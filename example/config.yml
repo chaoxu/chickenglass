@@ -1,0 +1,9 @@
+bib: test.bib
+csl: test.csl
+lua-filters: [abstract-section]
+format:
+  html:
+    css: test.css
+    html-math-method: katex
+    toc: true
+    template: template.html
