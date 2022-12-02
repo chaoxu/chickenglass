@@ -1,5 +1,5 @@
 ---
-title: Example Document
+title: Example Document -- Let's abandon $\LaTeX$
 tags: Example
 author: 
   - Lady Apple
@@ -50,6 +50,14 @@ Just check wikipedia.
 
 ::: Remark
 See how we can refer to both theorems, [@thm:fundalgebra] and [@thm:fundarith].
+:::
+
+Having markdown inside title? Fine, as long as it is not too crazy. Anything inline would work.
+
+::: {.Conjecture title="$x^2$ and reference [@aksin] allowed in title"}
+
+  Seems like it is working.
+
 :::
 
 # General class handling

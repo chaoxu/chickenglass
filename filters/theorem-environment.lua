@@ -67,6 +67,12 @@ function hasTheoremType(classes)
   end
 end
 
+function pandocInlineRead(data)
+    local blocks = pandoc.read(data,"markdown",PANDOC_READER_OPTIONS)
+    local inlines = pandoc.utils.blocks_to_inlines(blocks.blocks)
+    return inlines
+end
+
 function Div(div)
     content = div.content
     classes = div.attr.classes
@@ -91,9 +97,11 @@ function Div(div)
             end
 
             -- name of the theorem
+            -- note this is INLINE, so some work is required
             local name = div.attr.attributes["title"]
             if name then
-                name_span = pandoc.Span(pandoc.Str(name),pandoc.Attr("",{"name"}))
+                inlines = pandocInlineRead(name)
+                name_span = pandoc.Span(inlines,pandoc.Attr("",{"name"}))
                 table.insert(theorem_header_inline, name_span)
             end
 

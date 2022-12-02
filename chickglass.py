@@ -31,10 +31,10 @@ def main():
     lua_filters = ["--lua-filter="+filter_path+x+".lua" for x in config['lua-filters']]
     template = config['format']['html']['template']
     css = config['format']['html']['css']
-    read_options= ["--bibliography="+config['bib'], 
+    read_options= lua_filters+["--bibliography="+config['bib'], 
                 "--csl="+config['csl'],
                 "--citeproc",
-                "--metadata=reference-section-title:References"]+lua_filters
+                "--metadata=reference-section-title:References"]
     write_options = ["--"+math_render,
                      "--toc",
                      "--template="+template,
