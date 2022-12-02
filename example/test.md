@@ -9,15 +9,16 @@ date: 2022-12-01
 
 # Abstract
 
-This document shows some capabilities.
+This document show off some capabilities.
 
 ******
 
-Here is some text before the beginning.
+As a mathematician, who rarely use advanced features of $\LaTeX$, there are only a few important for writing.
 
 # LaTeX
 
-We do some LaTeX rendering. Use `$`, `\[`, `$$` or whatever delimiter. This can be configured elsewhere. The standard here is `$` and `\[`
+We can do $\LaTeX$ rendering. Using `$`, `\[`, `$$` or whatever delimiter. 
+This can be configured. I personally like to use `$` and `\[`
 
 See $\int_{-\infty}^\infty x^2 dx$ and display math \[\int_{-\infty}^\infty x^2 dx\]
 
@@ -25,25 +26,31 @@ See $\int_{-\infty}^\infty x^2 dx$ and display math \[\int_{-\infty}^\infty x^2 
 
 ::: Theorem
 
-  This is just a normal theorem
+  This is a normal theorem.
 
 :::
 
 However, if we need to refer to a theorem later, we would have to take extra care.
 
-::: {.Theorem #thmwow title="wow"}
+::: {.Theorem #thm:fundalgebra title="Fundamental Theorem of Algebra"}
 
-  This is the wow theorem.
+  The field of complex numbers is algebraically closed.
 
 :::
 
 ::: Proof
-Here is the proof.
+Just check wikipedia.
 :::
 
-Here we refer to [@thmwow].
+::: {.Theorem #thm:fundarith title="Fundamental Theorem of Arithmetic"}
 
-These blocks are handled by theorem block handler, which is a lua filter.
+  Every integer greater than $1$ can be represented uniquely as a product of prime numbers. 
+
+:::
+
+::: Remark
+See how we can refer to both theorems, [@thm:fundalgebra] and [@thm:fundarith].
+:::
 
 # General class handling
 
@@ -53,4 +60,4 @@ We define [continuous]{.definition} to be whatever.
 
 # Citations
 
-We can also do citations. [@ChanH20,@KargerS96]
+We can also do citations, citing one element [@westfahl:space]. How about cite two elements [@aksin; @westfahl:space].

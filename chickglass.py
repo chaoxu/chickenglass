@@ -4,7 +4,6 @@ import yaml
 import argparse
 import os
 import pandoc
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 def main():
     parser = argparse.ArgumentParser(description='Huh.')
@@ -43,16 +42,9 @@ def main():
                      "--number-sections",
                      "--css="+css]
 
-
-    env = Environment(
-    loader = FileSystemLoader("")
-    )
-
-
-
     with open(file, "r") as stream:
         content = stream.read()
-        pandoc_content = pandoc.read(content, format="markdown+tex_math_single_backslash", options=read_options)
+        pandoc_content = pandoc.read(content, format="markdown+tex_math_single_backslash+east_asian_line_breaks", options=read_options)
         html_content = pandoc.write(pandoc_content, format="html", options=write_options)
         print(html_content)
 
