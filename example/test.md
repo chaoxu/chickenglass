@@ -66,6 +66,22 @@ Note we can tag everything by some class. Hence, having some consistent handling
 
 We define [continuous]{.definition} to be whatever.
 
+# Algorithm block
+
+We consider the simple algorithm description philosophy appearing in Jeff Erickson's notes.
+
+```{.algorithm #alg:euclidian title="Pseudocode of the Euclidean Algorithm."}
+[EuclidianGCD]{.smallcaps}$(a,b)$
+    while $a\neq b$
+      if $a>b$
+        $a\gets a-b$
+      else
+        $b\gets b-a$
+    return a
+```
+
+And we can refer to it too! Like this: [@alg:euclidian].
+
 # Citations
 
 We can also do citations, citing one element [@westfahl:space]. How about cite two elements [@aksin; @westfahl:space].

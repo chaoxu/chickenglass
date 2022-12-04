@@ -50,6 +50,8 @@ small {
     font-size: 0.8em;
 }
 
+
+
 sup, sub {
     font-size: 0.75em;
 }
@@ -415,4 +417,22 @@ nav ul li a {
 
 span.definition {
   font-weight: bold;
+}
+
+div.algorithm {
+    display: flex;
+    flex-direction:column;
+    align-items:center;
+    margin:10px;
+    /*justify-content:center;*/
+}
+
+div.algorithm .line-block {
+    display: inline-block;
+    padding: 10px;
+    border-width: 1px;
+    border-style: solid;
+}
+.smallcaps {
+  font-variant: small-caps;
 }

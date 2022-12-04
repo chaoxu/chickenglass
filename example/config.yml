@@ -1,6 +1,6 @@
 bib: test.bib
 csl: test.csl
-lua-filters: [abstract-section,theorem-environment,blockref]
+lua-filters: [abstract-section,theorem-environment,algorithm,blockref]
 format:
   html:
     css: test.css
