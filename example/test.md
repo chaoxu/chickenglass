@@ -68,7 +68,7 @@ We define [continuous]{.definition} to be whatever.
 
 # Algorithm block
 
-We consider the simple algorithm description philosophy appearing in Jeff Erickson's notes.
+We consider the simple algorithm description philosophy appeared in [Jeff Erickson](https://jeffe.cs.illinois.edu/)'s [`jeffe.sty`](https://jeffe.cs.illinois.edu/pubs/tex/jeffe.sty).
 
 ```{.algorithm #alg:euclidian title="Pseudocode of the Euclidean Algorithm."}
 [EuclidianGCD]{.smallcaps}$(a,b)$
