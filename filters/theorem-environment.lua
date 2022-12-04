@@ -13,7 +13,7 @@ So for each type we need to define:
  - Optional extra operations
 ]]
 
-
+require "utils"
 -- we find certain theorem and add theorem-environment css
 -- we parse the title as a markdown
 -- or we parse the first heading as markdown
@@ -65,12 +65,6 @@ function hasTheoremType(classes)
         return theoremClasses[class]
     end
   end
-end
-
-function pandocInlineRead(data)
-    local blocks = pandoc.read(data,"markdown",PANDOC_READER_OPTIONS)
-    local inlines = pandoc.utils.blocks_to_inlines(blocks.blocks)
-    return inlines
 end
 
 function Div(div)

@@ -85,3 +85,11 @@ And we can refer to it too! Like this: [@alg:euclidian].
 # Citations
 
 We can also do citations, citing one element [@westfahl:space]. How about cite two elements [@aksin; @westfahl:space].
+
+# Footnotes
+
+Here are some footnotes [^1].
+
+
+
+[^1]: This is a pretty good footnote. Footnote can be in a margin too depend on the CSS I think!?

@@ -4,30 +4,16 @@ local logging = require 'logging'
 
 local numbering = 0
 
+require "utils"
 
 function Pandoc(pandoc)
 	logging.temp(pandoc)
-end
-
-function table.contains(table, element)
-  for _, value in pairs(table) do
-    if value == element then
-      return true
-    end
-  end
-  return false
 end
 
 -- match lines
 function magiclines(s)
     if s:sub(-1)~="\n" then s=s.."\n" end
     return s:gmatch("(.-)\n")
-end
-
-function pandocInlineRead(data)
-    local blocks = pandoc.read(data,"markdown",PANDOC_READER_OPTIONS)
-    local inlines = pandoc.utils.blocks_to_inlines(blocks.blocks)
-    return inlines
 end
 
 function CodeBlock(content)
