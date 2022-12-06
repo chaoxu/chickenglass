@@ -11,13 +11,14 @@ This project is mainly for someone who creates a collection of static content of
 The project would provide some filters to solve the following problems in standard markdown.
 
 # Philosophy
+ - Mathematical writing as first class citizen.
  - Write in [Pandoc markdown](https://pandoc.org/MANUAL.html#pandocs-markdown)
  - Postprocess with [Pandoc filters](https://pandoc.org/filters.html)
 
 This allows one to directly adopt any pandoc filter, and also use these filters in your own work.
 
 # Support
- - Label/References
+ - Label/References (crossref)
  - Theorem Environment
 
 # Tests
@@ -28,6 +29,7 @@ In the main directory, try the following.
 ```
 mkdir _site
 cd example
+export LUA_PATH="$PATH_TO_CHICKENGLASS/chickenglass/filters/?.lua;;"
 ../chickglass.py test.md --config config.yml > ../_site/out.html
 cp test.css ../_site/test.css
 ```
@@ -41,3 +43,4 @@ cp test.css ../_site/test.css
  - More robust crossref
  - Cross file ref support
  - Package for simple deployment
+ - Maybe switch to [djot](https://djot.net/)? 

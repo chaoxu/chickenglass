@@ -72,12 +72,12 @@ We consider the simple algorithm description philosophy appeared in [Jeff Ericks
 
 ```{.algorithm #alg:euclidian title="Pseudocode of the Euclidean Algorithm."}
 [EuclidianGCD]{.smallcaps}$(a,b)$
-    while $a\neq b$
+  while $a\neq b$
       if $a>b$
-        $a\gets a-b$
+          $a\gets a-b$
       else
-        $b\gets b-a$
-    return a
+          $b\gets b-a$
+  return a
 ```
 
 And we can refer to it too! Like this: [@alg:euclidian].
