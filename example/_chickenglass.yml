@@ -1,0 +1,12 @@
+project-name: example
+bib: assets/example.bib
+csl: assets/elsevier-with-titles.csl
+lua-filters: [abstract-section,theorem-environment,algorithm,blockref]
+format:
+  html:
+    css: assets/style.css
+    html-math-method: katex
+    toc: true
+    template: assets/template.html
+copy:
+  [assets/style.css]
