@@ -10,9 +10,12 @@ def main():
     parser = argparse.ArgumentParser(description='Huh.')
     parser.add_argument('project_dir', metavar='D', type=str, 
                         help='the input project directory')
+    parser.add_argument('output_dir', metavar='O', type=str, 
+                        help='the output project directory')
     args = parser.parse_args()
     project_dir = args.project_dir
-    config_file = os.path.join(project_dir,  '_chickenglass.yml')
+    output_dir = args.output_dir
+    config_file = os.path.join(project_dir,  '_chickenglass.yaml')
     with open(config_file, "r") as stream:
         try:
             config = yaml.safe_load(stream)
@@ -44,11 +47,11 @@ def main():
 
     # find all files with *.md
     md_files = []
-    output_dir = '_site'
     out_files = {}
+    n = len(project_dir.split(os.sep))
     for root, dirs, files in os.walk(project_dir):
         path = root.split(os.sep)
-        path[0] = output_dir
+        path = [output_dir] + path[n:]
         for file in files:
             name,ext = os.path.splitext(file)
             if ext == '.md':
