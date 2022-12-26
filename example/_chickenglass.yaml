@@ -1,7 +1,8 @@
 project-name: example
 bib: assets/example.bib
 csl: assets/elsevier-with-titles.csl
-lua-filters: [abstract-section,theorem-environment,algorithm,blockref]
+read-lua-filters: [abstract-section,theorem-environment,algorithm,blockref]
+write-lua-filters: [shifted-numbered-headings]
 format:
   html:
     css: assets/style.css

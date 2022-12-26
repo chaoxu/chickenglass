@@ -25,9 +25,9 @@ def main():
     
     # read configs
     filter_path = os.path.dirname(os.path.realpath(__file__))+"/filters/"
-    lua_filters = ["--lua-filter="+filter_path+x+".lua" for x in config['lua-filters']]
+    read_lua_filters = ["--lua-filter="+filter_path+x+".lua" for x in config['read-lua-filters']]
     css = config['format']['html']['css']
-    read_options= lua_filters+["--bibliography="+project_dir+"/"+config['bib'], 
+    read_options= read_lua_filters+["--bibliography="+project_dir+"/"+config['bib'], 
                 "--csl="+project_dir+"/"+config['csl'],
                 "--citeproc",
                 "--metadata=reference-section-title:References"]
@@ -38,11 +38,13 @@ def main():
         math_render = config['format']['html']['html-math-method']
     template = config['format']['html']['template']
 
-    write_options = ["--"+math_render,
+    write_lua_filters = ["--lua-filter="+filter_path+x+".lua" for x in config['write-lua-filters']]
+    write_options = write_lua_filters+["--"+math_render,
                      "--toc",
                      "--template="+project_dir+"/"+template,
                      "-s",
                      "--number-sections",
+                     "--section-divs",
                      "--css="+css]
 
     # find all files with *.md

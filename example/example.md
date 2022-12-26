@@ -15,12 +15,12 @@ This document show off some capabilities.
 
 As a mathematician, who rarely use advanced features of $\LaTeX$, there are only a few important for writing.
 
-# LaTeX
+# Rendering $\LaTeX$ Math Mode
 
-We can do $\LaTeX$ rendering. Using `$`, `\[`, `$$` or whatever delimiter. 
+We can do $\LaTeX$ math rendering. Using `$`, `\[`, `$$` or whatever delimiter. 
 This can be configured. I personally like to use `$` and `\[`
 
-See $\int_{-\infty}^\infty x^2 dx$ and display math \[\int_{-\infty}^\infty x^2 dx\]
+See $\int_{-\infty}^\infty x^2 dx$ and display math \[\int_{-\infty}^\infty x^2 dx.\]
 
 #  Theorem environment
 
@@ -33,23 +33,19 @@ See $\int_{-\infty}^\infty x^2 dx$ and display math \[\int_{-\infty}^\infty x^2 
 However, if we need to refer to a theorem later, we would have to take extra care.
 
 ::: {.Theorem #thm:fundalgebra title="Fundamental Theorem of Algebra"}
-
   The field of complex numbers is algebraically closed.
-
 :::
 
 ::: Proof
-Just check wikipedia.
+  Just check wikipedia.
 :::
 
 ::: {.Theorem #thm:fundarith title="Fundamental Theorem of Arithmetic"}
-
   Every integer greater than $1$ can be represented uniquely as a product of prime numbers. 
-
 :::
 
 ::: Remark
-See how we can refer to both theorems, [@thm:fundalgebra] and [@thm:fundarith].
+  See how we can refer to both theorems, [@thm:fundalgebra] and [@thm:fundarith].
 :::
 
 Having markdown inside title? Fine, as long as it is not too crazy. Anything inline would work.
@@ -59,6 +55,15 @@ Having markdown inside title? Fine, as long as it is not too crazy. Anything inl
   Seems like it is working.
 
 :::
+
+# Table
+
+| Default | Left | Right | Center |
+|---------|:-----|------:|:------:|
+| 12      | 12   |    12 |   12   |
+| $x^2$   | 123  |   123 |  123   |
+| 1       | 1    |     1 |   1    |
+
 
 # General class handling
 
@@ -80,7 +85,7 @@ We consider the simple algorithm description philosophy appeared in [Jeff Ericks
   return a
 ```
 
-And we can refer to it too! Like this: [@alg:euclidian].
+And we can refer to it too! Like this: [@alg:euclidian] and @alg:euclidian.
 
 # Citations
 
@@ -91,5 +96,18 @@ We can also do citations, citing one element [@westfahl:space]. How about cite t
 Here are some footnotes [^1].
 
 
+
+
+# Section
+
+## Subsection
+
+### Subsubsection
+
+#### Paragraph
+Here is a paragraph, note it is pretty nice. 
+
+##### Subparagraph 
+Here is a subparagraph, yawn. 
 
 [^1]: This is a pretty good footnote. Footnote can be in a margin too depend on the CSS I think!?

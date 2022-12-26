@@ -28,7 +28,7 @@ Don't forget to install python requirements and Pandoc.
 In the main directory, try the following.
 ```
 export LUA_PATH="$PATH_TO_CHICKENGLASS/chickenglass/filters/?.lua;;"
-./chickglass.py example
+./chickglass.py example _site
 ```
 
 # Roadmap
