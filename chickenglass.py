@@ -4,7 +4,9 @@ import yaml
 import argparse
 import os
 import pandoc
+from pandoc.types import *
 import shutil
+import json
 
 def main():
     parser = argparse.ArgumentParser(description='Huh.')
@@ -47,6 +49,13 @@ def main():
                      "--section-divs",
                      "--css="+css]
 
+    # handle latex math macros
+    latex_macros = {}
+    if config['latex-math-macros']:
+        if math_render == 'katex':
+            latex_macros = { ('\\'+a):b for (a,b) in config['latex-math-macros'].items()}
+    latex_macros_json = json.dumps(latex_macros)
+
     # find all files with *.md
     md_files = []
     out_files = {}
@@ -68,7 +77,9 @@ def main():
         with open(file, "r") as stream:
             content = stream.read()
             pandoc_contents[file] = pandoc.read(content, format="markdown+tex_math_single_backslash+east_asian_line_breaks", options=read_options)
-
+            # add latex macros into the meta dict
+            pandoc_contents[file][0][0]["latex-macros-json"] = MetaInlines([RawInline(Format("html"), latex_macros_json)])
+    
     # TODO: need to create a navigations page?
 
     # write
