@@ -1,0 +1,59 @@
+/**
+ * Types for the block plugin system.
+ *
+ * A BlockPlugin describes how a fenced div class is rendered and numbered.
+ * Plugins register themselves in the PluginRegistry, and the renderer
+ * looks up the registry to decide how to display each fenced div.
+ */
+
+/** Attributes extracted from a fenced div and enriched with numbering info. */
+export interface BlockAttrs {
+  /** The plugin/class name (e.g. "theorem", "proof"). */
+  readonly type: string;
+  /** The id from the attribute block (e.g. "thm-1"). */
+  readonly id?: string;
+  /** The user-supplied title from the fenced div opening line. */
+  readonly title?: string;
+  /** The auto-assigned number (undefined if unnumbered). */
+  readonly number?: number;
+}
+
+/**
+ * Specification for rendering a block.
+ *
+ * Used by the CM6 ViewPlugin to create decorations.
+ */
+export interface BlockDecorationSpec {
+  /** CSS class names to apply to the block wrapper. */
+  readonly className: string;
+  /** The header text (e.g. "Theorem 1" or "Proof"). */
+  readonly header: string;
+}
+
+/**
+ * A block plugin defines how a fenced div class behaves.
+ *
+ * Plugins are registered in the PluginRegistry. The core editor
+ * knows nothing about "theorem" or "proof" — all behavior comes
+ * from plugins.
+ */
+export interface BlockPlugin {
+  /** Class name that triggers this plugin (e.g. "theorem"). */
+  readonly name: string;
+  /**
+   * Counter group name. Plugins sharing the same counter group
+   * increment a single shared counter. If undefined, uses `name`
+   * as the counter group when `numbered` is true.
+   */
+  readonly counter?: string;
+  /** Whether this block type is auto-numbered. */
+  readonly numbered: boolean;
+  /** Display title shown in the rendered header (e.g. "Theorem"). */
+  readonly title: string;
+  /** Optional custom parser for the block body content. */
+  readonly bodyParser?: (content: string) => unknown;
+  /** Produce a decoration spec from the block's attributes. */
+  readonly render: (attrs: BlockAttrs) => BlockDecorationSpec;
+  /** Default settings (e.g. QED symbol, CSS overrides). */
+  readonly defaults?: Readonly<Record<string, unknown>>;
+}
