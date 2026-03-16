@@ -10,3 +10,4 @@ export {
   type FrontmatterConfig,
   type FrontmatterResult,
 } from "./frontmatter";
+export { equationLabelExtension } from "./equation-label";
