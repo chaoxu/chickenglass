@@ -19,7 +19,7 @@ export class BoldWidget extends RenderWidget {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const el = document.createElement("strong");
     el.className = "cg-bold";
     el.textContent = this.text;
@@ -37,7 +37,7 @@ export class ItalicWidget extends RenderWidget {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const el = document.createElement("em");
     el.className = "cg-italic";
     el.textContent = this.text;
@@ -55,7 +55,7 @@ export class InlineCodeWidget extends RenderWidget {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const el = document.createElement("code");
     el.className = "cg-inline-code";
     el.textContent = this.text;
@@ -100,10 +100,10 @@ export function collectInlineRanges(view: EditorView): Range<Decoration>[] {
     const text = stripMarkers(raw, node.type);
     const Widget = WIDGET_MAP[node.type];
     if (Widget) {
+      const widget = new Widget(text);
+      widget.sourceFrom = node.from;
       items.push(
-        Decoration.replace({
-          widget: new Widget(text),
-        }).range(node.from, node.to),
+        Decoration.replace({ widget }).range(node.from, node.to),
       );
     }
   }

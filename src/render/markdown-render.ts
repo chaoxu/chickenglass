@@ -24,7 +24,8 @@ class MarkdownRenderPlugin implements PluginValue {
     if (
       update.docChanged ||
       update.selectionSet ||
-      update.viewportChanged
+      update.viewportChanged ||
+      update.focusChanged
     ) {
       this.decorations = this.buildAll(update.view);
     }

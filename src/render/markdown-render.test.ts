@@ -18,7 +18,12 @@ function createTestView(doc: string, cursorPos?: number): EditorView {
     extensions: [markdown(), markdownRenderPlugin],
   });
   const parent = document.createElement("div");
-  return new EditorView({ state, parent });
+  document.body.appendChild(parent);
+  const view = new EditorView({ state, parent });
+  view.focus();
+  const origDestroy = view.destroy.bind(view);
+  view.destroy = () => { origDestroy(); parent.remove(); };
+  return view;
 }
 
 describe("cursorInRange", () => {

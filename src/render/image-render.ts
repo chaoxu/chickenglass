@@ -18,7 +18,7 @@ export class ImageWidget extends RenderWidget {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const wrapper = document.createElement("span");
     wrapper.className = "cg-image-wrapper";
 
@@ -68,10 +68,10 @@ export function collectImageRanges(view: EditorView): Range<Decoration>[] {
     const parsed = parseImageContent(view, node.from, node.to);
     if (!parsed) continue;
 
+    const widget = new ImageWidget(parsed.alt, parsed.src);
+    widget.sourceFrom = node.from;
     items.push(
-      Decoration.replace({
-        widget: new ImageWidget(parsed.alt, parsed.src),
-      }).range(node.from, node.to),
+      Decoration.replace({ widget }).range(node.from, node.to),
     );
   }
 

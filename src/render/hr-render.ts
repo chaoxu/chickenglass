@@ -11,7 +11,7 @@ const HR_TYPES = new Set(["HorizontalRule"]);
 
 /** Widget that renders a horizontal rule. */
 export class HorizontalRuleWidget extends RenderWidget {
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const el = document.createElement("hr");
     el.className = "cg-hr";
     return el;
@@ -30,10 +30,10 @@ export function collectHrRanges(view: EditorView): Range<Decoration>[] {
   for (const node of nodes) {
     if (cursorInRange(view, node.from, node.to)) continue;
 
+    const widget = new HorizontalRuleWidget();
+    widget.sourceFrom = node.from;
     items.push(
-      Decoration.replace({
-        widget: new HorizontalRuleWidget(),
-      }).range(node.from, node.to),
+      Decoration.replace({ widget }).range(node.from, node.to),
     );
   }
 

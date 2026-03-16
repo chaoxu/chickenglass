@@ -13,26 +13,54 @@
 import {
   type DecorationSet,
   Decoration,
-  WidgetType,
   EditorView,
 } from "@codemirror/view";
-import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
+import { type EditorState, type Extension, type Range, StateField, StateEffect } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { parseFencedDivAttrs } from "../parser/fenced-div-attrs";
 import type { BlockAttrs, BlockDecorationSpec } from "./plugin-types";
 import { pluginRegistryField, getPlugin } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
-import { selectionOverlaps, buildDecorations } from "../render/render-utils";
+import { selectionOverlaps, buildDecorations, RenderWidget } from "../render/render-utils";
+
+/** StateEffect to notify the decoration field of a focus change. */
+const focusChangedEffect = StateEffect.define<boolean>();
+
+/** StateField that tracks whether the editor is focused. */
+const focusField = StateField.define<boolean>({
+  create() {
+    return false;
+  },
+  update(focused, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(focusChangedEffect)) return effect.value;
+    }
+    return focused;
+  },
+});
+
+/**
+ * Extension that dispatches a focus-change effect when the editor gains or
+ * loses focus, so that the block decoration field can react accordingly.
+ */
+const focusTracker: Extension = EditorView.domEventHandlers({
+  focus(_event, view) {
+    view.dispatch({ effects: focusChangedEffect.of(true) });
+  },
+  blur(_event, view) {
+    view.dispatch({ effects: focusChangedEffect.of(false) });
+  },
+});
 
 /** Widget for the rendered block header (e.g. "Theorem 1 (Main Result)"). */
-export class BlockHeaderWidget extends WidgetType {
+export class BlockHeaderWidget extends RenderWidget {
   constructor(
     private readonly spec: BlockDecorationSpec,
   ) {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const el = document.createElement("div");
     el.className = `${this.spec.className}-header`;
     const strong = document.createElement("strong");
@@ -50,7 +78,7 @@ export class BlockHeaderWidget extends WidgetType {
 }
 
 /** Widget for an unrecognized fenced div (plain styled div). */
-export class PlainDivHeaderWidget extends WidgetType {
+export class PlainDivHeaderWidget extends RenderWidget {
   constructor(
     private readonly className: string,
     private readonly title: string,
@@ -58,7 +86,7 @@ export class PlainDivHeaderWidget extends WidgetType {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const el = document.createElement("div");
     el.className = "cg-block cg-block-unknown-header";
     if (this.title) {
@@ -79,8 +107,8 @@ interface FencedDivInfo {
   readonly to: number;
   readonly fenceFrom: number;
   readonly fenceTo: number;
-  readonly closeFenceFrom?: number;
-  readonly closeFenceTo?: number;
+  readonly closeFenceFrom: number;
+  readonly closeFenceTo: number;
   readonly className: string;
   readonly id?: string;
   readonly title?: string;
@@ -101,10 +129,10 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
       let title: string | undefined;
       let fenceFrom = node.from;
       let fenceTo = node.from;
+      let closeFenceFrom = -1;
+      let closeFenceTo = -1;
 
-      // Find opening and closing FencedDivFence nodes
-      let closeFenceFrom: number | undefined;
-      let closeFenceTo: number | undefined;
+      // Collect all FencedDivFence children (opening + closing)
       const fences = divNode.getChildren("FencedDivFence");
       if (fences.length > 0) {
         fenceFrom = fences[0].from;
@@ -112,8 +140,10 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
       }
       if (fences.length > 1) {
         const lastFence = fences[fences.length - 1];
-        closeFenceFrom = lastFence.from;
-        closeFenceTo = lastFence.to;
+        // Extend to the full line of the closing fence
+        const closeLine = state.doc.lineAt(lastFence.from);
+        closeFenceFrom = closeLine.from;
+        closeFenceTo = closeLine.to;
       }
 
       const attrNode = divNode.getChild("FencedDivAttributes");
@@ -157,12 +187,13 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const registry = state.field(pluginRegistryField);
   const counterState: BlockCounterState | undefined =
     state.field(blockCounterField, false) ?? undefined;
+  const focused = state.field(focusField, false) ?? false;
   const divs = collectFencedDivs(state);
   const items: Range<Decoration>[] = [];
 
   for (const div of divs) {
-    // Skip decorating if cursor is inside the fenced div
-    if (selectionOverlaps(state, div.from, div.to)) continue;
+    // Skip decorating if the editor is focused and cursor is inside the fenced div
+    if (focused && selectionOverlaps(state, div.from, div.to)) continue;
 
     const plugin = getPlugin(registry, div.className);
 
@@ -183,10 +214,10 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       );
 
       // Replace the opening fence line with the rendered header
+      const headerWidget = new BlockHeaderWidget(spec);
+      headerWidget.sourceFrom = div.fenceFrom;
       items.push(
-        Decoration.replace({
-          widget: new BlockHeaderWidget(spec),
-        }).range(div.fenceFrom, div.fenceTo),
+        Decoration.replace({ widget: headerWidget }).range(div.fenceFrom, div.fenceTo),
       );
     } else {
       // Unrecognized class -- render as a plain styled div
@@ -195,16 +226,16 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       );
 
       if (div.title) {
+        const plainWidget = new PlainDivHeaderWidget(div.className, div.title);
+        plainWidget.sourceFrom = div.fenceFrom;
         items.push(
-          Decoration.replace({
-            widget: new PlainDivHeaderWidget(div.className, div.title),
-          }).range(div.fenceFrom, div.fenceTo),
+          Decoration.replace({ widget: plainWidget }).range(div.fenceFrom, div.fenceTo),
         );
       }
     }
 
-    // Hide the closing fence
-    if (div.closeFenceFrom != null && div.closeFenceTo != null) {
+    // Hide the closing fence line
+    if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
       items.push(
         Decoration.replace({}).range(div.closeFenceFrom, div.closeFenceTo),
       );
@@ -226,7 +257,7 @@ const blockDecorationField = StateField.define<DecorationSet>({
   },
 
   update(value, tr) {
-    if (tr.docChanged || tr.selection) {
+    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(focusChangedEffect))) {
       return buildBlockDecorations(tr.state);
     }
     return value;
@@ -238,4 +269,4 @@ const blockDecorationField = StateField.define<DecorationSet>({
 });
 
 /** CM6 extension that renders fenced divs using the block plugin system. */
-export const blockRenderPlugin: Extension = blockDecorationField;
+export const blockRenderPlugin: Extension = [focusField, focusTracker, blockDecorationField];

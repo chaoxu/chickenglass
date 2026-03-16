@@ -5,6 +5,7 @@ export {
   collectNodes,
   buildDecorations,
   RenderWidget,
+  widgetClickHandler,
   type RenderableNode,
 } from "./render-utils";
 export { HeadingWidget, headingDecorations, collectHeadingRanges } from "./heading-render";

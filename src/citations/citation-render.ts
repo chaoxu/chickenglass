@@ -53,7 +53,7 @@ export class CitationWidget extends RenderWidget {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const el = document.createElement("span");
     el.className = "cg-citation";
     el.textContent = this.text;
@@ -75,7 +75,7 @@ export class NarrativeCitationWidget extends RenderWidget {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const el = document.createElement("span");
     el.className = "cg-citation cg-citation-narrative";
     el.textContent = this.text;
@@ -200,19 +200,19 @@ export function collectCitationRanges(
 
     if (match.parenthetical) {
       const rendered = formatParenthetical(match.ids, store);
+      const widget = new CitationWidget(rendered, match.ids);
+      widget.sourceFrom = match.from;
       items.push(
-        Decoration.replace({
-          widget: new CitationWidget(rendered, match.ids),
-        }).range(match.from, match.to),
+        Decoration.replace({ widget }).range(match.from, match.to),
       );
     } else {
       const entry = store.get(match.ids[0]);
       if (entry) {
         const rendered = formatNarrativeCitation(entry);
+        const widget = new NarrativeCitationWidget(rendered, match.ids[0]);
+        widget.sourceFrom = match.from;
         items.push(
-          Decoration.replace({
-            widget: new NarrativeCitationWidget(rendered, match.ids[0]),
-          }).range(match.from, match.to),
+          Decoration.replace({ widget }).range(match.from, match.to),
         );
       }
     }
@@ -229,7 +229,12 @@ class CitationRenderPlugin implements PluginValue {
   }
 
   update(update: ViewUpdate): void {
-    if (update.docChanged || update.selectionSet || update.viewportChanged) {
+    if (
+      update.docChanged ||
+      update.selectionSet ||
+      update.viewportChanged ||
+      update.focusChanged
+    ) {
       this.decorations = this.buildAll(update.view);
     }
   }

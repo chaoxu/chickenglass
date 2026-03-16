@@ -33,7 +33,7 @@ export class CrossrefWidget extends RenderWidget {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const span = document.createElement("span");
     span.className = "cg-crossref";
     span.textContent = this.resolved.label;
@@ -56,7 +56,7 @@ export class UnresolvedRefWidget extends RenderWidget {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const span = document.createElement("span");
     span.className = "cg-crossref cg-crossref-unresolved";
     span.textContent = this.raw;
@@ -78,7 +78,7 @@ export class CitationRefWidget extends RenderWidget {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const span = document.createElement("span");
     span.className = "cg-crossref cg-crossref-citation";
     span.textContent = `[${this.id}]`;
@@ -113,6 +113,7 @@ export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
     } else {
       widget = new UnresolvedRefWidget(raw);
     }
+    widget.sourceFrom = ref.from;
 
     items.push(
       Decoration.replace({ widget }).range(ref.from, ref.to),
@@ -138,7 +139,8 @@ class CrossrefRenderPlugin implements PluginValue {
     if (
       update.docChanged ||
       update.selectionSet ||
-      update.viewportChanged
+      update.viewportChanged ||
+      update.focusChanged
     ) {
       this.decorations = crossrefDecorations(update.view);
     }

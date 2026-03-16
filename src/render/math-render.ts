@@ -68,7 +68,7 @@ export class InlineMathWidget extends RenderWidget {
     this.macrosKey = serializeMacros(macros);
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const span = document.createElement("span");
     span.className = "cg-math-inline";
     try {
@@ -103,7 +103,7 @@ export class DisplayMathWidget extends RenderWidget {
     this.macrosKey = serializeMacros(macros);
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const div = document.createElement("div");
     div.className = "cg-math-display";
     try {
@@ -146,6 +146,7 @@ export function collectMathRanges(view: EditorView): Range<Decoration>[] {
     const widget = isDisplay
       ? new DisplayMathWidget(latex, raw, macros)
       : new InlineMathWidget(latex, raw, macros);
+    widget.sourceFrom = node.from;
 
     items.push(
       Decoration.replace({

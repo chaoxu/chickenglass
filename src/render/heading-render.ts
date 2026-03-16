@@ -25,7 +25,7 @@ export class HeadingWidget extends RenderWidget {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const el = document.createElement(`h${this.level}` as keyof HTMLElementTagNameMap) as HTMLElement;
     el.className = "cg-heading";
     el.textContent = this.text;
@@ -53,10 +53,10 @@ export function collectHeadingRanges(view: EditorView): Range<Decoration>[] {
     const level = headingLevel(node.type);
     const raw = view.state.sliceDoc(node.from, node.to);
     const text = raw.replace(/^#{1,6}\s*/, "");
+    const widget = new HeadingWidget(text, level);
+    widget.sourceFrom = node.from;
     items.push(
-      Decoration.replace({
-        widget: new HeadingWidget(text, level),
-      }).range(node.from, node.to),
+      Decoration.replace({ widget }).range(node.from, node.to),
     );
   }
 

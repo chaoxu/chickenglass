@@ -97,7 +97,7 @@ export class BibliographyWidget extends RenderWidget {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const section = document.createElement("div");
     section.className = "cg-bibliography";
 

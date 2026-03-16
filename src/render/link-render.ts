@@ -18,7 +18,7 @@ export class LinkWidget extends RenderWidget {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const el = document.createElement("a");
     el.className = "cg-link";
     el.textContent = this.text;
@@ -26,10 +26,6 @@ export class LinkWidget extends RenderWidget {
     el.title = this.url;
     el.rel = "noopener noreferrer";
     el.target = "_blank";
-    // Prevent the click from moving the cursor into the widget
-    el.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-    });
     return el;
   }
 
@@ -63,10 +59,10 @@ export function collectLinkRanges(view: EditorView): Range<Decoration>[] {
     const parsed = parseLinkContent(view, node.from, node.to);
     if (!parsed) continue;
 
+    const widget = new LinkWidget(parsed.text, parsed.url);
+    widget.sourceFrom = node.from;
     items.push(
-      Decoration.replace({
-        widget: new LinkWidget(parsed.text, parsed.url),
-      }).range(node.from, node.to),
+      Decoration.replace({ widget }).range(node.from, node.to),
     );
   }
 
