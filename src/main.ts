@@ -1,8 +1,10 @@
-import { createEditor } from "./editor";
+import { App, createDemoFileSystem } from "./app";
 
-const container = document.getElementById("editor-container");
-if (!container) {
-  throw new Error("Missing #editor-container element");
+const root = document.getElementById("app");
+if (!root) {
+  throw new Error("Missing #app element");
 }
 
-createEditor({ parent: container });
+const fs = createDemoFileSystem();
+const app = new App({ root, fs });
+app.init("main.md");

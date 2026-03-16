@@ -26,12 +26,20 @@
         color: #1a1a1a;
       }
 
-      #app {
+      /* App shell layout */
+      .app-root {
         display: flex;
+        flex-direction: column;
         height: 100%;
       }
 
-      #editor-container {
+      .app-main {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .app-editor {
         flex: 1;
         overflow: hidden;
       }
@@ -43,12 +51,156 @@
       .cm-scroller {
         overflow: auto;
       }
+
+      /* Tab bar */
+      .tab-bar {
+        display: flex;
+        align-items: center;
+        background: #e8e8e8;
+        border-bottom: 1px solid #ccc;
+        min-height: 36px;
+        overflow-x: auto;
+        flex-shrink: 0;
+      }
+
+      .tab {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 12px;
+        font-size: 13px;
+        cursor: pointer;
+        border-right: 1px solid #ccc;
+        white-space: nowrap;
+        user-select: none;
+        color: #555;
+      }
+
+      .tab:hover {
+        background: #d8d8d8;
+      }
+
+      .tab-active {
+        background: #fafafa;
+        color: #1a1a1a;
+        border-bottom: 2px solid #3b82f6;
+      }
+
+      .tab-label {
+        pointer-events: none;
+      }
+
+      .tab-dirty {
+        color: #e67e22;
+        font-size: 16px;
+        line-height: 1;
+      }
+
+      .tab-close {
+        font-size: 14px;
+        line-height: 1;
+        padding: 0 2px;
+        border-radius: 3px;
+        color: #888;
+      }
+
+      .tab-close:hover {
+        background: #c0c0c0;
+        color: #333;
+      }
+
+      /* Sidebar */
+      .sidebar {
+        width: 220px;
+        min-width: 180px;
+        background: #f0f0f0;
+        border-right: 1px solid #ccc;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+
+      .sidebar-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #666;
+        border-bottom: 1px solid #ddd;
+      }
+
+      .sidebar-btn {
+        background: none;
+        border: 1px solid #bbb;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1;
+        padding: 2px 6px;
+        color: #555;
+      }
+
+      .sidebar-btn:hover {
+        background: #ddd;
+        color: #333;
+      }
+
+      /* File tree */
+      .file-tree {
+        overflow-y: auto;
+        flex: 1;
+        padding: 4px 0;
+      }
+
+      .file-tree-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        font-size: 13px;
+        cursor: pointer;
+        user-select: none;
+        color: #444;
+      }
+
+      .file-tree-item:hover {
+        background: #e0e0e0;
+      }
+
+      .file-tree-active {
+        background: #d0e0f0;
+        color: #1a1a1a;
+      }
+
+      .file-tree-icon {
+        font-size: 10px;
+        width: 12px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+
+      .file-tree-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .file-tree-directory {
+        font-weight: 500;
+      }
+
+      .file-tree-children {
+        /* controlled by JS */
+      }
     </style>
   </head>
   <body>
-    <div id="app">
-      <div id="editor-container"></div>
-    </div>
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

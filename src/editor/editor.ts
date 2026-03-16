@@ -1,5 +1,5 @@
 import { markdown } from "@codemirror/lang-markdown";
-import { EditorState } from "@codemirror/state";
+import { type Extension, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 import { editorKeybindings } from "./keybindings";
@@ -27,13 +27,20 @@ export interface EditorConfig {
   parent: HTMLElement;
   /** Initial document content. */
   doc?: string;
+  /** Additional CM6 extensions to include. */
+  extensions?: Extension[];
 }
 
 /** Create and mount a CodeMirror 6 markdown editor. */
 export function createEditor(config: EditorConfig): EditorView {
   const state = EditorState.create({
     doc: config.doc ?? sampleDocument,
-    extensions: [markdown(), editorKeybindings, chickenglassTheme],
+    extensions: [
+      markdown(),
+      editorKeybindings,
+      chickenglassTheme,
+      ...(config.extensions ?? []),
+    ],
   });
 
   return new EditorView({
