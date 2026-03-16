@@ -17,3 +17,9 @@ export {
 export { LinkWidget, linkDecorations, collectLinkRanges } from "./link-render";
 export { ImageWidget, imageDecorations, collectImageRanges } from "./image-render";
 export { HorizontalRuleWidget, hrDecorations, collectHrRanges } from "./hr-render";
+export {
+  InlineMathWidget,
+  DisplayMathWidget,
+  mathDecorations,
+  collectMathRanges,
+} from "./math-render";
