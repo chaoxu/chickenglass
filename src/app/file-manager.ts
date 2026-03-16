@@ -120,13 +120,47 @@ export function createDemoFileSystem(): MemoryFileSystem {
 
 A semantic document editor for mathematical writing.
 
-## Getting started
+## Inline Math
 
-This is a **CodeMirror 6** editor with *markdown* syntax highlighting.
+The Euler identity $e^{i\\pi} + 1 = 0$ is elegant. Also $\\sum_{k=1}^n k$.
 
-- Fenced divs for semantic blocks
-- KaTeX for math rendering
-- Cross-references and citations
+## Display Math
+
+$$\\int_0^\\infty e^{-x^2} \\, dx = \\frac{\\sqrt{\\pi}}{2}$$
+
+Multi-line display math:
+
+$$
+\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}
+$$ {#eq:sum}
+
+## Theorem Environment
+
+::: {.theorem #thm-main} Fundamental Theorem
+Every continuous function $f: [a,b] \\to \\mathbb{R}$ is bounded.
+:::
+
+::: {.proof}
+Follows from compactness of $[a,b]$.
+:::
+
+::: {.lemma #lem-aux}
+A useful lemma for the proof.
+:::
+
+::: {.definition #def-compact}
+A set $K$ is **compact** if every open cover has a finite subcover.
+:::
+
+## Cross-References
+
+See [@thm-main] and [@eq:sum] for details.
+
+## Code Block
+
+\`\`\`typescript
+const greeting = "Hello, world!";
+\`\`\`
 `,
     "notes.md": `# Notes
 

@@ -28,12 +28,17 @@ const DISPLAY_DELIMITERS: ReadonlyArray<{ open: string; close: string }> = [
   { open: "$$", close: "$$" },
 ];
 
-/** Strip math delimiters from raw source to get the LaTeX content. */
+/** Regex matching a trailing equation label like {#eq:foo}. */
+const EQUATION_LABEL_SUFFIX = /\s*\{#eq:[^}\s]+\}\s*$/;
+
+/** Strip math delimiters (and any trailing equation label) from raw source. */
 function stripMathDelimiters(raw: string, isDisplay: boolean): string {
+  // Remove trailing equation label before checking for closing delimiter
+  const stripped = isDisplay ? raw.replace(EQUATION_LABEL_SUFFIX, "") : raw;
   const delimiters = isDisplay ? DISPLAY_DELIMITERS : INLINE_DELIMITERS;
   for (const { open, close } of delimiters) {
-    if (raw.startsWith(open) && raw.endsWith(close)) {
-      return raw.slice(open.length, raw.length - close.length);
+    if (stripped.startsWith(open) && stripped.endsWith(close)) {
+      return stripped.slice(open.length, stripped.length - close.length);
     }
   }
   return raw;

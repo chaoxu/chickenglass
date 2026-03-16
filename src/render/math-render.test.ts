@@ -3,6 +3,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
+import { equationLabelExtension } from "../parser/equation-label";
 import { InlineMathWidget, DisplayMathWidget, collectMathRanges } from "./math-render";
 
 /** Create an EditorView with math parser extensions at the given cursor position. */
@@ -255,5 +256,54 @@ describe("performance", () => {
     view = createMathView(blocks, blocks.length);
     const ranges = collectMathRanges(view);
     expect(ranges.length).toBe(50);
+  });
+});
+
+/** Create an EditorView with math + equation label extensions. */
+function createMathViewWithLabels(doc: string, cursorPos?: number): EditorView {
+  const state = EditorState.create({
+    doc,
+    selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
+    extensions: [
+      markdown({ extensions: [mathExtension, equationLabelExtension] }),
+    ],
+  });
+  const parent = document.createElement("div");
+  return new EditorView({ state, parent });
+}
+
+describe("display math with equation labels", () => {
+  let view: EditorView;
+
+  afterEach(() => {
+    view?.destroy();
+  });
+
+  it("collects single-line display math with equation label", () => {
+    const doc = "before\n\n$$x^2$$ {#eq:foo}\n\nafter";
+    view = createMathViewWithLabels(doc, doc.length);
+    const ranges = collectMathRanges(view);
+    expect(ranges.length).toBe(1);
+  });
+
+  it("collects multi-line display math with equation label", () => {
+    const doc = "before\n\n$$\nx^2\n$$ {#eq:bar}\n\nafter";
+    view = createMathViewWithLabels(doc, doc.length);
+    const ranges = collectMathRanges(view);
+    expect(ranges.length).toBe(1);
+  });
+
+  it("collects display math without label when label extension is loaded", () => {
+    const doc = "before\n\n$$x^2$$\n\nafter";
+    view = createMathViewWithLabels(doc, doc.length);
+    const ranges = collectMathRanges(view);
+    expect(ranges.length).toBe(1);
+  });
+
+  it("inline math is unaffected by equation label extension", () => {
+    const doc = "$x^2$ end";
+    view = createMathViewWithLabels(doc, doc.length);
+    const ranges = collectMathRanges(view);
+    expect(ranges.length).toBe(1);
   });
 });

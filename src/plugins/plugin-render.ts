@@ -79,6 +79,8 @@ interface FencedDivInfo {
   readonly to: number;
   readonly fenceFrom: number;
   readonly fenceTo: number;
+  readonly closeFenceFrom?: number;
+  readonly closeFenceTo?: number;
   readonly className: string;
   readonly id?: string;
   readonly title?: string;
@@ -100,11 +102,18 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
       let fenceFrom = node.from;
       let fenceTo = node.from;
 
-      // Find the first FencedDivFence (opening fence line)
-      const fence = divNode.getChild("FencedDivFence");
-      if (fence) {
-        fenceFrom = fence.from;
-        fenceTo = fence.to;
+      // Find opening and closing FencedDivFence nodes
+      let closeFenceFrom: number | undefined;
+      let closeFenceTo: number | undefined;
+      const fences = divNode.getChildren("FencedDivFence");
+      if (fences.length > 0) {
+        fenceFrom = fences[0].from;
+        fenceTo = fences[0].to;
+      }
+      if (fences.length > 1) {
+        const lastFence = fences[fences.length - 1];
+        closeFenceFrom = lastFence.from;
+        closeFenceTo = lastFence.to;
       }
 
       const attrNode = divNode.getChild("FencedDivAttributes");
@@ -130,6 +139,8 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
           to: node.to,
           fenceFrom,
           fenceTo,
+          closeFenceFrom,
+          closeFenceTo,
           className,
           id,
           title,
@@ -190,6 +201,13 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
           }).range(div.fenceFrom, div.fenceTo),
         );
       }
+    }
+
+    // Hide the closing fence
+    if (div.closeFenceFrom != null && div.closeFenceTo != null) {
+      items.push(
+        Decoration.replace({}).range(div.closeFenceFrom, div.closeFenceTo),
+      );
     }
   }
 
