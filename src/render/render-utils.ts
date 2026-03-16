@@ -1,8 +1,20 @@
 import { type EditorView } from "@codemirror/view";
-import { type Range } from "@codemirror/state";
+import { type EditorState, type Range } from "@codemirror/state";
 import { Decoration, type DecorationSet, WidgetType } from "@codemirror/view";
 import { RangeSetBuilder } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
+
+/** Check whether any selection range overlaps [from, to] in the given state. */
+export function selectionOverlaps(
+  state: EditorState,
+  from: number,
+  to: number,
+): boolean {
+  for (const range of state.selection.ranges) {
+    if (range.from <= to && range.to >= from) return true;
+  }
+  return false;
+}
 
 /** Check whether the cursor (or any part of a selection) overlaps [from, to]. */
 export function cursorInRange(
@@ -10,11 +22,7 @@ export function cursorInRange(
   from: number,
   to: number,
 ): boolean {
-  for (const range of view.state.selection.ranges) {
-    // A collapsed cursor at the boundary counts as inside
-    if (range.from <= to && range.to >= from) return true;
-  }
-  return false;
+  return selectionOverlaps(view.state, from, to);
 }
 
 /** Result of collecting renderable nodes from the syntax tree. */
@@ -26,13 +34,15 @@ export interface RenderableNode {
 
 /**
  * Walk the syntax tree and collect nodes matching the given type names.
+ * Accepts either an EditorView or EditorState.
  */
 export function collectNodes(
-  view: EditorView,
+  viewOrState: EditorView | EditorState,
   types: ReadonlySet<string>,
 ): RenderableNode[] {
+  const state = "state" in viewOrState ? viewOrState.state : viewOrState;
   const results: RenderableNode[] = [];
-  const tree = syntaxTree(view.state);
+  const tree = syntaxTree(state);
   tree.iterate({
     enter(node) {
       if (types.has(node.type.name)) {

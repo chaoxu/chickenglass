@@ -1,8 +1,13 @@
-import { type Range } from "@codemirror/state";
-import { Decoration, type DecorationSet, type EditorView } from "@codemirror/view";
+import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
+import {
+  Decoration,
+  type DecorationSet,
+  EditorView,
+} from "@codemirror/view";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import {
+  selectionOverlaps,
   cursorInRange,
   collectNodes,
   buildDecorations,
@@ -152,3 +157,60 @@ export function collectMathRanges(view: EditorView): Range<Decoration>[] {
 export function mathDecorations(view: EditorView): DecorationSet {
   return buildDecorations(collectMathRanges(view));
 }
+
+/**
+ * Build math decorations from EditorState (no view needed).
+ * Used by the StateField to produce block-safe decorations.
+ */
+function buildMathDecorationsFromState(state: EditorState): DecorationSet {
+  const macros = getMathMacros(state);
+  const nodes = collectNodes(state, MATH_TYPES);
+  const items: Range<Decoration>[] = [];
+
+  for (const node of nodes) {
+    if (selectionOverlaps(state, node.from, node.to)) continue;
+
+    const raw = state.sliceDoc(node.from, node.to);
+    const isDisplay = node.type === "DisplayMath";
+    const latex = stripMathDelimiters(raw, isDisplay);
+
+    const widget = isDisplay
+      ? new DisplayMathWidget(latex, raw, macros)
+      : new InlineMathWidget(latex, raw, macros);
+
+    items.push(
+      Decoration.replace({
+        widget,
+        block: isDisplay,
+      }).range(node.from, node.to),
+    );
+  }
+
+  return buildDecorations(items);
+}
+
+/**
+ * CM6 StateField that provides math rendering decorations.
+ *
+ * Uses a StateField (not ViewPlugin) so that block-level replace decorations
+ * for display math (which cross line breaks) are permitted by CM6.
+ */
+const mathDecorationField = StateField.define<DecorationSet>({
+  create(state) {
+    return buildMathDecorationsFromState(state);
+  },
+
+  update(value, tr) {
+    if (tr.docChanged || tr.selection) {
+      return buildMathDecorationsFromState(tr.state);
+    }
+    return value;
+  },
+
+  provide(field) {
+    return EditorView.decorations.from(field);
+  },
+});
+
+/** CM6 extension that renders math expressions with KaTeX (Typora-style toggle). */
+export const mathRenderPlugin: Extension = mathDecorationField;

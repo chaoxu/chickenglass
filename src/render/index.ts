@@ -1,5 +1,6 @@
 export { markdownRenderPlugin } from "./markdown-render";
 export {
+  selectionOverlaps,
   cursorInRange,
   collectNodes,
   buildDecorations,
@@ -22,6 +23,7 @@ export {
   DisplayMathWidget,
   mathDecorations,
   collectMathRanges,
+  mathRenderPlugin,
 } from "./math-render";
 export { getMathMacros } from "./math-macros";
 export {

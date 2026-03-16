@@ -1,28 +1,28 @@
 /**
- * CM6 ViewPlugin that renders fenced divs using the block plugin system.
+ * CM6 decoration provider for rendering fenced divs using the block plugin system.
  *
  * For each FencedDiv node in the syntax tree:
  * - If a plugin is registered for its class, render using the plugin's
  *   render function (Typora-style: show rendered block, reveal ::: on focus).
  * - If no plugin is registered, render as a plain styled div.
+ *
+ * Uses a StateField (not ViewPlugin) so that line decorations (Decoration.line)
+ * are permitted by CM6.
  */
 
 import {
   type DecorationSet,
-  type PluginValue,
-  type ViewUpdate,
-  ViewPlugin,
   Decoration,
   WidgetType,
-  type EditorView,
+  EditorView,
 } from "@codemirror/view";
-import { type Extension, type Range } from "@codemirror/state";
+import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { parseFencedDivAttrs } from "../parser/fenced-div-attrs";
 import type { BlockAttrs, BlockDecorationSpec } from "./plugin-types";
 import { pluginRegistryField, getPlugin } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
-import { buildDecorations, cursorInRange } from "../render/render-utils";
+import { selectionOverlaps, buildDecorations } from "../render/render-utils";
 
 /** Widget for the rendered block header (e.g. "Theorem 1 (Main Result)"). */
 export class BlockHeaderWidget extends WidgetType {
@@ -85,9 +85,9 @@ interface FencedDivInfo {
 }
 
 /** Extract info about FencedDiv nodes from the syntax tree. */
-function collectFencedDivs(view: EditorView): FencedDivInfo[] {
+function collectFencedDivs(state: EditorState): FencedDivInfo[] {
   const results: FencedDivInfo[] = [];
-  const tree = syntaxTree(view.state);
+  const tree = syntaxTree(state);
 
   tree.iterate({
     enter(node) {
@@ -109,7 +109,7 @@ function collectFencedDivs(view: EditorView): FencedDivInfo[] {
 
       const attrNode = divNode.getChild("FencedDivAttributes");
       if (attrNode) {
-        const attrText = view.state.doc.sliceString(attrNode.from, attrNode.to);
+        const attrText = state.doc.sliceString(attrNode.from, attrNode.to);
         const attrs = parseFencedDivAttrs(attrText);
         if (attrs && attrs.classes.length > 0) {
           className = attrs.classes[0];
@@ -120,7 +120,7 @@ function collectFencedDivs(view: EditorView): FencedDivInfo[] {
 
       const titleNode = divNode.getChild("FencedDivTitle");
       if (titleNode) {
-        title = view.state.doc.sliceString(titleNode.from, titleNode.to).trim();
+        title = state.doc.sliceString(titleNode.from, titleNode.to).trim();
         fenceTo = Math.max(fenceTo, titleNode.to);
       }
 
@@ -142,21 +142,21 @@ function collectFencedDivs(view: EditorView): FencedDivInfo[] {
 }
 
 /** Build decorations for all fenced divs using the plugin registry. */
-function buildBlockDecorations(view: EditorView): DecorationSet {
-  const registry = view.state.field(pluginRegistryField);
+function buildBlockDecorations(state: EditorState): DecorationSet {
+  const registry = state.field(pluginRegistryField);
   const counterState: BlockCounterState | undefined =
-    view.state.field(blockCounterField, false) ?? undefined;
-  const divs = collectFencedDivs(view);
+    state.field(blockCounterField, false) ?? undefined;
+  const divs = collectFencedDivs(state);
   const items: Range<Decoration>[] = [];
 
   for (const div of divs) {
     // Skip decorating if cursor is inside the fenced div
-    if (cursorInRange(view, div.from, div.to)) continue;
+    if (selectionOverlaps(state, div.from, div.to)) continue;
 
     const plugin = getPlugin(registry, div.className);
 
     if (plugin) {
-      // Registered plugin — use its render function
+      // Registered plugin -- use its render function
       const numberEntry = counterState?.byPosition.get(div.from);
       const blockAttrs: BlockAttrs = {
         type: div.className,
@@ -178,7 +178,7 @@ function buildBlockDecorations(view: EditorView): DecorationSet {
         }).range(div.fenceFrom, div.fenceTo),
       );
     } else {
-      // Unrecognized class — render as a plain styled div
+      // Unrecognized class -- render as a plain styled div
       items.push(
         Decoration.line({ class: "cg-block cg-block-unknown" }).range(div.from),
       );
@@ -196,28 +196,28 @@ function buildBlockDecorations(view: EditorView): DecorationSet {
   return buildDecorations(items);
 }
 
-class BlockRenderPlugin implements PluginValue {
-  decorations: DecorationSet;
+/**
+ * CM6 StateField that provides block rendering decorations.
+ *
+ * Uses a StateField so that line decorations (Decoration.line) and
+ * block-level replace decorations are permitted by CM6.
+ */
+const blockDecorationField = StateField.define<DecorationSet>({
+  create(state) {
+    return buildBlockDecorations(state);
+  },
 
-  constructor(view: EditorView) {
-    this.decorations = buildBlockDecorations(view);
-  }
-
-  update(update: ViewUpdate): void {
-    if (
-      update.docChanged ||
-      update.selectionSet ||
-      update.viewportChanged
-    ) {
-      this.decorations = buildBlockDecorations(update.view);
+  update(value, tr) {
+    if (tr.docChanged || tr.selection) {
+      return buildBlockDecorations(tr.state);
     }
-  }
-}
+    return value;
+  },
+
+  provide(field) {
+    return EditorView.decorations.from(field);
+  },
+});
 
 /** CM6 extension that renders fenced divs using the block plugin system. */
-export const blockRenderPlugin: Extension = ViewPlugin.fromClass(
-  BlockRenderPlugin,
-  {
-    decorations: (v) => v.decorations,
-  },
-);
+export const blockRenderPlugin: Extension = blockDecorationField;
