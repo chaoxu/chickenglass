@@ -2,6 +2,7 @@ import { EditorView } from "@codemirror/view";
 
 import { createEditor } from "../editor";
 import type { FileSystem } from "./file-manager";
+import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
 import { TabBar } from "./tab-bar";
 
@@ -32,6 +33,8 @@ export class App {
   private readonly root: HTMLElement;
   private readonly sidebar: Sidebar;
   private readonly tabBar: TabBar;
+  private readonly searchPanel: SearchPanel;
+  private readonly cleanupSearchKeybinding: () => void;
   private readonly editorContainer: HTMLElement;
   private editor: EditorView | null = null;
 
@@ -67,6 +70,16 @@ export class App {
     mainArea.appendChild(this.editorContainer);
 
     this.root.appendChild(mainArea);
+
+    // Search panel overlay (hidden by default)
+    this.searchPanel = new SearchPanel();
+    this.searchPanel.setResultHandler((entry) => this.openFile(entry.file));
+    this.root.appendChild(this.searchPanel.element);
+
+    this.cleanupSearchKeybinding = installSearchKeybinding(
+      this.root,
+      this.searchPanel,
+    );
 
     this.setupKeybindings();
   }
@@ -127,6 +140,17 @@ export class App {
   /** Get the sidebar component (for testing). */
   getSidebar(): Sidebar {
     return this.sidebar;
+  }
+
+  /** Get the search panel component (for testing). */
+  getSearchPanel(): SearchPanel {
+    return this.searchPanel;
+  }
+
+  /** Clean up event listeners. */
+  destroy(): void {
+    this.cleanupSearchKeybinding();
+    this.destroyEditor();
   }
 
   private activateFile(path: string): void {

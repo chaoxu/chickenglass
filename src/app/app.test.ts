@@ -97,4 +97,103 @@ describe("App", () => {
     expect(tabBar.hasTab("main.md")).toBe(true);
     expect(tabBar.getActiveTab()).toBe("main.md");
   });
+
+  it("mounts the search panel overlay in the DOM", () => {
+    const root = document.createElement("div");
+    new App({ root, fs: makeFs() });
+
+    expect(root.querySelector(".search-overlay")).not.toBeNull();
+  });
+
+  it("search panel starts hidden", () => {
+    const app = makeApp();
+    const searchPanel = app.getSearchPanel();
+
+    expect(searchPanel.isVisible()).toBe(false);
+  });
+
+  it("toggles search panel with Cmd/Ctrl+Shift+F", () => {
+    const root = document.createElement("div");
+    const app = new App({ root, fs: makeFs() });
+
+    root.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "F",
+        metaKey: true,
+        shiftKey: true,
+      }),
+    );
+
+    expect(app.getSearchPanel().isVisible()).toBe(true);
+
+    root.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "F",
+        metaKey: true,
+        shiftKey: true,
+      }),
+    );
+
+    expect(app.getSearchPanel().isVisible()).toBe(false);
+  });
+
+  it("opens a file when a search result is clicked", async () => {
+    const app = makeApp();
+    await app.init();
+    const searchPanel = app.getSearchPanel();
+
+    // Provide an index with an entry pointing to an existing file
+    searchPanel.setIndex({
+      files: new Map([
+        [
+          "main.md",
+          {
+            file: "main.md",
+            entries: [
+              {
+                type: "heading",
+                file: "main.md",
+                content: "Main",
+                position: { from: 0, to: 6 },
+              },
+            ],
+            references: [],
+          },
+        ],
+      ]),
+    });
+
+    searchPanel.show();
+    searchPanel.setTypeFilter("heading");
+
+    const item = searchPanel.element.querySelector(
+      ".search-result-item",
+    ) as HTMLElement;
+    item.click();
+
+    // The panel auto-hides on click
+    expect(searchPanel.isVisible()).toBe(false);
+
+    // openFile is async; wait a microtask for it to complete
+    await Promise.resolve();
+    expect(app.getTabBar().hasTab("main.md")).toBe(true);
+  });
+
+  it("cleans up keybinding on destroy", () => {
+    const root = document.createElement("div");
+    const app = new App({ root, fs: makeFs() });
+
+    app.destroy();
+
+    // After destroy, the keybinding should no longer toggle the panel
+    root.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "F",
+        metaKey: true,
+        shiftKey: true,
+      }),
+    );
+
+    expect(app.getSearchPanel().isVisible()).toBe(false);
+  });
 });
