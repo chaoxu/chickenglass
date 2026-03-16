@@ -1,0 +1,34 @@
+{
+  "name": "chickenglass",
+  "version": "2.0.0",
+  "description": "Browser-based semantic document editor for mathematical writing",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language": "^6.12.2",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.40.0",
+    "@lezer/markdown": "^1.6.3",
+    "katex": "^0.16.38"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/katex": "^0.16.8",
+    "eslint": "^10.0.3",
+    "jsdom": "^29.0.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.0"
+  }
+}
