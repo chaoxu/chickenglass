@@ -45,3 +45,24 @@ export { definitionPlugin } from "./definition-plugin";
 export { remarkPlugin, examplePlugin } from "./remark-plugin";
 export { algorithmPlugin } from "./algorithm-plugin";
 export { defaultPlugins } from "./default-plugins";
+export {
+  type ResolvedInclude,
+  IncludeCycleError,
+  IncludeNotFoundError,
+  extractIncludePaths,
+  resolveIncludePath,
+  resolveIncludes,
+  flattenIncludes,
+  collectIncludedPaths,
+} from "./include-resolver";
+export {
+  type BlockCounters,
+  type RefTarget,
+  type IncludeResult,
+  type IncludeError,
+  extractNumberedBlocks,
+  buildRefMap,
+  processIncludes,
+  isIncludeError,
+  isNumberedClass,
+} from "./include-plugin";

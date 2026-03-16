@@ -1,0 +1,219 @@
+import type { FileSystem } from "../app/file-manager";
+
+/** A single resolved include: the file path and its content. */
+export interface ResolvedInclude {
+  /** The file path that was included. */
+  readonly path: string;
+  /** The markdown content of the included file. */
+  readonly content: string;
+  /** Nested includes found within this file (recursively resolved). */
+  readonly children: readonly ResolvedInclude[];
+}
+
+/** Error produced when an include cycle is detected. */
+export class IncludeCycleError extends Error {
+  /** The chain of file paths forming the cycle. */
+  readonly chain: readonly string[];
+
+  constructor(chain: readonly string[]) {
+    const cycle = chain.join(" -> ");
+    super(`Include cycle detected: ${cycle}`);
+    this.name = "IncludeCycleError";
+    this.chain = chain;
+  }
+}
+
+/** Error produced when an included file cannot be found. */
+export class IncludeNotFoundError extends Error {
+  /** The path that could not be resolved. */
+  readonly path: string;
+
+  constructor(path: string) {
+    super(`Included file not found: ${path}`);
+    this.name = "IncludeNotFoundError";
+    this.path = path;
+  }
+}
+
+/**
+ * Pattern matching `::: {.include} <path> :::` blocks in markdown.
+ *
+ * Captures the file path from the content between the opening and closing fence.
+ * Supports both single-line and multi-line forms:
+ *   - Single line: `::: {.include} chapter1.md :::`
+ *   - Multi-line:
+ *     ```
+ *     ::: {.include}
+ *     chapter1.md
+ *     :::
+ *     ```
+ */
+const INCLUDE_BLOCK_RE =
+  /^:{3,}\s*\{\.include\}\s*\n?\s*(.+?)\s*\n?\s*:{3,}\s*$/gm;
+
+/** Extract include paths from markdown content. */
+export function extractIncludePaths(content: string): readonly string[] {
+  const paths: string[] = [];
+  const re = new RegExp(INCLUDE_BLOCK_RE.source, INCLUDE_BLOCK_RE.flags);
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(content)) !== null) {
+    const path = match[1].trim();
+    if (path.length > 0) {
+      paths.push(path);
+    }
+  }
+  return paths;
+}
+
+/**
+ * Resolve a file path relative to a base file's directory.
+ *
+ * If `includePath` is absolute (starts with `/`), it is returned as-is.
+ * Otherwise it is resolved relative to the directory of `fromPath`.
+ */
+export function resolveIncludePath(
+  fromPath: string,
+  includePath: string,
+): string {
+  if (includePath.startsWith("/")) {
+    return includePath.slice(1); // strip leading slash for FileSystem compatibility
+  }
+  const dir = fromPath.includes("/")
+    ? fromPath.slice(0, fromPath.lastIndexOf("/"))
+    : "";
+  const combined = dir ? `${dir}/${includePath}` : includePath;
+  return normalizePath(combined);
+}
+
+/** Normalize a path by resolving `.` and `..` segments. */
+function normalizePath(path: string): string {
+  const parts = path.split("/");
+  const resolved: string[] = [];
+  for (const part of parts) {
+    if (part === "." || part === "") {
+      continue;
+    } else if (part === "..") {
+      resolved.pop();
+    } else {
+      resolved.push(part);
+    }
+  }
+  return resolved.join("/");
+}
+
+/**
+ * Recursively resolve all includes starting from a root file.
+ *
+ * @param rootPath - The path of the root document.
+ * @param fs - The filesystem to read files from.
+ * @returns The resolved include tree.
+ * @throws {IncludeCycleError} If a cycle is detected in the include chain.
+ * @throws {IncludeNotFoundError} If an included file does not exist.
+ */
+export async function resolveIncludes(
+  rootPath: string,
+  fs: FileSystem,
+): Promise<readonly ResolvedInclude[]> {
+  return resolveIncludesRecursive(rootPath, fs, []);
+}
+
+async function resolveIncludesRecursive(
+  filePath: string,
+  fs: FileSystem,
+  ancestorChain: readonly string[],
+): Promise<readonly ResolvedInclude[]> {
+  const content = await readFileChecked(filePath, fs);
+  const includePaths = extractIncludePaths(content);
+
+  const results: ResolvedInclude[] = [];
+  for (const rawPath of includePaths) {
+    const resolved = resolveIncludePath(filePath, rawPath);
+
+    // Cycle detection: check if this path appears in the ancestor chain
+    if (ancestorChain.includes(resolved)) {
+      throw new IncludeCycleError([...ancestorChain, resolved]);
+    }
+
+    const childContent = await readFileChecked(resolved, fs);
+    const newChain = [...ancestorChain, resolved];
+
+    // Recursively resolve nested includes
+    const children = await resolveIncludesRecursive(resolved, fs, newChain);
+
+    results.push({
+      path: resolved,
+      content: childContent,
+      children,
+    });
+  }
+
+  return results;
+}
+
+async function readFileChecked(path: string, fs: FileSystem): Promise<string> {
+  const fileExists = await fs.exists(path);
+  if (!fileExists) {
+    throw new IncludeNotFoundError(path);
+  }
+  return fs.readFile(path);
+}
+
+/**
+ * Flatten the include tree into a linear sequence of file contents,
+ * in the order they should appear in the merged document.
+ *
+ * Each included file's content replaces its include directive.
+ * Nested includes are expanded inline.
+ */
+export function flattenIncludes(
+  rootContent: string,
+  includes: readonly ResolvedInclude[],
+): string {
+  if (includes.length === 0) {
+    return rootContent;
+  }
+
+  let result = rootContent;
+  const re = new RegExp(INCLUDE_BLOCK_RE.source, INCLUDE_BLOCK_RE.flags);
+  let includeIndex = 0;
+  const replacements: Array<{ start: number; end: number; text: string }> = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(result)) !== null) {
+    if (includeIndex >= includes.length) break;
+
+    const include = includes[includeIndex];
+    // Recursively flatten nested includes
+    const expandedContent = flattenIncludes(include.content, include.children);
+
+    replacements.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      text: expandedContent,
+    });
+    includeIndex++;
+  }
+
+  // Apply replacements in reverse order to preserve offsets
+  for (let i = replacements.length - 1; i >= 0; i--) {
+    const r = replacements[i];
+    result = result.slice(0, r.start) + r.text + result.slice(r.end);
+  }
+
+  return result;
+}
+
+/**
+ * Collect all file paths in the include tree (depth-first).
+ * Useful for determining what files are part of the merged document.
+ */
+export function collectIncludedPaths(
+  includes: readonly ResolvedInclude[],
+): readonly string[] {
+  const paths: string[] = [];
+  for (const inc of includes) {
+    paths.push(inc.path);
+    paths.push(...collectIncludedPaths(inc.children));
+  }
+  return paths;
+}
