@@ -23,3 +23,4 @@ export {
   mathDecorations,
   collectMathRanges,
 } from "./math-render";
+export { getMathMacros } from "./math-macros";

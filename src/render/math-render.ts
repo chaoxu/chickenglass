@@ -8,6 +8,7 @@ import {
   buildDecorations,
   RenderWidget,
 } from "./render-utils";
+import { getMathMacros } from "./math-macros";
 
 const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
 
@@ -33,13 +34,28 @@ function stripMathDelimiters(raw: string, isDisplay: boolean): string {
   return raw;
 }
 
+/**
+ * Serialize macros to a stable string for use in widget equality checks.
+ * Returns an empty string when there are no macros.
+ */
+function serializeMacros(macros: Record<string, string>): string {
+  const keys = Object.keys(macros);
+  if (keys.length === 0) return "";
+  keys.sort();
+  return keys.map((k) => `${k}=${macros[k]}`).join("\0");
+}
+
 /** Widget that renders inline math via KaTeX. */
 export class InlineMathWidget extends RenderWidget {
+  private readonly macrosKey: string;
+
   constructor(
     private readonly latex: string,
     private readonly raw: string,
+    private readonly macros: Record<string, string> = {},
   ) {
     super();
+    this.macrosKey = serializeMacros(macros);
   }
 
   toDOM(): HTMLElement {
@@ -50,6 +66,7 @@ export class InlineMathWidget extends RenderWidget {
         displayMode: false,
         throwOnError: false,
         output: "htmlAndMathml",
+        macros: { ...this.macros },
       });
     } catch (err: unknown) {
       span.className = "cg-math-error";
@@ -59,17 +76,21 @@ export class InlineMathWidget extends RenderWidget {
   }
 
   eq(other: InlineMathWidget): boolean {
-    return this.raw === other.raw;
+    return this.raw === other.raw && this.macrosKey === other.macrosKey;
   }
 }
 
 /** Widget that renders display math via KaTeX. */
 export class DisplayMathWidget extends RenderWidget {
+  private readonly macrosKey: string;
+
   constructor(
     private readonly latex: string,
     private readonly raw: string,
+    private readonly macros: Record<string, string> = {},
   ) {
     super();
+    this.macrosKey = serializeMacros(macros);
   }
 
   toDOM(): HTMLElement {
@@ -80,6 +101,7 @@ export class DisplayMathWidget extends RenderWidget {
         displayMode: true,
         throwOnError: false,
         output: "htmlAndMathml",
+        macros: { ...this.macros },
       });
     } catch (err: unknown) {
       div.className = "cg-math-error";
@@ -89,12 +111,18 @@ export class DisplayMathWidget extends RenderWidget {
   }
 
   eq(other: DisplayMathWidget): boolean {
-    return this.raw === other.raw;
+    return this.raw === other.raw && this.macrosKey === other.macrosKey;
   }
 }
 
-/** Collect decoration ranges for math nodes outside the cursor. */
+/**
+ * Collect decoration ranges for math nodes outside the cursor.
+ *
+ * Reads macros from the frontmatter state field and passes them
+ * to each math widget for KaTeX rendering.
+ */
 export function collectMathRanges(view: EditorView): Range<Decoration>[] {
+  const macros = getMathMacros(view.state);
   const nodes = collectNodes(view, MATH_TYPES);
   const items: Range<Decoration>[] = [];
 
@@ -106,8 +134,8 @@ export function collectMathRanges(view: EditorView): Range<Decoration>[] {
     const latex = stripMathDelimiters(raw, isDisplay);
 
     const widget = isDisplay
-      ? new DisplayMathWidget(latex, raw)
-      : new InlineMathWidget(latex, raw);
+      ? new DisplayMathWidget(latex, raw, macros)
+      : new InlineMathWidget(latex, raw, macros);
 
     items.push(
       Decoration.replace({
