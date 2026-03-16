@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-electron/
+dist-server/
 .DS_Store
 *.tsbuildinfo
 .worktrees/
