@@ -8,3 +8,8 @@ export {
 export { FileTree } from "./file-tree";
 export { Sidebar } from "./sidebar";
 export { TabBar, type Tab } from "./tab-bar";
+export {
+  SearchPanel,
+  installSearchKeybinding,
+  type SearchResultHandler,
+} from "./search-panel";
