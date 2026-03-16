@@ -1,0 +1,103 @@
+{
+  "project": {
+    "working_dir": ".",
+    "worktree_root": ".worktrees"
+  },
+  "forge": {
+    "type": "github",
+    "base_url": "https://api.github.com",
+    "repo": "chaoxu/chickenglass",
+    "deferred_label": "deferred",
+    "auth": {}
+  },
+  "verification": {
+    "typecheck": "npx tsc --noEmit",
+    "lint": "npm run lint",
+    "lint_fix": "npm run lint:fix",
+    "build": "npm run build",
+    "test": "npm run test"
+  },
+  "tiers": {
+    "small": {
+      "verify": ["typecheck"]
+    },
+    "medium": {
+      "verify": ["typecheck", "lint", "build"]
+    },
+    "full": {
+      "verify": ["typecheck", "lint", "build", "test"]
+    }
+  },
+  "tier_triggers": {
+    "medium": ["src/**/*.ts", "src/**/*.tsx"],
+    "full": ["src/parser/**", "src/plugins/**"]
+  },
+  "preflight": ["typecheck"],
+  "commit_format": "conventional",
+  "co_author": "Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+  "orchestration": {
+    "merge": {
+      "owner": "implementer",
+      "push_owner": "implementer",
+      "signal": "MERGE_TURN",
+      "require_base_sha_match": true,
+      "temp_branch_prefix": "merge-",
+      "strategy": "squash"
+    }
+  },
+  "review": {
+    "skill": "code-reviewer",
+    "dispatch_mode": "worker_subagent",
+    "subagent_type": "feature-dev:code-reviewer",
+    "severities_that_block": ["critical", "high"],
+    "severity_aliases": {},
+    "max_fix_rounds": 2,
+    "conventions_file": "CLAUDE.md"
+  },
+  "simplifier": {
+    "enabled": true,
+    "required_before_commit": true,
+    "scope": "modified_files",
+    "max_rounds": 2
+  },
+  "integration_verify_gate": {
+    "enabled": true,
+    "run_once_after_merge": true,
+    "command_keys": ["typecheck", "build"],
+    "owner": "verifier",
+    "fail_run_on_failure": true
+  },
+  "playwright_gate": {
+    "enabled": false
+  },
+  "selective_verify_checks": {
+    "enabled": false
+  },
+  "issue_closure": {
+    "check_all_task_lists": true,
+    "hard_fail_on_unchecked": false,
+    "update_checkboxes_before_close": true
+  },
+  "post_merge": {
+    "always": []
+  },
+  "baseline_failures": {
+    "enabled": false
+  },
+  "worker_rules_by_owner": {
+    "implementer": [
+      "Read CLAUDE.md before starting",
+      "Run all verification commands from the project root",
+      "Use conventional commit messages",
+      "Do not modify files outside your task scope unless necessary"
+    ]
+  },
+  "planner_rules": [
+    "Each task should target a cohesive unit of functionality",
+    "Parser tasks should be separate from rendering tasks",
+    "Plugin system should be implemented before individual plugins",
+    "Keep tasks under 15 files each"
+  ],
+  "state_dir": "state",
+  "dev_servers": {}
+}
