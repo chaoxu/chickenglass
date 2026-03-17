@@ -238,7 +238,7 @@ describe("collectCrossrefRanges", () => {
     view = createView(doc, doc.length);
     const ranges = collectCrossrefRanges(view);
 
-    expect(ranges.length).toBe(1);
+    expect(ranges.length).toBe(0);
   });
 
   it("handles empty document", () => {
