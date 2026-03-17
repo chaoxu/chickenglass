@@ -21,13 +21,29 @@ import {
   type WidgetType,
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
-import {
-  type BibEntry,
-  formatCitation,
-  formatNarrativeCitation,
-} from "./bibtex-parser";
+import { type BibEntry, extractLastName } from "./bibtex-parser";
 import type { CslProcessor } from "./csl-processor";
 import { cursorInRange, buildDecorations, RenderWidget } from "../render/render-utils";
+
+/**
+ * Format a citation label from a BibEntry.
+ * Returns "(Author, Year)" format for parenthetical citations.
+ */
+export function formatCitation(entry: BibEntry): string {
+  const author = entry.author ? extractLastName(entry.author) : entry.id;
+  const year = entry.year ?? "";
+  return `${author}, ${year}`;
+}
+
+/**
+ * Format a narrative citation from a BibEntry.
+ * Returns "Author (Year)" format.
+ */
+export function formatNarrativeCitation(entry: BibEntry): string {
+  const author = entry.author ? extractLastName(entry.author) : entry.id;
+  const year = entry.year ?? "";
+  return `${author} (${year})`;
+}
 
 /** A store of bibliography entries keyed by citation id. */
 export type BibStore = ReadonlyMap<string, BibEntry>;
