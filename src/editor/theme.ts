@@ -14,23 +14,6 @@ export const chickenglassTheme = EditorView.theme({
   ".cm-gutters": {
     display: "none",
   },
-  /* Fold toggle sits in the left margin outside the line */
-  ".cg-fold-line": {
-    position: "relative",
-  },
-  ".cg-fold-toggle": {
-    position: "absolute",
-    right: "100%",
-    marginRight: "4px",
-    color: "#bbb",
-    fontSize: "10px",
-    cursor: "pointer",
-    userSelect: "none",
-    lineHeight: "inherit",
-  },
-  ".cg-fold-toggle:hover": {
-    color: "#666",
-  },
   ".cm-cursor": {
     borderLeftColor: "#1a1a1a",
     borderLeftWidth: "2px",
@@ -118,13 +101,6 @@ export const chickenglassTheme = EditorView.theme({
     padding: "1px 4px",
   },
 
-  /* Section numbers (rendered via ::before when cursor is outside) */
-  "[data-section-number]::before": {
-    content: "attr(data-section-number) '\\2002'",
-    color: "#999",
-    fontWeight: "400",
-  },
-
   /* Header markers (# symbols) shown in muted color when editing */
   ".cg-heading-1 .tok-heading, .cg-heading-2 .tok-heading, .cg-heading-3 .tok-heading":
     {
@@ -144,60 +120,6 @@ export const chickenglassTheme = EditorView.theme({
   ".cg-block-header[data-block-label]::before": {
     content: "attr(data-block-label) ' '",
     fontWeight: "bold",
-  },
-
-  /* Fenced div nesting guides — vertical lines on the left, editing only.
-     Uses background-image so the line is strictly contained (no bleed). */
-  ".cg-fence-d1": {
-    backgroundImage: "linear-gradient(to right, #d0d0d0 2px, transparent 2px)",
-    backgroundRepeat: "no-repeat",
-    paddingLeft: "10px !important",
-  },
-  ".cg-fence-d2": {
-    backgroundImage:
-      "linear-gradient(to right, #d0d0d0 2px, transparent 2px), linear-gradient(to right, #c0c0c0 2px, transparent 2px)",
-    backgroundPosition: "0 0, 10px 0",
-    backgroundRepeat: "no-repeat",
-    paddingLeft: "20px !important",
-  },
-  ".cg-fence-d3": {
-    backgroundImage:
-      "linear-gradient(to right, #d0d0d0 2px, transparent 2px), linear-gradient(to right, #c0c0c0 2px, transparent 2px), linear-gradient(to right, #b0b0b0 2px, transparent 2px)",
-    backgroundPosition: "0 0, 10px 0, 20px 0",
-    backgroundRepeat: "no-repeat",
-    paddingLeft: "30px !important",
-  },
-  ".cg-fence-d4": {
-    backgroundImage:
-      "linear-gradient(to right, #d0d0d0 2px, transparent 2px), linear-gradient(to right, #c0c0c0 2px, transparent 2px), linear-gradient(to right, #b0b0b0 2px, transparent 2px), linear-gradient(to right, #a0a0a0 2px, transparent 2px)",
-    backgroundPosition: "0 0, 10px 0, 20px 0, 30px 0",
-    backgroundRepeat: "no-repeat",
-    paddingLeft: "40px !important",
-  },
-
-  /* QED tombstone — right-aligned ∎ at end of proof blocks */
-  ".cg-block-qed::after": {
-    content: "'\\220E'",
-    float: "right",
-    fontSize: "1.2em",
-    lineHeight: "1",
-  },
-
-  /* Include fence lines — collapsed to zero height for seamless flow */
-  ".cg-include-fence": {
-    height: "0",
-    lineHeight: "0",
-    overflow: "hidden",
-    padding: "0 !important",
-    margin: "0",
-  },
-
-  /* Include block styling */
-  ".cg-block-include": {
-    borderLeft: "3px solid #6cb4ee",
-    backgroundColor: "#f0f7ff",
-    paddingLeft: "1em",
-    marginBottom: "0.5em",
   },
 
   /* Blockquote styling: left border, muted background, padding */
@@ -347,5 +269,30 @@ export const chickenglassTheme = EditorView.theme({
     padding: "12px",
     overflow: "auto",
     maxHeight: "300px",
+  },
+
+  /* Include region: position relative so absolute label anchors correctly */
+  ".cg-include-region": {
+    position: "relative",
+  },
+
+  /* Include label: rotated filename in the right margin */
+  ".cg-include-label": {
+    position: "absolute",
+    right: "-40px",
+    top: "0",
+    writingMode: "vertical-rl",
+    transform: "rotate(180deg)",
+    userSelect: "none",
+    pointerEvents: "none",
+    fontSize: "11px",
+    color: "#999",
+    opacity: "0.2",
+    whiteSpace: "nowrap",
+    letterSpacing: "0.5px",
+  },
+
+  ".cg-include-label-active": {
+    opacity: "0.6",
   },
 });

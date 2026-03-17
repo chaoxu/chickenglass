@@ -23,6 +23,7 @@ import {
   debugInspectorPlugin,
   checkboxRenderPlugin,
   mathPreviewPlugin,
+  includeLabelPlugin,
 } from "../render";
 import {
   createPluginRegistryField,
@@ -33,7 +34,6 @@ import {
 import { citationRenderPlugin, bibliographyPlugin } from "../citations";
 import { editorKeybindings } from "./keybindings";
 import { chickenglassTheme } from "./theme";
-import { listOutlinerExtension } from "./list-outliner";
 
 const sampleDocument = `---
 title: Chickenglass Demo
@@ -143,9 +143,7 @@ export function createEditor(config: EditorConfig): EditorView {
       debugInspectorPlugin,
       checkboxRenderPlugin,
       mathPreviewPlugin,
-
-      // List outliner (fold/unfold + indent/outdent)
-      listOutlinerExtension,
+      includeLabelPlugin,
 
       // Editor chrome
       editorKeybindings,

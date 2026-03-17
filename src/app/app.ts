@@ -97,6 +97,12 @@ export class App {
     );
 
     this.setupKeybindings();
+
+    // Listen for "jump to source file" events from the editor keybinding
+    this.root.addEventListener("cg-open-file", (e) => {
+      const path = (e as CustomEvent).detail;
+      if (typeof path === "string") this.openFile(path);
+    });
   }
 
   /** Initialize the app: load file tree and optionally open a file. */
@@ -125,6 +131,7 @@ export class App {
     );
 
     this.sourceMap = sourceMap;
+    (window as unknown as { __cgSourceMap: SourceMap | null }).__cgSourceMap = sourceMap;
     this.savedContent.set(path, composed);
     this.bufferContent.set(path, composed);
     this.tabBar.openTab(path, name);
