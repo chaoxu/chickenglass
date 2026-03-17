@@ -1,5 +1,6 @@
 /**
- * List outliner: fold/unfold and indent/outdent for list items.
+ * List outliner: fold/unfold, indent/outdent, move, Enter, and Backspace
+ * for list items.
  *
  * - Fold: uses CM6 foldService so that ListItems with children
  *   (nested BulletList or OrderedList) can be collapsed.
@@ -7,6 +8,12 @@
  *   its children, respecting maximum nesting constraints.
  * - Outdent (Shift-Tab): removes 2 spaces from the current list
  *   item and all its children.
+ * - Move up/down (Cmd-Shift-Up/Down): swaps the current list item
+ *   (and all its children) with the previous/next sibling.
+ * - Enter: creates a new sibling list item, splitting text at cursor.
+ *   Removes empty items instead.
+ * - Backspace: at the start of a list item's content, merges with
+ *   the previous item.
  *
  * Reference: obsidian-outliner plugin (TypeScript, CM6-based).
  */
@@ -140,6 +147,19 @@ function findPrevSibling(node: SyntaxNode): SyntaxNode | null {
 }
 
 /**
+ * Find the next sibling ListItem. In the Lezer tree,
+ * siblings are children of the same BulletList/OrderedList.
+ */
+function findNextSibling(node: SyntaxNode): SyntaxNode | null {
+  let next = node.nextSibling;
+  while (next) {
+    if (next.name === "ListItem") return next;
+    next = next.nextSibling;
+  }
+  return null;
+}
+
+/**
  * Indent the current list item (and its children) by adding INDENT_UNIT
  * to each line. A list item can only be indented if it has a previous
  * sibling (it would become a child of that sibling).
@@ -223,6 +243,223 @@ function outdentListItem(view: EditorView): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Move item up / down
+// ---------------------------------------------------------------------------
+
+/**
+ * Move the current list item (and all its children) up, swapping it
+ * with the previous sibling ListItem. The entire subtree moves as a unit.
+ */
+function moveListItemUp(view: EditorView): boolean {
+  const listItem = findListItemAtCursor(view);
+  if (!listItem) return false;
+
+  const prevItem = findPrevSibling(listItem);
+  if (!prevItem) return false;
+
+  const doc = view.state.doc;
+  const cursorOffset = view.state.selection.main.head - listItem.from;
+
+  // Extract text of both items (including trailing newline if present)
+  const prevText = doc.sliceString(prevItem.from, prevItem.to);
+  const currText = doc.sliceString(listItem.from, listItem.to);
+
+  // Replace the range covering both items: [prevItem.from, listItem.to]
+  // with currText first, then prevText
+  const combinedFrom = prevItem.from;
+  const combinedTo = listItem.to;
+  const separator = doc.sliceString(prevItem.to, listItem.from);
+  const newText = currText + separator + prevText;
+
+  // After swap, the current item starts at prevItem.from
+  const newCursorPos = prevItem.from + cursorOffset;
+
+  view.dispatch({
+    changes: { from: combinedFrom, to: combinedTo, insert: newText },
+    selection: { anchor: newCursorPos },
+  });
+
+  return true;
+}
+
+/**
+ * Move the current list item (and all its children) down, swapping it
+ * with the next sibling ListItem. The entire subtree moves as a unit.
+ */
+function moveListItemDown(view: EditorView): boolean {
+  const listItem = findListItemAtCursor(view);
+  if (!listItem) return false;
+
+  const nextItem = findNextSibling(listItem);
+  if (!nextItem) return false;
+
+  const doc = view.state.doc;
+  const cursorOffset = view.state.selection.main.head - listItem.from;
+
+  // Extract text of both items
+  const currText = doc.sliceString(listItem.from, listItem.to);
+  const nextText = doc.sliceString(nextItem.from, nextItem.to);
+
+  // Replace the range covering both items: [listItem.from, nextItem.to]
+  // with nextText first, then currText
+  const combinedFrom = listItem.from;
+  const combinedTo = nextItem.to;
+  const separator = doc.sliceString(listItem.to, nextItem.from);
+  const newText = nextText + separator + currText;
+
+  // After swap, the current item starts after the next item's text + separator
+  const newCursorPos = listItem.from + nextText.length + separator.length + cursorOffset;
+
+  view.dispatch({
+    changes: { from: combinedFrom, to: combinedTo, insert: newText },
+    selection: { anchor: newCursorPos },
+  });
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Enter: create new sibling / remove empty item
+// ---------------------------------------------------------------------------
+
+/**
+ * When Enter is pressed inside a list item:
+ * - If the item is empty (just the marker), remove it and exit the list
+ * - Otherwise, split at cursor and create a new sibling item
+ */
+function enterInListItem(view: EditorView): boolean {
+  const listItem = findListItemAtCursor(view);
+  if (!listItem) return false;
+
+  const state = view.state;
+  const doc = state.doc;
+  const cursorPos = state.selection.main.head;
+  const line = doc.lineAt(cursorPos);
+  const lineText = line.text;
+
+  // Determine the marker on this line
+  const bulletMatch = lineText.match(/^(\s*)([-*+])\s/);
+  const orderedMatch = lineText.match(/^(\s*)(\d+)([.)]\s)/);
+
+  if (!bulletMatch && !orderedMatch) return false;
+
+  const indent = bulletMatch ? bulletMatch[1] : orderedMatch![1];
+
+  // Calculate marker end position (where content starts)
+  let markerEnd: number;
+  if (bulletMatch) {
+    markerEnd = line.from + indent.length + bulletMatch[2].length + 1; // +1 for the space after marker
+  } else {
+    markerEnd = line.from + indent.length + orderedMatch![2].length + orderedMatch![3].length;
+  }
+
+  // Check if the item content is empty (just the marker with no text after)
+  const contentAfterMarker = lineText.slice(markerEnd - line.from).trim();
+
+  if (contentAfterMarker.length === 0) {
+    // Empty item: remove the entire line (including the newline before it if possible)
+    const removeFrom = line.number > 1 ? doc.line(line.number - 1).to : line.from;
+    const removeTo = line.to;
+
+    view.dispatch({
+      changes: { from: removeFrom, to: removeTo },
+      selection: { anchor: removeFrom },
+    });
+    return true;
+  }
+
+  // Split at cursor position: text before cursor stays, text after goes to new item
+  const textAfterCursor = doc.sliceString(cursorPos, line.to);
+
+  // Build the new line marker
+  let newMarker: string;
+  if (bulletMatch) {
+    newMarker = indent + bulletMatch[2] + " ";
+  } else {
+    const num = parseInt(orderedMatch![2], 10);
+    newMarker = indent + String(num + 1) + orderedMatch![3];
+  }
+
+  const newLine = "\n" + newMarker + textAfterCursor;
+
+  // Replace from cursor to end of line with just the newline + new item
+  view.dispatch({
+    changes: { from: cursorPos, to: line.to, insert: newLine },
+    selection: { anchor: cursorPos + 1 + newMarker.length }, // after "\n" + marker
+  });
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Backspace: merge with previous item
+// ---------------------------------------------------------------------------
+
+/**
+ * When Backspace is pressed at the very start of a list item's content
+ * (right after the marker), merge the current item's content with the
+ * previous item. Returns false for first items and non-list contexts.
+ */
+function backspaceAtListItemStart(view: EditorView): boolean {
+  const listItem = findListItemAtCursor(view);
+  if (!listItem) return false;
+
+  const state = view.state;
+  const doc = state.doc;
+  const cursorPos = state.selection.main.head;
+
+  // Don't handle if there's a selection
+  if (!state.selection.main.empty) return false;
+
+  const line = doc.lineAt(cursorPos);
+  const lineText = line.text;
+
+  // Find the marker on this line
+  const bulletMatch = lineText.match(/^(\s*)([-*+])\s/);
+  const orderedMatch = lineText.match(/^(\s*)(\d+)[.)]\s/);
+
+  if (!bulletMatch && !orderedMatch) return false;
+
+  // Calculate where the content starts (after the marker)
+  let contentStart: number;
+  if (bulletMatch) {
+    contentStart = line.from + bulletMatch[0].length;
+  } else {
+    const fullMatch = lineText.match(/^(\s*\d+[.)]\s)/);
+    if (!fullMatch) return false;
+    contentStart = line.from + fullMatch[0].length;
+  }
+
+  // Only trigger if cursor is exactly at content start (right after marker)
+  if (cursorPos !== contentStart) return false;
+
+  // Find the previous ListItem sibling
+  const prevItem = findPrevSibling(listItem);
+  if (!prevItem) return false;
+
+  // Get the last line of the previous item's own content (not children)
+  // The previous item's first line is where we append
+  const prevLine = doc.lineAt(prevItem.from);
+  const prevLineEnd = prevLine.to;
+
+  // Get the content of the current item (text after marker)
+  const currentContent = lineText.slice(contentStart - line.from);
+
+  // Delete from end of previous item's first line to the end of the
+  // current item's marker, and insert the current item's content
+  // We need to remove the newline + current marker, appending content to prev line
+  const deleteFrom = prevLineEnd;
+  const deleteTo = contentStart;
+
+  view.dispatch({
+    changes: { from: deleteFrom, to: deleteTo, insert: currentContent },
+    selection: { anchor: prevLineEnd },
+  });
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Keymap
 // ---------------------------------------------------------------------------
 
@@ -235,6 +472,22 @@ const listOutlinerKeymap = keymap.of([
     key: "Shift-Tab",
     run: outdentListItem,
   },
+  {
+    key: "Mod-Shift-ArrowUp",
+    run: moveListItemUp,
+  },
+  {
+    key: "Mod-Shift-ArrowDown",
+    run: moveListItemDown,
+  },
+  {
+    key: "Enter",
+    run: enterInListItem,
+  },
+  {
+    key: "Backspace",
+    run: backspaceAtListItemStart,
+  },
   ...foldKeymap,
 ]);
 
@@ -242,7 +495,7 @@ const listOutlinerKeymap = keymap.of([
 // Combined extension
 // ---------------------------------------------------------------------------
 
-/** CM6 extension for list outliner: fold/unfold + indent/outdent. */
+/** CM6 extension for list outliner: fold/unfold, indent/outdent, move, Enter, Backspace. */
 export const listOutlinerExtension: Extension = [
   listFoldService,
   codeFolding(),
