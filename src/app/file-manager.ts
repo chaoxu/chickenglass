@@ -227,6 +227,8 @@ function isPrime(n: number): boolean {
 > Mathematics is the queen of the sciences and number theory is the queen of mathematics.
 > — Carl Friedrich Gauss
 
+> The identity $e^{i\\pi} + 1 = 0$ unites five constants. For any $f: [a,b] \\to \\mathbb{R}$, the integral $\\int_a^b f(x)\\,dx$ measures signed area.
+
 ---
 
 ::: {.include}

@@ -198,9 +198,8 @@ export const chickenglassTheme = EditorView.theme({
     marginBottom: "0.5em",
   },
 
-  /* Blockquote styling: left border, muted background, padding */
+  /* Blockquote styling: applied to .cm-line elements via Decoration.line */
   ".cg-blockquote": {
-    display: "block",
     borderLeft: "4px solid #ccc",
     backgroundColor: "#f9f9f9",
     paddingLeft: "1em",

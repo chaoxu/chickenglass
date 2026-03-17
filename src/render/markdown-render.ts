@@ -48,8 +48,8 @@ const headingDecorationByLevel: Record<string, Decoration> = {
 /** Decoration to style horizontal rules. */
 const hrDecoration = Decoration.mark({ class: "cg-hr" });
 
-/** Decoration to style blockquotes. */
-const blockquoteDecoration = Decoration.mark({ class: "cg-blockquote" });
+/** Line decoration to style blockquote lines (applied per-line, not as a wrapping span). */
+const blockquoteLineDecoration = Decoration.line({ class: "cg-blockquote" });
 
 /** Decoration to style highlighted text. Always applied (like headings). */
 const highlightDecoration = Decoration.mark({ class: "cg-highlight" });
@@ -188,12 +188,24 @@ class MarkdownRenderPlugin implements PluginValue {
             return;
           }
 
-          // --- Blockquote: apply decoration and hide QuoteMark when cursor outside ---
+          // --- Blockquote: apply per-line class, hide QuoteMark when cursor outside ---
           if (node.name === "Blockquote") {
             if (cursorInRange(view, node.from, node.to)) {
               return false; // cursor inside: show source markers, no decoration
             }
-            widgets.push(blockquoteDecoration.range(node.from, node.to));
+            // Use Decoration.line (not mark) so the class goes on .cm-line elements,
+            // which are already block-level. A mark with display:block would create
+            // block spans that break inline math layout.
+            const doc = view.state.doc;
+            let lineFrom = doc.lineAt(node.from).from;
+            while (lineFrom <= node.to) {
+              if (lineFrom >= from) {
+                widgets.push(blockquoteLineDecoration.range(lineFrom));
+              }
+              const line = doc.lineAt(lineFrom);
+              if (line.to >= node.to) break;
+              lineFrom = line.to + 1;
+            }
             // Walk children so QuoteMark nodes are hidden by HIDDEN_NODES handler
             return;
           }
