@@ -156,7 +156,8 @@ export function collectMathRanges(view: EditorView): Range<Decoration>[] {
     items.push(
       Decoration.replace({
         widget,
-        block: isDisplay,
+        // block: true breaks CM6 height tracking for subsequent lines
+        block: false,
       }).range(node.from, node.to),
     );
   }
@@ -205,7 +206,11 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
   for (const node of nodes) {
     if (focused && cursorContainedIn(state, node.from, node.to)) continue;
     // Skip math inside a block that's in source mode
-    if (activeRanges.some(r => node.from >= r.from && node.to <= r.to)) continue;
+    const skipped = activeRanges.some(r => node.from >= r.from && node.to <= r.to);
+    if (skipped) {
+      console.log(`[MATH-SKIP] Skipping math at ${node.from}-${node.to} (inside active block)`);
+      continue;
+    }
 
     const raw = state.sliceDoc(node.from, node.to);
     const isDisplay = node.type === "DisplayMath";
@@ -219,7 +224,8 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
     items.push(
       Decoration.replace({
         widget,
-        block: isDisplay,
+        // block: true breaks CM6 height tracking for subsequent lines
+        block: false,
       }).range(node.from, node.to),
     );
   }

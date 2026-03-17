@@ -193,6 +193,8 @@ export class App {
       doc: content,
       extensions: [changeListener],
     });
+    // Expose view for debugging
+    (window as unknown as { __cmView: EditorView }).__cmView = this.editor;
   }
 
   private destroyEditor(): void {
