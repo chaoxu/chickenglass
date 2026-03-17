@@ -21,11 +21,7 @@ import {
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
-  cursorContainedIn,
   buildDecorations,
-  editorFocusField,
-  focusEffect,
-  focusTracker,
 } from "./render-utils";
 
 /** Extract the heading level (1–6) from an ATXHeading node name. */
@@ -36,7 +32,6 @@ function headingLevel(name: string): number {
 
 /** Build section-number decorations for all headings in the document. */
 function buildSectionDecorations(state: EditorState): DecorationSet {
-  const focused = state.field(editorFocusField, false) ?? false;
   const tree = syntaxTree(state);
   const items: Range<Decoration>[] = [];
 
@@ -74,7 +69,7 @@ const sectionNumberField = StateField.define<DecorationSet>({
   },
 
   update(value, tr) {
-    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(focusEffect))) {
+    if (tr.docChanged) {
       return buildSectionDecorations(tr.state);
     }
     return value;
@@ -86,8 +81,4 @@ const sectionNumberField = StateField.define<DecorationSet>({
 });
 
 /** CM6 extension that adds hierarchical section numbers to headings. */
-export const sectionNumberPlugin: Extension = [
-  editorFocusField,
-  focusTracker,
-  sectionNumberField,
-];
+export const sectionNumberPlugin: Extension = sectionNumberField;
