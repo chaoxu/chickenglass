@@ -183,6 +183,7 @@ function buildMathDecorationsFromState(state: EditorState): DecorationSet {
     const widget = isDisplay
       ? new DisplayMathWidget(latex, raw, macros)
       : new InlineMathWidget(latex, raw, macros);
+    widget.sourceFrom = node.from;
 
     items.push(
       Decoration.replace({
