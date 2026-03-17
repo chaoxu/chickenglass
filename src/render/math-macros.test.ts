@@ -8,8 +8,27 @@ import { getMathMacros } from "./math-macros";
 import {
   InlineMathWidget,
   DisplayMathWidget,
-  collectMathRanges,
+  mathRenderPlugin,
 } from "./math-render";
+import { focusEffect } from "./render-utils";
+
+/** Count math decorations in the current editor state. */
+function countMathDecorations(view: EditorView): number {
+  let count = 0;
+  const cursor = view.state.facet(EditorView.decorations);
+  for (const source of cursor) {
+    const decoSet = typeof source === "function" ? source(view) : source;
+    const iter = decoSet.iter();
+    while (iter.value) {
+      if (iter.value.spec.widget instanceof InlineMathWidget ||
+          iter.value.spec.widget instanceof DisplayMathWidget) {
+        count++;
+      }
+      iter.next();
+    }
+  }
+  return count;
+}
 
 /** Create an EditorView with frontmatter and math parser extensions. */
 function createView(doc: string, cursorPos?: number): EditorView {
@@ -19,10 +38,16 @@ function createView(doc: string, cursorPos?: number): EditorView {
     extensions: [
       markdown({ extensions: [mathExtension] }),
       frontmatterField,
+      mathRenderPlugin,
     ],
   });
   const parent = document.createElement("div");
-  return new EditorView({ state, parent });
+  document.body.appendChild(parent);
+  const view = new EditorView({ state, parent });
+  view.dispatch({ effects: focusEffect.of(true) });
+  const origDestroy = view.destroy.bind(view);
+  view.destroy = () => { origDestroy(); parent.remove(); };
+  return view;
 }
 
 describe("getMathMacros", () => {
@@ -121,7 +146,7 @@ describe("macros in DisplayMathWidget", () => {
   });
 });
 
-describe("collectMathRanges with frontmatter macros", () => {
+describe("mathRenderPlugin with frontmatter macros", () => {
   let view: EditorView;
 
   afterEach(() => {
@@ -131,16 +156,14 @@ describe("collectMathRanges with frontmatter macros", () => {
   it("passes macros from frontmatter to math widgets", () => {
     const doc = "---\nmath:\n  \\R: \\mathbb{R}\n---\n\n$\\R$";
     view = createView(doc, 0);
-    const ranges = collectMathRanges(view);
-    // The math expression should be collected for rendering
-    expect(ranges.length).toBe(1);
+    // The math expression should be decorated for rendering
+    expect(countMathDecorations(view)).toBe(1);
   });
 
   it("works without frontmatter macros", () => {
     const doc = "---\ntitle: Hello\n---\n\n$x^2$";
     view = createView(doc, 0);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(1);
+    expect(countMathDecorations(view)).toBe(1);
   });
 });
 

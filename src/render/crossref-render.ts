@@ -69,28 +69,6 @@ export class UnresolvedRefWidget extends RenderWidget {
   }
 }
 
-/** Widget for a citation reference (deferred to citation system). */
-export class CitationRefWidget extends RenderWidget {
-  constructor(
-    private readonly id: string,
-    private readonly raw: string,
-  ) {
-    super();
-  }
-
-  createDOM(): HTMLElement {
-    const span = document.createElement("span");
-    span.className = "cg-crossref cg-crossref-citation";
-    span.textContent = `[${this.id}]`;
-    span.title = this.raw;
-    return span;
-  }
-
-  eq(other: CitationRefWidget): boolean {
-    return this.id === other.id && this.raw === other.raw;
-  }
-}
-
 /** Collect decoration ranges for cross-references outside the cursor. */
 export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
   const refs = findCrossrefs(view.state);
@@ -108,8 +86,6 @@ export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
     let widget: RenderWidget;
     if (resolved.kind === "block" || resolved.kind === "equation") {
       widget = new CrossrefWidget(resolved, raw);
-    } else if (resolved.kind === "citation") {
-      widget = new CitationRefWidget(ref.id, raw);
     } else {
       widget = new UnresolvedRefWidget(raw);
     }
@@ -122,16 +98,11 @@ export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
   return items;
 }
 
-/** Build a DecorationSet for cross-references (convenience wrapper). */
-export function crossrefDecorations(view: EditorView): DecorationSet {
-  return buildDecorations(collectCrossrefRanges(view));
-}
-
 class CrossrefRenderPlugin implements PluginValue {
   decorations: DecorationSet;
 
   constructor(view: EditorView) {
-    this.decorations = crossrefDecorations(view);
+    this.decorations = buildDecorations(collectCrossrefRanges(view));
   }
 
   update(update: ViewUpdate): void {
@@ -141,7 +112,7 @@ class CrossrefRenderPlugin implements PluginValue {
       update.viewportChanged ||
       update.focusChanged
     ) {
-      this.decorations = crossrefDecorations(update.view);
+      this.decorations = buildDecorations(collectCrossrefRanges(update.view));
     }
   }
 }

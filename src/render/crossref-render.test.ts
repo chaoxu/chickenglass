@@ -14,7 +14,6 @@ import type { BlockPlugin } from "../plugins/plugin-types";
 import {
   CrossrefWidget,
   UnresolvedRefWidget,
-  CitationRefWidget,
   collectCrossrefRanges,
 } from "./crossref-render";
 
@@ -132,28 +131,6 @@ describe("UnresolvedRefWidget", () => {
   it("eq returns false for different raw content", () => {
     const a = new UnresolvedRefWidget("[@x]");
     const b = new UnresolvedRefWidget("[@y]");
-    expect(a.eq(b)).toBe(false);
-  });
-});
-
-describe("CitationRefWidget", () => {
-  it("renders citation with bracketed id", () => {
-    const widget = new CitationRefWidget("karger2000", "[@karger2000]");
-    const el = widget.toDOM();
-    expect(el.tagName).toBe("SPAN");
-    expect(el.className).toContain("cg-crossref-citation");
-    expect(el.textContent).toBe("[karger2000]");
-  });
-
-  it("eq returns true for same citation", () => {
-    const a = new CitationRefWidget("k", "[@k]");
-    const b = new CitationRefWidget("k", "[@k]");
-    expect(a.eq(b)).toBe(true);
-  });
-
-  it("eq returns false for different citations", () => {
-    const a = new CitationRefWidget("k", "[@k]");
-    const b = new CitationRefWidget("j", "[@j]");
     expect(a.eq(b)).toBe(false);
   });
 });

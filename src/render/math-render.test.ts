@@ -4,24 +4,48 @@ import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
-import { InlineMathWidget, DisplayMathWidget, collectMathRanges } from "./math-render";
+import { InlineMathWidget, DisplayMathWidget, mathRenderPlugin } from "./math-render";
+import { focusEffect } from "./render-utils";
 
-/** Create an EditorView with math parser extensions at the given cursor position. */
+/** Create an EditorView with math parser extensions and the math render plugin. */
 function createMathView(doc: string, cursorPos?: number): EditorView {
   const state = EditorState.create({
     doc,
     selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
     extensions: [
       markdown({ extensions: [mathExtension] }),
+      mathRenderPlugin,
     ],
   });
   const parent = document.createElement("div");
   document.body.appendChild(parent);
   const view = new EditorView({ state, parent });
-  view.focus();
+  // Simulate focus so the StateField knows the editor is focused
+  view.dispatch({ effects: focusEffect.of(true) });
   const origDestroy = view.destroy.bind(view);
   view.destroy = () => { origDestroy(); parent.remove(); };
   return view;
+}
+
+/** Count replace decorations in the current editor state. */
+function countMathDecorations(view: EditorView): number {
+  let count = 0;
+  // Iterate over all decoration sets provided to the editor
+  // The mathDecorationField provides decorations via EditorView.decorations
+  // We can check by looking at the DOM or by counting widget decorations
+  const cursor = view.state.facet(EditorView.decorations);
+  for (const source of cursor) {
+    const decoSet = typeof source === "function" ? source(view) : source;
+    const iter = decoSet.iter();
+    while (iter.value) {
+      if (iter.value.spec.widget instanceof InlineMathWidget ||
+          iter.value.spec.widget instanceof DisplayMathWidget) {
+        count++;
+      }
+      iter.next();
+    }
+  }
+  return count;
 }
 
 describe("InlineMathWidget", () => {
@@ -98,83 +122,69 @@ describe("DisplayMathWidget", () => {
   });
 });
 
-describe("collectMathRanges", () => {
+describe("mathRenderPlugin decorations", () => {
   let view: EditorView;
 
   afterEach(() => {
     view?.destroy();
   });
 
-  it("collects inline math with dollar syntax", () => {
+  it("decorates inline math with dollar syntax", () => {
     view = createMathView("text $x^2$ more", 0);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(1);
-    expect(ranges[0].from).toBe(5);
-    expect(ranges[0].to).toBe(10);
+    expect(countMathDecorations(view)).toBe(1);
   });
 
-  it("collects inline math with backslash-paren syntax", () => {
+  it("decorates inline math with backslash-paren syntax", () => {
     view = createMathView("text \\(x^2\\) more", 0);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(1);
-    expect(ranges[0].from).toBe(5);
-    expect(ranges[0].to).toBe(12);
+    expect(countMathDecorations(view)).toBe(1);
   });
 
-  it("does not collect math when cursor is inside", () => {
+  it("does not decorate math when cursor is inside", () => {
     // Cursor at position 7 is inside "$x^2$" which spans 5..10
     view = createMathView("text $x^2$ more", 7);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countMathDecorations(view)).toBe(0);
   });
 
-  it("does not collect math when cursor is at math boundary", () => {
+  it("does not decorate math when cursor is at math boundary", () => {
     // Cursor at position 5 is at the start of "$x^2$"
     view = createMathView("text $x^2$ more", 5);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countMathDecorations(view)).toBe(0);
   });
 
-  it("collects display math with dollar-dollar syntax", () => {
+  it("decorates display math with dollar-dollar syntax", () => {
     const doc = "before\n\n$$x^2$$\n\nafter";
     view = createMathView(doc, doc.length);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(1);
+    expect(countMathDecorations(view)).toBe(1);
   });
 
-  it("collects display math with backslash-bracket syntax", () => {
+  it("decorates display math with backslash-bracket syntax", () => {
     const doc = "before\n\n\\[x^2\\]\n\nafter";
     view = createMathView(doc, doc.length);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(1);
+    expect(countMathDecorations(view)).toBe(1);
   });
 
-  it("does not collect display math when cursor is inside", () => {
+  it("does not decorate display math when cursor is inside", () => {
     const doc = "before\n\n$$x^2$$\n\nafter";
     // Cursor inside the $$ block
     view = createMathView(doc, 10);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countMathDecorations(view)).toBe(0);
   });
 
-  it("collects multiple math expressions", () => {
+  it("decorates multiple math expressions", () => {
     const doc = "$a$ and $b$ and $c$ end";
     // Cursor at the very end, past the last math expression
     view = createMathView(doc, doc.length);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(3);
+    expect(countMathDecorations(view)).toBe(3);
   });
 
   it("handles empty document", () => {
     view = createMathView("");
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countMathDecorations(view)).toBe(0);
   });
 
   it("handles document with no math", () => {
     view = createMathView("just plain text", 0);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countMathDecorations(view)).toBe(0);
   });
 });
 
@@ -187,33 +197,28 @@ describe("cursor toggle behavior", () => {
 
   it("reveals source when cursor enters math region", () => {
     view = createMathView("text $x^2$ more", 0);
-    // Initially cursor is outside, so math is collected for rendering
-    let ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(1);
+    // Initially cursor is outside, so math is decorated
+    expect(countMathDecorations(view)).toBe(1);
 
     // Move cursor inside the math
     view.dispatch({ selection: { anchor: 7 } });
-    ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countMathDecorations(view)).toBe(0);
   });
 
   it("renders when cursor leaves math region", () => {
     view = createMathView("text $x^2$ more", 7);
     // Cursor inside math - no decorations
-    let ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countMathDecorations(view)).toBe(0);
 
     // Move cursor outside
     view.dispatch({ selection: { anchor: 0 } });
-    ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(1);
+    expect(countMathDecorations(view)).toBe(1);
   });
 
   it("only reveals the math region containing the cursor", () => {
     view = createMathView("$a$ and $b$ and $c$", 9);
-    // Cursor is inside $b$ (positions 8..10), so $a$ and $c$ should be collected
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(2);
+    // Cursor is inside $b$ (positions 8..10), so $a$ and $c$ should be decorated
+    expect(countMathDecorations(view)).toBe(2);
   });
 });
 
@@ -249,8 +254,7 @@ describe("performance", () => {
       (_, i) => `$x_{${i}}^2$`,
     ).join(" ") + " end";
     view = createMathView(equations, equations.length);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(120);
+    expect(countMathDecorations(view)).toBe(120);
   });
 
   it("processes many display math blocks", () => {
@@ -259,8 +263,7 @@ describe("performance", () => {
       (_, i) => `$$\\sum_{k=0}^{${i}} k$$`,
     ).join("\n\n") + "\n\nend";
     view = createMathView(blocks, blocks.length);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(50);
+    expect(countMathDecorations(view)).toBe(50);
   });
 });
 
@@ -271,10 +274,16 @@ function createMathViewWithLabels(doc: string, cursorPos?: number): EditorView {
     selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
     extensions: [
       markdown({ extensions: [mathExtension, equationLabelExtension] }),
+      mathRenderPlugin,
     ],
   });
   const parent = document.createElement("div");
-  return new EditorView({ state, parent });
+  document.body.appendChild(parent);
+  const view = new EditorView({ state, parent });
+  view.dispatch({ effects: focusEffect.of(true) });
+  const origDestroy = view.destroy.bind(view);
+  view.destroy = () => { origDestroy(); parent.remove(); };
+  return view;
 }
 
 describe("display math with equation labels", () => {
@@ -284,31 +293,27 @@ describe("display math with equation labels", () => {
     view?.destroy();
   });
 
-  it("collects single-line display math with equation label", () => {
+  it("decorates single-line display math with equation label", () => {
     const doc = "before\n\n$$x^2$$ {#eq:foo}\n\nafter";
     view = createMathViewWithLabels(doc, doc.length);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(1);
+    expect(countMathDecorations(view)).toBe(1);
   });
 
-  it("collects multi-line display math with equation label", () => {
+  it("decorates multi-line display math with equation label", () => {
     const doc = "before\n\n$$\nx^2\n$$ {#eq:bar}\n\nafter";
     view = createMathViewWithLabels(doc, doc.length);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(1);
+    expect(countMathDecorations(view)).toBe(1);
   });
 
-  it("collects display math without label when label extension is loaded", () => {
+  it("decorates display math without label when label extension is loaded", () => {
     const doc = "before\n\n$$x^2$$\n\nafter";
     view = createMathViewWithLabels(doc, doc.length);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(1);
+    expect(countMathDecorations(view)).toBe(1);
   });
 
   it("inline math is unaffected by equation label extension", () => {
     const doc = "$x^2$ end";
     view = createMathViewWithLabels(doc, doc.length);
-    const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(1);
+    expect(countMathDecorations(view)).toBe(1);
   });
 });

@@ -7,7 +7,6 @@ import {
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import {
-  cursorInRange,
   cursorContainedIn,
   collectNodes,
   buildDecorations,
@@ -128,46 +127,6 @@ export class DisplayMathWidget extends RenderWidget {
   eq(other: DisplayMathWidget): boolean {
     return this.raw === other.raw && this.macrosKey === other.macrosKey;
   }
-}
-
-/**
- * Collect decoration ranges for math nodes outside the cursor.
- *
- * Reads macros from the frontmatter state field and passes them
- * to each math widget for KaTeX rendering.
- */
-export function collectMathRanges(view: EditorView): Range<Decoration>[] {
-  const macros = getMathMacros(view.state);
-  const nodes = collectNodes(view, MATH_TYPES);
-  const items: Range<Decoration>[] = [];
-
-  for (const node of nodes) {
-    if (cursorInRange(view, node.from, node.to)) continue;
-
-    const raw = view.state.sliceDoc(node.from, node.to);
-    const isDisplay = node.type === "DisplayMath";
-    const latex = stripMathDelimiters(raw, isDisplay);
-
-    const widget = isDisplay
-      ? new DisplayMathWidget(latex, raw, macros)
-      : new InlineMathWidget(latex, raw, macros);
-    widget.sourceFrom = node.from;
-
-    items.push(
-      Decoration.replace({
-        widget,
-        // block: true breaks CM6 height tracking for subsequent lines
-        block: false,
-      }).range(node.from, node.to),
-    );
-  }
-
-  return items;
-}
-
-/** Build a DecorationSet for math elements (convenience wrapper). */
-export function mathDecorations(view: EditorView): DecorationSet {
-  return buildDecorations(collectMathRanges(view));
 }
 
 /**
