@@ -66,6 +66,12 @@ export const chickenglassTheme = EditorView.theme({
     color: "#666",
   },
 
+  /* Header markers (# symbols) shown in muted color when editing */
+  ".cg-heading-1 .tok-heading, .cg-heading-2 .tok-heading, .cg-heading-3 .tok-heading":
+    {
+      color: "#999",
+    },
+
   /* Horizontal rule styling */
   ".cg-hr": {
     display: "block",

@@ -72,30 +72,28 @@ class MarkdownRenderPlugin implements PluginValue {
         from,
         to,
         enter(node) {
-          // --- ATX Headings: style text + hide HeaderMark ---
+          // --- ATX Headings: ALWAYS apply heading style, only hide markers when cursor outside ---
           if (node.name.startsWith("ATXHeading")) {
-            // If cursor is inside this heading and editor is focused, show source
-            if (
-              hasFocus &&
-              cursor.from >= node.from &&
-              cursor.to <= node.to
-            ) {
-              return false;
-            }
-
-            // Apply heading style decoration to the entire heading node
             const headingDeco = headingDecorationByLevel[node.name];
             if (headingDeco) {
               widgets.push(headingDeco.range(node.from, node.to));
             }
 
-            // Don't return false here -- we want to walk children to find HeaderMark
+            // If cursor is inside: keep heading style but skip hiding markers
+            // The # will appear at the same heading font size = seamless WYSIWYG
+            if (
+              hasFocus &&
+              cursor.from >= node.from &&
+              cursor.to <= node.to
+            ) {
+              return false; // don't walk children, so HeaderMark won't be hidden
+            }
+            // Cursor outside: walk children to find and hide HeaderMark
             return;
           }
 
           // --- HeaderMark (the # symbols + trailing space) ---
           if (node.name === "HeaderMark") {
-            // Hide the marker and any trailing space after it
             const end = node.to;
             const docLen = view.state.doc.length;
             const nextChar =
@@ -105,15 +103,17 @@ class MarkdownRenderPlugin implements PluginValue {
             return;
           }
 
-          // --- Inline elements: skip tree walk if cursor is inside ---
+          // --- Inline elements: ALWAYS keep styling, only toggle marker visibility ---
           if (ELEMENT_NODES.includes(node.name)) {
+            // If cursor is inside: skip hiding markers (show source) but keep style
             if (
               hasFocus &&
               cursor.from >= node.from &&
               cursor.to <= node.to
             ) {
-              return false;
+              return false; // markers stay visible, styling stays from syntax highlighting
             }
+            // Cursor outside: walk children to hide markers
             return;
           }
 
