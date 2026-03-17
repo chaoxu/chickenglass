@@ -67,6 +67,7 @@ See DESIGN.md for full specification.
   - For CM6 Typora-style editing: reference [codemirror-rich-markdoc](https://github.com/segphault/codemirror-rich-markdoc)
   - Use `Decoration.mark` + CSS hiding for inline elements (bold, italic, headings)
   - Use `Decoration.replace` + `ignoreEvent() { return false }` for block/math widgets
+- **Use Context7**: Before implementing with any library, use the Context7 MCP tool to fetch up-to-date API documentation. Don't rely on memory — APIs change.
 - **Verify in browser**: After implementing features, verify they actually work in the running application. Tests passing is necessary but not sufficient.
 - **Wire features into the app**: Every feature must be connected to the editor entry point, not just exported as unused code.
 
