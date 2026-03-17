@@ -352,24 +352,24 @@ export const chickenglassTheme = EditorView.theme({
     position: "relative",
   },
 
-  /* Include label: rotated filename in the right padding area */
+  /* Include label: rotated filename inside the right padding of .cm-content */
   ".cg-include-label": {
     position: "absolute",
     right: "-44px",
-    top: "0",
+    top: "2px",
     writingMode: "vertical-rl",
     transform: "rotate(180deg)",
     userSelect: "none",
     pointerEvents: "none",
     fontSize: "10px",
-    color: "#bbb",
-    opacity: "1",
+    color: "#ccc",
     whiteSpace: "nowrap",
     letterSpacing: "0.3px",
     lineHeight: "1",
+    zIndex: "1",
   },
 
   ".cg-include-label-active": {
-    color: "#888",
+    color: "#999",
   },
 });
