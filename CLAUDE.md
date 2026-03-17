@@ -64,12 +64,15 @@ See DESIGN.md for full specification.
 ## Development rules
 
 - **Copy what works**: Before implementing any non-trivial technique, find and study an existing open-source project that does it well. Clone it, read the source, copy the proven approach exactly. Don't invent from scratch. Only deviate when you have a specific reason the existing approach doesn't fit.
-  - For CM6 Typora-style editing: reference [codemirror-rich-markdoc](https://github.com/segphault/codemirror-rich-markdoc)
-  - Use `Decoration.mark` + CSS hiding for inline elements (bold, italic, headings)
-  - Use `Decoration.replace` + `ignoreEvent() { return false }` for block/math widgets
+  - For CM6 Typora-style editing: reference [codemirror-rich-markdoc](https://github.com/segphault/codemirror-rich-markdoc) (cloned at `/tmp/codemirror-rich-markdoc`)
+  - Inline elements (bold, italic, headings): `Decoration.mark` + CSS hiding — source text stays in DOM
+  - Block/math widgets: `Decoration.replace` + `ignoreEvent() { return true }` + explicit mousedown handler that dispatches cursor to `sourceFrom`
+  - **Never** use `ignoreEvent() { return false }` with custom mousedown handlers — CM6 will also process the event and override cursor placement
 - **Use Context7**: Before implementing with any library, use the Context7 MCP tool to fetch up-to-date API documentation. Don't rely on memory — APIs change.
-- **Verify in browser**: After implementing features, verify they actually work in the running application. Tests passing is necessary but not sufficient.
-- **Wire features into the app**: Every feature must be connected to the editor entry point, not just exported as unused code.
+- **Verify in browser**: After implementing features, verify they actually work in the running application by testing with Playwright. Tests passing is necessary but not sufficient. Add visual debug overlays (colored boxes, tooltips with positions) for interactive debugging.
+- **Wire features into the app**: Every feature must be connected to the editor entry point, not just exported as unused code. Each task's done criteria should include "feature is visible/functional in the running app."
+- **Worker gate protocol**: Subagents cannot use the Agent tool. Workers must use `Skill tool with skill: "simplify"` and `Skill tool with skill: "code-reviewer"` for gates. Workers loop until both are clean before reporting done. Lead rejects any non-`pass` status.
+- **Debug with the user**: When behavior bugs are hard to reproduce, add visual debug overlays (colored boxes, cursor position display, range tooltips) so both you and the user can see the same information. Use Playwright's headed browser for shared debugging sessions.
 
 ## Key architecture decisions
 
