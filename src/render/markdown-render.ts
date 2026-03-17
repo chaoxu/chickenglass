@@ -29,6 +29,7 @@ const HIDDEN_NODES = [
   "LinkMark",
   "URL",
   "HardBreak",
+  "QuoteMark",
 ];
 
 /** Heading style decorations keyed by ATXHeading level. */
@@ -43,6 +44,9 @@ const headingDecorationByLevel: Record<string, Decoration> = {
 
 /** Decoration to style horizontal rules. */
 const hrDecoration = Decoration.mark({ class: "cg-hr" });
+
+/** Decoration to style blockquotes. */
+const blockquoteDecoration = Decoration.mark({ class: "cg-blockquote" });
 
 class MarkdownRenderPlugin implements PluginValue {
   decorations: DecorationSet;
@@ -133,6 +137,20 @@ class MarkdownRenderPlugin implements PluginValue {
               return false;
             }
             widgets.push(hrDecoration.range(node.from, node.to));
+            return;
+          }
+
+          // --- Blockquote: apply decoration and hide QuoteMark when cursor outside ---
+          if (node.name === "Blockquote") {
+            if (
+              hasFocus &&
+              cursor.from >= node.from &&
+              cursor.to <= node.to
+            ) {
+              return false; // cursor inside: show source markers, no decoration
+            }
+            widgets.push(blockquoteDecoration.range(node.from, node.to));
+            // Walk children so QuoteMark nodes are hidden by HIDDEN_NODES handler
             return;
           }
         },

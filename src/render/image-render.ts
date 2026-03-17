@@ -1,5 +1,12 @@
-import { type Range } from "@codemirror/state";
-import { Decoration, type DecorationSet, type EditorView } from "@codemirror/view";
+import { type Extension, type Range } from "@codemirror/state";
+import {
+  Decoration,
+  type DecorationSet,
+  type PluginValue,
+  type ViewUpdate,
+  ViewPlugin,
+  type EditorView,
+} from "@codemirror/view";
 import {
   cursorInRange,
   collectNodes,
@@ -27,8 +34,6 @@ export class ImageWidget extends RenderWidget {
     img.src = this.src;
     img.alt = this.alt;
     img.title = this.alt;
-    img.style.maxWidth = "100%";
-
     img.addEventListener("error", () => {
       wrapper.textContent = `[Image: ${this.alt}]`;
       wrapper.className = "cg-image-error";
@@ -69,6 +74,7 @@ export function collectImageRanges(view: EditorView): Range<Decoration>[] {
     if (!parsed) continue;
 
     const widget = new ImageWidget(parsed.alt, parsed.src);
+    widget.sourceFrom = node.from;
     items.push(
       Decoration.replace({ widget }).range(node.from, node.to),
     );
@@ -81,3 +87,30 @@ export function collectImageRanges(view: EditorView): Range<Decoration>[] {
 export function imageDecorations(view: EditorView): DecorationSet {
   return buildDecorations(collectImageRanges(view));
 }
+
+class ImageRenderPlugin implements PluginValue {
+  decorations: DecorationSet;
+
+  constructor(view: EditorView) {
+    this.decorations = imageDecorations(view);
+  }
+
+  update(update: ViewUpdate): void {
+    if (
+      update.docChanged ||
+      update.selectionSet ||
+      update.viewportChanged ||
+      update.focusChanged
+    ) {
+      this.decorations = imageDecorations(update.view);
+    }
+  }
+}
+
+/** CM6 extension that renders inline images with Typora-style click-to-edit. */
+export const imageRenderPlugin: Extension = ViewPlugin.fromClass(
+  ImageRenderPlugin,
+  {
+    decorations: (v) => v.decorations,
+  },
+);

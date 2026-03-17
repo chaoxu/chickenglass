@@ -26,3 +26,30 @@ export {
   collectCrossrefRanges,
   crossrefRenderPlugin,
 } from "./crossref-render";
+export {
+  ImageWidget,
+  collectImageRanges,
+  imageDecorations,
+  imageRenderPlugin,
+} from "./image-render";
+export {
+  containerAttributesField,
+  containerAttributesPlugin,
+} from "./container-attributes";
+export { codeBlockRenderPlugin } from "./code-block-render";
+export { tableRenderPlugin } from "./table-render";
+export {
+  parseTable,
+  formatTable,
+  serializeTable,
+  detectAlignment,
+  addRow,
+  addColumn,
+  deleteRow,
+  deleteColumn,
+  type Alignment,
+  type TableCell,
+  type TableRow,
+  type ParsedTable,
+  type TableParseResult,
+} from "./table-utils";

@@ -11,3 +11,5 @@ export {
   type FrontmatterResult,
 } from "./frontmatter";
 export { equationLabelExtension } from "./equation-label";
+export { strikethroughExtension } from "./strikethrough";
+export { highlightExtension } from "./highlight";

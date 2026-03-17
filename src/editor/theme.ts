@@ -86,4 +86,111 @@ export const chickenglassTheme = EditorView.theme({
     content: "attr(data-block-label) ' '",
     fontWeight: "bold",
   },
+
+  /* Blockquote styling: left border, muted background, padding */
+  ".cg-blockquote": {
+    display: "block",
+    borderLeft: "4px solid #ccc",
+    backgroundColor: "#f9f9f9",
+    paddingLeft: "1em",
+    color: "#555",
+    fontStyle: "italic",
+  },
+
+  /* Inline image preview */
+  ".cg-image-wrapper": {
+    display: "inline-block",
+    verticalAlign: "middle",
+    maxWidth: "100%",
+  },
+  ".cg-image": {
+    display: "block",
+    maxWidth: "100%",
+    maxHeight: "400px",
+    borderRadius: "4px",
+  },
+  ".cg-image-error": {
+    display: "inline-block",
+    color: "#c00",
+    fontStyle: "italic",
+    fontSize: "0.85em",
+    padding: "2px 6px",
+    border: "1px solid #c00",
+    borderRadius: "3px",
+    verticalAlign: "middle",
+  },
+
+  /* Code block container */
+  ".cg-codeblock": {
+    fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
+    backgroundColor: "#f6f8fa",
+    borderRadius: "4px",
+  },
+
+  /* Code block header: show language label via CSS ::before */
+  ".cg-codeblock-header[data-language]::before": {
+    content: "attr(data-language)",
+    display: "inline-block",
+    fontSize: "0.75em",
+    color: "#666",
+    backgroundColor: "#e8ecf0",
+    borderRadius: "2px 2px 0 0",
+    padding: "0 6px",
+    marginBottom: "2px",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+
+  /* Source mode: subtle indication that fences are visible */
+  ".cg-codeblock-source": {
+    backgroundColor: "#fffbe6",
+  },
+
+  /* Table styles */
+  ".cg-table .cm-line": {
+    fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
+    fontSize: "0.9em",
+  },
+
+  ".cg-table-header": {
+    fontWeight: "700",
+  },
+
+  ".cg-table-separator": {
+    color: "#999",
+    fontSize: "0.85em",
+  },
+
+  ".cg-table-pipe": {
+    color: "#bbb",
+  },
+
+  /* Floating toolbar for table editing */
+  ".cg-table-toolbar": {
+    display: "flex",
+    gap: "4px",
+    padding: "4px 8px",
+    backgroundColor: "#f5f5f5",
+    border: "1px solid #ddd",
+    borderRadius: "4px",
+    marginBottom: "4px",
+  },
+
+  ".cg-table-toolbar-btn": {
+    padding: "2px 8px",
+    fontSize: "12px",
+    border: "1px solid #ccc",
+    borderRadius: "3px",
+    backgroundColor: "#fff",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    lineHeight: "1.4",
+    color: "#333",
+  },
+
+  ".cg-table-toolbar-btn:hover": {
+    backgroundColor: "#e8e8e8",
+    borderColor: "#999",
+  },
 });

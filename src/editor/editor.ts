@@ -2,14 +2,25 @@ import { markdown } from "@codemirror/lang-markdown";
 import { type Extension, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
+import { Table } from "@lezer/markdown";
 import {
   removeIndentedCode,
   mathExtension,
   fencedDiv,
   equationLabelExtension,
+  strikethroughExtension,
+  highlightExtension,
 } from "../parser";
 import { frontmatterField, frontmatterDecoration } from "./frontmatter-state";
-import { markdownRenderPlugin, mathRenderPlugin, crossrefRenderPlugin } from "../render";
+import {
+  markdownRenderPlugin,
+  mathRenderPlugin,
+  crossrefRenderPlugin,
+  containerAttributesPlugin,
+  imageRenderPlugin,
+  codeBlockRenderPlugin,
+  tableRenderPlugin,
+} from "../render";
 import {
   createPluginRegistryField,
   blockCounterField,
@@ -63,6 +74,14 @@ A set $K$ is **compact** if every open cover has a finite subcover.
 
 See [@thm-main] and [@eq:sum] for details.
 
+## Table
+
+| Concept       | Symbol    | Description              |
+| :------------ | :-------: | -----------------------: |
+| Natural nums  | $\\N$     | **Counting** numbers     |
+| Real nums     | $\\R$     | *Continuous* number line |
+| Euler's       | $e^{i\\pi}$ | Most beautiful identity |
+
 ## Code Block
 
 \`\`\`typescript
@@ -91,6 +110,9 @@ export function createEditor(config: EditorConfig): EditorView {
           mathExtension,
           fencedDiv,
           equationLabelExtension,
+          strikethroughExtension,
+          highlightExtension,
+          Table,
         ],
       }),
 
@@ -105,10 +127,14 @@ export function createEditor(config: EditorConfig): EditorView {
       // Rendering plugins
       markdownRenderPlugin,
       mathRenderPlugin,
+      imageRenderPlugin,
       blockRenderPlugin,
       crossrefRenderPlugin,
+      codeBlockRenderPlugin,
       citationRenderPlugin,
       bibliographyPlugin,
+      containerAttributesPlugin,
+      tableRenderPlugin,
 
       // Editor chrome
       editorKeybindings,

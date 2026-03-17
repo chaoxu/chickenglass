@@ -20,7 +20,7 @@ import { getMathMacros } from "./math-macros";
 import { syntaxTree, ensureSyntaxTree } from "@codemirror/language";
 import type { SyntaxNodeRef } from "@lezer/common";
 
-const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
+export const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
 
 /** Delimiter patterns for extracting LaTeX content from math nodes. */
 const INLINE_DELIMITERS: ReadonlyArray<{ open: string; close: string }> = [
@@ -37,7 +37,7 @@ const DISPLAY_DELIMITERS: ReadonlyArray<{ open: string; close: string }> = [
 const EQUATION_LABEL_SUFFIX = /\s*\{#eq:[^}\s]+\}\s*$/;
 
 /** Strip math delimiters (and any trailing equation label) from raw source. */
-function stripMathDelimiters(raw: string, isDisplay: boolean): string {
+export function stripMathDelimiters(raw: string, isDisplay: boolean): string {
   // Remove trailing equation label before checking for closing delimiter
   const stripped = isDisplay ? raw.replace(EQUATION_LABEL_SUFFIX, "") : raw;
   const delimiters = isDisplay ? DISPLAY_DELIMITERS : INLINE_DELIMITERS;
