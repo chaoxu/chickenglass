@@ -57,11 +57,6 @@ function buildSectionDecorations(state: EditorState): DecorationSet {
       for (let i = 1; i <= level; i++) parts.push(counters[i]);
       const sectionNumber = parts.join(".");
 
-      // Skip decoration when cursor is inside heading (source mode)
-      if (focused && cursorContainedIn(state, node.from, node.to)) {
-        return false;
-      }
-
       items.push(
         Decoration.line({
           attributes: { "data-section-number": sectionNumber },

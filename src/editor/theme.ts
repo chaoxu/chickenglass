@@ -149,30 +149,27 @@ export const chickenglassTheme = EditorView.theme({
   /* Fenced div nesting guides — vertical lines on the left, editing only.
      Uses background-image so the line is strictly contained (no bleed). */
   ".cg-fence-d1": {
-    backgroundImage: "linear-gradient(to right, #d0d0d0 2px, transparent 2px)",
+    backgroundImage: "linear-gradient(to right, #d8d8d8 2px, transparent 2px)",
     backgroundRepeat: "no-repeat",
-    paddingLeft: "10px !important",
+    backgroundPosition: "0 0",
   },
   ".cg-fence-d2": {
     backgroundImage:
-      "linear-gradient(to right, #d0d0d0 2px, transparent 2px), linear-gradient(to right, #c0c0c0 2px, transparent 2px)",
-    backgroundPosition: "0 0, 10px 0",
+      "linear-gradient(to right, #d8d8d8 2px, transparent 2px), linear-gradient(to right, #c8c8c8 2px, transparent 2px)",
+    backgroundPosition: "0 0, 8px 0",
     backgroundRepeat: "no-repeat",
-    paddingLeft: "20px !important",
   },
   ".cg-fence-d3": {
     backgroundImage:
-      "linear-gradient(to right, #d0d0d0 2px, transparent 2px), linear-gradient(to right, #c0c0c0 2px, transparent 2px), linear-gradient(to right, #b0b0b0 2px, transparent 2px)",
-    backgroundPosition: "0 0, 10px 0, 20px 0",
+      "linear-gradient(to right, #d8d8d8 2px, transparent 2px), linear-gradient(to right, #c8c8c8 2px, transparent 2px), linear-gradient(to right, #b8b8b8 2px, transparent 2px)",
+    backgroundPosition: "0 0, 8px 0, 16px 0",
     backgroundRepeat: "no-repeat",
-    paddingLeft: "30px !important",
   },
   ".cg-fence-d4": {
     backgroundImage:
-      "linear-gradient(to right, #d0d0d0 2px, transparent 2px), linear-gradient(to right, #c0c0c0 2px, transparent 2px), linear-gradient(to right, #b0b0b0 2px, transparent 2px), linear-gradient(to right, #a0a0a0 2px, transparent 2px)",
-    backgroundPosition: "0 0, 10px 0, 20px 0, 30px 0",
+      "linear-gradient(to right, #d8d8d8 2px, transparent 2px), linear-gradient(to right, #c8c8c8 2px, transparent 2px), linear-gradient(to right, #b8b8b8 2px, transparent 2px), linear-gradient(to right, #a8a8a8 2px, transparent 2px)",
+    backgroundPosition: "0 0, 8px 0, 16px 0, 24px 0",
     backgroundRepeat: "no-repeat",
-    paddingLeft: "40px !important",
   },
 
   /* QED tombstone — right-aligned ∎ at end of proof blocks */
