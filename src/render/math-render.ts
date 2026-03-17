@@ -17,7 +17,7 @@ import {
   focusTracker,
 } from "./render-utils";
 import { getMathMacros } from "./math-macros";
-import { syntaxTree } from "@codemirror/language";
+import { syntaxTree, ensureSyntaxTree } from "@codemirror/language";
 import type { SyntaxNodeRef } from "@lezer/common";
 
 const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
@@ -184,7 +184,9 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
   const activeRanges: Array<{ from: number; to: number }> = [];
   if (focused) {
     const cursor = state.selection.main;
-    syntaxTree(state).iterate({
+    // Use ensureSyntaxTree to guarantee FencedDiv nodes are parsed
+    const tree = ensureSyntaxTree(state, state.doc.length, 500) ?? syntaxTree(state);
+    tree.iterate({
       enter(n: SyntaxNodeRef) {
         if (n.name === "FencedDiv") {
           const lineFrom = state.doc.lineAt(n.from).from;
