@@ -17,6 +17,7 @@ import {
 } from "@codemirror/view";
 import { type Extension, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
+import { cursorInRange } from "./render-utils";
 
 /** Checkbox widget that toggles task marker content on click. */
 class CheckboxWidget extends WidgetType {
@@ -80,8 +81,6 @@ class CheckboxRenderPlugin implements PluginValue {
 
   private process(view: EditorView): DecorationSet {
     const widgets: Range<Decoration>[] = [];
-    const cursor = view.state.selection.main;
-    const hasFocus = view.hasFocus;
 
     for (const { from, to } of view.visibleRanges) {
       syntaxTree(view.state).iterate({
@@ -90,11 +89,8 @@ class CheckboxRenderPlugin implements PluginValue {
         enter(node) {
           if (node.name !== "TaskMarker") return;
 
-          // Skip if cursor is on the same line
-          if (hasFocus) {
-            const line = view.state.doc.lineAt(node.from);
-            if (cursor.from >= line.from && cursor.from <= line.to) return;
-          }
+          // Show source only when cursor touches the marker itself
+          if (cursorInRange(view, node.from, node.to)) return;
 
           const text = view.state.sliceDoc(node.from, node.to);
           const checked = text.includes("x") || text.includes("X");
