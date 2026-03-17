@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  parseBibTeX,
-  extractLastName,
-  type BibEntry,
-} from "./bibtex-parser";
-import {
-  formatCitation,
-  formatNarrativeCitation,
-} from "./citation-render";
+import { parseBibTeX, extractLastName, type BibEntry } from "./bibtex-parser";
+import { formatCitation, formatNarrativeCitation } from "./citation-render";
 
 describe("parseBibTeX", () => {
   it("parses a single article entry", () => {

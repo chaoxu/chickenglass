@@ -25,6 +25,7 @@
     "@codemirror/view": "^6.40.0",
     "@lezer/markdown": "^1.6.3",
     "@retorquere/bibtex-parser": "^9.0.29",
+    "citeproc": "^2.4.63",
     "katex": "^0.16.38",
     "ws": "^8.19.0"
   },

@@ -2,8 +2,6 @@ export {
   type BibEntry,
   parseBibTeX,
   extractLastName,
-  formatCitation,
-  formatNarrativeCitation,
 } from "./bibtex-parser";
 
 export {

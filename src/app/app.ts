@@ -49,7 +49,6 @@ export class App {
   /** Last CSL style path loaded. */
   private lastCslPath = "";
   private indexUpdateTimer: ReturnType<typeof setTimeout> | null = null;
->>>>>>> 9720ca9 (feat: wire up background indexer and enable basic search (#54))
 
   /** Raw content saved on disk (collapsed includes), keyed by file path. */
   private readonly savedContent = new Map<string, string>();
@@ -279,8 +278,9 @@ export class App {
     this.lastCslPath = cslPath;
 
     if (!bibPath) {
-      setBibStore(new Map());
-      setCslProcessor(null);
+      try {
+        view.dispatch({ effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) });
+      } catch { /* view destroyed */ }
       return;
     }
 
@@ -291,7 +291,7 @@ export class App {
 
     this.fs.readFile(resolve(bibPath)).then(async (bibText) => {
       const entries = parseBibTeX(bibText);
-      setBibStore(new Map(entries.map((e) => [e.id, e])));
+      const store = new Map(entries.map((e) => [e.id, e]));
 
       let cslXml: string | undefined;
       if (cslPath) {
@@ -302,16 +302,15 @@ export class App {
         }
       }
 
-      setCslProcessor(new CslProcessor(entries, cslXml));
+      const cslProcessor = new CslProcessor(entries, cslXml);
 
       try {
-        view.dispatch({ selection: view.state.selection });
-      } catch {
-        // View may have been destroyed
-      }
+        view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor }) });
+      } catch { /* view destroyed */ }
     }).catch(() => {
-      setBibStore(new Map());
-      setCslProcessor(null);
+      try {
+        view.dispatch({ effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) });
+      } catch { /* view destroyed */ }
     });
   }
 

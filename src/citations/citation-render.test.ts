@@ -173,7 +173,7 @@ describe("citationRenderPlugin integration", () => {
     });
     const parent = document.createElement("div");
     const v = new EditorView({ state, parent });
-    v.dispatch({ effects: bibDataEffect.of({ store }) });
+    v.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: null }) });
     return v;
   }
 

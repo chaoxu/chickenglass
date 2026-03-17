@@ -21,12 +21,23 @@ import {
   type WidgetType,
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
-import {
-  type BibEntry,
-  formatCitation,
-  formatNarrativeCitation,
-} from "./bibtex-parser";
+import { type BibEntry, extractLastName } from "./bibtex-parser";
+import type { CslProcessor } from "./csl-processor";
 import { cursorInRange, buildDecorations, RenderWidget } from "../render/render-utils";
+
+/** Format a citation label: "(Author, Year)". */
+export function formatCitation(entry: BibEntry): string {
+  const author = entry.author ? extractLastName(entry.author) : entry.id;
+  const year = entry.year ?? "";
+  return `${author}, ${year}`;
+}
+
+/** Format a narrative citation: "Author (Year)". */
+export function formatNarrativeCitation(entry: BibEntry): string {
+  const author = entry.author ? extractLastName(entry.author) : entry.id;
+  const year = entry.year ?? "";
+  return `${author} (${year})`;
+}
 
 /** A store of bibliography entries keyed by citation id. */
 export type BibStore = ReadonlyMap<string, BibEntry>;
@@ -34,6 +45,7 @@ export type BibStore = ReadonlyMap<string, BibEntry>;
 /** Bibliography data stored in the editor state. */
 export interface BibData {
   store: BibStore;
+  cslProcessor: CslProcessor | null;
 }
 
 /** StateEffect for updating bibliography data. */
@@ -42,7 +54,7 @@ export const bibDataEffect = StateEffect.define<BibData>();
 /** StateField that holds the current bibliography data. */
 export const bibDataField = StateField.define<BibData>({
   create() {
-    return { store: new Map() };
+    return { store: new Map(), cslProcessor: null };
   },
   update(value, tr) {
     for (const effect of tr.effects) {

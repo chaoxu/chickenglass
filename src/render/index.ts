@@ -21,8 +21,6 @@ export { getMathMacros } from "./math-macros";
 export {
   CrossrefWidget,
   UnresolvedRefWidget,
-  CitationRefWidget,
-  crossrefDecorations,
   collectCrossrefRanges,
   crossrefRenderPlugin,
 } from "./crossref-render";
