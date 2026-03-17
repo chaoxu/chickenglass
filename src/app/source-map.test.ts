@@ -118,14 +118,8 @@ describe("SourceMap", () => {
       // Delete from 5 to 9 (crosses end of r1 and start of r2)
       const changes = makeChanges("AAbbbbCCddddEE", [{ from: 5, to: 9 }]);
       sm.mapThrough(changes);
-      // r1: from=2, to maps 6 with assoc=1 -> 6 stays at 6 but delete 5..9
-      // mapPos(6, 1) for delete 5..9: 6 is inside the deleted range, maps to 5
-      // But assoc=1 means it goes to the right side of the deletion -> 5
-      // r1: from=2, to=5
       expect(sm.regions[0].from).toBe(2);
       expect(sm.regions[0].to).toBe(5);
-      // r2: from maps 8 with assoc=-1 -> 8 is inside deleted 5..9 -> maps to 5
-      // to maps 12 with assoc=1 -> 12 - 4 = 8
       expect(sm.regions[1].from).toBe(5);
       expect(sm.regions[1].to).toBe(8);
     });
@@ -134,8 +128,6 @@ describe("SourceMap", () => {
       // Doc: "AAbbbbCC" (include at 2-6)
       const sm = new SourceMap([region(2, 6, "inc.md")]);
       // Insert "XX" at position 2 (exact start of region)
-      // With assoc=-1 on from, position sticks left -> from stays at 2
-      // Inserted text goes into the region
       const changes = makeChanges("AAbbbbCC", [{ from: 2, insert: "XX" }]);
       sm.mapThrough(changes);
       expect(sm.regions[0].from).toBe(2);
@@ -146,7 +138,6 @@ describe("SourceMap", () => {
       // Doc: "AAbbbbCC" (include at 2-6)
       const sm = new SourceMap([region(2, 6, "inc.md")]);
       // Insert "XX" at position 6 (exact end of region)
-      // With assoc=1 on to, position sticks right -> to moves to 8
       const changes = makeChanges("AAbbbbCC", [{ from: 6, insert: "XX" }]);
       sm.mapThrough(changes);
       expect(sm.regions[0].from).toBe(2);
