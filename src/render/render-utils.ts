@@ -64,6 +64,9 @@ export function collectNodes(
   return results;
 }
 
+/** Shared Decoration.mark that visually hides source markers via CSS while keeping them in the DOM. */
+export const decorationHidden = Decoration.mark({ class: "cg-hidden" });
+
 /**
  * Build a DecorationSet from an array of decoration ranges.
  * Sorts by position before building (RangeSetBuilder requires sorted input).

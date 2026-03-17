@@ -74,4 +74,10 @@ export const chickenglassTheme = EditorView.theme({
     borderBottom: "1px solid #ccc",
     margin: "0.5em 0",
   },
+
+  /* Block header: show label via CSS ::before pseudo-element */
+  ".cg-block-header[data-block-label]::before": {
+    content: "attr(data-block-label) ' '",
+    fontWeight: "bold",
+  },
 });

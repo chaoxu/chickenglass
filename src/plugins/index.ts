@@ -24,8 +24,6 @@ export {
   blockCounterField,
 } from "./block-counter";
 export {
-  BlockHeaderWidget,
-  PlainDivHeaderWidget,
   blockRenderPlugin,
 } from "./plugin-render";
 export {

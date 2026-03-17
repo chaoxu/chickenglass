@@ -8,6 +8,7 @@ import {
 } from "@codemirror/view";
 import { type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
+import { decorationHidden } from "./render-utils";
 
 /**
  * Node types whose children's markers should be hidden when
@@ -29,9 +30,6 @@ const HIDDEN_NODES = [
   "URL",
   "HardBreak",
 ];
-
-/** CSS class that visually hides source markers while keeping them in the DOM. */
-const decorationHidden = Decoration.mark({ class: "cg-hidden" });
 
 /** Heading style decorations keyed by ATXHeading level. */
 const headingDecorationByLevel: Record<string, Decoration> = {
