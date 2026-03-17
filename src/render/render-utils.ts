@@ -91,39 +91,27 @@ export abstract class RenderWidget extends WidgetType {
   /** Subclasses build their DOM element here. */
   abstract createDOM(): HTMLElement;
 
-  toDOM(): HTMLElement {
+  toDOM(view?: EditorView): HTMLElement {
     const el = this.createDOM();
     if (this.sourceFrom >= 0) {
       el.setAttribute(SOURCE_FROM_ATTR, String(this.sourceFrom));
+      if (view) {
+        el.style.cursor = "pointer";
+        const from = this.sourceFrom;
+        el.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          view.dispatch({ selection: { anchor: from } });
+          view.focus();
+        });
+      }
     }
     return el;
   }
 }
 
 /**
- * CM6 extension that handles clicks on rendered widgets.
- *
- * When the user clicks a widget element that carries a `data-source-from`
- * attribute, the cursor is moved to that source position so the raw
- * markup is revealed for editing.
+ * Kept for backward compatibility but no longer needed — click handling
+ * is now done directly on widget DOM elements in RenderWidget.toDOM().
  */
-export const widgetClickHandler: Extension = EditorView.domEventHandlers({
-  mousedown(event: MouseEvent, view: EditorView): boolean {
-    const target = event.target as HTMLElement | null;
-    if (!target) return false;
-
-    const el = target.closest(`[${SOURCE_FROM_ATTR}]`) as HTMLElement | null;
-    if (!el) return false;
-
-    const fromStr = el.getAttribute(SOURCE_FROM_ATTR);
-    if (fromStr === null) return false;
-
-    const from = parseInt(fromStr, 10);
-    if (isNaN(from) || from < 0 || from > view.state.doc.length) return false;
-
-    event.preventDefault();
-    view.dispatch({ selection: { anchor: from } });
-    view.focus();
-    return true;
-  },
-});
+export const widgetClickHandler: Extension = [];
