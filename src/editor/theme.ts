@@ -24,4 +24,54 @@ export const chickenglassTheme = EditorView.theme({
   ".cm-activeLine": {
     backgroundColor: "transparent",
   },
+
+  /* Hidden markers — source text stays in DOM but invisible */
+  ".cg-hidden": {
+    fontSize: "0",
+    display: "inline",
+    width: "0",
+    overflow: "hidden",
+  },
+
+  /* Heading styles */
+  ".cg-heading-1": {
+    fontSize: "2em",
+    fontWeight: "700",
+    lineHeight: "1.2",
+  },
+  ".cg-heading-2": {
+    fontSize: "1.5em",
+    fontWeight: "700",
+    lineHeight: "1.3",
+  },
+  ".cg-heading-3": {
+    fontSize: "1.25em",
+    fontWeight: "600",
+    lineHeight: "1.4",
+  },
+  ".cg-heading-4": {
+    fontSize: "1.1em",
+    fontWeight: "600",
+    lineHeight: "1.4",
+  },
+  ".cg-heading-5": {
+    fontSize: "1em",
+    fontWeight: "600",
+    lineHeight: "1.5",
+  },
+  ".cg-heading-6": {
+    fontSize: "0.9em",
+    fontWeight: "600",
+    lineHeight: "1.5",
+    color: "#666",
+  },
+
+  /* Horizontal rule styling */
+  ".cg-hr": {
+    display: "block",
+    textAlign: "center",
+    fontSize: "0",
+    borderBottom: "1px solid #ccc",
+    margin: "0.5em 0",
+  },
 });

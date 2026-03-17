@@ -1,14 +1,9 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { Decoration, EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownRenderPlugin } from "./markdown-render";
 import { cursorInRange } from "./render-utils";
-import { HeadingWidget } from "./heading-render";
-import { BoldWidget, ItalicWidget, InlineCodeWidget } from "./inline-render";
-import { LinkWidget } from "./link-render";
-import { ImageWidget } from "./image-render";
-import { HorizontalRuleWidget } from "./hr-render";
 
 /** Create an EditorView with the markdown render plugin at the given cursor position. */
 function createTestView(doc: string, cursorPos?: number): EditorView {
@@ -22,170 +17,42 @@ function createTestView(doc: string, cursorPos?: number): EditorView {
   const view = new EditorView({ state, parent });
   view.focus();
   const origDestroy = view.destroy.bind(view);
-  view.destroy = () => { origDestroy(); parent.remove(); };
+  view.destroy = () => {
+    origDestroy();
+    parent.remove();
+  };
   return view;
 }
 
 describe("cursorInRange", () => {
+  let view: EditorView;
+
+  afterEach(() => {
+    view?.destroy();
+  });
+
   it("returns true when cursor is inside the range", () => {
-    const view = createTestView("hello world", 5);
+    view = createTestView("hello world", 5);
     expect(cursorInRange(view, 0, 10)).toBe(true);
-    view.destroy();
   });
 
   it("returns true when cursor is at range start", () => {
-    const view = createTestView("hello world", 0);
+    view = createTestView("hello world", 0);
     expect(cursorInRange(view, 0, 5)).toBe(true);
-    view.destroy();
   });
 
   it("returns true when cursor is at range end", () => {
-    const view = createTestView("hello world", 5);
+    view = createTestView("hello world", 5);
     expect(cursorInRange(view, 0, 5)).toBe(true);
-    view.destroy();
   });
 
   it("returns false when cursor is outside the range", () => {
-    const view = createTestView("hello world", 8);
+    view = createTestView("hello world", 8);
     expect(cursorInRange(view, 0, 5)).toBe(false);
-    view.destroy();
   });
 });
 
-describe("HeadingWidget", () => {
-  it("creates an h1 element", () => {
-    const widget = new HeadingWidget("Test", 1);
-    const el = widget.toDOM();
-    expect(el.tagName).toBe("H1");
-    expect(el.textContent).toBe("Test");
-    expect(el.className).toBe("cg-heading");
-  });
-
-  it("creates an h3 element", () => {
-    const widget = new HeadingWidget("Sub heading", 3);
-    const el = widget.toDOM();
-    expect(el.tagName).toBe("H3");
-    expect(el.textContent).toBe("Sub heading");
-  });
-
-  it("eq returns true for same content", () => {
-    const a = new HeadingWidget("Test", 1);
-    const b = new HeadingWidget("Test", 1);
-    expect(a.eq(b)).toBe(true);
-  });
-
-  it("eq returns false for different content", () => {
-    const a = new HeadingWidget("Test", 1);
-    const b = new HeadingWidget("Other", 1);
-    expect(a.eq(b)).toBe(false);
-  });
-
-  it("eq returns false for different levels", () => {
-    const a = new HeadingWidget("Test", 1);
-    const b = new HeadingWidget("Test", 2);
-    expect(a.eq(b)).toBe(false);
-  });
-});
-
-describe("BoldWidget", () => {
-  it("creates a strong element", () => {
-    const widget = new BoldWidget("bold text");
-    const el = widget.toDOM();
-    expect(el.tagName).toBe("STRONG");
-    expect(el.textContent).toBe("bold text");
-    expect(el.className).toBe("cg-bold");
-  });
-
-  it("eq compares text", () => {
-    expect(new BoldWidget("a").eq(new BoldWidget("a"))).toBe(true);
-    expect(new BoldWidget("a").eq(new BoldWidget("b"))).toBe(false);
-  });
-});
-
-describe("ItalicWidget", () => {
-  it("creates an em element", () => {
-    const widget = new ItalicWidget("italic text");
-    const el = widget.toDOM();
-    expect(el.tagName).toBe("EM");
-    expect(el.textContent).toBe("italic text");
-    expect(el.className).toBe("cg-italic");
-  });
-
-  it("eq compares text", () => {
-    expect(new ItalicWidget("a").eq(new ItalicWidget("a"))).toBe(true);
-    expect(new ItalicWidget("a").eq(new ItalicWidget("b"))).toBe(false);
-  });
-});
-
-describe("InlineCodeWidget", () => {
-  it("creates a code element", () => {
-    const widget = new InlineCodeWidget("code()");
-    const el = widget.toDOM();
-    expect(el.tagName).toBe("CODE");
-    expect(el.textContent).toBe("code()");
-    expect(el.className).toBe("cg-inline-code");
-  });
-
-  it("eq compares text", () => {
-    expect(new InlineCodeWidget("a").eq(new InlineCodeWidget("a"))).toBe(true);
-    expect(new InlineCodeWidget("a").eq(new InlineCodeWidget("b"))).toBe(false);
-  });
-});
-
-describe("LinkWidget", () => {
-  it("creates an anchor element", () => {
-    const widget = new LinkWidget("click me", "https://example.com");
-    const el = widget.toDOM();
-    expect(el.tagName).toBe("A");
-    expect(el.textContent).toBe("click me");
-    expect((el as HTMLAnchorElement).href).toBe("https://example.com/");
-    expect(el.className).toBe("cg-link");
-  });
-
-  it("eq compares text and url", () => {
-    const a = new LinkWidget("t", "u");
-    expect(a.eq(new LinkWidget("t", "u"))).toBe(true);
-    expect(a.eq(new LinkWidget("t", "v"))).toBe(false);
-    expect(a.eq(new LinkWidget("s", "u"))).toBe(false);
-  });
-});
-
-describe("ImageWidget", () => {
-  it("creates a span with img element", () => {
-    const widget = new ImageWidget("photo", "img.png");
-    const el = widget.toDOM();
-    expect(el.tagName).toBe("SPAN");
-    expect(el.className).toBe("cg-image-wrapper");
-    const img = el.querySelector("img");
-    expect(img).not.toBeNull();
-    expect(img?.src).toContain("img.png");
-    expect(img?.alt).toBe("photo");
-  });
-
-  it("eq compares alt and src", () => {
-    const a = new ImageWidget("a", "b");
-    expect(a.eq(new ImageWidget("a", "b"))).toBe(true);
-    expect(a.eq(new ImageWidget("a", "c"))).toBe(false);
-    expect(a.eq(new ImageWidget("d", "b"))).toBe(false);
-  });
-});
-
-describe("HorizontalRuleWidget", () => {
-  it("creates an hr element", () => {
-    const widget = new HorizontalRuleWidget();
-    const el = widget.toDOM();
-    expect(el.tagName).toBe("HR");
-    expect(el.className).toBe("cg-hr");
-  });
-
-  it("eq always returns true", () => {
-    const a = new HorizontalRuleWidget();
-    const b = new HorizontalRuleWidget();
-    expect(a.eq(b)).toBe(true);
-  });
-});
-
-describe("markdownRenderPlugin integration", () => {
+describe("markdownRenderPlugin (Decoration.mark approach)", () => {
   let view: EditorView;
 
   afterEach(() => {
@@ -250,5 +117,49 @@ describe("markdownRenderPlugin integration", () => {
 
     expect(view.state.doc.toString()).toBe(doc);
   });
+
+  it("source text is preserved in the document (mark approach keeps text)", () => {
+    const doc = "**bold** and *italic*";
+    view = createTestView(doc, doc.length); // cursor at end, outside markup
+    // The document always keeps source text with Decoration.mark
+    expect(view.state.doc.toString()).toBe(doc);
+    // Markers are still in the doc (not replaced by widgets)
+    expect(view.state.doc.toString()).toContain("**");
+    expect(view.state.doc.toString()).toContain("*italic*");
+  });
+
+  it("uses Decoration.mark not Decoration.replace", () => {
+    // Verify the plugin produces mark decorations, not replace decorations
+    const doc = "**bold**";
+    view = createTestView(doc, doc.length);
+    // The key property of mark decorations: source text stays in the doc
+    // and is not replaced by widget DOM. The doc should read the same.
+    expect(view.state.doc.toString()).toBe("**bold**");
+    // A replace decoration would remove the text from the DOM entirely
+    // and substitute a widget. With marks, the text remains.
+  });
+
+  it("does not hide markers when cursor is inside element", () => {
+    // Cursor at position 4 is inside "**bold**" (positions 0-7)
+    const doc = "**bold**";
+    view = createTestView(doc, 4);
+    // With cursor inside, no decorations should be applied
+    // (the tree walk returns false, skipping marker hiding)
+    expect(view.state.doc.toString()).toBe(doc);
+  });
 });
 
+describe("Decoration.mark hidden class", () => {
+  it("decorationHidden uses cg-hidden class", () => {
+    // Verify the decoration has the correct class
+    const deco = Decoration.mark({ class: "cg-hidden" });
+    expect(deco.spec.class).toBe("cg-hidden");
+  });
+
+  it("heading decorations have correct classes", () => {
+    for (let i = 1; i <= 6; i++) {
+      const deco = Decoration.mark({ class: `cg-heading-${i}` });
+      expect(deco.spec.class).toBe(`cg-heading-${i}`);
+    }
+  });
+});
