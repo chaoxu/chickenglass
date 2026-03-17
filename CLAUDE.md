@@ -63,7 +63,7 @@ See DESIGN.md for full specification.
 
 ## Development rules
 
-- **Research first**: Before implementing any non-trivial technique, find and study an existing open-source project that does it well. Clone it, read the source, copy the proven approach. Don't invent from scratch.
+- **Copy what works**: Before implementing any non-trivial technique, find and study an existing open-source project that does it well. Clone it, read the source, copy the proven approach exactly. Don't invent from scratch. Only deviate when you have a specific reason the existing approach doesn't fit.
   - For CM6 Typora-style editing: reference [codemirror-rich-markdoc](https://github.com/segphault/codemirror-rich-markdoc)
   - Use `Decoration.mark` + CSS hiding for inline elements (bold, italic, headings)
   - Use `Decoration.replace` + `ignoreEvent() { return false }` for block/math widgets
