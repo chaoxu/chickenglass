@@ -152,6 +152,11 @@ class MarkdownRenderPlugin implements PluginValue {
             return;
           }
 
+          // --- FencedCode: handled entirely by code-block-render plugin ---
+          if (node.name === "FencedCode") {
+            return false; // don't walk children — avoids hiding CodeMark fence markers
+          }
+
           // --- Hidden marker nodes ---
           if (HIDDEN_NODES.has(node.name)) {
             widgets.push(decorationHidden.range(node.from, node.to));
