@@ -37,6 +37,8 @@ export { tableRenderPlugin } from "./table-render";
 export { debugInspectorPlugin, toggleDebugInspector } from "./debug-inspector";
 export { checkboxRenderPlugin } from "./checkbox-render";
 export { mathPreviewPlugin } from "./math-preview";
+export { sectionNumberPlugin } from "./section-counter";
+export { fenceGuidePlugin } from "./fence-guide";
 export {
   parseTable,
   formatTable,

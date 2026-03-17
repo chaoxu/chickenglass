@@ -37,6 +37,11 @@ npm run test         # run tests
 npx tsc --noEmit     # typecheck only
 ```
 
+## Workspace hygiene
+
+- **Temporary files go in `/tmp/`** — never create temp files, cloned repos, or scratch data in the project directory. Use `/tmp/chickenglass-*` or similar.
+- Keep the project root clean — only committed source files, config, and build artifacts belong here.
+
 ## Conventions
 
 - Use ES modules (`import`/`export`), not CommonJS

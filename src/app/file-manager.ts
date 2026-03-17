@@ -116,7 +116,15 @@ function sortTree(entry: FileEntry): void {
 /** Create a demo filesystem with sample markdown files. */
 export function createDemoFileSystem(): MemoryFileSystem {
   return new MemoryFileSystem({
-    "main.md": `# Chickenglass Demo
+    "main.md": `---
+title: Chickenglass Demo
+bibliography: refs.bib
+math:
+  \\R: "\\\\mathbb{R}"
+  \\N: "\\\\mathbb{N}"
+---
+
+# Chickenglass Demo
 
 A semantic document editor for mathematical writing.
 
@@ -137,7 +145,7 @@ $$ {#eq:sum}
 ## Theorem Environment
 
 ::: {.theorem #thm-main} Fundamental Theorem
-Every continuous function $f: [a,b] \\to \\mathbb{R}$ is bounded.
+Every continuous function $f: [a,b] \\to \\R$ is bounded.
 :::
 
 ::: {.proof}
@@ -156,11 +164,70 @@ A set $K$ is **compact** if every open cover has a finite subcover.
 
 See [@thm-main] and [@eq:sum] for details.
 
+## Citations
+
+Minimum cuts can be computed efficiently [@karger2000]. As shown by @cormen2009, graph algorithms are fundamental. See also [@knuth1997; @karger2000] for classic references.
+
+## Lists
+
+Unordered list:
+
+- First item
+- Second item with **bold** and *italic*
+- Third item with $x^2 + y^2 = z^2$
+  - Nested item
+  - Another nested item
+    - Deeply nested
+
+Ordered list:
+
+1. Step one
+2. Step two
+3. Step three
+
+Task list:
+
+- [ ] Write the introduction
+- [x] Implement math rendering
+- [ ] Add export to PDF
+
 ## Code Block
 
 \`\`\`typescript
 const greeting = "Hello, world!";
 \`\`\`
+
+## Included Content
+
+::: {.include}
+chapters/introduction.md
+:::
+`,
+    "refs.bib": `@article{karger2000,
+  author = {David R. Karger},
+  title = {Minimum Cuts in Near-Linear Time},
+  journal = {Journal of the ACM},
+  volume = {47},
+  number = {1},
+  pages = {46--76},
+  year = {2000}
+}
+
+@book{cormen2009,
+  author = {Thomas H. Cormen and Charles E. Leiserson and Ronald L. Rivest and Clifford Stein},
+  title = {Introduction to Algorithms},
+  publisher = {MIT Press},
+  year = {2009},
+  edition = {3rd}
+}
+
+@book{knuth1997,
+  author = {Donald E. Knuth},
+  title = {The Art of Computer Programming},
+  publisher = {Addison-Wesley},
+  year = {1997},
+  volume = {1}
+}
 `,
     "notes.md": `# Notes
 

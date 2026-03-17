@@ -83,6 +83,9 @@ export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
     const raw = view.state.sliceDoc(ref.from, ref.to);
     const resolved = resolveCrossref(view.state, ref.id, equationLabels);
 
+    // Skip citations — let the citation render plugin handle them
+    if (resolved.kind === "citation") continue;
+
     let widget: RenderWidget;
     if (resolved.kind === "block" || resolved.kind === "equation") {
       widget = new CrossrefWidget(resolved, raw);

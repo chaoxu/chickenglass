@@ -94,28 +94,40 @@ class MarkdownRenderPlugin implements PluginValue {
         from,
         to,
         enter(node) {
-          // --- ATX Headings: ALWAYS apply heading style, only hide markers when cursor outside ---
+          // --- ATX Headings (block-level): apply style, show # when cursor is on the line ---
           if (node.name.startsWith("ATXHeading")) {
             const headingDeco = headingDecorationByLevel[node.name];
             if (headingDeco) {
               widgets.push(headingDeco.range(node.from, node.to));
             }
 
-            // If cursor is inside: keep heading style but skip hiding markers
-            // The # will appear at the same heading font size = seamless WYSIWYG
+            // Cursor anywhere on heading → show # markers, but still walk
+            // children so inline elements (bold, math) use local source
             if (
               hasFocus &&
               cursor.from >= node.from &&
               cursor.to <= node.to
             ) {
-              return false; // don't walk children, so HeaderMark won't be hidden
+              return; // walk children, but HeaderMark handler below will skip hiding
             }
-            // Cursor outside: walk children to find and hide HeaderMark
+            // Cursor outside heading → walk children to hide HeaderMark
             return;
           }
 
           // --- HeaderMark (the # symbols + trailing space) ---
           if (node.name === "HeaderMark") {
+            // If cursor is on this heading line, the ATXHeading handler above
+            // already decided to walk children — check if we should show markers
+            const headingNode = node.node.parent;
+            if (
+              hasFocus &&
+              headingNode &&
+              cursor.from >= headingNode.from &&
+              cursor.to <= headingNode.to
+            ) {
+              // Cursor on heading line → don't hide # markers
+              return;
+            }
             const end = node.to;
             const docLen = view.state.doc.length;
             const nextChar =
@@ -196,6 +208,11 @@ class MarkdownRenderPlugin implements PluginValue {
                 : numberListDecoration;
             widgets.push(deco.range(node.from, node.to));
             return;
+          }
+
+          // --- FencedCode: handled entirely by code-block-render plugin ---
+          if (node.name === "FencedCode") {
+            return false; // don't walk children — avoids hiding CodeMark fence markers
           }
 
           // --- Blockquote: apply decoration and hide QuoteMark when cursor outside ---

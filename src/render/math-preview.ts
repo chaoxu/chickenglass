@@ -59,9 +59,11 @@ class MathPreviewPlugin implements PluginValue {
   private isDragging = false;
   private dragOffsetX = 0;
   private dragOffsetY = 0;
+  /** Position to measure on next requestMeasure cycle. */
+  private measurePos = -1;
 
   constructor(private view: EditorView) {
-    this.check();
+    this.scheduleCheck();
   }
 
   update(update: ViewUpdate): void {
@@ -71,7 +73,7 @@ class MathPreviewPlugin implements PluginValue {
       update.focusChanged
     ) {
       this.view = update.view;
-      this.check();
+      this.scheduleCheck();
     }
   }
 
@@ -79,7 +81,8 @@ class MathPreviewPlugin implements PluginValue {
     this.removePanel();
   }
 
-  private check(): void {
+  /** Schedule a check after the update cycle completes (layout reads are safe). */
+  private scheduleCheck(): void {
     const info = findMathAtCursor(this.view);
 
     if (!info) {
@@ -91,18 +94,32 @@ class MathPreviewPlugin implements PluginValue {
     const latex = stripMathDelimiters(raw, info.isDisplay);
 
     if (!this.panel) {
-      this.createPanel(info);
-    } else {
-      this.positionPanel(info);
+      this.createPanel();
     }
 
     if (raw !== this.lastRaw) {
       this.lastRaw = raw;
       this.renderLatex(latex, info.isDisplay);
     }
+
+    // Store position for the measurement callback and schedule it.
+    // Using a key ensures multiple scheduleCheck calls collapse into one measurement.
+    this.measurePos = info.from;
+    this.view.requestMeasure({
+      key: "cg-math-preview-pos",
+      read: () => {
+        if (this.measurePos < 0) return null;
+        return this.view.coordsAtPos(this.measurePos);
+      },
+      write: (coords) => {
+        if (!coords || !this.panel || this.isDragging) return;
+        this.panel.style.left = `${coords.left}px`;
+        this.panel.style.top = `${coords.bottom + 8}px`;
+      },
+    });
   }
 
-  private createPanel(info: MathNodeInfo): void {
+  private createPanel(): void {
     const panel = document.createElement("div");
     panel.className = "cg-math-preview";
 
@@ -160,18 +177,7 @@ class MathPreviewPlugin implements PluginValue {
       document.removeEventListener("mouseup", onMouseUp);
     };
 
-    document.body.appendChild(panel);
-    this.positionPanel(info);
-  }
-
-  private positionPanel(info: MathNodeInfo): void {
-    if (!this.panel || this.isDragging) return;
-
-    const coords = this.view.coordsAtPos(info.from);
-    if (!coords) return;
-
-    this.panel.style.left = `${coords.left}px`;
-    this.panel.style.top = `${coords.bottom + 8}px`;
+    this.view.dom.appendChild(panel);
   }
 
   private renderLatex(latex: string, isDisplay: boolean): void {
@@ -200,6 +206,7 @@ class MathPreviewPlugin implements PluginValue {
     this.panel = null;
     this.contentEl = null;
     this.lastRaw = "";
+    this.measurePos = -1;
   }
 }
 

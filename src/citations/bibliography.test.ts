@@ -143,7 +143,7 @@ describe("sortBibEntries", () => {
 
 describe("BibliographyWidget", () => {
   it("creates a div with heading and list", () => {
-    const widget = new BibliographyWidget([karger, stein]);
+    const widget = new BibliographyWidget([karger, stein], null);
     const el = widget.toDOM();
 
     expect(el.tagName).toBe("DIV");
@@ -160,20 +160,20 @@ describe("BibliographyWidget", () => {
   });
 
   it("eq returns true for same entries", () => {
-    const a = new BibliographyWidget([karger, stein]);
-    const b = new BibliographyWidget([karger, stein]);
+    const a = new BibliographyWidget([karger, stein], null);
+    const b = new BibliographyWidget([karger, stein], null);
     expect(a.eq(b)).toBe(true);
   });
 
   it("eq returns false for different entries", () => {
-    const a = new BibliographyWidget([karger]);
-    const b = new BibliographyWidget([stein]);
+    const a = new BibliographyWidget([karger], null);
+    const b = new BibliographyWidget([stein], null);
     expect(a.eq(b)).toBe(false);
   });
 
   it("eq returns false for different lengths", () => {
-    const a = new BibliographyWidget([karger]);
-    const b = new BibliographyWidget([karger, stein]);
+    const a = new BibliographyWidget([karger], null);
+    const b = new BibliographyWidget([karger, stein], null);
     expect(a.eq(b)).toBe(false);
   });
 });

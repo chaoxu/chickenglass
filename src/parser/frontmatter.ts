@@ -14,6 +14,7 @@ export interface BlockConfig {
 export interface FrontmatterConfig {
   title?: string;
   bibliography?: string;
+  csl?: string;
   blocks?: Record<string, boolean | BlockConfig>;
   math?: Record<string, string>;
 }
@@ -54,13 +55,21 @@ export function extractRawFrontmatter(
   return { raw, end };
 }
 
-/** Remove surrounding quotes (single or double) from a YAML value. */
+/** Remove surrounding quotes and process YAML escape sequences. */
 function unquote(value: string): string {
   if (value.length >= 2) {
     const first = value[0];
     const last = value[value.length - 1];
-    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+    if (first === "'" && last === "'") {
       return value.slice(1, -1);
+    }
+    if (first === '"' && last === '"') {
+      // Double-quoted YAML strings interpret escape sequences
+      return value.slice(1, -1).replace(/\\(.)/g, (_m, ch: string) => {
+        if (ch === "n") return "\n";
+        if (ch === "t") return "\t";
+        return ch; // \\ → \, \" → ", etc.
+      });
     }
   }
   return value;
@@ -219,6 +228,10 @@ export function parseFrontmatter(doc: string): FrontmatterResult {
     } else if (key === "bibliography" && valueRaw !== "") {
       const parsed = parseScalar(valueRaw);
       if (typeof parsed === "string") config.bibliography = parsed;
+      i++;
+    } else if (key === "csl" && valueRaw !== "") {
+      const parsed = parseScalar(valueRaw);
+      if (typeof parsed === "string") config.csl = parsed;
       i++;
     } else if (key === "blocks" && valueRaw === "") {
       const result = parseBlocksSection(lines, i + 1, indentLevel(line));

@@ -10,6 +10,8 @@ export {
   type BibStore,
   setBibStore,
   getBibStore,
+  setCslProcessor,
+  getCslProcessor,
   findCitations,
   formatParenthetical,
   collectCitationRanges,
@@ -17,6 +19,8 @@ export {
   NarrativeCitationWidget,
   citationRenderPlugin,
 } from "./citation-render";
+
+export { CslProcessor, bibEntryToCsl } from "./csl-processor";
 
 export {
   collectCitedIds,

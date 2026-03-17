@@ -24,6 +24,7 @@
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.40.0",
     "@lezer/markdown": "^1.6.3",
+    "citeproc": "^2.4.63",
     "katex": "^0.16.38",
     "ws": "^8.19.0"
   },

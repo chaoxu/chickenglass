@@ -16,8 +16,7 @@ import {
   focusTracker,
 } from "./render-utils";
 import { getMathMacros } from "./math-macros";
-import { syntaxTree, ensureSyntaxTree } from "@codemirror/language";
-import type { SyntaxNodeRef } from "@lezer/common";
+
 
 export const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
 
@@ -139,37 +138,9 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
   const nodes = collectNodes(state, MATH_TYPES);
   const items: Range<Decoration>[] = [];
 
-  // Find FencedDivs that contain the cursor — math inside these must be
-  // raw text so CM6 can correctly map click positions (no mixed widget/text).
-  const activeRanges: Array<{ from: number; to: number }> = [];
-  if (focused) {
-    const cursor = state.selection.main;
-    // Use ensureSyntaxTree to guarantee FencedDiv nodes are parsed
-    const tree = ensureSyntaxTree(state, state.doc.length, 500) ?? syntaxTree(state);
-    tree.iterate({
-      enter(n: SyntaxNodeRef) {
-        if (n.name === "FencedDiv") {
-          const lineFrom = state.doc.lineAt(n.from).from;
-          const closeLine = state.doc.lineAt(n.to);
-          const lineTo = closeLine.number < state.doc.lines
-            ? state.doc.line(closeLine.number + 1).to
-            : closeLine.to;
-          if (cursor.from >= lineFrom && cursor.to <= lineTo) {
-            activeRanges.push({ from: n.from, to: n.to });
-          }
-        }
-      },
-    });
-  }
-
   for (const node of nodes) {
+    // Only show source when cursor is inside this specific math node
     if (focused && cursorContainedIn(state, node.from, node.to)) continue;
-    // Skip math inside a block that's in source mode
-    const skipped = activeRanges.some(r => node.from >= r.from && node.to <= r.to);
-    if (skipped) {
-      console.log(`[MATH-SKIP] Skipping math at ${node.from}-${node.to} (inside active block)`);
-      continue;
-    }
 
     const raw = state.sliceDoc(node.from, node.to);
     const isDisplay = node.type === "DisplayMath";

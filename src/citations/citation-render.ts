@@ -26,6 +26,7 @@ import {
   formatCitation,
   formatNarrativeCitation,
 } from "./bibtex-parser";
+import type { CslProcessor } from "./csl-processor";
 import { cursorInRange, buildDecorations, RenderWidget } from "../render/render-utils";
 
 /** A store of bibliography entries keyed by citation id. */
@@ -33,6 +34,9 @@ export type BibStore = ReadonlyMap<string, BibEntry>;
 
 /** StateField-compatible facet for providing bibliography data to the plugin. */
 let globalBibStore: BibStore = new Map();
+
+/** Optional CSL processor for styled citation formatting. */
+let globalCslProcessor: CslProcessor | null = null;
 
 /** Set the global bibliography store. */
 export function setBibStore(store: BibStore): void {
@@ -42,6 +46,16 @@ export function setBibStore(store: BibStore): void {
 /** Get the current bibliography store. */
 export function getBibStore(): BibStore {
   return globalBibStore;
+}
+
+/** Set the global CSL processor (null = use default formatting). */
+export function setCslProcessor(processor: CslProcessor | null): void {
+  globalCslProcessor = processor;
+}
+
+/** Get the current CSL processor. */
+export function getCslProcessor(): CslProcessor | null {
+  return globalCslProcessor;
 }
 
 /** Widget that renders a parenthetical citation like "(Karger, 2000)". */
@@ -173,12 +187,15 @@ export function findCitations(
 
 /**
  * Format a parenthetical citation string from multiple ids.
- * Returns "(Author1, Year1; Author2, Year2)" format.
+ * Uses CSL processor when available, falls back to "(Author, Year)" format.
  */
 export function formatParenthetical(
   ids: readonly string[],
   store: BibStore,
 ): string {
+  if (globalCslProcessor) {
+    return globalCslProcessor.cite([...ids]);
+  }
   const parts = ids.map((id) => {
     const entry = store.get(id);
     return entry ? formatCitation(entry) : id;
@@ -206,10 +223,13 @@ export function collectCitationRanges(
         Decoration.replace({ widget }).range(match.from, match.to),
       );
     } else {
-      const entry = store.get(match.ids[0]);
+      const id = match.ids[0];
+      const entry = store.get(id);
       if (entry) {
-        const rendered = formatNarrativeCitation(entry);
-        const widget = new NarrativeCitationWidget(rendered, match.ids[0]);
+        const rendered = globalCslProcessor
+          ? globalCslProcessor.citeNarrative(id)
+          : formatNarrativeCitation(entry);
+        const widget = new NarrativeCitationWidget(rendered, id);
         widget.sourceFrom = match.from;
         items.push(
           Decoration.replace({ widget }).range(match.from, match.to),

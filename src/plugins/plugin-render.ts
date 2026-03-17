@@ -26,7 +26,6 @@ import type { BlockAttrs } from "./plugin-types";
 import { pluginRegistryField, getPlugin } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
 import {
-  cursorContainedIn,
   buildDecorations,
   decorationHidden,
   editorFocusField,
@@ -130,32 +129,6 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
   return results;
 }
 
-/** Add hiding marks for fence syntax (opening prefix, attributes, closing fence). */
-function hideFenceSyntax(div: FencedDivInfo, items: Range<Decoration>[]): void {
-  // Hide the opening fence colons (the "::: " prefix)
-  if (div.attrFrom !== undefined && div.attrFrom > div.fenceFrom) {
-    items.push(decorationHidden.range(div.fenceFrom, div.attrFrom));
-  } else if (div.titleFrom !== undefined && div.titleFrom > div.fenceFrom) {
-    items.push(decorationHidden.range(div.fenceFrom, div.titleFrom));
-  } else {
-    items.push(decorationHidden.range(div.fenceFrom, div.fenceTo));
-  }
-
-  // Hide the attributes block (e.g. "{.theorem #thm-main}")
-  if (div.attrFrom !== undefined && div.attrTo !== undefined) {
-    if (div.titleFrom !== undefined && div.titleFrom > div.attrTo) {
-      // Hide attr + space before title
-      items.push(decorationHidden.range(div.attrFrom, div.titleFrom));
-    } else {
-      items.push(decorationHidden.range(div.attrFrom, div.attrTo));
-    }
-  }
-
-  // Hide closing fence line
-  if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
-    items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
-  }
-}
 
 /** Build decorations for all fenced divs using the plugin registry. */
 function buildBlockDecorations(state: EditorState): DecorationSet {
@@ -167,57 +140,123 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const items: Range<Decoration>[] = [];
 
   for (const div of divs) {
-    // Expand range: full lines of the block + one extra line after closing fence.
-    const blockLineFrom = state.doc.lineAt(div.from).from;
-    const closingLine = state.doc.lineAt(div.to);
-    const blockLineTo = closingLine.number < state.doc.lines
-      ? state.doc.line(closingLine.number + 1).to
-      : closingLine.to;
-    const cursorInside = focused && cursorContainedIn(state, blockLineFrom, blockLineTo);
-
     const plugin = getPlugin(registry, div.className);
+    const isInclude = div.className === "include";
 
-    // In source mode (cursor inside), show raw markdown — no hiding decorations.
-    // Only add the block wrapper class for subtle styling.
-    if (cursorInside) {
-      if (plugin) {
+    // Include blocks are always invisible — content flows seamlessly
+    if (isInclude) {
+      // Hide the entire opening fence line
+      items.push(decorationHidden.range(div.fenceFrom, div.fenceTo));
+      if (div.attrFrom !== undefined && div.attrTo !== undefined) {
+        items.push(decorationHidden.range(div.attrFrom, div.attrTo));
+      }
+      if (div.titleFrom !== undefined && div.titleTo !== undefined) {
+        items.push(decorationHidden.range(div.titleFrom, div.titleTo));
+      }
+      // Hide closing fence
+      if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
+        items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
+      }
+      // Collapse fence lines to zero height
+      items.push(
+        Decoration.line({ class: "cg-include-fence" }).range(div.fenceFrom),
+      );
+      if (div.closeFenceFrom >= 0) {
         items.push(
-          Decoration.line({ class: `${plugin.render({ type: div.className }).className} cg-block-source` }).range(div.from),
+          Decoration.line({ class: "cg-include-fence" }).range(div.closeFenceFrom),
         );
       }
       continue;
     }
 
-    // Rendered mode: add line decoration, then hide fence syntax.
-    if (plugin) {
-      const numberEntry = counterState?.byPosition.get(div.from);
-      const blockAttrs: BlockAttrs = {
-        type: div.className,
-        id: div.id,
-        title: div.title,
-        number: numberEntry?.number,
-      };
-      const spec = plugin.render(blockAttrs);
+    // Check if cursor is on a fence line (opening or closing).
+    // Fences are a semantic pair — editing one should reveal both.
+    const cursor = state.selection.main;
+    const openLine = state.doc.lineAt(div.fenceFrom);
+    const cursorOnOpenFence = focused &&
+      cursor.from >= openLine.from && cursor.from <= openLine.to;
+    const cursorOnCloseFence = focused &&
+      div.closeFenceFrom >= 0 &&
+      cursor.from >= div.closeFenceFrom && cursor.from <= div.closeFenceTo;
+    const cursorOnFence = cursorOnOpenFence || cursorOnCloseFence;
 
-      // Line decoration on the opening fence line: block class + label
+    // Render block label header — but NOT when cursor is on a fence line
+    // (fence source replaces the label in that case)
+    if (!cursorOnFence) {
+      if (plugin) {
+        const numberEntry = counterState?.byPosition.get(div.from);
+        const blockAttrs: BlockAttrs = {
+          type: div.className,
+          id: div.id,
+          title: div.title,
+          number: numberEntry?.number,
+        };
+        const spec = plugin.render(blockAttrs);
+
+        items.push(
+          Decoration.line({
+            class: `${spec.className} cg-block-header`,
+            attributes: { "data-block-label": spec.header },
+          }).range(div.from),
+        );
+      } else {
+        items.push(
+          Decoration.line({
+            class: "cg-block cg-block-unknown cg-block-header",
+            attributes: div.title ? { "data-block-label": div.title } : {},
+          }).range(div.from),
+        );
+      }
+    } else if (plugin) {
+      // Cursor on fence: add block class for styling but no label
       items.push(
         Decoration.line({
-          class: `${spec.className} cg-block-header`,
-          attributes: { "data-block-label": spec.header },
-        }).range(div.from),
-      );
-    } else {
-      // Unrecognized class -- render as a plain styled div
-      items.push(
-        Decoration.line({
-          class: "cg-block cg-block-unknown cg-block-header",
-          attributes: div.title ? { "data-block-label": div.title } : {},
+          class: `${plugin.render({ type: div.className }).className} cg-block-source`,
         }).range(div.from),
       );
     }
 
-    // Hide fence syntax (shared for both plugin and plain divs)
-    hideFenceSyntax(div, items);
+    // When cursor is on either fence, show BOTH fences (semantic pair).
+    // When cursor is on content, hide all fences.
+    if (!cursorOnFence) {
+      // Hide opening fence syntax
+      if (div.attrFrom !== undefined && div.attrFrom > div.fenceFrom) {
+        items.push(decorationHidden.range(div.fenceFrom, div.attrFrom));
+      } else if (div.titleFrom !== undefined && div.titleFrom > div.fenceFrom) {
+        items.push(decorationHidden.range(div.fenceFrom, div.titleFrom));
+      } else {
+        items.push(decorationHidden.range(div.fenceFrom, div.fenceTo));
+      }
+
+      // Hide attributes block
+      if (div.attrFrom !== undefined && div.attrTo !== undefined) {
+        items.push(decorationHidden.range(div.attrFrom, div.attrTo));
+      }
+
+      // Hide title text (rendered via ::before label)
+      if (div.titleFrom !== undefined && div.titleTo !== undefined) {
+        items.push(decorationHidden.range(div.titleFrom, div.titleTo));
+      }
+
+      // Hide closing fence
+      if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
+        items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
+      }
+    }
+    // When cursorOnFence: both fences shown, no hiding applied
+
+    // QED tombstone: add right-aligned ∎ on the last content line of proof blocks
+    if (plugin && plugin.defaults?.qedSymbol && div.closeFenceFrom >= 0) {
+      const closeLine = state.doc.lineAt(div.closeFenceFrom);
+      if (closeLine.number > 1) {
+        const lastContentLine = state.doc.line(closeLine.number - 1);
+        if (lastContentLine.from > div.fenceFrom) {
+          items.push(
+            Decoration.line({ class: "cg-block-qed" }).range(lastContentLine.from),
+          );
+        }
+      }
+    }
   }
 
   return buildDecorations(items);

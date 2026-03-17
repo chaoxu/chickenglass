@@ -1,6 +1,11 @@
 import { EditorView } from "@codemirror/view";
 
 import { createEditor } from "../editor";
+import { frontmatterField } from "../editor/frontmatter-state";
+import { parseBibTeX } from "../citations/bibtex-parser";
+import { setBibStore, setCslProcessor } from "../citations/citation-render";
+import { CslProcessor } from "../citations/csl-processor";
+import { expandIncludes, collapseIncludes } from "./include-expander";
 import type { FileSystem } from "./file-manager";
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
@@ -37,11 +42,17 @@ export class App {
   private readonly cleanupSearchKeybinding: () => void;
   private readonly editorContainer: HTMLElement;
   private editor: EditorView | null = null;
+  /** Last bibliography path loaded (to avoid redundant reloads). */
+  private lastBibPath = "";
+  /** Last CSL style path loaded. */
+  private lastCslPath = "";
 
-  /** Content saved on disk, keyed by file path. */
+  /** Raw content saved on disk (collapsed includes), keyed by file path. */
   private readonly savedContent = new Map<string, string>();
-  /** Content currently in the editor buffer, keyed by file path. */
+  /** Content currently in the editor buffer (expanded includes), keyed by file path. */
   private readonly bufferContent = new Map<string, string>();
+  /** Expanded content at last save point, for dirty checking. */
+  private readonly savedExpandedContent = new Map<string, string>();
 
   constructor(config: AppConfig) {
     this.fs = config.fs;
@@ -94,7 +105,7 @@ export class App {
     }
   }
 
-  /** Open a file in the editor. */
+  /** Open a file in the editor, expanding any include blocks. */
   async openFile(path: string): Promise<void> {
     const name = path.split("/").pop() ?? path;
 
@@ -103,15 +114,18 @@ export class App {
       return;
     }
 
-    const content = await this.fs.readFile(path);
-    this.savedContent.set(path, content);
+    const rawContent = await this.fs.readFile(path);
+    // Expand include blocks so their content is editable inline
+    const content = await expandIncludes(rawContent, path, this.fs);
+    this.savedContent.set(path, rawContent);
+    this.savedExpandedContent.set(path, content);
     this.bufferContent.set(path, content);
     this.tabBar.openTab(path, name);
     this.switchEditor(path, content);
     this.sidebar.setActivePath(path);
   }
 
-  /** Save the currently active file. */
+  /** Save the currently active file, collapsing includes back to source files. */
   async saveActiveFile(): Promise<void> {
     const activePath = this.tabBar.getActiveTab();
     if (!activePath) return;
@@ -119,8 +133,27 @@ export class App {
     const content = this.bufferContent.get(activePath);
     if (content === undefined) return;
 
-    await this.fs.writeFile(activePath, content);
-    this.savedContent.set(activePath, content);
+    // Collapse expanded includes: extract content for each included file
+    const { collapsed, regions } = collapseIncludes(content);
+
+    // Write each included file's content
+    const dir = activePath.includes("/")
+      ? activePath.substring(0, activePath.lastIndexOf("/"))
+      : "";
+    for (const region of regions) {
+      const fullPath = dir ? `${dir}/${region.path}` : region.path;
+      try {
+        await this.fs.writeFile(fullPath, region.content);
+      } catch {
+        // File might not exist yet — create it
+        await this.fs.createFile(fullPath, region.content);
+      }
+    }
+
+    // Write the main file with collapsed include blocks
+    await this.fs.writeFile(activePath, collapsed);
+    this.savedContent.set(activePath, collapsed);
+    this.savedExpandedContent.set(activePath, content);
     this.tabBar.setDirty(activePath, false);
   }
 
@@ -164,6 +197,7 @@ export class App {
   private closeFile(path: string): void {
     const nextPath = this.tabBar.closeTab(path);
     this.savedContent.delete(path);
+    this.savedExpandedContent.delete(path);
     this.bufferContent.delete(path);
 
     if (nextPath) {
@@ -178,26 +212,87 @@ export class App {
 
   private switchEditor(path: string, content: string): void {
     this.destroyEditor();
+    this.lastBibPath = "";
 
     const changeListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         const newContent = update.state.doc.toString();
         this.bufferContent.set(path, newContent);
-        const saved = this.savedContent.get(path) ?? "";
+        const saved = this.savedExpandedContent.get(path) ?? "";
         this.tabBar.setDirty(path, newContent !== saved);
+      }
+    });
+
+    const bibListener = EditorView.updateListener.of((update) => {
+      if (update.docChanged || update.startState.field(frontmatterField, false) === undefined) {
+        this.loadBibliographyIfChanged(path, update.view);
       }
     });
 
     this.editor = createEditor({
       parent: this.editorContainer,
       doc: content,
-      extensions: [changeListener],
+      extensions: [changeListener, bibListener],
     });
     // Expose view for debugging
     (window as unknown as { __cmView: EditorView }).__cmView = this.editor;
+
+    // Initial bibliography load
+    this.loadBibliographyIfChanged(path, this.editor);
+
+    // Attach outline to the new editor
+    this.sidebar.outline.attach(this.editor);
+  }
+
+  /** Load the .bib and optional .csl files specified in frontmatter. */
+  private loadBibliographyIfChanged(docPath: string, view: EditorView): void {
+    const fm = view.state.field(frontmatterField, false);
+    const bibPath = fm?.config.bibliography ?? "";
+    const cslPath = fm?.config.csl ?? "";
+
+    if (bibPath === this.lastBibPath && cslPath === this.lastCslPath) return;
+    this.lastBibPath = bibPath;
+    this.lastCslPath = cslPath;
+
+    if (!bibPath) {
+      setBibStore(new Map());
+      setCslProcessor(null);
+      return;
+    }
+
+    const dir = docPath.includes("/")
+      ? docPath.substring(0, docPath.lastIndexOf("/"))
+      : "";
+    const resolve = (p: string) => (dir ? `${dir}/${p}` : p);
+
+    this.fs.readFile(resolve(bibPath)).then(async (bibText) => {
+      const entries = parseBibTeX(bibText);
+      setBibStore(new Map(entries.map((e) => [e.id, e])));
+
+      let cslXml: string | undefined;
+      if (cslPath) {
+        try {
+          cslXml = await this.fs.readFile(resolve(cslPath));
+        } catch {
+          // CSL file not found — use default style
+        }
+      }
+
+      setCslProcessor(new CslProcessor(entries, cslXml));
+
+      try {
+        view.dispatch({ selection: view.state.selection });
+      } catch {
+        // View may have been destroyed
+      }
+    }).catch(() => {
+      setBibStore(new Map());
+      setCslProcessor(null);
+    });
   }
 
   private destroyEditor(): void {
+    this.sidebar.outline.detach();
     if (this.editor) {
       this.editor.destroy();
       this.editor = null;

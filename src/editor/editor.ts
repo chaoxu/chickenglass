@@ -23,6 +23,8 @@ import {
   debugInspectorPlugin,
   checkboxRenderPlugin,
   mathPreviewPlugin,
+  sectionNumberPlugin,
+  fenceGuidePlugin,
 } from "../render";
 import {
   createPluginRegistryField,
@@ -33,6 +35,7 @@ import {
 import { citationRenderPlugin, bibliographyPlugin } from "../citations";
 import { editorKeybindings } from "./keybindings";
 import { chickenglassTheme } from "./theme";
+import { headingFold } from "./heading-fold";
 
 const sampleDocument = `---
 title: Chickenglass Demo
@@ -142,8 +145,12 @@ export function createEditor(config: EditorConfig): EditorView {
       debugInspectorPlugin,
       checkboxRenderPlugin,
       mathPreviewPlugin,
+      sectionNumberPlugin,
+      fenceGuidePlugin,
 
       // Editor chrome
+      EditorView.lineWrapping,
+      headingFold,
       editorKeybindings,
       chickenglassTheme,
 
