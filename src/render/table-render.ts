@@ -513,7 +513,7 @@ class TableRenderPluginValue implements PluginValue {
         items.push(
           Decoration.replace({}).range(
             sepLine.from,
-            Math.min(sepLine.to + 1, doc.length),
+            sepLine.to,
           ),
         );
       }
