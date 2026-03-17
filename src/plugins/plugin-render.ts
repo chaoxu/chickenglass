@@ -337,10 +337,7 @@ const blockDecorationField = StateField.define<DecorationSet>({
   },
 
   provide(field) {
-    return [
-      EditorView.decorations.from(field),
-      EditorView.atomicRanges.of((view) => view.state.field(field)),
-    ];
+    return EditorView.decorations.from(field);
   },
 });
 
