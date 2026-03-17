@@ -76,7 +76,7 @@ export class TabBar {
   /** Mark a tab as dirty (unsaved changes). */
   setDirty(path: string, dirty: boolean): void {
     const tab = this.tabs.find((t) => t.path === path);
-    if (tab) {
+    if (tab && tab.dirty !== dirty) {
       tab.dirty = dirty;
       this.renderTabs();
     }

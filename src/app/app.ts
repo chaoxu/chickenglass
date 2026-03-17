@@ -213,6 +213,7 @@ export class App {
   private switchEditor(path: string, content: string): void {
     this.destroyEditor();
     this.lastBibPath = "";
+    this.lastCslPath = "";
 
     const changeListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {

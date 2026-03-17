@@ -93,7 +93,7 @@ export class Outline {
     const view = this.view;
 
     // Only rebuild DOM if content changed
-    const key = entries.map((e) => `${e.number}:${e.text}`).join("\n");
+    const key = entries.map((e) => `${e.number}:${e.text}:${e.pos}`).join("\n");
     if (this.element.getAttribute("data-key") === key) return;
     this.element.setAttribute("data-key", key);
 
