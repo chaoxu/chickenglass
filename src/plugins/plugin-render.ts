@@ -15,7 +15,7 @@ import {
   Decoration,
   EditorView,
 } from "@codemirror/view";
-import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
+import { type EditorState, type Extension, type Range, StateField, StateEffect } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { parseFencedDivAttrs } from "../parser/fenced-div-attrs";
 import type { BlockAttrs, BlockDecorationSpec } from "./plugin-types";
@@ -30,8 +30,34 @@ import {
   focusTracker,
 } from "../render/render-utils";
 
+/**
+ * StateEffect to set which block is actively being edited.
+ * Value is the block's `from` position, or -1 to clear.
+ */
+const activeBlockEffect = StateEffect.define<number>();
+
+/**
+ * Tracks which fenced div block is currently being edited (source mode).
+ * Once a block enters source mode via widget click, it stays active until
+ * the user clicks outside it or on a different block's widget.
+ */
+const activeBlockField = StateField.define<number>({
+  create() {
+    return -1;
+  },
+  update(active, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(activeBlockEffect)) return effect.value;
+    }
+    return active;
+  },
+});
+
 /** Widget for the rendered block header (e.g. "Theorem 1 (Main Result)"). */
 export class BlockHeaderWidget extends RenderWidget {
+  /** The FencedDiv's `from` position — used to set the active block on click. */
+  blockFrom = -1;
+
   constructor(
     private readonly spec: BlockDecorationSpec,
   ) {
@@ -47,6 +73,22 @@ export class BlockHeaderWidget extends RenderWidget {
     return el;
   }
 
+  toDOM(view?: EditorView): HTMLElement {
+    const el = super.toDOM(view);
+    if (view && this.blockFrom >= 0) {
+      const blockFrom = this.blockFrom;
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        view.focus();
+        view.dispatch({
+          selection: { anchor: this.sourceFrom >= 0 ? this.sourceFrom : blockFrom },
+          effects: activeBlockEffect.of(blockFrom),
+        });
+      });
+    }
+    return el;
+  }
+
   eq(other: BlockHeaderWidget): boolean {
     return (
       this.spec.className === other.spec.className &&
@@ -57,11 +99,29 @@ export class BlockHeaderWidget extends RenderWidget {
 
 /** Widget for an unrecognized fenced div (plain styled div). */
 export class PlainDivHeaderWidget extends RenderWidget {
+  blockFrom = -1;
+
   constructor(
     private readonly className: string,
     private readonly title: string,
   ) {
     super();
+  }
+
+  toDOM(view?: EditorView): HTMLElement {
+    const el = super.toDOM(view);
+    if (view && this.blockFrom >= 0) {
+      const blockFrom = this.blockFrom;
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        view.focus();
+        view.dispatch({
+          selection: { anchor: this.sourceFrom >= 0 ? this.sourceFrom : blockFrom },
+          effects: activeBlockEffect.of(blockFrom),
+        });
+      });
+    }
+    return el;
   }
 
   createDOM(): HTMLElement {
@@ -169,19 +229,23 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const counterState: BlockCounterState | undefined =
     state.field(blockCounterField, false) ?? undefined;
   const focused = state.field(editorFocusField, false) ?? false;
+  const activeBlock = state.field(activeBlockField, false) ?? -1;
   const divs = collectFencedDivs(state);
   const items: Range<Decoration>[] = [];
 
   for (let i = 0; i < divs.length; i++) {
     const div = divs[i];
-    // Expand range: full lines of the block + one extra line after closing fence,
-    // so clicking near block boundaries or the blank separator keeps source visible.
+    // Expand range: full lines of the block + one extra line after closing fence.
     const blockLineFrom = state.doc.lineAt(div.from).from;
     const closingLine = state.doc.lineAt(div.to);
     const blockLineTo = closingLine.number < state.doc.lines
       ? state.doc.line(closingLine.number + 1).to
       : closingLine.to;
-    const cursorInside = focused && cursorContainedIn(state, blockLineFrom, blockLineTo);
+    // A block is in source mode if:
+    // 1. It was explicitly activated via widget click (activeBlock matches), OR
+    // 2. The cursor is inside its expanded range
+    const isActiveBlock = activeBlock === div.from;
+    const cursorInside = focused && (isActiveBlock || cursorContainedIn(state, blockLineFrom, blockLineTo));
     const color = DEBUG_COLORS[i % DEBUG_COLORS.length];
 
     // Debug: add colored outline to every line in the hit area
@@ -223,6 +287,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       // Replace the opening fence line with the rendered header
       const headerWidget = new BlockHeaderWidget(spec);
       headerWidget.sourceFrom = div.fenceFrom;
+      headerWidget.blockFrom = div.from;
       items.push(
         Decoration.replace({ widget: headerWidget }).range(div.fenceFrom, div.fenceTo),
       );
@@ -235,6 +300,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       if (div.title) {
         const plainWidget = new PlainDivHeaderWidget(div.className, div.title);
         plainWidget.sourceFrom = div.fenceFrom;
+        plainWidget.blockFrom = div.from;
         items.push(
           Decoration.replace({ widget: plainWidget }).range(div.fenceFrom, div.fenceTo),
         );
@@ -264,7 +330,7 @@ const blockDecorationField = StateField.define<DecorationSet>({
   },
 
   update(value, tr) {
-    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(focusEffect))) {
+    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(focusEffect) || e.is(activeBlockEffect))) {
       return buildBlockDecorations(tr.state);
     }
     return value;
@@ -278,5 +344,34 @@ const blockDecorationField = StateField.define<DecorationSet>({
   },
 });
 
+/**
+ * Listener that clears the active block when the cursor moves outside
+ * all fenced div ranges (so source mode is exited).
+ */
+const activeBlockClearer = EditorView.updateListener.of((update) => {
+  if (!update.selectionSet) return;
+  const active = update.state.field(activeBlockField, false) ?? -1;
+  if (active < 0) return;
+
+  const divs = collectFencedDivs(update.state);
+  const cursor = update.state.selection.main;
+  for (const div of divs) {
+    const lineFrom = update.state.doc.lineAt(div.from).from;
+    const closeLine = update.state.doc.lineAt(div.to);
+    const lineTo = closeLine.number < update.state.doc.lines
+      ? update.state.doc.line(closeLine.number + 1).to
+      : closeLine.to;
+    if (cursor.from >= lineFrom && cursor.to <= lineTo) return; // still inside a block
+  }
+  // Cursor is outside all blocks — clear active
+  update.view.dispatch({ effects: activeBlockEffect.of(-1) });
+});
+
 /** CM6 extension that renders fenced divs using the block plugin system. */
-export const blockRenderPlugin: Extension = [editorFocusField, focusTracker, blockDecorationField];
+export const blockRenderPlugin: Extension = [
+  activeBlockField,
+  editorFocusField,
+  focusTracker,
+  blockDecorationField,
+  activeBlockClearer,
+];
