@@ -7,9 +7,10 @@ export const chickenglassTheme = EditorView.theme({
     fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
   },
   ".cm-content": {
-    padding: "24px 48px",
+    padding: "24px 48px 24px 48px",
     maxWidth: "720px",
     margin: "0 auto",
+    overflow: "visible",
   },
   ".cm-gutters": {
     display: "none",
@@ -351,23 +352,24 @@ export const chickenglassTheme = EditorView.theme({
     position: "relative",
   },
 
-  /* Include label: rotated filename in the right margin */
+  /* Include label: rotated filename in the right padding area */
   ".cg-include-label": {
     position: "absolute",
-    right: "-40px",
+    right: "-44px",
     top: "0",
     writingMode: "vertical-rl",
     transform: "rotate(180deg)",
     userSelect: "none",
     pointerEvents: "none",
-    fontSize: "11px",
-    color: "#999",
-    opacity: "0.2",
+    fontSize: "10px",
+    color: "#bbb",
+    opacity: "1",
     whiteSpace: "nowrap",
-    letterSpacing: "0.5px",
+    letterSpacing: "0.3px",
+    lineHeight: "1",
   },
 
   ".cg-include-label-active": {
-    opacity: "0.6",
+    color: "#888",
   },
 });

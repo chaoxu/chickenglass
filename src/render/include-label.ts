@@ -106,9 +106,10 @@ class IncludeLabelPlugin implements PluginValue {
 
       // Add widget decoration at the start of the region's first line
       const startLine = doc.lineAt(from);
+      const filename = region.file.split("/").pop() ?? region.file;
       decorations.push(
         Decoration.widget({
-          widget: new IncludeLabelWidget(region.file, active),
+          widget: new IncludeLabelWidget(filename, active),
           side: 1,
         }).range(startLine.from),
       );
