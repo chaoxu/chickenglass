@@ -1,22 +1,17 @@
 import { EditorView } from "@codemirror/view";
 
 import { createEditor } from "../editor";
+import { frontmatterField } from "../editor/frontmatter-state";
+import { parseBibTeX } from "../citations/bibtex-parser";
+import { bibDataEffect } from "../citations/citation-render";
+import { CslProcessor } from "../citations/csl-processor";
 import { resolveIncludePath } from "../plugins/include-resolver";
-import type { FileSystem } from "./file-manager";
+import { SourceMap, type IncludeRegion } from "./source-map";
+import { BackgroundIndexer } from "../index";
+import type { FileEntry, FileSystem } from "./file-manager";
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
-import { SourceMap, type IncludeRegion } from "./source-map";
 import { TabBar } from "./tab-bar";
-
-/**
- * Regex matching the collapsed include form:
- * ```
- * ::: {.include}
- * chapter1.md
- * :::
- * ```
- */
-const INCLUDE_RE = /^(:{3,})\s*\{\.include\}\s*\n\s*(.+?)\s*\n\1\s*$/gm;
 
 /** Configuration for the application shell. */
 export interface AppConfig {
@@ -46,17 +41,26 @@ export class App {
   private readonly sidebar: Sidebar;
   private readonly tabBar: TabBar;
   private readonly searchPanel: SearchPanel;
+  private readonly indexer: BackgroundIndexer;
   private readonly cleanupSearchKeybinding: () => void;
   private readonly editorContainer: HTMLElement;
   private editor: EditorView | null = null;
-
-  /** Source map for the currently open file (null if no includes). */
+  /** Last bibliography path loaded (to avoid redundant reloads). */
+  private lastBibPath = "";
+  /** Last CSL style path loaded. */
+  private lastCslPath = "";
+  private indexUpdateTimer: ReturnType<typeof setTimeout> | null = null;
   private sourceMap: SourceMap | null = null;
 
-  /** Content saved on disk, keyed by file path. */
+  private static readonly INCLUDE_RE =
+    /^(:{3,})\s*\{\.include\}\s*\n\s*(.+?)\s*\n\1\s*$/gm;
+
+  /** Raw content saved on disk (collapsed includes), keyed by file path. */
   private readonly savedContent = new Map<string, string>();
-  /** Content currently in the editor buffer, keyed by file path. */
+  /** Content currently in the editor buffer (expanded includes), keyed by file path. */
   private readonly bufferContent = new Map<string, string>();
+  /** Expanded content at last save point, for dirty checking. */
+  private readonly savedExpandedContent = new Map<string, string>();
 
   constructor(config: AppConfig) {
     this.fs = config.fs;
@@ -86,8 +90,12 @@ export class App {
 
     this.root.appendChild(mainArea);
 
+    // Background indexer
+    this.indexer = new BackgroundIndexer();
+
     // Search panel overlay (hidden by default)
     this.searchPanel = new SearchPanel();
+    this.searchPanel.setIndexer(this.indexer);
     this.searchPanel.setResultHandler((entry) => this.openFile(entry.file));
     this.root.appendChild(this.searchPanel.element);
 
@@ -98,24 +106,34 @@ export class App {
 
     this.setupKeybindings();
 
-    // Listen for "jump to source file" events from the editor keybinding
     this.root.addEventListener("cg-open-file", (e) => {
       const path = (e as CustomEvent).detail;
       if (typeof path === "string") this.openFile(path);
     });
   }
 
-  /** Initialize the app: load file tree and optionally open a file. */
+  /** Initialize the app: load file tree, index all .md files, and optionally open a file. */
   async init(initialFile?: string): Promise<void> {
     const tree = await this.fs.listTree();
     this.sidebar.render(tree);
+
+    // Collect all .md file paths from the tree and index them
+    const mdPaths = collectMdPaths(tree);
+    const files: Array<{ file: string; content: string }> = [];
+    for (const path of mdPaths) {
+      const content = await this.fs.readFile(path);
+      files.push({ file: path, content });
+    }
+    if (files.length > 0) {
+      await this.indexer.bulkUpdate(files);
+    }
 
     if (initialFile) {
       await this.openFile(initialFile);
     }
   }
 
-  /** Open a file in the editor, expanding includes inline via SourceMap. */
+  /** Open a file in the editor, expanding any include blocks. */
   async openFile(path: string): Promise<void> {
     const name = path.split("/").pop() ?? path;
 
@@ -125,21 +143,18 @@ export class App {
     }
 
     const rawContent = await this.fs.readFile(path);
-    const { composed, sourceMap } = await this.expandIncludes(
-      path,
-      rawContent,
-    );
-
+    const { composed: content, sourceMap } = await this.expandIncludes(path, rawContent);
     this.sourceMap = sourceMap;
     (window as unknown as { __cgSourceMap: SourceMap | null }).__cgSourceMap = sourceMap;
-    this.savedContent.set(path, composed);
-    this.bufferContent.set(path, composed);
+    this.savedContent.set(path, rawContent);
+    this.savedExpandedContent.set(path, content);
+    this.bufferContent.set(path, content);
     this.tabBar.openTab(path, name);
-    this.switchEditor(path, composed);
+    this.switchEditor(path, content);
     this.sidebar.setActivePath(path);
   }
 
-  /** Save the currently active file, decomposing includes back to separate files. */
+  /** Save the currently active file, collapsing includes back to source files. */
   async saveActiveFile(): Promise<void> {
     const activePath = this.tabBar.getActiveTab();
     if (!activePath) return;
@@ -148,22 +163,19 @@ export class App {
     if (content === undefined) return;
 
     if (this.sourceMap && this.sourceMap.regions.length > 0) {
-      // Decompose: extract each included file's content and write it
       const fileParts = this.sourceMap.decompose(content);
       for (const [filePath, fileContent] of fileParts) {
-        await this.fs.writeFile(filePath, fileContent);
+        try { await this.fs.writeFile(filePath, fileContent); }
+        catch { await this.fs.createFile(filePath, fileContent); }
       }
-
-      // Reconstruct the main file with include references restored
       const mainContent = this.sourceMap.reconstructMain(content, activePath);
       await this.fs.writeFile(activePath, mainContent);
-      this.savedContent.set(activePath, content);
+      this.savedContent.set(activePath, mainContent);
     } else {
-      // No includes: save directly
       await this.fs.writeFile(activePath, content);
       this.savedContent.set(activePath, content);
     }
-
+    this.savedExpandedContent.set(activePath, content);
     this.tabBar.setDirty(activePath, false);
   }
 
@@ -190,99 +202,12 @@ export class App {
     return this.searchPanel;
   }
 
-  /** Get the current source map (for CM6 extensions and testing). */
-  getSourceMap(): SourceMap | null {
-    return this.sourceMap;
-  }
-
-  /** Clean up event listeners. */
+  /** Clean up event listeners and background worker. */
   destroy(): void {
     this.cleanupSearchKeybinding();
     this.destroyEditor();
-  }
-
-  /**
-   * Expand include references in the raw content, building a SourceMap.
-   *
-   * Finds all `::: {.include}\npath\n:::` blocks, reads the included files,
-   * replaces the references with file content, and records each region.
-   */
-  private async expandIncludes(
-    mainPath: string,
-    rawContent: string,
-  ): Promise<{ composed: string; sourceMap: SourceMap }> {
-    const re = new RegExp(INCLUDE_RE.source, INCLUDE_RE.flags);
-    const matches: Array<{
-      fullMatch: string;
-      start: number;
-      end: number;
-      filePath: string;
-      resolvedPath: string;
-    }> = [];
-
-    let match: RegExpExecArray | null;
-    while ((match = re.exec(rawContent)) !== null) {
-      const filePath = match[2].trim();
-      const resolvedPath = resolveIncludePath(mainPath, filePath);
-      matches.push({
-        fullMatch: match[0],
-        start: match.index,
-        end: match.index + match[0].length,
-        filePath,
-        resolvedPath,
-      });
-    }
-
-    if (matches.length === 0) {
-      return { composed: rawContent, sourceMap: new SourceMap([]) };
-    }
-
-    // Read all included files
-    const fileContents = new Map<string, string>();
-    for (const m of matches) {
-      if (!fileContents.has(m.resolvedPath)) {
-        const exists = await this.fs.exists(m.resolvedPath);
-        if (exists) {
-          const content = await this.fs.readFile(m.resolvedPath);
-          fileContents.set(m.resolvedPath, content);
-        } else {
-          // If file not found, leave the include reference as-is
-          fileContents.set(m.resolvedPath, m.fullMatch);
-        }
-      }
-    }
-
-    // Build composed document and regions by replacing in reverse order
-    // to preserve offsets for earlier matches
-    const regions: IncludeRegion[] = [];
-    let composed = rawContent;
-    let offset = 0; // cumulative offset from replacements
-
-    for (const m of matches) {
-      const content = fileContents.get(m.resolvedPath) ?? m.fullMatch;
-      const adjustedStart = m.start + offset;
-      const adjustedEnd = m.end + offset;
-
-      // Replace the include reference with file content
-      composed =
-        composed.substring(0, adjustedStart) +
-        content +
-        composed.substring(adjustedEnd);
-
-      regions.push({
-        from: adjustedStart,
-        to: adjustedStart + content.length,
-        file: m.resolvedPath,
-        originalRef: m.fullMatch,
-        rawFrom: m.start,
-        rawTo: m.end,
-      });
-
-      // Update offset: content length minus original match length
-      offset += content.length - m.fullMatch.length;
-    }
-
-    return { composed, sourceMap: new SourceMap(regions) };
+    this.clearIndexTimer();
+    this.indexer.dispose();
   }
 
   private activateFile(path: string): void {
@@ -296,6 +221,7 @@ export class App {
   private closeFile(path: string): void {
     const nextPath = this.tabBar.closeTab(path);
     this.savedContent.delete(path);
+    this.savedExpandedContent.delete(path);
     this.bufferContent.delete(path);
 
     if (nextPath) {
@@ -305,35 +231,132 @@ export class App {
     } else {
       this.destroyEditor();
       this.sidebar.setActivePath(null);
-      this.sourceMap = null;
     }
   }
 
   private switchEditor(path: string, content: string): void {
     this.destroyEditor();
+    this.lastBibPath = "";
+    this.lastCslPath = "";
+    this.clearIndexTimer();
 
     const changeListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         const newContent = update.state.doc.toString();
         this.bufferContent.set(path, newContent);
-        const saved = this.savedContent.get(path) ?? "";
+        const saved = this.savedExpandedContent.get(path) ?? "";
         this.tabBar.setDirty(path, newContent !== saved);
-
-        // Keep the source map in sync with document changes
+        this.scheduleIndexUpdate(path, newContent);
         this.sourceMap?.mapThrough(update.changes);
+      }
+    });
+
+    const bibListener = EditorView.updateListener.of((update) => {
+      if (update.docChanged || update.startState.field(frontmatterField, false) === undefined) {
+        this.loadBibliographyIfChanged(path, update.view);
       }
     });
 
     this.editor = createEditor({
       parent: this.editorContainer,
       doc: content,
-      extensions: [changeListener],
+      extensions: [changeListener, bibListener],
     });
     // Expose view for debugging
     (window as unknown as { __cmView: EditorView }).__cmView = this.editor;
+
+    // Initial bibliography load
+    this.loadBibliographyIfChanged(path, this.editor);
+
+    // Attach outline to the new editor
+    this.sidebar.outline.attach(this.editor);
+  }
+
+  /** Load the .bib and optional .csl files specified in frontmatter. */
+  private loadBibliographyIfChanged(docPath: string, view: EditorView): void {
+    const fm = view.state.field(frontmatterField, false);
+    const bibPath = fm?.config.bibliography ?? "";
+    const cslPath = fm?.config.csl ?? "";
+
+    if (bibPath === this.lastBibPath && cslPath === this.lastCslPath) return;
+    this.lastBibPath = bibPath;
+    this.lastCslPath = cslPath;
+
+    if (!bibPath) {
+      try {
+        view.dispatch({ effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) });
+      } catch { /* view destroyed */ }
+      return;
+    }
+
+    const dir = docPath.includes("/")
+      ? docPath.substring(0, docPath.lastIndexOf("/"))
+      : "";
+    const resolve = (p: string) => (dir ? `${dir}/${p}` : p);
+
+    this.fs.readFile(resolve(bibPath)).then(async (bibText) => {
+      const entries = parseBibTeX(bibText);
+      const store = new Map(entries.map((e) => [e.id, e]));
+
+      let cslXml: string | undefined;
+      if (cslPath) {
+        try {
+          cslXml = await this.fs.readFile(resolve(cslPath));
+        } catch {
+          // CSL file not found — use default style
+        }
+      }
+
+      const cslProcessor = new CslProcessor(entries, cslXml);
+
+      try {
+        view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor }) });
+      } catch { /* view destroyed */ }
+    }).catch(() => {
+      try {
+        view.dispatch({ effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) });
+      } catch { /* view destroyed */ }
+    });
+  }
+
+  private async expandIncludes(
+    mainPath: string,
+    rawContent: string,
+  ): Promise<{ composed: string; sourceMap: SourceMap }> {
+    const re = new RegExp(App.INCLUDE_RE.source, App.INCLUDE_RE.flags);
+    const matches: Array<{ fullMatch: string; start: number; end: number; resolvedPath: string }> = [];
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(rawContent)) !== null) {
+      const filePath = m[2].trim();
+      matches.push({ fullMatch: m[0], start: m.index, end: m.index + m[0].length,
+        resolvedPath: resolveIncludePath(mainPath, filePath) });
+    }
+    if (matches.length === 0) return { composed: rawContent, sourceMap: new SourceMap([]) };
+
+    const fileContents = new Map<string, string>();
+    for (const { resolvedPath, fullMatch } of matches) {
+      if (!fileContents.has(resolvedPath)) {
+        try { fileContents.set(resolvedPath, await this.fs.readFile(resolvedPath)); }
+        catch { fileContents.set(resolvedPath, fullMatch); }
+      }
+    }
+
+    const regions: IncludeRegion[] = [];
+    let composed = rawContent;
+    let offset = 0;
+    for (const { fullMatch, start, end, resolvedPath } of matches) {
+      const fileContent = fileContents.get(resolvedPath) ?? fullMatch;
+      const adjStart = start + offset;
+      composed = composed.substring(0, adjStart) + fileContent + composed.substring(adjStart + (end - start));
+      regions.push({ from: adjStart, to: adjStart + fileContent.length,
+        file: resolvedPath, originalRef: fullMatch, rawFrom: start, rawTo: end });
+      offset += fileContent.length - fullMatch.length;
+    }
+    return { composed, sourceMap: new SourceMap(regions) };
   }
 
   private destroyEditor(): void {
+    this.sidebar.outline.detach();
     if (this.editor) {
       this.editor.destroy();
       this.editor = null;
@@ -354,4 +377,35 @@ export class App {
       }
     });
   }
+
+  /** Schedule a debounced index update for the given file. */
+  private scheduleIndexUpdate(path: string, content: string): void {
+    this.clearIndexTimer();
+    this.indexUpdateTimer = setTimeout(() => {
+      this.indexer.updateFile(path, content);
+    }, 500);
+  }
+
+  /** Clear any pending index update timer. */
+  private clearIndexTimer(): void {
+    if (this.indexUpdateTimer !== null) {
+      clearTimeout(this.indexUpdateTimer);
+      this.indexUpdateTimer = null;
+    }
+  }
+}
+
+/** Recursively collect all .md file paths from a FileEntry tree. */
+function collectMdPaths(entry: FileEntry): string[] {
+  const paths: string[] = [];
+  if (entry.isDirectory) {
+    if (entry.children) {
+      for (const child of entry.children) {
+        paths.push(...collectMdPaths(child));
+      }
+    }
+  } else if (entry.name.endsWith(".md")) {
+    paths.push(entry.path);
+  }
+  return paths;
 }
