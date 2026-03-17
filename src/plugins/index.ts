@@ -53,14 +53,3 @@ export {
   flattenIncludes,
   collectIncludedPaths,
 } from "./include-resolver";
-export {
-  type BlockCounters,
-  type RefTarget,
-  type IncludeResult,
-  type IncludeError,
-  extractNumberedBlocks,
-  buildRefMap,
-  processIncludes,
-  isIncludeError,
-  isNumberedClass,
-} from "./include-plugin";
