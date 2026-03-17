@@ -172,13 +172,9 @@ class MarkdownRenderPlugin implements PluginValue {
             return;
           }
 
-          // --- ListMark: style bullet/number markers when cursor is not on same line ---
+          // --- ListMark: style bullet/number markers unless cursor touches the marker ---
           if (node.name === "ListMark") {
-            if (view.hasFocus) {
-              const cursor = view.state.selection.main;
-              const line = view.state.doc.lineAt(node.from);
-              if (cursor.from >= line.from && cursor.from <= line.to) return;
-            }
+            if (cursorInRange(view, node.from, node.to)) return;
             const grandparent = node.node.parent?.parent?.name;
             const deco =
               grandparent === "BulletList"
