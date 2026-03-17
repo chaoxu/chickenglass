@@ -160,6 +160,9 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
   return results;
 }
 
+/** Debug colors for block hit-area outlines. */
+const DEBUG_COLORS = ["#e74c3c", "#2ecc71", "#3498db", "#f39c12", "#9b59b6", "#1abc9c"];
+
 /** Build decorations for all fenced divs using the plugin registry. */
 function buildBlockDecorations(state: EditorState): DecorationSet {
   const registry = state.field(pluginRegistryField);
@@ -169,8 +172,8 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const divs = collectFencedDivs(state);
   const items: Range<Decoration>[] = [];
 
-  for (const div of divs) {
-    // Skip decorating if the editor is focused and cursor is inside the fenced div.
+  for (let i = 0; i < divs.length; i++) {
+    const div = divs[i];
     // Expand range: full lines of the block + one extra line after closing fence,
     // so clicking near block boundaries or the blank separator keeps source visible.
     const blockLineFrom = state.doc.lineAt(div.from).from;
@@ -178,7 +181,26 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     const blockLineTo = closingLine.number < state.doc.lines
       ? state.doc.line(closingLine.number + 1).to
       : closingLine.to;
-    if (focused && cursorContainedIn(state, blockLineFrom, blockLineTo)) continue;
+    const cursorInside = focused && cursorContainedIn(state, blockLineFrom, blockLineTo);
+    const color = DEBUG_COLORS[i % DEBUG_COLORS.length];
+
+    // Debug: add colored outline to every line in the hit area
+    const startLine = state.doc.lineAt(blockLineFrom).number;
+    const endLine = state.doc.lineAt(blockLineTo).number;
+    for (let ln = startLine; ln <= endLine; ln++) {
+      const lineStart = state.doc.line(ln).from;
+      items.push(
+        Decoration.line({
+          attributes: {
+            style: `outline: 2px ${cursorInside ? "solid" : "dashed"} ${color}; outline-offset: -2px; ${cursorInside ? "background: " + color + "11;" : ""}`,
+            title: `${div.className} [${blockLineFrom}-${blockLineTo}] cursor=${cursorInside ? "INSIDE" : "outside"}`,
+          },
+        }).range(lineStart),
+      );
+    }
+
+    // Skip rendering decorations if cursor is inside the block
+    if (cursorInside) continue;
 
     const plugin = getPlugin(registry, div.className);
 
