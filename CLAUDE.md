@@ -64,7 +64,10 @@ See DESIGN.md for full specification.
 ## Development rules
 
 - **Copy what works**: Before implementing any non-trivial technique, find and study an existing open-source project that does it well. Clone it, read the source, copy the proven approach exactly. Don't invent from scratch. Only deviate when you have a specific reason the existing approach doesn't fit.
-  - For CM6 Typora-style editing: reference [codemirror-rich-markdoc](https://github.com/segphault/codemirror-rich-markdoc) (cloned at `/tmp/codemirror-rich-markdoc`)
+  - For CM6 Typora-style editing:
+    - [codemirror-rich-markdoc](https://github.com/segphault/codemirror-rich-markdoc) (cloned at `/tmp/codemirror-rich-markdoc`) — inline Decoration.mark approach
+    - [obsidian-codemirror-options](https://github.com/nothingislost/obsidian-codemirror-options) (cloned at `/tmp/obsidian-codemirror-options`) — full feature reference for WYSIWYG markdown
+    - Copy every feature from obsidian-codemirror-options: token hiding, checkbox rendering, inline images, table formatting, blockquote styling, code highlighting, math preview, container attributes
   - Inline elements (bold, italic, headings): `Decoration.mark` + CSS hiding — source text stays in DOM
   - Block/math widgets: `Decoration.replace` + `ignoreEvent() { return true }` + explicit mousedown handler that dispatches cursor to `sourceFrom`
   - **Never** use `ignoreEvent() { return false }` with custom mousedown handlers — CM6 will also process the event and override cursor placement
