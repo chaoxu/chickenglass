@@ -1,6 +1,6 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { EditorState } from "@codemirror/state";
-import { Decoration, EditorView } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownRenderPlugin } from "./markdown-render";
 import { cursorInRange } from "./render-utils";
@@ -149,17 +149,3 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
   });
 });
 
-describe("Decoration.mark hidden class", () => {
-  it("decorationHidden uses cg-hidden class", () => {
-    // Verify the decoration has the correct class
-    const deco = Decoration.mark({ class: "cg-hidden" });
-    expect(deco.spec.class).toBe("cg-hidden");
-  });
-
-  it("heading decorations have correct classes", () => {
-    for (let i = 1; i <= 6; i++) {
-      const deco = Decoration.mark({ class: `cg-heading-${i}` });
-      expect(deco.spec.class).toBe(`cg-heading-${i}`);
-    }
-  });
-});

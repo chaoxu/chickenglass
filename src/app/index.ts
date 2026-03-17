@@ -13,3 +13,4 @@ export {
   installSearchKeybinding,
   type SearchResultHandler,
 } from "./search-panel";
+export { SourceMap, type IncludeRegion } from "./source-map";

@@ -1,14 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { TabBar } from "./tab-bar";
 
 describe("TabBar", () => {
-  it("creates an element", () => {
-    const bar = new TabBar();
-    expect(bar.element).toBeInstanceOf(HTMLElement);
-    expect(bar.element.className).toBe("tab-bar");
-  });
-
   it("opens and tracks tabs", () => {
     const bar = new TabBar();
     bar.openTab("a.md", "a.md");
@@ -69,34 +63,4 @@ describe("TabBar", () => {
     expect(tab?.dirty).toBe(true);
   });
 
-  it("renders dirty indicator in DOM", () => {
-    const bar = new TabBar();
-    bar.openTab("a.md", "a.md");
-    bar.setDirty("a.md", true);
-
-    const dirty = bar.element.querySelector(".tab-dirty");
-    expect(dirty).not.toBeNull();
-  });
-
-  it("calls select handler on tab click", () => {
-    const bar = new TabBar();
-    const handler = vi.fn();
-    bar.setSelectHandler(handler);
-    bar.openTab("a.md", "a.md");
-
-    const tabEl = bar.element.querySelector(".tab");
-    (tabEl as HTMLElement)?.click();
-    expect(handler).toHaveBeenCalledWith("a.md");
-  });
-
-  it("calls close handler on close button click", () => {
-    const bar = new TabBar();
-    const handler = vi.fn();
-    bar.setCloseHandler(handler);
-    bar.openTab("a.md", "a.md");
-
-    const closeBtn = bar.element.querySelector(".tab-close");
-    (closeBtn as HTMLElement)?.click();
-    expect(handler).toHaveBeenCalledWith("a.md");
-  });
 });

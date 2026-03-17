@@ -48,6 +48,7 @@ export class SearchPanel {
   private indexer: BackgroundIndexer | null = null;
   private onResult: SearchResultHandler | null = null;
   private visible = false;
+  private lastResultCount = 0;
 
   constructor() {
     // Backdrop covers the page behind the panel
@@ -171,6 +172,11 @@ export class SearchPanel {
     return this.typeSelect.value;
   }
 
+  /** Get the number of results from the last search (for testing). */
+  getResultCount(): number {
+    return this.lastResultCount;
+  }
+
   /** Set the type filter programmatically (for testing). */
   setTypeFilter(type: string): void {
     this.typeSelect.value = type;
@@ -210,6 +216,7 @@ export class SearchPanel {
 
   /** Render the results list from index entries. */
   private renderResults(results: readonly IndexEntry[]): void {
+    this.lastResultCount = results.length;
     this.resultsList.innerHTML = "";
 
     if (results.length === 0) {
