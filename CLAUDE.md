@@ -67,6 +67,7 @@ See DESIGN.md for full specification.
   - For CM6 Typora-style editing:
     - [codemirror-rich-markdoc](https://github.com/segphault/codemirror-rich-markdoc) (cloned at `/tmp/codemirror-rich-markdoc`) — inline Decoration.mark approach
     - [obsidian-codemirror-options](https://github.com/nothingislost/obsidian-codemirror-options) (cloned at `/tmp/obsidian-codemirror-options`) — full feature reference for WYSIWYG markdown
+    - [advanced-tables-obsidian](https://github.com/tgrosinger/advanced-tables-obsidian) (cloned at `/tmp/advanced-tables-obsidian`) — interactive table editor with Tab/Enter navigation
     - Copy every feature from obsidian-codemirror-options: token hiding, checkbox rendering, inline images, table formatting, blockquote styling, code highlighting, math preview, container attributes
   - Inline elements (bold, italic, headings): `Decoration.mark` + CSS hiding — source text stays in DOM
   - Block/math widgets: `Decoration.replace` + `ignoreEvent() { return true }` + explicit mousedown handler that dispatches cursor to `sourceFrom`
