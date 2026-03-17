@@ -8,23 +8,23 @@ import {
 } from "@codemirror/view";
 import { type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { decorationHidden } from "./render-utils";
+import { cursorInRange, decorationHidden } from "./render-utils";
 
 /**
  * Node types whose children's markers should be hidden when
  * the cursor is NOT inside them.
  */
-const ELEMENT_NODES = [
+const ELEMENT_NODES = new Set([
   "Emphasis",
   "StrongEmphasis",
   "InlineCode",
   "Link",
   "Image",
   "Strikethrough",
-];
+]);
 
 /** Node types whose text content should be hidden (markers, URLs, etc.). */
-const HIDDEN_NODES = [
+const HIDDEN_NODES = new Set([
   "EmphasisMark",
   "CodeMark",
   "LinkMark",
@@ -33,7 +33,7 @@ const HIDDEN_NODES = [
   "QuoteMark",
   "StrikethroughMark",
   "HighlightMark",
-];
+]);
 
 /** Heading style decorations keyed by ATXHeading level. */
 const headingDecorationByLevel: Record<string, Decoration> = {
@@ -66,6 +66,14 @@ const bulletListDecoration = Decoration.mark({ class: "cg-list-bullet" });
 /** Decoration to style ordered list markers. */
 const numberListDecoration = Decoration.mark({ class: "cg-list-number" });
 
+/** Map from element node names to their content style decorations. */
+const styleMap: Readonly<Record<string, Decoration>> = {
+  StrongEmphasis: boldDecoration,
+  Emphasis: italicDecoration,
+  Strikethrough: strikethroughDecoration,
+  InlineCode: inlineCodeDecoration,
+};
+
 class MarkdownRenderPlugin implements PluginValue {
   decorations: DecorationSet;
 
@@ -86,48 +94,30 @@ class MarkdownRenderPlugin implements PluginValue {
 
   private process(view: EditorView): DecorationSet {
     const widgets: Range<Decoration>[] = [];
-    const cursor = view.state.selection.main;
-    const hasFocus = view.hasFocus;
 
     for (const { from, to } of view.visibleRanges) {
       syntaxTree(view.state).iterate({
         from,
         to,
         enter(node) {
-          // --- ATX Headings (block-level): apply style, show # when cursor is on the line ---
+          // --- ATX Headings: ALWAYS apply heading style, only hide markers when cursor outside ---
           if (node.name.startsWith("ATXHeading")) {
             const headingDeco = headingDecorationByLevel[node.name];
             if (headingDeco) {
               widgets.push(headingDeco.range(node.from, node.to));
             }
 
-            // Cursor anywhere on heading → show # markers, but still walk
-            // children so inline elements (bold, math) use local source
-            if (
-              hasFocus &&
-              cursor.from >= node.from &&
-              cursor.to <= node.to
-            ) {
-              return; // walk children, but HeaderMark handler below will skip hiding
+            // If cursor is inside: keep heading style but skip hiding markers
+            // The # will appear at the same heading font size = seamless WYSIWYG
+            if (cursorInRange(view, node.from, node.to)) {
+              return false; // don't walk children, so HeaderMark won't be hidden
             }
-            // Cursor outside heading → walk children to hide HeaderMark
+            // Cursor outside: walk children to find and hide HeaderMark
             return;
           }
 
           // --- HeaderMark (the # symbols + trailing space) ---
           if (node.name === "HeaderMark") {
-            // If cursor is on this heading line, the ATXHeading handler above
-            // already decided to walk children — check if we should show markers
-            const headingNode = node.node.parent;
-            if (
-              hasFocus &&
-              headingNode &&
-              cursor.from >= headingNode.from &&
-              cursor.to <= headingNode.to
-            ) {
-              // Cursor on heading line → don't hide # markers
-              return;
-            }
             const end = node.to;
             const docLen = view.state.doc.length;
             const nextChar =
@@ -140,36 +130,22 @@ class MarkdownRenderPlugin implements PluginValue {
           // --- Highlight: ALWAYS apply highlight decoration, hide markers when cursor outside ---
           if (node.name === "Highlight") {
             widgets.push(highlightDecoration.range(node.from, node.to));
-            if (
-              hasFocus &&
-              cursor.from >= node.from &&
-              cursor.to <= node.to
-            ) {
+            if (cursorInRange(view, node.from, node.to)) {
               return false; // keep highlight style, show markers
             }
             return; // walk children to hide HighlightMark
           }
 
           // --- Inline elements: ALWAYS apply content styling, toggle marker visibility ---
-          if (ELEMENT_NODES.includes(node.name)) {
+          if (ELEMENT_NODES.has(node.name)) {
             // Always apply content styling for seamless WYSIWYG
-            const styleMap: Record<string, Decoration> = {
-              StrongEmphasis: boldDecoration,
-              Emphasis: italicDecoration,
-              Strikethrough: strikethroughDecoration,
-              InlineCode: inlineCodeDecoration,
-            };
             const styleDeco = styleMap[node.name];
             if (styleDeco) {
               widgets.push(styleDeco.range(node.from, node.to));
             }
 
             // If cursor is inside: skip hiding markers (show source) but keep style
-            if (
-              hasFocus &&
-              cursor.from >= node.from &&
-              cursor.to <= node.to
-            ) {
+            if (cursorInRange(view, node.from, node.to)) {
               return false;
             }
             // Cursor outside: walk children to hide markers
@@ -177,18 +153,14 @@ class MarkdownRenderPlugin implements PluginValue {
           }
 
           // --- Hidden marker nodes ---
-          if (HIDDEN_NODES.includes(node.name)) {
+          if (HIDDEN_NODES.has(node.name)) {
             widgets.push(decorationHidden.range(node.from, node.to));
             return;
           }
 
           // --- HorizontalRule: style if cursor is not inside ---
           if (node.name === "HorizontalRule") {
-            if (
-              hasFocus &&
-              cursor.from >= node.from &&
-              cursor.to <= node.to
-            ) {
+            if (cursorInRange(view, node.from, node.to)) {
               return false;
             }
             widgets.push(hrDecoration.range(node.from, node.to));
@@ -197,7 +169,8 @@ class MarkdownRenderPlugin implements PluginValue {
 
           // --- ListMark: style bullet/number markers when cursor is not on same line ---
           if (node.name === "ListMark") {
-            if (hasFocus) {
+            if (view.hasFocus) {
+              const cursor = view.state.selection.main;
               const line = view.state.doc.lineAt(node.from);
               if (cursor.from >= line.from && cursor.from <= line.to) return;
             }
@@ -210,18 +183,9 @@ class MarkdownRenderPlugin implements PluginValue {
             return;
           }
 
-          // --- FencedCode: handled entirely by code-block-render plugin ---
-          if (node.name === "FencedCode") {
-            return false; // don't walk children — avoids hiding CodeMark fence markers
-          }
-
           // --- Blockquote: apply decoration and hide QuoteMark when cursor outside ---
           if (node.name === "Blockquote") {
-            if (
-              hasFocus &&
-              cursor.from >= node.from &&
-              cursor.to <= node.to
-            ) {
+            if (cursorInRange(view, node.from, node.to)) {
               return false; // cursor inside: show source markers, no decoration
             }
             widgets.push(blockquoteDecoration.range(node.from, node.to));

@@ -12,9 +12,10 @@
  */
 
 import { type Extension, StateField } from "@codemirror/state";
-import type { BlockAttrs, BlockPlugin } from "./plugin-types";
+import type { BlockPlugin } from "./plugin-types";
 import type { BlockConfig } from "../parser/frontmatter";
 import { frontmatterField } from "../editor/frontmatter-state";
+import { createBlockRender } from "./block-render";
 
 /**
  * Immutable snapshot of the registry state.
@@ -78,24 +79,6 @@ export function getRegisteredNames(
 }
 
 /**
- * Default render function for plugins created from frontmatter config.
- * Produces a simple header like "Theorem 1" or "Proof".
- */
-function defaultRender(title: string) {
-  return function render(attrs: BlockAttrs): {
-    className: string;
-    header: string;
-  } {
-    const numberSuffix = attrs.number !== undefined ? ` ${attrs.number}` : "";
-    const titleSuffix = attrs.title ? ` (${attrs.title})` : "";
-    return {
-      className: `cg-block cg-block-${attrs.type}`,
-      header: `${title}${numberSuffix}${titleSuffix}`,
-    };
-  };
-}
-
-/**
  * Create a BlockPlugin from a frontmatter BlockConfig entry.
  *
  * Frontmatter can define custom block types:
@@ -118,7 +101,7 @@ export function pluginFromConfig(
     counter: config.counter,
     numbered,
     title,
-    render: defaultRender(title),
+    render: createBlockRender(title),
   };
 }
 

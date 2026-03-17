@@ -14,8 +14,7 @@ import {
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import katex from "katex";
-import { stripMathDelimiters, MATH_TYPES } from "./math-render";
+import { stripMathDelimiters, MATH_TYPES, renderKatex } from "./math-render";
 import { getMathMacros } from "./math-macros";
 import { cursorInRange } from "./render-utils";
 
@@ -183,19 +182,7 @@ class MathPreviewPlugin implements PluginValue {
   private renderLatex(latex: string, isDisplay: boolean): void {
     if (!this.contentEl) return;
     const macros = getMathMacros(this.view.state);
-
-    try {
-      katex.render(latex, this.contentEl, {
-        displayMode: isDisplay,
-        throwOnError: false,
-        output: "htmlAndMathml",
-        macros: { ...macros },
-      });
-    } catch (err: unknown) {
-      this.contentEl.textContent =
-        err instanceof Error ? err.message : "KaTeX error";
-      this.contentEl.style.color = "#c00";
-    }
+    renderKatex(this.contentEl, latex, isDisplay, macros);
   }
 
   private removePanel(): void {

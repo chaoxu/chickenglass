@@ -6,29 +6,9 @@ import { mathExtension } from "../parser/math-backslash";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { getMathMacros } from "./math-macros";
 import {
-  InlineMathWidget,
-  DisplayMathWidget,
-  mathRenderPlugin,
+  MathWidget,
+  collectMathRanges,
 } from "./math-render";
-import { focusEffect } from "./render-utils";
-
-/** Count math decorations in the current editor state. */
-function countMathDecorations(view: EditorView): number {
-  let count = 0;
-  const cursor = view.state.facet(EditorView.decorations);
-  for (const source of cursor) {
-    const decoSet = typeof source === "function" ? source(view) : source;
-    const iter = decoSet.iter();
-    while (iter.value) {
-      if (iter.value.spec.widget instanceof InlineMathWidget ||
-          iter.value.spec.widget instanceof DisplayMathWidget) {
-        count++;
-      }
-      iter.next();
-    }
-  }
-  return count;
-}
 
 /** Create an EditorView with frontmatter and math parser extensions. */
 function createView(doc: string, cursorPos?: number): EditorView {
@@ -38,16 +18,10 @@ function createView(doc: string, cursorPos?: number): EditorView {
     extensions: [
       markdown({ extensions: [mathExtension] }),
       frontmatterField,
-      mathRenderPlugin,
     ],
   });
   const parent = document.createElement("div");
-  document.body.appendChild(parent);
-  const view = new EditorView({ state, parent });
-  view.dispatch({ effects: focusEffect.of(true) });
-  const origDestroy = view.destroy.bind(view);
-  view.destroy = () => { origDestroy(); parent.remove(); };
-  return view;
+  return new EditorView({ state, parent });
 }
 
 describe("getMathMacros", () => {
@@ -88,10 +62,10 @@ describe("getMathMacros", () => {
   });
 });
 
-describe("macros in InlineMathWidget", () => {
+describe("macros in MathWidget (inline)", () => {
   it("renders with macros applied", () => {
     const macros = { "\\R": "\\mathbb{R}" };
-    const widget = new InlineMathWidget("\\R", "$\\R$", macros);
+    const widget = new MathWidget("\\R", "$\\R$", false, macros);
     const el = widget.toDOM();
     expect(el.querySelector(".katex")).not.toBeNull();
     // The rendered output should contain the expanded macro
@@ -99,54 +73,54 @@ describe("macros in InlineMathWidget", () => {
   });
 
   it("eq returns false when macros differ", () => {
-    const a = new InlineMathWidget("\\R", "$\\R$", { "\\R": "\\mathbb{R}" });
-    const b = new InlineMathWidget("\\R", "$\\R$", { "\\R": "\\mathcal{R}" });
+    const a = new MathWidget("\\R", "$\\R$", false, { "\\R": "\\mathbb{R}" });
+    const b = new MathWidget("\\R", "$\\R$", false, { "\\R": "\\mathcal{R}" });
     expect(a.eq(b)).toBe(false);
   });
 
   it("eq returns true when macros match", () => {
     const macros = { "\\R": "\\mathbb{R}" };
-    const a = new InlineMathWidget("\\R", "$\\R$", macros);
-    const b = new InlineMathWidget("\\R", "$\\R$", { ...macros });
+    const a = new MathWidget("\\R", "$\\R$", false, macros);
+    const b = new MathWidget("\\R", "$\\R$", false, { ...macros });
     expect(a.eq(b)).toBe(true);
   });
 
   it("eq returns true with empty macros on both sides", () => {
-    const a = new InlineMathWidget("x", "$x$", {});
-    const b = new InlineMathWidget("x", "$x$", {});
+    const a = new MathWidget("x", "$x$", false, {});
+    const b = new MathWidget("x", "$x$", false, {});
     expect(a.eq(b)).toBe(true);
   });
 
   it("eq returns false when one has macros and other does not", () => {
-    const a = new InlineMathWidget("\\R", "$\\R$", { "\\R": "\\mathbb{R}" });
-    const b = new InlineMathWidget("\\R", "$\\R$");
+    const a = new MathWidget("\\R", "$\\R$", false, { "\\R": "\\mathbb{R}" });
+    const b = new MathWidget("\\R", "$\\R$", false);
     expect(a.eq(b)).toBe(false);
   });
 });
 
-describe("macros in DisplayMathWidget", () => {
+describe("macros in MathWidget (display)", () => {
   it("renders with macros applied", () => {
     const macros = { "\\R": "\\mathbb{R}" };
-    const widget = new DisplayMathWidget("\\R", "$$\\R$$", macros);
+    const widget = new MathWidget("\\R", "$$\\R$$", true, macros);
     const el = widget.toDOM();
     expect(el.querySelector(".katex-display")).not.toBeNull();
   });
 
   it("eq returns false when macros differ", () => {
-    const a = new DisplayMathWidget("\\R", "$$\\R$$", { "\\R": "\\mathbb{R}" });
-    const b = new DisplayMathWidget("\\R", "$$\\R$$", { "\\R": "\\mathcal{R}" });
+    const a = new MathWidget("\\R", "$$\\R$$", true, { "\\R": "\\mathbb{R}" });
+    const b = new MathWidget("\\R", "$$\\R$$", true, { "\\R": "\\mathcal{R}" });
     expect(a.eq(b)).toBe(false);
   });
 
   it("eq returns true when macros match", () => {
     const macros = { "\\R": "\\mathbb{R}" };
-    const a = new DisplayMathWidget("\\R", "$$\\R$$", macros);
-    const b = new DisplayMathWidget("\\R", "$$\\R$$", { ...macros });
+    const a = new MathWidget("\\R", "$$\\R$$", true, macros);
+    const b = new MathWidget("\\R", "$$\\R$$", true, { ...macros });
     expect(a.eq(b)).toBe(true);
   });
 });
 
-describe("mathRenderPlugin with frontmatter macros", () => {
+describe("collectMathRanges with frontmatter macros", () => {
   let view: EditorView;
 
   afterEach(() => {
@@ -156,14 +130,16 @@ describe("mathRenderPlugin with frontmatter macros", () => {
   it("passes macros from frontmatter to math widgets", () => {
     const doc = "---\nmath:\n  \\R: \\mathbb{R}\n---\n\n$\\R$";
     view = createView(doc, 0);
-    // The math expression should be decorated for rendering
-    expect(countMathDecorations(view)).toBe(1);
+    const ranges = collectMathRanges(view);
+    // The math expression should be collected for rendering
+    expect(ranges.length).toBe(1);
   });
 
   it("works without frontmatter macros", () => {
     const doc = "---\ntitle: Hello\n---\n\n$x^2$";
     view = createView(doc, 0);
-    expect(countMathDecorations(view)).toBe(1);
+    const ranges = collectMathRanges(view);
+    expect(ranges.length).toBe(1);
   });
 });
 
