@@ -257,7 +257,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
         Decoration.line({
           attributes: {
             style: `outline: 2px ${cursorInside ? "solid" : "dashed"} ${color}; outline-offset: -2px; ${cursorInside ? "background: " + color + "11;" : ""}`,
-            title: `${div.className} [${blockLineFrom}-${blockLineTo}] cursor=${cursorInside ? "INSIDE" : "outside"}`,
+            title: `${div.className} node=[${div.from}-${div.to}] expanded=[${blockLineFrom}-${blockLineTo}] active=${isActiveBlock} contained=${focused && cursorContainedIn(state, blockLineFrom, blockLineTo)} cursor=${cursorInside ? "INSIDE" : "outside"} sel=${state.selection.main.from}`,
           },
         }).range(lineStart),
       );

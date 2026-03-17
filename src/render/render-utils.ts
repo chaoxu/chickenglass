@@ -112,8 +112,14 @@ export abstract class RenderWidget extends WidgetType {
     return el;
   }
 
+  /**
+   * Return true so CM6 does NOT also process mouse events on this widget.
+   * Our mousedown handler in toDOM() handles cursor placement exclusively.
+   * If CM6 also processes the event, it places cursor at the widget boundary
+   * (outside the replaced range), overriding our handler.
+   */
   ignoreEvent(): boolean {
-    return false;
+    return true;
   }
 }
 
