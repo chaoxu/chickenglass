@@ -10,7 +10,7 @@
  * - @id narrative citations: "Author (Year)"
  * - [@a; @b] multiple citations: "(Author1, Year1; Author2, Year2)"
  */
-import { type Range } from "@codemirror/state";
+import { type Range, StateEffect, StateField } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -21,58 +21,36 @@ import {
   type WidgetType,
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
-import { type BibEntry, extractLastName } from "./bibtex-parser";
-import type { CslProcessor } from "./csl-processor";
+import {
+  type BibEntry,
+  formatCitation,
+  formatNarrativeCitation,
+} from "./bibtex-parser";
 import { cursorInRange, buildDecorations, RenderWidget } from "../render/render-utils";
-
-/**
- * Format a citation label from a BibEntry.
- * Returns "(Author, Year)" format for parenthetical citations.
- */
-export function formatCitation(entry: BibEntry): string {
-  const author = entry.author ? extractLastName(entry.author) : entry.id;
-  const year = entry.year ?? "";
-  return `${author}, ${year}`;
-}
-
-/**
- * Format a narrative citation from a BibEntry.
- * Returns "Author (Year)" format.
- */
-export function formatNarrativeCitation(entry: BibEntry): string {
-  const author = entry.author ? extractLastName(entry.author) : entry.id;
-  const year = entry.year ?? "";
-  return `${author} (${year})`;
-}
 
 /** A store of bibliography entries keyed by citation id. */
 export type BibStore = ReadonlyMap<string, BibEntry>;
 
-/** StateField-compatible facet for providing bibliography data to the plugin. */
-let globalBibStore: BibStore = new Map();
-
-/** Optional CSL processor for styled citation formatting. */
-let globalCslProcessor: CslProcessor | null = null;
-
-/** Set the global bibliography store. */
-export function setBibStore(store: BibStore): void {
-  globalBibStore = store;
+/** Bibliography data stored in the editor state. */
+export interface BibData {
+  store: BibStore;
 }
 
-/** Get the current bibliography store. */
-export function getBibStore(): BibStore {
-  return globalBibStore;
-}
+/** StateEffect for updating bibliography data. */
+export const bibDataEffect = StateEffect.define<BibData>();
 
-/** Set the global CSL processor (null = use default formatting). */
-export function setCslProcessor(processor: CslProcessor | null): void {
-  globalCslProcessor = processor;
-}
-
-/** Get the current CSL processor. */
-export function getCslProcessor(): CslProcessor | null {
-  return globalCslProcessor;
-}
+/** StateField that holds the current bibliography data. */
+export const bibDataField = StateField.define<BibData>({
+  create() {
+    return { store: new Map() };
+  },
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(bibDataEffect)) return effect.value;
+    }
+    return value;
+  },
+});
 
 /** Widget that renders a parenthetical citation like "(Karger, 2000)". */
 export class CitationWidget extends RenderWidget {
@@ -203,15 +181,12 @@ export function findCitations(
 
 /**
  * Format a parenthetical citation string from multiple ids.
- * Uses CSL processor when available, falls back to "(Author, Year)" format.
+ * Returns "(Author1, Year1; Author2, Year2)" format.
  */
 export function formatParenthetical(
   ids: readonly string[],
   store: BibStore,
 ): string {
-  if (globalCslProcessor) {
-    return globalCslProcessor.cite([...ids]);
-  }
   const parts = ids.map((id) => {
     const entry = store.get(id);
     return entry ? formatCitation(entry) : id;
@@ -239,13 +214,10 @@ export function collectCitationRanges(
         Decoration.replace({ widget }).range(match.from, match.to),
       );
     } else {
-      const id = match.ids[0];
-      const entry = store.get(id);
+      const entry = store.get(match.ids[0]);
       if (entry) {
-        const rendered = globalCslProcessor
-          ? globalCslProcessor.citeNarrative(id)
-          : formatNarrativeCitation(entry);
-        const widget = new NarrativeCitationWidget(rendered, id);
+        const rendered = formatNarrativeCitation(entry);
+        const widget = new NarrativeCitationWidget(rendered, match.ids[0]);
         widget.sourceFrom = match.from;
         items.push(
           Decoration.replace({ widget }).range(match.from, match.to),
@@ -269,14 +241,18 @@ class CitationRenderPlugin implements PluginValue {
       update.docChanged ||
       update.selectionSet ||
       update.viewportChanged ||
-      update.focusChanged
+      update.focusChanged ||
+      update.transactions.some((tr) =>
+        tr.effects.some((e) => e.is(bibDataEffect)),
+      )
     ) {
       this.decorations = this.buildAll(update.view);
     }
   }
 
   private buildAll(view: EditorView): DecorationSet {
-    return buildDecorations(collectCitationRanges(view, globalBibStore));
+    const { store } = view.state.field(bibDataField);
+    return buildDecorations(collectCitationRanges(view, store));
   }
 }
 

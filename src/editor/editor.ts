@@ -32,7 +32,7 @@ import {
   blockRenderPlugin,
   defaultPlugins,
 } from "../plugins";
-import { citationRenderPlugin, bibliographyPlugin } from "../citations";
+import { bibDataField, citationRenderPlugin, bibliographyPlugin } from "../citations";
 import { editorKeybindings } from "./keybindings";
 import { chickenglassTheme } from "./theme";
 import { headingFold } from "./heading-fold";
@@ -130,6 +130,9 @@ export function createEditor(config: EditorConfig): EditorView {
       // Block plugin system
       createPluginRegistryField(defaultPlugins),
       blockCounterField,
+
+      // Bibliography state (must come before citation plugins)
+      bibDataField,
 
       // Rendering plugins
       markdownRenderPlugin,

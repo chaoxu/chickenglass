@@ -2,16 +2,15 @@ export {
   type BibEntry,
   parseBibTeX,
   extractLastName,
+  formatCitation,
+  formatNarrativeCitation,
 } from "./bibtex-parser";
 
 export {
-  formatCitation,
-  formatNarrativeCitation,
   type BibStore,
-  setBibStore,
-  getBibStore,
-  setCslProcessor,
-  getCslProcessor,
+  type BibData,
+  bibDataEffect,
+  bibDataField,
   findCitations,
   formatParenthetical,
   collectCitationRanges,
@@ -19,8 +18,6 @@ export {
   NarrativeCitationWidget,
   citationRenderPlugin,
 } from "./citation-render";
-
-export { CslProcessor, bibEntryToCsl } from "./csl-processor";
 
 export {
   collectCitedIds,

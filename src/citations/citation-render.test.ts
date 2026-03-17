@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, afterEach } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
@@ -9,7 +9,8 @@ import {
   formatParenthetical,
   CitationWidget,
   NarrativeCitationWidget,
-  setBibStore,
+  bibDataEffect,
+  bibDataField,
   citationRenderPlugin,
 } from "./citation-render";
 
@@ -160,23 +161,20 @@ describe("NarrativeCitationWidget", () => {
 describe("citationRenderPlugin integration", () => {
   let view: EditorView;
 
-  beforeEach(() => {
-    setBibStore(store);
-  });
-
   afterEach(() => {
     view?.destroy();
-    setBibStore(new Map());
   });
 
   function createTestView(doc: string, cursorPos?: number): EditorView {
     const state = EditorState.create({
       doc,
       selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
-      extensions: [markdown(), citationRenderPlugin],
+      extensions: [markdown(), bibDataField, citationRenderPlugin],
     });
     const parent = document.createElement("div");
-    return new EditorView({ state, parent });
+    const v = new EditorView({ state, parent });
+    v.dispatch({ effects: bibDataEffect.of({ store }) });
+    return v;
   }
 
   it("creates a view with the plugin without errors", () => {

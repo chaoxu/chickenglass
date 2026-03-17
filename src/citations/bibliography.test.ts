@@ -1,9 +1,9 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, afterEach } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { type BibEntry } from "./bibtex-parser";
-import { type BibStore, setBibStore } from "./citation-render";
+import { type BibStore, bibDataEffect, bibDataField } from "./citation-render";
 import {
   collectCitedIds,
   formatBibEntry,
@@ -181,22 +181,21 @@ describe("BibliographyWidget", () => {
 describe("bibliographyPlugin integration", () => {
   let view: EditorView;
 
-  beforeEach(() => {
-    setBibStore(store);
-  });
-
   afterEach(() => {
     view?.destroy();
-    setBibStore(new Map());
   });
 
-  function createTestView(doc: string): EditorView {
+  function createTestView(doc: string, useStore = true): EditorView {
     const state = EditorState.create({
       doc,
-      extensions: [markdown(), bibliographyPlugin],
+      extensions: [markdown(), bibDataField, bibliographyPlugin],
     });
     const parent = document.createElement("div");
-    return new EditorView({ state, parent });
+    const v = new EditorView({ state, parent });
+    if (useStore) {
+      v.dispatch({ effects: bibDataEffect.of({ store }) });
+    }
+    return v;
   }
 
   it("creates a view without errors", () => {
@@ -210,8 +209,7 @@ describe("bibliographyPlugin integration", () => {
   });
 
   it("handles empty bib store", () => {
-    setBibStore(new Map());
-    view = createTestView("See [@karger2000].");
+    view = createTestView("See [@karger2000].", false);
     expect(view.state.doc.toString()).toBe("See [@karger2000].");
   });
 });

@@ -8,11 +8,14 @@
 import {
   Decoration,
   type DecorationSet,
-  EditorView,
+  type EditorView,
+  type PluginValue,
+  type ViewUpdate,
+  ViewPlugin,
 } from "@codemirror/view";
-import { type EditorState, type Extension, StateField } from "@codemirror/state";
+import { type Extension } from "@codemirror/state";
 import { type BibEntry, extractLastName } from "./bibtex-parser";
-import { type BibStore, getBibStore, getCslProcessor, findCitations } from "./citation-render";
+import { type BibStore, bibDataEffect, bibDataField, findCitations } from "./citation-render";
 import { RenderWidget, buildDecorations } from "../render/render-utils";
 
 /**
@@ -90,10 +93,7 @@ export function sortBibEntries(entries: BibEntry[]): BibEntry[] {
 
 /** Widget that renders the full bibliography section. */
 export class BibliographyWidget extends RenderWidget {
-  constructor(
-    private readonly entries: readonly BibEntry[],
-    private readonly cslEntries: readonly string[] | null,
-  ) {
+  constructor(private readonly entries: readonly BibEntry[]) {
     super();
   }
 
@@ -109,23 +109,12 @@ export class BibliographyWidget extends RenderWidget {
     const list = document.createElement("ol");
     list.className = "cg-bibliography-list";
 
-    if (this.cslEntries && this.cslEntries.length > 0) {
-      // Use CSL-formatted HTML entries
-      for (const html of this.cslEntries) {
-        const li = document.createElement("li");
-        li.className = "cg-bibliography-entry";
-        li.innerHTML = html;
-        list.appendChild(li);
-      }
-    } else {
-      // Fallback: simple text formatting
-      for (const entry of this.entries) {
-        const li = document.createElement("li");
-        li.className = "cg-bibliography-entry";
-        li.id = `bib-${entry.id}`;
-        li.textContent = formatBibEntry(entry);
-        list.appendChild(li);
-      }
+    for (const entry of this.entries) {
+      const li = document.createElement("li");
+      li.className = "cg-bibliography-entry";
+      li.id = `bib-${entry.id}`;
+      li.textContent = formatBibEntry(entry);
+      list.appendChild(li);
     }
 
     section.appendChild(list);
@@ -138,50 +127,52 @@ export class BibliographyWidget extends RenderWidget {
   }
 }
 
-/** Build bibliography decorations from state. */
-function buildBibDecorations(state: EditorState): DecorationSet {
-  const store = getBibStore();
-  if (store.size === 0) return Decoration.none;
+class BibliographyPlugin implements PluginValue {
+  decorations: DecorationSet;
 
-  const text = state.doc.toString();
-  const citedIds = collectCitedIds(text, store);
-  if (citedIds.length === 0) return Decoration.none;
+  constructor(view: EditorView) {
+    this.decorations = this.buildAll(view);
+  }
 
-  const entries = sortBibEntries(
-    citedIds
-      .map((id) => store.get(id))
-      .filter((e): e is BibEntry => e !== undefined),
-  );
+  update(update: ViewUpdate): void {
+    if (
+      update.docChanged ||
+      update.viewportChanged ||
+      update.transactions.some((tr) =>
+        tr.effects.some((e) => e.is(bibDataEffect)),
+      )
+    ) {
+      this.decorations = this.buildAll(update.view);
+    }
+  }
 
-  const cslProcessor = getCslProcessor();
-  const cslEntries = cslProcessor ? cslProcessor.bibliography() : null;
-  const widget = new BibliographyWidget(entries, cslEntries);
+  private buildAll(view: EditorView): DecorationSet {
+    const { store } = view.state.field(bibDataField);
+    if (store.size === 0) return Decoration.none;
 
-  return buildDecorations([
-    Decoration.widget({ widget, side: 1, block: true }).range(state.doc.length),
-  ]);
+    const text = view.state.doc.toString();
+    const citedIds = collectCitedIds(text, store);
+    if (citedIds.length === 0) return Decoration.none;
+
+    const entries = sortBibEntries(
+      citedIds
+        .map((id) => store.get(id))
+        .filter((e): e is BibEntry => e !== undefined),
+    );
+
+    const endPos = view.state.doc.length;
+    const widget = new BibliographyWidget(entries);
+
+    return buildDecorations([
+      Decoration.widget({ widget, side: 1 }).range(endPos),
+    ]);
+  }
 }
 
-/**
- * CM6 StateField that renders a bibliography section at the end of the document.
- * Uses StateField (not ViewPlugin) so block widgets are permitted by CM6.
- */
-const bibliographyField = StateField.define<DecorationSet>({
-  create(state) {
-    return buildBibDecorations(state);
-  },
-
-  update(value, tr) {
-    if (tr.docChanged || tr.selection) {
-      return buildBibDecorations(tr.state);
-    }
-    return value;
-  },
-
-  provide(field) {
-    return EditorView.decorations.from(field);
-  },
-});
-
 /** CM6 extension that renders a bibliography section at the end of the document. */
-export const bibliographyPlugin: Extension = bibliographyField;
+export const bibliographyPlugin: Extension = ViewPlugin.fromClass(
+  BibliographyPlugin,
+  {
+    decorations: (v) => v.decorations,
+  },
+);
