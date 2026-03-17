@@ -54,6 +54,12 @@ const blockquoteDecoration = Decoration.mark({ class: "cg-blockquote" });
 /** Decoration to style highlighted text. Always applied (like headings). */
 const highlightDecoration = Decoration.mark({ class: "cg-highlight" });
 
+/** Content style decorations — always applied for seamless WYSIWYG. */
+const boldDecoration = Decoration.mark({ class: "cg-bold" });
+const italicDecoration = Decoration.mark({ class: "cg-italic" });
+const strikethroughDecoration = Decoration.mark({ class: "cg-strikethrough" });
+const inlineCodeDecoration = Decoration.mark({ class: "cg-inline-code" });
+
 /** Decoration to style bullet list markers. */
 const bulletListDecoration = Decoration.mark({ class: "cg-list-bullet" });
 
@@ -132,15 +138,27 @@ class MarkdownRenderPlugin implements PluginValue {
             return; // walk children to hide HighlightMark
           }
 
-          // --- Inline elements: ALWAYS keep styling, only toggle marker visibility ---
+          // --- Inline elements: ALWAYS apply content styling, toggle marker visibility ---
           if (ELEMENT_NODES.includes(node.name)) {
+            // Always apply content styling for seamless WYSIWYG
+            const styleMap: Record<string, Decoration> = {
+              StrongEmphasis: boldDecoration,
+              Emphasis: italicDecoration,
+              Strikethrough: strikethroughDecoration,
+              InlineCode: inlineCodeDecoration,
+            };
+            const styleDeco = styleMap[node.name];
+            if (styleDeco) {
+              widgets.push(styleDeco.range(node.from, node.to));
+            }
+
             // If cursor is inside: skip hiding markers (show source) but keep style
             if (
               hasFocus &&
               cursor.from >= node.from &&
               cursor.to <= node.to
             ) {
-              return false; // markers stay visible, styling stays from syntax highlighting
+              return false;
             }
             // Cursor outside: walk children to hide markers
             return;

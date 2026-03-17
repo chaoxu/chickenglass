@@ -84,6 +84,23 @@ export const chickenglassTheme = EditorView.theme({
     color: "#666",
   },
 
+  /* Inline content styling — always applied for WYSIWYG feel */
+  ".cg-bold": {
+    fontWeight: "700",
+  },
+  ".cg-italic": {
+    fontStyle: "italic",
+  },
+  ".cg-strikethrough": {
+    textDecoration: "line-through",
+  },
+  ".cg-inline-code": {
+    fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
+    backgroundColor: "rgba(0,0,0,0.06)",
+    borderRadius: "3px",
+    padding: "1px 4px",
+  },
+
   /* Header markers (# symbols) shown in muted color when editing */
   ".cg-heading-1 .tok-heading, .cg-heading-2 .tok-heading, .cg-heading-3 .tok-heading":
     {
