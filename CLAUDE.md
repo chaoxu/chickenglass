@@ -61,6 +61,15 @@ Pandoc-flavored markdown with:
 
 See DESIGN.md for full specification.
 
+## Development rules
+
+- **Research first**: Before implementing any non-trivial technique, find and study an existing open-source project that does it well. Clone it, read the source, copy the proven approach. Don't invent from scratch.
+  - For CM6 Typora-style editing: reference [codemirror-rich-markdoc](https://github.com/segphault/codemirror-rich-markdoc)
+  - Use `Decoration.mark` + CSS hiding for inline elements (bold, italic, headings)
+  - Use `Decoration.replace` + `ignoreEvent() { return false }` for block/math widgets
+- **Verify in browser**: After implementing features, verify they actually work in the running application. Tests passing is necessary but not sufficient.
+- **Wire features into the app**: Every feature must be connected to the editor entry point, not just exported as unused code.
+
 ## Key architecture decisions
 
 - **Pandoc-free editing loop**: Pandoc is only for export (PDF/LaTeX). The editor uses Lezer + CM6 + KaTeX directly.
