@@ -347,9 +347,10 @@ export const chickenglassTheme = EditorView.theme({
     maxHeight: "300px",
   },
 
-  /* Include region: position relative so absolute label anchors correctly */
+  /* Include region: right border spans the full height, label anchors to it */
   ".cg-include-region": {
     position: "relative",
+    borderRight: "2px solid #e8e8e8",
   },
 
   /* Include label: rotated filename inside the right padding of .cm-content */
