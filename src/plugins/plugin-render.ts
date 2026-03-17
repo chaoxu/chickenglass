@@ -34,14 +34,14 @@ import {
  * StateEffect to set which block is actively being edited.
  * Value is the block's `from` position, or -1 to clear.
  */
-const activeBlockEffect = StateEffect.define<number>();
+export const activeBlockEffect = StateEffect.define<number>();
 
 /**
  * Tracks which fenced div block is currently being edited (source mode).
  * Once a block enters source mode via widget click, it stays active until
  * the user clicks outside it or on a different block's widget.
  */
-const activeBlockField = StateField.define<number>({
+export const activeBlockField = StateField.define<number>({
   create() {
     return -1;
   },

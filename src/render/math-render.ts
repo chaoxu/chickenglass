@@ -17,6 +17,8 @@ import {
   focusTracker,
 } from "./render-utils";
 import { getMathMacros } from "./math-macros";
+import { activeBlockField, activeBlockEffect } from "../plugins/plugin-render";
+import { syntaxTree } from "@codemirror/language";
 
 const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
 
@@ -177,8 +179,27 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
   const nodes = collectNodes(state, MATH_TYPES);
   const items: Range<Decoration>[] = [];
 
+  // Find the active block range — skip ALL decorations inside it so CM6
+  // can correctly map click positions (no mixed widget/text).
+  const activeBlock = state.field(activeBlockField, false) ?? -1;
+  let activeBlockFrom = -1;
+  let activeBlockTo = -1;
+  if (activeBlock >= 0) {
+    syntaxTree(state).iterate({
+      enter(n) {
+        if (n.name === "FencedDiv" && n.from === activeBlock) {
+          activeBlockFrom = n.from;
+          activeBlockTo = n.to;
+          return false;
+        }
+      },
+    });
+  }
+
   for (const node of nodes) {
     if (focused && cursorContainedIn(state, node.from, node.to)) continue;
+    // Skip math inside the active block — entire block must be raw text
+    if (activeBlockFrom >= 0 && node.from >= activeBlockFrom && node.to <= activeBlockTo) continue;
 
     const raw = state.sliceDoc(node.from, node.to);
     const isDisplay = node.type === "DisplayMath";
@@ -212,7 +233,7 @@ const mathDecorationField = StateField.define<DecorationSet>({
   },
 
   update(value, tr) {
-    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(focusEffect))) {
+    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(focusEffect) || e.is(activeBlockEffect))) {
       const focused = tr.state.field(editorFocusField, false) ?? false;
       return buildMathDecorationsFromState(tr.state, focused);
     }
