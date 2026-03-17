@@ -23,6 +23,8 @@ import {
   debugInspectorPlugin,
   checkboxRenderPlugin,
   mathPreviewPlugin,
+  sectionNumberPlugin,
+  fenceGuidePlugin,
   includeLabelPlugin,
 } from "../render";
 import {
@@ -31,67 +33,13 @@ import {
   blockRenderPlugin,
   defaultPlugins,
 } from "../plugins";
-import { citationRenderPlugin, bibliographyPlugin } from "../citations";
+import { citationRenderPlugin, bibliographyPlugin, bibDataField } from "../citations";
 import { editorKeybindings } from "./keybindings";
 import { chickenglassTheme } from "./theme";
+import { headingFold } from "./heading-fold";
+import { listOutlinerExtension } from "./list-outliner";
 
-const sampleDocument = `---
-title: Chickenglass Demo
-math:
-  \\R: "\\\\mathbb{R}"
-  \\N: "\\\\mathbb{N}"
----
-
-# Chickenglass
-
-A semantic document editor for mathematical writing.
-
-## Inline Math
-
-The Euler identity $e^{i\\pi} + 1 = 0$ is elegant. We also have $\\R$ and $\\N$.
-
-## Display Math
-
-$$
-\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}
-$$ {#eq:sum}
-
-## Theorem Environment
-
-::: {.theorem #thm-main} Fundamental Theorem
-Every continuous function $f: [a,b] \\to \\R$ is bounded.
-:::
-
-::: {.proof}
-Follows from compactness of $[a,b]$.
-:::
-
-::: {.lemma #lem-aux}
-A useful lemma for the proof.
-:::
-
-::: {.definition #def-compact}
-A set $K$ is **compact** if every open cover has a finite subcover.
-:::
-
-## Cross-References
-
-See [@thm-main] and [@eq:sum] for details.
-
-## Table
-
-| Concept       | Symbol    | Description              |
-| :------------ | :-------: | -----------------------: |
-| Natural nums  | $\\N$     | **Counting** numbers     |
-| Real nums     | $\\R$     | *Continuous* number line |
-| Euler's       | $e^{i\\pi}$ | Most beautiful identity |
-
-## Code Block
-
-\`\`\`typescript
-const greeting = "Hello, world!";
-\`\`\`
-`;
+const fallbackDocument = "# Untitled\n";
 
 export interface EditorConfig {
   /** The DOM element to mount the editor into. */
@@ -105,7 +53,7 @@ export interface EditorConfig {
 /** Create and mount a CodeMirror 6 markdown editor. */
 export function createEditor(config: EditorConfig): EditorView {
   const state = EditorState.create({
-    doc: config.doc ?? sampleDocument,
+    doc: config.doc ?? fallbackDocument,
     extensions: [
       // Parser: markdown with custom extensions
       markdown({
@@ -129,6 +77,9 @@ export function createEditor(config: EditorConfig): EditorView {
       createPluginRegistryField(defaultPlugins),
       blockCounterField,
 
+      // Bibliography state (must come before citation plugins)
+      bibDataField,
+
       // Rendering plugins
       markdownRenderPlugin,
       mathRenderPlugin,
@@ -143,9 +94,14 @@ export function createEditor(config: EditorConfig): EditorView {
       debugInspectorPlugin,
       checkboxRenderPlugin,
       mathPreviewPlugin,
+      sectionNumberPlugin,
+      fenceGuidePlugin,
       includeLabelPlugin,
 
       // Editor chrome
+      EditorView.lineWrapping,
+      headingFold,
+      listOutlinerExtension,
       editorKeybindings,
       chickenglassTheme,
 
