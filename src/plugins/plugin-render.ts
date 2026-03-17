@@ -193,6 +193,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
 
       // Replace the opening fence line with the rendered header
       const headerWidget = new BlockHeaderWidget(spec);
+      headerWidget.sourceFrom = div.fenceFrom;
       items.push(
         Decoration.replace({ widget: headerWidget }).range(div.fenceFrom, div.fenceTo),
       );
@@ -204,6 +205,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
 
       if (div.title) {
         const plainWidget = new PlainDivHeaderWidget(div.className, div.title);
+        plainWidget.sourceFrom = div.fenceFrom;
         items.push(
           Decoration.replace({ widget: plainWidget }).range(div.fenceFrom, div.fenceTo),
         );

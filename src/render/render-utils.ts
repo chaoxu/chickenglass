@@ -83,19 +83,34 @@ export function buildDecorations(
  * Base class for render widgets.
  *
  * Subclasses implement `createDOM()` to build the widget element.
- * `ignoreEvent()` returns false so that CM6 handles mouse events
- * itself, placing the cursor at the correct document position
- * within the replaced range.
+ * `toDOM(view)` attaches a mousedown handler that moves the cursor
+ * inside the replaced range when clicked — necessary because CM6
+ * places cursor at the boundary of Decoration.replace, not inside.
+ *
+ * Set `sourceFrom` before the widget is added to a decoration.
  */
 export abstract class RenderWidget extends WidgetType {
+  /** Document offset of the start of the source range this widget replaces. */
+  sourceFrom = -1;
+
   /** Subclasses build their DOM element here. */
   abstract createDOM(): HTMLElement;
 
-  toDOM(): HTMLElement {
-    return this.createDOM();
+  toDOM(view?: EditorView): HTMLElement {
+    const el = this.createDOM();
+    if (this.sourceFrom >= 0 && view) {
+      el.style.cursor = "pointer";
+      const from = this.sourceFrom;
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        view.dispatch({ selection: { anchor: from } });
+        view.focus();
+      });
+    }
+    return el;
   }
 
-  /** Let CM6 handle all events — it places the cursor correctly. */
   ignoreEvent(): boolean {
     return false;
   }

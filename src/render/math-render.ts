@@ -149,6 +149,7 @@ export function collectMathRanges(view: EditorView): Range<Decoration>[] {
     const widget = isDisplay
       ? new DisplayMathWidget(latex, raw, macros)
       : new InlineMathWidget(latex, raw, macros);
+    widget.sourceFrom = node.from;
 
     items.push(
       Decoration.replace({
@@ -186,6 +187,7 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
     const widget = isDisplay
       ? new DisplayMathWidget(latex, raw, macros)
       : new InlineMathWidget(latex, raw, macros);
+    widget.sourceFrom = node.from;
 
     items.push(
       Decoration.replace({
