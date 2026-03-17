@@ -33,6 +33,24 @@ export const chickenglassTheme = EditorView.theme({
     overflow: "hidden",
   },
 
+  /* List marker styling */
+  ".cg-list-bullet": {
+    color: "#888",
+    fontWeight: "700",
+  },
+  ".cg-list-number": {
+    color: "#888",
+    fontWeight: "600",
+    fontVariantNumeric: "tabular-nums",
+  },
+
+  /* Highlight styling (==text==) */
+  ".cg-highlight": {
+    backgroundColor: "#fff3a3",
+    borderRadius: "2px",
+    padding: "1px 0",
+  },
+
   /* Heading styles */
   ".cg-heading-1": {
     fontSize: "2em",
@@ -192,5 +210,47 @@ export const chickenglassTheme = EditorView.theme({
   ".cg-table-toolbar-btn:hover": {
     backgroundColor: "#e8e8e8",
     borderColor: "#999",
+  },
+
+  /* Math preview floating panel */
+  ".cg-math-preview": {
+    position: "fixed",
+    zIndex: "1000",
+    backgroundColor: "#fff",
+    border: "1px solid #ccc",
+    borderRadius: "6px",
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+    minWidth: "200px",
+    maxWidth: "500px",
+  },
+  ".cg-math-preview-titlebar": {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "4px 8px",
+    backgroundColor: "#f5f5f5",
+    borderBottom: "1px solid #ddd",
+    borderRadius: "6px 6px 0 0",
+    cursor: "grab",
+    fontSize: "12px",
+    color: "#666",
+    userSelect: "none",
+  },
+  ".cg-math-preview-close": {
+    border: "none",
+    background: "none",
+    cursor: "pointer",
+    fontSize: "16px",
+    color: "#999",
+    padding: "0 4px",
+    lineHeight: "1",
+  },
+  ".cg-math-preview-close:hover": {
+    color: "#333",
+  },
+  ".cg-math-preview-content": {
+    padding: "12px",
+    overflow: "auto",
+    maxHeight: "300px",
   },
 });

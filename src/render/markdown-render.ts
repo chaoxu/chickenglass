@@ -20,6 +20,7 @@ const ELEMENT_NODES = [
   "InlineCode",
   "Link",
   "Image",
+  "Strikethrough",
 ];
 
 /** Node types whose text content should be hidden (markers, URLs, etc.). */
@@ -30,6 +31,8 @@ const HIDDEN_NODES = [
   "URL",
   "HardBreak",
   "QuoteMark",
+  "StrikethroughMark",
+  "HighlightMark",
 ];
 
 /** Heading style decorations keyed by ATXHeading level. */
@@ -47,6 +50,15 @@ const hrDecoration = Decoration.mark({ class: "cg-hr" });
 
 /** Decoration to style blockquotes. */
 const blockquoteDecoration = Decoration.mark({ class: "cg-blockquote" });
+
+/** Decoration to style highlighted text. Always applied (like headings). */
+const highlightDecoration = Decoration.mark({ class: "cg-highlight" });
+
+/** Decoration to style bullet list markers. */
+const bulletListDecoration = Decoration.mark({ class: "cg-list-bullet" });
+
+/** Decoration to style ordered list markers. */
+const numberListDecoration = Decoration.mark({ class: "cg-list-number" });
 
 class MarkdownRenderPlugin implements PluginValue {
   decorations: DecorationSet;
@@ -107,6 +119,19 @@ class MarkdownRenderPlugin implements PluginValue {
             return;
           }
 
+          // --- Highlight: ALWAYS apply highlight decoration, hide markers when cursor outside ---
+          if (node.name === "Highlight") {
+            widgets.push(highlightDecoration.range(node.from, node.to));
+            if (
+              hasFocus &&
+              cursor.from >= node.from &&
+              cursor.to <= node.to
+            ) {
+              return false; // keep highlight style, show markers
+            }
+            return; // walk children to hide HighlightMark
+          }
+
           // --- Inline elements: ALWAYS keep styling, only toggle marker visibility ---
           if (ELEMENT_NODES.includes(node.name)) {
             // If cursor is inside: skip hiding markers (show source) but keep style
@@ -137,6 +162,21 @@ class MarkdownRenderPlugin implements PluginValue {
               return false;
             }
             widgets.push(hrDecoration.range(node.from, node.to));
+            return;
+          }
+
+          // --- ListMark: style bullet/number markers when cursor is not on same line ---
+          if (node.name === "ListMark") {
+            if (hasFocus) {
+              const line = view.state.doc.lineAt(node.from);
+              if (cursor.from >= line.from && cursor.from <= line.to) return;
+            }
+            const grandparent = node.node.parent?.parent?.name;
+            const deco =
+              grandparent === "BulletList"
+                ? bulletListDecoration
+                : numberListDecoration;
+            widgets.push(deco.range(node.from, node.to));
             return;
           }
 

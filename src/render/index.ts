@@ -38,6 +38,9 @@ export {
 } from "./container-attributes";
 export { codeBlockRenderPlugin } from "./code-block-render";
 export { tableRenderPlugin } from "./table-render";
+export { debugInspectorPlugin, toggleDebugInspector } from "./debug-inspector";
+export { checkboxRenderPlugin } from "./checkbox-render";
+export { mathPreviewPlugin } from "./math-preview";
 export {
   parseTable,
   formatTable,

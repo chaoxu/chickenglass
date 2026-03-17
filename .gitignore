@@ -6,3 +6,8 @@ dist-server/
 *.tsbuildinfo
 .worktrees/
 .claude/state/
+
+.playwright-mcp/
+*.png
+~/
+.claude/worktrees/

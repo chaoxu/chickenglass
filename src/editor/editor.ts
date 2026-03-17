@@ -2,7 +2,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { type Extension, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
-import { Table } from "@lezer/markdown";
+import { Table, TaskList } from "@lezer/markdown";
 import {
   removeIndentedCode,
   mathExtension,
@@ -20,6 +20,9 @@ import {
   imageRenderPlugin,
   codeBlockRenderPlugin,
   tableRenderPlugin,
+  debugInspectorPlugin,
+  checkboxRenderPlugin,
+  mathPreviewPlugin,
 } from "../render";
 import {
   createPluginRegistryField,
@@ -113,6 +116,7 @@ export function createEditor(config: EditorConfig): EditorView {
           strikethroughExtension,
           highlightExtension,
           Table,
+          TaskList,
         ],
       }),
 
@@ -135,6 +139,9 @@ export function createEditor(config: EditorConfig): EditorView {
       bibliographyPlugin,
       containerAttributesPlugin,
       tableRenderPlugin,
+      debugInspectorPlugin,
+      checkboxRenderPlugin,
+      mathPreviewPlugin,
 
       // Editor chrome
       editorKeybindings,
