@@ -103,9 +103,10 @@ export abstract class RenderWidget extends WidgetType {
       const from = this.sourceFrom;
       el.addEventListener("mousedown", (e) => {
         e.preventDefault();
-        e.stopPropagation();
-        view.dispatch({ selection: { anchor: from } });
+        // Focus first so the focus state field is updated before
+        // the selection dispatch triggers decoration rebuilding.
         view.focus();
+        view.dispatch({ selection: { anchor: from } });
       });
     }
     return el;

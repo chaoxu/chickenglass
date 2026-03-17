@@ -170,8 +170,15 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const items: Range<Decoration>[] = [];
 
   for (const div of divs) {
-    // Skip decorating if the editor is focused and cursor is inside the fenced div
-    if (focused && cursorContainedIn(state, div.from, div.to)) continue;
+    // Skip decorating if the editor is focused and cursor is inside the fenced div.
+    // Expand range: full lines of the block + one extra line after closing fence,
+    // so clicking near block boundaries or the blank separator keeps source visible.
+    const blockLineFrom = state.doc.lineAt(div.from).from;
+    const closingLine = state.doc.lineAt(div.to);
+    const blockLineTo = closingLine.number < state.doc.lines
+      ? state.doc.line(closingLine.number + 1).to
+      : closingLine.to;
+    if (focused && cursorContainedIn(state, blockLineFrom, blockLineTo)) continue;
 
     const plugin = getPlugin(registry, div.className);
 
