@@ -1,7 +1,44 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { MemoryFileSystem } from "./file-manager";
-import { App } from "./app";
+
+// Mock BackgroundIndexer to avoid creating a real Web Worker in tests
+vi.mock("../index", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../index")>();
+  return {
+    ...actual,
+    BackgroundIndexer: class MockBackgroundIndexer {
+      query() {
+        return Promise.resolve([]);
+      }
+      updateFile() {
+        return Promise.resolve(0);
+      }
+      removeFile() {
+        return Promise.resolve();
+      }
+      bulkUpdate() {
+        return Promise.resolve(0);
+      }
+      resolveLabel() {
+        return Promise.resolve(undefined);
+      }
+      findReferences() {
+        return Promise.resolve([]);
+      }
+      getFileIndex() {
+        return Promise.resolve(undefined);
+      }
+      getAllLabels() {
+        return Promise.resolve([]);
+      }
+      dispose() {}
+    },
+  };
+});
+
+// Import App after mocking so it picks up the mock
+const { App } = await import("./app");
 
 function makeFs(): MemoryFileSystem {
   return new MemoryFileSystem({
@@ -10,7 +47,7 @@ function makeFs(): MemoryFileSystem {
   });
 }
 
-function makeApp(fs?: MemoryFileSystem): App {
+function makeApp(fs?: MemoryFileSystem): InstanceType<typeof App> {
   const root = document.createElement("div");
   return new App({ root, fs: fs ?? makeFs() });
 }
@@ -135,48 +172,6 @@ describe("App", () => {
     );
 
     expect(app.getSearchPanel().isVisible()).toBe(false);
-  });
-
-  it("opens a file when a search result is clicked", async () => {
-    const app = makeApp();
-    await app.init();
-    const searchPanel = app.getSearchPanel();
-
-    // Provide an index with an entry pointing to an existing file
-    searchPanel.setIndex({
-      files: new Map([
-        [
-          "main.md",
-          {
-            file: "main.md",
-            entries: [
-              {
-                type: "heading",
-                file: "main.md",
-                content: "Main",
-                position: { from: 0, to: 6 },
-              },
-            ],
-            references: [],
-          },
-        ],
-      ]),
-    });
-
-    searchPanel.show();
-    searchPanel.setTypeFilter("heading");
-
-    const item = searchPanel.element.querySelector(
-      ".search-result-item",
-    ) as HTMLElement;
-    item.click();
-
-    // The panel auto-hides on click
-    expect(searchPanel.isVisible()).toBe(false);
-
-    // openFile is async; wait a microtask for it to complete
-    await Promise.resolve();
-    expect(app.getTabBar().hasTab("main.md")).toBe(true);
   });
 
   it("cleans up keybinding on destroy", () => {

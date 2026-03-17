@@ -7,7 +7,8 @@
  * Clicking a result navigates to that block in the editor.
  */
 
-import { queryIndex, type DocumentIndex, type IndexEntry, type IndexQuery } from "../index";
+import type { BackgroundIndexer } from "../index";
+import type { IndexEntry, IndexQuery } from "../index";
 
 /** Known block types available for filtering. */
 const BLOCK_TYPES = [
@@ -44,7 +45,7 @@ export class SearchPanel {
   private readonly resultsList: HTMLElement;
   private readonly statusEl: HTMLElement;
 
-  private index: DocumentIndex = { files: new Map() };
+  private indexer: BackgroundIndexer | null = null;
   private onResult: SearchResultHandler | null = null;
   private visible = false;
 
@@ -113,9 +114,9 @@ export class SearchPanel {
     });
   }
 
-  /** Set the document index to query against. */
-  setIndex(index: DocumentIndex): void {
-    this.index = index;
+  /** Set the background indexer to query against. */
+  setIndexer(indexer: BackgroundIndexer): void {
+    this.indexer = indexer;
     if (this.visible) {
       this.executeSearch();
     }
@@ -181,9 +182,16 @@ export class SearchPanel {
     const text = this.input.value.trim();
     const type = this.typeSelect.value || undefined;
 
+    if (!this.indexer) {
+      this.renderResults([]);
+      return;
+    }
+
     const query = this.buildQuery(text, type);
-    const results = queryIndex(this.index, query);
-    this.renderResults(results);
+    this.indexer.query(query).then(
+      (results) => this.renderResults(results),
+      () => this.renderResults([]),
+    );
   }
 
   /** Build an IndexQuery from the raw search text and optional type filter. */

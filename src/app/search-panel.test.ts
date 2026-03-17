@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
-import type { DocumentIndex, FileIndex, IndexEntry } from "../index";
+import { queryIndex, type DocumentIndex, type FileIndex, type IndexEntry, type IndexQuery } from "../index";
+import type { BackgroundIndexer } from "../index";
 
 function makeEntry(
   overrides: Partial<IndexEntry> & { type: string; file: string },
@@ -19,6 +20,21 @@ function makeIndex(fileIndices: FileIndex[]): DocumentIndex {
     files.set(fi.file, fi);
   }
   return { files };
+}
+
+/** Create a mock BackgroundIndexer that queries a DocumentIndex synchronously. */
+function makeMockIndexer(index: DocumentIndex): BackgroundIndexer {
+  return {
+    query: (query: IndexQuery) => Promise.resolve(queryIndex(index, query)),
+    updateFile: () => Promise.resolve(0),
+    removeFile: () => Promise.resolve(),
+    bulkUpdate: () => Promise.resolve(0),
+    resolveLabel: () => Promise.resolve(undefined),
+    findReferences: () => Promise.resolve([]),
+    getFileIndex: () => Promise.resolve(undefined),
+    getAllLabels: () => Promise.resolve([]),
+    dispose: () => {},
+  } as unknown as BackgroundIndexer;
 }
 
 const testIndex = makeIndex([
@@ -68,6 +84,20 @@ const testIndex = makeIndex([
     references: [],
   },
 ]);
+
+/** Helper: set indexer, trigger search, and wait for async results. */
+async function searchWith(
+  panel: SearchPanel,
+  index: DocumentIndex,
+  opts?: { query?: string; type?: string },
+): Promise<void> {
+  panel.setIndexer(makeMockIndexer(index));
+  panel.show();
+  if (opts?.type) panel.setTypeFilter(opts.type);
+  if (opts?.query) panel.setQuery(opts.query);
+  // Wait for the async query promise to resolve
+  await Promise.resolve();
+}
 
 describe("SearchPanel", () => {
   it("creates an element with overlay structure", () => {
@@ -125,43 +155,34 @@ describe("SearchPanel", () => {
     expect(options).toContain("proof");
   });
 
-  it("searches by content and shows results", () => {
+  it("searches by content and shows results", async () => {
     const panel = new SearchPanel();
-    panel.setIndex(testIndex);
-    panel.show();
-    panel.setQuery("group");
+    await searchWith(panel, testIndex, { query: "group" });
 
     const items = panel.element.querySelectorAll(".search-result-item");
     // "group" appears in: def-1 content, thm-2 content, proof content
     expect(items.length).toBe(3);
   });
 
-  it("filters by block type", () => {
+  it("filters by block type", async () => {
     const panel = new SearchPanel();
-    panel.setIndex(testIndex);
-    panel.show();
-    panel.setTypeFilter("theorem");
+    await searchWith(panel, testIndex, { type: "theorem" });
 
     const items = panel.element.querySelectorAll(".search-result-item");
     expect(items.length).toBe(2);
   });
 
-  it("combines text search with type filter", () => {
+  it("combines text search with type filter", async () => {
     const panel = new SearchPanel();
-    panel.setIndex(testIndex);
-    panel.show();
-    panel.setQuery("group");
-    panel.setTypeFilter("theorem");
+    await searchWith(panel, testIndex, { query: "group", type: "theorem" });
 
     const items = panel.element.querySelectorAll(".search-result-item");
     expect(items.length).toBe(1);
   });
 
-  it("searches by label with # prefix", () => {
+  it("searches by label with # prefix", async () => {
     const panel = new SearchPanel();
-    panel.setIndex(testIndex);
-    panel.show();
-    panel.setQuery("#thm-1");
+    await searchWith(panel, testIndex, { query: "#thm-1" });
 
     const items = panel.element.querySelectorAll(".search-result-item");
     expect(items.length).toBe(1);
@@ -170,31 +191,25 @@ describe("SearchPanel", () => {
     expect(typeBadge?.textContent).toBe("theorem");
   });
 
-  it("searches by label with colon notation", () => {
+  it("searches by label with colon notation", async () => {
     const panel = new SearchPanel();
-    panel.setIndex(testIndex);
-    panel.show();
-    panel.setQuery("eq:euler");
+    await searchWith(panel, testIndex, { query: "eq:euler" });
 
     const items = panel.element.querySelectorAll(".search-result-item");
     expect(items.length).toBe(1);
   });
 
-  it("searches math content", () => {
+  it("searches math content", async () => {
     const panel = new SearchPanel();
-    panel.setIndex(testIndex);
-    panel.show();
-    panel.setQuery("e^{i\\pi}");
+    await searchWith(panel, testIndex, { query: "e^{i\\pi}" });
 
     const items = panel.element.querySelectorAll(".search-result-item");
     expect(items.length).toBe(1);
   });
 
-  it("displays type, number, title, and file in results", () => {
+  it("displays type, number, title, and file in results", async () => {
     const panel = new SearchPanel();
-    panel.setIndex(testIndex);
-    panel.show();
-    panel.setQuery("#thm-1");
+    await searchWith(panel, testIndex, { query: "#thm-1" });
 
     const item = panel.element.querySelector(".search-result-item");
     expect(item).not.toBeNull();
@@ -212,10 +227,9 @@ describe("SearchPanel", () => {
     expect(file?.textContent).toBe("chapter1.md");
   });
 
-  it("shows status text for empty query", () => {
+  it("shows status text for empty query", async () => {
     const panel = new SearchPanel();
-    panel.setIndex(testIndex);
-    panel.show();
+    await searchWith(panel, testIndex);
 
     const status = panel.element.querySelector(".search-status");
     // With empty query and no type filter, all entries are returned
@@ -223,23 +237,19 @@ describe("SearchPanel", () => {
     expect(status?.textContent).toContain("5 results");
   });
 
-  it("shows no results message", () => {
+  it("shows no results message", async () => {
     const panel = new SearchPanel();
-    panel.setIndex(testIndex);
-    panel.show();
-    panel.setQuery("nonexistent term xyz");
+    await searchWith(panel, testIndex, { query: "nonexistent term xyz" });
 
     const status = panel.element.querySelector(".search-status");
     expect(status?.textContent).toBe("No results found");
   });
 
-  it("calls result handler and hides on click", () => {
+  it("calls result handler and hides on click", async () => {
     const panel = new SearchPanel();
     const handler = vi.fn();
     panel.setResultHandler(handler);
-    panel.setIndex(testIndex);
-    panel.show();
-    panel.setQuery("#thm-1");
+    await searchWith(panel, testIndex, { query: "#thm-1" });
 
     const item = panel.element.querySelector(
       ".search-result-item",
@@ -273,26 +283,25 @@ describe("SearchPanel", () => {
     expect(panel.isVisible()).toBe(false);
   });
 
-  it("re-executes search when index is updated while visible", () => {
+  it("re-executes search when indexer is set while visible", async () => {
     const panel = new SearchPanel();
     panel.show();
     panel.setQuery("group");
 
-    // No results with empty index
+    // No results without an indexer
     let items = panel.element.querySelectorAll(".search-result-item");
     expect(items.length).toBe(0);
 
-    // Update index while visible
-    panel.setIndex(testIndex);
+    // Set indexer while visible — triggers re-search
+    panel.setIndexer(makeMockIndexer(testIndex));
+    await Promise.resolve();
     items = panel.element.querySelectorAll(".search-result-item");
     expect(items.length).toBe(3);
   });
 
-  it("does not show number span when entry has no number", () => {
+  it("does not show number span when entry has no number", async () => {
     const panel = new SearchPanel();
-    panel.setIndex(testIndex);
-    panel.show();
-    panel.setTypeFilter("proof");
+    await searchWith(panel, testIndex, { type: "proof" });
 
     const item = panel.element.querySelector(".search-result-item");
     const num = item?.querySelector(".search-result-number");

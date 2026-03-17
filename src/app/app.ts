@@ -3,10 +3,11 @@ import { EditorView } from "@codemirror/view";
 import { createEditor } from "../editor";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { parseBibTeX } from "../citations/bibtex-parser";
-import { setBibStore, setCslProcessor } from "../citations/citation-render";
+import { bibDataEffect } from "../citations/citation-render";
 import { CslProcessor } from "../citations/csl-processor";
 import { expandIncludes, collapseIncludes } from "./include-expander";
-import type { FileSystem } from "./file-manager";
+import { BackgroundIndexer } from "../index";
+import type { FileEntry, FileSystem } from "./file-manager";
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
 import { TabBar } from "./tab-bar";
@@ -39,6 +40,7 @@ export class App {
   private readonly sidebar: Sidebar;
   private readonly tabBar: TabBar;
   private readonly searchPanel: SearchPanel;
+  private readonly indexer: BackgroundIndexer;
   private readonly cleanupSearchKeybinding: () => void;
   private readonly editorContainer: HTMLElement;
   private editor: EditorView | null = null;
@@ -46,6 +48,8 @@ export class App {
   private lastBibPath = "";
   /** Last CSL style path loaded. */
   private lastCslPath = "";
+  private indexUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+>>>>>>> 9720ca9 (feat: wire up background indexer and enable basic search (#54))
 
   /** Raw content saved on disk (collapsed includes), keyed by file path. */
   private readonly savedContent = new Map<string, string>();
@@ -82,8 +86,12 @@ export class App {
 
     this.root.appendChild(mainArea);
 
+    // Background indexer
+    this.indexer = new BackgroundIndexer();
+
     // Search panel overlay (hidden by default)
     this.searchPanel = new SearchPanel();
+    this.searchPanel.setIndexer(this.indexer);
     this.searchPanel.setResultHandler((entry) => this.openFile(entry.file));
     this.root.appendChild(this.searchPanel.element);
 
@@ -95,10 +103,21 @@ export class App {
     this.setupKeybindings();
   }
 
-  /** Initialize the app: load file tree and optionally open a file. */
+  /** Initialize the app: load file tree, index all .md files, and optionally open a file. */
   async init(initialFile?: string): Promise<void> {
     const tree = await this.fs.listTree();
     this.sidebar.render(tree);
+
+    // Collect all .md file paths from the tree and index them
+    const mdPaths = collectMdPaths(tree);
+    const files: Array<{ file: string; content: string }> = [];
+    for (const path of mdPaths) {
+      const content = await this.fs.readFile(path);
+      files.push({ file: path, content });
+    }
+    if (files.length > 0) {
+      await this.indexer.bulkUpdate(files);
+    }
 
     if (initialFile) {
       await this.openFile(initialFile);
@@ -180,10 +199,12 @@ export class App {
     return this.searchPanel;
   }
 
-  /** Clean up event listeners. */
+  /** Clean up event listeners and background worker. */
   destroy(): void {
     this.cleanupSearchKeybinding();
     this.destroyEditor();
+    this.clearIndexTimer();
+    this.indexer.dispose();
   }
 
   private activateFile(path: string): void {
@@ -214,6 +235,7 @@ export class App {
     this.destroyEditor();
     this.lastBibPath = "";
     this.lastCslPath = "";
+    this.clearIndexTimer();
 
     const changeListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
@@ -221,6 +243,7 @@ export class App {
         this.bufferContent.set(path, newContent);
         const saved = this.savedExpandedContent.get(path) ?? "";
         this.tabBar.setDirty(path, newContent !== saved);
+        this.scheduleIndexUpdate(path, newContent);
       }
     });
 
@@ -314,4 +337,35 @@ export class App {
       }
     });
   }
+
+  /** Schedule a debounced index update for the given file. */
+  private scheduleIndexUpdate(path: string, content: string): void {
+    this.clearIndexTimer();
+    this.indexUpdateTimer = setTimeout(() => {
+      this.indexer.updateFile(path, content);
+    }, 500);
+  }
+
+  /** Clear any pending index update timer. */
+  private clearIndexTimer(): void {
+    if (this.indexUpdateTimer !== null) {
+      clearTimeout(this.indexUpdateTimer);
+      this.indexUpdateTimer = null;
+    }
+  }
+}
+
+/** Recursively collect all .md file paths from a FileEntry tree. */
+function collectMdPaths(entry: FileEntry): string[] {
+  const paths: string[] = [];
+  if (entry.isDirectory) {
+    if (entry.children) {
+      for (const child of entry.children) {
+        paths.push(...collectMdPaths(child));
+      }
+    }
+  } else if (entry.name.endsWith(".md")) {
+    paths.push(entry.path);
+  }
+  return paths;
 }
