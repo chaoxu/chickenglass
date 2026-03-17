@@ -243,9 +243,11 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       : closingLine.to;
     // A block is in source mode if:
     // 1. It was explicitly activated via widget click (activeBlock matches), OR
-    // 2. The cursor is inside its expanded range
+    // 2. No block is active AND cursor is inside its expanded range
+    // When an active block exists, ONLY that block shows source — prevents
+    // adjacent blocks from entering source mode due to cursor overshoot.
     const isActiveBlock = activeBlock === div.from;
-    const cursorInside = focused && (isActiveBlock || cursorContainedIn(state, blockLineFrom, blockLineTo));
+    const cursorInside = focused && (isActiveBlock || (activeBlock < 0 && cursorContainedIn(state, blockLineFrom, blockLineTo)));
     const color = DEBUG_COLORS[i % DEBUG_COLORS.length];
 
     // Debug: add colored outline to every line in the hit area
