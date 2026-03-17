@@ -69,7 +69,6 @@ export function collectImageRanges(view: EditorView): Range<Decoration>[] {
     if (!parsed) continue;
 
     const widget = new ImageWidget(parsed.alt, parsed.src);
-    widget.sourceFrom = node.from;
     items.push(
       Decoration.replace({ widget }).range(node.from, node.to),
     );

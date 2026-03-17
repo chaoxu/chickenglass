@@ -19,7 +19,6 @@ import {
 import { citationRenderPlugin, bibliographyPlugin } from "../citations";
 import { editorKeybindings } from "./keybindings";
 import { chickenglassTheme } from "./theme";
-import { widgetClickHandler } from "../render";
 
 const sampleDocument = `---
 title: Chickenglass Demo
@@ -114,7 +113,6 @@ export function createEditor(config: EditorConfig): EditorView {
       // Editor chrome
       editorKeybindings,
       chickenglassTheme,
-      widgetClickHandler,
 
       // User-provided extensions last
       ...(config.extensions ?? []),

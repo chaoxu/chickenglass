@@ -1,11 +1,13 @@
 export { markdownRenderPlugin } from "./markdown-render";
 export {
-  selectionOverlaps,
   cursorInRange,
+  cursorContainedIn,
   collectNodes,
   buildDecorations,
   RenderWidget,
-  widgetClickHandler,
+  editorFocusField,
+  focusEffect,
+  focusTracker,
   type RenderableNode,
 } from "./render-utils";
 export {

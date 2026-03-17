@@ -1,27 +1,35 @@
-import { EditorView, Decoration, type DecorationSet, WidgetType } from "@codemirror/view";
-import { type EditorState, type Range, type Extension, RangeSetBuilder } from "@codemirror/state";
+import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
+import { type EditorState, type Extension, type Range, RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 
-/** Check whether any selection range overlaps [from, to] in the given state. */
-export function selectionOverlaps(
-  state: EditorState,
-  from: number,
-  to: number,
-): boolean {
-  for (const range of state.selection.ranges) {
-    if (range.from <= to && range.to >= from) return true;
-  }
-  return false;
-}
-
-/** Check whether the cursor (or any part of a selection) overlaps [from, to]. */
+/**
+ * Check whether the primary cursor is contained within [from, to].
+ *
+ * Uses containment (cursor.from >= from && cursor.to <= to) rather than
+ * overlap so that clicking *near* a widget places the cursor outside the
+ * replaced range and keeps the widget rendered.
+ */
 export function cursorInRange(
   view: EditorView,
   from: number,
   to: number,
 ): boolean {
   if (!view.hasFocus) return false;
-  return selectionOverlaps(view.state, from, to);
+  const cursor = view.state.selection.main;
+  return cursor.from >= from && cursor.to <= to;
+}
+
+/**
+ * Check whether the primary cursor is contained within [from, to]
+ * using only EditorState (no view/focus check).
+ */
+export function cursorContainedIn(
+  state: EditorState,
+  from: number,
+  to: number,
+): boolean {
+  const cursor = state.selection.main;
+  return cursor.from >= from && cursor.to <= to;
 }
 
 /** Result of collecting renderable nodes from the syntax tree. */
@@ -71,47 +79,58 @@ export function buildDecorations(
   return builder.finish();
 }
 
-/** Data attribute name used to store source position on widget DOM elements. */
-const SOURCE_FROM_ATTR = "data-source-from";
-
 /**
  * Base class for render widgets.
  *
  * Subclasses implement `createDOM()` to build the widget element.
- * The base `toDOM()` stamps a `data-source-from` attribute onto
- * the result so the global click handler can move the cursor into
- * the replaced source range when the widget is clicked.
- *
- * Set `sourceFrom` before the widget is added to a decoration.
+ * `ignoreEvent()` returns false so that CM6 handles mouse events
+ * itself, placing the cursor at the correct document position
+ * within the replaced range.
  */
 export abstract class RenderWidget extends WidgetType {
-  /** Document offset of the start of the source range this widget replaces. */
-  sourceFrom = -1;
-
   /** Subclasses build their DOM element here. */
   abstract createDOM(): HTMLElement;
 
-  toDOM(view?: EditorView): HTMLElement {
-    const el = this.createDOM();
-    if (this.sourceFrom >= 0) {
-      el.setAttribute(SOURCE_FROM_ATTR, String(this.sourceFrom));
-      if (view) {
-        el.style.cursor = "pointer";
-        const from = this.sourceFrom;
-        el.addEventListener("mousedown", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          view.dispatch({ selection: { anchor: from } });
-          view.focus();
-        });
-      }
-    }
-    return el;
+  toDOM(): HTMLElement {
+    return this.createDOM();
+  }
+
+  /** Let CM6 handle all events — it places the cursor correctly. */
+  ignoreEvent(): boolean {
+    return false;
   }
 }
 
+/** StateEffect dispatched when the editor gains or loses focus. */
+export const focusEffect = StateEffect.define<boolean>();
+
 /**
- * Kept for backward compatibility but no longer needed — click handling
- * is now done directly on widget DOM elements in RenderWidget.toDOM().
+ * Shared StateField that tracks whether the editor is focused.
+ *
+ * Used by StateField-based renderers (math, block plugins) that need
+ * to know focus state to decide whether to show source or rendered view.
  */
-export const widgetClickHandler: Extension = [];
+export const editorFocusField = StateField.define<boolean>({
+  create() {
+    return false;
+  },
+  update(focused, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(focusEffect)) return effect.value;
+    }
+    return focused;
+  },
+});
+
+/**
+ * Extension that dispatches focus-change effects when the editor
+ * gains or loses focus.
+ */
+export const focusTracker: Extension = EditorView.domEventHandlers({
+  focus(_event, view) {
+    view.dispatch({ effects: focusEffect.of(true) });
+  },
+  blur(_event, view) {
+    view.dispatch({ effects: focusEffect.of(false) });
+  },
+});

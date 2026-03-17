@@ -201,7 +201,6 @@ export function collectCitationRanges(
     if (match.parenthetical) {
       const rendered = formatParenthetical(match.ids, store);
       const widget = new CitationWidget(rendered, match.ids);
-      widget.sourceFrom = match.from;
       items.push(
         Decoration.replace({ widget }).range(match.from, match.to),
       );
@@ -210,7 +209,6 @@ export function collectCitationRanges(
       if (entry) {
         const rendered = formatNarrativeCitation(entry);
         const widget = new NarrativeCitationWidget(rendered, match.ids[0]);
-        widget.sourceFrom = match.from;
         items.push(
           Decoration.replace({ widget }).range(match.from, match.to),
         );

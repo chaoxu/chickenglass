@@ -54,7 +54,6 @@ export function collectHeadingRanges(view: EditorView): Range<Decoration>[] {
     const raw = view.state.sliceDoc(node.from, node.to);
     const text = raw.replace(/^#{1,6}\s*/, "");
     const widget = new HeadingWidget(text, level);
-    widget.sourceFrom = node.from;
     items.push(
       Decoration.replace({ widget }).range(node.from, node.to),
     );

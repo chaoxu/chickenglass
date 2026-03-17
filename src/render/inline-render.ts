@@ -101,7 +101,6 @@ export function collectInlineRanges(view: EditorView): Range<Decoration>[] {
     const Widget = WIDGET_MAP[node.type];
     if (Widget) {
       const widget = new Widget(text);
-      widget.sourceFrom = node.from;
       items.push(
         Decoration.replace({ widget }).range(node.from, node.to),
       );

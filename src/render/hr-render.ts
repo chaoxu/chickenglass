@@ -31,7 +31,6 @@ export function collectHrRanges(view: EditorView): Range<Decoration>[] {
     if (cursorInRange(view, node.from, node.to)) continue;
 
     const widget = new HorizontalRuleWidget();
-    widget.sourceFrom = node.from;
     items.push(
       Decoration.replace({ widget }).range(node.from, node.to),
     );

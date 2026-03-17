@@ -60,7 +60,6 @@ export function collectLinkRanges(view: EditorView): Range<Decoration>[] {
     if (!parsed) continue;
 
     const widget = new LinkWidget(parsed.text, parsed.url);
-    widget.sourceFrom = node.from;
     items.push(
       Decoration.replace({ widget }).range(node.from, node.to),
     );

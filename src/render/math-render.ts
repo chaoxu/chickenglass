@@ -7,11 +7,14 @@ import {
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import {
-  selectionOverlaps,
   cursorInRange,
+  cursorContainedIn,
   collectNodes,
   buildDecorations,
   RenderWidget,
+  editorFocusField,
+  focusEffect,
+  focusTracker,
 } from "./render-utils";
 import { getMathMacros } from "./math-macros";
 
@@ -146,7 +149,6 @@ export function collectMathRanges(view: EditorView): Range<Decoration>[] {
     const widget = isDisplay
       ? new DisplayMathWidget(latex, raw, macros)
       : new InlineMathWidget(latex, raw, macros);
-    widget.sourceFrom = node.from;
 
     items.push(
       Decoration.replace({
@@ -165,16 +167,17 @@ export function mathDecorations(view: EditorView): DecorationSet {
 }
 
 /**
- * Build math decorations from EditorState (no view needed).
+ * Build math decorations from EditorState.
  * Used by the StateField to produce block-safe decorations.
+ * When the editor is focused, nodes containing the cursor show source.
  */
-function buildMathDecorationsFromState(state: EditorState): DecorationSet {
+function buildMathDecorationsFromState(state: EditorState, focused: boolean): DecorationSet {
   const macros = getMathMacros(state);
   const nodes = collectNodes(state, MATH_TYPES);
   const items: Range<Decoration>[] = [];
 
   for (const node of nodes) {
-    if (selectionOverlaps(state, node.from, node.to)) continue;
+    if (focused && cursorContainedIn(state, node.from, node.to)) continue;
 
     const raw = state.sliceDoc(node.from, node.to);
     const isDisplay = node.type === "DisplayMath";
@@ -183,7 +186,6 @@ function buildMathDecorationsFromState(state: EditorState): DecorationSet {
     const widget = isDisplay
       ? new DisplayMathWidget(latex, raw, macros)
       : new InlineMathWidget(latex, raw, macros);
-    widget.sourceFrom = node.from;
 
     items.push(
       Decoration.replace({
@@ -204,20 +206,24 @@ function buildMathDecorationsFromState(state: EditorState): DecorationSet {
  */
 const mathDecorationField = StateField.define<DecorationSet>({
   create(state) {
-    return buildMathDecorationsFromState(state);
+    return buildMathDecorationsFromState(state, false);
   },
 
   update(value, tr) {
-    if (tr.docChanged || tr.selection) {
-      return buildMathDecorationsFromState(tr.state);
+    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(focusEffect))) {
+      const focused = tr.state.field(editorFocusField, false) ?? false;
+      return buildMathDecorationsFromState(tr.state, focused);
     }
     return value;
   },
 
   provide(field) {
-    return EditorView.decorations.from(field);
+    return [
+      EditorView.decorations.from(field),
+      EditorView.atomicRanges.of((view) => view.state.field(field)),
+    ];
   },
 });
 
 /** CM6 extension that renders math expressions with KaTeX (Typora-style toggle). */
-export const mathRenderPlugin: Extension = mathDecorationField;
+export const mathRenderPlugin: Extension = [editorFocusField, focusTracker, mathDecorationField];

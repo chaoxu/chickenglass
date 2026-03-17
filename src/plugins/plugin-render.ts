@@ -15,42 +15,20 @@ import {
   Decoration,
   EditorView,
 } from "@codemirror/view";
-import { type EditorState, type Extension, type Range, StateField, StateEffect } from "@codemirror/state";
+import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { parseFencedDivAttrs } from "../parser/fenced-div-attrs";
 import type { BlockAttrs, BlockDecorationSpec } from "./plugin-types";
 import { pluginRegistryField, getPlugin } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
-import { selectionOverlaps, buildDecorations, RenderWidget } from "../render/render-utils";
-
-/** StateEffect to notify the decoration field of a focus change. */
-const focusChangedEffect = StateEffect.define<boolean>();
-
-/** StateField that tracks whether the editor is focused. */
-const focusField = StateField.define<boolean>({
-  create() {
-    return false;
-  },
-  update(focused, tr) {
-    for (const effect of tr.effects) {
-      if (effect.is(focusChangedEffect)) return effect.value;
-    }
-    return focused;
-  },
-});
-
-/**
- * Extension that dispatches a focus-change effect when the editor gains or
- * loses focus, so that the block decoration field can react accordingly.
- */
-const focusTracker: Extension = EditorView.domEventHandlers({
-  focus(_event, view) {
-    view.dispatch({ effects: focusChangedEffect.of(true) });
-  },
-  blur(_event, view) {
-    view.dispatch({ effects: focusChangedEffect.of(false) });
-  },
-});
+import {
+  cursorContainedIn,
+  buildDecorations,
+  RenderWidget,
+  editorFocusField,
+  focusEffect,
+  focusTracker,
+} from "../render/render-utils";
 
 /** Widget for the rendered block header (e.g. "Theorem 1 (Main Result)"). */
 export class BlockHeaderWidget extends RenderWidget {
@@ -187,13 +165,13 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const registry = state.field(pluginRegistryField);
   const counterState: BlockCounterState | undefined =
     state.field(blockCounterField, false) ?? undefined;
-  const focused = state.field(focusField, false) ?? false;
+  const focused = state.field(editorFocusField, false) ?? false;
   const divs = collectFencedDivs(state);
   const items: Range<Decoration>[] = [];
 
   for (const div of divs) {
     // Skip decorating if the editor is focused and cursor is inside the fenced div
-    if (focused && selectionOverlaps(state, div.from, div.to)) continue;
+    if (focused && cursorContainedIn(state, div.from, div.to)) continue;
 
     const plugin = getPlugin(registry, div.className);
 
@@ -215,7 +193,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
 
       // Replace the opening fence line with the rendered header
       const headerWidget = new BlockHeaderWidget(spec);
-      headerWidget.sourceFrom = div.fenceFrom;
       items.push(
         Decoration.replace({ widget: headerWidget }).range(div.fenceFrom, div.fenceTo),
       );
@@ -227,7 +204,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
 
       if (div.title) {
         const plainWidget = new PlainDivHeaderWidget(div.className, div.title);
-        plainWidget.sourceFrom = div.fenceFrom;
         items.push(
           Decoration.replace({ widget: plainWidget }).range(div.fenceFrom, div.fenceTo),
         );
@@ -257,16 +233,19 @@ const blockDecorationField = StateField.define<DecorationSet>({
   },
 
   update(value, tr) {
-    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(focusChangedEffect))) {
+    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(focusEffect))) {
       return buildBlockDecorations(tr.state);
     }
     return value;
   },
 
   provide(field) {
-    return EditorView.decorations.from(field);
+    return [
+      EditorView.decorations.from(field),
+      EditorView.atomicRanges.of((view) => view.state.field(field)),
+    ];
   },
 });
 
 /** CM6 extension that renders fenced divs using the block plugin system. */
-export const blockRenderPlugin: Extension = [focusField, focusTracker, blockDecorationField];
+export const blockRenderPlugin: Extension = [editorFocusField, focusTracker, blockDecorationField];
