@@ -406,4 +406,35 @@ export const chickenglassTheme = EditorView.theme({
     padding: "0 !important",
     margin: "0",
   },
+
+  /* Hover preview tooltip for cross-references and citations */
+  ".cg-hover-preview": {
+    maxWidth: "400px",
+    maxHeight: "300px",
+    overflow: "auto",
+    padding: "8px 12px",
+    fontSize: "0.9em",
+    lineHeight: "1.5",
+    fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
+  },
+  ".cg-hover-preview-header": {
+    fontWeight: "700",
+    marginBottom: "4px",
+    color: "#333",
+  },
+  ".cg-hover-preview-body": {
+    color: "#444",
+    whiteSpace: "pre-wrap",
+  },
+  ".cg-hover-preview-unresolved": {
+    color: "#c00",
+    fontStyle: "italic",
+  },
+  ".cg-hover-preview-citation": {
+    color: "#444",
+    marginBottom: "4px",
+  },
+  ".cg-hover-preview-citation:last-child": {
+    marginBottom: "0",
+  },
 });
