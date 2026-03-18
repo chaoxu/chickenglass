@@ -12,9 +12,12 @@ export {
 } from "./command-palette";
 export {
   exportDocument,
+  batchExport,
+  collectMdPaths,
   checkPandoc,
   type ExportFormat,
 } from "./export";
+export { isTauri, openFolder, revealInFinder, TauriFileSystem } from "./tauri-fs";
 export {
   type FileEntry,
   type FileSystem,
@@ -44,3 +47,26 @@ export {
   loadProjectConfig,
   PROJECT_CONFIG_FILE,
 } from "./project-config";
+export { showAboutDialog } from "./about-dialog";
+export {
+  installDragDrop,
+  type DragDropCallbacks,
+} from "./drag-drop";
+export {
+  loadWindowState,
+  saveWindowState,
+  clearWindowState,
+  buildWindowState,
+  readSidebarSections,
+  applySidebarSections,
+  applySidebarWidth,
+  type WindowState,
+  type TabState,
+  type SidebarSectionState,
+} from "./window-state";
+export {
+  SplitPane,
+  type SplitPaneConfig,
+  type SplitOrientation,
+  type ResizeCallback,
+} from "./split-pane";

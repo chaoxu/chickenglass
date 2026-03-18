@@ -1,17 +1,15 @@
 import { App, createDemoFileSystem, FileWatcher } from "./app";
 import type { Theme } from "./app/theme-manager";
 import { isTauri, openFolder, TauriFileSystem } from "./app/tauri-fs";
+import { showAboutDialog } from "./app/about-dialog";
+import { installDragDrop } from "./app/drag-drop";
+import { imagePasteExtension } from "./editor/image-paste";
+import type { EditorView } from "@codemirror/view";
 
 const root = document.getElementById("app");
 if (!root) {
   throw new Error("Missing #app element");
 }
-
-// Start with demo content in both browser and Tauri.
-// In Tauri, a toolbar button lets the user open a real folder.
-const demoFs = createDemoFileSystem();
-let app = new App({ root, fs: demoFs });
-app.init("main.md");
 
 // ── Theme switcher ────────────────────────────────────────────────────────────
 // Inject a small Light / Dark / System toggle into the sidebar footer.
@@ -63,8 +61,6 @@ function mountThemeSwitcher(target: App): void {
   sidebar.appendChild(switcher);
 }
 
-mountThemeSwitcher(app);
-
 /** Active file watcher (Tauri only). */
 let fileWatcher: FileWatcher | null = null;
 
@@ -78,7 +74,71 @@ function createFileWatcher(target: App): FileWatcher {
   });
 }
 
-// Window close handling: prompt to save dirty tabs before closing.
+
+/**
+ * Open a folder as the project root (Tauri only).
+ * Destroys the current App, creates a new one, and re-mounts all accessories.
+ */
+async function openFolderAndReinit(path: string): Promise<void> {
+  if (fileWatcher) {
+    await fileWatcher.unwatch();
+    fileWatcher = null;
+  }
+
+  const tauriFs = new TauriFileSystem();
+  app.destroy();
+  // root is guaranteed non-null (checked at module top-level)
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const appRoot = root!;
+  appRoot.innerHTML = "";
+  const newApp = new App({ root: appRoot, fs: tauriFs, editorExtensions: [imagePasteExtension()] });
+  app = newApp;
+
+  await newApp.init();
+  mountThemeSwitcher(newApp);
+  mountAboutCommand(newApp);
+
+  fileWatcher = createFileWatcher(newApp);
+  await fileWatcher.watch(path);
+}
+
+// ── About dialog ──────────────────────────────────────────────────────────────
+
+/** Register the "About" command in the given app's command palette. */
+function mountAboutCommand(target: App): void {
+  target.getCommandPalette().registerCommands([
+    {
+      id: "help-about",
+      label: "Help: About Chickenglass",
+      action: () => { showAboutDialog(); },
+    },
+  ]);
+}
+
+// ── App setup ─────────────────────────────────────────────────────────────────
+// Start with demo content in both browser and Tauri.
+// In Tauri, a toolbar button lets the user open a real folder.
+const demoFs = createDemoFileSystem();
+let app = new App({ root, fs: demoFs, editorExtensions: [imagePasteExtension()] });
+app.init("main.md");
+
+mountThemeSwitcher(app);
+mountAboutCommand(app);
+
+// ── Drag-and-drop ─────────────────────────────────────────────────────────────
+installDragDrop({
+  onOpenFile: (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => { if (typeof reader.result === "string") app.openFile(file.name); };
+    reader.readAsText(file);
+  },
+  onInsertImage: (markdown: string) => {
+    const view = (window as unknown as { __cmView?: EditorView }).__cmView;
+    if (view) view.dispatch({ changes: { from: view.state.selection.main.head, insert: markdown } });
+  },
+});
+
+// ── Window close handling ──────────────────────────────────────────────────────
 if (isTauri()) {
   // Tauri: intercept the native window close request
   import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
@@ -99,7 +159,7 @@ if (isTauri()) {
   });
 }
 
-// In Tauri, add an "Open Folder" button to the sidebar header.
+// ── Open Folder button (Tauri only) ───────────────────────────────────────────
 if (isTauri()) {
   const openBtn = document.createElement("button");
   openBtn.textContent = "Open Folder";
@@ -107,28 +167,7 @@ if (isTauri()) {
   openBtn.addEventListener("click", async () => {
     const path = await openFolder();
     if (!path) return;
-
-    // Stop any existing file watcher
-    if (fileWatcher) {
-      await fileWatcher.unwatch();
-      fileWatcher = null;
-    }
-
-    const tauriFs = new TauriFileSystem();
-    app.destroy();
-    root.innerHTML = "";
-    const newApp = new App({ root, fs: tauriFs });
-    app = newApp;
-
-    // Open the first .md file found, or just show the file tree
-    await newApp.init();
-
-    // Re-mount the theme switcher after sidebar is rendered
-    mountThemeSwitcher(newApp);
-
-    // Start watching the opened directory for external changes
-    fileWatcher = createFileWatcher(newApp);
-    await fileWatcher.watch(path);
+    await openFolderAndReinit(path);
   });
   // Insert after the files header
   const filesHeader = root.querySelector(".sidebar-section-header");

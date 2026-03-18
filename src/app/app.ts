@@ -1,4 +1,5 @@
 import { EditorView } from "@codemirror/view";
+import type { Extension } from "@codemirror/state";
 
 import { createEditor } from "../editor";
 import { themeCompartment } from "../editor/editor";
@@ -17,7 +18,8 @@ import {
   installPaletteKeybinding,
 } from "./command-palette";
 import { getEditorCommands, createHeadingCommands } from "../editor/commands";
-import { exportDocument, type ExportFormat } from "./export";
+import { exportDocument, batchExport, collectMdPaths, type ExportFormat } from "./export";
+import { revealInFinder, isTauri } from "./tauri-fs";
 import { showSaveDialog, showSaveAllDialog } from "./save-dialog";
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
@@ -56,6 +58,12 @@ export interface AppConfig {
   root: HTMLElement;
   /** Filesystem backend to use. */
   fs: FileSystem;
+  /**
+   * Additional CodeMirror 6 extensions to inject into every editor instance.
+   * Use this to add app-level behaviour (e.g. image-paste) without modifying
+   * the editor setup directly.
+   */
+  editorExtensions?: Extension[];
 }
 
 /**
@@ -84,6 +92,8 @@ export class App {
   private readonly cleanupPaletteKeybinding: () => void;
   private readonly editorContainer: HTMLElement;
   private editor: EditorView | null = null;
+  /** Extra CM6 extensions injected into every editor instance. */
+  private readonly extraEditorExtensions: Extension[];
   /** Theme manager: handles Light/Dark/System switching. */
   private readonly themeManager: ThemeManager;
   /** Project-level configuration loaded from chickenglass.yaml. */
@@ -110,6 +120,7 @@ export class App {
     this.root = config.root;
     this.root.innerHTML = "";
     this.root.className = "app-root";
+    this.extraEditorExtensions = config.editorExtensions ?? [];
 
     // Theme manager — initialise before building UI so the resolved theme is
     // available when createEditor is first called.
@@ -440,7 +451,7 @@ export class App {
       doc: content,
       projectConfig: this.projectConfig,
       themeManager: this.themeManager,
-      extensions: [changeListener, bibListener, titleListener],
+      extensions: [changeListener, bibListener, titleListener, ...this.extraEditorExtensions],
     });
     // Expose view for debugging
     (window as unknown as { __cmView: EditorView }).__cmView = this.editor;
@@ -577,7 +588,12 @@ export class App {
     this.bufferContent.set(activePath, this.editor.state.doc.toString());
   }
 
-  /** Export the active document to PDF or LaTeX via Pandoc. */
+  /**
+   * Export the active document to the given format.
+   *
+   * PDF/LaTeX: requires Pandoc (Tauri only).
+   * HTML: self-contained output; works in browser and Tauri.
+   */
   async exportActiveFile(format: ExportFormat): Promise<void> {
     const activePath = this.tabBar.getActiveTab();
     if (!activePath || !this.editor) return;
@@ -586,12 +602,59 @@ export class App {
     const content = this.editor.state.doc.toString();
 
     try {
-      const outputPath = await exportDocument(content, format, activePath);
-      // Show a brief success notification
+      const outputPath = await exportDocument(content, format, activePath, this.fs);
       this.showNotification(`Exported to ${outputPath}`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       this.showNotification(`Export failed: ${message}`, true);
+    }
+  }
+
+  /**
+   * Batch-export all .md files in the project to the given format.
+   *
+   * Shows a summary notification when done.
+   */
+  async batchExportAll(format: ExportFormat): Promise<void> {
+    let tree: FileEntry;
+    try {
+      tree = await this.fs.listTree();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.showNotification(`Batch export failed: ${message}`, true);
+      return;
+    }
+
+    this.showNotification(`Batch export started…`);
+
+    const results = await batchExport(tree, format, this.fs);
+    const succeeded = results.filter((r) => r.outputPath !== undefined).length;
+    const failed = results.filter((r) => r.error !== undefined).length;
+
+    if (failed === 0) {
+      this.showNotification(`Batch export complete: ${succeeded} file(s) exported.`);
+    } else {
+      this.showNotification(
+        `Batch export: ${succeeded} succeeded, ${failed} failed.`,
+        true,
+      );
+    }
+  }
+
+  /**
+   * Reveal the active file (or a given path) in the OS file explorer.
+   *
+   * Only works in Tauri mode; silently ignored in browser mode.
+   */
+  async revealActiveFile(path?: string): Promise<void> {
+    if (!isTauri()) return;
+    const target = path ?? this.tabBar.getActiveTab();
+    if (!target) return;
+    try {
+      await revealInFinder(target);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.showNotification(`Could not reveal file: ${message}`, true);
     }
   }
 
@@ -619,6 +682,11 @@ export class App {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "L") {
         e.preventDefault();
         this.exportActiveFile("latex");
+      }
+      // Cmd+Shift+H / Ctrl+Shift+H → Export to HTML
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "H") {
+        e.preventDefault();
+        this.exportActiveFile("html");
       }
       // Cmd+= / Ctrl+= → Zoom in
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "=") {
@@ -653,19 +721,4 @@ export class App {
       this.indexUpdateTimer = null;
     }
   }
-}
-
-/** Recursively collect all .md file paths from a FileEntry tree. */
-function collectMdPaths(entry: FileEntry): string[] {
-  const paths: string[] = [];
-  if (entry.isDirectory) {
-    if (entry.children) {
-      for (const child of entry.children) {
-        paths.push(...collectMdPaths(child));
-      }
-    }
-  } else if (entry.name.endsWith(".md")) {
-    paths.push(entry.path);
-  }
-  return paths;
 }

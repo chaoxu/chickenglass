@@ -26,6 +26,17 @@ export async function openFolder(): Promise<string | null> {
   return path;
 }
 
+/**
+ * Reveal a file in the OS file explorer (Finder on macOS, Explorer on Windows).
+ * Only available in Tauri mode. Silently no-ops in browser mode.
+ *
+ * @param path - Absolute path of the file to reveal.
+ */
+export async function revealInFinder(path: string): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("reveal_in_finder", { path });
+}
+
 /** FileSystem implementation backed by Tauri Rust commands. */
 export class TauriFileSystem implements FileSystem {
   async listTree(): Promise<FileEntry> {

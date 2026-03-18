@@ -31,6 +31,7 @@ fn main() {
             commands::export_document,
             commands::watch_directory,
             commands::unwatch_directory,
+            commands::reveal_in_finder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Chickenglass");
