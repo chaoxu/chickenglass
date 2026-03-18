@@ -22,6 +22,8 @@ export interface FileSystem {
   createFile(path: string, content?: string): Promise<void>;
   /** Check whether a file exists at the given path. */
   exists(path: string): Promise<boolean>;
+  /** Rename a file from oldPath to newPath. */
+  renameFile(oldPath: string, newPath: string): Promise<void>;
 }
 
 /** In-memory filesystem for demo/testing purposes. */
@@ -96,6 +98,18 @@ export class MemoryFileSystem implements FileSystem {
 
   async exists(path: string): Promise<boolean> {
     return this.files.has(path);
+  }
+
+  async renameFile(oldPath: string, newPath: string): Promise<void> {
+    const content = this.files.get(oldPath);
+    if (content === undefined) {
+      throw new Error(`File not found: ${oldPath}`);
+    }
+    if (this.files.has(newPath)) {
+      throw new Error(`File already exists: ${newPath}`);
+    }
+    this.files.delete(oldPath);
+    this.files.set(newPath, content);
   }
 }
 

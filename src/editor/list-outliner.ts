@@ -343,14 +343,15 @@ function enterInListItem(view: EditorView): boolean {
 
   if (!bulletMatch && !orderedMatch) return false;
 
-  const indent = bulletMatch ? bulletMatch[1] : orderedMatch![1];
+  const ordered = orderedMatch;
+  const indent = bulletMatch ? bulletMatch[1] : (ordered?.[1] ?? "");
 
   // Calculate marker end position (where content starts)
   let markerEnd: number;
   if (bulletMatch) {
     markerEnd = line.from + indent.length + bulletMatch[2].length + 1; // +1 for the space after marker
   } else {
-    markerEnd = line.from + indent.length + orderedMatch![2].length + orderedMatch![3].length;
+    markerEnd = line.from + indent.length + (ordered?.[2].length ?? 0) + (ordered?.[3].length ?? 0);
   }
 
   // Check if the item content is empty (just the marker with no text after)
@@ -376,8 +377,8 @@ function enterInListItem(view: EditorView): boolean {
   if (bulletMatch) {
     newMarker = indent + bulletMatch[2] + " ";
   } else {
-    const num = parseInt(orderedMatch![2], 10);
-    newMarker = indent + String(num + 1) + orderedMatch![3];
+    const num = parseInt(ordered?.[2] ?? "1", 10);
+    newMarker = indent + String(num + 1) + (ordered?.[3] ?? ". ");
   }
 
   const newLine = "\n" + newMarker + textAfterCursor;

@@ -89,8 +89,8 @@ function parseOpeningFence(
   // A bare `:::` with nothing after is a closing fence, not an opening one
   if (cursor >= text.length) return undefined;
 
-  let attrFrom = -1;
-  let attrTo = -1;
+  let attrFrom: number;
+  let attrTo: number;
 
   // Check for attribute block
   if (text.charCodeAt(cursor) === 123 /* '{' */) {

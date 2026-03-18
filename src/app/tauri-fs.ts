@@ -47,4 +47,8 @@ export class TauriFileSystem implements FileSystem {
   async exists(path: string): Promise<boolean> {
     return invoke<boolean>("file_exists", { path });
   }
+
+  async renameFile(oldPath: string, newPath: string): Promise<void> {
+    await invoke("rename_file", { oldPath, newPath });
+  }
 }

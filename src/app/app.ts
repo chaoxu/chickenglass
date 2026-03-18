@@ -94,6 +94,9 @@ export class App {
     this.sidebar.setSelectHandler((path) => this.openFile(path));
     this.sidebar.setRefreshHandler(() => this.fs.listTree());
     this.sidebar.setCreateFileHandler((path) => this.createFile(path));
+    this.sidebar.setRenameHandler((oldPath, newPath) =>
+      this.renameFile(oldPath, newPath),
+    );
     mainArea.appendChild(this.sidebar.element);
 
     this.editorContainer = document.createElement("div");
@@ -211,6 +214,70 @@ export class App {
     const tree = await this.fs.listTree();
     this.sidebar.render(tree);
     await this.openFile(path);
+  }
+
+  /**
+   * Rename a file. Validates the new name, updates open tabs and internal
+   * buffers if the file is open, then refreshes the sidebar tree.
+   * Returns an error message on failure, or null on success.
+   */
+  async renameFile(
+    oldPath: string,
+    newPath: string,
+  ): Promise<string | null> {
+    // Validate new name (already checked in file-tree but double-check here)
+    const newName = newPath.split("/").pop() ?? newPath;
+    if (!newName) return "File name cannot be empty.";
+    if (newName.includes("/") || newName.includes("\\"))
+      return "File name cannot contain slashes.";
+
+    // Check for duplicate
+    const exists = await this.fs.exists(newPath);
+    if (exists) return `A file named "${newName}" already exists.`;
+
+    try {
+      await this.fs.renameFile(oldPath, newPath);
+    } catch (err: unknown) {
+      return err instanceof Error ? err.message : String(err);
+    }
+
+    // Update open tab and internal buffers if this file is open
+    if (this.tabBar.hasTab(oldPath)) {
+      // Move all buffer state to the new path
+      const content = this.bufferContent.get(oldPath);
+      if (content !== undefined) {
+        this.bufferContent.set(newPath, content);
+        this.bufferContent.delete(oldPath);
+      }
+      const savedContent = this.savedContent.get(oldPath);
+      if (savedContent !== undefined) {
+        this.savedContent.set(newPath, savedContent);
+        this.savedContent.delete(oldPath);
+      }
+      const savedExpanded = this.savedExpandedContent.get(oldPath);
+      if (savedExpanded !== undefined) {
+        this.savedExpandedContent.set(newPath, savedExpanded);
+        this.savedExpandedContent.delete(oldPath);
+      }
+      const sourceMap = this.sourceMaps.get(oldPath);
+      if (sourceMap !== undefined) {
+        this.sourceMaps.set(newPath, sourceMap);
+        this.sourceMaps.delete(oldPath);
+      }
+
+      // Rename the tab
+      this.tabBar.renameTab(oldPath, newPath, newName);
+
+    }
+
+    // Refresh sidebar tree
+    const tree = await this.fs.listTree();
+    this.sidebar.render(tree);
+    // Re-apply active path after re-render
+    const activeTab = this.tabBar.getActiveTab();
+    if (activeTab) this.sidebar.setActivePath(activeTab);
+
+    return null;
   }
 
   /** Get the tab bar component (for testing). */
@@ -551,11 +618,6 @@ export class App {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
         this.saveActiveFile();
-      }
-      // Cmd+B / Ctrl+B → Toggle sidebar
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "b") {
-        e.preventDefault();
-        this.sidebar.toggle();
       }
       // Cmd+Shift+E / Ctrl+Shift+E → Export to PDF
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "E") {

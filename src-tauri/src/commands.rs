@@ -126,6 +126,33 @@ pub fn file_exists(
     Ok(full.exists())
 }
 
+/// Rename (move) a file within the project root.
+#[tauri::command]
+pub fn rename_file(
+    root: State<'_, ProjectRoot>,
+    old_path: String,
+    new_path: String,
+) -> Result<(), String> {
+    let lock = root.0.lock().map_err(|e| e.to_string())?;
+    let project_root = lock.as_ref().ok_or("No project folder open")?;
+    let old_resolved = resolve_path(project_root, &old_path)?;
+    // new_path's parent must exist; the new file itself must not exist
+    let new_full = project_root.join(&new_path);
+    // Security: ensure the new path stays within the root
+    if let Some(parent) = new_full.parent() {
+        if let Ok(canonical_parent) = parent.canonicalize() {
+            if !canonical_parent.starts_with(project_root) {
+                return Err(format!("Path '{}' escapes project root", new_path));
+            }
+        }
+    }
+    if new_full.exists() {
+        return Err(format!("File already exists: {}", new_path));
+    }
+    fs::rename(&old_resolved, &new_full)
+        .map_err(|e| format!("Failed to rename '{}' to '{}': {}", old_path, new_path, e))
+}
+
 /// List the file tree starting from the project root.
 #[tauri::command]
 pub fn list_tree(

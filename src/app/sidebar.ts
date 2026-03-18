@@ -1,12 +1,10 @@
 import { FileTree } from "./file-tree";
-import type { FileSelectHandler, TreeRefreshHandler } from "./file-tree";
+import type { FileSelectHandler, TreeRefreshHandler, FileRenameHandler } from "./file-tree";
 import type { FileEntry } from "./file-manager";
 import { Outline } from "./outline";
 
 /** Callback when a new file is requested from the sidebar. */
 export type CreateFileHandler = (path: string) => Promise<void>;
-
-const STORAGE_KEY = "cg-sidebar-collapsed";
 
 /** Sidebar container wrapping the file tree, outline, and action buttons. */
 export class Sidebar {
@@ -14,17 +12,10 @@ export class Sidebar {
   readonly fileTree: FileTree;
   readonly outline: Outline;
   private onCreateFile: CreateFileHandler | null = null;
-  private collapsed: boolean;
 
   constructor() {
     this.element = document.createElement("div");
     this.element.className = "sidebar";
-
-    // Restore collapse state from localStorage
-    this.collapsed = localStorage.getItem(STORAGE_KEY) === "true";
-    if (this.collapsed) {
-      this.element.classList.add("sidebar-collapsed");
-    }
 
     // Files section (collapsible)
     const filesSection = this.createCollapsibleSection("Files");
@@ -63,6 +54,11 @@ export class Sidebar {
     this.onCreateFile = handler;
   }
 
+  /** Set the handler for renaming files. */
+  setRenameHandler(handler: FileRenameHandler): void {
+    this.fileTree.setRenameHandler(handler);
+  }
+
   /** Render the file tree from a root entry. */
   render(root: FileEntry): void {
     this.fileTree.render(root);
@@ -71,18 +67,6 @@ export class Sidebar {
   /** Set the active file path highlighted in the tree. */
   setActivePath(path: string | null): void {
     this.fileTree.setActivePath(path);
-  }
-
-  /** Toggle the whole sidebar panel open/closed. */
-  toggle(): void {
-    this.collapsed = !this.collapsed;
-    this.element.classList.toggle("sidebar-collapsed", this.collapsed);
-    localStorage.setItem(STORAGE_KEY, String(this.collapsed));
-  }
-
-  /** Whether the sidebar is currently collapsed. */
-  isCollapsed(): boolean {
-    return this.collapsed;
   }
 
   private createCollapsibleSection(title: string): {

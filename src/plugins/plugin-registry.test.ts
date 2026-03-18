@@ -370,7 +370,8 @@ describe("createPluginRegistryField (CM6 integration)", () => {
     const registry = state.field(pluginRegistryField);
     const claim = getPlugin(registry, "claim");
     expect(claim).toBeDefined();
-    const spec = claim!.render({ type: "claim", number: 5, title: "Main" });
+    if (!claim) throw new Error("claim plugin missing");
+    const spec = claim.render({ type: "claim", number: 5, title: "Main" });
     expect(spec.header).toBe("Claim 5 (Main)");
     expect(spec.className).toBe("cg-block cg-block-claim");
   });

@@ -129,7 +129,6 @@ function buildFoldToggles(state: EditorState): DecorationSet {
       const line = state.doc.lineAt(node.from);
       // Check if this heading has a foldable range
       let foldEnd = state.doc.length;
-      let hasFoldRange = false;
 
       tree.iterate({
         from: line.to + 1,
@@ -143,7 +142,7 @@ function buildFoldToggles(state: EditorState): DecorationSet {
         },
       });
 
-      hasFoldRange = foldEnd > line.to;
+      const hasFoldRange = foldEnd > line.to;
       if (!hasFoldRange) return;
 
       // Check if currently folded

@@ -1,5 +1,4 @@
 export { App, type AppConfig } from "./app";
-export { StatusBar, type ModeChangeHandler } from "./status-bar";
 export {
   CommandPalette,
   installPaletteKeybinding,
@@ -16,7 +15,7 @@ export {
   MemoryFileSystem,
   createDemoFileSystem,
 } from "./file-manager";
-export { FileTree } from "./file-tree";
+export { FileTree, type FileRenameHandler } from "./file-tree";
 export {
   showSaveDialog,
   showSaveAllDialog,

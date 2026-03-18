@@ -82,6 +82,21 @@ export class TabBar {
     }
   }
 
+  /**
+   * Rename a tab: update its path and display name.
+   * Also updates the active tab pointer if the renamed tab was active.
+   */
+  renameTab(oldPath: string, newPath: string, newName: string): void {
+    const tab = this.tabs.find((t) => t.path === oldPath);
+    if (!tab) return;
+    tab.path = newPath;
+    tab.name = newName;
+    if (this.activeTab === oldPath) {
+      this.activeTab = newPath;
+    }
+    this.renderTabs();
+  }
+
   /** Mark a tab as dirty (unsaved changes). */
   setDirty(path: string, dirty: boolean): void {
     const tab = this.tabs.find((t) => t.path === path);
