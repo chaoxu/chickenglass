@@ -10,6 +10,7 @@ Usage:
     python scripts/run-issues.py 69 70 71          # specific issues
     python scripts/run-issues.py --all              # all open non-deferred issues
     python scripts/run-issues.py --dry-run 69 70    # plan without executing
+    python scripts/run-issues.py --no-push --all    # run but don't push (inspect first)
 """
 
 from __future__ import annotations
@@ -36,6 +37,8 @@ DEFAULT_MAX_PARALLEL = 4
 MAX_PARALLEL_CAP = 8
 DEFERRED_LABEL = "deferred"
 DEFAULT_WORKER_TIMEOUT = 30 * 60  # 30 minutes per worker
+STALL_THRESHOLD_SECONDS = 5 * 60  # warn if no output growth for 5 minutes
+LOG_DIR = REPO_ROOT / ".worktrees" / "logs"
 
 
 @dataclass
@@ -49,6 +52,9 @@ class IssueTask:
     commit_sha: str = ""
     status: str = "pending"  # pending, running, done, failed, merged
     error: str = ""
+    log_file: Path = Path()
+    last_output_size: int = 0
+    last_output_time: float = 0.0
 
 
 @dataclass
@@ -330,10 +336,17 @@ def spawn_worker(task: IssueTask) -> subprocess.Popen[str]:
     """Spawn a Claude worker process for a task."""
     prompt = build_worker_prompt(task)
     task.status = "running"
+    task.last_output_time = time.time()
+
+    # Create log file for this worker
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    task.log_file = LOG_DIR / f"worker-{task.number}.log"
+    log_fh = open(task.log_file, "w")
+
     log(f"Spawning worker for #{task.number}: {task.title}", "RUN")
+    log(f"  Log: {task.log_file}", "INFO")
 
     # Use cwd to set the working directory — NOT --dir flag
-    # Pass prompt via stdin to avoid shell escaping issues
     proc = subprocess.Popen(
         [
             "claude",
@@ -342,7 +355,7 @@ def spawn_worker(task: IssueTask) -> subprocess.Popen[str]:
             "-p", prompt,
         ],
         cwd=task.worktree,
-        stdout=subprocess.PIPE,
+        stdout=log_fh,
         stderr=subprocess.PIPE,
         text=True,
     )
@@ -353,6 +366,36 @@ def spawn_worker(task: IssueTask) -> subprocess.Popen[str]:
 # ---------------------------------------------------------------------------
 # Phase 4: Wait for workers and verify
 # ---------------------------------------------------------------------------
+
+def print_worker_status(
+    active: dict[int, tuple[IssueTask, subprocess.Popen[str], float]],
+    now: float,
+) -> None:
+    """Print a one-line status for each active worker."""
+    lines = []
+    for num, (task, _proc, start_time) in sorted(active.items()):
+        elapsed = now - start_time
+        mins, secs = divmod(int(elapsed), 60)
+
+        # Check log file size for progress
+        output_size = 0
+        if task.log_file.exists():
+            output_size = task.log_file.stat().st_size
+
+        size_kb = output_size / 1024
+        stalled = ""
+        if output_size > task.last_output_size:
+            task.last_output_size = output_size
+            task.last_output_time = now
+        elif now - task.last_output_time > STALL_THRESHOLD_SECONDS:
+            stall_mins = int((now - task.last_output_time) / 60)
+            stalled = f" STALLED {stall_mins}m!"
+
+        lines.append(f"#{num} {mins}m{secs:02d}s {size_kb:.1f}KB{stalled}")
+
+    if lines:
+        log("  ".join(lines), "RUN")
+
 
 def check_main_not_contaminated(state: RunState) -> bool:
     """Check if main branch received unexpected commits (isolation escape)."""
@@ -525,7 +568,7 @@ def merge_task(task: IssueTask, state: RunState) -> None:
 # Phase 6: Push and cleanup
 # ---------------------------------------------------------------------------
 
-def push_and_cleanup(state: RunState) -> None:
+def push_and_cleanup(state: RunState, no_push: bool = False) -> None:
     """Push merged changes and clean up worktrees."""
     log_header("PUSH & CLEANUP")
 
@@ -540,9 +583,18 @@ def push_and_cleanup(state: RunState) -> None:
     result = run_cmd(["npm", "run", "test"], check=False)
     if result.returncode != 0:
         log("Final tests FAILED — not pushing", "ERROR")
+        log("Merged commits are on local main — inspect with: git log --oneline -10", "WARN")
         cleanup_worktrees(state)
         return
     log("Final tests passed", "OK")
+
+    if no_push:
+        log("--no-push: skipping push. Inspect results:", "WARN")
+        log(f"  git log --oneline -{len(merged) + 1}", "INFO")
+        log(f"  npm run dev  # then open http://localhost:5173", "INFO")
+        log(f"  git push origin {MAIN_BRANCH}  # when satisfied", "INFO")
+        cleanup_worktrees(state)
+        return
 
     # Push
     log("Pushing to origin...", "RUN")
@@ -598,6 +650,17 @@ def print_report(state: RunState, elapsed: float) -> None:
         print(f"  Failed: {len(failed)}/{len(state.tasks)}", flush=True)
     print(f"  Time:   {elapsed:.0f}s", flush=True)
 
+    # Show log file locations for debugging
+    has_logs = any(
+        str(t.log_file) != "." and t.log_file.exists() for t in state.tasks
+    )
+    if has_logs:
+        print(f"\n  Worker logs:", flush=True)
+        for task in state.tasks:
+            if str(task.log_file) != "." and task.log_file.exists():
+                size_kb = task.log_file.stat().st_size / 1024
+                print(f"    #{task.number}: {task.log_file} ({size_kb:.1f}KB)", flush=True)
+
 
 # ---------------------------------------------------------------------------
 # Main orchestration
@@ -608,6 +671,7 @@ def run_batch(
     dry_run: bool = False,
     max_parallel: int = 4,
     worker_timeout: int = DEFAULT_WORKER_TIMEOUT,
+    no_push: bool = False,
 ) -> RunState:
     """Run a batch of issues through the full pipeline."""
     global _current_state
@@ -641,6 +705,8 @@ def run_batch(
     log_header("SPAWN WORKERS")
     pending = [t for t in tasks if t.status == "pending"]
     active: dict[int, tuple[IssueTask, subprocess.Popen[str], float]] = {}
+    last_status_print = 0.0
+    status_interval = 30.0  # print status every 30 seconds
 
     try:
         while pending or active:
@@ -656,8 +722,24 @@ def run_batch(
             time.sleep(2)
             finished = []
             now = time.time()
+
+            # Periodic status update
+            if now - last_status_print > status_interval and active:
+                print_worker_status(active, now)
+                last_status_print = now
+
             for num, (task, proc, start_time) in active.items():
                 elapsed = now - start_time
+
+                # Check for stalled workers (no output growth)
+                if (
+                    task.last_output_time > 0
+                    and now - task.last_output_time > STALL_THRESHOLD_SECONDS
+                    and elapsed > STALL_THRESHOLD_SECONDS
+                ):
+                    stall_mins = int((now - task.last_output_time) / 60)
+                    if stall_mins % 2 == 0:  # warn every 2 minutes of stall
+                        log(f"#{num} appears stalled — no output for {stall_mins}m", "WARN")
 
                 # Check timeout
                 if elapsed > worker_timeout:
@@ -667,21 +749,27 @@ def run_batch(
                     task.status = "failed"
                     task.error = f"Timed out after {elapsed:.0f}s"
                     finished.append(num)
-                    # Check contamination after timeout kill
                     check_main_not_contaminated(state)
                     continue
 
                 if proc.poll() is not None:
                     finished.append(num)
-                    # Use communicate() to drain pipes safely (avoids deadlock)
-                    try:
-                        _, stderr = proc.communicate(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-                        _, stderr = proc.communicate()
+                    # Read stderr (stdout goes to log file)
+                    stderr = ""
+                    if proc.stderr:
+                        try:
+                            stderr = proc.stderr.read()
+                        except (OSError, ValueError):
+                            pass
                     if proc.returncode != 0 and stderr:
                         log(f"#{num} worker exited with code {proc.returncode}", "WARN")
                         log(f"  stderr: {stderr[:200]}", "WARN")
+
+                    # Log final output size
+                    if task.log_file.exists():
+                        size_kb = task.log_file.stat().st_size / 1024
+                        log(f"#{num} finished — {size_kb:.1f}KB output", "OK")
+
                     verify_worker_result(task, state)
 
             for num in finished:
@@ -705,7 +793,7 @@ def run_batch(
         merge_task(task, state)
 
     # --- Phase 6: Push and cleanup ---
-    push_and_cleanup(state)
+    push_and_cleanup(state, no_push=no_push)
 
     return state
 
@@ -742,6 +830,11 @@ def main() -> None:
         default=DEFAULT_WORKER_TIMEOUT,
         help=f"Worker timeout in seconds (default: {DEFAULT_WORKER_TIMEOUT})",
     )
+    parser.add_argument(
+        "--no-push",
+        action="store_true",
+        help="Do everything except push — inspect results before making permanent",
+    )
     args = parser.parse_args()
 
     if not args.issues and not args.all:
@@ -773,7 +866,13 @@ def main() -> None:
         return
 
     start = time.time()
-    state = run_batch(tasks, dry_run=args.dry_run, max_parallel=max_parallel, worker_timeout=args.timeout)
+    state = run_batch(
+        tasks,
+        dry_run=args.dry_run,
+        max_parallel=max_parallel,
+        worker_timeout=args.timeout,
+        no_push=args.no_push,
+    )
     elapsed = time.time() - start
 
     print_report(state, elapsed)
