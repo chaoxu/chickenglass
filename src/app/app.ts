@@ -1,6 +1,6 @@
 import { EditorView } from "@codemirror/view";
 
-import { createEditor, setEditorMode, type EditorMode } from "../editor";
+import { createEditor } from "../editor";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { parseBibTeX } from "../citations/bibtex-parser";
 import { bibDataEffect } from "../citations/citation-render";
@@ -20,7 +20,6 @@ import { showSaveDialog, showSaveAllDialog } from "./save-dialog";
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
 import { TabBar } from "./tab-bar";
-import { StatusBar } from "./status-bar";
 
 /** Configuration for the application shell. */
 export interface AppConfig {
@@ -31,7 +30,7 @@ export interface AppConfig {
 }
 
 /**
- * Application shell that orchestrates the sidebar, tab bar, editor, and status bar.
+ * Application shell that orchestrates the sidebar, tab bar, and editor.
  *
  * Layout:
  * ```
@@ -42,8 +41,6 @@ export interface AppConfig {
  * |  bar   |                                  |
  * |        |                                  |
  * +--------+----------------------------------+
- * | Status Bar  Ln 1, Col 1    Rendered       |
- * +-------------------------------------------+
  * ```
  */
 export class App {
@@ -51,7 +48,6 @@ export class App {
   private readonly root: HTMLElement;
   private readonly sidebar: Sidebar;
   private readonly tabBar: TabBar;
-  private readonly statusBar: StatusBar;
   private readonly searchPanel: SearchPanel;
   private readonly commandPalette: CommandPalette;
   private readonly indexer: BackgroundIndexer;
@@ -59,7 +55,6 @@ export class App {
   private readonly cleanupPaletteKeybinding: () => void;
   private readonly editorContainer: HTMLElement;
   private editor: EditorView | null = null;
-  private editorMode: EditorMode = "rendered";
   /** Project-level configuration loaded from chickenglass.yaml. */
   private projectConfig: ProjectConfig = {};
   /** Last bibliography path loaded (to avoid redundant reloads). */
@@ -106,16 +101,6 @@ export class App {
     mainArea.appendChild(this.editorContainer);
 
     this.root.appendChild(mainArea);
-
-    // Status bar at the bottom
-    this.statusBar = new StatusBar();
-    this.statusBar.setModeChangeHandler((mode) => {
-      this.editorMode = mode;
-      if (this.editor) {
-        setEditorMode(this.editor, mode);
-      }
-    });
-    this.root.appendChild(this.statusBar.element);
 
     // Background indexer
     this.indexer = new BackgroundIndexer();
@@ -397,15 +382,10 @@ export class App {
       parent: this.editorContainer,
       doc: content,
       projectConfig: this.projectConfig,
-      extensions: [changeListener, bibListener, titleListener, this.statusBar.extension],
+      extensions: [changeListener, bibListener, titleListener],
     });
     // Expose view for debugging
     (window as unknown as { __cmView: EditorView }).__cmView = this.editor;
-
-    // Sync status bar with initial state and apply current mode
-    this.statusBar.syncFromView(this.editor);
-    this.statusBar.setMode(this.editorMode);
-    setEditorMode(this.editor, this.editorMode);
 
     // Initial bibliography load
     this.loadBibliographyIfChanged(path, this.editor);
@@ -571,6 +551,11 @@ export class App {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
         this.saveActiveFile();
+      }
+      // Cmd+B / Ctrl+B → Toggle sidebar
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "b") {
+        e.preventDefault();
+        this.sidebar.toggle();
       }
       // Cmd+Shift+E / Ctrl+Shift+E → Export to PDF
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "E") {

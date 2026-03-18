@@ -123,13 +123,19 @@
       /* Sidebar */
       .sidebar {
         width: 220px;
-        min-width: 180px;
+        min-width: 0;
         background: var(--cg-subtle);
         border-right: 1px solid var(--cg-border);
         display: flex;
         flex-direction: column;
         overflow: hidden;
         flex-shrink: 0;
+        transition: width 0.2s ease;
+      }
+
+      .sidebar-collapsed {
+        width: 0;
+        border-right-width: 0;
       }
 
       .sidebar-header {
@@ -428,54 +434,6 @@
         padding: 2px 6px;
         border-radius: 2px;
         border: 1px solid var(--cg-border);
-      }
-
-      /* Status bar */
-      .status-bar {
-        position: relative;
-        display: flex;
-        align-items: center;
-        background: var(--cg-subtle);
-        border-top: 1px solid var(--cg-border);
-        height: 22px;
-        padding: 0 8px;
-        flex-shrink: 0;
-        font-size: 11px;
-        color: var(--cg-muted);
-        user-select: none;
-      }
-
-      .status-bar-left,
-      .status-bar-center,
-      .status-bar-right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .status-bar-center {
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-      }
-
-      .status-bar-right {
-        margin-left: auto;
-      }
-
-      .status-bar-item {
-        white-space: nowrap;
-      }
-
-      .status-bar-mode {
-        cursor: pointer;
-        padding: 1px 6px;
-        border-radius: 2px;
-      }
-
-      .status-bar-mode:hover {
-        background: var(--cg-hover);
-        color: var(--cg-fg);
       }
     </style>
   </head>
