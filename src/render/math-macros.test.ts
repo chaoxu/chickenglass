@@ -4,6 +4,7 @@ import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { frontmatterField } from "../editor/frontmatter-state";
+import { projectConfigFacet } from "../app/project-config";
 import { getMathMacros } from "./math-macros";
 import {
   MathWidget,
@@ -11,12 +12,17 @@ import {
 } from "./math-render";
 
 /** Create an EditorView with frontmatter and math parser extensions. */
-function createView(doc: string, cursorPos?: number): EditorView {
+function createView(
+  doc: string,
+  cursorPos?: number,
+  projectConfig?: Record<string, string>,
+): EditorView {
   const state = EditorState.create({
     doc,
     selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
     extensions: [
       markdown({ extensions: [mathExtension] }),
+      ...(projectConfig ? [projectConfigFacet.of({ math: projectConfig })] : []),
       frontmatterField,
     ],
   });
@@ -62,6 +68,43 @@ describe("getMathMacros", () => {
   });
 });
 
+describe("getMathMacros with project config", () => {
+  let view: EditorView;
+
+  afterEach(() => {
+    view?.destroy();
+  });
+
+  it("returns project macros when file has no math frontmatter", () => {
+    const doc = "---\ntitle: Test\n---\nContent";
+    view = createView(doc, undefined, {
+      "\\R": "\\mathbb{R}",
+      "\\e": "\\varepsilon",
+    });
+
+    const macros = getMathMacros(view.state);
+    expect(macros).toEqual({
+      "\\R": "\\mathbb{R}",
+      "\\e": "\\varepsilon",
+    });
+  });
+
+  it("merges project and file macros (file overrides)", () => {
+    const doc = "---\nmath:\n  \\R: \\mathcal{R}\n  \\Z: \\mathbb{Z}\n---\nContent";
+    view = createView(doc, undefined, {
+      "\\R": "\\mathbb{R}",
+      "\\N": "\\mathbb{N}",
+    });
+
+    const macros = getMathMacros(view.state);
+    expect(macros).toEqual({
+      "\\R": "\\mathcal{R}", // file overrides
+      "\\N": "\\mathbb{N}", // project preserved
+      "\\Z": "\\mathbb{Z}", // file added
+    });
+  });
+});
+
 describe("macros in MathWidget (inline)", () => {
   it("renders with macros applied", () => {
     const macros = { "\\R": "\\mathbb{R}" };
@@ -95,6 +138,34 @@ describe("macros in MathWidget (inline)", () => {
     const a = new MathWidget("\\R", "$\\R$", false, { "\\R": "\\mathbb{R}" });
     const b = new MathWidget("\\R", "$\\R$", false);
     expect(a.eq(b)).toBe(false);
+  });
+});
+
+describe("non-builtin macros in MathWidget", () => {
+  it("renders macro with argument (#1) correctly", () => {
+    const macros = { "\\bm": "\\boldsymbol{#1}" };
+    const widget = new MathWidget("\\bm{x}", "$\\bm{x}$", false, macros);
+    const el = widget.toDOM();
+    expect(el.querySelector(".katex")).not.toBeNull();
+    // Should not contain an error
+    expect(el.querySelector(".katex-error")).toBeNull();
+  });
+
+  it("renders non-builtin macro without KaTeX built-in", () => {
+    // \\e is not a KaTeX built-in, so this exercises the custom macro path
+    const macros = { "\\e": "\\varepsilon" };
+    const widget = new MathWidget("\\e", "$\\e$", false, macros);
+    const el = widget.toDOM();
+    expect(el.querySelector(".katex")).not.toBeNull();
+    expect(el.querySelector(".katex-error")).toBeNull();
+  });
+
+  it("renders macro with braces in expansion", () => {
+    const macros = { "\\set": "\\left\\{#1\\right\\}" };
+    const widget = new MathWidget("\\set{x}", "$\\set{x}$", false, macros);
+    const el = widget.toDOM();
+    expect(el.querySelector(".katex")).not.toBeNull();
+    expect(el.querySelector(".katex-error")).toBeNull();
   });
 });
 

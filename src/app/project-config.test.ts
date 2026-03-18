@@ -64,6 +64,42 @@ describe("parseProjectConfig", () => {
     const config = parseProjectConfig("# just a comment\n# another");
     expect(config).toEqual({});
   });
+
+  it("parses double-quoted YAML values with backslash escapes", () => {
+    const yaml = 'math:\n  \\set: "\\\\left\\\\{#1\\\\right\\\\}"';
+    const config = parseProjectConfig(yaml);
+    expect(config.math).toEqual({
+      "\\set": "\\left\\{#1\\right\\}",
+    });
+  });
+
+  it("parses non-builtin macros with arguments", () => {
+    const yaml = [
+      "math:",
+      '  \\e: "\\\\varepsilon"',
+      '  \\bm: "\\\\boldsymbol{#1}"',
+      '  \\ceil: "\\\\left\\\\lceil#1\\\\right\\\\rceil"',
+    ].join("\n");
+    const config = parseProjectConfig(yaml);
+    expect(config.math).toEqual({
+      "\\e": "\\varepsilon",
+      "\\bm": "\\boldsymbol{#1}",
+      "\\ceil": "\\left\\lceil#1\\right\\rceil",
+    });
+  });
+
+  it("parses mix of unquoted and double-quoted macro values", () => {
+    const yaml = [
+      "math:",
+      "  \\R: \\mathbb{R}",
+      '  \\set: "\\\\left\\\\{#1\\\\right\\\\}"',
+    ].join("\n");
+    const config = parseProjectConfig(yaml);
+    expect(config.math).toEqual({
+      "\\R": "\\mathbb{R}",
+      "\\set": "\\left\\{#1\\right\\}",
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -173,6 +209,22 @@ describe("loadProjectConfig", () => {
     const config = await loadProjectConfig(fs);
     expect(config).toEqual({});
   });
+
+  it("loads non-builtin macros with double-quoted YAML values", async () => {
+    const yaml = [
+      "math:",
+      "  \\R: \\mathbb{R}",
+      '  \\set: "\\\\left\\\\{#1\\\\right\\\\}"',
+      '  \\e: "\\\\varepsilon"',
+    ].join("\n");
+    const fs = new MemoryFileSystem({ [PROJECT_CONFIG_FILE]: yaml });
+    const config = await loadProjectConfig(fs);
+    expect(config.math).toEqual({
+      "\\R": "\\mathbb{R}",
+      "\\set": "\\left\\{#1\\right\\}",
+      "\\e": "\\varepsilon",
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -237,6 +289,56 @@ describe("projectConfigFacet", () => {
     const fm = state.field(frontmatterField);
     expect(fm.config.title).toBe("Solo");
     expect(fm.config.bibliography).toBeUndefined();
+  });
+
+  it("provides non-builtin macros with arguments via project config", () => {
+    const doc = "---\ntitle: Test\n---\nContent";
+    const projectConfig = {
+      math: {
+        "\\e": "\\varepsilon",
+        "\\set": "\\left\\{#1\\right\\}",
+        "\\bm": "\\boldsymbol{#1}",
+      },
+    };
+
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        projectConfigFacet.of(projectConfig),
+        frontmatterField,
+      ],
+    });
+
+    const fm = state.field(frontmatterField);
+    expect(fm.config.math).toEqual({
+      "\\e": "\\varepsilon",
+      "\\set": "\\left\\{#1\\right\\}",
+      "\\bm": "\\boldsymbol{#1}",
+    });
+  });
+
+  it("file macros override project non-builtin macros", () => {
+    const doc = "---\nmath:\n  \\e: \\epsilon\n---\nContent";
+    const projectConfig = {
+      math: {
+        "\\e": "\\varepsilon",
+        "\\set": "\\left\\{#1\\right\\}",
+      },
+    };
+
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        projectConfigFacet.of(projectConfig),
+        frontmatterField,
+      ],
+    });
+
+    const fm = state.field(frontmatterField);
+    expect(fm.config.math).toEqual({
+      "\\e": "\\epsilon",              // file overrides project
+      "\\set": "\\left\\{#1\\right\\}", // project preserved
+    });
   });
 
   it("merges project blocks with file blocks", () => {
