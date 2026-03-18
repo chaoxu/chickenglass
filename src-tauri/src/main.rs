@@ -3,13 +3,14 @@
 
 mod commands;
 
-use commands::ProjectRoot;
+use commands::{FileWatcherState, ProjectRoot};
 use std::sync::Mutex;
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(ProjectRoot(Mutex::new(None)))
+        .manage(FileWatcherState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             commands::open_folder,
             commands::read_file,
@@ -17,6 +18,8 @@ fn main() {
             commands::create_file,
             commands::file_exists,
             commands::list_tree,
+            commands::watch_directory,
+            commands::unwatch_directory,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Chickenglass");

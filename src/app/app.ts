@@ -203,6 +203,41 @@ export class App {
     return this.searchPanel;
   }
 
+  /** Check whether a file is currently open in a tab. */
+  isFileOpen(path: string): boolean {
+    return this.tabBar.hasTab(path);
+  }
+
+  /** Check whether a file has unsaved changes. */
+  isFileDirty(path: string): boolean {
+    const tab = this.tabBar.getOpenTabs().find((t) => t.path === path);
+    return tab?.dirty ?? false;
+  }
+
+  /** Reload a file from disk, replacing the buffer content. */
+  async reloadFile(path: string): Promise<void> {
+    if (!this.tabBar.hasTab(path)) return;
+
+    const rawContent = await this.fs.readFile(path);
+    const { composed: content, sourceMap } = await this.expandIncludes(path, rawContent);
+    this.sourceMaps.set(path, sourceMap);
+    this.savedContent.set(path, rawContent);
+    this.savedExpandedContent.set(path, content);
+    this.bufferContent.set(path, content);
+    this.tabBar.setDirty(path, false);
+
+    // If this is the currently active tab, refresh the editor
+    if (this.tabBar.getActiveTab() === path) {
+      (window as unknown as { __cgSourceMap: SourceMap | null }).__cgSourceMap = sourceMap;
+      this.switchEditor(path, content);
+    }
+  }
+
+  /** Get the root DOM element (for attaching overlays like the file watcher notification). */
+  getRoot(): HTMLElement {
+    return this.root;
+  }
+
   /** Clean up event listeners and background worker. */
   destroy(): void {
     this.cleanupSearchKeybinding();

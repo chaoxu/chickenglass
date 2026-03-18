@@ -14,3 +14,4 @@ export {
   type SearchResultHandler,
 } from "./search-panel";
 export { SourceMap, type IncludeRegion } from "./source-map";
+export { FileWatcher, type FileWatcherConfig } from "./file-watcher";

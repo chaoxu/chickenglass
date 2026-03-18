@@ -273,6 +273,47 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+
+      /* File watcher notification bar */
+      .file-watcher-notification {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: #fff3cd;
+        border-bottom: 1px solid #ffc107;
+        font-size: 13px;
+        color: #664d03;
+        flex-shrink: 0;
+      }
+
+      .file-watcher-message {
+        flex: 1;
+      }
+
+      .file-watcher-btn {
+        padding: 3px 10px;
+        border: 1px solid #bbb;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        background: #fff;
+        color: #333;
+      }
+
+      .file-watcher-btn:hover {
+        background: #eee;
+      }
+
+      .file-watcher-btn-yes {
+        background: #3b82f6;
+        color: #fff;
+        border-color: #3b82f6;
+      }
+
+      .file-watcher-btn-yes:hover {
+        background: #2563eb;
+      }
     </style>
   </head>
   <body>
