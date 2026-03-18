@@ -1,4 +1,5 @@
 export { App, type AppConfig } from "./app";
+export { StatusBar, type ModeChangeHandler } from "./status-bar";
 export {
   CommandPalette,
   installPaletteKeybinding,
@@ -38,10 +39,3 @@ export {
   loadProjectConfig,
   PROJECT_CONFIG_FILE,
 } from "./project-config";
-export {
-  SettingsDialog,
-  installPreferencesKeybinding,
-  loadSettings,
-  saveSettings,
-  type AppSettings,
-} from "./settings";

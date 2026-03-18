@@ -1,6 +1,6 @@
 import { EditorView } from "@codemirror/view";
 
-import { createEditor } from "../editor";
+import { createEditor, setEditorMode, type EditorMode } from "../editor";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { parseBibTeX } from "../citations/bibtex-parser";
 import { bibDataEffect } from "../citations/citation-render";
@@ -20,7 +20,7 @@ import { showSaveDialog, showSaveAllDialog } from "./save-dialog";
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
 import { TabBar } from "./tab-bar";
-import { SettingsDialog, installPreferencesKeybinding } from "./settings";
+import { StatusBar } from "./status-bar";
 
 /** Configuration for the application shell. */
 export interface AppConfig {
@@ -31,7 +31,7 @@ export interface AppConfig {
 }
 
 /**
- * Application shell that orchestrates the sidebar, tab bar, and editor.
+ * Application shell that orchestrates the sidebar, tab bar, editor, and status bar.
  *
  * Layout:
  * ```
@@ -42,6 +42,8 @@ export interface AppConfig {
  * |  bar   |                                  |
  * |        |                                  |
  * +--------+----------------------------------+
+ * | Status Bar  Ln 1, Col 1    Rendered       |
+ * +-------------------------------------------+
  * ```
  */
 export class App {
@@ -49,15 +51,15 @@ export class App {
   private readonly root: HTMLElement;
   private readonly sidebar: Sidebar;
   private readonly tabBar: TabBar;
+  private readonly statusBar: StatusBar;
   private readonly searchPanel: SearchPanel;
   private readonly commandPalette: CommandPalette;
   private readonly indexer: BackgroundIndexer;
   private readonly cleanupSearchKeybinding: () => void;
   private readonly cleanupPaletteKeybinding: () => void;
-  private readonly cleanupPrefsKeybinding: () => void;
-  private readonly settingsDialog: SettingsDialog;
   private readonly editorContainer: HTMLElement;
   private editor: EditorView | null = null;
+  private editorMode: EditorMode = "rendered";
   /** Project-level configuration loaded from chickenglass.yaml. */
   private projectConfig: ProjectConfig = {};
   /** Last bibliography path loaded (to avoid redundant reloads). */
@@ -105,6 +107,16 @@ export class App {
 
     this.root.appendChild(mainArea);
 
+    // Status bar at the bottom
+    this.statusBar = new StatusBar();
+    this.statusBar.setModeChangeHandler((mode) => {
+      this.editorMode = mode;
+      if (this.editor) {
+        setEditorMode(this.editor, mode);
+      }
+    });
+    this.root.appendChild(this.statusBar.element);
+
     // Background indexer
     this.indexer = new BackgroundIndexer();
 
@@ -127,15 +139,6 @@ export class App {
     this.cleanupPaletteKeybinding = installPaletteKeybinding(
       this.root,
       this.commandPalette,
-    );
-
-    // Settings dialog overlay (hidden by default)
-    this.settingsDialog = new SettingsDialog();
-    this.root.appendChild(this.settingsDialog.element);
-
-    this.cleanupPrefsKeybinding = installPreferencesKeybinding(
-      this.root,
-      this.settingsDialog,
     );
 
     this.setupKeybindings();
@@ -280,16 +283,10 @@ export class App {
     return this.root;
   }
 
-  /** Get the settings dialog component (for testing). */
-  getSettingsDialog(): SettingsDialog {
-    return this.settingsDialog;
-  }
-
   /** Clean up event listeners and background worker. */
   destroy(): void {
     this.cleanupSearchKeybinding();
     this.cleanupPaletteKeybinding();
-    this.cleanupPrefsKeybinding();
     this.destroyEditor();
     this.clearIndexTimer();
     this.indexer.dispose();
@@ -400,10 +397,15 @@ export class App {
       parent: this.editorContainer,
       doc: content,
       projectConfig: this.projectConfig,
-      extensions: [changeListener, bibListener, titleListener],
+      extensions: [changeListener, bibListener, titleListener, this.statusBar.extension],
     });
     // Expose view for debugging
     (window as unknown as { __cmView: EditorView }).__cmView = this.editor;
+
+    // Sync status bar with initial state and apply current mode
+    this.statusBar.syncFromView(this.editor);
+    this.statusBar.setMode(this.editorMode);
+    setEditorMode(this.editor, this.editorMode);
 
     // Initial bibliography load
     this.loadBibliographyIfChanged(path, this.editor);
