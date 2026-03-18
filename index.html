@@ -231,20 +231,6 @@
         /* toggleable via JS */
       }
 
-      /* Collapse arrow visibility */
-      .sidebar-header-collapsible .sidebar-toggle {
-        opacity: 0;
-        transition: opacity 150ms;
-      }
-
-      .sidebar-header-collapsible:hover .sidebar-toggle {
-        opacity: 1;
-      }
-
-      .sidebar-header-collapsible.collapsed .sidebar-toggle {
-        opacity: 1;
-      }
-
       /* Outline */
       .outline-list {
         overflow-y: auto;
@@ -308,50 +294,10 @@
         background: var(--cg-active);
       }
 
-      /* Breadcrumb bar */
-      .breadcrumb-bar {
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        padding: 4px 12px;
-        font-size: 12px;
-        color: var(--cg-muted);
-        background: var(--cg-bg);
-        border-bottom: 1px solid var(--cg-border);
-        min-height: 24px;
-        overflow: hidden;
-        white-space: nowrap;
-      }
-
-      .breadcrumb-bar-empty {
-        display: none;
-      }
-
-      .breadcrumb-separator {
-        color: var(--cg-border);
-        margin: 0 2px;
-        flex-shrink: 0;
-      }
-
-      .breadcrumb-segment {
-        cursor: pointer;
-        color: var(--cg-muted);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        border-radius: 2px;
-        padding: 1px 4px;
-      }
-
-      .breadcrumb-segment:hover {
-        background: var(--cg-hover);
-        color: var(--cg-fg);
-      }
-
-      .breadcrumb-segment:last-child {
-        color: var(--cg-fg);
-        font-weight: 500;
-      }
+      /* Breadcrumb overlay — styles are injected by breadcrumbs.ts at runtime.
+         The overlay uses .cg-bc-overlay / .cg-bc-bar class names and is
+         positioned absolutely inside .cm-editor (position: relative by CM6).
+         See src/app/breadcrumbs.ts for the full CSS. */
 
       /* Command palette */
       .cmd-palette-overlay {
