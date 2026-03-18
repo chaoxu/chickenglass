@@ -38,3 +38,10 @@ export {
   loadProjectConfig,
   PROJECT_CONFIG_FILE,
 } from "./project-config";
+export {
+  SettingsDialog,
+  installPreferencesKeybinding,
+  loadSettings,
+  saveSettings,
+  type AppSettings,
+} from "./settings";

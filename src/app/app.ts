@@ -20,6 +20,7 @@ import { showSaveDialog, showSaveAllDialog } from "./save-dialog";
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
 import { TabBar } from "./tab-bar";
+import { SettingsDialog, installPreferencesKeybinding } from "./settings";
 
 /** Configuration for the application shell. */
 export interface AppConfig {
@@ -53,6 +54,8 @@ export class App {
   private readonly indexer: BackgroundIndexer;
   private readonly cleanupSearchKeybinding: () => void;
   private readonly cleanupPaletteKeybinding: () => void;
+  private readonly cleanupPrefsKeybinding: () => void;
+  private readonly settingsDialog: SettingsDialog;
   private readonly editorContainer: HTMLElement;
   private editor: EditorView | null = null;
   /** Project-level configuration loaded from chickenglass.yaml. */
@@ -124,6 +127,15 @@ export class App {
     this.cleanupPaletteKeybinding = installPaletteKeybinding(
       this.root,
       this.commandPalette,
+    );
+
+    // Settings dialog overlay (hidden by default)
+    this.settingsDialog = new SettingsDialog();
+    this.root.appendChild(this.settingsDialog.element);
+
+    this.cleanupPrefsKeybinding = installPreferencesKeybinding(
+      this.root,
+      this.settingsDialog,
     );
 
     this.setupKeybindings();
@@ -268,10 +280,16 @@ export class App {
     return this.root;
   }
 
+  /** Get the settings dialog component (for testing). */
+  getSettingsDialog(): SettingsDialog {
+    return this.settingsDialog;
+  }
+
   /** Clean up event listeners and background worker. */
   destroy(): void {
     this.cleanupSearchKeybinding();
     this.cleanupPaletteKeybinding();
+    this.cleanupPrefsKeybinding();
     this.destroyEditor();
     this.clearIndexTimer();
     this.indexer.dispose();
