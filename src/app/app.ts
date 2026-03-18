@@ -9,6 +9,7 @@ import { resolveIncludePath } from "../plugins/include-resolver";
 import { SourceMap, type IncludeRegion } from "./source-map";
 import { BackgroundIndexer } from "../index";
 import type { FileEntry, FileSystem } from "./file-manager";
+import { loadProjectConfig, type ProjectConfig } from "./project-config";
 import {
   CommandPalette,
   installPaletteKeybinding,
@@ -53,6 +54,8 @@ export class App {
   private readonly cleanupPaletteKeybinding: () => void;
   private readonly editorContainer: HTMLElement;
   private editor: EditorView | null = null;
+  /** Project-level configuration loaded from chickenglass.yaml. */
+  private projectConfig: ProjectConfig = {};
   /** Last bibliography path loaded (to avoid redundant reloads). */
   private lastBibPath = "";
   /** Last CSL style path loaded. */
@@ -130,8 +133,11 @@ export class App {
     });
   }
 
-  /** Initialize the app: load file tree, index all .md files, and optionally open a file. */
+  /** Initialize the app: load project config, file tree, index all .md files, and optionally open a file. */
   async init(initialFile?: string): Promise<void> {
+    // Load project config (chickenglass.yaml) before opening any files
+    this.projectConfig = await loadProjectConfig(this.fs);
+
     const tree = await this.fs.listTree();
     this.sidebar.render(tree);
 
@@ -333,6 +339,7 @@ export class App {
     this.editor = createEditor({
       parent: this.editorContainer,
       doc: content,
+      projectConfig: this.projectConfig,
       extensions: [changeListener, bibListener, titleListener],
     });
     // Expose view for debugging
@@ -380,16 +387,29 @@ export class App {
     const dir = docPath.includes("/")
       ? docPath.substring(0, docPath.lastIndexOf("/"))
       : "";
-    const resolve = (p: string) => (dir ? `${dir}/${p}` : p);
 
-    this.fs.readFile(resolve(bibPath)).then(async (bibText) => {
+    // Try resolving relative to the document directory first, then
+    // fall back to project root. This handles both per-file paths
+    // (relative to doc) and project config paths (relative to root).
+    const readWithFallback = async (p: string): Promise<string> => {
+      if (dir) {
+        try {
+          return await this.fs.readFile(`${dir}/${p}`);
+        } catch {
+          // Fall through to project-root resolution
+        }
+      }
+      return this.fs.readFile(p);
+    };
+
+    readWithFallback(bibPath).then(async (bibText) => {
       const entries = parseBibTeX(bibText);
       const store = new Map(entries.map((e) => [e.id, e]));
 
       let cslXml: string | undefined;
       if (cslPath) {
         try {
-          cslXml = await this.fs.readFile(resolve(cslPath));
+          cslXml = await readWithFallback(cslPath);
         } catch {
           // CSL file not found — use default style
         }

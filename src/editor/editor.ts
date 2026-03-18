@@ -37,6 +37,7 @@ import {
   defaultPlugins,
 } from "../plugins";
 import { citationRenderPlugin, bibliographyPlugin, bibDataField } from "../citations";
+import { projectConfigFacet, type ProjectConfig } from "../app/project-config";
 import { editorKeybindings } from "./keybindings";
 import { chickenglassTheme } from "./theme";
 import { headingFold } from "./heading-fold";
@@ -81,6 +82,8 @@ export interface EditorConfig {
   parent: HTMLElement;
   /** Initial document content. */
   doc?: string;
+  /** Project-level configuration to merge with per-file frontmatter. */
+  projectConfig?: ProjectConfig;
   /** Additional CM6 extensions to include. */
   extensions?: Extension[];
 }
@@ -90,6 +93,9 @@ export function createEditor(config: EditorConfig): EditorView {
   const state = EditorState.create({
     doc: config.doc ?? fallbackDocument,
     extensions: [
+      // Project config (must come before frontmatterField so the facet is available)
+      ...(config.projectConfig ? [projectConfigFacet.of(config.projectConfig)] : []),
+
       // Parser: markdown with custom extensions
       markdown({
         extensions: [

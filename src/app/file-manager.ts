@@ -116,13 +116,16 @@ function sortTree(entry: FileEntry): void {
 /** Create a demo filesystem with sample markdown files. */
 export function createDemoFileSystem(): MemoryFileSystem {
   return new MemoryFileSystem({
-    "main.md": `---
-title: Chickenglass Demo
+    "chickenglass.yaml": `# Project configuration — shared settings inherited by all documents.
+# Per-file frontmatter can override any of these.
 bibliography: refs.bib
 math:
   \\\\R: "\\\\mathbb{R}"
   \\\\N: "\\\\mathbb{N}"
   \\\\Z: "\\\\mathbb{Z}"
+`,
+    "main.md": `---
+title: Chickenglass Demo
 ---
 
 A semantic document editor for **mathematical writing**. It supports *Typora-style* inline rendering, ~~strikethrough~~, ==highlights==, and \`inline code\`.

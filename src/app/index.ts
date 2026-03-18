@@ -25,3 +25,11 @@ export {
 } from "./search-panel";
 export { SourceMap, type IncludeRegion } from "./source-map";
 export { FileWatcher, type FileWatcherConfig } from "./file-watcher";
+export {
+  type ProjectConfig,
+  projectConfigFacet,
+  parseProjectConfig,
+  mergeConfigs,
+  loadProjectConfig,
+  PROJECT_CONFIG_FILE,
+} from "./project-config";

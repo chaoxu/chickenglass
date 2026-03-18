@@ -14,6 +14,7 @@ import {
   type FrontmatterConfig,
   type FrontmatterResult,
 } from "../parser/frontmatter";
+import { projectConfigFacet, mergeConfigs } from "../app/project-config";
 import {
   editorFocusField,
   focusEffect,
@@ -50,7 +51,9 @@ function parseFrontmatterFromState(state: EditorState): FrontmatterResult {
 export const frontmatterField = StateField.define<FrontmatterState>({
   create(state) {
     const result = parseFrontmatterFromState(state);
-    return { config: result.config, end: result.end };
+    const project = state.facet(projectConfigFacet);
+    const config = mergeConfigs(project, result.config);
+    return { config, end: result.end };
   },
 
   update(value, tr) {
@@ -75,7 +78,9 @@ export const frontmatterField = StateField.define<FrontmatterState>({
     if (!affectsFrontmatter) return value;
 
     const result = parseFrontmatterFromState(tr.state);
-    return { config: result.config, end: result.end };
+    const project = tr.state.facet(projectConfigFacet);
+    const config = mergeConfigs(project, result.config);
+    return { config, end: result.end };
   },
 });
 
