@@ -537,9 +537,11 @@ def merge_task(task: IssueTask, state: RunState) -> None:
         task.status = "merged"
         return
 
-    # Commit the merge
+    # Commit the merge — strip any conventional prefix already in the title
+    import re
+    clean_title = re.sub(r"^(feat|fix|docs|refactor|test|chore):\s*", "", task.title)
     commit_msg = (
-        f"feat: {task.title}\n\n"
+        f"feat: {clean_title}\n\n"
         f"Closes #{task.number}\n\n"
         f"Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
     )
