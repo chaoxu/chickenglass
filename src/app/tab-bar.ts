@@ -1,3 +1,5 @@
+import { ContextMenu } from "./context-menu";
+
 /** Represents a single open file tab. */
 export interface Tab {
   /** File path used as the unique identifier. */
@@ -30,6 +32,8 @@ export class TabBar {
   private dragSrcPath: string | null = null;
   /** The drop-indicator line element shown during drag. */
   private readonly dropIndicator: HTMLElement;
+  /** Active context menu (if any). */
+  private activeMenu: ContextMenu | null = null;
 
   constructor() {
     this.element = document.createElement("div");
@@ -227,6 +231,45 @@ export class TabBar {
     this.dropIndicator.style.display = "none";
   }
 
+  /** Show the tab context menu at the given position. */
+  private showTabContextMenu(x: number, y: number, path: string): void {
+    this.activeMenu?.dismiss();
+
+    const otherPaths = this.tabs
+      .filter((t) => t.path !== path)
+      .map((t) => t.path);
+
+    this.activeMenu = new ContextMenu(
+      [
+        {
+          label: "Close",
+          action: () => this.onClose?.(path),
+        },
+        {
+          label: "Close Others",
+          disabled: otherPaths.length === 0,
+          action: () => {
+            // Close all tabs except the right-clicked one
+            for (const p of otherPaths) {
+              this.onClose?.(p);
+            }
+          },
+        },
+        {
+          label: "Close All",
+          action: () => {
+            const allPaths = this.tabs.map((t) => t.path);
+            for (const p of allPaths) {
+              this.onClose?.(p);
+            }
+          },
+        },
+      ],
+      x,
+      y,
+    );
+  }
+
   private renderTabs(): void {
     // Reset to just the persistent drop indicator, matching the codebase's
     // innerHTML = "" convention but preserving the indicator element.
@@ -281,6 +324,13 @@ export class TabBar {
 
       tabEl.addEventListener("click", () => {
         this.onSelect?.(tab.path);
+      });
+
+      // Right-click context menu
+      tabEl.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showTabContextMenu(e.clientX, e.clientY, tab.path);
       });
 
       this.element.appendChild(tabEl);

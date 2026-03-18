@@ -1,4 +1,5 @@
 import type { FileEntry } from "./file-manager";
+import { ContextMenu } from "./context-menu";
 
 /** Callback when a file is selected in the tree. */
 export type FileSelectHandler = (path: string) => void;
@@ -24,35 +25,34 @@ export type FileRenameHandler = (
  */
 export type CreateDirectoryHandler = (path: string) => Promise<string | null>;
 
+/** Callback when a new file is requested at a given path. */
+export type CreateFileHandler = (path: string) => Promise<void>;
+
 /** File tree sidebar component. */
 export class FileTree {
   readonly element: HTMLElement;
   private onSelect: FileSelectHandler | null = null;
   private onRefresh: TreeRefreshHandler | null = null;
   private onRename: FileRenameHandler | null = null;
+  private onDelete: FileDeleteHandler | null = null;
   private onCreateDirectory: CreateDirectoryHandler | null = null;
+  private onCreateFile: CreateFileHandler | null = null;
   private activePath: string | null = null;
   /** The file-tree-item element currently focused for keyboard interaction. */
   private focusedItem: HTMLElement | null = null;
-  /** Context menu element currently shown (if any). */
-  private activeContextMenu: HTMLElement | null = null;
-  /** Bound listener stored so it can be removed in destroy(). */
-  private readonly globalClickListener: () => void;
+  /** Active context menu (if any). */
+  private activeMenu: ContextMenu | null = null;
 
   constructor() {
     this.element = document.createElement("div");
     this.element.className = "file-tree";
     this.element.setAttribute("tabindex", "0");
-
-    // Dismiss the context menu on any click outside it
-    this.globalClickListener = () => this.dismissContextMenu();
-    document.addEventListener("click", this.globalClickListener);
   }
 
   /** Remove global event listeners. Call when the tree is removed from the DOM. */
   destroy(): void {
-    document.removeEventListener("click", this.globalClickListener);
-    this.dismissContextMenu();
+    this.activeMenu?.dismiss();
+    this.activeMenu = null;
   }
 
   /** Set the handler called when a file is clicked. */
@@ -70,9 +70,19 @@ export class FileTree {
     this.onRename = handler;
   }
 
+  /** Set the handler called when a file is deleted. */
+  setDeleteHandler(handler: FileDeleteHandler): void {
+    this.onDelete = handler;
+  }
+
   /** Set the handler called when a new directory is created. */
   setCreateDirectoryHandler(handler: CreateDirectoryHandler): void {
     this.onCreateDirectory = handler;
+  }
+
+  /** Set the handler called when a new file is created. */
+  setCreateFileHandler(handler: CreateFileHandler): void {
+    this.onCreateFile = handler;
   }
 
   /** Set the currently active file path (highlighted in tree). */
@@ -149,7 +159,13 @@ export class FileTree {
       item.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.showDirectoryContextMenu(e.clientX, e.clientY, entry, childContainer, icon);
+        this.showDirectoryContextMenu(
+          e.clientX,
+          e.clientY,
+          entry,
+          childContainer,
+          icon,
+        );
       });
 
       const wrapper = document.createElement("div");
@@ -180,7 +196,62 @@ export class FileTree {
       this.setFocusedItem(item);
     });
 
+    // Right-click context menu for files
+    item.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.showFileContextMenu(e.clientX, e.clientY, entry, item);
+    });
+
     return item;
+  }
+
+  /** Show a context menu for a file item. */
+  private showFileContextMenu(
+    x: number,
+    y: number,
+    entry: FileEntry,
+    item: HTMLElement,
+  ): void {
+    this.activeMenu?.dismiss();
+
+    const parentPath = entry.path.includes("/")
+      ? entry.path.substring(0, entry.path.lastIndexOf("/"))
+      : "";
+
+    this.activeMenu = new ContextMenu(
+      [
+        {
+          label: "Open",
+          action: () => {
+            this.setFocusedItem(item);
+            this.onSelect?.(entry.path);
+          },
+        },
+        { label: "-" },
+        {
+          label: "Rename",
+          action: () => this.startRename(item, entry.path),
+        },
+        {
+          label: "Delete",
+          action: () => {
+            this.onDelete?.(entry.path);
+          },
+        },
+        { label: "-" },
+        {
+          label: "New File",
+          action: () => this.promptNewFileInDir(parentPath),
+        },
+        {
+          label: "New Folder",
+          action: () => this.startNewFolderInline(parentPath),
+        },
+      ],
+      x,
+      y,
+    );
   }
 
   /** Show a context menu for a directory item. */
@@ -191,39 +262,49 @@ export class FileTree {
     childContainer: HTMLElement,
     icon: HTMLElement,
   ): void {
-    this.dismissContextMenu();
+    this.activeMenu?.dismiss();
 
-    const menu = document.createElement("div");
-    menu.className = "file-tree-context-menu";
-    menu.style.left = `${x}px`;
-    menu.style.top = `${y}px`;
-
-    const newFolderItem = document.createElement("div");
-    newFolderItem.className = "file-tree-context-item";
-    newFolderItem.textContent = "New Folder";
-    newFolderItem.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.dismissContextMenu();
-      // Expand the directory so the inline input is visible
-      childContainer.style.display = "block";
-      icon.textContent = "\u25BC";
-      this.startNewFolderInline(entry.path, childContainer);
-    });
-
-    menu.appendChild(newFolderItem);
-    document.body.appendChild(menu);
-    this.activeContextMenu = menu;
-
-    // Prevent the document-level click listener from immediately closing it
-    menu.addEventListener("click", (e) => e.stopPropagation());
+    this.activeMenu = new ContextMenu(
+      [
+        {
+          label: "New File",
+          action: () => this.promptNewFileInDir(entry.path),
+        },
+        {
+          label: "New Folder",
+          action: () => {
+            // Expand so the inline input is visible
+            childContainer.style.display = "block";
+            icon.textContent = "\u25BC";
+            this.startNewFolderInline(entry.path, childContainer);
+          },
+        },
+        { label: "-" },
+        {
+          label: "Rename",
+          action: () => {
+            // Find the directory's item element and start rename
+            const dirItem = this.element.querySelector(
+              `[data-path="${CSS.escape(entry.path)}"]`,
+            ) as HTMLElement | null;
+            if (dirItem) this.startRename(dirItem, entry.path);
+          },
+        },
+      ],
+      x,
+      y,
+    );
   }
 
-  /** Remove any active context menu. */
-  private dismissContextMenu(): void {
-    if (this.activeContextMenu) {
-      this.activeContextMenu.remove();
-      this.activeContextMenu = null;
-    }
+  /**
+   * Prompt for a new file name inside the given parent directory
+   * and create it via the createFile handler.
+   */
+  private promptNewFileInDir(parentPath: string): void {
+    const name = prompt("Enter file name (e.g., notes.md):");
+    if (!name?.trim()) return;
+    const newPath = parentPath ? `${parentPath}/${name.trim()}` : name.trim();
+    this.onCreateFile?.(newPath);
   }
 
   /**
@@ -244,9 +325,7 @@ export class FileTree {
     // Guard: only one new-folder input at a time
     if (host.querySelector(".file-tree-new-folder-row")) return;
 
-    const depth = parentPath
-      ? parentPath.split("/").length
-      : 0;
+    const depth = parentPath ? parentPath.split("/").length : 0;
 
     const row = document.createElement("div");
     row.className = "file-tree-item file-tree-new-folder-row";

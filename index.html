@@ -5,9 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chickenglass</title>
     <style>
-      /* ── Light theme (default) ───────────────────────────────────────── */
-      :root,
-      [data-theme="light"] {
+      :root {
         --cg-bg: #ffffff;
         --cg-fg: #09090b;
         --cg-border: #d4d4d8;
@@ -15,19 +13,6 @@
         --cg-subtle: #f4f4f5;
         --cg-hover: #e4e4e7;
         --cg-active: #d4d4d8;
-        --cg-error: #c00000;
-      }
-
-      /* ── Dark theme ──────────────────────────────────────────────────── */
-      [data-theme="dark"] {
-        --cg-bg: #09090b;
-        --cg-fg: #fafafa;
-        --cg-border: #3f3f46;
-        --cg-muted: #a1a1aa;
-        --cg-subtle: #18181b;
-        --cg-hover: #27272a;
-        --cg-active: #3f3f46;
-        --cg-error: #f87171;
       }
 
       *,
@@ -445,45 +430,41 @@
         border: 1px solid var(--cg-border);
       }
 
-      /* ── Theme switcher (sidebar footer) ─────────────────────────────── */
-      .theme-switcher {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        padding: 6px 12px;
-        border-top: 1px solid var(--cg-border);
-        flex-shrink: 0;
-      }
-
-      .theme-switcher-label {
-        font-size: 11px;
-        color: var(--cg-muted);
-        flex: 1;
+      /* Context menus */
+      .context-menu {
+        position: fixed;
+        z-index: 3000;
+        min-width: 140px;
+        background: var(--cg-bg);
+        border: 1px solid var(--cg-border);
+        border-radius: 4px;
+        padding: 4px 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
         user-select: none;
       }
 
-      .theme-btn {
-        padding: 2px 7px;
-        font-size: 11px;
-        border: 1px solid var(--cg-border);
-        border-radius: 2px;
-        background: none;
-        color: var(--cg-muted);
+      .context-menu-item {
+        padding: 6px 14px;
+        font-size: 13px;
         cursor: pointer;
-        font-family: inherit;
-        line-height: 1.4;
-        transition: background 0.1s, color 0.1s;
+        color: var(--cg-fg);
+        white-space: nowrap;
       }
 
-      .theme-btn:hover {
+      .context-menu-item:hover {
         background: var(--cg-hover);
-        color: var(--cg-fg);
       }
 
-      .theme-btn-active {
-        background: var(--cg-active);
-        color: var(--cg-fg);
-        font-weight: 600;
+      .context-menu-item-disabled {
+        color: var(--cg-muted);
+        cursor: default;
+        pointer-events: none;
+      }
+
+      .context-menu-separator {
+        height: 1px;
+        background: var(--cg-border);
+        margin: 4px 0;
       }
     </style>
   </head>
