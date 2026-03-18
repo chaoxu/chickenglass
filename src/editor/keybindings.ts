@@ -8,7 +8,25 @@ import { EditorSelection, Prec, type Extension } from "@codemirror/state";
 import { type EditorView, keymap } from "@codemirror/view";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
+import { setEditorMode, type EditorMode } from "./editor";
 import type { SourceMap } from "../app/source-map";
+
+/** Current editor mode — cycles through rendered → source → preview. */
+let currentMode: EditorMode = "rendered";
+
+/** Cycle to the next editor mode. */
+function cycleEditorMode(view: EditorView): boolean {
+  const modes: EditorMode[] = ["rendered", "source", "preview"];
+  const idx = modes.indexOf(currentMode);
+  currentMode = modes[(idx + 1) % modes.length];
+  setEditorMode(view, currentMode);
+
+  // Dispatch a DOM event so the app can update the UI indicator
+  view.dom.dispatchEvent(
+    new CustomEvent("cg-mode-change", { detail: currentMode, bubbles: true }),
+  );
+  return true;
+}
 
 /**
  * Jump to the source file when cursor is in an include region.
@@ -220,6 +238,7 @@ export const editorKeybindings: Extension = [
     { key: "Mod-Shift-d", run: toggleDebugInspector },
     { key: "Mod-Shift-f", run: toggleFocusMode },
     { key: "Mod-Shift-o", run: jumpToSourceFile },
+    { key: "Mod-Shift-m", run: cycleEditorMode },
   ]),
   // Formatting shortcuts at high precedence so they override defaults
   Prec.high(
