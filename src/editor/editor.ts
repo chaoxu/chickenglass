@@ -44,7 +44,7 @@ import { chickenglassTheme } from "./theme";
 import { headingFold } from "./heading-fold";
 import { listOutlinerExtension } from "./list-outliner";
 import { breadcrumbExtension } from "../app/breadcrumbs";
-import { findReplaceExtension } from "./find-replace";
+import { spellcheckExtension } from "./spellcheck";
 
 const fallbackDocument = "# Untitled\n";
 
@@ -137,8 +137,10 @@ export function createEditor(config: EditorConfig): EditorView {
       listOutlinerExtension,
       breadcrumbExtension,
       editorKeybindings,
-      findReplaceExtension,
       chickenglassTheme,
+
+      // Spellcheck (enabled by default, toggleable)
+      spellcheckExtension,
 
       // User-provided extensions last
       ...(config.extensions ?? []),
