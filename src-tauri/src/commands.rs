@@ -446,3 +446,41 @@ pub fn export_document(
 
     Ok(output_path.to_string_lossy().to_string())
 }
+
+/// Reveal a file or directory in the OS file explorer.
+///
+/// On macOS: uses `open -R <path>` to select the item in Finder.
+/// On Windows: uses `explorer /select,<path>` (single combined argument).
+/// On Linux: opens the parent directory with `xdg-open`.
+#[tauri::command]
+pub fn reveal_in_finder(path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .args(["-R", &path])
+            .spawn()
+            .map_err(|e| format!("Failed to reveal in Finder: {}", e))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // /select,<path> must be a single argument — no space between /select, and path
+        Command::new("explorer")
+            .arg(format!("/select,{}", path))
+            .spawn()
+            .map_err(|e| format!("Failed to reveal in Explorer: {}", e))?;
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        // Linux: open the parent directory
+        let p = PathBuf::from(&path);
+        let parent = p.parent().unwrap_or(&p);
+        Command::new("xdg-open")
+            .arg(parent)
+            .spawn()
+            .map_err(|e| format!("Failed to open file manager: {}", e))?;
+    }
+
+    Ok(())
+}

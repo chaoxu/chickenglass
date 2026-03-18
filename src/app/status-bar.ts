@@ -1,6 +1,7 @@
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { EditorMode } from "../editor";
+import { computeDocStats, WritingStatsPopup } from "./writing-stats";
 
 /** Callback invoked when the user clicks the mode indicator to cycle modes. */
 export type ModeChangeHandler = (mode: EditorMode) => void;
@@ -12,22 +13,15 @@ const MODE_LABELS: Record<EditorMode, string> = {
   preview: "Preview",
 };
 
-/** Count words in a markdown document, ignoring frontmatter fences and blank lines. */
-function countWords(text: string): number {
-  // Strip YAML frontmatter delimited by leading ---
-  const withoutFrontmatter = text.replace(/^---[\s\S]*?---\n?/, "");
-  // Split on whitespace and filter empty tokens
-  const tokens = withoutFrontmatter.split(/\s+/).filter((t) => t.length > 0);
-  return tokens.length;
-}
-
 /**
  * Status bar shown at the bottom of the editor window.
  *
  * Displays:
- * - Word count (debounced, updates on doc changes)
+ * - Word count (debounced, updates on doc changes) — clickable to open stats popup
  * - Cursor position (line:column, updates on selection changes)
  * - Editor mode indicator (clickable to cycle Rendered → Source → Preview)
+ *
+ * Also owns the WritingStatsPopup. Mount its DOM node via `popupElement`.
  */
 export class StatusBar {
   readonly element: HTMLElement;
@@ -35,6 +29,8 @@ export class StatusBar {
   private readonly wordCountEl: HTMLElement;
   private readonly cursorPosEl: HTMLElement;
   private readonly modeEl: HTMLElement;
+
+  private readonly statsPopup: WritingStatsPopup;
 
   private currentMode: EditorMode = "rendered";
   private onModeChange: ModeChangeHandler | null = null;
@@ -47,10 +43,17 @@ export class StatusBar {
     this.element = document.createElement("div");
     this.element.className = "status-bar";
 
-    // Left side: word count
+    this.statsPopup = new WritingStatsPopup();
+
+    // Left side: word count (clickable — opens writing stats popup)
     this.wordCountEl = document.createElement("span");
-    this.wordCountEl.className = "status-bar-item status-bar-words";
+    this.wordCountEl.className =
+      "status-bar-item status-bar-words status-bar-clickable";
     this.wordCountEl.textContent = "0 words";
+    this.wordCountEl.title = "Click for writing statistics";
+    this.wordCountEl.addEventListener("click", () =>
+      this.statsPopup.toggle(this.wordCountEl),
+    );
 
     // Center: cursor position
     this.cursorPosEl = document.createElement("span");
@@ -90,6 +93,14 @@ export class StatusBar {
         this.scheduleWordCount(update.view);
       }
     });
+  }
+
+  /**
+   * The DOM element for the writing stats popup.
+   * Append this to the app root so it can escape scroll containers.
+   */
+  get popupElement(): HTMLElement {
+    return this.statsPopup.element;
   }
 
   /** Set the handler called when the user cycles the editor mode. */
@@ -134,8 +145,11 @@ export class StatusBar {
 
   private updateWordCount(view: EditorView): void {
     const text = view.state.doc.toString();
-    const count = countWords(text);
+    // Compute once; feed both the badge and the popup from the same result.
+    const stats = computeDocStats(text);
+    const count = stats.words;
     this.wordCountEl.textContent = count === 1 ? "1 word" : `${count} words`;
+    this.statsPopup.update(stats);
   }
 
   private cycleMode(): void {
