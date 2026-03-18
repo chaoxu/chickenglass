@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import subprocess
 import sys
 import time
@@ -32,8 +33,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 WORKTREE_DIR = REPO_ROOT / ".worktrees"
 MAIN_BRANCH = "main"
 DEFAULT_MAX_PARALLEL = 4
+MAX_PARALLEL_CAP = 8
 DEFERRED_LABEL = "deferred"
-WORKER_TIMEOUT_SECONDS = 30 * 60  # 30 minutes per worker
+DEFAULT_WORKER_TIMEOUT = 30 * 60  # 30 minutes per worker
 
 
 @dataclass
@@ -54,6 +56,64 @@ class RunState:
     """State for the entire run."""
     tasks: list[IssueTask] = field(default_factory=list)
     merged_shas: list[str] = field(default_factory=list)
+    baseline_main_sha: str = ""
+
+
+# Active worker processes — global for signal handler cleanup
+_active_procs: list[subprocess.Popen[str]] = []
+_current_state: Optional[RunState] = None
+
+
+# ---------------------------------------------------------------------------
+# Signal handling
+# ---------------------------------------------------------------------------
+
+def _shutdown_handler(signum: int, _frame: object) -> None:
+    """Kill all active workers and clean up on Ctrl+C or SIGTERM."""
+    sig_name = signal.Signals(signum).name
+    print(f"\n  [!] Received {sig_name} — shutting down...", flush=True)
+
+    # Kill all active worker processes
+    for proc in _active_procs:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+    for proc in _active_procs:
+        try:
+            proc.wait(timeout=5)
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+    _active_procs.clear()
+
+    # Clean up worktrees if state exists
+    if _current_state:
+        print("  [!] Cleaning up worktrees...", flush=True)
+        cleanup_worktrees(_current_state)
+
+    # Reset git to clean state
+    try:
+        subprocess.run(
+            ["git", "merge", "--abort"],
+            cwd=REPO_ROOT, capture_output=True, check=False,
+        )
+        subprocess.run(
+            ["git", "checkout", MAIN_BRANCH],
+            cwd=REPO_ROOT, capture_output=True, check=False,
+        )
+        subprocess.run(
+            ["git", "reset", "--hard", "HEAD"],
+            cwd=REPO_ROOT, capture_output=True, check=False,
+        )
+    except OSError:
+        pass
+
+    print("  [!] Shutdown complete.", flush=True)
+    sys.exit(130)
+
+
+signal.signal(signal.SIGINT, _shutdown_handler)
+signal.signal(signal.SIGTERM, _shutdown_handler)
 
 
 # ---------------------------------------------------------------------------
@@ -68,13 +128,19 @@ def run_cmd(
     timeout: Optional[int] = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command with proper error handling."""
-    result = subprocess.run(
-        args,
-        cwd=cwd or REPO_ROOT,
-        capture_output=capture,
-        text=True,
-        timeout=timeout,
-    )
+    try:
+        result = subprocess.run(
+            args,
+            cwd=cwd or REPO_ROOT,
+            capture_output=capture,
+            text=True,
+            timeout=timeout,
+        )
+    except FileNotFoundError:
+        cmd = args[0] if args else "unknown"
+        raise RuntimeError(
+            f"Command not found: '{cmd}'. Is it installed and on PATH?"
+        ) from None
     if check and result.returncode != 0:
         stderr = result.stderr.strip() if result.stderr else ""
         raise RuntimeError(
@@ -134,7 +200,6 @@ def fetch_all_open_issues() -> list[IssueTask]:
     issues = json.loads(result.stdout)
     tasks = []
     for i in issues:
-        # Filter out deferred issues
         labels = {lbl.get("name", "") for lbl in i.get("labels", [])}
         if DEFERRED_LABEL in labels:
             log(f"Skipping #{i['number']}: {i['title']} (deferred)", "INFO")
@@ -149,7 +214,7 @@ def fetch_all_open_issues() -> list[IssueTask]:
 # Phase 2: Preflight checks
 # ---------------------------------------------------------------------------
 
-def preflight() -> None:
+def preflight(state: RunState) -> None:
     """Verify the repo is in a clean state before starting."""
     log_header("PREFLIGHT")
 
@@ -181,9 +246,8 @@ def preflight() -> None:
     log("Pulled latest from origin", "OK")
 
     # Record baseline main SHA for isolation checking later
-    global _baseline_main_sha
-    _baseline_main_sha = git("rev-parse", "HEAD")
-    log(f"Baseline main SHA: {_baseline_main_sha[:7]}", "OK")
+    state.baseline_main_sha = git("rev-parse", "HEAD")
+    log(f"Baseline main SHA: {state.baseline_main_sha[:7]}", "OK")
 
     # Run typecheck
     log("Running typecheck...", "RUN")
@@ -196,16 +260,12 @@ def preflight() -> None:
     log("Tests passed", "OK")
 
 
-_baseline_main_sha = ""
-
-
 # ---------------------------------------------------------------------------
 # Phase 3: Create worktrees and spawn workers
 # ---------------------------------------------------------------------------
 
 def create_worktree(task: IssueTask) -> None:
     """Create a git worktree for a task."""
-    # Use flat directory name (no nested dirs)
     task.branch = f"feat/issue-{task.number}"
     task.worktree = WORKTREE_DIR / f"issue-{task.number}"
 
@@ -272,24 +332,21 @@ def spawn_worker(task: IssueTask) -> subprocess.Popen[str]:
     task.status = "running"
     log(f"Spawning worker for #{task.number}: {task.title}", "RUN")
 
-    # Pass prompt via stdin to avoid shell escaping issues with $, \, etc.
+    # Use cwd to set the working directory — NOT --dir flag
+    # Pass prompt via stdin to avoid shell escaping issues
     proc = subprocess.Popen(
         [
             "claude",
-            "--dir", str(task.worktree),
             "--print",
             "--dangerously-skip-permissions",
-            "-",  # read prompt from stdin
+            "-p", prompt,
         ],
-        stdin=subprocess.PIPE,
+        cwd=task.worktree,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
-    # Write prompt to stdin and close it so claude starts processing
-    if proc.stdin:
-        proc.stdin.write(prompt)
-        proc.stdin.close()
+    _active_procs.append(proc)
     return proc
 
 
@@ -297,32 +354,34 @@ def spawn_worker(task: IssueTask) -> subprocess.Popen[str]:
 # Phase 4: Wait for workers and verify
 # ---------------------------------------------------------------------------
 
-def check_main_not_contaminated() -> bool:
+def check_main_not_contaminated(state: RunState) -> bool:
     """Check if main branch received unexpected commits (isolation escape)."""
+    if not state.baseline_main_sha:
+        log("No baseline SHA — cannot check contamination", "WARN")
+        return True  # can't check, assume OK
     current_main_sha = git("rev-parse", MAIN_BRANCH)
-    if current_main_sha != _baseline_main_sha:
+    if current_main_sha != state.baseline_main_sha:
         log(
             f"ISOLATION ESCAPE DETECTED: main moved from "
-            f"{_baseline_main_sha[:7]} to {current_main_sha[:7]}",
+            f"{state.baseline_main_sha[:7]} to {current_main_sha[:7]}",
             "ERROR",
         )
         return False
     return True
 
 
-def verify_worker_result(task: IssueTask) -> None:
+def verify_worker_result(task: IssueTask, state: RunState) -> None:
     """Verify a completed worker's output."""
     log(f"Verifying #{task.number}...", "RUN")
 
     # Check if main was contaminated by this worker
-    if not check_main_not_contaminated():
+    if not check_main_not_contaminated(state):
         task.status = "failed"
         task.error = "ISOLATION ESCAPE: worker committed to main branch"
         log(task.error, "ERROR")
-        # Reset main to baseline to recover
         git("checkout", MAIN_BRANCH)
-        git("reset", "--hard", _baseline_main_sha)
-        log(f"Reset main to baseline {_baseline_main_sha[:7]}", "WARN")
+        git("reset", "--hard", state.baseline_main_sha)
+        log(f"Reset main to baseline {state.baseline_main_sha[:7]}", "WARN")
         return
 
     # Check the branch is correct
@@ -344,7 +403,6 @@ def verify_worker_result(task: IssueTask) -> None:
     head_sha = git("rev-parse", "HEAD", cwd=task.worktree)
 
     if head_sha == main_sha:
-        # No new commits — check for uncommitted changes
         status = git("status", "--short", cwd=task.worktree)
         if status:
             task.status = "failed"
@@ -393,9 +451,10 @@ def merge_task(task: IssueTask, state: RunState) -> None:
 
     log(f"Merging #{task.number}...", "RUN")
 
-    # Ensure we're on main with clean state
+    # Ensure clean git state: abort any leftover merge, reset to HEAD
     git("checkout", MAIN_BRANCH)
-    git("reset", "--hard", "HEAD")  # clean any leftover state
+    git("merge", "--abort", check=False)
+    git("reset", "--hard", "HEAD")
 
     # Squash merge the task branch
     result = run_cmd(
@@ -404,35 +463,29 @@ def merge_task(task: IssueTask, state: RunState) -> None:
     )
 
     if result.returncode != 0:
-        # Check for any conflict markers in status
+        # Check for conflict markers (U=unmerged, A=added, D=deleted)
         status = git("status", "--short")
-        conflict_files = [
-            line for line in status.splitlines()
-            if len(line) >= 2 and line[0] in "UDA" and line[1] in "UDA"
-        ]
-        if conflict_files:
+        has_conflicts = any(
+            "U" in line[:2]
+            for line in status.splitlines()
+            if len(line) >= 2
+        )
+        if has_conflicts:
+            conflict_files = [
+                line[3:].strip() for line in status.splitlines()
+                if len(line) >= 2 and "U" in line[:2]
+            ]
             task.status = "failed"
-            task.error = f"Merge conflicts in: {', '.join(f.split()[-1] for f in conflict_files)}"
-            log(task.error, "ERROR")
-            git("reset", "--hard", "HEAD")  # clean reset, not merge --abort
-            return
+            task.error = f"Merge conflicts in: {', '.join(conflict_files)}"
+        else:
+            task.status = "failed"
+            task.error = f"Merge failed: {result.stderr[:200] if result.stderr else 'unknown error'}"
+        log(task.error, "ERROR")
+        git("reset", "--hard", "HEAD")
+        return
 
-    # Commit the merge
-    commit_msg = (
-        f"feat: {task.title}\n\n"
-        f"Closes #{task.number}\n\n"
-        f"Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
-    )
-
-    # Stage only tracked changes (not random untracked files)
-    git("add", "-u")
-    # Also add new files from the merge
-    new_files = [
-        line[3:] for line in git("status", "--short").splitlines()
-        if line.startswith("?? src/") or line.startswith("?? tests/")
-    ]
-    for f in new_files:
-        git("add", f)
+    # Stage changes: tracked modifications + any new files
+    git("add", "-A")
 
     # Check if there are actually changes to commit
     diff = git("diff", "--cached", "--name-only")
@@ -441,11 +494,14 @@ def merge_task(task: IssueTask, state: RunState) -> None:
         task.status = "merged"
         return
 
+    # Commit the merge
+    commit_msg = (
+        f"feat: {task.title}\n\n"
+        f"Closes #{task.number}\n\n"
+        f"Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
+    )
     git("commit", "-m", commit_msg)
     merged_sha = git("rev-parse", "HEAD")
-
-    task.status = "merged"
-    state.merged_shas.append(merged_sha)
     log(f"#{task.number} merged: {merged_sha[:7]}", "OK")
 
     # Post-merge typecheck
@@ -454,11 +510,15 @@ def merge_task(task: IssueTask, state: RunState) -> None:
     if result.returncode != 0:
         log(f"Post-merge typecheck FAILED for #{task.number}", "ERROR")
         log("Removing bad merge commit...", "WARN")
-        git("reset", "--hard", "HEAD~1")  # clean removal, no revert commit
+        git("reset", "--hard", "HEAD~1")
         task.status = "failed"
         task.error = "Post-merge typecheck failed — merge removed"
         return
     log("Post-merge typecheck passed", "OK")
+
+    # Only record as merged AFTER typecheck passes (B4 fix)
+    task.status = "merged"
+    state.merged_shas.append(merged_sha)
 
 
 # ---------------------------------------------------------------------------
@@ -495,19 +555,17 @@ def push_and_cleanup(state: RunState) -> None:
 def cleanup_worktrees(state: RunState) -> None:
     """Remove all worktrees and their branches."""
     log("Cleaning up worktrees...", "RUN")
-    # Must be on main, not inside a worktree
     git("checkout", MAIN_BRANCH, check=False)
     for task in state.tasks:
         if task.worktree.exists():
             git("worktree", "remove", str(task.worktree), "--force", check=False)
         if task.branch:
             git("branch", "-D", task.branch, check=False)
-    # Remove the worktree directory if empty
     if WORKTREE_DIR.exists():
         try:
             WORKTREE_DIR.rmdir()
         except OSError:
-            pass  # not empty, leave it
+            pass
     log("Worktrees cleaned up", "OK")
 
 
@@ -545,9 +603,16 @@ def print_report(state: RunState, elapsed: float) -> None:
 # Main orchestration
 # ---------------------------------------------------------------------------
 
-def run_batch(tasks: list[IssueTask], dry_run: bool = False, max_parallel: int = 4, worker_timeout: int = WORKER_TIMEOUT_SECONDS) -> RunState:
+def run_batch(
+    tasks: list[IssueTask],
+    dry_run: bool = False,
+    max_parallel: int = 4,
+    worker_timeout: int = DEFAULT_WORKER_TIMEOUT,
+) -> RunState:
     """Run a batch of issues through the full pipeline."""
+    global _current_state
     state = RunState(tasks=tasks)
+    _current_state = state
 
     # --- Phase 1: Display plan ---
     log_header(f"PLAN: {len(tasks)} issues")
@@ -559,7 +624,7 @@ def run_batch(tasks: list[IssueTask], dry_run: bool = False, max_parallel: int =
         return state
 
     # --- Phase 2: Preflight ---
-    preflight()
+    preflight(state)
 
     # --- Phase 3: Create worktrees ---
     log_header("CREATE WORKTREES")
@@ -577,15 +642,17 @@ def run_batch(tasks: list[IssueTask], dry_run: bool = False, max_parallel: int =
     pending = [t for t in tasks if t.status == "pending"]
     active: dict[int, tuple[IssueTask, subprocess.Popen[str], float]] = {}
 
-    while pending or active:
-        # Spawn up to max_parallel
-        while pending and len(active) < max_parallel:
-            task = pending.pop(0)
-            proc = spawn_worker(task)
-            active[task.number] = (task, proc, time.time())
+    try:
+        while pending or active:
+            # Spawn up to max_parallel
+            while pending and len(active) < max_parallel:
+                task = pending.pop(0)
+                proc = spawn_worker(task)
+                active[task.number] = (task, proc, time.time())
 
-        # Wait for any to finish
-        if active:
+            if not active:
+                break
+
             time.sleep(2)
             finished = []
             now = time.time()
@@ -600,20 +667,36 @@ def run_batch(tasks: list[IssueTask], dry_run: bool = False, max_parallel: int =
                     task.status = "failed"
                     task.error = f"Timed out after {elapsed:.0f}s"
                     finished.append(num)
+                    # Check contamination after timeout kill
+                    check_main_not_contaminated(state)
                     continue
 
                 if proc.poll() is not None:
                     finished.append(num)
-                    exit_code = proc.returncode
-                    if exit_code != 0:
-                        stderr = proc.stderr.read() if proc.stderr else ""
-                        log(f"#{num} worker exited with code {exit_code}", "WARN")
-                        if stderr:
-                            log(f"  stderr: {stderr[:200]}", "WARN")
-                    verify_worker_result(task)
+                    # Use communicate() to drain pipes safely (avoids deadlock)
+                    try:
+                        _, stderr = proc.communicate(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        _, stderr = proc.communicate()
+                    if proc.returncode != 0 and stderr:
+                        log(f"#{num} worker exited with code {proc.returncode}", "WARN")
+                        log(f"  stderr: {stderr[:200]}", "WARN")
+                    verify_worker_result(task, state)
 
             for num in finished:
+                task_proc = active[num][1]
+                if task_proc in _active_procs:
+                    _active_procs.remove(task_proc)
                 del active[num]
+    finally:
+        # Kill any remaining workers if we exit the loop unexpectedly
+        for _, (task, proc, _) in active.items():
+            proc.kill()
+            proc.wait()
+            if task.status == "running":
+                task.status = "failed"
+                task.error = "Killed during shutdown"
 
     # --- Phase 5: Merge in order ---
     log_header("MERGE")
@@ -656,39 +739,45 @@ def main() -> None:
     parser.add_argument(
         "--timeout",
         type=int,
-        default=WORKER_TIMEOUT_SECONDS,
-        help=f"Worker timeout in seconds (default: {WORKER_TIMEOUT_SECONDS})",
+        default=DEFAULT_WORKER_TIMEOUT,
+        help=f"Worker timeout in seconds (default: {DEFAULT_WORKER_TIMEOUT})",
     )
     args = parser.parse_args()
 
     if not args.issues and not args.all:
         parser.error("Provide issue numbers or --all")
 
-    worker_timeout = args.timeout
+    # Cap max_parallel to prevent resource exhaustion
+    max_parallel = min(args.max_parallel, MAX_PARALLEL_CAP)
+    if args.max_parallel > MAX_PARALLEL_CAP:
+        log(f"Capping --max-parallel to {MAX_PARALLEL_CAP} (requested {args.max_parallel})", "WARN")
 
     # Fetch issues
     log_header("FETCH ISSUES")
-    if args.all:
-        tasks = fetch_all_open_issues()
-        log(f"Found {len(tasks)} open non-deferred issues")
-    else:
-        tasks = []
-        for num in args.issues:
-            task = fetch_issue(num)
-            tasks.append(task)
-            log(f"Fetched #{task.number}: {task.title}")
+    try:
+        if args.all:
+            tasks = fetch_all_open_issues()
+            log(f"Found {len(tasks)} open non-deferred issues")
+        else:
+            tasks = []
+            for num in args.issues:
+                task = fetch_issue(num)
+                tasks.append(task)
+                log(f"Fetched #{task.number}: {task.title}")
+    except RuntimeError as e:
+        log(f"Failed to fetch issues: {e}", "ERROR")
+        sys.exit(1)
 
     if not tasks:
         log("No issues to process", "WARN")
         return
 
     start = time.time()
-    state = run_batch(tasks, dry_run=args.dry_run, max_parallel=args.max_parallel, worker_timeout=worker_timeout)
+    state = run_batch(tasks, dry_run=args.dry_run, max_parallel=max_parallel, worker_timeout=args.timeout)
     elapsed = time.time() - start
 
     print_report(state, elapsed)
 
-    # Exit with error if any tasks failed
     failed = [t for t in state.tasks if t.status == "failed"]
     if failed:
         sys.exit(1)
