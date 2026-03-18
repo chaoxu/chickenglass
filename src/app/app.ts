@@ -28,6 +28,28 @@ import {
   type Theme,
 } from "./theme-manager";
 
+/** Zoom manager: controls --font-size-base CSS variable, persists in localStorage. */
+const ZOOM_KEY = "cg-zoom-level";
+const ZOOM_DEFAULT = 16;
+const ZOOM_MIN = 10;
+const ZOOM_MAX = 32;
+const ZOOM_STEP = 2;
+
+let currentZoomLevel = (() => {
+  try {
+    const stored = localStorage.getItem(ZOOM_KEY);
+    return stored ? Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Number(stored))) : ZOOM_DEFAULT;
+  } catch {
+    return ZOOM_DEFAULT;
+  }
+})();
+
+function applyZoomLevel(px: number): void {
+  currentZoomLevel = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, px));
+  document.documentElement.style.setProperty("--font-size-base", `${currentZoomLevel}px`);
+  localStorage.setItem(ZOOM_KEY, String(currentZoomLevel));
+}
+
 /** Configuration for the application shell. */
 export interface AppConfig {
   /** Root DOM element to mount the app into. */
@@ -597,6 +619,21 @@ export class App {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "L") {
         e.preventDefault();
         this.exportActiveFile("latex");
+      }
+      // Cmd+= / Ctrl+= → Zoom in
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "=") {
+        e.preventDefault();
+        applyZoomLevel(currentZoomLevel + ZOOM_STEP);
+      }
+      // Cmd+- / Ctrl+- → Zoom out
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "-") {
+        e.preventDefault();
+        applyZoomLevel(currentZoomLevel - ZOOM_STEP);
+      }
+      // Cmd+0 / Ctrl+0 → Reset zoom
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "0") {
+        e.preventDefault();
+        applyZoomLevel(ZOOM_DEFAULT);
       }
     });
   }
