@@ -391,6 +391,7 @@ export const chickenglassTheme = EditorView.theme({
     lineHeight: "1.4",
     color: "#555",
     fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
+    transition: "transform 0.15s ease-out",
   },
 
   /* Sidenote number label */

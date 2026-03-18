@@ -13,6 +13,8 @@ import {
   type DecorationSet,
   Decoration,
   EditorView,
+  ViewPlugin,
+  type ViewUpdate,
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
@@ -271,9 +273,109 @@ const sidenoteDecorationField = StateField.define<DecorationSet>({
   },
 });
 
+/** Minimum vertical gap in pixels between stacked sidenotes. */
+const SIDENOTE_GAP = 4;
+
+/** Measurement data for a single sidenote used by the collision resolver. */
+export interface SidenoteMeasurement {
+  readonly top: number;
+  readonly height: number;
+}
+
+/**
+ * Compute translateY offsets to resolve vertical overlap between sidenotes.
+ *
+ * Walks top-to-bottom, tracking the bottom edge of the last placed sidenote.
+ * If the next sidenote's top is above that edge (plus gap), it gets pushed down.
+ *
+ * Returns an array of pixel offsets (0 means no adjustment needed).
+ */
+export function computeSidenoteOffsets(
+  measurements: readonly SidenoteMeasurement[],
+  gap: number = SIDENOTE_GAP,
+): number[] {
+  const offsets = new Array<number>(measurements.length).fill(0);
+  let prevBottom = -Infinity;
+
+  for (let i = 0; i < measurements.length; i++) {
+    const { top, height } = measurements[i];
+    if (top < prevBottom + gap) {
+      offsets[i] = prevBottom + gap - top;
+    }
+    prevBottom = top + offsets[i] + height;
+  }
+
+  return offsets;
+}
+
+/**
+ * ViewPlugin that resolves vertical overlap between sidenotes after layout.
+ *
+ * After each update that may change sidenote positions, it measures all
+ * .cg-sidenote elements, computes collision-free offsets, and applies
+ * CSS transforms to push overlapping sidenotes downward.
+ */
+const sidenoteLayoutPlugin = ViewPlugin.fromClass(
+  class {
+    private rafId = 0;
+
+    constructor(private view: EditorView) {
+      this.scheduleLayout();
+    }
+
+    update(_update: ViewUpdate) {
+      // Debounced via rAF — safe to schedule on every update
+      this.scheduleLayout();
+    }
+
+    private scheduleLayout() {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = requestAnimationFrame(() => this.resolveOverlaps());
+    }
+
+    private resolveOverlaps() {
+      const sidenotes = [
+        ...this.view.dom.querySelectorAll(".cg-sidenote"),
+      ] as HTMLElement[];
+
+      if (sidenotes.length < 2) {
+        // Nothing to resolve — clear any stale transforms
+        for (const s of sidenotes) s.style.transform = "";
+        return;
+      }
+
+      // Reset transforms so measurements reflect natural positions
+      for (const s of sidenotes) s.style.transform = "";
+
+      // Measure natural positions (forces layout reflow after reset)
+      const measured: Array<SidenoteMeasurement & { el: HTMLElement }> =
+        sidenotes.map((el) => {
+          const rect = el.getBoundingClientRect();
+          return { el, top: rect.top, height: rect.height };
+        });
+
+      // Sort by natural top position (should be in document order already)
+      measured.sort((a, b) => a.top - b.top);
+
+      // Compute and apply offsets
+      const offsets = computeSidenoteOffsets(measured);
+      for (let i = 0; i < measured.length; i++) {
+        if (offsets[i] > 0) {
+          measured[i].el.style.transform = `translateY(${offsets[i]}px)`;
+        }
+      }
+    }
+
+    destroy() {
+      cancelAnimationFrame(this.rafId);
+    }
+  },
+);
+
 /** CM6 extension that renders footnotes as Tufte-style sidenotes. */
 export const sidenoteRenderPlugin: Extension = [
   editorFocusField,
   focusTracker,
   sidenoteDecorationField,
+  sidenoteLayoutPlugin,
 ];
