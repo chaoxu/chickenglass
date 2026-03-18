@@ -16,6 +16,7 @@ import {
 } from "./command-palette";
 import { getEditorCommands, createHeadingCommands } from "../editor/commands";
 import { exportDocument, type ExportFormat } from "./export";
+import { showSaveDialog, showSaveAllDialog } from "./save-dialog";
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
 import { TabBar } from "./tab-bar";
@@ -276,6 +277,33 @@ export class App {
     this.indexer.dispose();
   }
 
+  /** Get all tabs with unsaved changes. */
+  getDirtyTabs(): readonly { path: string; name: string }[] {
+    return this.tabBar.getOpenTabs().filter((t) => t.dirty);
+  }
+
+  /**
+   * Confirm whether the window can close when there are dirty tabs.
+   * Returns true if the window should close, false to cancel.
+   */
+  async confirmCloseAll(): Promise<boolean> {
+    const dirtyTabs = this.getDirtyTabs();
+    if (dirtyTabs.length === 0) return true;
+
+    const result = await showSaveAllDialog(dirtyTabs.length);
+    if (result === "cancel") return false;
+
+    if (result === "save") {
+      // Save all dirty files
+      for (const tab of dirtyTabs) {
+        this.activateFile(tab.path);
+        await this.saveActiveFile();
+      }
+    }
+    // "discard" — close without saving
+    return true;
+  }
+
   private activateFile(path: string): void {
     this.saveCurrentBuffer();
     this.tabBar.setActiveTab(path);
@@ -284,7 +312,21 @@ export class App {
     this.sidebar.setActivePath(path);
   }
 
-  private closeFile(path: string): void {
+  private async closeFile(path: string): Promise<void> {
+    // Check if the file has unsaved changes
+    const tab = this.tabBar.getOpenTabs().find((t) => t.path === path);
+    if (tab?.dirty) {
+      const fileName = tab.name;
+      const result = await showSaveDialog(fileName);
+      if (result === "cancel") return;
+      if (result === "save") {
+        // Activate the file first so saveActiveFile operates on it
+        if (this.tabBar.getActiveTab() !== path) this.activateFile(path);
+        await this.saveActiveFile();
+      }
+      // "discard" falls through to close without saving
+    }
+
     const nextPath = this.tabBar.closeTab(path);
     this.savedContent.delete(path);
     this.savedExpandedContent.delete(path);

@@ -16,6 +16,11 @@ export {
   createDemoFileSystem,
 } from "./file-manager";
 export { FileTree } from "./file-tree";
+export {
+  showSaveDialog,
+  showSaveAllDialog,
+  type SaveDialogResult,
+} from "./save-dialog";
 export { Sidebar } from "./sidebar";
 export { TabBar, type Tab } from "./tab-bar";
 export {

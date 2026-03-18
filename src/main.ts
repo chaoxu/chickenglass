@@ -25,6 +25,27 @@ function createFileWatcher(target: App): FileWatcher {
   });
 }
 
+// Window close handling: prompt to save dirty tabs before closing.
+if (isTauri()) {
+  // Tauri: intercept the native window close request
+  import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+    getCurrentWindow().onCloseRequested(async (event) => {
+      const canClose = await app.confirmCloseAll();
+      if (!canClose) {
+        event.preventDefault();
+      }
+    });
+  });
+} else {
+  // Browser: use beforeunload to warn about unsaved changes
+  window.addEventListener("beforeunload", (event) => {
+    const dirtyTabs = app.getDirtyTabs();
+    if (dirtyTabs.length > 0) {
+      event.preventDefault();
+    }
+  });
+}
+
 // In Tauri, add an "Open Folder" button to the sidebar header.
 if (isTauri()) {
   const openBtn = document.createElement("button");
