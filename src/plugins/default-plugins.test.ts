@@ -230,8 +230,8 @@ describe("algorithmPlugin", () => {
 // ---------------------------------------------------------------------------
 
 describe("defaultPlugins", () => {
-  it("contains all 10 default plugins", () => {
-    expect(defaultPlugins).toHaveLength(10);
+  it("contains all 11 default plugins", () => {
+    expect(defaultPlugins).toHaveLength(11);
   });
 
   it("includes all expected plugin names", () => {
@@ -242,6 +242,7 @@ describe("defaultPlugins", () => {
     expect(names).toContain("proposition");
     expect(names).toContain("conjecture");
     expect(names).toContain("definition");
+    expect(names).toContain("problem");
     expect(names).toContain("proof");
     expect(names).toContain("remark");
     expect(names).toContain("example");

@@ -120,9 +120,16 @@ export function createDemoFileSystem(): MemoryFileSystem {
 # Per-file frontmatter can override any of these.
 bibliography: refs.bib
 math:
-  \\\\R: "\\\\mathbb{R}"
-  \\\\N: "\\\\mathbb{N}"
-  \\\\Z: "\\\\mathbb{Z}"
+  \\R: "\\\\mathbb{R}"
+  \\N: "\\\\mathbb{N}"
+  \\Z: "\\\\mathbb{Z}"
+  \\Q: "\\\\mathbb{Q}"
+  \\F: "\\\\mathbb{F}"
+  \\e: "\\\\varepsilon"
+  \\set: "\\\\left\\\\{#1\\\\right\\\\}"
+  \\ceil: "\\\\left\\\\lceil#1\\\\right\\\\rceil"
+  \\floor: "\\\\left\\\\lfloor#1\\\\right\\\\rfloor"
+  \\bm: "\\\\boldsymbol{#1}"
 `,
     "main.md": `---
 title: Chickenglass Demo
@@ -172,6 +179,10 @@ Every continuous function on a closed interval is bounded.
 
 ::: Theorem Bolzano-Weierstrass
 Every bounded sequence in $\\R$ has a convergent subsequence.
+:::
+
+::: {.problem #prob-macros} Custom Macros
+Show that $\\set{x \\in \\R : \\floor{x} = \\ceil{x}}$ equals $\\Z$, and that for any $\\e > 0$ there exists $n \\in \\N$ with $1/n < \\e$.
 :::
 
 # Cross-References
