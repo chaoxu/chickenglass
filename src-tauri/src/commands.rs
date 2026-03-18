@@ -1,14 +1,20 @@
+use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 /// Shared state holding the currently opened project directory.
 pub struct ProjectRoot(pub Mutex<Option<PathBuf>>);
+
+/// Shared state holding the active file watcher (if any).
+pub struct FileWatcherState(pub Mutex<Option<RecommendedWatcher>>);
 
 /// A file or directory entry for the sidebar tree.
 #[derive(Serialize, Clone)]
@@ -132,6 +138,115 @@ pub fn list_tree(
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "project".to_string());
     build_tree(project_root, &name, "")
+}
+
+/// Start watching a directory for file changes.
+///
+/// Emits `file-changed` events to the frontend with the relative file path
+/// when files are created, modified, or removed. Events are debounced at 500ms.
+#[tauri::command]
+pub fn watch_directory(
+    app: AppHandle,
+    watcher_state: State<'_, FileWatcherState>,
+    path: String,
+) -> Result<(), String> {
+    let watch_path = PathBuf::from(&path)
+        .canonicalize()
+        .map_err(|e| format!("Cannot resolve path '{}': {}", path, e))?;
+
+    if !watch_path.is_dir() {
+        return Err(format!("Not a directory: {}", watch_path.display()));
+    }
+
+    // Stop any existing watcher first
+    let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
+    *lock = None;
+
+    let root_for_closure = watch_path.clone();
+    let debounce_ms = Duration::from_millis(500);
+    let last_events: std::sync::Arc<Mutex<HashMap<PathBuf, Instant>>> =
+        std::sync::Arc::new(Mutex::new(HashMap::new()));
+    let last_events_clone = last_events.clone();
+
+    let mut watcher = RecommendedWatcher::new(
+        move |result: Result<Event, notify::Error>| {
+            let event = match result {
+                Ok(e) => e,
+                Err(_) => return,
+            };
+
+            // Only report file-level changes (create, modify, remove)
+            let dominated = matches!(
+                event.kind,
+                EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
+            );
+            if !dominated {
+                return;
+            }
+
+            for path in &event.paths {
+                // Skip directories — only report file changes
+                if path.is_dir() {
+                    continue;
+                }
+
+                // Debounce: skip if we emitted for this path within the window
+                {
+                    let mut map = match last_events_clone.lock() {
+                        Ok(m) => m,
+                        Err(_) => continue,
+                    };
+                    let now = Instant::now();
+                    if let Some(last) = map.get(path) {
+                        if now.duration_since(*last) < debounce_ms {
+                            continue;
+                        }
+                    }
+                    map.insert(path.clone(), now);
+                }
+
+                // Compute relative path from the watched root
+                let relative = match path.strip_prefix(&root_for_closure) {
+                    Ok(r) => r.to_string_lossy().replace('\\', "/"),
+                    Err(_) => continue,
+                };
+
+                // Skip hidden files and common non-content paths
+                if relative.starts_with('.')
+                    || relative.contains("/.")
+                    || relative.starts_with("node_modules")
+                    || relative.contains("/node_modules")
+                    || relative.starts_with("target")
+                    || relative.contains("/target")
+                {
+                    continue;
+                }
+
+                let _ = app.emit("file-changed", &relative);
+            }
+        },
+        Config::default(),
+    )
+    .map_err(|e| format!("Failed to create watcher: {}", e))?;
+
+    watcher
+        .watch(&watch_path, RecursiveMode::Recursive)
+        .map_err(|e| format!("Failed to watch directory: {}", e))?;
+
+    // Store watcher so it persists (dropping it stops watching)
+    *lock = Some(watcher);
+
+    Ok(())
+}
+
+/// Stop watching the current directory.
+#[tauri::command]
+pub fn unwatch_directory(
+    watcher_state: State<'_, FileWatcherState>,
+) -> Result<(), String> {
+    let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
+    *lock = None;
+    Ok(())
 }
 
 /// Recursively build a FileEntry tree from a directory.
