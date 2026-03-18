@@ -44,6 +44,7 @@ import { chickenglassTheme } from "./theme";
 import { headingFold } from "./heading-fold";
 import { listOutlinerExtension } from "./list-outliner";
 import { breadcrumbExtension } from "../app/breadcrumbs";
+import { findReplaceExtension } from "./find-replace";
 
 const fallbackDocument = "# Untitled\n";
 
@@ -136,6 +137,7 @@ export function createEditor(config: EditorConfig): EditorView {
       listOutlinerExtension,
       breadcrumbExtension,
       editorKeybindings,
+      findReplaceExtension,
       chickenglassTheme,
 
       // User-provided extensions last
