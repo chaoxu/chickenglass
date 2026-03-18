@@ -99,6 +99,7 @@ export class Sidebar {
       const collapsed = body.style.display === "none";
       body.style.display = collapsed ? "" : "none";
       toggle.textContent = collapsed ? "▼" : "▶";
+      header.classList.toggle("collapsed", !collapsed);
     });
 
     container.appendChild(header);

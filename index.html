@@ -209,32 +209,6 @@
         /* controlled by JS */
       }
 
-      .file-tree-focused {
-        outline: 1px solid var(--cg-border);
-      }
-
-      .file-tree-rename-input {
-        flex: 1;
-        min-width: 0;
-        font: inherit;
-        font-size: 13px;
-        padding: 0 2px;
-        border: 1px solid var(--cg-border);
-        border-radius: 2px;
-        background: var(--cg-bg);
-        color: var(--cg-fg);
-        outline: none;
-      }
-
-      .file-tree-rename-input:focus {
-        border-color: var(--cg-muted);
-      }
-
-      .file-tree-rename-error {
-        border-color: #dc2626;
-        background: #fef2f2;
-      }
-
       /* Collapsible sidebar sections */
       .sidebar-section {
         border-top: 1px solid var(--cg-border);
@@ -255,6 +229,20 @@
 
       .sidebar-section-body {
         /* toggleable via JS */
+      }
+
+      /* Collapse arrow visibility */
+      .sidebar-header-collapsible .sidebar-toggle {
+        opacity: 0;
+        transition: opacity 150ms;
+      }
+
+      .sidebar-header-collapsible:hover .sidebar-toggle {
+        opacity: 1;
+      }
+
+      .sidebar-header-collapsible.collapsed .sidebar-toggle {
+        opacity: 1;
       }
 
       /* Outline */
