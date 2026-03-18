@@ -22,7 +22,7 @@ import {
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { parseFencedDivAttrs } from "../parser/fenced-div-attrs";
+import { extractDivClass } from "../parser/fenced-div-attrs";
 import type { BlockAttrs } from "./plugin-types";
 import { pluginRegistryField, getPlugin } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
@@ -152,7 +152,7 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
       const attrNode = divNode.getChild("FencedDivAttributes");
       if (attrNode) {
         const attrText = state.doc.sliceString(attrNode.from, attrNode.to);
-        const attrs = parseFencedDivAttrs(attrText);
+        const attrs = extractDivClass(attrText);
         if (attrs && attrs.classes.length > 0) {
           className = attrs.classes[0];
           id = attrs.id;

@@ -69,6 +69,34 @@ export function parseFencedDivAttrs(input: string): FencedDivAttrs | undefined {
   return { classes, id, keyValues };
 }
 
+/**
+ * Extract the div class, id, and key-values from an attribute string.
+ *
+ * Handles two forms:
+ * - Full attribute block: `{.theorem #thm-1 title="Main result"}`
+ *   Uses `parseFencedDivAttrs` to parse.
+ * - Bare class name (short-form): `Theorem`
+ *   Lowercases the word and returns it as the single class.
+ *
+ * Returns `undefined` if the input is empty or invalid.
+ */
+export function extractDivClass(attrText: string): FencedDivAttrs | undefined {
+  const trimmed = attrText.trim();
+  if (trimmed.length === 0) return undefined;
+
+  // Full attribute block with braces
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return parseFencedDivAttrs(trimmed);
+  }
+
+  // Bare class name (short-form): lowercase the word
+  return {
+    classes: [trimmed.toLowerCase()],
+    id: undefined,
+    keyValues: {},
+  };
+}
+
 /** Characters allowed in identifiers: letters, digits, hyphens, underscores, colons, periods. */
 function isIdentChar(ch: number): boolean {
   return (

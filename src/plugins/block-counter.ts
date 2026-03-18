@@ -9,7 +9,7 @@
 
 import { type EditorState, StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { parseFencedDivAttrs } from "../parser/fenced-div-attrs";
+import { extractDivClass } from "../parser/fenced-div-attrs";
 import type { NumberingScheme } from "../parser/frontmatter";
 import type { PluginRegistryState } from "./plugin-registry";
 import { getPlugin, pluginRegistryField } from "./plugin-registry";
@@ -73,7 +73,7 @@ export function computeBlockNumbers(
 
       if (!attrText) return;
 
-      const attrs = parseFencedDivAttrs(attrText);
+      const attrs = extractDivClass(attrText);
       if (!attrs || attrs.classes.length === 0) return;
 
       const className = attrs.classes[0];

@@ -170,6 +170,10 @@ A set $K \\subseteq \\R$ is **compact** if every open cover of $K$ has a finite 
 Every continuous function on a closed interval is bounded.
 :::
 
+::: Theorem Bolzano-Weierstrass
+Every bounded sequence in $\\R$ has a convergent subsequence.
+:::
+
 # Cross-References
 
 See [@thm-evt] for the main result, which relies on [@lem-compact]. The key definition is [@def-compact]. The Gaussian integral is [@eq:gaussian], and the summation formula is [@eq:sum].

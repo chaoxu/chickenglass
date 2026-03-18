@@ -99,6 +99,24 @@ function parseOpeningFence(
     attrFrom = cursor;
     attrTo = end;
     cursor = skipWhitespace(text, end);
+  } else {
+    // Short-form: ::: ClassName [Title...]
+    // The first word is treated as the class name. We synthesize a
+    // FencedDivAttributes node whose text is the bare class name
+    // (no braces). extractDivClass() in fenced-div-attrs.ts handles
+    // both braced and bare forms.
+    const wordStart = cursor;
+    while (
+      cursor < text.length &&
+      text.charCodeAt(cursor) !== 32 &&
+      text.charCodeAt(cursor) !== 9
+    ) {
+      cursor++;
+    }
+    if (cursor === wordStart) return undefined; // nothing after :::
+    attrFrom = wordStart;
+    attrTo = cursor;
+    cursor = skipWhitespace(text, cursor);
   }
 
   // Remaining text is the title (may be empty)

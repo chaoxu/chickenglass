@@ -116,11 +116,13 @@ describe("fenced div parser", () => {
       expect(title.text).toBe("Fundamental Theorem");
     });
 
-    it("captures title without attributes", () => {
+    it("short-form: first word is class, rest is title", () => {
       const text = "::: Title Only\nContent.\n:::";
       const infos = nodeInfos(text);
+      const attr = findNode(infos, "FencedDivAttributes");
+      expect(attr.text).toBe("Title");
       const title = findNode(infos, "FencedDivTitle");
-      expect(title.text).toBe("Title Only");
+      expect(title.text).toBe("Only");
     });
   });
 
@@ -220,6 +222,58 @@ describe("fenced div parser", () => {
       const names = nodeNames(text);
       const divCount = names.filter((n) => n === "FencedDiv").length;
       expect(divCount).toBe(2);
+    });
+  });
+
+  describe("short-form syntax", () => {
+    it("creates FencedDiv for ::: Theorem", () => {
+      const text = "::: Theorem\nContent.\n:::";
+      const names = nodeNames(text);
+      expect(names).toContain("FencedDiv");
+    });
+
+    it("creates FencedDivAttributes for the bare class name", () => {
+      const text = "::: Theorem\nContent.\n:::";
+      const infos = nodeInfos(text);
+      const attr = findNode(infos, "FencedDivAttributes");
+      expect(attr.text).toBe("Theorem");
+    });
+
+    it("creates FencedDivTitle for text after class name", () => {
+      const text = "::: Theorem Main Result\nContent.\n:::";
+      const infos = nodeInfos(text);
+      const attr = findNode(infos, "FencedDivAttributes");
+      expect(attr.text).toBe("Theorem");
+      const title = findNode(infos, "FencedDivTitle");
+      expect(title.text).toBe("Main Result");
+    });
+
+    it("does not create FencedDivTitle when only class name", () => {
+      const text = "::: Theorem\nContent.\n:::";
+      const names = nodeNames(text);
+      expect(names).not.toContain("FencedDivTitle");
+    });
+
+    it("parses content inside short-form div", () => {
+      const text = "::: Theorem\nSome *emphasized* text.\n:::";
+      const names = nodeNames(text);
+      expect(names).toContain("Paragraph");
+      expect(names).toContain("Emphasis");
+    });
+
+    it("supports nesting with short-form", () => {
+      const text =
+        ":::: Theorem\nSetup.\n::: Proof\nProof content.\n:::\n::::";
+      const names = nodeNames(text);
+      const divCount = names.filter((n) => n === "FencedDiv").length;
+      expect(divCount).toBe(2);
+    });
+
+    it("handles short-form with trailing whitespace", () => {
+      const text = "::: Theorem   \nContent.\n:::";
+      const infos = nodeInfos(text);
+      const attr = findNode(infos, "FencedDivAttributes");
+      expect(attr.text).toBe("Theorem");
     });
   });
 

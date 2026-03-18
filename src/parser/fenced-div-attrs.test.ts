@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseFencedDivAttrs } from "./fenced-div-attrs";
+import { extractDivClass, parseFencedDivAttrs } from "./fenced-div-attrs";
 
 describe("parseFencedDivAttrs", () => {
   it("parses a single class", () => {
@@ -128,6 +128,88 @@ describe("parseFencedDivAttrs", () => {
       classes: [],
       id: undefined,
       keyValues: { counter: "theorem", numbered: "true" },
+    });
+  });
+
+  it("parses title key-value", () => {
+    const result = parseFencedDivAttrs('{.theorem #thm-1 title="Main result"}');
+    expect(result).toEqual({
+      classes: ["theorem"],
+      id: "thm-1",
+      keyValues: { title: "Main result" },
+    });
+  });
+
+  it("parses multiple key-value pairs including title and status", () => {
+    const result = parseFencedDivAttrs('{.theorem #thm-1 title="Main result" status="draft"}');
+    expect(result).toEqual({
+      classes: ["theorem"],
+      id: "thm-1",
+      keyValues: { title: "Main result", status: "draft" },
+    });
+  });
+});
+
+describe("extractDivClass", () => {
+  it("handles full attribute block with braces", () => {
+    const result = extractDivClass("{.theorem #thm-1}");
+    expect(result).toEqual({
+      classes: ["theorem"],
+      id: "thm-1",
+      keyValues: {},
+    });
+  });
+
+  it("handles bare class name (short-form)", () => {
+    const result = extractDivClass("Theorem");
+    expect(result).toEqual({
+      classes: ["theorem"],
+      id: undefined,
+      keyValues: {},
+    });
+  });
+
+  it("lowercases bare class names", () => {
+    const result = extractDivClass("Definition");
+    expect(result).toEqual({
+      classes: ["definition"],
+      id: undefined,
+      keyValues: {},
+    });
+  });
+
+  it("handles bare class name with mixed case", () => {
+    const result = extractDivClass("LEMMA");
+    expect(result).toEqual({
+      classes: ["lemma"],
+      id: undefined,
+      keyValues: {},
+    });
+  });
+
+  it("returns undefined for empty string", () => {
+    expect(extractDivClass("")).toBeUndefined();
+  });
+
+  it("returns undefined for whitespace-only string", () => {
+    expect(extractDivClass("   ")).toBeUndefined();
+  });
+
+  it("trims whitespace from bare class name", () => {
+    const result = extractDivClass("  Theorem  ");
+    expect(result).toEqual({
+      classes: ["theorem"],
+      id: undefined,
+      keyValues: {},
+    });
+  });
+
+  it("handles braced attributes with title key", () => {
+    const result = extractDivClass('{.theorem #thm-1 title="Main result" status="draft"}');
+    expect(result).toEqual({
+      classes: ["theorem"],
+      id: "thm-1",
+      keyValues: { title: "Main result", status: "draft" },
     });
   });
 });
