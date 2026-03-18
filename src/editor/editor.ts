@@ -29,6 +29,7 @@ import {
   includeLabelPlugin,
   focusModeExtension,
   sidenoteRenderPlugin,
+  hoverPreviewExtension,
 } from "../render";
 import {
   createPluginRegistryField,
@@ -76,6 +77,7 @@ const renderingExtensions: Extension[] = [
   includeLabelPlugin,
   focusModeExtension,
   sidenoteRenderPlugin,
+  hoverPreviewExtension,
 ];
 
 export interface EditorConfig {

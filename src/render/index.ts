@@ -44,6 +44,7 @@ export { fenceGuidePlugin } from "./fence-guide";
 export { includeLabelPlugin } from "./include-label";
 export { focusModeExtension, toggleFocusMode } from "./focus-mode";
 export { sidenoteRenderPlugin } from "./sidenote-render";
+export { hoverPreviewExtension } from "./hover-preview";
 export {
   parseTable,
   formatTable,
