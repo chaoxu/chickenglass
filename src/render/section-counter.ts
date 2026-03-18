@@ -31,7 +31,7 @@ function headingLevel(name: string): number {
 }
 
 /** Build section-number decorations for all headings in the document. */
-function buildSectionDecorations(state: EditorState): DecorationSet {
+export function buildSectionDecorations(state: EditorState): DecorationSet {
   const tree = syntaxTree(state);
   const items: Range<Decoration>[] = [];
 
@@ -69,7 +69,10 @@ const sectionNumberField = StateField.define<DecorationSet>({
   },
 
   update(value, tr) {
-    if (tr.docChanged) {
+    if (
+      tr.docChanged ||
+      syntaxTree(tr.state).length > syntaxTree(tr.startState).length
+    ) {
       return buildSectionDecorations(tr.state);
     }
     return value;
