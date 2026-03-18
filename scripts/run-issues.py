@@ -8,7 +8,7 @@ program, not a suggestion.
 
 Usage:
     python scripts/run-issues.py 69 70 71          # specific issues
-    python scripts/run-issues.py --all              # all open issues
+    python scripts/run-issues.py --all              # all open non-deferred issues
     python scripts/run-issues.py --dry-run 69 70    # plan without executing
 """
 
@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 import time
@@ -33,6 +32,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 WORKTREE_DIR = REPO_ROOT / ".worktrees"
 MAIN_BRANCH = "main"
 DEFAULT_MAX_PARALLEL = 4
+DEFERRED_LABEL = "deferred"
+WORKER_TIMEOUT_SECONDS = 30 * 60  # 30 minutes per worker
 
 
 @dataclass
@@ -64,6 +65,7 @@ def run_cmd(
     cwd: Optional[Path] = None,
     check: bool = True,
     capture: bool = True,
+    timeout: Optional[int] = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command with proper error handling."""
     result = subprocess.run(
@@ -71,6 +73,7 @@ def run_cmd(
         cwd=cwd or REPO_ROOT,
         capture_output=capture,
         text=True,
+        timeout=timeout,
     )
     if check and result.returncode != 0:
         stderr = result.stderr.strip() if result.stderr else ""
@@ -92,14 +95,14 @@ def log(msg: str, level: str = "INFO") -> None:
     """Print a timestamped log message."""
     ts = time.strftime("%H:%M:%S")
     symbol = {"INFO": ".", "OK": "+", "WARN": "!", "ERROR": "X", "RUN": ">"}
-    print(f"  [{ts}] {symbol.get(level, '.')} {msg}")
+    print(f"  [{ts}] {symbol.get(level, '.')} {msg}", flush=True)
 
 
 def log_header(msg: str) -> None:
     """Print a section header."""
-    print(f"\n{'=' * 60}")
-    print(f"  {msg}")
-    print(f"{'=' * 60}")
+    print(f"\n{'=' * 60}", flush=True)
+    print(f"  {msg}", flush=True)
+    print(f"{'=' * 60}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -121,18 +124,25 @@ def fetch_issue(number: int) -> IssueTask:
 
 
 def fetch_all_open_issues() -> list[IssueTask]:
-    """Fetch all open issues from GitHub."""
+    """Fetch all open non-deferred issues from GitHub."""
     result = run_cmd([
         "gh", "issue", "list",
         "--state", "open",
-        "--json", "number,title,body",
+        "--json", "number,title,body,labels",
         "--limit", "50",
     ])
     issues = json.loads(result.stdout)
-    return [
-        IssueTask(number=i["number"], title=i["title"], body=i.get("body", ""))
-        for i in issues
-    ]
+    tasks = []
+    for i in issues:
+        # Filter out deferred issues
+        labels = {lbl.get("name", "") for lbl in i.get("labels", [])}
+        if DEFERRED_LABEL in labels:
+            log(f"Skipping #{i['number']}: {i['title']} (deferred)", "INFO")
+            continue
+        tasks.append(
+            IssueTask(number=i["number"], title=i["title"], body=i.get("body", ""))
+        )
+    return tasks
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +180,11 @@ def preflight() -> None:
     git("pull", "--ff-only", "origin", MAIN_BRANCH, check=False)
     log("Pulled latest from origin", "OK")
 
+    # Record baseline main SHA for isolation checking later
+    global _baseline_main_sha
+    _baseline_main_sha = git("rev-parse", "HEAD")
+    log(f"Baseline main SHA: {_baseline_main_sha[:7]}", "OK")
+
     # Run typecheck
     log("Running typecheck...", "RUN")
     run_cmd(["npx", "tsc", "--noEmit"])
@@ -181,14 +196,18 @@ def preflight() -> None:
     log("Tests passed", "OK")
 
 
+_baseline_main_sha = ""
+
+
 # ---------------------------------------------------------------------------
 # Phase 3: Create worktrees and spawn workers
 # ---------------------------------------------------------------------------
 
 def create_worktree(task: IssueTask) -> None:
     """Create a git worktree for a task."""
+    # Use flat directory name (no nested dirs)
     task.branch = f"feat/issue-{task.number}"
-    task.worktree = WORKTREE_DIR / task.branch
+    task.worktree = WORKTREE_DIR / f"issue-{task.number}"
 
     # Clean up any existing worktree
     if task.worktree.exists():
@@ -221,6 +240,7 @@ CRITICAL ISOLATION RULES:
 - If it shows 'main', STOP IMMEDIATELY and exit with error.
 - Do NOT cd to any other directory. Stay in your worktree.
 - All file paths are relative to your worktree root.
+- Run pwd before your first edit to confirm you are in the worktree.
 
 TASK:
 Implement GitHub issue #{task.number}: {task.title}
@@ -252,18 +272,24 @@ def spawn_worker(task: IssueTask) -> subprocess.Popen[str]:
     task.status = "running"
     log(f"Spawning worker for #{task.number}: {task.title}", "RUN")
 
+    # Pass prompt via stdin to avoid shell escaping issues with $, \, etc.
     proc = subprocess.Popen(
         [
             "claude",
             "--dir", str(task.worktree),
             "--print",
             "--dangerously-skip-permissions",
-            prompt,
+            "-",  # read prompt from stdin
         ],
+        stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
+    # Write prompt to stdin and close it so claude starts processing
+    if proc.stdin:
+        proc.stdin.write(prompt)
+        proc.stdin.close()
     return proc
 
 
@@ -271,9 +297,33 @@ def spawn_worker(task: IssueTask) -> subprocess.Popen[str]:
 # Phase 4: Wait for workers and verify
 # ---------------------------------------------------------------------------
 
+def check_main_not_contaminated() -> bool:
+    """Check if main branch received unexpected commits (isolation escape)."""
+    current_main_sha = git("rev-parse", MAIN_BRANCH)
+    if current_main_sha != _baseline_main_sha:
+        log(
+            f"ISOLATION ESCAPE DETECTED: main moved from "
+            f"{_baseline_main_sha[:7]} to {current_main_sha[:7]}",
+            "ERROR",
+        )
+        return False
+    return True
+
+
 def verify_worker_result(task: IssueTask) -> None:
     """Verify a completed worker's output."""
     log(f"Verifying #{task.number}...", "RUN")
+
+    # Check if main was contaminated by this worker
+    if not check_main_not_contaminated():
+        task.status = "failed"
+        task.error = "ISOLATION ESCAPE: worker committed to main branch"
+        log(task.error, "ERROR")
+        # Reset main to baseline to recover
+        git("checkout", MAIN_BRANCH)
+        git("reset", "--hard", _baseline_main_sha)
+        log(f"Reset main to baseline {_baseline_main_sha[:7]}", "WARN")
+        return
 
     # Check the branch is correct
     actual_branch = git("branch", "--show-current", cwd=task.worktree)
@@ -320,41 +370,51 @@ def verify_worker_result(task: IssueTask) -> None:
         return
     log(f"#{task.number} typecheck passed", "OK")
 
+    # Run tests in the worktree
+    log(f"Testing #{task.number}...", "RUN")
+    result = run_cmd(["npm", "run", "test"], cwd=task.worktree, check=False)
+    if result.returncode != 0:
+        task.status = "failed"
+        task.error = f"Tests failed:\n{result.stderr[:500]}"
+        log(f"#{task.number} tests failed", "ERROR")
+        return
+    log(f"#{task.number} tests passed", "OK")
+
 
 # ---------------------------------------------------------------------------
 # Phase 5: Merge
 # ---------------------------------------------------------------------------
 
 def merge_task(task: IssueTask, state: RunState) -> None:
-    """Merge a completed task onto main via cherry-pick."""
+    """Merge a completed task onto main via squash merge."""
     if task.status != "done":
         log(f"Skipping #{task.number} ({task.status})", "WARN")
         return
 
     log(f"Merging #{task.number}...", "RUN")
 
-    # Ensure we're on main
+    # Ensure we're on main with clean state
     git("checkout", MAIN_BRANCH)
+    git("reset", "--hard", "HEAD")  # clean any leftover state
 
-    # Try cherry-pick (each worktree has a single squash commit ideally)
-    # Use merge --squash for robustness (handles multiple commits)
+    # Squash merge the task branch
     result = run_cmd(
         ["git", "merge", "--squash", task.branch],
         check=False,
     )
 
     if result.returncode != 0:
-        # Try to resolve — if conflicts, report and skip
+        # Check for any conflict markers in status
         status = git("status", "--short")
         conflict_files = [
             line for line in status.splitlines()
-            if line.startswith("UU") or line.startswith("AA")
+            if len(line) >= 2 and line[0] in "UDA" and line[1] in "UDA"
         ]
         if conflict_files:
             task.status = "failed"
             task.error = f"Merge conflicts in: {', '.join(f.split()[-1] for f in conflict_files)}"
             log(task.error, "ERROR")
-            git("merge", "--abort", check=False)
+            git("reset", "--hard", "HEAD")  # clean reset, not merge --abort
             return
 
     # Commit the merge
@@ -363,7 +423,16 @@ def merge_task(task: IssueTask, state: RunState) -> None:
         f"Closes #{task.number}\n\n"
         f"Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
     )
-    git("add", "-A")
+
+    # Stage only tracked changes (not random untracked files)
+    git("add", "-u")
+    # Also add new files from the merge
+    new_files = [
+        line[3:] for line in git("status", "--short").splitlines()
+        if line.startswith("?? src/") or line.startswith("?? tests/")
+    ]
+    for f in new_files:
+        git("add", f)
 
     # Check if there are actually changes to commit
     diff = git("diff", "--cached", "--name-only")
@@ -380,14 +449,14 @@ def merge_task(task: IssueTask, state: RunState) -> None:
     log(f"#{task.number} merged: {merged_sha[:7]}", "OK")
 
     # Post-merge typecheck
-    log(f"Post-merge typecheck...", "RUN")
+    log("Post-merge typecheck...", "RUN")
     result = run_cmd(["npx", "tsc", "--noEmit"], check=False)
     if result.returncode != 0:
         log(f"Post-merge typecheck FAILED for #{task.number}", "ERROR")
-        log("Reverting merge...", "WARN")
-        git("revert", "--no-edit", "HEAD")
+        log("Removing bad merge commit...", "WARN")
+        git("reset", "--hard", "HEAD~1")  # clean removal, no revert commit
         task.status = "failed"
-        task.error = "Post-merge typecheck failed — reverted"
+        task.error = "Post-merge typecheck failed — merge removed"
         return
     log("Post-merge typecheck passed", "OK")
 
@@ -403,6 +472,7 @@ def push_and_cleanup(state: RunState) -> None:
     merged = [t for t in state.tasks if t.status == "merged"]
     if not merged:
         log("Nothing to push — no tasks merged successfully", "WARN")
+        cleanup_worktrees(state)
         return
 
     # Final test run
@@ -410,6 +480,7 @@ def push_and_cleanup(state: RunState) -> None:
     result = run_cmd(["npm", "run", "test"], check=False)
     if result.returncode != 0:
         log("Final tests FAILED — not pushing", "ERROR")
+        cleanup_worktrees(state)
         return
     log("Final tests passed", "OK")
 
@@ -418,12 +489,25 @@ def push_and_cleanup(state: RunState) -> None:
     git("push", "origin", MAIN_BRANCH)
     log(f"Pushed {len(merged)} features to origin/{MAIN_BRANCH}", "OK")
 
-    # Clean up worktrees
+    cleanup_worktrees(state)
+
+
+def cleanup_worktrees(state: RunState) -> None:
+    """Remove all worktrees and their branches."""
     log("Cleaning up worktrees...", "RUN")
+    # Must be on main, not inside a worktree
+    git("checkout", MAIN_BRANCH, check=False)
     for task in state.tasks:
         if task.worktree.exists():
             git("worktree", "remove", str(task.worktree), "--force", check=False)
+        if task.branch:
             git("branch", "-D", task.branch, check=False)
+    # Remove the worktree directory if empty
+    if WORKTREE_DIR.exists():
+        try:
+            WORKTREE_DIR.rmdir()
+        except OSError:
+            pass  # not empty, leave it
     log("Worktrees cleaned up", "OK")
 
 
@@ -449,19 +533,19 @@ def print_report(state: RunState, elapsed: float) -> None:
         line = f"  [{symbol}] #{task.number} {task.title}"
         if task.error:
             line += f" — {task.error}"
-        print(line)
+        print(line, flush=True)
 
-    print(f"\n  Merged: {len(merged)}/{len(state.tasks)}")
+    print(f"\n  Merged: {len(merged)}/{len(state.tasks)}", flush=True)
     if failed:
-        print(f"  Failed: {len(failed)}/{len(state.tasks)}")
-    print(f"  Time:   {elapsed:.0f}s")
+        print(f"  Failed: {len(failed)}/{len(state.tasks)}", flush=True)
+    print(f"  Time:   {elapsed:.0f}s", flush=True)
 
 
 # ---------------------------------------------------------------------------
 # Main orchestration
 # ---------------------------------------------------------------------------
 
-def run_batch(tasks: list[IssueTask], dry_run: bool = False, max_parallel: int = 4) -> RunState:
+def run_batch(tasks: list[IssueTask], dry_run: bool = False, max_parallel: int = 4, worker_timeout: int = WORKER_TIMEOUT_SECONDS) -> RunState:
     """Run a batch of issues through the full pipeline."""
     state = RunState(tasks=tasks)
 
@@ -488,23 +572,36 @@ def run_batch(tasks: list[IssueTask], dry_run: bool = False, max_parallel: int =
             task.error = str(e)
             log(f"Failed to create worktree for #{task.number}: {e}", "ERROR")
 
-    # --- Phase 4: Spawn workers (batched) ---
+    # --- Phase 4: Spawn workers (batched with timeout) ---
     log_header("SPAWN WORKERS")
     pending = [t for t in tasks if t.status == "pending"]
-    active: dict[int, tuple[IssueTask, subprocess.Popen[str]]] = {}
+    active: dict[int, tuple[IssueTask, subprocess.Popen[str], float]] = {}
 
     while pending or active:
         # Spawn up to max_parallel
         while pending and len(active) < max_parallel:
             task = pending.pop(0)
             proc = spawn_worker(task)
-            active[task.number] = (task, proc)
+            active[task.number] = (task, proc, time.time())
 
         # Wait for any to finish
         if active:
             time.sleep(2)
             finished = []
-            for num, (task, proc) in active.items():
+            now = time.time()
+            for num, (task, proc, start_time) in active.items():
+                elapsed = now - start_time
+
+                # Check timeout
+                if elapsed > worker_timeout:
+                    log(f"#{num} TIMED OUT after {elapsed:.0f}s — killing", "ERROR")
+                    proc.kill()
+                    proc.wait()
+                    task.status = "failed"
+                    task.error = f"Timed out after {elapsed:.0f}s"
+                    finished.append(num)
+                    continue
+
                 if proc.poll() is not None:
                     finished.append(num)
                     exit_code = proc.returncode
@@ -543,7 +640,7 @@ def main() -> None:
     parser.add_argument(
         "--all",
         action="store_true",
-        help="Fetch and run all open issues",
+        help="Fetch and run all open non-deferred issues",
     )
     parser.add_argument(
         "--dry-run",
@@ -556,18 +653,24 @@ def main() -> None:
         default=DEFAULT_MAX_PARALLEL,
         help=f"Max parallel workers (default: {DEFAULT_MAX_PARALLEL})",
     )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=WORKER_TIMEOUT_SECONDS,
+        help=f"Worker timeout in seconds (default: {WORKER_TIMEOUT_SECONDS})",
+    )
     args = parser.parse_args()
 
     if not args.issues and not args.all:
         parser.error("Provide issue numbers or --all")
 
-    os.chdir(REPO_ROOT)
+    worker_timeout = args.timeout
 
     # Fetch issues
     log_header("FETCH ISSUES")
     if args.all:
         tasks = fetch_all_open_issues()
-        log(f"Found {len(tasks)} open issues")
+        log(f"Found {len(tasks)} open non-deferred issues")
     else:
         tasks = []
         for num in args.issues:
@@ -580,7 +683,7 @@ def main() -> None:
         return
 
     start = time.time()
-    state = run_batch(tasks, dry_run=args.dry_run, max_parallel=args.max_parallel)
+    state = run_batch(tasks, dry_run=args.dry_run, max_parallel=args.max_parallel, worker_timeout=worker_timeout)
     elapsed = time.time() - start
 
     print_report(state, elapsed)
