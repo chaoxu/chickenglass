@@ -17,6 +17,8 @@ fn main() {
             commands::create_file,
             commands::file_exists,
             commands::list_tree,
+            commands::check_pandoc,
+            commands::export_document,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Chickenglass");
