@@ -1,6 +1,8 @@
 import { EditorView } from "@codemirror/view";
 
 import { createEditor } from "../editor";
+import { themeCompartment } from "../editor/editor";
+import { chickenglasDarkTheme } from "../editor/theme";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { parseBibTeX } from "../citations/bibtex-parser";
 import { bibDataEffect } from "../citations/citation-render";
@@ -20,6 +22,11 @@ import { showSaveDialog, showSaveAllDialog } from "./save-dialog";
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
 import { TabBar } from "./tab-bar";
+import {
+  ThemeManager,
+  loadTheme,
+  type Theme,
+} from "./theme-manager";
 
 /** Configuration for the application shell. */
 export interface AppConfig {
@@ -55,6 +62,8 @@ export class App {
   private readonly cleanupPaletteKeybinding: () => void;
   private readonly editorContainer: HTMLElement;
   private editor: EditorView | null = null;
+  /** Theme manager: handles Light/Dark/System switching. */
+  private readonly themeManager: ThemeManager;
   /** Project-level configuration loaded from chickenglass.yaml. */
   private projectConfig: ProjectConfig = {};
   /** Last bibliography path loaded (to avoid redundant reloads). */
@@ -80,6 +89,21 @@ export class App {
     this.root.innerHTML = "";
     this.root.className = "app-root";
 
+    // Theme manager — initialise before building UI so the resolved theme is
+    // available when createEditor is first called.
+    this.themeManager = new ThemeManager();
+    this.themeManager.onChange((resolved) => {
+      // Reconfigure the CM6 dark/light base theme on every live editor.
+      if (this.editor) {
+        this.editor.dispatch({
+          effects: themeCompartment.reconfigure(
+            resolved === "dark" ? chickenglasDarkTheme : [],
+          ),
+        });
+      }
+    });
+    this.themeManager.setTheme(loadTheme());
+
     // Tab bar across the top
     this.tabBar = new TabBar();
     this.tabBar.setSelectHandler((path) => this.activateFile(path));
@@ -94,12 +118,6 @@ export class App {
     this.sidebar.setSelectHandler((path) => this.openFile(path));
     this.sidebar.setRefreshHandler(() => this.fs.listTree());
     this.sidebar.setCreateFileHandler((path) => this.createFile(path));
-    this.sidebar.setRenameHandler((oldPath, newPath) =>
-      this.renameFile(oldPath, newPath),
-    );
-    this.sidebar.setCreateDirectoryHandler((path) =>
-      this.createDirectory(path),
-    );
     mainArea.appendChild(this.sidebar.element);
 
     this.editorContainer = document.createElement("div");
@@ -219,88 +237,6 @@ export class App {
     await this.openFile(path);
   }
 
-  /**
-   * Create a new directory and refresh the sidebar.
-   * Returns an error message on failure, or null on success.
-   */
-  async createDirectory(path: string): Promise<string | null> {
-    try {
-      await this.fs.createDirectory(path);
-    } catch (err: unknown) {
-      return err instanceof Error ? err.message : String(err);
-    }
-
-    const tree = await this.fs.listTree();
-    this.sidebar.render(tree);
-    const activeTab = this.tabBar.getActiveTab();
-    if (activeTab) this.sidebar.setActivePath(activeTab);
-    return null;
-  }
-
-  /**
-   * Rename a file. Validates the new name, updates open tabs and internal
-   * buffers if the file is open, then refreshes the sidebar tree.
-   * Returns an error message on failure, or null on success.
-   */
-  async renameFile(
-    oldPath: string,
-    newPath: string,
-  ): Promise<string | null> {
-    // Validate new name (already checked in file-tree but double-check here)
-    const newName = newPath.split("/").pop() ?? newPath;
-    if (!newName) return "File name cannot be empty.";
-    if (newName.includes("/") || newName.includes("\\"))
-      return "File name cannot contain slashes.";
-
-    // Check for duplicate
-    const exists = await this.fs.exists(newPath);
-    if (exists) return `A file named "${newName}" already exists.`;
-
-    try {
-      await this.fs.renameFile(oldPath, newPath);
-    } catch (err: unknown) {
-      return err instanceof Error ? err.message : String(err);
-    }
-
-    // Update open tab and internal buffers if this file is open
-    if (this.tabBar.hasTab(oldPath)) {
-      // Move all buffer state to the new path
-      const content = this.bufferContent.get(oldPath);
-      if (content !== undefined) {
-        this.bufferContent.set(newPath, content);
-        this.bufferContent.delete(oldPath);
-      }
-      const savedContent = this.savedContent.get(oldPath);
-      if (savedContent !== undefined) {
-        this.savedContent.set(newPath, savedContent);
-        this.savedContent.delete(oldPath);
-      }
-      const savedExpanded = this.savedExpandedContent.get(oldPath);
-      if (savedExpanded !== undefined) {
-        this.savedExpandedContent.set(newPath, savedExpanded);
-        this.savedExpandedContent.delete(oldPath);
-      }
-      const sourceMap = this.sourceMaps.get(oldPath);
-      if (sourceMap !== undefined) {
-        this.sourceMaps.set(newPath, sourceMap);
-        this.sourceMaps.delete(oldPath);
-      }
-
-      // Rename the tab
-      this.tabBar.renameTab(oldPath, newPath, newName);
-
-    }
-
-    // Refresh sidebar tree
-    const tree = await this.fs.listTree();
-    this.sidebar.render(tree);
-    // Re-apply active path after re-render
-    const activeTab = this.tabBar.getActiveTab();
-    if (activeTab) this.sidebar.setActivePath(activeTab);
-
-    return null;
-  }
-
   /** Get the tab bar component (for testing). */
   getTabBar(): TabBar {
     return this.tabBar;
@@ -363,6 +299,17 @@ export class App {
     this.destroyEditor();
     this.clearIndexTimer();
     this.indexer.dispose();
+    this.themeManager.destroy();
+  }
+
+  /** Switch the active theme (light | dark | system). */
+  setTheme(theme: Theme): void {
+    this.themeManager.setTheme(theme);
+  }
+
+  /** Get the current theme setting. */
+  getTheme(): Theme {
+    return this.themeManager.getTheme();
   }
 
   /** Get all tabs with unsaved changes. */
@@ -470,6 +417,7 @@ export class App {
       parent: this.editorContainer,
       doc: content,
       projectConfig: this.projectConfig,
+      themeManager: this.themeManager,
       extensions: [changeListener, bibListener, titleListener],
     });
     // Expose view for debugging

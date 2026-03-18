@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chickenglass</title>
     <style>
-      :root {
+      /* ── Light theme (default) ───────────────────────────────────────── */
+      :root,
+      [data-theme="light"] {
         --cg-bg: #ffffff;
         --cg-fg: #09090b;
         --cg-border: #d4d4d8;
@@ -13,6 +15,19 @@
         --cg-subtle: #f4f4f5;
         --cg-hover: #e4e4e7;
         --cg-active: #d4d4d8;
+        --cg-error: #c00000;
+      }
+
+      /* ── Dark theme ──────────────────────────────────────────────────── */
+      [data-theme="dark"] {
+        --cg-bg: #09090b;
+        --cg-fg: #fafafa;
+        --cg-border: #3f3f46;
+        --cg-muted: #a1a1aa;
+        --cg-subtle: #18181b;
+        --cg-hover: #27272a;
+        --cg-active: #3f3f46;
+        --cg-error: #f87171;
       }
 
       *,
@@ -207,32 +222,6 @@
 
       .file-tree-children {
         /* controlled by JS */
-      }
-
-      .file-tree-focused {
-        outline: 1px solid var(--cg-border);
-      }
-
-      .file-tree-rename-input {
-        flex: 1;
-        min-width: 0;
-        font: inherit;
-        font-size: 13px;
-        padding: 0 2px;
-        border: 1px solid var(--cg-border);
-        border-radius: 2px;
-        background: var(--cg-bg);
-        color: var(--cg-fg);
-        outline: none;
-      }
-
-      .file-tree-rename-input:focus {
-        border-color: var(--cg-muted);
-      }
-
-      .file-tree-rename-error {
-        border-color: #dc2626;
-        background: #fef2f2;
       }
 
       /* Collapsible sidebar sections */
@@ -456,28 +445,45 @@
         border: 1px solid var(--cg-border);
       }
 
-      /* File tree context menu */
-      .file-tree-context-menu {
-        position: fixed;
-        z-index: 3000;
-        background: var(--cg-bg);
+      /* ── Theme switcher (sidebar footer) ─────────────────────────────── */
+      .theme-switcher {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 12px;
+        border-top: 1px solid var(--cg-border);
+        flex-shrink: 0;
+      }
+
+      .theme-switcher-label {
+        font-size: 11px;
+        color: var(--cg-muted);
+        flex: 1;
+        user-select: none;
+      }
+
+      .theme-btn {
+        padding: 2px 7px;
+        font-size: 11px;
         border: 1px solid var(--cg-border);
-        border-radius: 4px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-        padding: 4px 0;
-        min-width: 140px;
-        font-size: 13px;
+        border-radius: 2px;
+        background: none;
+        color: var(--cg-muted);
+        cursor: pointer;
+        font-family: inherit;
+        line-height: 1.4;
+        transition: background 0.1s, color 0.1s;
+      }
+
+      .theme-btn:hover {
+        background: var(--cg-hover);
         color: var(--cg-fg);
       }
 
-      .file-tree-context-item {
-        padding: 6px 16px;
-        cursor: pointer;
-        white-space: nowrap;
-      }
-
-      .file-tree-context-item:hover {
-        background: var(--cg-hover);
+      .theme-btn-active {
+        background: var(--cg-active);
+        color: var(--cg-fg);
+        font-weight: 600;
       }
     </style>
   </head>

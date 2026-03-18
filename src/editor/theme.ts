@@ -2,7 +2,10 @@ import { EditorView } from "@codemirror/view";
 
 const monoFont = "'IBM Plex Mono', 'Fira Code', monospace";
 
-/** Editor theme for chickenglass — minimal black-and-white design. */
+/**
+ * Base editor theme for chickenglass — uses CSS custom properties so that
+ * light/dark switching only requires changing variables on the html element.
+ */
 export const chickenglassTheme = EditorView.theme({
   "&": {
     fontSize: "16px",
@@ -420,21 +423,35 @@ export const chickenglassTheme = EditorView.theme({
   ".cg-hover-preview-header": {
     fontWeight: "700",
     marginBottom: "4px",
-    color: "#333",
+    color: "var(--cg-fg)",
   },
   ".cg-hover-preview-body": {
-    color: "#444",
+    color: "var(--cg-muted)",
     whiteSpace: "pre-wrap",
   },
   ".cg-hover-preview-unresolved": {
-    color: "#c00",
+    color: "var(--cg-error)",
     fontStyle: "italic",
   },
   ".cg-hover-preview-citation": {
-    color: "#444",
+    color: "var(--cg-muted)",
     marginBottom: "4px",
   },
   ".cg-hover-preview-citation:last-child": {
     marginBottom: "0",
   },
 });
+
+/**
+ * CM6 dark-mode base theme — tells CodeMirror the background is dark so it
+ * picks appropriate defaults for its own UI (scroll gutter, etc.).
+ * Applied when the resolved theme is "dark".
+ */
+export const chickenglasDarkTheme = EditorView.theme(
+  {
+    "&": {
+      colorScheme: "dark",
+    },
+  },
+  { dark: true },
+);

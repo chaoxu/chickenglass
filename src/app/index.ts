@@ -1,5 +1,11 @@
 export { App, type AppConfig } from "./app";
 export {
+  ThemeManager,
+  loadTheme,
+  saveTheme,
+  type Theme,
+} from "./theme-manager";
+export {
   CommandPalette,
   installPaletteKeybinding,
   type PaletteCommand,
@@ -15,11 +21,7 @@ export {
   MemoryFileSystem,
   createDemoFileSystem,
 } from "./file-manager";
-export {
-  FileTree,
-  type FileRenameHandler,
-  type FileDeleteHandler,
-} from "./file-tree";
+export { FileTree } from "./file-tree";
 export {
   showSaveDialog,
   showSaveAllDialog,

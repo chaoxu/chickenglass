@@ -1,6 +1,7 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { type Extension, Compartment, EditorState, StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import type { ThemeManager } from "../app/theme-manager";
 
 import { Table, TaskList } from "@lezer/markdown";
 import {
@@ -40,11 +41,10 @@ import {
 import { citationRenderPlugin, bibliographyPlugin, bibDataField } from "../citations";
 import { projectConfigFacet, type ProjectConfig } from "../app/project-config";
 import { editorKeybindings } from "./keybindings";
-import { chickenglassTheme } from "./theme";
+import { chickenglassTheme, chickenglasDarkTheme } from "./theme";
 import { headingFold } from "./heading-fold";
 import { listOutlinerExtension } from "./list-outliner";
 import { breadcrumbExtension } from "../app/breadcrumbs";
-import { spellcheckExtension } from "./spellcheck";
 
 const fallbackDocument = "# Untitled\n";
 
@@ -56,6 +56,9 @@ const renderCompartment = new Compartment();
 
 /** Compartment for editability — reconfigured for preview mode. */
 const editableCompartment = new Compartment();
+
+/** Compartment for the CM6 dark/light base theme — reconfigured on theme switch. */
+export const themeCompartment = new Compartment();
 
 /** All rendering extensions that get toggled by mode. */
 const renderingExtensions: Extension[] = [
@@ -88,12 +91,16 @@ export interface EditorConfig {
   doc?: string;
   /** Project-level configuration to merge with per-file frontmatter. */
   projectConfig?: ProjectConfig;
+  /** Theme manager — used to initialise the CM6 dark/light base theme. */
+  themeManager?: ThemeManager;
   /** Additional CM6 extensions to include. */
   extensions?: Extension[];
 }
 
 /** Create and mount a CodeMirror 6 markdown editor. */
 export function createEditor(config: EditorConfig): EditorView {
+  const isDark = config.themeManager?.getResolved() === "dark";
+
   const state = EditorState.create({
     doc: config.doc ?? fallbackDocument,
     extensions: [
@@ -139,8 +146,8 @@ export function createEditor(config: EditorConfig): EditorView {
       editorKeybindings,
       chickenglassTheme,
 
-      // Spellcheck (enabled by default, toggleable)
-      spellcheckExtension,
+      // Dark/light base theme (wrapped in compartment for live switching)
+      themeCompartment.of(isDark ? chickenglasDarkTheme : []),
 
       // User-provided extensions last
       ...(config.extensions ?? []),
