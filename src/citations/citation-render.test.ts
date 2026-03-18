@@ -91,6 +91,40 @@ describe("findCitations", () => {
   it("returns empty for text with no citations", () => {
     expect(findCitations("No citations here.", store)).toHaveLength(0);
   });
+
+  it("parses a citation with a locator", () => {
+    const matches = findCitations("See [@karger2000, chap. 36].", store);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].ids).toEqual(["karger2000"]);
+    expect(matches[0].locators).toEqual(["chap. 36"]);
+  });
+
+  it("parses a citation with page locator", () => {
+    const matches = findCitations("[@karger2000, pp. 100-120]", store);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].ids).toEqual(["karger2000"]);
+    expect(matches[0].locators).toEqual(["pp. 100-120"]);
+  });
+
+  it("parses multiple citations each with locators", () => {
+    const matches = findCitations("[@karger2000, theorem 3; @stein2001, p. 42]", store);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].ids).toEqual(["karger2000", "stein2001"]);
+    expect(matches[0].locators).toEqual(["theorem 3", "p. 42"]);
+  });
+
+  it("handles mixed citations with and without locators", () => {
+    const matches = findCitations("[@karger2000; @stein2001, chap. 5]", store);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].ids).toEqual(["karger2000", "stein2001"]);
+    expect(matches[0].locators).toEqual([undefined, "chap. 5"]);
+  });
+
+  it("returns undefined locators when none present", () => {
+    const matches = findCitations("[@karger2000]", store);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].locators).toEqual([undefined]);
+  });
 });
 
 describe("formatParenthetical", () => {
@@ -106,6 +140,18 @@ describe("formatParenthetical", () => {
 
   it("falls back to id for unknown entries", () => {
     expect(formatParenthetical(["unknown2020"], store)).toBe("(unknown2020)");
+  });
+
+  it("formats a citation with a locator", () => {
+    expect(
+      formatParenthetical(["karger2000"], store, ["chap. 36"]),
+    ).toBe("(Karger, 2000, chap. 36)");
+  });
+
+  it("formats multiple citations with mixed locators", () => {
+    expect(
+      formatParenthetical(["karger2000", "stein2001"], store, [undefined, "pp. 1-10"]),
+    ).toBe("(Karger, 2000; Stein, 2001, pp. 1-10)");
   });
 });
 

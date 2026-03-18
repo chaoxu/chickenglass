@@ -36,6 +36,52 @@ export interface CslItem {
   [key: string]: unknown;
 }
 
+/** Pandoc-style locator label terms mapped to CSL locator labels. */
+const LOCATOR_TERMS: ReadonlyMap<string, string> = new Map([
+  ["book", "book"], ["bk.", "book"], ["bks.", "book"],
+  ["chapter", "chapter"], ["chap.", "chapter"], ["chaps.", "chapter"],
+  ["column", "column"], ["col.", "column"], ["cols.", "column"],
+  ["figure", "figure"], ["fig.", "figure"], ["figs.", "figure"],
+  ["folio", "folio"], ["fol.", "folio"], ["fols.", "folio"],
+  ["number", "number"], ["no.", "number"], ["nos.", "number"],
+  ["line", "line"], ["l.", "line"], ["ll.", "line"],
+  ["note", "note"], ["n.", "note"], ["nn.", "note"],
+  ["opus", "opus"], ["op.", "opus"], ["opp.", "opus"],
+  ["page", "page"], ["p.", "page"], ["pp.", "page"],
+  ["paragraph", "paragraph"], ["para.", "paragraph"], ["paras.", "paragraph"],
+  ["part", "part"], ["pt.", "part"], ["pts.", "part"],
+  ["section", "section"], ["sec.", "section"], ["secs.", "section"],
+  ["sub verbo", "sub-verbo"], ["s.v.", "sub-verbo"], ["s.vv.", "sub-verbo"],
+  ["verse", "verse"], ["v.", "verse"], ["vv.", "verse"],
+  ["volume", "volume"], ["vol.", "volume"], ["vols.", "volume"],
+]);
+
+/** Sorted keys for matching (longest first to avoid prefix conflicts). */
+const SORTED_LOCATOR_KEYS = [...LOCATOR_TERMS.keys()].sort(
+  (a, b) => b.length - a.length,
+);
+
+/**
+ * Parse a Pandoc-style locator string into a CSL label and locator value.
+ * E.g. "chap. 36" → { label: "chapter", locator: "36" }
+ * E.g. "pp. 100-120" → { label: "page", locator: "100-120" }
+ * E.g. "theorem 3" → { locator: "theorem 3" } (no recognized label)
+ */
+export function parseLocator(raw: string): { locator: string; label?: string } {
+  const text = raw.trim();
+
+  for (const prefix of SORTED_LOCATOR_KEYS) {
+    if (text.toLowerCase().startsWith(prefix)) {
+      const rest = text.slice(prefix.length).trim();
+      if (rest) {
+        return { locator: rest, label: LOCATOR_TERMS.get(prefix) };
+      }
+    }
+  }
+
+  return { locator: text };
+}
+
 /** Map from BibTeX entry types to CSL types. */
 const BIBTEX_TO_CSL_TYPE: Record<string, string> = {
   article: "article-journal",
@@ -121,22 +167,32 @@ export class CslProcessor {
     this.initEngine();
   }
 
-  /** Format a parenthetical citation for the given ids. */
-  cite(ids: string[]): string {
+  /** Format a parenthetical citation for the given ids, with optional locators. */
+  cite(ids: string[], locators?: (string | undefined)[]): string {
     if (!this.engine || ids.length === 0) return "";
     try {
-      const items = ids.map((id) => ({ id }));
+      const items = ids.map((id, i) => {
+        const raw = locators?.[i];
+        if (raw) {
+          const parsed = parseLocator(raw);
+          return { id, locator: parsed.locator, label: parsed.label };
+        }
+        return { id };
+      });
       const result = this.engine.makeCitationCluster(items);
       return result;
     } catch {
       // Fallback: simple "Author, Year" format
       return ids
-        .map((id) => {
+        .map((id, i) => {
           const item = this.items.get(id);
           if (!item) return id;
           const author = item.author?.[0]?.family ?? id;
           const year = item.issued?.["date-parts"]?.[0]?.[0] ?? "";
-          return `${author}, ${year}`;
+          const locator = locators?.[i];
+          let text = `${author}, ${year}`;
+          if (locator) text += `, ${locator}`;
+          return text;
         })
         .join("; ");
     }

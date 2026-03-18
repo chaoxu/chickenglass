@@ -18,6 +18,12 @@ export {
 } from "./citation-render";
 
 export {
+  type CslItem,
+  CslProcessor,
+  parseLocator,
+} from "./csl-processor";
+
+export {
   collectCitedIds,
   formatBibEntry,
   sortBibEntries,

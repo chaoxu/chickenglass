@@ -198,6 +198,26 @@ describe("formatCitation", () => {
     };
     expect(formatCitation(entry)).toBe("Smith, ");
   });
+
+  it("appends locator when provided", () => {
+    const entry: BibEntry = {
+      id: "karger2000",
+      type: "article",
+      author: "Karger, David R.",
+      year: "2000",
+    };
+    expect(formatCitation(entry, "chap. 36")).toBe("Karger, 2000, chap. 36");
+  });
+
+  it("does not append locator when undefined", () => {
+    const entry: BibEntry = {
+      id: "karger2000",
+      type: "article",
+      author: "Karger, David R.",
+      year: "2000",
+    };
+    expect(formatCitation(entry, undefined)).toBe("Karger, 2000");
+  });
 });
 
 describe("formatNarrativeCitation", () => {

@@ -25,11 +25,13 @@ import { type BibEntry, extractLastName } from "./bibtex-parser";
 import type { CslProcessor } from "./csl-processor";
 import { cursorInRange, buildDecorations, RenderWidget } from "../render/render-utils";
 
-/** Format a citation label: "(Author, Year)". */
-export function formatCitation(entry: BibEntry): string {
+/** Format a citation label: "(Author, Year)" or "(Author, Year, locator)". */
+export function formatCitation(entry: BibEntry, locator?: string): string {
   const author = entry.author ? extractLastName(entry.author) : entry.id;
   const year = entry.year ?? "";
-  return `${author}, ${year}`;
+  let text = `${author}, ${year}`;
+  if (locator) text += `, ${locator}`;
+  return text;
 }
 
 /** Format a narrative citation: "Author (Year)". */
@@ -120,20 +122,37 @@ interface CitationMatch {
   parenthetical: boolean;
   /** The citation ids referenced. */
   ids: string[];
+  /** Locator strings parallel to ids (e.g. "chap. 36", "pp. 100-120"). */
+  locators: (string | undefined)[];
 }
 
-/** Pattern for parenthetical citations: [@id] or [@id1; @id2; ...] */
-const PAREN_CITE_RE = /\[(@[a-zA-Z0-9_][\w:.-]*(?:\s*;\s*@[a-zA-Z0-9_][\w:.-]*)*)\]/g;
+/** Pattern for parenthetical citations: [@id], [@id, locator], [@id1; @id2; ...] */
+const PAREN_CITE_RE = /\[(@[a-zA-Z0-9_][\w:.-]*(?:,[^;\]]*)?(?:\s*;\s*@[a-zA-Z0-9_][\w:.-]*(?:,[^;\]]*)?)*)\]/g;
 
 /** Pattern for narrative citations: @id (not preceded by [ or another @) */
 const NARRATIVE_CITE_RE = /(?<![[@\w])@([a-zA-Z0-9_][\w:.-]*)/g;
 
-/** Extract individual citation ids from a parenthetical citation match. */
-function extractCitationIds(raw: string): string[] {
-  return raw.split(";").map((part) => {
+/** Extract citation ids and locators from a parenthetical citation match. */
+function extractCitations(raw: string): { ids: string[]; locators: (string | undefined)[] } {
+  const ids: string[] = [];
+  const locators: (string | undefined)[] = [];
+
+  for (const part of raw.split(";")) {
     const trimmed = part.trim();
-    return trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
-  });
+    const key = trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
+
+    const commaIdx = key.indexOf(",");
+    if (commaIdx >= 0) {
+      ids.push(key.slice(0, commaIdx).trim());
+      const loc = key.slice(commaIdx + 1).trim();
+      locators.push(loc || undefined);
+    } else {
+      ids.push(key.trim());
+      locators.push(undefined);
+    }
+  }
+
+  return { ids, locators };
 }
 
 /**
@@ -146,11 +165,11 @@ export function findCitations(
 ): CitationMatch[] {
   const matches: CitationMatch[] = [];
 
-  // Find parenthetical citations: [@id] and [@id1; @id2]
+  // Find parenthetical citations: [@id], [@id, locator], [@id1; @id2]
   PAREN_CITE_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = PAREN_CITE_RE.exec(text)) !== null) {
-    const ids = extractCitationIds(m[1]);
+    const { ids, locators } = extractCitations(m[1]);
     // Only treat as citation if at least one id is in the bib store
     if (ids.some((id) => store.has(id))) {
       matches.push({
@@ -158,6 +177,7 @@ export function findCitations(
         to: m.index + m[0].length,
         parenthetical: true,
         ids,
+        locators,
       });
     }
   }
@@ -184,6 +204,7 @@ export function findCitations(
         to: matchTo,
         parenthetical: false,
         ids: [id],
+        locators: [undefined],
       });
     }
   }
@@ -193,15 +214,17 @@ export function findCitations(
 
 /**
  * Format a parenthetical citation string from multiple ids.
- * Returns "(Author1, Year1; Author2, Year2)" format.
+ * Returns "(Author1, Year1; Author2, Year2)" or "(Author, Year, locator)" format.
  */
 export function formatParenthetical(
   ids: readonly string[],
   store: BibStore,
+  locators?: readonly (string | undefined)[],
 ): string {
-  const parts = ids.map((id) => {
+  const parts = ids.map((id, i) => {
     const entry = store.get(id);
-    return entry ? formatCitation(entry) : id;
+    const locator = locators?.[i];
+    return entry ? formatCitation(entry, locator) : id;
   });
   return `(${parts.join("; ")})`;
 }
@@ -219,7 +242,7 @@ export function collectCitationRanges(
     if (cursorInRange(view, match.from, match.to)) continue;
 
     if (match.parenthetical) {
-      const rendered = formatParenthetical(match.ids, store);
+      const rendered = formatParenthetical(match.ids, store, match.locators);
       const widget = new CitationWidget(rendered, match.ids);
       widget.sourceFrom = match.from;
       items.push(
