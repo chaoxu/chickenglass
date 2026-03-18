@@ -52,7 +52,7 @@ export class TauriFileSystem implements FileSystem {
     await invoke("rename_file", { oldPath, newPath });
   }
 
-  async deleteFile(path: string): Promise<void> {
-    await invoke("delete_file", { path });
+  async createDirectory(path: string): Promise<void> {
+    await invoke("create_directory", { path });
   }
 }

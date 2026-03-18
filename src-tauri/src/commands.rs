@@ -114,6 +114,40 @@ pub fn create_file(
         .map_err(|e| format!("Failed to create '{}': {}", path, e))
 }
 
+/// Create a new directory (and any missing ancestors) within the project root.
+#[tauri::command]
+pub fn create_directory(
+    root: State<'_, ProjectRoot>,
+    path: String,
+) -> Result<(), String> {
+    let lock = root.0.lock().map_err(|e| e.to_string())?;
+    let project_root = lock.as_ref().ok_or("No project folder open")?;
+    let full = project_root.join(&path);
+    // Security: ensure the path stays within the root (parent must already exist or be creatable)
+    // We check the canonical form of the closest existing ancestor.
+    let mut check = full.as_path();
+    loop {
+        if let Some(parent) = check.parent() {
+            if parent.exists() {
+                if let Ok(canonical) = parent.canonicalize() {
+                    if !canonical.starts_with(project_root) {
+                        return Err(format!("Path '{}' escapes project root", path));
+                    }
+                }
+                break;
+            }
+            check = parent;
+        } else {
+            break;
+        }
+    }
+    if full.exists() {
+        return Err(format!("Directory already exists: {}", path));
+    }
+    fs::create_dir_all(&full)
+        .map_err(|e| format!("Failed to create directory '{}': {}", path, e))
+}
+
 /// Check whether a file exists.
 #[tauri::command]
 pub fn file_exists(
@@ -151,22 +185,6 @@ pub fn rename_file(
     }
     fs::rename(&old_resolved, &new_full)
         .map_err(|e| format!("Failed to rename '{}' to '{}': {}", old_path, new_path, e))
-}
-
-/// Delete a file by moving it to the system trash.
-#[tauri::command]
-pub fn delete_file(
-    root: State<'_, ProjectRoot>,
-    path: String,
-) -> Result<(), String> {
-    let lock = root.0.lock().map_err(|e| e.to_string())?;
-    let project_root = lock.as_ref().ok_or("No project folder open")?;
-    let resolved = resolve_path(project_root, &path)?;
-    if !resolved.exists() {
-        return Err(format!("File not found: {}", path));
-    }
-    trash::delete(&resolved)
-        .map_err(|e| format!("Failed to delete '{}': {}", path, e))
 }
 
 /// List the file tree starting from the project root.

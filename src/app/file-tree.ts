@@ -3,6 +3,9 @@ import type { FileEntry } from "./file-manager";
 /** Callback when a file is selected in the tree. */
 export type FileSelectHandler = (path: string) => void;
 
+/** Callback when a file is deleted. Returns null if cancelled. */
+export type FileDeleteHandler = (path: string) => Promise<string | null>;
+
 /** Callback to refresh the tree (e.g., after creating a file). */
 export type TreeRefreshHandler = () => Promise<FileEntry>;
 
@@ -16,10 +19,10 @@ export type FileRenameHandler = (
 ) => Promise<string | null>;
 
 /**
- * Callback when a file is deleted.
+ * Callback when a new directory is created.
  * Returns an error message string on failure, or null on success.
  */
-export type FileDeleteHandler = (path: string) => Promise<string | null>;
+export type CreateDirectoryHandler = (path: string) => Promise<string | null>;
 
 /** File tree sidebar component. */
 export class FileTree {
@@ -27,15 +30,29 @@ export class FileTree {
   private onSelect: FileSelectHandler | null = null;
   private onRefresh: TreeRefreshHandler | null = null;
   private onRename: FileRenameHandler | null = null;
-  private onDelete: FileDeleteHandler | null = null;
+  private onCreateDirectory: CreateDirectoryHandler | null = null;
   private activePath: string | null = null;
   /** The file-tree-item element currently focused for keyboard interaction. */
   private focusedItem: HTMLElement | null = null;
+  /** Context menu element currently shown (if any). */
+  private activeContextMenu: HTMLElement | null = null;
+  /** Bound listener stored so it can be removed in destroy(). */
+  private readonly globalClickListener: () => void;
 
   constructor() {
     this.element = document.createElement("div");
     this.element.className = "file-tree";
     this.element.setAttribute("tabindex", "0");
+
+    // Dismiss the context menu on any click outside it
+    this.globalClickListener = () => this.dismissContextMenu();
+    document.addEventListener("click", this.globalClickListener);
+  }
+
+  /** Remove global event listeners. Call when the tree is removed from the DOM. */
+  destroy(): void {
+    document.removeEventListener("click", this.globalClickListener);
+    this.dismissContextMenu();
   }
 
   /** Set the handler called when a file is clicked. */
@@ -53,9 +70,9 @@ export class FileTree {
     this.onRename = handler;
   }
 
-  /** Set the handler called when a file is deleted. */
-  setDeleteHandler(handler: FileDeleteHandler): void {
-    this.onDelete = handler;
+  /** Set the handler called when a new directory is created. */
+  setCreateDirectoryHandler(handler: CreateDirectoryHandler): void {
+    this.onCreateDirectory = handler;
   }
 
   /** Set the currently active file path (highlighted in tree). */
@@ -81,6 +98,14 @@ export class FileTree {
       const root = await this.onRefresh();
       this.render(root);
     }
+  }
+
+  /**
+   * Start the inline "New Folder" name input at the root level (no parent
+   * directory). Called from the sidebar header button.
+   */
+  startNewFolderAtRoot(): void {
+    this.startNewFolderInline("");
   }
 
   private renderEntry(entry: FileEntry, depth: number): HTMLElement {
@@ -120,6 +145,13 @@ export class FileTree {
         icon.textContent = isOpen ? "\u25B6" : "\u25BC";
       });
 
+      // Right-click context menu for directories
+      item.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showDirectoryContextMenu(e.clientX, e.clientY, entry, childContainer, icon);
+      });
+
       const wrapper = document.createElement("div");
       wrapper.appendChild(item);
       wrapper.appendChild(childContainer);
@@ -129,17 +161,6 @@ export class FileTree {
     if (entry.path === this.activePath) {
       item.classList.add("file-tree-active");
     }
-
-    // Delete button (shown on hover via CSS)
-    const deleteBtn = document.createElement("button");
-    deleteBtn.className = "file-tree-delete-btn";
-    deleteBtn.title = "Delete file";
-    deleteBtn.textContent = "\u2715";
-    deleteBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.confirmDelete(entry.path);
-    });
-    item.appendChild(deleteBtn);
 
     item.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -152,10 +173,6 @@ export class FileTree {
         e.preventDefault();
         e.stopPropagation();
         this.startRename(item, entry.path);
-      } else if (e.key === "Delete" || e.key === "Backspace") {
-        e.preventDefault();
-        e.stopPropagation();
-        this.confirmDelete(entry.path);
       }
     });
 
@@ -163,13 +180,169 @@ export class FileTree {
       this.setFocusedItem(item);
     });
 
-    item.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
+    return item;
+  }
+
+  /** Show a context menu for a directory item. */
+  private showDirectoryContextMenu(
+    x: number,
+    y: number,
+    entry: FileEntry,
+    childContainer: HTMLElement,
+    icon: HTMLElement,
+  ): void {
+    this.dismissContextMenu();
+
+    const menu = document.createElement("div");
+    menu.className = "file-tree-context-menu";
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+
+    const newFolderItem = document.createElement("div");
+    newFolderItem.className = "file-tree-context-item";
+    newFolderItem.textContent = "New Folder";
+    newFolderItem.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.showContextMenu(e.clientX, e.clientY, item, entry.path);
+      this.dismissContextMenu();
+      // Expand the directory so the inline input is visible
+      childContainer.style.display = "block";
+      icon.textContent = "\u25BC";
+      this.startNewFolderInline(entry.path, childContainer);
     });
 
-    return item;
+    menu.appendChild(newFolderItem);
+    document.body.appendChild(menu);
+    this.activeContextMenu = menu;
+
+    // Prevent the document-level click listener from immediately closing it
+    menu.addEventListener("click", (e) => e.stopPropagation());
+  }
+
+  /** Remove any active context menu. */
+  private dismissContextMenu(): void {
+    if (this.activeContextMenu) {
+      this.activeContextMenu.remove();
+      this.activeContextMenu = null;
+    }
+  }
+
+  /**
+   * Append an inline "New Folder" input row inside `container` (or at the
+   * root of the tree when `container` is undefined) and handle confirmation.
+   *
+   * @param parentPath - The directory path that will contain the new folder,
+   *   or "" for the project root.
+   * @param container - The child container element to append the row into.
+   *   Defaults to `this.element` (the tree root) when omitted.
+   */
+  private startNewFolderInline(
+    parentPath: string,
+    container?: HTMLElement,
+  ): void {
+    const host = container ?? this.element;
+
+    // Guard: only one new-folder input at a time
+    if (host.querySelector(".file-tree-new-folder-row")) return;
+
+    const depth = parentPath
+      ? parentPath.split("/").length
+      : 0;
+
+    const row = document.createElement("div");
+    row.className = "file-tree-item file-tree-new-folder-row";
+    row.style.paddingLeft = `${depth * 16 + 8}px`;
+
+    const icon = document.createElement("span");
+    icon.className = "file-tree-icon";
+    icon.textContent = "\u25B6"; // folder icon (closed)
+    row.appendChild(icon);
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "file-tree-rename-input";
+    input.placeholder = "Folder name";
+    row.appendChild(input);
+
+    host.appendChild(row);
+    input.focus();
+
+    let committed = false;
+
+    const dismiss = (): void => {
+      if (committed) return;
+      committed = true;
+      row.remove();
+    };
+
+    const confirm = async (): Promise<void> => {
+      if (committed) return;
+      const name = input.value.trim();
+
+      if (!name) {
+        dismiss();
+        return;
+      }
+
+      if (name.includes("/") || name.includes("\\")) {
+        input.setCustomValidity("Folder name cannot contain slashes.");
+        input.reportValidity();
+        return;
+      }
+
+      committed = true;
+      row.remove();
+
+      if (this.onCreateDirectory) {
+        const newPath = parentPath ? `${parentPath}/${name}` : name;
+        const err = await this.onCreateDirectory(newPath);
+        if (err) {
+          // Show error inline at tree root (brief error row)
+          this.showNewFolderError(host, err, depth);
+        }
+      }
+    };
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        void confirm();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        dismiss();
+      }
+    });
+
+    input.addEventListener("blur", () => {
+      dismiss();
+    });
+  }
+
+  /** Show a brief, dismissible error row after a failed folder creation. */
+  private showNewFolderError(
+    host: HTMLElement,
+    message: string,
+    depth: number,
+  ): void {
+    const row = document.createElement("div");
+    row.className = "file-tree-item file-tree-new-folder-row";
+    row.style.paddingLeft = `${depth * 16 + 8}px`;
+
+    const errInput = document.createElement("input");
+    errInput.type = "text";
+    errInput.className = "file-tree-rename-input file-tree-rename-error";
+    errInput.placeholder = message;
+    errInput.title = message;
+    errInput.readOnly = true;
+    row.appendChild(errInput);
+
+    host.appendChild(row);
+    errInput.focus();
+
+    const dismiss = (): void => row.remove();
+    errInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" || e.key === "Enter") dismiss();
+    });
+    errInput.addEventListener("blur", dismiss);
   }
 
   private setFocusedItem(item: HTMLElement): void {
@@ -277,71 +450,6 @@ export class FileTree {
       // Cancel on blur unless confirm() already took over
       dismiss();
     });
-  }
-
-  /** Show a native-style context menu at the given position for a file item. */
-  private showContextMenu(
-    x: number,
-    y: number,
-    item: HTMLElement,
-    filePath: string,
-  ): void {
-    // Remove any existing context menu
-    document.querySelector(".file-tree-context-menu")?.remove();
-
-    const menu = document.createElement("div");
-    menu.className = "file-tree-context-menu";
-    menu.style.left = `${x}px`;
-    menu.style.top = `${y}px`;
-
-    const renameItem = document.createElement("div");
-    renameItem.className = "file-tree-context-menu-item";
-    renameItem.textContent = "Rename";
-    renameItem.addEventListener("click", () => {
-      menu.remove();
-      this.startRename(item, filePath);
-    });
-
-    const deleteItem = document.createElement("div");
-    deleteItem.className = "file-tree-context-menu-item file-tree-context-menu-item-danger";
-    deleteItem.textContent = "Delete";
-    deleteItem.addEventListener("click", () => {
-      menu.remove();
-      this.confirmDelete(filePath);
-    });
-
-    menu.appendChild(renameItem);
-    menu.appendChild(deleteItem);
-    document.body.appendChild(menu);
-
-    const dismiss = (e: MouseEvent): void => {
-      if (!menu.contains(e.target as Node)) {
-        menu.remove();
-        document.removeEventListener("mousedown", dismiss);
-      }
-    };
-    // Defer listener so this click doesn't immediately dismiss
-    setTimeout(() => {
-      document.addEventListener("mousedown", dismiss);
-    }, 0);
-  }
-
-  /** Show a confirmation dialog and delete the file if confirmed. */
-  private confirmDelete(filePath: string): void {
-    const name = filePath.split("/").pop() ?? filePath;
-    const confirmed = window.confirm(`Delete "${name}"?`);
-    if (!confirmed) return;
-
-    void this.performDelete(filePath);
-  }
-
-  /** Perform the actual delete operation. The handler is responsible for refreshing the tree. */
-  private async performDelete(filePath: string): Promise<void> {
-    if (!this.onDelete) return;
-    const err = await this.onDelete(filePath);
-    if (err) {
-      window.alert(`Could not delete file: ${err}`);
-    }
   }
 
   private updateActiveHighlight(): void {

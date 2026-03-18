@@ -24,16 +24,19 @@ export interface FileSystem {
   exists(path: string): Promise<boolean>;
   /** Rename a file from oldPath to newPath. */
   renameFile(oldPath: string, newPath: string): Promise<void>;
-  /** Delete a file permanently (memory FS) or move it to trash (Tauri). */
-  deleteFile(path: string): Promise<void>;
+  /** Create a new directory at the given path. */
+  createDirectory(path: string): Promise<void>;
 }
 
 /** In-memory filesystem for demo/testing purposes. */
 export class MemoryFileSystem implements FileSystem {
   private readonly files: Map<string, string>;
+  /** Tracks explicitly created directories (not just inferred from file paths). */
+  private readonly dirs: Set<string>;
 
   constructor(initialFiles?: Record<string, string>) {
     this.files = new Map(Object.entries(initialFiles ?? {}));
+    this.dirs = new Set();
   }
 
   async listTree(): Promise<FileEntry> {
@@ -44,31 +47,44 @@ export class MemoryFileSystem implements FileSystem {
       children: [],
     };
 
-    const paths = [...this.files.keys()].sort();
-    for (const filePath of paths) {
-      const parts = filePath.split("/");
+    /** Ensure all ancestor directory nodes exist and return the leaf's parent. */
+    const ensureDirNode = (parts: string[]): FileEntry => {
       let current = root;
-
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
         const partialPath = parts.slice(0, i + 1).join("/");
-        const isLast = i === parts.length - 1;
-
-        if (!current.children) {
-          current.children = [];
+        if (!current.children) current.children = [];
+        let node = current.children.find((c) => c.name === part);
+        if (!node) {
+          node = { name: part, path: partialPath, isDirectory: true, children: [] };
+          current.children.push(node);
         }
+        current = node;
+      }
+      return current;
+    };
 
-        let existing = current.children.find((c) => c.name === part);
-        if (!existing) {
-          existing = {
-            name: part,
-            path: partialPath,
-            isDirectory: !isLast,
-            children: isLast ? undefined : [],
-          };
-          current.children.push(existing);
-        }
-        current = existing;
+    // Materialise explicitly created empty directories first
+    for (const dirPath of [...this.dirs].sort()) {
+      const parts = dirPath.split("/");
+      const parentParts = parts.slice(0, -1);
+      const dirName = parts[parts.length - 1];
+      const parent = ensureDirNode(parentParts);
+      if (!parent.children) parent.children = [];
+      if (!parent.children.find((c) => c.name === dirName)) {
+        parent.children.push({ name: dirName, path: dirPath, isDirectory: true, children: [] });
+      }
+    }
+
+    // Add files, creating ancestor directory nodes as needed
+    for (const filePath of [...this.files.keys()].sort()) {
+      const parts = filePath.split("/");
+      const fileName = parts[parts.length - 1];
+      const parentParts = parts.slice(0, -1);
+      const parent = ensureDirNode(parentParts);
+      if (!parent.children) parent.children = [];
+      if (!parent.children.find((c) => c.name === fileName)) {
+        parent.children.push({ name: fileName, path: filePath, isDirectory: false });
       }
     }
 
@@ -114,11 +130,18 @@ export class MemoryFileSystem implements FileSystem {
     this.files.set(newPath, content);
   }
 
-  async deleteFile(path: string): Promise<void> {
-    if (!this.files.has(path)) {
-      throw new Error(`File not found: ${path}`);
+  async createDirectory(path: string): Promise<void> {
+    if (this.dirs.has(path)) {
+      throw new Error(`Directory already exists: ${path}`);
     }
-    this.files.delete(path);
+    // A "directory" is also implicitly present if any file lives inside it
+    const prefix = path + "/";
+    for (const key of this.files.keys()) {
+      if (key.startsWith(prefix)) {
+        throw new Error(`Directory already exists: ${path}`);
+      }
+    }
+    this.dirs.add(path);
   }
 }
 

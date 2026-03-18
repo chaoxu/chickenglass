@@ -3,7 +3,7 @@ import type {
   FileSelectHandler,
   TreeRefreshHandler,
   FileRenameHandler,
-  FileDeleteHandler,
+  CreateDirectoryHandler,
 } from "./file-tree";
 import type { FileEntry } from "./file-manager";
 import { Outline } from "./outline";
@@ -24,6 +24,16 @@ export class Sidebar {
 
     // Files section (collapsible)
     const filesSection = this.createCollapsibleSection("Files");
+
+    const newFolderBtn = document.createElement("button");
+    newFolderBtn.className = "sidebar-btn";
+    newFolderBtn.textContent = "\uD83D\uDCC1"; // folder emoji
+    newFolderBtn.title = "New folder";
+    newFolderBtn.addEventListener("click", () => {
+      this.fileTree.startNewFolderAtRoot();
+    });
+    filesSection.header.appendChild(newFolderBtn);
+
     const newFileBtn = document.createElement("button");
     newFileBtn.className = "sidebar-btn";
     newFileBtn.textContent = "+";
@@ -64,9 +74,9 @@ export class Sidebar {
     this.fileTree.setRenameHandler(handler);
   }
 
-  /** Set the handler for deleting files. */
-  setDeleteHandler(handler: FileDeleteHandler): void {
-    this.fileTree.setDeleteHandler(handler);
+  /** Set the handler for creating new directories. */
+  setCreateDirectoryHandler(handler: CreateDirectoryHandler): void {
+    this.fileTree.setCreateDirectoryHandler(handler);
   }
 
   /** Render the file tree from a root entry. */
