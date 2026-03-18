@@ -173,4 +173,38 @@ describe("parseFrontmatter", () => {
       (config as Record<string, unknown>)["unknown_key"],
     ).toBeUndefined();
   });
+
+  it("parses numbering: global", () => {
+    const doc = "---\nnumbering: global\n---\n";
+    const { config } = parseFrontmatter(doc);
+    expect(config.numbering).toBe("global");
+  });
+
+  it("parses numbering: grouped", () => {
+    const doc = "---\nnumbering: grouped\n---\n";
+    const { config } = parseFrontmatter(doc);
+    expect(config.numbering).toBe("grouped");
+  });
+
+  it("ignores invalid numbering values", () => {
+    const doc = "---\nnumbering: invalid\n---\n";
+    const { config } = parseFrontmatter(doc);
+    expect(config.numbering).toBeUndefined();
+  });
+
+  it("parses numbering alongside other fields", () => {
+    const doc = [
+      "---",
+      "title: Blog Post",
+      "numbering: global",
+      "blocks:",
+      "  theorem: true",
+      "---",
+      "",
+    ].join("\n");
+    const { config } = parseFrontmatter(doc);
+    expect(config.title).toBe("Blog Post");
+    expect(config.numbering).toBe("global");
+    expect(config.blocks?.["theorem"]).toBe(true);
+  });
 });

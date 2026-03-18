@@ -11,10 +11,19 @@ export interface BlockConfig {
   title?: string;
 }
 
+/** How numbered blocks are counted across the document. */
+export type NumberingScheme = "global" | "grouped";
+
 export interface FrontmatterConfig {
   title?: string;
   bibliography?: string;
   csl?: string;
+  /**
+   * Numbering scheme for theorem-like blocks.
+   * - "global": all numbered blocks share one counter (blog style)
+   * - "grouped": separate counters per group (default, academic style)
+   */
+  numbering?: NumberingScheme;
   blocks?: Record<string, boolean | BlockConfig>;
   math?: Record<string, string>;
 }
@@ -232,6 +241,11 @@ export function parseFrontmatter(doc: string): FrontmatterResult {
     } else if (key === "csl" && valueRaw !== "") {
       const parsed = parseScalar(valueRaw);
       if (typeof parsed === "string") config.csl = parsed;
+      i++;
+    } else if (key === "numbering" && valueRaw !== "") {
+      if (valueRaw === "global" || valueRaw === "grouped") {
+        config.numbering = valueRaw;
+      }
       i++;
     } else if (key === "blocks" && valueRaw === "") {
       const result = parseBlocksSection(lines, i + 1, indentLevel(line));

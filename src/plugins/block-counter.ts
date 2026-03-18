@@ -10,8 +10,10 @@
 import { type EditorState, StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { parseFencedDivAttrs } from "../parser/fenced-div-attrs";
+import type { NumberingScheme } from "../parser/frontmatter";
 import type { PluginRegistryState } from "./plugin-registry";
 import { getPlugin, pluginRegistryField } from "./plugin-registry";
+import { frontmatterField } from "../editor/frontmatter-state";
 
 /** A numbered block entry mapping a fenced div to its assigned number. */
 export interface NumberedBlock {
@@ -37,13 +39,20 @@ export interface BlockCounterState {
   readonly byPosition: ReadonlyMap<number, NumberedBlock>;
 }
 
+/** Sentinel counter group used when numbering is "global". */
+const GLOBAL_COUNTER = "_global";
+
 /**
  * Walk the syntax tree and assign numbers to all fenced divs
  * whose registered plugin is numbered.
+ *
+ * @param numbering - "global" shares one counter across all types,
+ *   "grouped" (default) uses per-plugin counter groups.
  */
 export function computeBlockNumbers(
   state: EditorState,
   registry: PluginRegistryState,
+  numbering: NumberingScheme = "grouped",
 ): BlockCounterState {
   const tree = syntaxTree(state);
   const blocks: NumberedBlock[] = [];
@@ -71,7 +80,10 @@ export function computeBlockNumbers(
       const plugin = getPlugin(registry, className);
       if (!plugin || !plugin.numbered) return;
 
-      const counterGroup = plugin.counter ?? plugin.name;
+      const counterGroup =
+        numbering === "global"
+          ? GLOBAL_COUNTER
+          : (plugin.counter ?? plugin.name);
       const current = (counters.get(counterGroup) ?? 0) + 1;
       counters.set(counterGroup, current);
 
@@ -113,7 +125,8 @@ export function emptyCounterState(): BlockCounterState {
  */
 export const blockCounterField = StateField.define<BlockCounterState>({
   create(state) {
-    return computeBlockNumbers(state, state.field(pluginRegistryField));
+    const numbering = state.field(frontmatterField).config.numbering;
+    return computeBlockNumbers(state, state.field(pluginRegistryField), numbering);
   },
 
   update(value, tr) {
@@ -121,7 +134,8 @@ export const blockCounterField = StateField.define<BlockCounterState>({
       tr.docChanged ||
       syntaxTree(tr.state).length > syntaxTree(tr.startState).length
     ) {
-      return computeBlockNumbers(tr.state, tr.state.field(pluginRegistryField));
+      const numbering = tr.state.field(frontmatterField).config.numbering;
+      return computeBlockNumbers(tr.state, tr.state.field(pluginRegistryField), numbering);
     }
     return value;
   },

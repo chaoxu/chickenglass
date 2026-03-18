@@ -290,4 +290,133 @@ describe("computeBlockNumbers", () => {
     expect(result.blocks[1].number).toBe(1); // lemma 1
     expect(result.blocks[2].number).toBe(2); // theorem 2
   });
+
+  it("shares one counter across all types with global numbering", () => {
+    const doc = [
+      "::: {.theorem}",
+      "A theorem.",
+      ":::",
+      "",
+      "::: {.definition}",
+      "A definition.",
+      ":::",
+      "",
+      "::: {.theorem}",
+      "Another theorem.",
+      ":::",
+    ].join("\n");
+
+    const state = createState(doc);
+    const registry = testRegistry();
+    const result = computeBlockNumbers(state, registry, "global");
+
+    expect(result.blocks).toHaveLength(3);
+    expect(result.blocks[0].type).toBe("theorem");
+    expect(result.blocks[0].number).toBe(1);
+    expect(result.blocks[1].type).toBe("definition");
+    expect(result.blocks[1].number).toBe(2);
+    expect(result.blocks[2].type).toBe("theorem");
+    expect(result.blocks[2].number).toBe(3);
+  });
+
+  it("still skips unnumbered blocks with global numbering", () => {
+    const doc = [
+      "::: {.theorem}",
+      "A theorem.",
+      ":::",
+      "",
+      "::: {.proof}",
+      "A proof.",
+      ":::",
+      "",
+      "::: {.definition}",
+      "A definition.",
+      ":::",
+    ].join("\n");
+
+    const state = createState(doc);
+    const registry = testRegistry();
+    const result = computeBlockNumbers(state, registry, "global");
+
+    expect(result.blocks).toHaveLength(2);
+    expect(result.blocks[0].type).toBe("theorem");
+    expect(result.blocks[0].number).toBe(1);
+    expect(result.blocks[1].type).toBe("definition");
+    expect(result.blocks[1].number).toBe(2);
+  });
+
+  it("defaults to grouped numbering when scheme is undefined", () => {
+    const doc = [
+      "::: {.theorem}",
+      "A theorem.",
+      ":::",
+      "",
+      "::: {.definition}",
+      "A definition.",
+      ":::",
+    ].join("\n");
+
+    const state = createState(doc);
+    const registry = testRegistry();
+    const result = computeBlockNumbers(state, registry);
+
+    // Default (no scheme) = grouped: separate counters
+    expect(result.blocks[0].number).toBe(1); // theorem 1
+    expect(result.blocks[1].number).toBe(1); // definition 1
+  });
+
+  it("grouped numbering preserves existing counter group behavior", () => {
+    const doc = [
+      "::: {.theorem}",
+      "T1.",
+      ":::",
+      "",
+      "::: {.lemma}",
+      "L1.",
+      ":::",
+      "",
+      "::: {.definition}",
+      "D1.",
+      ":::",
+    ].join("\n");
+
+    const state = createState(doc);
+    const registry = testRegistry();
+    const result = computeBlockNumbers(state, registry, "grouped");
+
+    // theorem and lemma share "theorem" counter, definition is separate
+    expect(result.blocks[0].number).toBe(1); // theorem 1
+    expect(result.blocks[1].number).toBe(2); // lemma 2 (shared with theorem)
+    expect(result.blocks[2].number).toBe(1); // definition 1
+  });
+
+  it("global numbering assigns sequential numbers across all types", () => {
+    const doc = [
+      "::: {.theorem}",
+      "T1.",
+      ":::",
+      "",
+      "::: {.lemma}",
+      "L1.",
+      ":::",
+      "",
+      "::: {.definition}",
+      "D1.",
+      ":::",
+      "",
+      "::: {.theorem}",
+      "T2.",
+      ":::",
+    ].join("\n");
+
+    const state = createState(doc);
+    const registry = testRegistry();
+    const result = computeBlockNumbers(state, registry, "global");
+
+    expect(result.blocks).toHaveLength(4);
+    expect(result.blocks[0].number).toBe(1); // Theorem 1
+    expect(result.blocks[1].number).toBe(2); // Lemma 2
+    expect(result.blocks[2].number).toBe(3); // Definition 3
+    expect(result.blocks[3].number).toBe(4); // Theorem 4
+  });
 });

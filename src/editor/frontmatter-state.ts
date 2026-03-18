@@ -21,7 +21,7 @@ import {
   focusTracker,
 } from "../render/render-utils";
 
-export { type FrontmatterConfig } from "../parser/frontmatter";
+export { type FrontmatterConfig, type NumberingScheme } from "../parser/frontmatter";
 
 /** State stored in the frontmatter field. */
 export interface FrontmatterState {
