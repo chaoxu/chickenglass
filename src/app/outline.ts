@@ -3,64 +3,21 @@
  *
  * Displays a table of contents derived from the document's ATX headings.
  * Each entry shows the section number and heading text. Clicking an
- * entry scrolls the editor to that heading.
+ * entry scrolls the editor to that heading. The active section is
+ * highlighted based on the cursor position.
  */
 
 import { EditorView } from "@codemirror/view";
 import { StateEffect } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-
-/** A single outline entry. */
-interface OutlineEntry {
-  /** Heading level (1–6). */
-  level: number;
-  /** Heading text (without # markers). */
-  text: string;
-  /** Hierarchical section number (e.g., "1.2.3"). */
-  number: string;
-  /** Document position of the heading. */
-  pos: number;
-}
-
-/** Extract outline entries from the editor state. */
-function extractOutline(view: EditorView): OutlineEntry[] {
-  const entries: OutlineEntry[] = [];
-  const counters = [0, 0, 0, 0, 0, 0, 0];
-  const tree = syntaxTree(view.state);
-
-  tree.iterate({
-    enter(node) {
-      const m = /^ATXHeading(\d)$/.exec(node.name);
-      if (!m) return;
-
-      const level = Number(m[1]);
-      counters[level]++;
-      for (let i = level + 1; i <= 6; i++) counters[i] = 0;
-
-      const parts: number[] = [];
-      for (let i = 1; i <= level; i++) parts.push(counters[i]);
-
-      // Extract text: skip HeaderMark children, get remaining text
-      const lineText = view.state.doc.lineAt(node.from).text;
-      const text = lineText.replace(/^#+\s*/, "");
-
-      entries.push({
-        level,
-        text,
-        number: parts.join("."),
-        pos: node.from,
-      });
-    },
-  });
-
-  return entries;
-}
+import { extractHeadings, activeHeadingIndex } from "./heading-ancestry";
 
 /** Document outline component for the sidebar. */
 export class Outline {
   readonly element: HTMLElement;
   private view: EditorView | null = null;
   private lastTreeLength = 0;
+  private lastActiveIndex = -1;
 
   constructor() {
     this.element = document.createElement("div");
@@ -72,9 +29,9 @@ export class Outline {
     this.detach();
     this.view = view;
     this.lastTreeLength = 0;
+    this.lastActiveIndex = -1;
     this.refresh();
 
-    // Refresh outline on doc changes and parser advancement
     const extension = EditorView.updateListener.of((update) => {
       if (!this.view) return;
       const tree = syntaxTree(update.state);
@@ -82,6 +39,10 @@ export class Outline {
       if (update.docChanged || treeAdvanced) {
         this.lastTreeLength = tree.length;
         this.refresh();
+      }
+      // Update active heading highlight on cursor move
+      if (update.selectionSet || update.docChanged || treeAdvanced) {
+        this.updateActiveHeading();
       }
     });
 
@@ -91,6 +52,7 @@ export class Outline {
   /** Detach from the current editor view. */
   detach(): void {
     this.view = null;
+    this.lastActiveIndex = -1;
     this.element.innerHTML = "";
   }
 
@@ -98,7 +60,7 @@ export class Outline {
   private refresh(): void {
     if (!this.view) return;
 
-    const entries = extractOutline(this.view);
+    const entries = extractHeadings(this.view.state);
     const view = this.view;
 
     // Only rebuild DOM if content changed
@@ -159,6 +121,23 @@ export class Outline {
 
       this.element.appendChild(item);
     }
+  }
+
+  /** Update the active heading highlight in the outline. */
+  private updateActiveHeading(): void {
+    if (!this.view) return;
+
+    const headings = extractHeadings(this.view.state);
+    const cursorPos = this.view.state.selection.main.head;
+    const idx = activeHeadingIndex(headings, cursorPos);
+
+    if (idx === this.lastActiveIndex) return;
+    this.lastActiveIndex = idx;
+
+    const items = this.element.querySelectorAll(".outline-item");
+    items.forEach((item, i) => {
+      item.classList.toggle("outline-item-active", i === idx);
+    });
   }
 
   /** Toggle visibility of children after the given item. */

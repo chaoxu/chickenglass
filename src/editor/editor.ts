@@ -42,6 +42,7 @@ import { editorKeybindings } from "./keybindings";
 import { chickenglassTheme } from "./theme";
 import { headingFold } from "./heading-fold";
 import { listOutlinerExtension } from "./list-outliner";
+import { breadcrumbExtension } from "../app/breadcrumbs";
 
 const fallbackDocument = "# Untitled\n";
 
@@ -131,6 +132,7 @@ export function createEditor(config: EditorConfig): EditorView {
       EditorView.lineWrapping,
       headingFold,
       listOutlinerExtension,
+      breadcrumbExtension,
       editorKeybindings,
       chickenglassTheme,
 
