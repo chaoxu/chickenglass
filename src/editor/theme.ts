@@ -358,4 +358,10 @@ export const chickenglassTheme = EditorView.theme({
   ".cg-include-label-active": {
     color: "#999",
   },
+
+  /* Focus mode: dim non-active paragraphs */
+  ".cg-focus-dimmed": {
+    opacity: "0.3",
+    transition: "opacity 0.15s",
+  },
 });

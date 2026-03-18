@@ -26,6 +26,7 @@ import {
   sectionNumberPlugin,
   fenceGuidePlugin,
   includeLabelPlugin,
+  focusModeExtension,
 } from "../render";
 import {
   createPluginRegistryField,
@@ -97,6 +98,7 @@ export function createEditor(config: EditorConfig): EditorView {
       sectionNumberPlugin,
       fenceGuidePlugin,
       includeLabelPlugin,
+      focusModeExtension,
 
       // Editor chrome
       EditorView.lineWrapping,

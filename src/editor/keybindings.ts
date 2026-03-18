@@ -7,6 +7,7 @@ import {
 import { type Extension } from "@codemirror/state";
 import { type EditorView, keymap } from "@codemirror/view";
 import { toggleDebugInspector } from "../render/debug-inspector";
+import { toggleFocusMode } from "../render/focus-mode";
 import type { SourceMap } from "../app/source-map";
 
 /**
@@ -37,6 +38,7 @@ export const editorKeybindings: Extension = [
     ...historyKeymap,
     indentWithTab,
     { key: "Mod-Shift-d", run: toggleDebugInspector },
+    { key: "Mod-Shift-f", run: toggleFocusMode },
     { key: "Mod-Shift-o", run: jumpToSourceFile },
   ]),
 ];

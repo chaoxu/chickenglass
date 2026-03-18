@@ -42,6 +42,7 @@ export { mathPreviewPlugin } from "./math-preview";
 export { sectionNumberPlugin } from "./section-counter";
 export { fenceGuidePlugin } from "./fence-guide";
 export { includeLabelPlugin } from "./include-label";
+export { focusModeExtension, toggleFocusMode } from "./focus-mode";
 export {
   parseTable,
   formatTable,
