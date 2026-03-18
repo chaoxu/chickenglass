@@ -1,0 +1,95 @@
+import { describe, expect, it } from "vitest";
+
+import { MemoryFileSystem, createDemoFileSystem } from "./file-manager";
+
+describe("MemoryFileSystem", () => {
+  it("reads files that exist", async () => {
+    const fs = new MemoryFileSystem({ "test.md": "hello" });
+    const content = await fs.readFile("test.md");
+    expect(content).toBe("hello");
+  });
+
+  it("throws on reading non-existent files", async () => {
+    const fs = new MemoryFileSystem();
+    await expect(fs.readFile("missing.md")).rejects.toThrow("File not found");
+  });
+
+  it("writes to existing files", async () => {
+    const fs = new MemoryFileSystem({ "test.md": "old" });
+    await fs.writeFile("test.md", "new");
+    const content = await fs.readFile("test.md");
+    expect(content).toBe("new");
+  });
+
+  it("throws on writing to non-existent files", async () => {
+    const fs = new MemoryFileSystem();
+    await expect(fs.writeFile("missing.md", "data")).rejects.toThrow(
+      "File not found",
+    );
+  });
+
+  it("creates new files", async () => {
+    const fs = new MemoryFileSystem();
+    await fs.createFile("new.md", "content");
+    const content = await fs.readFile("new.md");
+    expect(content).toBe("content");
+  });
+
+  it("creates files with empty content by default", async () => {
+    const fs = new MemoryFileSystem();
+    await fs.createFile("empty.md");
+    const content = await fs.readFile("empty.md");
+    expect(content).toBe("");
+  });
+
+  it("throws on creating a file that already exists", async () => {
+    const fs = new MemoryFileSystem({ "test.md": "data" });
+    await expect(fs.createFile("test.md")).rejects.toThrow(
+      "File already exists",
+    );
+  });
+
+  it("checks file existence", async () => {
+    const fs = new MemoryFileSystem({ "test.md": "data" });
+    expect(await fs.exists("test.md")).toBe(true);
+    expect(await fs.exists("missing.md")).toBe(false);
+  });
+
+  it("lists a flat file tree", async () => {
+    const fs = new MemoryFileSystem({
+      "a.md": "",
+      "b.md": "",
+    });
+    const tree = await fs.listTree();
+    expect(tree.isDirectory).toBe(true);
+    expect(tree.children).toHaveLength(2);
+    expect(tree.children?.[0].name).toBe("a.md");
+    expect(tree.children?.[1].name).toBe("b.md");
+  });
+
+  it("lists a nested file tree with directories first", async () => {
+    const fs = new MemoryFileSystem({
+      "z.md": "",
+      "chapters/intro.md": "",
+      "chapters/bg.md": "",
+    });
+    const tree = await fs.listTree();
+    expect(tree.children).toHaveLength(2);
+    // directories first
+    expect(tree.children?.[0].name).toBe("chapters");
+    expect(tree.children?.[0].isDirectory).toBe(true);
+    expect(tree.children?.[0].children).toHaveLength(2);
+    // then files
+    expect(tree.children?.[1].name).toBe("z.md");
+    expect(tree.children?.[1].isDirectory).toBe(false);
+  });
+});
+
+describe("createDemoFileSystem", () => {
+  it("creates a filesystem with sample files", async () => {
+    const fs = createDemoFileSystem();
+    expect(await fs.exists("main.md")).toBe(true);
+    expect(await fs.exists("notes.md")).toBe(true);
+    expect(await fs.exists("chapters/introduction.md")).toBe(true);
+  });
+});

@@ -1,0 +1,128 @@
+/**
+ * Block numbering system.
+ *
+ * Walks the syntax tree to find FencedDiv nodes, checks which plugin
+ * owns each one, and assigns sequential numbers per counter group.
+ * Plugins sharing the same counter group (e.g., theorem and lemma)
+ * increment a single shared counter.
+ */
+
+import { type EditorState, StateField } from "@codemirror/state";
+import { syntaxTree } from "@codemirror/language";
+import { parseFencedDivAttrs } from "../parser/fenced-div-attrs";
+import type { PluginRegistryState } from "./plugin-registry";
+import { getPlugin, pluginRegistryField } from "./plugin-registry";
+
+/** A numbered block entry mapping a fenced div to its assigned number. */
+export interface NumberedBlock {
+  /** Start position of the FencedDiv node in the document. */
+  readonly from: number;
+  /** End position of the FencedDiv node in the document. */
+  readonly to: number;
+  /** The plugin class name (e.g. "theorem"). */
+  readonly type: string;
+  /** The id from attributes, if any. */
+  readonly id?: string;
+  /** The assigned number. */
+  readonly number: number;
+}
+
+/** Immutable counter state for the entire document. */
+export interface BlockCounterState {
+  /** Ordered list of all numbered blocks in the document. */
+  readonly blocks: readonly NumberedBlock[];
+  /** Map from block id to its NumberedBlock entry. */
+  readonly byId: ReadonlyMap<string, NumberedBlock>;
+  /** Map from document position (from) to its NumberedBlock entry. */
+  readonly byPosition: ReadonlyMap<number, NumberedBlock>;
+}
+
+/**
+ * Walk the syntax tree and assign numbers to all fenced divs
+ * whose registered plugin is numbered.
+ */
+export function computeBlockNumbers(
+  state: EditorState,
+  registry: PluginRegistryState,
+): BlockCounterState {
+  const tree = syntaxTree(state);
+  const blocks: NumberedBlock[] = [];
+  const byId = new Map<string, NumberedBlock>();
+  const byPosition = new Map<number, NumberedBlock>();
+  const counters = new Map<string, number>();
+
+  tree.iterate({
+    enter(node) {
+      if (node.type.name !== "FencedDiv") return;
+
+      // Find the FencedDivAttributes child to extract the class
+      let attrText: string | undefined;
+      const child = node.node.getChild("FencedDivAttributes");
+      if (child) {
+        attrText = state.doc.sliceString(child.from, child.to);
+      }
+
+      if (!attrText) return;
+
+      const attrs = parseFencedDivAttrs(attrText);
+      if (!attrs || attrs.classes.length === 0) return;
+
+      const className = attrs.classes[0];
+      const plugin = getPlugin(registry, className);
+      if (!plugin || !plugin.numbered) return;
+
+      const counterGroup = plugin.counter ?? plugin.name;
+      const current = (counters.get(counterGroup) ?? 0) + 1;
+      counters.set(counterGroup, current);
+
+      const entry: NumberedBlock = {
+        from: node.from,
+        to: node.to,
+        type: className,
+        id: attrs.id,
+        number: current,
+      };
+
+      blocks.push(entry);
+      if (attrs.id) {
+        byId.set(attrs.id, entry);
+      }
+      byPosition.set(node.from, entry);
+    },
+  });
+
+  return { blocks, byId, byPosition };
+}
+
+/** Create an empty counter state. */
+export function emptyCounterState(): BlockCounterState {
+  return { blocks: [], byId: new Map(), byPosition: new Map() };
+}
+
+/**
+ * CM6 StateField that maintains block numbering.
+ *
+ * Depends on the pluginRegistryField to know which plugins are
+ * registered and which counter groups they use.
+ *
+ * Usage:
+ * ```ts
+ * const counters = state.field(blockCounterField);
+ * const entry = counters.byId.get("thm-1");
+ * ```
+ */
+export const blockCounterField = StateField.define<BlockCounterState>({
+  create(state) {
+    return computeBlockNumbers(state, state.field(pluginRegistryField));
+  },
+
+  update(value, tr) {
+    if (
+      tr.docChanged ||
+      syntaxTree(tr.state).length > syntaxTree(tr.startState).length
+    ) {
+      return computeBlockNumbers(tr.state, tr.state.field(pluginRegistryField));
+    }
+    return value;
+  },
+});
