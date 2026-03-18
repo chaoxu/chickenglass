@@ -1,10 +1,12 @@
 import { EditorView } from "@codemirror/view";
 
-/** Editor theme for chickenglass. */
+const monoFont = "'IBM Plex Mono', 'Fira Code', monospace";
+
+/** Editor theme for chickenglass — minimal black-and-white design. */
 export const chickenglassTheme = EditorView.theme({
   "&": {
     fontSize: "16px",
-    fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
+    fontFamily: monoFont,
   },
   ".cm-content": {
     padding: "24px 48px 24px 48px",
@@ -23,21 +25,21 @@ export const chickenglassTheme = EditorView.theme({
     position: "absolute",
     right: "100%",
     marginRight: "4px",
-    color: "#bbb",
+    color: "var(--cg-border)",
     fontSize: "10px",
     cursor: "pointer",
     userSelect: "none",
     lineHeight: "inherit",
   },
   ".cg-fold-toggle:hover": {
-    color: "#666",
+    color: "var(--cg-fg)",
   },
   ".cm-cursor": {
-    borderLeftColor: "#1a1a1a",
+    borderLeftColor: "var(--cg-fg)",
     borderLeftWidth: "2px",
   },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-    backgroundColor: "#d7e4f2",
+    backgroundColor: "var(--cg-hover)",
   },
   ".cm-activeLine": {
     backgroundColor: "transparent",
@@ -48,10 +50,10 @@ export const chickenglassTheme = EditorView.theme({
     fontSize: "2.4em",
     fontWeight: "800",
     lineHeight: "1.2",
-    color: "#111",
+    color: "var(--cg-fg)",
     marginBottom: "0.25em",
     paddingBottom: "0.15em",
-    borderBottom: "1px solid #e8e8e8",
+    borderBottom: "1px solid var(--cg-border)",
     display: "block",
     cursor: "text",
     userSelect: "none",
@@ -67,18 +69,18 @@ export const chickenglassTheme = EditorView.theme({
 
   /* List marker styling */
   ".cg-list-bullet": {
-    color: "#888",
+    color: "var(--cg-muted)",
     fontWeight: "700",
   },
   ".cg-list-number": {
-    color: "#888",
+    color: "var(--cg-muted)",
     fontWeight: "600",
     fontVariantNumeric: "tabular-nums",
   },
 
   /* Highlight styling (==text==) */
   ".cg-highlight": {
-    backgroundColor: "#fff3a3",
+    backgroundColor: "var(--cg-hover)",
     borderRadius: "2px",
     padding: "1px 0",
   },
@@ -113,7 +115,7 @@ export const chickenglassTheme = EditorView.theme({
     fontSize: "0.9em",
     fontWeight: "600",
     lineHeight: "1.5",
-    color: "#666",
+    color: "var(--cg-muted)",
   },
 
   /* Inline content styling — always applied for WYSIWYG feel */
@@ -127,15 +129,15 @@ export const chickenglassTheme = EditorView.theme({
     textDecoration: "line-through",
   },
   ".cg-inline-code": {
-    fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
-    backgroundColor: "rgba(0,0,0,0.06)",
-    borderRadius: "3px",
+    fontFamily: monoFont,
+    backgroundColor: "var(--cg-subtle)",
+    borderRadius: "2px",
     padding: "1px 4px",
   },
 
   /* Rendered link styling — shown when cursor is outside the link */
   ".cg-link-rendered": {
-    color: "#2563eb",
+    color: "var(--cg-fg)",
     textDecoration: "underline",
     cursor: "pointer",
   },
@@ -143,14 +145,14 @@ export const chickenglassTheme = EditorView.theme({
   /* Section numbers (rendered via ::before when cursor is outside) */
   "[data-section-number]::before": {
     content: "attr(data-section-number) '\\2002'",
-    color: "#999",
+    color: "var(--cg-muted)",
     fontWeight: "400",
   },
 
   /* Header markers (# symbols) shown in muted color when editing */
   ".cg-heading-1 .tok-heading, .cg-heading-2 .tok-heading, .cg-heading-3 .tok-heading":
     {
-      color: "#999",
+      color: "var(--cg-muted)",
     },
 
   /* Horizontal rule styling */
@@ -158,7 +160,7 @@ export const chickenglassTheme = EditorView.theme({
     display: "block",
     textAlign: "center",
     fontSize: "0",
-    borderBottom: "1px solid #ccc",
+    borderBottom: "1px solid var(--cg-border)",
     margin: "0.5em 0",
   },
 
@@ -168,32 +170,25 @@ export const chickenglassTheme = EditorView.theme({
   },
 
   /* Fenced div nesting guides — vertical lines on the left, editing only.
-     Uses background-image so the line is strictly contained (no bleed). */
+     Uses solid border approach for pure BW design. */
   ".cg-fence-d1": {
-    backgroundImage: "linear-gradient(to right, #d8d8d8 2px, transparent 2px)",
-    backgroundRepeat: "no-repeat",
-    backgroundPosition: "0 0",
+    borderLeft: "2px solid var(--cg-border)",
+    paddingLeft: "8px",
   },
   ".cg-fence-d2": {
-    backgroundImage:
-      "linear-gradient(to right, #d8d8d8 2px, transparent 2px), linear-gradient(to right, #c8c8c8 2px, transparent 2px)",
-    backgroundPosition: "0 0, 8px 0",
-    backgroundRepeat: "no-repeat",
+    borderLeft: "2px solid var(--cg-active)",
+    paddingLeft: "8px",
   },
   ".cg-fence-d3": {
-    backgroundImage:
-      "linear-gradient(to right, #d8d8d8 2px, transparent 2px), linear-gradient(to right, #c8c8c8 2px, transparent 2px), linear-gradient(to right, #b8b8b8 2px, transparent 2px)",
-    backgroundPosition: "0 0, 8px 0, 16px 0",
-    backgroundRepeat: "no-repeat",
+    borderLeft: "2px solid var(--cg-muted)",
+    paddingLeft: "8px",
   },
   ".cg-fence-d4": {
-    backgroundImage:
-      "linear-gradient(to right, #d8d8d8 2px, transparent 2px), linear-gradient(to right, #c8c8c8 2px, transparent 2px), linear-gradient(to right, #b8b8b8 2px, transparent 2px), linear-gradient(to right, #a8a8a8 2px, transparent 2px)",
-    backgroundPosition: "0 0, 8px 0, 16px 0, 24px 0",
-    backgroundRepeat: "no-repeat",
+    borderLeft: "2px solid var(--cg-fg)",
+    paddingLeft: "8px",
   },
 
-  /* QED tombstone — right-aligned ∎ at end of proof blocks */
+  /* QED tombstone — right-aligned at end of proof blocks */
   ".cg-block-qed::after": {
     content: "'\\220E'",
     float: "right",
@@ -212,18 +207,16 @@ export const chickenglassTheme = EditorView.theme({
 
   /* Include block styling */
   ".cg-block-include": {
-    borderLeft: "3px solid #6cb4ee",
-    backgroundColor: "#f0f7ff",
+    borderLeft: "2px solid var(--cg-border)",
     paddingLeft: "1em",
     marginBottom: "0.5em",
   },
 
   /* Blockquote styling: applied to .cm-line elements via Decoration.line */
   ".cg-blockquote": {
-    borderLeft: "4px solid #ccc",
-    backgroundColor: "#f9f9f9",
+    borderLeft: "2px solid var(--cg-border)",
     paddingLeft: "1em",
-    color: "#555",
+    color: "var(--cg-muted)",
     fontStyle: "italic",
   },
 
@@ -237,24 +230,23 @@ export const chickenglassTheme = EditorView.theme({
     display: "block",
     maxWidth: "100%",
     maxHeight: "400px",
-    borderRadius: "4px",
   },
   ".cg-image-error": {
     display: "inline-block",
-    color: "#c00",
+    color: "var(--cg-fg)",
     fontStyle: "italic",
     fontSize: "0.85em",
     padding: "2px 6px",
-    border: "1px solid #c00",
-    borderRadius: "3px",
+    border: "1px solid var(--cg-fg)",
+    borderRadius: "2px",
     verticalAlign: "middle",
   },
 
   /* Code block container */
   ".cg-codeblock": {
-    fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
-    backgroundColor: "#f6f8fa",
-    borderRadius: "4px",
+    fontFamily: monoFont,
+    backgroundColor: "var(--cg-subtle)",
+    borderRadius: "2px",
   },
 
   /* Code block header: show language label via CSS ::before */
@@ -262,9 +254,7 @@ export const chickenglassTheme = EditorView.theme({
     content: "attr(data-language)",
     display: "inline-block",
     fontSize: "0.75em",
-    color: "#666",
-    backgroundColor: "#e8ecf0",
-    borderRadius: "2px 2px 0 0",
+    color: "var(--cg-muted)",
     padding: "0 6px",
     marginBottom: "2px",
     fontWeight: "600",
@@ -274,12 +264,12 @@ export const chickenglassTheme = EditorView.theme({
 
   /* Source mode: subtle indication that fences are visible */
   ".cg-codeblock-source": {
-    backgroundColor: "#fffbe6",
+    backgroundColor: "var(--cg-subtle)",
   },
 
   /* Table styles */
   ".cg-table .cm-line": {
-    fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
+    fontFamily: monoFont,
     fontSize: "0.9em",
   },
 
@@ -288,12 +278,12 @@ export const chickenglassTheme = EditorView.theme({
   },
 
   ".cg-table-separator": {
-    color: "#999",
+    color: "var(--cg-muted)",
     fontSize: "0.85em",
   },
 
   ".cg-table-pipe": {
-    color: "#bbb",
+    color: "var(--cg-border)",
   },
 
   /* Floating toolbar for table editing */
@@ -301,37 +291,35 @@ export const chickenglassTheme = EditorView.theme({
     display: "flex",
     gap: "4px",
     padding: "4px 8px",
-    backgroundColor: "#f5f5f5",
-    border: "1px solid #ddd",
-    borderRadius: "4px",
+    backgroundColor: "var(--cg-subtle)",
+    border: "1px solid var(--cg-border)",
+    borderRadius: "2px",
     marginBottom: "4px",
   },
 
   ".cg-table-toolbar-btn": {
     padding: "2px 8px",
     fontSize: "12px",
-    border: "1px solid #ccc",
-    borderRadius: "3px",
-    backgroundColor: "#fff",
+    border: "1px solid var(--cg-border)",
+    borderRadius: "2px",
+    backgroundColor: "var(--cg-bg)",
     cursor: "pointer",
     fontFamily: "inherit",
     lineHeight: "1.4",
-    color: "#333",
+    color: "var(--cg-fg)",
   },
 
   ".cg-table-toolbar-btn:hover": {
-    backgroundColor: "#e8e8e8",
-    borderColor: "#999",
+    backgroundColor: "var(--cg-hover)",
   },
 
   /* Math preview floating panel */
   ".cg-math-preview": {
     position: "fixed",
     zIndex: "1000",
-    backgroundColor: "#fff",
-    border: "1px solid #ccc",
-    borderRadius: "6px",
-    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+    backgroundColor: "var(--cg-bg)",
+    border: "1px solid var(--cg-border)",
+    borderRadius: "2px",
     width: "fit-content",
     cursor: "grab",
   },
@@ -342,7 +330,7 @@ export const chickenglassTheme = EditorView.theme({
   /* Include region: right border spans the full height, label anchors to it */
   ".cg-include-region": {
     position: "relative",
-    borderRight: "2px solid #e8e8e8",
+    borderRight: "1px solid var(--cg-border)",
   },
 
   /* Include label: rotated filename inside the right padding of .cm-content */
@@ -355,7 +343,7 @@ export const chickenglassTheme = EditorView.theme({
     userSelect: "none",
     pointerEvents: "none",
     fontSize: "10px",
-    color: "#ccc",
+    color: "var(--cg-border)",
     whiteSpace: "nowrap",
     letterSpacing: "0.3px",
     lineHeight: "1",
@@ -363,7 +351,7 @@ export const chickenglassTheme = EditorView.theme({
   },
 
   ".cg-include-label-active": {
-    color: "#999",
+    color: "var(--cg-muted)",
   },
 
   /* Focus mode: dim non-active paragraphs */
@@ -375,7 +363,7 @@ export const chickenglassTheme = EditorView.theme({
   /* Sidenote reference: superscript number */
   ".cg-sidenote-ref": {
     fontSize: "0.75em",
-    color: "#a00",
+    color: "var(--cg-fg)",
     cursor: "pointer",
     verticalAlign: "super",
     lineHeight: "0",
@@ -389,15 +377,15 @@ export const chickenglassTheme = EditorView.theme({
     width: "240px",
     fontSize: "0.8em",
     lineHeight: "1.4",
-    color: "#555",
-    fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
+    color: "var(--cg-muted)",
+    fontFamily: monoFont,
     transition: "transform 0.15s ease-out",
   },
 
   /* Sidenote number label */
   ".cg-sidenote-number": {
     fontSize: "0.75em",
-    color: "#a00",
+    color: "var(--cg-fg)",
     fontWeight: "600",
     verticalAlign: "super",
     lineHeight: "0",
