@@ -5,6 +5,11 @@ export {
   type PaletteCommand,
 } from "./command-palette";
 export {
+  exportDocument,
+  checkPandoc,
+  type ExportFormat,
+} from "./export";
+export {
   type FileEntry,
   type FileSystem,
   MemoryFileSystem,

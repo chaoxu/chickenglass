@@ -14,6 +14,7 @@ import {
   installPaletteKeybinding,
 } from "./command-palette";
 import { getEditorCommands, createHeadingCommands } from "../editor/commands";
+import { exportDocument, type ExportFormat } from "./export";
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
 import { TabBar } from "./tab-bar";
@@ -421,11 +422,48 @@ export class App {
     this.bufferContent.set(activePath, this.editor.state.doc.toString());
   }
 
+  /** Export the active document to PDF or LaTeX via Pandoc. */
+  async exportActiveFile(format: ExportFormat): Promise<void> {
+    const activePath = this.tabBar.getActiveTab();
+    if (!activePath || !this.editor) return;
+
+    // Use the current editor content (includes already expanded)
+    const content = this.editor.state.doc.toString();
+
+    try {
+      const outputPath = await exportDocument(content, format, activePath);
+      // Show a brief success notification
+      this.showNotification(`Exported to ${outputPath}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.showNotification(`Export failed: ${message}`, true);
+    }
+  }
+
+  /** Show a temporary notification bar at the top of the editor. */
+  private showNotification(message: string, isError = false): void {
+    const bar = document.createElement("div");
+    bar.className = `app-notification${isError ? " app-notification-error" : ""}`;
+    bar.textContent = message;
+    this.editorContainer.prepend(bar);
+    setTimeout(() => bar.remove(), 5000);
+  }
+
   private setupKeybindings(): void {
     this.root.addEventListener("keydown", (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
         this.saveActiveFile();
+      }
+      // Cmd+Shift+E / Ctrl+Shift+E → Export to PDF
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "E") {
+        e.preventDefault();
+        this.exportActiveFile("pdf");
+      }
+      // Cmd+Shift+L / Ctrl+Shift+L → Export to LaTeX
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "L") {
+        e.preventDefault();
+        this.exportActiveFile("latex");
       }
     });
   }
