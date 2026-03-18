@@ -9,6 +9,11 @@ import { resolveIncludePath } from "../plugins/include-resolver";
 import { SourceMap, type IncludeRegion } from "./source-map";
 import { BackgroundIndexer } from "../index";
 import type { FileEntry, FileSystem } from "./file-manager";
+import {
+  CommandPalette,
+  installPaletteKeybinding,
+} from "./command-palette";
+import { getEditorCommands, createHeadingCommands } from "../editor/commands";
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
 import { TabBar } from "./tab-bar";
@@ -41,8 +46,10 @@ export class App {
   private readonly sidebar: Sidebar;
   private readonly tabBar: TabBar;
   private readonly searchPanel: SearchPanel;
+  private readonly commandPalette: CommandPalette;
   private readonly indexer: BackgroundIndexer;
   private readonly cleanupSearchKeybinding: () => void;
+  private readonly cleanupPaletteKeybinding: () => void;
   private readonly editorContainer: HTMLElement;
   private editor: EditorView | null = null;
   /** Last bibliography path loaded (to avoid redundant reloads). */
@@ -102,6 +109,16 @@ export class App {
     this.cleanupSearchKeybinding = installSearchKeybinding(
       this.root,
       this.searchPanel,
+    );
+
+    // Command palette overlay (hidden by default)
+    this.commandPalette = new CommandPalette();
+    this.commandPalette.registerCommands(getEditorCommands());
+    this.root.appendChild(this.commandPalette.element);
+
+    this.cleanupPaletteKeybinding = installPaletteKeybinding(
+      this.root,
+      this.commandPalette,
     );
 
     this.setupKeybindings();
@@ -203,9 +220,15 @@ export class App {
     return this.searchPanel;
   }
 
+  /** Get the command palette component (for testing). */
+  getCommandPalette(): CommandPalette {
+    return this.commandPalette;
+  }
+
   /** Clean up event listeners and background worker. */
   destroy(): void {
     this.cleanupSearchKeybinding();
+    this.cleanupPaletteKeybinding();
     this.destroyEditor();
     this.clearIndexTimer();
     this.indexer.dispose();
@@ -292,6 +315,13 @@ export class App {
 
     // Attach outline to the new editor
     this.sidebar.outline.attach(this.editor);
+
+    // Wire command palette to the new editor view
+    this.commandPalette.setView(this.editor);
+    const editorRef = this.editor;
+    this.commandPalette.setDynamicProvider(() =>
+      createHeadingCommands(editorRef),
+    );
   }
 
   /** Load the .bib and optional .csl files specified in frontmatter. */

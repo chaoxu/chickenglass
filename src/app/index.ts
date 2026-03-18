@@ -1,5 +1,10 @@
 export { App, type AppConfig } from "./app";
 export {
+  CommandPalette,
+  installPaletteKeybinding,
+  type PaletteCommand,
+} from "./command-palette";
+export {
   type FileEntry,
   type FileSystem,
   MemoryFileSystem,

@@ -1,3 +1,4 @@
+export { getEditorCommands, createHeadingCommands } from "./commands";
 export { createEditor, type EditorConfig } from "./editor";
 export {
   frontmatterDecoration,
