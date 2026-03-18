@@ -101,7 +101,6 @@ export function createEditor(config: EditorConfig): EditorView {
       sectionNumberPlugin,
       fenceGuidePlugin,
       includeLabelPlugin,
-<<<<<<< HEAD
       focusModeExtension,
       sidenoteRenderPlugin,
 
