@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod menu;
 
 use commands::{FileWatcherState, ProjectRoot};
 use std::sync::Mutex;
@@ -11,6 +12,12 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(ProjectRoot(Mutex::new(None)))
         .manage(FileWatcherState(Mutex::new(None)))
+        .setup(|app| {
+            let menu = menu::build_menu(app)?;
+            app.set_menu(menu)?;
+            menu::setup_menu_events(app);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::open_folder,
             commands::read_file,
