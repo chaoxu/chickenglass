@@ -90,6 +90,7 @@ const pipeMarkDecoration = Decoration.mark({ class: "cg-table-pipe" });
 /** Find all Table nodes in the visible ranges and parse them. */
 function findTables(view: EditorView): TableRange[] {
   const tables: TableRange[] = [];
+  const seen = new Set<number>();
   const doc = view.state.doc;
 
   for (const { from: vFrom, to: vTo } of view.visibleRanges) {
@@ -98,6 +99,10 @@ function findTables(view: EditorView): TableRange[] {
       to: vTo,
       enter(node) {
         if (node.name !== "Table") return;
+        // Deduplicate: a Table node can span multiple visible ranges
+        // when inline Decoration.replace (e.g. math widgets) creates gaps
+        if (seen.has(node.from)) return;
+        seen.add(node.from);
 
         const tableFrom = node.from;
         const tableTo = node.to;

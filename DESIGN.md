@@ -2,7 +2,7 @@
 
 ## What is it
 
-A browser-based editor for semantic documents, optimized for mathematical writing. Typora-style inline WYSIWYG: rendered by default, source revealed on cursor focus.
+A desktop editor for semantic documents, optimized for mathematical writing. Typora-style inline WYSIWYG: rendered by default, source revealed on cursor focus. Built with Tauri (Rust backend) + CodeMirror 6 (TypeScript frontend).
 
 ## Core philosophy
 
@@ -14,12 +14,12 @@ A browser-based editor for semantic documents, optimized for mathematical writin
 
 ## Stack
 
-- **Language**: TypeScript (everything)
+- **Language**: TypeScript (frontend) + Rust (Tauri backend)
 - **Editor**: CodeMirror 6
 - **Parser**: Lezer (extending `@lezer/markdown`)
 - **Math**: KaTeX
-- **Desktop**: Electron (later)
-- **Self-hosted web**: Served as a static SPA or lightweight server
+- **Desktop**: Tauri v2 (~5MB binary, native OS webview)
+- **Build**: Vite (frontend), Cargo (backend)
 - **Future CRDT**: Yjs (text-level for v2, AST-level for v3)
 
 ## Document format
@@ -115,15 +115,24 @@ Or inline: `!include chapter1.md` (TBD: choose syntax)
 
 ```
 ┌─────────────────────────────────────────────┐
-│                  Editor (CM6)                │
-│                                             │
-│  Markdown text ←→ Lezer parser → AST        │
-│       ↑                          ↓          │
-│       │                    CM6 ViewPlugins   │
-│       │                    (Decorations)     │
-│       │                          ↓          │
-│  Source on focus ←──→ Rendered otherwise     │
-│                          (KaTeX, blocks)     │
+│  Tauri Window (WebView)                      │
+│  ┌─────────────────────────────────────────┐ │
+│  │            Editor (CM6)                 │ │
+│  │                                         │ │
+│  │  Markdown text ←→ Lezer parser → AST    │ │
+│  │       ↑                          ↓      │ │
+│  │       │                  CM6 Decorations │ │
+│  │       │                          ↓      │ │
+│  │  Source on focus ←──→ Rendered otherwise │ │
+│  │                        (KaTeX, blocks)  │ │
+│  └──────────────┬──────────────────────────┘ │
+│                 │ invoke()                    │
+│  ┌──────────────▼──────────────────────────┐ │
+│  │  Rust Backend                           │ │
+│  │  - fs commands (read/write/list/create) │ │
+│  │  - open_folder dialog                   │ │
+│  │  - path security (no traversal)         │ │
+│  └─────────────────────────────────────────┘ │
 └─────────────────────────────────────────────┘
            ↓ save                ↑ load
      .md files on disk (git-tracked)
@@ -179,7 +188,7 @@ A background process (or web worker) that:
 - Cross-references and citations
 - File inclusion with continuous numbering
 - Semantic search/indexing
-- Desktop (Electron) and self-hosted web app
+- Desktop app via Tauri v2 (replaced Electron)
 - Git integration: none (use externally)
 - Export: Pandoc CLI (manual)
 

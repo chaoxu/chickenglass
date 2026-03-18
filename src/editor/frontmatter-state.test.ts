@@ -1,7 +1,7 @@
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 
-import { frontmatterDecoration, frontmatterField } from "./frontmatter-state";
+import { frontmatterDecoration, frontmatterDecorationField, frontmatterField } from "./frontmatter-state";
 
 function createState(doc: string): EditorState {
   return EditorState.create({
@@ -104,7 +104,7 @@ describe("frontmatterDecoration", () => {
   it("creates decoration hiding frontmatter", () => {
     const doc = "---\ntitle: Hello\n---\nContent";
     const state = createState(doc);
-    const decos = state.field(frontmatterDecoration);
+    const decos = state.field(frontmatterDecorationField);
     // Should have exactly one decoration range
     const iter = decos.iter();
     expect(iter.value).not.toBeNull();
@@ -114,7 +114,7 @@ describe("frontmatterDecoration", () => {
 
   it("creates no decorations when no frontmatter", () => {
     const state = createState("# No frontmatter");
-    const decos = state.field(frontmatterDecoration);
+    const decos = state.field(frontmatterDecorationField);
     const iter = decos.iter();
     expect(iter.value).toBeNull();
   });

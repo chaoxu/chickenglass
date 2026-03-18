@@ -125,15 +125,13 @@ math:
   \\\\Z: "\\\\mathbb{Z}"
 ---
 
-# Chickenglass Demo
-
 A semantic document editor for **mathematical writing**. It supports *Typora-style* inline rendering, ~~strikethrough~~, ==highlights==, and \`inline code\`.
 
 ::: {.include}
 chapters/introduction.md
 :::
 
-## Math
+# Math
 
 The Euler identity $e^{i\\pi} + 1 = 0$ unites five fundamental constants. Custom macros work too: $\\R$, $\\N$, $\\Z$.
 
@@ -147,7 +145,7 @@ $$
 \\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}
 $$ {#eq:sum}
 
-## Theorems & Proofs
+# Theorems & Proofs
 
 ::: {.theorem #thm-evt} Extreme Value Theorem
 Every continuous function $f: [a,b] \\to \\R$ attains its maximum and minimum.
@@ -169,15 +167,15 @@ A set $K \\subseteq \\R$ is **compact** if every open cover of $K$ has a finite 
 Every continuous function on a closed interval is bounded.
 :::
 
-## Cross-References
+# Cross-References
 
 See [@thm-evt] for the main result, which relies on [@lem-compact]. The key definition is [@def-compact]. The Gaussian integral is [@eq:gaussian], and the summation formula is [@eq:sum].
 
-## Citations
+# Citations
 
 Minimum cuts can be computed efficiently [@karger2000]. As shown by @cormen2009, graph algorithms are fundamental to computer science. For classic references on algorithm analysis, see [@knuth1997; @karger2000].
 
-## Lists
+# Lists
 
 Key concepts:
 
@@ -201,7 +199,7 @@ Task list:
 - [ ] Export to PDF via Pandoc
 - [ ] Add real-time collaboration
 
-## Tables
+# Tables
 
 | Property      | Symbol        | Description                              |
 | :------------ | :-----------: | ---------------------------------------: |
@@ -210,7 +208,7 @@ Task list:
 | Reals         | $\\R$         | The complete ordered field               |
 | Euler's       | $e^{i\\pi}$   | The most beautiful identity              |
 
-## Code
+# Code
 
 \`\`\`typescript
 function isPrime(n: number): boolean {
@@ -222,7 +220,7 @@ function isPrime(n: number): boolean {
 }
 \`\`\`
 
-## Blockquote
+# Blockquote
 
 > Mathematics is the queen of the sciences and number theory is the queen of mathematics.
 > — Carl Friedrich Gauss
@@ -275,7 +273,7 @@ chapters/background.md
 2. @cormen2009 — Chapter 26 on maximum flow
 3. [@knuth1997] — Volume 1, fundamental algorithms
 `,
-    "chapters/introduction.md": `## Introduction
+    "chapters/introduction.md": `# Introduction
 
 This document demonstrates the features of Chickenglass, a semantic editor for mathematical writing. The editor provides:
 
@@ -286,9 +284,9 @@ This document demonstrates the features of Chickenglass, a semantic editor for m
 - **CSL citations**: formatted bibliography from BibTeX files
 - **File includes**: compose documents from multiple files seamlessly
 `,
-    "chapters/background.md": `## Background
+    "chapters/background.md": `# Background
 
-### Compactness
+## Compactness
 
 The notion of compactness is central to analysis. In $\\R^n$, the Heine-Borel theorem states that a set is compact if and only if it is closed and bounded.
 
@@ -296,10 +294,10 @@ The notion of compactness is central to analysis. In $\\R^n$, the Heine-Borel th
 A subset of $\\R^n$ is compact if and only if it is closed and bounded.
 :::
 
-### Continuity
+## Continuity
 
-::: {.definition #def-continuous}
-A function $f: X \\to Y$ is **continuous** at $x_0$ if for every $\\varepsilon > 0$ there exists $\\delta > 0$ such that $d(x, x_0) < \\delta$ implies $d(f(x), f(x_0)) < \\varepsilon$.
+::: {.definition #def-continuous} Continuity of $f: X \\to Y$
+A function $f$ is **continuous** at $x_0$ if for every $\\varepsilon > 0$ there exists $\\delta > 0$ such that $d(x, x_0) < \\delta$ implies $d(f(x), f(x_0)) < \\varepsilon$.
 :::
 
 This is equivalent to requiring that preimages of open sets are open.

@@ -50,8 +50,6 @@ export class App {
   /** Last CSL style path loaded. */
   private lastCslPath = "";
   private indexUpdateTimer: ReturnType<typeof setTimeout> | null = null;
-  private sourceMap: SourceMap | null = null;
-
   private static readonly INCLUDE_RE =
     /^(:{3,})\s*\{\.include\}\s*\n\s*(.+?)\s*\n\1\s*$/gm;
 
@@ -61,6 +59,8 @@ export class App {
   private readonly bufferContent = new Map<string, string>();
   /** Expanded content at last save point, for dirty checking. */
   private readonly savedExpandedContent = new Map<string, string>();
+  /** Source maps for include tracking, keyed by file path. */
+  private readonly sourceMaps = new Map<string, SourceMap>();
 
   constructor(config: AppConfig) {
     this.fs = config.fs;
@@ -144,7 +144,7 @@ export class App {
 
     const rawContent = await this.fs.readFile(path);
     const { composed: content, sourceMap } = await this.expandIncludes(path, rawContent);
-    this.sourceMap = sourceMap;
+    this.sourceMaps.set(path, sourceMap);
     (window as unknown as { __cgSourceMap: SourceMap | null }).__cgSourceMap = sourceMap;
     this.savedContent.set(path, rawContent);
     this.savedExpandedContent.set(path, content);
@@ -162,13 +162,14 @@ export class App {
     const content = this.bufferContent.get(activePath);
     if (content === undefined) return;
 
-    if (this.sourceMap && this.sourceMap.regions.length > 0) {
-      const fileParts = this.sourceMap.decompose(content);
+    const sourceMap = this.sourceMaps.get(activePath);
+    if (sourceMap && sourceMap.regions.length > 0) {
+      const fileParts = sourceMap.decompose(content);
       for (const [filePath, fileContent] of fileParts) {
         try { await this.fs.writeFile(filePath, fileContent); }
         catch { await this.fs.createFile(filePath, fileContent); }
       }
-      const mainContent = this.sourceMap.reconstructMain(content, activePath);
+      const mainContent = sourceMap.reconstructMain(content, activePath);
       await this.fs.writeFile(activePath, mainContent);
       this.savedContent.set(activePath, mainContent);
     } else {
@@ -223,6 +224,7 @@ export class App {
     this.savedContent.delete(path);
     this.savedExpandedContent.delete(path);
     this.bufferContent.delete(path);
+    this.sourceMaps.delete(path);
 
     if (nextPath) {
       const content = this.bufferContent.get(nextPath) ?? "";
@@ -235,6 +237,7 @@ export class App {
   }
 
   private switchEditor(path: string, content: string): void {
+    const basename = path.split("/").pop() ?? path;
     this.destroyEditor();
     this.lastBibPath = "";
     this.lastCslPath = "";
@@ -247,7 +250,7 @@ export class App {
         const saved = this.savedExpandedContent.get(path) ?? "";
         this.tabBar.setDirty(path, newContent !== saved);
         this.scheduleIndexUpdate(path, newContent);
-        this.sourceMap?.mapThrough(update.changes);
+        this.sourceMaps.get(path)?.mapThrough(update.changes);
       }
     });
 
@@ -257,16 +260,35 @@ export class App {
       }
     });
 
+    const titleListener = EditorView.updateListener.of((update) => {
+      if (update.docChanged || update.startState.field(frontmatterField, false) === undefined) {
+        const fm = update.state.field(frontmatterField, false);
+        const displayName = fm?.config.title ?? basename;
+        this.tabBar.updateName(path, displayName);
+        document.title = fm?.config.title
+          ? `${fm.config.title} — Chickenglass`
+          : "Chickenglass";
+      }
+    });
+
     this.editor = createEditor({
       parent: this.editorContainer,
       doc: content,
-      extensions: [changeListener, bibListener],
+      extensions: [changeListener, bibListener, titleListener],
     });
     // Expose view for debugging
     (window as unknown as { __cmView: EditorView }).__cmView = this.editor;
 
     // Initial bibliography load
     this.loadBibliographyIfChanged(path, this.editor);
+
+    // Initial title update (listener only fires on changes, not initial state)
+    const initialFm = this.editor.state.field(frontmatterField, false);
+    const initialName = initialFm?.config.title ?? basename;
+    this.tabBar.updateName(path, initialName);
+    if (initialFm?.config.title) {
+      document.title = `${initialFm.config.title} — Chickenglass`;
+    }
 
     // Attach outline to the new editor
     this.sidebar.outline.attach(this.editor);

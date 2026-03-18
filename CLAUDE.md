@@ -1,14 +1,15 @@
 # Chickenglass v2
 
-Browser-based semantic document editor for mathematical writing.
+Semantic document editor for mathematical writing. Runs as a native desktop app (Tauri) or in the browser for development.
 
 ## Stack
 
-- **Language**: TypeScript (strict mode)
+- **Language**: TypeScript (strict mode) + Rust (Tauri backend)
 - **Editor**: CodeMirror 6
 - **Parser**: Lezer (`@lezer/markdown` with custom extensions)
 - **Math**: KaTeX
-- **Build**: Vite
+- **Desktop**: Tauri v2 (replaced Electron — smaller bundles, native webview)
+- **Build**: Vite (frontend), Cargo (Rust backend)
 - **Package manager**: npm
 
 ## Project structure
@@ -21,20 +22,27 @@ src/
   render/        # CM6 ViewPlugins for Typora-style rendering
   index/         # Semantic indexer (cross-refs, citations, search)
   citations/     # BibTeX parser and citation rendering
-  app/           # File management, tabs, sidebar
-  main.ts        # Entry point
+  app/           # File management, tabs, sidebar, TauriFileSystem
+  main.ts        # Entry point (detects Tauri vs browser, picks filesystem)
+src-tauri/
+  src/main.rs    # Tauri entry point, registers commands
+  src/commands.rs # Rust filesystem commands (read/write/list/create/exists)
+  tauri.conf.json # Tauri config (window, build, permissions)
+  capabilities/  # Tauri v2 permission declarations
 ```
 
 ## Commands
 
 ```bash
 npm install          # install dependencies
-npm run dev          # start dev server (Vite)
-npm run build        # production build
+npm run dev          # start dev server (Vite) — browser mode with demo content
+npm run build        # production build (frontend only)
 npm run lint         # ESLint
 npm run lint:fix     # ESLint autofix
 npm run test         # run tests
 npx tsc --noEmit     # typecheck only
+npm run tauri:dev    # launch Tauri desktop app (starts Vite + Rust backend)
+npm run tauri:build  # build production desktop binary
 ```
 
 ## Workspace hygiene
@@ -89,3 +97,6 @@ See DESIGN.md for full specification.
 - **Every block is a plugin**: The core knows nothing about "theorem." Plugins register classes, parsers, renderers, and numbering.
 - **AST nodes track source positions**: Lezer does this by default. Essential for Typora-style editing and future structural editing (v3).
 - **Fenced divs are composite blocks**: Content inside `::: ... :::` is parsed as full markdown by re-entering the markdown parser.
+- **Tauri over Electron**: Chose Tauri for ~5MB bundles (vs Electron's ~150MB), native OS webview, and Rust backend. The frontend is identical in both browser and Tauri modes.
+- **FileSystem abstraction**: `FileSystem` interface in `file-manager.ts` is implemented by `MemoryFileSystem` (demo/dev) and `TauriFileSystem` (desktop). `main.ts` detects the environment at runtime via `window.__TAURI__`.
+- **Dual-mode app**: Tauri app starts with demo content, user can "Open Folder" to switch to real files. Browser dev mode always uses demo content. This keeps development fast (no Rust recompilation for frontend changes).

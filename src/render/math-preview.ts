@@ -58,8 +58,9 @@ class MathPreviewPlugin implements PluginValue {
   private isDragging = false;
   private dragOffsetX = 0;
   private dragOffsetY = 0;
-  /** Position to measure on next requestMeasure cycle. */
-  private measurePos = -1;
+  /** Positions to measure on next requestMeasure cycle. */
+  private measureFromPos = -1;
+  private measureToPos = -1;
 
   constructor(private view: EditorView) {
     this.scheduleCheck();
@@ -101,19 +102,22 @@ class MathPreviewPlugin implements PluginValue {
       this.renderLatex(latex, info.isDisplay);
     }
 
-    // Store position for the measurement callback and schedule it.
-    // Using a key ensures multiple scheduleCheck calls collapse into one measurement.
-    this.measurePos = info.from;
+    // Position below the entire math block: left from start, top from end.
+    this.measureFromPos = info.from;
+    this.measureToPos = info.to;
     this.view.requestMeasure({
       key: "cg-math-preview-pos",
       read: () => {
-        if (this.measurePos < 0) return null;
-        return this.view.coordsAtPos(this.measurePos);
+        if (this.measureFromPos < 0) return null;
+        const fromCoords = this.view.coordsAtPos(this.measureFromPos);
+        const toCoords = this.view.coordsAtPos(this.measureToPos);
+        if (!fromCoords || !toCoords) return null;
+        return { left: fromCoords.left, bottom: toCoords.bottom };
       },
       write: (coords) => {
         if (!coords || !this.panel || this.isDragging) return;
         this.panel.style.left = `${coords.left}px`;
-        this.panel.style.top = `${coords.bottom + 8}px`;
+        this.panel.style.top = `${coords.bottom + 4}px`;
       },
     });
   }
@@ -122,12 +126,8 @@ class MathPreviewPlugin implements PluginValue {
     const panel = document.createElement("div");
     panel.className = "cg-math-preview";
 
-    // Title bar (draggable)
-    const titleBar = document.createElement("div");
-    titleBar.className = "cg-math-preview-titlebar";
-    titleBar.textContent = "Math Preview";
-
-    titleBar.addEventListener("mousedown", (e) => {
+    // Panel itself is draggable
+    panel.addEventListener("mousedown", (e) => {
       this.isDragging = true;
       const rect = panel.getBoundingClientRect();
       this.dragOffsetX = e.clientX - rect.left;
@@ -147,19 +147,6 @@ class MathPreviewPlugin implements PluginValue {
 
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
-
-    // Close button
-    const closeBtn = document.createElement("button");
-    closeBtn.className = "cg-math-preview-close";
-    closeBtn.textContent = "\u00D7";
-    closeBtn.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.removePanel();
-    });
-
-    titleBar.appendChild(closeBtn);
-    panel.appendChild(titleBar);
 
     // Content area
     const content = document.createElement("div");
@@ -193,7 +180,8 @@ class MathPreviewPlugin implements PluginValue {
     this.panel = null;
     this.contentEl = null;
     this.lastRaw = "";
-    this.measurePos = -1;
+    this.measureFromPos = -1;
+    this.measureToPos = -1;
   }
 }
 

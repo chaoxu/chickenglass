@@ -43,6 +43,20 @@ export const chickenglassTheme = EditorView.theme({
     backgroundColor: "transparent",
   },
 
+  /* Document title from frontmatter — distinct from # section headings */
+  ".cg-doc-title": {
+    fontSize: "2.4em",
+    fontWeight: "800",
+    lineHeight: "1.2",
+    color: "#111",
+    marginBottom: "0.25em",
+    paddingBottom: "0.15em",
+    borderBottom: "1px solid #e8e8e8",
+    display: "block",
+    cursor: "text",
+    userSelect: "none",
+  },
+
   /* Hidden markers — source text stays in DOM but invisible */
   ".cg-hidden": {
     fontSize: "0",
@@ -141,9 +155,8 @@ export const chickenglassTheme = EditorView.theme({
     margin: "0.5em 0",
   },
 
-  /* Block header: show label via CSS ::before pseudo-element */
-  ".cg-block-header[data-block-label]::before": {
-    content: "attr(data-block-label) ' '",
+  /* Block header: rendered widget with optional KaTeX math */
+  ".cg-block-header-rendered": {
     fontWeight: "bold",
   },
 
@@ -312,38 +325,11 @@ export const chickenglassTheme = EditorView.theme({
     border: "1px solid #ccc",
     borderRadius: "6px",
     boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-    minWidth: "200px",
-    maxWidth: "500px",
-  },
-  ".cg-math-preview-titlebar": {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "4px 8px",
-    backgroundColor: "#f5f5f5",
-    borderBottom: "1px solid #ddd",
-    borderRadius: "6px 6px 0 0",
+    width: "fit-content",
     cursor: "grab",
-    fontSize: "12px",
-    color: "#666",
-    userSelect: "none",
-  },
-  ".cg-math-preview-close": {
-    border: "none",
-    background: "none",
-    cursor: "pointer",
-    fontSize: "16px",
-    color: "#999",
-    padding: "0 4px",
-    lineHeight: "1",
-  },
-  ".cg-math-preview-close:hover": {
-    color: "#333",
   },
   ".cg-math-preview-content": {
-    padding: "12px",
-    overflow: "auto",
-    maxHeight: "300px",
+    padding: "8px 12px",
   },
 
   /* Include region: right border spans the full height, label anchors to it */

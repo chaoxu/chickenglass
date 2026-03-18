@@ -117,10 +117,12 @@ export const blockCounterField = StateField.define<BlockCounterState>({
   },
 
   update(value, tr) {
-    if (!tr.docChanged) return value;
-    return computeBlockNumbers(
-      tr.state,
-      tr.state.field(pluginRegistryField),
-    );
+    if (
+      tr.docChanged ||
+      syntaxTree(tr.state).length > syntaxTree(tr.startState).length
+    ) {
+      return computeBlockNumbers(tr.state, tr.state.field(pluginRegistryField));
+    }
+    return value;
   },
 });

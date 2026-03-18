@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicbarker/tauri/main/crates/tauri-schema-generator/schemas/config.schema.json",
+  "identifier": "default",
+  "description": "Default capabilities for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "dialog:allow-open"
+  ]
+}

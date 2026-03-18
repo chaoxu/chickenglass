@@ -73,6 +73,15 @@ export class TabBar {
     this.renderTabs();
   }
 
+  /** Update the display name of a tab (e.g. from frontmatter title). */
+  updateName(path: string, name: string): void {
+    const tab = this.tabs.find((t) => t.path === path);
+    if (tab && tab.name !== name) {
+      tab.name = name;
+      this.renderTabs();
+    }
+  }
+
   /** Mark a tab as dirty (unsaved changes). */
   setDirty(path: string, dirty: boolean): void {
     const tab = this.tabs.find((t) => t.path === path);

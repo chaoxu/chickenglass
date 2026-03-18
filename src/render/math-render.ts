@@ -1,4 +1,5 @@
 import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
+import { syntaxTree } from "@codemirror/language";
 import {
   Decoration,
   type DecorationSet,
@@ -194,7 +195,12 @@ const mathDecorationField = StateField.define<DecorationSet>({
   },
 
   update(value, tr) {
-    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(focusEffect))) {
+    if (
+      tr.docChanged ||
+      tr.selection ||
+      tr.effects.some((e) => e.is(focusEffect)) ||
+      syntaxTree(tr.state).length > syntaxTree(tr.startState).length
+    ) {
       const focused = tr.state.field(editorFocusField, false) ?? false;
       return buildMathDecorationsFromState(tr.state, focused);
     }

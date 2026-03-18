@@ -1,13 +1,13 @@
 node_modules/
 dist/
-dist-electron/
 dist-server/
+src-tauri/target/
+src-tauri/gen/schemas/
 .DS_Store
 *.tsbuildinfo
 .worktrees/
 .claude/state/
 
 .playwright-mcp/
-*.png
 ~/
 .claude/worktrees/

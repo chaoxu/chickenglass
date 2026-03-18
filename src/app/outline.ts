@@ -6,7 +6,8 @@
  * entry scrolls the editor to that heading.
  */
 
-import type { EditorView } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
+import { StateEffect } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 
 /** A single outline entry. */
@@ -59,7 +60,7 @@ function extractOutline(view: EditorView): OutlineEntry[] {
 export class Outline {
   readonly element: HTMLElement;
   private view: EditorView | null = null;
-  private cleanup: (() => void) | null = null;
+  private lastTreeLength = 0;
 
   constructor() {
     this.element = document.createElement("div");
@@ -70,17 +71,25 @@ export class Outline {
   attach(view: EditorView): void {
     this.detach();
     this.view = view;
+    this.lastTreeLength = 0;
     this.refresh();
 
-    // Periodically refresh outline to track doc changes
-    const interval = setInterval(() => this.refresh(), 1000);
-    this.cleanup = () => clearInterval(interval);
+    // Refresh outline on doc changes and parser advancement
+    const extension = EditorView.updateListener.of((update) => {
+      if (!this.view) return;
+      const tree = syntaxTree(update.state);
+      const treeAdvanced = tree.length > this.lastTreeLength;
+      if (update.docChanged || treeAdvanced) {
+        this.lastTreeLength = tree.length;
+        this.refresh();
+      }
+    });
+
+    view.dispatch({ effects: StateEffect.appendConfig.of(extension) });
   }
 
   /** Detach from the current editor view. */
   detach(): void {
-    this.cleanup?.();
-    this.cleanup = null;
     this.view = null;
     this.element.innerHTML = "";
   }

@@ -2,17 +2,23 @@
  * CM6 StateField that parses and caches frontmatter configuration.
  *
  * Provides `FrontmatterConfig` to other extensions via
- * `state.field(frontmatterField)` and an optional decoration
- * that hides the frontmatter region in Typora-style rendering.
+ * `state.field(frontmatterField)` and a decoration that renders
+ * the document title (from frontmatter) in Typora-style mode,
+ * revealing the raw YAML when the cursor is inside the region.
  */
-import { EditorState, StateField } from "@codemirror/state";
-import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
+import { EditorState, type Extension, StateField } from "@codemirror/state";
+import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 
 import {
   parseFrontmatter,
   type FrontmatterConfig,
   type FrontmatterResult,
 } from "../parser/frontmatter";
+import {
+  editorFocusField,
+  focusEffect,
+  focusTracker,
+} from "../render/render-utils";
 
 export { type FrontmatterConfig } from "../parser/frontmatter";
 
@@ -73,26 +79,49 @@ export const frontmatterField = StateField.define<FrontmatterState>({
   },
 });
 
-/** Widget-replace decoration that hides a range of text. */
-const hiddenDecoration = Decoration.replace({});
+/** Widget that renders the document title from frontmatter. */
+class TitleWidget extends WidgetType {
+  constructor(private readonly title: string) {
+    super();
+  }
+
+  toDOM(): HTMLElement {
+    const el = document.createElement("div");
+    el.className = "cg-doc-title";
+    el.textContent = this.title;
+    return el;
+  }
+
+  eq(other: TitleWidget): boolean {
+    return this.title === other.title;
+  }
+
+  ignoreEvent(): boolean {
+    // Let CM6 handle clicks → places cursor at position 0 → reveals YAML source
+    return false;
+  }
+}
 
 /**
- * CM6 StateField that provides a DecorationSet hiding the frontmatter
- * block in Typora-style rendering mode.
- *
- * Add this to your extensions to hide frontmatter visually:
- * ```ts
- * extensions: [frontmatterField, frontmatterDecoration]
- * ```
+ * CM6 StateField that renders frontmatter in Typora style:
+ * - Editor focused + cursor inside frontmatter: show raw YAML for editing
+ * - Otherwise: replace with a document title widget (if title present)
+ *   or hide entirely (if no title)
  */
-export const frontmatterDecoration = StateField.define<DecorationSet>({
+const frontmatterDecorationField = StateField.define<DecorationSet>({
   create(state) {
     return buildDecorations(state);
   },
 
   update(value, tr) {
-    if (!tr.docChanged) return value;
-    return buildDecorations(tr.state);
+    if (
+      tr.docChanged ||
+      tr.selection ||
+      tr.effects.some((e) => e.is(focusEffect))
+    ) {
+      return buildDecorations(tr.state);
+    }
+    return value;
   },
 
   provide(field) {
@@ -100,10 +129,43 @@ export const frontmatterDecoration = StateField.define<DecorationSet>({
   },
 });
 
-/** Build decorations that hide the frontmatter region. */
+/**
+ * The StateField for tests and direct field access.
+ * Use `frontmatterDecoration` (the full extension) in the editor.
+ */
+export { frontmatterDecorationField };
+
+/**
+ * CM6 extension that hides frontmatter and renders a document title widget.
+ * Includes the focus tracker so focus/blur toggling works correctly.
+ */
+export const frontmatterDecoration: Extension = [
+  editorFocusField,
+  focusTracker,
+  frontmatterDecorationField,
+];
+
+/** Build decorations for the frontmatter region. */
 function buildDecorations(state: EditorState): DecorationSet {
-  const { end } = state.field(frontmatterField);
+  const { end, config } = state.field(frontmatterField);
   if (end <= 0) return Decoration.none;
 
-  return Decoration.set([hiddenDecoration.range(0, end)]);
+  // Only reveal raw YAML when the editor is focused and cursor is inside
+  const focused = state.field(editorFocusField, false) ?? false;
+  const cursor = state.selection.main;
+  if (focused && cursor.from < end) {
+    return Decoration.none;
+  }
+
+  // Otherwise: replace frontmatter with title widget (or hide)
+  if (config.title) {
+    return Decoration.set([
+      Decoration.replace({
+        widget: new TitleWidget(config.title),
+        block: true,
+      }).range(0, end),
+    ]);
+  }
+
+  return Decoration.set([Decoration.replace({}).range(0, end)]);
 }
