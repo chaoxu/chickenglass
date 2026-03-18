@@ -13,6 +13,7 @@ export {
   getRegisteredNames,
   pluginFromConfig,
   applyFrontmatterBlocks,
+  builtinPluginsFacet,
   pluginRegistryField,
   createPluginRegistryField,
 } from "./plugin-registry";

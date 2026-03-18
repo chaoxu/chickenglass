@@ -1,4 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { EditorState } from "@codemirror/state";
+import { markdown } from "@codemirror/lang-markdown";
+import { fencedDiv } from "../parser/fenced-div";
+import { frontmatterField } from "../editor/frontmatter-state";
+import { projectConfigFacet } from "../app/project-config";
+import type { BlockConfig } from "../parser/frontmatter";
 
 import type { BlockPlugin } from "./plugin-types";
 import {
@@ -10,6 +16,8 @@ import {
   getRegisteredNames,
   pluginFromConfig,
   applyFrontmatterBlocks,
+  pluginRegistryField,
+  createPluginRegistryField,
 } from "./plugin-registry";
 
 /** Helper to make a minimal plugin for testing. */
@@ -213,5 +221,226 @@ describe("applyFrontmatterBlocks", () => {
     expect(getPlugin(next, "proof")).toBeUndefined();
     expect(getPlugin(next, "remark")).toBeDefined();
     expect(getPlugin(next, "remark")?.numbered).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CM6 StateField integration: declarative block plugins from YAML
+// ---------------------------------------------------------------------------
+
+/** Default plugins used in CM6 integration tests. */
+const builtinTestPlugins: readonly BlockPlugin[] = [
+  makePlugin({ name: "theorem", counter: "theorem", title: "Theorem" }),
+  makePlugin({ name: "lemma", counter: "theorem", title: "Lemma" }),
+  makePlugin({ name: "proof", numbered: false, title: "Proof" }),
+];
+
+/** Create an EditorState with the plugin registry loaded from builtins. */
+function createEditorState(doc: string, projectBlocks?: Record<string, boolean | BlockConfig>): EditorState {
+  return EditorState.create({
+    doc,
+    extensions: [
+      ...(projectBlocks ? [projectConfigFacet.of({ blocks: projectBlocks })] : []),
+      markdown({ extensions: [fencedDiv] }),
+      frontmatterField,
+      createPluginRegistryField(builtinTestPlugins),
+    ],
+  });
+}
+
+describe("createPluginRegistryField (CM6 integration)", () => {
+  it("loads built-in plugins on creation", () => {
+    const state = createEditorState("Hello world");
+    const registry = state.field(pluginRegistryField);
+    expect(getPlugin(registry, "theorem")).toBeDefined();
+    expect(getPlugin(registry, "lemma")).toBeDefined();
+    expect(getPlugin(registry, "proof")).toBeDefined();
+    expect(registry.plugins.size).toBe(3);
+  });
+
+  it("applies frontmatter block definitions on creation", () => {
+    const doc = [
+      "---",
+      "blocks:",
+      "  claim:",
+      "    counter: theorem",
+      "    numbered: true",
+      "    title: Claim",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createEditorState(doc);
+    const registry = state.field(pluginRegistryField);
+    // Built-in plugins still present
+    expect(getPlugin(registry, "theorem")).toBeDefined();
+    // Frontmatter-defined plugin added
+    const claim = getPlugin(registry, "claim");
+    expect(claim).toBeDefined();
+    expect(claim?.title).toBe("Claim");
+    expect(claim?.counter).toBe("theorem");
+    expect(claim?.numbered).toBe(true);
+  });
+
+  it("frontmatter can disable built-in plugins", () => {
+    const doc = [
+      "---",
+      "blocks:",
+      "  proof: false",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createEditorState(doc);
+    const registry = state.field(pluginRegistryField);
+    expect(getPlugin(registry, "theorem")).toBeDefined();
+    expect(getPlugin(registry, "proof")).toBeUndefined();
+  });
+
+  it("frontmatter can override built-in plugin properties", () => {
+    const doc = [
+      "---",
+      "blocks:",
+      "  theorem:",
+      "    title: Satz",
+      "    counter: theorem",
+      "    numbered: true",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createEditorState(doc);
+    const registry = state.field(pluginRegistryField);
+    const theorem = getPlugin(registry, "theorem");
+    expect(theorem?.title).toBe("Satz");
+  });
+
+  it("applies project-level block definitions", () => {
+    const doc = "Content without frontmatter";
+    const state = createEditorState(doc, {
+      axiom: { counter: "theorem", numbered: true, title: "Axiom" },
+    });
+    const registry = state.field(pluginRegistryField);
+    // Built-in plugins present
+    expect(getPlugin(registry, "theorem")).toBeDefined();
+    // Project-defined plugin available
+    const axiom = getPlugin(registry, "axiom");
+    expect(axiom).toBeDefined();
+    expect(axiom?.title).toBe("Axiom");
+    expect(axiom?.counter).toBe("theorem");
+  });
+
+  it("file frontmatter overrides project-level blocks", () => {
+    const doc = [
+      "---",
+      "blocks:",
+      "  axiom: false",
+      "  claim:",
+      "    counter: theorem",
+      "    numbered: true",
+      "    title: Claim",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createEditorState(doc, {
+      axiom: { counter: "theorem", numbered: true, title: "Axiom" },
+    });
+    const registry = state.field(pluginRegistryField);
+    // Project-defined axiom disabled by file frontmatter
+    expect(getPlugin(registry, "axiom")).toBeUndefined();
+    // File-defined claim present
+    expect(getPlugin(registry, "claim")).toBeDefined();
+  });
+
+  it("declarative plugins share counter groups correctly", () => {
+    const doc = "Content";
+    const state = createEditorState(doc, {
+      claim: { counter: "theorem", numbered: true, title: "Claim" },
+      hypothesis: { counter: "theorem", numbered: true, title: "Hypothesis" },
+    });
+    const registry = state.field(pluginRegistryField);
+    const claim = getPlugin(registry, "claim");
+    const hypothesis = getPlugin(registry, "hypothesis");
+    expect(claim?.counter).toBe("theorem");
+    expect(hypothesis?.counter).toBe("theorem");
+  });
+
+  it("declarative plugins render with correct header format", () => {
+    const doc = "Content";
+    const state = createEditorState(doc, {
+      claim: { counter: "theorem", numbered: true, title: "Claim" },
+    });
+    const registry = state.field(pluginRegistryField);
+    const claim = getPlugin(registry, "claim");
+    expect(claim).toBeDefined();
+    const spec = claim!.render({ type: "claim", number: 5, title: "Main" });
+    expect(spec.header).toBe("Claim 5 (Main)");
+    expect(spec.className).toBe("cg-block cg-block-claim");
+  });
+
+  it("rebuilds registry from defaults when frontmatter changes", () => {
+    // Start with a custom block in frontmatter
+    const initialDoc = [
+      "---",
+      "blocks:",
+      "  custom:",
+      "    title: Custom",
+      "    numbered: true",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createEditorState(initialDoc);
+    const registry1 = state.field(pluginRegistryField);
+    expect(getPlugin(registry1, "custom")).toBeDefined();
+
+    // Edit to remove the blocks section from frontmatter
+    const newDoc = [
+      "---",
+      "title: No blocks",
+      "---",
+      "Content",
+    ].join("\n");
+    const tr = state.update({
+      changes: { from: 0, to: state.doc.length, insert: newDoc },
+    });
+    const registry2 = tr.state.field(pluginRegistryField);
+    // Custom block should be gone since frontmatter no longer defines it
+    expect(getPlugin(registry2, "custom")).toBeUndefined();
+    // Built-in plugins should still be present
+    expect(getPlugin(registry2, "theorem")).toBeDefined();
+    expect(getPlugin(registry2, "lemma")).toBeDefined();
+    expect(getPlugin(registry2, "proof")).toBeDefined();
+  });
+
+  it("restores built-in plugins when frontmatter disabling is removed", () => {
+    // Start with proof disabled
+    const initialDoc = [
+      "---",
+      "blocks:",
+      "  proof: false",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createEditorState(initialDoc);
+    expect(getPlugin(state.field(pluginRegistryField), "proof")).toBeUndefined();
+
+    // Remove the blocks section
+    const newDoc = "---\ntitle: Fresh\n---\nContent";
+    const tr = state.update({
+      changes: { from: 0, to: state.doc.length, insert: newDoc },
+    });
+    // Proof should be restored from builtins
+    expect(getPlugin(tr.state.field(pluginRegistryField), "proof")).toBeDefined();
+  });
+
+  it("does not change registry when doc change is outside frontmatter", () => {
+    const doc = "---\ntitle: Test\n---\nContent here";
+    const state = createEditorState(doc);
+    const registry1 = state.field(pluginRegistryField);
+
+    // Append text after frontmatter
+    const tr = state.update({
+      changes: { from: state.doc.length, insert: " more text" },
+    });
+    const registry2 = tr.state.field(pluginRegistryField);
+    // Registry should still have same plugins
+    expect(registry2.plugins.size).toBe(registry1.plugins.size);
   });
 });

@@ -4,14 +4,14 @@
  * Plugins register themselves by class name. The renderer and counter
  * systems look up plugins through this registry. Supports runtime
  * registration and unregistration for custom block types defined
- * in frontmatter.
+ * in frontmatter or project-level chickenglass.yaml.
  *
  * Also provides the CM6 StateField that holds the registry state,
  * so that both the counter and renderer can depend on it without
  * circular imports.
  */
 
-import { type Extension, StateField } from "@codemirror/state";
+import { type Extension, Facet, StateField } from "@codemirror/state";
 import type { BlockPlugin } from "./plugin-types";
 import type { BlockConfig } from "../parser/frontmatter";
 import { frontmatterField } from "../editor/frontmatter-state";
@@ -130,29 +130,66 @@ export function applyFrontmatterBlocks(
 }
 
 // ---------------------------------------------------------------------------
-// CM6 StateField
+// CM6 Facet & StateField
 // ---------------------------------------------------------------------------
+
+/**
+ * Facet holding the built-in (default) plugins.
+ *
+ * Used by the plugin registry StateField to rebuild from defaults
+ * whenever frontmatter changes, instead of accumulating on top of
+ * previous state.
+ */
+export const builtinPluginsFacet = Facet.define<
+  readonly BlockPlugin[],
+  readonly BlockPlugin[]
+>({
+  combine(values) {
+    // Flatten all provided plugin arrays into one. Typically there is
+    // exactly one provider (from createPluginRegistryField).
+    return values.flat();
+  },
+});
+
+/**
+ * Build a fresh registry from built-in plugins + frontmatter blocks.
+ *
+ * This is the single source of truth for registry construction.
+ * Both `create` and `update` use it so the registry is always
+ * a deterministic function of (builtins + merged frontmatter).
+ */
+function buildRegistry(
+  builtins: readonly BlockPlugin[],
+  blocks: Readonly<Record<string, boolean | BlockConfig>> | undefined,
+): PluginRegistryState {
+  let registry = registerPlugins(createRegistryState(), builtins);
+  if (blocks) {
+    registry = applyFrontmatterBlocks(registry, blocks);
+  }
+  return registry;
+}
 
 /**
  * CM6 StateField holding the plugin registry.
  *
- * On creation, starts empty. On doc change, re-applies frontmatter
- * block definitions. Use `createPluginRegistryField` to pre-load
- * an initial set of plugins.
+ * On creation, loads built-in plugins from the builtinPluginsFacet
+ * and applies frontmatter block definitions. On doc change, rebuilds
+ * from defaults so removed frontmatter entries are properly reflected.
+ *
+ * Use `createPluginRegistryField` to pre-load an initial set of plugins.
  */
 export const pluginRegistryField = StateField.define<PluginRegistryState>({
-  create() {
-    return createRegistryState();
+  create(state) {
+    const builtins = state.facet(builtinPluginsFacet);
+    const fm = state.field(frontmatterField, false);
+    return buildRegistry(builtins, fm?.config.blocks);
   },
 
   update(value, tr) {
     if (tr.docChanged) {
+      const builtins = tr.state.facet(builtinPluginsFacet);
       const fm = tr.state.field(frontmatterField);
-      let result = value;
-      if (fm.config.blocks) {
-        result = applyFrontmatterBlocks(value, fm.config.blocks);
-      }
-      return result;
+      return buildRegistry(builtins, fm.config.blocks);
     }
     return value;
   },
@@ -161,16 +198,15 @@ export const pluginRegistryField = StateField.define<PluginRegistryState>({
 /**
  * Create a pluginRegistryField pre-loaded with an initial set of plugins.
  * This is the recommended way to initialize the registry.
+ *
+ * Provides the plugins via the builtinPluginsFacet so the StateField's
+ * update logic can rebuild from defaults on every frontmatter change.
  */
 export function createPluginRegistryField(
   initialPlugins: readonly BlockPlugin[],
 ): Extension {
-  return pluginRegistryField.init((state) => {
-    let registry = registerPlugins(createRegistryState(), initialPlugins);
-    const fm = state.field(frontmatterField, false);
-    if (fm?.config.blocks) {
-      registry = applyFrontmatterBlocks(registry, fm.config.blocks);
-    }
-    return registry;
-  });
+  return [
+    builtinPluginsFacet.of(initialPlugins),
+    pluginRegistryField,
+  ];
 }
