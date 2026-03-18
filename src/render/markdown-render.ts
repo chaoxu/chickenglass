@@ -18,7 +18,6 @@ const ELEMENT_NODES = new Set([
   "Emphasis",
   "StrongEmphasis",
   "InlineCode",
-  "Link",
   "Image",
   "Strikethrough",
 ]);
@@ -136,6 +135,44 @@ class MarkdownRenderPlugin implements PluginValue {
             return; // walk children to hide HighlightMark
           }
 
+          // --- Link: style as clickable link when cursor is outside ---
+          if (node.name === "Link") {
+            if (cursorInRange(view, node.from, node.to)) {
+              return false; // cursor inside: show full source for editing
+            }
+            // Extract URL from the URL child node
+            let url = "";
+            const linkNode = node.node;
+            const urlChild = linkNode.getChild("URL");
+            if (urlChild) {
+              url = view.state.sliceDoc(urlChild.from, urlChild.to);
+            }
+            // Find the link text range: between first [ and ]
+            // The text is between the first LinkMark end and second LinkMark start
+            const marks: { from: number; to: number }[] = [];
+            let cursor = linkNode.firstChild;
+            while (cursor) {
+              if (cursor.name === "LinkMark") {
+                marks.push({ from: cursor.from, to: cursor.to });
+              }
+              cursor = cursor.nextSibling;
+            }
+            // marks[0] = "[", marks[1] = "]", marks[2] = "("
+            if (marks.length >= 2) {
+              const textFrom = marks[0].to;
+              const textTo = marks[1].from;
+              if (textFrom < textTo) {
+                const linkDeco = Decoration.mark({
+                  class: "cg-link-rendered",
+                  attributes: { "data-url": url },
+                });
+                widgets.push(linkDeco.range(textFrom, textTo));
+              }
+            }
+            // Walk children to hide markers (LinkMark, URL) via HIDDEN_NODES
+            return;
+          }
+
           // --- Inline elements: ALWAYS apply content styling, toggle marker visibility ---
           if (ELEMENT_NODES.has(node.name)) {
             // Always apply content styling for seamless WYSIWYG
@@ -218,5 +255,23 @@ export const markdownRenderPlugin: Extension = ViewPlugin.fromClass(
   MarkdownRenderPlugin,
   {
     decorations: (v) => v.decorations,
+    eventHandlers: {
+      click(event: MouseEvent, _view: EditorView) {
+        // Cmd+click (Mac) or Ctrl+click (Win/Linux) on rendered links
+        if (!(event.metaKey || event.ctrlKey)) return false;
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return false;
+        // Walk up to find the element with data-url (the mark decoration span)
+        const linkEl = target.closest("[data-url]");
+        if (!linkEl) return false;
+        const url = linkEl.getAttribute("data-url");
+        if (url) {
+          window.open(url, "_blank");
+          event.preventDefault();
+          return true;
+        }
+        return false;
+      },
+    },
   },
 );

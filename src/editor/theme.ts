@@ -133,6 +133,13 @@ export const chickenglassTheme = EditorView.theme({
     padding: "1px 4px",
   },
 
+  /* Rendered link styling — shown when cursor is outside the link */
+  ".cg-link-rendered": {
+    color: "#2563eb",
+    textDecoration: "underline",
+    cursor: "pointer",
+  },
+
   /* Section numbers (rendered via ::before when cursor is outside) */
   "[data-section-number]::before": {
     content: "attr(data-section-number) '\\2002'",
