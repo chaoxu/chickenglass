@@ -1,5 +1,10 @@
 import { FileTree } from "./file-tree";
-import type { FileSelectHandler, TreeRefreshHandler, FileRenameHandler } from "./file-tree";
+import type {
+  FileSelectHandler,
+  TreeRefreshHandler,
+  FileRenameHandler,
+  FileDeleteHandler,
+} from "./file-tree";
 import type { FileEntry } from "./file-manager";
 import { Outline } from "./outline";
 
@@ -59,6 +64,11 @@ export class Sidebar {
     this.fileTree.setRenameHandler(handler);
   }
 
+  /** Set the handler for deleting files. */
+  setDeleteHandler(handler: FileDeleteHandler): void {
+    this.fileTree.setDeleteHandler(handler);
+  }
+
   /** Render the file tree from a root entry. */
   render(root: FileEntry): void {
     this.fileTree.render(root);
@@ -99,7 +109,6 @@ export class Sidebar {
       const collapsed = body.style.display === "none";
       body.style.display = collapsed ? "" : "none";
       toggle.textContent = collapsed ? "▼" : "▶";
-      header.classList.toggle("collapsed", !collapsed);
     });
 
     container.appendChild(header);

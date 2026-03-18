@@ -153,6 +153,22 @@ pub fn rename_file(
         .map_err(|e| format!("Failed to rename '{}' to '{}': {}", old_path, new_path, e))
 }
 
+/// Delete a file by moving it to the system trash.
+#[tauri::command]
+pub fn delete_file(
+    root: State<'_, ProjectRoot>,
+    path: String,
+) -> Result<(), String> {
+    let lock = root.0.lock().map_err(|e| e.to_string())?;
+    let project_root = lock.as_ref().ok_or("No project folder open")?;
+    let resolved = resolve_path(project_root, &path)?;
+    if !resolved.exists() {
+        return Err(format!("File not found: {}", path));
+    }
+    trash::delete(&resolved)
+        .map_err(|e| format!("Failed to delete '{}': {}", path, e))
+}
+
 /// List the file tree starting from the project root.
 #[tauri::command]
 pub fn list_tree(

@@ -51,4 +51,8 @@ export class TauriFileSystem implements FileSystem {
   async renameFile(oldPath: string, newPath: string): Promise<void> {
     await invoke("rename_file", { oldPath, newPath });
   }
+
+  async deleteFile(path: string): Promise<void> {
+    await invoke("delete_file", { path });
+  }
 }

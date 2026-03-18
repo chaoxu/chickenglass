@@ -25,6 +25,7 @@ fn main() {
             commands::create_file,
             commands::file_exists,
             commands::rename_file,
+            commands::delete_file,
             commands::list_tree,
             commands::check_pandoc,
             commands::export_document,

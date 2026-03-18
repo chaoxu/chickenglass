@@ -15,12 +15,19 @@ export type FileRenameHandler = (
   newPath: string,
 ) => Promise<string | null>;
 
+/**
+ * Callback when a file is deleted.
+ * Returns an error message string on failure, or null on success.
+ */
+export type FileDeleteHandler = (path: string) => Promise<string | null>;
+
 /** File tree sidebar component. */
 export class FileTree {
   readonly element: HTMLElement;
   private onSelect: FileSelectHandler | null = null;
   private onRefresh: TreeRefreshHandler | null = null;
   private onRename: FileRenameHandler | null = null;
+  private onDelete: FileDeleteHandler | null = null;
   private activePath: string | null = null;
   /** The file-tree-item element currently focused for keyboard interaction. */
   private focusedItem: HTMLElement | null = null;
@@ -44,6 +51,11 @@ export class FileTree {
   /** Set the handler called when a file is renamed. */
   setRenameHandler(handler: FileRenameHandler): void {
     this.onRename = handler;
+  }
+
+  /** Set the handler called when a file is deleted. */
+  setDeleteHandler(handler: FileDeleteHandler): void {
+    this.onDelete = handler;
   }
 
   /** Set the currently active file path (highlighted in tree). */
@@ -118,6 +130,17 @@ export class FileTree {
       item.classList.add("file-tree-active");
     }
 
+    // Delete button (shown on hover via CSS)
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "file-tree-delete-btn";
+    deleteBtn.title = "Delete file";
+    deleteBtn.textContent = "\u2715";
+    deleteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.confirmDelete(entry.path);
+    });
+    item.appendChild(deleteBtn);
+
     item.addEventListener("click", (e) => {
       e.stopPropagation();
       this.setFocusedItem(item);
@@ -129,11 +152,21 @@ export class FileTree {
         e.preventDefault();
         e.stopPropagation();
         this.startRename(item, entry.path);
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        e.stopPropagation();
+        this.confirmDelete(entry.path);
       }
     });
 
     item.addEventListener("focus", () => {
       this.setFocusedItem(item);
+    });
+
+    item.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.showContextMenu(e.clientX, e.clientY, item, entry.path);
     });
 
     return item;
@@ -244,6 +277,71 @@ export class FileTree {
       // Cancel on blur unless confirm() already took over
       dismiss();
     });
+  }
+
+  /** Show a native-style context menu at the given position for a file item. */
+  private showContextMenu(
+    x: number,
+    y: number,
+    item: HTMLElement,
+    filePath: string,
+  ): void {
+    // Remove any existing context menu
+    document.querySelector(".file-tree-context-menu")?.remove();
+
+    const menu = document.createElement("div");
+    menu.className = "file-tree-context-menu";
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+
+    const renameItem = document.createElement("div");
+    renameItem.className = "file-tree-context-menu-item";
+    renameItem.textContent = "Rename";
+    renameItem.addEventListener("click", () => {
+      menu.remove();
+      this.startRename(item, filePath);
+    });
+
+    const deleteItem = document.createElement("div");
+    deleteItem.className = "file-tree-context-menu-item file-tree-context-menu-item-danger";
+    deleteItem.textContent = "Delete";
+    deleteItem.addEventListener("click", () => {
+      menu.remove();
+      this.confirmDelete(filePath);
+    });
+
+    menu.appendChild(renameItem);
+    menu.appendChild(deleteItem);
+    document.body.appendChild(menu);
+
+    const dismiss = (e: MouseEvent): void => {
+      if (!menu.contains(e.target as Node)) {
+        menu.remove();
+        document.removeEventListener("mousedown", dismiss);
+      }
+    };
+    // Defer listener so this click doesn't immediately dismiss
+    setTimeout(() => {
+      document.addEventListener("mousedown", dismiss);
+    }, 0);
+  }
+
+  /** Show a confirmation dialog and delete the file if confirmed. */
+  private confirmDelete(filePath: string): void {
+    const name = filePath.split("/").pop() ?? filePath;
+    const confirmed = window.confirm(`Delete "${name}"?`);
+    if (!confirmed) return;
+
+    void this.performDelete(filePath);
+  }
+
+  /** Perform the actual delete operation. The handler is responsible for refreshing the tree. */
+  private async performDelete(filePath: string): Promise<void> {
+    if (!this.onDelete) return;
+    const err = await this.onDelete(filePath);
+    if (err) {
+      window.alert(`Could not delete file: ${err}`);
+    }
   }
 
   private updateActiveHighlight(): void {

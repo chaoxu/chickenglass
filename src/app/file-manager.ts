@@ -24,6 +24,8 @@ export interface FileSystem {
   exists(path: string): Promise<boolean>;
   /** Rename a file from oldPath to newPath. */
   renameFile(oldPath: string, newPath: string): Promise<void>;
+  /** Delete a file permanently (memory FS) or move it to trash (Tauri). */
+  deleteFile(path: string): Promise<void>;
 }
 
 /** In-memory filesystem for demo/testing purposes. */
@@ -110,6 +112,13 @@ export class MemoryFileSystem implements FileSystem {
     }
     this.files.delete(oldPath);
     this.files.set(newPath, content);
+  }
+
+  async deleteFile(path: string): Promise<void> {
+    if (!this.files.has(path)) {
+      throw new Error(`File not found: ${path}`);
+    }
+    this.files.delete(path);
   }
 }
 

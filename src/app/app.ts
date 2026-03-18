@@ -97,6 +97,7 @@ export class App {
     this.sidebar.setRenameHandler((oldPath, newPath) =>
       this.renameFile(oldPath, newPath),
     );
+    this.sidebar.setDeleteHandler((path) => this.deleteFile(path));
     mainArea.appendChild(this.sidebar.element);
 
     this.editorContainer = document.createElement("div");
@@ -280,6 +281,36 @@ export class App {
     return null;
   }
 
+  /**
+   * Delete a file. Closes the open tab (without saving), deletes via the
+   * filesystem, removes from the indexer, and refreshes the sidebar.
+   * Returns an error message on failure, or null on success.
+   */
+  async deleteFile(path: string): Promise<string | null> {
+    // Close the tab for this file if it is open (discard unsaved changes)
+    if (this.tabBar.hasTab(path)) {
+      this.forceCloseTab(path);
+    }
+
+    // Delete via filesystem first — only update indexer on success
+    try {
+      await this.fs.deleteFile(path);
+    } catch (err: unknown) {
+      return err instanceof Error ? err.message : String(err);
+    }
+
+    // Remove from indexer after confirmed deletion
+    void this.indexer.removeFile(path);
+
+    // Refresh the sidebar tree
+    const tree = await this.fs.listTree();
+    this.sidebar.render(tree);
+    const activeTab = this.tabBar.getActiveTab();
+    if (activeTab) this.sidebar.setActivePath(activeTab);
+
+    return null;
+  }
+
   /** Get the tab bar component (for testing). */
   getTabBar(): TabBar {
     return this.tabBar;
@@ -394,6 +425,14 @@ export class App {
       // "discard" falls through to close without saving
     }
 
+    this.forceCloseTab(path);
+  }
+
+  /**
+   * Close a tab unconditionally without saving or prompting.
+   * Cleans up all associated buffer state and switches to the next tab.
+   */
+  private forceCloseTab(path: string): void {
     const nextPath = this.tabBar.closeTab(path);
     this.savedContent.delete(path);
     this.savedExpandedContent.delete(path);

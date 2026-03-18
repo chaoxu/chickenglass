@@ -72,7 +72,6 @@
         min-height: 32px;
         overflow-x: auto;
         flex-shrink: 0;
-        position: relative;
       }
 
       .tab {
@@ -96,21 +95,6 @@
         background: var(--cg-bg);
         color: var(--cg-fg);
         font-weight: 500;
-      }
-
-      .tab-dragging {
-        opacity: 0.4;
-      }
-
-      .tab-drop-indicator {
-        position: absolute;
-        top: 4px;
-        bottom: 4px;
-        width: 2px;
-        background: var(--cg-fg);
-        border-radius: 1px;
-        pointer-events: none;
-        z-index: 10;
       }
 
       .tab-label {
@@ -223,6 +207,83 @@
 
       .file-tree-children {
         /* controlled by JS */
+      }
+
+      .file-tree-focused {
+        outline: 1px solid var(--cg-border);
+      }
+
+      .file-tree-rename-input {
+        flex: 1;
+        min-width: 0;
+        font: inherit;
+        font-size: 13px;
+        padding: 0 2px;
+        border: 1px solid var(--cg-border);
+        border-radius: 2px;
+        background: var(--cg-bg);
+        color: var(--cg-fg);
+        outline: none;
+      }
+
+      .file-tree-rename-input:focus {
+        border-color: var(--cg-muted);
+      }
+
+      .file-tree-rename-error {
+        border-color: #dc2626;
+        background: #fef2f2;
+      }
+
+      /* Delete button — hidden by default, visible on item hover */
+      .file-tree-delete-btn {
+        display: none;
+        margin-left: auto;
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--cg-muted);
+        font-size: 11px;
+        padding: 0 2px;
+        line-height: 1;
+      }
+
+      .file-tree-item:hover .file-tree-delete-btn,
+      .file-tree-focused .file-tree-delete-btn {
+        display: inline-flex;
+      }
+
+      .file-tree-delete-btn:hover {
+        color: #dc2626;
+      }
+
+      /* Context menu */
+      .file-tree-context-menu {
+        position: fixed;
+        z-index: 1000;
+        background: var(--cg-bg);
+        border: 1px solid var(--cg-border);
+        border-radius: 4px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        min-width: 120px;
+        padding: 4px 0;
+        font-size: 13px;
+      }
+
+      .file-tree-context-menu-item {
+        padding: 6px 12px;
+        cursor: pointer;
+        user-select: none;
+        color: var(--cg-fg);
+      }
+
+      .file-tree-context-menu-item:hover {
+        background: var(--cg-hover);
+      }
+
+      .file-tree-context-menu-item-danger {
+        color: #dc2626;
       }
 
       /* Collapsible sidebar sections */

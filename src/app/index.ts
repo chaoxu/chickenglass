@@ -15,7 +15,11 @@ export {
   MemoryFileSystem,
   createDemoFileSystem,
 } from "./file-manager";
-export { FileTree, type FileRenameHandler } from "./file-tree";
+export {
+  FileTree,
+  type FileRenameHandler,
+  type FileDeleteHandler,
+} from "./file-tree";
 export {
   showSaveDialog,
   showSaveAllDialog,
