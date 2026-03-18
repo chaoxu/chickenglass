@@ -220,6 +220,13 @@ function isPrime(n: number): boolean {
 }
 \`\`\`
 
+# Sidenotes
+
+The Extreme Value Theorem[^evt] is fundamental to real analysis. Compactness[^compact] plays a key role in the proof.
+
+[^evt]: First proved by Weierstrass. Every continuous function $f: [a,b] \\to \\R$ attains its **maximum** and **minimum**.
+[^compact]: A set is compact if every open cover has a finite subcover. In $\\R^n$, this is equivalent to being closed and bounded.
+
 # Blockquote
 
 > Mathematics is the queen of the sciences and number theory is the queen of mathematics.

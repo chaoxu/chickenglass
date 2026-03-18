@@ -13,3 +13,4 @@ export {
 export { equationLabelExtension } from "./equation-label";
 export { strikethroughExtension } from "./strikethrough";
 export { highlightExtension } from "./highlight";
+export { footnoteExtension } from "./footnote";

@@ -10,6 +10,7 @@ import {
   equationLabelExtension,
   strikethroughExtension,
   highlightExtension,
+  footnoteExtension,
 } from "../parser";
 import { frontmatterField, frontmatterDecoration } from "./frontmatter-state";
 import {
@@ -27,6 +28,7 @@ import {
   fenceGuidePlugin,
   includeLabelPlugin,
   focusModeExtension,
+  sidenoteRenderPlugin,
 } from "../render";
 import {
   createPluginRegistryField,
@@ -65,6 +67,7 @@ export function createEditor(config: EditorConfig): EditorView {
           equationLabelExtension,
           strikethroughExtension,
           highlightExtension,
+          footnoteExtension,
           Table,
           TaskList,
         ],
@@ -98,7 +101,9 @@ export function createEditor(config: EditorConfig): EditorView {
       sectionNumberPlugin,
       fenceGuidePlugin,
       includeLabelPlugin,
+<<<<<<< HEAD
       focusModeExtension,
+      sidenoteRenderPlugin,
 
       // Editor chrome
       EditorView.lineWrapping,

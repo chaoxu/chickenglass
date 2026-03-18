@@ -371,4 +371,50 @@ export const chickenglassTheme = EditorView.theme({
     opacity: "0.3",
     transition: "opacity 0.15s",
   },
+
+  /* Sidenote reference: superscript number */
+  ".cg-sidenote-ref": {
+    fontSize: "0.75em",
+    color: "#a00",
+    cursor: "pointer",
+    verticalAlign: "super",
+    lineHeight: "0",
+    fontWeight: "600",
+  },
+
+  /* Sidenote definition rendered in the right margin */
+  ".cg-sidenote": {
+    position: "absolute",
+    right: "-280px",
+    width: "240px",
+    fontSize: "0.8em",
+    lineHeight: "1.4",
+    color: "#555",
+    fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
+  },
+
+  /* Sidenote number label */
+  ".cg-sidenote-number": {
+    fontSize: "0.75em",
+    color: "#a00",
+    fontWeight: "600",
+    verticalAlign: "super",
+    lineHeight: "0",
+    marginRight: "3px",
+  },
+
+  /* Sidenote content */
+  ".cg-sidenote-content": {
+    display: "inline",
+  },
+
+  /* The definition line when sidenote is shown in margin */
+  ".cg-sidenote-def-line": {
+    position: "relative",
+    height: "0",
+    lineHeight: "0",
+    overflow: "visible",
+    padding: "0 !important",
+    margin: "0",
+  },
 });
