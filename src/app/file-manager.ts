@@ -28,6 +28,14 @@ export interface FileSystem {
   createDirectory(path: string): Promise<void>;
   /** Delete a file at the given path. */
   deleteFile(path: string): Promise<void>;
+  /**
+   * Write binary data to a file at the given path.
+   * Creates parent directories if needed. Overwrites if the file exists.
+   *
+   * @param path    Relative path within the project.
+   * @param data    Binary data as a Uint8Array.
+   */
+  writeFileBinary(path: string, data: Uint8Array): Promise<void>;
 }
 
 /** In-memory filesystem for demo/testing purposes. */
@@ -144,6 +152,24 @@ export class MemoryFileSystem implements FileSystem {
       }
     }
     this.dirs.add(path);
+  }
+
+  async writeFileBinary(path: string, data: Uint8Array): Promise<void> {
+    // In memory mode, store binary data as a base64 string.
+    // Ensure parent directories exist.
+    const parts = path.split("/");
+    for (let i = 1; i < parts.length; i++) {
+      const dirPath = parts.slice(0, i).join("/");
+      if (!this.dirs.has(dirPath)) {
+        this.dirs.add(dirPath);
+      }
+    }
+    // Convert Uint8Array to base64 string for storage
+    let binary = "";
+    for (let i = 0; i < data.length; i++) {
+      binary += String.fromCharCode(data[i]);
+    }
+    this.files.set(path, btoa(binary));
   }
 
   async deleteFile(path: string): Promise<void> {

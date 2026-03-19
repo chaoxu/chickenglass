@@ -22,6 +22,8 @@ export interface ProjectConfig {
   csl?: string;
   blocks?: Record<string, boolean | BlockConfig>;
   math?: Record<string, string>;
+  /** Default image folder for all documents in the project. */
+  imageFolder?: string;
 }
 
 /** Well-known project config file name. */
@@ -58,6 +60,7 @@ export function parseProjectConfig(yaml: string): ProjectConfig {
   if (config.csl) result.csl = config.csl;
   if (config.blocks) result.blocks = config.blocks;
   if (config.math) result.math = config.math;
+  if (config.imageFolder) result.imageFolder = config.imageFolder;
   return result;
 }
 
@@ -96,6 +99,10 @@ export function mergeConfigs(
   if (project.blocks || file.blocks) {
     merged.blocks = { ...project.blocks, ...file.blocks };
   }
+
+  // imageFolder: file overrides project
+  const imgFolder = file.imageFolder ?? project.imageFolder;
+  if (imgFolder !== undefined) merged.imageFolder = imgFolder;
 
   return merged;
 }

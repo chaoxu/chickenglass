@@ -70,4 +70,14 @@ export class TauriFileSystem implements FileSystem {
   async deleteFile(path: string): Promise<void> {
     await invoke("delete_file", { path });
   }
+
+  async writeFileBinary(path: string, data: Uint8Array): Promise<void> {
+    // Convert Uint8Array to base64 string for transport to Rust
+    let binary = "";
+    for (let i = 0; i < data.length; i++) {
+      binary += String.fromCharCode(data[i]);
+    }
+    const dataBase64 = btoa(binary);
+    await invoke("write_file_binary", { path, dataBase64 });
+  }
 }

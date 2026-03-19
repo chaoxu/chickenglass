@@ -3,6 +3,7 @@ import { FileSystemProvider, useFileSystem } from "./contexts/file-system-contex
 import type { FileSystem } from "./file-manager";
 import { loadProjectConfig } from "./project-config";
 import type { ProjectConfig } from "./project-config";
+import { insertImageFromPicker } from "../editor/image-insert";
 import type { Tab } from "./tab-bar";
 import { TabBar } from "./components/tab-bar";
 import { Sidebar } from "./components/sidebar";
@@ -416,6 +417,10 @@ function AppInner() {
     onCloseTab: () => { if (activeTab) void closeFile(activeTab); },
     onToggleSidebar: () => setSidebarCollapsed((v) => !v),
     onToggleSidenotes: () => setSidenotesCollapsed((v) => !v),
+    onInsertImage: () => {
+      const view = editorState?.view;
+      if (view) void insertImageFromPicker(view, editorState?.imageSaver ?? undefined);
+    },
     onShowFiles: () => { setSidebarCollapsed(false); setSidebarTab("files"); },
     onShowOutline: () => { setSidebarCollapsed(false); setSidebarTab("outline"); },
     onToggleTheme: () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),

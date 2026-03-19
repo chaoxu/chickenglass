@@ -26,6 +26,13 @@ export interface FrontmatterConfig {
   numbering?: NumberingScheme;
   blocks?: Record<string, boolean | BlockConfig>;
   math?: Record<string, string>;
+  /**
+   * Folder for storing images relative to the document.
+   * When set, paste/drop/insert image operations save files here
+   * instead of using data URLs.
+   * Example: "assets" → images saved to `assets/image-name.png`
+   */
+  imageFolder?: string;
 }
 
 export interface FrontmatterResult {
@@ -253,6 +260,10 @@ export function parseFrontmatter(doc: string): FrontmatterResult {
         config.blocks = result.blocks;
       }
       i = result.nextIndex;
+    } else if ((key === "image-folder" || key === "imageFolder") && valueRaw !== "") {
+      const parsed = parseScalar(valueRaw);
+      if (typeof parsed === "string") config.imageFolder = parsed;
+      i++;
     } else if (key === "math" && valueRaw === "") {
       const { entries, nextIndex } = parseIndentedBlock(
         lines,

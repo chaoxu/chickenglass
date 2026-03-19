@@ -465,6 +465,85 @@ pub fn delete_file(
     }
 }
 
+/// Copy a file from an absolute source path into the project root.
+///
+/// The source path must be absolute and must exist. The destination path
+/// is relative to the project root. Parent directories are created automatically.
+/// If the destination already exists, it is overwritten.
+#[tauri::command]
+pub fn copy_file_to_project(
+    root: State<'_, ProjectRoot>,
+    source: String,
+    dest: String,
+) -> Result<(), String> {
+    let lock = root.0.lock().map_err(|e| e.to_string())?;
+    let project_root = lock.as_ref().ok_or("No project folder open")?;
+    let source_path = PathBuf::from(&source);
+
+    if !source_path.is_absolute() {
+        return Err(format!("Source path must be absolute: {}", source));
+    }
+    if !source_path.exists() {
+        return Err(format!("Source file not found: {}", source));
+    }
+
+    let full_dest = project_root.join(&dest);
+
+    // Security: ensure the destination stays within the root
+    if let Some(parent) = full_dest.parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create directories: {}", e))?;
+        }
+        if let Ok(canonical_parent) = parent.canonicalize() {
+            if !canonical_parent.starts_with(project_root) {
+                return Err(format!("Path '{}' escapes project root", dest));
+            }
+        }
+    }
+
+    fs::copy(&source_path, &full_dest)
+        .map_err(|e| format!("Failed to copy '{}' to '{}': {}", source, dest, e))?;
+    Ok(())
+}
+
+/// Write binary data (received as base64) to a file within the project root.
+///
+/// If the file already exists, it is overwritten. If the parent directory
+/// does not exist, it is created automatically.
+#[tauri::command]
+pub fn write_file_binary(
+    root: State<'_, ProjectRoot>,
+    path: String,
+    data_base64: String,
+) -> Result<(), String> {
+    use base64::Engine;
+    let lock = root.0.lock().map_err(|e| e.to_string())?;
+    let project_root = lock.as_ref().ok_or("No project folder open")?;
+    let full = project_root.join(&path);
+
+    // Security: ensure the resolved path stays within the root
+    if let Some(parent) = full.parent() {
+        // Create parent directories if needed
+        if !parent.exists() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create directories: {}", e))?;
+        }
+        if let Ok(canonical_parent) = parent.canonicalize() {
+            if !canonical_parent.starts_with(project_root) {
+                return Err(format!("Path '{}' escapes project root", path));
+            }
+        }
+    }
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&data_base64)
+        .map_err(|e| format!("Invalid base64 data: {}", e))?;
+
+    fs::write(&full, &bytes)
+        .map_err(|e| format!("Failed to write binary file '{}': {}", path, e))
+}
+
 /// Reveal a file or directory in the OS file explorer.
 ///
 /// On macOS: uses `open -R <path>` to select the item in Finder.

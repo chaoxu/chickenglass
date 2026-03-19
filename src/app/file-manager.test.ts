@@ -93,3 +93,29 @@ describe("createDemoFileSystem", () => {
     expect(await fs.exists("chapters/introduction.md")).toBe(true);
   });
 });
+
+describe("MemoryFileSystem.writeFileBinary", () => {
+  it("writes binary data and creates parent directories", async () => {
+    const fs = new MemoryFileSystem();
+    const data = new Uint8Array([0x89, 0x50, 0x4e, 0x47]); // PNG header bytes
+    await fs.writeFileBinary("assets/test.png", data);
+    expect(await fs.exists("assets/test.png")).toBe(true);
+  });
+
+  it("overwrites existing files", async () => {
+    const fs = new MemoryFileSystem();
+    const data1 = new Uint8Array([1, 2, 3]);
+    const data2 = new Uint8Array([4, 5, 6]);
+    await fs.writeFileBinary("img/a.png", data1);
+    await fs.writeFileBinary("img/a.png", data2);
+    // File should still exist (overwritten)
+    expect(await fs.exists("img/a.png")).toBe(true);
+  });
+
+  it("creates nested directories automatically", async () => {
+    const fs = new MemoryFileSystem();
+    const data = new Uint8Array([0]);
+    await fs.writeFileBinary("a/b/c/test.png", data);
+    expect(await fs.exists("a/b/c/test.png")).toBe(true);
+  });
+});

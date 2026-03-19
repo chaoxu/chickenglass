@@ -23,6 +23,9 @@ import { EditorPluginManager } from "../../editor/editor-plugin";
 import { defaultEditorPlugins } from "../../editor/editor-plugins-registry";
 import { chickenglasDarkTheme } from "../../editor/theme";
 import { frontmatterField, type FrontmatterState } from "../../editor/frontmatter-state";
+import { imagePasteExtension } from "../../editor/image-paste";
+import { imageDropExtension } from "../../editor/image-drop";
+import { createImageSaver, type ImageSaveContext } from "../../editor/image-save";
 import { parseBibTeX } from "../../citations/bibtex-parser";
 import { bibDataEffect } from "../../citations/citation-render";
 import { CslProcessor } from "../../citations/csl-processor";
@@ -90,6 +93,8 @@ export interface UseEditorReturn {
   viewportFrom: number;
   /** Plugin manager for toggling editor features at runtime. */
   pluginManager: EditorPluginManager;
+  /** Image saver callback bound to the current document context. */
+  imageSaver: ((file: File) => Promise<string>) | null;
 }
 
 // ── Include expansion (uses shared include-resolver utilities) ───────────────
@@ -226,6 +231,7 @@ export function useEditor(
   const [cursorPos, setCursorPos] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportFrom, setViewportFrom] = useState(0);
+  const imageSaverRef = useRef<((file: File) => Promise<string>) | null>(null);
 
   // Stable refs so callbacks inside the effect don't capture stale closures.
   const onDocChangeRef = useRef(onDocChange);
@@ -308,7 +314,33 @@ export function useEditor(
       }
     });
 
-    const extraExtensions: Extension[] = [updateListener, ...(extensions ?? [])];
+    // Image save context — reads imageFolder from frontmatter dynamically.
+    // We create a mutable ref so the save callback always reads the latest
+    // frontmatter config even though the extension is created once.
+    let currentImageFolder: string | undefined;
+    const imageSaveCtx: ImageSaveContext = {
+      fs,
+      docPath,
+      get imageFolder() {
+        return currentImageFolder;
+      },
+    };
+    const imageSaver = createImageSaver(imageSaveCtx);
+
+    // Wrap the updateListener to also track imageFolder changes
+    const imageAwareUpdateListener = EditorView.updateListener.of((update) => {
+      // Keep imageFolder in sync with frontmatter
+      const fm = update.state.field(frontmatterField, false);
+      currentImageFolder = fm?.config.imageFolder;
+    });
+
+    const extraExtensions: Extension[] = [
+      updateListener,
+      imageAwareUpdateListener,
+      imagePasteExtension({ saveImage: imageSaver }),
+      imageDropExtension({ saveImage: imageSaver }),
+      ...(extensions ?? []),
+    ];
 
     const newView = createEditor({
       parent: container,
@@ -320,6 +352,9 @@ export function useEditor(
 
     // Expose view for console debugging.
     (window as unknown as { __cmView: EditorView }).__cmView = newView;
+
+    // Store imageSaver ref so commands can access it
+    imageSaverRef.current = imageSaver;
 
     setView(newView);
     setWordCount(computeDocStats(doc).words);
@@ -376,6 +411,7 @@ export function useEditor(
         clearTimeout(wordCountTimerRef.current);
         wordCountTimerRef.current = null;
       }
+      imageSaverRef.current = null;
       newView.destroy();
       setView(null);
     };
@@ -396,7 +432,7 @@ export function useEditor(
     }
   }, [view, theme]);
 
-  return { view, wordCount, cursorPos, scrollTop, viewportFrom, pluginManager };
+  return { view, wordCount, cursorPos, scrollTop, viewportFrom, pluginManager, imageSaver: imageSaverRef.current };
 }
 
 // ── Re-exports for hook consumers ─────────────────────────────────────────────

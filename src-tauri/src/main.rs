@@ -33,6 +33,8 @@ fn main() {
             commands::unwatch_directory,
             commands::delete_file,
             commands::reveal_in_finder,
+            commands::write_file_binary,
+            commands::copy_file_to_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Chickenglass");

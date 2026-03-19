@@ -207,4 +207,37 @@ describe("parseFrontmatter", () => {
     expect(config.numbering).toBe("global");
     expect(config.blocks?.["theorem"]).toBe(true);
   });
+
+  it("parses image-folder from frontmatter", () => {
+    const doc = "---\nimage-folder: assets\n---\n";
+    const { config } = parseFrontmatter(doc);
+    expect(config.imageFolder).toBe("assets");
+  });
+
+  it("parses imageFolder (camelCase) from frontmatter", () => {
+    const doc = "---\nimageFolder: img\n---\n";
+    const { config } = parseFrontmatter(doc);
+    expect(config.imageFolder).toBe("img");
+  });
+
+  it("parses image-folder alongside other fields", () => {
+    const doc = [
+      "---",
+      "title: My Doc",
+      "image-folder: images",
+      "bibliography: refs.bib",
+      "---",
+      "",
+    ].join("\n");
+    const { config } = parseFrontmatter(doc);
+    expect(config.title).toBe("My Doc");
+    expect(config.imageFolder).toBe("images");
+    expect(config.bibliography).toBe("refs.bib");
+  });
+
+  it("parses quoted image-folder value", () => {
+    const doc = '---\nimage-folder: "my assets"\n---\n';
+    const { config } = parseFrontmatter(doc);
+    expect(config.imageFolder).toBe("my assets");
+  });
 });

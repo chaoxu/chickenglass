@@ -54,6 +54,8 @@ export interface CommandHandlers {
   onExportHtml?: () => void;
   /** Batch export all project files to HTML. */
   onBatchExportHtml?: () => void;
+  /** Insert an image from a file picker. */
+  onInsertImage?: () => void;
 }
 
 /** Dispatch a formatting event to the document for CM6 to handle. */
@@ -195,6 +197,14 @@ export function useCommands(handlers: CommandHandlers): PaletteCommand[] {
         category: "Navigation",
         action: () => handlers.onShowSettings?.(),
       },
+      // ── Insert ──────────────────────────────────────────────────────────────
+      {
+        id: "insert.image",
+        label: "Insert Image",
+        category: "Insert",
+        action: () => handlers.onInsertImage?.(),
+      },
+
       // ── Export ──────────────────────────────────────────────────────────────
       {
         id: "export.html",

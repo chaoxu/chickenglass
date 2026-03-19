@@ -21,18 +21,13 @@
 
 import { type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import {
+  IMAGE_MIME_EXT,
+  fileToDataUrl,
+} from "./image-save";
 
-/** Supported image MIME types and their default file extensions. */
-const IMAGE_MIME_EXT: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/jpg": "jpg",
-  "image/gif": "gif",
-  "image/webp": "webp",
-  "image/svg+xml": "svg",
-  "image/bmp": "bmp",
-  "image/tiff": "tiff",
-};
+// Re-export for backwards compatibility
+export { fileToDataUrl } from "./image-save";
 
 /**
  * Configuration for the image-paste extension.
@@ -48,16 +43,6 @@ export interface ImagePasteConfig {
    * in browser / demo mode without any filesystem access.
    */
   saveImage?: (file: File) => Promise<string>;
-}
-
-/** Convert a File to a base-64 data URL. */
-export function fileToDataUrl(file: File): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("FileReader error"));
-    reader.readAsDataURL(file);
-  });
 }
 
 /**
