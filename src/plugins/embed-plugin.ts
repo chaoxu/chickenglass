@@ -26,6 +26,7 @@ export function isValidEmbedUrl(url: string): boolean {
     const parsed = new URL(trimmed);
     return parsed.protocol === "https:";
   } catch {
+    // Malformed URL string — not a valid embed target
     return false;
   }
 }

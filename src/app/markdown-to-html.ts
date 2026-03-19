@@ -40,6 +40,7 @@ function renderMath(latex: string, displayMode: boolean): string {
       trust: true,
     });
   } catch {
+    // KaTeX render failed (e.g. unsupported command) — show raw LaTeX as error
     const escaped = escapeHtml(latex);
     return displayMode
       ? `<pre class="math-error">${escaped}</pre>`

@@ -115,6 +115,7 @@ export function renderInlineMarkdown(
           macros,
         });
       } catch {
+        // KaTeX render failed — show raw LaTeX source as fallback
         span.textContent = `$${seg.content}$`;
       }
       container.appendChild(span);

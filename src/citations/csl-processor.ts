@@ -271,6 +271,7 @@ export class CslProcessor {
       const [, entries] = this.engine.makeBibliography() as [unknown, string[]];
       return entries.map((e: string) => e.trim());
     } catch {
+      // CSL engine may fail on malformed entries — return empty bibliography
       return [];
     }
   }
@@ -289,6 +290,7 @@ export class CslProcessor {
     try {
       this.engine = new CSL.Engine(sys, this.styleXml);
     } catch {
+      // Invalid or unsupported CSL style XML — disable engine, fall back to simple formatting
       this.engine = null;
     }
   }

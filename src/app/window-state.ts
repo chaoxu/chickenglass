@@ -66,6 +66,7 @@ export function loadWindowState(): WindowState {
     if (!isWindowState(parsed)) return { ...DEFAULT_STATE };
     return parsed;
   } catch {
+    // localStorage unavailable or corrupt JSON — use defaults
     return { ...DEFAULT_STATE };
   }
 }

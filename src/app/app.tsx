@@ -86,6 +86,7 @@ function AppInner() {
       const tree = await fs.listTree();
       setFileTree(tree);
     } catch {
+      // Filesystem may not support listTree (e.g. empty MemoryFS) — show no tree
       setFileTree(null);
     }
   }, [fs]);
@@ -600,6 +601,7 @@ function AppInner() {
       const line = view.state.doc.lineAt(cursorCharOffset);
       return { line: line.number, col: cursorCharOffset - line.from + 1 };
     } catch {
+      // Offset may be stale (beyond doc length) after a doc swap — fall back to 1:1
       return { line: 1, col: 1 };
     }
   })();

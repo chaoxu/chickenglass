@@ -42,6 +42,7 @@ function loadSettings(): Settings {
 
     return loaded;
   } catch {
+    // localStorage unavailable or corrupt JSON — use defaults
     return { ...DEFAULT_SETTINGS };
   }
 }

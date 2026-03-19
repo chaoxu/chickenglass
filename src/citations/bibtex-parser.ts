@@ -99,6 +99,7 @@ export function parseBibTeX(content: string): BibEntry[] {
     });
     return library.entries.map(toBibEntry);
   } catch {
+    // Malformed BibTeX content — return empty list rather than crashing
     return [];
   }
 }

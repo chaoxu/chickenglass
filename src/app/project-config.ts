@@ -122,6 +122,7 @@ export async function loadProjectConfig(
     const content = await fs.readFile(PROJECT_CONFIG_FILE);
     return parseProjectConfig(content);
   } catch {
+    // Config file missing, unreadable, or invalid YAML — use empty config
     return {};
   }
 }

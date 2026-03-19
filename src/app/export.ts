@@ -260,6 +260,7 @@ async function exportHtml(
     try {
       await fs.writeFile(outputPath, html);
     } catch {
+      // writeFile fails if the file doesn't exist yet — fall back to createFile
       await fs.createFile(outputPath, html);
     }
     return outputPath;

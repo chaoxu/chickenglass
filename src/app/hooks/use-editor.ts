@@ -121,6 +121,7 @@ async function expandIncludes(
     try {
       content = await fs.readFile(resolved);
     } catch {
+      // Included file not found or unreadable — skip expansion, return raw content
       return { text: rawContent, regions: [] };
     }
     includes.push({ path: resolved, content, children: [] });
@@ -185,6 +186,7 @@ async function loadBibliography(
       // view destroyed
     }
   } catch {
+    // BibTeX file unreadable or unparseable — clear bibliography data
     try {
       view.dispatch({ effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) });
     } catch {

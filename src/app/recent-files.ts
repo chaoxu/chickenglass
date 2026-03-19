@@ -19,6 +19,7 @@ function readList(key: string): string[] {
     if (!Array.isArray(parsed)) return [];
     return parsed.filter((v): v is string => typeof v === "string");
   } catch {
+    // localStorage unavailable or corrupt JSON — start with empty list
     return [];
   }
 }
