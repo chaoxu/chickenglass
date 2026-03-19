@@ -32,7 +32,7 @@ export function Outline({ headings, onSelect }: OutlineProps) {
         return (
           <button
             key={i}
-            className="w-full text-left flex items-baseline gap-1 py-[2px] text-sm text-[var(--cg-fg)] hover:bg-[var(--cg-hover,rgba(0,0,0,.06))] cursor-pointer truncate"
+            className="w-full text-left flex items-baseline gap-1 py-[2px] text-sm text-[var(--cg-fg)] hover:bg-[var(--cg-hover)] cursor-pointer truncate transition-colors duration-[var(--cg-transition,0.15s)]"
             style={{ paddingLeft: `${indent}px`, paddingRight: "8px" }}
             onClick={() => onSelect(heading.from)}
             title={heading.text}

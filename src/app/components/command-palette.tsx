@@ -90,15 +90,14 @@ export function CommandPalette({
       // Overlay: fixed, full-screen semi-transparent backdrop
       overlayClassName={[
         "fixed inset-0 z-50",
-        "bg-black/40 backdrop-blur-sm",
-        // Fade-in animation via Tailwind arbitrary variant
+        "bg-black/40",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
       ].join(" ")}
-      // Panel: centered card
+      // Panel: centered card — borders for depth, no shadows
       className={[
         "fixed left-1/2 top-[20%] z-50 w-full max-w-lg -translate-x-1/2",
-        "rounded-lg border border-[var(--cg-border)] shadow-2xl",
+        "rounded-lg border border-[var(--cg-border)]",
         "bg-[var(--cg-bg)] text-[var(--cg-fg)]",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
@@ -154,7 +153,7 @@ export function CommandPalette({
                 className={[
                   "relative flex cursor-pointer select-none items-center rounded-md px-2 py-2 text-sm",
                   "text-[var(--cg-fg)] outline-none",
-                  "aria-selected:bg-[var(--cg-accent,#4a9eff)] aria-selected:text-white",
+                  "aria-selected:bg-[var(--cg-accent)] aria-selected:text-[var(--cg-accent-fg)]",
                   "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
                 ].join(" ")}
               >

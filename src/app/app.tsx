@@ -559,9 +559,9 @@ function AppInner() {
         <div className="flex border-b border-[var(--cg-border)] shrink-0">
           <button
             className={[
-              "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide",
+              "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-[var(--cg-transition,0.15s)]",
               sidebarTab === "files"
-                ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent,#4a9eff)]"
+                ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent)]"
                 : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
             ].join(" ")}
             onClick={() => setSidebarTab("files")}
@@ -570,9 +570,9 @@ function AppInner() {
           </button>
           <button
             className={[
-              "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide",
+              "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-[var(--cg-transition,0.15s)]",
               sidebarTab === "outline"
-                ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent,#4a9eff)]"
+                ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent)]"
                 : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
             ].join(" ")}
             onClick={() => setSidebarTab("outline")}
@@ -581,9 +581,9 @@ function AppInner() {
           </button>
           <button
             className={[
-              "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide",
+              "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-[var(--cg-transition,0.15s)]",
               sidebarTab === "symbols"
-                ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent,#4a9eff)]"
+                ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent)]"
                 : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
             ].join(" ")}
             onClick={() => setSidebarTab("symbols")}

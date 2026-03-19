@@ -176,7 +176,7 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
     >
       {/* Panel */}
       <div
-        className="w-full max-w-xl bg-[var(--cg-bg,#fff)] border border-[var(--cg-border)] rounded-lg shadow-2xl flex flex-col overflow-hidden"
+        className="w-full max-w-xl bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded-lg flex flex-col overflow-hidden"
         style={{ maxHeight: "70vh" }}
       >
         {/* Header: search input + type filter */}
@@ -204,7 +204,7 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="text-xs bg-[var(--cg-subtle,#f5f5f5)] border border-[var(--cg-border)] rounded px-1 py-0.5 text-[var(--cg-fg)] outline-none cursor-pointer"
+            className="text-xs bg-[var(--cg-subtle)] border border-[var(--cg-border)] rounded px-1 py-0.5 text-[var(--cg-fg)] outline-none cursor-pointer"
           >
             <option value="">All types</option>
             {BLOCK_TYPES.map((t) => (
@@ -223,7 +223,7 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
             Array.from(grouped.entries()).map(([file, entries]) => (
               <div key={file}>
                 {/* File group header */}
-                <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--cg-muted)] bg-[var(--cg-subtle,#f5f5f5)] border-b border-[var(--cg-border)] sticky top-0">
+                <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--cg-muted)] bg-[var(--cg-subtle)] border-b border-[var(--cg-border)] sticky top-0">
                   {basename(file)}
                   <span className="ml-1 font-normal normal-case text-[var(--cg-muted)]">
                     — {file}
@@ -234,12 +234,12 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
                 {entries.map((entry, i) => (
                   <button
                     key={i}
-                    className="w-full text-left px-3 py-2 flex flex-col gap-0.5 hover:bg-[var(--cg-hover,rgba(0,0,0,.06))] border-b border-[var(--cg-border)] last:border-b-0"
+                    className="w-full text-left px-3 py-2 flex flex-col gap-0.5 hover:bg-[var(--cg-hover)] border-b border-[var(--cg-border)] last:border-b-0 transition-colors duration-[var(--cg-transition,0.15s)]"
                     onClick={() => handleResultClick(entry)}
                   >
                     {/* Top row: type badge + number + title */}
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1 py-0.5 rounded bg-[var(--cg-accent,#4a9eff)]/10 text-[var(--cg-accent,#4a9eff)]">
+                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1 py-0.5 rounded bg-[var(--cg-subtle)] text-[var(--cg-muted)]">
                         {entry.type}
                       </span>
                       {entry.number !== undefined && (
@@ -274,7 +274,7 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
 
         {/* Status bar */}
         {grouped.size > 0 && (
-          <div className="shrink-0 px-3 py-1 border-t border-[var(--cg-border)] text-xs text-[var(--cg-muted)] bg-[var(--cg-subtle,#f5f5f5)]">
+          <div className="shrink-0 px-3 py-1 border-t border-[var(--cg-border)] text-xs text-[var(--cg-muted)] bg-[var(--cg-subtle)]">
             {statusText}
           </div>
         )}

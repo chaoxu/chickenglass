@@ -1,26 +1,60 @@
 @import "tailwindcss";
 
+/* ── Design tokens ──────────────────────────────────────────────────────────
+ * Minimal black-and-white palette. No gradients, no shadows, borders for depth.
+ * Typography: 12px labels, 14px body, 16px editor. Weights: 400/500/600.
+ * Spacing: 4/8/12/16px increments. Opacity for icon affordance (0.6 → 1.0).
+ * ──────────────────────────────────────────────────────────────────────────── */
+
 :root {
+  /* Backgrounds */
   --cg-bg: #ffffff;
+  --cg-bg-secondary: #f4f4f5;
+
+  /* Text */
   --cg-fg: #09090b;
-  --cg-border: #d4d4d8;
   --cg-muted: #71717a;
+
+  /* Borders — always 1px solid */
+  --cg-border: #e4e4e7;
+
+  /* Interactive states */
   --cg-subtle: #f4f4f5;
-  --cg-hover: #e4e4e7;
-  --cg-active: #d4d4d8;
+  --cg-hover: #f4f4f5;
+  --cg-active: #e4e4e7;
+
+  /* Accent — black, one color */
+  --cg-accent: #18181b;
+  --cg-accent-fg: #ffffff;
+
+  /* Transitions */
+  --cg-transition: 0.15s ease;
 }
 
 [data-theme="dark"] {
   --cg-bg: #0a0a0a;
+  --cg-bg-secondary: #18181b;
   --cg-fg: #fafafa;
-  --cg-border: #27272a;
   --cg-muted: #a1a1aa;
+  --cg-border: #27272a;
   --cg-subtle: #18181b;
   --cg-hover: #27272a;
   --cg-active: #3f3f46;
+  --cg-accent: #fafafa;
+  --cg-accent-fg: #09090b;
 }
 
-/* CodeMirror 6 overrides */
+/* ── Base styles ────────────────────────────────────────────────────────────── */
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── CodeMirror 6 overrides ─────────────────────────────────────────────────── */
+
 .cm-editor {
   height: 100%;
 }

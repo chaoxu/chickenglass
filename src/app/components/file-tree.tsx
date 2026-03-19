@@ -117,7 +117,7 @@ function FileNode({
         <div
           role="button"
           tabIndex={0}
-          className="flex items-center gap-1 px-2 py-[2px] cursor-pointer hover:bg-[var(--cg-hover,rgba(0,0,0,.06))] text-sm text-[var(--cg-fg)] select-none whitespace-nowrap"
+          className="flex items-center gap-1 px-2 py-[2px] cursor-pointer hover:bg-[var(--cg-hover)] text-sm text-[var(--cg-fg)] select-none whitespace-nowrap"
           style={{ paddingLeft: `${indent}px` }}
           onClick={() => setOpen((o) => !o)}
           onContextMenu={handleContextMenu}
@@ -188,8 +188,8 @@ function FileNode({
       className={[
         "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
         isActive
-          ? "bg-zinc-200 dark:bg-zinc-700"
-          : "hover:bg-[var(--cg-hover,rgba(0,0,0,.06))]",
+          ? "bg-[var(--cg-active)]"
+          : "hover:bg-[var(--cg-hover)]",
       ].join(" ")}
       style={{ paddingLeft: `${indent}px` }}
       onClick={() => onSelect(entry.path)}
@@ -281,7 +281,7 @@ function ContextMenuPortal({ x, y, items, onDismiss }: ContextMenuPortalProps) {
         }}
       />
       <div
-        className="fixed z-50 min-w-[140px] py-1 bg-[var(--cg-subtle)] border border-[var(--cg-border)] rounded shadow-md text-sm text-[var(--cg-fg)]"
+        className="fixed z-50 min-w-[140px] py-1 bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded text-sm text-[var(--cg-fg)]"
         style={{ left: x, top: y }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -291,7 +291,7 @@ function ContextMenuPortal({ x, y, items, onDismiss }: ContextMenuPortalProps) {
           ) : (
             <button
               key={i}
-              className="w-full text-left px-3 py-1 hover:bg-[var(--cg-hover,rgba(0,0,0,.06))] whitespace-nowrap"
+              className="w-full text-left px-3 py-1 hover:bg-[var(--cg-hover)] whitespace-nowrap"
               onClick={() => {
                 onDismiss();
                 item.action?.();

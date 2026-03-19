@@ -101,7 +101,7 @@ export function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }: TabBar
   return (
     <div
       data-tabbar
-      className="flex flex-row items-stretch border-b border-[var(--cg-border)] bg-[var(--cg-subtle)] relative overflow-x-auto overflow-y-hidden select-none"
+      className="flex flex-row items-stretch border-b border-[var(--cg-border)] bg-[var(--cg-bg-secondary)] relative overflow-x-auto overflow-y-hidden select-none"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -119,16 +119,17 @@ export function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }: TabBar
             onDragEnd={handleDragEnd}
             onClick={() => { onSelect(tab.path); }}
             className={cn(
-              "group relative flex items-center gap-1 px-3 h-8 text-sm cursor-pointer border-r border-[var(--cg-border)] shrink-0 whitespace-nowrap transition-colors",
+              "group relative flex items-center gap-1 px-3 h-8 text-sm cursor-pointer border-r border-[var(--cg-border)] shrink-0 whitespace-nowrap",
+              "transition-[background-color,color] duration-[var(--cg-transition,0.15s)]",
               isActive
-                ? "bg-white text-[var(--cg-fg)]"
-                : "bg-zinc-100 text-[var(--cg-muted)] hover:bg-zinc-50",
+                ? "bg-[var(--cg-bg)] text-[var(--cg-fg)]"
+                : "bg-[var(--cg-bg-secondary)] text-[var(--cg-muted)] hover:bg-[var(--cg-hover)]",
               isDragging && "opacity-40",
             )}
           >
             {/* Drop indicator line: shown to the LEFT of this tab */}
             {dropIndex === i && (
-              <span className="absolute left-0 top-0 h-full w-0.5 bg-blue-500 pointer-events-none" />
+              <span className="absolute left-0 top-0 h-full w-0.5 bg-[var(--cg-accent)] pointer-events-none" />
             )}
 
             {/* Dirty dot before name */}
@@ -146,7 +147,7 @@ export function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }: TabBar
                 e.stopPropagation();
                 onClose(tab.path);
               }}
-              className="ml-1 flex items-center justify-center w-4 h-4 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-zinc-200 text-[var(--cg-muted)] leading-none shrink-0"
+              className="ml-1 flex items-center justify-center w-4 h-4 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-[var(--cg-transition,0.15s)] hover:bg-[var(--cg-hover)] text-[var(--cg-muted)] leading-none shrink-0"
               aria-label={`Close ${tab.name}`}
             >
               ×
@@ -158,7 +159,7 @@ export function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }: TabBar
       {/* Spacer so the end-drop indicator has a relative parent at the right edge of the last tab */}
       {dropIndex === tabs.length && tabs.length > 0 && (
         <span className="relative shrink-0">
-          <span className="absolute left-0 top-0 h-full w-0.5 bg-blue-500 pointer-events-none" />
+          <span className="absolute left-0 top-0 h-full w-0.5 bg-[var(--cg-accent)] pointer-events-none" />
         </span>
       )}
     </div>

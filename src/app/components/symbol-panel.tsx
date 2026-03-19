@@ -76,7 +76,7 @@ export function SymbolPanel({ onInsert, view }: SymbolPanelProps) {
             "w-full text-xs rounded px-2 py-1",
             "bg-[var(--cg-bg)] border border-[var(--cg-border)]",
             "text-[var(--cg-fg)] placeholder:text-[var(--cg-muted)]",
-            "focus:outline-none focus:ring-1 focus:ring-[var(--cg-accent,#4a9eff)]",
+            "focus:outline-none focus:ring-1 focus:ring-[var(--cg-accent)]",
           )}
         />
       </div>
@@ -106,7 +106,7 @@ export function SymbolPanel({ onInsert, view }: SymbolPanelProps) {
                     }}
                     className={cn(
                       "flex items-center justify-center h-7 rounded text-sm leading-none",
-                      "hover:bg-[var(--cg-hover,#e4e4e7)] active:bg-[var(--cg-active,#d4d4d8)]",
+                      "hover:bg-[var(--cg-hover)] active:bg-[var(--cg-active)]",
                       "text-[var(--cg-fg)] transition-colors",
                     )}
                     aria-label={`${sym.label}: ${sym.latex}`}

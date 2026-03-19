@@ -55,7 +55,7 @@ export function GotoLineDialog({ open, onOpenChange, onGoto, currentLine }: Goto
       onClick={() => onOpenChange(false)}
     >
       <div
-        className="bg-white rounded-lg shadow-2xl border border-zinc-200 w-72 p-3"
+        className="bg-[var(--cg-bg)] rounded-lg border border-[var(--cg-border)] w-72 p-3"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -64,7 +64,7 @@ export function GotoLineDialog({ open, onOpenChange, onGoto, currentLine }: Goto
         <input
           ref={inputRef}
           type="text"
-          className="w-full text-sm px-3 py-1.5 rounded border border-zinc-200 outline-none focus:border-blue-400 bg-zinc-50 placeholder:text-zinc-400 font-mono"
+          className="w-full text-sm px-3 py-1.5 rounded border border-[var(--cg-border)] outline-none focus:ring-1 focus:ring-[var(--cg-accent)] bg-[var(--cg-bg-secondary)] placeholder:text-[var(--cg-muted)] text-[var(--cg-fg)] font-mono"
           placeholder={String(currentLine)}
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -73,8 +73,8 @@ export function GotoLineDialog({ open, onOpenChange, onGoto, currentLine }: Goto
           spellCheck={false}
           autoComplete="off"
         />
-        <p className="mt-1.5 text-[11px] text-zinc-400 leading-tight">
-          line or line:column — Enter to jump, Esc to dismiss
+        <p className="mt-1.5 text-[11px] text-[var(--cg-muted)] leading-tight">
+          line or line:column -- Enter to jump, Esc to dismiss
         </p>
       </div>
     </div>

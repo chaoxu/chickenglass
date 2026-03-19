@@ -109,12 +109,12 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <div className="flex items-center gap-0.5 px-3 py-1 text-xs bg-white/82 backdrop-blur-sm border-b border-zinc-200/60 whitespace-nowrap overflow-hidden min-h-[24px]">
+      <div className="flex items-center gap-0.5 px-3 py-1 text-xs bg-[var(--cg-bg)]/90 border-b border-[var(--cg-border)] whitespace-nowrap overflow-hidden min-h-[24px]">
         {ancestry.map((h, i) => (
           <span key={h.pos} className="flex items-center gap-0.5 min-w-0">
             {i > 0 && (
               <span
-                className="text-zinc-400/80 mx-0.5 shrink-0 select-none"
+                className="text-[var(--cg-muted)] opacity-60 mx-0.5 shrink-0 select-none"
                 aria-hidden="true"
               >
                 ›
@@ -123,8 +123,9 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
             <span
               className={cn(
                 "cursor-pointer rounded px-1 py-[1px] max-w-[200px] truncate",
-                "text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900",
-                i === ancestry.length - 1 && "text-zinc-900 font-medium",
+                "text-[var(--cg-muted)] hover:bg-[var(--cg-hover)] hover:text-[var(--cg-fg)]",
+                "transition-colors duration-[var(--cg-transition,0.15s)]",
+                i === ancestry.length - 1 && "text-[var(--cg-fg)] font-medium",
               )}
               title={h.text}
               onClick={() => onSelect(h.pos)}

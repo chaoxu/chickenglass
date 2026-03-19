@@ -32,7 +32,7 @@ interface SettingsDialogProps {
 // ── Shared constants ──────────────────────────────────────────────────────────
 
 const SELECT_CLASS =
-  "text-sm border border-[var(--cg-border)] rounded px-2 py-1 bg-[var(--cg-bg)] text-[var(--cg-fg)] focus:outline-none focus:ring-1 focus:ring-[var(--cg-accent,#4a9eff)]";
+  "text-sm border border-[var(--cg-border)] rounded px-2 py-1 bg-[var(--cg-bg)] text-[var(--cg-fg)] focus:outline-none focus:ring-1 focus:ring-[var(--cg-accent)]";
 
 const TABS: SettingsTab[] = ["General", "Editor", "Appearance", "Plugins", "Export"];
 
@@ -120,7 +120,7 @@ function EditorTab({ settings, onUpdateSetting }: EditorTabProps) {
           step={1}
           value={settings.fontSize}
           onChange={(e) => { onUpdateSetting("fontSize", Number(e.target.value)); }}
-          className="w-32 accent-[var(--cg-accent,#4a9eff)]"
+          className="w-32 accent-[var(--cg-accent)]"
         />
       </Row>
 
@@ -137,7 +137,7 @@ function EditorTab({ settings, onUpdateSetting }: EditorTabProps) {
           step={0.1}
           value={settings.lineHeight}
           onChange={(e) => { onUpdateSetting("lineHeight", Number(e.target.value)); }}
-          className="w-32 accent-[var(--cg-accent,#4a9eff)]"
+          className="w-32 accent-[var(--cg-accent)]"
         />
       </Row>
 
@@ -161,7 +161,7 @@ function EditorTab({ settings, onUpdateSetting }: EditorTabProps) {
           type="checkbox"
           checked={settings.showLineNumbers}
           onChange={(e) => { onUpdateSetting("showLineNumbers", e.target.checked); }}
-          className="w-4 h-4 accent-[var(--cg-accent,#4a9eff)]"
+          className="w-4 h-4 accent-[var(--cg-accent)]"
         />
       </Row>
 
@@ -172,7 +172,7 @@ function EditorTab({ settings, onUpdateSetting }: EditorTabProps) {
           type="checkbox"
           checked={settings.wordWrap}
           onChange={(e) => { onUpdateSetting("wordWrap", e.target.checked); }}
-          className="w-4 h-4 accent-[var(--cg-accent,#4a9eff)]"
+          className="w-4 h-4 accent-[var(--cg-accent)]"
         />
       </Row>
 
@@ -196,10 +196,10 @@ function AppearanceTab({ theme, onSetTheme }: AppearanceTabProps) {
               type="button"
               onClick={() => { onSetTheme(t.value); }}
               className={cn(
-                "px-3 py-1 text-sm rounded border transition-colors",
+                "px-3 py-1 text-sm rounded border transition-colors duration-[var(--cg-transition,0.15s)]",
                 theme === t.value
-                  ? "bg-[var(--cg-accent,#4a9eff)] text-white border-[var(--cg-accent,#4a9eff)]"
-                  : "border-[var(--cg-border)] text-[var(--cg-fg)] hover:bg-[var(--cg-subtle)]",
+                  ? "bg-[var(--cg-accent)] text-[var(--cg-accent-fg)] border-[var(--cg-accent)]"
+                  : "border-[var(--cg-border)] text-[var(--cg-fg)] hover:bg-[var(--cg-hover)]",
               )}
             >
               {t.label}
@@ -276,7 +276,7 @@ function PluginsTab({ settings, onUpdateSetting, plugins }: PluginsTabProps) {
                   [plugin.id]: !isEnabled,
                 });
               }}
-              className="w-4 h-4 accent-[var(--cg-accent,#4a9eff)] shrink-0 ml-4"
+              className="w-4 h-4 accent-[var(--cg-accent)] shrink-0 ml-4"
             />
           </div>
         );
@@ -323,7 +323,7 @@ export function SettingsDialog({
         role="dialog"
         aria-modal="true"
         aria-label="Settings"
-        className="flex flex-col w-[560px] max-h-[80vh] rounded-lg shadow-xl bg-[var(--cg-bg)] border border-[var(--cg-border)] overflow-hidden"
+        className="flex flex-col w-[560px] max-h-[80vh] rounded-lg bg-[var(--cg-bg)] border border-[var(--cg-border)] overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--cg-border)] shrink-0">

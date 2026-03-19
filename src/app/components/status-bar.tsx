@@ -86,7 +86,7 @@ function StatsPopover({ stats, anchorRef, onClose }: StatsPopoverProps) {
         role="dialog"
         aria-label="Writing statistics"
         tabIndex={-1}
-        className="fixed z-50 min-w-[200px] rounded-md border border-[var(--cg-border)] bg-[var(--cg-bg,white)] shadow-lg p-3 text-xs text-[var(--cg-fg)]"
+        className="fixed z-50 min-w-[200px] rounded-md border border-[var(--cg-border)] bg-[var(--cg-bg)] p-3 text-xs text-[var(--cg-fg)]"
       >
         <div className="font-semibold text-sm mb-2 text-[var(--cg-fg)]">
           Writing Statistics
@@ -148,8 +148,8 @@ export function StatusBar({
             title="Click for writing statistics"
             onClick={() => setPopoverOpen((v) => !v)}
             className={cn(
-              "px-1 rounded hover:bg-[var(--cg-hover,rgba(0,0,0,0.06))] transition-colors",
-              popoverOpen && "bg-[var(--cg-hover,rgba(0,0,0,0.06))]",
+              "px-1 rounded hover:bg-[var(--cg-hover)] transition-colors",
+              popoverOpen && "bg-[var(--cg-hover)]",
             )}
           >
             {wordLabel}
@@ -170,7 +170,7 @@ export function StatusBar({
           type="button"
           title="Click to cycle editor mode"
           onClick={cycleMode}
-          className="px-1 rounded hover:bg-[var(--cg-hover,rgba(0,0,0,0.06))] transition-colors"
+          className="px-1 rounded hover:bg-[var(--cg-hover)] transition-colors"
         >
           {MODE_LABELS[editorMode]}
         </button>

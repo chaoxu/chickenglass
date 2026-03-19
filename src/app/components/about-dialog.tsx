@@ -42,11 +42,11 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
 
   return (
     <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40"
       onClick={onClose}
     >
       <div
-        className="relative bg-white text-zinc-900 rounded-lg shadow-2xl px-10 py-8 min-w-[320px] max-w-[480px] w-full outline-none"
+        className="relative bg-[var(--cg-bg)] text-[var(--cg-fg)] rounded-lg border border-[var(--cg-border)] px-10 py-8 min-w-[320px] max-w-[480px] w-full outline-none"
         role="dialog"
         aria-modal="true"
         aria-label="About Chickenglass"
@@ -55,7 +55,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
         {/* Close button */}
         <button
           type="button"
-          className="absolute top-3 right-3 text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 rounded px-2 py-0.5 text-xl leading-none"
+          className="absolute top-3 right-3 text-[var(--cg-muted)] hover:text-[var(--cg-fg)] hover:bg-[var(--cg-hover)] rounded px-2 py-0.5 text-xl leading-none transition-colors duration-[var(--cg-transition,0.15s)]"
           aria-label="Close"
           onClick={onClose}
         >
@@ -64,18 +64,18 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
 
         {/* Header */}
         <div className="flex items-baseline gap-2 mb-2">
-          <h2 className="text-2xl font-bold">Chickenglass</h2>
-          <span className="text-sm text-zinc-400">v0.1.0</span>
+          <h2 className="text-base font-semibold">Chickenglass</h2>
+          <span className="text-sm text-[var(--cg-muted)]">v0.1.0</span>
         </div>
 
         {/* Description */}
-        <p className="text-zinc-500 text-sm mb-5">
+        <p className="text-[var(--cg-muted)] text-sm mb-5">
           Semantic document editor for mathematical writing.
         </p>
 
         {/* Credits */}
         <div className="mb-5">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 mb-1.5">
+          <p className="text-xs font-semibold uppercase tracking-widest text-[var(--cg-muted)] mb-1.5">
             Built with
           </p>
           <ul className="flex flex-wrap gap-x-4 gap-y-1 list-none p-0 m-0">
@@ -85,7 +85,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
                   href={c.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-[var(--cg-fg)] underline hover:opacity-60 transition-opacity duration-[var(--cg-transition,0.15s)]"
                 >
                   {c.name}
                 </a>
@@ -95,12 +95,12 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-zinc-100 pt-4">
+        <div className="border-t border-[var(--cg-border)] pt-4">
           <a
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-blue-600 hover:underline"
+            className="text-sm text-[var(--cg-fg)] underline hover:opacity-60 transition-opacity duration-[var(--cg-transition,0.15s)]"
           >
             View on GitHub
           </a>

@@ -167,8 +167,8 @@ export function SplitPane({
         aria-orientation={isVertical ? "vertical" : "horizontal"}
         onMouseDown={handleDividerMouseDown}
         className={cn(
-          "split-pane-divider shrink-0 bg-[var(--cg-border,#d4d4d8)] z-10 transition-colors",
-          "hover:bg-[var(--cg-active,#a1a1aa)]",
+          "split-pane-divider shrink-0 bg-[var(--cg-border)] z-10 transition-colors duration-[var(--cg-transition,0.15s)]",
+          "hover:bg-[var(--cg-active)]",
           isVertical
             ? "w-1 h-full cursor-col-resize"
             : "h-1 w-full cursor-row-resize",
