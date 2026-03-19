@@ -16,7 +16,7 @@
 import CSL from "citeproc";
 import type { BibEntry } from "./bibtex-parser";
 import enUsLocale from "./en-us-locale.xml?raw";
-import defaultCslStyle from "./chicago-author-date.csl?raw";
+import defaultCslStyle from "./ieee.csl?raw";
 
 /** CSL-JSON item (subset of fields used by citeproc). */
 export interface CslItem {
@@ -165,6 +165,45 @@ export class CslProcessor {
   setStyle(styleXml: string): void {
     this.styleXml = styleXml;
     this.initEngine();
+  }
+
+  /**
+   * Register all citations in order so numeric styles can assign numbers.
+   * Call this once with every citation cluster before calling cite().
+   */
+  registerCitations(clusters: Array<{ ids: string[]; locators?: (string | undefined)[] }>): void {
+    if (!this.engine) return;
+    this.engine.updateItems([]);
+    const allIds = new Set<string>();
+    for (const cluster of clusters) {
+      for (const id of cluster.ids) allIds.add(id);
+    }
+    this.engine.updateItems([...allIds]);
+
+    // Process citations in order so the engine assigns numbers
+    const citationsPre: Array<[string, number]> = [];
+    for (let i = 0; i < clusters.length; i++) {
+      const cluster = clusters[i];
+      const citationItems = cluster.ids.map((id, j) => {
+        const raw = cluster.locators?.[j];
+        if (raw) {
+          const parsed = parseLocator(raw);
+          return { id, locator: parsed.locator, label: parsed.label };
+        }
+        return { id };
+      });
+      const citation = {
+        citationItems,
+        properties: { noteIndex: 0 },
+        citationID: `cite-${i}`,
+      };
+      try {
+        this.engine.processCitationCluster(citation, citationsPre, []);
+      } catch {
+        // ignore individual cluster errors
+      }
+      citationsPre.push([`cite-${i}`, i]);
+    }
   }
 
   /** Format a parenthetical citation for the given ids, with optional locators. */

@@ -233,16 +233,31 @@ export function formatParenthetical(
 export function collectCitationRanges(
   view: EditorView,
   store: BibStore,
+  cslProcessor?: CslProcessor | null,
 ): Range<Decoration>[] {
   const items: Range<Decoration>[] = [];
   const text = view.state.doc.toString();
   const matches = findCitations(text, store);
 
+  // Register all citations with CSL processor first (needed for numeric styles)
+  if (cslProcessor) {
+    const clusters = matches
+      .filter((m) => m.parenthetical)
+      .map((m) => ({
+        ids: [...m.ids],
+        locators: m.locators ? [...m.locators] : undefined,
+      }));
+    cslProcessor.registerCitations(clusters);
+  }
+
   for (const match of matches) {
     if (cursorInRange(view, match.from, match.to)) continue;
 
     if (match.parenthetical) {
-      const rendered = formatParenthetical(match.ids, store, match.locators);
+      // Use CSL processor when available for proper style formatting
+      const rendered = cslProcessor
+        ? cslProcessor.cite([...match.ids], match.locators ? [...match.locators] : undefined)
+        : formatParenthetical(match.ids, store, match.locators);
       const widget = new CitationWidget(rendered, match.ids);
       widget.sourceFrom = match.from;
       items.push(
@@ -251,7 +266,9 @@ export function collectCitationRanges(
     } else {
       const entry = store.get(match.ids[0]);
       if (entry) {
-        const rendered = formatNarrativeCitation(entry);
+        const rendered = cslProcessor
+          ? cslProcessor.citeNarrative(match.ids[0])
+          : formatNarrativeCitation(entry);
         const widget = new NarrativeCitationWidget(rendered, match.ids[0]);
         widget.sourceFrom = match.from;
         items.push(
@@ -286,8 +303,8 @@ class CitationRenderPlugin implements PluginValue {
   }
 
   private buildAll(view: EditorView): DecorationSet {
-    const { store } = view.state.field(bibDataField);
-    return buildDecorations(collectCitationRanges(view, store));
+    const { store, cslProcessor } = view.state.field(bibDataField);
+    return buildDecorations(collectCitationRanges(view, store, cslProcessor));
   }
 }
 
