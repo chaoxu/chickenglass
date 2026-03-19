@@ -32,6 +32,9 @@ function applyZoomLevel(px: number): void {
 export interface KeybindingActions {
   saveActiveFile(): Promise<void>;
   exportActiveFile(format: ExportFormat): Promise<void>;
+  toggleSidebar(): void;
+  /** The editor container — used to check if keydown originates inside the editor. */
+  editorContainer: HTMLElement;
 }
 
 /**
@@ -68,6 +71,12 @@ export function installAppKeybindings(
       case "s": // Save
         e.preventDefault();
         actions.saveActiveFile();
+        return;
+      case "b": // Toggle sidebar (skip when inside editor to avoid conflict with Cmd+B bold)
+        if (!actions.editorContainer.contains(e.target as Node)) {
+          e.preventDefault();
+          actions.toggleSidebar();
+        }
         return;
       case "=": // Zoom in
         e.preventDefault();

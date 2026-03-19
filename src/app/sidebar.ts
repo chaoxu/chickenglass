@@ -17,10 +17,21 @@ export class Sidebar {
   readonly fileTree: FileTree;
   readonly outline: Outline;
   private onCreateFile: CreateFileHandler | null = null;
+  private collapsed = false;
 
   constructor() {
     this.element = document.createElement("div");
     this.element.className = "sidebar";
+
+    // Restore persisted collapse state
+    try {
+      this.collapsed = localStorage.getItem("cg-sidebar-collapsed") === "true";
+    } catch {
+      // localStorage unavailable
+    }
+    if (this.collapsed) {
+      this.element.classList.add("sidebar-collapsed");
+    }
 
     // Files section (collapsible)
     const filesSection = this.createCollapsibleSection("Files");
@@ -87,6 +98,22 @@ export class Sidebar {
   /** Set the active file path highlighted in the tree. */
   setActivePath(path: string | null): void {
     this.fileTree.setActivePath(path);
+  }
+
+  /** Toggle sidebar visibility. */
+  toggle(): void {
+    this.collapsed = !this.collapsed;
+    this.element.classList.toggle("sidebar-collapsed", this.collapsed);
+    try {
+      localStorage.setItem("cg-sidebar-collapsed", String(this.collapsed));
+    } catch {
+      // localStorage unavailable
+    }
+  }
+
+  /** Whether the sidebar is currently collapsed. */
+  isCollapsed(): boolean {
+    return this.collapsed;
   }
 
   private createCollapsibleSection(title: string): {

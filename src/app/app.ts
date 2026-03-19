@@ -166,6 +166,8 @@ export class App {
     this.cleanupAppKeybindings = installAppKeybindings(this.root, {
       saveActiveFile: () => this.saveActiveFile(),
       exportActiveFile: (fmt) => this.exportActiveFile(fmt),
+      toggleSidebar: () => this.sidebar.toggle(),
+      editorContainer: this.editorContainer,
     });
 
     this.root.addEventListener("cg-open-file", (e) => {
