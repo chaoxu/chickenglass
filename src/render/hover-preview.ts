@@ -264,7 +264,13 @@ function hoverSource(
   return null;
 }
 
-/** CM6 extension that shows hover previews for cross-references and citations. */
+/**
+ * CM6 extension that shows hover previews for cross-references and citations.
+ *
+ * Positioning is handled entirely by CM6's hoverTooltip, which includes its
+ * own collision detection. @floating-ui/dom was evaluated (#180, #189) but
+ * is not applicable here — CM6's tooltip system already manages placement.
+ */
 export const hoverPreviewExtension: Extension = hoverTooltip(hoverSource, {
   hoverTime: 300,
 });

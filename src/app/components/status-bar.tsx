@@ -42,7 +42,11 @@ interface StatsPopoverProps {
 function StatsPopover({ stats, anchorRef, onClose }: StatsPopoverProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  // Position the panel above the anchor element
+  // Position the panel above the anchor element.
+  // Manual positioning is sufficient here — the anchor is always at the bottom
+  // of the viewport so there is no collision risk. @floating-ui was evaluated
+  // (#180, #189) but rejected: only 2 manual positioning sites exist in the
+  // codebase, both are trivial, and the ~8KB gzipped cost is not justified.
   useEffect(() => {
     const anchor = anchorRef.current;
     const panel = panelRef.current;

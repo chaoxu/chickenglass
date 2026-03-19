@@ -67,7 +67,12 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
     return () => observer.disconnect();
   }, [view, sidenotesCollapsed, onSidenotesCollapsedChange]);
 
-  // Hover tooltip for sidenote refs when margin is collapsed
+  // Hover tooltip for sidenote refs when margin is collapsed.
+  // Manual positioning via getBoundingClientRect is sufficient — the tooltip
+  // is small (max-width 320px), pointer-events:none, and only appears on
+  // hover. @floating-ui was evaluated (#180, #189) but rejected for this
+  // use case: minimal collision risk and the bundle cost (~8KB) is not
+  // justified for 2 trivial positioning sites in the codebase.
   const tooltipRef = useRef<HTMLDivElement | null>(null);
 
   const getFootnoteContent = useCallback((id: string): string | null => {
