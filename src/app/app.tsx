@@ -286,9 +286,32 @@ function AppInner() {
     } catch {
       // deleteFile may not be supported (e.g., MemoryFS for non-existent files)
     }
-    await closeFile(path);
+    // Close the exact file, or all children if it was a directory (single batch update)
+    const prefix = path + "/";
+    const isAffected = (p: string) => p === path || p.startsWith(prefix);
+    setOpenTabs((prev) => {
+      const affected = new Set(prev.filter((t) => isAffected(t.path)).map((t) => t.path));
+      if (affected.size === 0) return prev;
+      // Clean up buffers/liveDocs for affected paths
+      for (const p of affected) {
+        buffers.current.delete(p);
+        liveDocs.current.delete(p);
+      }
+      const remaining = prev.filter((t) => !affected.has(t.path));
+      // If the active tab was deleted, switch to another
+      if (affected.has(activeTabRef.current ?? "")) {
+        const nextPath = remaining[0]?.path ?? null;
+        setActiveTab(nextPath);
+        setEditorDoc(
+          nextPath
+            ? (liveDocs.current.get(nextPath) ?? buffers.current.get(nextPath) ?? "")
+            : "",
+        );
+      }
+      return remaining;
+    });
     await refreshTree();
-  }, [fs, closeFile, refreshTree]);
+  }, [fs, refreshTree]);
 
   const handleOutlineSelect = useCallback((from: number) => {
     const view = editorState?.view;

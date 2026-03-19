@@ -31,6 +31,7 @@ fn main() {
             commands::export_document,
             commands::watch_directory,
             commands::unwatch_directory,
+            commands::delete_file,
             commands::reveal_in_finder,
         ])
         .run(tauri::generate_context!())

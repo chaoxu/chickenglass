@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import type { FileEntry } from "../file-manager";
+import { isTauri, revealInFinder } from "../tauri-fs";
 
 interface FileTreeProps {
   root: FileEntry | null;
@@ -109,9 +110,45 @@ function FileNode({
     ? entry.path.substring(0, entry.path.lastIndexOf("/"))
     : "";
 
+  // ── Shared menu items ──────────────────────────────────────────────────
+
+  const revealItem: MenuItem | null = isTauri()
+    ? {
+        label: "Reveal in Finder",
+        action: () => void revealInFinder(entry.path),
+      }
+    : null;
+
   // ── Directory rendering ───────────────────────────────────────────────────
 
   if (entry.isDirectory) {
+    const dirMenuItems: MenuItem[] = [
+      {
+        label: "New File",
+        action: () => {
+          const name = window.prompt("File name:");
+          if (name?.trim()) onCreateFile(`${entry.path}/${name.trim()}`);
+        },
+      },
+      {
+        label: "New Folder",
+        action: () => {
+          const name = window.prompt("Folder name:");
+          if (name?.trim()) onCreateDir(`${entry.path}/${name.trim()}`);
+        },
+      },
+      { label: "-" },
+      { label: "Rename", action: startRename },
+      {
+        label: "Delete",
+        action: () => void onDelete(entry.path),
+      },
+    ];
+
+    if (revealItem) {
+      dirMenuItems.push({ label: "-" }, revealItem);
+    }
+
     return (
       <div>
         <div
@@ -123,12 +160,31 @@ function FileNode({
           onContextMenu={handleContextMenu}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") setOpen((o) => !o);
+            if (e.key === "F2") {
+              e.preventDefault();
+              startRename();
+            }
           }}
         >
           <span className="text-[10px] text-[var(--cg-muted)] w-3 shrink-0">
-            {open ? "▼" : "▶"}
+            {open ? "\u25BC" : "\u25B6"}
           </span>
-          <span className="font-mono truncate">{entry.name}</span>
+
+          {renaming ? (
+            <input
+              ref={renameInputRef}
+              type="text"
+              className="flex-1 text-sm font-mono bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
+              value={renameValue}
+              autoFocus
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={handleRenameKey}
+              onBlur={cancelRename}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="font-mono truncate">{entry.name}</span>
+          )}
         </div>
 
         {open && entry.children && (
@@ -155,24 +211,7 @@ function FileNode({
             x={contextMenu.x}
             y={contextMenu.y}
             onDismiss={dismissMenu}
-            items={[
-              {
-                label: "New File",
-                action: () => {
-                  const name = window.prompt("File name:");
-                  if (name?.trim()) onCreateFile(`${entry.path}/${name.trim()}`);
-                },
-              },
-              {
-                label: "New Folder",
-                action: () => {
-                  const name = window.prompt("Folder name:");
-                  if (name?.trim()) onCreateDir(`${entry.path}/${name.trim()}`);
-                },
-              },
-              { label: "-" },
-              { label: "Rename", action: startRename },
-            ]}
+            items={dirMenuItems}
           />
         )}
       </div>
@@ -180,6 +219,39 @@ function FileNode({
   }
 
   // ── File rendering ────────────────────────────────────────────────────────
+
+  const fileMenuItems: MenuItem[] = [
+    { label: "Open", action: () => onSelect(entry.path) },
+    { label: "-" },
+    { label: "Rename", action: startRename },
+    {
+      label: "Delete",
+      action: () => void onDelete(entry.path),
+    },
+    { label: "-" },
+    {
+      label: "New File",
+      action: () => {
+        const name = window.prompt("File name:");
+        if (name?.trim()) {
+          onCreateFile(parentPath ? `${parentPath}/${name.trim()}` : name.trim());
+        }
+      },
+    },
+    {
+      label: "New Folder",
+      action: () => {
+        const name = window.prompt("Folder name:");
+        if (name?.trim()) {
+          onCreateDir(parentPath ? `${parentPath}/${name.trim()}` : name.trim());
+        }
+      },
+    },
+  ];
+
+  if (revealItem) {
+    fileMenuItems.push({ label: "-" }, revealItem);
+  }
 
   return (
     <div
@@ -196,7 +268,7 @@ function FileNode({
       onContextMenu={handleContextMenu}
       onKeyDown={handleItemKey}
     >
-      <span className="text-[10px] text-[var(--cg-muted)] w-3 shrink-0">○</span>
+      <span className="text-[10px] text-[var(--cg-muted)] w-3 shrink-0">{"\u25CB"}</span>
 
       {renaming ? (
         <input
@@ -220,41 +292,14 @@ function FileNode({
           x={contextMenu.x}
           y={contextMenu.y}
           onDismiss={dismissMenu}
-          items={[
-            { label: "Open", action: () => onSelect(entry.path) },
-            { label: "-" },
-            { label: "Rename", action: startRename },
-            {
-              label: "Delete",
-              action: () => void onDelete(entry.path),
-            },
-            { label: "-" },
-            {
-              label: "New File",
-              action: () => {
-                const name = window.prompt("File name:");
-                if (name?.trim()) {
-                  onCreateFile(parentPath ? `${parentPath}/${name.trim()}` : name.trim());
-                }
-              },
-            },
-            {
-              label: "New Folder",
-              action: () => {
-                const name = window.prompt("Folder name:");
-                if (name?.trim()) {
-                  onCreateDir(parentPath ? `${parentPath}/${name.trim()}` : name.trim());
-                }
-              },
-            },
-          ]}
+          items={fileMenuItems}
         />
       )}
     </div>
   );
 }
 
-// ── Simple positioned context menu (no shadcn) ────────────────────────────
+// ── Context menu with keyboard navigation ──────────────────────────────
 
 interface MenuItem {
   label: string;
@@ -269,6 +314,57 @@ interface ContextMenuPortalProps {
 }
 
 function ContextMenuPortal({ x, y, items, onDismiss }: ContextMenuPortalProps) {
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const actionItems = items.filter((item) => item.label !== "-");
+
+  // Focus the menu container on mount for keyboard navigation
+  useEffect(() => {
+    menuRef.current?.focus();
+  }, []);
+
+  const handleMenuKey = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onDismiss();
+        return;
+      }
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setFocusedIndex((prev) => {
+          const next = prev + 1;
+          return next >= actionItems.length ? 0 : next;
+        });
+        return;
+      }
+
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setFocusedIndex((prev) => {
+          const next = prev - 1;
+          return next < 0 ? actionItems.length - 1 : next;
+        });
+        return;
+      }
+
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        if (focusedIndex >= 0 && focusedIndex < actionItems.length) {
+          onDismiss();
+          actionItems[focusedIndex].action?.();
+        }
+        return;
+      }
+    },
+    [onDismiss, focusedIndex, actionItems],
+  );
+
+  // Map from the full items array index to the action-item index
+  let actionIdx = -1;
+
   return (
     <>
       {/* Click-away backdrop */}
@@ -281,17 +377,34 @@ function ContextMenuPortal({ x, y, items, onDismiss }: ContextMenuPortalProps) {
         }}
       />
       <div
-        className="fixed z-50 min-w-[140px] py-1 bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded text-sm text-[var(--cg-fg)]"
+        ref={menuRef}
+        role="menu"
+        tabIndex={0}
+        className="fixed z-50 min-w-[160px] py-1 bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded shadow-sm text-sm text-[var(--cg-fg)] outline-none"
         style={{ left: x, top: y }}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleMenuKey}
       >
-        {items.map((item, i) =>
-          item.label === "-" ? (
-            <div key={i} className="my-1 border-t border-[var(--cg-border)]" />
-          ) : (
+        {items.map((item, i) => {
+          if (item.label === "-") {
+            return (
+              <div key={i} className="my-1 border-t border-[var(--cg-border)]" />
+            );
+          }
+
+          actionIdx++;
+          const isFocused = actionIdx === focusedIndex;
+
+          return (
             <button
               key={i}
-              className="w-full text-left px-3 py-1 hover:bg-[var(--cg-hover)] whitespace-nowrap"
+              role="menuitem"
+              className={[
+                "w-full text-left px-3 py-1 whitespace-nowrap",
+                isFocused
+                  ? "bg-[var(--cg-hover)]"
+                  : "hover:bg-[var(--cg-hover)]",
+              ].join(" ")}
               onClick={() => {
                 onDismiss();
                 item.action?.();
@@ -299,8 +412,8 @@ function ContextMenuPortal({ x, y, items, onDismiss }: ContextMenuPortalProps) {
             >
               {item.label}
             </button>
-          ),
-        )}
+          );
+        })}
       </div>
     </>
   );

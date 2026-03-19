@@ -147,10 +147,36 @@ export class MemoryFileSystem implements FileSystem {
   }
 
   async deleteFile(path: string): Promise<void> {
-    if (!this.files.has(path)) {
+    // Check if it's a file first
+    if (this.files.has(path)) {
+      this.files.delete(path);
+      return;
+    }
+
+    // Check if it's a directory (explicit or implicit via children)
+    const prefix = path + "/";
+    let found = this.dirs.has(path);
+    if (!found) {
+      for (const key of this.files.keys()) {
+        if (key.startsWith(prefix)) {
+          found = true;
+          break;
+        }
+      }
+    }
+
+    if (!found) {
       throw new Error(`File not found: ${path}`);
     }
-    this.files.delete(path);
+
+    // Delete the directory and all its children
+    this.dirs.delete(path);
+    for (const dir of [...this.dirs]) {
+      if (dir.startsWith(prefix)) this.dirs.delete(dir);
+    }
+    for (const key of [...this.files.keys()]) {
+      if (key.startsWith(prefix)) this.files.delete(key);
+    }
   }
 }
 

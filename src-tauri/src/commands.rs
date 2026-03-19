@@ -447,17 +447,48 @@ pub fn export_document(
     Ok(output_path.to_string_lossy().to_string())
 }
 
+/// Delete a file within the project root.
+#[tauri::command]
+pub fn delete_file(
+    root: State<'_, ProjectRoot>,
+    path: String,
+) -> Result<(), String> {
+    let lock = root.0.lock().map_err(|e| e.to_string())?;
+    let project_root = lock.as_ref().ok_or("No project folder open")?;
+    let resolved = resolve_path(project_root, &path)?;
+    if resolved.is_dir() {
+        fs::remove_dir_all(&resolved)
+            .map_err(|e| format!("Failed to delete directory '{}': {}", path, e))
+    } else {
+        fs::remove_file(&resolved)
+            .map_err(|e| format!("Failed to delete '{}': {}", path, e))
+    }
+}
+
 /// Reveal a file or directory in the OS file explorer.
 ///
 /// On macOS: uses `open -R <path>` to select the item in Finder.
 /// On Windows: uses `explorer /select,<path>` (single combined argument).
 /// On Linux: opens the parent directory with `xdg-open`.
 #[tauri::command]
-pub fn reveal_in_finder(path: String) -> Result<(), String> {
+pub fn reveal_in_finder(
+    root: State<'_, ProjectRoot>,
+    path: String,
+) -> Result<(), String> {
+    // Resolve relative path against the project root to get an absolute path.
+    let lock = root.0.lock().map_err(|e| e.to_string())?;
+    let abs_path = if let Some(project_root) = lock.as_ref() {
+        let resolved = resolve_path(project_root, &path)?;
+        resolved.to_string_lossy().to_string()
+    } else {
+        // No project root — assume the path is already absolute
+        path
+    };
+
     #[cfg(target_os = "macos")]
     {
         Command::new("open")
-            .args(["-R", &path])
+            .args(["-R", &abs_path])
             .spawn()
             .map_err(|e| format!("Failed to reveal in Finder: {}", e))?;
     }
@@ -466,7 +497,7 @@ pub fn reveal_in_finder(path: String) -> Result<(), String> {
     {
         // /select,<path> must be a single argument — no space between /select, and path
         Command::new("explorer")
-            .arg(format!("/select,{}", path))
+            .arg(format!("/select,{}", abs_path))
             .spawn()
             .map_err(|e| format!("Failed to reveal in Explorer: {}", e))?;
     }
@@ -474,7 +505,7 @@ pub fn reveal_in_finder(path: String) -> Result<(), String> {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         // Linux: open the parent directory
-        let p = PathBuf::from(&path);
+        let p = PathBuf::from(&abs_path);
         let parent = p.parent().unwrap_or(&p);
         Command::new("xdg-open")
             .arg(parent)
