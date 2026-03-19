@@ -1,22 +1,30 @@
 /**
- * Main-thread interface to the background indexer web worker.
+ * Main-thread document indexer.
  *
- * Provides async methods for updating files and querying the index.
- * All heavy parsing happens in the worker; this class manages the
- * message protocol and pending request tracking.
+ * Maintains an in-memory index of all parsed markdown files and provides
+ * synchronous query methods. Extraction runs directly on the main thread
+ * using the Lezer parser — no web worker involved.
+ *
+ * Design decision (T21): The web worker was removed because the overhead
+ * of worker bundle duplication (Lezer parser + extensions duplicated in a
+ * separate bundle), structured-clone message serialization for every
+ * update/query, and forced async indirection for trivial Map lookups far
+ * exceeds the cost of main-thread Lezer parsing. For typical math documents
+ * (5–50 KB), Lezer tree parsing + extraction takes sub-millisecond to a
+ * few milliseconds — well within a single frame budget. Queries (resolve,
+ * find, filter) are pure Map/array lookups that complete in microseconds.
  */
 
 import type { IndexEntry, IndexQuery, FileIndex, ResolvedReference } from "./query-api";
-import type { WorkerRequest, WorkerResponse } from "./indexer-worker";
-
-/** Pending request tracker. */
-interface PendingRequest {
-  resolve: (value: WorkerResponse) => void;
-  reject: (reason: Error) => void;
-}
+import { queryIndex, resolveLabel, findReferences } from "./query-api";
+import { extractFileIndex, updateFileInIndex, removeFileFromIndex } from "./extract";
 
 /**
- * Background document indexer that runs parsing in a web worker.
+ * Document indexer that runs extraction and queries on the main thread.
+ *
+ * All methods return Promises for API compatibility with consumers that
+ * were written against the previous async worker-based interface, but
+ * they resolve synchronously.
  *
  * Usage:
  * ```ts
@@ -27,18 +35,11 @@ interface PendingRequest {
  * ```
  */
 export class BackgroundIndexer {
-  private readonly worker: Worker;
-  private nextId = 1;
-  private readonly pending = new Map<number, PendingRequest>();
+  private files = new Map<string, FileIndex>();
   private disposed = false;
 
-  constructor() {
-    this.worker = new Worker(
-      new URL("./indexer-worker.ts", import.meta.url),
-      { type: "module" },
-    );
-    this.worker.onmessage = this.handleMessage.bind(this);
-    this.worker.onerror = this.handleError.bind(this);
+  private getDocumentIndex(): { files: ReadonlyMap<string, FileIndex> } {
+    return { files: this.files };
   }
 
   /**
@@ -46,153 +47,73 @@ export class BackgroundIndexer {
    * Returns the number of entries found in the file.
    */
   async updateFile(file: string, content: string): Promise<number> {
-    const response = await this.send({
-      kind: "update-file",
-      id: this.allocateId(),
-      file,
-      content,
-    });
-    if (response.kind === "update-file-done") {
-      return response.entryCount;
-    }
-    throw new Error(`Unexpected response: ${response.kind}`);
+    if (this.disposed) throw new Error("Indexer disposed");
+    this.files = updateFileInIndex(this.files, file, content);
+    return this.files.get(file)?.entries.length ?? 0;
   }
 
   /** Remove a file from the index. */
   async removeFile(file: string): Promise<void> {
-    const response = await this.send({
-      kind: "remove-file",
-      id: this.allocateId(),
-      file,
-    });
-    if (response.kind !== "remove-file-done") {
-      throw new Error(`Unexpected response: ${response.kind}`);
-    }
+    if (this.disposed) throw new Error("Indexer disposed");
+    this.files = removeFileFromIndex(this.files, file);
   }
 
   /** Query the index with the given filters. */
   async query(query: IndexQuery): Promise<readonly IndexEntry[]> {
-    const response = await this.send({
-      kind: "query",
-      id: this.allocateId(),
-      query,
-    });
-    if (response.kind === "query-result") {
-      return response.entries;
-    }
-    throw new Error(`Unexpected response: ${response.kind}`);
+    if (this.disposed) throw new Error("Indexer disposed");
+    return queryIndex(this.getDocumentIndex(), query);
   }
 
   /** Resolve a label to its index entry. */
   async resolveLabel(label: string): Promise<IndexEntry | undefined> {
-    const response = await this.send({
-      kind: "resolve-label",
-      id: this.allocateId(),
-      label,
-    });
-    if (response.kind === "resolve-label-result") {
-      return response.entry;
-    }
-    throw new Error(`Unexpected response: ${response.kind}`);
+    if (this.disposed) throw new Error("Indexer disposed");
+    return resolveLabel(this.getDocumentIndex(), label);
   }
 
   /** Find all references to a label across all files. */
   async findReferences(label: string): Promise<readonly ResolvedReference[]> {
-    const response = await this.send({
-      kind: "find-references",
-      id: this.allocateId(),
-      label,
-    });
-    if (response.kind === "find-references-result") {
-      return response.references;
-    }
-    throw new Error(`Unexpected response: ${response.kind}`);
+    if (this.disposed) throw new Error("Indexer disposed");
+    return findReferences(this.getDocumentIndex(), label);
   }
 
   /** Get the full index for a specific file. */
   async getFileIndex(file: string): Promise<FileIndex | undefined> {
-    const response = await this.send({
-      kind: "get-file-index",
-      id: this.allocateId(),
-      file,
-    });
-    if (response.kind === "file-index-result") {
-      return response.fileIndex;
-    }
-    throw new Error(`Unexpected response: ${response.kind}`);
+    if (this.disposed) throw new Error("Indexer disposed");
+    return this.files.get(file);
   }
 
   /** Get all labels from all indexed files. */
   async getAllLabels(): Promise<readonly string[]> {
-    const response = await this.send({
-      kind: "get-all-labels",
-      id: this.allocateId(),
-    });
-    if (response.kind === "all-labels-result") {
-      return response.labels;
+    if (this.disposed) throw new Error("Indexer disposed");
+    const labels: string[] = [];
+    for (const [, fileIndex] of this.files) {
+      for (const entry of fileIndex.entries) {
+        if (entry.label !== undefined) {
+          labels.push(entry.label);
+        }
+      }
     }
-    throw new Error(`Unexpected response: ${response.kind}`);
+    return labels;
   }
 
   /** Bulk update multiple files at once. Returns total entry count. */
   async bulkUpdate(
     files: ReadonlyArray<{ file: string; content: string }>,
   ): Promise<number> {
-    const response = await this.send({
-      kind: "bulk-update",
-      id: this.allocateId(),
-      files,
-    });
-    if (response.kind === "bulk-update-done") {
-      return response.totalEntries;
+    if (this.disposed) throw new Error("Indexer disposed");
+    let totalEntries = 0;
+    for (const { file, content } of files) {
+      const fileIndex = extractFileIndex(content, file);
+      this.files.set(file, fileIndex);
+      totalEntries += fileIndex.entries.length;
     }
-    throw new Error(`Unexpected response: ${response.kind}`);
+    return totalEntries;
   }
 
-  /** Terminate the worker and reject all pending requests. */
+  /** Mark the indexer as disposed. No-op cleanup (no worker to terminate). */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.worker.terminate();
-    for (const [, pending] of this.pending) {
-      pending.reject(new Error("Indexer disposed"));
-    }
-    this.pending.clear();
-  }
-
-  private allocateId(): number {
-    return this.nextId++;
-  }
-
-  private send(request: WorkerRequest): Promise<WorkerResponse> {
-    if (this.disposed) {
-      return Promise.reject(new Error("Indexer disposed"));
-    }
-
-    return new Promise<WorkerResponse>((resolve, reject) => {
-      this.pending.set(request.id, { resolve, reject });
-      this.worker.postMessage(request);
-    });
-  }
-
-  private handleMessage(event: MessageEvent<WorkerResponse>): void {
-    const response = event.data;
-    const pending = this.pending.get(response.id);
-    if (!pending) return;
-    this.pending.delete(response.id);
-
-    if (response.kind === "error") {
-      pending.reject(new Error(response.message));
-    } else {
-      pending.resolve(response);
-    }
-  }
-
-  private handleError(event: ErrorEvent): void {
-    // Reject all pending requests on worker error
-    for (const [, pending] of this.pending) {
-      pending.reject(new Error(`Worker error: ${event.message}`));
-    }
-    this.pending.clear();
+    this.files.clear();
   }
 }

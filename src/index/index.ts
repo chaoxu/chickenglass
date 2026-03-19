@@ -39,5 +39,3 @@ export {
 } from "./extract";
 
 export { BackgroundIndexer } from "./indexer";
-
-export type { WorkerRequest, WorkerResponse } from "./indexer-worker";
