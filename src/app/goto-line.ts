@@ -14,7 +14,7 @@ import type { EditorView } from "@codemirror/view";
  * Returns null if the input is not a valid number.
  * Both line and col are 1-based.
  */
-function parseTarget(
+export function parseTarget(
   raw: string,
 ): { line: number; col: number } | null {
   const trimmed = raw.trim();
