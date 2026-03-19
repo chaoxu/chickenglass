@@ -229,10 +229,10 @@ const OVERLAY_STYLES = `
   padding: 4px 12px;
   font-size: 12px;
   color: var(--cg-muted, #71717a);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--cg-bg-overlay, rgba(255, 255, 255, 0.82));
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(212, 212, 216, 0.6);
+  border-bottom: 1px solid var(--cg-border-overlay, rgba(212, 212, 216, 0.6));
   white-space: nowrap;
   overflow: hidden;
   min-height: 24px;
@@ -240,7 +240,7 @@ const OVERLAY_STYLES = `
 
 /* Separator between segments */
 .cg-bc-sep {
-  color: rgba(161, 161, 170, 0.8);
+  color: var(--cg-separator, rgba(161, 161, 170, 0.8));
   margin: 0 2px;
   flex-shrink: 0;
   user-select: none;

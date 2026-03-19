@@ -27,6 +27,11 @@
   --cg-accent: #18181b;
   --cg-accent-fg: #ffffff;
 
+  /* Overlay (semi-transparent background for floating bars) */
+  --cg-bg-overlay: rgba(255, 255, 255, 0.82);
+  --cg-border-overlay: rgba(212, 212, 216, 0.6);
+  --cg-separator: rgba(161, 161, 170, 0.8);
+
   /* Transitions */
   --cg-transition: 0.15s ease;
 }
@@ -42,6 +47,9 @@
   --cg-active: #3f3f46;
   --cg-accent: #fafafa;
   --cg-accent-fg: #09090b;
+  --cg-bg-overlay: rgba(10, 10, 10, 0.82);
+  --cg-border-overlay: rgba(63, 63, 70, 0.6);
+  --cg-separator: rgba(161, 161, 170, 0.6);
 }
 
 /* ── Base styles ────────────────────────────────────────────────────────────── */
@@ -51,6 +59,8 @@ body {
     "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--cg-bg);
+  color: var(--cg-fg);
 }
 
 /* ── CodeMirror 6 overrides ─────────────────────────────────────────────────── */
