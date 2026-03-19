@@ -29,7 +29,7 @@ import {
   focusTracker,
 } from "./render-utils";
 import { getMathMacros } from "./math-macros";
-import katex from "katex";
+import { renderInlineMarkdown } from "./inline-render";
 
 /** StateEffect to toggle sidenote margin visibility. */
 export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
@@ -45,29 +45,8 @@ export const sidenotesCollapsedField = StateField.define<boolean>({
   },
 });
 
-/** Split text by $...$ inline math, returning alternating text/math segments. */
-export function splitByInlineMath(
-  text: string,
-): Array<{ isMath: boolean; content: string }> {
-  const segments: Array<{ isMath: boolean; content: string }> = [];
-  const regex = /\$([^$\n]+)\$/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ isMath: false, content: text.slice(lastIndex, match.index) });
-    }
-    segments.push({ isMath: true, content: match[1] });
-    lastIndex = regex.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    segments.push({ isMath: false, content: text.slice(lastIndex) });
-  }
-
-  return segments;
-}
+// Re-export splitByInlineMath for consumers that imported it from here
+export { splitByInlineMath } from "./inline-render";
 
 export interface FootnoteRef {
   readonly id: string;
@@ -267,53 +246,6 @@ export function computeSidenoteOffsets(
 }
 
 
-/** Render inline markdown (bold, italic) and math into a container element. */
-function renderFootnoteContent(
-  container: HTMLElement,
-  text: string,
-  macros: Record<string, string>,
-): void {
-  const segments = splitByInlineMath(text);
-  for (const seg of segments) {
-    if (seg.isMath) {
-      const span = document.createElement("span");
-      try {
-        span.innerHTML = katex.renderToString(seg.content, {
-          throwOnError: false,
-          displayMode: false,
-          macros,
-        });
-      } catch {
-        span.textContent = `$${seg.content}$`;
-      }
-      container.appendChild(span);
-    } else {
-      // Render bold (**text**) and italic (*text*)
-      const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g;
-      let last = 0;
-      let match: RegExpExecArray | null;
-      while ((match = regex.exec(seg.content)) !== null) {
-        if (match.index > last) {
-          container.appendChild(document.createTextNode(seg.content.slice(last, match.index)));
-        }
-        if (match[1] !== undefined) {
-          const strong = document.createElement("strong");
-          strong.textContent = match[1];
-          container.appendChild(strong);
-        } else if (match[2] !== undefined) {
-          const em = document.createElement("em");
-          em.textContent = match[2];
-          container.appendChild(em);
-        }
-        last = regex.lastIndex;
-      }
-      if (last < seg.content.length) {
-        container.appendChild(document.createTextNode(seg.content.slice(last)));
-      }
-    }
-  }
-}
-
 /** Widget that renders a "Footnotes" section at the bottom when sidenotes are collapsed. */
 class FootnoteSectionWidget extends WidgetType {
   constructor(
@@ -351,7 +283,7 @@ class FootnoteSectionWidget extends WidgetType {
       div.appendChild(num);
 
       const content = document.createElement("span");
-      renderFootnoteContent(content, entry.content, this.macros);
+      renderInlineMarkdown(content, entry.content, this.macros);
       div.appendChild(content);
 
       const defFrom = entry.defFrom;

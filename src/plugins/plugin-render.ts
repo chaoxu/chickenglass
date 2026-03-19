@@ -34,33 +34,10 @@ import {
   focusTracker,
 } from "../render/render-utils";
 import { getMathMacros } from "../render/math-macros";
-import { MathWidget, renderKatex } from "../render/math-render";
+import { MathWidget } from "../render/math-render";
+import { renderInlineMarkdown } from "../render/inline-render";
 
-/** Split text by $...$ inline math, returning alternating text/math segments. */
-function splitByInlineMath(
-  text: string,
-): Array<{ isMath: boolean; content: string }> {
-  const segments: Array<{ isMath: boolean; content: string }> = [];
-  const regex = /\$([^$\n]+)\$/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ isMath: false, content: text.slice(lastIndex, match.index) });
-    }
-    segments.push({ isMath: true, content: match[1] });
-    lastIndex = regex.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    segments.push({ isMath: false, content: text.slice(lastIndex) });
-  }
-
-  return segments;
-}
-
-/** Widget that renders a block header string with optional inline KaTeX math. */
+/** Widget that renders a block header string with inline math/bold/italic. */
 class BlockHeaderWidget extends WidgetType {
   constructor(
     private readonly header: string,
@@ -73,17 +50,7 @@ class BlockHeaderWidget extends WidgetType {
   toDOM(): HTMLElement {
     const el = document.createElement("span");
     el.className = "cg-block-header-rendered";
-
-    for (const seg of splitByInlineMath(this.header)) {
-      if (!seg.isMath) {
-        el.appendChild(document.createTextNode(seg.content));
-      } else {
-        const mathEl = document.createElement("span");
-        renderKatex(mathEl, seg.content, false, this.macros);
-        el.appendChild(mathEl);
-      }
-    }
-
+    renderInlineMarkdown(el, this.header, this.macros);
     return el;
   }
 
@@ -92,7 +59,6 @@ class BlockHeaderWidget extends WidgetType {
   }
 
   ignoreEvent(): boolean {
-    // Let CM6 handle clicks → places cursor at fenceFrom → reveals source
     return false;
   }
 }

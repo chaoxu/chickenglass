@@ -12,11 +12,8 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { EditorView } from "@codemirror/view";
-import {
-  collectFootnotes,
-  splitByInlineMath,
-} from "../../render/sidenote-render";
-import katex from "katex";
+import { collectFootnotes } from "../../render/sidenote-render";
+import { renderInlineMarkdown } from "../../render/inline-render";
 import { getMathMacros } from "../../render/math-macros";
 
 interface SidenoteEntry {
@@ -70,63 +67,15 @@ function extractSidenotes(view: EditorView): SidenoteEntry[] {
   return entries;
 }
 
-/** Render a plain-text segment with bold/italic markdown. */
-function InlineMarkdown({ text }: { text: string }) {
-  const parts: Array<{ type: "text" | "bold" | "italic"; content: string }> = [];
-  const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g;
-  let last = 0;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > last) {
-      parts.push({ type: "text", content: text.slice(last, match.index) });
-    }
-    if (match[1] !== undefined) {
-      parts.push({ type: "bold", content: match[1] });
-    } else if (match[2] !== undefined) {
-      parts.push({ type: "italic", content: match[2] });
-    }
-    last = regex.lastIndex;
-  }
-  if (last < text.length) {
-    parts.push({ type: "text", content: text.slice(last) });
-  }
-  return (
-    <>
-      {parts.map((p, i) =>
-        p.type === "bold" ? (
-          <strong key={i}>{p.content}</strong>
-        ) : p.type === "italic" ? (
-          <em key={i}>{p.content}</em>
-        ) : (
-          <span key={i}>{p.content}</span>
-        ),
-      )}
-    </>
-  );
-}
-
+/** React wrapper around the shared renderInlineMarkdown DOM utility. */
 function SidenoteContent({ text, macros }: { text: string; macros: Record<string, string> }) {
-  const segments = splitByInlineMath(text);
-  return (
-    <>
-      {segments.map((seg, i) =>
-        seg.isMath ? (
-          <span
-            key={i}
-            dangerouslySetInnerHTML={{
-              __html: katex.renderToString(seg.content, {
-                throwOnError: false,
-                displayMode: false,
-                macros,
-              }),
-            }}
-          />
-        ) : (
-          <InlineMarkdown key={i} text={seg.content} />
-        ),
-      )}
-    </>
-  );
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.innerHTML = "";
+    renderInlineMarkdown(ref.current, text, macros);
+  }, [text, macros]);
+  return <span ref={ref} />;
 }
 
 export function SidenoteMargin({ view }: SidenoteMarginProps) {
