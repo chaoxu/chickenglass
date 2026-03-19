@@ -28,6 +28,8 @@ import {
   focusEffect,
   focusTracker,
 } from "./render-utils";
+import { getMathMacros } from "./math-macros";
+import katex from "katex";
 
 /** StateEffect to toggle sidenote margin visibility. */
 export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
@@ -265,10 +267,58 @@ export function computeSidenoteOffsets(
 }
 
 
+/** Render inline markdown (bold, italic) and math into a container element. */
+function renderFootnoteContent(
+  container: HTMLElement,
+  text: string,
+  macros: Record<string, string>,
+): void {
+  const segments = splitByInlineMath(text);
+  for (const seg of segments) {
+    if (seg.isMath) {
+      const span = document.createElement("span");
+      try {
+        span.innerHTML = katex.renderToString(seg.content, {
+          throwOnError: false,
+          displayMode: false,
+          macros,
+        });
+      } catch {
+        span.textContent = `$${seg.content}$`;
+      }
+      container.appendChild(span);
+    } else {
+      // Render bold (**text**) and italic (*text*)
+      const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g;
+      let last = 0;
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(seg.content)) !== null) {
+        if (match.index > last) {
+          container.appendChild(document.createTextNode(seg.content.slice(last, match.index)));
+        }
+        if (match[1] !== undefined) {
+          const strong = document.createElement("strong");
+          strong.textContent = match[1];
+          container.appendChild(strong);
+        } else if (match[2] !== undefined) {
+          const em = document.createElement("em");
+          em.textContent = match[2];
+          container.appendChild(em);
+        }
+        last = regex.lastIndex;
+      }
+      if (last < seg.content.length) {
+        container.appendChild(document.createTextNode(seg.content.slice(last)));
+      }
+    }
+  }
+}
+
 /** Widget that renders a "Footnotes" section at the bottom when sidenotes are collapsed. */
 class FootnoteSectionWidget extends WidgetType {
   constructor(
     private readonly entries: ReadonlyArray<{ num: number; id: string; content: string; defFrom: number }>,
+    private readonly macros: Record<string, string>,
   ) {
     super();
   }
@@ -298,12 +348,11 @@ class FootnoteSectionWidget extends WidgetType {
       num.style.fontWeight = "600";
       num.style.marginRight = "4px";
       num.textContent = String(entry.num);
-
-      const text = document.createElement("span");
-      text.textContent = entry.content;
-
       div.appendChild(num);
-      div.appendChild(text);
+
+      const content = document.createElement("span");
+      renderFootnoteContent(content, entry.content, this.macros);
+      div.appendChild(content);
 
       const defFrom = entry.defFrom;
       div.addEventListener("mousedown", (e) => {
@@ -376,7 +425,8 @@ class FootnoteSectionPlugin implements PluginValue {
     }
 
     const endPos = view.state.doc.length;
-    const widget = new FootnoteSectionWidget(entries);
+    const macros = getMathMacros(view.state);
+    const widget = new FootnoteSectionWidget(entries, macros);
     return buildDecorations([
       Decoration.widget({ widget, side: 1 }).range(endPos),
     ]);
