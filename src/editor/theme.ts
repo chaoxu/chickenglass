@@ -14,7 +14,7 @@ export const chickenglassTheme = EditorView.theme({
   ".cm-content": {
     padding: "24px 48px 24px 48px",
     maxWidth: "720px",
-    margin: "0 auto",
+    marginRight: "224px", // leave room for sidenote margin column
     overflow: "visible",
   },
   ".cm-gutters": {
@@ -401,7 +401,7 @@ export const chickenglassTheme = EditorView.theme({
     position: "relative",
     height: "0",
     lineHeight: "0",
-    overflow: "visible",
+    overflow: "hidden",
     padding: "0 !important",
     margin: "0",
   },

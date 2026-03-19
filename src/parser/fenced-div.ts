@@ -119,10 +119,53 @@ function parseOpeningFence(
     cursor = skipWhitespace(text, cursor);
   }
 
+  // Check for trailing ::: (self-closing single-line div)
+  // Scan backwards from end of line past whitespace, then check for 3+ colons
+  let lineEnd = text.length;
+  while (
+    lineEnd > cursor &&
+    (text.charCodeAt(lineEnd - 1) === 32 || text.charCodeAt(lineEnd - 1) === 9)
+  ) {
+    lineEnd--;
+  }
+
+  let selfClosing = false;
+  let closingFenceFrom = lineEnd;
+  let closingFenceTo = lineEnd;
+
+  // Count colons backwards from lineEnd
+  let closingColonEnd = lineEnd;
+  let closingColonStart = lineEnd;
+  while (
+    closingColonStart > cursor &&
+    text.charCodeAt(closingColonStart - 1) === COLON
+  ) {
+    closingColonStart--;
+  }
+  const trailingColons = closingColonEnd - closingColonStart;
+
+  if (trailingColons >= 3) {
+    // Verify there's whitespace (or nothing) between the title and the closing colons
+    let beforeClosing = closingColonStart;
+    while (
+      beforeClosing > cursor &&
+      (text.charCodeAt(beforeClosing - 1) === 32 || text.charCodeAt(beforeClosing - 1) === 9)
+    ) {
+      beforeClosing--;
+    }
+    // Only self-closing if there's content between attrs and the trailing :::
+    // (otherwise it's ambiguous with a bare opening fence)
+    if (beforeClosing > cursor || closingColonStart > cursor) {
+      selfClosing = true;
+      closingFenceFrom = closingColonStart;
+      closingFenceTo = closingColonEnd;
+    }
+  }
+
   // Remaining text is the title (may be empty)
   const titleFrom = cursor;
-  // Trim trailing whitespace from title
-  let titleTo = text.length;
+  // Trim trailing whitespace from title — but stop before closing fence if self-closing
+  let titleTo = selfClosing ? closingFenceFrom : text.length;
   while (
     titleTo > titleFrom &&
     (text.charCodeAt(titleTo - 1) === 32 || text.charCodeAt(titleTo - 1) === 9)
@@ -136,6 +179,9 @@ function parseOpeningFence(
     attrTo,
     titleFrom,
     titleTo,
+    selfClosing,
+    closingFenceFrom,
+    closingFenceTo,
   };
 }
 
@@ -145,6 +191,11 @@ interface OpeningFenceInfo {
   readonly attrTo: number;
   readonly titleFrom: number;
   readonly titleTo: number;
+  /** True if the line ends with ::: (self-closing single-line div). */
+  readonly selfClosing: boolean;
+  /** End of the closing fence colons (only set when selfClosing). */
+  readonly closingFenceFrom: number;
+  readonly closingFenceTo: number;
 }
 
 /**
@@ -158,6 +209,9 @@ function fencedDivComposite(
   line: Line,
   value: number,
 ): boolean {
+  // Negative value signals a self-closing div — end immediately
+  if (value < 0) return false;
+
   const closingColons = isClosingFence(line.text, line.pos);
   if (closingColons >= value) {
     // Closing fence found -- add a marker for it and end the composite
@@ -195,10 +249,13 @@ const fencedDivBlockParser: BlockParser = {
     const fenceStart = cx.lineStart + line.pos;
     const fenceEnd = cx.lineStart + line.pos + info.colonCount;
 
-    // Start the composite block first, so child elements are added
-    // inside the FencedDiv. The `value` stores the colon count so the
-    // composite callback knows how many colons close this div.
-    cx.startComposite("FencedDiv", line.pos, info.colonCount);
+    // Start the composite block. Negative value signals self-closing
+    // to the composite callback (it will end immediately).
+    cx.startComposite(
+      "FencedDiv",
+      line.pos,
+      info.selfClosing ? -info.colonCount : info.colonCount,
+    );
 
     cx.addElement(cx.elt("FencedDivFence", fenceStart, fenceEnd));
 
@@ -218,6 +275,17 @@ const fencedDivBlockParser: BlockParser = {
           "FencedDivTitle",
           cx.lineStart + info.titleFrom,
           cx.lineStart + info.titleTo,
+        ),
+      );
+    }
+
+    // Add closing fence marker for self-closing divs
+    if (info.selfClosing) {
+      cx.addElement(
+        cx.elt(
+          "FencedDivFence",
+          cx.lineStart + info.closingFenceFrom,
+          cx.lineStart + info.closingFenceTo,
         ),
       );
     }

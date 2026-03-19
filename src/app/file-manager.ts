@@ -240,6 +240,10 @@ Every bounded sequence in $\\R$ has a convergent subsequence.
 Show that $\\set{x \\in \\R : \\floor{x} = \\ceil{x}}$ equals $\\Z$, and that for any $\\e > 0$ there exists $n \\in \\N$ with $1/n < \\e$.
 :::
 
+::: {.corollary} Every continuous function on a closed interval is bounded. :::
+
+::: {.remark} The converse of the Extreme Value Theorem is false. :::
+
 # Cross-References
 
 See [@thm-evt] for the main result, which relies on [@lem-compact]. The key definition is [@def-compact]. The Gaussian integral is [@eq:gaussian], and the summation formula is [@eq:sum].

@@ -43,7 +43,24 @@ npm run test         # run tests
 npx tsc --noEmit     # typecheck only
 npm run tauri:dev    # launch Tauri desktop app (starts Vite + Rust backend)
 npm run tauri:build  # build production desktop binary
+npm run chrome       # launch Playwright Chromium with CDP on port 9322
+npm run chrome:test  # connect to running Chrome, take a screenshot
 ```
+
+## Browser testing (CDP)
+
+Use Playwright's bundled Chromium with a fixed CDP port for browser testing:
+
+1. Start dev server: `npm run dev`
+2. Launch Chrome: `npm run chrome` (opens http://localhost:5173, CDP on port 9322)
+3. Connect from scripts or tests:
+   ```ts
+   import { chromium } from "playwright";
+   const browser = await chromium.connectOverCDP("http://localhost:9322");
+   const page = browser.contexts()[0].pages()[0];
+   ```
+
+Do NOT use the Playwright MCP plugin — connect directly via CDP for lower overhead.
 
 ## Workspace hygiene
 

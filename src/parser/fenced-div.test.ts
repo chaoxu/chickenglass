@@ -277,6 +277,75 @@ describe("fenced div parser", () => {
     });
   });
 
+  describe("single-line syntax", () => {
+    it("creates FencedDiv for single-line div with braces", () => {
+      const text = "::: {.theorem} Extreme Value Theorem :::";
+      const names = nodeNames(text);
+      expect(names).toContain("FencedDiv");
+    });
+
+    it("has two FencedDivFence nodes (opening and closing)", () => {
+      const text = "::: {.theorem} Extreme Value Theorem :::";
+      const names = nodeNames(text);
+      const fenceCount = names.filter((n) => n === "FencedDivFence").length;
+      expect(fenceCount).toBe(2);
+    });
+
+    it("captures attributes", () => {
+      const text = "::: {.lemma} A continuous image is compact. :::";
+      const infos = nodeInfos(text);
+      const attr = findNode(infos, "FencedDivAttributes");
+      expect(attr.text).toBe("{.lemma}");
+    });
+
+    it("captures title (content between attrs and closing :::)", () => {
+      const text = "::: {.theorem} Extreme Value Theorem :::";
+      const infos = nodeInfos(text);
+      const title = findNode(infos, "FencedDivTitle");
+      expect(title.text).toBe("Extreme Value Theorem");
+    });
+
+    it("works with short-form class name", () => {
+      const text = "::: corollary Every bounded sequence converges. :::";
+      const infos = nodeInfos(text);
+      const attr = findNode(infos, "FencedDivAttributes");
+      expect(attr.text).toBe("corollary");
+      const title = findNode(infos, "FencedDivTitle");
+      expect(title.text).toBe("Every bounded sequence converges.");
+    });
+
+    it("text after single-line div is parsed as separate paragraph", () => {
+      const text = "::: {.theorem} Short theorem. :::\nNext paragraph.";
+      const infos = nodeInfos(text);
+      const paragraphs = infos.filter((n) => n.name === "Paragraph");
+      expect(paragraphs.length).toBe(1);
+      expect(paragraphs[0].text.trim()).toBe("Next paragraph.");
+    });
+
+    it("multiple single-line divs in sequence", () => {
+      const text = "::: {.lemma} Lemma A. :::\n::: {.lemma} Lemma B. :::";
+      const names = nodeNames(text);
+      const divCount = names.filter((n) => n === "FencedDiv").length;
+      expect(divCount).toBe(2);
+    });
+
+    it("works with more colons", () => {
+      const text = "::::: {.theorem} Long fence theorem. :::::";
+      const names = nodeNames(text);
+      expect(names).toContain("FencedDiv");
+      const fenceCount = names.filter((n) => n === "FencedDivFence").length;
+      expect(fenceCount).toBe(2);
+    });
+
+    it("does not treat title-less opening as self-closing", () => {
+      // ::: {.theorem} ::: — this has no content between attrs and closing,
+      // but should still be self-closing (empty title)
+      const text = "::: {.theorem} :::";
+      const names = nodeNames(text);
+      expect(names).toContain("FencedDiv");
+    });
+  });
+
   describe("edge cases", () => {
     it("unclosed div extends to end of document", () => {
       const text = "::: {.theorem}\nContent without closing fence.";

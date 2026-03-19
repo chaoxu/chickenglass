@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "tauri:dev": "cargo tauri dev",
-    "tauri:build": "cargo tauri build"
+    "tauri:build": "cargo tauri build",
+    "chrome": "node scripts/launch-chrome.mjs",
+    "chrome:test": "node scripts/test-chrome.mjs"
   },
   "license": "MIT",
   "dependencies": {
@@ -46,6 +48,7 @@
     "@types/ws": "^8.18.1",
     "eslint": "^10.0.3",
     "jsdom": "^29.0.0",
+    "playwright": "^1.58.2",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.1",

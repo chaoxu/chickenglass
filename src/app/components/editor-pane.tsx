@@ -38,24 +38,21 @@ export function EditorPane({ onStateChange, ...editorOptions }: EditorPaneProps)
     : [];
 
   return (
-    <div className="flex-1 flex overflow-hidden" style={{ minHeight: 0 }}>
-      {/* Editor column */}
-      <div className="flex-1 overflow-hidden relative">
-        <Breadcrumbs
-          headings={headings}
-          onSelect={(from) => {
-            if (view) {
-              view.dispatch({ selection: { anchor: from }, scrollIntoView: true });
-              view.focus();
-            }
-          }}
-          scrollTop={scrollTop}
-          viewportFrom={viewportFrom}
-        />
-        <div ref={containerRef} className="h-full" />
-      </div>
-      {/* Sidenote margin column */}
-      <SidenoteMargin view={view} scrollTop={scrollTop} />
+    <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
+      <Breadcrumbs
+        headings={headings}
+        onSelect={(from) => {
+          if (view) {
+            view.dispatch({ selection: { anchor: from }, scrollIntoView: true });
+            view.focus();
+          }
+        }}
+        scrollTop={scrollTop}
+        viewportFrom={viewportFrom}
+      />
+      <div ref={containerRef} className="h-full" />
+      {/* Portal target — SidenoteMargin renders into the CM6 scroller via DOM portal */}
+      <SidenoteMargin view={view} />
     </div>
   );
 }
