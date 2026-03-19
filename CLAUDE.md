@@ -11,23 +11,115 @@ Semantic document editor for mathematical writing. Runs as a native desktop app 
 - **Desktop**: Tauri v2 (replaced Electron — smaller bundles, native webview)
 - **Build**: Vite (frontend), Cargo (Rust backend)
 - **Package manager**: npm
+- **UI libraries**: @radix-ui/dialog (accessible modals), @dnd-kit (drag-and-drop), lucide-react (icons), cmdk (command palette)
 
 ## Project structure
 
 ```
 src/
-  editor/        # CodeMirror 6 setup, keybindings, theme
-  parser/        # Lezer markdown extensions (fenced divs, math, equation labels)
-  plugins/       # Block plugin system + default plugins (theorem, proof, etc.)
+  editor/        # CodeMirror 6 setup, keybindings, theme (decomposed into 5 sub-modules)
+    theme.ts           # Composes sub-modules: base, typography, code, block, margin
+    base-theme.ts      # Editor chrome: container, gutters, cursor, selection
+    typography-theme.ts # Headings, inline formatting, links, lists
+    code-theme.ts      # Code blocks, syntax highlighting
+    block-theme.ts     # Fenced divs, tables, embeds, images
+    margin-theme.ts    # Math preview, sidenotes, tooltips
+    image-paste.ts     # Clipboard image handling
+    image-drop.ts      # Drag-and-drop image handling
+    image-insert.ts    # File picker image insertion
+    image-save.ts      # Shared image utilities (filename gen, alt-text, error logging)
+    heading-fold.ts    # Heading fold toggles (uses RenderWidget)
+  parser/        # Lezer markdown extensions
+    char-utils.ts      # Shared character constants and scanning functions
+    highlight.ts       # ==highlight== syntax
+    strikethrough.ts   # ~~strikethrough~~ syntax
+    fenced-div.ts      # ::: {.class} blocks
+    fenced-div-attrs.ts # Attribute parsing for fenced divs
+    footnote.ts        # [^ref] footnotes
+    equation-label.ts  # $$ ... $$ {#eq:label}
+    math-backslash.ts  # \( \) \[ \] delimiters
+    frontmatter.ts     # YAML frontmatter parsing
+  plugins/       # Block plugin system
+    plugin-factory.ts  # createStandardPlugin() factory — theorem-family plugins use this
+    plugin-registry.ts # Plugin registration and lookup
+    plugin-render.ts   # Block rendering (decomposed into 8 helper functions)
+    block-render.ts    # createBlockRender() with className parameter
+    theorem-plugin.ts  # Theorem, Lemma, Corollary, Conjecture, Proposition
+    definition-plugin.ts
+    problem-plugin.ts
+    remark-plugin.ts   # Remark, Example
+    algorithm-plugin.ts
+    proof-plugin.ts    # Proof with QED tombstone
+    embed-plugin.ts    # iframe/youtube/gist/generic embeds
+    include-resolver.ts # File include resolution
   render/        # CM6 ViewPlugins for Typora-style rendering
-  index/         # Semantic indexer (cross-refs, citations, search)
-  citations/     # BibTeX parser and citation rendering
-  app/           # File management, tabs, sidebar, TauriFileSystem
-  main.ts        # Entry point (detects Tauri vs browser, picks filesystem)
+    render-utils.ts    # Unified cursorInRange(), RenderWidget base (default ignoreEvent), serializeMacros()
+    math-render.ts     # Math rendering (uses shared buildMathItems helper)
+    math-macros.ts     # getMathMacros() + mathMacrosField StateField cache
+    math-preview.ts    # Math preview panel
+    inline-render.ts   # Inline markdown rendering (bold/italic/code hiding)
+    code-block-render.ts # Code block widgets
+    image-render.ts    # Image rendering
+    checkbox-render.ts # Checkbox widgets
+    crossref-render.ts # Cross-reference rendering
+    markdown-render.ts # General markdown rendering
+    table-render.ts    # Table rendering with toolbar
+    table-utils.ts     # Table serialization (shared buildSerializedRow helper)
+    sidenote-render.ts # Footnote sidenote rendering
+    hover-preview.ts   # Hover tooltips (uses CM6 hoverTooltip)
+    include-label.ts   # Include region labels (single-pass ViewPlugin)
+  index/         # Semantic indexer
+    extract.ts         # Lezer tree-based extraction (replaced regex)
+    indexer.ts         # BackgroundIndexer (inline, no web worker)
+  citations/     # BibTeX/CSL citation system
+    bibtex-parser.ts   # BibTeX parsing + shared parseAuthorNames()
+    citation-render.ts # Citation formatting
+    csl-processor.ts   # CSL processing (typed via citeproc.d.ts)
+    citeproc.d.ts      # Type declarations for citeproc library
+  app/           # React application shell
+    main.tsx           # Entry point (Tauri vs browser detection)
+    app.tsx            # Root component (composes hooks)
+    demo-blog.ts       # Blog demo files via import.meta.glob
+    file-manager.ts    # FileSystem interface, MemoryFileSystem, demo filesystems
+    tauri-fs.ts        # TauriFileSystem implementation
+    hooks/
+      use-editor.ts         # Editor setup (delegates to sub-hooks)
+      use-dialogs.ts        # Dialog open/close state management
+      use-document-buffer.ts # Tabs, buffers, dirty tracking
+      use-file-operations.ts # File CRUD operations
+      use-bibliography.ts   # BibTeX/CSL loading
+      use-editor-scroll.ts  # Scroll position tracking
+      use-menu-events.ts    # Menu event map (Record-based, not switch)
+      use-commands.ts       # Command registration
+      use-settings.ts       # Settings with shared localStorage utils
+    components/
+      editor-pane.tsx       # Main editor area
+      sidebar.tsx           # File explorer sidebar
+      file-tree.tsx         # File tree with inline creation input (no window.prompt)
+      tab-bar.tsx           # Tab bar with @dnd-kit drag reordering
+      split-pane.tsx        # Resizable split pane (keyboard a11y, ARIA)
+      command-palette.tsx   # cmdk-based palette (built-in fuzzy search)
+      search-panel.tsx      # Search across indexed content
+      sidenote-margin.tsx   # Footnote sidenotes (rAF-throttled scroll)
+      breadcrumbs.tsx       # Heading breadcrumbs
+      outline.tsx           # Document outline
+      settings-dialog.tsx   # @radix-ui/dialog
+      shortcuts-dialog.tsx  # @radix-ui/dialog
+      goto-line-dialog.tsx  # @radix-ui/dialog
+      about-dialog.tsx      # @radix-ui/dialog
+    lib/
+      utils.ts             # Shared utilities: basename, dirname, uint8ArrayToBase64, localStorage
+demo/
+  blog/          # Blog project files (loaded via import.meta.glob at build time)
+    chickenglass.yaml   # Blog project config (bibliography, math macros)
+    reference.bib       # BibTeX references
+    bib_style.csl       # CSL citation style
+    posts/              # 77 converted blog posts (Hakyll → fenced div format)
+    *.md                # Top-level pages (about, research, etc.)
 src-tauri/
-  src/main.rs    # Tauri entry point, registers commands
-  src/commands.rs # Rust filesystem commands (read/write/list/create/exists)
-  tauri.conf.json # Tauri config (window, build, permissions)
+  src/main.rs    # Tauri entry point
+  src/commands.rs # Rust filesystem commands
+  tauri.conf.json
   capabilities/  # Tauri v2 permission declarations
 ```
 
@@ -35,11 +127,11 @@ src-tauri/
 
 ```bash
 npm install          # install dependencies
-npm run dev          # start dev server (Vite) — browser mode with demo content
+npm run dev          # start dev server (Vite) — browser mode with blog demo content
 npm run build        # production build (frontend only)
 npm run lint         # ESLint
 npm run lint:fix     # ESLint autofix
-npm run test         # run tests
+npm run test         # run tests (Vitest, 824 tests across 39 files)
 npx tsc --noEmit     # typecheck only
 npm run tauri:dev    # launch Tauri desktop app (starts Vite + Rust backend)
 npm run tauri:build  # build production desktop binary
@@ -91,6 +183,10 @@ Pandoc-flavored markdown with:
 
 See DESIGN.md for full specification.
 
+## Blog content
+
+The `demo/blog/` directory contains 94 files from the user's blog (originally in Hakyll `{Theorem}` syntax, converted to Chickenglass fenced div format). These are loaded as the default demo project in browser mode via Vite's `import.meta.glob`. The converter script is at `/tmp/chickenglass-convert.ts`.
+
 ## Development rules
 
 - **Copy what works**: Before implementing any non-trivial technique, find and study an existing open-source project that does it well. Clone it, read the source, copy the proven approach exactly. Don't invent from scratch. Only deviate when you have a specific reason the existing approach doesn't fit.
@@ -111,9 +207,15 @@ See DESIGN.md for full specification.
 ## Key architecture decisions
 
 - **Pandoc-free editing loop**: Pandoc is only for export (PDF/LaTeX). The editor uses Lezer + CM6 + KaTeX directly.
-- **Every block is a plugin**: The core knows nothing about "theorem." Plugins register classes, parsers, renderers, and numbering.
+- **Every block is a plugin**: The core knows nothing about "theorem." Plugins register classes via `createStandardPlugin()` factory. The factory handles title, numbering, counter, and rendering.
 - **AST nodes track source positions**: Lezer does this by default. Essential for Typora-style editing and future structural editing (v3).
 - **Fenced divs are composite blocks**: Content inside `::: ... :::` is parsed as full markdown by re-entering the markdown parser.
 - **Tauri over Electron**: Chose Tauri for ~5MB bundles (vs Electron's ~150MB), native OS webview, and Rust backend. The frontend is identical in both browser and Tauri modes.
-- **FileSystem abstraction**: `FileSystem` interface in `file-manager.ts` is implemented by `MemoryFileSystem` (demo/dev) and `TauriFileSystem` (desktop). `main.ts` detects the environment at runtime via `window.__TAURI__`.
-- **Dual-mode app**: Tauri app starts with demo content, user can "Open Folder" to switch to real files. Browser dev mode always uses demo content. This keeps development fast (no Rust recompilation for frontend changes).
+- **FileSystem abstraction**: `FileSystem` interface in `file-manager.ts` is implemented by `MemoryFileSystem` (demo/dev) and `TauriFileSystem` (desktop). `main.tsx` detects the environment at runtime via `window.__TAURI__`.
+- **Dual-mode app**: Tauri app starts with demo content, user can "Open Folder" to switch to real files. Browser dev mode loads the blog project by default. This keeps development fast (no Rust recompilation for frontend changes).
+- **Demo content via import.meta.glob**: Blog files in `demo/blog/` are imported at build time using Vite's `import.meta.glob` with `?raw` query. No code generation step needed.
+- **Math macros cached in StateField**: `mathMacrosField` caches parsed macros from frontmatter, recomputing only when frontmatter changes. All math renderers read from this field.
+- **Index extraction via Lezer tree**: The indexer walks the Lezer syntax tree directly (no regex). Runs inline on the main thread (web worker removed — serialization overhead exceeded extraction cost for typical documents).
+- **RenderWidget base class**: Provides default `ignoreEvent() { return true }` inherited by 7+ widget types. Centralizes cursor-range checking via unified `cursorInRange()`.
+- **Shared utilities**: `src/app/lib/utils.ts` contains `basename()`, `dirname()`, `uint8ArrayToBase64()`, `readLocalStorage()`, `writeLocalStorage()` — prevents duplication across modules.
+- **Library evaluation pattern**: Libraries are evaluated against actual codebase needs. Rejected: @floating-ui (2 trivial sites), react-resizable-panels (desktop app), fuse.js (cmdk has fuzzy search), path-browserify (only forward slashes). Adopted: @radix-ui/dialog (zero added bundle via cmdk dedup), @dnd-kit (accessibility gains).

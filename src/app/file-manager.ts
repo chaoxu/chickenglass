@@ -1,4 +1,5 @@
 import { uint8ArrayToBase64 } from "./lib/utils";
+import { getBlogFiles } from "./demo-blog";
 
 /** File entry representing a single file or directory in the tree. */
 export interface FileEntry {
@@ -436,4 +437,9 @@ A function $f$ is **continuous** at $x_0$ if for every $\\varepsilon > 0$ there 
 This is equivalent to requiring that preimages of open sets are open.
 `,
   });
+}
+
+/** Create a demo filesystem with the blog project. */
+export function createBlogDemoFileSystem(): MemoryFileSystem {
+  return new MemoryFileSystem(getBlogFiles());
 }
