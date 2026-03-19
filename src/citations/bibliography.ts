@@ -93,7 +93,10 @@ export function sortBibEntries(entries: BibEntry[]): BibEntry[] {
 
 /** Widget that renders the full bibliography section. */
 export class BibliographyWidget extends RenderWidget {
-  constructor(private readonly entries: readonly BibEntry[]) {
+  constructor(
+    private readonly entries: readonly BibEntry[],
+    private readonly cslHtml: readonly string[],
+  ) {
     super();
   }
 
@@ -106,15 +109,26 @@ export class BibliographyWidget extends RenderWidget {
     heading.textContent = "References";
     section.appendChild(heading);
 
-    const list = document.createElement("ol");
+    const list = document.createElement("div");
     list.className = "cg-bibliography-list";
 
-    for (const entry of this.entries) {
-      const li = document.createElement("li");
-      li.className = "cg-bibliography-entry";
-      li.id = `bib-${entry.id}`;
-      li.textContent = formatBibEntry(entry);
-      list.appendChild(li);
+    if (this.cslHtml.length > 0) {
+      // Use CSL-formatted entries (already include [1] numbering for IEEE)
+      for (let i = 0; i < this.cslHtml.length; i++) {
+        const div = document.createElement("div");
+        div.className = "cg-bibliography-entry";
+        div.innerHTML = this.cslHtml[i];
+        list.appendChild(div);
+      }
+    } else {
+      // Fallback: plain text format
+      for (const entry of this.entries) {
+        const div = document.createElement("div");
+        div.className = "cg-bibliography-entry";
+        div.id = `bib-${entry.id}`;
+        div.textContent = formatBibEntry(entry);
+        list.appendChild(div);
+      }
     }
 
     section.appendChild(list);
@@ -123,6 +137,7 @@ export class BibliographyWidget extends RenderWidget {
 
   eq(other: BibliographyWidget): boolean {
     if (this.entries.length !== other.entries.length) return false;
+    if (this.cslHtml.length !== other.cslHtml.length) return false;
     return this.entries.every((e, i) => e.id === other.entries[i].id);
   }
 }
@@ -147,21 +162,27 @@ class BibliographyPlugin implements PluginValue {
   }
 
   private buildAll(view: EditorView): DecorationSet {
-    const { store } = view.state.field(bibDataField);
+    const { store, cslProcessor } = view.state.field(bibDataField);
     if (store.size === 0) return Decoration.none;
 
     const text = view.state.doc.toString();
     const citedIds = collectCitedIds(text, store);
     if (citedIds.length === 0) return Decoration.none;
 
-    const entries = sortBibEntries(
-      citedIds
-        .map((id) => store.get(id))
-        .filter((e): e is BibEntry => e !== undefined),
-    );
+    // Try CSL-formatted bibliography first
+    let cslHtml: string[] = [];
+    if (cslProcessor) {
+      cslHtml = cslProcessor.bibliography();
+    }
+
+    const entries = cslHtml.length > 0
+      ? citedIds.map((id) => store.get(id)).filter((e): e is BibEntry => e !== undefined)
+      : sortBibEntries(
+          citedIds.map((id) => store.get(id)).filter((e): e is BibEntry => e !== undefined),
+        );
 
     const endPos = view.state.doc.length;
-    const widget = new BibliographyWidget(entries);
+    const widget = new BibliographyWidget(entries, cslHtml);
 
     return buildDecorations([
       Decoration.widget({ widget, side: 1 }).range(endPos),
