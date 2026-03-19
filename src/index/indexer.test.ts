@@ -170,6 +170,72 @@ By [@thm-main] and [@eq:key], this follows.
     });
   });
 
+  describe("code block edge cases", () => {
+    it("ignores headings inside fenced code blocks", () => {
+      const content = `\`\`\`markdown
+# Fake heading {#fake}
+\`\`\`
+
+# Real heading {#real}`;
+      const result = extractFileIndex(content, "test.md");
+
+      const headings = result.entries.filter((e) => e.type === "heading");
+      expect(headings).toHaveLength(1);
+      expect(headings[0].label).toBe("real");
+      expect(headings[0].title).toBe("Real heading");
+    });
+
+    it("ignores fenced divs inside fenced code blocks", () => {
+      const content = `\`\`\`
+::: {.theorem #fake-thm}
+Fake theorem content.
+:::
+\`\`\`
+
+::: {.theorem #real-thm}
+Real theorem.
+:::`;
+      const result = extractFileIndex(content, "test.md");
+
+      const theorems = result.entries.filter((e) => e.type === "theorem");
+      expect(theorems).toHaveLength(1);
+      expect(theorems[0].label).toBe("real-thm");
+    });
+
+    it("ignores equation labels inside fenced code blocks", () => {
+      const content = `\`\`\`latex
+$$ x^2 $$ {#eq:fake}
+\`\`\`
+
+$$ y^2 $$ {#eq:real}`;
+      const result = extractFileIndex(content, "test.md");
+
+      const equations = result.entries.filter((e) => e.type === "equation");
+      expect(equations).toHaveLength(1);
+      expect(equations[0].label).toBe("eq:real");
+    });
+
+    it("ignores references inside fenced code blocks", () => {
+      const content = `\`\`\`
+[@fake-ref]
+\`\`\`
+
+See [@real-ref].`;
+      const result = extractFileIndex(content, "test.md");
+
+      expect(result.references).toHaveLength(1);
+      expect(result.references[0].label).toBe("real-ref");
+    });
+
+    it("ignores references inside inline code", () => {
+      const content = "Use `[@fake-ref]` syntax for references. See [@real-ref].";
+      const result = extractFileIndex(content, "test.md");
+
+      expect(result.references).toHaveLength(1);
+      expect(result.references[0].label).toBe("real-ref");
+    });
+  });
+
   describe("mixed content", () => {
     it("extracts all types from a realistic document", () => {
       const content = `---
