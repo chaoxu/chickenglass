@@ -15,6 +15,7 @@ import {
   type DecorationSet,
   Decoration,
   EditorView,
+  WidgetType,
 } from "@codemirror/view";
 import {
   type EditorState,
@@ -31,6 +32,37 @@ import {
   focusEffect,
   focusTracker,
 } from "./render-utils";
+
+/** Widget that renders a copy-to-clipboard button in the code block header. */
+class CopyButtonWidget extends WidgetType {
+  constructor(private readonly code: string) {
+    super();
+  }
+
+  toDOM(): HTMLElement {
+    const btn = document.createElement("button");
+    btn.className = "cg-codeblock-copy";
+    btn.textContent = "Copy";
+    btn.title = "Copy code to clipboard";
+    btn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      void navigator.clipboard.writeText(this.code).then(() => {
+        btn.textContent = "Copied!";
+        setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+      });
+    });
+    return btn;
+  }
+
+  eq(other: CopyButtonWidget): boolean {
+    return this.code === other.code;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
 
 interface CodeBlockInfo {
   /** Start of the FencedCode node (opening fence line start). */
@@ -107,32 +139,60 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
       continue;
     }
 
-    // Rendered mode: add line decoration on opening fence line with language label,
-    // then hide the opening and closing fence lines.
+    // Rendered mode: unified container appearance via per-line classes.
 
-    // Line decoration on the opening fence: block class + data-language attribute.
+    const openLine = state.doc.lineAt(block.openFenceFrom);
+    const closeLine = state.doc.lineAt(block.closeFenceFrom);
+    const bodyLineCount = closeLine.number - openLine.number - 1;
+
+    // Header line: language label via ::before, fence text hidden, position:relative for copy btn
     items.push(
       Decoration.line({
-        class: "cg-codeblock cg-codeblock-header",
+        class: "cg-codeblock-header",
         attributes: block.language ? { "data-language": block.language } : {},
       }).range(block.openFenceFrom),
     );
-
-    // Hide opening fence line (the ``` and language tag).
     items.push(decorationHidden.range(block.openFenceFrom, block.openFenceTo));
 
-    // Add cg-codeblock background to every body line inside the block.
-    const openLine = state.doc.lineAt(block.openFenceFrom);
-    const closeLine = state.doc.lineAt(block.closeFenceFrom);
-    for (let ln = openLine.number + 1; ln < closeLine.number; ln++) {
-      const line = state.doc.line(ln);
-      items.push(Decoration.line({ class: "cg-codeblock" }).range(line.from));
+    // Copy button widget in the header line
+    if (bodyLineCount > 0) {
+      const codeText = state.doc.sliceString(
+        state.doc.line(openLine.number + 1).from,
+        state.doc.line(closeLine.number - 1).to,
+      );
+      items.push(
+        Decoration.widget({
+          widget: new CopyButtonWidget(codeText),
+          side: 1,
+        }).range(block.openFenceFrom),
+      );
     }
 
-    // Hide closing fence line (the closing ```).
-    // Only hide if closing fence is on a different line than opening.
+    // Body lines: side borders only (no top/bottom)
+    for (let ln = openLine.number + 1; ln < closeLine.number; ln++) {
+      const line = state.doc.line(ln);
+      const isLast = ln === closeLine.number - 1;
+      items.push(
+        Decoration.line({
+          class: isLast ? "cg-codeblock-last" : "cg-codeblock-body",
+        }).range(line.from),
+      );
+    }
+
+    // If no body lines, header also gets bottom border
+    if (bodyLineCount === 0) {
+      // Single empty code block — header is also the last line
+      items.push(
+        Decoration.line({ class: "cg-codeblock-last" }).range(block.openFenceFrom),
+      );
+    }
+
+    // Hide closing fence line and collapse to zero height
     if (block.closeFenceFrom !== block.openFenceFrom) {
       items.push(decorationHidden.range(block.closeFenceFrom, block.closeFenceTo));
+      items.push(
+        Decoration.line({ class: "cg-include-fence" }).range(block.closeFenceFrom),
+      );
     }
   }
 
