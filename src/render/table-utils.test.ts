@@ -152,6 +152,16 @@ describe("serializeTable", () => {
       "| 1 | 2 |",
     ]);
   });
+
+  it("preserves alignment markers in separator row", () => {
+    const table = mustParse([
+      "| Left | Center | Right | None |",
+      "| :--- | :---: | ---: | --- |",
+      "| a | b | c | d |",
+    ]);
+    const serialized = serializeTable(table);
+    expect(serialized[1]).toBe("| :--- | :---: | ---: | --- |");
+  });
 });
 
 describe("addRow", () => {

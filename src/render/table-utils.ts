@@ -187,6 +187,78 @@ function padCell(content: string, width: number, alignment: Alignment): string {
 }
 
 /**
+ * Build a serialized pipe-delimited row from cells.
+ *
+ * When `widths` and `alignments` are provided, cells are padded to
+ * the specified column widths respecting alignment. Without them,
+ * cells are serialized as-is (no padding).
+ */
+function buildSerializedRow(
+  cells: readonly TableCell[],
+  widths?: readonly number[],
+  alignments?: readonly Alignment[],
+): string {
+  const parts = cells.map((cell, i) =>
+    widths && alignments
+      ? padCell(cell.content, widths[i], alignments[i] ?? "none")
+      : cell.content,
+  );
+  return "| " + parts.join(" | ") + " |";
+}
+
+/**
+ * Minimum total width for a separator cell so that it contains at
+ * least 3 dashes (the GFM minimum) plus any alignment colons.
+ */
+function minSeparatorWidth(alignment: Alignment): number {
+  switch (alignment) {
+    case "left":
+    case "right":
+      return 4; // e.g. ":---" or "---:"
+    case "center":
+      return 5; // e.g. ":---:"
+    case "none":
+      return 3; // e.g. "---"
+  }
+}
+
+/**
+ * Build a serialized separator row from alignments.
+ *
+ * When `widths` are provided, separator dashes are padded to match
+ * column widths. Without them, minimal separators are used (3 dashes
+ * plus alignment colons).
+ */
+function buildSeparatorRow(
+  alignments: readonly Alignment[],
+  widths?: readonly number[],
+): string {
+  const sepParts = alignments.map((a, i) =>
+    alignmentToSeparator(a, widths ? widths[i] : minSeparatorWidth(a)),
+  );
+  return "| " + sepParts.join(" | ") + " |";
+}
+
+/**
+ * Serialize a table to markdown lines, with optional column padding.
+ *
+ * Shared implementation for both `formatTable` (padded) and
+ * `serializeTable` (unpadded).
+ */
+function serializeTableLines(
+  table: ParsedTable,
+  widths?: readonly number[],
+): string[] {
+  const lines: string[] = [];
+  lines.push(buildSerializedRow(table.header.cells, widths, widths ? table.alignments : undefined));
+  lines.push(buildSeparatorRow(table.alignments, widths));
+  for (const row of table.rows) {
+    lines.push(buildSerializedRow(row.cells, widths, widths ? table.alignments : undefined));
+  }
+  return lines;
+}
+
+/**
  * Format a parsed table so all columns are aligned and padded.
  *
  * Returns the formatted table as a new `ParsedTable` — cell contents
@@ -206,27 +278,7 @@ export function formatTable(table: ParsedTable): string[] {
     }
   }
 
-  const serializeRow = (cells: readonly TableCell[]): string => {
-    const parts = cells.map((cell, i) =>
-      padCell(cell.content, widths[i], table.alignments[i] ?? "none"),
-    );
-    return "| " + parts.join(" | ") + " |";
-  };
-
-  const lines: string[] = [];
-  lines.push(serializeRow(table.header.cells));
-
-  // Separator row
-  const sepParts = table.alignments.map((a, i) =>
-    alignmentToSeparator(a, widths[i]),
-  );
-  lines.push("| " + sepParts.join(" | ") + " |");
-
-  for (const row of table.rows) {
-    lines.push(serializeRow(row.cells));
-  }
-
-  return lines;
+  return serializeTableLines(table, widths);
 }
 
 /**
@@ -235,32 +287,7 @@ export function formatTable(table: ParsedTable): string[] {
  * Unlike `formatTable`, this does not pad columns.
  */
 export function serializeTable(table: ParsedTable): string[] {
-  const serializeRow = (cells: readonly TableCell[]): string => {
-    return "| " + cells.map((c) => c.content).join(" | ") + " |";
-  };
-
-  const lines: string[] = [];
-  lines.push(serializeRow(table.header.cells));
-
-  const sepParts = table.alignments.map((a) => {
-    switch (a) {
-      case "left":
-        return ":---";
-      case "right":
-        return "---:";
-      case "center":
-        return ":---:";
-      case "none":
-        return "---";
-    }
-  });
-  lines.push("| " + sepParts.join(" | ") + " |");
-
-  for (const row of table.rows) {
-    lines.push(serializeRow(row.cells));
-  }
-
-  return lines;
+  return serializeTableLines(table);
 }
 
 // ---------------------------------------------------------------------------
