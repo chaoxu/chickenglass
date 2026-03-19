@@ -101,11 +101,10 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
   return (
     <div
       className={cn(
-        "absolute top-0 left-0 right-0 z-[100]",
+        "absolute top-0 left-0 z-[100]",
         !instant && "transition-opacity duration-300",
         visible ? "opacity-100" : "opacity-0",
       )}
-      // When hidden, shrink to a thin strip so hover can re-show without blocking editor clicks
       style={{
         pointerEvents: visible ? "auto" : undefined,
         height: visible ? undefined : "4px",
@@ -114,7 +113,7 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <div className="flex items-center gap-0.5 px-3 py-1 text-xs bg-[var(--cg-bg)]/80 backdrop-blur-sm border-b border-[var(--cg-border)] whitespace-nowrap overflow-hidden min-h-[24px]">
+      <div className="inline-flex items-center gap-0.5 px-3 py-1 text-xs bg-[var(--cg-bg)]/80 backdrop-blur-sm border border-[var(--cg-border)] rounded-br whitespace-nowrap overflow-hidden">
         {ancestry.map((h, i) => (
           <span key={h.pos} className="flex items-center gap-0.5 min-w-0">
             {i > 0 && (
