@@ -90,7 +90,7 @@ class FoldToggleWidget extends WidgetType {
 
   toDOM(view: EditorView): HTMLElement {
     const span = document.createElement("span");
-    span.className = "cg-fold-toggle";
+    span.className = this.folded ? "cg-fold-toggle cg-fold-toggle-folded" : "cg-fold-toggle";
     span.textContent = this.folded ? "▶" : "▼";
     span.title = this.folded ? "Unfold section" : "Fold section";
 

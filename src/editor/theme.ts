@@ -33,6 +33,16 @@ export const chickenglassTheme = EditorView.theme({
     cursor: "pointer",
     userSelect: "none",
     lineHeight: "inherit",
+    opacity: "0",
+    transition: "opacity 0.15s",
+  },
+  /* Show fold toggle when hovering the heading line */
+  ".cm-line:hover .cg-fold-toggle": {
+    opacity: "1",
+  },
+  /* Always show fold toggle when section is folded */
+  ".cg-fold-toggle-folded": {
+    opacity: "1",
   },
   ".cg-fold-toggle:hover": {
     color: "var(--cg-fg)",

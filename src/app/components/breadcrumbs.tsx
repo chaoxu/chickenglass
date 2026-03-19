@@ -109,7 +109,7 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <div className="flex items-center gap-0.5 px-3 py-1 text-xs bg-[var(--cg-bg)]/90 border-b border-[var(--cg-border)] whitespace-nowrap overflow-hidden min-h-[24px]">
+      <div className="flex items-center gap-0.5 px-3 py-1 text-xs bg-[var(--cg-bg)]/80 backdrop-blur-sm border-b border-[var(--cg-border)] whitespace-nowrap overflow-hidden min-h-[24px]">
         {ancestry.map((h, i) => (
           <span key={h.pos} className="flex items-center gap-0.5 min-w-0">
             {i > 0 && (

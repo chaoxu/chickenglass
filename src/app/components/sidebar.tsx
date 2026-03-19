@@ -21,13 +21,13 @@ export function Sidebar({ collapsed, onToggle, children }: SidebarProps) {
       ].join(" ")}
     >
       {/* Toggle button — always rendered so it stays clickable */}
-      <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-[var(--cg-border)]">
+      <div className="group shrink-0 flex items-center justify-between px-3 py-2 border-b border-[var(--cg-border)]">
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--cg-muted)] whitespace-nowrap overflow-hidden">
           {collapsed ? "" : "Explorer"}
         </span>
         <button
           onClick={onToggle}
-          className="text-[var(--cg-muted)] hover:text-[var(--cg-fg)] text-xs shrink-0 leading-none"
+          className="opacity-0 group-hover:opacity-100 transition-opacity duration-[var(--cg-transition,0.15s)] text-[var(--cg-muted)] hover:text-[var(--cg-fg)] text-xs shrink-0 leading-none"
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
