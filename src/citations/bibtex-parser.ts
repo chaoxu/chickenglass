@@ -105,20 +105,33 @@ export function parseBibTeX(content: string): BibEntry[] {
 }
 
 /**
+ * Parse a BibTeX author string into structured name objects.
+ * Handles "Last, First and Last, First" and "First Last" formats.
+ *
+ * Shared by CSL conversion (which needs full {family, given} pairs)
+ * and extractLastName (which only needs the first author's family name).
+ */
+export function parseAuthorNames(
+  authorStr: string,
+): Array<{ family: string; given: string }> {
+  return authorStr.split(/\s+and\s+/i).map((name) => {
+    const trimmed = name.trim();
+    if (trimmed.includes(",")) {
+      const [family, given] = trimmed.split(",", 2);
+      return { family: family.trim(), given: (given ?? "").trim() };
+    }
+    // "First Middle Last" -> given="First Middle", family="Last"
+    const parts = trimmed.split(/\s+/);
+    const family = parts.pop() ?? trimmed;
+    return { family, given: parts.join(" ") };
+  });
+}
+
+/**
  * Extract the last name from a BibTeX author string.
  * Handles "Last, First" and "First Last" formats.
  * For multiple authors, returns the first author's last name.
  */
 export function extractLastName(author: string): string {
-  // Split on " and " to handle multiple authors
-  const firstAuthor = author.split(/\s+and\s+/i)[0].trim();
-
-  // "Last, First" format
-  if (firstAuthor.includes(",")) {
-    return firstAuthor.split(",")[0].trim();
-  }
-
-  // "First Last" format -- take the last word
-  const parts = firstAuthor.split(/\s+/);
-  return parts[parts.length - 1];
+  return parseAuthorNames(author)[0]?.family ?? author;
 }

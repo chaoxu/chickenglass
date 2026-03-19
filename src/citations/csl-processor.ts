@@ -12,9 +12,9 @@
  *   const bib = processor.bibliography();
  */
 
-// @ts-expect-error citeproc has no type declarations
 import CSL from "citeproc";
-import type { BibEntry } from "./bibtex-parser";
+import { type BibEntry, parseAuthorNames } from "./bibtex-parser";
+import { formatParenthetical, type BibStore } from "./citation-render";
 import enUsLocale from "./en-us-locale.xml?raw";
 import defaultCslStyle from "./ieee.csl?raw";
 
@@ -96,23 +96,6 @@ const BIBTEX_TO_CSL_TYPE: Record<string, string> = {
   proceedings: "book",
 };
 
-/** Parse a BibTeX author string into CSL name objects. */
-function parseAuthors(
-  authorStr: string,
-): Array<{ family: string; given: string }> {
-  return authorStr.split(/\s+and\s+/i).map((name) => {
-    const trimmed = name.trim();
-    if (trimmed.includes(",")) {
-      const [family, given] = trimmed.split(",", 2);
-      return { family: family.trim(), given: (given ?? "").trim() };
-    }
-    // "First Middle Last" -> given="First Middle", family="Last"
-    const parts = trimmed.split(/\s+/);
-    const family = parts.pop() ?? trimmed;
-    return { family, given: parts.join(" ") };
-  });
-}
-
 /** Convert a BibEntry to a CSL-JSON item. */
 export function bibEntryToCsl(entry: BibEntry): CslItem {
   const item: CslItem = {
@@ -120,7 +103,7 @@ export function bibEntryToCsl(entry: BibEntry): CslItem {
     type: BIBTEX_TO_CSL_TYPE[entry.type] ?? "document",
   };
 
-  if (entry.author) item.author = parseAuthors(entry.author);
+  if (entry.author) item.author = parseAuthorNames(entry.author);
   if (entry.title) item.title = entry.title;
   if (entry.journal) item["container-title"] = entry.journal;
   if (entry.booktitle) item["container-title"] = entry.booktitle;
@@ -148,11 +131,13 @@ export function bibEntryToCsl(entry: BibEntry): CslItem {
  */
 export class CslProcessor {
   private items: Map<string, CslItem>;
-  private engine: ReturnType<typeof CSL.Engine> | null = null;
+  private bibStore: BibStore;
+  private engine: InstanceType<typeof CSL.Engine> | null = null;
   private styleXml: string;
 
   constructor(entries: BibEntry[], styleXml?: string) {
     this.items = new Map();
+    this.bibStore = new Map(entries.map((e) => [e.id, e]));
     for (const entry of entries) {
       const csl = bibEntryToCsl(entry);
       this.items.set(csl.id, csl);
@@ -221,19 +206,8 @@ export class CslProcessor {
       const result = this.engine.makeCitationCluster(items);
       return result;
     } catch {
-      // Fallback: simple "Author, Year" format
-      return ids
-        .map((id, i) => {
-          const item = this.items.get(id);
-          if (!item) return id;
-          const author = item.author?.[0]?.family ?? id;
-          const year = item.issued?.["date-parts"]?.[0]?.[0] ?? "";
-          const locator = locators?.[i];
-          let text = `${author}, ${year}`;
-          if (locator) text += `, ${locator}`;
-          return text;
-        })
-        .join("; ");
+      // Fallback: delegate to the shared formatting utility
+      return formatParenthetical(ids, this.bibStore, locators);
     }
   }
 
@@ -268,8 +242,8 @@ export class CslProcessor {
     if (!this.engine) return [];
     try {
       this.engine.updateItems([...this.items.keys()]);
-      const [, entries] = this.engine.makeBibliography() as [unknown, string[]];
-      return entries.map((e: string) => e.trim());
+      const [, entries] = this.engine.makeBibliography();
+      return entries.map((e) => e.trim());
     } catch {
       // CSL engine may fail on malformed entries — return empty bibliography
       return [];

@@ -1,6 +1,7 @@
 export {
   type BibEntry,
   parseBibTeX,
+  parseAuthorNames,
   extractLastName,
 } from "./bibtex-parser";
 
