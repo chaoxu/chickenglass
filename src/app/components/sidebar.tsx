@@ -6,10 +6,33 @@ interface SidebarProps {
   children: ReactNode;
 }
 
+/** Panel-left icon (sidebar with left panel highlighted). */
+function PanelLeftIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 3v18" />
+    </svg>
+  );
+}
+
 /**
  * Collapsible sidebar container.
- * Transitions between w-56 (expanded) and w-0 (collapsed) with overflow-hidden
- * so child content is clipped cleanly without layout shift elsewhere.
+ *
+ * Copies ChatGPT-style toggle: an always-visible icon button at the top of the
+ * sidebar header. When collapsed, the same button appears outside the panel
+ * so it's always discoverable — no hover required.
  */
 export function Sidebar({ collapsed, onToggle, children }: SidebarProps) {
   return (
@@ -22,18 +45,18 @@ export function Sidebar({ collapsed, onToggle, children }: SidebarProps) {
           collapsed ? "w-0" : "w-56",
         ].join(" ")}
       >
-        {/* Header with hover-only collapse button */}
-        <div className="group shrink-0 flex items-center justify-between px-3 py-2 border-b border-[var(--cg-border)]">
+        {/* Header with always-visible collapse button */}
+        <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-[var(--cg-border)]">
           <span className="text-xs font-semibold uppercase tracking-wide text-[var(--cg-muted)] whitespace-nowrap overflow-hidden">
             Explorer
           </span>
           <button
             onClick={onToggle}
-            className="opacity-0 group-hover:opacity-100 transition-opacity duration-[var(--cg-transition,0.15s)] text-[var(--cg-muted)] hover:text-[var(--cg-fg)] text-xs shrink-0 leading-none"
+            className="flex items-center justify-center w-7 h-7 rounded text-[var(--cg-muted)] hover:text-[var(--cg-fg)] hover:bg-[var(--cg-hover)] transition-colors duration-150 shrink-0"
             title="Collapse sidebar"
             aria-label="Collapse sidebar"
           >
-            ‹
+            <PanelLeftIcon />
           </button>
         </div>
 
@@ -43,16 +66,20 @@ export function Sidebar({ collapsed, onToggle, children }: SidebarProps) {
         </div>
       </div>
 
-      {/* Expand button — outside the collapsed panel so it's always accessible */}
+      {/* Expand button — always visible outside the collapsed panel */}
       {collapsed && (
-        <button
-          onClick={onToggle}
-          className="shrink-0 px-1 py-2 text-[var(--cg-muted)] hover:text-[var(--cg-fg)] hover:bg-[var(--cg-hover)] text-xs leading-none border-r border-[var(--cg-border)] transition-colors duration-150"
-          title="Expand sidebar"
-          aria-label="Expand sidebar"
-        >
-          ›
-        </button>
+        <div className="shrink-0 flex flex-col border-r border-[var(--cg-border)]">
+          <div className="px-1 py-2">
+            <button
+              onClick={onToggle}
+              className="flex items-center justify-center w-7 h-7 rounded text-[var(--cg-muted)] hover:text-[var(--cg-fg)] hover:bg-[var(--cg-hover)] transition-colors duration-150"
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
+            >
+              <PanelLeftIcon />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
