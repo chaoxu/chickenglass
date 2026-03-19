@@ -129,6 +129,7 @@ class FootnoteRefWidget extends RenderWidget {
     sup.className = "cg-sidenote-ref";
     sup.textContent = String(this.number);
     sup.title = `Footnote ${this.id}`;
+    sup.setAttribute("data-footnote-id", this.id);
     return sup;
   }
 

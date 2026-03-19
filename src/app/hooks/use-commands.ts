@@ -26,6 +26,8 @@ export interface CommandHandlers {
   onCloseTab?: () => void;
   /** Toggle the sidebar visibility. */
   onToggleSidebar?: () => void;
+  /** Toggle the sidenote margin visibility. */
+  onToggleSidenotes?: () => void;
   /** Switch sidebar to the files panel. */
   onShowFiles?: () => void;
   /** Switch sidebar to the outline panel. */
@@ -166,6 +168,12 @@ export function useCommands(handlers: CommandHandlers): PaletteCommand[] {
         category: "View",
         shortcut: `${modKey}+\\`,
         action: () => handlers.onToggleSidebar?.(),
+      },
+      {
+        id: "view.toggle-sidenotes",
+        label: "Toggle Sidenote Margin",
+        category: "View",
+        action: () => handlers.onToggleSidenotes?.(),
       },
       {
         id: "view.toggle-theme",

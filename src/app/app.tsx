@@ -78,6 +78,7 @@ function AppInner() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(224);
   const [sidebarTab, setSidebarTab] = useState<"files" | "outline" | "symbols">("files");
+  const [sidenotesCollapsed, setSidenotesCollapsed] = useState(false);
 
   const refreshTree = useCallback(async () => {
     try {
@@ -414,6 +415,7 @@ function AppInner() {
     onSaveAs: () => { void saveAs(); },
     onCloseTab: () => { if (activeTab) void closeFile(activeTab); },
     onToggleSidebar: () => setSidebarCollapsed((v) => !v),
+    onToggleSidenotes: () => setSidenotesCollapsed((v) => !v),
     onShowFiles: () => { setSidebarCollapsed(false); setSidebarTab("files"); },
     onShowOutline: () => { setSidebarCollapsed(false); setSidebarTab("outline"); },
     onToggleTheme: () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),
@@ -705,6 +707,7 @@ function AppInner() {
             theme={resolvedTheme}
             fs={fs}
             pluginManager={pluginManager}
+            sidenotesCollapsed={sidenotesCollapsed}
             onDocChange={handleDocChange}
             onStateChange={handleEditorStateChange}
           />
