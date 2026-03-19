@@ -195,7 +195,7 @@ describe("computeBlockNumbers", () => {
     expect(entry?.number).toBe(1);
   });
 
-  it("skips divs with no attributes", () => {
+  it("numbers unregistered div classes via fallback", () => {
     const doc = [
       "::: {.unknown-type}",
       "Not a registered plugin.",
@@ -206,7 +206,10 @@ describe("computeBlockNumbers", () => {
     const registry = testRegistry();
     const result = computeBlockNumbers(state, registry);
 
-    expect(result.blocks).toHaveLength(0);
+    // Fallback creates a numbered plugin on-the-fly
+    expect(result.blocks).toHaveLength(1);
+    expect(result.blocks[0].type).toBe("unknown-type");
+    expect(result.blocks[0].number).toBe(1);
   });
 
   it("handles empty document", () => {
@@ -388,6 +391,62 @@ describe("computeBlockNumbers", () => {
     expect(result.blocks[0].number).toBe(1); // theorem 1
     expect(result.blocks[1].number).toBe(2); // lemma 2 (shared with theorem)
     expect(result.blocks[2].number).toBe(1); // definition 1
+  });
+
+  it("fallback divs each get their own counter group", () => {
+    const doc = [
+      "::: {.observation}",
+      "First observation.",
+      ":::",
+      "",
+      "::: {.conjecture2}",
+      "A custom conjecture.",
+      ":::",
+      "",
+      "::: {.observation}",
+      "Second observation.",
+      ":::",
+    ].join("\n");
+
+    const state = createState(doc);
+    const registry = testRegistry();
+    const result = computeBlockNumbers(state, registry);
+
+    expect(result.blocks).toHaveLength(3);
+    expect(result.blocks[0].type).toBe("observation");
+    expect(result.blocks[0].number).toBe(1);
+    expect(result.blocks[1].type).toBe("conjecture2");
+    expect(result.blocks[1].number).toBe(1); // different counter group
+    expect(result.blocks[2].type).toBe("observation");
+    expect(result.blocks[2].number).toBe(2);
+  });
+
+  it("fallback divs mix with registered divs correctly", () => {
+    const doc = [
+      "::: {.theorem}",
+      "A theorem.",
+      ":::",
+      "",
+      "::: {.observation}",
+      "An observation (unregistered).",
+      ":::",
+      "",
+      "::: {.theorem}",
+      "Another theorem.",
+      ":::",
+    ].join("\n");
+
+    const state = createState(doc);
+    const registry = testRegistry();
+    const result = computeBlockNumbers(state, registry);
+
+    expect(result.blocks).toHaveLength(3);
+    expect(result.blocks[0].type).toBe("theorem");
+    expect(result.blocks[0].number).toBe(1);
+    expect(result.blocks[1].type).toBe("observation");
+    expect(result.blocks[1].number).toBe(1); // own counter
+    expect(result.blocks[2].type).toBe("theorem");
+    expect(result.blocks[2].number).toBe(2); // theorem counter not affected
   });
 
   it("global numbering assigns sequential numbers across all types", () => {

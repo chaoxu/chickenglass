@@ -13,6 +13,7 @@ import {
   registerPlugins,
   unregisterPlugin,
   getPlugin,
+  getPluginOrFallback,
   getRegisteredNames,
   pluginFromConfig,
   applyFrontmatterBlocks,
@@ -106,6 +107,53 @@ describe("getPlugin", () => {
   it("returns undefined for unknown names", () => {
     const state = createRegistryState();
     expect(getPlugin(state, "unknown")).toBeUndefined();
+  });
+});
+
+describe("getPluginOrFallback", () => {
+  it("returns registered plugin when available", () => {
+    let state = createRegistryState();
+    const plugin = makePlugin({ name: "theorem" });
+    state = registerPlugin(state, plugin);
+    expect(getPluginOrFallback(state, "theorem")).toBe(plugin);
+  });
+
+  it("creates a fallback for unregistered class names", () => {
+    const state = createRegistryState();
+    const fallback = getPluginOrFallback(state, "observation");
+    expect(fallback).toBeDefined();
+    expect(fallback?.name).toBe("observation");
+    expect(fallback?.title).toBe("Observation");
+    expect(fallback?.numbered).toBe(true);
+  });
+
+  it("returns same fallback instance on repeated calls (cached)", () => {
+    const state = createRegistryState();
+    const a = getPluginOrFallback(state, "conjecture2");
+    const b = getPluginOrFallback(state, "conjecture2");
+    expect(a).toBe(b);
+  });
+
+  it("returns undefined for 'include' class", () => {
+    const state = createRegistryState();
+    expect(getPluginOrFallback(state, "include")).toBeUndefined();
+  });
+
+  it("fallback plugin renders correct header and class", () => {
+    const state = createRegistryState();
+    const fallback = getPluginOrFallback(state, "hypothesis");
+    expect(fallback).toBeDefined();
+    const spec = fallback!.render({ type: "hypothesis", number: 3, title: "Key" });
+    expect(spec.className).toBe("cg-block cg-block-hypothesis");
+    expect(spec.header).toBe("Hypothesis 3 (Key)");
+  });
+
+  it("fallback uses class name as counter group (no explicit counter)", () => {
+    const state = createRegistryState();
+    const fallback = getPluginOrFallback(state, "axiom");
+    expect(fallback).toBeDefined();
+    expect(fallback!.counter).toBeUndefined();
+    // counter ?? name falls back to "axiom" in the numbering logic
   });
 });
 

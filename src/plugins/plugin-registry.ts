@@ -71,6 +71,45 @@ export function getPlugin(
   return state.plugins.get(name);
 }
 
+/**
+ * Look up a plugin by name, or create a default fallback plugin on-the-fly.
+ *
+ * Fallback plugins render with the class name capitalized as the title,
+ * are numbered by default, and use the class name as the counter group.
+ * This ensures that any `::: {.anything}` fenced div renders as a
+ * formatted block even without explicit registration.
+ *
+ * Special class names (e.g., "include") are excluded from fallback
+ * generation — those are handled separately by the renderer.
+ */
+const EXCLUDED_FROM_FALLBACK = new Set(["include"]);
+
+/** Cache for fallback plugins to avoid re-creating them on every tree walk. */
+const fallbackCache = new Map<string, BlockPlugin>();
+
+export function getPluginOrFallback(
+  state: PluginRegistryState,
+  name: string,
+): BlockPlugin | undefined {
+  const registered = state.plugins.get(name);
+  if (registered) return registered;
+
+  if (EXCLUDED_FROM_FALLBACK.has(name)) return undefined;
+
+  let fallback = fallbackCache.get(name);
+  if (!fallback) {
+    const title = name.charAt(0).toUpperCase() + name.slice(1);
+    fallback = {
+      name,
+      numbered: true,
+      title,
+      render: createBlockRender(title),
+    };
+    fallbackCache.set(name, fallback);
+  }
+  return fallback;
+}
+
 /** Get all registered plugin names. */
 export function getRegisteredNames(
   state: PluginRegistryState,

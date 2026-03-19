@@ -12,7 +12,7 @@ import { syntaxTree } from "@codemirror/language";
 import { extractDivClass } from "../parser/fenced-div-attrs";
 import type { NumberingScheme } from "../parser/frontmatter";
 import type { PluginRegistryState } from "./plugin-registry";
-import { getPlugin, pluginRegistryField } from "./plugin-registry";
+import { getPluginOrFallback, pluginRegistryField } from "./plugin-registry";
 import { frontmatterField } from "../editor/frontmatter-state";
 
 /** A numbered block entry mapping a fenced div to its assigned number. */
@@ -77,7 +77,7 @@ export function computeBlockNumbers(
       if (!attrs || attrs.classes.length === 0) return;
 
       const className = attrs.classes[0];
-      const plugin = getPlugin(registry, className);
+      const plugin = getPluginOrFallback(registry, className);
       if (!plugin || !plugin.numbered) return;
 
       const counterGroup =

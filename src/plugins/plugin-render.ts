@@ -24,7 +24,7 @@ import { type EditorState, type Extension, type Range, StateField } from "@codem
 import { syntaxTree } from "@codemirror/language";
 import { extractDivClass } from "../parser/fenced-div-attrs";
 import type { BlockAttrs } from "./plugin-types";
-import { pluginRegistryField, getPlugin } from "./plugin-registry";
+import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
 import {
   buildDecorations,
@@ -213,7 +213,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       : "";
 
   for (const div of divs) {
-    const plugin = getPlugin(registry, div.className);
+    const plugin = getPluginOrFallback(registry, div.className);
     const isInclude = div.className === "include";
 
     // Include blocks are always invisible — content flows seamlessly
@@ -255,57 +255,43 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       cursor.from <= div.closeFenceTo;
     const cursorOnFence = cursorOnOpenFence || cursorOnCloseFence;
 
-    if (!cursorOnFence) {
-      if (plugin) {
-        const numberEntry = counterState?.byPosition.get(div.from);
-        // Build label without title — title stays as editable text
-        const labelAttrs: BlockAttrs = {
-          type: div.className,
-          id: div.id,
-          number: numberEntry?.number,
-        };
-        const spec = plugin.render(labelAttrs);
+    if (!cursorOnFence && plugin) {
+      const numberEntry = counterState?.byPosition.get(div.from);
+      // Build label without title — title stays as editable text
+      const labelAttrs: BlockAttrs = {
+        type: div.className,
+        id: div.id,
+        number: numberEntry?.number,
+      };
+      const spec = plugin.render(labelAttrs);
 
-        // Line decoration for block CSS class
-        items.push(
-          Decoration.line({
-            class: `${spec.className} cg-block-header`,
-          }).range(div.from),
-        );
+      // Line decoration for block CSS class
+      items.push(
+        Decoration.line({
+          class: `${spec.className} cg-block-header`,
+        }).range(div.from),
+      );
 
-        // Replace fence+attrs with label widget, title stays as editable text
-        const replaceEnd = div.titleFrom ?? div.fenceTo;
-        const label = div.titleFrom !== undefined ? spec.header + " " : spec.header;
-        items.push(
-          Decoration.replace({
-            widget: new BlockHeaderWidget(label, macros, macrosKey),
-          }).range(div.fenceFrom, replaceEnd),
-        );
-      } else {
-        items.push(
-          Decoration.line({
-            class: "cg-block cg-block-unknown cg-block-header",
-          }).range(div.from),
-        );
-
-        // Hide fence+attrs, title stays as editable text
-        const replaceEnd = div.titleFrom ?? div.fenceTo;
-        items.push(decorationHidden.range(div.fenceFrom, replaceEnd));
-      }
+      // Replace fence+attrs with label widget, title stays as editable text
+      const replaceEnd = div.titleFrom ?? div.fenceTo;
+      const label = div.titleFrom !== undefined ? spec.header + " " : spec.header;
+      items.push(
+        Decoration.replace({
+          widget: new BlockHeaderWidget(label, macros, macrosKey),
+        }).range(div.fenceFrom, replaceEnd),
+      );
 
       // Hide closing fence
       if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
         items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
       }
-    } else {
+    } else if (plugin) {
       // Cursor on fence: show fence syntax as source, title stays as editable text
-      if (plugin) {
-        items.push(
-          Decoration.line({
-            class: `${plugin.render({ type: div.className }).className} cg-block-source`,
-          }).range(div.from),
-        );
-      }
+      items.push(
+        Decoration.line({
+          class: `${plugin.render({ type: div.className }).className} cg-block-source`,
+        }).range(div.from),
+      );
     }
 
     // Render inline math ($...$) in title text (Typora-style: cursor inside → source)

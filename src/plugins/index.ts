@@ -10,6 +10,7 @@ export {
   registerPlugins,
   unregisterPlugin,
   getPlugin,
+  getPluginOrFallback,
   getRegisteredNames,
   pluginFromConfig,
   applyFrontmatterBlocks,
