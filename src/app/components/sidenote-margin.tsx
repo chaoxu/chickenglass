@@ -154,27 +154,12 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
         "top: 0",
         "right: 0",
         `width: ${MARGIN_WIDTH}px`,
-        "height: 0",       // doesn't need height — children are absolute
+        "height: 0",
         "overflow: visible",
-        "pointer-events: none",  // let clicks pass through to editor
+        "pointer-events: none",
         "z-index: 1",
         "box-sizing: border-box",
       ].join(";");
-
-      // Visual separator line between editor content and sidenote column
-      const separator = document.createElement("div");
-      separator.className = "cg-sidenote-separator";
-      separator.style.cssText = [
-        "position: absolute",
-        "top: 0",
-        "left: 0",
-        "width: 1px",
-        "height: 100000px", // large fixed height — parent has height:0 + overflow:visible
-        "background: var(--cg-border)",
-        "opacity: 0.5",
-        "pointer-events: none",
-      ].join(";");
-      container.appendChild(separator);
 
       scroller.style.position = "relative";
       scroller.appendChild(container);

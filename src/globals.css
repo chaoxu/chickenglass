@@ -76,3 +76,17 @@ body {
 .cm-editor.cm-focused {
   outline: none;
 }
+
+/* Sidenote margin separator — sticky pseudo-element stays visible
+   during scrolling without contributing to scroll height */
+.cg-sidenote-portal::before {
+  content: "";
+  position: sticky;
+  top: 0;
+  display: block;
+  width: 1px;
+  height: 100vh;
+  background: var(--cg-border);
+  opacity: 0.5;
+  pointer-events: none;
+}

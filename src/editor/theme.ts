@@ -30,7 +30,7 @@ export const chickenglassTheme = EditorView.theme({
     right: "100%",
     marginRight: "4px",
     color: "var(--cg-border)",
-    fontSize: "10px",
+    fontSize: "0.6em",  // scales with heading size
     cursor: "pointer",
     userSelect: "none",
     lineHeight: "inherit",
