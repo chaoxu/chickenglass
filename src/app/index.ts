@@ -34,6 +34,7 @@ export {
   collectMdPaths,
   checkPandoc,
   type ExportFormat,
+  type BatchExportProgress,
 } from "./export";
 export { isTauri, openFolder, revealInFinder, TauriFileSystem } from "./tauri-fs";
 export {

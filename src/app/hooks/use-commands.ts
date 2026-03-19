@@ -48,6 +48,10 @@ export interface CommandHandlers {
   onOpenRecentFile?: (path: string) => void;
   /** Recent file paths for dynamic command generation. */
   recentFiles?: readonly string[];
+  /** Export current file to HTML. */
+  onExportHtml?: () => void;
+  /** Batch export all project files to HTML. */
+  onBatchExportHtml?: () => void;
 }
 
 /** Dispatch a formatting event to the document for CM6 to handle. */
@@ -183,6 +187,20 @@ export function useCommands(handlers: CommandHandlers): PaletteCommand[] {
         category: "Navigation",
         action: () => handlers.onShowSettings?.(),
       },
+      // ── Export ──────────────────────────────────────────────────────────────
+      {
+        id: "export.html",
+        label: "Export Current File to HTML",
+        category: "Export",
+        action: () => handlers.onExportHtml?.(),
+      },
+      {
+        id: "export.batch-html",
+        label: "Export All Files to HTML",
+        category: "Export",
+        action: () => handlers.onBatchExportHtml?.(),
+      },
+
       {
         id: "help.shortcuts",
         label: "Keyboard Shortcuts",

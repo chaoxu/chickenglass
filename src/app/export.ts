@@ -3,13 +3,14 @@
  *
  * - PDF and LaTeX: invoked via the Tauri `export_document` command
  *   (spawns Pandoc from the Rust backend; content passed via stdin).
- * - HTML: self-contained, generated directly in TypeScript with inline
- *   KaTeX CSS so no Pandoc or network access is required.
+ * - HTML: self-contained, generated directly in TypeScript with
+ *   proper semantic HTML (headings, lists, math via KaTeX, fenced divs).
  */
 
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "./tauri-fs";
 import type { FileSystem, FileEntry } from "./file-manager";
+import { markdownToHtml } from "./markdown-to-html";
 
 /** Supported export formats. */
 export type ExportFormat = "pdf" | "latex" | "html";
@@ -41,18 +42,17 @@ function deriveOutputPath(sourcePath: string, format: ExportFormat): string {
 /**
  * Build a self-contained HTML document from markdown content.
  *
- * The output embeds KaTeX CSS inline and wraps the source content in a
- * minimal styled page. Math rendering, fenced divs, and cross-references
- * are not re-processed here — this is a lightweight "source as HTML"
- * export suitable for sharing or archiving.
+ * Parses the markdown and renders proper semantic HTML:
+ * - Headings, paragraphs, lists (ordered, unordered, task lists)
+ * - Math via KaTeX (inline and display)
+ * - Fenced divs as semantic `<div class="theorem">` etc.
+ * - Code blocks, blockquotes, tables, horizontal rules
+ * - Inline formatting: bold, italic, strikethrough, highlight, code
  *
- * For full rendering (LaTeX-quality output), use the PDF format instead.
+ * Includes a minimal stylesheet and links KaTeX CSS for math rendering.
  */
 function buildHtmlDocument(content: string, title: string): string {
-  const escaped = content
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  const bodyHtml = markdownToHtml(content);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -60,10 +60,8 @@ function buildHtmlDocument(content: string, title: string): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
   <style>
-    /* KaTeX CSS — inlined for self-contained output */
-    @import url("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css");
-
     /* Document typography */
     body {
       font-family: "Georgia", "Times New Roman", serif;
@@ -103,17 +101,81 @@ function buildHtmlDocument(content: string, title: string): string {
       border-left: 3px solid #ccc;
       color: #555;
     }
-    /* Fenced div blocks */
-    .fenced-div {
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      padding: 1rem;
+    table {
+      border-collapse: collapse;
+      width: 100%;
       margin: 1.5rem 0;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 0.5rem 0.75rem;
+    }
+    th {
+      background: #f8f8f8;
+      font-weight: 600;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #ddd;
+      margin: 2rem 0;
+    }
+    mark {
+      background: #fff3a3;
+      padding: 0.1em 0.2em;
+    }
+    .math-display {
+      margin: 1.5rem 0;
+      text-align: center;
+    }
+    /* Fenced div blocks (theorem, proof, lemma, etc.) */
+    .theorem, .lemma, .corollary, .definition, .proposition, .conjecture, .problem {
+      border-left: 3px solid #4a9eff;
+      padding: 0.75rem 1rem;
+      margin: 1.5rem 0;
+      background: #f7faff;
+    }
+    .proof {
+      border-left: 3px solid #888;
+      padding: 0.75rem 1rem;
+      margin: 1.5rem 0;
+      background: #fafafa;
+    }
+    .remark, .example, .note {
+      border-left: 3px solid #e8a838;
+      padding: 0.75rem 1rem;
+      margin: 1.5rem 0;
+      background: #fffdf5;
+    }
+    .div-title {
+      display: block;
+      margin-bottom: 0.5rem;
+    }
+    .cross-ref {
+      color: #4a9eff;
+      text-decoration: none;
+      border-bottom: 1px dashed #4a9eff;
+    }
+    .cross-ref:hover {
+      border-bottom-style: solid;
+    }
+    .footnote {
+      font-size: 0.9em;
+      color: #555;
+      padding: 0.25rem 0;
+      border-top: 1px solid #eee;
+      margin-top: 0.5rem;
+    }
+    .math-error {
+      color: #c00;
+      background: #fff0f0;
+    }
+    input[type="checkbox"] {
+      margin-right: 0.4em;
     }
   </style>
 </head>
 <body>
-<pre style="font-family: inherit; background: none; padding: 0; white-space: pre-wrap; word-wrap: break-word;">${escaped}</pre>
+${bodyHtml}
 </body>
 </html>`;
 }
@@ -217,15 +279,19 @@ async function exportHtml(
   return outputPath;
 }
 
+/** Progress callback for batch export operations. */
+export type BatchExportProgress = (completed: number, total: number, currentPath: string) => void;
+
 /**
  * Export all .md files in a project to a given format.
  *
- * Files are exported in parallel for efficiency. Each file's output path
- * is derived from its source path (e.g. `notes/intro.md` → `notes/intro.html`).
+ * Files are exported sequentially to allow progress reporting without
+ * blocking the UI (each iteration yields to the event loop via await).
  *
  * @param tree - The project file tree root entry.
  * @param format - Target format for all files.
  * @param fs - FileSystem used to read file contents (and write HTML output).
+ * @param onProgress - Optional callback invoked after each file is exported.
  * @returns Results for each file: `{ path, outputPath }` on success or
  *          `{ path, error }` on failure.
  */
@@ -233,27 +299,27 @@ export async function batchExport(
   tree: FileEntry,
   format: ExportFormat,
   fs: FileSystem,
+  onProgress?: BatchExportProgress,
 ): Promise<Array<{ path: string; outputPath?: string; error?: string }>> {
   const mdPaths = collectMdPaths(tree);
+  const results: Array<{ path: string; outputPath?: string; error?: string }> = [];
 
-  const results = await Promise.allSettled(
-    mdPaths.map(async (path) => {
+  for (let i = 0; i < mdPaths.length; i++) {
+    const path = mdPaths[i];
+    try {
       const content = await fs.readFile(path);
       const outputPath = await exportDocument(content, format, path, fs);
-      return { path, outputPath };
-    }),
-  );
-
-  return results.map((result, i) => {
-    if (result.status === "fulfilled") {
-      return result.value;
+      results.push({ path, outputPath });
+    } catch (err: unknown) {
+      results.push({
+        path,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
-    const err = result.reason;
-    return {
-      path: mdPaths[i],
-      error: err instanceof Error ? err.message : String(err),
-    };
-  });
+    onProgress?.(i + 1, mdPaths.length, path);
+  }
+
+  return results;
 }
 
 /** Recursively collect all .md file paths from a FileEntry tree. */

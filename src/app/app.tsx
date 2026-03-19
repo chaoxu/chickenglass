@@ -34,6 +34,7 @@ import { setEditorMode } from "../editor";
 import { EditorPluginManager } from "../editor/editor-plugin";
 import { defaultEditorPlugins } from "../editor/editor-plugins-registry";
 import { isTauri, openFolder as tauriOpenFolder } from "./tauri-fs";
+import { exportDocument, batchExport } from "./export";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -351,6 +352,37 @@ function AppInner() {
     saveWindowState({ sidebarWidth: sidebarCollapsed ? 0 : 220 });
   }, [sidebarCollapsed, saveWindowState]);
 
+  // ── Export handlers ──────────────────────────────────────────────────────
+  const handleExportHtml = useCallback(() => {
+    if (!activeTab) return;
+    const doc = liveDocs.current.get(activeTab) ?? "";
+    void exportDocument(doc, "html", activeTab, fs).then(
+      (outputPath) => {
+        window.alert(`Exported to ${outputPath}`);
+      },
+      (err: unknown) => {
+        window.alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+      },
+    );
+  }, [activeTab, fs]);
+
+  const handleBatchExportHtml = useCallback(() => {
+    if (!fileTree) return;
+    void (async () => {
+      const results = await batchExport(fileTree, "html", fs);
+      const succeeded = results.filter((r) => r.outputPath);
+      const failed = results.filter((r) => r.error);
+      const summary = [`Batch export complete: ${succeeded.length} succeeded`];
+      if (failed.length > 0) {
+        summary.push(`${failed.length} failed`);
+        for (const f of failed) {
+          summary.push(`  ${f.path}: ${f.error}`);
+        }
+      }
+      window.alert(summary.join("\n"));
+    })();
+  }, [fileTree, fs]);
+
   // ── Command palette commands ──────────────────────────────────────────────
   const commandHandlers = useMemo(() => ({
     onSave: () => { void saveFile(); },
@@ -368,7 +400,9 @@ function AppInner() {
     onOpenFolder: handleOpenFolder,
     onOpenRecentFile: (path: string) => { void openFile(path); },
     recentFiles,
-  }), [saveFile, saveAs, activeTab, closeFile, resolvedTheme, setTheme, handleOpenFolder, openFile, recentFiles]);
+    onExportHtml: handleExportHtml,
+    onBatchExportHtml: handleBatchExportHtml,
+  }), [saveFile, saveAs, activeTab, closeFile, resolvedTheme, setTheme, handleOpenFolder, openFile, recentFiles, handleExportHtml, handleBatchExportHtml]);
 
   const commands = useCommands(commandHandlers);
 

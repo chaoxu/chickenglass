@@ -134,7 +134,7 @@ function parseOpeningFence(
   let closingFenceTo = lineEnd;
 
   // Count colons backwards from lineEnd
-  let closingColonEnd = lineEnd;
+  const closingColonEnd = lineEnd;
   let closingColonStart = lineEnd;
   while (
     closingColonStart > cursor &&
