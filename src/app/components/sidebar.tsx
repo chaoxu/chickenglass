@@ -92,7 +92,7 @@ export function Sidebar({ collapsed, onToggle, width, onWidthChange, children }:
           "bg-[var(--cg-subtle)] border-r border-[var(--cg-border)]",
           collapsed ? "w-0" : "",
           // Only animate width when not dragging
-          dragging.current ? "" : "transition-[width] duration-200 ease-in-out",
+          dragging.current ? "" : "transition-[width] duration-[var(--cg-transition,0.15s)] ease-in-out",
         ]
           .filter(Boolean)
           .join(" ")}
@@ -105,7 +105,7 @@ export function Sidebar({ collapsed, onToggle, width, onWidthChange, children }:
           </span>
           <button
             onClick={onToggle}
-            className="flex items-center justify-center w-7 h-7 rounded text-[var(--cg-muted)] hover:text-[var(--cg-fg)] hover:bg-[var(--cg-hover)] transition-colors duration-150 shrink-0"
+            className="flex items-center justify-center w-7 h-7 rounded text-[var(--cg-muted)] hover:text-[var(--cg-fg)] hover:bg-[var(--cg-hover)] transition-colors duration-[var(--cg-transition,0.15s)] shrink-0"
             title="Collapse sidebar"
             aria-label="Collapse sidebar"
           >
@@ -122,7 +122,7 @@ export function Sidebar({ collapsed, onToggle, width, onWidthChange, children }:
       {/* Invisible drag handle — overlaps the border edge for easy grabbing */}
       {!collapsed && (
         <div
-          className="shrink-0 w-1 cursor-col-resize relative -ml-[2px] z-10 hover:bg-[var(--cg-active)] active:bg-[var(--cg-active)] transition-colors duration-100"
+          className="shrink-0 w-1 cursor-col-resize relative -ml-[2px] z-10 hover:bg-[var(--cg-active)] active:bg-[var(--cg-active)] transition-colors duration-[var(--cg-transition,0.15s)]"
           onMouseDown={onMouseDown}
           onDoubleClick={onDoubleClick}
         />
@@ -134,7 +134,7 @@ export function Sidebar({ collapsed, onToggle, width, onWidthChange, children }:
           <div className="px-1 py-2">
             <button
               onClick={onToggle}
-              className="flex items-center justify-center w-7 h-7 rounded text-[var(--cg-muted)] hover:text-[var(--cg-fg)] hover:bg-[var(--cg-hover)] transition-colors duration-150"
+              className="flex items-center justify-center w-7 h-7 rounded text-[var(--cg-muted)] hover:text-[var(--cg-fg)] hover:bg-[var(--cg-hover)] transition-colors duration-[var(--cg-transition,0.15s)]"
               title="Expand sidebar"
               aria-label="Expand sidebar"
             >

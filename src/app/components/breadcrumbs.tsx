@@ -92,7 +92,7 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
     <div
       className={cn(
         "absolute top-0 left-0 z-[100]",
-        !instant && "transition-opacity duration-300",
+        !instant && "transition-opacity duration-[var(--cg-transition,0.15s)]",
         visible ? "opacity-100" : "opacity-0",
       )}
       style={{
