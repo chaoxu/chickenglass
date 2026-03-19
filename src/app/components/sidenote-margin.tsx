@@ -1,16 +1,14 @@
 /**
  * SidenoteMargin — Gwern-style margin column for footnote sidenotes.
  *
- * Renders footnotes as a stacked list in a fixed-width column to the right
- * of the editor. Each sidenote is positioned near its anchor line (the
- * footnote ref in the text) but never overlaps — they flow top-to-bottom
- * like a regular list with gaps.
+ * Two-pass rendering:
+ * 1. Render all sidenotes invisibly to measure actual DOM heights
+ * 2. Reposition with real heights: each at max(anchor, prevBottom + gap)
  *
- * This replaces the old approach of absolute-positioned widgets inside
- * the CM6 editor DOM, which caused overlap issues and one-frame flashes.
+ * Sidenotes anchor near their footnote ref line but never overlap.
  */
 
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import type { EditorView } from "@codemirror/view";
 import {
   collectFootnotes,
@@ -23,7 +21,7 @@ interface SidenoteEntry {
   id: string;
   number: number;
   content: string;
-  /** Y position of the footnote ref in the editor (px, relative to scroller top). */
+  /** Y of the footnote ref in the editor (px, relative to document top). */
   anchorY: number;
 }
 
@@ -32,53 +30,43 @@ interface SidenoteMarginProps {
   scrollTop: number;
 }
 
-/** Minimum gap between stacked sidenotes (px). */
 const GAP = 8;
 
-/** Extract sidenote data from CM6 state + compute anchor positions. */
 function extractSidenotes(view: EditorView): SidenoteEntry[] {
   const state = view.state;
   const { refs, defs } = collectFootnotes(state);
 
-  // Number footnotes in order of first ref appearance
   const numberMap = new Map<string, number>();
   let nextNum = 1;
   for (const ref of refs) {
-    if (!numberMap.has(ref.id)) {
-      numberMap.set(ref.id, nextNum++);
-    }
+    if (!numberMap.has(ref.id)) numberMap.set(ref.id, nextNum++);
   }
 
-  // Build entries with anchor Y positions
   const entries: SidenoteEntry[] = [];
   const scrollerRect = view.scrollDOM.getBoundingClientRect();
 
   for (const ref of refs) {
     const def = defs.get(ref.id);
     if (!def) continue;
-    // Skip duplicate refs for the same footnote
     if (entries.some((e) => e.id === ref.id)) continue;
 
-    const num = numberMap.get(ref.id) ?? 0;
-
-    // Get the Y position of the ref in the editor
     const coords = view.coordsAtPos(ref.from);
-    const anchorY = coords ? coords.top - scrollerRect.top + view.scrollDOM.scrollTop : 0;
+    const anchorY = coords
+      ? coords.top - scrollerRect.top + view.scrollDOM.scrollTop
+      : 0;
 
     entries.push({
       id: ref.id,
-      number: num,
+      number: numberMap.get(ref.id) ?? 0,
       content: def.content,
       anchorY,
     });
   }
 
-  // Sort by anchor position
   entries.sort((a, b) => a.anchorY - b.anchorY);
   return entries;
 }
 
-/** Render sidenote content with inline math via KaTeX. */
 function SidenoteContent({ text, macros }: { text: string; macros: Record<string, string> }) {
   const segments = splitByInlineMath(text);
   return (
@@ -105,6 +93,8 @@ function SidenoteContent({ text, macros }: { text: string; macros: Record<string
 
 export function SidenoteMargin({ view, scrollTop }: SidenoteMarginProps) {
   const [entries, setEntries] = useState<SidenoteEntry[]>([]);
+  const [positions, setPositions] = useState<number[]>([]);
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Extract sidenotes whenever view state or scroll changes
@@ -116,40 +106,69 @@ export function SidenoteMargin({ view, scrollTop }: SidenoteMarginProps) {
     setEntries(extractSidenotes(view));
   }, [view, scrollTop, view?.state.doc.length]);
 
-  // Get macros from CM6 state
   const macros = useMemo(() => {
     if (!view) return {};
     return getMathMacros(view.state);
   }, [view, view?.state.doc.length]);
 
-  // Compute stacked positions: each sidenote goes at max(anchor, prevBottom + gap)
-  const positions = useMemo(() => {
-    const result: number[] = [];
-    let nextAvailableY = 0;
-    for (const entry of entries) {
-      const y = Math.max(entry.anchorY, nextAvailableY);
-      result.push(y);
-      // Estimate height: ~20px per line, ~60 chars per line
-      const estimatedLines = Math.ceil(entry.content.length / 50);
-      const estimatedHeight = Math.max(20, estimatedLines * 18);
-      nextAvailableY = y + estimatedHeight + GAP;
+  // Ref callback to track item elements
+  const setItemRef = useCallback((id: string, el: HTMLDivElement | null) => {
+    if (el) {
+      itemRefs.current.set(id, el);
+    } else {
+      itemRefs.current.delete(id);
     }
-    return result;
+  }, []);
+
+  // Two-pass: after render, measure actual heights and recompute positions
+  useEffect(() => {
+    if (entries.length === 0) {
+      setPositions([]);
+      return;
+    }
+
+    // Use requestAnimationFrame to measure after browser has painted
+    const rafId = requestAnimationFrame(() => {
+      const result: number[] = [];
+      let nextAvailableY = 0;
+
+      for (const entry of entries) {
+        // Anchor Y from the ref position in the editor
+        const targetY = Math.max(entry.anchorY, nextAvailableY);
+        result.push(targetY);
+
+        // Measure actual rendered height
+        const el = itemRefs.current.get(entry.id);
+        const actualHeight = el ? el.offsetHeight : 40;
+        nextAvailableY = targetY + actualHeight + GAP;
+      }
+
+      setPositions(result);
+    });
+
+    return () => cancelAnimationFrame(rafId);
   }, [entries]);
+
+  // Sync margin scroll with editor scroll
+  useEffect(() => {
+    if (!containerRef.current || !view) return;
+    containerRef.current.scrollTop = scrollTop;
+  }, [scrollTop, view]);
 
   if (entries.length === 0) return null;
 
   return (
     <div
       ref={containerRef}
-      className="w-56 shrink-0 relative overflow-y-auto border-l border-[var(--cg-border)] bg-[var(--cg-bg)]"
+      className="w-56 shrink-0 relative overflow-hidden border-l border-[var(--cg-border)] bg-[var(--cg-bg)]"
     >
       {entries.map((entry, i) => (
         <div
           key={entry.id}
+          ref={(el) => setItemRef(entry.id, el)}
           className="absolute w-full px-3 text-xs leading-relaxed text-[var(--cg-muted)]"
           style={{
-            top: `${positions[i]}px`,
+            top: `${positions[i] ?? entry.anchorY}px`,
             fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
           }}
         >
