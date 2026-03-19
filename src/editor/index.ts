@@ -10,3 +10,5 @@ export { editorKeybindings } from "./keybindings";
 export { listOutlinerExtension } from "./list-outliner";
 export { chickenglassTheme } from "./theme";
 export { imagePasteExtension, fileToDataUrl, insertImageMarkdown, type ImagePasteConfig } from "./image-paste";
+export { type EditorPlugin, EditorPluginManager } from "./editor-plugin";
+export { defaultEditorPlugins } from "./editor-plugins-registry";

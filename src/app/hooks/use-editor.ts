@@ -14,11 +14,13 @@
  * - Destroy the old view and create a new one when the `doc` prop changes
  */
 
-import { useRef, useEffect, useState, type RefObject } from "react";
+import { useRef, useEffect, useState, useMemo, type RefObject } from "react";
 import { EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
 
 import { createEditor, themeCompartment } from "../../editor/editor";
+import { EditorPluginManager } from "../../editor/editor-plugin";
+import { defaultEditorPlugins } from "../../editor/editor-plugins-registry";
 import { chickenglasDarkTheme } from "../../editor/theme";
 import { frontmatterField, type FrontmatterState } from "../../editor/frontmatter-state";
 import { parseBibTeX } from "../../citations/bibtex-parser";
@@ -79,6 +81,8 @@ export interface UseEditorReturn {
   scrollTop: number;
   /** Character offset of the first visible line in the viewport. */
   viewportFrom: number;
+  /** Plugin manager for toggling editor features at runtime. */
+  pluginManager: EditorPluginManager;
 }
 
 // ── Include expansion (uses shared include-resolver utilities) ───────────────
@@ -191,6 +195,12 @@ export function useEditor(
     onFrontmatterChange,
   } = options;
 
+  const pluginManager = useMemo(() => {
+    const m = new EditorPluginManager();
+    defaultEditorPlugins.forEach((p) => m.register(p));
+    return m;
+  }, []);
+
   const [view, setView] = useState<EditorView | null>(null);
   const [wordCount, setWordCount] = useState(0);
   const [cursorPos, setCursorPos] = useState(0);
@@ -284,6 +294,7 @@ export function useEditor(
       parent: container,
       doc,
       projectConfig,
+      pluginManager,
       extensions: extraExtensions,
     });
 
@@ -358,7 +369,7 @@ export function useEditor(
     }
   }, [view, theme]);
 
-  return { view, wordCount, cursorPos, scrollTop, viewportFrom };
+  return { view, wordCount, cursorPos, scrollTop, viewportFrom, pluginManager };
 }
 
 // ── Re-exports for hook consumers ─────────────────────────────────────────────

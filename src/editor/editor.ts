@@ -2,6 +2,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { type Extension, Compartment, EditorState, StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { ThemeManager } from "../app/theme-manager";
+import type { EditorPluginManager } from "./editor-plugin";
 
 import { Table, TaskList } from "@lezer/markdown";
 import {
@@ -22,15 +23,12 @@ import {
   imageRenderPlugin,
   codeBlockRenderPlugin,
   tableRenderPlugin,
-  debugInspectorPlugin,
   checkboxRenderPlugin,
   mathPreviewPlugin,
   sectionNumberPlugin,
   fenceGuidePlugin,
   includeLabelPlugin,
-  focusModeExtension,
   sidenoteRenderPlugin,
-  hoverPreviewExtension,
 } from "../render";
 import {
   createPluginRegistryField,
@@ -73,15 +71,12 @@ const renderingExtensions: Extension[] = [
   bibliographyPlugin,
   containerAttributesPlugin,
   tableRenderPlugin,
-  debugInspectorPlugin,
   checkboxRenderPlugin,
   mathPreviewPlugin,
   sectionNumberPlugin,
   fenceGuidePlugin,
   includeLabelPlugin,
-  focusModeExtension,
   sidenoteRenderPlugin,
-  hoverPreviewExtension,
 ];
 
 export interface EditorConfig {
@@ -93,6 +88,8 @@ export interface EditorConfig {
   projectConfig?: ProjectConfig;
   /** Theme manager — used to initialise the CM6 dark/light base theme. */
   themeManager?: ThemeManager;
+  /** Plugin manager for toggleable editor features. */
+  pluginManager?: EditorPluginManager;
   /** Additional CM6 extensions to include. */
   extensions?: Extension[];
 }
@@ -137,6 +134,9 @@ export function createEditor(config: EditorConfig): EditorView {
 
       // Editability (wrapped in compartment for preview mode)
       editableCompartment.of([]),
+
+      // Toggleable editor plugins (managed by EditorPluginManager)
+      ...(config.pluginManager?.initialExtensions() ?? []),
 
       // Editor chrome
       EditorView.lineWrapping,
