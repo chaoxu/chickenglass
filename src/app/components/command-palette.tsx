@@ -6,6 +6,7 @@
  */
 
 import { Command } from "cmdk";
+import { Search } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -106,20 +107,10 @@ export function CommandPalette({
     >
       {/* Search input */}
       <div className="flex items-center border-b border-[var(--cg-border)] px-3">
-        <svg
+        <Search
           className="mr-2 h-4 w-4 shrink-0 text-[var(--cg-muted)]"
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
           aria-hidden="true"
-        >
-          <circle cx="11" cy="11" r="8" />
-          <path d="m21 21-4.35-4.35" />
-        </svg>
+        />
         <Command.Input
           placeholder="Type a command..."
           className={[

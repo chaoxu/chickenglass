@@ -1,4 +1,5 @@
 import { type ReactNode, useRef, useCallback, useEffect } from "react";
+import { PanelLeft } from "lucide-react";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -10,27 +11,6 @@ interface SidebarProps {
 
 const MIN_WIDTH = 140;
 const MAX_WIDTH = 480;
-
-/** Panel-left icon (sidebar with left panel highlighted). */
-function PanelLeftIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <rect width="18" height="18" x="3" y="3" rx="2" />
-      <path d="M9 3v18" />
-    </svg>
-  );
-}
 
 /**
  * Collapsible sidebar with drag-to-resize.
@@ -109,7 +89,7 @@ export function Sidebar({ collapsed, onToggle, width, onWidthChange, children }:
             title="Collapse sidebar"
             aria-label="Collapse sidebar"
           >
-            <PanelLeftIcon />
+            <PanelLeft size={16} />
           </button>
         </div>
 
@@ -138,7 +118,7 @@ export function Sidebar({ collapsed, onToggle, width, onWidthChange, children }:
               title="Expand sidebar"
               aria-label="Expand sidebar"
             >
-              <PanelLeftIcon />
+              <PanelLeft size={16} />
             </button>
           </div>
         </div>
