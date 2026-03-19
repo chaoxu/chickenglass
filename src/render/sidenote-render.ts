@@ -14,7 +14,7 @@ import {
   Decoration,
   EditorView,
 } from "@codemirror/view";
-import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
+import { type EditorState, type Extension, type Range, StateField, StateEffect } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   buildDecorations,
@@ -24,6 +24,20 @@ import {
   focusEffect,
   focusTracker,
 } from "./render-utils";
+
+/** StateEffect to toggle sidenote margin visibility. */
+export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
+
+/** StateField tracking whether the sidenote margin is collapsed. */
+export const sidenotesCollapsedField = StateField.define<boolean>({
+  create() { return false; },
+  update(value, tr) {
+    for (const e of tr.effects) {
+      if (e.is(sidenotesCollapsedEffect)) return e.value;
+    }
+    return value;
+  },
+});
 
 /** Split text by $...$ inline math, returning alternating text/math segments. */
 export function splitByInlineMath(
@@ -162,20 +176,24 @@ function buildSidenoteDecorations(state: EditorState, focused: boolean): Decorat
     items.push(Decoration.replace({ widget }).range(ref.from, ref.to));
   }
 
-  // Hide footnote definition lines (content is rendered in React margin column).
-  // When cursor is inside a def, show the source text for editing.
-  for (const [, def] of defs) {
-    if (focused && cursorContainedIn(state, def.from, def.to)) continue;
+  // When sidenote margin is visible, hide footnote definition lines
+  // (content is rendered in React margin column).
+  // When collapsed, leave defs visible as inline footnotes.
+  const collapsed = state.field(sidenotesCollapsedField, false) ?? false;
+  if (!collapsed) {
+    for (const [, def] of defs) {
+      if (focused && cursorContainedIn(state, def.from, def.to)) continue;
 
-    // Collapse the definition line to zero height
-    items.push(
-      Decoration.line({ class: "cg-sidenote-def-line" }).range(def.from),
-    );
-    // Replace text content (after label) with empty widget to hide it visually
-    if (def.labelTo < def.to) {
+      // Collapse the definition line to zero height
       items.push(
-        Decoration.replace({}).range(def.labelTo, def.to),
+        Decoration.line({ class: "cg-sidenote-def-line" }).range(def.from),
       );
+      // Replace text content (after label) with empty widget to hide it visually
+      if (def.labelTo < def.to) {
+        items.push(
+          Decoration.replace({}).range(def.labelTo, def.to),
+        );
+      }
     }
   }
 
@@ -196,7 +214,7 @@ const sidenoteDecorationField = StateField.define<DecorationSet>({
     if (
       tr.docChanged ||
       tr.selection ||
-      tr.effects.some((e) => e.is(focusEffect)) ||
+      tr.effects.some((e) => e.is(focusEffect) || e.is(sidenotesCollapsedEffect)) ||
       syntaxTree(tr.state).length > syntaxTree(tr.startState).length
     ) {
       const focused = tr.state.field(editorFocusField, false) ?? false;
@@ -251,5 +269,6 @@ export function computeSidenoteOffsets(
 export const sidenoteRenderPlugin: Extension = [
   editorFocusField,
   focusTracker,
+  sidenotesCollapsedField,
   sidenoteDecorationField,
 ];

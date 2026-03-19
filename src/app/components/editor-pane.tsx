@@ -4,14 +4,15 @@ import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
 import { Breadcrumbs } from "./breadcrumbs";
 import { SidenoteMargin } from "./sidenote-margin";
 import { extractHeadings } from "../heading-ancestry";
-import { collectFootnotes } from "../../render/sidenote-render";
+import { collectFootnotes, sidenotesCollapsedEffect } from "../../render/sidenote-render";
 
 export interface EditorPaneProps extends UseEditorOptions {
   sidenotesCollapsed?: boolean;
+  onSidenotesCollapsedChange?: (collapsed: boolean) => void;
   onStateChange?: (state: UseEditorReturn) => void;
 }
 
-export function EditorPane({ onStateChange, sidenotesCollapsed, ...editorOptions }: EditorPaneProps) {
+export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesCollapsedChange, ...editorOptions }: EditorPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorState = useEditor(containerRef, editorOptions);
 
@@ -39,16 +40,34 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, ...editorOptions
     ? extractHeadings(view.state).map((h) => ({ level: h.level, text: h.text, from: h.pos }))
     : [];
 
-  // Toggle .cm-content marginRight when sidenotes are collapsed
+  // Sync collapsed state to CM6 StateField + adjust marginRight
   useEffect(() => {
     if (!view) return;
-    const content = view.contentDOM;
-    if (sidenotesCollapsed) {
-      content.style.marginRight = "auto";
-    } else {
-      content.style.marginRight = "";
-    }
+    const collapsed = sidenotesCollapsed ?? false;
+    view.dispatch({ effects: sidenotesCollapsedEffect.of(collapsed) });
+    view.contentDOM.style.marginRight = collapsed ? "auto" : "";
   }, [view, sidenotesCollapsed]);
+
+  // Auto-collapse sidenote margin when editor is too narrow
+  const AUTO_COLLAPSE_WIDTH = 700;
+  useEffect(() => {
+    if (!view || !onSidenotesCollapsedChange) return;
+    const container = view.dom.parentElement;
+    if (!container) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const width = entry.contentRect.width;
+        if (width < AUTO_COLLAPSE_WIDTH && !sidenotesCollapsed) {
+          onSidenotesCollapsedChange(true);
+        } else if (width >= AUTO_COLLAPSE_WIDTH && sidenotesCollapsed) {
+          onSidenotesCollapsedChange(false);
+        }
+      }
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [view, sidenotesCollapsed, onSidenotesCollapsedChange]);
 
   // Hover tooltip for sidenote refs when margin is collapsed
   const tooltipRef = useRef<HTMLDivElement | null>(null);

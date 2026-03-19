@@ -708,6 +708,7 @@ function AppInner() {
             fs={fs}
             pluginManager={pluginManager}
             sidenotesCollapsed={sidenotesCollapsed}
+            onSidenotesCollapsedChange={setSidenotesCollapsed}
             onDocChange={handleDocChange}
             onStateChange={handleEditorStateChange}
           />
