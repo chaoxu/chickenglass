@@ -7,11 +7,7 @@ import type {
   Line,
   InlineContext,
 } from "@lezer/markdown";
-
-const BACKSLASH = 92; // '\'
-const OPEN_PAREN = 40; // '('
-const CLOSE_PAREN = 41; // ')'
-const DOLLAR = 36; // '$'
+import { BACKSLASH, OPEN_PAREN, CLOSE_PAREN, DOLLAR } from "./char-utils";
 
 /**
  * Inline parser for \(...\) math syntax.

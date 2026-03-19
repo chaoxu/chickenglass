@@ -1,7 +1,6 @@
 import { tags } from "@lezer/highlight";
 import type { InlineParser, MarkdownConfig, InlineContext } from "@lezer/markdown";
-
-const EQUALS = 61; // '='
+import { EQUALS, scanDoubleDelimited } from "./char-utils";
 
 /**
  * Inline parser for ==highlight== syntax.
@@ -12,24 +11,15 @@ const highlightParser: InlineParser = {
   name: "Highlight",
   parse(cx: InlineContext, next: number, pos: number): number {
     if (next !== EQUALS) return -1;
-    // Must be == (two equals signs)
-    if (cx.char(pos + 1) !== EQUALS) return -1;
 
-    // Scan forward for closing ==
-    let i = pos + 2;
-    while (i < cx.end) {
-      const ch = cx.char(i);
-      if (ch === EQUALS && cx.char(i + 1) === EQUALS) {
-        const openMark = cx.elt("HighlightMark", pos, pos + 2);
-        const closeMark = cx.elt("HighlightMark", i, i + 2);
-        return cx.addElement(
-          cx.elt("Highlight", pos, i + 2, [openMark, closeMark]),
-        );
-      }
-      i++;
-    }
+    const match = scanDoubleDelimited(cx, pos, EQUALS, false);
+    if (!match) return -1;
 
-    return -1;
+    const openMark = cx.elt("HighlightMark", pos, pos + 2);
+    const closeMark = cx.elt("HighlightMark", match.closeStart, match.closeEnd);
+    return cx.addElement(
+      cx.elt("Highlight", pos, match.closeEnd, [openMark, closeMark]),
+    );
   },
   before: "Escape",
 };

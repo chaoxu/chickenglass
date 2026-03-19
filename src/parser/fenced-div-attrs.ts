@@ -7,6 +7,8 @@
  * - `key=value` or `key="value"` adds a key-value pair
  */
 
+import { isSpaceTab } from "./char-utils";
+
 /** Parsed result of a fenced div attribute string. */
 export interface FencedDivAttrs {
   readonly classes: readonly string[];
@@ -34,7 +36,7 @@ export function parseFencedDivAttrs(input: string): FencedDivAttrs | undefined {
   let pos = 0;
   while (pos < inner.length) {
     // Skip whitespace
-    while (pos < inner.length && isWhitespace(inner.charCodeAt(pos))) pos++;
+    while (pos < inner.length && isSpaceTab(inner.charCodeAt(pos))) pos++;
     if (pos >= inner.length) break;
 
     const ch = inner[pos];
@@ -110,9 +112,6 @@ function isIdentChar(ch: number): boolean {
   );
 }
 
-function isWhitespace(ch: number): boolean {
-  return ch === 32 || ch === 9; // space or tab
-}
 
 /** Read an identifier starting at `pos`. */
 function readIdentifier(str: string, pos: number): string {
@@ -141,7 +140,7 @@ function readValue(
 
   // Unquoted value: read until whitespace or end
   const start = pos;
-  while (pos < str.length && !isWhitespace(str.charCodeAt(pos))) pos++;
+  while (pos < str.length && !isSpaceTab(str.charCodeAt(pos))) pos++;
   if (pos === start) return undefined;
   return { value: str.slice(start, pos), end: pos };
 }

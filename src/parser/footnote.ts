@@ -7,11 +7,7 @@ import type {
   Line,
   InlineContext,
 } from "@lezer/markdown";
-
-const OPEN_BRACKET = 91; // '['
-const CARET = 94; // '^'
-const CLOSE_BRACKET = 93; // ']'
-const COLON = 58; // ':'
+import { OPEN_BRACKET, CARET, CLOSE_BRACKET, COLON, SPACE, NEWLINE, CR, TAB } from "./char-utils";
 
 /**
  * Inline parser for [^id] footnote references.
@@ -31,7 +27,7 @@ const footnoteRefParser: InlineParser = {
     while (i < cx.end) {
       const ch = cx.char(i);
       // Footnote ids cannot contain spaces or newlines
-      if (ch === 32 || ch === 10 || ch === 13 || ch === 9) return -1;
+      if (ch === SPACE || ch === NEWLINE || ch === CR || ch === TAB) return -1;
       if (ch === CLOSE_BRACKET) {
         // Don't match [^id]: at line start — that's a definition
         if (i + 1 < cx.end && cx.char(i + 1) === COLON) return -1;
@@ -67,7 +63,7 @@ const footnoteDefParser: BlockParser = {
     let i = start + 2;
     while (i < text.length) {
       const ch = text.charCodeAt(i);
-      if (ch === 32 || ch === 10 || ch === 13 || ch === 9) return false;
+      if (ch === SPACE || ch === NEWLINE || ch === CR || ch === TAB) return false;
       if (ch === CLOSE_BRACKET) {
         if (i + 1 < text.length && text.charCodeAt(i + 1) === COLON) {
           // Found [^id]:

@@ -14,3 +14,26 @@ export { equationLabelExtension } from "./equation-label";
 export { strikethroughExtension } from "./strikethrough";
 export { highlightExtension } from "./highlight";
 export { footnoteExtension } from "./footnote";
+export {
+  SPACE,
+  TAB,
+  NEWLINE,
+  CR,
+  DOLLAR,
+  OPEN_PAREN,
+  CLOSE_PAREN,
+  COLON,
+  EQUALS,
+  OPEN_BRACKET,
+  BACKSLASH,
+  CLOSE_BRACKET,
+  CARET,
+  OPEN_BRACE,
+  CLOSE_BRACE,
+  TILDE,
+  DOT,
+  skipSpaceTab,
+  isSpaceTab,
+  findMatchingBrace,
+  scanDoubleDelimited,
+} from "./char-utils";

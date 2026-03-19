@@ -6,9 +6,7 @@ import type {
   Line,
   Element,
 } from "@lezer/markdown";
-
-const OPEN_BRACE = 123; // '{'
-const CLOSE_BRACE = 125; // '}'
+import { OPEN_BRACE, CLOSE_BRACE, skipSpaceTab } from "./char-utils";
 
 /** Regex to validate that a braced string is an equation label: {#eq:...} */
 const LABEL_RE = /^\{#eq:[^}\s]+\}$/;
@@ -21,11 +19,7 @@ function extractLabel(
   text: string,
   startOffset: number,
 ): { labelFrom: number; labelTo: number } | undefined {
-  let i = startOffset;
-  // Skip whitespace
-  while (i < text.length && (text.charCodeAt(i) === 32 || text.charCodeAt(i) === 9)) {
-    i++;
-  }
+  let i = skipSpaceTab(text, startOffset);
   if (i >= text.length || text.charCodeAt(i) !== OPEN_BRACE) return undefined;
 
   const braceStart = i;

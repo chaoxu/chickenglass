@@ -5,6 +5,7 @@ import type {
   MarkdownConfig,
   NodeSpec,
 } from "@lezer/markdown";
+import { COLON, SPACE, TAB, OPEN_BRACE, findMatchingBrace, skipSpaceTab, isSpaceTab } from "./char-utils";
 
 /**
  * Lezer markdown extension for Pandoc-style fenced divs.
@@ -24,9 +25,6 @@ import type {
  * parsed as regular markdown automatically.
  */
 
-// Character code for ':'
-const COLON = 58;
-
 /** Count consecutive colons starting at `pos` in `text`. */
 function countColons(text: string, pos: number): number {
   let count = 0;
@@ -36,31 +34,6 @@ function countColons(text: string, pos: number): number {
   return count;
 }
 
-/** Find the end of the attribute block `{...}` starting at `pos`. Returns -1 if not found. */
-function findAttrEnd(text: string, pos: number): number {
-  if (pos >= text.length || text.charCodeAt(pos) !== 123 /* '{' */) return -1;
-  let depth = 1;
-  let i = pos + 1;
-  while (i < text.length && depth > 0) {
-    const ch = text.charCodeAt(i);
-    if (ch === 123 /* '{' */) depth++;
-    else if (ch === 125 /* '}' */) depth--;
-    i++;
-  }
-  return depth === 0 ? i : -1;
-}
-
-/** Skip whitespace characters (space and tab) starting at `pos`. */
-function skipWhitespace(text: string, pos: number): number {
-  while (
-    pos < text.length &&
-    (text.charCodeAt(pos) === 32 || text.charCodeAt(pos) === 9)
-  ) {
-    pos++;
-  }
-  return pos;
-}
-
 /**
  * Check if a line is a closing fence (3+ colons followed by only whitespace).
  * Returns the colon count or -1 if not a closing fence.
@@ -68,7 +41,7 @@ function skipWhitespace(text: string, pos: number): number {
 function isClosingFence(text: string, pos: number): number {
   const colonCount = countColons(text, pos);
   if (colonCount < 3) return -1;
-  const afterColons = skipWhitespace(text, pos + colonCount);
+  const afterColons = skipSpaceTab(text, pos + colonCount);
   return afterColons >= text.length ? colonCount : -1;
 }
 
@@ -83,7 +56,7 @@ function parseOpeningFence(
   const colonCount = countColons(text, pos);
   if (colonCount < 3) return undefined;
 
-  let cursor = skipWhitespace(text, pos + colonCount);
+  let cursor = skipSpaceTab(text, pos + colonCount);
 
   // Must have at least attributes or be followed by non-whitespace
   // A bare `:::` with nothing after is a closing fence, not an opening one
@@ -93,12 +66,12 @@ function parseOpeningFence(
   let attrTo: number;
 
   // Check for attribute block
-  if (text.charCodeAt(cursor) === 123 /* '{' */) {
-    const end = findAttrEnd(text, cursor);
+  if (text.charCodeAt(cursor) === OPEN_BRACE) {
+    const end = findMatchingBrace(text, cursor);
     if (end === -1) return undefined;
     attrFrom = cursor;
     attrTo = end;
-    cursor = skipWhitespace(text, end);
+    cursor = skipSpaceTab(text, end);
   } else {
     // Short-form: ::: ClassName [Title...]
     // The first word is treated as the class name. We synthesize a
@@ -108,24 +81,21 @@ function parseOpeningFence(
     const wordStart = cursor;
     while (
       cursor < text.length &&
-      text.charCodeAt(cursor) !== 32 &&
-      text.charCodeAt(cursor) !== 9
+      text.charCodeAt(cursor) !== SPACE &&
+      text.charCodeAt(cursor) !== TAB
     ) {
       cursor++;
     }
     if (cursor === wordStart) return undefined; // nothing after :::
     attrFrom = wordStart;
     attrTo = cursor;
-    cursor = skipWhitespace(text, cursor);
+    cursor = skipSpaceTab(text, cursor);
   }
 
   // Check for trailing ::: (self-closing single-line div)
   // Scan backwards from end of line past whitespace, then check for 3+ colons
   let lineEnd = text.length;
-  while (
-    lineEnd > cursor &&
-    (text.charCodeAt(lineEnd - 1) === 32 || text.charCodeAt(lineEnd - 1) === 9)
-  ) {
+  while (lineEnd > cursor && isSpaceTab(text.charCodeAt(lineEnd - 1))) {
     lineEnd--;
   }
 
@@ -147,10 +117,7 @@ function parseOpeningFence(
   if (trailingColons >= 3) {
     // Verify there's whitespace (or nothing) between the title and the closing colons
     let beforeClosing = closingColonStart;
-    while (
-      beforeClosing > cursor &&
-      (text.charCodeAt(beforeClosing - 1) === 32 || text.charCodeAt(beforeClosing - 1) === 9)
-    ) {
+    while (beforeClosing > cursor && isSpaceTab(text.charCodeAt(beforeClosing - 1))) {
       beforeClosing--;
     }
     // Only self-closing if there's content between attrs and the trailing :::
@@ -166,10 +133,7 @@ function parseOpeningFence(
   const titleFrom = cursor;
   // Trim trailing whitespace from title — but stop before closing fence if self-closing
   let titleTo = selfClosing ? closingFenceFrom : text.length;
-  while (
-    titleTo > titleFrom &&
-    (text.charCodeAt(titleTo - 1) === 32 || text.charCodeAt(titleTo - 1) === 9)
-  ) {
+  while (titleTo > titleFrom && isSpaceTab(text.charCodeAt(titleTo - 1))) {
     titleTo--;
   }
 
