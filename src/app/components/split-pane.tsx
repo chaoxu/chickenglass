@@ -1,10 +1,27 @@
 import { useRef, useState, useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { cn } from "../lib/utils";
 
+// ── Library evaluation (#190) ─────────────────────────────────────────────────
+//
+// Evaluated react-resizable-panels (~5KB gzip, used in VS Code web).
+// Decision: REJECTED — custom implementation is sufficient.
+//
+// Reasons:
+// 1. This is a Tauri desktop app; touch support is irrelevant.
+// 2. The current component is ~200 lines with zero dependencies, well-typed,
+//    and handles all edge cases (clamped ratio, stable refs, proper cleanup).
+// 3. react-resizable-panels uses a Panel/PanelGroup/PanelResizeHandle model
+//    that would change the consumer API for no user-facing benefit.
+// 4. Adding a dependency means ongoing maintenance (version bumps, React compat).
+// 5. The only meaningful gap (keyboard accessibility) is trivially added inline
+//    — see handleDividerKeyDown below.
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const DIVIDER_PX = 4;
 const MIN_PANE_PX = 100;
+/** Fraction of container to shift per arrow-key press on the divider. */
+const KEYBOARD_STEP = 0.02;
 
 // ── Helpers (outside component — pure functions, no deps) ─────────────────────
 
@@ -116,6 +133,51 @@ export function SplitPane({
     [orientation],
   );
 
+  // ── Keyboard logic ───────────────────────────────────────────────────────
+
+  const handleDividerKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const total = orientation === "vertical" ? rect.width : rect.height;
+
+      let delta = 0;
+      if (orientation === "vertical") {
+        if (e.key === "ArrowLeft") delta = -KEYBOARD_STEP;
+        else if (e.key === "ArrowRight") delta = KEYBOARD_STEP;
+      } else {
+        if (e.key === "ArrowUp") delta = -KEYBOARD_STEP;
+        else if (e.key === "ArrowDown") delta = KEYBOARD_STEP;
+      }
+      // Home/End move to min/max positions
+      if (e.key === "Home") delta = -1;
+      else if (e.key === "End") delta = 1;
+
+      if (delta === 0) return;
+      e.preventDefault();
+
+      const newRatio = clampRatio(
+        (e.key === "Home" || e.key === "End")
+          ? (delta < 0 ? 0 : 1)
+          : currentRatioRef.current + delta,
+        total,
+      );
+      currentRatioRef.current = newRatio;
+      setRatio(newRatio);
+
+      // Fire onResize callback
+      if (onResizeRef.current) {
+        onResizeRef.current(
+          total * newRatio - DIVIDER_PX / 2,
+          total * (1 - newRatio) - DIVIDER_PX / 2,
+        );
+      }
+    },
+    [orientation],
+  );
+
   // ── Styles ─────────────────────────────────────────────────────────────────
 
   const isVertical = orientation === "vertical";
@@ -161,14 +223,19 @@ export function SplitPane({
         {children[0]}
       </div>
 
-      {/* Draggable divider */}
+      {/* Draggable divider — focusable for keyboard accessibility */}
       <div
         role="separator"
         aria-orientation={isVertical ? "vertical" : "horizontal"}
+        aria-valuenow={Math.round(ratio * 100)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        tabIndex={0}
         onMouseDown={handleDividerMouseDown}
+        onKeyDown={handleDividerKeyDown}
         className={cn(
           "split-pane-divider shrink-0 bg-[var(--cg-border)] z-10 transition-colors duration-[var(--cg-transition,0.15s)]",
-          "hover:bg-[var(--cg-active)]",
+          "hover:bg-[var(--cg-active)] focus-visible:bg-[var(--cg-active)] focus-visible:outline-none",
           isVertical
             ? "w-1 h-full cursor-col-resize"
             : "h-1 w-full cursor-row-resize",
