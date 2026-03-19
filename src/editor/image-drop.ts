@@ -18,7 +18,14 @@
 
 import { type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { isImageMime, IMAGE_MIME_EXT, fileToDataUrl } from "./image-save";
+import {
+  isImageMime,
+  IMAGE_MIME_EXT,
+  fileToDataUrl,
+  generateImageFilename,
+  altTextFromFilename,
+  logImageError,
+} from "./image-save";
 import { insertImageMarkdown } from "./image-paste";
 
 /**
@@ -69,10 +76,7 @@ export function imageDropExtension(config: ImageDropConfig = {}): Extension {
         event.preventDefault();
 
         const ext = IMAGE_MIME_EXT[file.type] ?? "png";
-        const baseName =
-          file.name && file.name !== "image.png"
-            ? file.name
-            : `image-${Date.now()}.${ext}`;
+        const baseName = generateImageFilename(file, ext);
 
         // Compute the drop position from mouse coordinates
         const dropPos = view.posAtCoords({
@@ -90,11 +94,10 @@ export function imageDropExtension(config: ImageDropConfig = {}): Extension {
         // Save and insert asynchronously
         save(file)
           .then((path) => {
-            const alt = baseName.replace(/\.[^.]+$/, "");
-            insertImageMarkdown(view, path, alt);
+            insertImageMarkdown(view, path, altTextFromFilename(baseName));
           })
           .catch((err: unknown) => {
-            console.error("[chickenglass] image drop failed:", err);
+            logImageError("drop", err);
           });
 
         // Only handle the first image

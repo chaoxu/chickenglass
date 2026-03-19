@@ -73,6 +73,27 @@ export function generateImageFilename(file: File, ext: string): string {
 }
 
 /**
+ * Derive alt text from a filename by stripping the file extension.
+ *
+ * Examples:
+ *   "my-diagram.png" → "my-diagram"
+ *   "photo.jpeg"     → "photo"
+ *   "noext"          → "noext"
+ */
+export function altTextFromFilename(filename: string): string {
+  return filename.replace(/\.[^.]+$/, "");
+}
+
+/**
+ * Log an image operation error with a consistent prefix.
+ *
+ * All image modules use this for uniform error reporting.
+ */
+export function logImageError(operation: string, err: unknown): void {
+  console.error(`[chickenglass] image ${operation} failed:`, err);
+}
+
+/**
  * Deduplicate a filename by appending a numeric suffix if needed.
  *
  * Checks `<folder>/<name>` against the filesystem and returns a name

@@ -24,6 +24,9 @@ import { EditorView } from "@codemirror/view";
 import {
   IMAGE_MIME_EXT,
   fileToDataUrl,
+  generateImageFilename,
+  altTextFromFilename,
+  logImageError,
 } from "./image-save";
 
 // Re-export for backwards compatibility
@@ -89,21 +92,15 @@ export function imagePasteExtension(config: ImagePasteConfig = {}): Extension {
         // Prevent the default paste (which would paste nothing or garbled text)
         event.preventDefault();
 
-        // Determine a filename: use the file's own name if non-empty, otherwise
-        // generate one from the current timestamp.
-        const baseName =
-          file.name && file.name !== "image.png"
-            ? file.name
-            : `image-${Date.now()}.${ext}`;
+        const baseName = generateImageFilename(file, ext);
 
         // Save and insert asynchronously
         save(file)
           .then((path) => {
-            const alt = baseName.replace(/\.[^.]+$/, ""); // strip extension for alt text
-            insertImageMarkdown(view, path, alt);
+            insertImageMarkdown(view, path, altTextFromFilename(baseName));
           })
           .catch((err: unknown) => {
-            console.error("[chickenglass] image paste failed:", err);
+            logImageError("paste", err);
           });
 
         // Only handle the first image item

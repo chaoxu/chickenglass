@@ -10,7 +10,14 @@
 
 import type { EditorView } from "@codemirror/view";
 import { isTauri } from "../app/tauri-fs";
-import { isImageMime, IMAGE_MIME_EXT, fileToDataUrl } from "./image-save";
+import {
+  isImageMime,
+  IMAGE_MIME_EXT,
+  fileToDataUrl,
+  generateImageFilename,
+  altTextFromFilename,
+  logImageError,
+} from "./image-save";
 import { insertImageMarkdown } from "./image-paste";
 import { frontmatterField } from "./frontmatter-state";
 
@@ -64,17 +71,16 @@ async function insertImageBrowser(
       }
 
       const ext = IMAGE_MIME_EXT[file.type] ?? "png";
-      const baseName = file.name || `image-${Date.now()}.${ext}`;
+      const baseName = generateImageFilename(file, ext);
 
       save(file)
         .then((path) => {
-          const alt = baseName.replace(/\.[^.]+$/, "");
-          insertImageMarkdown(view, path, alt);
+          insertImageMarkdown(view, path, altTextFromFilename(baseName));
           view.focus();
           resolve();
         })
         .catch((err: unknown) => {
-          console.error("[chickenglass] image insert failed:", err);
+          logImageError("insert", err);
           resolve();
         });
     });
@@ -114,7 +120,7 @@ async function insertImageTauri(view: EditorView): Promise<void> {
 
     const sourcePath = selected as string;
     const fileName = sourcePath.split("/").pop() ?? sourcePath.split("\\").pop() ?? sourcePath;
-    const alt = fileName.replace(/\.[^.]+$/, "");
+    const alt = altTextFromFilename(fileName);
 
     // Read the imageFolder from frontmatter (or default to "assets")
     const fm = view.state.field(frontmatterField, false);
@@ -135,6 +141,6 @@ async function insertImageTauri(view: EditorView): Promise<void> {
     insertImageMarkdown(view, destPath, alt);
     view.focus();
   } catch (err: unknown) {
-    console.error("[chickenglass] Image file picker failed:", err);
+    logImageError("file picker", err);
   }
 }

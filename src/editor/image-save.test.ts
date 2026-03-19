@@ -3,6 +3,8 @@ import {
   IMAGE_MIME_EXT,
   isImageMime,
   generateImageFilename,
+  altTextFromFilename,
+  logImageError,
 } from "./image-save";
 
 describe("IMAGE_MIME_EXT", () => {
@@ -61,5 +63,39 @@ describe("generateImageFilename", () => {
     const file = new File([], "", { type: "image/jpeg" });
     const result = generateImageFilename(file, "jpg");
     expect(result).toMatch(/^image-\d+\.jpg$/);
+  });
+});
+
+describe("altTextFromFilename", () => {
+  it("strips file extension", () => {
+    expect(altTextFromFilename("my-diagram.png")).toBe("my-diagram");
+  });
+
+  it("strips only the last extension", () => {
+    expect(altTextFromFilename("file.backup.jpg")).toBe("file.backup");
+  });
+
+  it("returns the name unchanged when there is no extension", () => {
+    expect(altTextFromFilename("noext")).toBe("noext");
+  });
+
+  it("handles dotfiles", () => {
+    expect(altTextFromFilename(".hidden")).toBe("");
+  });
+});
+
+describe("logImageError", () => {
+  it("logs with the correct prefix format", () => {
+    const errors: unknown[][] = [];
+    const orig = console.error;
+    console.error = (...args: unknown[]) => { errors.push(args); };
+    try {
+      logImageError("paste", new Error("test"));
+      expect(errors).toHaveLength(1);
+      expect(errors[0][0]).toBe("[chickenglass] image paste failed:");
+      expect(errors[0][1]).toBeInstanceOf(Error);
+    } finally {
+      console.error = orig;
+    }
   });
 });
