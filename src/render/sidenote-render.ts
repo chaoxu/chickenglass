@@ -338,31 +338,35 @@ const sidenoteLayoutPlugin = ViewPlugin.fromClass(
         ...this.view.dom.querySelectorAll(".cg-sidenote"),
       ] as HTMLElement[];
 
-      if (sidenotes.length < 2) {
-        // Nothing to resolve — clear any stale transforms
-        for (const s of sidenotes) s.style.transform = "";
-        return;
-      }
+      if (sidenotes.length === 0) return;
 
-      // Reset transforms so measurements reflect natural positions
+      // Reset transforms to measure natural (anchor) positions
       for (const s of sidenotes) s.style.transform = "";
+      void sidenotes[0].offsetHeight; // force reflow
 
-      // Measure natural positions (forces layout reflow after reset)
-      const measured: Array<SidenoteMeasurement & { el: HTMLElement }> =
-        sidenotes.map((el) => {
-          const rect = el.getBoundingClientRect();
-          return { el, top: rect.top, height: rect.height };
-        });
+      // Measure natural positions
+      const measured = sidenotes.map((el) => {
+        const rect = el.getBoundingClientRect();
+        return { el, naturalTop: rect.top, height: rect.height };
+      });
 
-      // Sort by natural top position (should be in document order already)
-      measured.sort((a, b) => a.top - b.top);
+      // Sort by natural anchor position (document order)
+      measured.sort((a, b) => a.naturalTop - b.naturalTop);
 
-      // Compute and apply offsets
-      const offsets = computeSidenoteOffsets(measured);
-      for (let i = 0; i < measured.length; i++) {
-        if (offsets[i] > 0) {
-          measured[i].el.style.transform = `translateY(${offsets[i]}px)`;
+      // Stack: each sidenote goes at max(its anchor, previous bottom + gap).
+      // This ensures they never overlap — they form a top-to-bottom list
+      // with gaps, anchored as close to their reference as possible.
+      let nextAvailableTop = -Infinity;
+
+      for (const m of measured) {
+        const targetTop = Math.max(m.naturalTop, nextAvailableTop);
+        const offset = targetTop - m.naturalTop;
+        if (offset > 0.5) {
+          m.el.style.transform = `translateY(${offset}px)`;
+        } else {
+          m.el.style.transform = "";
         }
+        nextAvailableTop = targetTop + m.height + SIDENOTE_GAP;
       }
     }
 
