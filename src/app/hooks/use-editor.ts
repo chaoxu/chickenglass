@@ -331,7 +331,9 @@ export function useEditor(
     const scroller = newView.scrollDOM;
     const onScroll = () => {
       setScrollTop(scroller.scrollTop);
-      setViewportFrom(newView.viewport.from);
+      // Use lineBlockAtHeight for accurate position — viewport.from can lag behind
+      const topPos = newView.lineBlockAtHeight(scroller.scrollTop).from;
+      setViewportFrom(topPos);
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
 
