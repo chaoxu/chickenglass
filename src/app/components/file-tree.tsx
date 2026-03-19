@@ -2,6 +2,51 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import type { FileEntry } from "../file-manager";
 import { isTauri, revealInFinder } from "../tauri-fs";
+import {
+  File,
+  FileText,
+  FileCode,
+  FileJson,
+  BookOpen,
+  Settings,
+  FolderClosed,
+  FolderOpen,
+} from "lucide-react";
+
+const ICON_SIZE = 14;
+const ICON_CLASS = "shrink-0 text-[var(--cg-muted)]";
+
+/** Map file extension to an icon component. */
+function FileIcon({ name }: { name: string }) {
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : "";
+  switch (ext) {
+    case "md":
+    case "mdx":
+    case "txt":
+      return <FileText size={ICON_SIZE} className={ICON_CLASS} />;
+    case "ts":
+    case "tsx":
+    case "js":
+    case "jsx":
+    case "rs":
+    case "py":
+    case "go":
+    case "css":
+    case "html":
+      return <FileCode size={ICON_SIZE} className={ICON_CLASS} />;
+    case "json":
+      return <FileJson size={ICON_SIZE} className={ICON_CLASS} />;
+    case "bib":
+      return <BookOpen size={ICON_SIZE} className={ICON_CLASS} />;
+    case "yaml":
+    case "yml":
+    case "toml":
+    case "csl":
+      return <Settings size={ICON_SIZE} className={ICON_CLASS} />;
+    default:
+      return <File size={ICON_SIZE} className={ICON_CLASS} />;
+  }
+}
 
 interface FileTreeProps {
   root: FileEntry | null;
@@ -166,9 +211,10 @@ function FileNode({
             }
           }}
         >
-          <span className="text-[10px] text-[var(--cg-muted)] w-3 shrink-0">
-            {open ? "\u25BC" : "\u25B6"}
-          </span>
+          {open
+            ? <FolderOpen size={ICON_SIZE} className={ICON_CLASS} />
+            : <FolderClosed size={ICON_SIZE} className={ICON_CLASS} />
+          }
 
           {renaming ? (
             <input
@@ -268,7 +314,7 @@ function FileNode({
       onContextMenu={handleContextMenu}
       onKeyDown={handleItemKey}
     >
-      <span className="text-[10px] text-[var(--cg-muted)] w-3 shrink-0">{"\u25CB"}</span>
+      <FileIcon name={entry.name} />
 
       {renaming ? (
         <input
