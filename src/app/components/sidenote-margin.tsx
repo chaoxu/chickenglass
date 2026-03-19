@@ -142,13 +142,12 @@ export function SidenoteMargin({ view, scrollTop }: SidenoteMarginProps) {
   return (
     <div
       ref={containerRef}
-      className="absolute right-0 top-0 w-56 pointer-events-none select-none"
-      style={{ transform: `translateX(100%)` }}
+      className="w-56 shrink-0 relative overflow-y-auto border-l border-[var(--cg-border)] bg-[var(--cg-bg)]"
     >
       {entries.map((entry, i) => (
         <div
           key={entry.id}
-          className="absolute right-0 w-56 text-xs leading-relaxed text-[var(--cg-muted)] pointer-events-auto"
+          className="absolute w-full px-3 text-xs leading-relaxed text-[var(--cg-muted)]"
           style={{
             top: `${positions[i]}px`,
             fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
