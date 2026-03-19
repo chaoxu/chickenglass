@@ -244,6 +244,187 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
 }
 
 
+/** Hide all fence syntax for include blocks so content flows seamlessly. */
+function addIncludeDecorations(
+  div: FencedDivInfo,
+  items: Range<Decoration>[],
+): void {
+  // Hide the entire opening fence line
+  items.push(decorationHidden.range(div.fenceFrom, div.fenceTo));
+  if (div.attrFrom !== undefined && div.attrTo !== undefined) {
+    items.push(decorationHidden.range(div.attrFrom, div.attrTo));
+  }
+  if (div.titleFrom !== undefined && div.titleTo !== undefined) {
+    items.push(decorationHidden.range(div.titleFrom, div.titleTo));
+  }
+  // Hide closing fence
+  if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
+    items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
+  }
+  // Collapse fence lines to zero height
+  items.push(
+    Decoration.line({ class: "cg-include-fence" }).range(div.fenceFrom),
+  );
+  if (div.closeFenceFrom >= 0) {
+    items.push(
+      Decoration.line({ class: "cg-include-fence" }).range(div.closeFenceFrom),
+    );
+  }
+}
+
+/**
+ * Determine whether a fenced div should show its rendered form or raw source.
+ *
+ * Returns true when the block should be rendered (cursor is not on the fence).
+ * Embed blocks require the cursor to be entirely outside the block; regular
+ * blocks only check whether the cursor sits on the opening or closing fence.
+ */
+function shouldShowRendered(
+  state: EditorState,
+  div: FencedDivInfo,
+  focused: boolean,
+): boolean {
+  const cursor = state.selection.main;
+  const openLine = state.doc.lineAt(div.fenceFrom);
+  const cursorOnOpenFence =
+    focused && cursor.from >= openLine.from && cursor.from <= openLine.to;
+  const cursorOnCloseFence =
+    focused &&
+    div.closeFenceFrom >= 0 &&
+    cursor.from >= div.closeFenceFrom &&
+    cursor.from <= div.closeFenceTo;
+  const cursorOnFence = cursorOnOpenFence || cursorOnCloseFence;
+
+  const isEmbed = EMBED_CLASSES.has(div.className);
+  const cursorInsideBlock =
+    focused && cursor.from >= div.from && cursor.from <= div.to;
+  return isEmbed ? !cursorInsideBlock : !cursorOnFence;
+}
+
+/** Replace the opening fence+attrs with a rendered header widget. */
+function addHeaderWidgetDecoration(
+  div: FencedDivInfo,
+  header: string,
+  macros: Record<string, string>,
+  macrosKey: string,
+  items: Range<Decoration>[],
+): void {
+  const replaceEnd = div.titleFrom ?? div.fenceTo;
+  const label = div.titleFrom !== undefined ? header + " " : header;
+  items.push(
+    Decoration.replace({
+      widget: new BlockHeaderWidget(label, macros, macrosKey),
+    }).range(div.fenceFrom, replaceEnd),
+  );
+}
+
+/**
+ * Hide the trailing closing fence colons on a single-line block.
+ *
+ * Also trims any whitespace immediately before the closing `:::`.
+ */
+function addSingleLineClosingFence(
+  state: EditorState,
+  div: FencedDivInfo,
+  items: Range<Decoration>[],
+): void {
+  if (div.closeFenceFrom < 0) return;
+
+  let hideFrom = div.closeFenceFrom;
+  const lineText = state.doc.lineAt(div.closeFenceFrom).text;
+  const lineStart = state.doc.lineAt(div.closeFenceFrom).from;
+  const relPos = hideFrom - lineStart;
+  // Walk back to trim trailing whitespace before :::
+  let trimFrom = relPos;
+  while (
+    trimFrom > 0 &&
+    (lineText.charCodeAt(trimFrom - 1) === 32 ||
+      lineText.charCodeAt(trimFrom - 1) === 9)
+  ) {
+    trimFrom--;
+  }
+  hideFrom = lineStart + trimFrom;
+  items.push(decorationHidden.range(hideFrom, div.closeFenceTo));
+}
+
+/** Hide closing fence text and collapse the line to zero height for multi-line blocks. */
+function addMultiLineClosingFence(
+  div: FencedDivInfo,
+  items: Range<Decoration>[],
+): void {
+  if (div.closeFenceFrom < 0 || div.closeFenceTo < div.closeFenceFrom) return;
+
+  items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
+  items.push(
+    Decoration.line({ class: "cg-include-fence" }).range(div.closeFenceFrom),
+  );
+}
+
+/** Replace embed block body content with an iframe widget. */
+function addEmbedWidget(
+  state: EditorState,
+  div: FencedDivInfo,
+  openLine: { to: number },
+  items: Range<Decoration>[],
+): void {
+  if (div.singleLine || div.closeFenceFrom < 0) return;
+
+  const bodyFrom = openLine.to + 1; // start of first body line
+  const bodyTo = div.closeFenceFrom - 1; // end of last body line (before newline)
+  if (bodyFrom > bodyTo) return;
+
+  const bodyText = state.sliceDoc(bodyFrom, bodyTo);
+  const rawUrl = bodyText.trim();
+  const src = computeEmbedSrc(div.className, rawUrl);
+  if (src) {
+    const widget = new EmbedWidget(src, div.className);
+    widget.sourceFrom = bodyFrom;
+    items.push(Decoration.replace({ widget }).range(bodyFrom, bodyTo));
+  }
+}
+
+/** Render inline math ($...$) in title text (Typora-style: cursor inside shows source). */
+function addTitleMathDecorations(
+  state: EditorState,
+  div: FencedDivInfo,
+  focused: boolean,
+  cursorFrom: number,
+  macros: Record<string, string>,
+  items: Range<Decoration>[],
+): void {
+  if (div.titleFrom === undefined || div.titleTo === undefined) return;
+
+  const titleText = state.sliceDoc(div.titleFrom, div.titleTo);
+  const regex = /\$([^$\n]+)\$/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(titleText)) !== null) {
+    const mathFrom = div.titleFrom + match.index;
+    const mathTo = mathFrom + match[0].length;
+    if (focused && cursorFrom >= mathFrom && cursorFrom <= mathTo) continue;
+    const widget = new MathWidget(match[1], match[0], false, macros);
+    items.push(Decoration.replace({ widget }).range(mathFrom, mathTo));
+  }
+}
+
+/** Add right-aligned QED tombstone on the last content line of proof blocks. */
+function addQedDecoration(
+  state: EditorState,
+  div: FencedDivInfo,
+  items: Range<Decoration>[],
+): void {
+  if (div.closeFenceFrom < 0) return;
+
+  const closeLine = state.doc.lineAt(div.closeFenceFrom);
+  if (closeLine.number > 1) {
+    const lastContentLine = state.doc.line(closeLine.number - 1);
+    if (lastContentLine.from > div.fenceFrom) {
+      items.push(
+        Decoration.line({ class: "cg-block-qed" }).range(lastContentLine.from),
+      );
+    }
+  }
+}
+
 /** Build decorations for all fenced divs using the plugin registry. */
 function buildBlockDecorations(state: EditorState): DecorationSet {
   const registry = state.field(pluginRegistryField);
@@ -264,57 +445,18 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
 
   for (const div of divs) {
     const plugin = getPluginOrFallback(registry, div.className);
-    const isInclude = div.className === "include";
 
     // Include blocks are always invisible — content flows seamlessly
-    if (isInclude) {
-      // Hide the entire opening fence line
-      items.push(decorationHidden.range(div.fenceFrom, div.fenceTo));
-      if (div.attrFrom !== undefined && div.attrTo !== undefined) {
-        items.push(decorationHidden.range(div.attrFrom, div.attrTo));
-      }
-      if (div.titleFrom !== undefined && div.titleTo !== undefined) {
-        items.push(decorationHidden.range(div.titleFrom, div.titleTo));
-      }
-      // Hide closing fence
-      if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
-        items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
-      }
-      // Collapse fence lines to zero height
-      items.push(
-        Decoration.line({ class: "cg-include-fence" }).range(div.fenceFrom),
-      );
-      if (div.closeFenceFrom >= 0) {
-        items.push(
-          Decoration.line({ class: "cg-include-fence" }).range(div.closeFenceFrom),
-        );
-      }
+    if (div.className === "include") {
+      addIncludeDecorations(div, items);
       continue;
     }
 
-    // Check if cursor is on a fence line (opening or closing).
-    // Fences are a semantic pair — editing one should reveal both.
-    const cursor = state.selection.main;
-    const openLine = state.doc.lineAt(div.fenceFrom);
-    const cursorOnOpenFence =
-      focused && cursor.from >= openLine.from && cursor.from <= openLine.to;
-    const cursorOnCloseFence =
-      focused &&
-      div.closeFenceFrom >= 0 &&
-      cursor.from >= div.closeFenceFrom &&
-      cursor.from <= div.closeFenceTo;
-    const cursorOnFence = cursorOnOpenFence || cursorOnCloseFence;
-
-    // For embed blocks, check if cursor is anywhere inside the block.
-    // When cursor is inside, show raw source for editing; when outside, show iframe.
+    const showRendered = shouldShowRendered(state, div, focused);
     const isEmbed = EMBED_CLASSES.has(div.className);
-    const cursorInsideBlock =
-      focused && cursor.from >= div.from && cursor.from <= div.to;
-    const showRendered = isEmbed ? !cursorInsideBlock : !cursorOnFence;
 
     if (showRendered && plugin) {
       const numberEntry = counterState?.byPosition.get(div.from);
-      // Build label without title — title stays as editable text
       const labelAttrs: BlockAttrs = {
         type: div.className,
         id: div.id,
@@ -329,66 +471,18 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
         }).range(div.from),
       );
 
-      if (div.singleLine) {
-        // Single-line block: `::: {.class} Title content :::` on one line.
-        // Replace fence+attrs with label widget. Title stays as editable text.
-        // Hide only the trailing ::: colons.
-        const replaceEnd = div.titleFrom ?? div.fenceTo;
-        const label = div.titleFrom !== undefined ? spec.header + " " : spec.header;
-        items.push(
-          Decoration.replace({
-            widget: new BlockHeaderWidget(label, macros, macrosKey),
-          }).range(div.fenceFrom, replaceEnd),
-        );
-        // Hide trailing closing fence colons (just the ::: at the end, not the whole line)
-        if (div.closeFenceFrom >= 0) {
-          // Also hide any whitespace before the closing :::
-          let hideFrom = div.closeFenceFrom;
-          const lineText = state.doc.lineAt(div.closeFenceFrom).text;
-          const lineStart = state.doc.lineAt(div.closeFenceFrom).from;
-          const relPos = hideFrom - lineStart;
-          // Walk back to trim trailing whitespace before :::
-          let trimFrom = relPos;
-          while (trimFrom > 0 && (lineText.charCodeAt(trimFrom - 1) === 32 || lineText.charCodeAt(trimFrom - 1) === 9)) {
-            trimFrom--;
-          }
-          hideFrom = lineStart + trimFrom;
-          items.push(decorationHidden.range(hideFrom, div.closeFenceTo));
-        }
-      } else {
-        // Multi-line block: replace fence+attrs with label widget, title stays editable.
-        const replaceEnd = div.titleFrom ?? div.fenceTo;
-        const label = div.titleFrom !== undefined ? spec.header + " " : spec.header;
-        items.push(
-          Decoration.replace({
-            widget: new BlockHeaderWidget(label, macros, macrosKey),
-          }).range(div.fenceFrom, replaceEnd),
-        );
+      // Header widget (shared for single-line and multi-line)
+      addHeaderWidgetDecoration(div, spec.header, macros, macrosKey, items);
 
-        // Hide closing fence text AND collapse the line to zero height
-        if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
-          items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
-          items.push(
-            Decoration.line({ class: "cg-include-fence" }).range(div.closeFenceFrom),
-          );
-        }
+      if (div.singleLine) {
+        addSingleLineClosingFence(state, div, items);
+      } else {
+        addMultiLineClosingFence(div, items);
 
         // Embed blocks: replace body content with iframe widget
-        if (isEmbed && !div.singleLine && div.closeFenceFrom >= 0) {
-          const bodyFrom = openLine.to + 1; // start of first body line
-          const bodyTo = div.closeFenceFrom - 1; // end of last body line (before newline)
-          if (bodyFrom <= bodyTo) {
-            const bodyText = state.sliceDoc(bodyFrom, bodyTo);
-            const rawUrl = bodyText.trim();
-            const src = computeEmbedSrc(div.className, rawUrl);
-            if (src) {
-              const widget = new EmbedWidget(src, div.className);
-              widget.sourceFrom = bodyFrom;
-              items.push(
-                Decoration.replace({ widget }).range(bodyFrom, bodyTo),
-              );
-            }
-          }
+        if (isEmbed) {
+          const openLine = state.doc.lineAt(div.fenceFrom);
+          addEmbedWidget(state, div, openLine, items);
         }
       }
     } else if (plugin) {
@@ -400,31 +494,13 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       );
     }
 
-    // Render inline math ($...$) in title text (Typora-style: cursor inside → source)
-    if (div.titleFrom !== undefined && div.titleTo !== undefined) {
-      const titleText = state.sliceDoc(div.titleFrom, div.titleTo);
-      const regex = /\$([^$\n]+)\$/g;
-      let match: RegExpExecArray | null;
-      while ((match = regex.exec(titleText)) !== null) {
-        const mathFrom = div.titleFrom + match.index;
-        const mathTo = mathFrom + match[0].length;
-        if (focused && cursor.from >= mathFrom && cursor.from <= mathTo) continue;
-        const widget = new MathWidget(match[1], match[0], false, macros);
-        items.push(Decoration.replace({ widget }).range(mathFrom, mathTo));
-      }
-    }
+    // Render inline math in title text
+    const cursor = state.selection.main;
+    addTitleMathDecorations(state, div, focused, cursor.from, macros, items);
 
-    // QED tombstone: add right-aligned ∎ on the last content line of proof blocks
-    if (plugin && plugin.defaults?.qedSymbol && div.closeFenceFrom >= 0) {
-      const closeLine = state.doc.lineAt(div.closeFenceFrom);
-      if (closeLine.number > 1) {
-        const lastContentLine = state.doc.line(closeLine.number - 1);
-        if (lastContentLine.from > div.fenceFrom) {
-          items.push(
-            Decoration.line({ class: "cg-block-qed" }).range(lastContentLine.from),
-          );
-        }
-      }
+    // QED tombstone for proof blocks
+    if (plugin?.defaults?.qedSymbol) {
+      addQedDecoration(state, div, items);
     }
   }
 
