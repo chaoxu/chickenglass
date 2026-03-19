@@ -3,6 +3,7 @@ import { useState, useCallback } from "react";
 interface HeadingEntry {
   level: number;
   text: string;
+  number: string;
   from: number;
 }
 
@@ -92,8 +93,8 @@ export function Outline({ headings, onSelect }: OutlineProps) {
               onClick={() => onSelect(heading.from)}
               title={heading.text}
             >
-              <span className="text-[10px] text-[var(--cg-muted)] shrink-0 font-mono">
-                {"#".repeat(heading.level)}
+              <span className="text-[10px] text-[var(--cg-muted)] shrink-0 font-mono tabular-nums">
+                {heading.number}
               </span>
               <span className="truncate font-mono">{heading.text}</span>
             </button>

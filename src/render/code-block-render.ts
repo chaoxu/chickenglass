@@ -121,6 +121,14 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
     // Hide opening fence line (the ``` and language tag).
     items.push(decorationHidden.range(block.openFenceFrom, block.openFenceTo));
 
+    // Add cg-codeblock background to every body line inside the block.
+    const openLine = state.doc.lineAt(block.openFenceFrom);
+    const closeLine = state.doc.lineAt(block.closeFenceFrom);
+    for (let ln = openLine.number + 1; ln < closeLine.number; ln++) {
+      const line = state.doc.line(ln);
+      items.push(Decoration.line({ class: "cg-codeblock" }).range(line.from));
+    }
+
     // Hide closing fence line (the closing ```).
     // Only hide if closing fence is on a different line than opening.
     if (block.closeFenceFrom !== block.openFenceFrom) {

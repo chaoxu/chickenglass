@@ -114,7 +114,7 @@ function AppInner() {
   const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
 
   // ── Outline headings ───────────────────────────────────────────────────────
-  const [headings, setHeadings] = useState<Array<{ level: number; text: string; from: number }>>([]);
+  const [headings, setHeadings] = useState<Array<{ level: number; text: string; number: string; from: number }>>([]);
 
   const handleEditorStateChange = useCallback((state: UseEditorReturn) => {
     setEditorState(state);
@@ -122,7 +122,7 @@ function AppInner() {
     // Extract headings from current CM6 view
     if (state.view) {
       const extracted = extractHeadings(state.view.state);
-      setHeadings(extracted.map((h) => ({ level: h.level, text: h.text, from: h.pos })));
+      setHeadings(extracted.map((h) => ({ level: h.level, text: h.text, number: h.number, from: h.pos })));
     } else {
       setHeadings([]);
     }
