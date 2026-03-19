@@ -30,6 +30,42 @@ export interface MenuEventHandlers {
 }
 
 /**
+ * Map from menu-event IDs that invoke a handler on MenuEventHandlers.
+ * To add a new handler-based menu item, add an entry here.
+ */
+const handlerEventMap: Record<string, keyof MenuEventHandlers> = {
+  // ── File ────────────────────────────────────────────────────────
+  file_save: "onSave",
+  file_save_as: "onSaveAs",
+  file_close_tab: "onCloseTab",
+  file_open_folder: "onOpenFolder",
+  file_export: "onExport",
+
+  // ── Edit (custom items — predefined Undo/Copy/etc. handled by OS)
+  edit_find: "onShowSearch",
+
+  // ── View ────────────────────────────────────────────────────────
+  view_toggle_sidebar: "onToggleSidebar",
+
+  // ── Help ────────────────────────────────────────────────────────
+  help_about: "onAbout",
+  help_shortcuts: "onShowShortcuts",
+};
+
+/**
+ * Map from menu-event IDs that dispatch a cg:format event for CM6.
+ * To add a new format action, add an entry here.
+ */
+const formatEventMap: Record<string, string> = {
+  format_bold: "bold",
+  format_italic: "italic",
+  format_code: "code",
+  format_strikethrough: "strikethrough",
+  format_highlight: "highlight",
+  format_link: "link",
+};
+
+/**
  * Listen for native Tauri menu events and dispatch to handlers.
  *
  * Uses a ref to avoid re-subscribing on every handler change.
@@ -53,68 +89,23 @@ export function useMenuEvents(handlers: MenuEventHandlers): void {
         const id = event.payload;
         const h = handlersRef.current;
 
-        switch (id) {
-          // ── File ────────────────────────────────────────────────────────
-          case "file_save":
-            h.onSave?.();
-            break;
-          case "file_save_as":
-            h.onSaveAs?.();
-            break;
-          case "file_close_tab":
-            h.onCloseTab?.();
-            break;
-          case "file_open_folder":
-            h.onOpenFolder?.();
-            break;
-          case "file_export":
-            h.onExport?.();
-            break;
-
-          // ── Edit (custom items — predefined Undo/Copy/etc. handled by OS)
-          case "edit_find":
-            h.onShowSearch?.();
-            break;
-
-          // ── View ────────────────────────────────────────────────────────
-          case "view_toggle_sidebar":
-            h.onToggleSidebar?.();
-            break;
-
-          // ── Format (dispatched as cg:format events for CM6) ─────────────
-          case "format_bold":
-            dispatchFormatEvent("bold");
-            break;
-          case "format_italic":
-            dispatchFormatEvent("italic");
-            break;
-          case "format_code":
-            dispatchFormatEvent("code");
-            break;
-          case "format_strikethrough":
-            dispatchFormatEvent("strikethrough");
-            break;
-          case "format_highlight":
-            dispatchFormatEvent("highlight");
-            break;
-          case "format_link":
-            dispatchFormatEvent("link");
-            break;
-
-          // ── Help ────────────────────────────────────────────────────────
-          case "help_about":
-            h.onAbout?.();
-            break;
-          case "help_shortcuts":
-            h.onShowShortcuts?.();
-            break;
-
-          // file_new, file_open_file, file_quit, view_zoom_in, view_zoom_out,
-          // view_focus_mode, view_debug, edit_replace: not yet wired to frontend
-          // handlers. They can be added when those features are implemented.
-          default:
-            break;
+        // Handler-based events (file, edit, view, help)
+        const handlerKey = handlerEventMap[id];
+        if (handlerKey) {
+          h[handlerKey]?.();
+          return;
         }
+
+        // Format events dispatched as cg:format CustomEvents for CM6
+        const formatAction = formatEventMap[id];
+        if (formatAction) {
+          dispatchFormatEvent(formatAction);
+          return;
+        }
+
+        // file_new, file_open_file, file_quit, view_zoom_in, view_zoom_out,
+        // view_focus_mode, view_debug, edit_replace: not yet wired to frontend
+        // handlers. They can be added when those features are implemented.
       });
     };
 
