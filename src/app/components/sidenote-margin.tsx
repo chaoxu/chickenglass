@@ -158,7 +158,24 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
         "overflow: visible",
         "pointer-events: none",  // let clicks pass through to editor
         "z-index: 1",
+        "box-sizing: border-box",
       ].join(";");
+
+      // Visual separator line between editor content and sidenote column
+      const separator = document.createElement("div");
+      separator.className = "cg-sidenote-separator";
+      separator.style.cssText = [
+        "position: absolute",
+        "top: 0",
+        "left: 0",
+        "width: 1px",
+        "height: 100000px", // large fixed height — parent has height:0 + overflow:visible
+        "background: var(--cg-border)",
+        "opacity: 0.5",
+        "pointer-events: none",
+      ].join(";");
+      container.appendChild(separator);
+
       scroller.style.position = "relative";
       scroller.appendChild(container);
     }
@@ -268,6 +285,8 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
               fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
               pointerEvents: "auto",
               cursor: "pointer",
+              overflowWrap: "break-word",
+              boxSizing: "border-box",
             }}
           >
             <span
