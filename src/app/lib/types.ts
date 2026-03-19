@@ -14,8 +14,11 @@ export interface Settings {
   tabSize: number;
   showLineNumbers: boolean;
   wordWrap: boolean;
+  /** @deprecated Use `enabledPlugins["spellcheck"]` instead. Kept for migration. */
   spellCheck: boolean;
   editorMode: EditorMode;
   theme: string;
   defaultExportFormat: ExportFormat;
+  /** Per-plugin enabled/disabled overrides. Keys are plugin IDs, values are booleans. */
+  enabledPlugins: Record<string, boolean>;
 }

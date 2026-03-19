@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS: Settings = {
   editorMode: "rendered",
   theme: "system",
   defaultExportFormat: "pdf",
+  enabledPlugins: {},
 };
 
 function loadSettings(): Settings {
@@ -30,7 +31,14 @@ function loadSettings(): Settings {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
     const parsed = JSON.parse(raw) as Partial<Settings>;
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    const loaded = { ...DEFAULT_SETTINGS, ...parsed };
+
+    // Migrate legacy spellCheck boolean into enabledPlugins
+    if (loaded.spellCheck !== undefined && loaded.enabledPlugins?.spellcheck === undefined) {
+      loaded.enabledPlugins = { ...loaded.enabledPlugins, spellcheck: loaded.spellCheck };
+    }
+
+    return loaded;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

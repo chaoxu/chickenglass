@@ -67,6 +67,12 @@ export interface UseEditorOptions {
   onCursorChange?: (pos: number) => void;
   /** Called with the parsed frontmatter state whenever it changes. */
   onFrontmatterChange?: (fm: FrontmatterState | undefined) => void;
+  /**
+   * External plugin manager. When provided, useEditor uses it instead of
+   * creating its own. This allows the caller (e.g., AppInner) to share a
+   * single manager across editor recreations and sync it with settings.
+   */
+  pluginManager?: EditorPluginManager;
 }
 
 /** Values returned by useEditor. */
@@ -193,13 +199,16 @@ export function useEditor(
     onDocChange,
     onCursorChange,
     onFrontmatterChange,
+    pluginManager: externalPluginManager,
   } = options;
 
-  const pluginManager = useMemo(() => {
+  const fallbackManager = useMemo(() => {
     const m = new EditorPluginManager();
     defaultEditorPlugins.forEach((p) => m.register(p));
     return m;
   }, []);
+
+  const pluginManager = externalPluginManager ?? fallbackManager;
 
   const [view, setView] = useState<EditorView | null>(null);
   const [wordCount, setWordCount] = useState(0);

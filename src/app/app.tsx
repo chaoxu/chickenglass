@@ -29,6 +29,8 @@ import { BackgroundIndexer } from "../index";
 import { extractHeadings } from "./heading-ancestry";
 import type { EditorMode } from "../editor";
 import { setEditorMode } from "../editor";
+import { EditorPluginManager } from "../editor/editor-plugin";
+import { defaultEditorPlugins } from "../editor/editor-plugins-registry";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -56,6 +58,13 @@ function AppInner() {
 
   // ── Indexer for search ─────────────────────────────────────────────────────
   const [indexer] = useState(() => new BackgroundIndexer());
+
+  // ── Plugin manager (shared across editor recreations) ───────────────────
+  const [pluginManager] = useState(() => {
+    const m = new EditorPluginManager();
+    defaultEditorPlugins.forEach((p) => m.register(p));
+    return m;
+  });
 
   // ── File tree ──────────────────────────────────────────────────────────────
   const [fileTree, setFileTree] = useState<FileEntry | null>(null);
@@ -301,6 +310,18 @@ function AppInner() {
   const hasDirtyFiles = openTabs.some((t) => t.dirty);
   useAutoSave(hasDirtyFiles, saveFile, settings.autoSaveInterval);
 
+  // ── Sync enabledPlugins settings → plugin manager ─────────────────────────
+  useEffect(() => {
+    const view = editorState?.view ?? null;
+    for (const { plugin, enabled } of pluginManager.getPlugins()) {
+      const settingEnabled = settings.enabledPlugins[plugin.id];
+      // Only override if the setting explicitly specifies (not undefined)
+      if (settingEnabled !== undefined && settingEnabled !== enabled) {
+        pluginManager.setEnabled(view, plugin.id, settingEnabled);
+      }
+    }
+  }, [settings.enabledPlugins, editorState?.view, pluginManager]);
+
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useHotkeys([
     { key: "mod+s", handler: () => { void saveFile(); } },
@@ -512,6 +533,7 @@ function AppInner() {
             projectConfig={projectConfig}
             theme={resolvedTheme}
             fs={fs}
+            pluginManager={pluginManager}
             onDocChange={handleDocChange}
             onStateChange={handleEditorStateChange}
           />
