@@ -8,6 +8,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { FileEntry, FileSystem } from "./file-manager";
+import { uint8ArrayToBase64 } from "./lib/utils";
 
 /** Check whether we're running inside a Tauri webview. */
 export function isTauri(): boolean {
@@ -72,12 +73,7 @@ export class TauriFileSystem implements FileSystem {
   }
 
   async writeFileBinary(path: string, data: Uint8Array): Promise<void> {
-    // Convert Uint8Array to base64 string for transport to Rust
-    let binary = "";
-    for (let i = 0; i < data.length; i++) {
-      binary += String.fromCharCode(data[i]);
-    }
-    const dataBase64 = btoa(binary);
+    const dataBase64 = uint8ArrayToBase64(data);
     await invoke("write_file_binary", { path, dataBase64 });
   }
 }

@@ -12,6 +12,7 @@ import { isTauri } from "./tauri-fs";
 import type { FileSystem, FileEntry } from "./file-manager";
 import { markdownToHtml } from "./markdown-to-html";
 import type { ExportFormat } from "./lib/types";
+import { basename } from "./lib/utils";
 
 export type { ExportFormat };
 
@@ -250,8 +251,8 @@ async function exportHtml(
   sourcePath: string,
   fs?: FileSystem,
 ): Promise<string> {
-  const basename = sourcePath.split("/").pop() ?? sourcePath;
-  const title = basename.endsWith(".md") ? basename.slice(0, -3) : basename;
+  const name = basename(sourcePath);
+  const title = name.endsWith(".md") ? name.slice(0, -3) : name;
   const html = buildHtmlDocument(content, title);
   const outputPath = deriveOutputPath(sourcePath, "html");
 
@@ -271,7 +272,7 @@ async function exportHtml(
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = outputPath.split("/").pop() ?? "export.html";
+  a.download = basename(outputPath);
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

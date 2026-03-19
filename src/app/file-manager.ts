@@ -1,3 +1,5 @@
+import { uint8ArrayToBase64 } from "./lib/utils";
+
 /** File entry representing a single file or directory in the tree. */
 export interface FileEntry {
   /** File name (without path). */
@@ -164,12 +166,7 @@ export class MemoryFileSystem implements FileSystem {
         this.dirs.add(dirPath);
       }
     }
-    // Convert Uint8Array to base64 string for storage
-    let binary = "";
-    for (let i = 0; i < data.length; i++) {
-      binary += String.fromCharCode(data[i]);
-    }
-    this.files.set(path, btoa(binary));
+    this.files.set(path, uint8ArrayToBase64(data));
   }
 
   async deleteFile(path: string): Promise<void> {

@@ -10,6 +10,7 @@
 
 import type { EditorView } from "@codemirror/view";
 import { isTauri } from "../app/tauri-fs";
+import { basename } from "../app/lib/utils";
 import {
   isImageMime,
   IMAGE_MIME_EXT,
@@ -119,7 +120,7 @@ async function insertImageTauri(view: EditorView): Promise<void> {
     if (!selected) return; // User cancelled
 
     const sourcePath = selected as string;
-    const fileName = sourcePath.split("/").pop() ?? sourcePath.split("\\").pop() ?? sourcePath;
+    const fileName = basename(sourcePath);
     const alt = altTextFromFilename(fileName);
 
     // Read the imageFolder from frontmatter (or default to "assets")

@@ -13,6 +13,7 @@ import {
 } from "@codemirror/view";
 import { type Extension, type Range } from "@codemirror/state";
 import { buildDecorations, RenderWidget } from "./render-utils";
+import { basename } from "../app/lib/utils";
 
 /** A region of the document that came from an included file. */
 export interface IncludeRegion {
@@ -69,7 +70,7 @@ class IncludeLabelPlugin implements PluginValue {
 
       // Widget label at start of region
       const active = cursor >= from && cursor <= to;
-      const filename = region.file.split("/").pop() ?? region.file;
+      const filename = basename(region.file);
       const startLine = doc.lineAt(from);
       items.push(Decoration.widget({ widget: new IncludeLabelWidget(filename, active), side: 1 }).range(startLine.from));
 

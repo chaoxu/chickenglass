@@ -7,6 +7,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { basename } from "./lib/utils";
 
 /** Callback to check whether a file is open in a tab. */
 export type IsFileOpenFn = (path: string) => boolean;
@@ -108,7 +109,7 @@ export class FileWatcher {
 
     const message = document.createElement("span");
     message.className = "file-watcher-message";
-    const displayName = path.split("/").pop() ?? path;
+    const displayName = basename(path);
     message.textContent = `"${displayName}" changed externally. Reload?`;
     bar.appendChild(message);
 

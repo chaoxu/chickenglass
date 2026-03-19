@@ -14,7 +14,7 @@
 
 import { useMemo } from "react";
 import type { PaletteCommand } from "../components/command-palette";
-import { modKey } from "../lib/utils";
+import { basename, modKey } from "../lib/utils";
 
 /** Handlers injected by the parent for commands that need side effects. */
 export interface CommandHandlers {
@@ -103,7 +103,7 @@ export function useCommands(handlers: CommandHandlers): PaletteCommand[] {
       // ── Recent files (dynamic) ────────────────────────────────────────────
       ...(handlers.recentFiles ?? []).map((path, i) => ({
         id: `file.recent-${i}`,
-        label: `Open Recent: ${path.split("/").pop() ?? path}`,
+        label: `Open Recent: ${basename(path)}`,
         category: "File",
         action: () => handlers.onOpenRecentFile?.(path),
       })),

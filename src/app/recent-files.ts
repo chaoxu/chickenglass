@@ -5,32 +5,23 @@
  * the last MAX_FOLDERS recently opened folder paths in localStorage.
  */
 
+import { readLocalStorage, writeLocalStorage } from "./lib/utils";
+
 const RECENT_FILES_KEY = "cg-recent-files";
 const RECENT_FOLDERS_KEY = "cg-recent-folders";
 const MAX_FILES = 10;
 const MAX_FOLDERS = 5;
 
-/** Read a string array from localStorage, returning [] on parse errors. */
+/** Read a string array from localStorage, filtering out non-strings. */
 function readList(key: string): string[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((v): v is string => typeof v === "string");
-  } catch {
-    // localStorage unavailable or corrupt JSON — start with empty list
-    return [];
-  }
+  const parsed = readLocalStorage<unknown[]>(key, []);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((v): v is string => typeof v === "string");
 }
 
 /** Persist a string array to localStorage. */
 function writeList(key: string, list: string[]): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(list));
-  } catch {
-    // localStorage unavailable (e.g. private mode) — ignore silently
-  }
+  writeLocalStorage(key, list);
 }
 
 /**

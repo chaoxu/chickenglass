@@ -10,6 +10,8 @@
  * State is persisted to localStorage under the key `cg-window-state`.
  */
 
+import { readLocalStorage, writeLocalStorage } from "./lib/utils";
+
 /** Persisted state for a single editor tab. */
 export interface TabState {
   /** Absolute file path. */
@@ -58,17 +60,9 @@ const DEFAULT_STATE: WindowState = {
  * malformed.
  */
 export function loadWindowState(): WindowState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_STATE };
-
-    const parsed: unknown = JSON.parse(raw);
-    if (!isWindowState(parsed)) return { ...DEFAULT_STATE };
-    return parsed;
-  } catch {
-    // localStorage unavailable or corrupt JSON — use defaults
-    return { ...DEFAULT_STATE };
-  }
+  const parsed = readLocalStorage<unknown>(STORAGE_KEY, null);
+  if (!isWindowState(parsed)) return { ...DEFAULT_STATE };
+  return parsed;
 }
 
 /**
@@ -76,16 +70,16 @@ export function loadWindowState(): WindowState {
  * Silently ignores storage errors (e.g. private-browsing quota limits).
  */
 export function saveWindowState(state: WindowState): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // Quota exceeded or storage unavailable — ignore.
-  }
+  writeLocalStorage(STORAGE_KEY, state);
 }
 
 /** Clear the persisted window state from localStorage. */
 export function clearWindowState(): void {
-  localStorage.removeItem(STORAGE_KEY);
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // localStorage unavailable
+  }
 }
 
 /**

@@ -9,6 +9,7 @@
 
 import { useState, useCallback } from "react";
 import type { Settings } from "../lib/types";
+import { readLocalStorage, writeLocalStorage } from "../lib/utils";
 
 const STORAGE_KEY = "cg-settings";
 
@@ -29,30 +30,19 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 function loadSettings(): Settings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS };
-    const parsed = JSON.parse(raw) as Partial<Settings>;
-    const loaded = { ...DEFAULT_SETTINGS, ...parsed };
+  const parsed = readLocalStorage<Partial<Settings>>(STORAGE_KEY, {});
+  const loaded = { ...DEFAULT_SETTINGS, ...parsed };
 
-    // Migrate legacy spellCheck boolean into enabledPlugins
-    if (loaded.spellCheck !== undefined && loaded.enabledPlugins?.spellcheck === undefined) {
-      loaded.enabledPlugins = { ...loaded.enabledPlugins, spellcheck: loaded.spellCheck };
-    }
-
-    return loaded;
-  } catch {
-    // localStorage unavailable or corrupt JSON — use defaults
-    return { ...DEFAULT_SETTINGS };
+  // Migrate legacy spellCheck boolean into enabledPlugins
+  if (loaded.spellCheck !== undefined && loaded.enabledPlugins?.spellcheck === undefined) {
+    loaded.enabledPlugins = { ...loaded.enabledPlugins, spellcheck: loaded.spellCheck };
   }
+
+  return loaded;
 }
 
 function persistSettings(settings: Settings): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // localStorage unavailable (test environments, private browsing)
-  }
+  writeLocalStorage(STORAGE_KEY, settings);
 }
 
 export interface UseSettingsReturn {
