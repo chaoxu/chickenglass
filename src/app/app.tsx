@@ -76,6 +76,7 @@ function AppInner() {
   // ── File tree ──────────────────────────────────────────────────────────────
   const [fileTree, setFileTree] = useState<FileEntry | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(224);
   const [sidebarTab, setSidebarTab] = useState<"files" | "outline" | "symbols">("files");
 
   const refreshTree = useCallback(async () => {
@@ -373,8 +374,8 @@ function AppInner() {
   }, [openTabs, activeTab, saveWindowState]);
 
   useEffect(() => {
-    saveWindowState({ sidebarWidth: sidebarCollapsed ? 0 : 220 });
-  }, [sidebarCollapsed, saveWindowState]);
+    saveWindowState({ sidebarWidth: sidebarCollapsed ? 0 : sidebarWidth });
+  }, [sidebarCollapsed, sidebarWidth, saveWindowState]);
 
   // ── Export handlers ──────────────────────────────────────────────────────
   const handleExportHtml = useCallback(() => {
@@ -533,9 +534,11 @@ function AppInner() {
       };
       void restoreTabs();
 
-      // Restore sidebar collapsed state.
+      // Restore sidebar collapsed state and width.
       if (windowState.sidebarWidth === 0) {
         setSidebarCollapsed(true);
+      } else if (windowState.sidebarWidth > 0) {
+        setSidebarWidth(windowState.sidebarWidth);
       }
       return;
     }
@@ -624,7 +627,7 @@ function AppInner() {
   return (
     <div className="flex h-screen overflow-hidden" onDragOver={handleDragOver} onDrop={handleDrop}>
       {/* Sidebar */}
-      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((v) => !v)}>
+      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((v) => !v)} width={sidebarWidth} onWidthChange={setSidebarWidth}>
         {/* Tab switcher */}
         <div className="flex border-b border-[var(--cg-border)] shrink-0">
           <button
