@@ -1,7 +1,6 @@
 /**
  * Right-margin filename decoration for include regions.
- * Uses a StateField for Decoration.line (required by CM6) and
- * a ViewPlugin for the widget.
+ * Single ViewPlugin computes both line decorations and widget labels in one pass.
  */
 
 import {
@@ -13,12 +12,7 @@ import {
   ViewPlugin,
   WidgetType,
 } from "@codemirror/view";
-import {
-  type EditorState,
-  type Extension,
-  type Range,
-  StateField,
-} from "@codemirror/state";
+import { type Extension, type Range } from "@codemirror/state";
 import { buildDecorations } from "./render-utils";
 
 /** A region of the document that came from an included file. */
@@ -36,37 +30,6 @@ export interface SourceMap {
 function getSourceMap(): SourceMap | null {
   return (window as unknown as { __cgSourceMap?: SourceMap }).__cgSourceMap ?? null;
 }
-
-// ── StateField: Decoration.line for cg-include-region class ──────────────────
-
-function buildLineDecorations(state: EditorState): DecorationSet {
-  const sourceMap = getSourceMap();
-  if (!sourceMap || sourceMap.regions.length === 0) return Decoration.none;
-
-  const items: Range<Decoration>[] = [];
-  for (const region of sourceMap.regions) {
-    const from = Math.min(region.from, state.doc.length);
-    const to = Math.min(region.to, state.doc.length);
-    if (from >= to) continue;
-    const startLine = state.doc.lineAt(from);
-    const endLine = state.doc.lineAt(to);
-    for (let ln = startLine.number; ln <= endLine.number; ln++) {
-      items.push(Decoration.line({ class: "cg-include-region" }).range(state.doc.line(ln).from));
-    }
-  }
-  return buildDecorations(items);
-}
-
-const includeLabelLineField = StateField.define<DecorationSet>({
-  create(state) { return buildLineDecorations(state); },
-  update(value, tr) {
-    if (tr.docChanged || tr.selection) return buildLineDecorations(tr.state);
-    return value;
-  },
-  provide(field) { return EditorView.decorations.from(field); },
-});
-
-// ── ViewPlugin: widget label at start of each region ─────────────────────────
 
 class IncludeLabelWidget extends WidgetType {
   constructor(private readonly filename: string, private readonly active: boolean) {
@@ -99,22 +62,30 @@ class IncludeLabelPlugin implements PluginValue {
     const items: Range<Decoration>[] = [];
     const cursor = view.state.selection.main.head;
     const doc = view.state.doc;
+    const lineDeco = Decoration.line({ class: "cg-include-region" });
+
     for (const region of sourceMap.regions) {
       const from = Math.min(region.from, doc.length);
       const to = Math.min(region.to, doc.length);
       if (from >= to) continue;
+
+      // Widget label at start of region
       const active = cursor >= from && cursor <= to;
       const filename = region.file.split("/").pop() ?? region.file;
-      const line = doc.lineAt(from);
-      items.push(Decoration.widget({ widget: new IncludeLabelWidget(filename, active), side: 1 }).range(line.from));
+      const startLine = doc.lineAt(from);
+      items.push(Decoration.widget({ widget: new IncludeLabelWidget(filename, active), side: 1 }).range(startLine.from));
+
+      // Line decorations for every line in the region
+      const endLine = doc.lineAt(to);
+      for (let ln = startLine.number; ln <= endLine.number; ln++) {
+        items.push(lineDeco.range(doc.line(ln).from));
+      }
     }
     return buildDecorations(items);
   }
 }
 
-const includeLabelWidgetPlugin = ViewPlugin.fromClass(IncludeLabelPlugin, {
+/** CM6 extension that renders include region labels in the right margin. */
+export const includeLabelPlugin: Extension = ViewPlugin.fromClass(IncludeLabelPlugin, {
   decorations: (v) => v.decorations,
 });
-
-/** CM6 extension that renders include region labels in the right margin. */
-export const includeLabelPlugin: Extension = [includeLabelLineField, includeLabelWidgetPlugin];
