@@ -15,14 +15,22 @@ const STORAGE_KEY = "cg-theme";
 
 /** Read the persisted theme, defaulting to "system". */
 export function loadTheme(): Theme {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw === "light" || raw === "dark" || raw === "system") return raw;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === "light" || raw === "dark" || raw === "system") return raw;
+  } catch {
+    // localStorage unavailable (test environments, private browsing)
+  }
   return "system";
 }
 
 /** Persist the theme choice. */
 export function saveTheme(theme: Theme): void {
-  localStorage.setItem(STORAGE_KEY, theme);
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    // localStorage unavailable
+  }
 }
 
 type ThemeChangeHandler = (resolved: "light" | "dark") => void;
@@ -102,6 +110,7 @@ export class ThemeManager {
 
   private startMediaListener(): void {
     if (this.mediaQuery) return; // already listening
+    if (typeof window.matchMedia !== "function") return; // test environments
     this.mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     this.mediaQuery.addEventListener("change", this.mediaListener);
   }
