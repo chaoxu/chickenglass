@@ -26,6 +26,8 @@ export interface FileSystem {
   renameFile(oldPath: string, newPath: string): Promise<void>;
   /** Create a new directory at the given path. */
   createDirectory(path: string): Promise<void>;
+  /** Delete a file at the given path. */
+  deleteFile(path: string): Promise<void>;
 }
 
 /** In-memory filesystem for demo/testing purposes. */
@@ -142,6 +144,13 @@ export class MemoryFileSystem implements FileSystem {
       }
     }
     this.dirs.add(path);
+  }
+
+  async deleteFile(path: string): Promise<void> {
+    if (!this.files.has(path)) {
+      throw new Error(`File not found: ${path}`);
+    }
+    this.files.delete(path);
   }
 }
 

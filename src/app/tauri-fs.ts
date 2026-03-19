@@ -66,4 +66,8 @@ export class TauriFileSystem implements FileSystem {
   async createDirectory(path: string): Promise<void> {
     await invoke("create_directory", { path });
   }
+
+  async deleteFile(path: string): Promise<void> {
+    await invoke("delete_file", { path });
+  }
 }

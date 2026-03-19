@@ -32,6 +32,14 @@ export interface CommandHandlers {
   onToggleTheme?: () => void;
   /** Jump to a specific line number (prompts via browser dialog). */
   onGoToLine?: () => void;
+  /** Show the About dialog. */
+  onAbout?: () => void;
+  /** Open keyboard shortcuts reference. */
+  onShowShortcuts?: () => void;
+  /** Open settings dialog. */
+  onShowSettings?: () => void;
+  /** Open search panel. */
+  onShowSearch?: () => void;
 }
 
 /** Dispatch a formatting event to the document for CM6 to handle. */
@@ -131,6 +139,33 @@ export function useCommands(handlers: CommandHandlers): PaletteCommand[] {
         label: "Toggle Light/Dark Theme",
         category: "View",
         action: () => handlers.onToggleTheme?.(),
+      },
+      {
+        id: "nav.search",
+        label: "Find in Files",
+        shortcut: `${modKey}+Shift+F`,
+        category: "Navigation",
+        action: () => handlers.onShowSearch?.(),
+      },
+      {
+        id: "nav.settings",
+        label: "Settings",
+        shortcut: `${modKey}+,`,
+        category: "Navigation",
+        action: () => handlers.onShowSettings?.(),
+      },
+      {
+        id: "help.shortcuts",
+        label: "Keyboard Shortcuts",
+        shortcut: `${modKey}+/`,
+        category: "Help",
+        action: () => handlers.onShowShortcuts?.(),
+      },
+      {
+        id: "help.about",
+        label: "About Chickenglass",
+        category: "Help",
+        action: () => handlers.onAbout?.(),
       },
     ],
     [handlers],

@@ -193,17 +193,23 @@ function AppInner() {
     }
   }, [fs, refreshTree]);
 
-  const closeFile = useCallback((path: string) => {
+  const closeFile = useCallback(async (path: string) => {
+    // Save-before-close: ask if tab is dirty
+    const tab = openTabs.find((t) => t.path === path);
+    if (tab?.dirty) {
+      const answer = window.confirm(
+        `"${tab.name}" has unsaved changes.\n\nPress OK to discard, or Cancel to keep editing.`
+      );
+      if (!answer) return;
+    }
+
     setOpenTabs((prev) => {
       const idx = prev.findIndex((t) => t.path === path);
       if (idx === -1) return prev;
       return prev.filter((t) => t.path !== path);
     });
 
-    // Side effects OUTSIDE the updater to avoid infinite re-render loop.
     if (path === activeTabRef.current) {
-      // Read the current tabs to find the next one — use a timeout to
-      // let React flush the setOpenTabs first.
       setTimeout(() => {
         const remaining = openTabs.filter((t) => t.path !== path);
         const nextPath = remaining[0]?.path ?? null;
@@ -256,10 +262,16 @@ function AppInner() {
   }, [fs, refreshTree]);
 
   const handleDelete = useCallback(async (path: string) => {
-    closeFile(path);
-    // FileSystem interface does not yet expose deleteFile — just refresh the tree.
+    const ok = window.confirm(`Delete "${basename(path)}"? This cannot be undone.`);
+    if (!ok) return;
+    try {
+      await fs.deleteFile(path);
+    } catch {
+      // deleteFile may not be supported (e.g., MemoryFS for non-existent files)
+    }
+    await closeFile(path);
     await refreshTree();
-  }, [closeFile, refreshTree]);
+  }, [fs, closeFile, refreshTree]);
 
   const handleOutlineSelect = useCallback((from: number) => {
     const view = editorState?.view;
@@ -271,12 +283,16 @@ function AppInner() {
   // ── Command palette commands ──────────────────────────────────────────────
   const commandHandlers = useMemo(() => ({
     onSave: () => { void saveFile(); },
-    onCloseTab: () => { if (activeTab) closeFile(activeTab); },
+    onCloseTab: () => { if (activeTab) void closeFile(activeTab); },
     onToggleSidebar: () => setSidebarCollapsed((v) => !v),
     onShowFiles: () => { setSidebarCollapsed(false); setSidebarTab("files"); },
     onShowOutline: () => { setSidebarCollapsed(false); setSidebarTab("outline"); },
     onToggleTheme: () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),
     onGoToLine: () => setGotoLineOpen(true),
+    onAbout: () => setAboutOpen(true),
+    onShowShortcuts: () => setShortcutsOpen(true),
+    onShowSettings: () => setSettingsOpen(true),
+    onShowSearch: () => setSearchOpen(true),
   }), [saveFile, activeTab, closeFile, resolvedTheme, setTheme]);
 
   const commands = useCommands(commandHandlers);
@@ -387,8 +403,31 @@ function AppInner() {
   // Current document text for stats popover (from liveDocs).
   const docTextForStats = activeTab ? (liveDocs.current.get(activeTab) ?? "") : "";
 
+  // ── Drag-and-drop ───────────────────────────────────────────────────────
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files);
+    for (const file of files) {
+      if (file.name.endsWith(".md")) {
+        // Read .md file and open it
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string") {
+            void openFile(file.name);
+          }
+        };
+        reader.readAsText(file);
+      }
+    }
+  }, [openFile]);
+
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden" onDragOver={handleDragOver} onDrop={handleDrop}>
       {/* Sidebar */}
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((v) => !v)}>
         {/* Tab switcher */}

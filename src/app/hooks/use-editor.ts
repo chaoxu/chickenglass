@@ -75,6 +75,10 @@ export interface UseEditorReturn {
   wordCount: number;
   /** Current cursor head position (char offset). */
   cursorPos: number;
+  /** Current scroll top of the editor scroller (px). */
+  scrollTop: number;
+  /** Character offset of the first visible line in the viewport. */
+  viewportFrom: number;
 }
 
 // ── Include expansion (uses shared include-resolver utilities) ───────────────
@@ -190,6 +194,8 @@ export function useEditor(
   const [view, setView] = useState<EditorView | null>(null);
   const [wordCount, setWordCount] = useState(0);
   const [cursorPos, setCursorPos] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportFrom, setViewportFrom] = useState(0);
 
   // Stable refs so callbacks inside the effect don't capture stale closures.
   const onDocChangeRef = useRef(onDocChange);
@@ -287,6 +293,16 @@ export function useEditor(
     setView(newView);
     setWordCount(computeDocStats(doc).words);
     setCursorPos(0);
+    setScrollTop(0);
+    setViewportFrom(0);
+
+    // Track scroll for breadcrumbs
+    const scroller = newView.scrollDOM;
+    const onScroll = () => {
+      setScrollTop(scroller.scrollTop);
+      setViewportFrom(newView.viewport.from);
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
 
     // Initial frontmatter notification
     const initialFm = newView.state.field(frontmatterField, false);
@@ -317,6 +333,7 @@ export function useEditor(
     }
 
     return () => {
+      scroller.removeEventListener("scroll", onScroll);
       if (wordCountTimerRef.current !== null) {
         clearTimeout(wordCountTimerRef.current);
         wordCountTimerRef.current = null;
@@ -341,7 +358,7 @@ export function useEditor(
     }
   }, [view, theme]);
 
-  return { view, wordCount, cursorPos };
+  return { view, wordCount, cursorPos, scrollTop, viewportFrom };
 }
 
 // ── Re-exports for hook consumers ─────────────────────────────────────────────

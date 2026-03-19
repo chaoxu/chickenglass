@@ -1,49 +1,55 @@
 import { useRef, useEffect } from "react";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+import { Breadcrumbs } from "./breadcrumbs";
+import { extractHeadings } from "../heading-ancestry";
 
 export interface EditorPaneProps extends UseEditorOptions {
-  /** Called whenever the editor state changes (view, wordCount, cursorPos). */
   onStateChange?: (state: UseEditorReturn) => void;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
-/**
- * EditorPane — mounts a CM6 editor into a managed container element.
- *
- * Forwards all UseEditorOptions to useEditor and notifies the parent of
- * state changes (view, wordCount, cursorPos) via onStateChange.
- */
 export function EditorPane({ onStateChange, ...editorOptions }: EditorPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-
   const editorState = useEditor(containerRef, editorOptions);
 
-  // Notify parent when individual values change — NOT when the object
-  // reference changes (which is every render since useEditor returns a
-  // fresh object). This prevents an infinite re-render loop.
   const onStateChangeRef = useRef(onStateChange);
   useEffect(() => { onStateChangeRef.current = onStateChange; }, [onStateChange]);
 
-  const { view, wordCount, cursorPos } = editorState;
-  const prevRef = useRef({ wordCount: -1, cursorPos: -1, hasView: false });
+  const { view, wordCount, cursorPos, scrollTop, viewportFrom } = editorState;
+  const prevRef = useRef({ wordCount: -1, cursorPos: -1, scrollTop: -1, hasView: false });
 
   useEffect(() => {
     const prev = prevRef.current;
     const hasView = view !== null;
-    if (prev.wordCount === wordCount && prev.cursorPos === cursorPos && prev.hasView === hasView) return;
-    prevRef.current = { wordCount, cursorPos, hasView };
+    if (
+      prev.wordCount === wordCount &&
+      prev.cursorPos === cursorPos &&
+      prev.scrollTop === scrollTop &&
+      prev.hasView === hasView
+    ) return;
+    prevRef.current = { wordCount, cursorPos, scrollTop, hasView };
     onStateChangeRef.current?.(editorState);
-  }, [view, wordCount, cursorPos, editorState]);
+  }, [view, wordCount, cursorPos, scrollTop, editorState]);
+
+  // Extract headings for breadcrumbs
+  const headings = view
+    ? extractHeadings(view.state).map((h) => ({ level: h.level, text: h.text, from: h.pos }))
+    : [];
 
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 overflow-hidden"
-      style={{ minHeight: 0 }}
-    />
+    <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
+      <Breadcrumbs
+        headings={headings}
+        onSelect={(from) => {
+          if (view) {
+            view.dispatch({ selection: { anchor: from }, scrollIntoView: true });
+            view.focus();
+          }
+        }}
+        scrollTop={scrollTop}
+        viewportFrom={viewportFrom}
+      />
+      <div ref={containerRef} className="h-full" />
+    </div>
   );
 }
