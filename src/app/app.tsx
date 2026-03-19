@@ -453,7 +453,7 @@ function AppInner() {
   useHotkeys([
     { key: "mod+s", handler: () => { void saveFile(); } },
     { key: "mod+shift+s", handler: () => { void saveAs(); } },
-    { key: "mod+p", handler: () => setPaletteOpen((v) => !v) },
+    { key: "mod+k", handler: () => setPaletteOpen((v) => !v) },
     { key: "mod+shift+f", handler: () => setSearchOpen((v) => !v) },
     { key: "mod+,", handler: () => setSettingsOpen((v) => !v) },
     { key: "mod+/", handler: () => setShortcutsOpen((v) => !v) },
