@@ -45,7 +45,7 @@ export const chickenglassTheme = EditorView.theme({
     backgroundColor: "var(--cg-hover)",
   },
   ".cm-activeLine": {
-    backgroundColor: "transparent",
+    backgroundColor: "var(--cg-subtle)",
   },
 
   /* Document title from frontmatter — distinct from # section headings */
@@ -167,9 +167,16 @@ export const chickenglassTheme = EditorView.theme({
     margin: "0.5em 0",
   },
 
-  /* Block header: rendered widget with optional KaTeX math */
+  /* Block header line — left border accent for fenced div blocks */
+  ".cg-block-header": {
+    borderLeft: "2px solid var(--cg-fg)",
+    paddingLeft: "12px",
+  },
+
+  /* Block header: rendered widget label (e.g. "Theorem 1.") */
   ".cg-block-header-rendered": {
-    fontWeight: "bold",
+    fontWeight: "700",
+    color: "var(--cg-fg)",
   },
 
   /* Fenced div nesting guides — vertical lines on the left, editing only.
@@ -245,6 +252,7 @@ export const chickenglassTheme = EditorView.theme({
   ".cg-codeblock": {
     fontFamily: monoFont,
     backgroundColor: "var(--cg-subtle)",
+    border: "1px solid var(--cg-border)",
     borderRadius: "2px",
   },
 
@@ -323,7 +331,8 @@ export const chickenglassTheme = EditorView.theme({
     cursor: "grab",
   },
   ".cg-math-preview-content": {
-    padding: "8px 12px",
+    padding: "12px 16px",
+    lineHeight: "1.6",
   },
 
   /* Include region: right border spans the full height, label anchors to it */
@@ -359,10 +368,10 @@ export const chickenglassTheme = EditorView.theme({
     transition: "opacity 0.15s",
   },
 
-  /* Sidenote reference: superscript number */
+  /* Sidenote reference: superscript number, muted */
   ".cg-sidenote-ref": {
     fontSize: "0.75em",
-    color: "var(--cg-fg)",
+    color: "var(--cg-muted)",
     cursor: "pointer",
     verticalAlign: "super",
     lineHeight: "0",
@@ -414,7 +423,7 @@ export const chickenglassTheme = EditorView.theme({
     padding: "8px 12px",
     fontSize: "0.9em",
     lineHeight: "1.5",
-    fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
+    fontFamily: monoFont,
   },
   ".cg-hover-preview-header": {
     fontWeight: "700",
@@ -426,7 +435,7 @@ export const chickenglassTheme = EditorView.theme({
     whiteSpace: "pre-wrap",
   },
   ".cg-hover-preview-unresolved": {
-    color: "var(--cg-error)",
+    color: "var(--cg-muted)",
     fontStyle: "italic",
   },
   ".cg-hover-preview-citation": {
