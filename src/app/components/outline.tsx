@@ -1,3 +1,5 @@
+import { useState, useCallback } from "react";
+
 interface HeadingEntry {
   level: number;
   text: string;
@@ -10,11 +12,26 @@ interface OutlineProps {
 }
 
 /**
- * Document outline panel.
- * Renders heading hierarchy with indentation by level.
- * Clicking a heading calls onSelect with the character position.
+ * Document outline panel with collapsible sections.
+ * Clicking the toggle arrow collapses/expands child headings.
+ * Clicking the heading text navigates to it in the editor.
  */
 export function Outline({ headings, onSelect }: OutlineProps) {
+  // Set of heading indices that are collapsed (their children are hidden)
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+
+  const toggleCollapse = useCallback((index: number) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  }, []);
+
   if (headings.length === 0) {
     return (
       <div className="px-3 py-2 text-xs text-[var(--cg-muted)] italic">
@@ -23,25 +40,64 @@ export function Outline({ headings, onSelect }: OutlineProps) {
     );
   }
 
+  // Determine which headings are visible (not hidden by a collapsed parent)
+  const visible: boolean[] = new Array(headings.length).fill(true);
+  for (let i = 0; i < headings.length; i++) {
+    if (!visible[i]) continue;
+    if (!collapsed.has(i)) continue;
+    // This heading is collapsed — hide all subsequent headings with higher level
+    const parentLevel = headings[i].level;
+    for (let j = i + 1; j < headings.length; j++) {
+      if (headings[j].level <= parentLevel) break;
+      visible[j] = false;
+    }
+  }
+
+  // Check if a heading has children (next heading has higher level number)
+  const hasChildren = (index: number): boolean => {
+    if (index + 1 >= headings.length) return false;
+    return headings[index + 1].level > headings[index].level;
+  };
+
   return (
     <div className="py-1">
       {headings.map((heading, i) => {
-        // Indentation: each level adds 12px, base offset 8px
+        if (!visible[i]) return null;
+
         const indent = (heading.level - 1) * 12 + 8;
+        const canCollapse = hasChildren(i);
+        const isCollapsed = collapsed.has(i);
 
         return (
-          <button
+          <div
             key={i}
-            className="w-full text-left flex items-baseline gap-1 py-[2px] text-sm text-[var(--cg-fg)] hover:bg-[var(--cg-hover)] cursor-pointer truncate transition-colors duration-[var(--cg-transition,0.15s)]"
+            className="flex items-baseline w-full hover:bg-[var(--cg-hover)] transition-colors duration-[var(--cg-transition,0.15s)]"
             style={{ paddingLeft: `${indent}px`, paddingRight: "8px" }}
-            onClick={() => onSelect(heading.from)}
-            title={heading.text}
           >
-            <span className="text-[10px] text-[var(--cg-muted)] shrink-0 font-mono">
-              {"#".repeat(heading.level)}
-            </span>
-            <span className="truncate font-mono">{heading.text}</span>
-          </button>
+            {/* Collapse toggle */}
+            <button
+              className="shrink-0 w-4 text-[10px] text-[var(--cg-muted)] font-mono leading-none cursor-pointer select-none"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (canCollapse) toggleCollapse(i);
+              }}
+              style={{ visibility: canCollapse ? "visible" : "hidden" }}
+              aria-label={isCollapsed ? "Expand section" : "Collapse section"}
+            >
+              {isCollapsed ? "▶" : "▼"}
+            </button>
+            {/* Heading text — click to navigate */}
+            <button
+              className="flex-1 text-left flex items-baseline gap-1 py-[2px] text-sm text-[var(--cg-fg)] cursor-pointer truncate min-w-0"
+              onClick={() => onSelect(heading.from)}
+              title={heading.text}
+            >
+              <span className="text-[10px] text-[var(--cg-muted)] shrink-0 font-mono">
+                {"#".repeat(heading.level)}
+              </span>
+              <span className="truncate font-mono">{heading.text}</span>
+            </button>
+          </div>
         );
       })}
     </div>

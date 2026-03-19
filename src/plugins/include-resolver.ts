@@ -203,6 +203,83 @@ export function flattenIncludes(
   return result;
 }
 
+/** Result of flattening includes with source-map tracking. */
+export interface FlattenResult {
+  /** The fully expanded document text. */
+  text: string;
+  /** Regions mapping positions in the expanded text to source files. */
+  regions: Array<{ from: number; to: number; file: string; originalRef: string; rawFrom: number; rawTo: number }>;
+}
+
+/**
+ * Flatten includes like `flattenIncludes`, but also track where each
+ * included file's content ends up in the expanded document.
+ */
+export function flattenIncludesWithSourceMap(
+  rootContent: string,
+  includes: readonly ResolvedInclude[],
+): FlattenResult {
+  if (includes.length === 0) {
+    return { text: rootContent, regions: [] };
+  }
+
+  const re = new RegExp(INCLUDE_BLOCK_RE.source, INCLUDE_BLOCK_RE.flags);
+  let includeIndex = 0;
+  const replacements: Array<{
+    start: number;
+    end: number;
+    text: string;
+    file: string;
+    originalRef: string;
+  }> = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(rootContent)) !== null) {
+    if (includeIndex >= includes.length) break;
+
+    const include = includes[includeIndex];
+    const expandedContent = flattenIncludes(include.content, include.children);
+
+    replacements.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      text: expandedContent,
+      file: include.path,
+      originalRef: match[0],
+    });
+    includeIndex++;
+  }
+
+  // Build result and regions by applying replacements forward
+  const regions: FlattenResult["regions"] = [];
+  let result = "";
+  let cursor = 0;
+  let offset = 0; // cumulative shift from replacements
+
+  for (const r of replacements) {
+    // Copy text before this replacement
+    result += rootContent.slice(cursor, r.start);
+    const newFrom = r.start + offset;
+    result += r.text;
+    const newTo = newFrom + r.text.length;
+
+    regions.push({
+      from: newFrom,
+      to: newTo,
+      file: r.file,
+      originalRef: r.originalRef,
+      rawFrom: r.start,
+      rawTo: r.end,
+    });
+
+    offset += r.text.length - (r.end - r.start);
+    cursor = r.end;
+  }
+  result += rootContent.slice(cursor);
+
+  return { text: result, regions };
+}
+
 /**
  * Collect all file paths in the include tree (depth-first).
  * Useful for determining what files are part of the merged document.

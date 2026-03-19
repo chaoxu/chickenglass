@@ -84,13 +84,16 @@ class FoldToggleWidget extends WidgetType {
   constructor(
     private readonly pos: number,
     private readonly folded: boolean,
+    private readonly level: number,
   ) {
     super();
   }
 
   toDOM(view: EditorView): HTMLElement {
     const span = document.createElement("span");
-    span.className = this.folded ? "cg-fold-toggle cg-fold-toggle-folded" : "cg-fold-toggle";
+    const classes = ["cg-fold-toggle", `cg-fold-h${this.level}`];
+    if (this.folded) classes.push("cg-fold-toggle-folded");
+    span.className = classes.join(" ");
     span.textContent = this.folded ? "▶" : "▼";
     span.title = this.folded ? "Unfold section" : "Fold section";
 
@@ -107,7 +110,7 @@ class FoldToggleWidget extends WidgetType {
   }
 
   eq(other: FoldToggleWidget): boolean {
-    return this.pos === other.pos && this.folded === other.folded;
+    return this.pos === other.pos && this.folded === other.folded && this.level === other.level;
   }
 
   ignoreEvent(): boolean {
@@ -151,7 +154,7 @@ function buildFoldToggles(state: EditorState): DecorationSet {
         isFolded = true;
       });
 
-      const widget = new FoldToggleWidget(node.from, isFolded);
+      const widget = new FoldToggleWidget(node.from, isFolded, level);
       // Line class for position:relative context
       items.push(
         Decoration.line({ class: "cg-fold-line" }).range(node.from),

@@ -30,7 +30,7 @@ export const chickenglassTheme = EditorView.theme({
     right: "100%",
     marginRight: "4px",
     color: "var(--cg-border)",
-    fontSize: "0.6em",  // scales with heading size
+    fontSize: "14px",  // default, overridden per heading level
     cursor: "pointer",
     userSelect: "none",
     lineHeight: "inherit",
@@ -48,6 +48,10 @@ export const chickenglassTheme = EditorView.theme({
   ".cg-fold-toggle:hover": {
     color: "var(--cg-fg)",
   },
+  /* Fold toggle sizes per heading level */
+  ".cg-fold-h1": { fontSize: "24px" },
+  ".cg-fold-h2": { fontSize: "20px" },
+  ".cg-fold-h3": { fontSize: "16px" },
   ".cm-cursor": {
     borderLeftColor: "var(--cg-fg)",
     borderLeftWidth: "2px",

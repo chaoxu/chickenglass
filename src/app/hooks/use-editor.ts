@@ -32,9 +32,10 @@ import { computeDocStats } from "../writing-stats";
 import {
   extractIncludePaths,
   resolveIncludePath,
-  flattenIncludes,
+  flattenIncludesWithSourceMap,
   type ResolvedInclude,
 } from "../../plugins/include-resolver";
+import type { IncludeRegion } from "../source-map";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -95,16 +96,18 @@ export interface UseEditorReturn {
 
 /**
  * Expand one level of include blocks in `content`.
- * Uses the shared extractIncludePaths / resolveIncludePath / flattenIncludes
+ * Uses the shared extractIncludePaths / resolveIncludePath / flattenIncludesWithSourceMap
  * utilities from plugins/include-resolver — no duplicated regex logic.
+ *
+ * Returns the expanded text and include regions for the source map.
  */
 async function expandIncludes(
   mainPath: string,
   rawContent: string,
   fs: FileSystem,
-): Promise<string> {
+): Promise<{ text: string; regions: IncludeRegion[] }> {
   const paths = extractIncludePaths(rawContent);
-  if (paths.length === 0) return rawContent;
+  if (paths.length === 0) return { text: rawContent, regions: [] };
 
   const includes: ResolvedInclude[] = [];
   for (const rawPath of paths) {
@@ -113,15 +116,23 @@ async function expandIncludes(
     try {
       content = await fs.readFile(resolved);
     } catch {
-      // On read failure keep the original directive text (no-op expansion).
-      // We cannot easily recover the original directive text here, so we
-      // leave the block in place by returning rawContent unchanged for this path.
-      return rawContent;
+      return { text: rawContent, regions: [] };
     }
     includes.push({ path: resolved, content, children: [] });
   }
 
-  return flattenIncludes(rawContent, includes);
+  const result = flattenIncludesWithSourceMap(rawContent, includes);
+  return {
+    text: result.text,
+    regions: result.regions.map((r) => ({
+      from: r.from,
+      to: r.to,
+      file: r.file,
+      originalRef: r.originalRef,
+      rawFrom: r.rawFrom,
+      rawTo: r.rawTo,
+    })),
+  };
 }
 
 // ── Bibliography loading (mirrors app.ts loadBibliographyIfChanged) ──────────
@@ -342,9 +353,14 @@ export function useEditor(
     // Include expansion: patch the document in-place after mount if needed.
     // expandIncludes returns early with the same string when no includes are found.
     if (fs && docPath) {
-      void expandIncludes(docPath, doc, fs).then((expanded) => {
+      void expandIncludes(docPath, doc, fs).then(({ text: expanded, regions }) => {
         if (expanded === doc) return; // no includes — no-op
         if (newView.dom.isConnected) {
+          // Set global source map BEFORE dispatch so the include-label plugin
+          // picks it up during the docChanged StateField update
+          if (regions.length > 0) {
+            (window as unknown as { __cgSourceMap?: { regions: IncludeRegion[] } }).__cgSourceMap = { regions };
+          }
           newView.dispatch({
             changes: { from: 0, to: newView.state.doc.length, insert: expanded },
           });
