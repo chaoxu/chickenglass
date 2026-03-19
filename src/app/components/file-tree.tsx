@@ -48,6 +48,75 @@ function FileIcon({ name }: { name: string }) {
   }
 }
 
+// ── Inline create input (VS Code-style) ─────────────────────────────────
+
+type CreateKind = "file" | "folder";
+
+interface InlineCreateInputProps {
+  kind: CreateKind;
+  depth: number;
+  onConfirm: (name: string) => void;
+  onCancel: () => void;
+}
+
+function InlineCreateInput({ kind, depth, onConfirm, onCancel }: InlineCreateInputProps) {
+  const [value, setValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const indent = depth * 12 + 8;
+
+  useEffect(() => {
+    // Focus and select on mount
+    inputRef.current?.focus();
+  }, []);
+
+  const commit = useCallback(() => {
+    const trimmed = value.trim();
+    if (trimmed) {
+      onConfirm(trimmed);
+    } else {
+      onCancel();
+    }
+  }, [value, onConfirm, onCancel]);
+
+  const handleKey = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commit();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel();
+      }
+    },
+    [commit, onCancel],
+  );
+
+  return (
+    <div
+      className="flex items-center gap-1 px-2 py-[2px] text-sm text-[var(--cg-fg)] whitespace-nowrap"
+      style={{ paddingLeft: `${indent}px` }}
+    >
+      {kind === "folder" ? (
+        <FolderClosed size={ICON_SIZE} className={ICON_CLASS} />
+      ) : (
+        <File size={ICON_SIZE} className={ICON_CLASS} />
+      )}
+      <input
+        ref={inputRef}
+        type="text"
+        placeholder={kind === "folder" ? "Folder name" : "File name"}
+        className="flex-1 text-sm font-mono bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={handleKey}
+        onBlur={onCancel}
+      />
+    </div>
+  );
+}
+
+// ── Types ────────────────────────────────────────────────────────────────
+
 interface FileTreeProps {
   root: FileEntry | null;
   activePath: string | null;
@@ -89,6 +158,7 @@ function FileNode({
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [creating, setCreating] = useState<CreateKind | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const indent = depth * 12 + 8;
@@ -141,6 +211,24 @@ function FileNode({
     [startRename],
   );
 
+  // ── Inline create ──────────────────────────────────────────────────────
+
+  const startCreate = useCallback(
+    (kind: CreateKind) => {
+      setCreating(kind);
+      setContextMenu(null);
+      // For directories, ensure the folder is open so the input is visible
+      if (entry.isDirectory) {
+        setOpen(true);
+      }
+    },
+    [entry.isDirectory],
+  );
+
+  const cancelCreate = useCallback(() => {
+    setCreating(null);
+  }, []);
+
   // ── Context menu ─────────────────────────────────────────────────────────
 
   const handleContextMenu = useCallback((e: MouseEvent) => {
@@ -170,17 +258,11 @@ function FileNode({
     const dirMenuItems: MenuItem[] = [
       {
         label: "New File",
-        action: () => {
-          const name = window.prompt("File name:");
-          if (name?.trim()) onCreateFile(`${entry.path}/${name.trim()}`);
-        },
+        action: () => startCreate("file"),
       },
       {
         label: "New Folder",
-        action: () => {
-          const name = window.prompt("Folder name:");
-          if (name?.trim()) onCreateDir(`${entry.path}/${name.trim()}`);
-        },
+        action: () => startCreate("folder"),
       },
       { label: "-" },
       { label: "Rename", action: startRename },
@@ -193,6 +275,16 @@ function FileNode({
     if (revealItem) {
       dirMenuItems.push({ label: "-" }, revealItem);
     }
+
+    const handleCreateConfirm = (name: string) => {
+      const fullPath = `${entry.path}/${name}`;
+      if (creating === "folder") {
+        onCreateDir(fullPath);
+      } else {
+        onCreateFile(fullPath);
+      }
+      setCreating(null);
+    };
 
     return (
       <div>
@@ -233,9 +325,18 @@ function FileNode({
           )}
         </div>
 
-        {open && entry.children && (
+        {open && (
           <div>
-            {entry.children.map((child) => (
+            {/* Inline create input appears as first child inside the directory */}
+            {creating && (
+              <InlineCreateInput
+                kind={creating}
+                depth={depth + 1}
+                onConfirm={handleCreateConfirm}
+                onCancel={cancelCreate}
+              />
+            )}
+            {entry.children?.map((child) => (
               <FileNode
                 key={child.path}
                 entry={child}
@@ -266,6 +367,17 @@ function FileNode({
 
   // ── File rendering ────────────────────────────────────────────────────────
 
+  const handleFileCreateConfirm = (name: string) => {
+    const base = parentPath || "";
+    const fullPath = base ? `${base}/${name}` : name;
+    if (creating === "folder") {
+      onCreateDir(fullPath);
+    } else {
+      onCreateFile(fullPath);
+    }
+    setCreating(null);
+  };
+
   const fileMenuItems: MenuItem[] = [
     { label: "Open", action: () => onSelect(entry.path) },
     { label: "-" },
@@ -277,21 +389,11 @@ function FileNode({
     { label: "-" },
     {
       label: "New File",
-      action: () => {
-        const name = window.prompt("File name:");
-        if (name?.trim()) {
-          onCreateFile(parentPath ? `${parentPath}/${name.trim()}` : name.trim());
-        }
-      },
+      action: () => startCreate("file"),
     },
     {
       label: "New Folder",
-      action: () => {
-        const name = window.prompt("Folder name:");
-        if (name?.trim()) {
-          onCreateDir(parentPath ? `${parentPath}/${name.trim()}` : name.trim());
-        }
-      },
+      action: () => startCreate("folder"),
     },
   ];
 
@@ -300,48 +402,60 @@ function FileNode({
   }
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      className={[
-        "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
-        isActive
-          ? "bg-[var(--cg-active)]"
-          : "hover:bg-[var(--cg-hover)]",
-      ].join(" ")}
-      style={{ paddingLeft: `${indent}px` }}
-      onClick={() => onSelect(entry.path)}
-      onContextMenu={handleContextMenu}
-      onKeyDown={handleItemKey}
-    >
-      <FileIcon name={entry.name} />
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        className={[
+          "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
+          isActive
+            ? "bg-[var(--cg-active)]"
+            : "hover:bg-[var(--cg-hover)]",
+        ].join(" ")}
+        style={{ paddingLeft: `${indent}px` }}
+        onClick={() => onSelect(entry.path)}
+        onContextMenu={handleContextMenu}
+        onKeyDown={handleItemKey}
+      >
+        <FileIcon name={entry.name} />
 
-      {renaming ? (
-        <input
-          ref={renameInputRef}
-          type="text"
-          className="flex-1 text-sm font-mono bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
-          value={renameValue}
-          autoFocus
-          onChange={(e) => setRenameValue(e.target.value)}
-          onKeyDown={handleRenameKey}
-          onBlur={cancelRename}
-          onClick={(e) => e.stopPropagation()}
-        />
-      ) : (
-        <span className="font-mono truncate">{entry.name}</span>
-      )}
+        {renaming ? (
+          <input
+            ref={renameInputRef}
+            type="text"
+            className="flex-1 text-sm font-mono bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
+            value={renameValue}
+            autoFocus
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={handleRenameKey}
+            onBlur={cancelRename}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="font-mono truncate">{entry.name}</span>
+        )}
 
-      {/* File context menu */}
-      {contextMenu && (
-        <ContextMenuPortal
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onDismiss={dismissMenu}
-          items={fileMenuItems}
+        {/* File context menu */}
+        {contextMenu && (
+          <ContextMenuPortal
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onDismiss={dismissMenu}
+            items={fileMenuItems}
+          />
+        )}
+      </div>
+
+      {/* Inline create input appears as sibling row below the file */}
+      {creating && (
+        <InlineCreateInput
+          kind={creating}
+          depth={depth}
+          onConfirm={handleFileCreateConfirm}
+          onCancel={cancelCreate}
         />
       )}
-    </div>
+    </>
   );
 }
 
