@@ -174,24 +174,28 @@ function AppInner() {
     setOpenTabs((prev) => {
       const idx = prev.findIndex((t) => t.path === path);
       if (idx === -1) return prev;
-      const next = prev.filter((t) => t.path !== path);
+      return prev.filter((t) => t.path !== path);
+    });
 
-      // Determine next active tab
-      if (path === activeTabRef.current) {
-        const nextPath = next[Math.min(idx, next.length - 1)]?.path ?? null;
+    // Side effects OUTSIDE the updater to avoid infinite re-render loop.
+    if (path === activeTabRef.current) {
+      // Read the current tabs to find the next one — use a timeout to
+      // let React flush the setOpenTabs first.
+      setTimeout(() => {
+        const remaining = openTabs.filter((t) => t.path !== path);
+        const nextPath = remaining[0]?.path ?? null;
         setActiveTab(nextPath);
         setEditorDoc(
           nextPath
             ? (liveDocs.current.get(nextPath) ?? buffers.current.get(nextPath) ?? "")
             : "",
         );
-      }
+      }, 0);
+    }
 
-      buffers.current.delete(path);
-      liveDocs.current.delete(path);
-      return next;
-    });
-  }, []);
+    buffers.current.delete(path);
+    liveDocs.current.delete(path);
+  }, [openTabs]);
 
   const switchToTab = useCallback((path: string) => {
     setActiveTab(path);

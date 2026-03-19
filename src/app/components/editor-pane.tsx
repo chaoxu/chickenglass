@@ -22,13 +22,22 @@ export function EditorPane({ onStateChange, ...editorOptions }: EditorPaneProps)
 
   const editorState = useEditor(containerRef, editorOptions);
 
-  // Notify parent whenever the editor state changes.
+  // Notify parent when individual values change — NOT when the object
+  // reference changes (which is every render since useEditor returns a
+  // fresh object). This prevents an infinite re-render loop.
   const onStateChangeRef = useRef(onStateChange);
   useEffect(() => { onStateChangeRef.current = onStateChange; }, [onStateChange]);
 
+  const { view, wordCount, cursorPos } = editorState;
+  const prevRef = useRef({ wordCount: -1, cursorPos: -1, hasView: false });
+
   useEffect(() => {
+    const prev = prevRef.current;
+    const hasView = view !== null;
+    if (prev.wordCount === wordCount && prev.cursorPos === cursorPos && prev.hasView === hasView) return;
+    prevRef.current = { wordCount, cursorPos, hasView };
     onStateChangeRef.current?.(editorState);
-  }, [editorState]);
+  }, [view, wordCount, cursorPos, editorState]);
 
   return (
     <div
