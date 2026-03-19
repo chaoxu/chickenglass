@@ -13,8 +13,6 @@ import {
   type DecorationSet,
   Decoration,
   EditorView,
-  ViewPlugin,
-  type ViewUpdate,
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
@@ -26,11 +24,9 @@ import {
   focusEffect,
   focusTracker,
 } from "./render-utils";
-import { renderKatex } from "./math-render";
-import { getMathMacros } from "./math-macros";
 
 /** Split text by $...$ inline math, returning alternating text/math segments. */
-function splitByInlineMath(
+export function splitByInlineMath(
   text: string,
 ): Array<{ isMath: boolean; content: string }> {
   const segments: Array<{ isMath: boolean; content: string }> = [];
@@ -53,13 +49,13 @@ function splitByInlineMath(
   return segments;
 }
 
-interface FootnoteRef {
+export interface FootnoteRef {
   readonly id: string;
   readonly from: number;
   readonly to: number;
 }
 
-interface FootnoteDef {
+export interface FootnoteDef {
   readonly id: string;
   readonly from: number;
   readonly to: number;
@@ -68,7 +64,7 @@ interface FootnoteDef {
 }
 
 /** Collect footnote references and definitions from the syntax tree. */
-function collectFootnotes(state: EditorState): {
+export function collectFootnotes(state: EditorState): {
   refs: FootnoteRef[];
   defs: Map<string, FootnoteDef>;
 } {
@@ -141,70 +137,10 @@ class FootnoteRefWidget extends RenderWidget {
   }
 }
 
-/** Widget for a footnote definition rendered as a margin sidenote. */
-class SidenoteWidget extends RenderWidget {
-  constructor(
-    private readonly number: number,
-    private readonly content: string,
-    private readonly macros: Record<string, string>,
-    private readonly macrosKey: string,
-  ) {
-    super();
-  }
-
-  createDOM(): HTMLElement {
-    const aside = document.createElement("span");
-    aside.className = "cg-sidenote";
-
-    const numSpan = document.createElement("span");
-    numSpan.className = "cg-sidenote-number";
-    numSpan.textContent = String(this.number);
-    aside.appendChild(numSpan);
-
-    const contentSpan = document.createElement("span");
-    contentSpan.className = "cg-sidenote-content";
-
-    for (const seg of splitByInlineMath(this.content)) {
-      if (!seg.isMath) {
-        // Render bold (**text**) and italic (*text*) simply
-        const processed = seg.content
-          .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-          .replace(/\*(.+?)\*/g, "<em>$1</em>");
-        const frag = document.createElement("span");
-        frag.innerHTML = processed;
-        contentSpan.appendChild(frag);
-      } else {
-        const mathEl = document.createElement("span");
-        renderKatex(mathEl, seg.content, false, this.macros);
-        contentSpan.appendChild(mathEl);
-      }
-    }
-
-    aside.appendChild(contentSpan);
-    return aside;
-  }
-
-  eq(other: SidenoteWidget): boolean {
-    return (
-      this.number === other.number &&
-      this.content === other.content &&
-      this.macrosKey === other.macrosKey
-    );
-  }
-}
-
 /** Build sidenote decorations from editor state. */
 function buildSidenoteDecorations(state: EditorState, focused: boolean): DecorationSet {
   const { refs, defs } = collectFootnotes(state);
   const items: Range<Decoration>[] = [];
-  const macros = getMathMacros(state);
-  const macrosKey =
-    Object.keys(macros).length > 0
-      ? Object.keys(macros)
-          .sort()
-          .map((k) => `${k}=${macros[k]}`)
-          .join("\0")
-      : "";
 
   // Assign numbers to footnotes in order of first reference appearance
   const numberMap = new Map<string, number>();
@@ -225,21 +161,21 @@ function buildSidenoteDecorations(state: EditorState, focused: boolean): Decorat
     items.push(Decoration.replace({ widget }).range(ref.from, ref.to));
   }
 
-  // Render defs as margin sidenotes
-  for (const [id, def] of defs) {
+  // Hide footnote definition lines (content is rendered in React margin column).
+  // When cursor is inside a def, show the source text for editing.
+  for (const [, def] of defs) {
     if (focused && cursorContainedIn(state, def.from, def.to)) continue;
 
-    const num = numberMap.get(id) ?? 0;
-    const widget = new SidenoteWidget(num, def.content, macros, macrosKey);
-    widget.sourceFrom = def.from;
-
-    // Replace the entire definition line with the sidenote widget
-    items.push(Decoration.replace({ widget }).range(def.from, def.to));
-
-    // Add a line class to hide the definition block visually when replaced
+    // Collapse the definition line to zero height
     items.push(
       Decoration.line({ class: "cg-sidenote-def-line" }).range(def.from),
     );
+    // Replace text content (after label) with empty widget to hide it visually
+    if (def.labelTo < def.to) {
+      items.push(
+        Decoration.replace({}).range(def.labelTo, def.to),
+      );
+    }
   }
 
   return buildDecorations(items);
@@ -308,78 +244,11 @@ export function computeSidenoteOffsets(
   return offsets;
 }
 
-/**
- * ViewPlugin that resolves vertical overlap between sidenotes after layout.
- *
- * After each update that may change sidenote positions, it measures all
- * .cg-sidenote elements, computes collision-free offsets, and applies
- * CSS transforms to push overlapping sidenotes downward.
- */
-const sidenoteLayoutPlugin = ViewPlugin.fromClass(
-  class {
-    private rafId = 0;
 
-    constructor(private view: EditorView) {
-      // Run synchronously on first layout to avoid one-frame overlap flash
-      this.resolveOverlaps();
-    }
-
-    update(_update: ViewUpdate) {
-      this.scheduleLayout();
-    }
-
-    private scheduleLayout() {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = requestAnimationFrame(() => this.resolveOverlaps());
-    }
-
-    private resolveOverlaps() {
-      const sidenotes = [
-        ...this.view.dom.querySelectorAll(".cg-sidenote"),
-      ] as HTMLElement[];
-
-      if (sidenotes.length === 0) return;
-
-      // Reset transforms to measure natural (anchor) positions
-      for (const s of sidenotes) s.style.transform = "";
-      void sidenotes[0].offsetHeight; // force reflow
-
-      // Measure natural positions
-      const measured = sidenotes.map((el) => {
-        const rect = el.getBoundingClientRect();
-        return { el, naturalTop: rect.top, height: rect.height };
-      });
-
-      // Sort by natural anchor position (document order)
-      measured.sort((a, b) => a.naturalTop - b.naturalTop);
-
-      // Stack: each sidenote goes at max(its anchor, previous bottom + gap).
-      // This ensures they never overlap — they form a top-to-bottom list
-      // with gaps, anchored as close to their reference as possible.
-      let nextAvailableTop = -Infinity;
-
-      for (const m of measured) {
-        const targetTop = Math.max(m.naturalTop, nextAvailableTop);
-        const offset = targetTop - m.naturalTop;
-        if (offset > 0.5) {
-          m.el.style.transform = `translateY(${offset}px)`;
-        } else {
-          m.el.style.transform = "";
-        }
-        nextAvailableTop = targetTop + m.height + SIDENOTE_GAP;
-      }
-    }
-
-    destroy() {
-      cancelAnimationFrame(this.rafId);
-    }
-  },
-);
-
-/** CM6 extension that renders footnotes as Tufte-style sidenotes. */
+/** CM6 extension that renders footnote refs as superscripts and hides defs.
+ *  Sidenote content is rendered by the React SidenoteMargin component. */
 export const sidenoteRenderPlugin: Extension = [
   editorFocusField,
   focusTracker,
   sidenoteDecorationField,
-  sidenoteLayoutPlugin,
 ];

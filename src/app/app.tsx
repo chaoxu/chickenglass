@@ -352,7 +352,13 @@ function AppInner() {
     if (didInitRef.current || !fileTree) return;
     didInitRef.current = true;
 
-    // Find first non-directory entry in tree (depth-first)
+    // Prefer main.md or index.md at root, then any root-level .md file,
+    // then fall back to depth-first search.
+    const rootFiles = (fileTree.children ?? []).filter((c) => !c.isDirectory);
+    const preferred = rootFiles.find((f) => f.path === "main.md")
+      ?? rootFiles.find((f) => f.path === "index.md")
+      ?? rootFiles.find((f) => f.path.endsWith(".md"));
+
     const findFirst = (entry: FileEntry): string | null => {
       if (!entry.isDirectory) return entry.path;
       for (const child of entry.children ?? []) {
@@ -362,7 +368,7 @@ function AppInner() {
       return null;
     };
 
-    const first = findFirst(fileTree);
+    const first = preferred?.path ?? findFirst(fileTree);
     if (first) void openFile(first);
   }, [fileTree, openFile]);
 

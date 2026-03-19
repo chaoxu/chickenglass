@@ -2,6 +2,7 @@ import { useRef, useEffect } from "react";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
 import { Breadcrumbs } from "./breadcrumbs";
+import { SidenoteMargin } from "./sidenote-margin";
 import { extractHeadings } from "../heading-ancestry";
 
 export interface EditorPaneProps extends UseEditorOptions {
@@ -50,6 +51,7 @@ export function EditorPane({ onStateChange, ...editorOptions }: EditorPaneProps)
         viewportFrom={viewportFrom}
       />
       <div ref={containerRef} className="h-full" />
+      <SidenoteMargin view={view} scrollTop={scrollTop} />
     </div>
   );
 }
