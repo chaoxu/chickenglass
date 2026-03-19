@@ -89,7 +89,7 @@ export function Sidebar({ collapsed, onToggle, width, onWidthChange, children }:
       <div
         className={[
           "flex flex-col shrink-0 overflow-hidden",
-          "bg-[var(--cg-subtle)]",
+          "bg-[var(--cg-subtle)] border-r border-[var(--cg-border)]",
           collapsed ? "w-0" : "",
           // Only animate width when not dragging
           dragging.current ? "" : "transition-[width] duration-200 ease-in-out",
@@ -119,13 +119,12 @@ export function Sidebar({ collapsed, onToggle, width, onWidthChange, children }:
         </div>
       </div>
 
-      {/* Drag handle / resize border — visible when expanded */}
+      {/* Invisible drag handle — overlaps the border edge for easy grabbing */}
       {!collapsed && (
         <div
-          className="shrink-0 w-1 cursor-col-resize hover:bg-[var(--cg-active)] active:bg-[var(--cg-active)] transition-colors duration-100 border-r border-[var(--cg-border)]"
+          className="shrink-0 w-1 cursor-col-resize relative -ml-[2px] z-10 hover:bg-[var(--cg-active)] active:bg-[var(--cg-active)] transition-colors duration-100"
           onMouseDown={onMouseDown}
           onDoubleClick={onDoubleClick}
-          title="Drag to resize sidebar"
         />
       )}
 
