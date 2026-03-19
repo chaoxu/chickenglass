@@ -3,6 +3,31 @@
  *
  * Renders a Command.Dialog with search input, category-grouped items,
  * and keyboard navigation. Toggle via Cmd+P (wired in the parent).
+ *
+ * ## Fuzzy search
+ *
+ * cmdk includes a built-in fuzzy scoring algorithm (a bundled variant of
+ * `command-score`) that handles typo-tolerant, order-preserving character
+ * matching with bonuses for word-boundary hits. This makes fuse.js
+ * unnecessary for command palette filtering:
+ *
+ * - **Redundancy**: cmdk already does fuzzy matching out of the box.
+ *   Adding fuse.js (~40 KB) would duplicate functionality with no benefit.
+ * - **Bundle cost**: 40 KB is significant for a desktop/web editor that
+ *   ships ~20 commands. The built-in scorer is <1 KB (inlined in cmdk).
+ * - **Integration friction**: Using fuse.js would require disabling cmdk's
+ *   built-in filter (`shouldFilter={false}`) and manually managing item
+ *   visibility and ordering, losing cmdk's optimized DOM diffing.
+ * - **Scale**: The palette has ~25 static commands. Even exact substring
+ *   matching would be adequate at this scale; fuzzy matching is a bonus
+ *   we already get for free.
+ *
+ * The search panel (`search-panel.tsx`) uses a separate backend-style
+ * indexer query (label/content search via BackgroundIndexer) and does not
+ * need client-side fuzzy matching either.
+ *
+ * Decision: fuse.js rejected — cmdk's built-in fuzzy search is sufficient.
+ * Evaluated 2026-03-19, issue #194.
  */
 
 import { Command } from "cmdk";
