@@ -3,7 +3,7 @@ title: Reducing edge connectivity to vertex connectivity with small increase in 
 tags: connectivity
 ---
 
-::: Problem
+::: {.problem}
 Let $G=(V,E)$ be a graph, we are interested in finding a graph $G'=(V',E')$, such that $G$ is a minor of $G'$. We want a partition $P$ of $V'$ and a bijection $f:P\to V$, such that for any $s\in S$, $t\in T$ and $S,T\in P$, we have $\kappa_{G'}(s,t) = \lambda_{G}(f(S),f(T))$.
 :::
 
@@ -16,7 +16,7 @@ There is another way with the edge blow up to be $O(nm)$ [@Galil:1991:REC:122413
 
 However, we want to blow up the number of edges by at most $O(m)$.
 
-::: Definition
+::: {.definition}
 A $n$-connector is a graph with two disjoint set of vertices $I$ (inputs) and $O$ (outputs) such that $|I|=|O|=n$, and for any bijection $f:I\to O$, there exist vertex disjoint paths connecting $v$ and $f(v)$ simultaneously.
 :::
 
@@ -25,7 +25,7 @@ It is known a $n$-connector exists with $O(n)$ edges, because there is a even st
 
 $n$-connector seems to be what we need here, but it forces us to have input and output vertices. Thus we can define the following.
 
-::: Definition
+::: {.definition}
 A $n$-symmetric-connector is a graph with a set of $n$ vertices $T$, such that for any $f$ a bijection between two disjoint subsets of $T$, there exist vertex disjoint paths connecting $v$ and $f(v)$ simultaneously.
 :::
 

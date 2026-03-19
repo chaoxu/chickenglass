@@ -6,12 +6,12 @@ Let $T$ be a rooted tree on vertices $V$. $T_v$ to be the subtree of $T$ rooted 
 
 Let $G_T^k$ to be the graph in $\mathbb{G}_T^k$ with minimum number of edges(break ties arbitrarily), what can we say about the number of edges in $G_T^2$?
 
-::: Theorem
+::: {.theorem}
 If $T$ has $n$ vertices, then $G_T^2$ have $O(n \log n)$ edges. 
 :::
 
 
-::: Proof
+::: {.proof}
 Let $|G|$ to be the number of vertices in $|G|$. 
 
 We construct a graph $G\in \mathbb{G}_T^2$ recursively. For each $T_v$, we construct a $G_v$ on the same vertex set such that it has the property there exist a vertex that connects to all other vertex in $G_v$. Call such vertex a golden vertex of $G_v$. $G_v$ would be a union of all $G_u$, where $u$ is a child of $T_v$ with some extra edges. Let $u$ to be the child of $v$ such that $G_u$ has the maximum number of vertices (break ties arbitrarily), and $u'$ is the golden vertex of $G_u$, then we add edges from $u'$ to all other vertices in $G_v$. Let $G=G_r$, where $r$ is the root of $T$.
@@ -24,19 +24,19 @@ The number of edges is at most $O(n\log n)$. Label $v$ with $|T_v|$. The number 
 
 This bound is in fact best possible by considering a complete binary tree and the following lemma:
 
-::: Lemma
+::: {.lemma}
 If $G=(V,E)$ is a graph with diameter $2$, then for any cut $\delta(U)$, we have $|\delta(U)|\geq min(|U|,|V\setminus U|)$.
 :::
 
 
-::: Proof
+::: {.proof}
 wlog, let $|U|\leq |V\setminus U|$. If all vertex in $U$ has an neighbor in $V\setminus U$, then $|\delta(U)|\geq |U|$ and we are done. Otherwise, there is an vertex $u\in U$ has no neighbor in $V\setminus U$, then for any $v\not\in U$, there is an $u'\in U$, and there is a path $uu'v$. This implies there are at least $|V|$ edges in $\delta(U)$. 
 :::
 
 
 Is this the best possible for general $G_T^k$ too? Not at all. To show this, we introduce an algorithmic problem.
 
-::: Problem
+::: {.problem}
 Preprocess a rooted tree $T$ where the elements in the tree $T$ has weights from a semigroup $(S,+)$, such that we can answer the following query in $k$ semigroup operations. 
 
 **Query Input**: $x$ and $y$ where $x$ is an ancestor of $y$.
@@ -47,12 +47,12 @@ Preprocess a rooted tree $T$ where the elements in the tree $T$ has weights from
 
 Alon and Schieber showed this problem can be solved by precompute $O(n\lambda(k,n))$ path sums [@Alon87optimalpreprocessing]. Where $\lambda(k,n)$ is related to the inverse Ackermann function, and $\lambda(4,n)=O(n\log^*n)$. 
 
-::: Theorem
+::: {.theorem}
 If $T$ has $n$ vertices, then $G_T^k$ have $O(n \lambda(k,n))$ edges.
 :::
 
 
-::: Proof
+::: {.proof}
 A simple reduction from our tree problem by input our rooted tree $T$ into Alon and Schieber's algorithm. For each path sum they preprocess, we create an edge in our $G$. The diameter of all $G_v$ is at most $2k$, since for any 2 vertices $x$ and $y$, we find it's lowest common ancestor $w$ in $T$, then there is a path of length $k$ from $x$ to $w$ and another of length at most $k$ from $w$ to $y$. 
 :::
 
@@ -63,7 +63,7 @@ In their problem, their path sum is actually divide the path into $k$ subpaths, 
 
 One might to think the reason we can do it in $O(n)$ edges comes directly from in the undirected model we can traverse back from the leaf and allow overlaps. Maybe the following problem might give us an lower bound. 
 
-::: Problem
+::: {.problem}
 Preprocess a rooted tree $T$ where the elements in the tree $T$ has weights from a semigroup $(S,+)$, such that we can answer the following query in $k$ semigroup operations. 
 
 **Query Input**: $x$ and $y$ where $x$ is an ancestor of $y$ and $y$ is a leaf.
@@ -76,7 +76,7 @@ Unfortunately, this does not give us an lower bound. Following the proof in Alon
 
 Again, for this graph, we can add at most $n$ edges and force diameter to be at most $2$. Take the lowest leaf and add edge to all other vertices. Here would be an formulation that could result an lower bound.
 
-::: Problem
+::: {.problem}
 Preprocess a rooted tree $T$ where the elements in the tree $T$ has weights from a semigroup $(S,+)$, such that we can answer the following query in $k$ semigroup operations. 
 
 **Query Input**: $x$ and $y$ where $x$ is an ancestor of $y$.
@@ -87,7 +87,7 @@ Preprocess a rooted tree $T$ where the elements in the tree $T$ has weights from
 
 Finally, here is a conjecture. Instead of using tree, we use Laminar family to simplify the wording of the conjecture. 
 
-::: Conjecture
+::: {.conjecture}
 For every constant $k$, there exist a Laminar family $X$ over ground set $V$ of $n$ vertices, such that for any graph $G=(V,E)$ such that $G[A]$ has diameter at most $k$ for all $A\in X$, then $|E|=\Omega(n\lambda_k(n))$.
 :::
 

@@ -28,4 +28,6 @@ $$
 $$
 
 I wrote a [Haskell implementation of the algorithm](https://gist.github.com/1066286).
- <script src="https://gist.github.com/1066286.js?file=word_problem_b3.hs"></script>
+ ::: {.gist}
+https://gist.github.com/1066286
+:::

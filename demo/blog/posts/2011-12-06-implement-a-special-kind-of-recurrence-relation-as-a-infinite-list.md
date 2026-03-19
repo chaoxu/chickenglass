@@ -17,8 +17,12 @@ Using an array would make it $O(d(n))$, but it is too imperative for our taste, 
 
 The idea is that we are summing the first item of infinite many stacks. However we don't have to really sum the infinite stacks, we only sum the stack we require. [The code](https://gist.github.com/1438136): 
 
-<script src="https://gist.github.com/1438136.js?file=rec.hs"></script>
+::: {.gist}
+https://gist.github.com/1438136
+:::
 
 What's a practical usage of this? Produce a infinite list of partition numbers, such that finding the first $n$ elements can be done in $O(n^{\frac{3}{2}})$ time and 3 lines of code. [The code](https://gist.github.com/1438142)
 
-<script src="https://gist.github.com/1438142.js?file=PartitionNumbers.hs"></script>
+::: {.gist}
+https://gist.github.com/1438142
+:::

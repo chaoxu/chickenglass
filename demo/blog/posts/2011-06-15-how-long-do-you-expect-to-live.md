@@ -5,7 +5,7 @@ tags: probability
 
 While discussing conditional probability, someone said the following: 
 
-::: Problem
+::: {.problem}
 The expected life expectancy of some country is 70, and there exist people who die at every age before 70. What is the expected life expectancy for a 60 year old?
 :::
 
@@ -16,12 +16,12 @@ Most people would answer 10. However, he continuous:
 
 The quote above would follow directly from the proof of the following theorem:
 
-::: Theorem
+::: {.theorem}
 For any real random variable $X$, if $\Pr(X\geq a)>0$, $E[X|X\geq a] \geq E[X]$.
 :::
 
  
-::: Proof
+::: {.proof}
 Let $c = \Pr(X\leq a)$ 
 $$
 \begin{align*}
@@ -38,7 +38,7 @@ If $a = \lambda b + (1-\lambda) c$, where $\lambda \in [0,1]$, then $a \leq \max
 
 
 In fact, one can easily modify the above proof and prove the next theorem:
-::: Theorem
+::: {.theorem}
 For any real random variable $X$, if $x\geq y$ and $\Pr(X\geq x)>0$, then $E[X|X\geq x] \geq E[X|X\geq y]$. 
 :::
 

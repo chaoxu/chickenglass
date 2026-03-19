@@ -11,21 +11,21 @@ The definition of guard, visibility, etc. are defined in the wiki for the [art g
 
 One want to generalize the notion of guarding a polygon. Instead of walls, the edges become mirrors. The light loses intensity every time it get reflected on the mirror. Therefore after $k$ reflections, it become indistinguishable to a guard.
 
-::: Definition $k$-reflection visible
+::: {.definition} $k$-reflection visible
 Given polygon $P$. $p,q\in P$. $p$ is called *$k$-reflection visible* to $q$ if and only if there is a ray of light from $p$ to $q$, such that it reflects at most $k$ times on the boundary of the polygon. Each reflection follows the law of reflection. (angle of incidence = angle of reflection.)
 :::
 
 
-::: Definition $k$-reflection guard
+::: {.definition} $k$-reflection guard
 A *$k$-reflection guard* is a guard that can see all the points that are $k$-reflection visible from himself.
 :::
 
 
-::: Theorem
+::: {.theorem}
 If $G_k(n)$ is the minimal number of $k$-reflection guard required to guard any polygon of $n$ vertices. Then $G_k(n)=\lfloor \frac{n}{3} \rfloor$.
 :::
 
-::: Proof
+::: {.proof}
 By the art gallery theorem, we know $G_0(n)\leq \lfloor \frac{n}{3} \rfloor$. $G_k(n)\leq G_j(n)$ if $j\leq k$. Since a guards can only become stronger when they can see more reflections.
 $G_k(n)\leq \lfloor \frac{n}{3} \rfloor$
 
@@ -47,7 +47,7 @@ $\lfloor \frac{n}{3} \rfloor \leq G_k(n)\leq  \lfloor \frac{n}{3} \rfloor$, $G_k
 
 Just for fun. Here is another toy problem from last year's AMS 345 homework.
 
-::: Problem
+::: {.problem}
 Let $P$ be a simple polygon with $n = 3k$ vertices, for a positive integer $k$. Starting with a vertex, color the vertices alternately around the polygon: red, blue, green, red, blue, green, etc.
 Find a counterexample to the following claim: There exist a monochromatic guard set.
 :::
@@ -55,7 +55,7 @@ Find a counterexample to the following claim: There exist a monochromatic guard 
 
 Back then, the best known counterexample has 15 vertices($k=5$). Professor Mitchell asked if it was the smallest counterexample. I start to work on the following problem:
 
-::: Problem
+::: {.problem}
 Find the smallest counterexample, and prove it's the smallest.
 :::
 
@@ -66,22 +66,22 @@ A counterexample with $k=3$. The colored region are the area can't be seen by ve
 
 It is indeed the smallest possible.
 
-::: Lemma
+::: {.lemma}
 Any 2 vertices on a quadrilateral can guard the quadrilateral.
 :::
 
 
-::: Proof
+::: {.proof}
 There are only 2 cases, draw them and convince yourself.
 :::
 
 
-::: Theorem
+::: {.theorem}
 There exist no counterexample for $k=2$.
 :::
 
 
-::: Proof
+::: {.proof}
 Suppose there exist a polygon $P$ such that $k=2$ and it is a counterexample to the original conjecture. The vertices of $P$ are
 $RGBrgb$.
 

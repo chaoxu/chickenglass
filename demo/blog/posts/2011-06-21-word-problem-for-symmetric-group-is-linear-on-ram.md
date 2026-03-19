@@ -5,7 +5,7 @@ tags: BSU REU, computational complexity, group theory
 
 # Linear time algorithm for symmetric group
 
-::: Problem The word problem for symmetric groups
+::: {.problem} The word problem for symmetric groups
 **Input:***
 $w$ is a word of length $l$ from the presentation $S_n = \langle x_1,x_2,\ldots,x_n \mid x_i^2 = 1, x_{i+1}x_ix_{i+1} = x_ix_{i+1}x_i, x_ix_j = x_jx_i \rangle$ where $|i-j|\neq 1$.
  
@@ -16,7 +16,7 @@ Return `true` if $w$ is the identity, else return `false`.
 
 The representation was crucial for coming up with a linear time algorithm respect to $n$ and $l$. This is not a word problem on one group, but on a set of group.
 
-::: Theorem
+::: {.theorem}
 The following is a $O(n+l)$ algorithm for the word problem for symmetric groups on RAM.
 
 1. Produce an array `a` of size $n$, Such that `a[i] = i`. (Array start with index 1)
@@ -25,7 +25,7 @@ The following is a $O(n+l)$ algorithm for the word problem for symmetric groups 
 :::
 
 
-::: Proof
+::: {.proof}
 The algorithm takes $O(n+l)$ time is obvious. The correctness needs to be justified.
 
 $x_i$ can be represented as the transposition $(i~i+1)$. Define $(n~n+1) = (n~1)$.
@@ -53,7 +53,7 @@ The algorithm can be modified so it runs in $O(l n!)$ time for a Turing machine.
 
 This proves every symmetric group is automatic. For any fixed $S_n$, the Turing machine $M_n$ can solve the problem in $O(l)$ time without writing anything to the tape and can only move to the right, which is equivalent to a finite state automata.
 
-::: Remark
+::: {.remark}
 Automatic is a property of a group, not a set of groups. That's why $n$ is ignored in the $O(ln!)$, because it's fixed for each $S_n$. I was confused for a while before I read a concrete definition. 
 :::
 
@@ -76,12 +76,12 @@ Recursively calculate $A''(w,z)$ with the following definition.
 $A''(1,z) = z$.
 $A''(w,z) = A''(w', A(x_iz))$, where $w = w'x_i$.
 
-::: Theorem
+::: {.theorem}
 $A(w) = A'(w)$ and runs in $O(l f(n^2,n))$ time.
 :::
 
 
-::: Proof
+::: {.proof}
 $A''(w,z)$ can ran at most $l$ times, each time it makes a call to $A(w)$, contribute the factor $O(f(n^2,n))$.
 :::
 

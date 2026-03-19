@@ -4,12 +4,12 @@ tags: puzzle
 ---
 This was a homework problem for CSE 548. It's also a very common puzzle. 
 
-::: Problem
+::: {.problem}
 Given a $n\times n$ checkerboard, one can put a few checkers on it. A rule transform a checkerboard to the next. The rule states one can put a new checker if and only if at least two of it's adjacent positions (up, down, left, right) has a checker. Apply the rule until no more checker can be added. Show that if originally the checkerboard has only $n-1$ checkers, then when the process terminates, there exist cells not filled by a checker.
 :::
 
 
-::: Proof
+::: {.proof}
 Consider any $n-1$ pieces that are already placed on the board. Consider the following process:
 
 1. Pick any piece that was never considered, so we have a filled rectangle(square) of $1\times 1$. 

@@ -3,7 +3,7 @@ title: Rectangles in point set
 tags: classical, algorithm, computational geometry
 ---
 
-::: Problem
+::: {.problem}
 Given $n$ points in the plane $P$, find if any $4$ of them are the vertices of some axis-aligned rectangle.
 :::
 

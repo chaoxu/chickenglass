@@ -2,7 +2,7 @@
 title: Bisect circle for a balanced set of points
 ---
 
-::: Problem
+::: {.problem}
 $S$ is a set of $n$ points on the unit circle. No two points in $S$ lies on the same diagonal. Find a line that passes through the origin that divide the unit circle into two open semicircles, such that each piece have the same number of points in $S$.
 :::
 
@@ -12,7 +12,7 @@ Let $C$ be the unit circle. The angle made by the lines and the $x$-axis uniquel
 
 We can solve this problem in $O(n)$ time by reducing it to a somewhat more general problem.
 
-::: Problem
+::: {.problem}
 Given two arcs $L(a,b)$ and $U(a,b)$ and a set of points $S$ on lying on the two arcs. $|S\cap L(a,b)|\geq k$ and $|S\cap U(a,b)|\leq k$. $|l_\theta\cap S|\leq 1$ for all $\theta\in(a,b)$. Find a $l_\theta$, such that $\theta\in(a,b)$ and $|S\cap (L(a,\theta)\cup U(\theta,b))|=k$ in $O(|S|)$ time.
 :::
 

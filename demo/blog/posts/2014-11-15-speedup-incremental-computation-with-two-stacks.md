@@ -5,7 +5,7 @@ tags: algorithmic toolkit
 
 # Introduction
 
-::: Problem
+::: {.problem}
 Consider a knapsack of capacity $C$ and a empty sequence of objects. One can update the sequence by add or delete objects from either end of the sequence. Construct a data structure, such that we can output the maximum possible value of the knapsack after every update if we pack the knapsack using the objects in the sequence.
 :::
 
@@ -18,7 +18,7 @@ The rest of the article describe the idea of decomposable function, which lead t
 
 # Decomposable function
 
-::: Definition
+::: {.definition}
 A function $f:\cup_{i=1}^\infty X^i \to Y$ is called $(\triangleright,\bowtie,\triangleleft)$-decomposable, if for all $1 \leq k \leq n$,
 \[
 f(x_1,\ldots,x_n)=(x_1 \triangleright \ldots \triangleright x_k \triangleright id_{\triangleright}) \bowtie (id_{\triangleleft} \triangleleft x_{k+1}\triangleleft \ldots \triangleleft x_n)
@@ -31,7 +31,7 @@ where
 :::
 
 
-::: Problem
+::: {.problem}
 Let $f$ be a $(\triangleright,\bowtie,\triangleleft)$-decomposable function. Let $S$ be a finite sequence of elements, such that $S$ is in the domain of $f$. Dynamically output $f(S)$ after every deque operation on $S$, such that we call $\triangleright,\bowtie$ and $\triangleleft$ amortized constant number of times per operation. 
 :::
 
@@ -50,7 +50,7 @@ Intuitively, $\triangleright$ and $\triangleleft$ produces two stacks. $\bowtie$
 
 ## $\triangleleft$, a stack
 
-::: Problem
+::: {.problem}
 We have a stack of elements $S$, dynamically maintain $foldl \triangleleft$ in $O(1)$ $\triangleleft$ per operation.
 :::
 
@@ -71,7 +71,7 @@ The idea is to build this through two stacks. This is a very common problem, and
 
 We can try to simulate the deque with 3 stacks(where $n$ deque operation maps to $9n$ stack operations) [@Petersen2001], but that is just an interesting exercise. We just need to use our two stack set up as in the queue and occasionally rebuild everything. When our front stack become empty and we remove an element in front of our sequence, we just rebuild the structure with two stacks of the same size. There are ways to do the rebuilding without use extra space. The case on the other side is handled symmetrically. Therefore we still maintain $O(1)$ amortized monoid time per operation and $O(\sqrt{n})$ extra space. Finally, we combine the result through $\bowtie$.
 
-::: Remark
+::: {.remark}
 There exist worst case constant time simulation of deque using a few stacks [@Petersen2001]. Thus it is conceivable to make everything from amortized to worst case, with obvious increase in space.
 :::
 
@@ -99,7 +99,7 @@ Let $\bigtriangleright_{i=j}^k x_i=(a,b,c,d)$, where $a$ is the maximum sum usin
 
 ## Dynamic sum of a sequence of elements
 
-::: Problem
+::: {.problem}
 Let $x_1,\ldots,x_n$ be a finite sequence of elements from a monoid $(M,+)$. Dynamically maintain the sum of all element in the sequence if we can add and delete element in both end of the sequence.
 :::
 
@@ -108,7 +108,7 @@ A simpler version of this problem is asked in [CS theory](http://cstheory.stacke
 
 Let $f$ be the sum of elements in the sequence, then $f$ is $(+,+,+)$-decomposable. There is a more general statement: 
 
-::: Theorem
+::: {.theorem}
 $f$ is a homomorphism, then it is decomposable.
 :::
 

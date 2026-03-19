@@ -3,7 +3,7 @@ title: Totally Unimodular Matrices
 tags: matrix
 ---
 
-::: Definition Totally Unimodular Matrices
+::: {.definition} Totally Unimodular Matrices
 A matrix $A$ is *totally unimodular* if for all square submatrix $A'$ of $A$, $\det(A') \in \{-1,0,1\}$. 
 :::
 
@@ -12,7 +12,7 @@ We will use $TU$ to be the set of all totally unimodular matrices.
 
 By this definition, all the entries in a totally unimodular matrix must be $-1,0,1$ by consider square submatrix of size $1$.
 
-::: Proposition
+::: {.proposition}
 If $A \in TU$, $A_j$ be the $j$th row of $A$, then 
 
 1. $A^T \in TU$,
@@ -32,7 +32,7 @@ If $A \in TU$, $A_j$ be the $j$th row of $A$, then
 6. Multiply by ${-1,0,1}$ to a row.
 :::
 
-::: Proof
+::: {.proof}
 1. $det(M) = det(M^T)$.
 2. square submatrix of $A'$ is also square submatrix of $A$.
 3. The submatrices that doesn't contain the first row has corresponding submatrix in $A$, ones that does contain the first row has determinant 0.   

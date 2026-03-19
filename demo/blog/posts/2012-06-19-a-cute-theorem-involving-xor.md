@@ -6,11 +6,11 @@ tags: math
 Define $[a..b] = \{x|a\leq x\leq b, x\in \mathbb{N} \}$, and $k\oplus [a..b] = \{k\oplus x| x\in [a..b]\}$, where $\oplus$ is the bitwise xor function.
 We want to know something about $k\oplus [a..b]$. 
 
-::: Lemma
+::: {.lemma}
 $x-y \leq x\oplus y \leq x+y$
 :::
 
-::: Proof
+::: {.proof}
 $x\oplus y \leq x+y$ is easy to see as $\oplus$ is binary addition without carries.
 Assume $x\oplus y < x-y$ for some $x$ and $y$, then
 \[
@@ -21,12 +21,12 @@ x = x\oplus(y\oplus y)
 A contradiction. Therefore $x-y \leq x\oplus y$.
 :::
 
-::: Remark
+::: {.remark}
 $\oplus$, binary addition without carries, and binary subtraction without borrows are the same operation. The lemma is trivial by notice that equivalence. 
 :::
 
 
-::: Theorem
+::: {.theorem}
 If $f:\mathbb{N}\to \mathbb{N}$ a surjection such that $x-n\leq f(x)\leq x+m$, then
 
 1. $\{f(x)|x\in [a..b]\} \supseteq [a+m..b-n]$
@@ -34,7 +34,7 @@ If $f:\mathbb{N}\to \mathbb{N}$ a surjection such that $x-n\leq f(x)\leq x+m$, t
 :::
 
 
-::: Proof
+::: {.proof}
 $f$ is a surjection implies all values in any integer interval get's taken. $f^{-1}(y)=\min(\{x|f(x)=y\})$
 \[
 x-n\leq f(x)\leq x+m \implies y+m\leq f^{-1}(y)\leq y-n.
@@ -48,7 +48,7 @@ x-n\leq f(x)\leq x+m \implies y+m\leq f^{-1}(y)\leq y-n.
 
 Let $f_k(x) = k\oplus x$, noting that $f_k$ is a bijection, we derive the result we want for xor.
 
-::: Corollary
+::: {.corollary}
 1. $[a+k..b-k] \subseteq k\oplus [a..b]$.
 2. $[0..b-k] \subseteq k\oplus [0..b]$.
 :::

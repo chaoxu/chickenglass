@@ -23,4 +23,6 @@ It is important to also handle cases where we will have repeated elements
 
 This is done by recursively try to compress a free monoid element with the [FreeMonoidCompress](/posts/2013-03-26-represent-an-element-in-a-free-monoid-with-minimum-weight.html) module.
 
-<script src="https://gist.github.com/chaoxu/5210853.js"></script>
+::: {.gist}
+https://gist.github.com/chaoxu/5210853
+:::

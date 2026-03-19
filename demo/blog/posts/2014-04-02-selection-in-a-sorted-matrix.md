@@ -19,17 +19,17 @@ Let $A_o$ be the matrix we get by removing all even index columns from $A$, and 
 In [@Mirzaian198513], they used $A_{o,o}$, which is defined as only retain positions with odd coordinates, but I found it nicer to consider things by only stripping one coordinate. In particular, it gave a much nicer proof for the following result. 
 
 
-::: Definition
+::: {.definition}
 $r(a,A)$ is the number of elements in matrix $A$ smaller or equal to $a$.
 :::
 
 
-::: Theorem
+::: {.theorem}
 Let $A$ be a sorted $n\times m$ matrix, then $2(r(a,A_o) - n) \leq r(a,A)\leq 2r(a,A_o)$.
 :::
 
 
-::: Proof
+::: {.proof}
 For any fixed $i$, let $f(i)$ be the largest $j$, such that $A_{i,j}\geq a$. $r(a,A)=\sum_{i=1}^n f(i)$, $r(a,A_o)=\sum_{i=1}^n \lceil f(i)/2 \rceil \leq r(a,A)/2 +n$. On the other hand $\sum_{i=1}^n f(i)/2 \leq r(a,A_o)$. 
 :::
 

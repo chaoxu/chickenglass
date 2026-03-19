@@ -2,7 +2,7 @@
 title: TSP, Max TSP and Supnick
 ---
 
-::: Problem
+::: {.problem}
 Given $f$ and $x_1,\ldots,x_n$. Find a permutation $\pi$ that maximizes (minimizes)
 \[
 \sum_{i=1}^n f(x_{\pi(i)},x_{\pi(i+1)}).
@@ -14,7 +14,7 @@ All our index calculations are mod $n$.
 
 Assume $f$ can be evaluated in $O(1)$ time. The TSP problem reduces to this one.
 
-::: Definition Supnick
+::: {.definition} Supnick
 For all $x\leq x'$, $y\leq y'$, $f:\R^2\to \R$ is called Supnick if it has the following properties:
 
 1. Monge: $f(x,y)+f(x',y')\leq f(x',y)+f(x,y')$.
@@ -24,7 +24,7 @@ For all $x\leq x'$, $y\leq y'$, $f:\R^2\to \R$ is called Supnick if it has the f
 
 The name Supnick comes from [Supnick matrix](http://en.wikipedia.org/wiki/Supnick_matrix), which are symmetric Monge matrices. The following theorem implies an $O(n\log n)$ algorithm to solve the TSP problem if the distance matrix is Supnick [@supnick].
 
-::: Theorem Supnick’s
+::: {.theorem} Supnick’s
 Let $x_1\leq x_2 \leq \ldots \leq x_n$, $f$ is Supnick, then
 \[
     \sum_{i=1}^n f(x_{\pi(i)},x_{\pi(i+1)})

@@ -12,7 +12,7 @@ As an example, this article demonstrates how to write the KMP string matching al
 
 The KMP string matching algorithm solves the following problem.
 
-::: Problem
+::: {.problem}
 Given a string $pat$ of length $m$, return if it exist in $text$ of length $n$ in $O(n)$ time.
 :::
 

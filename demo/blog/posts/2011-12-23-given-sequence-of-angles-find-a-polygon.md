@@ -3,7 +3,7 @@ title: Given sequence of angles, find a polygon
 tags: computational geometry
 ---
 
-::: Problem
+::: {.problem}
 Find a polygon $p_1\ldots p_n$, such that the angle at vertex $p_i$ is $\alpha_i$.
 :::
 

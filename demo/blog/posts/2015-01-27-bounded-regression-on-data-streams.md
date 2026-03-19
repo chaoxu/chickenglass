@@ -7,7 +7,7 @@ title: Bounded regression on data streams
 
 Recently [Hsien-Chih](http://web.engr.illinois.edu/~hchang17/) sent me [this problem](http://www.careercup.com/question?id=5207197178920960) ([similar problem has been asked on Quora](http://www.quora.com/Given-an-integer-array-what-is-the-algorithmic-approach-to-find-minimum-adjustments-such-that-the-absolute-difference-between-the-adjacent-elements-is-within-target-value)), and noticed it might be solved in near linear time using min-cost circulation. It's easy to generalize it to the following problem. 
 
-::: Problem Bounded Regression on Data Stream
+::: {.problem} Bounded Regression on Data Stream
 Given 
 
 1. $(a_1,\ldots,a_n)\in \R^n$,

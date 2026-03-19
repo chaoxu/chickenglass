@@ -4,7 +4,7 @@ title: More algorithms on perfectly balanced photo gallery
 
 Recently there was [an article](http://www.crispymtn.com/stories/the-algorithm-for-a-perfectly-balanced-photo-gallery) by [Johannes Treitz](https://twitter.com/jtreitz) [submitted to Hacker News](https://news.ycombinator.com/item?id=6198400) about how to display a set of pictures as nicely as possible. The article doesn't have a formal description of the problem, so here is my take on what it mean by perfectly balanced.
 
-::: Problem
+::: {.problem}
 Given a sequence of $n$ rectangles where the $i$th rectangle has width $W_i$ and height $H_i$. Also given are width $W$ and target height $H$.
 Partition the sequence to $k$ consecutive subsequences, such that we scale the rectangles keeping the aspect ratio, and each subsequence of rectangles fills the entire width $W$, and is close to the target height $H$.
 :::
@@ -13,7 +13,7 @@ The problem is not so well defined. To make sure the heights are close, do we mi
 
 Nevertheless, in real applications, the exact definition doesn't matter that much. Treitz reduce the problem to the linear partition problem.
 
-::: Problem
+::: {.problem}
 Let $a_1,\ldots,a_n$ be a sequence of positive reals. We want to partition it into $k$ consecutive subsequences, such that the maximum sum over each subsequence is minimized. 
 Formally, find $k+1$ positions $b_1=1,b_2,\ldots,b_{k},b_{k+1}=n$, such that $\max_{i=1}^{k} \sum_{j=b_i}^{b_{i+1}} a_j$ is minimized.
 :::
@@ -25,7 +25,7 @@ $a_i = W_i/H_i$ is the aspect ratio. This article will explore the techniques to
 
 Let's first consider a simpler problem for demonstration.
 
-::: Problem
+::: {.problem}
 Let $a_1,\ldots,a_n$ be a sequence of positive reals. We want to partition it into $k$ consecutive subsequences, such that the total difference between the sum of each consecutive sequence and the average sum of the whole sequence is minimized. 
 Formally, let $\mu = \frac{1}{k}\sum_{i=1}^n a_i$. Find $k+1$ positions $b_1=1,b_2,\ldots,b_k,b_{k+1}=n$, such that $\sum_{i=1}^{k} |\sum_{j=b_i}^{b_{i+1}} a_j - \mu|$ is minimized.
 :::
@@ -57,7 +57,7 @@ There are $kn$ entries in the DP table for $C$, and $C(d,i)$ requires $O(n)$ tim
 # Improve the time complexity
 There is a standard technique on totally monotone matrices that can reduce the complexity of the problem to $O(kn)$. 
 
-::: Definition
+::: {.definition}
 A weight function $w$ is Monge if for every $1<i+1<j\leq n$, we have 
 \[
 w(i,j) + w(i+1,j+1)\leq w(i,j+1) + w(i+1,j)
@@ -65,11 +65,11 @@ w(i,j) + w(i+1,j+1)\leq w(i,j+1) + w(i+1,j)
 . 
 :::
 
-::: Theorem
+::: {.theorem}
 $w$ is Monge.
 :::
 
-::: Proof
+::: {.proof}
 Let $\sum_{k=i+1}^{j-1} a_i - \mu = m$
 $$
 \begin{align*}
@@ -84,11 +84,11 @@ To prove the $\leq$, see that $a_i,a_j$ are positive, one can consider either $m
 :::
 
 
-::: Remark
+::: {.remark}
 We can replace $|\cdot|$ with $|\cdot|^p$ for $p\geq 1$. When $p=2$, we minimizes the variance(and standard deviation).
 :::
 
-::: Definition
+::: {.definition}
 A matrix is totally monotone if for every $i<i'$ and $j<j'$, $a_{i,j} > a_{i',j} \implies a_{i,j'} > a_{i',j'}$. 
 :::
 
@@ -96,7 +96,7 @@ A matrix is totally monotone if for every $i<i'$ and $j<j'$, $a_{i,j} > a_{i',j}
 ![totally monotone](/files/totallymonotone.jpg)
 <br /><sup>Image Credit: [Vanessa Li](http://codesandmaze.tumblr.com/).</sup>
 
-::: Remark
+::: {.remark}
 There are isomorphic definition of Monge and totally monotone, depend on if the person want to find row or column minima. 
 :::
 
@@ -107,7 +107,7 @@ C(d,i) = \min_{1\leq j\leq n} {M^d_{j,i}}
 \]
 In other words, $C(d,i)$ is the $i$th column's minima of $M^d$. 
 
-::: Theorem
+::: {.theorem}
 If $w$ is Monge, then $M^d$ is a $n\times n$ totally monotone matrix.
 :::
 
@@ -174,7 +174,7 @@ Some readers who are familiar with [$L^p$ space](http://en.wikipedia.org/wiki/Lp
 
 Good news, a more restrictive but good enough variant of the Monge property hold.
 
-::: Definition
+::: {.definition}
 $w$ has the *strict bottleneck Monge property* if either of the following is true for $1<i+1<j$:
     
 1. $\max(w(i,j), w(i+1,j+1)) < \max(w(i+1,j),w(i,j+1))$.
@@ -184,7 +184,7 @@ $w$ has the *strict bottleneck Monge property* if either of the following is tru
 
 Our $w$ in consideration has strict bottleneck Monge property. Because all the numbers are positive, $w(i,j+1)>w(i+1,j+1)>w(i+1,j)$, $w(i,j+1)>w(i,j)>w(i+1,j)$. A simple case check on the relation between $w(i,j)$ and $w(i+1,j+1)$ will give the desired proof. Why this property? You can check by a case by case proof that this property implies total monotonicity.
 
-::: Theorem
+::: {.theorem}
 If $w$ has the strict bottleneck Monge property, then $M^d$ is a $n\times n$ totally monotone matrix.
 :::
 
@@ -192,7 +192,7 @@ There seems to be a direct proof by analyze 12 different cases, but I got too bo
  
 The final punchline.
     
-::: Theorem
+::: {.theorem}
 Change the last `(+)` in `minCostkEdgePath` to `max`, and change how `w` is computed in `minCostMuPartition` solves [Problem 2].
 :::
 
@@ -205,7 +205,7 @@ For a few hundred photos, we can afford to run it in real time. This will reach 
 
 Can we do better? Yes, by considering a different kind of reduction(thank god we didn't formally define what *close* means). Instead of compute $k$ and try to fit $k$ rows, why not just make sure each row's width is almost the width we want and scale accordingly? We want each rows to approximately have width $W$, we don't really care how many rows there are.
 
-::: Problem
+::: {.problem}
 Let $a_1,\ldots,a_n$ be a sequence of positive reals, and a number $\mu = W/H$. We want to partition it into consecutive subsequences, such that the maximum difference between the sum of each consecutive sequence and the $\mu$ is minimized. 
 Formally, find a $k$ and a sequence of $k+1$ numbers $b_1=1,b_2,\ldots,b_{k},b_{k+1}=n$, such that $\max_{i=1}^{k} |\sum_{j=b_i}^{b_{i+1}} a_j - \mu|$ is minimized.
 :::

@@ -26,12 +26,12 @@ D_k = \{x \backslash \bigcup S_{k+1} : x \in S_k\}
 \]
 Trivially, $x\in S_{k+1}$, $y\in S_k$, then $x\subset y$.
 
-::: Problem
+::: {.problem}
 Prove that $D_k$ is a set of disjoint sets.
 :::
 
 
-::: Proof
+::: {.proof}
 If $x,y\in D_k$ and $x\cap y$ is nonempty and $x\neq y$. Since $x=\bigcap_{i=1}^k x_i$ and $y = \bigcap_{i=1}^k y_i$, $x\cap y = \bigcap_{i=1}^k x_i \cap y_i$, and there are at least some $i,j$, such that $x_i\neq y_j$. This shows $x\cap y \subset \bigcap \mathcal{S}_{k+1}$.
 :::
 

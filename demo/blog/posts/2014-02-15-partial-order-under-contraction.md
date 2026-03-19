@@ -18,12 +18,12 @@ If we interpret $(P,\leq)$ as a directed graph, then this operation is contracti
 
 There is a cute characterization of when $(Q,\preccurlyeq)$ is also a partial order.
 
-::: Theorem
+::: {.theorem}
 $C(P,Z)=(Q,\preccurlyeq)$ is a partial order if and only if $D(Z)\cap U(Z) = \emptyset$. In particular, the map \[ f(x) = \begin{cases} x  & x\in P\backslash Z \\ q & x \in Z\end{cases} \] is order-preserving.
 :::
 
 
-::: Proof
+::: {.proof}
 If $x\leq y$, then $f(x)\preccurlyeq f(y)$ by definition. We just have to prove $(Q,\preccurlyeq)$ is a partial order.
 
 If $D(Z)\cap U(Z) \neq \emptyset$, let $x\in D(Z)\cap U(Z)$. There is $z,z'\in Z$ such that $z\leq x\leq z'$. $x \preccurlyeq q$ and $q \preccurlyeq x$ but $x\neq q$. $(Q,\preccurlyeq)$ is not a partial order.

@@ -6,7 +6,7 @@ tags: automatic group, braid group, BSU REU
 $B_3$ is particularly nice to analyze due to the uniqueness of the Garside
 normal form.
 
-::: Theorem
+::: {.theorem}
 The Garside normal form is unique in $B_3$, and is in the form 
 $\Delta^m\sigma_{a_1}^{e_1}\ldots\sigma_{a_k}^{e_k}$, such that $a_i \neq a_{i+1}$,
 $e_1,e_k\geq 1$ and $e_2,\ldots,e_{k-1} \geq 2$.
@@ -14,7 +14,7 @@ $e_1,e_k\geq 1$ and $e_2,\ldots,e_{k-1} \geq 2$.
 
 
 
-::: Proof
+::: {.proof}
 For any word $w\in B_n$, the Garside normal form $\Delta^m p$ is unique up
 to elements $p$ in $B_n^+$ and $p$ does not have a factor of $\Delta$.
 Now we show that there is only one way to write $p$. 
@@ -31,12 +31,12 @@ unique.
 :::
 
 
-::: Theorem
+::: {.theorem}
 The Garside normal form of $B_3$ is regular.
 :::
 
 
-::: Proof
+::: {.proof}
 Let $A=\{\Delta,\Delta^{-1},\sigma_1,\sigma_2\}$, then $A$ generates $G$.
 The Garside normal form is a regular language over $A$ because they exist 
 an explicit regular expression $R$ that matches it.
@@ -89,7 +89,7 @@ The fellow traveler property is true for each generator.
 
 We now have the theorem
 
-::: Theorem
+::: {.theorem}
 $B_3$ is automatic.
 :::
 

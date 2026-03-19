@@ -3,7 +3,7 @@ title: Pattern in Labeled Ordered Rooted Trees
 tags: algorithm
 ---
 
-::: Problem
+::: {.problem}
 Let $T$ be a rooted ordered labeled tree. Find all the vertices where all it's subtrees are equal.
 :::
 
@@ -20,7 +20,7 @@ Let $s(T)$ be a string defined by concatenating the labels on the path by traver
 
 Note $s(T)$ would be a balanced set of parenthesis when $l$ maps vertices to the empty string. Indeed, there is a bijection between unlabeled ordered trees and balanced parenthesis. It's not hard to see this generalizes to the labeled setting.
 
-::: Theorem
+::: {.theorem}
 If $s(T)=s(T')$, then $T=T'$.
 :::
 

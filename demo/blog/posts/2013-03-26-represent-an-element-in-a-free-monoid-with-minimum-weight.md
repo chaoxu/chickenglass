@@ -6,7 +6,7 @@ tags: Haskell, monoid
 Consider a rank $k$ free monoid $(M,\cdot)$ with free generators $G$. Sometimes there are ways to express them by writing a little less than write the whole string of generators. We can group some generators by powers.
 For example, $aababababaaaa = a(ab)^4a^4$.
 
-::: Problem
+::: {.problem}
 Find the shortest way to write down an element in a free monoid.
 :::
 
@@ -19,7 +19,7 @@ Formally. For any free monoid $M$ with free generators $G$, we can construct ano
 1. $a\in G \implies Atom(a)\in M^*$.
 2. $a\in M^*$, $n\in\N$, then $Power(a,n) \in M^*$. 
 
-::: Definition
+::: {.definition}
 Consider a homomorphism $w:M^*\to \N$. Such that for all $n$, it satisfy the following criteria: 
 
 1. $w(a)\leq w(b) \implies w(Power(a,n))\leq w(Power(b,n))$,
@@ -35,7 +35,7 @@ Let $f:M^*\to M$, such that
 - $f(Atom(a)) = a$,
 - $f(Power(a,n)) = a^n$.
 
-::: Problem
+::: {.problem}
 Given $a\in M$, we want to find $a'\in M^*$, such that $f(a') = a$ and $w(a')$ is minimized.
 :::
 
@@ -55,4 +55,6 @@ Here $\min$ return any of the expressions that achieves the minimum weight. This
 
 Here is an Haskell code for it. It is designed to show the algorithm instead of been efficient. This has real life usage to [compress regular expressions](/posts/2013-03-21-regular-expression-for-a-interval-of-non-negative-integers.html).
  
-<script src="https://gist.github.com/chaoxu/72a82300b9750f9c0374.js"></script>
+::: {.gist}
+https://gist.github.com/chaoxu/72a82300b9750f9c0374
+:::

@@ -52,7 +52,7 @@ Most of the above has been described in [@Hinze2006], but we will talk about two
 
 ## Merge sorted lists in optimal time bound
 
-::: Theorem
+::: {.theorem}
 If $S$ and $T$ are two ordered sequences of length $n$ and $m$, respectively. $n\leq m$. Both ordered sequences are represented by finger trees. Compute the finger tree representation of $S\cup T$ takes $O(n\log \frac{m}{n})$ time.
 :::
 
@@ -76,7 +76,7 @@ We maintain a collection of intervals with data structure $D$, there are 3 opera
 2. $delete(D,a,b)$. Delete a interval $(a,b)$ from the collection, we assume it's always a interval inserted before.
 3. $measure(D)$. Find the measure of the union of all intervals in the collection. 
 
-::: Remark
+::: {.remark}
 It can be sharpened such that $n$ is the number of intervals inside the data structure. We just do a global rebuild if the number of interval doubled or reduced to half since the last global update. Also, $measure()$ actually only take constant time.
 :::
 

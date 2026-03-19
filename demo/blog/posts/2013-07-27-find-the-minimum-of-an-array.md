@@ -16,7 +16,7 @@ The idea is to use ternary search, which works well when all values are distinct
 
 First, we present a lemma.
 
-::: Lemma
+::: {.lemma}
 If there exist a index $i < j < k$, such that $a[i]=a[j]=a[k]$, then at least $\min(j-i,k-j)$ positions in the array has the same value as $a[i]$.
 :::
 
@@ -33,7 +33,9 @@ Consider we want to find the minima from index $l$ to $r$ (not including $r$), a
 
 Here is the code in Go:
 
-<script src="https://gist.github.com/chaoxu/6094392.js"></script>
+::: {.gist}
+https://gist.github.com/chaoxu/6094392
+:::
 
 # Complexity
 

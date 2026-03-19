@@ -4,14 +4,14 @@ title: A common **3SUM-hard** reduction
 
 I'm writing this to address a problem I often hear from friends. They usually get it from some technical interview.
 
-::: Problem
+::: {.problem}
 Let $A$ be an array of $n$ numbers, decide if there exist index $i,j,k$, such that $A[i]+A[j]=A[k]$.
 :::
 
 
 The problem is **3SUM-hard**. We reduce the problem **3SUM** to the above problem in linear time.
 
-::: Problem **3SUM**
+::: {.problem} **3SUM**
 Does there exist $a,b,c\in S$, such that $a+b+c=0$?
 :::
 

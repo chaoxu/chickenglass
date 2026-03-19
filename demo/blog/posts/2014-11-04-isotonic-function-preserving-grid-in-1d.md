@@ -3,19 +3,19 @@ title: Isotonic function preserving grid in $[0,1]$
 tags: analysis
 ---
 
-::: Definition
+::: {.definition}
 A function $\varphi:X\to Y$ is isotonic if $\|x-y\| < \|w-z\| \implies \|\varphi(x)-\varphi(y)\| < \|\varphi(w)-\varphi(z)\|$ for all $x,y,z,w\in X$.
 :::
 
 
 A sequence of points $x_0,x_1,\ldots,x_n$ is called $\delta$-grid if $\delta<\frac{1}{5n}$, $x_0=0$, $x_n=1$ and for all $1 \leq i\leq n-1$, we have $x_i-x_{i-1} \in (\frac{1}{n}-\frac{\delta}{2^{i-1}},\frac{1}{n}-\frac{\delta}{2^i})$. Note this imply $x_n-x_{n-1}>\frac{1}{n}$.
 
-::: Theorem
+::: {.theorem}
 Let $X$ be a $\delta$-grid of $n$ points where $\delta<2^{-n}$. $\varphi: X\to [0,1]$ is a isotonic function such that $\varphi(0)=0$ and $\varphi(1)=1$, then $|x_i - \varphi(x_i)|<1/n$
 :::
 
 
-::: Proof
+::: {.proof}
 It's easy to see that $\varphi$ is a increasing function. Let the points in $X$ ordered as $x_0,x_1,\ldots,x_n$. 
 Let $l_i = |\varphi(x_i)-\varphi(x_{i-1})|$. Note that 
 

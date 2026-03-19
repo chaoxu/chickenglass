@@ -7,7 +7,7 @@ Consider we have a histogram of $n$ values and $n$ distinct colors. The $i$th ba
 
 Formally, we are seeking an algorithm for the following problem:
 
-::: Problem
+::: {.problem}
 Input: $(v_1,1),\ldots,(v_n,n)$.
 
 Output: $S=\{s_1,\ldots,s_n\}$, such that $s_i = \{(x_{2i-1},c_{2i-1}),(x_{2i},c_{2i})\}$, $x_{2i}+x_{2i-1}=1$ and for all $1 \leq i\leq n$, 

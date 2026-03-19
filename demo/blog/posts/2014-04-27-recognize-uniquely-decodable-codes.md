@@ -4,7 +4,7 @@ title: Recognize Uniquely Decodable Codes
 
 A set of strings $C$ is called a uniquely decodable code, if $C^*$ has a unique factorization over $C$. Namely, for each element $s$ in $C^*$, there exist a unique finite sequence $\{s_i\}_{i=1}^m$ of elements in $C$, such that $s_1\ldots s_m = s$. We call the strings in $C$ a code string.
 
-::: Problem Uniquely Decodable Code Recognition
+::: {.problem} Uniquely Decodable Code Recognition
 Let $C$ be a finite set of strings, decide if $C$ is a uniquely decodable code.
 :::
 
@@ -19,12 +19,12 @@ For variable sized alphabet, let $\sigma$ be the number of distinct alphabet app
 
 Define $S(C) = \{ v| xv = c, c\in C\}$, the set of suffixes of $C$. $I(C) = \{ v| c'v = c, c'\neq c, c',c\in C\}$, we call those initial suffix.
 
-::: Lemma
+::: {.lemma}
 $C$ is uniquely decodable if and only if there is no $v\in I(C)$, such that $vs\in C^*$ and $s\in C^*$. 
 :::
 
 
-::: Proof
+::: {.proof}
 If there exist such $v$ so $vs,s\in C^*$. $c'v=c$ for some $c,c'\in C$. Consider the string $cs=c'(vs)$. It has at least two factorization, one start with $c$, the other start with $c'$, and $c'\neq c$.
 
 Let no such $v$ exists. Consider some $u\in C^*$. It can be written as $cs$ and $c's'$ for $c,c'\in C$, $s,s'\in C^*$. Assume there is more than one factorization, then $c'\neq c$ and wlog $c'v=c$. We arrive $vs=s'\in C^*$, a contradiction.
@@ -33,12 +33,12 @@ Let no such $v$ exists. Consider some $u\in C^*$. It can be written as $cs$ and 
 
 Consider a $G=(V,A)$ a directed graph. $V=S(C)$. There is an arc from $a$ to $b$ iff $ab=c$ or $cb=a$ for some $c\in C$.
 
-::: Theorem
+::: {.theorem}
  $C$ is uniquely decodable code iff there is no path from a vertex in $I(C)$ to $\epsilon$.
 :::
 
 
-::: Proof
+::: {.proof}
 For any arc $uv$, if $uv=c\in C$, then label the arc $uv$ by $u$. Otherwise, label the arc with $c$ where $cv = u$. It's then easy to see concatenate the labels on any walk from $v$ to $\epsilon$ spells a string of the form $vs \in C^*$ for $s \in C^*$.
 
 By induction, one can show that for a vertex $v$, there exist string $vs\in C^*$, where $s\in C^*$, if and only if there is a path from $v$ to $\epsilon$.
@@ -67,7 +67,7 @@ If we number the code words and name the suffixes by their length, then we can c
 The graph $G$ has at most $O(nk)$ arcs. We add a new vertex that has an arc to each initial vertices and apply a DFS from the new vertex.
 If it reaches the $\epsilon$ vertex, we return true, else we return false.
 
-::: Theorem
+::: {.theorem}
 There exist an algorithm to test if $C$ is a uniquely decodable code in $O(nk)$ time, where $k=|C|$ and $n=\sum_{c\in C} |c|$.
 :::
 

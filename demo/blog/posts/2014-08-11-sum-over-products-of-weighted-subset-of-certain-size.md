@@ -41,14 +41,14 @@ Let $[P]$ be the [Iverson bracket notation](http://en.wikipedia.org/wiki/Iverson
       \mathbb{0} & \text{otherwise.} \end{cases}
 \]
 
-::: Theorem
+::: {.theorem}
  1. $D(i,0) = [i \neq 0]$
 
  2. For $j\geq 1$, $D(i,j) = [i\geq w(v_j)] f(v_j)D(i-w(v_j),j-1) + g(v_j) D(i,j-1)$.
 :::
 
 
-::: Proof
+::: {.proof}
 The base case can be verified easily, we show part of a inductive step.
 
 $$

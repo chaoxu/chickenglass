@@ -3,7 +3,7 @@ title: Word problem for braid group using a representation
 tags: braid group, BSU REU, group theory, Haskell
 ---
 
-::: Problem The word problem for braid groups
+::: {.problem} The word problem for braid groups
 **Input:**
 $w$ is a word of length $l$ from the presentation $\langle \sigma_1,\sigma_2,\ldots,\sigma_{n-1} \mid  \sigma_{i+1}\sigma_i\sigma_{i+1} = \sigma_i\sigma_{i+1}\sigma_i, \sigma_i\sigma_j = \sigma_j\sigma_i \rangle$ where $|i-j|\neq 1$.
    
@@ -35,7 +35,9 @@ Where $t_i$ are generators of $F_n$, and $\sigma_i$ are the generators of the br
 Using a recursive definition. Let any word of the form $(\sigma_i w)^*$ be $\sigma_i^* \circ w^*$. The algorithm is obvious. Test if $w^*(t_i) = t_i$ for every generator in $F_n$ is applying a list of $\sigma_i$ to elements in $F_n$.
  
 I wrote the program in Haskell, and [posted it on github](https://gist.github.com/1041985).
-<script src="https://gist.github.com/1041985.js?file=word_problem_braid_group.hs"></script>
+::: {.gist}
+https://gist.github.com/1041985
+:::
 
 The analysis: Given a word with length $l$ in $B_n$, how long does it take to solve the problem with this algorithm?
 Each application of $\sigma_i^*(u)$ to some word $u$ takes $O(|u|)$ time. One then free reduce. $\sigma_i$ is applied $l$ times.

@@ -2,7 +2,7 @@
 title: Even cycle in a simple graph
 ---
 
-::: Problem
+::: {.problem}
 $G=(V,E)$ is a simple graph, decide if there exist a cycle of even length in $G$.
 :::
 
@@ -12,22 +12,22 @@ The problem comes from 2014 Spring UIUC Theory Qualify Exam.
 # Characterizations
 Let $\lambda(u,v)$ denote the local edge connectivity of vertices $u$ and $v$. It's the same as the largest number of edge disjoint paths connecting $u$ and $v$. $\overline{\lambda}(G) = \max_{u,v\in V} \{\lambda(u,v)\}$. Similarly, $\kappa(u,v)$ is defined as local vertex connectivity, and $\overline{\kappa}(G) = \max_{u,v\in V} \{\kappa(u,v)\}$
 
-::: Theorem
+::: {.theorem}
 If $\kappa(u,v) \geq 3$ for some $u,v\in V$, then there exist an even cycle.
 :::
 
 
-::: Proof
+::: {.proof}
 There are 3 vertex disjoint paths $p_1,p_2,p_3$ from $u$ to $v$, thus it contains cycle $p_1 p_2^{-1}$,$p_1 p_3^{-1}$ and $p_2 p_3^{-1}$. One of them will have even length. 
 :::
 
 
-::: Theorem
+::: {.theorem}
 If $\overline{\lambda}(G)\geq 3$, then $\overline{\kappa}(G)\geq 3$.
 :::
 
 
-::: Proof
+::: {.proof}
 If $\lambda(u,v)\geq 3$, we consider the 3 edge paths between $u,v$. Let them be $p_1,p_2,p_3$. Notice if none of them intersect at a vertex, $\kappa(u,v)\geq 3$.
 
 If $p_1,p_2$ intersects and has their first intersection at $v'$. Let $p_1',p_1''$ and $p_2'$ be the paths following $p_1$ from $u$ to $v'$ and $v'$ to $v$, and the paths following $p_2$ from $u$ to $v'$. $p_1' p_2'^{-1}$ is a cycle that contains $u$ and $v'$. $\lambda(u,v')\geq 3$ because there is an additional edge disjoint path $p_3 p_1''^{-1}$ from $u$ to $v'$.
@@ -38,7 +38,7 @@ So now we can consider $u,v'$, where $\lambda(u,v')\geq 3$ and $u,v'$ is in some
 
 It should be easy to show that
 
-::: Theorem
+::: {.theorem}
 If $\overline{\lambda}(G)=2$, then all cycles in the graph are edge disjoint.
 :::
 
@@ -62,7 +62,7 @@ Our algorithm above is pretty general and uses some heavy machinery. That's the 
 
 The theorems we proved implies one nice corollary
 
-::: Corollary
+::: {.corollary}
 If a graph has no even cycles, then all cycles in the graph are edge disjoint.
 :::
 

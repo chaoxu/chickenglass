@@ -17,12 +17,12 @@ The area of of any single section of the radio chart is $ab \frac{\cos \theta}{2
 
 Once we can maximize $\sum_{i=1}^n a_{\pi(i)} a_{\pi(i+1)}$, we are done.
 
-::: Lemma
+::: {.lemma}
 If $x\geq a\geq b \geq c \geq d\geq 0$, then $ax+bx - ab \geq cx+dx-cd$.
 :::
 
 
-::: Proof
+::: {.proof}
 Let's consider what is required to make sure the property works.
 $$
 \begin{align*}
@@ -38,7 +38,7 @@ The lemma is true, as $x\geq b$ is part of the hypothesis for $x$.
 :::
 
 
-::: Theorem
+::: {.theorem}
 Let $a_1,\ldots,a_n$ be a sequence of positive numbers, such that $a_1 \leq \ldots \leq a_n$. 
 
 Let $\pi$ be the following:
@@ -54,7 +54,7 @@ $\pi$ maximizes
 :::
 
 
-::: Proof
+::: {.proof}
 Proof by induction.
 
 *Base case:* Base case for $n=1,2$ are trivial.

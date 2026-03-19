@@ -5,7 +5,7 @@ tags: math
 
 My friend was solving the following problem during a interview for Citigroup's IT department. 
 
-::: Problem
+::: {.problem}
 Find the square root of a integer n, without using the built in sqrt function. (The range of the result was not specified, I assume it's double)
 :::
 

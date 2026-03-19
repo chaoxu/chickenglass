@@ -6,17 +6,17 @@ Here are some problems that are either open to the best of my knowledge, or aske
 
 # Probably NP-hard
 
-::: Problem
+::: {.problem}
 Given a directed graph $G$ and a vertex $v$, what's the minimum number of vertices has to be removed such that there exist a vertex $u$ such that there is no path from $v$ to $u$ or $u$ to $v$.
 :::
 
 
-::: Problem
+::: {.problem}
 [This one](http://cs.stackexchange.com/questions/12441/is-it-np-hard-to-fill-up-bins-with-minimum-moves).
 :::
 
 
-::: Problem
+::: {.problem}
 Given $a_1,\ldots,a_n$ and $b_1,\ldots,b_n$. Does there exist a permutation such that
 \[ 
 \sum_{i=1}^n a_{\pi(i)}a_{\pi(i+1)} - b_{\pi(i)}b_{\pi(i+1)} < 0
@@ -27,7 +27,7 @@ Is this problem NP-hard?
 
 Note this is basically traveling salesman problem such that the distance between two vertices is the difference of two symmetric product matrix, where a matrix $M$ is a product matrix of vector $x$ and $y$ if $M_{ij}=x_iy_j$.
 
-::: Problem
+::: {.problem}
 There are $n$ people sitting on a circle of $n$ seats. Out of the $n$ people, there are $k$ couples($2k$ people). You can swap any two people. Find an algorithm that swap the least amount of times such that all the couples are sitting with his/her partner.
 :::
 
@@ -36,7 +36,7 @@ There are $n$ people sitting on a circle of $n$ seats. Out of the $n$ people, th
 
 It comes from the game [FTL: Faster Than Light](http://www.ftlgame.com/). The beam weapons attacks a entire line segment. The damage is proportional to the total number of rooms hit by the line segment. 
 
-::: Problem
+::: {.problem}
 Input is the length $l$ and polygons on the plane. Find a segment of length $l$ that intersects the most number of polygons.
 :::
 
@@ -45,29 +45,29 @@ Variations: Allow weights, can we do it faster if polygons are all axis-aligned 
 
 This problem doesn't seem hard. Common computational geometry technique should handle it well. 
 
-::: Problem
+::: {.problem}
 Hypergraph minimum cut in near linear time?
 :::
 
 
 # Connectivity
 
-::: Problem
+::: {.problem}
 Given a simple unit edge capacity undirected graph $G=(V,E)$ with a subset of vertices $T$ with unit capacity, and remaining vertices with infinite capacity. Can one find a $st$-maximum flow in deterministic $O(n^{2.5})$ time?
 :::
 
 
-::: Problem
+::: {.problem}
 Let $G$ be a directed graph with a source vertex $s$, how fast can one find $\min_{t\in T} \lambda(s,t)$? 
 :::
 
 
-::: Problem
+::: {.problem}
 [Maximum local edge connectivity](http://cstheory.stackexchange.com/questions/25531/maximum-local-edge-connectivity)
 :::
 
 
-::: Problem
+::: {.problem}
 There are disjoint sets of red vertices $R$ and blue vertices $B$. Let $V=R\cup B$. $|R|,|B|$ are odd.
 
 Consider any submodular function $f:2^V\to \mathbb{R}$, such that $f(V)\leq f(Y)$ for all $Y$, where $|Y\cap R|$ and $|Y\cap B|$ are odd.
@@ -76,13 +76,13 @@ Show that there exist $r\in R$ and $b\in B$, s.t. for any set $S$ where $r,b\in 
 :::
 
 
-::: Problem
+::: {.problem}
 Let the min-cutset of a hypergraph to be a set of minimum size such that removing it disconnects the hypergraph. What is the maximum number of min-cutset there can be given the number of vertices?
 :::
 
 # Other problems
 
-::: Problem
+::: {.problem}
 How fast can we [improve the pseudo-polytime algorithm for subset sum](http://cstheory.stackexchange.com/questions/21533/faster-pseudo-polynomial-time-algorithm-for-subset-sum)? 
 :::
 

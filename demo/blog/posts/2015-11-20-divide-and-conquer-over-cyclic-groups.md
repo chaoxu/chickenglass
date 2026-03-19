@@ -16,7 +16,7 @@ by induction.
 
 First, we would need a small lemma.
 
-::: Lemma
+::: {.lemma}
 Let $a_1,\ldots,a_k$ be real numbers such that non of them is $0$ or $1$, then
 \[
 1+\sum_{j=1}^k \frac{1}{p_j} \prod_{i=1}^j \left(1+\frac{1}{p_i -1}\right) = \prod_{j=1}^k \left(1+\frac{1}{p_j-1}\right)
@@ -24,7 +24,7 @@ Let $a_1,\ldots,a_k$ be real numbers such that non of them is $0$ or $1$, then
 :::
 
 
-::: Proof
+::: {.proof}
 Proof by induction, basically $\frac{1}{x} (1+\frac{1}{x-1})=\frac{1}{x-1}$ for any $x\neq 0,1$, so this is true when $k=1$.
 
 $$
@@ -37,14 +37,14 @@ $$
 :::
 
 
-::: Theorem
+::: {.theorem}
 \[
 	f_k(x) = x \prod_{i=1}^{k} \left(1+\frac{1}{p_i-1}\right)
 \]
 :::
 
 
-::: Proof
+::: {.proof}
 $$
 \begin{align*}
 	f_k(x)            &= \sum_{i=0}^k f_i(x/p_i)\\
@@ -67,14 +67,14 @@ $$
 
 It's also useful to bound $f_k(x)$.
 
-::: Theorem
+::: {.theorem}
 \[
 	f_k(x) = O(x \log k)
 \]
 :::
 
 
-::: Proof
+::: {.proof}
 $$
 \begin{align*}
 	f_k(x) &= x \prod_{i=1}^{k} \left(1+\frac{1}{p_i-1}\right)\\

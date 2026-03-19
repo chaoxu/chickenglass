@@ -3,7 +3,7 @@ title: Minimum cost zero skew tree
 tags: series-parallel, tree
 ---
 
-::: Problem
+::: {.problem}
 Let $T$ be a rooted tree with real costs $c(e)$ and length lower bounds $\ell(e)$ on each edge $e$. We are interested in compute a function $f$, such that $f(e)\geq \ell(e)$, for any root to leaf path $P$, $\sum_{e\in P} f(e)=t$ and $\sum_{e\in E} c(e)f(e)$ is minimized. 
 :::
 
