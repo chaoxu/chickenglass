@@ -20,6 +20,8 @@ import { modKey } from "../lib/utils";
 export interface CommandHandlers {
   /** Save the active file. */
   onSave?: () => void;
+  /** Save the active file under a new name/location. */
+  onSaveAs?: () => void;
   /** Close the active tab. */
   onCloseTab?: () => void;
   /** Toggle the sidebar visibility. */
@@ -40,6 +42,12 @@ export interface CommandHandlers {
   onShowSettings?: () => void;
   /** Open search panel. */
   onShowSearch?: () => void;
+  /** Open folder dialog (Tauri: native dialog, browser: no-op). */
+  onOpenFolder?: () => void;
+  /** Open a recently opened file by path. */
+  onOpenRecentFile?: (path: string) => void;
+  /** Recent file paths for dynamic command generation. */
+  recentFiles?: readonly string[];
 }
 
 /** Dispatch a formatting event to the document for CM6 to handle. */
@@ -64,12 +72,33 @@ export function useCommands(handlers: CommandHandlers): PaletteCommand[] {
         action: () => handlers.onSave?.(),
       },
       {
+        id: "file.save-as",
+        label: "Save As...",
+        category: "File",
+        shortcut: `${modKey}+Shift+S`,
+        action: () => handlers.onSaveAs?.(),
+      },
+      {
         id: "file.close-tab",
         label: "Close Tab",
         category: "File",
         shortcut: `${modKey}+W`,
         action: () => handlers.onCloseTab?.(),
       },
+      {
+        id: "file.open-folder",
+        label: "Open Folder...",
+        category: "File",
+        action: () => handlers.onOpenFolder?.(),
+      },
+
+      // ── Recent files (dynamic) ────────────────────────────────────────────
+      ...(handlers.recentFiles ?? []).map((path, i) => ({
+        id: `file.recent-${i}`,
+        label: `Open Recent: ${path.split("/").pop() ?? path}`,
+        category: "File",
+        action: () => handlers.onOpenRecentFile?.(path),
+      })),
 
       // ── Format ──────────────────────────────────────────────────────────────
       {

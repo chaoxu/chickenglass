@@ -23,6 +23,8 @@ import { useSettings } from "./hooks/use-settings";
 import { useCommands } from "./hooks/use-commands";
 import { useAutoSave } from "./hooks/use-auto-save";
 import { useHotkeys } from "./hooks/use-hotkeys";
+import { useRecentFiles } from "./hooks/use-recent-files";
+import { useWindowState } from "./hooks/use-window-state";
 import type { UseEditorReturn } from "./hooks/use-editor";
 import type { FileEntry } from "./file-manager";
 import { BackgroundIndexer } from "../index";
@@ -31,6 +33,7 @@ import type { EditorMode } from "../editor";
 import { setEditorMode } from "../editor";
 import { EditorPluginManager } from "../editor/editor-plugin";
 import { defaultEditorPlugins } from "../editor/editor-plugins-registry";
+import { isTauri, openFolder as tauriOpenFolder } from "./tauri-fs";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -47,6 +50,8 @@ function AppInner() {
   const fs = useFileSystem();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const { settings, updateSetting } = useSettings();
+  const { recentFiles, addRecentFile } = useRecentFiles();
+  const { windowState, saveState: saveWindowState } = useWindowState();
 
   // ── Dialog open states ──────────────────────────────────────────────────────
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -151,6 +156,7 @@ function AppInner() {
     if (openPathsRef.current.has(path)) {
       setActiveTab(path);
       setEditorDoc(liveDocs.current.get(path) ?? buffers.current.get(path) ?? "");
+      addRecentFile(path);
       return;
     }
 
@@ -162,10 +168,11 @@ function AppInner() {
       setOpenTabs((prev) => [...prev, { path, name: basename(path), dirty: false }]);
       setActiveTab(path);
       setEditorDoc(content);
+      addRecentFile(path);
     } catch {
       // Silently ignore unreadable files
     }
-  }, [fs]);
+  }, [fs, addRecentFile]);
 
   const saveFile = useCallback(async () => {
     const path = activeTab;
@@ -289,9 +296,65 @@ function AppInner() {
     view.focus();
   }, [editorState?.view]);
 
+  // ── Save As ───────────────────────────────────────────────────────────────
+  const saveAs = useCallback(async () => {
+    const path = activeTab;
+    if (!path) return;
+    const doc = liveDocs.current.get(path) ?? "";
+
+    if (isTauri()) {
+      // Tauri: open native save dialog
+      try {
+        const { save } = await import("@tauri-apps/plugin-dialog");
+        const savePath = await save({
+          defaultPath: path,
+          filters: [{ name: "Markdown", extensions: ["md"] }],
+        });
+        if (!savePath) return; // user cancelled
+        await fs.writeFile(savePath, doc);
+        addRecentFile(savePath);
+      } catch {
+        // Save dialog failed or was cancelled
+      }
+    } else {
+      // Browser: download the file
+      const blob = new Blob([doc], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = basename(path);
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  }, [activeTab, fs, addRecentFile]);
+
+  // ── Open Folder ───────────────────────────────────────────────────────────
+  const handleOpenFolder = useCallback(() => {
+    if (!isTauri()) return;
+    void tauriOpenFolder().then((folderPath) => {
+      if (folderPath) {
+        void refreshTree();
+      }
+    });
+  }, [refreshTree]);
+
+  // ── Window state persistence ──────────────────────────────────────────────
+  // Save window state whenever tabs or sidebar state changes.
+  useEffect(() => {
+    saveWindowState({
+      tabs: openTabs.map((t) => ({ path: t.path, name: t.name })),
+      activeTab,
+    });
+  }, [openTabs, activeTab, saveWindowState]);
+
+  useEffect(() => {
+    saveWindowState({ sidebarWidth: sidebarCollapsed ? 0 : 220 });
+  }, [sidebarCollapsed, saveWindowState]);
+
   // ── Command palette commands ──────────────────────────────────────────────
   const commandHandlers = useMemo(() => ({
     onSave: () => { void saveFile(); },
+    onSaveAs: () => { void saveAs(); },
     onCloseTab: () => { if (activeTab) void closeFile(activeTab); },
     onToggleSidebar: () => setSidebarCollapsed((v) => !v),
     onShowFiles: () => { setSidebarCollapsed(false); setSidebarTab("files"); },
@@ -302,7 +365,10 @@ function AppInner() {
     onShowShortcuts: () => setShortcutsOpen(true),
     onShowSettings: () => setSettingsOpen(true),
     onShowSearch: () => setSearchOpen(true),
-  }), [saveFile, activeTab, closeFile, resolvedTheme, setTheme]);
+    onOpenFolder: handleOpenFolder,
+    onOpenRecentFile: (path: string) => { void openFile(path); },
+    recentFiles,
+  }), [saveFile, saveAs, activeTab, closeFile, resolvedTheme, setTheme, handleOpenFolder, openFile, recentFiles]);
 
   const commands = useCommands(commandHandlers);
 
@@ -325,6 +391,7 @@ function AppInner() {
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useHotkeys([
     { key: "mod+s", handler: () => { void saveFile(); } },
+    { key: "mod+shift+s", handler: () => { void saveAs(); } },
     { key: "mod+p", handler: () => setPaletteOpen((v) => !v) },
     { key: "mod+shift+f", handler: () => setSearchOpen((v) => !v) },
     { key: "mod+,", handler: () => setSettingsOpen((v) => !v) },
@@ -367,12 +434,43 @@ function AppInner() {
     view.focus();
   }, [editorState?.view]);
 
-  // ── Open first file on init ────────────────────────────────────────────────
+  // ── Open first file on init (restore from window state or pick default) ───
   const didInitRef = useRef(false);
   useEffect(() => {
     if (didInitRef.current || !fileTree) return;
     didInitRef.current = true;
 
+    // Try to restore tabs from persisted window state.
+    if (windowState.tabs.length > 0) {
+      const restoreTabs = async () => {
+        for (const tab of windowState.tabs) {
+          await openFile(tab.path).catch(() => {
+            // File may have been deleted since last session — skip.
+          });
+        }
+        // Activate the previously active tab if it was restored.
+        if (windowState.activeTab) {
+          const restored = openPathsRef.current.has(windowState.activeTab);
+          if (restored) {
+            setActiveTab(windowState.activeTab);
+            setEditorDoc(
+              liveDocs.current.get(windowState.activeTab)
+              ?? buffers.current.get(windowState.activeTab)
+              ?? "",
+            );
+          }
+        }
+      };
+      void restoreTabs();
+
+      // Restore sidebar collapsed state.
+      if (windowState.sidebarWidth === 0) {
+        setSidebarCollapsed(true);
+      }
+      return;
+    }
+
+    // No saved state — pick a default file.
     // Prefer main.md or index.md at root, then any root-level .md file,
     // then fall back to depth-first search.
     const rootFiles = (fileTree.children ?? []).filter((c) => !c.isDirectory);
@@ -391,7 +489,7 @@ function AppInner() {
 
     const first = preferred?.path ?? findFirst(fileTree);
     if (first) void openFile(first);
-  }, [fileTree, openFile]);
+  }, [fileTree, openFile]); // windowState is intentionally omitted — only read on first mount
 
   // ── Editor mode ────────────────────────────────────────────────────────────
   const [editorMode, setEditorModeState] = useState<EditorMode>("rendered");
