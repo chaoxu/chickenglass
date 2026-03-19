@@ -35,6 +35,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@lezer/markdown": "^1.6.3",
+    "@radix-ui/react-dialog": "^1.1.15",
     "@retorquere/bibtex-parser": "^9.0.29",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
