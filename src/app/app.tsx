@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
 import type { FileSystem } from "./file-manager";
 import { loadProjectConfig } from "./project-config";
@@ -10,9 +10,22 @@ import { FileTree } from "./components/file-tree";
 import { Outline } from "./components/outline";
 import { EditorPane } from "./components/editor-pane";
 import { StatusBar } from "./components/status-bar";
+import { CommandPalette } from "./components/command-palette";
+import { SearchPanel } from "./components/search-panel";
+import { SettingsDialog } from "./components/settings-dialog";
+import { AboutDialog } from "./components/about-dialog";
+import { ShortcutsDialog } from "./components/shortcuts-dialog";
+import { GotoLineDialog } from "./components/goto-line-dialog";
+// Breadcrumbs needs editor scroll position — TODO wire once EditorPane exposes scrollTop
+import { SymbolPanel } from "./components/symbol-panel";
 import { useTheme } from "./hooks/use-theme";
+import { useSettings } from "./hooks/use-settings";
+import { useCommands } from "./hooks/use-commands";
+import { useAutoSave } from "./hooks/use-auto-save";
+import { useHotkeys } from "./hooks/use-hotkeys";
 import type { UseEditorReturn } from "./hooks/use-editor";
 import type { FileEntry } from "./file-manager";
+import { BackgroundIndexer } from "../index";
 import { extractHeadings } from "./heading-ancestry";
 import type { EditorMode } from "../editor";
 import { setEditorMode } from "../editor";
@@ -25,19 +38,29 @@ function basename(path: string): string {
   return idx === -1 ? path : path.slice(idx + 1);
 }
 
-/** Whether we're running on macOS. Computed once — never changes at runtime. */
-const isMac = navigator.platform.toLowerCase().startsWith("mac");
 
 // ── Inner app (has access to FileSystem context) ──────────────────────────────
 
 function AppInner() {
   const fs = useFileSystem();
-  const { resolvedTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { settings, updateSetting } = useSettings();
+
+  // ── Dialog open states ──────────────────────────────────────────────────────
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [gotoLineOpen, setGotoLineOpen] = useState(false);
+
+  // ── Indexer for search ─────────────────────────────────────────────────────
+  const [indexer] = useState(() => new BackgroundIndexer());
 
   // ── File tree ──────────────────────────────────────────────────────────────
   const [fileTree, setFileTree] = useState<FileEntry | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<"files" | "outline">("files");
+  const [sidebarTab, setSidebarTab] = useState<"files" | "outline" | "symbols">("files");
 
   const refreshTree = useCallback(async () => {
     try {
@@ -245,18 +268,67 @@ function AppInner() {
     view.focus();
   }, [editorState?.view]);
 
+  // ── Command palette commands ──────────────────────────────────────────────
+  const commandHandlers = useMemo(() => ({
+    onSave: () => { void saveFile(); },
+    onCloseTab: () => { if (activeTab) closeFile(activeTab); },
+    onToggleSidebar: () => setSidebarCollapsed((v) => !v),
+    onShowFiles: () => { setSidebarCollapsed(false); setSidebarTab("files"); },
+    onShowOutline: () => { setSidebarCollapsed(false); setSidebarTab("outline"); },
+    onToggleTheme: () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),
+    onGoToLine: () => setGotoLineOpen(true),
+  }), [saveFile, activeTab, closeFile, resolvedTheme, setTheme]);
+
+  const commands = useCommands(commandHandlers);
+
+  // ── Auto-save ─────────────────────────────────────────────────────────────
+  const hasDirtyFiles = openTabs.some((t) => t.dirty);
+  useAutoSave(hasDirtyFiles, saveFile, settings.autoSaveInterval);
+
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const mod = isMac ? e.metaKey : e.ctrlKey;
-      if (mod && e.key === "s") {
-        e.preventDefault();
-        void saveFile();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [saveFile]);
+  useHotkeys([
+    { key: "mod+s", handler: () => { void saveFile(); } },
+    { key: "mod+p", handler: () => setPaletteOpen((v) => !v) },
+    { key: "mod+shift+f", handler: () => setSearchOpen((v) => !v) },
+    { key: "mod+,", handler: () => setSettingsOpen((v) => !v) },
+    { key: "mod+/", handler: () => setShortcutsOpen((v) => !v) },
+    { key: "mod+g", handler: () => setGotoLineOpen((v) => !v) },
+    { key: "mod+b", handler: () => setSidebarCollapsed((v) => !v) },
+  ]);
+
+  // ── Go to line handler ─────────────────────────────────────────────────────
+  const handleGotoLine = useCallback((line: number, col?: number) => {
+    const view = editorState?.view;
+    if (!view) return;
+    const docLine = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines)));
+    const offset = docLine.from + (col ? col - 1 : 0);
+    view.dispatch({ selection: { anchor: offset }, scrollIntoView: true });
+    view.focus();
+    setGotoLineOpen(false);
+  }, [editorState?.view]);
+
+  // ── Search result handler ──────────────────────────────────────────────────
+  const handleSearchResult = useCallback((file: string, pos: number) => {
+    void openFile(file).then(() => {
+      setTimeout(() => {
+        const view = editorState?.view;
+        if (view) {
+          view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+          view.focus();
+        }
+      }, 100);
+    });
+    setSearchOpen(false);
+  }, [openFile, editorState?.view]);
+
+  // ── Symbol insert handler ──────────────────────────────────────────────────
+  const handleSymbolInsert = useCallback((latex: string) => {
+    const view = editorState?.view;
+    if (!view) return;
+    const { from } = view.state.selection.main;
+    view.dispatch({ changes: { from, insert: latex } });
+    view.focus();
+  }, [editorState?.view]);
 
   // ── Open first file on init ────────────────────────────────────────────────
   const didInitRef = useRef(false);
@@ -343,9 +415,20 @@ function AppInner() {
           >
             Outline
           </button>
+          <button
+            className={[
+              "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide",
+              sidebarTab === "symbols"
+                ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent,#4a9eff)]"
+                : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
+            ].join(" ")}
+            onClick={() => setSidebarTab("symbols")}
+          >
+            Symbols
+          </button>
         </div>
 
-        {sidebarTab === "files" ? (
+        {sidebarTab === "files" && (
           <FileTree
             root={fileTree}
             activePath={activeTab}
@@ -355,8 +438,12 @@ function AppInner() {
             onCreateFile={(path) => { void createFile(path); }}
             onCreateDir={(path) => { void createDirectory(path); }}
           />
-        ) : (
+        )}
+        {sidebarTab === "outline" && (
           <Outline headings={headings} onSelect={handleOutlineSelect} />
+        )}
+        {sidebarTab === "symbols" && (
+          <SymbolPanel onInsert={handleSymbolInsert} view={editorState?.view ?? null} />
         )}
       </Sidebar>
 
@@ -398,6 +485,35 @@ function AppInner() {
           docText={docTextForStats}
         />
       </div>
+
+      {/* ── Overlays & Dialogs ────────────────────────────────────────────── */}
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        commands={commands}
+      />
+      <SearchPanel
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onResultSelect={handleSearchResult}
+        indexer={indexer}
+      />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        settings={settings}
+        onUpdateSetting={updateSetting}
+        theme={theme}
+        onSetTheme={setTheme}
+      />
+      <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <GotoLineDialog
+        open={gotoLineOpen}
+        onOpenChange={setGotoLineOpen}
+        onGoto={handleGotoLine}
+        currentLine={cursorLineCol.line}
+      />
     </div>
   );
 }
