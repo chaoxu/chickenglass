@@ -11,9 +11,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "./tauri-fs";
 import type { FileSystem, FileEntry } from "./file-manager";
 import { markdownToHtml } from "./markdown-to-html";
+import type { ExportFormat } from "./lib/types";
 
-/** Supported export formats. */
-export type ExportFormat = "pdf" | "latex" | "html";
+export type { ExportFormat };
 
 /** Check whether Pandoc is installed. Returns the version string on success. */
 export async function checkPandoc(): Promise<string> {

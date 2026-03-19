@@ -3,7 +3,6 @@ export { createEditor, setEditorMode, type EditorConfig, type EditorMode } from 
 export {
   frontmatterDecoration,
   frontmatterField,
-  type FrontmatterConfig,
   type FrontmatterState,
 } from "./frontmatter-state";
 export { editorKeybindings } from "./keybindings";

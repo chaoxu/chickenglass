@@ -139,12 +139,5 @@ export function getEditorCommands(): PaletteCommand[] {
       label: "Insert Table",
       action: (view: EditorView) => insertTable(view),
     },
-    {
-      id: "toggle-focus-mode",
-      label: "Toggle Focus Mode",
-      action: (_view: EditorView) => {
-        console.log("[chickenglass] Focus mode toggled (placeholder)");
-      },
-    },
   ];
 }
