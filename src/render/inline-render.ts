@@ -2,7 +2,7 @@
  * Shared inline markdown renderer for DOM elements.
  *
  * Handles:
- * - Inline math ($...$) via KaTeX
+ * - Inline math ($...$ and \(...\)) via KaTeX
  * - Bold (**text**)
  * - Italic (*text*)
  *
@@ -11,6 +11,7 @@
  */
 
 import katex from "katex";
+import { INLINE_DELIMITERS } from "./math-render";
 
 /** A segment of text split by inline math delimiters. */
 export interface InlineSegment {
@@ -18,10 +19,29 @@ export interface InlineSegment {
   content: string;
 }
 
-/** Split text by $...$ inline math, returning alternating text/math segments. */
+/** Escape a string for use in a regular expression. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Build a regex that matches any inline math delimiter pair.
+ * Each alternative captures the content between its open/close delimiters.
+ * Longer delimiters are tried first to avoid prefix conflicts.
+ */
+function buildInlineMathRegex(): RegExp {
+  const alternatives = [...INLINE_DELIMITERS]
+    .sort((a, b) => b.open.length - a.open.length)
+    .map(({ open, close }) => `${escapeRegex(open)}([^\\n]+?)${escapeRegex(close)}`);
+  return new RegExp(alternatives.join("|"), "g");
+}
+
+const INLINE_MATH_REGEX = buildInlineMathRegex();
+
+/** Split text by inline math delimiters, returning alternating text/math segments. */
 export function splitByInlineMath(text: string): InlineSegment[] {
   const segments: InlineSegment[] = [];
-  const regex = /\$([^$\n]+)\$/g;
+  const regex = new RegExp(INLINE_MATH_REGEX.source, INLINE_MATH_REGEX.flags);
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -29,7 +49,9 @@ export function splitByInlineMath(text: string): InlineSegment[] {
     if (match.index > lastIndex) {
       segments.push({ isMath: false, content: text.slice(lastIndex, match.index) });
     }
-    segments.push({ isMath: true, content: match[1] });
+    // Find the first capturing group that matched (one per delimiter pair)
+    const content = match.slice(1).find((g) => g !== undefined);
+    segments.push({ isMath: true, content: content ?? "" });
     lastIndex = regex.lastIndex;
   }
 

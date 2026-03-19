@@ -21,13 +21,20 @@ import { getMathMacros } from "./math-macros";
 
 export const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
 
-/** Delimiter patterns for extracting LaTeX content from math nodes. */
-const INLINE_DELIMITERS: ReadonlyArray<{ open: string; close: string }> = [
+/** A pair of opening and closing delimiters for math expressions. */
+export interface MathDelimiterPair {
+  readonly open: string;
+  readonly close: string;
+}
+
+/** Delimiter patterns for extracting LaTeX content from inline math nodes. */
+export const INLINE_DELIMITERS: ReadonlyArray<MathDelimiterPair> = [
   { open: "\\(", close: "\\)" },
   { open: "$", close: "$" },
 ];
 
-const DISPLAY_DELIMITERS: ReadonlyArray<{ open: string; close: string }> = [
+/** Delimiter patterns for extracting LaTeX content from display math nodes. */
+export const DISPLAY_DELIMITERS: ReadonlyArray<MathDelimiterPair> = [
   { open: "\\[", close: "\\]" },
   { open: "$$", close: "$$" },
 ];
