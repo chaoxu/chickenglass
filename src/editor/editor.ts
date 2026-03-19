@@ -1,6 +1,8 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { type Extension, Compartment, EditorState, StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { LanguageDescription, syntaxHighlighting } from "@codemirror/language";
+import { classHighlighter } from "@lezer/highlight";
 import type { ThemeManager } from "../app/theme-manager";
 import type { EditorPluginManager } from "./editor-plugin";
 
@@ -104,7 +106,7 @@ export function createEditor(config: EditorConfig): EditorView {
       // Project config (must come before frontmatterField so the facet is available)
       ...(config.projectConfig ? [projectConfigFacet.of(config.projectConfig)] : []),
 
-      // Parser: markdown with custom extensions
+      // Parser: markdown with custom extensions + code block language support
       markdown({
         extensions: [
           removeIndentedCode,
@@ -117,7 +119,21 @@ export function createEditor(config: EditorConfig): EditorView {
           Table,
           TaskList,
         ],
+        codeLanguages: [
+          LanguageDescription.of({ name: "javascript", alias: ["js", "jsx"], load: () => import("@codemirror/lang-javascript").then(m => m.javascript({ jsx: true })) }),
+          LanguageDescription.of({ name: "typescript", alias: ["ts", "tsx"], load: () => import("@codemirror/lang-javascript").then(m => m.javascript({ jsx: true, typescript: true })) }),
+          LanguageDescription.of({ name: "python", alias: ["py"], load: () => import("@codemirror/lang-python").then(m => m.python()) }),
+          LanguageDescription.of({ name: "html", alias: ["htm"], load: () => import("@codemirror/lang-html").then(m => m.html()) }),
+          LanguageDescription.of({ name: "css", alias: ["scss", "less"], load: () => import("@codemirror/lang-css").then(m => m.css()) }),
+          LanguageDescription.of({ name: "json", load: () => import("@codemirror/lang-json").then(m => m.json()) }),
+          LanguageDescription.of({ name: "java", load: () => import("@codemirror/lang-java").then(m => m.java()) }),
+          LanguageDescription.of({ name: "cpp", alias: ["c", "c++", "cc", "cxx", "h"], load: () => import("@codemirror/lang-cpp").then(m => m.cpp()) }),
+          LanguageDescription.of({ name: "rust", alias: ["rs"], load: () => import("@codemirror/lang-rust").then(m => m.rust()) }),
+        ],
       }),
+
+      // Syntax highlighting: apply tok-* CSS classes from parse tree tags
+      syntaxHighlighting(classHighlighter),
 
       // Frontmatter state (always needed — other extensions read it)
       frontmatterField,
