@@ -31,7 +31,6 @@ interface SidenoteMarginProps {
 }
 
 const GAP = 8;
-const MARGIN_WIDTH = 224; // w-56 = 14rem = 224px
 
 function extractSidenotes(view: EditorView): SidenoteEntry[] {
   const state = view.state;
@@ -97,19 +96,6 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
     if (!container) {
       container = document.createElement("div");
       container.className = "cg-sidenote-portal";
-      // Position the container to the right of the content area
-      container.style.cssText = [
-        "position: absolute",
-        "top: 0",
-        "right: 0",
-        `width: ${MARGIN_WIDTH}px`,
-        "height: 0",
-        "overflow: visible",
-        "pointer-events: none",
-        "z-index: 1",
-        "box-sizing: border-box",
-      ].join(";");
-
       scroller.style.position = "relative";
       scroller.appendChild(container);
     }
@@ -218,30 +204,10 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
                 view.dispatch({ effects: EditorView.scrollIntoView(entry.defFrom) });
               });
             }}
-            style={{
-              position: "absolute",
-              top: `${docY}px`,
-              width: "100%",
-              padding: "0 12px",
-              fontSize: "0.75rem",
-              lineHeight: "1.625",
-              color: "var(--cg-muted)",
-              fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
-              pointerEvents: "auto",
-              cursor: "pointer",
-              overflowWrap: "break-word",
-              boxSizing: "border-box",
-            }}
+            className="cg-sidenote-entry"
+            style={{ top: `${docY}px` }}
           >
-            <span
-              style={{
-                fontWeight: 600,
-                color: "var(--cg-fg)",
-                fontSize: "0.7em",
-                verticalAlign: "super",
-                marginRight: "2px",
-              }}
-            >
+            <span className="cg-sidenote-entry-number">
               {entry.number}
             </span>
             <SidenoteContent text={entry.content} macros={macros} />

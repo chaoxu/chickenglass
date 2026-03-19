@@ -96,8 +96,7 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
 
       if (!tooltip) {
         tooltip = document.createElement("div");
-        tooltip.className = "cg-hover-preview";
-        tooltip.style.cssText = "position:fixed;z-index:1000;background:var(--cg-bg);border:1px solid var(--cg-border);border-radius:2px;pointer-events:none;max-width:320px;padding:8px 12px;font-size:0.8em;line-height:1.5;color:var(--cg-muted);font-family:'IBM Plex Mono','Fira Code',monospace";
+        tooltip.className = "cg-hover-preview-tooltip";
         document.body.appendChild(tooltip);
       }
       tooltip.textContent = content;
