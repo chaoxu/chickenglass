@@ -25,6 +25,7 @@ import { useAutoSave } from "./hooks/use-auto-save";
 import { useHotkeys } from "./hooks/use-hotkeys";
 import { useRecentFiles } from "./hooks/use-recent-files";
 import { useWindowState } from "./hooks/use-window-state";
+import { useMenuEvents } from "./hooks/use-menu-events";
 import type { UseEditorReturn } from "./hooks/use-editor";
 import type { FileEntry } from "./file-manager";
 import { BackgroundIndexer } from "../index";
@@ -456,6 +457,18 @@ function AppInner() {
     { key: "mod+g", handler: () => setGotoLineOpen((v) => !v) },
     { key: "mod+b", handler: () => setSidebarCollapsed((v) => !v) },
   ]);
+
+  // ── Native menu bar events (Tauri only) ────────────────────────────────────
+  useMenuEvents({
+    onSave: () => { void saveFile(); },
+    onSaveAs: () => { void saveAs(); },
+    onCloseTab: () => { if (activeTab) void closeFile(activeTab); },
+    onToggleSidebar: () => setSidebarCollapsed((v) => !v),
+    onShowSearch: () => setSearchOpen(true),
+    onShowShortcuts: () => setShortcutsOpen(true),
+    onAbout: () => setAboutOpen(true),
+    onOpenFolder: handleOpenFolder,
+  });
 
   // ── Go to line handler ─────────────────────────────────────────────────────
   const handleGotoLine = useCallback((line: number, col?: number) => {
