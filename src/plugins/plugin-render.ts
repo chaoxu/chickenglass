@@ -32,10 +32,17 @@ import {
   editorFocusField,
   focusEffect,
   focusTracker,
+  RenderWidget,
 } from "../render/render-utils";
 import { getMathMacros } from "../render/math-macros";
 import { MathWidget } from "../render/math-render";
 import { renderInlineMarkdown } from "../render/inline-render";
+import {
+  isValidEmbedUrl,
+  extractYoutubeId,
+  youtubeEmbedUrl,
+  gistEmbedUrl,
+} from "./embed-plugin";
 
 /** Widget that renders a block header string with inline math/bold/italic. */
 class BlockHeaderWidget extends WidgetType {
@@ -60,6 +67,71 @@ class BlockHeaderWidget extends WidgetType {
 
   ignoreEvent(): boolean {
     return false;
+  }
+}
+
+/** Set of fenced div class names that are embed types. */
+const EMBED_CLASSES = new Set(["embed", "iframe", "youtube", "gist"]);
+
+/**
+ * Compute the iframe src URL for an embed block.
+ *
+ * Returns undefined if the URL is invalid or cannot be embedded.
+ */
+function computeEmbedSrc(
+  embedType: string,
+  rawUrl: string,
+): string | undefined {
+  const url = rawUrl.trim();
+  if (!isValidEmbedUrl(url)) return undefined;
+
+  switch (embedType) {
+    case "youtube": {
+      const videoId = extractYoutubeId(url);
+      return videoId ? youtubeEmbedUrl(videoId) : undefined;
+    }
+    case "gist":
+      return gistEmbedUrl(url);
+    case "embed":
+    case "iframe":
+    default:
+      return url;
+  }
+}
+
+/** Widget that renders an iframe for embed blocks. */
+class EmbedWidget extends RenderWidget {
+  constructor(
+    private readonly src: string,
+    private readonly embedType: string,
+  ) {
+    super();
+  }
+
+  createDOM(): HTMLElement {
+    const wrapper = document.createElement("div");
+    wrapper.className = `cg-embed cg-embed-${this.embedType}`;
+
+    const iframe = document.createElement("iframe");
+    iframe.src = this.src;
+    iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
+    iframe.setAttribute("loading", "lazy");
+    iframe.setAttribute("referrerpolicy", "no-referrer");
+    iframe.setAttribute("frameborder", "0");
+
+    if (this.embedType === "youtube") {
+      iframe.setAttribute("allowfullscreen", "");
+      iframe.className = "cg-embed-iframe cg-embed-youtube-iframe";
+    } else {
+      iframe.className = "cg-embed-iframe";
+    }
+
+    wrapper.appendChild(iframe);
+    return wrapper;
+  }
+
+  eq(other: EmbedWidget): boolean {
+    return this.src === other.src && this.embedType === other.embedType;
   }
 }
 
@@ -233,7 +305,14 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       cursor.from <= div.closeFenceTo;
     const cursorOnFence = cursorOnOpenFence || cursorOnCloseFence;
 
-    if (!cursorOnFence && plugin) {
+    // For embed blocks, check if cursor is anywhere inside the block.
+    // When cursor is inside, show raw source for editing; when outside, show iframe.
+    const isEmbed = EMBED_CLASSES.has(div.className);
+    const cursorInsideBlock =
+      focused && cursor.from >= div.from && cursor.from <= div.to;
+    const showRendered = isEmbed ? !cursorInsideBlock : !cursorOnFence;
+
+    if (showRendered && plugin) {
       const numberEntry = counterState?.byPosition.get(div.from);
       // Build label without title — title stays as editable text
       const labelAttrs: BlockAttrs = {
@@ -293,9 +372,27 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
             Decoration.line({ class: "cg-include-fence" }).range(div.closeFenceFrom),
           );
         }
+
+        // Embed blocks: replace body content with iframe widget
+        if (isEmbed && !div.singleLine && div.closeFenceFrom >= 0) {
+          const bodyFrom = openLine.to + 1; // start of first body line
+          const bodyTo = div.closeFenceFrom - 1; // end of last body line (before newline)
+          if (bodyFrom <= bodyTo) {
+            const bodyText = state.sliceDoc(bodyFrom, bodyTo);
+            const rawUrl = bodyText.trim();
+            const src = computeEmbedSrc(div.className, rawUrl);
+            if (src) {
+              const widget = new EmbedWidget(src, div.className);
+              widget.sourceFrom = bodyFrom;
+              items.push(
+                Decoration.replace({ widget }).range(bodyFrom, bodyTo),
+              );
+            }
+          }
+        }
       }
     } else if (plugin) {
-      // Cursor on fence: show fence syntax as source, title stays as editable text
+      // Cursor on fence (or inside embed block): show fence syntax as source
       items.push(
         Decoration.line({
           class: `${plugin.render({ type: div.className }).className} cg-block-source`,

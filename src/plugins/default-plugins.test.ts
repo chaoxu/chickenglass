@@ -230,8 +230,8 @@ describe("algorithmPlugin", () => {
 // ---------------------------------------------------------------------------
 
 describe("defaultPlugins", () => {
-  it("contains all 11 default plugins", () => {
-    expect(defaultPlugins).toHaveLength(11);
+  it("contains all 15 default plugins", () => {
+    expect(defaultPlugins).toHaveLength(15);
   });
 
   it("includes all expected plugin names", () => {
@@ -247,6 +247,10 @@ describe("defaultPlugins", () => {
     expect(names).toContain("remark");
     expect(names).toContain("example");
     expect(names).toContain("algorithm");
+    expect(names).toContain("embed");
+    expect(names).toContain("iframe");
+    expect(names).toContain("youtube");
+    expect(names).toContain("gist");
   });
 
   it("has no duplicate names", () => {

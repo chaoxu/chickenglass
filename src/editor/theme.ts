@@ -446,6 +446,42 @@ export const chickenglassTheme = EditorView.theme({
     lineHeight: "1.6",
   },
 
+  /* Embed block: iframe container */
+  ".cg-embed": {
+    display: "block",
+    width: "100%",
+    margin: "4px 0",
+  },
+  ".cg-embed-iframe": {
+    display: "block",
+    width: "100%",
+    height: "350px",
+    border: "1px solid var(--cg-border)",
+    borderRadius: "2px",
+    backgroundColor: "var(--cg-subtle)",
+  },
+  /* YouTube: responsive 16:9 aspect ratio */
+  ".cg-embed-youtube": {
+    position: "relative",
+    width: "100%",
+    paddingBottom: "56.25%",
+    height: "0",
+    margin: "4px 0",
+  },
+  ".cg-embed-youtube-iframe": {
+    position: "absolute",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    border: "1px solid var(--cg-border)",
+    borderRadius: "2px",
+  },
+  /* Gist embed: taller to show code */
+  ".cg-embed-gist .cg-embed-iframe": {
+    height: "400px",
+  },
+
   /* Include region: right border spans the full height, label anchors to it */
   ".cg-include-region": {
     position: "relative",

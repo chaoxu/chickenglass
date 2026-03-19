@@ -47,6 +47,17 @@ export { algorithmPlugin } from "./algorithm-plugin";
 export { problemPlugin } from "./problem-plugin";
 export { defaultPlugins } from "./default-plugins";
 export {
+  embedPlugin,
+  iframePlugin,
+  youtubePlugin,
+  gistPlugin,
+  embedFamilyPlugins,
+  isValidEmbedUrl,
+  extractYoutubeId,
+  youtubeEmbedUrl,
+  gistEmbedUrl,
+} from "./embed-plugin";
+export {
   type ResolvedInclude,
   IncludeCycleError,
   IncludeNotFoundError,
