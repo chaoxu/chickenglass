@@ -120,20 +120,24 @@ export class MathWidget extends RenderWidget {
 }
 
 /**
- * Collect decoration ranges for math nodes outside the cursor.
+ * Build decoration ranges for math nodes, skipping nodes where
+ * `shouldSkip(from, to)` returns true (typically a cursor check).
  *
- * Reads macros from the frontmatter state field and passes them
- * to each math widget for KaTeX rendering.
+ * Shared helper used by both collectMathRanges() and
+ * buildMathDecorationsFromState().
  */
-export function collectMathRanges(view: EditorView): Range<Decoration>[] {
-  const macros = getMathMacros(view.state);
-  const nodes = collectNodes(view, MATH_TYPES);
+function buildMathItems(
+  state: EditorState,
+  shouldSkip: (from: number, to: number) => boolean,
+): Range<Decoration>[] {
+  const macros = getMathMacros(state);
+  const nodes = collectNodes(state, MATH_TYPES);
   const items: Range<Decoration>[] = [];
 
   for (const node of nodes) {
-    if (cursorInRange(view, node.from, node.to)) continue;
+    if (shouldSkip(node.from, node.to)) continue;
 
-    const raw = view.state.sliceDoc(node.from, node.to);
+    const raw = state.sliceDoc(node.from, node.to);
     const isDisplay = node.type === "DisplayMath";
     const latex = stripMathDelimiters(raw, isDisplay);
 
@@ -152,6 +156,16 @@ export function collectMathRanges(view: EditorView): Range<Decoration>[] {
   return items;
 }
 
+/**
+ * Collect decoration ranges for math nodes outside the cursor.
+ *
+ * Reads macros from the frontmatter state field and passes them
+ * to each math widget for KaTeX rendering.
+ */
+export function collectMathRanges(view: EditorView): Range<Decoration>[] {
+  return buildMathItems(view.state, (from, to) => cursorInRange(view, from, to));
+}
+
 /** Build a DecorationSet for math elements (convenience wrapper). */
 export function mathDecorations(view: EditorView): DecorationSet {
   return buildDecorations(collectMathRanges(view));
@@ -163,30 +177,10 @@ export function mathDecorations(view: EditorView): DecorationSet {
  * When the editor is focused, nodes containing the cursor show source.
  */
 function buildMathDecorationsFromState(state: EditorState, focused: boolean): DecorationSet {
-  const macros = getMathMacros(state);
-  const nodes = collectNodes(state, MATH_TYPES);
-  const items: Range<Decoration>[] = [];
-
-  for (const node of nodes) {
-    // Only show source when cursor is inside this specific math node
-    if (focused && cursorContainedIn(state, node.from, node.to)) continue;
-
-    const raw = state.sliceDoc(node.from, node.to);
-    const isDisplay = node.type === "DisplayMath";
-    const latex = stripMathDelimiters(raw, isDisplay);
-
-    const widget = new MathWidget(latex, raw, isDisplay, macros);
-    widget.sourceFrom = node.from;
-
-    items.push(
-      Decoration.replace({
-        widget,
-        // block: true breaks CM6 height tracking for subsequent lines
-        block: false,
-      }).range(node.from, node.to),
-    );
-  }
-
+  const items = buildMathItems(
+    state,
+    (from, to) => focused && cursorContainedIn(state, from, to),
+  );
   return buildDecorations(items);
 }
 
