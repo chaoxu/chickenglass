@@ -200,5 +200,18 @@ export const mathExtension: MarkdownConfig = {
     },
   ],
   parseInline: [backslashInlineMathParser, dollarInlineMathParser],
-  parseBlock: [backslashDisplayMathParser, dollarDisplayMathParser],
+  parseBlock: [
+    {
+      ...backslashDisplayMathParser,
+      endLeaf(_cx: BlockContext, line: Line): boolean {
+        return line.text.slice(line.pos - line.basePos).startsWith("\\[");
+      },
+    },
+    {
+      ...dollarDisplayMathParser,
+      endLeaf(_cx: BlockContext, line: Line): boolean {
+        return line.text.slice(line.pos - line.basePos).startsWith("$$");
+      },
+    },
+  ],
 };
