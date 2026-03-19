@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS: Settings = {
   spellCheck: false,
   editorMode: "rendered",
   theme: "system",
+  defaultExportFormat: "pdf",
 };
 
 function loadSettings(): Settings {
