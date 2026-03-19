@@ -34,19 +34,16 @@ interface BreadcrumbsProps {
 const FADE_DELAY_MS = 2000;
 
 export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: BreadcrumbsProps) {
-  // Memoize the shape conversion and ancestry computation so they don't run on every render.
   const entries = useMemo(
     () => headings.map((h) => ({ level: h.level, text: h.text, number: "", pos: h.from })),
     [headings],
   );
   const ancestry = useMemo(() => headingAncestryAt(entries, viewportFrom), [entries, viewportFrom]);
 
-  // Track visibility: hidden when ancestry is empty, or after the fade timer.
   const [visible, setVisible] = useState(false);
   const [instant, setInstant] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevScrollTopRef = useRef(scrollTop);
-  // Ref (not state) — hover doesn't drive rendering, only controls timer scheduling.
   const hoveredRef = useRef(false);
 
   const clearTimer = useCallback(() => {
@@ -60,17 +57,16 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
     clearTimer();
     hideTimerRef.current = setTimeout(() => {
       hideTimerRef.current = null;
-      setVisible(false);
+      if (!hoveredRef.current) setVisible(false);
     }, FADE_DELAY_MS);
   }, [clearTimer]);
 
-  // React to scroll changes and clean up on unmount.
   useEffect(() => {
     if (ancestry.length === 0) {
       clearTimer();
       setInstant(true);
       setVisible(false);
-      return clearTimer; // cleanup
+      return clearTimer;
     }
 
     const didScroll = scrollTop !== prevScrollTopRef.current;
@@ -99,13 +95,22 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
     scheduleHide();
   };
 
+  // Don't render anything when there's no heading ancestry
+  if (ancestry.length === 0) return null;
+
   return (
     <div
       className={cn(
-        "absolute top-0 left-0 right-0 z-[100] pointer-events-none",
+        "absolute top-0 left-0 right-0 z-[100]",
         !instant && "transition-opacity duration-300",
-        visible ? "opacity-100 pointer-events-auto" : "opacity-0",
+        visible ? "opacity-100" : "opacity-0",
       )}
+      // When hidden, shrink to a thin strip so hover can re-show without blocking editor clicks
+      style={{
+        pointerEvents: visible ? "auto" : undefined,
+        height: visible ? undefined : "4px",
+        overflow: visible ? undefined : "hidden",
+      }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
