@@ -13,14 +13,13 @@ import {
   type PluginValue,
   type ViewUpdate,
   ViewPlugin,
-  WidgetType,
 } from "@codemirror/view";
 import { type Extension, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { cursorInRange } from "./render-utils";
+import { cursorInRange, RenderWidget } from "./render-utils";
 
 /** Checkbox widget that toggles task marker content on click. */
-class CheckboxWidget extends WidgetType {
+class CheckboxWidget extends RenderWidget {
   constructor(
     private readonly checked: boolean,
     private readonly from: number,
@@ -54,10 +53,6 @@ class CheckboxWidget extends WidgetType {
 
   eq(other: CheckboxWidget): boolean {
     return this.checked === other.checked && this.from === other.from;
-  }
-
-  ignoreEvent(): boolean {
-    return true;
   }
 }
 

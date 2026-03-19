@@ -29,6 +29,7 @@ import { blockCounterField, type BlockCounterState } from "./block-counter";
 import {
   buildDecorations,
   decorationHidden,
+  serializeMacros,
   editorFocusField,
   focusEffect,
   focusTracker,
@@ -435,13 +436,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const items: Range<Decoration>[] = [];
 
   const macros = getMathMacros(state);
-  const macrosKey =
-    Object.keys(macros).length > 0
-      ? Object.keys(macros)
-          .sort()
-          .map((k) => `${k}=${macros[k]}`)
-          .join("\0")
-      : "";
+  const macrosKey = serializeMacros(macros);
 
   for (const div of divs) {
     const plugin = getPluginOrFallback(registry, div.className);

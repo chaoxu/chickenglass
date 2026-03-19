@@ -9,9 +9,9 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 import {
   cursorInRange,
-  cursorContainedIn,
   collectNodes,
   buildDecorations,
+  serializeMacros,
   RenderWidget,
   editorFocusField,
   focusEffect,
@@ -53,17 +53,6 @@ export function stripMathDelimiters(raw: string, isDisplay: boolean): string {
     }
   }
   return raw;
-}
-
-/**
- * Serialize macros to a stable string for use in widget equality checks.
- * Returns an empty string when there are no macros.
- */
-function serializeMacros(macros: Record<string, string>): string {
-  const keys = Object.keys(macros);
-  if (keys.length === 0) return "";
-  keys.sort();
-  return keys.map((k) => `${k}=${macros[k]}`).join("\0");
 }
 
 /**
@@ -179,7 +168,7 @@ export function mathDecorations(view: EditorView): DecorationSet {
 function buildMathDecorationsFromState(state: EditorState, focused: boolean): DecorationSet {
   const items = buildMathItems(
     state,
-    (from, to) => focused && cursorContainedIn(state, from, to),
+    (from, to) => focused && cursorInRange(state, from, to),
   );
   return buildDecorations(items);
 }

@@ -18,7 +18,6 @@ import {
   EditorView,
   type PluginValue,
   ViewPlugin,
-  WidgetType,
   type ViewUpdate,
 } from "@codemirror/view";
 import {
@@ -28,7 +27,7 @@ import {
 } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
-import { buildDecorations } from "./render-utils";
+import { buildDecorations, RenderWidget } from "./render-utils";
 import {
   parseTable,
   formatTable,
@@ -168,7 +167,7 @@ function findTableAtCursor(
 // ---------------------------------------------------------------------------
 
 /** Floating toolbar widget shown above an active table. */
-class TableToolbarWidget extends WidgetType {
+class TableToolbarWidget extends RenderWidget {
   constructor(
     private readonly tableRange: TableRange,
   ) {
@@ -320,10 +319,6 @@ class TableToolbarWidget extends WidgetType {
       this.tableRange.from === other.tableRange.from &&
       this.tableRange.to === other.tableRange.to
     );
-  }
-
-  ignoreEvent(): boolean {
-    return true;
   }
 }
 

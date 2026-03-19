@@ -16,7 +16,6 @@ import {
   Decoration,
   type DecorationSet,
   EditorView,
-  WidgetType,
   keymap,
 } from "@codemirror/view";
 import {
@@ -27,7 +26,7 @@ import {
   foldedRanges,
   syntaxTree,
 } from "@codemirror/language";
-import { buildDecorations } from "../render/render-utils";
+import { buildDecorations, RenderWidget } from "../render/render-utils";
 
 /** Extract heading level (1–6) from a node name, or 0 if not a heading. */
 function headingLevel(name: string): number {
@@ -79,7 +78,7 @@ const headingFoldService = foldService.of((state, lineStart, _lineEnd) => {
 });
 
 /** Widget that renders a fold/unfold toggle inline with a heading. */
-class FoldToggleWidget extends WidgetType {
+class FoldToggleWidget extends RenderWidget {
   constructor(
     private readonly pos: number,
     private readonly folded: boolean,
@@ -126,10 +125,6 @@ class FoldToggleWidget extends WidgetType {
 
   eq(other: FoldToggleWidget): boolean {
     return this.pos === other.pos && this.folded === other.folded && this.level === other.level;
-  }
-
-  ignoreEvent(): boolean {
-    return true;
   }
 }
 

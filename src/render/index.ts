@@ -4,6 +4,7 @@ export {
   cursorContainedIn,
   collectNodes,
   buildDecorations,
+  serializeMacros,
   RenderWidget,
   editorFocusField,
   focusEffect,

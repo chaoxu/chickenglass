@@ -10,10 +10,9 @@ import {
   type PluginValue,
   type ViewUpdate,
   ViewPlugin,
-  WidgetType,
 } from "@codemirror/view";
 import { type Extension, type Range } from "@codemirror/state";
-import { buildDecorations } from "./render-utils";
+import { buildDecorations, RenderWidget } from "./render-utils";
 
 /** A region of the document that came from an included file. */
 export interface IncludeRegion {
@@ -31,11 +30,11 @@ function getSourceMap(): SourceMap | null {
   return (window as unknown as { __cgSourceMap?: SourceMap }).__cgSourceMap ?? null;
 }
 
-class IncludeLabelWidget extends WidgetType {
+class IncludeLabelWidget extends RenderWidget {
   constructor(private readonly filename: string, private readonly active: boolean) {
     super();
   }
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const span = document.createElement("span");
     span.className = this.active ? "cg-include-label cg-include-label-active" : "cg-include-label";
     span.textContent = this.filename;
@@ -44,7 +43,6 @@ class IncludeLabelWidget extends WidgetType {
   eq(other: IncludeLabelWidget): boolean {
     return this.filename === other.filename && this.active === other.active;
   }
-  ignoreEvent(): boolean { return true; }
 }
 
 class IncludeLabelPlugin implements PluginValue {

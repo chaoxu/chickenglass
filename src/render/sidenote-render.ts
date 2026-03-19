@@ -16,13 +16,12 @@ import {
   type PluginValue,
   type ViewUpdate,
   ViewPlugin,
-  WidgetType,
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Range, StateField, StateEffect } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   buildDecorations,
-  cursorContainedIn,
+  cursorInRange,
   RenderWidget,
   editorFocusField,
   focusEffect,
@@ -153,7 +152,7 @@ function buildSidenoteDecorations(state: EditorState, focused: boolean): Decorat
 
   // Render refs as superscript numbers
   for (const ref of refs) {
-    if (focused && cursorContainedIn(state, ref.from, ref.to)) continue;
+    if (focused && cursorInRange(state, ref.from, ref.to)) continue;
 
     const num = numberMap.get(ref.id) ?? 0;
     const widget = new FootnoteRefWidget(num, ref.id);
@@ -165,7 +164,7 @@ function buildSidenoteDecorations(state: EditorState, focused: boolean): Decorat
   // in margin) or collapsed (content shown in bottom footnote section).
   // When cursor is inside a def, show source for editing.
   for (const [, def] of defs) {
-    if (focused && cursorContainedIn(state, def.from, def.to)) continue;
+    if (focused && cursorInRange(state, def.from, def.to)) continue;
 
     // Collapse the definition line to zero height
     items.push(
@@ -247,7 +246,7 @@ export function computeSidenoteOffsets(
 
 
 /** Widget that renders a "Footnotes" section at the bottom when sidenotes are collapsed. */
-class FootnoteSectionWidget extends WidgetType {
+class FootnoteSectionWidget extends RenderWidget {
   constructor(
     private readonly entries: ReadonlyArray<{ num: number; id: string; content: string; defFrom: number }>,
     private readonly macros: Record<string, string>,
@@ -307,8 +306,6 @@ class FootnoteSectionWidget extends WidgetType {
     if (this.entries.length !== other.entries.length) return false;
     return this.entries.every((e, i) => e.id === other.entries[i].id && e.content === other.entries[i].content);
   }
-
-  ignoreEvent(): boolean { return true; }
 }
 
 /** ViewPlugin that adds a "Footnotes" section at the end of the document when sidenotes are collapsed. */

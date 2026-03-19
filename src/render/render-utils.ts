@@ -5,32 +5,34 @@ import { syntaxTree } from "@codemirror/language";
 /**
  * Check whether the primary cursor is contained within [from, to].
  *
+ * Accepts either an EditorView or EditorState:
+ * - EditorView: also checks view.hasFocus (returns false when unfocused)
+ * - EditorState: pure position check with no focus guard
+ *
  * Uses containment (cursor.from >= from && cursor.to <= to) rather than
  * overlap so that clicking *near* a widget places the cursor outside the
  * replaced range and keeps the widget rendered.
  */
 export function cursorInRange(
-  view: EditorView,
+  viewOrState: EditorView | EditorState,
   from: number,
   to: number,
 ): boolean {
-  if (!view.hasFocus) return false;
-  const cursor = view.state.selection.main;
+  if ("state" in viewOrState) {
+    // EditorView path — guard on focus
+    if (!viewOrState.hasFocus) return false;
+    const cursor = viewOrState.state.selection.main;
+    return cursor.from >= from && cursor.to <= to;
+  }
+  // EditorState path — no focus guard
+  const cursor = viewOrState.selection.main;
   return cursor.from >= from && cursor.to <= to;
 }
 
 /**
- * Check whether the primary cursor is contained within [from, to]
- * using only EditorState (no view/focus check).
+ * @deprecated Use `cursorInRange` which now accepts both EditorView and EditorState.
  */
-export function cursorContainedIn(
-  state: EditorState,
-  from: number,
-  to: number,
-): boolean {
-  const cursor = state.selection.main;
-  return cursor.from >= from && cursor.to <= to;
-}
+export const cursorContainedIn = cursorInRange;
 
 /** Result of collecting renderable nodes from the syntax tree. */
 export interface RenderableNode {
@@ -62,6 +64,17 @@ export function collectNodes(
     },
   });
   return results;
+}
+
+/**
+ * Serialize macros to a stable string for use in widget equality checks.
+ * Returns an empty string when there are no macros.
+ */
+export function serializeMacros(macros: Record<string, string>): string {
+  const keys = Object.keys(macros);
+  if (keys.length === 0) return "";
+  keys.sort();
+  return keys.map((k) => `${k}=${macros[k]}`).join("\0");
 }
 
 /** Shared Decoration.mark that visually hides source markers via CSS while keeping them in the DOM. */
@@ -96,8 +109,16 @@ export abstract class RenderWidget extends WidgetType {
   /** Document offset of the start of the source range this widget replaces. */
   sourceFrom = -1;
 
-  /** Subclasses build their DOM element here. */
-  abstract createDOM(): HTMLElement;
+  /**
+   * Subclasses build their DOM element here.
+   *
+   * Called by the default `toDOM()` implementation. Widgets that override
+   * `toDOM()` entirely (e.g. widgets needing the view parameter for custom
+   * event handling) do not need to implement this method.
+   */
+  createDOM(): HTMLElement {
+    return document.createElement("span");
+  }
 
   toDOM(view?: EditorView): HTMLElement {
     const el = this.createDOM();

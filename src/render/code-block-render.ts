@@ -15,7 +15,6 @@ import {
   type DecorationSet,
   Decoration,
   EditorView,
-  WidgetType,
 } from "@codemirror/view";
 import {
   type EditorState,
@@ -25,16 +24,17 @@ import {
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
-  cursorContainedIn,
+  cursorInRange,
   buildDecorations,
   decorationHidden,
+  RenderWidget,
   editorFocusField,
   focusEffect,
   focusTracker,
 } from "./render-utils";
 
 /** Widget that renders a copy-to-clipboard button in the code block header. */
-class CopyButtonWidget extends WidgetType {
+class CopyButtonWidget extends RenderWidget {
   constructor(private readonly code: string) {
     super();
   }
@@ -57,10 +57,6 @@ class CopyButtonWidget extends WidgetType {
 
   eq(other: CopyButtonWidget): boolean {
     return this.code === other.code;
-  }
-
-  ignoreEvent(): boolean {
-    return true;
   }
 }
 
@@ -129,7 +125,7 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
   const items: Range<Decoration>[] = [];
 
   for (const block of blocks) {
-    const cursorInside = focused && cursorContainedIn(state, block.from, block.to);
+    const cursorInside = focused && cursorInRange(state, block.from, block.to);
 
     if (cursorInside) {
       // Source mode: show raw markdown, just add a subtle wrapper class.
