@@ -320,11 +320,11 @@ const sidenoteLayoutPlugin = ViewPlugin.fromClass(
     private rafId = 0;
 
     constructor(private view: EditorView) {
-      this.scheduleLayout();
+      // Run synchronously on first layout to avoid one-frame overlap flash
+      this.resolveOverlaps();
     }
 
     update(_update: ViewUpdate) {
-      // Debounced via rAF — safe to schedule on every update
       this.scheduleLayout();
     }
 
