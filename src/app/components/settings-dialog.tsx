@@ -6,7 +6,18 @@ import { cn } from "../lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = "General" | "Editor" | "Appearance" | "Export";
+type SettingsTab = "General" | "Editor" | "Appearance" | "Plugins" | "Export";
+
+/** Minimal plugin info needed by the settings UI. */
+export interface PluginInfo {
+  plugin: {
+    id: string;
+    name: string;
+    description?: string;
+    defaultEnabled: boolean;
+  };
+  enabled: boolean;
+}
 
 interface SettingsDialogProps {
   open: boolean;
@@ -15,6 +26,7 @@ interface SettingsDialogProps {
   onUpdateSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   theme: Theme;
   onSetTheme: (theme: Theme) => void;
+  plugins?: PluginInfo[];
 }
 
 // ── Shared constants ──────────────────────────────────────────────────────────
@@ -22,7 +34,7 @@ interface SettingsDialogProps {
 const SELECT_CLASS =
   "text-sm border border-[var(--cg-border)] rounded px-2 py-1 bg-[var(--cg-bg)] text-[var(--cg-fg)] focus:outline-none focus:ring-1 focus:ring-[var(--cg-accent,#4a9eff)]";
 
-const TABS: SettingsTab[] = ["General", "Editor", "Appearance", "Export"];
+const TABS: SettingsTab[] = ["General", "Editor", "Appearance", "Plugins", "Export"];
 
 const THEME_OPTIONS: Array<{ value: Theme; label: string }> = [
   { value: "light", label: "Light" },
@@ -164,16 +176,6 @@ function EditorTab({ settings, onUpdateSetting }: EditorTabProps) {
         />
       </Row>
 
-      {/* Spell check */}
-      <Row label="Spell check" htmlFor="sd-spell-check">
-        <input
-          id="sd-spell-check"
-          type="checkbox"
-          checked={settings.spellCheck}
-          onChange={(e) => { onUpdateSetting("spellCheck", e.target.checked); }}
-          className="w-4 h-4 accent-[var(--cg-accent,#4a9eff)]"
-        />
-      </Row>
     </section>
   );
 }
@@ -235,6 +237,54 @@ function ExportTab({ settings, onUpdateSetting }: ExportTabProps) {
   );
 }
 
+interface PluginsTabProps {
+  settings: Settings;
+  onUpdateSetting: SettingsDialogProps["onUpdateSetting"];
+  plugins: PluginInfo[];
+}
+
+function PluginsTab({ settings, onUpdateSetting, plugins }: PluginsTabProps) {
+  if (plugins.length === 0) {
+    return (
+      <section>
+        <p className="text-sm text-[var(--cg-muted)]">No plugins registered.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section>
+      {plugins.map(({ plugin }) => {
+        const isEnabled = settings.enabledPlugins[plugin.id] ?? plugin.defaultEnabled;
+        return (
+          <div
+            key={plugin.id}
+            className="flex items-center justify-between py-2 border-b border-[var(--cg-border)] last:border-b-0"
+          >
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-[var(--cg-fg)]">{plugin.name}</span>
+              {plugin.description && (
+                <span className="text-xs text-[var(--cg-muted)]">{plugin.description}</span>
+              )}
+            </div>
+            <input
+              type="checkbox"
+              checked={isEnabled}
+              onChange={() => {
+                onUpdateSetting("enabledPlugins", {
+                  ...settings.enabledPlugins,
+                  [plugin.id]: !isEnabled,
+                });
+              }}
+              className="w-4 h-4 accent-[var(--cg-accent,#4a9eff)] shrink-0 ml-4"
+            />
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 // ── Main dialog ───────────────────────────────────────────────────────────────
 
 export function SettingsDialog({
@@ -244,6 +294,7 @@ export function SettingsDialog({
   onUpdateSetting,
   theme,
   onSetTheme,
+  plugins = [],
 }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("General");
 
@@ -318,6 +369,9 @@ export function SettingsDialog({
             )}
             {activeTab === "Appearance" && (
               <AppearanceTab theme={theme} onSetTheme={onSetTheme} />
+            )}
+            {activeTab === "Plugins" && (
+              <PluginsTab settings={settings} onUpdateSetting={onUpdateSetting} plugins={plugins} />
             )}
             {activeTab === "Export" && (
               <ExportTab settings={settings} onUpdateSetting={onUpdateSetting} />

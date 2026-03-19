@@ -572,6 +572,7 @@ function AppInner() {
         onUpdateSetting={updateSetting}
         theme={theme}
         onSetTheme={setTheme}
+        plugins={pluginManager.getPlugins()}
       />
       <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
