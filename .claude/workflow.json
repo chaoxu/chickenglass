@@ -37,8 +37,8 @@
   "co_author": "Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
   "orchestration": {
     "merge": {
-      "owner": "implementer",
-      "push_owner": "implementer",
+      "owner": "lead",
+      "push_owner": "lead",
       "signal": "MERGE_TURN",
       "require_base_sha_match": true,
       "temp_branch_prefix": "merge-",
@@ -47,7 +47,7 @@
   },
   "review": {
     "skill": "code-reviewer",
-    "dispatch_mode": "worker_subagent",
+    "dispatch_mode": "lead_reviewer_worker",
     "subagent_type": "feature-dev:code-reviewer",
     "severities_that_block": ["critical", "high"],
     "severity_aliases": {},

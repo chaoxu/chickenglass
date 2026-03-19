@@ -11,15 +11,14 @@ import { CslProcessor } from "../citations/csl-processor";
 import { resolveIncludePath } from "../plugins/include-resolver";
 import { SourceMap, type IncludeRegion } from "./source-map";
 import { BackgroundIndexer } from "../index";
-import type { FileEntry, FileSystem } from "./file-manager";
+import type { FileSystem } from "./file-manager";
 import { loadProjectConfig, type ProjectConfig } from "./project-config";
+import { collectMdPaths, type ExportFormat } from "./export";
 import {
   CommandPalette,
   installPaletteKeybinding,
 } from "./command-palette";
 import { getEditorCommands, createHeadingCommands } from "../editor/commands";
-import { exportDocument, batchExport, collectMdPaths, type ExportFormat } from "./export";
-import { revealInFinder, isTauri } from "./tauri-fs";
 import { showSaveDialog, showSaveAllDialog } from "./save-dialog";
 import { SearchPanel, installSearchKeybinding } from "./search-panel";
 import { Sidebar } from "./sidebar";
@@ -29,28 +28,8 @@ import {
   loadTheme,
   type Theme,
 } from "./theme-manager";
-
-/** Zoom manager: controls --font-size-base CSS variable, persists in localStorage. */
-const ZOOM_KEY = "cg-zoom-level";
-const ZOOM_DEFAULT = 16;
-const ZOOM_MIN = 10;
-const ZOOM_MAX = 32;
-const ZOOM_STEP = 2;
-
-let currentZoomLevel = (() => {
-  try {
-    const stored = localStorage.getItem(ZOOM_KEY);
-    return stored ? Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Number(stored))) : ZOOM_DEFAULT;
-  } catch {
-    return ZOOM_DEFAULT;
-  }
-})();
-
-function applyZoomLevel(px: number): void {
-  currentZoomLevel = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, px));
-  document.documentElement.style.setProperty("--font-size-base", `${currentZoomLevel}px`);
-  localStorage.setItem(ZOOM_KEY, String(currentZoomLevel));
-}
+import { installAppKeybindings } from "./app-keybindings";
+import { doExportActiveFile, doBatchExportAll, doRevealActiveFile } from "./app-export";
 
 /** Configuration for the application shell. */
 export interface AppConfig {
@@ -90,6 +69,7 @@ export class App {
   private readonly indexer: BackgroundIndexer;
   private readonly cleanupSearchKeybinding: () => void;
   private readonly cleanupPaletteKeybinding: () => void;
+  private readonly cleanupAppKeybindings: () => void;
   private readonly editorContainer: HTMLElement;
   private editor: EditorView | null = null;
   /** Extra CM6 extensions injected into every editor instance. */
@@ -183,7 +163,10 @@ export class App {
       this.commandPalette,
     );
 
-    this.setupKeybindings();
+    this.cleanupAppKeybindings = installAppKeybindings(this.root, {
+      saveActiveFile: () => this.saveActiveFile(),
+      exportActiveFile: (fmt) => this.exportActiveFile(fmt),
+    });
 
     this.root.addEventListener("cg-open-file", (e) => {
       const path = (e as CustomEvent).detail;
@@ -329,6 +312,7 @@ export class App {
   destroy(): void {
     this.cleanupSearchKeybinding();
     this.cleanupPaletteKeybinding();
+    this.cleanupAppKeybindings();
     this.destroyEditor();
     this.clearIndexTimer();
     this.indexer.dispose();
@@ -588,122 +572,24 @@ export class App {
     this.bufferContent.set(activePath, this.editor.state.doc.toString());
   }
 
-  /**
-   * Export the active document to the given format.
-   *
-   * PDF/LaTeX: requires Pandoc (Tauri only).
-   * HTML: self-contained output; works in browser and Tauri.
-   */
+  /** Get the export context for delegation to app-export module. */
+  private get exportCtx() {
+    return { fs: this.fs, tabBar: this.tabBar, editorContainer: this.editorContainer, editor: this.editor };
+  }
+
+  /** Export the active document to the given format. */
   async exportActiveFile(format: ExportFormat): Promise<void> {
-    const activePath = this.tabBar.getActiveTab();
-    if (!activePath || !this.editor) return;
-
-    // Use the current editor content (includes already expanded)
-    const content = this.editor.state.doc.toString();
-
-    try {
-      const outputPath = await exportDocument(content, format, activePath, this.fs);
-      this.showNotification(`Exported to ${outputPath}`);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.showNotification(`Export failed: ${message}`, true);
-    }
+    return doExportActiveFile(this.exportCtx, format);
   }
 
-  /**
-   * Batch-export all .md files in the project to the given format.
-   *
-   * Shows a summary notification when done.
-   */
+  /** Batch-export all .md files in the project. */
   async batchExportAll(format: ExportFormat): Promise<void> {
-    let tree: FileEntry;
-    try {
-      tree = await this.fs.listTree();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.showNotification(`Batch export failed: ${message}`, true);
-      return;
-    }
-
-    this.showNotification(`Batch export started…`);
-
-    const results = await batchExport(tree, format, this.fs);
-    const succeeded = results.filter((r) => r.outputPath !== undefined).length;
-    const failed = results.filter((r) => r.error !== undefined).length;
-
-    if (failed === 0) {
-      this.showNotification(`Batch export complete: ${succeeded} file(s) exported.`);
-    } else {
-      this.showNotification(
-        `Batch export: ${succeeded} succeeded, ${failed} failed.`,
-        true,
-      );
-    }
+    return doBatchExportAll(this.exportCtx, format);
   }
 
-  /**
-   * Reveal the active file (or a given path) in the OS file explorer.
-   *
-   * Only works in Tauri mode; silently ignored in browser mode.
-   */
+  /** Reveal the active file in the OS file explorer (Tauri only). */
   async revealActiveFile(path?: string): Promise<void> {
-    if (!isTauri()) return;
-    const target = path ?? this.tabBar.getActiveTab();
-    if (!target) return;
-    try {
-      await revealInFinder(target);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.showNotification(`Could not reveal file: ${message}`, true);
-    }
-  }
-
-  /** Show a temporary notification bar at the top of the editor. */
-  private showNotification(message: string, isError = false): void {
-    const bar = document.createElement("div");
-    bar.className = `app-notification${isError ? " app-notification-error" : ""}`;
-    bar.textContent = message;
-    this.editorContainer.prepend(bar);
-    setTimeout(() => bar.remove(), 5000);
-  }
-
-  private setupKeybindings(): void {
-    this.root.addEventListener("keydown", (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-        e.preventDefault();
-        this.saveActiveFile();
-      }
-      // Cmd+Shift+E / Ctrl+Shift+E → Export to PDF
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "E") {
-        e.preventDefault();
-        this.exportActiveFile("pdf");
-      }
-      // Cmd+Shift+L / Ctrl+Shift+L → Export to LaTeX
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "L") {
-        e.preventDefault();
-        this.exportActiveFile("latex");
-      }
-      // Cmd+Shift+H / Ctrl+Shift+H → Export to HTML
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "H") {
-        e.preventDefault();
-        this.exportActiveFile("html");
-      }
-      // Cmd+= / Ctrl+= → Zoom in
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "=") {
-        e.preventDefault();
-        applyZoomLevel(currentZoomLevel + ZOOM_STEP);
-      }
-      // Cmd+- / Ctrl+- → Zoom out
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "-") {
-        e.preventDefault();
-        applyZoomLevel(currentZoomLevel - ZOOM_STEP);
-      }
-      // Cmd+0 / Ctrl+0 → Reset zoom
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "0") {
-        e.preventDefault();
-        applyZoomLevel(ZOOM_DEFAULT);
-      }
-    });
+    return doRevealActiveFile(this.exportCtx, path);
   }
 
   /** Schedule a debounced index update for the given file. */
