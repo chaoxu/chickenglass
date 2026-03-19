@@ -33,6 +33,11 @@ export {
   createBlockRender,
 } from "./block-render";
 export {
+  THEOREM_COUNTER,
+  createStandardPlugin,
+  type StandardPluginOptions,
+} from "./plugin-factory";
+export {
   theoremPlugin,
   lemmaPlugin,
   corollaryPlugin,

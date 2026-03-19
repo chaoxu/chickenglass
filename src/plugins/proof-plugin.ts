@@ -7,15 +7,13 @@
  */
 
 import type { BlockPlugin } from "./plugin-types";
-import { createBlockRender } from "./block-render";
+import { createStandardPlugin } from "./plugin-factory";
 
 /** The default QED symbol appended to proof blocks. */
 export const QED_SYMBOL = "\u220E"; // ∎
 
-export const proofPlugin: BlockPlugin = {
+export const proofPlugin: BlockPlugin = createStandardPlugin({
   name: "proof",
   numbered: false,
-  title: "Proof",
-  render: createBlockRender("Proof"),
   defaults: { qedSymbol: QED_SYMBOL },
-};
+});

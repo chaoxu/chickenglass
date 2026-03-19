@@ -17,7 +17,8 @@
  * Security: Only https:// URLs are allowed. Iframes use sandbox attributes.
  */
 
-import type { BlockAttrs, BlockDecorationSpec, BlockPlugin } from "./plugin-types";
+import type { BlockPlugin } from "./plugin-types";
+import { createBlockRender } from "./block-render";
 
 /** Validate that a URL is safe for embedding (https only). */
 export function isValidEmbedUrl(url: string): boolean {
@@ -96,26 +97,12 @@ export function gistEmbedUrl(url: string): string {
   return trimmed.endsWith("/") ? `${trimmed.slice(0, -1)}.pibb` : `${trimmed}.pibb`;
 }
 
-/** Create a render function for embed-type plugins. */
-function createEmbedRender(displayTitle: string) {
-  return function render(attrs: BlockAttrs): BlockDecorationSpec {
-    const parts = [displayTitle];
-    if (attrs.title) {
-      parts.push(` (${attrs.title})`);
-    }
-    return {
-      className: `cg-block cg-block-${attrs.type}`,
-      header: parts.join(""),
-    };
-  };
-}
-
 /** Generic embed plugin — renders any https URL as an iframe. */
 export const embedPlugin: BlockPlugin = {
   name: "embed",
   numbered: false,
   title: "Embed",
-  render: createEmbedRender("Embed"),
+  render: createBlockRender("Embed"),
 };
 
 /** Plain iframe plugin — renders URL as a plain iframe. */
@@ -123,7 +110,7 @@ export const iframePlugin: BlockPlugin = {
   name: "iframe",
   numbered: false,
   title: "Iframe",
-  render: createEmbedRender("Iframe"),
+  render: createBlockRender("Iframe"),
 };
 
 /** YouTube embed plugin — extracts video ID and renders responsive 16:9. */
@@ -131,7 +118,7 @@ export const youtubePlugin: BlockPlugin = {
   name: "youtube",
   numbered: false,
   title: "YouTube",
-  render: createEmbedRender("YouTube"),
+  render: createBlockRender("YouTube"),
 };
 
 /** GitHub Gist embed plugin. */
@@ -139,7 +126,7 @@ export const gistPlugin: BlockPlugin = {
   name: "gist",
   numbered: false,
   title: "Gist",
-  render: createEmbedRender("Gist"),
+  render: createBlockRender("Gist"),
 };
 
 /** All embed-family plugins as an array. */

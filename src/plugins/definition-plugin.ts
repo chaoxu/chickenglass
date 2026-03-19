@@ -7,12 +7,9 @@
  */
 
 import type { BlockPlugin } from "./plugin-types";
-import { createBlockRender } from "./block-render";
+import { createStandardPlugin } from "./plugin-factory";
 
-export const definitionPlugin: BlockPlugin = {
+export const definitionPlugin: BlockPlugin = createStandardPlugin({
   name: "definition",
   counter: "definition",
-  numbered: true,
-  title: "Definition",
-  render: createBlockRender("Definition"),
-};
+});

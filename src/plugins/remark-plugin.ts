@@ -6,18 +6,14 @@
  */
 
 import type { BlockPlugin } from "./plugin-types";
-import { createBlockRender } from "./block-render";
+import { createStandardPlugin } from "./plugin-factory";
 
-export const remarkPlugin: BlockPlugin = {
+export const remarkPlugin: BlockPlugin = createStandardPlugin({
   name: "remark",
   numbered: false,
-  title: "Remark",
-  render: createBlockRender("Remark"),
-};
+});
 
-export const examplePlugin: BlockPlugin = {
+export const examplePlugin: BlockPlugin = createStandardPlugin({
   name: "example",
   numbered: false,
-  title: "Example",
-  render: createBlockRender("Example"),
-};
+});

@@ -7,12 +7,9 @@
  */
 
 import type { BlockPlugin } from "./plugin-types";
-import { createBlockRender } from "./block-render";
+import { createStandardPlugin } from "./plugin-factory";
 
-export const algorithmPlugin: BlockPlugin = {
+export const algorithmPlugin: BlockPlugin = createStandardPlugin({
   name: "algorithm",
   counter: "algorithm",
-  numbered: true,
-  title: "Algorithm",
-  render: createBlockRender("Algorithm"),
-};
+});

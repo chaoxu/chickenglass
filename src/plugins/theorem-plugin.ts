@@ -7,50 +7,32 @@
  */
 
 import type { BlockPlugin } from "./plugin-types";
-import { createBlockRender } from "./block-render";
+import { createStandardPlugin, THEOREM_COUNTER } from "./plugin-factory";
 
-/** Shared counter group for all theorem-family blocks. */
-const THEOREM_COUNTER = "theorem";
-
-export const theoremPlugin: BlockPlugin = {
+export const theoremPlugin: BlockPlugin = createStandardPlugin({
   name: "theorem",
   counter: THEOREM_COUNTER,
-  numbered: true,
-  title: "Theorem",
-  render: createBlockRender("Theorem"),
-};
+});
 
-export const lemmaPlugin: BlockPlugin = {
+export const lemmaPlugin: BlockPlugin = createStandardPlugin({
   name: "lemma",
   counter: THEOREM_COUNTER,
-  numbered: true,
-  title: "Lemma",
-  render: createBlockRender("Lemma"),
-};
+});
 
-export const corollaryPlugin: BlockPlugin = {
+export const corollaryPlugin: BlockPlugin = createStandardPlugin({
   name: "corollary",
   counter: THEOREM_COUNTER,
-  numbered: true,
-  title: "Corollary",
-  render: createBlockRender("Corollary"),
-};
+});
 
-export const propositionPlugin: BlockPlugin = {
+export const propositionPlugin: BlockPlugin = createStandardPlugin({
   name: "proposition",
   counter: THEOREM_COUNTER,
-  numbered: true,
-  title: "Proposition",
-  render: createBlockRender("Proposition"),
-};
+});
 
-export const conjecturePlugin: BlockPlugin = {
+export const conjecturePlugin: BlockPlugin = createStandardPlugin({
   name: "conjecture",
   counter: THEOREM_COUNTER,
-  numbered: true,
-  title: "Conjecture",
-  render: createBlockRender("Conjecture"),
-};
+});
 
 /** All theorem-family plugins as an array. */
 export const theoremFamilyPlugins: readonly BlockPlugin[] = [

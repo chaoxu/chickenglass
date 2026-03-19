@@ -6,12 +6,9 @@
  */
 
 import type { BlockPlugin } from "./plugin-types";
-import { createBlockRender } from "./block-render";
+import { createStandardPlugin, THEOREM_COUNTER } from "./plugin-factory";
 
-export const problemPlugin: BlockPlugin = {
+export const problemPlugin: BlockPlugin = createStandardPlugin({
   name: "problem",
-  counter: "theorem",
-  numbered: true,
-  title: "Problem",
-  render: createBlockRender("Problem"),
-};
+  counter: THEOREM_COUNTER,
+});
