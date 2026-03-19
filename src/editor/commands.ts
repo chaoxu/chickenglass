@@ -8,6 +8,7 @@
 import type { EditorView } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import type { PaletteCommand } from "../app/command-palette";
+import { insertTable } from "../render/table-render";
 
 /** Insert a fenced div block at the cursor. */
 function insertBlock(view: EditorView, className: string): void {
@@ -133,6 +134,11 @@ export function getEditorCommands(): PaletteCommand[] {
   return [
     ...createBlockCommands(),
     ...createMathCommands(),
+    {
+      id: "insert-table",
+      label: "Insert Table",
+      action: (view: EditorView) => insertTable(view),
+    },
     {
       id: "toggle-focus-mode",
       label: "Toggle Focus Mode",

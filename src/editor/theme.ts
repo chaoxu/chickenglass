@@ -419,6 +419,18 @@ export const chickenglassTheme = EditorView.theme({
     backgroundColor: "var(--cg-hover)",
   },
 
+  ".cg-table-toolbar-btn-active": {
+    backgroundColor: "var(--cg-active)",
+    fontWeight: "600",
+  },
+
+  ".cg-table-toolbar-sep": {
+    width: "1px",
+    alignSelf: "stretch",
+    backgroundColor: "var(--cg-border)",
+    margin: "0 2px",
+  },
+
   /* Math preview floating panel */
   ".cg-math-preview": {
     position: "fixed",

@@ -29,8 +29,20 @@ import {
 import { keymap } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { buildDecorations } from "./render-utils";
-import { parseTable, formatTable, addRow, addColumn, deleteRow, deleteColumn } from "./table-utils";
-import type { ParsedTable } from "./table-utils";
+import {
+  parseTable,
+  formatTable,
+  addRow,
+  addColumn,
+  deleteRow,
+  deleteColumn,
+  setAlignment,
+  moveRow,
+  moveColumn,
+} from "./table-utils";
+import type { Alignment, ParsedTable } from "./table-utils";
+import { ContextMenu } from "../app/context-menu";
+import type { ContextMenuItem } from "../app/context-menu";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -167,7 +179,7 @@ class TableToolbarWidget extends WidgetType {
     const toolbar = document.createElement("div");
     toolbar.className = "cg-table-toolbar";
 
-    const makeBtn = (label: string, title: string, handler: () => void): void => {
+    const makeBtn = (label: string, title: string, handler: () => void): HTMLButtonElement => {
       const btn = document.createElement("button");
       btn.className = "cg-table-toolbar-btn";
       btn.textContent = label;
@@ -177,7 +189,16 @@ class TableToolbarWidget extends WidgetType {
         handler();
       });
       toolbar.appendChild(btn);
+      return btn;
     };
+
+    const makeSep = (): void => {
+      const sep = document.createElement("div");
+      sep.className = "cg-table-toolbar-sep";
+      toolbar.appendChild(sep);
+    };
+
+    // ── Row/Column add/delete buttons ──────────────────────────────────
 
     makeBtn("+Row", "Add row below", () => {
       applyTableMutation(view, this.tableRange, (table) => {
@@ -207,6 +228,88 @@ class TableToolbarWidget extends WidgetType {
         if (cursorCol === null) return table;
         return deleteColumn(table, cursorCol);
       });
+    });
+
+    makeSep();
+
+    // ── Alignment buttons ──────────────────────────────────────────────
+
+    const alignments: Array<{ label: string; title: string; value: Alignment }> = [
+      { label: "\u2190", title: "Align left", value: "left" },
+      { label: "\u2194", title: "Align center", value: "center" },
+      { label: "\u2192", title: "Align right", value: "right" },
+    ];
+
+    for (const { label, title, value } of alignments) {
+      const btn = makeBtn(label, title, () => {
+        applyTableMutation(view, this.tableRange, (table) => {
+          const cursorCol = getCursorColIndex(view, this.tableRange);
+          if (cursorCol === null) return table;
+          return setAlignment(table, cursorCol, value);
+        });
+      });
+
+      // Highlight the active alignment for the current column
+      const cursorCol = getCursorColIndex(view, this.tableRange);
+      if (cursorCol !== null && this.tableRange.parsed.alignments[cursorCol] === value) {
+        btn.classList.add("cg-table-toolbar-btn-active");
+      }
+    }
+
+    makeSep();
+
+    // ── Move Row/Column buttons ────────────────────────────────────────
+
+    makeBtn("\u2191", "Move row up", () => {
+      const cursorRow = getCursorRowIndex(view, this.tableRange);
+      if (cursorRow === null || cursorRow <= 0) return;
+      applyTableMutation(view, this.tableRange, (table) =>
+        moveRow(table, cursorRow, cursorRow - 1),
+      );
+      // Move cursor up to follow the row
+      const targetLineNum = view.state.doc.lineAt(view.state.selection.main.head).number - 1;
+      if (targetLineNum >= 1) {
+        const targetLine = view.state.doc.line(targetLineNum);
+        const cursorCol = getCursorColIndex(view, this.tableRange);
+        const bounds = findCellBounds(targetLine.text, targetLine.from, cursorCol ?? 0);
+        if (bounds) {
+          view.dispatch({ selection: { anchor: bounds.from } });
+        }
+      }
+    });
+
+    makeBtn("\u2193", "Move row down", () => {
+      const cursorRow = getCursorRowIndex(view, this.tableRange);
+      if (cursorRow === null || cursorRow >= this.tableRange.parsed.rows.length - 1) return;
+      applyTableMutation(view, this.tableRange, (table) =>
+        moveRow(table, cursorRow, cursorRow + 1),
+      );
+      // Move cursor down to follow the row
+      const targetLineNum = view.state.doc.lineAt(view.state.selection.main.head).number + 1;
+      if (targetLineNum <= view.state.doc.lines) {
+        const targetLine = view.state.doc.line(targetLineNum);
+        const cursorCol = getCursorColIndex(view, this.tableRange);
+        const bounds = findCellBounds(targetLine.text, targetLine.from, cursorCol ?? 0);
+        if (bounds) {
+          view.dispatch({ selection: { anchor: bounds.from } });
+        }
+      }
+    });
+
+    makeBtn("\u2190", "Move column left", () => {
+      const cursorCol = getCursorColIndex(view, this.tableRange);
+      if (cursorCol === null || cursorCol <= 0) return;
+      applyTableMutation(view, this.tableRange, (table) =>
+        moveColumn(table, cursorCol, cursorCol - 1),
+      );
+    });
+
+    makeBtn("\u2192", "Move column right", () => {
+      const cursorCol = getCursorColIndex(view, this.tableRange);
+      if (cursorCol === null || cursorCol >= this.tableRange.parsed.header.cells.length - 1) return;
+      applyTableMutation(view, this.tableRange, (table) =>
+        moveColumn(table, cursorCol, cursorCol + 1),
+      );
     });
 
     return toolbar;
@@ -459,6 +562,170 @@ function nextRow(view: EditorView): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Context menu
+// ---------------------------------------------------------------------------
+
+/** Show a context menu for a table at the given screen coordinates. */
+function showTableContextMenu(
+  view: EditorView,
+  table: TableRange,
+  x: number,
+  y: number,
+): void {
+  const cursorRow = getCursorRowIndex(view, table);
+  const cursorCol = getCursorColIndex(view, table);
+
+  const items: ContextMenuItem[] = [
+    {
+      label: "Insert Row Above",
+      disabled: cursorRow === null,
+      action: () => {
+        applyTableMutation(view, table, (t) =>
+          addRow(t, cursorRow ?? 0),
+        );
+      },
+    },
+    {
+      label: "Insert Row Below",
+      action: () => {
+        applyTableMutation(view, table, (t) =>
+          addRow(t, cursorRow !== null ? cursorRow + 1 : undefined),
+        );
+      },
+    },
+    {
+      label: "Insert Column Left",
+      action: () => {
+        applyTableMutation(view, table, (t) =>
+          addColumn(t, cursorCol ?? 0),
+        );
+      },
+    },
+    {
+      label: "Insert Column Right",
+      action: () => {
+        applyTableMutation(view, table, (t) =>
+          addColumn(t, cursorCol !== null ? cursorCol + 1 : undefined),
+        );
+      },
+    },
+    { label: "-" },
+    {
+      label: "Delete Row",
+      disabled: cursorRow === null || table.parsed.rows.length === 0,
+      action: () => {
+        if (cursorRow === null) return;
+        applyTableMutation(view, table, (t) => deleteRow(t, cursorRow));
+      },
+    },
+    {
+      label: "Delete Column",
+      disabled: cursorCol === null || table.parsed.header.cells.length <= 1,
+      action: () => {
+        if (cursorCol === null) return;
+        applyTableMutation(view, table, (t) => deleteColumn(t, cursorCol));
+      },
+    },
+    { label: "-" },
+    {
+      label: "Align Left",
+      disabled: cursorCol === null,
+      action: () => {
+        if (cursorCol === null) return;
+        applyTableMutation(view, table, (t) => setAlignment(t, cursorCol, "left"));
+      },
+    },
+    {
+      label: "Align Center",
+      disabled: cursorCol === null,
+      action: () => {
+        if (cursorCol === null) return;
+        applyTableMutation(view, table, (t) => setAlignment(t, cursorCol, "center"));
+      },
+    },
+    {
+      label: "Align Right",
+      disabled: cursorCol === null,
+      action: () => {
+        if (cursorCol === null) return;
+        applyTableMutation(view, table, (t) => setAlignment(t, cursorCol, "right"));
+      },
+    },
+    { label: "-" },
+    {
+      label: "Move Row Up",
+      disabled: cursorRow === null || cursorRow <= 0,
+      action: () => {
+        if (cursorRow === null) return;
+        applyTableMutation(view, table, (t) => moveRow(t, cursorRow, cursorRow - 1));
+      },
+    },
+    {
+      label: "Move Row Down",
+      disabled: cursorRow === null || cursorRow >= table.parsed.rows.length - 1,
+      action: () => {
+        if (cursorRow === null) return;
+        applyTableMutation(view, table, (t) => moveRow(t, cursorRow, cursorRow + 1));
+      },
+    },
+    {
+      label: "Move Column Left",
+      disabled: cursorCol === null || cursorCol <= 0,
+      action: () => {
+        if (cursorCol === null) return;
+        applyTableMutation(view, table, (t) => moveColumn(t, cursorCol, cursorCol - 1));
+      },
+    },
+    {
+      label: "Move Column Right",
+      disabled: cursorCol === null || cursorCol >= table.parsed.header.cells.length - 1,
+      action: () => {
+        if (cursorCol === null) return;
+        applyTableMutation(view, table, (t) => moveColumn(t, cursorCol, cursorCol + 1));
+      },
+    },
+  ];
+
+  new ContextMenu(items, x, y);
+}
+
+// ---------------------------------------------------------------------------
+// Insert Table
+// ---------------------------------------------------------------------------
+
+/**
+ * Insert a blank table at the cursor position.
+ *
+ * @param view - The editor view.
+ * @param rows - Number of data rows (default 3).
+ * @param cols - Number of columns (default 3).
+ */
+export function insertTable(
+  view: EditorView,
+  rows = 3,
+  cols = 3,
+): void {
+  const { from, to } = view.state.selection.main;
+  const line = view.state.doc.lineAt(from);
+  // Insert on a new line if cursor is not at the start of an empty line
+  const prefix = line.text.trim() === "" && from === line.from ? "" : "\n";
+
+  const header = "| " + Array.from({ length: cols }, (_, i) => `Col ${i + 1}`).join(" | ") + " |";
+  const separator = "| " + Array.from({ length: cols }, () => "---").join(" | ") + " |";
+  const emptyRow = "| " + Array.from({ length: cols }, () => "   ").join(" | ") + " |";
+  const dataRows = Array.from({ length: rows }, () => emptyRow).join("\n");
+
+  const tableText = `${prefix}${header}\n${separator}\n${dataRows}\n`;
+
+  view.dispatch({
+    changes: { from, to, insert: tableText },
+    // Place cursor in the first data cell
+    selection: { anchor: from + prefix.length + header.length + 1 + separator.length + 1 + 2 },
+  });
+  view.focus();
+}
+
+// ---------------------------------------------------------------------------
 // ViewPlugin
 // ---------------------------------------------------------------------------
 
@@ -580,6 +847,22 @@ const tableKeybindings: Extension = Prec.high(
 export const tableRenderPlugin: Extension = [
   ViewPlugin.fromClass(TableRenderPluginValue, {
     decorations: (v) => v.decorations,
+    eventHandlers: {
+      contextmenu(event: MouseEvent, view: EditorView) {
+        // Check if the right-click is inside a table
+        const tables = findTables(view);
+        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+        if (pos === null) return false;
+        const table = findTableAtCursor(tables, pos);
+        if (!table) return false;
+
+        event.preventDefault();
+        // Place cursor at the right-click position so row/col detection works
+        view.dispatch({ selection: { anchor: pos } });
+        showTableContextMenu(view, table, event.clientX, event.clientY);
+        return true;
+      },
+    },
   }),
   tableKeybindings,
 ];

@@ -342,3 +342,61 @@ export function deleteColumn(
 
   return { header, alignments, rows };
 }
+
+/** Set the alignment for a column at the given index. */
+export function setAlignment(
+  table: ParsedTable,
+  colIndex: number,
+  alignment: Alignment,
+): ParsedTable {
+  const colCount = table.header.cells.length;
+  if (colIndex < 0 || colIndex >= colCount) return table;
+  const alignments = [...table.alignments];
+  alignments[colIndex] = alignment;
+  return { ...table, alignments };
+}
+
+/** Move a data row from one index to another. */
+export function moveRow(
+  table: ParsedTable,
+  fromIndex: number,
+  toIndex: number,
+): ParsedTable {
+  if (fromIndex < 0 || fromIndex >= table.rows.length) return table;
+  if (toIndex < 0 || toIndex >= table.rows.length) return table;
+  if (fromIndex === toIndex) return table;
+  const rows = [...table.rows];
+  const [moved] = rows.splice(fromIndex, 1);
+  rows.splice(toIndex, 0, moved);
+  return { ...table, rows };
+}
+
+/** Move a column from one index to another. */
+export function moveColumn(
+  table: ParsedTable,
+  fromIndex: number,
+  toIndex: number,
+): ParsedTable {
+  const colCount = table.header.cells.length;
+  if (fromIndex < 0 || fromIndex >= colCount) return table;
+  if (toIndex < 0 || toIndex >= colCount) return table;
+  if (fromIndex === toIndex) return table;
+
+  const swapCell = (cells: readonly TableCell[]): TableCell[] => {
+    const result = [...cells];
+    const [moved] = result.splice(fromIndex, 1);
+    result.splice(toIndex, 0, moved);
+    return result;
+  };
+
+  const header: TableRow = { cells: swapCell(table.header.cells) };
+  const alignments = [...table.alignments];
+  const [movedAlign] = alignments.splice(fromIndex, 1);
+  alignments.splice(toIndex, 0, movedAlign);
+
+  const rows = table.rows.map((row) => ({
+    cells: swapCell(row.cells),
+  }));
+
+  return { header, alignments, rows };
+}

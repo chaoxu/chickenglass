@@ -35,7 +35,7 @@ export {
   containerAttributesPlugin,
 } from "./container-attributes";
 export { codeBlockRenderPlugin } from "./code-block-render";
-export { tableRenderPlugin } from "./table-render";
+export { tableRenderPlugin, insertTable } from "./table-render";
 export { debugInspectorPlugin, toggleDebugInspector } from "./debug-inspector";
 export { checkboxRenderPlugin } from "./checkbox-render";
 export { mathPreviewPlugin } from "./math-preview";
@@ -54,6 +54,9 @@ export {
   addColumn,
   deleteRow,
   deleteColumn,
+  setAlignment,
+  moveRow,
+  moveColumn,
   type Alignment,
   type TableCell,
   type TableRow,
