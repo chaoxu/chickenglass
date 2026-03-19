@@ -9,7 +9,8 @@
  * - Subscribe to doc changes, cursor position, and frontmatter via updateListener
  * - Debounce word-count computation (300 ms)
  * - Reconfigure the dark/light base theme when `theme` prop changes
- * - Load BibTeX + CSL files whenever frontmatter bibliography paths change
+ * - Delegate bibliography loading to useBibliography
+ * - Delegate scroll tracking to useEditorScroll
  * - Expand ::: {.include} fenced divs using the shared include-resolver utilities
  * - Destroy the old view and create a new one when the `doc` prop changes
  */
@@ -26,9 +27,6 @@ import { frontmatterField, type FrontmatterState } from "../../editor/frontmatte
 import { imagePasteExtension } from "../../editor/image-paste";
 import { imageDropExtension } from "../../editor/image-drop";
 import { createImageSaver, type ImageSaveContext } from "../../editor/image-save";
-import { parseBibTeX } from "../../citations/bibtex-parser";
-import { bibDataEffect } from "../../citations/citation-render";
-import { CslProcessor } from "../../citations/csl-processor";
 import type { ProjectConfig } from "../project-config";
 import type { FileSystem } from "../file-manager";
 import { computeDocStats } from "../writing-stats";
@@ -39,6 +37,8 @@ import {
   type ResolvedInclude,
 } from "../../plugins/include-resolver";
 import type { IncludeRegion } from "../source-map";
+import { useBibliography } from "./use-bibliography";
+import { useEditorScroll } from "./use-editor-scroll";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -141,60 +141,6 @@ async function expandIncludes(
   };
 }
 
-// ── Bibliography loading (mirrors app.ts loadBibliographyIfChanged) ──────────
-
-async function loadBibliography(
-  docPath: string,
-  bibPath: string,
-  cslPath: string,
-  fs: FileSystem,
-  view: EditorView,
-): Promise<void> {
-  const dir = docPath.includes("/")
-    ? docPath.slice(0, docPath.lastIndexOf("/"))
-    : "";
-
-  const readWithFallback = async (p: string): Promise<string> => {
-    if (dir) {
-      try {
-        return await fs.readFile(`${dir}/${p}`);
-      } catch {
-        // Fall through to project-root resolution
-      }
-    }
-    return fs.readFile(p);
-  };
-
-  try {
-    const bibText = await readWithFallback(bibPath);
-    const entries = parseBibTeX(bibText);
-    const store = new Map(entries.map((e) => [e.id, e]));
-
-    let cslXml: string | undefined;
-    if (cslPath) {
-      try {
-        cslXml = await readWithFallback(cslPath);
-      } catch {
-        // CSL file not found — use default style
-      }
-    }
-
-    const cslProcessor = new CslProcessor(entries, cslXml);
-    try {
-      view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor }) });
-    } catch {
-      // view destroyed
-    }
-  } catch {
-    // BibTeX file unreadable or unparseable — clear bibliography data
-    try {
-      view.dispatch({ effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) });
-    } catch {
-      // view destroyed
-    }
-  }
-}
-
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -231,9 +177,13 @@ export function useEditor(
   const [view, setView] = useState<EditorView | null>(null);
   const [wordCount, setWordCount] = useState(0);
   const [cursorPos, setCursorPos] = useState(0);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewportFrom, setViewportFrom] = useState(0);
   const imageSaverRef = useRef<((file: File) => Promise<string>) | null>(null);
+
+  // Delegate bibliography loading to useBibliography hook.
+  const bib = useBibliography({ fs, docPath });
+
+  // Delegate scroll tracking to useEditorScroll hook.
+  const { scrollTop, viewportFrom, resetScroll } = useEditorScroll(view);
 
   // Stable refs so callbacks inside the effect don't capture stale closures.
   const onDocChangeRef = useRef(onDocChange);
@@ -243,19 +193,19 @@ export function useEditor(
   useEffect(() => { onCursorChangeRef.current = onCursorChange; }, [onCursorChange]);
   useEffect(() => { onFrontmatterChangeRef.current = onFrontmatterChange; }, [onFrontmatterChange]);
 
-  // Track last bib/csl paths to avoid redundant reloads (mirrors app.ts).
-  const lastBibPathRef = useRef("");
-  const lastCslPathRef = useRef("");
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Stable ref for bib.handleBibChange to avoid stale closures in the effect.
+  const handleBibChangeRef = useRef(bib.handleBibChange);
+  useEffect(() => { handleBibChangeRef.current = bib.handleBibChange; }, [bib.handleBibChange]);
 
   // ── Create / destroy editor when doc or container changes ─────────────────
   useEffect(() => {
     if (!containerRef.current) return;
     const container = containerRef.current;
 
-    // Reset bib path tracking on new editor (mirrors switchEditor).
-    lastBibPathRef.current = "";
-    lastCslPathRef.current = "";
+    // Reset bibliography tracking on new editor.
+    bib.resetTracking();
 
     // Build the updateListener that drives reactive state.
     const updateListener = EditorView.updateListener.of((update) => {
@@ -289,30 +239,10 @@ export function useEditor(
         const fm = update.state.field(frontmatterField, false);
         onFrontmatterChangeRef.current?.(fm);
 
-        // Bibliography loading
-        if (fs && docPath) {
-          const bibPath = fm?.config.bibliography ?? "";
-          const cslPath = fm?.config.csl ?? "";
-          if (
-            bibPath !== lastBibPathRef.current ||
-            cslPath !== lastCslPathRef.current
-          ) {
-            lastBibPathRef.current = bibPath;
-            lastCslPathRef.current = cslPath;
-
-            if (!bibPath) {
-              try {
-                update.view.dispatch({
-                  effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }),
-                });
-              } catch {
-                // view destroyed
-              }
-            } else {
-              void loadBibliography(docPath, bibPath, cslPath, fs, update.view);
-            }
-          }
-        }
+        // Bibliography loading — delegated to useBibliography.
+        const bibPath = fm?.config.bibliography ?? "";
+        const cslPath = fm?.config.csl ?? "";
+        handleBibChangeRef.current(bibPath, cslPath, update.view);
       }
     });
 
@@ -361,33 +291,16 @@ export function useEditor(
     setView(newView);
     setWordCount(computeDocStats(doc).words);
     setCursorPos(0);
-    setScrollTop(0);
-    setViewportFrom(0);
-
-    // Track scroll for breadcrumbs
-    const scroller = newView.scrollDOM;
-    const onScroll = () => {
-      setScrollTop(scroller.scrollTop);
-      // Use lineBlockAtHeight for accurate position — viewport.from can lag behind
-      const topPos = newView.lineBlockAtHeight(scroller.scrollTop).from;
-      setViewportFrom(topPos);
-    };
-    scroller.addEventListener("scroll", onScroll, { passive: true });
+    resetScroll();
 
     // Initial frontmatter notification
     const initialFm = newView.state.field(frontmatterField, false);
     onFrontmatterChangeRef.current?.(initialFm);
 
-    // Initial bibliography load
-    if (fs && docPath) {
-      const bibPath = initialFm?.config.bibliography ?? "";
-      const cslPath = initialFm?.config.csl ?? "";
-      lastBibPathRef.current = bibPath;
-      lastCslPathRef.current = cslPath;
-      if (bibPath) {
-        void loadBibliography(docPath, bibPath, cslPath, fs, newView);
-      }
-    }
+    // Initial bibliography load — delegated to useBibliography.
+    const initialBibPath = initialFm?.config.bibliography ?? "";
+    const initialCslPath = initialFm?.config.csl ?? "";
+    bib.loadInitial(initialBibPath, initialCslPath, newView);
 
     // Include expansion: patch the document in-place after mount if needed.
     // expandIncludes returns early with the same string when no includes are found.
@@ -408,7 +321,6 @@ export function useEditor(
     }
 
     return () => {
-      scroller.removeEventListener("scroll", onScroll);
       if (wordCountTimerRef.current !== null) {
         clearTimeout(wordCountTimerRef.current);
         wordCountTimerRef.current = null;

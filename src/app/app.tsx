@@ -4,7 +4,6 @@ import type { FileSystem } from "./file-manager";
 import { loadProjectConfig } from "./project-config";
 import type { ProjectConfig } from "./project-config";
 import { insertImageFromPicker } from "../editor/image-insert";
-import type { Tab } from "./tab-bar";
 import { TabBar } from "./components/tab-bar";
 import { Sidebar } from "./components/sidebar";
 import { FileTree } from "./components/file-tree";
@@ -27,6 +26,9 @@ import { useHotkeys } from "./hooks/use-hotkeys";
 import { useRecentFiles } from "./hooks/use-recent-files";
 import { useWindowState } from "./hooks/use-window-state";
 import { useMenuEvents } from "./hooks/use-menu-events";
+import { useDialogs } from "./hooks/use-dialogs";
+import { useDocumentBuffer } from "./hooks/use-document-buffer";
+import { useFileOperations } from "./hooks/use-file-operations";
 import type { UseEditorReturn } from "./hooks/use-editor";
 import type { FileEntry } from "./file-manager";
 import { BackgroundIndexer } from "../index";
@@ -38,14 +40,6 @@ import { defaultEditorPlugins } from "../editor/editor-plugins-registry";
 import { isTauri, openFolder as tauriOpenFolder } from "./tauri-fs";
 import { exportDocument, batchExport } from "./export";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Return the file name portion of a path (last segment after "/"). */
-function basename(path: string): string {
-  const idx = path.lastIndexOf("/");
-  return idx === -1 ? path : path.slice(idx + 1);
-}
-
 
 // ── Inner app (has access to FileSystem context) ──────────────────────────────
 
@@ -56,13 +50,8 @@ function AppInner() {
   const { recentFiles, addRecentFile } = useRecentFiles();
   const { windowState, saveState: saveWindowState } = useWindowState();
 
-  // ── Dialog open states ──────────────────────────────────────────────────────
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [gotoLineOpen, setGotoLineOpen] = useState(false);
+  // ── Dialog open states (extracted to useDialogs) ──────────────────────────
+  const dialogs = useDialogs();
 
   // ── Indexer for search ─────────────────────────────────────────────────────
   const [indexer] = useState(() => new BackgroundIndexer());
@@ -98,22 +87,25 @@ function AppInner() {
     void loadProjectConfig(fs).then(setProjectConfig);
   }, [fs, refreshTree]);
 
-  // ── Tabs & buffers ─────────────────────────────────────────────────────────
-  const [openTabs, setOpenTabs] = useState<Tab[]>([]);
-  const [activeTab, setActiveTab] = useState<string | null>(null);
-  /** path → raw file content (for FS save) */
-  const buffers = useRef<Map<string, string>>(new Map());
-  /** path → in-editor doc string (live, may include expanded includes) */
-  const liveDocs = useRef<Map<string, string>>(new Map());
-  /** Ref mirror of openTabs paths — avoids closing over stale openTabs in openFile. */
-  const openPathsRef = useRef<Set<string>>(new Set());
-  /** Ref mirror of activeTab — avoids stale closure in handleDocChange. */
-  const activeTabRef = useRef<string | null>(null);
+  // ── Document buffer (tabs, buffers, liveDocs — extracted to useDocumentBuffer) ─
+  const docBuffer = useDocumentBuffer();
+  const {
+    openTabs,
+    setOpenTabs,
+    activeTab,
+    setActiveTab,
+    editorDoc,
+    setEditorDoc,
+    buffers,
+    liveDocs,
+    openPathsRef,
+    activeTabRef,
+    handleDocChange,
+    switchToTab,
+    renameBuffers,
+  } = docBuffer;
 
   // ── Active document ────────────────────────────────────────────────────────
-  /** The doc string passed to EditorPane. Changing this recreates the CM6 editor. */
-  const [editorDoc, setEditorDoc] = useState("");
-
   // ── Editor state (view, wordCount, cursorPos) ─────────────────────────────
   const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
 
@@ -131,191 +123,32 @@ function AppInner() {
     }
   }, []);
 
-  // Track doc changes to mark tab dirty — use ref to avoid stale activeTab closure.
-  const handleDocChange = useCallback((doc: string) => {
-    const path = activeTabRef.current;
-    if (!path) return;
-    liveDocs.current.set(path, doc);
+  // ── File operations (extracted to useFileOperations) ──────────────────────
+  const fileOps = useFileOperations({
+    fs,
+    openPathsRef,
+    activeTabRef,
+    buffers,
+    liveDocs,
+    openTabs,
+    setOpenTabs,
+    setActiveTab,
+    setEditorDoc,
+    renameBuffers,
+    refreshTree,
+    addRecentFile,
+  });
 
-    const isDirty = doc !== (buffers.current.get(path) ?? "");
-    setOpenTabs((prev) => {
-      const tab = prev.find((t) => t.path === path);
-      // Guard: skip update when dirty state hasn't changed.
-      if (!tab || tab.dirty === isDirty) return prev;
-      return prev.map((t) => (t.path === path ? { ...t, dirty: isDirty } : t));
-    });
-  }, []);
-
-  // Sync ref mirrors whenever state updates.
-  useEffect(() => {
-    openPathsRef.current = new Set(openTabs.map((t) => t.path));
-  }, [openTabs]);
-  useEffect(() => {
-    activeTabRef.current = activeTab;
-  }, [activeTab]);
-
-  // ── File operations ────────────────────────────────────────────────────────
-
-  const openFile = useCallback(async (path: string) => {
-    // If already open, just activate — use ref to avoid capturing openTabs.
-    if (openPathsRef.current.has(path)) {
-      setActiveTab(path);
-      setEditorDoc(liveDocs.current.get(path) ?? buffers.current.get(path) ?? "");
-      addRecentFile(path);
-      return;
-    }
-
-    try {
-      const content = await fs.readFile(path);
-      buffers.current.set(path, content);
-      liveDocs.current.set(path, content);
-
-      setOpenTabs((prev) => [...prev, { path, name: basename(path), dirty: false }]);
-      setActiveTab(path);
-      setEditorDoc(content);
-      addRecentFile(path);
-    } catch {
-      // Silently ignore unreadable files
-    }
-  }, [fs, addRecentFile]);
-
-  const saveFile = useCallback(async () => {
-    const path = activeTab;
-    if (!path) return;
-
-    const doc = liveDocs.current.get(path) ?? "";
-    try {
-      await fs.writeFile(path, doc);
-      buffers.current.set(path, doc);
-      setOpenTabs((prev) =>
-        prev.map((t) => (t.path === path ? { ...t, dirty: false } : t)),
-      );
-    } catch {
-      // Save failed — leave dirty
-    }
-  }, [activeTab, fs]);
-
-  const createFile = useCallback(async (path: string) => {
-    try {
-      await fs.createFile(path, "");
-      await refreshTree();
-      await openFile(path);
-    } catch {
-      // File may already exist
-    }
-  }, [fs, refreshTree, openFile]);
-
-  const createDirectory = useCallback(async (path: string) => {
-    try {
-      await fs.createDirectory(path);
-      await refreshTree();
-    } catch {
-      // Directory may already exist
-    }
-  }, [fs, refreshTree]);
-
-  const closeFile = useCallback(async (path: string) => {
-    // Save-before-close: ask if tab is dirty
-    const tab = openTabs.find((t) => t.path === path);
-    if (tab?.dirty) {
-      const answer = window.confirm(
-        `"${tab.name}" has unsaved changes.\n\nPress OK to discard, or Cancel to keep editing.`
-      );
-      if (!answer) return;
-    }
-
-    setOpenTabs((prev) => {
-      const idx = prev.findIndex((t) => t.path === path);
-      if (idx === -1) return prev;
-      return prev.filter((t) => t.path !== path);
-    });
-
-    if (path === activeTabRef.current) {
-      setTimeout(() => {
-        const remaining = openTabs.filter((t) => t.path !== path);
-        const nextPath = remaining[0]?.path ?? null;
-        setActiveTab(nextPath);
-        setEditorDoc(
-          nextPath
-            ? (liveDocs.current.get(nextPath) ?? buffers.current.get(nextPath) ?? "")
-            : "",
-        );
-      }, 0);
-    }
-
-    buffers.current.delete(path);
-    liveDocs.current.delete(path);
-  }, [openTabs]);
-
-  const switchToTab = useCallback((path: string) => {
-    setActiveTab(path);
-    setEditorDoc(liveDocs.current.get(path) ?? buffers.current.get(path) ?? "");
-  }, []);
-
-  const handleRename = useCallback(async (oldPath: string, newPath: string) => {
-    try {
-      await fs.renameFile(oldPath, newPath);
-      await refreshTree();
-
-      // Move buffer/liveDoc entries to new key
-      const content = buffers.current.get(oldPath);
-      if (content !== undefined) {
-        buffers.current.delete(oldPath);
-        buffers.current.set(newPath, content);
-      }
-      const liveDoc = liveDocs.current.get(oldPath);
-      if (liveDoc !== undefined) {
-        liveDocs.current.delete(oldPath);
-        liveDocs.current.set(newPath, liveDoc);
-      }
-
-      setOpenTabs((prev) =>
-        prev.map((t) =>
-          t.path === oldPath ? { ...t, path: newPath, name: basename(newPath) } : t,
-        ),
-      );
-      if (activeTabRef.current === oldPath) {
-        setActiveTab(newPath);
-      }
-    } catch {
-      // Rename failed
-    }
-  }, [fs, refreshTree]);
-
-  const handleDelete = useCallback(async (path: string) => {
-    const ok = window.confirm(`Delete "${basename(path)}"? This cannot be undone.`);
-    if (!ok) return;
-    try {
-      await fs.deleteFile(path);
-    } catch {
-      // deleteFile may not be supported (e.g., MemoryFS for non-existent files)
-    }
-    // Close the exact file, or all children if it was a directory (single batch update)
-    const prefix = path + "/";
-    const isAffected = (p: string) => p === path || p.startsWith(prefix);
-    setOpenTabs((prev) => {
-      const affected = new Set(prev.filter((t) => isAffected(t.path)).map((t) => t.path));
-      if (affected.size === 0) return prev;
-      // Clean up buffers/liveDocs for affected paths
-      for (const p of affected) {
-        buffers.current.delete(p);
-        liveDocs.current.delete(p);
-      }
-      const remaining = prev.filter((t) => !affected.has(t.path));
-      // If the active tab was deleted, switch to another
-      if (affected.has(activeTabRef.current ?? "")) {
-        const nextPath = remaining[0]?.path ?? null;
-        setActiveTab(nextPath);
-        setEditorDoc(
-          nextPath
-            ? (liveDocs.current.get(nextPath) ?? buffers.current.get(nextPath) ?? "")
-            : "",
-        );
-      }
-      return remaining;
-    });
-    await refreshTree();
-  }, [fs, refreshTree]);
+  const {
+    openFile,
+    saveFile,
+    createFile,
+    createDirectory,
+    closeFile,
+    handleRename,
+    handleDelete,
+    saveAs,
+  } = fileOps;
 
   const handleOutlineSelect = useCallback((from: number) => {
     const view = editorState?.view;
@@ -323,38 +156,6 @@ function AppInner() {
     view.dispatch({ selection: { anchor: from }, scrollIntoView: true });
     view.focus();
   }, [editorState?.view]);
-
-  // ── Save As ───────────────────────────────────────────────────────────────
-  const saveAs = useCallback(async () => {
-    const path = activeTab;
-    if (!path) return;
-    const doc = liveDocs.current.get(path) ?? "";
-
-    if (isTauri()) {
-      // Tauri: open native save dialog
-      try {
-        const { save } = await import("@tauri-apps/plugin-dialog");
-        const savePath = await save({
-          defaultPath: path,
-          filters: [{ name: "Markdown", extensions: ["md"] }],
-        });
-        if (!savePath) return; // user cancelled
-        await fs.writeFile(savePath, doc);
-        addRecentFile(savePath);
-      } catch {
-        // Save dialog failed or was cancelled
-      }
-    } else {
-      // Browser: download the file
-      const blob = new Blob([doc], { type: "text/markdown;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = basename(path);
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  }, [activeTab, fs, addRecentFile]);
 
   // ── Open Folder ───────────────────────────────────────────────────────────
   const handleOpenFolder = useCallback(() => {
@@ -391,7 +192,7 @@ function AppInner() {
         window.alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
       },
     );
-  }, [activeTab, fs]);
+  }, [activeTab, fs, liveDocs]);
 
   const handleBatchExportHtml = useCallback(() => {
     if (!fileTree) return;
@@ -424,17 +225,17 @@ function AppInner() {
     onShowFiles: () => { setSidebarCollapsed(false); setSidebarTab("files"); },
     onShowOutline: () => { setSidebarCollapsed(false); setSidebarTab("outline"); },
     onToggleTheme: () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),
-    onGoToLine: () => setGotoLineOpen(true),
-    onAbout: () => setAboutOpen(true),
-    onShowShortcuts: () => setShortcutsOpen(true),
-    onShowSettings: () => setSettingsOpen(true),
-    onShowSearch: () => setSearchOpen(true),
+    onGoToLine: () => dialogs.setGotoLineOpen(true),
+    onAbout: () => dialogs.setAboutOpen(true),
+    onShowShortcuts: () => dialogs.setShortcutsOpen(true),
+    onShowSettings: () => dialogs.setSettingsOpen(true),
+    onShowSearch: () => dialogs.setSearchOpen(true),
     onOpenFolder: handleOpenFolder,
     onOpenRecentFile: (path: string) => { void openFile(path); },
     recentFiles,
     onExportHtml: handleExportHtml,
     onBatchExportHtml: handleBatchExportHtml,
-  }), [saveFile, saveAs, activeTab, closeFile, resolvedTheme, setTheme, handleOpenFolder, openFile, recentFiles, handleExportHtml, handleBatchExportHtml]);
+  }), [saveFile, saveAs, activeTab, closeFile, resolvedTheme, setTheme, handleOpenFolder, openFile, recentFiles, handleExportHtml, handleBatchExportHtml, dialogs, editorState?.view, editorState?.imageSaver]);
 
   const commands = useCommands(commandHandlers);
 
@@ -442,7 +243,7 @@ function AppInner() {
   const hasDirtyFiles = openTabs.some((t) => t.dirty);
   useAutoSave(hasDirtyFiles, saveFile, settings.autoSaveInterval);
 
-  // ── Sync enabledPlugins settings → plugin manager ─────────────────────────
+  // ── Sync enabledPlugins settings -> plugin manager ─────────────────────────
   useEffect(() => {
     const view = editorState?.view ?? null;
     for (const { plugin, enabled } of pluginManager.getPlugins()) {
@@ -458,11 +259,11 @@ function AppInner() {
   useHotkeys([
     { key: "mod+s", handler: () => { void saveFile(); } },
     { key: "mod+shift+s", handler: () => { void saveAs(); } },
-    { key: "mod+shift+p", handler: () => setPaletteOpen((v) => !v) },
-    { key: "mod+shift+f", handler: () => setSearchOpen((v) => !v) },
-    { key: "mod+,", handler: () => setSettingsOpen((v) => !v) },
-    { key: "mod+/", handler: () => setShortcutsOpen((v) => !v) },
-    { key: "mod+g", handler: () => setGotoLineOpen((v) => !v) },
+    { key: "mod+shift+p", handler: () => dialogs.setPaletteOpen((v) => !v) },
+    { key: "mod+shift+f", handler: () => dialogs.setSearchOpen((v) => !v) },
+    { key: "mod+,", handler: () => dialogs.setSettingsOpen((v) => !v) },
+    { key: "mod+/", handler: () => dialogs.setShortcutsOpen((v) => !v) },
+    { key: "mod+g", handler: () => dialogs.setGotoLineOpen((v) => !v) },
     { key: "mod+b", handler: () => setSidebarCollapsed((v) => !v) },
   ]);
 
@@ -472,9 +273,9 @@ function AppInner() {
     onSaveAs: () => { void saveAs(); },
     onCloseTab: () => { if (activeTab) void closeFile(activeTab); },
     onToggleSidebar: () => setSidebarCollapsed((v) => !v),
-    onShowSearch: () => setSearchOpen(true),
-    onShowShortcuts: () => setShortcutsOpen(true),
-    onAbout: () => setAboutOpen(true),
+    onShowSearch: () => dialogs.setSearchOpen(true),
+    onShowShortcuts: () => dialogs.setShortcutsOpen(true),
+    onAbout: () => dialogs.setAboutOpen(true),
     onOpenFolder: handleOpenFolder,
   });
 
@@ -486,8 +287,8 @@ function AppInner() {
     const offset = docLine.from + (col ? col - 1 : 0);
     view.dispatch({ selection: { anchor: offset }, scrollIntoView: true });
     view.focus();
-    setGotoLineOpen(false);
-  }, [editorState?.view]);
+    dialogs.setGotoLineOpen(false);
+  }, [editorState?.view, dialogs]);
 
   // ── Search result handler ──────────────────────────────────────────────────
   const handleSearchResult = useCallback((file: string, pos: number) => {
@@ -500,8 +301,8 @@ function AppInner() {
         }
       }, 100);
     });
-    setSearchOpen(false);
-  }, [openFile, editorState?.view]);
+    dialogs.setSearchOpen(false);
+  }, [openFile, editorState?.view, dialogs]);
 
   // ── Symbol insert handler ──────────────────────────────────────────────────
   const handleSymbolInsert = useCallback((latex: string) => {
@@ -730,37 +531,37 @@ function AppInner() {
           cursorPos={cursorLineCol}
           editorMode={editorMode}
           onModeChange={handleModeChange}
-          onOpenPalette={() => setPaletteOpen(true)}
+          onOpenPalette={() => dialogs.setPaletteOpen(true)}
           docText={docTextForStats}
         />
       </div>
 
       {/* ── Overlays & Dialogs ────────────────────────────────────────────── */}
       <CommandPalette
-        open={paletteOpen}
-        onOpenChange={setPaletteOpen}
+        open={dialogs.paletteOpen}
+        onOpenChange={dialogs.setPaletteOpen}
         commands={commands}
       />
       <SearchPanel
-        open={searchOpen}
-        onOpenChange={setSearchOpen}
+        open={dialogs.searchOpen}
+        onOpenChange={dialogs.setSearchOpen}
         onResultSelect={handleSearchResult}
         indexer={indexer}
       />
       <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
+        open={dialogs.settingsOpen}
+        onOpenChange={dialogs.setSettingsOpen}
         settings={settings}
         onUpdateSetting={updateSetting}
         theme={theme}
         onSetTheme={setTheme}
         plugins={pluginManager.getPlugins()}
       />
-      <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
-      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <AboutDialog open={dialogs.aboutOpen} onClose={dialogs.closeAbout} />
+      <ShortcutsDialog open={dialogs.shortcutsOpen} onClose={dialogs.closeShortcuts} />
       <GotoLineDialog
-        open={gotoLineOpen}
-        onOpenChange={setGotoLineOpen}
+        open={dialogs.gotoLineOpen}
+        onOpenChange={dialogs.setGotoLineOpen}
         onGoto={handleGotoLine}
         currentLine={cursorLineCol.line}
       />
