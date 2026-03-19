@@ -108,6 +108,8 @@ interface FencedDivInfo {
   readonly titleTo?: number;
   readonly closeFenceFrom: number;
   readonly closeFenceTo: number;
+  /** True when opening and closing fence are on the same line. */
+  readonly singleLine: boolean;
   readonly className: string;
   readonly id?: string;
   readonly title?: string;
@@ -141,12 +143,21 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
         fenceFrom = fences[0].from;
         fenceTo = fences[0].to;
       }
+      let singleLine = false;
       if (fences.length > 1) {
         const lastFence = fences[fences.length - 1];
-        // Extend to the full line of the closing fence
+        const openLine = state.doc.lineAt(fenceFrom);
         const closeLine = state.doc.lineAt(lastFence.from);
-        closeFenceFrom = closeLine.from;
-        closeFenceTo = closeLine.to;
+        singleLine = openLine.number === closeLine.number;
+        if (singleLine) {
+          // Single-line: just the closing colons, not the full line
+          closeFenceFrom = lastFence.from;
+          closeFenceTo = lastFence.to;
+        } else {
+          // Multi-line: the full closing fence line
+          closeFenceFrom = closeLine.from;
+          closeFenceTo = closeLine.to;
+        }
       }
 
       const attrNode = divNode.getChild("FencedDivAttributes");
@@ -182,6 +193,7 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
           titleTo,
           closeFenceFrom,
           closeFenceTo,
+          singleLine,
           className,
           id,
           title,
@@ -272,18 +284,49 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
         }).range(div.from),
       );
 
-      // Replace fence+attrs with label widget, title stays as editable text
-      const replaceEnd = div.titleFrom ?? div.fenceTo;
-      const label = div.titleFrom !== undefined ? spec.header + " " : spec.header;
-      items.push(
-        Decoration.replace({
-          widget: new BlockHeaderWidget(label, macros, macrosKey),
-        }).range(div.fenceFrom, replaceEnd),
-      );
+      if (div.singleLine) {
+        // Single-line block: `::: {.class} Title content :::` on one line.
+        // Replace fence+attrs with label widget. Title stays as editable text.
+        // Hide only the trailing ::: colons.
+        const replaceEnd = div.titleFrom ?? div.fenceTo;
+        const label = div.titleFrom !== undefined ? spec.header + " " : spec.header;
+        items.push(
+          Decoration.replace({
+            widget: new BlockHeaderWidget(label, macros, macrosKey),
+          }).range(div.fenceFrom, replaceEnd),
+        );
+        // Hide trailing closing fence colons (just the ::: at the end, not the whole line)
+        if (div.closeFenceFrom >= 0) {
+          // Also hide any whitespace before the closing :::
+          let hideFrom = div.closeFenceFrom;
+          const lineText = state.doc.lineAt(div.closeFenceFrom).text;
+          const lineStart = state.doc.lineAt(div.closeFenceFrom).from;
+          const relPos = hideFrom - lineStart;
+          // Walk back to trim trailing whitespace before :::
+          let trimFrom = relPos;
+          while (trimFrom > 0 && (lineText.charCodeAt(trimFrom - 1) === 32 || lineText.charCodeAt(trimFrom - 1) === 9)) {
+            trimFrom--;
+          }
+          hideFrom = lineStart + trimFrom;
+          items.push(decorationHidden.range(hideFrom, div.closeFenceTo));
+        }
+      } else {
+        // Multi-line block: replace fence+attrs with label widget, title stays editable.
+        const replaceEnd = div.titleFrom ?? div.fenceTo;
+        const label = div.titleFrom !== undefined ? spec.header + " " : spec.header;
+        items.push(
+          Decoration.replace({
+            widget: new BlockHeaderWidget(label, macros, macrosKey),
+          }).range(div.fenceFrom, replaceEnd),
+        );
 
-      // Hide closing fence
-      if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
-        items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
+        // Hide closing fence text AND collapse the line to zero height
+        if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
+          items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
+          items.push(
+            Decoration.line({ class: "cg-include-fence" }).range(div.closeFenceFrom),
+          );
+        }
       }
     } else if (plugin) {
       // Cursor on fence: show fence syntax as source, title stays as editable text
