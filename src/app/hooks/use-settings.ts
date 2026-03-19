@@ -24,6 +24,8 @@ const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   defaultExportFormat: "pdf",
   enabledPlugins: {},
+  themeName: "default",
+  customCss: "",
 };
 
 function loadSettings(): Settings {

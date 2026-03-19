@@ -50,8 +50,8 @@ function basename(path: string): string {
 
 function AppInner() {
   const fs = useFileSystem();
-  const { theme, setTheme, resolvedTheme } = useTheme();
   const { settings, updateSetting } = useSettings();
+  const { theme, setTheme, resolvedTheme } = useTheme(settings.themeName, settings.customCss);
   const { recentFiles, addRecentFile } = useRecentFiles();
   const { windowState, saveState: saveWindowState } = useWindowState();
 

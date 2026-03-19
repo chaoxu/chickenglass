@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { Settings, ExportFormat } from "../lib/types";
 import type { Theme } from "../theme-manager";
 import { cn } from "../lib/utils";
+import { builtinThemes } from "../themes";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -183,12 +184,15 @@ function EditorTab({ settings, onUpdateSetting }: EditorTabProps) {
 interface AppearanceTabProps {
   theme: Theme;
   onSetTheme: (theme: Theme) => void;
+  settings: Settings;
+  onUpdateSetting: SettingsDialogProps["onUpdateSetting"];
 }
 
-function AppearanceTab({ theme, onSetTheme }: AppearanceTabProps) {
+function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: AppearanceTabProps) {
   return (
     <section>
-      <Row label="Theme">
+      {/* Light / Dark / System toggle */}
+      <Row label="Mode">
         <div className="flex gap-2">
           {THEME_OPTIONS.map((t) => (
             <button
@@ -207,6 +211,49 @@ function AppearanceTab({ theme, onSetTheme }: AppearanceTabProps) {
           ))}
         </div>
       </Row>
+
+      {/* Writing theme selection */}
+      <div className="py-3 border-b border-[var(--cg-border)]">
+        <label className="text-sm text-[var(--cg-fg)] block mb-2">Writing theme</label>
+        <div className="grid grid-cols-2 gap-2">
+          {builtinThemes.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => { onUpdateSetting("themeName", t.id); }}
+              className={cn(
+                "px-3 py-2 text-sm rounded border text-left transition-colors duration-[var(--cg-transition,0.15s)]",
+                settings.themeName === t.id
+                  ? "bg-[var(--cg-accent)] text-[var(--cg-accent-fg)] border-[var(--cg-accent)]"
+                  : "border-[var(--cg-border)] text-[var(--cg-fg)] hover:bg-[var(--cg-hover)]",
+              )}
+            >
+              <span className="font-medium">{t.name}</span>
+              {t.dark && (
+                <span className="ml-1 text-xs opacity-60">(dark)</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Custom CSS */}
+      <div className="py-3">
+        <label htmlFor="sd-custom-css" className="text-sm text-[var(--cg-fg)] block mb-1">
+          Custom CSS
+        </label>
+        <p className="text-xs text-[var(--cg-muted)] mb-2">
+          Add your own CSS overrides. Changes apply immediately.
+        </p>
+        <textarea
+          id="sd-custom-css"
+          value={settings.customCss}
+          onChange={(e) => { onUpdateSetting("customCss", e.target.value); }}
+          placeholder={`/* Example: change editor font */\n.cm-content {\n  font-family: "Georgia", serif;\n}`}
+          className="w-full h-32 text-xs font-mono border border-[var(--cg-border)] rounded px-3 py-2 bg-[var(--cg-bg)] text-[var(--cg-fg)] resize-y focus:outline-none focus:ring-1 focus:ring-[var(--cg-accent)]"
+          spellCheck={false}
+        />
+      </div>
     </section>
   );
 }
@@ -368,7 +415,12 @@ export function SettingsDialog({
               <EditorTab settings={settings} onUpdateSetting={onUpdateSetting} />
             )}
             {activeTab === "Appearance" && (
-              <AppearanceTab theme={theme} onSetTheme={onSetTheme} />
+              <AppearanceTab
+                theme={theme}
+                onSetTheme={onSetTheme}
+                settings={settings}
+                onUpdateSetting={onUpdateSetting}
+              />
             )}
             {activeTab === "Plugins" && (
               <PluginsTab settings={settings} onUpdateSetting={onUpdateSetting} plugins={plugins} />

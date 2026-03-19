@@ -21,4 +21,8 @@ export interface Settings {
   defaultExportFormat: ExportFormat;
   /** Per-plugin enabled/disabled overrides. Keys are plugin IDs, values are booleans. */
   enabledPlugins: Record<string, boolean>;
+  /** Selected writing theme id (e.g., "default", "sepia", "nord", "dracula"). */
+  themeName: string;
+  /** User-provided custom CSS injected via a <style> tag. */
+  customCss: string;
 }
