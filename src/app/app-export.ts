@@ -2,7 +2,7 @@ import type { EditorView } from "@codemirror/view";
 
 import { exportDocument, batchExport, type ExportFormat } from "./export";
 import { revealInFinder, isTauri } from "./tauri-fs";
-import type { FileEntry, FileSystem } from "./file-manager";
+import type { FileSystem } from "./file-manager";
 import type { TabBar } from "./tab-bar";
 
 /** Narrow context needed by export operations. */
@@ -11,6 +11,11 @@ export interface ExportContext {
   readonly tabBar: TabBar;
   readonly editorContainer: HTMLElement;
   editor: EditorView | null;
+}
+
+/** Extract a human-readable message from an unknown error value. */
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 /** Show a temporary notification bar at the top of the editor container. */
@@ -33,19 +38,17 @@ export async function doExportActiveFile(ctx: ExportContext, format: ExportForma
     const outputPath = await exportDocument(content, format, activePath, ctx.fs);
     showNotification(ctx.editorContainer, `Exported to ${outputPath}`);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    showNotification(ctx.editorContainer, `Export failed: ${message}`, true);
+    showNotification(ctx.editorContainer, `Export failed: ${errorMessage(err)}`, true);
   }
 }
 
 /** Batch-export all .md files in the project. */
 export async function doBatchExportAll(ctx: ExportContext, format: ExportFormat): Promise<void> {
-  let tree: FileEntry;
+  let tree;
   try {
     tree = await ctx.fs.listTree();
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    showNotification(ctx.editorContainer, `Batch export failed: ${message}`, true);
+    showNotification(ctx.editorContainer, `Batch export failed: ${errorMessage(err)}`, true);
     return;
   }
 
@@ -53,7 +56,7 @@ export async function doBatchExportAll(ctx: ExportContext, format: ExportFormat)
 
   const results = await batchExport(tree, format, ctx.fs);
   const succeeded = results.filter((r) => r.outputPath !== undefined).length;
-  const failed = results.filter((r) => r.error !== undefined).length;
+  const failed = results.length - succeeded;
 
   if (failed === 0) {
     showNotification(ctx.editorContainer, `Batch export complete: ${succeeded} file(s) exported.`);
@@ -74,7 +77,6 @@ export async function doRevealActiveFile(ctx: ExportContext, path?: string): Pro
   try {
     await revealInFinder(target);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    showNotification(ctx.editorContainer, `Could not reveal file: ${message}`, true);
+    showNotification(ctx.editorContainer, `Could not reveal file: ${errorMessage(err)}`, true);
   }
 }

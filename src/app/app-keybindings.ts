@@ -7,17 +7,23 @@ const ZOOM_MIN = 10;
 const ZOOM_MAX = 32;
 const ZOOM_STEP = 2;
 
-let currentZoomLevel = (() => {
+function clampZoom(value: number): number {
+  return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value));
+}
+
+function loadZoomLevel(): number {
   try {
     const stored = localStorage.getItem(ZOOM_KEY);
-    return stored ? Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Number(stored))) : ZOOM_DEFAULT;
+    return stored ? clampZoom(Number(stored)) : ZOOM_DEFAULT;
   } catch {
     return ZOOM_DEFAULT;
   }
-})();
+}
+
+let currentZoomLevel = loadZoomLevel();
 
 function applyZoomLevel(px: number): void {
-  currentZoomLevel = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, px));
+  currentZoomLevel = clampZoom(px);
   document.documentElement.style.setProperty("--font-size-base", `${currentZoomLevel}px`);
   localStorage.setItem(ZOOM_KEY, String(currentZoomLevel));
 }
@@ -40,40 +46,41 @@ export function installAppKeybindings(
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
 
-    // Cmd+S → Save
-    if (e.key === "s" && !e.shiftKey) {
-      e.preventDefault();
-      actions.saveActiveFile();
+    if (e.shiftKey) {
+      switch (e.key) {
+        case "E": // Export to PDF
+          e.preventDefault();
+          actions.exportActiveFile("pdf");
+          return;
+        case "L": // Export to LaTeX
+          e.preventDefault();
+          actions.exportActiveFile("latex");
+          return;
+        case "H": // Export to HTML
+          e.preventDefault();
+          actions.exportActiveFile("html");
+          return;
+      }
+      return;
     }
-    // Cmd+Shift+E → Export to PDF
-    if (e.shiftKey && e.key === "E") {
-      e.preventDefault();
-      actions.exportActiveFile("pdf");
-    }
-    // Cmd+Shift+L → Export to LaTeX
-    if (e.shiftKey && e.key === "L") {
-      e.preventDefault();
-      actions.exportActiveFile("latex");
-    }
-    // Cmd+Shift+H → Export to HTML
-    if (e.shiftKey && e.key === "H") {
-      e.preventDefault();
-      actions.exportActiveFile("html");
-    }
-    // Cmd+= → Zoom in
-    if (!e.shiftKey && e.key === "=") {
-      e.preventDefault();
-      applyZoomLevel(currentZoomLevel + ZOOM_STEP);
-    }
-    // Cmd+- → Zoom out
-    if (!e.shiftKey && e.key === "-") {
-      e.preventDefault();
-      applyZoomLevel(currentZoomLevel - ZOOM_STEP);
-    }
-    // Cmd+0 → Reset zoom
-    if (!e.shiftKey && e.key === "0") {
-      e.preventDefault();
-      applyZoomLevel(ZOOM_DEFAULT);
+
+    switch (e.key) {
+      case "s": // Save
+        e.preventDefault();
+        actions.saveActiveFile();
+        return;
+      case "=": // Zoom in
+        e.preventDefault();
+        applyZoomLevel(currentZoomLevel + ZOOM_STEP);
+        return;
+      case "-": // Zoom out
+        e.preventDefault();
+        applyZoomLevel(currentZoomLevel - ZOOM_STEP);
+        return;
+      case "0": // Reset zoom
+        e.preventDefault();
+        applyZoomLevel(ZOOM_DEFAULT);
+        return;
     }
   };
 

@@ -29,7 +29,7 @@ import {
   type Theme,
 } from "./theme-manager";
 import { installAppKeybindings } from "./app-keybindings";
-import { doExportActiveFile, doBatchExportAll, doRevealActiveFile } from "./app-export";
+import { doExportActiveFile, doBatchExportAll, doRevealActiveFile, type ExportContext } from "./app-export";
 
 /** Configuration for the application shell. */
 export interface AppConfig {
@@ -573,8 +573,13 @@ export class App {
   }
 
   /** Get the export context for delegation to app-export module. */
-  private get exportCtx() {
-    return { fs: this.fs, tabBar: this.tabBar, editorContainer: this.editorContainer, editor: this.editor };
+  private get exportCtx(): ExportContext {
+    return {
+      fs: this.fs,
+      tabBar: this.tabBar,
+      editorContainer: this.editorContainer,
+      editor: this.editor,
+    };
   }
 
   /** Export the active document to the given format. */
