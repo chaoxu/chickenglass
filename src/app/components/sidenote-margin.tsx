@@ -134,15 +134,25 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
   }, [view, view?.state.doc.length]);
 
   // Re-extract on scroll (positions may change due to folding/viewport)
+  // Uses rAF-based throttling to limit extractSidenotes() to once per frame
   useEffect(() => {
     if (!view) return;
 
+    let rafId: number | null = null;
+
     const handleScroll = () => {
-      setEntries(extractSidenotes(view));
+      if (rafId !== null) return; // already scheduled for this frame
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        setEntries(extractSidenotes(view));
+      });
     };
 
     view.scrollDOM.addEventListener("scroll", handleScroll, { passive: true });
-    return () => view.scrollDOM.removeEventListener("scroll", handleScroll);
+    return () => {
+      view.scrollDOM.removeEventListener("scroll", handleScroll);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [view]);
 
   const macros = useMemo(() => {
