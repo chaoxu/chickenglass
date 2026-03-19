@@ -173,22 +173,18 @@ export const chickenglassTheme = EditorView.theme({
   },
 
   /* Fenced div nesting guides — vertical lines on the left, editing only.
-     Uses solid border approach for pure BW design. */
+     Uses inset box-shadow so the guide never shifts content layout. */
   ".cg-fence-d1": {
-    borderLeft: "2px solid var(--cg-border)",
-    paddingLeft: "8px",
+    boxShadow: "inset 3px 0 0 var(--cg-border)",
   },
   ".cg-fence-d2": {
-    borderLeft: "2px solid var(--cg-active)",
-    paddingLeft: "8px",
+    boxShadow: "inset 3px 0 0 var(--cg-active)",
   },
   ".cg-fence-d3": {
-    borderLeft: "2px solid var(--cg-muted)",
-    paddingLeft: "8px",
+    boxShadow: "inset 3px 0 0 var(--cg-muted)",
   },
   ".cg-fence-d4": {
-    borderLeft: "2px solid var(--cg-fg)",
-    paddingLeft: "8px",
+    boxShadow: "inset 3px 0 0 var(--cg-fg)",
   },
 
   /* QED tombstone — right-aligned at end of proof blocks */
