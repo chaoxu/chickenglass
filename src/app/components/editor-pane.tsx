@@ -35,10 +35,8 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
     onStateChangeRef.current?.(editorState);
   }, [view, wordCount, cursorPos, scrollTop, editorState]);
 
-  // Extract headings for breadcrumbs
-  const headings = view
-    ? extractHeadings(view.state).map((h) => ({ level: h.level, text: h.text, from: h.pos }))
-    : [];
+  // Extract headings for breadcrumbs and outline
+  const headings = view ? extractHeadings(view.state) : [];
 
   // Sync collapsed state to CM6 StateField + adjust marginRight
   useEffect(() => {

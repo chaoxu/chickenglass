@@ -30,7 +30,7 @@ import { useMenuEvents } from "./hooks/use-menu-events";
 import type { UseEditorReturn } from "./hooks/use-editor";
 import type { FileEntry } from "./file-manager";
 import { BackgroundIndexer } from "../index";
-import { extractHeadings } from "./heading-ancestry";
+import { extractHeadings, type HeadingEntry } from "./heading-ancestry";
 import type { EditorMode } from "../editor";
 import { setEditorMode } from "../editor";
 import { EditorPluginManager } from "../editor/editor-plugin";
@@ -117,15 +117,14 @@ function AppInner() {
   const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
 
   // ── Outline headings ───────────────────────────────────────────────────────
-  const [headings, setHeadings] = useState<Array<{ level: number; text: string; number: string; from: number }>>([]);
+  const [headings, setHeadings] = useState<HeadingEntry[]>([]);
 
   const handleEditorStateChange = useCallback((state: UseEditorReturn) => {
     setEditorState(state);
 
     // Extract headings from current CM6 view
     if (state.view) {
-      const extracted = extractHeadings(state.view.state);
-      setHeadings(extracted.map((h) => ({ level: h.level, text: h.text, number: h.number, from: h.pos })));
+      setHeadings(extractHeadings(state.view.state));
     } else {
       setHeadings([]);
     }

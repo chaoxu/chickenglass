@@ -1,11 +1,5 @@
 import { useState, useCallback } from "react";
-
-interface HeadingEntry {
-  level: number;
-  text: string;
-  number: string;
-  from: number;
-}
+import type { HeadingEntry } from "../heading-ancestry";
 
 interface OutlineProps {
   headings: HeadingEntry[];
@@ -90,7 +84,7 @@ export function Outline({ headings, onSelect }: OutlineProps) {
             {/* Heading text — click to navigate */}
             <button
               className="flex-1 text-left flex items-baseline gap-1 py-[2px] text-sm text-[var(--cg-fg)] cursor-pointer truncate min-w-0"
-              onClick={() => onSelect(heading.from)}
+              onClick={() => onSelect(heading.pos)}
               title={heading.text}
             >
               <span className="text-[10px] text-[var(--cg-muted)] shrink-0 font-mono tabular-nums">

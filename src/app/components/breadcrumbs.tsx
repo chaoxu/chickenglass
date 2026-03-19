@@ -8,17 +8,11 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { cn } from "../lib/utils";
-import { headingAncestryAt } from "../heading-ancestry";
-
-export interface BreadcrumbHeading {
-  level: number;
-  text: string;
-  from: number;
-}
+import { headingAncestryAt, type HeadingEntry } from "../heading-ancestry";
 
 interface BreadcrumbsProps {
   /** All headings extracted from the document. */
-  headings: BreadcrumbHeading[];
+  headings: HeadingEntry[];
   /** Called when the user clicks a breadcrumb segment. */
   onSelect: (from: number) => void;
   /** Current scroll offset of the editor scroller (pixels from top). */
@@ -34,11 +28,7 @@ interface BreadcrumbsProps {
 const FADE_DELAY_MS = 2000;
 
 export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: BreadcrumbsProps) {
-  const entries = useMemo(
-    () => headings.map((h) => ({ level: h.level, text: h.text, number: "", pos: h.from })),
-    [headings],
-  );
-  const ancestry = useMemo(() => headingAncestryAt(entries, viewportFrom), [entries, viewportFrom]);
+  const ancestry = useMemo(() => headingAncestryAt(headings, viewportFrom), [headings, viewportFrom]);
 
   const [visible, setVisible] = useState(false);
   const [instant, setInstant] = useState(true);
