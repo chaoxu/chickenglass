@@ -16,6 +16,7 @@ export interface StatusBarProps {
   cursorPos: CursorPosition;
   editorMode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
+  onOpenPalette?: () => void;
   /** Raw document text — used to compute the stats popover. */
   docText?: string;
 }
@@ -118,6 +119,7 @@ export function StatusBar({
   cursorPos,
   editorMode,
   onModeChange,
+  onOpenPalette,
   docText = "",
 }: StatusBarProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -165,15 +167,27 @@ export function StatusBar({
           </span>
         </div>
 
-        {/* Right: mode indicator */}
-        <button
-          type="button"
-          title="Click to cycle editor mode"
-          onClick={cycleMode}
-          className="px-1 rounded hover:bg-[var(--cg-hover)] transition-colors"
-        >
-          {MODE_LABELS[editorMode]}
-        </button>
+        {/* Right: command palette + mode indicator */}
+        <div className="flex items-center gap-1">
+          {onOpenPalette && (
+            <button
+              type="button"
+              title="Command Palette (⇧⌘P)"
+              onClick={onOpenPalette}
+              className="px-1 rounded hover:bg-[var(--cg-hover)] transition-colors"
+            >
+              ⌘
+            </button>
+          )}
+          <button
+            type="button"
+            title="Click to cycle editor mode"
+            onClick={cycleMode}
+            className="px-1 rounded hover:bg-[var(--cg-hover)] transition-colors"
+          >
+            {MODE_LABELS[editorMode]}
+          </button>
+        </div>
       </div>
 
       {/* Stats popover — rendered in the same stacking context, positioned fixed */}
