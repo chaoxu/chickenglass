@@ -56,6 +56,13 @@ function AppInner() {
   // ── Indexer for search ─────────────────────────────────────────────────────
   const [indexer] = useState(() => new BackgroundIndexer());
 
+  // Terminate the indexer web worker on unmount to prevent resource leaks.
+  useEffect(() => {
+    return () => {
+      indexer.dispose();
+    };
+  }, [indexer]);
+
   // ── Plugin manager (shared across editor recreations) ───────────────────
   const [pluginManager] = useState(() => {
     const m = new EditorPluginManager();
