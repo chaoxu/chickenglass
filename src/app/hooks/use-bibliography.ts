@@ -11,6 +11,7 @@ import { parseBibTeX } from "../../citations/bibtex-parser";
 import { bibDataEffect } from "../../citations/citation-render";
 import { CslProcessor } from "../../citations/csl-processor";
 import type { FileSystem } from "../file-manager";
+import { dirname } from "../lib/utils";
 
 /**
  * Load a bibliography file (and optional CSL style) relative to the document,
@@ -24,9 +25,7 @@ export async function loadBibliography(
   fs: FileSystem,
   view: EditorView,
 ): Promise<void> {
-  const dir = docPath.includes("/")
-    ? docPath.slice(0, docPath.lastIndexOf("/"))
-    : "";
+  const dir = dirname(docPath);
 
   const readWithFallback = async (p: string): Promise<string> => {
     if (dir) {

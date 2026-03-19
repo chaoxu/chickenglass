@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import type { FileEntry } from "../file-manager";
+import { dirname } from "../lib/utils";
 import { isTauri, revealInFinder } from "../tauri-fs";
 import {
   File,
@@ -178,10 +179,8 @@ function FileNode({
     const newName = renameValue.trim();
     setRenaming(false);
     if (!newName || newName === entry.name) return;
-    const dir = entry.path.includes("/")
-      ? entry.path.substring(0, entry.path.lastIndexOf("/") + 1)
-      : "";
-    await onRename(entry.path, dir + newName);
+    const dir = dirname(entry.path);
+    await onRename(entry.path, dir ? `${dir}/${newName}` : newName);
   }, [renameValue, entry.name, entry.path, onRename]);
 
   const cancelRename = useCallback(() => {
@@ -239,9 +238,7 @@ function FileNode({
 
   const dismissMenu = useCallback(() => setContextMenu(null), []);
 
-  const parentPath = entry.path.includes("/")
-    ? entry.path.substring(0, entry.path.lastIndexOf("/"))
-    : "";
+  const parentPath = dirname(entry.path);
 
   // ── Shared menu items ──────────────────────────────────────────────────
 

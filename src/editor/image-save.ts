@@ -10,6 +10,7 @@
  */
 
 import type { FileSystem } from "../app/file-manager";
+import { dirname } from "../app/lib/utils";
 import { isTauri } from "../app/tauri-fs";
 
 /** Supported image MIME types and their default file extensions. */
@@ -144,9 +145,7 @@ export async function saveImage(
   const imageFolder = ctx.imageFolder || "assets";
 
   // Compute the directory relative to the document
-  const docDir = docPath.includes("/")
-    ? docPath.slice(0, docPath.lastIndexOf("/"))
-    : "";
+  const docDir = dirname(docPath);
   const targetDir = docDir ? `${docDir}/${imageFolder}` : imageFolder;
 
   // Ensure the target directory exists

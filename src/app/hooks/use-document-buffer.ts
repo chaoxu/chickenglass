@@ -8,12 +8,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { Tab } from "../tab-bar";
-
-/** Return the file name portion of a path (last segment after "/"). */
-function basename(path: string): string {
-  const idx = path.lastIndexOf("/");
-  return idx === -1 ? path : path.slice(idx + 1);
-}
+import { basename } from "../lib/utils";
 
 export interface UseDocumentBufferReturn {
   /** Currently open tabs. */

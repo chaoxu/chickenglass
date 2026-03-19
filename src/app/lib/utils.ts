@@ -21,6 +21,18 @@ export function basename(path: string): string {
 }
 
 /**
+ * Return the directory portion of a file path (everything before the last `/`).
+ *
+ * Returns an empty string when the path contains no separator,
+ * matching the convention used throughout the codebase (relative paths
+ * with forward slashes only, no Windows backslash handling needed).
+ */
+export function dirname(path: string): string {
+  const idx = path.lastIndexOf("/");
+  return idx === -1 ? "" : path.slice(0, idx);
+}
+
+/**
  * Convert a Uint8Array to a base64-encoded string.
  *
  * Uses `String.fromCharCode` + `btoa` — safe for binary data

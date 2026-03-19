@@ -10,6 +10,7 @@ import { Search } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { BackgroundIndexer } from "../../index/indexer";
 import type { IndexEntry, IndexQuery } from "../../index/query-api";
+import { basename } from "../lib/utils";
 
 /** Known block types for the filter dropdown. */
 const BLOCK_TYPES = [
@@ -47,12 +48,6 @@ function groupByFile(entries: readonly IndexEntry[]): Map<string, IndexEntry[]> 
     groups.set(entry.file, group);
   }
   return groups;
-}
-
-/** Return the file name portion of a path (last segment after "/"). */
-function basename(path: string): string {
-  const idx = path.lastIndexOf("/");
-  return idx === -1 ? path : path.slice(idx + 1);
 }
 
 /** Truncate content preview to a reasonable length. */

@@ -1,4 +1,5 @@
 import type { FileSystem } from "../app/file-manager";
+import { dirname } from "../app/lib/utils";
 
 /** A single resolved include: the file path and its content. */
 export interface ResolvedInclude {
@@ -78,9 +79,7 @@ export function resolveIncludePath(
   if (includePath.startsWith("/")) {
     return includePath.slice(1); // strip leading slash for FileSystem compatibility
   }
-  const dir = fromPath.includes("/")
-    ? fromPath.slice(0, fromPath.lastIndexOf("/"))
-    : "";
+  const dir = dirname(fromPath);
   const combined = dir ? `${dir}/${includePath}` : includePath;
   return normalizePath(combined);
 }

@@ -9,12 +9,7 @@ import { useCallback } from "react";
 import type { FileSystem } from "../file-manager";
 import type { Tab } from "../tab-bar";
 import { isTauri } from "../tauri-fs";
-
-/** Return the file name portion of a path (last segment after "/"). */
-function basename(path: string): string {
-  const idx = path.lastIndexOf("/");
-  return idx === -1 ? path : path.slice(idx + 1);
-}
+import { basename } from "../lib/utils";
 
 export interface FileOperationsDeps {
   fs: FileSystem;
