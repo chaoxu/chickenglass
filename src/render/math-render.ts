@@ -17,7 +17,7 @@ import {
   focusEffect,
   focusTracker,
 } from "./render-utils";
-import { getMathMacros } from "./math-macros";
+import { mathMacrosField } from "./math-macros";
 
 export const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
 
@@ -119,7 +119,7 @@ function buildMathItems(
   state: EditorState,
   shouldSkip: (from: number, to: number) => boolean,
 ): Range<Decoration>[] {
-  const macros = getMathMacros(state);
+  const macros = state.field(mathMacrosField);
   const nodes = collectNodes(state, MATH_TYPES);
   const items: Range<Decoration>[] = [];
 
@@ -203,4 +203,4 @@ const mathDecorationField = StateField.define<DecorationSet>({
 });
 
 /** CM6 extension that renders math expressions with KaTeX (Typora-style toggle). */
-export const mathRenderPlugin: Extension = [editorFocusField, focusTracker, mathDecorationField];
+export const mathRenderPlugin: Extension = [editorFocusField, focusTracker, mathMacrosField, mathDecorationField];

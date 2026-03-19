@@ -15,7 +15,7 @@ import {
 import { type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { stripMathDelimiters, MATH_TYPES, renderKatex } from "./math-render";
-import { getMathMacros } from "./math-macros";
+import { mathMacrosField } from "./math-macros";
 import { cursorInRange } from "./render-utils";
 
 interface MathNodeInfo {
@@ -168,7 +168,7 @@ class MathPreviewPlugin implements PluginValue {
 
   private renderLatex(latex: string, isDisplay: boolean): void {
     if (!this.contentEl) return;
-    const macros = getMathMacros(this.view.state);
+    const macros = this.view.state.field(mathMacrosField);
     renderKatex(this.contentEl, latex, isDisplay, macros);
   }
 

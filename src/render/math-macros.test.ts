@@ -5,7 +5,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { projectConfigFacet } from "../app/project-config";
-import { getMathMacros } from "./math-macros";
+import { getMathMacros, mathMacrosField } from "./math-macros";
 import {
   MathWidget,
   collectMathRanges,
@@ -24,6 +24,7 @@ function createView(
       markdown({ extensions: [mathExtension] }),
       ...(projectConfig ? [projectConfigFacet.of({ math: projectConfig })] : []),
       frontmatterField,
+      mathMacrosField,
     ],
   });
   const parent = document.createElement("div");

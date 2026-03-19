@@ -35,7 +35,7 @@ import {
   focusTracker,
   RenderWidget,
 } from "../render/render-utils";
-import { getMathMacros } from "../render/math-macros";
+import { mathMacrosField } from "../render/math-macros";
 import { MathWidget } from "../render/math-render";
 import { renderInlineMarkdown } from "../render/inline-render";
 import {
@@ -435,7 +435,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const divs = collectFencedDivs(state);
   const items: Range<Decoration>[] = [];
 
-  const macros = getMathMacros(state);
+  const macros = state.field(mathMacrosField);
   const macrosKey = serializeMacros(macros);
 
   for (const div of divs) {

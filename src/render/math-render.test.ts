@@ -5,6 +5,8 @@ import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { MathWidget, collectMathRanges } from "./math-render";
+import { frontmatterField } from "../editor/frontmatter-state";
+import { mathMacrosField } from "./math-macros";
 
 /** Create an EditorView with math parser extensions at the given cursor position. */
 function createMathView(doc: string, cursorPos?: number): EditorView {
@@ -13,6 +15,8 @@ function createMathView(doc: string, cursorPos?: number): EditorView {
     selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
     extensions: [
       markdown({ extensions: [mathExtension] }),
+      frontmatterField,
+      mathMacrosField,
     ],
   });
   const parent = document.createElement("div");
@@ -277,6 +281,8 @@ function createMathViewWithLabels(doc: string, cursorPos?: number): EditorView {
     selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
     extensions: [
       markdown({ extensions: [mathExtension, equationLabelExtension] }),
+      frontmatterField,
+      mathMacrosField,
     ],
   });
   const parent = document.createElement("div");

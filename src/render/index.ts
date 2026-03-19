@@ -18,7 +18,7 @@ export {
   MATH_TYPES,
   stripMathDelimiters,
 } from "./math-render";
-export { getMathMacros } from "./math-macros";
+export { getMathMacros, mathMacrosField } from "./math-macros";
 export {
   CrossrefWidget,
   UnresolvedRefWidget,

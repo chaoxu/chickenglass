@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import { EditorView } from "@codemirror/view";
 import { collectFootnotes } from "../../render/sidenote-render";
 import { renderInlineMarkdown } from "../../render/inline-render";
-import { getMathMacros } from "../../render/math-macros";
+import { mathMacrosField } from "../../render/math-macros";
 
 interface SidenoteEntry {
   id: string;
@@ -143,7 +143,7 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
 
   const macros = useMemo(() => {
     if (!view) return {};
-    return getMathMacros(view.state);
+    return view.state.field(mathMacrosField, false) ?? {};
   }, [view, view?.state.doc.length]);
 
   const setItemRef = useCallback((id: string, el: HTMLDivElement | null) => {

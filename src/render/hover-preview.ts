@@ -22,7 +22,7 @@ import { blockCounterField, type NumberedBlock } from "../plugins/block-counter"
 import { bibDataField, findCitations, type BibStore } from "../citations/citation-render";
 import { formatBibEntry } from "../citations/bibliography";
 import { renderKatex, stripMathDelimiters } from "./math-render";
-import { getMathMacros } from "./math-macros";
+import { mathMacrosField } from "./math-macros";
 
 /** Maximum content length shown in hover previews. */
 const MAX_PREVIEW_LENGTH = 500;
@@ -147,7 +147,7 @@ function buildCrossrefTooltip(
   ref: CrossrefMatch,
   resolved: ResolvedCrossref,
 ): HTMLElement {
-  const macros = getMathMacros(view.state);
+  const macros = view.state.field(mathMacrosField);
   const container = document.createElement("div");
   container.className = "cg-hover-preview";
 

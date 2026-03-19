@@ -27,7 +27,7 @@ import {
   focusEffect,
   focusTracker,
 } from "./render-utils";
-import { getMathMacros } from "./math-macros";
+import { mathMacrosField } from "./math-macros";
 import { renderInlineMarkdown } from "./inline-render";
 
 /** StateEffect to toggle sidenote margin visibility. */
@@ -354,7 +354,7 @@ class FootnoteSectionPlugin implements PluginValue {
     }
 
     const endPos = view.state.doc.length;
-    const macros = getMathMacros(view.state);
+    const macros = view.state.field(mathMacrosField);
     const widget = new FootnoteSectionWidget(entries, macros);
     return buildDecorations([
       Decoration.widget({ widget, side: 1 }).range(endPos),
