@@ -13,6 +13,10 @@ import {
   type DecorationSet,
   Decoration,
   EditorView,
+  type PluginValue,
+  type ViewUpdate,
+  ViewPlugin,
+  WidgetType,
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Range, StateField, StateEffect } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
@@ -176,24 +180,21 @@ function buildSidenoteDecorations(state: EditorState, focused: boolean): Decorat
     items.push(Decoration.replace({ widget }).range(ref.from, ref.to));
   }
 
-  // When sidenote margin is visible, hide footnote definition lines
-  // (content is rendered in React margin column).
-  // When collapsed, leave defs visible as inline footnotes.
-  const collapsed = state.field(sidenotesCollapsedField, false) ?? false;
-  if (!collapsed) {
-    for (const [, def] of defs) {
-      if (focused && cursorContainedIn(state, def.from, def.to)) continue;
+  // Hide footnote definition lines — whether margin is visible (content shown
+  // in margin) or collapsed (content shown in bottom footnote section).
+  // When cursor is inside a def, show source for editing.
+  for (const [, def] of defs) {
+    if (focused && cursorContainedIn(state, def.from, def.to)) continue;
 
-      // Collapse the definition line to zero height
+    // Collapse the definition line to zero height
+    items.push(
+      Decoration.line({ class: "cg-sidenote-def-line" }).range(def.from),
+    );
+    // Replace text content (after label) with empty widget to hide it visually
+    if (def.labelTo < def.to) {
       items.push(
-        Decoration.line({ class: "cg-sidenote-def-line" }).range(def.from),
+        Decoration.replace({}).range(def.labelTo, def.to),
       );
-      // Replace text content (after label) with empty widget to hide it visually
-      if (def.labelTo < def.to) {
-        items.push(
-          Decoration.replace({}).range(def.labelTo, def.to),
-        );
-      }
     }
   }
 
@@ -264,6 +265,128 @@ export function computeSidenoteOffsets(
 }
 
 
+/** Widget that renders a "Footnotes" section at the bottom when sidenotes are collapsed. */
+class FootnoteSectionWidget extends WidgetType {
+  constructor(
+    private readonly entries: ReadonlyArray<{ num: number; id: string; content: string; defFrom: number }>,
+  ) {
+    super();
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const section = document.createElement("div");
+    section.className = "cg-bibliography";
+    section.style.marginTop = "2em";
+
+    const heading = document.createElement("h2");
+    heading.className = "cg-bibliography-heading";
+    heading.textContent = "Footnotes";
+    section.appendChild(heading);
+
+    const list = document.createElement("div");
+    list.className = "cg-bibliography-list";
+
+    for (const entry of this.entries) {
+      const div = document.createElement("div");
+      div.className = "cg-bibliography-entry";
+      div.style.cursor = "pointer";
+      div.style.fontSize = "0.85em";
+      div.style.lineHeight = "1.6";
+      div.style.marginBottom = "4px";
+
+      const num = document.createElement("sup");
+      num.style.fontWeight = "600";
+      num.style.marginRight = "4px";
+      num.textContent = String(entry.num);
+
+      const text = document.createElement("span");
+      text.textContent = entry.content;
+
+      div.appendChild(num);
+      div.appendChild(text);
+
+      const defFrom = entry.defFrom;
+      div.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        view.focus();
+        view.dispatch({
+          selection: { anchor: defFrom },
+          scrollIntoView: true,
+        });
+      });
+
+      list.appendChild(div);
+    }
+
+    section.appendChild(list);
+    return section;
+  }
+
+  eq(other: FootnoteSectionWidget): boolean {
+    if (this.entries.length !== other.entries.length) return false;
+    return this.entries.every((e, i) => e.id === other.entries[i].id && e.content === other.entries[i].content);
+  }
+
+  ignoreEvent(): boolean { return true; }
+}
+
+/** ViewPlugin that adds a "Footnotes" section at the end of the document when sidenotes are collapsed. */
+class FootnoteSectionPlugin implements PluginValue {
+  decorations: DecorationSet;
+
+  constructor(view: EditorView) {
+    this.decorations = this.build(view);
+  }
+
+  update(update: ViewUpdate): void {
+    if (
+      update.docChanged ||
+      update.transactions.some((tr) =>
+        tr.effects.some((e) => e.is(sidenotesCollapsedEffect)),
+      )
+    ) {
+      this.decorations = this.build(update.view);
+    }
+  }
+
+  private build(view: EditorView): DecorationSet {
+    const collapsed = view.state.field(sidenotesCollapsedField, false) ?? false;
+    if (!collapsed) return Decoration.none;
+
+    const { refs, defs } = collectFootnotes(view.state);
+    if (defs.size === 0) return Decoration.none;
+
+    // Assign numbers in reference order
+    const numberMap = new Map<string, number>();
+    let nextNum = 1;
+    for (const ref of refs) {
+      if (!numberMap.has(ref.id)) numberMap.set(ref.id, nextNum++);
+    }
+
+    const entries: Array<{ num: number; id: string; content: string; defFrom: number }> = [];
+    for (const ref of refs) {
+      const def = defs.get(ref.id);
+      if (!def || entries.some((e) => e.id === ref.id)) continue;
+      entries.push({
+        num: numberMap.get(ref.id) ?? 0,
+        id: ref.id,
+        content: def.content,
+        defFrom: def.from,
+      });
+    }
+
+    const endPos = view.state.doc.length;
+    const widget = new FootnoteSectionWidget(entries);
+    return buildDecorations([
+      Decoration.widget({ widget, side: 1 }).range(endPos),
+    ]);
+  }
+}
+
+const footnoteSectionPlugin = ViewPlugin.fromClass(FootnoteSectionPlugin, {
+  decorations: (v) => v.decorations,
+});
+
 /** CM6 extension that renders footnote refs as superscripts and hides defs.
  *  Sidenote content is rendered by the React SidenoteMargin component. */
 export const sidenoteRenderPlugin: Extension = [
@@ -271,4 +394,5 @@ export const sidenoteRenderPlugin: Extension = [
   focusTracker,
   sidenotesCollapsedField,
   sidenoteDecorationField,
+  footnoteSectionPlugin,
 ];
