@@ -1,0 +1,189 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import type { EditorMode } from "../../editor";
+import { computeDocStats, formatReadingTime } from "../writing-stats";
+import type { DocStats } from "../writing-stats";
+import { cn } from "../lib/utils";
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+export interface CursorPosition {
+  line: number;
+  col: number;
+}
+
+export interface StatusBarProps {
+  wordCount: number;
+  cursorPos: CursorPosition;
+  editorMode: EditorMode;
+  onModeChange: (mode: EditorMode) => void;
+  /** Raw document text — used to compute the stats popover. */
+  docText?: string;
+}
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+const MODE_ORDER: EditorMode[] = ["rendered", "source", "preview"];
+
+const MODE_LABELS: Record<EditorMode, string> = {
+  rendered: "Rendered",
+  source: "Source",
+  preview: "Preview",
+};
+
+// ── StatsPopover ───────────────────────────────────────────────────────────────
+
+interface StatsPopoverProps {
+  stats: DocStats;
+  anchorRef: React.RefObject<HTMLElement | null>;
+  onClose: () => void;
+}
+
+function StatsPopover({ stats, anchorRef, onClose }: StatsPopoverProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  // Position the panel above the anchor element
+  useEffect(() => {
+    const anchor = anchorRef.current;
+    const panel = panelRef.current;
+    if (!anchor || !panel) return;
+    const rect = anchor.getBoundingClientRect();
+    panel.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+    panel.style.left = `${rect.left}px`;
+  }, [anchorRef]);
+
+  // Dismiss on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const rows: Array<[string, string]> = [
+    ["Words", stats.words.toLocaleString()],
+    ["Characters", stats.chars.toLocaleString()],
+    ["Without spaces", stats.charsNoSpaces.toLocaleString()],
+    ["Sentences", stats.sentences.toLocaleString()],
+    ["Reading time", formatReadingTime(stats.readingMinutes)],
+  ];
+
+  return (
+    <>
+      {/* Transparent backdrop — click closes popover */}
+      <div
+        className="fixed inset-0 z-40"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Panel */}
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-label="Writing statistics"
+        tabIndex={-1}
+        className="fixed z-50 min-w-[200px] rounded-md border border-[var(--cg-border)] bg-[var(--cg-bg,white)] shadow-lg p-3 text-xs text-[var(--cg-fg)]"
+      >
+        <div className="font-semibold text-sm mb-2 text-[var(--cg-fg)]">
+          Writing Statistics
+        </div>
+        <div className="flex flex-col gap-1">
+          {rows.map(([label, value]) => (
+            <div key={label} className="flex justify-between gap-6">
+              <span className="text-[var(--cg-muted)]">{label}</span>
+              <span className="font-medium tabular-nums">{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── StatusBar ──────────────────────────────────────────────────────────────────
+
+/**
+ * Status bar shown at the bottom of the editor.
+ *
+ * Left:   word count + character count (clickable — opens stats popover)
+ * Center: cursor position Ln/Col
+ * Right:  mode indicator (clickable to cycle Rendered → Source → Preview)
+ */
+export function StatusBar({
+  wordCount,
+  cursorPos,
+  editorMode,
+  onModeChange,
+  docText = "",
+}: StatusBarProps) {
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const wordCountRef = useRef<HTMLButtonElement | null>(null);
+
+  // Compute stats once per render — shared by the word-count badge and the popover.
+  const stats = computeDocStats(docText);
+
+  const cycleMode = useCallback(() => {
+    const idx = MODE_ORDER.indexOf(editorMode);
+    const next = MODE_ORDER[(idx + 1) % MODE_ORDER.length];
+    onModeChange(next);
+  }, [editorMode, onModeChange]);
+
+  const closePopover = useCallback(() => setPopoverOpen(false), []);
+
+  const wordLabel = wordCount === 1 ? "1 word" : `${wordCount} words`;
+  const charLabel = `${stats.chars} chars`;
+
+  return (
+    <>
+      <div className="shrink-0 flex items-center border-t border-[var(--cg-border)] bg-[var(--cg-subtle)] h-6 px-2 text-xs text-[var(--cg-muted)] select-none">
+        {/* Left: word + char count */}
+        <div className="flex items-center gap-2">
+          <button
+            ref={wordCountRef}
+            type="button"
+            title="Click for writing statistics"
+            onClick={() => setPopoverOpen((v) => !v)}
+            className={cn(
+              "px-1 rounded hover:bg-[var(--cg-hover,rgba(0,0,0,0.06))] transition-colors",
+              popoverOpen && "bg-[var(--cg-hover,rgba(0,0,0,0.06))]",
+            )}
+          >
+            {wordLabel}
+          </button>
+          <span className="opacity-50">·</span>
+          <span>{charLabel}</span>
+        </div>
+
+        {/* Center: cursor position */}
+        <div className="flex-1 flex items-center justify-center">
+          <span>
+            Ln {cursorPos.line}, Col {cursorPos.col}
+          </span>
+        </div>
+
+        {/* Right: mode indicator */}
+        <button
+          type="button"
+          title="Click to cycle editor mode"
+          onClick={cycleMode}
+          className="px-1 rounded hover:bg-[var(--cg-hover,rgba(0,0,0,0.06))] transition-colors"
+        >
+          {MODE_LABELS[editorMode]}
+        </button>
+      </div>
+
+      {/* Stats popover — rendered in the same stacking context, positioned fixed */}
+      {popoverOpen && (
+        <StatsPopover
+          stats={stats}
+          anchorRef={wordCountRef}
+          onClose={closePopover}
+        />
+      )}
+    </>
+  );
+}

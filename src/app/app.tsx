@@ -9,10 +9,13 @@ import { Sidebar } from "./components/sidebar";
 import { FileTree } from "./components/file-tree";
 import { Outline } from "./components/outline";
 import { EditorPane } from "./components/editor-pane";
+import { StatusBar } from "./components/status-bar";
 import { useTheme } from "./hooks/use-theme";
 import type { UseEditorReturn } from "./hooks/use-editor";
 import type { FileEntry } from "./file-manager";
 import { extractHeadings } from "./heading-ancestry";
+import type { EditorMode } from "../editor";
+import { setEditorMode } from "../editor";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -271,9 +274,42 @@ function AppInner() {
     if (first) void openFile(first);
   }, [fileTree, openFile]);
 
+  // ── Editor mode ────────────────────────────────────────────────────────────
+  const [editorMode, setEditorModeState] = useState<EditorMode>("rendered");
+
+  // Reset mode indicator to "rendered" whenever the active file changes so the
+  // status bar stays in sync with the freshly-created CM view (which always
+  // initialises in rendered mode).
+  useEffect(() => {
+    setEditorModeState("rendered");
+  }, [activeTab]);
+
+  const handleModeChange = useCallback((mode: EditorMode) => {
+    setEditorModeState(mode);
+    const view = editorState?.view;
+    if (view) {
+      setEditorMode(view, mode);
+    }
+  }, [editorState?.view]);
+
   // ── Status bar info ────────────────────────────────────────────────────────
   const wordCount = editorState?.wordCount ?? 0;
-  const cursorPos = editorState?.cursorPos ?? 0;
+  const cursorCharOffset = editorState?.cursorPos ?? 0;
+
+  // Compute line/col from the char offset using the live CM view.
+  const cursorLineCol = (() => {
+    const view = editorState?.view;
+    if (!view) return { line: 1, col: 1 };
+    try {
+      const line = view.state.doc.lineAt(cursorCharOffset);
+      return { line: line.number, col: cursorCharOffset - line.from + 1 };
+    } catch {
+      return { line: 1, col: 1 };
+    }
+  })();
+
+  // Current document text for stats popover (from liveDocs).
+  const docTextForStats = activeTab ? (liveDocs.current.get(activeTab) ?? "") : "";
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -350,15 +386,13 @@ function AppInner() {
         )}
 
         {/* Status bar */}
-        <div className="shrink-0 border-t border-[var(--cg-border)] bg-[var(--cg-subtle)] min-h-[24px] flex items-center px-3 gap-4 text-xs text-[var(--cg-muted)]">
-          {activeTab && (
-            <>
-              <span>{activeTab}</span>
-              <span className="ml-auto">{wordCount} words</span>
-              <span>pos {cursorPos}</span>
-            </>
-          )}
-        </div>
+        <StatusBar
+          wordCount={wordCount}
+          cursorPos={cursorLineCol}
+          editorMode={editorMode}
+          onModeChange={handleModeChange}
+          docText={docTextForStats}
+        />
       </div>
     </div>
   );

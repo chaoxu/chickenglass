@@ -22,6 +22,16 @@ export interface DocStats {
   readingMinutes: number;
 }
 
+/**
+ * Format a readingMinutes value as a human-readable string.
+ * 0 → "< 1 min", 1 → "1 min", N → "N min"
+ */
+export function formatReadingTime(minutes: number): string {
+  if (minutes === 0) return "< 1 min";
+  if (minutes === 1) return "1 min";
+  return `${minutes} min`;
+}
+
 /** Compute document statistics from raw markdown text. */
 export function computeDocStats(text: string): DocStats {
   // Strip YAML frontmatter
@@ -237,12 +247,7 @@ export class WritingStatsPopup {
     this.charCountEl.textContent = s.chars.toLocaleString();
     this.charNoSpaceEl.textContent = s.charsNoSpaces.toLocaleString();
     this.sentenceCountEl.textContent = s.sentences.toLocaleString();
-    this.readingTimeEl.textContent =
-      s.readingMinutes === 0
-        ? "< 1 min"
-        : s.readingMinutes === 1
-          ? "1 min"
-          : `${s.readingMinutes} min`;
+    this.readingTimeEl.textContent = formatReadingTime(s.readingMinutes);
   }
 
   private renderSession(): void {
