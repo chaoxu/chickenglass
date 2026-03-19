@@ -426,7 +426,7 @@ function ContextMenuPortal({ x, y, items, onDismiss }: ContextMenuPortalProps) {
         ref={menuRef}
         role="menu"
         tabIndex={0}
-        className="fixed z-50 min-w-[160px] py-1 bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded shadow-sm text-sm text-[var(--cg-fg)] outline-none"
+        className="fixed z-50 min-w-[160px] py-1 bg-[var(--cg-bg)] border border-[var(--cg-border)] ring-1 ring-[var(--cg-border)] rounded text-sm text-[var(--cg-fg)] outline-none"
         style={{ left: x, top: y }}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleMenuKey}
