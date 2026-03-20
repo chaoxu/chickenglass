@@ -34,18 +34,38 @@ export interface InlineEditorOptions {
   onKeydown?: (event: KeyboardEvent) => boolean;
 }
 
-/** Theme for inline editors: transparent, no chrome, inherits parent font. */
+/** Theme for inline editors: transparent, no chrome, inherits parent font.
+ *  Uses !important to override the outer (parent) editor's scoped theme
+ *  rules, which cascade into nested CM6 instances sharing the same
+ *  generated scope classes (e.g. ͼ1, ͼ2). Without !important, the outer
+ *  editor's .cm-content { padding: 24px 48px; max-width: 720px } wins. */
 const inlineEditorTheme = EditorView.theme({
-  ".cm-editor": {
-    backgroundColor: "transparent",
-    fontFamily: "inherit",
-    fontSize: "inherit",
+  "&": {
+    backgroundColor: "transparent !important",
+    fontFamily: "inherit !important",
+    fontSize: "inherit !important",
+    padding: "0 !important",
+    margin: "0 !important",
+    border: "none !important",
+    minHeight: "auto !important",
+  },
+  "&.cm-focused": {
+    outline: "none !important",
   },
   ".cm-gutters": {
-    display: "none",
+    display: "none !important",
+  },
+  ".cm-scroller": {
+    overflow: "visible !important",
   },
   ".cm-content": {
-    padding: "0",
+    padding: "0 !important",
+    margin: "0 !important",
+    minHeight: "auto !important",
+    maxWidth: "none !important",
+  },
+  ".cm-line": {
+    padding: "0 !important",
   },
   ".cm-cursor": {
     borderLeftColor: "currentColor",
