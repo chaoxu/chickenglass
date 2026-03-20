@@ -21,7 +21,7 @@ const DEFAULT_SETTINGS: Settings = {
   showLineNumbers: false,
   wordWrap: true,
   spellCheck: false,
-  editorMode: "rendered",
+  editorMode: "rich",
   theme: "system",
   defaultExportFormat: "pdf",
   enabledPlugins: {},

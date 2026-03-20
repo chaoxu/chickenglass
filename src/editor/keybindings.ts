@@ -12,11 +12,11 @@ import { setEditorMode, type EditorMode } from "./editor";
 import type { SourceMap } from "../app/source-map";
 
 /** Current editor mode — cycles through rendered → source → preview. */
-let currentMode: EditorMode = "rendered";
+let currentMode: EditorMode = "rich";
 
 /** Cycle to the next editor mode. */
 function cycleEditorMode(view: EditorView): boolean {
-  const modes: EditorMode[] = ["rendered", "source", "preview"];
+  const modes: EditorMode[] = ["rich", "source", "read"];
   const idx = modes.indexOf(currentMode);
   currentMode = modes[(idx + 1) % modes.length];
   setEditorMode(view, currentMode);

@@ -387,13 +387,13 @@ function AppInner() {
   }, [fileTree, openFile]); // windowState is intentionally omitted — only read on first mount
 
   // ── Editor mode ────────────────────────────────────────────────────────────
-  const [editorMode, setEditorModeState] = useState<EditorMode>("rendered");
+  const [editorMode, setEditorModeState] = useState<EditorMode>("rich");
 
-  // Reset mode indicator to "rendered" whenever the active file changes so the
+  // Reset mode indicator to "rich" whenever the active file changes so the
   // status bar stays in sync with the freshly-created CM view (which always
   // initialises in rendered mode).
   useEffect(() => {
-    setEditorModeState("rendered");
+    setEditorModeState("rich");
   }, [activeTab]);
 
   const handleModeChange = useCallback((mode: EditorMode) => {

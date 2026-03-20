@@ -49,12 +49,12 @@ import { listOutlinerExtension } from "./list-outliner";
 const fallbackDocument = "# Untitled\n";
 
 /** Editor display modes. */
-export type EditorMode = "rendered" | "source" | "preview";
+export type EditorMode = "rich" | "source" | "read";
 
 /** Compartment for rendering extensions — reconfigured on mode switch. */
 const renderCompartment = new Compartment();
 
-/** Compartment for editability — reconfigured for preview mode. */
+/** Compartment for editability — reconfigured for read mode. */
 const editableCompartment = new Compartment();
 
 /** Compartment for the CM6 dark/light base theme — reconfigured on theme switch. */
@@ -177,17 +177,17 @@ export function createEditor(config: EditorConfig): EditorView {
 }
 
 /**
- * Switch the editor between rendered, source, and preview modes.
+ * Switch the editor between rich, source, and read modes.
  *
- * - **rendered**: Typora-style — decorations active, editable (default)
+ * - **rich**: Typora-style — decorations active, editable (default)
  * - **source**: plain markdown — no decorations, editable
- * - **preview**: rendered — decorations active, read-only
+ * - **read**: decorations active, read-only
  */
 export function setEditorMode(view: EditorView, mode: EditorMode): void {
   const effects: StateEffect<unknown>[] = [];
 
   switch (mode) {
-    case "rendered":
+    case "rich":
       effects.push(renderCompartment.reconfigure(renderingExtensions));
       effects.push(editableCompartment.reconfigure([]));
       break;
@@ -195,7 +195,7 @@ export function setEditorMode(view: EditorView, mode: EditorMode): void {
       effects.push(renderCompartment.reconfigure([]));
       effects.push(editableCompartment.reconfigure([]));
       break;
-    case "preview":
+    case "read":
       effects.push(renderCompartment.reconfigure(renderingExtensions));
       effects.push(editableCompartment.reconfigure(EditorView.editable.of(false)));
       break;

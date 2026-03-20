@@ -23,12 +23,12 @@ export interface StatusBarProps {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const MODE_ORDER: EditorMode[] = ["rendered", "source", "preview"];
+const MODE_ORDER: EditorMode[] = ["rich", "source", "read"];
 
 const MODE_LABELS: Record<EditorMode, string> = {
-  rendered: "Rendered",
+  rich: "Rich",
   source: "Source",
-  preview: "Preview",
+  read: "Read",
 };
 
 // ── StatsPopover ───────────────────────────────────────────────────────────────
