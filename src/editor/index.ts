@@ -20,3 +20,4 @@ export {
 } from "./image-save";
 export { type EditorPlugin, EditorPluginManager } from "./editor-plugin";
 export { defaultEditorPlugins } from "./editor-plugins-registry";
+export { createInlineEditor, type InlineEditorOptions } from "./inline-editor";
