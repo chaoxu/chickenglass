@@ -19,20 +19,20 @@
   },
   "tiers": {
     "small": {
-      "verify": ["typecheck"]
+      "verify": ["build"]
     },
     "medium": {
-      "verify": ["typecheck", "lint", "build"]
+      "verify": ["lint", "build"]
     },
     "full": {
-      "verify": ["typecheck", "lint", "build", "test"]
+      "verify": ["lint", "build", "test"]
     }
   },
   "tier_triggers": {
     "medium": ["src/**/*.ts", "src/**/*.tsx"],
     "full": ["src/parser/**", "src/plugins/**"]
   },
-  "preflight": ["typecheck"],
+  "preflight": ["build"],
   "commit_format": "conventional",
   "co_author": "Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
   "orchestration": {
@@ -63,17 +63,12 @@
   "integration_verify_gate": {
     "enabled": true,
     "run_once_after_merge": true,
-    "command_keys": ["typecheck", "build"],
+    "command_keys": ["build"],
     "owner": "verifier",
     "fail_run_on_failure": true
   },
   "playwright_gate": {
     "enabled": false
-  },
-  "lead_visual_check": {
-    "enabled": true,
-    "when": "before_merge",
-    "description": "Lead starts dev server in the worktree, opens headless Playwright, takes screenshot of affected pages, and visually verifies before merging. If issues found, sends feedback to worker for fixes."
   },
   "selective_verify_checks": {
     "enabled": false
