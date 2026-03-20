@@ -84,7 +84,11 @@ export const blockThemeStyles = {
     verticalAlign: "middle",
   },
 
-  /* Table styles */
+  /* Table styles — rows never wrap to next line */
+  ".cg-table .cm-line": {
+    whiteSpace: "nowrap",
+  },
+
   ".cg-table-header .cg-table-col": {
     fontWeight: "700",
     borderBottom: "2px solid var(--cg-border)",
