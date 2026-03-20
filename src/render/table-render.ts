@@ -1248,11 +1248,195 @@ export class TableWidget extends WidgetType {
         if (e.key === "Escape") {
           // Blur the cell, return focus to CM6
           e.preventDefault();
+          e.stopPropagation();
           cell.blur();
           view.focus();
-        } else if (e.key === "Enter") {
-          // Prevent <br> insertion
+          return;
+        }
+
+        const colCount = this.table.header.cells.length;
+        const bodyRowCount = this.table.rows.length;
+        // Total navigable rows: 1 header + bodyRowCount body rows
+        // We use a linear index: 0 = header, 1..bodyRowCount = body rows
+        const currentLinear = section === "header" ? 0 : row + 1;
+        const totalRows = 1 + bodyRowCount;
+
+        const sel = window.getSelection();
+        const textLen = (cell.textContent ?? "").length;
+        const atStart = sel !== null && sel.isCollapsed && sel.anchorOffset === 0;
+        const atEnd = sel !== null && sel.isCollapsed && sel.anchorOffset >= textLen;
+
+        // Helper: focus a cell by linear row index and column
+        const focusByLinear = (linearRow: number, targetCol: number, placeAtEnd = false): void => {
+          const targetSection = linearRow === 0 ? "header" : "body";
+          const targetRow = linearRow === 0 ? 0 : linearRow - 1;
+          const target = tableEl.querySelector(
+            `[data-section="${targetSection}"][data-row="${targetRow}"][data-col="${targetCol}"]`,
+          ) as HTMLElement | null;
+          if (target) {
+            target.focus();
+            // Place caret at start or end
+            if (placeAtEnd) {
+              const range = document.createRange();
+              const targetSel = window.getSelection();
+              if (target.childNodes.length > 0) {
+                const lastNode = target.childNodes[target.childNodes.length - 1];
+                const nodeLen = lastNode.nodeType === Node.TEXT_NODE
+                  ? (lastNode.textContent ?? "").length
+                  : 0;
+                range.setStart(lastNode, nodeLen);
+              } else {
+                range.setStart(target, 0);
+              }
+              range.collapse(true);
+              targetSel?.removeAllRanges();
+              targetSel?.addRange(range);
+            }
+          }
+        };
+
+        // Helper: add a row to the table and focus a cell in it
+        const addRowAndFocus = (targetCol: number): void => {
+          // Blur current cell to sync content before mutation
+          cell.blur();
+          // Re-parse the table from current document state and add a row
+          const state = view.state;
+          const tables = findTablesFromState(state);
+          const matchingTable = tables.find(
+            (t) => t.from === this.tableFrom,
+          );
+          if (matchingTable) {
+            applyTableMutation(view, matchingTable, (t) => addRow(t));
+          }
+          // After mutation, the widget will be rebuilt by CM6, so we
+          // schedule a focus on the new cell via a microtask
+          setTimeout(() => {
+            // Find the new widget container
+            const containers = view.dom.querySelectorAll(".cg-table-widget");
+            for (const c of containers) {
+              const el = c as HTMLElement;
+              if (el.dataset.tableFrom === String(this.tableFrom)) {
+                const newTarget = el.querySelector(
+                  `[data-section="body"][data-row="${bodyRowCount}"][data-col="${targetCol}"]`,
+                ) as HTMLElement | null;
+                if (newTarget) {
+                  newTarget.focus();
+                }
+                break;
+              }
+            }
+          }, 0);
+        };
+
+        if (e.key === "Tab" && !e.shiftKey) {
+          // Tab: move to next cell (left→right, top→bottom)
           e.preventDefault();
+          e.stopPropagation();
+          let nextCol = col + 1;
+          let nextLinear = currentLinear;
+          if (nextCol >= colCount) {
+            nextCol = 0;
+            nextLinear++;
+          }
+          if (nextLinear >= totalRows) {
+            // Past last cell: add a row
+            addRowAndFocus(0);
+          } else {
+            focusByLinear(nextLinear, nextCol);
+          }
+          return;
+        }
+
+        if (e.key === "Tab" && e.shiftKey) {
+          // Shift+Tab: move to previous cell
+          e.preventDefault();
+          e.stopPropagation();
+          let prevCol = col - 1;
+          let prevLinear = currentLinear;
+          if (prevCol < 0) {
+            prevCol = colCount - 1;
+            prevLinear--;
+          }
+          if (prevLinear < 0) return; // Already at first cell
+          focusByLinear(prevLinear, prevCol, true);
+          return;
+        }
+
+        if (e.key === "Enter") {
+          // Enter: move to same column, next row
+          e.preventDefault();
+          e.stopPropagation();
+          const nextLinear = currentLinear + 1;
+          if (nextLinear >= totalRows) {
+            addRowAndFocus(col);
+          } else {
+            focusByLinear(nextLinear, col);
+          }
+          return;
+        }
+
+        if (e.key === "ArrowLeft" && atStart) {
+          // At caret position 0: focus previous cell, place caret at end
+          e.preventDefault();
+          e.stopPropagation();
+          let prevCol = col - 1;
+          let prevLinear = currentLinear;
+          if (prevCol < 0) {
+            prevCol = colCount - 1;
+            prevLinear--;
+          }
+          if (prevLinear < 0) return;
+          focusByLinear(prevLinear, prevCol, true);
+          return;
+        }
+
+        if (e.key === "ArrowRight" && atEnd) {
+          // At caret at end: focus next cell, place caret at start
+          e.preventDefault();
+          e.stopPropagation();
+          let nextCol = col + 1;
+          let nextLinear = currentLinear;
+          if (nextCol >= colCount) {
+            nextCol = 0;
+            nextLinear++;
+          }
+          if (nextLinear >= totalRows) return;
+          focusByLinear(nextLinear, nextCol);
+          return;
+        }
+
+        if (e.key === "ArrowUp") {
+          // Move to same column, previous row
+          e.preventDefault();
+          e.stopPropagation();
+          const prevLinear = currentLinear - 1;
+          if (prevLinear < 0) return;
+          focusByLinear(prevLinear, col);
+          return;
+        }
+
+        if (e.key === "ArrowDown") {
+          // Move to same column, next row
+          e.preventDefault();
+          e.stopPropagation();
+          const nextLinear = currentLinear + 1;
+          if (nextLinear >= totalRows) return;
+          focusByLinear(nextLinear, col);
+          return;
+        }
+
+        if (e.key === "Backspace" && atStart) {
+          // Prevent default at cell start (don't delete into previous cell)
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+
+        if (e.key === "Delete" && atEnd) {
+          // Prevent default at cell end
+          e.preventDefault();
+          e.stopPropagation();
+          return;
         }
       });
     };
