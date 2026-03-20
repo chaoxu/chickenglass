@@ -19,6 +19,7 @@ import {
   texLinebreakDOM,
   resetDOMJustification,
 } from "tex-linebreak2";
+import { getHyphenator, applyHyphensToContainer } from "../hyphenation";
 
 /** Debounce delay (ms) for re-applying line breaking on resize. */
 const RESIZE_DEBOUNCE_MS = 200;
@@ -148,6 +149,30 @@ export function ReadModeView({
       el.scrollTop = scrollTop;
     }
   }, [scrollTop]);
+
+  // Apply Hyphenopoly soft hyphens to text nodes after HTML renders.
+  // Runs after each htmlContent change. Math (.katex) and code subtrees
+  // are excluded by applyHyphensToContainer.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    let cancelled = false;
+    getHyphenator()
+      .then((hyphenate) => {
+        if (!cancelled) {
+          applyHyphensToContainer(el, hyphenate);
+        }
+      })
+      .catch((err: unknown) => {
+        // Non-fatal: CSS hyphens:auto serves as fallback
+        console.warn("Hyphenopoly failed to load:", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [htmlContent]);
 
   // Track scroll position
   useEffect(() => {

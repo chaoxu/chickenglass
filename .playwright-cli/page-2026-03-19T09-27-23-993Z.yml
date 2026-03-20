@@ -1,0 +1,38 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]: Explorer
+      - button "Collapse sidebar" [ref=e8]:
+        - img [ref=e9]
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - button "Files" [ref=e13]
+        - button "Outline" [ref=e14]
+        - button "Symbols" [ref=e15]
+      - generic [ref=e16]:
+        - button "chapters" [ref=e18] [cursor=pointer]:
+          - img [ref=e19]
+          - generic [ref=e21]: chapters
+        - button "chickenglass.yaml" [ref=e22] [cursor=pointer]:
+          - img [ref=e23]
+          - generic [ref=e26]: chickenglass.yaml
+        - button "main.md" [ref=e27] [cursor=pointer]:
+          - img [ref=e28]
+          - generic [ref=e31]: main.md
+        - button "notes.md" [ref=e32] [cursor=pointer]:
+          - img [ref=e33]
+          - generic [ref=e36]: notes.md
+        - button "refs.bib" [ref=e37] [cursor=pointer]:
+          - img [ref=e38]
+          - generic [ref=e40]: refs.bib
+  - generic [ref=e42]:
+    - generic [ref=e44] [cursor=pointer]:
+      - generic [ref=e45]: main.md
+      - button "Close main.md" [ref=e46]: ×
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - button "0 words" [ref=e51]
+        - generic [ref=e52]: ·
+        - generic [ref=e53]: 3966 chars
+      - generic [ref=e55]: Ln 1, Col 1
+      - button "Rendered" [ref=e56]

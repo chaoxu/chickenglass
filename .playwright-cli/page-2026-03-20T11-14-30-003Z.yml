@@ -1,0 +1,248 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]: Explorer
+      - button "Collapse sidebar" [ref=e8]:
+        - img [ref=e9]
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - button "Files" [ref=e13]
+        - button "Outline" [ref=e14]
+        - button "Symbols" [ref=e15]
+      - tree [ref=e16]:
+        - button "posts" [ref=e18] [cursor=pointer]:
+          - img [ref=e19]
+          - generic [ref=e21]: posts
+        - button "404.md" [ref=e22] [cursor=pointer]:
+          - img [ref=e23]
+          - generic [ref=e26]: 404.md
+        - button "about.md" [ref=e27] [cursor=pointer]:
+          - img [ref=e28]
+          - generic [ref=e31]: about.md
+        - button "bib_style.csl" [ref=e32] [cursor=pointer]:
+          - img [ref=e33]
+          - generic [ref=e36]: bib_style.csl
+        - button "chickenglass.yaml" [ref=e37] [cursor=pointer]:
+          - img [ref=e38]
+          - generic [ref=e41]: chickenglass.yaml
+        - button "current.md" [ref=e42] [cursor=pointer]:
+          - img [ref=e43]
+          - generic [ref=e46]: current.md
+        - button "journal.md" [ref=e47] [cursor=pointer]:
+          - img [ref=e48]
+          - generic [ref=e51]: journal.md
+        - button "open-problems.md" [ref=e52] [cursor=pointer]:
+          - img [ref=e53]
+          - generic [ref=e56]: open-problems.md
+        - button "potential-startups.md" [ref=e57] [cursor=pointer]:
+          - img [ref=e58]
+          - generic [ref=e61]: potential-startups.md
+        - button "problems.md" [ref=e62] [cursor=pointer]:
+          - img [ref=e63]
+          - generic [ref=e66]: problems.md
+        - button "puzzles.md" [ref=e67] [cursor=pointer]:
+          - img [ref=e68]
+          - generic [ref=e71]: puzzles.md
+        - button "reference.bib" [ref=e72] [cursor=pointer]:
+          - img [ref=e73]
+          - generic [ref=e75]: reference.bib
+        - button "research.md" [ref=e76] [cursor=pointer]:
+          - img [ref=e77]
+          - generic [ref=e80]: research.md
+        - button "simple-words-on-surfaces.md" [ref=e81] [cursor=pointer]:
+          - img [ref=e82]
+          - generic [ref=e85]: simple-words-on-surfaces.md
+        - button "table-demo.md" [ref=e86] [cursor=pointer]:
+          - img [ref=e87]
+          - generic [ref=e90]: table-demo.md
+        - button "test-features.md" [ref=e91] [cursor=pointer]:
+          - img [ref=e92]
+          - generic [ref=e95]: test-features.md
+        - button "test.md" [ref=e96] [cursor=pointer]:
+          - img [ref=e97]
+          - generic [ref=e100]: test.md
+        - button "tools.md" [ref=e101] [cursor=pointer]:
+          - img [ref=e102]
+          - generic [ref=e105]: tools.md
+        - button "tricks.md" [ref=e106] [cursor=pointer]:
+          - img [ref=e107]
+          - generic [ref=e110]: tricks.md
+        - button "works.md" [ref=e111] [cursor=pointer]:
+          - img [ref=e112]
+          - generic [ref=e115]: works.md
+  - generic [ref=e117]:
+    - generic [ref=e118]:
+      - button "404.md Close 404.md" [ref=e119] [cursor=pointer]:
+        - generic [ref=e120]: 404.md
+        - button "Close 404.md" [ref=e121]: ×
+      - button "test-features.md Close test-features.md" [ref=e141] [cursor=pointer]:
+        - generic [ref=e142]: test-features.md
+        - button "Close test-features.md" [ref=e143]: ×
+    - status [ref=e122]
+    - textbox [active] [ref=e148]:
+      - generic [ref=e311]: Feature Test Page
+      - generic [ref=e150]: This page tests all rendering features. Open it to verify everything works.
+      - generic [ref=e152]:
+        - generic "Fold section" [ref=e153] [cursor=pointer]: ▼
+        - generic [ref=e154]:
+          - generic: "#"
+          - text: Unnumbered Heading
+          - generic: "{-}"
+      - generic [ref=e156]:
+        - text: This heading has
+        - generic [ref=e157]:
+          - generic: "`"
+          - text: "{-}"
+          - generic: "`"
+        - text: — it should NOT have a section number.
+      - generic [ref=e159]:
+        - text: "1"
+        - generic "Fold section" [ref=e160] [cursor=pointer]: ▼
+        - generic [ref=e161]:
+          - generic: "#"
+          - text: Numbered Heading
+      - generic [ref=e163]: This SHOULD have section number "1".
+      - generic [ref=e165]:
+        - generic "Fold section" [ref=e166] [cursor=pointer]: ▼
+        - generic [ref=e167]:
+          - generic: "##"
+          - text: Unnumbered Subsection
+          - generic: "{.unnumbered}"
+      - generic [ref=e169]:
+        - text: Uses
+        - generic [ref=e170]:
+          - generic: "`"
+          - text: "{.unnumbered}"
+          - generic: "`"
+        - text: — also no number.
+      - generic [ref=e172]:
+        - text: "1.1"
+        - generic "Fold section" [ref=e173] [cursor=pointer]: ▼
+        - generic [ref=e174]:
+          - generic: "##"
+          - text: Numbered Subsection
+      - generic [ref=e176]: Should be "1.1".
+      - generic [ref=e178]:
+        - text: "2"
+        - generic "Fold section" [ref=e179] [cursor=pointer]: ▼
+        - generic [ref=e180]:
+          - generic: "#"
+          - text: Inline Rendering
+      - generic [ref=e182]:
+        - generic [ref=e183]:
+          - generic: "**"
+          - text: Bold text
+          - generic: "**"
+        - text: ","
+        - generic [ref=e184]:
+          - generic: "*"
+          - text: italic text
+          - generic: "*"
+        - text: ","
+        - generic [ref=e185]:
+          - generic: ~~
+          - text: strikethrough
+          - generic: ~~
+        - text: ","
+        - generic [ref=e186]:
+          - generic: ==
+          - text: highlight
+          - generic: ==
+        - text: ","
+        - generic [ref=e187]:
+          - generic: "`"
+          - text: inline code
+          - generic: "`"
+        - text: .
+      - generic [ref=e189]:
+        - text: "Inline math:"
+        - generic [ref=e191] [cursor=pointer]:
+          - math [ref=e193]:
+            - generic [ref=e195]:
+              - generic [ref=e196]:
+                - generic [ref=e197]: e
+                - generic [ref=e198]:
+                  - generic [ref=e199]: i
+                  - generic [ref=e200]: π
+              - generic [ref=e201]: +
+              - generic [ref=e202]: "1"
+              - generic [ref=e203]: =
+              - generic [ref=e204]: "0"
+          - generic [ref=e205]:
+            - generic [ref=e206]:
+              - generic [ref=e207]:
+                - text: e
+                - generic [ref=e213]: iπ
+              - text: +
+            - generic [ref=e214]: 1 =
+            - generic [ref=e215]: "0"
+        - text: ","
+        - generic [ref=e217] [cursor=pointer]:
+          - math [ref=e219]:
+            - generic [ref=e221]:
+              - generic [ref=e222]:
+                - generic [ref=e223]: ∑
+                - generic [ref=e224]:
+                  - generic [ref=e225]: k
+                  - generic [ref=e226]: =
+                  - generic [ref=e227]: "1"
+                - generic [ref=e228]: "n"
+              - generic [ref=e229]: k
+              - generic [ref=e230]: =
+              - generic [ref=e231]:
+                - generic [ref=e232]:
+                  - generic [ref=e233]: "n"
+                  - generic [ref=e234]: (
+                  - generic [ref=e235]: "n"
+                  - generic [ref=e236]: +
+                  - generic [ref=e237]: "1"
+                  - generic [ref=e238]: )
+                - generic [ref=e239]: "2"
+          - generic [ref=e240]:
+            - generic [ref=e241]:
+              - generic [ref=e242]:
+                - text: ∑
+                - generic [ref=e246]:
+                  - generic [ref=e248]: k=1
+                  - generic [ref=e249]: "n"
+              - text: k =
+            - generic [ref=e258]:
+              - generic [ref=e260]: "2"
+              - generic [ref=e263]: n(n+1)
+        - text: .
+      - generic [ref=e268]:
+        - text: "Mixed delimiters:"
+        - generic [ref=e270] [cursor=pointer]:
+          - math [ref=e272]:
+            - generic [ref=e275]:
+              - generic [ref=e276]: x
+              - generic [ref=e277]: "2"
+          - generic [ref=e280]:
+            - text: x
+            - generic [ref=e285]: "2"
+        - text: and
+        - generic [ref=e287] [cursor=pointer]:
+          - math [ref=e289]:
+            - generic [ref=e292]:
+              - generic [ref=e293]: "y"
+              - generic [ref=e294]: "2"
+          - generic [ref=e297]:
+            - text: "y"
+            - generic [ref=e302]: "2"
+        - text: in the same line.
+      - generic [ref=e304]:
+        - text: "3"
+        - generic "Fold section" [ref=e305] [cursor=pointer]: ▼
+        - generic [ref=e306]:
+          - generic: "#"
+          - text: Display Math
+      - generic [ref=e308]: "Standard:"
+    - generic [ref=e125]:
+      - generic [ref=e126]:
+        - button "352 words" [ref=e310]
+        - generic [ref=e128]: ·
+        - generic [ref=e129]: 2095 chars
+      - generic [ref=e131]: Ln 15, Col 1
+      - generic [ref=e132]:
+        - button "⌘" [ref=e133]
+        - button "Rendered" [ref=e134]
