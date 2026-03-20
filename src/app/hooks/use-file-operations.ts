@@ -10,6 +10,7 @@ import type { FileSystem } from "../file-manager";
 import type { Tab } from "../tab-bar";
 import { isTauri } from "../tauri-fs";
 import { basename } from "../lib/utils";
+import { parseTable, formatTable } from "../../render/table-utils";
 
 export interface FileOperationsDeps {
   fs: FileSystem;
@@ -44,6 +45,74 @@ export interface UseFileOperationsReturn {
   handleRename: (oldPath: string, newPath: string) => Promise<void>;
   handleDelete: (path: string) => Promise<void>;
   saveAs: () => Promise<void>;
+}
+
+/**
+ * Find and format all GFM pipe tables in a document string.
+ *
+ * A table is a sequence of lines where:
+ * - Each line starts and ends with `|` (after trimming)
+ * - The second line is a separator row (cells match /^:?-+:?$/)
+ * - There are at least 2 lines (header + separator)
+ */
+function formatTablesInDocument(doc: string): string {
+  const lines = doc.split("\n");
+  const result: string[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    // Check if this line could be the start of a table (starts/ends with |)
+    const trimmed = lines[i].trim();
+    if (trimmed.startsWith("|") && trimmed.endsWith("|") && i + 1 < lines.length) {
+      // Look ahead: next line must be a separator row
+      const sepTrimmed = lines[i + 1].trim();
+      if (isSeparatorRow(sepTrimmed)) {
+        // Collect the full table
+        const tableLines: string[] = [lines[i], lines[i + 1]];
+        let j = i + 2;
+        while (j < lines.length) {
+          const lt = lines[j].trim();
+          if (lt.startsWith("|") && lt.endsWith("|")) {
+            tableLines.push(lines[j]);
+            j++;
+          } else {
+            break;
+          }
+        }
+
+        // Parse and format
+        const parsed = parseTable(tableLines);
+        if (parsed) {
+          const formatted = formatTable(parsed);
+          for (const fl of formatted) {
+            result.push(fl);
+          }
+        } else {
+          // Couldn't parse — keep original lines
+          for (const tl of tableLines) {
+            result.push(tl);
+          }
+        }
+        i = j;
+        continue;
+      }
+    }
+
+    result.push(lines[i]);
+    i++;
+  }
+
+  return result.join("\n");
+}
+
+/** Check if a trimmed line is a GFM table separator row. */
+function isSeparatorRow(trimmed: string): boolean {
+  if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) return false;
+  // Remove outer pipes and split by |
+  const inner = trimmed.slice(1, -1);
+  const cells = inner.split("|");
+  if (cells.length === 0) return false;
+  return cells.every((cell) => /^\s*:?-+:?\s*$/.test(cell));
 }
 
 export function useFileOperations(deps: FileOperationsDeps): UseFileOperationsReturn {
@@ -89,10 +158,15 @@ export function useFileOperations(deps: FileOperationsDeps): UseFileOperationsRe
     const path = activeTabRef.current;
     if (!path) return;
 
-    const doc = liveDocs.current.get(path) ?? "";
+    let doc = liveDocs.current.get(path) ?? "";
+
+    // Format tables before writing
+    doc = formatTablesInDocument(doc);
+
     try {
       await fs.writeFile(path, doc);
       buffers.current.set(path, doc);
+      liveDocs.current.set(path, doc);
       setOpenTabs((prev) =>
         prev.map((t) => (t.path === path ? { ...t, dirty: false } : t)),
       );

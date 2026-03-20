@@ -378,26 +378,6 @@ function applyTableMutation(
 }
 
 // ---------------------------------------------------------------------------
-// Auto-format
-// ---------------------------------------------------------------------------
-
-/** Format the table containing the cursor. Uses the already-found table range. */
-function autoFormatTableRange(view: EditorView, table: TableRange): void {
-  const formatted = formatTable(table.parsed);
-  const newText = formatted.join("\n");
-  const currentText = view.state.doc.sliceString(table.from, table.to);
-  if (newText !== currentText) {
-    const cursorPos = view.state.selection.main.head;
-    const relPos = cursorPos - table.from;
-    const newCursorPos = Math.min(table.from + relPos, table.from + newText.length);
-    view.dispatch({
-      changes: { from: table.from, to: table.to, insert: newText },
-      selection: { anchor: newCursorPos },
-    });
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Navigation
 // ---------------------------------------------------------------------------
 
@@ -917,23 +897,208 @@ class TableRenderPluginValue implements PluginValue {
 // Keybindings
 // ---------------------------------------------------------------------------
 
+/** ArrowLeft: at cell start, jump to end of previous cell. */
+function arrowLeft(view: EditorView): boolean {
+  const tables = findTables(view);
+  const cursorPos = view.state.selection.main.head;
+  const doc = view.state.doc;
+
+  const table = findTableAtCursor(tables, cursorPos);
+  if (!table) return false;
+
+  const colIdx = getCursorColIndex(view, table);
+  if (colIdx === null) return false;
+
+  const line = doc.lineAt(cursorPos);
+  const bounds = findCellBounds(line.text, line.from, colIdx);
+  if (!bounds) return false;
+
+  // Only intercept at cell start
+  if (cursorPos !== bounds.from) return false;
+
+  const lineIdx = line.number - table.startLineNumber;
+  let prevLineIdx = lineIdx;
+  let prevColIdx = colIdx - 1;
+
+  if (prevColIdx < 0) {
+    // Wrap to last cell of previous row
+    prevColIdx = table.parsed.header.cells.length - 1;
+    prevLineIdx = skipSeparator(prevLineIdx - 1, -1);
+  }
+
+  if (prevLineIdx < 0) return false; // At very start of table
+
+  const targetLineNum = table.startLineNumber + prevLineIdx;
+  const targetLine = doc.line(targetLineNum);
+  const targetBounds = findCellBounds(targetLine.text, targetLine.from, prevColIdx);
+  if (targetBounds) {
+    view.dispatch({ selection: { anchor: targetBounds.to } });
+  }
+  return true;
+}
+
+/** ArrowRight: at cell end, jump to start of next cell. */
+function arrowRight(view: EditorView): boolean {
+  const tables = findTables(view);
+  const cursorPos = view.state.selection.main.head;
+  const doc = view.state.doc;
+
+  const table = findTableAtCursor(tables, cursorPos);
+  if (!table) return false;
+
+  const colIdx = getCursorColIndex(view, table);
+  if (colIdx === null) return false;
+
+  const line = doc.lineAt(cursorPos);
+  const bounds = findCellBounds(line.text, line.from, colIdx);
+  if (!bounds) return false;
+
+  // Only intercept at cell end
+  if (cursorPos !== bounds.to) return false;
+
+  const lineIdx = line.number - table.startLineNumber;
+  const colCount = table.parsed.header.cells.length;
+  let nextLineIdx = lineIdx;
+  let nextColIdx = colIdx + 1;
+
+  if (nextColIdx >= colCount) {
+    // Wrap to first cell of next row
+    nextColIdx = 0;
+    nextLineIdx = skipSeparator(nextLineIdx + 1, 1);
+  }
+
+  const totalLines = table.lines.length;
+  if (nextLineIdx >= totalLines) return false; // At very end of table
+
+  const targetLineNum = table.startLineNumber + nextLineIdx;
+  const targetLine = doc.line(targetLineNum);
+  const targetBounds = findCellBounds(targetLine.text, targetLine.from, nextColIdx);
+  if (targetBounds) {
+    view.dispatch({ selection: { anchor: targetBounds.from } });
+  }
+  return true;
+}
+
+/** ArrowUp: move to same column in previous row. */
+function arrowUp(view: EditorView): boolean {
+  const tables = findTables(view);
+  const cursorPos = view.state.selection.main.head;
+  const doc = view.state.doc;
+
+  const table = findTableAtCursor(tables, cursorPos);
+  if (!table) return false;
+
+  const colIdx = getCursorColIndex(view, table);
+  if (colIdx === null) return false;
+
+  const line = doc.lineAt(cursorPos);
+  const lineIdx = line.number - table.startLineNumber;
+
+  const prevLineIdx = skipSeparator(lineIdx - 1, -1);
+  if (prevLineIdx < 0) return false; // Already on header row
+
+  const targetLineNum = table.startLineNumber + prevLineIdx;
+  const targetLine = doc.line(targetLineNum);
+  const targetBounds = findCellBounds(targetLine.text, targetLine.from, colIdx);
+  if (targetBounds) {
+    // Clamp cursor to cell content range
+    const offset = cursorPos - (findCellBounds(line.text, line.from, colIdx)?.from ?? cursorPos);
+    const clamped = Math.min(targetBounds.from + offset, targetBounds.to);
+    view.dispatch({ selection: { anchor: clamped } });
+  }
+  return true;
+}
+
+/** ArrowDown: move to same column in next row. */
+function arrowDown(view: EditorView): boolean {
+  const tables = findTables(view);
+  const cursorPos = view.state.selection.main.head;
+  const doc = view.state.doc;
+
+  const table = findTableAtCursor(tables, cursorPos);
+  if (!table) return false;
+
+  const colIdx = getCursorColIndex(view, table);
+  if (colIdx === null) return false;
+
+  const line = doc.lineAt(cursorPos);
+  const lineIdx = line.number - table.startLineNumber;
+
+  const nextLineIdx = skipSeparator(lineIdx + 1, 1);
+  if (nextLineIdx >= table.lines.length) return false; // Already on last row
+
+  const targetLineNum = table.startLineNumber + nextLineIdx;
+  const targetLine = doc.line(targetLineNum);
+  const targetBounds = findCellBounds(targetLine.text, targetLine.from, colIdx);
+  if (targetBounds) {
+    // Clamp cursor to cell content range
+    const offset = cursorPos - (findCellBounds(line.text, line.from, colIdx)?.from ?? cursorPos);
+    const clamped = Math.min(targetBounds.from + offset, targetBounds.to);
+    view.dispatch({ selection: { anchor: clamped } });
+  }
+  return true;
+}
+
+/** Backspace: prevent deleting at cell start (would destroy pipe). */
+function backspaceStop(view: EditorView): boolean {
+  const tables = findTables(view);
+  const cursorPos = view.state.selection.main.head;
+
+  // Only intercept when there's no selection
+  if (!view.state.selection.main.empty) return false;
+
+  const table = findTableAtCursor(tables, cursorPos);
+  if (!table) return false;
+
+  const colIdx = getCursorColIndex(view, table);
+  if (colIdx === null) return false;
+
+  const line = view.state.doc.lineAt(cursorPos);
+  const bounds = findCellBounds(line.text, line.from, colIdx);
+  if (!bounds) return false;
+
+  // At start of cell content — consume the event
+  if (cursorPos === bounds.from) return true;
+
+  return false;
+}
+
+/** Delete: prevent deleting at cell end (would destroy pipe). */
+function deleteStop(view: EditorView): boolean {
+  const tables = findTables(view);
+  const cursorPos = view.state.selection.main.head;
+
+  // Only intercept when there's no selection
+  if (!view.state.selection.main.empty) return false;
+
+  const table = findTableAtCursor(tables, cursorPos);
+  if (!table) return false;
+
+  const colIdx = getCursorColIndex(view, table);
+  if (colIdx === null) return false;
+
+  const line = view.state.doc.lineAt(cursorPos);
+  const bounds = findCellBounds(line.text, line.from, colIdx);
+  if (!bounds) return false;
+
+  // At end of cell content — consume the event
+  if (cursorPos === bounds.to) return true;
+
+  return false;
+}
+
 /** Table-specific keybindings. Must be high-precedence to override defaults. */
 const tableKeybindings: Extension = Prec.high(
   keymap.of([
     { key: "Tab", run: nextCell },
     { key: "Shift-Tab", run: previousCell },
     { key: "Enter", run: nextRow },
-    {
-      key: "Mod-Shift-f",
-      run(view: EditorView): boolean {
-        const tables = findTables(view);
-        const cursorPos = view.state.selection.main.head;
-        const table = findTableAtCursor(tables, cursorPos);
-        if (!table) return false;
-        autoFormatTableRange(view, table);
-        return true;
-      },
-    },
+    { key: "ArrowLeft", run: arrowLeft },
+    { key: "ArrowRight", run: arrowRight },
+    { key: "ArrowUp", run: arrowUp },
+    { key: "ArrowDown", run: arrowDown },
+    { key: "Backspace", run: backspaceStop },
+    { key: "Delete", run: deleteStop },
   ]),
 );
 
