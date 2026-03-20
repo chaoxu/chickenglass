@@ -89,7 +89,8 @@
       "Read CLAUDE.md before starting",
       "Run all verification commands from the project root",
       "Use conventional commit messages",
-      "Do not modify files outside your task scope unless necessary"
+      "Do not modify files outside your task scope unless necessary",
+      "After visual changes, ALWAYS verify in the browser via Playwright CDP (scripts/cdp.cjs or inline script) and take a screenshot before reporting done"
     ]
   },
   "planner_rules": [
