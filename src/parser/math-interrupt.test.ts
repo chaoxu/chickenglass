@@ -76,6 +76,74 @@ test("$$ inside list item with indented continuation", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Display math inside list items (#210)
+// ---------------------------------------------------------------------------
+
+describe("display math inside ordered list items (#210)", () => {
+  test("$$ on same line as list marker", () => {
+    const doc = "1. $$\nx^2\n$$";
+    expect(hasNode(doc, "DisplayMath")).toBe(true);
+  });
+
+  test("$$ on continuation line of list item", () => {
+    const doc = "1. text\n   $$\n   x^2\n   $$";
+    expect(hasNode(doc, "DisplayMath")).toBe(true);
+  });
+
+  test("\\[ on same line as list marker", () => {
+    const doc = "1. \\[\n   x^2\n   \\]";
+    expect(hasNode(doc, "DisplayMath")).toBe(true);
+  });
+
+  test("nested list with $$ display math", () => {
+    const doc = "1. outer\n   1. $$\n      x^2\n      $$";
+    expect(hasNode(doc, "DisplayMath")).toBe(true);
+  });
+
+  test("$$ after paragraph in list item (loose list)", () => {
+    const doc = "1. paragraph\n\n   $$\n   x^2\n   $$";
+    expect(hasNode(doc, "DisplayMath")).toBe(true);
+  });
+
+  test("\\[ after paragraph in list item (loose list)", () => {
+    const doc = "1. paragraph\n\n   \\[\n   x^2\n   \\]";
+    expect(hasNode(doc, "DisplayMath")).toBe(true);
+  });
+
+  test("nested list with \\[ display math", () => {
+    const doc = "1. outer\n   1. \\[\n      x^2\n      \\]";
+    expect(hasNode(doc, "DisplayMath")).toBe(true);
+  });
+});
+
+describe("display math inside unordered list items (#210)", () => {
+  test("$$ on same line as unordered list marker", () => {
+    const doc = "- $$\nx^2\n$$";
+    expect(hasNode(doc, "DisplayMath")).toBe(true);
+  });
+
+  test("$$ on continuation line of unordered list item", () => {
+    const doc = "- text\n  $$\n  x^2\n  $$";
+    expect(hasNode(doc, "DisplayMath")).toBe(true);
+  });
+
+  test("\\[ on same line as unordered list marker", () => {
+    const doc = "- \\[\n  x^2\n  \\]";
+    expect(hasNode(doc, "DisplayMath")).toBe(true);
+  });
+
+  test("$$ after paragraph in unordered list (loose list)", () => {
+    const doc = "- paragraph\n\n  $$\n  x^2\n  $$";
+    expect(hasNode(doc, "DisplayMath")).toBe(true);
+  });
+
+  test("\\[ after paragraph in unordered list (loose list)", () => {
+    const doc = "- paragraph\n\n  \\[\n  x^2\n  \\]";
+    expect(hasNode(doc, "DisplayMath")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Edge case 1: \[...\] inside blockquotes
 // ---------------------------------------------------------------------------
 
