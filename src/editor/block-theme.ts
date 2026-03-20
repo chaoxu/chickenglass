@@ -58,7 +58,6 @@ export const blockThemeStyles = {
   ".cg-block-blockquote": {
     borderLeft: "2px solid var(--cg-border)",
     paddingLeft: "1em",
-    color: "var(--cg-muted)",
     fontStyle: "italic",
   },
 

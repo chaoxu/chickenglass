@@ -20,10 +20,10 @@ export const marginThemeStyles = {
     lineHeight: "1.6",
   },
 
-  /* Sidenote reference: superscript number, muted */
+  /* Sidenote reference: superscript number */
   ".cg-sidenote-ref": {
     fontSize: "0.75em",
-    color: "var(--cg-muted)",
+    color: "var(--cg-fg)",
     cursor: "pointer",
     verticalAlign: "super",
     lineHeight: "0",
@@ -37,7 +37,7 @@ export const marginThemeStyles = {
     width: "240px",
     fontSize: "0.8em",
     lineHeight: "1.4",
-    color: "var(--cg-muted)",
+    color: "var(--cg-fg)",
     fontFamily: monoFont,
     transition: "transform 0.15s ease-out",
   },

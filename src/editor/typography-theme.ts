@@ -30,11 +30,11 @@ export const typographyThemeStyles = {
 
   /* List marker styling */
   ".cg-list-bullet": {
-    color: "var(--cg-muted)",
+    color: "var(--cg-fg)",
     fontWeight: "700",
   },
   ".cg-list-number": {
-    color: "var(--cg-muted)",
+    color: "var(--cg-fg)",
     fontWeight: "600",
     fontVariantNumeric: "tabular-nums",
   },
@@ -61,7 +61,7 @@ export const typographyThemeStyles = {
   ".cg-heading-3": { fontWeight: "600" },
   ".cg-heading-4": { fontWeight: "600" },
   ".cg-heading-5": { fontWeight: "600" },
-  ".cg-heading-6": { fontWeight: "600", color: "var(--cg-muted)" },
+  ".cg-heading-6": { fontWeight: "600" },
 
   /* Inline content styling — always applied for WYSIWYG feel */
   ".cg-bold": {
@@ -90,7 +90,7 @@ export const typographyThemeStyles = {
   /* Section numbers (rendered via ::before when cursor is outside) */
   "[data-section-number]::before": {
     content: "attr(data-section-number) '\\2002'",
-    color: "var(--cg-muted)",
+    color: "var(--cg-fg)",
     fontWeight: "400",
   },
 
