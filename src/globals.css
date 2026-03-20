@@ -132,6 +132,35 @@ body {
   margin-right: 2px;
 }
 
+/* ── Bibliography / References section ──────────────────────────────────── */
+
+.cg-bibliography-list {
+  line-height: 1.5;
+}
+
+.cg-bibliography-entry + .cg-bibliography-entry {
+  margin-top: 0.15em;
+}
+
+/* CSL-formatted entries: number + text inline, no extra indentation */
+.cg-bibliography-entry .csl-left-margin {
+  display: inline;
+}
+
+.cg-bibliography-entry .csl-right-inline {
+  display: inline;
+}
+
+/* ── Math sizing: inherit from surrounding context ─────────────────────── */
+
+.cg-math-inline .katex {
+  font-size: inherit;
+}
+
+.cg-math-display .katex-display {
+  font-size: inherit;
+}
+
 /* ── Hover preview tooltip (appended to document.body) ─────────────────────
  * Used when sidenote margin is collapsed to show footnote content. */
 .cg-hover-preview-tooltip {

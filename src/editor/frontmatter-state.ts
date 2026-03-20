@@ -8,6 +8,7 @@
  */
 import { EditorState, type Extension, StateField } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
+import katex from "katex";
 
 import {
   parseFrontmatter,
@@ -84,16 +85,47 @@ export const frontmatterField = StateField.define<FrontmatterState>({
   },
 });
 
+/** Render title text with inline $math$ support via KaTeX. */
+function renderTitleContent(
+  container: HTMLElement,
+  text: string,
+  macros: Record<string, string>,
+): void {
+  // Split on $...$ inline math (not greedy, no newlines)
+  const parts = text.split(/(\$[^$\n]+\$)/);
+  for (const part of parts) {
+    if (part.startsWith("$") && part.endsWith("$") && part.length > 2) {
+      const latex = part.slice(1, -1);
+      const span = document.createElement("span");
+      try {
+        span.innerHTML = katex.renderToString(latex, {
+          throwOnError: false,
+          displayMode: false,
+          macros: { ...macros },
+        });
+      } catch {
+        span.textContent = part;
+      }
+      container.appendChild(span);
+    } else if (part) {
+      container.appendChild(document.createTextNode(part));
+    }
+  }
+}
+
 /** Widget that renders the document title from frontmatter. */
 class TitleWidget extends WidgetType {
-  constructor(private readonly title: string) {
+  constructor(
+    private readonly title: string,
+    private readonly macros: Record<string, string>,
+  ) {
     super();
   }
 
   toDOM(): HTMLElement {
     const el = document.createElement("div");
     el.className = "cg-doc-title";
-    el.textContent = this.title;
+    renderTitleContent(el, this.title, this.macros);
     return el;
   }
 
@@ -164,9 +196,10 @@ function buildDecorations(state: EditorState): DecorationSet {
 
   // Otherwise: replace frontmatter with title widget (or hide)
   if (config.title) {
+    const macros = config.math ?? {};
     return Decoration.set([
       Decoration.replace({
-        widget: new TitleWidget(config.title),
+        widget: new TitleWidget(config.title, macros),
         block: true,
       }).range(0, end),
     ]);
