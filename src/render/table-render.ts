@@ -45,7 +45,7 @@ import {
   moveRow,
   moveColumn,
 } from "./table-utils";
-import type { Alignment, ParsedTable } from "./table-utils";
+import type { ParsedTable } from "./table-utils";
 import { ContextMenu } from "../app/context-menu";
 import type { ContextMenuItem } from "../app/context-menu";
 
@@ -180,157 +180,6 @@ function findTableAtCursor(
  * Build toolbar DOM with all table-editing buttons.
  * The toolbar gets the currently active cell from `getActiveCell`.
  */
-function buildToolbarDOM(
-  view: EditorView,
-  tableFrom: number,
-  parsed: ParsedTable,
-  getActiveCell: () => { section: string; row: number; col: number } | null,
-): HTMLElement {
-  const toolbar = document.createElement("div");
-  toolbar.className = "cg-table-toolbar";
-  toolbar.style.display = "none";
-
-  /** Re-parse the table from current document state at `tableFrom`. */
-  const getCurrentTableRange = (): TableRange | null => {
-    const tables = findTablesFromState(view.state);
-    return tables.find((t) => t.from === tableFrom) ?? null;
-  };
-
-  const makeBtn = (label: string, title: string, handler: () => void): HTMLButtonElement => {
-    const btn = document.createElement("button");
-    btn.className = "cg-table-toolbar-btn";
-    btn.textContent = label;
-    btn.title = title;
-    btn.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      handler();
-    });
-    toolbar.appendChild(btn);
-    return btn;
-  };
-
-  const makeSep = (): void => {
-    const sep = document.createElement("div");
-    sep.className = "cg-table-toolbar-sep";
-    toolbar.appendChild(sep);
-  };
-
-  // ── Row/Column add/delete buttons ──────────────────────────────────
-
-  makeBtn("+Row", "Add row below", () => {
-    const tableRange = getCurrentTableRange();
-    if (!tableRange) return;
-    const active = getActiveCell();
-    const rowIdx = active ? (active.section === "header" ? null : active.row) : null;
-    applyTableMutation(view, tableRange, (table) =>
-      addRow(table, rowIdx !== null ? rowIdx + 1 : undefined),
-    );
-  });
-
-  makeBtn("+Col", "Add column to the right", () => {
-    const tableRange = getCurrentTableRange();
-    if (!tableRange) return;
-    const active = getActiveCell();
-    const colIdx = active ? active.col : null;
-    applyTableMutation(view, tableRange, (table) =>
-      addColumn(table, colIdx !== null ? colIdx + 1 : undefined),
-    );
-  });
-
-  makeBtn("-Row", "Delete current row", () => {
-    const tableRange = getCurrentTableRange();
-    if (!tableRange) return;
-    const active = getActiveCell();
-    if (!active || active.section === "header") return;
-    const rowIdx = active.row;
-    if (tableRange.parsed.rows.length === 0) return;
-    applyTableMutation(view, tableRange, (table) => deleteRow(table, rowIdx));
-  });
-
-  makeBtn("-Col", "Delete current column", () => {
-    const tableRange = getCurrentTableRange();
-    if (!tableRange) return;
-    const active = getActiveCell();
-    if (!active) return;
-    applyTableMutation(view, tableRange, (table) => deleteColumn(table, active.col));
-  });
-
-  makeSep();
-
-  // ── Alignment buttons ──────────────────────────────────────────────
-
-  const alignments: Array<{ label: string; title: string; value: Alignment }> = [
-    { label: "\u2190", title: "Align left", value: "left" },
-    { label: "\u2194", title: "Align center", value: "center" },
-    { label: "\u2192", title: "Align right", value: "right" },
-  ];
-
-  for (const { label, title, value } of alignments) {
-    const btn = makeBtn(label, title, () => {
-      const tableRange = getCurrentTableRange();
-      if (!tableRange) return;
-      const active = getActiveCell();
-      if (!active) return;
-      applyTableMutation(view, tableRange, (table) =>
-        setAlignment(table, active.col, value),
-      );
-    });
-
-    // Highlight the active alignment for the current column
-    const active = getActiveCell();
-    if (active !== null && parsed.alignments[active.col] === value) {
-      btn.classList.add("cg-table-toolbar-btn-active");
-    }
-  }
-
-  makeSep();
-
-  // ── Move Row/Column buttons ────────────────────────────────────────
-
-  makeBtn("\u2191", "Move row up", () => {
-    const tableRange = getCurrentTableRange();
-    if (!tableRange) return;
-    const active = getActiveCell();
-    if (!active || active.section === "header" || active.row <= 0) return;
-    applyTableMutation(view, tableRange, (table) =>
-      moveRow(table, active.row, active.row - 1),
-    );
-  });
-
-  makeBtn("\u2193", "Move row down", () => {
-    const tableRange = getCurrentTableRange();
-    if (!tableRange) return;
-    const active = getActiveCell();
-    if (!active || active.section === "header") return;
-    if (active.row >= parsed.rows.length - 1) return;
-    applyTableMutation(view, tableRange, (table) =>
-      moveRow(table, active.row, active.row + 1),
-    );
-  });
-
-  makeBtn("\u2190", "Move column left", () => {
-    const tableRange = getCurrentTableRange();
-    if (!tableRange) return;
-    const active = getActiveCell();
-    if (!active || active.col <= 0) return;
-    applyTableMutation(view, tableRange, (table) =>
-      moveColumn(table, active.col, active.col - 1),
-    );
-  });
-
-  makeBtn("\u2192", "Move column right", () => {
-    const tableRange = getCurrentTableRange();
-    if (!tableRange) return;
-    const active = getActiveCell();
-    if (!active || active.col >= parsed.header.cells.length - 1) return;
-    applyTableMutation(view, tableRange, (table) =>
-      moveColumn(table, active.col, active.col + 1),
-    );
-  });
-
-  return toolbar;
-}
-
 // ---------------------------------------------------------------------------
 // Cursor position helpers
 // ---------------------------------------------------------------------------
@@ -1281,32 +1130,6 @@ export class TableWidget extends WidgetType {
   }
 
   /**
-   * Sync cell content back to the CM6 document.
-   * Uses the cellEditAnnotation to prevent StateField rebuild.
-   */
-  private syncToDocument(
-    section: string,
-    row: number,
-    col: number,
-    newContent: string,
-  ): void {
-    const view = this.editorView;
-    if (!view) return;
-
-    const updatedTable = this.buildUpdatedTable(section, row, col, newContent);
-    const newLines = formatTable(updatedTable);
-    const newText = newLines.join("\n");
-
-    // Don't dispatch if nothing changed
-    if (newText === this.tableText) return;
-
-    view.dispatch({
-      changes: { from: this.tableFrom, to: this.tableFrom + this.tableText.length, insert: newText },
-      annotations: cellEditAnnotation.of(true),
-    });
-  }
-
-  /**
    * Render the parsed table as an HTML <table> with thead/tbody.
    * Each cell gets data attributes for row, column, and section,
    * contenteditable for direct editing, and inline markdown rendering.
@@ -1322,43 +1145,6 @@ export class TableWidget extends WidgetType {
     const tableEl = document.createElement("table");
 
     // ── Active cell tracking ──────────────────────────────────────────
-    let activeCell: { section: string; row: number; col: number } | null = null;
-
-    const getActiveCell = (): { section: string; row: number; col: number } | null =>
-      activeCell;
-
-    // ── Toolbar (initially hidden, shown on cell focus) ───────────────
-    const toolbar = buildToolbarDOM(
-      view,
-      this.tableFrom,
-      this.table,
-      getActiveCell,
-    );
-    container.appendChild(toolbar);
-
-    // ── Focus / blur: show/hide toolbar ───────────────────────────────
-    container.addEventListener("focusin", (e) => {
-      const target = e.target as HTMLElement | null;
-      if (target && target.dataset.col !== undefined) {
-        activeCell = {
-          section: target.dataset.section ?? "body",
-          row: parseInt(target.dataset.row ?? "0", 10),
-          col: parseInt(target.dataset.col ?? "0", 10),
-        };
-      }
-      toolbar.style.display = "flex";
-    });
-
-    container.addEventListener("focusout", () => {
-      // Delay to allow focus to move between cells within the same table
-      setTimeout(() => {
-        if (!container.contains(document.activeElement)) {
-          toolbar.style.display = "none";
-          activeCell = null;
-        }
-      }, 0);
-    });
-
     // ── Shared cell setup ─────────────────────────────────────────────
     const setupCell = (
       cell: HTMLElement,
@@ -1388,15 +1174,21 @@ export class TableWidget extends WidgetType {
         cell.textContent = rawText;
       });
 
-      // ── Blur: sync edit back and re-render ────────────────────────
+      // ── Blur: sync edit back (widget will be rebuilt by StateField) ─
       cell.addEventListener("focusout", () => {
         cell.classList.remove("cg-table-cell-editing");
         const editedText = (cell.textContent ?? "").trim();
-        // Sync to document
-        this.syncToDocument(section, row, col, editedText);
-        // Re-render inline markdown
-        cell.innerHTML = "";
-        renderInlineMarkdown(cell, editedText, this.macros);
+        // Sync to document WITHOUT cellEditAnnotation so the StateField
+        // fully rebuilds the widget with re-rendered markdown content.
+        const view = this.editorView;
+        if (!view) return;
+        const updated = this.buildUpdatedTable(section, row, col, editedText);
+        if (!updated) return;
+        const newText = formatTable(updated).join("\n");
+        if (newText === this.tableText) return;
+        view.dispatch({
+          changes: { from: this.tableFrom, to: this.tableFrom + this.tableText.length, insert: newText },
+        });
       });
 
       // ── Keydown handlers ──────────────────────────────────────────

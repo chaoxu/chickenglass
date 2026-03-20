@@ -113,45 +113,6 @@ export const blockThemeStyles = {
     backgroundColor: "var(--cg-subtle)",
   },
 
-  /* Floating toolbar for table editing */
-  ".cg-table-toolbar": {
-    display: "flex",
-    gap: "4px",
-    padding: "4px 8px",
-    backgroundColor: "var(--cg-subtle)",
-    border: "1px solid var(--cg-border)",
-    borderRadius: "2px",
-    marginBottom: "4px",
-  },
-
-  ".cg-table-toolbar-btn": {
-    padding: "2px 8px",
-    fontSize: "12px",
-    border: "1px solid var(--cg-border)",
-    borderRadius: "2px",
-    backgroundColor: "var(--cg-bg)",
-    cursor: "pointer",
-    fontFamily: "inherit",
-    lineHeight: "1.4",
-    color: "var(--cg-fg)",
-  },
-
-  ".cg-table-toolbar-btn:hover": {
-    backgroundColor: "var(--cg-hover)",
-  },
-
-  ".cg-table-toolbar-btn-active": {
-    backgroundColor: "var(--cg-active)",
-    fontWeight: "600",
-  },
-
-  ".cg-table-toolbar-sep": {
-    width: "1px",
-    alignSelf: "stretch",
-    backgroundColor: "var(--cg-border)",
-    margin: "0 2px",
-  },
-
   /* Embed block: iframe container */
   ".cg-embed": {
     display: "block",
