@@ -734,6 +734,14 @@ export function FileTree({
         return;
       }
 
+      if (e.key === " ") {
+        e.preventDefault();
+        if (currentEntry?.isDirectory) {
+          toggleFolder(currentEntry.path);
+        }
+        return;
+      }
+
       if (e.key === "ArrowRight") {
         e.preventDefault();
         if (currentEntry?.isDirectory && !openPaths.has(currentEntry.path)) {
