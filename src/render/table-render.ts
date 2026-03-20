@@ -1174,21 +1174,33 @@ export class TableWidget extends WidgetType {
         cell.textContent = rawText;
       });
 
-      // ── Blur: sync edit back (widget will be rebuilt by StateField) ─
+      // ── Blur: re-render cell markdown, sync on table exit ─────────
       cell.addEventListener("focusout", () => {
         cell.classList.remove("cg-table-cell-editing");
         const editedText = (cell.textContent ?? "").trim();
-        // Sync to document WITHOUT cellEditAnnotation so the StateField
-        // fully rebuilds the widget with re-rendered markdown content.
-        const view = this.editorView;
-        if (!view) return;
-        const updated = this.buildUpdatedTable(section, row, col, editedText);
-        if (!updated) return;
-        const newText = formatTable(updated).join("\n");
-        if (newText === this.tableText) return;
-        view.dispatch({
-          changes: { from: this.tableFrom, to: this.tableFrom + this.tableText.length, insert: newText },
-        });
+
+        // Re-render markdown immediately in this cell
+        cell.innerHTML = "";
+        renderInlineMarkdown(cell, editedText, this.macros);
+
+        // Delay sync: check if focus moved to another cell in this table.
+        // If so, use cellEditAnnotation (map, don't rebuild — keeps widget alive).
+        // If focus left the table entirely, dispatch without annotation (full rebuild).
+        const container = cell.closest(".cg-table-widget");
+        setTimeout(() => {
+          const view = this.editorView;
+          if (!view) return;
+          const updated = this.buildUpdatedTable(section, row, col, editedText);
+          if (!updated) return;
+          const newText = formatTable(updated).join("\n");
+          if (newText === this.tableText) return;
+
+          const stillInTable = container && container.contains(document.activeElement);
+          view.dispatch({
+            changes: { from: this.tableFrom, to: this.tableFrom + this.tableText.length, insert: newText },
+            ...(stillInTable ? { annotations: cellEditAnnotation.of(true) } : {}),
+          });
+        }, 0);
       });
 
       // ── Keydown handlers ──────────────────────────────────────────
