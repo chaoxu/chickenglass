@@ -132,7 +132,18 @@ class MarkdownRenderPlugin implements PluginValue {
             if (cursorInRange(view, node.from, node.to)) {
               return false; // don't walk children, so HeaderMark won't be hidden
             }
-            // Cursor outside: walk children to find and hide HeaderMark
+            // Cursor outside: hide trailing {-} / {.unnumbered} attribute text
+            const hLine = view.state.doc.lineAt(node.from);
+            const attrMatch = hLine.text.match(
+              /\s*\{[^}]*(?:-|\.unnumbered)[^}]*\}\s*$/,
+            );
+            if (attrMatch && attrMatch.index !== undefined) {
+              const attrFrom = hLine.from + attrMatch.index;
+              const attrTo =
+                hLine.from + attrMatch.index + attrMatch[0].length;
+              widgets.push(decorationHidden.range(attrFrom, attrTo));
+            }
+            // Walk children to find and hide HeaderMark
             return;
           }
 
