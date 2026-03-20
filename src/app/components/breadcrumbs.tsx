@@ -9,6 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { cn } from "../lib/utils";
 import { headingAncestryAt, type HeadingEntry } from "../heading-ancestry";
+import { renderInline } from "../markdown-to-html";
 
 interface BreadcrumbsProps {
   /** All headings extracted from the document. */
@@ -123,9 +124,8 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
               )}
               title={h.text}
               onClick={() => onSelect(h.pos)}
-            >
-              {h.text}
-            </span>
+              dangerouslySetInnerHTML={{ __html: renderInline(h.text) }}
+            />
           </span>
         ))}
       </div>
