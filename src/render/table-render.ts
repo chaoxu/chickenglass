@@ -21,6 +21,7 @@ import {
   type PluginValue,
   ViewPlugin,
   type ViewUpdate,
+  WidgetType,
 } from "@codemirror/view";
 import {
   type Extension,
@@ -30,6 +31,7 @@ import {
 import { keymap } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { buildDecorations, decorationHidden, RenderWidget } from "./render-utils";
+import { renderInlineMarkdown } from "./inline-render";
 import {
   parseTable,
   formatTable,
@@ -1133,3 +1135,135 @@ export const tableRenderPlugin: Extension = [
   }),
   tableKeybindings,
 ];
+
+// ---------------------------------------------------------------------------
+// TableWidget — HTML table rendering for Decoration.replace mode (#205)
+// ---------------------------------------------------------------------------
+
+/**
+ * Widget that renders a markdown table as an HTML <table> element.
+ *
+ * Used with Decoration.replace to show a rendered table when the cursor
+ * is outside the table's source range. Clicking the widget lets CM6
+ * place the cursor into the source, revealing the raw markdown.
+ *
+ * Cell content is rendered via renderInlineMarkdown so math, bold,
+ * and italic work inside table cells.
+ */
+export class TableWidget extends WidgetType {
+  constructor(
+    private readonly table: ParsedTable,
+    private readonly tableText: string,
+    private readonly tableFrom: number,
+    private readonly macros: Record<string, string>,
+  ) {
+    super();
+  }
+
+  /**
+   * Content-based equality check for DOM reuse.
+   * If the table text changed, CM6 will rebuild the DOM via toDOM().
+   */
+  eq(other: TableWidget): boolean {
+    return this.tableText === other.tableText;
+  }
+
+  /**
+   * Render the parsed table as an HTML <table> with thead/tbody.
+   * Each cell gets data attributes for row, column, and section,
+   * and inline markdown content is rendered via renderInlineMarkdown.
+   */
+  toDOM(view: EditorView): HTMLElement {
+    const container = document.createElement("div");
+    container.className = "cg-table-widget";
+    container.dataset.tableTextHash = this.tableText;
+    container.dataset.tableFrom = String(this.tableFrom);
+
+    const tableEl = document.createElement("table");
+
+    // ── Header ────────────────────────────────────────────────────────
+    const thead = document.createElement("thead");
+    const headerTr = document.createElement("tr");
+    const headerCells = this.table.header.cells;
+
+    for (let col = 0; col < headerCells.length; col++) {
+      const th = document.createElement("th");
+      th.dataset.row = "0";
+      th.dataset.col = String(col);
+      th.dataset.section = "header";
+
+      // Apply column alignment
+      const align = this.table.alignments[col];
+      if (align && align !== "none") {
+        th.style.textAlign = align;
+      }
+
+      // Render inline markdown (math, bold, italic)
+      renderInlineMarkdown(th, headerCells[col].content, this.macros);
+
+      headerTr.appendChild(th);
+    }
+
+    thead.appendChild(headerTr);
+    tableEl.appendChild(thead);
+
+    // ── Body ──────────────────────────────────────────────────────────
+    const tbody = document.createElement("tbody");
+
+    for (let row = 0; row < this.table.rows.length; row++) {
+      const tr = document.createElement("tr");
+      const rowCells = this.table.rows[row].cells;
+
+      for (let col = 0; col < rowCells.length; col++) {
+        const td = document.createElement("td");
+        td.dataset.row = String(row);
+        td.dataset.col = String(col);
+        td.dataset.section = "body";
+
+        // Apply column alignment
+        const align = this.table.alignments[col];
+        if (align && align !== "none") {
+          td.style.textAlign = align;
+        }
+
+        // Render inline markdown (math, bold, italic)
+        renderInlineMarkdown(td, rowCells[col].content, this.macros);
+
+        tr.appendChild(td);
+      }
+
+      tbody.appendChild(tr);
+    }
+
+    tableEl.appendChild(tbody);
+    container.appendChild(tableEl);
+
+    // ── ResizeObserver ────────────────────────────────────────────────
+    // Notify CM6 when the rendered table height changes so scroll
+    // positions and coordinate mappings stay accurate.
+    const observer = new ResizeObserver(() => {
+      view.requestMeasure();
+    });
+    observer.observe(container);
+
+    return container;
+  }
+
+  /**
+   * Let CM6 handle click events on this widget.
+   * CM6 will place the cursor at the widget boundary (sourceFrom),
+   * which triggers the Typora-style reveal of the raw markdown source.
+   */
+  ignoreEvent(): boolean {
+    return false;
+  }
+
+  /**
+   * Estimated height for CM6 scroll calculations.
+   * Approximates based on row count: ~32px per row + ~40px header.
+   */
+  get estimatedHeight(): number {
+    const rowCount = this.table.rows.length;
+    return 40 + rowCount * 32;
+  }
+}
