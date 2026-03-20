@@ -267,6 +267,11 @@ function FileNode({
         label: "Delete",
         action: () => void onDelete(entry.path),
       },
+      { label: "-" },
+      {
+        label: "Copy File Name",
+        action: () => void navigator.clipboard.writeText(entry.name),
+      },
     ];
 
     if (revealItem) {
@@ -391,6 +396,11 @@ function FileNode({
     {
       label: "New Folder",
       action: () => startCreate("folder"),
+    },
+    { label: "-" },
+    {
+      label: "Copy File Name",
+      action: () => void navigator.clipboard.writeText(entry.name),
     },
   ];
 
