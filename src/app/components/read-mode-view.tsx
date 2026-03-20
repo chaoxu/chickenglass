@@ -36,26 +36,25 @@ export interface ReadModeViewProps {
 }
 
 /**
- * Set .katex elements to display:inline-flex before tex-linebreak2 runs.
+ * Make .katex elements opaque to tex-linebreak2.
  *
- * tex-linebreak2's element handler checks for display "inline" or
- * "inline-block". For anything else, it reads getComputedStyle().width
- * and creates a single atomic box — no recursion into children.
- *
- * inline-flex participates in inline text flow (preserving whitespace)
- * while making the element opaque to the algorithm.
- *
- * Returns a restore function that resets display.
+ * Uses display:inline-flex so the else branch in tex-linebreak2 treats
+ * the element as a single atomic box. Sets width to 0 so the algorithm
+ * doesn't double-count (the DOM element already occupies its natural width
+ * in inline flow). The algorithm sees a 0-width box, and the element's
+ * natural width provides the actual space.
  */
 function makeKatexAtomic(container: HTMLElement): () => void {
   const elements: HTMLElement[] = [];
   for (const el of container.querySelectorAll<HTMLElement>("p .katex")) {
     el.style.display = "inline-flex";
+    el.style.width = "0px";
     elements.push(el);
   }
   return () => {
     for (const el of elements) {
       el.style.removeProperty("display");
+      el.style.removeProperty("width");
     }
   };
 }
@@ -81,6 +80,7 @@ async function applyLineBreaking(container: HTMLElement): Promise<void> {
     updateOnWindowResize: false,
   });
 
+  // Restore KaTeX children and un-hide eaten whitespace
   restoreKatex();
 }
 
