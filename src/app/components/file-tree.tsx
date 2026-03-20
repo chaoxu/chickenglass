@@ -136,6 +136,8 @@ interface FileTreeProps {
   root: FileEntry | null;
   activePath: string | null;
   onSelect: (path: string) => void;
+  /** Double-click a file to pin it (open as non-preview). */
+  onDoubleClick?: (path: string) => void;
   onRename: (oldPath: string, newPath: string) => Promise<void>;
   onDelete: (path: string) => Promise<void>;
   onCreateFile: (path: string) => void;
@@ -157,6 +159,7 @@ interface FileNodeProps {
   onToggleFolder: (path: string) => void;
   onSetOpen: (path: string, open: boolean) => void;
   onSelect: (path: string) => void;
+  onDoubleClick?: (path: string) => void;
   onSelectPath: (path: string) => void;
   onRename: (oldPath: string, newPath: string) => Promise<void>;
   onDelete: (path: string) => Promise<void>;
@@ -173,6 +176,7 @@ function FileNode({
   onToggleFolder,
   onSetOpen,
   onSelect,
+  onDoubleClick,
   onSelectPath,
   onRename,
   onDelete,
@@ -382,6 +386,7 @@ function FileNode({
                 onToggleFolder={onToggleFolder}
                 onSetOpen={onSetOpen}
                 onSelect={onSelect}
+                onDoubleClick={onDoubleClick}
                 onSelectPath={onSelectPath}
                 onRename={onRename}
                 onDelete={onDelete}
@@ -461,6 +466,9 @@ function FileNode({
         onClick={() => {
           onSelectPath(entry.path);
           onSelect(entry.path);
+        }}
+        onDoubleClick={() => {
+          onDoubleClick?.(entry.path);
         }}
         onContextMenu={handleContextMenu}
         onKeyDown={handleItemKey}
@@ -633,6 +641,7 @@ export function FileTree({
   root,
   activePath,
   onSelect,
+  onDoubleClick,
   onRename,
   onDelete,
   onCreateFile,
@@ -774,6 +783,7 @@ export function FileTree({
           onToggleFolder={toggleFolder}
           onSetOpen={setFolderOpen}
           onSelect={onSelect}
+          onDoubleClick={onDoubleClick}
           onSelectPath={setSelectedPath}
           onRename={onRename}
           onDelete={onDelete}

@@ -71,8 +71,15 @@ export function useDocumentBuffer(): UseDocumentBufferReturn {
     const isDirty = doc !== (buffers.current.get(path) ?? "");
     setOpenTabs((prev) => {
       const tab = prev.find((t) => t.path === path);
-      if (!tab || tab.dirty === isDirty) return prev;
-      return prev.map((t) => (t.path === path ? { ...t, dirty: isDirty } : t));
+      if (!tab) return prev;
+      // Auto-pin preview tabs when content changes (dirty)
+      const shouldPin = isDirty && tab.preview;
+      if (tab.dirty === isDirty && !shouldPin) return prev;
+      return prev.map((t) =>
+        t.path === path
+          ? { ...t, dirty: isDirty, ...(shouldPin ? { preview: false } : {}) }
+          : t,
+      );
     });
   }, []);
 

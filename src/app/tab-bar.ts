@@ -8,6 +8,8 @@ export interface Tab {
   name: string;
   /** Whether the file has unsaved changes. */
   dirty: boolean;
+  /** Whether this is a transient preview tab (replaced on next single-click). */
+  preview?: boolean;
 }
 
 /** Callback when a tab is selected. */
@@ -303,6 +305,9 @@ export class TabBar {
 
       const label = document.createElement("span");
       label.className = "tab-label";
+      if (tab.preview) {
+        label.style.fontStyle = "italic";
+      }
       label.textContent = tab.name;
       tabEl.appendChild(label);
 

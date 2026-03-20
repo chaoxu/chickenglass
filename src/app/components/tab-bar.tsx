@@ -27,6 +27,8 @@ interface TabBarProps {
   onSelect: (path: string) => void;
   onClose: (path: string) => void;
   onReorder: (tabs: Tab[]) => void;
+  /** Double-click a tab to pin it (remove preview status). */
+  onPin?: (path: string) => void;
 }
 
 /**
@@ -39,7 +41,7 @@ interface TabBarProps {
  * Design mirrors the vanilla tab-bar.ts: horizontal flex, border-bottom,
  * dot dirty indicator before the name, hover-only close button (x).
  */
-export function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }: TabBarProps) {
+export function TabBar({ tabs, activeTab, onSelect, onClose, onReorder, onPin }: TabBarProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -124,6 +126,7 @@ export function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }: TabBar
               isDragActive={tab.path === activeId}
               onSelect={onSelect}
               onClose={onClose}
+              onPin={onPin}
             />
           ))}
         </div>
@@ -140,9 +143,10 @@ interface SortableTabProps {
   isDragActive: boolean;
   onSelect: (path: string) => void;
   onClose: (path: string) => void;
+  onPin?: (path: string) => void;
 }
 
-function SortableTab({ tab, isActive, isDragActive, onSelect, onClose }: SortableTabProps) {
+function SortableTab({ tab, isActive, isDragActive, onSelect, onClose, onPin }: SortableTabProps) {
   const {
     attributes,
     listeners,
@@ -164,6 +168,7 @@ function SortableTab({ tab, isActive, isDragActive, onSelect, onClose }: Sortabl
       {...attributes}
       {...listeners}
       onClick={() => { onSelect(tab.path); }}
+      onDoubleClick={() => { onPin?.(tab.path); }}
       className={cn(
         "group relative flex items-center gap-1 px-3 h-8 text-sm cursor-pointer border-r border-[var(--cg-border)] shrink-0 whitespace-nowrap",
         "transition-[background-color,color] duration-[var(--cg-transition,0.15s)]",
@@ -178,8 +183,8 @@ function SortableTab({ tab, isActive, isDragActive, onSelect, onClose }: Sortabl
         <span className="text-[var(--cg-muted)] leading-none">&bull;</span>
       )}
 
-      {/* File name */}
-      <span className="max-w-[140px] truncate">{tab.name}</span>
+      {/* File name — italic when preview tab */}
+      <span className={cn("max-w-[140px] truncate", tab.preview && "italic")}>{tab.name}</span>
 
       {/* Close button -- visible only on hover, stops propagation to avoid
           triggering both close and select */}

@@ -155,6 +155,7 @@ function AppInner() {
     handleRename,
     handleDelete,
     saveAs,
+    pinTab,
   } = fileOps;
 
   const handleOutlineSelect = useCallback((from: number) => {
@@ -491,7 +492,8 @@ function AppInner() {
           <FileTree
             root={fileTree}
             activePath={activeTab}
-            onSelect={(path) => { void openFile(path); }}
+            onSelect={(path) => { void openFile(path, { preview: true }); }}
+            onDoubleClick={(path) => { void openFile(path, { preview: false }); }}
             onRename={handleRename}
             onDelete={handleDelete}
             onCreateFile={(path) => { void createFile(path); }}
@@ -515,6 +517,7 @@ function AppInner() {
           onSelect={switchToTab}
           onClose={closeFile}
           onReorder={setOpenTabs}
+          onPin={pinTab}
         />
 
         {/* Editor */}

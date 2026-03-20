@@ -37,7 +37,7 @@ export interface FileOperationsDeps {
 }
 
 export interface UseFileOperationsReturn {
-  openFile: (path: string) => Promise<void>;
+  openFile: (path: string, options?: { preview?: boolean }) => Promise<void>;
   saveFile: () => Promise<void>;
   createFile: (path: string) => Promise<void>;
   createDirectory: (path: string) => Promise<void>;
@@ -45,6 +45,8 @@ export interface UseFileOperationsReturn {
   handleRename: (oldPath: string, newPath: string) => Promise<void>;
   handleDelete: (path: string) => Promise<void>;
   saveAs: () => Promise<void>;
+  /** Pin a preview tab (mark preview: false). */
+  pinTab: (path: string) => void;
 }
 
 /**
@@ -131,11 +133,24 @@ export function useFileOperations(deps: FileOperationsDeps): UseFileOperationsRe
     addRecentFile,
   } = deps;
 
-  const openFile = useCallback(async (path: string) => {
-    // If already open, just activate.
+  const pinTab = useCallback((path: string) => {
+    setOpenTabs((prev) => {
+      const tab = prev.find((t) => t.path === path);
+      if (!tab || !tab.preview) return prev;
+      return prev.map((t) => (t.path === path ? { ...t, preview: false } : t));
+    });
+  }, [setOpenTabs]);
+
+  const openFile = useCallback(async (path: string, options?: { preview?: boolean }) => {
+    const isPreview = options?.preview ?? false;
+
+    // If already open, just activate. If opening as pinned, also pin.
     if (openPathsRef.current.has(path)) {
       setActiveTab(path);
       setEditorDoc(liveDocs.current.get(path) ?? buffers.current.get(path) ?? "");
+      if (!isPreview) {
+        pinTab(path);
+      }
       addRecentFile(path);
       return;
     }
@@ -145,14 +160,29 @@ export function useFileOperations(deps: FileOperationsDeps): UseFileOperationsRe
       buffers.current.set(path, content);
       liveDocs.current.set(path, content);
 
-      setOpenTabs((prev) => [...prev, { path, name: basename(path), dirty: false }]);
+      setOpenTabs((prev) => {
+        if (isPreview) {
+          // Replace existing preview tab if any
+          const previewIdx = prev.findIndex((t) => t.preview);
+          if (previewIdx !== -1) {
+            const oldPreview = prev[previewIdx];
+            // Clean up buffers for the old preview tab
+            buffers.current.delete(oldPreview.path);
+            liveDocs.current.delete(oldPreview.path);
+            const next = [...prev];
+            next[previewIdx] = { path, name: basename(path), dirty: false, preview: true };
+            return next;
+          }
+        }
+        return [...prev, { path, name: basename(path), dirty: false, preview: isPreview }];
+      });
       setActiveTab(path);
       setEditorDoc(content);
       addRecentFile(path);
     } catch {
       // Silently ignore unreadable files
     }
-  }, [fs, addRecentFile, openPathsRef, buffers, liveDocs, setOpenTabs, setActiveTab, setEditorDoc]);
+  }, [fs, addRecentFile, openPathsRef, buffers, liveDocs, setOpenTabs, setActiveTab, setEditorDoc, pinTab]);
 
   const saveFile = useCallback(async () => {
     const path = activeTabRef.current;
@@ -308,5 +338,6 @@ export function useFileOperations(deps: FileOperationsDeps): UseFileOperationsRe
     handleRename,
     handleDelete,
     saveAs,
+    pinTab,
   };
 }
