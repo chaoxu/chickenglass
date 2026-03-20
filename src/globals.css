@@ -136,7 +136,8 @@ body {
 /* ── Bibliography / References section ──────────────────────────────────── */
 
 .cg-bibliography {
-  font-size: 1rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 .cg-bibliography-entry + .cg-bibliography-entry {
