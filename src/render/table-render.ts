@@ -16,6 +16,7 @@ import {
   WidgetType,
 } from "@codemirror/view";
 import {
+  Annotation,
   type EditorState,
   type Extension,
   type Range,
@@ -48,6 +49,19 @@ import {
 import type { Alignment, ParsedTable } from "./table-utils";
 import { ContextMenu } from "../app/context-menu";
 import type { ContextMenuItem } from "../app/context-menu";
+
+// ---------------------------------------------------------------------------
+// Cell-edit annotation — marks dispatches that originate from contenteditable
+// cell syncing so the StateField can map positions instead of rebuilding.
+// ---------------------------------------------------------------------------
+
+/**
+ * Annotation attached to transactions dispatched by cell-edit sync.
+ * When `true`, the StateField maps existing decorations through the
+ * change instead of fully rebuilding — preventing the widget from
+ * being destroyed mid-edit.
+ */
+const cellEditAnnotation = Annotation.define<boolean>();
 
 // ---------------------------------------------------------------------------
 // Types
@@ -803,6 +817,14 @@ const tableDecorationField = StateField.define<DecorationSet>({
   },
 
   update(value, tr) {
+    // When the change came from a contenteditable cell sync, map
+    // positions through the change instead of rebuilding. This keeps
+    // the widget alive so the user can keep editing without the DOM
+    // being destroyed and recreated.
+    if (tr.annotation(cellEditAnnotation)) {
+      return value.map(tr.changes);
+    }
+
     if (
       tr.docChanged ||
       tr.selection ||
@@ -1071,13 +1093,18 @@ export const tableRenderPlugin: Extension = [
  * Widget that renders a markdown table as an HTML <table> element.
  *
  * Used with Decoration.replace to show a rendered table when the cursor
- * is outside the table's source range. Clicking the widget lets CM6
- * place the cursor into the source, revealing the raw markdown.
+ * is outside the table's source range. Cells are contenteditable so
+ * users can click and type directly. On focus, rendered content is
+ * replaced with raw markdown; on blur, the edit syncs back to the
+ * source document and the cell re-renders inline markdown.
  *
  * Cell content is rendered via renderInlineMarkdown so math, bold,
  * and italic work inside table cells.
  */
 export class TableWidget extends WidgetType {
+  /** Reference to the EditorView, stored on first toDOM() call. */
+  private editorView: EditorView | null = null;
+
   constructor(
     private readonly table: ParsedTable,
     private readonly tableText: string,
@@ -1096,17 +1123,139 @@ export class TableWidget extends WidgetType {
   }
 
   /**
+   * Return the raw markdown text for a cell given its section and indices.
+   */
+  private getRawCellText(section: string, row: number, col: number): string {
+    if (section === "header") {
+      return col < this.table.header.cells.length
+        ? this.table.header.cells[col].content
+        : "";
+    }
+    if (row < this.table.rows.length && col < this.table.rows[row].cells.length) {
+      return this.table.rows[row].cells[col].content;
+    }
+    return "";
+  }
+
+  /**
+   * Build a new ParsedTable with one cell replaced.
+   */
+  private buildUpdatedTable(
+    section: string,
+    row: number,
+    col: number,
+    newContent: string,
+  ): ParsedTable {
+    if (section === "header") {
+      const cells = this.table.header.cells.map((c, i) =>
+        i === col ? { content: newContent } : c,
+      );
+      return { ...this.table, header: { cells } };
+    }
+    const rows = this.table.rows.map((r, ri) => {
+      if (ri !== row) return r;
+      const cells = r.cells.map((c, ci) =>
+        ci === col ? { content: newContent } : c,
+      );
+      return { cells };
+    });
+    return { ...this.table, rows };
+  }
+
+  /**
+   * Sync cell content back to the CM6 document.
+   * Uses the cellEditAnnotation to prevent StateField rebuild.
+   */
+  private syncToDocument(
+    section: string,
+    row: number,
+    col: number,
+    newContent: string,
+  ): void {
+    const view = this.editorView;
+    if (!view) return;
+
+    const updatedTable = this.buildUpdatedTable(section, row, col, newContent);
+    const newLines = formatTable(updatedTable);
+    const newText = newLines.join("\n");
+
+    // Don't dispatch if nothing changed
+    if (newText === this.tableText) return;
+
+    view.dispatch({
+      changes: { from: this.tableFrom, to: this.tableFrom + this.tableText.length, insert: newText },
+      annotations: cellEditAnnotation.of(true),
+    });
+  }
+
+  /**
    * Render the parsed table as an HTML <table> with thead/tbody.
    * Each cell gets data attributes for row, column, and section,
-   * and inline markdown content is rendered via renderInlineMarkdown.
+   * contenteditable for direct editing, and inline markdown rendering.
    */
   toDOM(view: EditorView): HTMLElement {
+    this.editorView = view;
+
     const container = document.createElement("div");
     container.className = "cg-table-widget";
     container.dataset.tableTextHash = this.tableText;
     container.dataset.tableFrom = String(this.tableFrom);
 
     const tableEl = document.createElement("table");
+
+    // ── Shared cell setup ─────────────────────────────────────────────
+    const setupCell = (
+      cell: HTMLElement,
+      section: string,
+      row: number,
+      col: number,
+      content: string,
+    ): void => {
+      cell.dataset.row = String(row);
+      cell.dataset.col = String(col);
+      cell.dataset.section = section;
+      cell.contentEditable = "true";
+
+      // Apply column alignment
+      const align = this.table.alignments[col];
+      if (align && align !== "none") {
+        cell.style.textAlign = align;
+      }
+
+      // Initial render: show inline markdown
+      renderInlineMarkdown(cell, content, this.macros);
+
+      // ── Focus: switch to raw markdown for editing ─────────────────
+      cell.addEventListener("focusin", () => {
+        cell.classList.add("cg-table-cell-editing");
+        const rawText = this.getRawCellText(section, row, col);
+        cell.textContent = rawText;
+      });
+
+      // ── Blur: sync edit back and re-render ────────────────────────
+      cell.addEventListener("focusout", () => {
+        cell.classList.remove("cg-table-cell-editing");
+        const editedText = (cell.textContent ?? "").trim();
+        // Sync to document
+        this.syncToDocument(section, row, col, editedText);
+        // Re-render inline markdown
+        cell.innerHTML = "";
+        renderInlineMarkdown(cell, editedText, this.macros);
+      });
+
+      // ── Keydown handlers ──────────────────────────────────────────
+      cell.addEventListener("keydown", (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          // Blur the cell, return focus to CM6
+          e.preventDefault();
+          cell.blur();
+          view.focus();
+        } else if (e.key === "Enter") {
+          // Prevent <br> insertion
+          e.preventDefault();
+        }
+      });
+    };
 
     // ── Header ────────────────────────────────────────────────────────
     const thead = document.createElement("thead");
@@ -1115,19 +1264,7 @@ export class TableWidget extends WidgetType {
 
     for (let col = 0; col < headerCells.length; col++) {
       const th = document.createElement("th");
-      th.dataset.row = "0";
-      th.dataset.col = String(col);
-      th.dataset.section = "header";
-
-      // Apply column alignment
-      const align = this.table.alignments[col];
-      if (align && align !== "none") {
-        th.style.textAlign = align;
-      }
-
-      // Render inline markdown (math, bold, italic)
-      renderInlineMarkdown(th, headerCells[col].content, this.macros);
-
+      setupCell(th, "header", 0, col, headerCells[col].content);
       headerTr.appendChild(th);
     }
 
@@ -1143,19 +1280,7 @@ export class TableWidget extends WidgetType {
 
       for (let col = 0; col < rowCells.length; col++) {
         const td = document.createElement("td");
-        td.dataset.row = String(row);
-        td.dataset.col = String(col);
-        td.dataset.section = "body";
-
-        // Apply column alignment
-        const align = this.table.alignments[col];
-        if (align && align !== "none") {
-          td.style.textAlign = align;
-        }
-
-        // Render inline markdown (math, bold, italic)
-        renderInlineMarkdown(td, rowCells[col].content, this.macros);
-
+        setupCell(td, "body", row, col, rowCells[col].content);
         tr.appendChild(td);
       }
 
@@ -1177,12 +1302,12 @@ export class TableWidget extends WidgetType {
   }
 
   /**
-   * Let CM6 handle click events on this widget.
-   * CM6 will place the cursor at the widget boundary (sourceFrom),
-   * which triggers the Typora-style reveal of the raw markdown source.
+   * Return true so CM6 does NOT process events inside this widget.
+   * The contenteditable cells handle their own clicks, input, and
+   * keyboard events. CM6 should not interfere.
    */
   ignoreEvent(): boolean {
-    return false;
+    return true;
   }
 
   /**

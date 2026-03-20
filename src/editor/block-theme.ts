@@ -106,6 +106,13 @@ export const blockThemeStyles = {
     borderBottom: "2px solid var(--cg-border)",
   },
 
+  /* Active cell editing indicator */
+  ".cg-table-cell-editing": {
+    outline: "2px solid var(--cg-active)",
+    outlineOffset: "-2px",
+    backgroundColor: "var(--cg-subtle)",
+  },
+
   /* Floating toolbar for table editing */
   ".cg-table-toolbar": {
     display: "flex",
