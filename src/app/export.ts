@@ -68,7 +68,7 @@ function buildHtmlDocument(content: string, title: string): string {
       font-family: "Georgia", "Times New Roman", serif;
       font-size: 16px;
       line-height: 1.7;
-      max-width: 720px;
+      max-width: 800px;
       margin: 3rem auto;
       padding: 0 1.5rem;
       color: #111;

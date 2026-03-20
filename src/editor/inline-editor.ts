@@ -38,7 +38,7 @@ export interface InlineEditorOptions {
  *  Uses !important to override the outer (parent) editor's scoped theme
  *  rules, which cascade into nested CM6 instances sharing the same
  *  generated scope classes (e.g. ͼ1, ͼ2). Without !important, the outer
- *  editor's .cm-content { padding: 24px 48px; max-width: 720px } wins. */
+ *  editor's .cm-content { padding: 24px 48px; max-width: 800px } wins. */
 const inlineEditorTheme = EditorView.theme({
   "&": {
     backgroundColor: "transparent !important",

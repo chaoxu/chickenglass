@@ -9,9 +9,9 @@ export const baseThemeStyles = {
   },
   ".cm-content": {
     padding: "24px 48px 24px 48px",
-    maxWidth: "720px",
+    maxWidth: "800px",
     marginLeft: "auto",
-    marginRight: "max(224px, calc((100% - 720px) / 2))",
+    marginRight: "max(224px, calc((100% - 800px) / 2))",
     overflow: "visible",
   },
   ".cm-gutters": {
