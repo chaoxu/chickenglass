@@ -210,6 +210,7 @@ The `demo/blog/` directory contains 94 files from the user's blog (originally in
 ## Key architecture decisions
 
 - **Pandoc-free editing loop**: Pandoc is only for export (PDF/LaTeX). The editor uses Lezer + CM6 + KaTeX directly.
+- **Read mode = HTML export**: The Read mode renderer (`markdown-to-html.ts`) is a standalone Lezer tree walker with no CM6 dependency. It takes markdown text + options (macros, bibliography) and returns semantic HTML. This same code path is used for both the in-app Read mode view and HTML file export. Keep it CM6-free — data like bibliography entries should be passed as plain objects (e.g., `BibStore`), not read from CM6 state fields.
 - **Every block is a plugin**: The core knows nothing about "theorem." Plugins register classes via `createStandardPlugin()` factory. The factory handles title, numbering, counter, and rendering.
 - **AST nodes track source positions**: Lezer does this by default. Essential for Typora-style editing and future structural editing (v3).
 - **Fenced divs are composite blocks**: Content inside `::: ... :::` is parsed as full markdown by re-entering the markdown parser.
