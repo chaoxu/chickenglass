@@ -1,5 +1,3 @@
-const monoFont = "'IBM Plex Mono', 'Fira Code', monospace";
-
 /**
  * Block and structural styles: fenced div headers/nesting, QED tombstone,
  * blockquotes, images, tables, table toolbar, embeds, and include regions.
@@ -87,22 +85,21 @@ export const blockThemeStyles = {
   },
 
   /* Table styles */
-  ".cg-table .cm-line": {
-    fontFamily: monoFont,
-    fontSize: "0.9em",
-  },
-
-  ".cg-table-header": {
+  ".cg-table-header .cg-table-col": {
     fontWeight: "700",
+    borderBottom: "2px solid var(--cg-border)",
   },
 
-  ".cg-table-separator": {
-    color: "var(--cg-muted)",
-    fontSize: "0.85em",
+  ".cg-table-col": {
+    display: "inline-block",
+    borderRight: "1px solid var(--cg-border)",
+    padding: "2px 8px",
+    verticalAlign: "top",
+    boxSizing: "border-box",
   },
 
-  ".cg-table-pipe": {
-    color: "var(--cg-border)",
+  ".cg-table-col:last-child": {
+    borderRight: "none",
   },
 
   /* Floating toolbar for table editing */

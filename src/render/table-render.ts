@@ -2,14 +2,16 @@
  * CM6 ViewPlugin for interactive table rendering.
  *
  * Behavior:
- * - Cursor INSIDE table: show styled grid with floating toolbar
- *   (add/delete row/col), enable Tab/Enter navigation.
- * - Cursor OUTSIDE table: hide separator row, apply cg-table styling.
+ * - Pipe characters are always hidden (cg-hidden mark, zero-width CSS).
+ * - Separator row is always hidden via Decoration.replace.
+ * - Each cell's content is wrapped in a cg-table-col mark with CSS borders
+ *   to create a visual grid.
+ * - Cursor INSIDE table: show floating toolbar (add/delete row/col),
+ *   enable Tab/Enter navigation.
  * - Auto-format after cell edits via transactions.
  *
  * Inline markdown (math, bold, etc.) works inside table cells because
- * we use Decoration.mark (not replace) for styling and only hide the
- * separator row via Decoration.replace when cursor is outside.
+ * we use Decoration.mark (not replace) for styling.
  */
 
 import {
@@ -27,7 +29,7 @@ import {
 } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
-import { buildDecorations, RenderWidget } from "./render-utils";
+import { buildDecorations, decorationHidden, RenderWidget } from "./render-utils";
 import {
   parseTable,
   formatTable,
@@ -91,8 +93,6 @@ function findPipePositions(text: string): number[] {
 
 const tableMarkDecoration = Decoration.mark({ class: "cg-table" });
 const headerMarkDecoration = Decoration.mark({ class: "cg-table-header" });
-const separatorMarkDecoration = Decoration.mark({ class: "cg-table-separator" });
-const pipeMarkDecoration = Decoration.mark({ class: "cg-table-pipe" });
 
 // ---------------------------------------------------------------------------
 // Table detection from syntax tree
@@ -758,33 +758,21 @@ class TableRenderPluginValue implements PluginValue {
       // Always apply table wrapper styling
       items.push(tableMarkDecoration.range(table.from, table.to));
 
+      // Toolbar: shown when cursor is in table
       if (cursorInTable) {
-        // Cursor is inside: show toolbar widget above the table
         items.push(
           Decoration.widget({
             widget: new TableToolbarWidget(table),
             side: -1,
           }).range(table.from),
         );
-
-        // Style the separator row distinctly when editing
-        items.push(
-          separatorMarkDecoration.range(
-            table.separatorFrom,
-            // Don't include trailing newline in mark
-            Math.min(table.separatorTo, doc.lineAt(table.separatorFrom).to),
-          ),
-        );
-      } else {
-        // Cursor outside: hide the separator row
-        const sepLine = doc.lineAt(table.separatorFrom);
-        items.push(
-          Decoration.replace({}).range(
-            sepLine.from,
-            sepLine.to,
-          ),
-        );
       }
+
+      // Separator row: ALWAYS hidden via Decoration.replace
+      const sepLine = doc.lineAt(table.separatorFrom);
+      items.push(
+        Decoration.replace({}).range(sepLine.from, sepLine.to),
+      );
 
       // Style header row
       const headerLine = doc.line(table.startLineNumber);
@@ -792,17 +780,39 @@ class TableRenderPluginValue implements PluginValue {
         headerMarkDecoration.range(headerLine.from, headerLine.to),
       );
 
-      // Style pipe delimiters in all visible rows
+      // Process all rows (except separator) for pipe hiding + column wrapping
       const endLine = doc.lineAt(table.to);
+      const separatorLineNumber = table.startLineNumber + 1;
+
       for (let ln = table.startLineNumber; ln <= endLine.number; ln++) {
-        // Skip separator row when cursor is outside (it's hidden)
-        if (!cursorInTable && ln === table.startLineNumber + 1) continue;
+        // Skip separator row — it's fully hidden
+        if (ln === separatorLineNumber) continue;
+
         const line = doc.line(ln);
         const pipes = findPipePositions(line.text);
+
+        // Hide ALL pipe characters via cg-hidden
         for (const p of pipes) {
           items.push(
-            pipeMarkDecoration.range(line.from + p, line.from + p + 1),
+            decorationHidden.range(line.from + p, line.from + p + 1),
           );
+        }
+
+        // Wrap each cell content in cg-table-col cg-table-col-N
+        // Cells are between consecutive pipes: pipe[i]+1 .. pipe[i+1]
+        for (let i = 0; i < pipes.length - 1; i++) {
+          const cellStart = line.from + pipes[i] + 1;
+          const cellEnd = line.from + pipes[i + 1];
+
+          // Only create mark if cell has content (non-empty range)
+          if (cellStart < cellEnd) {
+            items.push(
+              Decoration.mark({
+                class: `cg-table-col cg-table-col-${i}`,
+                attributes: { "data-col": String(i) },
+              }).range(cellStart, cellEnd),
+            );
+          }
         }
       }
     }
