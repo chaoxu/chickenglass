@@ -95,7 +95,7 @@
       "Run all verification commands from the project root",
       "Use conventional commit messages",
       "Do not modify files outside your task scope unless necessary",
-      "After visual changes, ALWAYS verify in the browser via Playwright CDP (scripts/cdp.cjs or inline script) and take a screenshot before reporting done"
+      "For tasks that change rendering/CSS/UI: visually verify BEFORE reporting done. Steps: (1) npm run build (2) npx vite preview --port 0 in background (3) wait for server URL (4) use Playwright chromium.launch() to open the page, navigate to affected content, take a screenshot (5) Read the screenshot file and describe what you see (6) kill the preview server. Include screenshot path in report. If the visual result is wrong, fix before reporting."
     ]
   },
   "planner_rules": [
