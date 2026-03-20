@@ -105,11 +105,12 @@ describe("markdownToHtml", () => {
     expect(html).toContain("</pre>");
   });
 
-  it("renders blockquotes", () => {
+  it("renders > lines as paragraphs (blockquote parser removed)", () => {
+    // Blockquotes are removed from the parser (removeBlockquote extension).
+    // Documents use fenced div blockquotes (::: Blockquote) instead.
     const html = markdownToHtml("> This is a quote\n> Second line");
-    expect(html).toContain("<blockquote>");
     expect(html).toContain("This is a quote");
-    expect(html).toContain("</blockquote>");
+    expect(html).toContain("Second line");
   });
 
   it("renders horizontal rules", () => {

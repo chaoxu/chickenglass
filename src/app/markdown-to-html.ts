@@ -1,23 +1,57 @@
 /**
  * Markdown-to-HTML converter for export.
  *
- * Converts Pandoc-flavored markdown to semantic HTML with:
+ * Converts Pandoc-flavored markdown to semantic HTML by walking a Lezer
+ * syntax tree. This replaces the line-oriented parser with a proper AST
+ * transform, giving correct handling of nested structures, inline
+ * formatting inside blocks, and math rendering.
+ *
+ * Features:
  * - Headings, paragraphs, lists (ordered, unordered, task lists)
  * - Inline formatting: bold, italic, strikethrough, highlight, inline code
  * - Math rendering via KaTeX (inline and display)
  * - Fenced div blocks as semantic `<div>` elements
  * - Code blocks with language classes
- * - Blockquotes, horizontal rules, tables
+ * - Horizontal rules, tables
  * - Footnotes
- *
- * This is a line-oriented parser — not a full AST transform — designed
- * specifically for the export path where we need standalone HTML.
  */
 
 import katex from "katex";
-import { extractDivClass } from "../parser/fenced-div-attrs";
+import { parser as baseParser } from "@lezer/markdown";
+import { Table, TaskList } from "@lezer/markdown";
+import type { SyntaxNode } from "@lezer/common";
+import {
+  removeIndentedCode,
+  removeBlockquote,
+  mathExtension,
+  fencedDiv,
+  equationLabelExtension,
+  strikethroughExtension,
+  highlightExtension,
+  footnoteExtension,
+  extractDivClass,
+} from "../parser";
 
-// ── Inline rendering ─────────────────────────────────────────────────────────
+// ── Standalone Lezer parser ─────────────────────────────────────────────────
+
+/**
+ * Standalone Lezer markdown parser configured with the same extensions
+ * the editor uses, but without CM6 dependencies.
+ */
+const mdParser = baseParser.configure([
+  removeIndentedCode,
+  removeBlockquote,
+  mathExtension,
+  fencedDiv,
+  equationLabelExtension,
+  strikethroughExtension,
+  highlightExtension,
+  footnoteExtension,
+  Table,
+  TaskList,
+]);
+
+// ── Shared utilities ────────────────────────────────────────────────────────
 
 /** Escape HTML special characters in text. */
 function escapeHtml(text: string): string {
@@ -31,7 +65,6 @@ function escapeHtml(text: string): string {
 /** Check if a URL is safe to embed in href/src (blocks javascript:, data:, vbscript:). */
 function isSafeUrl(url: string): boolean {
   const lower = url.trim().toLowerCase();
-  // Block known dangerous schemes
   if (
     lower.startsWith("javascript:") ||
     lower.startsWith("data:") ||
@@ -62,7 +95,6 @@ function renderMath(
       ...(macros ? { macros: { ...macros } } : {}),
     });
   } catch {
-    // KaTeX render failed (e.g. unsupported command) — show raw LaTeX as error
     const escaped = escapeHtml(latex);
     return displayMode
       ? `<pre class="math-error">${escaped}</pre>`
@@ -70,243 +102,7 @@ function renderMath(
   }
 }
 
-/**
- * Process inline markdown formatting within a line of text.
- *
- * Handles: inline math ($..$ and \(..\)), bold, italic, strikethrough,
- * highlight, inline code, links, and images.
- *
- * @param macros - Optional KaTeX macros from frontmatter for math rendering.
- */
-export function renderInline(
-  text: string,
-  macros?: Record<string, string>,
-): string {
-  let result = "";
-  let i = 0;
-
-  while (i < text.length) {
-    // Inline math: \(...\)
-    if (text[i] === "\\" && text[i + 1] === "(") {
-      const closeIdx = text.indexOf("\\)", i + 2);
-      if (closeIdx !== -1) {
-        const latex = text.slice(i + 2, closeIdx);
-        result += renderMath(latex, false, macros);
-        i = closeIdx + 2;
-        continue;
-      }
-    }
-
-    // Inline math: $...$ (not $$)
-    if (text[i] === "$" && text[i + 1] !== "$") {
-      const closeIdx = findClosingDollar(text, i + 1);
-      if (closeIdx !== -1) {
-        const latex = text.slice(i + 1, closeIdx);
-        result += renderMath(latex, false, macros);
-        i = closeIdx + 1;
-        continue;
-      }
-    }
-
-    // Inline code: `...`
-    if (text[i] === "`") {
-      const closeIdx = text.indexOf("`", i + 1);
-      if (closeIdx !== -1) {
-        const code = escapeHtml(text.slice(i + 1, closeIdx));
-        result += `<code>${code}</code>`;
-        i = closeIdx + 1;
-        continue;
-      }
-    }
-
-    // Strikethrough: ~~...~~
-    if (text[i] === "~" && text[i + 1] === "~") {
-      const closeIdx = text.indexOf("~~", i + 2);
-      if (closeIdx !== -1) {
-        const inner = renderInline(text.slice(i + 2, closeIdx), macros);
-        result += `<del>${inner}</del>`;
-        i = closeIdx + 2;
-        continue;
-      }
-    }
-
-    // Highlight: ==...==
-    if (text[i] === "=" && text[i + 1] === "=") {
-      const closeIdx = text.indexOf("==", i + 2);
-      if (closeIdx !== -1) {
-        const inner = renderInline(text.slice(i + 2, closeIdx), macros);
-        result += `<mark>${inner}</mark>`;
-        i = closeIdx + 2;
-        continue;
-      }
-    }
-
-    // Bold: **...**
-    if (text[i] === "*" && text[i + 1] === "*") {
-      const closeIdx = text.indexOf("**", i + 2);
-      if (closeIdx !== -1) {
-        const inner = renderInline(text.slice(i + 2, closeIdx), macros);
-        result += `<strong>${inner}</strong>`;
-        i = closeIdx + 2;
-        continue;
-      }
-    }
-
-    // Italic: *...*
-    if (text[i] === "*" && text[i + 1] !== "*") {
-      const closeIdx = findClosingStar(text, i + 1);
-      if (closeIdx !== -1) {
-        const inner = renderInline(text.slice(i + 1, closeIdx), macros);
-        result += `<em>${inner}</em>`;
-        i = closeIdx + 1;
-        continue;
-      }
-    }
-
-    // Image: ![alt](url)
-    if (text[i] === "!" && text[i + 1] === "[") {
-      const match = text.slice(i).match(/^!\[([^\]]*)\]\(([^)]+)\)/);
-      if (match) {
-        const alt = escapeHtml(match[1]);
-        const rawSrc = match[2];
-        if (isSafeUrl(rawSrc)) {
-          result += `<img src="${escapeHtml(rawSrc)}" alt="${alt}">`;
-        } else {
-          result += `<span class="unsafe-link">[image: ${alt}]</span>`;
-        }
-        i += match[0].length;
-        continue;
-      }
-    }
-
-    // Link: [text](url)
-    if (text[i] === "[") {
-      // Footnote callout: [^id]
-      const fnMatch = text.slice(i).match(/^\[\^([^\]]+)\]/);
-      if (fnMatch && text[i + 1] === "^") {
-        const fnId = escapeHtml(fnMatch[1]);
-        result += `<sup><a class="footnote-ref" href="#fn-${fnId}">${fnId}</a></sup>`;
-        i += fnMatch[0].length;
-        continue;
-      }
-
-      const match = text.slice(i).match(/^\[([^\]]+)\]\(([^)]+)\)/);
-      if (match) {
-        const linkText = renderInline(match[1], macros);
-        const rawHref = match[2];
-        if (isSafeUrl(rawHref)) {
-          result += `<a href="${escapeHtml(rawHref)}">${linkText}</a>`;
-        } else {
-          result += `<span class="unsafe-link">${linkText}</span>`;
-        }
-        i += match[0].length;
-        continue;
-      }
-    }
-
-    // Cross-reference: [@id]
-    if (text[i] === "[" && text[i + 1] === "@") {
-      const closeIdx = text.indexOf("]", i + 2);
-      if (closeIdx !== -1) {
-        const ref = escapeHtml(text.slice(i + 2, closeIdx));
-        result += `<a class="cross-ref" href="#${ref}">${ref}</a>`;
-        i = closeIdx + 1;
-        continue;
-      }
-    }
-
-    // Bare citation: @id (not preceded by [)
-    if (text[i] === "@" && i > 0 && text[i - 1] !== "[" && /[a-zA-Z]/.test(text[i + 1] ?? "")) {
-      const match = text.slice(i).match(/^@([a-zA-Z][\w-]*)/);
-      if (match) {
-        const ref = escapeHtml(match[1]);
-        result += `<a class="cross-ref" href="#${ref}">${ref}</a>`;
-        i += match[0].length;
-        continue;
-      }
-    }
-
-    // Default: escape and append character
-    result += escapeHtml(text[i]);
-    i++;
-  }
-
-  return result;
-}
-
-/** Find closing $ that isn't escaped, skipping whitespace-adjacent dollars. */
-function findClosingDollar(text: string, start: number): number {
-  // Opening $ must not be followed by whitespace
-  if (start >= text.length || /\s/.test(text[start])) return -1;
-  for (let i = start; i < text.length; i++) {
-    if (text[i] === "$" && text[i - 1] !== "\\" && !/\s/.test(text[i - 1])) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-/** Find closing * for italic that isn't part of **. */
-function findClosingStar(text: string, start: number): number {
-  for (let i = start; i < text.length; i++) {
-    if (text[i] === "*" && text[i + 1] !== "*" && (i === 0 || text[i - 1] !== "*")) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-// ── Block-level parsing ──────────────────────────────────────────────────────
-
-/**
- * Parse the attribute block and title from a fenced div opening line.
- *
- * Reuses the existing `extractDivClass` parser for attribute extraction,
- * and additionally extracts the title text that follows the attributes.
- */
-function parseDivAttrs(
-  line: string,
-): { classes: string[]; id: string | undefined; title: string } | undefined {
-  // Match ::: {.class #id} Title or ::: ClassName Title
-  const colonMatch = line.match(/^:{3,}\s*(.*)/);
-  if (!colonMatch) return undefined;
-  const rest = colonMatch[1].trim();
-  if (!rest) return undefined;
-
-  // Remove trailing ::: for self-closing divs
-  const cleaned = rest.replace(/\s*:{3,}\s*$/, "").trim();
-
-  // Split attribute part from title
-  let attrPart: string;
-  let title: string;
-
-  if (cleaned.startsWith("{")) {
-    const braceEnd = cleaned.indexOf("}");
-    if (braceEnd === -1) return undefined;
-    attrPart = cleaned.slice(0, braceEnd + 1);
-    title = cleaned.slice(braceEnd + 1).trim();
-  } else {
-    // Short form: first word is the class name, rest is title
-    const spaceIdx = cleaned.indexOf(" ");
-    if (spaceIdx === -1) {
-      attrPart = cleaned;
-      title = "";
-    } else {
-      attrPart = cleaned.slice(0, spaceIdx);
-      title = cleaned.slice(spaceIdx + 1).trim();
-    }
-  }
-
-  const attrs = extractDivClass(attrPart);
-  if (!attrs) return undefined;
-
-  return { classes: [...attrs.classes], id: attrs.id, title };
-}
-
-/** Check if a line is an include directive. */
-function isIncludeDirective(line: string): boolean {
-  return /^:{3,}\s*\{\.include\}/.test(line.trim());
-}
+// ── Options ─────────────────────────────────────────────────────────────────
 
 /** Options for the markdown-to-HTML converter. */
 export interface MarkdownToHtmlOptions {
@@ -318,435 +114,434 @@ export interface MarkdownToHtmlOptions {
   _counters?: number[];
 }
 
+// ── Inline rendering (standalone, for titles) ───────────────────────────────
+
+/**
+ * Process inline markdown formatting within a line of text.
+ *
+ * This is a standalone function used by `read-mode-view.tsx` for rendering
+ * frontmatter titles. It parses the text with Lezer and uses the tree walker.
+ */
+export function renderInline(
+  text: string,
+  macros?: Record<string, string>,
+): string {
+  // Parse just the text as a paragraph (Lezer wraps it in Document > Paragraph)
+  const tree = mdParser.parse(text);
+  const doc = tree.topNode;
+  // The text becomes a single Paragraph inside Document
+  const para = doc.firstChild;
+  if (!para) return escapeHtml(text);
+  // Render the paragraph's inline content (without wrapping in <p>)
+  return renderChildren(para, text, macros);
+}
+
+// ── Tree walking ────────────────────────────────────────────────────────────
+
+/** Context for the tree walker, carrying state across recursive calls. */
+interface WalkContext {
+  readonly doc: string;
+  readonly macros?: Record<string, string>;
+  readonly sectionNumbers: boolean;
+  readonly headingCounters: number[];
+}
+
 /**
  * Convert markdown content to semantic HTML body content.
  *
- * This is the main conversion function. It processes the markdown
- * line-by-line, handling block structures (headings, lists, code blocks,
- * fenced divs, blockquotes, tables, horizontal rules) and delegates
- * inline formatting to `renderInline`.
- *
- * @param options - Optional configuration for macros and section numbers.
+ * Parses the content with Lezer and walks the syntax tree to produce HTML.
  */
 export function markdownToHtml(
   content: string,
   options?: MarkdownToHtmlOptions,
 ): string {
-  const macros = options?.macros;
-  const sectionNumbers = options?.sectionNumbers ?? false;
-  const headingCounters = options?._counters ?? [0, 0, 0, 0, 0, 0, 0];
-  const lines = content.split("\n");
-  const output: string[] = [];
-  let i = 0;
+  const tree = mdParser.parse(content);
+  const ctx: WalkContext = {
+    doc: content,
+    macros: options?.macros,
+    sectionNumbers: options?.sectionNumbers ?? false,
+    headingCounters: options?._counters ?? [0, 0, 0, 0, 0, 0, 0],
+  };
 
-  // Skip YAML frontmatter (must have a closing --- with content between)
-  if (lines[0]?.trim() === "---") {
-    let fmEnd = 1;
-    while (fmEnd < lines.length && lines[fmEnd].trim() !== "---") fmEnd++;
-    // Only skip if we found a closing --- and there's content between
-    if (fmEnd < lines.length && fmEnd > 1) {
-      i = fmEnd + 1;
+  return renderNode(tree.topNode, ctx);
+}
+
+/**
+ * Render a syntax tree node to HTML.
+ * Dispatches on node type and delegates to specialized renderers.
+ */
+function renderNode(node: SyntaxNode, ctx: WalkContext): string {
+  switch (node.name) {
+    case "Document":
+      return renderDocument(node, ctx);
+
+    case "Paragraph":
+      return `<p>${renderChildren(node, ctx.doc, ctx.macros)}</p>`;
+
+    case "ATXHeading1":
+    case "ATXHeading2":
+    case "ATXHeading3":
+    case "ATXHeading4":
+    case "ATXHeading5":
+    case "ATXHeading6":
+      return renderHeading(node, ctx);
+
+    case "FencedCode":
+      return renderFencedCode(node, ctx);
+
+    case "BulletList":
+      return renderList(node, ctx, "ul");
+
+    case "OrderedList":
+      return renderList(node, ctx, "ol");
+
+    case "HorizontalRule":
+      return "<hr>";
+
+    case "FencedDiv":
+      return renderFencedDiv(node, ctx);
+
+    case "DisplayMath":
+      return renderDisplayMath(node, ctx);
+
+    case "FootnoteDef":
+      return renderFootnoteDef(node, ctx);
+
+    case "Table":
+      return renderTable(node, ctx);
+
+    case "Blockquote":
+      return renderBlockquote(node, ctx);
+
+    default:
+      // Unknown block — render children as fallback
+      return renderDocChildren(node, ctx);
+  }
+}
+
+/**
+ * Render the Document node's children, skipping frontmatter.
+ *
+ * Frontmatter appears as a HorizontalRule at position 0 followed by
+ * content then another HorizontalRule (since Lezer doesn't have a
+ * frontmatter node). We detect the `---\n...\n---` pattern and skip it.
+ */
+function renderDocument(node: SyntaxNode, ctx: WalkContext): string {
+  const output: string[] = [];
+  let child = node.firstChild;
+
+  // Detect and skip YAML frontmatter at start of document
+  // Pattern: doc starts with --- and has a closing ---
+  if (ctx.doc.startsWith("---")) {
+    const firstNewline = ctx.doc.indexOf("\n");
+    if (firstNewline !== -1) {
+      const afterFirstLine = ctx.doc.slice(3, firstNewline).trim();
+      if (afterFirstLine.length === 0) {
+        const closingIndex = ctx.doc.indexOf("\n---", firstNewline);
+        if (closingIndex !== -1) {
+          const fmEnd = closingIndex + 4;
+          // Skip nodes that fall within the frontmatter range
+          while (child && child.to <= fmEnd) {
+            child = child.nextSibling;
+          }
+          // Also skip the node that contains the closing --- if partially overlapping
+          if (child && child.from < fmEnd) {
+            child = child.nextSibling;
+          }
+        }
+      }
     }
   }
 
-  while (i < lines.length) {
-    const line = lines[i];
-    const trimmed = line.trim();
-
-    // Empty line
-    if (trimmed === "") {
-      i++;
-      continue;
-    }
-
-    // Skip include directives and their content
-    if (isIncludeDirective(trimmed)) {
-      i++;
-      // Skip content until closing :::
-      while (i < lines.length && !/^:{3,}\s*$/.test(lines[i].trim())) i++;
-      if (i < lines.length) i++; // skip closing :::
-      continue;
-    }
-
-    // Horizontal rule
-    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
-      output.push("<hr>");
-      i++;
-      continue;
-    }
-
-    // Heading
-    const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      // Strip trailing attribute blocks {.class #id -} for display
-      const rawText = headingMatch[2].replace(/\s*\{[^}]*\}\s*$/, "");
-      const isUnnumbered = /\{[^}]*(?:-|\.unnumbered)[^}]*\}\s*$/.test(headingMatch[2]);
-      const text = renderInline(rawText, macros);
-
-      let prefix = "";
-      if (sectionNumbers && !isUnnumbered) {
-        headingCounters[level]++;
-        for (let lv = level + 1; lv <= 6; lv++) headingCounters[lv] = 0;
-        const parts: number[] = [];
-        for (let lv = 1; lv <= level; lv++) parts.push(headingCounters[lv]);
-        prefix = `<span class="cg-section-number">${parts.join(".")}</span> `;
-      }
-      output.push(`<h${level}>${prefix}${text}</h${level}>`);
-      i++;
-      continue;
-    }
-
-    // Display math: $$ ... $$ (possibly multi-line)
-    if (trimmed.startsWith("$$")) {
-      const mathLines: string[] = [];
-      const firstLine = trimmed.slice(2).trim();
-
-      // Check for single-line display math: $$ ... $$
-      const singleLineClose = firstLine.indexOf("$$");
-      if (singleLineClose !== -1 && firstLine.length > 2) {
-        const latex = firstLine.slice(0, singleLineClose).trim();
-        output.push(`<div class="math-display">${renderMath(latex, true, macros)}</div>`);
-        i++;
-        continue;
-      }
-
-      if (firstLine && !firstLine.startsWith("$$")) {
-        mathLines.push(firstLine);
-      }
-      i++;
-      while (i < lines.length) {
-        const ml = lines[i].trim();
-        // Closing $$ possibly with equation label {#eq:...}
-        if (ml.startsWith("$$") || ml.match(/^\$\$\s*\{#eq:/)) {
-          break;
-        }
-        mathLines.push(lines[i]);
-        i++;
-      }
-      // Skip closing $$ line (and any equation label)
-      if (i < lines.length) i++;
-
-      const latex = mathLines.join("\n").trim();
-      output.push(`<div class="math-display">${renderMath(latex, true, macros)}</div>`);
-      continue;
-    }
-
-    // Display math: \[...\] (multi-line)
-    if (trimmed.startsWith("\\[")) {
-      const mathLines: string[] = [];
-      const firstLine = trimmed.slice(2).trim();
-      if (firstLine && !firstLine.startsWith("\\]")) {
-        mathLines.push(firstLine);
-      }
-      i++;
-      while (i < lines.length && !lines[i].trim().startsWith("\\]")) {
-        mathLines.push(lines[i]);
-        i++;
-      }
-      if (i < lines.length) i++; // skip closing \]
-      const latex = mathLines.join("\n").trim();
-      output.push(`<div class="math-display">${renderMath(latex, true, macros)}</div>`);
-      continue;
-    }
-
-    // Fenced code block
-    const codeMatch = trimmed.match(/^(`{3,})(.*)/);
-    if (codeMatch) {
-      const fence = codeMatch[1];
-      const lang = codeMatch[2].trim();
-      const codeLines: string[] = [];
-      i++;
-      while (i < lines.length && !lines[i].trim().startsWith(fence)) {
-        codeLines.push(lines[i]);
-        i++;
-      }
-      if (i < lines.length) i++; // skip closing fence
-      const code = escapeHtml(codeLines.join("\n"));
-      const langAttr = lang ? ` class="language-${escapeHtml(lang)}"` : "";
-      output.push(`<pre><code${langAttr}>${code}</code></pre>`);
-      continue;
-    }
-
-    // Fenced div: ::: {.class} Title ... :::
-    const divAttrs = parseDivAttrs(trimmed);
-    if (divAttrs) {
-      // Check for self-closing div (trailing ::: on same line)
-      const isSelfClosing = /:{3,}\s*$/.test(line) && /:{3,}.*:{3,}/.test(trimmed);
-
-      const classAttr = divAttrs.classes.length > 0
-        ? ` class="${divAttrs.classes.map(escapeHtml).join(" ")}"`
-        : "";
-      const idAttr = divAttrs.id ? ` id="${escapeHtml(divAttrs.id)}"` : "";
-
-      if (isSelfClosing) {
-        // Self-closing: ::: {.class} Content :::
-        // The content between attrs and closing ::: is captured as the title.
-        output.push(`<div${classAttr}${idAttr}>`);
-        if (divAttrs.title) {
-          output.push(`<p>${renderInline(divAttrs.title, macros)}</p>`);
-        }
-        output.push("</div>");
-        i++;
-        continue;
-      }
-
-      output.push(`<div${classAttr}${idAttr}>`);
-      if (divAttrs.title) {
-        output.push(`<strong class="div-title">${renderInline(divAttrs.title, macros)}</strong>`);
-      }
-      i++;
-
-      // Collect content until matching closing ::: (respecting nesting depth)
-      const innerLines: string[] = [];
-      let depth = 1;
-      while (i < lines.length && depth > 0) {
-        const ln = lines[i].trim();
-        // Opening ::: with content (not bare closing)
-        if (/^:{3,}\s+\S/.test(ln) || (/^:{3,}\s*\{/.test(ln) && !/^:{3,}\s*$/.test(ln))) {
-          depth++;
-        }
-        // Bare closing :::
-        if (/^:{3,}\s*$/.test(ln)) {
-          depth--;
-          if (depth === 0) {
-            i++; // skip closing :::
-            break;
-          }
-        }
-        innerLines.push(lines[i]);
-        i++;
-      }
-
-      // Recursively render inner content (share heading counters)
-      const innerHtml = markdownToHtml(innerLines.join("\n"), {
-        ...options,
-        _counters: headingCounters,
-      });
-      output.push(innerHtml);
-      output.push("</div>");
-      continue;
-    }
-
-    // Blockquote
-    if (trimmed.startsWith("> ") || trimmed === ">") {
-      const quoteLines: string[] = [];
-      while (i < lines.length) {
-        const ql = lines[i].trim();
-        if (ql.startsWith("> ") || ql === ">") {
-          quoteLines.push(ql.slice(2));
-          i++;
-        } else if (ql === "") {
-          // Empty line may continue blockquote if next line is also >
-          if (i + 1 < lines.length && lines[i + 1].trim().startsWith(">")) {
-            quoteLines.push("");
-            i++;
-          } else {
-            break;
-          }
-        } else {
-          break;
-        }
-      }
-      const quoteHtml = markdownToHtml(quoteLines.join("\n"), options);
-      output.push(`<blockquote>${quoteHtml}</blockquote>`);
-      continue;
-    }
-
-    // Table
-    if (trimmed.includes("|") && i + 1 < lines.length && /^\|?\s*:?-+:?\s*\|/.test(lines[i + 1]?.trim() ?? "")) {
-      const tableLines: string[] = [];
-      while (i < lines.length && lines[i].trim().includes("|")) {
-        tableLines.push(lines[i].trim());
-        i++;
-      }
-      output.push(renderTable(tableLines, macros));
-      continue;
-    }
-
-    // Unordered list
-    if (/^[-*+]\s/.test(trimmed)) {
-      const listResult = parseList(lines, i, "ul", macros);
-      output.push(listResult.html);
-      i = listResult.nextIndex;
-      continue;
-    }
-
-    // Ordered list
-    if (/^\d+\.\s/.test(trimmed)) {
-      const listResult = parseList(lines, i, "ol", macros);
-      output.push(listResult.html);
-      i = listResult.nextIndex;
-      continue;
-    }
-
-    // Footnote definition: [^id]: content
-    const footnoteMatch = trimmed.match(/^\[\^([^\]]+)\]:\s*(.*)/);
-    if (footnoteMatch) {
-      const fnId = escapeHtml(footnoteMatch[1]);
-      const fnContent = renderInline(footnoteMatch[2], macros);
-      output.push(
-        `<div class="footnote" id="fn-${fnId}">` +
-        `<sup>${fnId}</sup> ${fnContent}</div>`,
-      );
-      i++;
-      continue;
-    }
-
-    // Paragraph (default)
-    const paraLines: string[] = [];
-    while (
-      i < lines.length &&
-      lines[i].trim() !== "" &&
-      !lines[i].trim().startsWith("#") &&
-      !lines[i].trim().startsWith("$$") &&
-      !lines[i].trim().startsWith("\\[") &&
-      !lines[i].trim().startsWith("```") &&
-      !lines[i].trim().startsWith(":::") &&
-      !lines[i].trim().startsWith("> ") &&
-      !/^[-*+]\s/.test(lines[i].trim()) &&
-      !/^\d+\.\s/.test(lines[i].trim()) &&
-      !/^(-{3,}|\*{3,}|_{3,})$/.test(lines[i].trim()) &&
-      !/^\[\^[^\]]+\]:/.test(lines[i].trim())
-    ) {
-      paraLines.push(lines[i].trim());
-      i++;
-    }
-    if (paraLines.length > 0) {
-      const paraText = renderInline(paraLines.join(" "), macros);
-      output.push(`<p>${paraText}</p>`);
-    }
+  while (child) {
+    const html = renderNode(child, ctx);
+    if (html) output.push(html);
+    child = child.nextSibling;
   }
 
   return output.join("\n");
 }
 
-// ── List parsing ─────────────────────────────────────────────────────────────
-
-interface ListParseResult {
-  html: string;
-  nextIndex: number;
+/** Render child block nodes (for unknown wrapper nodes). */
+function renderDocChildren(node: SyntaxNode, ctx: WalkContext): string {
+  const output: string[] = [];
+  let child = node.firstChild;
+  while (child) {
+    const html = renderNode(child, ctx);
+    if (html) output.push(html);
+    child = child.nextSibling;
+  }
+  return output.join("\n");
 }
 
-/**
- * Parse a list (ordered or unordered) starting at the given index.
- * Handles nested lists and task list items.
- */
-function parseList(
-  lines: string[],
-  startIndex: number,
-  type: "ul" | "ol",
-  macros?: Record<string, string>,
-): ListParseResult {
+// ── Block renderers ─────────────────────────────────────────────────────────
+
+/** Render an ATXHeading node. */
+function renderHeading(node: SyntaxNode, ctx: WalkContext): string {
+  const levelChar = node.name[node.name.length - 1];
+  const level = Number(levelChar);
+
+  // Get text after the HeaderMark (# symbols)
+  const headerMark = node.getChild("HeaderMark");
+  const textStart = headerMark ? headerMark.to : node.from;
+  let rawText = ctx.doc.slice(textStart, node.to).trim();
+
+  // Check for attribute block {.class #id -} at end
+  const attrMatch = rawText.match(/\s*\{([^}]*)\}\s*$/);
+  const isUnnumbered = attrMatch
+    ? /(?:^|\s)(?:-|\.unnumbered)(?:\s|$)/.test(attrMatch[1])
+    : false;
+
+  // Strip the attribute block from text
+  if (attrMatch) {
+    rawText = rawText.slice(0, attrMatch.index).trim();
+  }
+
+  // Render inline content within the heading text
+  const text = renderInline(rawText, ctx.macros);
+
+  let prefix = "";
+  if (ctx.sectionNumbers && !isUnnumbered) {
+    ctx.headingCounters[level]++;
+    for (let lv = level + 1; lv <= 6; lv++) ctx.headingCounters[lv] = 0;
+    const parts: number[] = [];
+    for (let lv = 1; lv <= level; lv++) parts.push(ctx.headingCounters[lv]);
+    prefix = `<span class="cg-section-number">${parts.join(".")}</span> `;
+  }
+
+  return `<h${level}>${prefix}${text}</h${level}>`;
+}
+
+/** Render a FencedCode node. */
+function renderFencedCode(node: SyntaxNode, ctx: WalkContext): string {
+  const codeInfo = node.getChild("CodeInfo");
+  const lang = codeInfo ? ctx.doc.slice(codeInfo.from, codeInfo.to).trim() : "";
+
+  // Extract code text between the code marks
+  const codeText = node.getChild("CodeText");
+  const code = codeText ? escapeHtml(ctx.doc.slice(codeText.from, codeText.to)) : "";
+
+  const langAttr = lang ? ` class="language-${escapeHtml(lang)}"` : "";
+  return `<pre><code${langAttr}>${code}</code></pre>`;
+}
+
+/** Render a list (BulletList or OrderedList). */
+function renderList(
+  node: SyntaxNode,
+  ctx: WalkContext,
+  tag: "ul" | "ol",
+): string {
   const items: string[] = [];
-  let i = startIndex;
-  const listPattern = type === "ul" ? /^[-*+]\s/ : /^\d+\.\s/;
-  const itemPattern = type === "ul" ? /^[-*+]\s(.*)/ : /^\d+\.\s(.*)/;
+  let child = node.firstChild;
 
-  while (i < lines.length) {
-    const trimmed = lines[i].trim();
-
-    // Check for list item at current level
-    const itemMatch = trimmed.match(itemPattern);
-    if (itemMatch) {
-      let itemContent = itemMatch[1];
-
-      // Collect continuation lines (indented by 2+ spaces)
-      i++;
-      while (
-        i < lines.length &&
-        lines[i].trim() !== "" &&
-        (lines[i].startsWith("  ") || lines[i].startsWith("\t")) &&
-        !listPattern.test(lines[i].trim())
-      ) {
-        itemContent += " " + lines[i].trim();
-        i++;
-      }
-
-      // Check for nested list
-      if (
-        i < lines.length &&
-        (lines[i].startsWith("  ") || lines[i].startsWith("\t")) &&
-        (/^[-*+]\s/.test(lines[i].trim()) || /^\d+\.\s/.test(lines[i].trim()))
-      ) {
-        const nestedType = /^\d+\.\s/.test(lines[i].trim()) ? "ol" : "ul";
-        const nestedLines: string[] = [];
-        while (
-          i < lines.length &&
-          (lines[i].startsWith("  ") || lines[i].startsWith("\t") || lines[i].trim() === "")
-        ) {
-          // Dedent by 2 spaces or 1 tab
-          const dedented = lines[i].startsWith("  ")
-            ? lines[i].slice(2)
-            : lines[i].startsWith("\t")
-              ? lines[i].slice(1)
-              : lines[i];
-          nestedLines.push(dedented);
-          i++;
-          // Stop if we hit a non-indented non-empty line
-          if (
-            i < lines.length &&
-            lines[i].trim() !== "" &&
-            !lines[i].startsWith("  ") &&
-            !lines[i].startsWith("\t")
-          ) {
-            break;
-          }
-        }
-        const nestedResult = parseList(nestedLines, 0, nestedType, macros);
-        items.push(renderListItem(itemContent, macros) + nestedResult.html);
-      } else {
-        items.push(renderListItem(itemContent, macros));
-      }
-      continue;
+  while (child) {
+    if (child.name === "ListItem") {
+      items.push(renderListItem(child, ctx));
     }
-
-    // Empty line might continue the list
-    if (trimmed === "" && i + 1 < lines.length && listPattern.test(lines[i + 1]?.trim() ?? "")) {
-      i++;
-      continue;
-    }
-
-    break;
+    child = child.nextSibling;
   }
 
-  const tag = type;
   const itemsHtml = items.map((item) => `<li>${item}</li>`).join("\n");
-  return { html: `<${tag}>\n${itemsHtml}\n</${tag}>`, nextIndex: i };
+  return `<${tag}>\n${itemsHtml}\n</${tag}>`;
 }
 
-/** Render a list item, handling task list checkboxes. */
-function renderListItem(
-  content: string,
-  macros?: Record<string, string>,
-): string {
-  // Task list: [x] or [ ]
-  const taskMatch = content.match(/^\[([ xX])\]\s*(.*)/);
-  if (taskMatch) {
-    const checked = taskMatch[1] !== " " ? " checked" : "";
-    return `<input type="checkbox" disabled${checked}> ${renderInline(taskMatch[2], macros)}`;
+/** Render a ListItem node, handling task lists and nested content. */
+function renderListItem(node: SyntaxNode, ctx: WalkContext): string {
+  const parts: string[] = [];
+  let child = node.firstChild;
+
+  while (child) {
+    if (child.name === "ListMark") {
+      // Skip list markers (-, *, +, 1.)
+    } else if (child.name === "Task") {
+      // Task list item: contains TaskMarker + inline content
+      const taskMarker = child.getChild("TaskMarker");
+      if (taskMarker) {
+        const markerText = ctx.doc.slice(taskMarker.from, taskMarker.to);
+        const checked = markerText !== "[ ]" ? " checked" : "";
+        parts.push(`<input type="checkbox" disabled${checked}>`);
+      }
+      // Render the task content (everything after TaskMarker)
+      const contentStart = taskMarker ? taskMarker.to + 1 : child.from;
+      const taskContent = ctx.doc.slice(contentStart, child.to);
+      parts.push(renderInline(taskContent.trim(), ctx.macros));
+    } else if (child.name === "Paragraph") {
+      // Inline content — render without <p> wrapping
+      parts.push(renderChildren(child, ctx.doc, ctx.macros));
+    } else {
+      // Block content (nested lists, math, code, divs, etc.)
+      const html = renderNode(child, ctx);
+      if (html) parts.push(html);
+    }
+
+    child = child.nextSibling;
   }
-  return renderInline(content, macros);
+
+  return parts.join(" ");
 }
 
-// ── Table rendering ──────────────────────────────────────────────────────────
+/** Render a FencedDiv node. */
+function renderFencedDiv(node: SyntaxNode, ctx: WalkContext): string {
+  // Parse attributes
+  const attrNode = node.getChild("FencedDivAttributes");
+  let classes: string[] = [];
+  let id: string | undefined;
 
-/** Render a markdown table from its lines. */
-function renderTable(
-  tableLines: string[],
-  macros?: Record<string, string>,
-): string {
-  if (tableLines.length < 2) return "";
+  if (attrNode) {
+    const attrText = ctx.doc.slice(attrNode.from, attrNode.to);
+    const parsed = extractDivClass(attrText);
+    if (parsed) {
+      classes = [...parsed.classes];
+      id = parsed.id;
+    }
+  }
 
-  const parseRow = (row: string): string[] => {
-    // Remove leading/trailing pipes and split
-    const trimmed = row.replace(/^\|/, "").replace(/\|$/, "");
-    return trimmed.split("|").map((cell) => cell.trim());
+  // Check for include directive — skip entirely
+  if (classes.includes("include")) {
+    return "";
+  }
+
+  const classAttr = classes.length > 0
+    ? ` class="${classes.map(escapeHtml).join(" ")}"`
+    : "";
+  const idAttr = id ? ` id="${escapeHtml(id)}"` : "";
+
+  // Parse title
+  const titleNode = node.getChild("FencedDivTitle");
+  const title = titleNode
+    ? ctx.doc.slice(titleNode.from, titleNode.to).trim()
+    : "";
+
+  // Check if self-closing (has two FencedDivFence children on the same line)
+  const fences = node.getChildren("FencedDivFence");
+  const isSelfClosing = fences.length >= 2 &&
+    !ctx.doc.slice(fences[0].from, fences[fences.length - 1].to).includes("\n");
+
+  const output: string[] = [];
+  output.push(`<div${classAttr}${idAttr}>`);
+
+  if (title) {
+    if (isSelfClosing) {
+      output.push(`<p>${renderInline(title, ctx.macros)}</p>`);
+    } else {
+      output.push(`<strong class="div-title">${renderInline(title, ctx.macros)}</strong>`);
+    }
+  }
+
+  if (!isSelfClosing) {
+    // Render inner content — skip FencedDivFence, FencedDivAttributes, FencedDivTitle
+    const innerParts: string[] = [];
+    let child = node.firstChild;
+    while (child) {
+      if (
+        child.name !== "FencedDivFence" &&
+        child.name !== "FencedDivAttributes" &&
+        child.name !== "FencedDivTitle"
+      ) {
+        const html = renderNode(child, ctx);
+        if (html) innerParts.push(html);
+      }
+      child = child.nextSibling;
+    }
+    if (innerParts.length > 0) {
+      output.push(innerParts.join("\n"));
+    }
+  }
+
+  output.push("</div>");
+  return output.join("\n");
+}
+
+/** Render a DisplayMath node. */
+function renderDisplayMath(node: SyntaxNode, ctx: WalkContext): string {
+  const marks = node.getChildren("DisplayMathMark");
+  let latex = "";
+
+  if (marks.length >= 2) {
+    const afterOpen = marks[0].to;
+    const beforeClose = marks[marks.length - 1].from;
+    if (beforeClose > afterOpen) {
+      latex = ctx.doc.slice(afterOpen, beforeClose).trim();
+    }
+  } else if (marks.length === 1) {
+    // Unclosed math — take everything after the opening mark
+    latex = ctx.doc.slice(marks[0].to, node.to).trim();
+  }
+
+  return `<div class="math-display">${renderMath(latex, true, ctx.macros)}</div>`;
+}
+
+/** Render a FootnoteDef node. */
+function renderFootnoteDef(node: SyntaxNode, ctx: WalkContext): string {
+  const labelNode = node.getChild("FootnoteDefLabel");
+  if (!labelNode) return "";
+
+  const labelText = ctx.doc.slice(labelNode.from, labelNode.to);
+  // Label text is like "[^1]:" — extract the id
+  const match = /^\[\^([^\]]+)\]:?$/.exec(labelText);
+  if (!match) return "";
+
+  const fnId = escapeHtml(match[1]);
+  // Content is everything after the label
+  const contentStart = labelNode.to;
+  const rawContent = ctx.doc.slice(contentStart, node.to).trim();
+  const fnContent = renderInline(rawContent, ctx.macros);
+
+  return `<div class="footnote" id="fn-${fnId}"><sup>${fnId}</sup> ${fnContent}</div>`;
+}
+
+/** Render a Table node. */
+function renderTable(node: SyntaxNode, ctx: WalkContext): string {
+  const delimiterNode = node.getChild("TableDelimiter");
+  if (!delimiterNode) return "";
+
+  // Parse alignment from the delimiter row
+  const delimText = ctx.doc.slice(delimiterNode.from, delimiterNode.to);
+  const alignments = parseTableAlignments(delimText);
+
+  /** Render a row of cells with a given tag (th or td). */
+  const renderRow = (cells: readonly SyntaxNode[], tag: "th" | "td"): string => {
+    let row = "";
+    for (let c = 0; c < cells.length; c++) {
+      const align = alignments[c] ? ` style="text-align: ${alignments[c]}"` : "";
+      const content = renderChildren(cells[c], ctx.doc, ctx.macros);
+      row += `<${tag}${align}>${content}</${tag}>\n`;
+    }
+    return row;
   };
 
-  // Parse alignment from separator row
-  const separatorCells = parseRow(tableLines[1]);
-  const alignments = separatorCells.map((cell) => {
+  // Render header
+  const headerNode = node.getChild("TableHeader");
+  let html = "<table>\n<thead>\n<tr>\n";
+  if (headerNode) {
+    html += renderRow(headerNode.getChildren("TableCell"), "th");
+  }
+  html += "</tr>\n</thead>\n<tbody>\n";
+
+  // Render body rows
+  let child = node.firstChild;
+  while (child) {
+    if (child.name === "TableRow") {
+      html += "<tr>\n";
+      html += renderRow(child.getChildren("TableCell"), "td");
+      html += "</tr>\n";
+    }
+    child = child.nextSibling;
+  }
+
+  html += "</tbody>\n</table>";
+  return html;
+}
+
+/** Parse table alignments from a delimiter row like "| :--- | :---: | ---: |". */
+function parseTableAlignments(delimRow: string): string[] {
+  const cells = delimRow
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+
+  return cells.map((cell) => {
     const left = cell.startsWith(":");
     const right = cell.endsWith(":");
     if (left && right) return "center";
@@ -754,27 +549,220 @@ function renderTable(
     if (left) return "left";
     return "";
   });
+}
 
-  const headerCells = parseRow(tableLines[0]);
-  const bodyRows = tableLines.slice(2);
+/** Render a Blockquote node (kept for safety, though removed from parser). */
+function renderBlockquote(node: SyntaxNode, ctx: WalkContext): string {
+  const innerHtml = renderDocChildren(node, ctx);
+  return `<blockquote>${innerHtml}</blockquote>`;
+}
 
-  let html = "<table>\n<thead>\n<tr>\n";
-  for (let c = 0; c < headerCells.length; c++) {
-    const align = alignments[c] ? ` style="text-align: ${alignments[c]}"` : "";
-    html += `<th${align}>${renderInline(headerCells[c], macros)}</th>\n`;
-  }
-  html += "</tr>\n</thead>\n<tbody>\n";
+// ── Inline content rendering ────────────────────────────────────────────────
 
-  for (const row of bodyRows) {
-    const cells = parseRow(row);
-    html += "<tr>\n";
-    for (let c = 0; c < cells.length; c++) {
-      const align = alignments[c] ? ` style="text-align: ${alignments[c]}"` : "";
-      html += `<td${align}>${renderInline(cells[c] ?? "", macros)}</td>\n`;
+/** Set of node names that are "marks" (delimiters) to skip. */
+const MARK_NODES = new Set([
+  "EmphasisMark",
+  "CodeMark",
+  "LinkMark",
+  "StrikethroughMark",
+  "HighlightMark",
+  "InlineMathMark",
+  "HeaderMark",
+  "ListMark",
+  "TaskMarker",
+  "TableDelimiter",
+]);
+
+/**
+ * Render the inline children of a node (e.g., Paragraph, Emphasis).
+ *
+ * Walks the node's children, rendering inline elements and collecting
+ * plain text between them. Text gaps between children are escaped.
+ *
+ * When `rangeFrom`/`rangeTo` are provided, only children and text within
+ * that range are rendered (used by renderLinkText to extract [text] portion).
+ */
+function renderChildren(
+  node: SyntaxNode,
+  doc: string,
+  macros?: Record<string, string>,
+  rangeFrom?: number,
+  rangeTo?: number,
+): string {
+  const from = rangeFrom ?? node.from;
+  const to = rangeTo ?? node.to;
+  const parts: string[] = [];
+  let pos = from;
+  let child = node.firstChild;
+
+  while (child) {
+    // Only process children within the range
+    if (child.to > from && child.from < to) {
+      // Text gap between previous position and this child
+      if (child.from > pos) {
+        parts.push(escapeHtml(doc.slice(pos, child.from)));
+      }
+
+      const childHtml = renderInlineNode(child, doc, macros);
+      if (childHtml !== null) {
+        parts.push(childHtml);
+      }
+
+      pos = child.to;
     }
-    html += "</tr>\n";
+    child = child.nextSibling;
   }
 
-  html += "</tbody>\n</table>";
-  return html;
+  // Trailing text after last child
+  if (pos < to) {
+    parts.push(escapeHtml(doc.slice(pos, to)));
+  }
+
+  return parts.join("");
+}
+
+/**
+ * Render a single inline node. Returns HTML string, or null if the node
+ * should be skipped (marks).
+ */
+function renderInlineNode(
+  node: SyntaxNode,
+  doc: string,
+  macros?: Record<string, string>,
+): string | null {
+  // Skip delimiter marks
+  if (MARK_NODES.has(node.name)) {
+    return null;
+  }
+
+  switch (node.name) {
+    case "Emphasis":
+      return `<em>${renderChildren(node, doc, macros)}</em>`;
+
+    case "StrongEmphasis":
+      return `<strong>${renderChildren(node, doc, macros)}</strong>`;
+
+    case "Strikethrough":
+      return `<del>${renderChildren(node, doc, macros)}</del>`;
+
+    case "Highlight":
+      return `<mark>${renderChildren(node, doc, macros)}</mark>`;
+
+    case "InlineCode": {
+      // Get code text between the CodeMark delimiters
+      const marks = node.getChildren("CodeMark");
+      if (marks.length >= 2) {
+        const code = doc.slice(marks[0].to, marks[marks.length - 1].from);
+        return `<code>${escapeHtml(code)}</code>`;
+      }
+      return `<code>${escapeHtml(doc.slice(node.from, node.to))}</code>`;
+    }
+
+    case "InlineMath": {
+      const marks = node.getChildren("InlineMathMark");
+      if (marks.length >= 2) {
+        const latex = doc.slice(marks[0].to, marks[marks.length - 1].from);
+        return renderMath(latex, false, macros);
+      }
+      return escapeHtml(doc.slice(node.from, node.to));
+    }
+
+    case "Link": {
+      return renderLink(node, doc, macros);
+    }
+
+    case "Image": {
+      return renderImage(node, doc);
+    }
+
+    case "FootnoteRef": {
+      // FootnoteRef text is [^id]
+      const refText = doc.slice(node.from, node.to);
+      const match = /^\[\^([^\]]+)\]$/.exec(refText);
+      if (match) {
+        const fnId = escapeHtml(match[1]);
+        return `<sup><a class="footnote-ref" href="#fn-${fnId}">${fnId}</a></sup>`;
+      }
+      return escapeHtml(refText);
+    }
+
+    case "HardBreak":
+      return "<br>";
+
+    case "URL":
+      // URL nodes inside links are handled by renderLink
+      return null;
+
+    default:
+      // Unknown inline node — render its text
+      return escapeHtml(doc.slice(node.from, node.to));
+  }
+}
+
+/** Render a Link node, handling cross-references ([@id]). */
+function renderLink(
+  node: SyntaxNode,
+  doc: string,
+  macros?: Record<string, string>,
+): string {
+  const fullText = doc.slice(node.from, node.to);
+
+  // Cross-reference: [@id] — Lezer parses this as a Link
+  const crossRefMatch = /^\[@([^\]]+)\]$/.exec(fullText);
+  if (crossRefMatch) {
+    const ref = escapeHtml(crossRefMatch[1]);
+    return `<a class="cross-ref" href="#${ref}">${ref}</a>`;
+  }
+
+  // Regular link: [text](url)
+  const urlNode = node.getChild("URL");
+  if (!urlNode) {
+    // No URL child — just render text
+    return renderChildren(node, doc, macros);
+  }
+
+  const rawHref = doc.slice(urlNode.from, urlNode.to);
+  const linkText = renderLinkText(node, doc, macros);
+
+  if (isSafeUrl(rawHref)) {
+    return `<a href="${escapeHtml(rawHref)}">${linkText}</a>`;
+  }
+  return `<span class="unsafe-link">${linkText}</span>`;
+}
+
+/** Render the text portion of a Link node (between [ and ]). */
+function renderLinkText(
+  node: SyntaxNode,
+  doc: string,
+  macros?: Record<string, string>,
+): string {
+  // Link text is between the first LinkMark "[" and the second LinkMark "]"
+  const marks = node.getChildren("LinkMark");
+  if (marks.length < 2) return escapeHtml(doc.slice(node.from, node.to));
+
+  const textFrom = marks[0].to;
+  const textTo = marks[1].from;
+  if (textTo <= textFrom) return "";
+
+  return renderChildren(node, doc, macros, textFrom, textTo);
+}
+
+/** Render an Image node. */
+function renderImage(node: SyntaxNode, doc: string): string {
+  const urlNode = node.getChild("URL");
+  if (!urlNode) return "";
+
+  const rawSrc = doc.slice(urlNode.from, urlNode.to);
+
+  // Alt text is between ![ and ]
+  const marks = node.getChildren("LinkMark");
+  let alt = "";
+  if (marks.length >= 2) {
+    alt = doc.slice(marks[0].to, marks[1].from);
+  }
+
+  if (isSafeUrl(rawSrc)) {
+    return `<img src="${escapeHtml(rawSrc)}" alt="${escapeHtml(alt)}">`;
+  }
+  return `<span class="unsafe-link">[image: ${escapeHtml(alt)}]</span>`;
 }
