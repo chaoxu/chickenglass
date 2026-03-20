@@ -100,6 +100,57 @@ function computeEmbedSrc(
   }
 }
 
+/**
+ * Try to read the iframe's content height and apply it.
+ *
+ * Returns `"resized"` on success, `"unavailable"` if the body isn't ready,
+ * or `"blocked"` if cross-origin restrictions prevent access.
+ */
+function tryResizeIframe(
+  iframe: HTMLIFrameElement,
+): "resized" | "unavailable" | "blocked" {
+  try {
+    const doc = iframe.contentDocument;
+    if (doc?.body) {
+      const height = doc.body.scrollHeight;
+      if (height > 0) {
+        iframe.style.height = `${height}px`;
+        return "resized";
+      }
+    }
+    return "unavailable";
+  } catch {
+    return "blocked";
+  }
+}
+
+/**
+ * Auto-resize a gist iframe to match its content height.
+ *
+ * Attempts to read `contentDocument.body.scrollHeight` (works when
+ * same-origin or sandbox allows access). If cross-origin blocks access,
+ * stops immediately. Otherwise polls until content is ready.
+ */
+function autoResizeGistIframe(iframe: HTMLIFrameElement): void {
+  const result = tryResizeIframe(iframe);
+  if (result !== "unavailable") return;
+
+  // Content not ready yet — poll until it loads or we give up
+  let attempts = 0;
+  const maxAttempts = 10;
+  const pollInterval = 500;
+
+  const poll = (): void => {
+    attempts++;
+    const r = tryResizeIframe(iframe);
+    if (r === "unavailable" && attempts < maxAttempts) {
+      setTimeout(poll, pollInterval);
+    }
+  };
+
+  setTimeout(poll, pollInterval);
+}
+
 /** Widget that renders an iframe for embed blocks. */
 class EmbedWidget extends RenderWidget {
   constructor(
@@ -125,6 +176,13 @@ class EmbedWidget extends RenderWidget {
       iframe.className = "cg-embed-iframe cg-embed-youtube-iframe";
     } else {
       iframe.className = "cg-embed-iframe";
+    }
+
+    // Gist embeds: auto-resize iframe to match content height
+    if (this.embedType === "gist") {
+      iframe.addEventListener("load", () => {
+        autoResizeGistIframe(iframe);
+      });
     }
 
     wrapper.appendChild(iframe);

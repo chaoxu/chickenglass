@@ -144,9 +144,10 @@ export const blockThemeStyles = {
     border: "1px solid var(--cg-border)",
     borderRadius: "2px",
   },
-  /* Gist embed: taller to show code */
+  /* Gist embed: auto-size to content instead of fixed height */
   ".cg-embed-gist .cg-embed-iframe": {
-    height: "400px",
+    height: "auto",
+    minHeight: "200px",
   },
 
   /* Include region: right border spans the full height, label anchors to it */
