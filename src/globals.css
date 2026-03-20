@@ -138,6 +138,16 @@ body {
   margin-top: 0.15em;
 }
 
+/* ── Math sizing: match surrounding context ────────────────────────────── *
+ * Math widgets (.cg-math-inline) are siblings of heading marks (.cg-heading-N),
+ * not children, so they don't inherit heading font-size. Use :has() to detect
+ * heading context and apply matching sizes. */
+
+.cm-line:has(.cg-heading-1) > .cg-math-inline { font-size: 2em; }
+.cm-line:has(.cg-heading-2) > .cg-math-inline { font-size: 1.5em; }
+.cm-line:has(.cg-heading-3) > .cg-math-inline { font-size: 1.25em; }
+.cm-line:has(.cg-heading-4) > .cg-math-inline { font-size: 1.1em; }
+
 /* ── Math sizing: inherit from surrounding context ─────────────────────── */
 
 .cg-math-inline .katex {
