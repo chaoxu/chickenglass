@@ -28,7 +28,6 @@ import { syntaxTree } from "@codemirror/language";
 import {
   buildDecorations,
   cursorInRange,
-  RenderWidget,
   editorFocusField,
   focusEffect,
   focusTracker,
@@ -174,163 +173,162 @@ function findTableAtCursor(
 }
 
 // ---------------------------------------------------------------------------
-// Toolbar widget
+// Toolbar builder helper (used inside TableWidget.toDOM)
 // ---------------------------------------------------------------------------
 
-/** Floating toolbar widget shown above an active table. */
-class TableToolbarWidget extends RenderWidget {
-  constructor(
-    private readonly tableRange: TableRange,
-  ) {
-    super();
-  }
+/**
+ * Build toolbar DOM with all table-editing buttons.
+ * The toolbar gets the currently active cell from `getActiveCell`.
+ */
+function buildToolbarDOM(
+  view: EditorView,
+  tableFrom: number,
+  parsed: ParsedTable,
+  getActiveCell: () => { section: string; row: number; col: number } | null,
+): HTMLElement {
+  const toolbar = document.createElement("div");
+  toolbar.className = "cg-table-toolbar";
+  toolbar.style.display = "none";
 
-  toDOM(view: EditorView): HTMLElement {
-    const toolbar = document.createElement("div");
-    toolbar.className = "cg-table-toolbar";
+  /** Re-parse the table from current document state at `tableFrom`. */
+  const getCurrentTableRange = (): TableRange | null => {
+    const tables = findTablesFromState(view.state);
+    return tables.find((t) => t.from === tableFrom) ?? null;
+  };
 
-    const makeBtn = (label: string, title: string, handler: () => void): HTMLButtonElement => {
-      const btn = document.createElement("button");
-      btn.className = "cg-table-toolbar-btn";
-      btn.textContent = label;
-      btn.title = title;
-      btn.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        handler();
-      });
-      toolbar.appendChild(btn);
-      return btn;
-    };
-
-    const makeSep = (): void => {
-      const sep = document.createElement("div");
-      sep.className = "cg-table-toolbar-sep";
-      toolbar.appendChild(sep);
-    };
-
-    // ── Row/Column add/delete buttons ──────────────────────────────────
-
-    makeBtn("+Row", "Add row below", () => {
-      applyTableMutation(view, this.tableRange, (table) => {
-        const cursorRow = getCursorRowIndex(view, this.tableRange);
-        return addRow(table, cursorRow !== null ? cursorRow + 1 : undefined);
-      });
+  const makeBtn = (label: string, title: string, handler: () => void): HTMLButtonElement => {
+    const btn = document.createElement("button");
+    btn.className = "cg-table-toolbar-btn";
+    btn.textContent = label;
+    btn.title = title;
+    btn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      handler();
     });
+    toolbar.appendChild(btn);
+    return btn;
+  };
 
-    makeBtn("+Col", "Add column to the right", () => {
-      applyTableMutation(view, this.tableRange, (table) => {
-        const cursorCol = getCursorColIndex(view, this.tableRange);
-        return addColumn(table, cursorCol !== null ? cursorCol + 1 : undefined);
-      });
-    });
+  const makeSep = (): void => {
+    const sep = document.createElement("div");
+    sep.className = "cg-table-toolbar-sep";
+    toolbar.appendChild(sep);
+  };
 
-    makeBtn("-Row", "Delete current row", () => {
-      applyTableMutation(view, this.tableRange, (table) => {
-        const cursorRow = getCursorRowIndex(view, this.tableRange);
-        if (cursorRow === null || table.rows.length === 0) return table;
-        return deleteRow(table, cursorRow);
-      });
-    });
+  // ── Row/Column add/delete buttons ──────────────────────────────────
 
-    makeBtn("-Col", "Delete current column", () => {
-      applyTableMutation(view, this.tableRange, (table) => {
-        const cursorCol = getCursorColIndex(view, this.tableRange);
-        if (cursorCol === null) return table;
-        return deleteColumn(table, cursorCol);
-      });
-    });
-
-    makeSep();
-
-    // ── Alignment buttons ──────────────────────────────────────────────
-
-    const alignments: Array<{ label: string; title: string; value: Alignment }> = [
-      { label: "\u2190", title: "Align left", value: "left" },
-      { label: "\u2194", title: "Align center", value: "center" },
-      { label: "\u2192", title: "Align right", value: "right" },
-    ];
-
-    for (const { label, title, value } of alignments) {
-      const btn = makeBtn(label, title, () => {
-        applyTableMutation(view, this.tableRange, (table) => {
-          const cursorCol = getCursorColIndex(view, this.tableRange);
-          if (cursorCol === null) return table;
-          return setAlignment(table, cursorCol, value);
-        });
-      });
-
-      // Highlight the active alignment for the current column
-      const cursorCol = getCursorColIndex(view, this.tableRange);
-      if (cursorCol !== null && this.tableRange.parsed.alignments[cursorCol] === value) {
-        btn.classList.add("cg-table-toolbar-btn-active");
-      }
-    }
-
-    makeSep();
-
-    // ── Move Row/Column buttons ────────────────────────────────────────
-
-    makeBtn("\u2191", "Move row up", () => {
-      const cursorRow = getCursorRowIndex(view, this.tableRange);
-      if (cursorRow === null || cursorRow <= 0) return;
-      applyTableMutation(view, this.tableRange, (table) =>
-        moveRow(table, cursorRow, cursorRow - 1),
-      );
-      // Move cursor up to follow the row
-      const targetLineNum = view.state.doc.lineAt(view.state.selection.main.head).number - 1;
-      if (targetLineNum >= 1) {
-        const targetLine = view.state.doc.line(targetLineNum);
-        const cursorCol = getCursorColIndex(view, this.tableRange);
-        const bounds = findCellBounds(targetLine.text, targetLine.from, cursorCol ?? 0);
-        if (bounds) {
-          view.dispatch({ selection: { anchor: bounds.from } });
-        }
-      }
-    });
-
-    makeBtn("\u2193", "Move row down", () => {
-      const cursorRow = getCursorRowIndex(view, this.tableRange);
-      if (cursorRow === null || cursorRow >= this.tableRange.parsed.rows.length - 1) return;
-      applyTableMutation(view, this.tableRange, (table) =>
-        moveRow(table, cursorRow, cursorRow + 1),
-      );
-      // Move cursor down to follow the row
-      const targetLineNum = view.state.doc.lineAt(view.state.selection.main.head).number + 1;
-      if (targetLineNum <= view.state.doc.lines) {
-        const targetLine = view.state.doc.line(targetLineNum);
-        const cursorCol = getCursorColIndex(view, this.tableRange);
-        const bounds = findCellBounds(targetLine.text, targetLine.from, cursorCol ?? 0);
-        if (bounds) {
-          view.dispatch({ selection: { anchor: bounds.from } });
-        }
-      }
-    });
-
-    makeBtn("\u2190", "Move column left", () => {
-      const cursorCol = getCursorColIndex(view, this.tableRange);
-      if (cursorCol === null || cursorCol <= 0) return;
-      applyTableMutation(view, this.tableRange, (table) =>
-        moveColumn(table, cursorCol, cursorCol - 1),
-      );
-    });
-
-    makeBtn("\u2192", "Move column right", () => {
-      const cursorCol = getCursorColIndex(view, this.tableRange);
-      if (cursorCol === null || cursorCol >= this.tableRange.parsed.header.cells.length - 1) return;
-      applyTableMutation(view, this.tableRange, (table) =>
-        moveColumn(table, cursorCol, cursorCol + 1),
-      );
-    });
-
-    return toolbar;
-  }
-
-  eq(other: TableToolbarWidget): boolean {
-    return (
-      this.tableRange.from === other.tableRange.from &&
-      this.tableRange.to === other.tableRange.to
+  makeBtn("+Row", "Add row below", () => {
+    const tableRange = getCurrentTableRange();
+    if (!tableRange) return;
+    const active = getActiveCell();
+    const rowIdx = active ? (active.section === "header" ? null : active.row) : null;
+    applyTableMutation(view, tableRange, (table) =>
+      addRow(table, rowIdx !== null ? rowIdx + 1 : undefined),
     );
+  });
+
+  makeBtn("+Col", "Add column to the right", () => {
+    const tableRange = getCurrentTableRange();
+    if (!tableRange) return;
+    const active = getActiveCell();
+    const colIdx = active ? active.col : null;
+    applyTableMutation(view, tableRange, (table) =>
+      addColumn(table, colIdx !== null ? colIdx + 1 : undefined),
+    );
+  });
+
+  makeBtn("-Row", "Delete current row", () => {
+    const tableRange = getCurrentTableRange();
+    if (!tableRange) return;
+    const active = getActiveCell();
+    if (!active || active.section === "header") return;
+    const rowIdx = active.row;
+    if (tableRange.parsed.rows.length === 0) return;
+    applyTableMutation(view, tableRange, (table) => deleteRow(table, rowIdx));
+  });
+
+  makeBtn("-Col", "Delete current column", () => {
+    const tableRange = getCurrentTableRange();
+    if (!tableRange) return;
+    const active = getActiveCell();
+    if (!active) return;
+    applyTableMutation(view, tableRange, (table) => deleteColumn(table, active.col));
+  });
+
+  makeSep();
+
+  // ── Alignment buttons ──────────────────────────────────────────────
+
+  const alignments: Array<{ label: string; title: string; value: Alignment }> = [
+    { label: "\u2190", title: "Align left", value: "left" },
+    { label: "\u2194", title: "Align center", value: "center" },
+    { label: "\u2192", title: "Align right", value: "right" },
+  ];
+
+  for (const { label, title, value } of alignments) {
+    const btn = makeBtn(label, title, () => {
+      const tableRange = getCurrentTableRange();
+      if (!tableRange) return;
+      const active = getActiveCell();
+      if (!active) return;
+      applyTableMutation(view, tableRange, (table) =>
+        setAlignment(table, active.col, value),
+      );
+    });
+
+    // Highlight the active alignment for the current column
+    const active = getActiveCell();
+    if (active !== null && parsed.alignments[active.col] === value) {
+      btn.classList.add("cg-table-toolbar-btn-active");
+    }
   }
+
+  makeSep();
+
+  // ── Move Row/Column buttons ────────────────────────────────────────
+
+  makeBtn("\u2191", "Move row up", () => {
+    const tableRange = getCurrentTableRange();
+    if (!tableRange) return;
+    const active = getActiveCell();
+    if (!active || active.section === "header" || active.row <= 0) return;
+    applyTableMutation(view, tableRange, (table) =>
+      moveRow(table, active.row, active.row - 1),
+    );
+  });
+
+  makeBtn("\u2193", "Move row down", () => {
+    const tableRange = getCurrentTableRange();
+    if (!tableRange) return;
+    const active = getActiveCell();
+    if (!active || active.section === "header") return;
+    if (active.row >= parsed.rows.length - 1) return;
+    applyTableMutation(view, tableRange, (table) =>
+      moveRow(table, active.row, active.row + 1),
+    );
+  });
+
+  makeBtn("\u2190", "Move column left", () => {
+    const tableRange = getCurrentTableRange();
+    if (!tableRange) return;
+    const active = getActiveCell();
+    if (!active || active.col <= 0) return;
+    applyTableMutation(view, tableRange, (table) =>
+      moveColumn(table, active.col, active.col - 1),
+    );
+  });
+
+  makeBtn("\u2192", "Move column right", () => {
+    const tableRange = getCurrentTableRange();
+    if (!tableRange) return;
+    const active = getActiveCell();
+    if (!active || active.col >= parsed.header.cells.length - 1) return;
+    applyTableMutation(view, tableRange, (table) =>
+      moveColumn(table, active.col, active.col + 1),
+    );
+  });
+
+  return toolbar;
 }
 
 // ---------------------------------------------------------------------------
@@ -780,15 +778,7 @@ function buildTableDecorationsFromState(state: EditorState, focused: boolean): D
   for (const table of tables) {
     const insideCursor = focused && cursorInRange(state, table.from, table.to);
 
-    if (insideCursor) {
-      // Cursor inside: show raw source + toolbar
-      items.push(
-        Decoration.widget({
-          widget: new TableToolbarWidget(table),
-          side: -1,
-        }).range(table.from),
-      );
-    } else {
+    if (!insideCursor) {
       // Cursor outside: replace entire table with rendered HTML table
       const tableText = state.sliceDoc(table.from, table.to);
       const widget = new TableWidget(table.parsed, tableText, table.from, macros);
@@ -800,6 +790,8 @@ function buildTableDecorationsFromState(state: EditorState, focused: boolean): D
         }).range(table.from, table.to),
       );
     }
+    // Cursor inside: raw source is visible for editing.
+    // Toolbar is now embedded inside TableWidget DOM (shown on focus).
   }
 
   return buildDecorations(items);
@@ -1202,6 +1194,44 @@ export class TableWidget extends WidgetType {
     container.dataset.tableFrom = String(this.tableFrom);
 
     const tableEl = document.createElement("table");
+
+    // ── Active cell tracking ──────────────────────────────────────────
+    let activeCell: { section: string; row: number; col: number } | null = null;
+
+    const getActiveCell = (): { section: string; row: number; col: number } | null =>
+      activeCell;
+
+    // ── Toolbar (initially hidden, shown on cell focus) ───────────────
+    const toolbar = buildToolbarDOM(
+      view,
+      this.tableFrom,
+      this.table,
+      getActiveCell,
+    );
+    container.appendChild(toolbar);
+
+    // ── Focus / blur: show/hide toolbar ───────────────────────────────
+    container.addEventListener("focusin", (e) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.dataset.col !== undefined) {
+        activeCell = {
+          section: target.dataset.section ?? "body",
+          row: parseInt(target.dataset.row ?? "0", 10),
+          col: parseInt(target.dataset.col ?? "0", 10),
+        };
+      }
+      toolbar.style.display = "flex";
+    });
+
+    container.addEventListener("focusout", () => {
+      // Delay to allow focus to move between cells within the same table
+      setTimeout(() => {
+        if (!container.contains(document.activeElement)) {
+          toolbar.style.display = "none";
+          activeCell = null;
+        }
+      }, 0);
+    });
 
     // ── Shared cell setup ─────────────────────────────────────────────
     const setupCell = (
