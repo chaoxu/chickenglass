@@ -36,29 +36,19 @@ export interface ReadModeViewProps {
 }
 
 /**
- * Replace each .katex element with an empty inline span whose padding
- * matches the KaTeX width. tex-linebreak2 creates a box from the padding
- * of inline elements (no recursion, no IGNORE_WHITESPACE) — so it sees
- * each math expression as a single "word" of the correct width in normal
- * inline text flow. After line breaking, swap the originals back.
+ * Filter paragraphs to only those without inline math.
+ * Paragraphs with .katex elements are skipped — they fall back to
+ * CSS text-align:justify + Hyphenopoly soft hyphens, which handles
+ * KaTeX's complex DOM without any compatibility issues.
  */
-function replaceKatexWithPaddingSpans(container: HTMLElement): () => void {
-  const saved: { placeholder: HTMLSpanElement; original: HTMLElement }[] = [];
-
-  for (const el of container.querySelectorAll<HTMLElement>("p .katex")) {
-    const width = el.getBoundingClientRect().width;
-    const placeholder = document.createElement("span");
-    placeholder.style.paddingLeft = width + "px";
-
-    el.parentNode?.replaceChild(placeholder, el);
-    saved.push({ placeholder, original: el });
-  }
-
-  return () => {
-    for (const { placeholder, original } of saved) {
-      placeholder.parentNode?.replaceChild(original, placeholder);
+function getTextOnlyParagraphs(container: HTMLElement): HTMLElement[] {
+  const result: HTMLElement[] = [];
+  for (const p of container.querySelectorAll<HTMLElement>("p")) {
+    if (!p.querySelector(".katex")) {
+      result.push(p);
     }
-  };
+  }
+  return result;
 }
 
 /**
@@ -75,14 +65,24 @@ async function applyLineBreaking(container: HTMLElement): Promise<void> {
     resetDOMJustification(p);
   }
 
-  const restoreKatex = replaceKatexWithPaddingSpans(container);
+  // Only apply Knuth-Plass to paragraphs without math — tex-linebreak2
+  // cannot handle KaTeX's DOM (all placeholder approaches fail due to
+  // skipWhenRendering/display:none in the rendering phase). Math paragraphs
+  // fall back to CSS text-align:justify + Hyphenopoly soft hyphens.
+  const textParagraphs = getTextOnlyParagraphs(container);
+  if (textParagraphs.length === 0) return;
 
-  await texLinebreakDOM(paragraphs, {
+  await texLinebreakDOM(textParagraphs, {
     justify: true,
     updateOnWindowResize: false,
   });
 
-  restoreKatex();
+  // DEBUG: log width mismatches
+  for (const el of container.querySelectorAll<HTMLElement>("p .katex")) {
+    const newWidth = el.getBoundingClientRect().width;
+    const text = el.textContent?.substring(0, 20) || "";
+    console.log(`KaTeX "${text}" restored width: ${newWidth.toFixed(2)}`);
+  }
 }
 
 /**
