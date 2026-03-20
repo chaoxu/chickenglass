@@ -35,6 +35,42 @@ export interface ReadModeViewProps {
   onScroll?: (scrollTop: number) => void;
 }
 
+/** Transparent 1x1 pixel PNG for img placeholders. */
+const TRANSPARENT_PIXEL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAABJREFOAAAADQABBQAABmkAAAAAAElFTkSuQmCC";
+
+/**
+ * Replace each .katex element with an `<img>` placeholder of the same
+ * dimensions. `<img>` is a replaced element — tex-linebreak2 cannot
+ * recurse into it, so it treats each math expression as a single
+ * atomic box at the correct width. Normal inline flow is preserved
+ * (no IGNORE_WHITESPACE markers like with inline-block).
+ *
+ * Returns a restore function that swaps the originals back in.
+ */
+function replaceKatexWithPlaceholders(container: HTMLElement): () => void {
+  const saved: { img: HTMLImageElement; original: HTMLElement }[] = [];
+
+  for (const el of container.querySelectorAll<HTMLElement>(".katex")) {
+    const rect = el.getBoundingClientRect();
+    const img = document.createElement("img");
+    img.src = TRANSPARENT_PIXEL;
+    img.width = Math.ceil(rect.width);
+    img.height = Math.ceil(rect.height);
+    img.style.verticalAlign = "middle";
+    img.setAttribute("aria-hidden", "true");
+
+    el.parentNode?.replaceChild(img, el);
+    saved.push({ img, original: el });
+  }
+
+  return () => {
+    for (const { img, original } of saved) {
+      img.parentNode?.replaceChild(original, img);
+    }
+  };
+}
+
 /**
  * Apply Knuth-Plass line breaking to all `<p>` elements inside the container.
  * Resets any previous justification before re-applying so the algorithm
@@ -49,10 +85,16 @@ async function applyLineBreaking(container: HTMLElement): Promise<void> {
     resetDOMJustification(p);
   }
 
+  // Replace KaTeX with img placeholders so tex-linebreak2 sees atomic boxes
+  const restoreKatex = replaceKatexWithPlaceholders(container);
+
   await texLinebreakDOM(paragraphs, {
     justify: true,
-    updateOnWindowResize: false, // We handle resize ourselves via ResizeObserver
+    updateOnWindowResize: false,
   });
+
+  // Swap original KaTeX elements back in
+  restoreKatex();
 }
 
 /**
