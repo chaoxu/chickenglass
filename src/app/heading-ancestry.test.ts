@@ -46,6 +46,67 @@ describe("extractHeadings", () => {
     expect(headings[3]).toMatchObject({ level: 2, text: "D", number: "1.2" });
     expect(headings[4]).toMatchObject({ level: 3, text: "E", number: "1.2.1" });
   });
+
+  it("gives empty number to headings with {-} attribute", () => {
+    const headings = headingsFrom(
+      "# Intro\n\n# Acknowledgments {-}\n\n# Methods\n",
+    );
+
+    expect(headings).toHaveLength(3);
+    expect(headings[0]).toMatchObject({ level: 1, text: "Intro", number: "1" });
+    expect(headings[1]).toMatchObject({
+      level: 1,
+      text: "Acknowledgments",
+      number: "",
+    });
+    expect(headings[2]).toMatchObject({ level: 1, text: "Methods", number: "2" });
+  });
+
+  it("gives empty number to headings with {.unnumbered} attribute", () => {
+    const headings = headingsFrom(
+      "# Intro\n\n# Acknowledgments {.unnumbered}\n\n# Methods\n",
+    );
+
+    expect(headings).toHaveLength(3);
+    expect(headings[1]).toMatchObject({
+      level: 1,
+      text: "Acknowledgments",
+      number: "",
+    });
+    expect(headings[2]).toMatchObject({ level: 1, text: "Methods", number: "2" });
+  });
+
+  it("strips attribute block from heading text", () => {
+    const headings = headingsFrom("# Title {-}\n\n## Sub {.unnumbered}\n");
+
+    expect(headings[0].text).toBe("Title");
+    expect(headings[1].text).toBe("Sub");
+  });
+
+  it("unnumbered headings do not affect counter state", () => {
+    const headings = headingsFrom(
+      "# One\n\n## Sub A\n\n## Aside {-}\n\n## Sub B\n\n# Two\n",
+    );
+
+    expect(headings).toHaveLength(5);
+    expect(headings[2]).toMatchObject({ text: "Aside", number: "" });
+    // Sub B should be 1.2, not 1.3
+    expect(headings[3]).toMatchObject({ text: "Sub B", number: "1.2" });
+    expect(headings[4]).toMatchObject({ text: "Two", number: "2" });
+  });
+
+  it("unnumbered headings still appear in the outline", () => {
+    const headings = headingsFrom(
+      "# Chapter\n\n## Regular\n\n## Appendix {-}\n",
+    );
+
+    expect(headings).toHaveLength(3);
+    expect(headings[2]).toMatchObject({
+      level: 2,
+      text: "Appendix",
+      number: "",
+    });
+  });
 });
 
 describe("headingAncestryAt", () => {

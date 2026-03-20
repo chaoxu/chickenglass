@@ -12,19 +12,28 @@ import { syntaxTree } from "@codemirror/language";
 export interface HeadingEntry {
   /** Heading level (1–6). */
   level: number;
-  /** Heading text (without # markers). */
+  /** Heading text (without # markers or attribute blocks). */
   text: string;
-  /** Hierarchical section number (e.g., "1.2.3"). */
+  /** Hierarchical section number (e.g., "1.2.3"), or "" for unnumbered headings. */
   number: string;
   /** Document position of the heading node. */
   pos: number;
 }
 
 /**
+ * Regex matching Pandoc unnumbered heading attributes.
+ * Matches `{-}`, `{.unnumbered}`, or attribute blocks containing either
+ * (e.g. `{- .someclass}`, `{.unnumbered #id}`).
+ */
+export const unnumberedRe = /\{[^}]*(?:-|\.unnumbered)[^}]*\}\s*$/;
+
+/**
  * Extract all headings from the editor state.
  *
  * Walks the syntax tree for ATXHeading nodes and builds hierarchical
- * section numbers. Returns entries sorted by document position.
+ * section numbers. Headings with Pandoc unnumbered attributes ({-} or
+ * {.unnumbered}) are included but without a section number.
+ * Returns entries sorted by document position.
  */
 export function extractHeadings(state: EditorState): HeadingEntry[] {
   const entries: HeadingEntry[] = [];
@@ -37,19 +46,31 @@ export function extractHeadings(state: EditorState): HeadingEntry[] {
       if (!m) return;
 
       const level = Number(m[1]);
-      counters[level]++;
-      for (let i = level + 1; i <= 6; i++) counters[i] = 0;
-
-      const parts: number[] = [];
-      for (let i = 1; i <= level; i++) parts.push(counters[i]);
-
       const lineText = state.doc.lineAt(node.from).text;
-      const text = lineText.replace(/^#+\s*/, "");
+      const isUnnumbered = unnumberedRe.test(lineText);
+
+      let sectionNumber: string;
+      if (isUnnumbered) {
+        // Unnumbered headings get no section number and don't affect counters
+        sectionNumber = "";
+      } else {
+        counters[level]++;
+        for (let i = level + 1; i <= 6; i++) counters[i] = 0;
+
+        const parts: number[] = [];
+        for (let i = 1; i <= level; i++) parts.push(counters[i]);
+        sectionNumber = parts.join(".");
+      }
+
+      // Strip # markers and any trailing attribute block ({...})
+      const text = lineText
+        .replace(/^#+\s*/, "")
+        .replace(/\s*\{[^}]*\}\s*$/, "");
 
       entries.push({
         level,
         text,
-        number: parts.join("."),
+        number: sectionNumber,
         pos: node.from,
       });
     },

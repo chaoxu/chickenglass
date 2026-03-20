@@ -23,6 +23,7 @@ import { syntaxTree } from "@codemirror/language";
 import {
   buildDecorations,
 } from "./render-utils";
+import { unnumberedRe } from "../app/heading-ancestry";
 
 /** Extract the heading level (1–6) from an ATXHeading node name. */
 function headingLevel(name: string): number {
@@ -42,6 +43,10 @@ export function buildSectionDecorations(state: EditorState): DecorationSet {
     enter(node) {
       const level = headingLevel(node.name);
       if (level === 0) return;
+
+      // Check for Pandoc unnumbered attribute ({-} or {.unnumbered})
+      const lineText = state.doc.lineAt(node.from).text;
+      if (unnumberedRe.test(lineText)) return;
 
       // Increment this level, reset all deeper levels
       counters[level]++;

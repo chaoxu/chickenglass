@@ -111,4 +111,61 @@ describe("buildSectionDecorations", () => {
   it("returns empty for an empty document", () => {
     expect(extractNumbers(createState(""))).toEqual([]);
   });
+
+  it("skips numbering for headings with {-} attribute", () => {
+    const doc = [
+      "# Intro",
+      "",
+      "# Acknowledgments {-}",
+      "",
+      "# Methods",
+    ].join("\n");
+    expect(extractNumbers(createState(doc))).toEqual(["1", "2"]);
+  });
+
+  it("skips numbering for headings with {.unnumbered} attribute", () => {
+    const doc = [
+      "# Intro",
+      "",
+      "# Acknowledgments {.unnumbered}",
+      "",
+      "# Methods",
+    ].join("\n");
+    expect(extractNumbers(createState(doc))).toEqual(["1", "2"]);
+  });
+
+  it("skips unnumbered headings at any level", () => {
+    const doc = [
+      "# Chapter",
+      "",
+      "## Aside {-}",
+      "",
+      "## Real Section",
+      "",
+      "### Deep Aside {.unnumbered}",
+      "",
+      "### Real Subsection",
+    ].join("\n");
+    expect(extractNumbers(createState(doc))).toEqual([
+      "1", "1.1", "1.1.1",
+    ]);
+  });
+
+  it("does not affect counter state for unnumbered headings", () => {
+    const doc = [
+      "# One",
+      "",
+      "## Sub A",
+      "",
+      "## Unnumbered {-}",
+      "",
+      "## Sub B",
+      "",
+      "# Two",
+    ].join("\n");
+    // Sub B should be 1.2, not 1.3 — the unnumbered heading doesn't increment
+    expect(extractNumbers(createState(doc))).toEqual([
+      "1", "1.1", "1.2", "2",
+    ]);
+  });
 });
