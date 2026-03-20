@@ -94,11 +94,22 @@ export const typographyThemeStyles = {
     fontWeight: "400",
   },
 
-  /* Header markers (# symbols) shown in muted color when editing */
-  ".cg-heading-1 .tok-heading, .cg-heading-2 .tok-heading, .cg-heading-3 .tok-heading":
+  /* Header markers (# symbols) shown in muted color when editing.
+   * Only target tok-meta (the # and space), not tok-heading (the text). */
+  ".cg-heading-1 .tok-heading.tok-meta, .cg-heading-2 .tok-heading.tok-meta, .cg-heading-3 .tok-heading.tok-meta":
     {
       color: "var(--cg-muted)",
     },
+  /* Heading text should use foreground color, not syntax highlight grey */
+  ".cg-heading-1 .tok-heading, .cg-heading-2 .tok-heading, .cg-heading-3 .tok-heading, .cg-heading-4 .tok-heading, .cg-heading-5 .tok-heading, .cg-heading-6 .tok-heading":
+    {
+      color: "var(--cg-fg)",
+    },
+
+  /* List markers (1., 2., -, *) should use foreground color */
+  ".tok-meta": {
+    color: "var(--cg-fg)",
+  },
 
   /* Horizontal rule styling */
   ".cg-hr": {
