@@ -156,22 +156,21 @@ body {
   margin-top: 0.15em;
 }
 
-/* CSL-formatted entries: number + text inline, flush left */
+/* CSL-formatted entries: flex layout ignores whitespace nodes in CSL HTML */
 .cg-bibliography-entry .csl-entry {
+  display: flex;
+  flex-wrap: wrap;
   margin: 0;
   padding: 0;
 }
 
 .cg-bibliography-entry .csl-left-margin {
-  display: inline;
-  padding: 0;
-  margin: 0;
+  margin-right: 0.3em;
 }
 
 .cg-bibliography-entry .csl-right-inline {
-  display: inline;
-  padding: 0;
-  margin: 0;
+  flex: 1;
+  min-width: 70%;
 }
 
 /* ── Math sizing: inherit from surrounding context ─────────────────────── */
