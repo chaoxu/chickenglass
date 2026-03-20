@@ -146,7 +146,11 @@ body {
 /* No heading math size hacks needed — font-size is on .cm-line via
  * Decoration.line (.cg-heading-line-N), so all children inherit it. */
 
-/* ── Math sizing: inherit from surrounding context ─────────────────────── */
+/* ── Math sizing & color: inherit from surrounding context ─────────────── */
+
+.katex {
+  color: inherit;
+}
 
 .cg-math-inline .katex {
   font-size: inherit;
