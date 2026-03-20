@@ -67,7 +67,7 @@ function appendLabelIfPresent(
 const backslashDisplayMathWithLabel: BlockParser = {
   name: "BackslashDisplayMath",
   parse(cx: BlockContext, line: Line) {
-    const textAfterIndent = line.text.slice(line.pos - line.basePos);
+    const textAfterIndent = line.text.slice(line.pos);
     if (!textAfterIndent.startsWith("\\[")) return false;
 
     const start = cx.lineStart + line.pos;
@@ -134,7 +134,7 @@ const backslashDisplayMathWithLabel: BlockParser = {
 const dollarDisplayMathWithLabel: BlockParser = {
   name: "DollarDisplayMath",
   parse(cx: BlockContext, line: Line) {
-    const textAfterIndent = line.text.slice(line.pos - line.basePos);
+    const textAfterIndent = line.text.slice(line.pos);
     if (!textAfterIndent.startsWith("$$")) return false;
 
     const start = cx.lineStart + line.pos;
@@ -217,5 +217,18 @@ export const equationLabelExtension: MarkdownConfig = {
       style: tags.labelName,
     },
   ],
-  parseBlock: [backslashDisplayMathWithLabel, dollarDisplayMathWithLabel],
+  parseBlock: [
+    {
+      ...backslashDisplayMathWithLabel,
+      endLeaf(_cx: BlockContext, line: Line): boolean {
+        return line.text.slice(line.pos).startsWith("\\[");
+      },
+    },
+    {
+      ...dollarDisplayMathWithLabel,
+      endLeaf(_cx: BlockContext, line: Line): boolean {
+        return line.text.slice(line.pos).startsWith("$$");
+      },
+    },
+  ],
 };
