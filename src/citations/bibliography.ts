@@ -117,7 +117,8 @@ export class BibliographyWidget extends RenderWidget {
       for (let i = 0; i < this.cslHtml.length; i++) {
         const div = document.createElement("div");
         div.className = "cg-bibliography-entry";
-        div.innerHTML = this.cslHtml[i];
+        // Strip whitespace between CSL HTML tags to prevent inline spacing artifacts
+        div.innerHTML = this.cslHtml[i].replace(/>\s+</g, "><").trim();
         list.appendChild(div);
       }
     } else {
