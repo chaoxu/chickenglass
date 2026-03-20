@@ -70,6 +70,11 @@
   "playwright_gate": {
     "enabled": false
   },
+  "lead_visual_check": {
+    "enabled": true,
+    "when": "before_merge",
+    "description": "Lead starts dev server in the worktree, opens headless Playwright, takes screenshot of affected pages, and visually verifies before merging. If issues found, sends feedback to worker for fixes."
+  },
   "selective_verify_checks": {
     "enabled": false
   },
