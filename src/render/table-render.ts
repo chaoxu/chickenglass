@@ -27,9 +27,7 @@ import { keymap } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import {
   buildDecorations,
-  cursorInRange,
   editorFocusField,
-  focusEffect,
   focusTracker,
 } from "./render-utils";
 import { renderInlineMarkdown } from "./inline-render";
@@ -739,34 +737,26 @@ function findTablesFromState(state: EditorState): TableRange[] {
 /**
  * Build table decorations from EditorState.
  *
- * For each table:
- * - If cursor is inside (and editor is focused): show toolbar widget only
- *   (raw source is visible for editing).
- * - If cursor is outside: replace the entire table with a rendered HTML
- *   <table> via TableWidget.
+ * For each table: always replace with a rendered HTML <table> via TableWidget.
+ * Cell editing happens via contenteditable within the widget.
  */
-function buildTableDecorationsFromState(state: EditorState, focused: boolean): DecorationSet {
+function buildTableDecorationsFromState(state: EditorState): DecorationSet {
   const tables = findTablesFromState(state);
   const macros = state.field(mathMacrosField);
   const items: Range<Decoration>[] = [];
 
   for (const table of tables) {
-    const insideCursor = focused && cursorInRange(state, table.from, table.to);
+    // Always render as HTML table widget — never show raw source.
+    // Cell editing happens via contenteditable within the widget.
+    const tableText = state.sliceDoc(table.from, table.to);
+    const widget = new TableWidget(table.parsed, tableText, table.from, macros);
 
-    if (!insideCursor) {
-      // Cursor outside: replace entire table with rendered HTML table
-      const tableText = state.sliceDoc(table.from, table.to);
-      const widget = new TableWidget(table.parsed, tableText, table.from, macros);
-
-      items.push(
-        Decoration.replace({
-          widget,
-          block: true,
-        }).range(table.from, table.to),
-      );
-    }
-    // Cursor inside: raw source is visible for editing.
-    // Toolbar is now embedded inside TableWidget DOM (shown on focus).
+    items.push(
+      Decoration.replace({
+        widget,
+        block: true,
+      }).range(table.from, table.to),
+    );
   }
 
   return buildDecorations(items);
@@ -780,7 +770,7 @@ function buildTableDecorationsFromState(state: EditorState, focused: boolean): D
  */
 const tableDecorationField = StateField.define<DecorationSet>({
   create(state) {
-    return buildTableDecorationsFromState(state, false);
+    return buildTableDecorationsFromState(state);
   },
 
   update(value, tr) {
@@ -794,12 +784,9 @@ const tableDecorationField = StateField.define<DecorationSet>({
 
     if (
       tr.docChanged ||
-      tr.selection ||
-      tr.effects.some((e) => e.is(focusEffect)) ||
       syntaxTree(tr.state) !== syntaxTree(tr.startState)
     ) {
-      const focused = tr.state.field(editorFocusField, false) ?? false;
-      return buildTableDecorationsFromState(tr.state, focused);
+      return buildTableDecorationsFromState(tr.state);
     }
     return value;
   },
