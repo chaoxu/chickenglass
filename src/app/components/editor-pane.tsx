@@ -58,8 +58,6 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
         const width = entry.contentRect.width;
         if (width < AUTO_COLLAPSE_WIDTH && !sidenotesCollapsed) {
           onSidenotesCollapsedChange(true);
-        } else if (width >= AUTO_COLLAPSE_WIDTH && sidenotesCollapsed) {
-          onSidenotesCollapsedChange(false);
         }
       }
     });

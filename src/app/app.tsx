@@ -75,7 +75,7 @@ function AppInner() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(224);
   const [sidebarTab, setSidebarTab] = useState<"files" | "outline" | "symbols">("files");
-  const [sidenotesCollapsed, setSidenotesCollapsed] = useState(false);
+  const [sidenotesCollapsed, setSidenotesCollapsed] = useState(true);
 
   const refreshTree = useCallback(async () => {
     try {
