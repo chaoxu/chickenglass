@@ -71,6 +71,7 @@ body {
 
 .cm-scroller {
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .cm-editor.cm-focused {
