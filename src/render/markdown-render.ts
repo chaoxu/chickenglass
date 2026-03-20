@@ -34,14 +34,28 @@ const HIDDEN_NODES = new Set([
   "HighlightMark",
 ]);
 
-/** Heading style decorations keyed by ATXHeading level. */
-const headingDecorationByLevel: Record<string, Decoration> = {
+/** Heading mark decorations (font-weight, text styling on spans). */
+const headingMarkByLevel: Record<string, Decoration> = {
   ATXHeading1: Decoration.mark({ class: "cg-heading-1" }),
   ATXHeading2: Decoration.mark({ class: "cg-heading-2" }),
   ATXHeading3: Decoration.mark({ class: "cg-heading-3" }),
   ATXHeading4: Decoration.mark({ class: "cg-heading-4" }),
   ATXHeading5: Decoration.mark({ class: "cg-heading-5" }),
   ATXHeading6: Decoration.mark({ class: "cg-heading-6" }),
+};
+
+/**
+ * Heading line decorations (font-size on .cm-line).
+ * Font-size lives here so ALL children (including math widgets) inherit it,
+ * rather than only text spans wrapped by Decoration.mark.
+ */
+const headingLineByLevel: Record<string, Decoration> = {
+  ATXHeading1: Decoration.line({ class: "cg-heading-line-1" }),
+  ATXHeading2: Decoration.line({ class: "cg-heading-line-2" }),
+  ATXHeading3: Decoration.line({ class: "cg-heading-line-3" }),
+  ATXHeading4: Decoration.line({ class: "cg-heading-line-4" }),
+  ATXHeading5: Decoration.line({ class: "cg-heading-line-5" }),
+  ATXHeading6: Decoration.line({ class: "cg-heading-line-6" }),
 };
 
 /** Decoration to style horizontal rules. */
@@ -101,9 +115,15 @@ class MarkdownRenderPlugin implements PluginValue {
         enter(node) {
           // --- ATX Headings: ALWAYS apply heading style, only hide markers when cursor outside ---
           if (node.name.startsWith("ATXHeading")) {
-            const headingDeco = headingDecorationByLevel[node.name];
-            if (headingDeco) {
-              widgets.push(headingDeco.range(node.from, node.to));
+            const headingMark = headingMarkByLevel[node.name];
+            if (headingMark) {
+              widgets.push(headingMark.range(node.from, node.to));
+            }
+            // Line decoration puts font-size on .cm-line so math widgets inherit it
+            const headingLine = headingLineByLevel[node.name];
+            if (headingLine) {
+              const line = view.state.doc.lineAt(node.from);
+              widgets.push(headingLine.range(line.from));
             }
 
             // If cursor is inside: keep heading style but skip hiding markers

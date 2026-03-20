@@ -46,38 +46,22 @@ export const typographyThemeStyles = {
     padding: "1px 0",
   },
 
-  /* Heading styles */
-  ".cg-heading-1": {
-    fontSize: "2em",
-    fontWeight: "700",
-    lineHeight: "1.2",
-  },
-  ".cg-heading-2": {
-    fontSize: "1.5em",
-    fontWeight: "700",
-    lineHeight: "1.3",
-  },
-  ".cg-heading-3": {
-    fontSize: "1.25em",
-    fontWeight: "600",
-    lineHeight: "1.4",
-  },
-  ".cg-heading-4": {
-    fontSize: "1.1em",
-    fontWeight: "600",
-    lineHeight: "1.4",
-  },
-  ".cg-heading-5": {
-    fontSize: "1em",
-    fontWeight: "600",
-    lineHeight: "1.5",
-  },
-  ".cg-heading-6": {
-    fontSize: "0.9em",
-    fontWeight: "600",
-    lineHeight: "1.5",
-    color: "var(--cg-muted)",
-  },
+  /* Heading line styles — font-size on .cm-line so all children (including
+   * math widgets) inherit it. Font-weight stays on .cg-heading-N marks. */
+  ".cg-heading-line-1": { fontSize: "2em", lineHeight: "1.2" },
+  ".cg-heading-line-2": { fontSize: "1.5em", lineHeight: "1.3" },
+  ".cg-heading-line-3": { fontSize: "1.25em", lineHeight: "1.4" },
+  ".cg-heading-line-4": { fontSize: "1.1em", lineHeight: "1.4" },
+  ".cg-heading-line-5": { fontSize: "1em", lineHeight: "1.5" },
+  ".cg-heading-line-6": { fontSize: "0.9em", lineHeight: "1.5" },
+
+  /* Heading mark styles — font-weight on text spans */
+  ".cg-heading-1": { fontWeight: "700" },
+  ".cg-heading-2": { fontWeight: "700" },
+  ".cg-heading-3": { fontWeight: "600" },
+  ".cg-heading-4": { fontWeight: "600" },
+  ".cg-heading-5": { fontWeight: "600" },
+  ".cg-heading-6": { fontWeight: "600", color: "var(--cg-muted)" },
 
   /* Inline content styling — always applied for WYSIWYG feel */
   ".cg-bold": {
