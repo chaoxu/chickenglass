@@ -448,7 +448,7 @@ function AppInner() {
   }, [openFile]);
 
   return (
-    <div className="flex h-screen overflow-hidden" onDragOver={handleDragOver} onDrop={handleDrop}>
+    <div className="flex h-screen overflow-hidden overscroll-contain" onDragOver={handleDragOver} onDrop={handleDrop}>
       {/* Sidebar */}
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((v) => !v)} width={sidebarWidth} onWidthChange={setSidebarWidth}>
         {/* Tab switcher */}

@@ -94,7 +94,7 @@ export function Sidebar({ collapsed, onToggle, width, onWidthChange, children }:
         </div>
 
         {/* Scrollable content area */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 overscroll-contain">
           {children}
         </div>
       </div>

@@ -82,7 +82,7 @@ export function SymbolPanel({ onInsert, view }: SymbolPanelProps) {
       </div>
 
       {/* Symbol list */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-2 py-1">
+      <div className="flex-1 overflow-y-auto min-h-0 px-2 py-1 overscroll-contain">
         {visible.length === 0 ? (
           <p className="text-xs text-[var(--cg-muted)] text-center py-4">
             No symbols found.

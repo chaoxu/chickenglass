@@ -116,7 +116,7 @@ export function TabBar({ tabs, activeTab, onSelect, onClose, onReorder, onPin }:
       <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
         <div
           data-tabbar
-          className="flex flex-row items-stretch border-b border-[var(--cg-border)] bg-[var(--cg-bg-secondary)] relative overflow-x-auto overflow-y-hidden select-none"
+          className="flex flex-row items-stretch border-b border-[var(--cg-border)] bg-[var(--cg-bg-secondary)] relative overflow-x-auto overflow-y-hidden select-none overscroll-x-contain"
         >
           {tabs.map((tab) => (
             <SortableTab
