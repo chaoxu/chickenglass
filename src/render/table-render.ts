@@ -1,37 +1,39 @@
 /**
- * CM6 ViewPlugin for interactive table rendering.
+ * CM6 StateField for interactive table rendering.
  *
  * Behavior:
- * - Pipe characters are always hidden (cg-hidden mark, zero-width CSS).
- * - Separator row is always hidden via Decoration.replace.
- * - Each cell's content is wrapped in a cg-table-col mark with CSS borders
- *   to create a visual grid.
- * - Cursor INSIDE table: show floating toolbar (add/delete row/col),
- *   enable Tab/Enter navigation.
- * - Auto-format after cell edits via transactions.
- *
- * Inline markdown (math, bold, etc.) works inside table cells because
- * we use Decoration.mark (not replace) for styling.
+ * - Cursor OUTSIDE table: render as HTML <table> via Decoration.replace
+ *   with TableWidget (inline math, bold, italic rendered in cells).
+ * - Cursor INSIDE table: show raw markdown source for editing,
+ *   with floating toolbar (add/delete row/col) and Tab/Enter navigation.
+ * - Clicking a rendered table places the cursor inside, revealing source.
  */
 
 import {
   Decoration,
   type DecorationSet,
   EditorView,
-  type PluginValue,
-  ViewPlugin,
-  type ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
 import {
+  type EditorState,
   type Extension,
   type Range,
   Prec,
+  StateField,
 } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
-import { buildDecorations, decorationHidden, RenderWidget } from "./render-utils";
+import {
+  buildDecorations,
+  cursorInRange,
+  RenderWidget,
+  editorFocusField,
+  focusEffect,
+  focusTracker,
+} from "./render-utils";
 import { renderInlineMarkdown } from "./inline-render";
+import { mathMacrosField } from "./math-macros";
 import {
   parseTable,
   formatTable,
@@ -88,13 +90,6 @@ function findPipePositions(text: string): number[] {
   }
   return pipes;
 }
-
-// ---------------------------------------------------------------------------
-// Shared decoration constants (avoid allocating per-pipe/per-table)
-// ---------------------------------------------------------------------------
-
-const tableMarkDecoration = Decoration.mark({ class: "cg-table" });
-const headerMarkDecoration = Decoration.mark({ class: "cg-table-header" });
 
 // ---------------------------------------------------------------------------
 // Table detection from syntax tree
@@ -703,201 +698,147 @@ export function insertTable(
 }
 
 // ---------------------------------------------------------------------------
-// ViewPlugin
+// StateField — Decoration.replace with TableWidget
 // ---------------------------------------------------------------------------
 
-class TableRenderPluginValue implements PluginValue {
-  decorations: DecorationSet;
+/**
+ * Find all tables using the syntax tree from EditorState.
+ * Unlike the view-based findTables(), this does not filter by visible ranges
+ * since StateFields operate on the full document.
+ */
+function findTablesFromState(state: EditorState): TableRange[] {
+  const tables: TableRange[] = [];
+  const seen = new Set<number>();
+  const doc = state.doc;
 
-  /** Injected <style> element for dynamic column widths. */
-  private styleEl: HTMLStyleElement;
-  /** Last generated CSS — skip DOM write if unchanged. */
-  private lastCSS = "";
-  /** Guard against redundant rAF scheduling. */
-  private measureScheduled = false;
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (node.name !== "Table") return;
+      if (seen.has(node.from)) return;
+      seen.add(node.from);
 
-  constructor(view: EditorView) {
-    this.decorations = this.buildDecorations(view);
-    this.styleEl = document.createElement("style");
-    this.styleEl.setAttribute("data-cg-table-columns", "");
-    document.head.appendChild(this.styleEl);
-    this.scheduleMeasure(view);
-  }
+      const tableFrom = node.from;
+      const tableTo = node.to;
 
-  update(update: ViewUpdate): void {
-    if (
-      update.docChanged ||
-      update.viewportChanged ||
-      update.selectionSet ||
-      update.focusChanged ||
-      syntaxTree(update.state) !== syntaxTree(update.startState)
-    ) {
-      this.decorations = this.buildDecorations(update.view);
-    }
-
-    // Only re-measure when layout may have changed
-    if (update.docChanged || update.geometryChanged || update.viewportChanged) {
-      this.scheduleMeasure(update.view);
-    }
-  }
-
-  destroy(): void {
-    this.styleEl.remove();
-  }
-
-  // ── Column width measurement ────────────────────────────────────────
-
-  /**
-   * Schedule a single rAF to measure column widths after the browser
-   * has painted the new decorations.
-   */
-  private scheduleMeasure(view: EditorView): void {
-    if (this.measureScheduled) return;
-    this.measureScheduled = true;
-    requestAnimationFrame(() => {
-      this.measureScheduled = false;
-      this.measureAndInjectCSS(view);
-    });
-  }
-
-  /**
-   * Measure the offsetWidth of every `.cg-table-col` span, compute
-   * the maximum width per column per table, and inject CSS min-width
-   * rules via the shared <style> element.
-   */
-  private measureAndInjectCSS(view: EditorView): void {
-    // Clear existing min-width CSS before measuring so offsetWidth returns
-    // natural content width, not the previous min-width value.
-    this.styleEl.textContent = "";
-
-    const dom = view.dom;
-    const colSpans = dom.querySelectorAll<HTMLElement>(".cg-table-col");
-
-    // Collect max width per column per table: { tableId: { colIdx: maxWidth } }
-    const widths = new Map<string, Map<number, number>>();
-
-    for (const span of colSpans) {
-      const tableId = span.getAttribute("data-table-id");
-      const colStr = span.getAttribute("data-col");
-      if (tableId === null || colStr === null) continue;
-
-      const colIdx = Number(colStr);
-      const width = span.offsetWidth + 1; // +1 for sub-pixel rounding
-
-      let tableWidths = widths.get(tableId);
-      if (!tableWidths) {
-        tableWidths = new Map<number, number>();
-        widths.set(tableId, tableWidths);
+      const startLine = doc.lineAt(tableFrom);
+      const endLine = doc.lineAt(tableTo);
+      const lines: string[] = [];
+      for (let ln = startLine.number; ln <= endLine.number; ln++) {
+        lines.push(doc.line(ln).text);
       }
 
-      const current = tableWidths.get(colIdx) ?? 0;
-      if (width > current) {
-        tableWidths.set(colIdx, width);
-      }
-    }
+      const parsed = parseTable(lines);
+      if (!parsed) return;
 
-    // Generate CSS rules
-    const rules: string[] = [];
-    for (const [tableId, tableWidths] of widths) {
-      for (const [colIdx, width] of tableWidths) {
-        rules.push(
-          `[data-table-id="${tableId}"].cg-table-col-${colIdx} { min-width: ${width}px }`,
-        );
-      }
-    }
+      const sepLine = doc.line(startLine.number + 1);
+      const separatorFrom = sepLine.from;
+      const separatorTo =
+        sepLine.to < doc.length ? sepLine.to + 1 : sepLine.to;
 
-    const css = rules.join("\n");
-    if (css !== this.lastCSS) {
-      this.styleEl.textContent = css;
-      this.lastCSS = css;
-    }
-  }
-
-  // ── Decoration building ─────────────────────────────────────────────
-
-  private buildDecorations(view: EditorView): DecorationSet {
-    const tables = findTables(view);
-    const cursor = view.state.selection.main;
-    const hasFocus = view.hasFocus;
-    const doc = view.state.doc;
-
-    const items: Range<Decoration>[] = [];
-
-    for (let tableIdx = 0; tableIdx < tables.length; tableIdx++) {
-      const table = tables[tableIdx];
-      const tableId = String(tableIdx);
-      const cursorInTable =
-        hasFocus && cursor.from >= table.from && cursor.to <= table.to;
-
-      // Always apply table wrapper styling
-      items.push(tableMarkDecoration.range(table.from, table.to));
-
-      // Toolbar: shown when cursor is in table
-      if (cursorInTable) {
-        items.push(
-          Decoration.widget({
-            widget: new TableToolbarWidget(table),
-            side: -1,
-          }).range(table.from),
-        );
-      }
-
-      // Separator row: ALWAYS hidden via Decoration.replace
-      const sepLine = doc.lineAt(table.separatorFrom);
-      items.push(
-        Decoration.replace({}).range(sepLine.from, sepLine.to),
-      );
-
-      // Style header row
-      const headerLine = doc.line(table.startLineNumber);
-      items.push(
-        headerMarkDecoration.range(headerLine.from, headerLine.to),
-      );
-
-      // Process all rows (except separator) for pipe hiding + column wrapping
-      const endLine = doc.lineAt(table.to);
-      const separatorLineNumber = table.startLineNumber + 1;
-
-      for (let ln = table.startLineNumber; ln <= endLine.number; ln++) {
-        // Skip separator row — it's fully hidden
-        if (ln === separatorLineNumber) continue;
-
-        const line = doc.line(ln);
-        const pipes = findPipePositions(line.text);
-
-        // Hide ALL pipe characters via cg-hidden
-        for (const p of pipes) {
-          items.push(
-            decorationHidden.range(line.from + p, line.from + p + 1),
-          );
-        }
-
-        // Wrap each cell content in cg-table-col cg-table-col-N
-        // Cells are between consecutive pipes: pipe[i]+1 .. pipe[i+1]
-        // data-table-id scopes column widths per table
-        for (let i = 0; i < pipes.length - 1; i++) {
-          const cellStart = line.from + pipes[i] + 1;
-          const cellEnd = line.from + pipes[i + 1];
-
-          // Only create mark if cell has content (non-empty range)
-          if (cellStart < cellEnd) {
-            items.push(
-              Decoration.mark({
-                class: `cg-table-col cg-table-col-${i}`,
-                attributes: {
-                  "data-col": String(i),
-                  "data-table-id": tableId,
-                },
-              }).range(cellStart, cellEnd),
-            );
-          }
-        }
-      }
-    }
-
-    return buildDecorations(items);
-  }
+      tables.push({
+        from: tableFrom,
+        to: tableTo,
+        separatorFrom,
+        separatorTo,
+        parsed,
+        lines,
+        startLineNumber: startLine.number,
+      });
+    },
+  });
+  return tables;
 }
+
+/**
+ * Build table decorations from EditorState.
+ *
+ * For each table:
+ * - If cursor is inside (and editor is focused): show toolbar widget only
+ *   (raw source is visible for editing).
+ * - If cursor is outside: replace the entire table with a rendered HTML
+ *   <table> via TableWidget.
+ */
+function buildTableDecorationsFromState(state: EditorState, focused: boolean): DecorationSet {
+  const tables = findTablesFromState(state);
+  const macros = state.field(mathMacrosField);
+  const items: Range<Decoration>[] = [];
+
+  for (const table of tables) {
+    const insideCursor = focused && cursorInRange(state, table.from, table.to);
+
+    if (insideCursor) {
+      // Cursor inside: show raw source + toolbar
+      items.push(
+        Decoration.widget({
+          widget: new TableToolbarWidget(table),
+          side: -1,
+        }).range(table.from),
+      );
+    } else {
+      // Cursor outside: replace entire table with rendered HTML table
+      const tableText = state.sliceDoc(table.from, table.to);
+      const widget = new TableWidget(table.parsed, tableText, table.from, macros);
+
+      items.push(
+        Decoration.replace({
+          widget,
+          block: true,
+        }).range(table.from, table.to),
+      );
+    }
+  }
+
+  return buildDecorations(items);
+}
+
+/**
+ * CM6 StateField that provides table rendering decorations.
+ *
+ * Uses a StateField (not ViewPlugin) so that block-level replace decorations
+ * (which cross line breaks) are permitted by CM6.
+ */
+const tableDecorationField = StateField.define<DecorationSet>({
+  create(state) {
+    return buildTableDecorationsFromState(state, false);
+  },
+
+  update(value, tr) {
+    if (
+      tr.docChanged ||
+      tr.selection ||
+      tr.effects.some((e) => e.is(focusEffect)) ||
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+    ) {
+      const focused = tr.state.field(editorFocusField, false) ?? false;
+      return buildTableDecorationsFromState(tr.state, focused);
+    }
+    return value;
+  },
+
+  provide(field) {
+    return EditorView.decorations.from(field);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Context menu event handler (standalone extension)
+// ---------------------------------------------------------------------------
+
+/** Standalone DOM event handler for table context menus. */
+const tableContextMenuHandler: Extension = EditorView.domEventHandlers({
+  contextmenu(event: MouseEvent, view: EditorView) {
+    const tables = findTables(view);
+    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+    if (pos === null) return false;
+    const table = findTableAtCursor(tables, pos);
+    if (!table) return false;
+
+    event.preventDefault();
+    view.dispatch({ selection: { anchor: pos } });
+    showTableContextMenu(view, table, event.clientX, event.clientY);
+    return true;
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Keybindings
@@ -1114,25 +1055,11 @@ const tableKeybindings: Extension = Prec.high(
 
 /** CM6 extension for interactive table editing. */
 export const tableRenderPlugin: Extension = [
-  ViewPlugin.fromClass(TableRenderPluginValue, {
-    decorations: (v) => v.decorations,
-    eventHandlers: {
-      contextmenu(event: MouseEvent, view: EditorView) {
-        // Check if the right-click is inside a table
-        const tables = findTables(view);
-        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-        if (pos === null) return false;
-        const table = findTableAtCursor(tables, pos);
-        if (!table) return false;
-
-        event.preventDefault();
-        // Place cursor at the right-click position so row/col detection works
-        view.dispatch({ selection: { anchor: pos } });
-        showTableContextMenu(view, table, event.clientX, event.clientY);
-        return true;
-      },
-    },
-  }),
+  editorFocusField,
+  focusTracker,
+  mathMacrosField,
+  tableDecorationField,
+  tableContextMenuHandler,
   tableKeybindings,
 ];
 

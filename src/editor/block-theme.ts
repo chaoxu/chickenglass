@@ -84,26 +84,26 @@ export const blockThemeStyles = {
     verticalAlign: "middle",
   },
 
-  /* Table styles — rows never wrap to next line */
-  ".cg-table .cm-line": {
-    whiteSpace: "nowrap",
+  /* HTML table widget styles */
+  ".cg-table-widget": {
+    margin: "8px 0",
   },
 
-  ".cg-table-header .cg-table-col": {
+  ".cg-table-widget table": {
+    borderCollapse: "collapse",
+    width: "100%",
+  },
+
+  ".cg-table-widget th, .cg-table-widget td": {
+    border: "1px solid var(--cg-border)",
+    padding: "4px 8px",
+    textAlign: "left",
+    verticalAlign: "top",
+  },
+
+  ".cg-table-widget th": {
     fontWeight: "700",
     borderBottom: "2px solid var(--cg-border)",
-  },
-
-  ".cg-table-col": {
-    display: "inline-block",
-    borderRight: "1px solid var(--cg-border)",
-    padding: "2px 8px",
-    verticalAlign: "top",
-    boxSizing: "border-box",
-  },
-
-  ".cg-table-col:last-child": {
-    borderRight: "none",
   },
 
   /* Floating toolbar for table editing */
