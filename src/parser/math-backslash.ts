@@ -84,8 +84,8 @@ const dollarInlineMathParser: InlineParser = {
 const backslashDisplayMathParser: BlockParser = {
   name: "BackslashDisplayMath",
   parse(cx: BlockContext, line: Line) {
-    // Check that line starts with \[ (after indentation)
-    const textAfterIndent = line.text.slice(line.pos - line.basePos);
+    // Check that line starts with \[ (after container markup like list markers)
+    const textAfterIndent = line.text.slice(line.pos);
     if (!textAfterIndent.startsWith("\\[")) return false;
 
     const start = cx.lineStart + line.pos;
@@ -134,7 +134,7 @@ const backslashDisplayMathParser: BlockParser = {
 const dollarDisplayMathParser: BlockParser = {
   name: "DollarDisplayMath",
   parse(cx: BlockContext, line: Line) {
-    const textAfterIndent = line.text.slice(line.pos - line.basePos);
+    const textAfterIndent = line.text.slice(line.pos);
     if (!textAfterIndent.startsWith("$$")) return false;
 
     const start = cx.lineStart + line.pos;
@@ -204,13 +204,13 @@ export const mathExtension: MarkdownConfig = {
     {
       ...backslashDisplayMathParser,
       endLeaf(_cx: BlockContext, line: Line): boolean {
-        return line.text.slice(line.pos - line.basePos).startsWith("\\[");
+        return line.text.slice(line.pos).startsWith("\\[");
       },
     },
     {
       ...dollarDisplayMathParser,
       endLeaf(_cx: BlockContext, line: Line): boolean {
-        return line.text.slice(line.pos - line.basePos).startsWith("$$");
+        return line.text.slice(line.pos).startsWith("$$");
       },
     },
   ],
