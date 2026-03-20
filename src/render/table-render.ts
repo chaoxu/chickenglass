@@ -197,6 +197,53 @@ function findTableAtCursor(
   return null;
 }
 
+/**
+ * Find the table whose `from` position is closest to the given position.
+ *
+ * Used when a widget tracks its table position across edits — cumulative
+ * shifts from cell edits can drift the position arbitrarily far, so a
+ * fixed tolerance (e.g., `< 50`) is unreliable. Returns the nearest
+ * table by absolute distance from the tracked position.
+ */
+function findClosestTable(
+  tables: readonly TableRange[],
+  trackedFrom: number,
+): TableRange | undefined {
+  let best: TableRange | undefined;
+  let bestDist = Infinity;
+  for (const t of tables) {
+    const dist = Math.abs(t.from - trackedFrom);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = t;
+    }
+  }
+  return best;
+}
+
+/**
+ * Find the closest `.cg-table-widget` DOM container to the given
+ * tracked position. Used after add-row mutations to locate the
+ * rebuilt widget in the DOM for focus scheduling.
+ */
+function findClosestWidgetContainer(
+  view: EditorView,
+  trackedFrom: number,
+): HTMLElement | null {
+  const containers = view.dom.querySelectorAll(".cg-table-widget");
+  let closest: HTMLElement | null = null;
+  let closestDist = Infinity;
+  for (const c of containers) {
+    const el = c as HTMLElement;
+    const dist = Math.abs(parseInt(el.dataset.tableFrom ?? "0", 10) - trackedFrom);
+    if (dist < closestDist) {
+      closestDist = dist;
+      closest = el;
+    }
+  }
+  return closest;
+}
+
 // ---------------------------------------------------------------------------
 // Toolbar builder helper (used inside TableWidget.toDOM)
 // ---------------------------------------------------------------------------
@@ -1087,7 +1134,7 @@ export class TableWidget extends WidgetType {
   constructor(
     private readonly table: ParsedTable,
     private readonly tableText: string,
-    private readonly tableFrom: number,
+    private tableFrom: number,
     private readonly macros: Record<string, string>,
   ) {
     super();
@@ -1197,17 +1244,19 @@ export class TableWidget extends WidgetType {
       const rootView = this.editorView;
       if (!rootView) return;
       const currentTables = findTablesFromState(rootView.state);
-      const currentTable = currentTables.find(
-        (t) => Math.abs(t.from - this.tableFrom) < 50,
-      );
-      if (!currentTable) return;
-      const currentText = rootView.state.sliceDoc(currentTable.from, currentTable.to);
+      // Match by closest position — update tracked position each time
+      // so cumulative shifts beyond the tolerance don't cause lost edits.
+      const bestTable = findClosestTable(currentTables, this.tableFrom);
+      if (!bestTable) return;
+      // Update tracked position to where the table actually is now
+      this.tableFrom = bestTable.from;
+      const currentText = rootView.state.sliceDoc(bestTable.from, bestTable.to);
       const updated = this.buildUpdatedTable(editedSection, editedRow, editedCol, editedText);
       if (!updated) return;
       const newText = formatTable(updated).join("\n");
       if (newText === currentText) return;
       rootView.dispatch({
-        changes: { from: currentTable.from, to: currentTable.to, insert: newText },
+        changes: { from: bestTable.from, to: bestTable.to, insert: newText },
         ...(useAnnotation ? { annotations: cellEditAnnotation.of(true) } : {}),
       });
     };
@@ -1322,27 +1371,21 @@ export class TableWidget extends WidgetType {
                 const rootView = this.editorView;
                 if (rootView) {
                   const tables = findTablesFromState(rootView.state);
-                  const matchingTable = tables.find(
-                    (t) => Math.abs(t.from - this.tableFrom) < 50,
-                  );
+                  const matchingTable = findClosestTable(tables, this.tableFrom);
                   if (matchingTable) {
                     applyTableMutation(rootView, matchingTable, (t) => addRow(t));
                   }
                   // After mutation, widget is rebuilt. Schedule focus on new row.
                   setTimeout(() => {
-                    const containers = rootView.dom.querySelectorAll(".cg-table-widget");
-                    for (const c of containers) {
-                      const el = c as HTMLElement;
-                      if (Math.abs(parseInt(el.dataset.tableFrom ?? "0", 10) - this.tableFrom) < 50) {
-                        const newTarget = el.querySelector(
-                          `[data-section="body"][data-row="${bodyRowCount}"][data-col="0"]`,
-                        ) as HTMLElement | null;
-                        if (newTarget) {
-                          newTarget.dispatchEvent(
-                            new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
-                          );
-                        }
-                        break;
+                    const closestEl = findClosestWidgetContainer(rootView, this.tableFrom);
+                    if (closestEl) {
+                      const newTarget = closestEl.querySelector(
+                        `[data-section="body"][data-row="${bodyRowCount}"][data-col="0"]`,
+                      ) as HTMLElement | null;
+                      if (newTarget) {
+                        newTarget.dispatchEvent(
+                          new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+                        );
                       }
                     }
                   }, 0);
@@ -1378,26 +1421,20 @@ export class TableWidget extends WidgetType {
                 const rootView = this.editorView;
                 if (rootView) {
                   const tables = findTablesFromState(rootView.state);
-                  const matchingTable = tables.find(
-                    (t) => Math.abs(t.from - this.tableFrom) < 50,
-                  );
+                  const matchingTable = findClosestTable(tables, this.tableFrom);
                   if (matchingTable) {
                     applyTableMutation(rootView, matchingTable, (t) => addRow(t));
                   }
                   setTimeout(() => {
-                    const containers = rootView.dom.querySelectorAll(".cg-table-widget");
-                    for (const c of containers) {
-                      const el = c as HTMLElement;
-                      if (Math.abs(parseInt(el.dataset.tableFrom ?? "0", 10) - this.tableFrom) < 50) {
-                        const newTarget = el.querySelector(
-                          `[data-section="body"][data-row="${bodyRowCount}"][data-col="${col}"]`,
-                        ) as HTMLElement | null;
-                        if (newTarget) {
-                          newTarget.dispatchEvent(
-                            new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
-                          );
-                        }
-                        break;
+                    const closestEl = findClosestWidgetContainer(rootView, this.tableFrom);
+                    if (closestEl) {
+                      const newTarget = closestEl.querySelector(
+                        `[data-section="body"][data-row="${bodyRowCount}"][data-col="${col}"]`,
+                      ) as HTMLElement | null;
+                      if (newTarget) {
+                        newTarget.dispatchEvent(
+                          new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+                        );
                       }
                     }
                   }, 0);
