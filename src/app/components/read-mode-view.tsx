@@ -35,41 +35,27 @@ export interface ReadModeViewProps {
   onScroll?: (scrollTop: number) => void;
 }
 
-/** Transparent 1x1 pixel PNG for img placeholders. */
-const TRANSPARENT_PIXEL =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAABJREFOAAAADQABBQAABmkAAAAAAElFTkSuQmCC";
-
 /**
- * Replace each .katex element with an `<img>` placeholder of the same
- * dimensions. `<img>` is a replaced element — tex-linebreak2 cannot
- * recurse into it, so it treats each math expression as a single
- * atomic box at the correct width. Normal inline flow is preserved
- * (no IGNORE_WHITESPACE markers like with inline-block).
+ * Set .katex elements to display:inline-flex before tex-linebreak2 runs.
  *
- * Returns a restore function that swaps the originals back in.
+ * tex-linebreak2's element handler checks for display "inline" or
+ * "inline-block". For anything else, it reads getComputedStyle().width
+ * and creates a single atomic box — no recursion into children.
+ *
+ * inline-flex participates in inline text flow (preserving whitespace)
+ * while making the element opaque to the algorithm.
+ *
+ * Returns a restore function that resets display.
  */
-function replaceKatexWithPlaceholders(container: HTMLElement): () => void {
-  const saved: { img: HTMLImageElement; original: HTMLElement }[] = [];
-
-  for (const el of container.querySelectorAll<HTMLElement>(".katex")) {
-    const rect = el.getBoundingClientRect();
-    const img = document.createElement("img");
-    img.src = TRANSPARENT_PIXEL;
-    // Use exact fractional pixel dimensions via CSS — HTML width/height
-    // attributes only accept integers, and rounding up accumulates error
-    // across multiple math expressions on a line.
-    img.style.width = rect.width + "px";
-    img.style.height = rect.height + "px";
-    img.style.verticalAlign = "middle";
-    img.setAttribute("aria-hidden", "true");
-
-    el.parentNode?.replaceChild(img, el);
-    saved.push({ img, original: el });
+function makeKatexAtomic(container: HTMLElement): () => void {
+  const elements: HTMLElement[] = [];
+  for (const el of container.querySelectorAll<HTMLElement>("p .katex")) {
+    el.style.display = "inline-flex";
+    elements.push(el);
   }
-
   return () => {
-    for (const { img, original } of saved) {
-      img.parentNode?.replaceChild(original, img);
+    for (const el of elements) {
+      el.style.removeProperty("display");
     }
   };
 }
@@ -88,15 +74,13 @@ async function applyLineBreaking(container: HTMLElement): Promise<void> {
     resetDOMJustification(p);
   }
 
-  // Replace KaTeX with img placeholders so tex-linebreak2 sees atomic boxes
-  const restoreKatex = replaceKatexWithPlaceholders(container);
+  const restoreKatex = makeKatexAtomic(container);
 
   await texLinebreakDOM(paragraphs, {
     justify: true,
     updateOnWindowResize: false,
   });
 
-  // Swap original KaTeX elements back in
   restoreKatex();
 }
 
