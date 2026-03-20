@@ -46,9 +46,10 @@ import {
 import type { ParsedTable } from "./table-utils";
 import { ContextMenu } from "../app/context-menu";
 import type { ContextMenuItem } from "../app/context-menu";
+import { createInlineEditor } from "../editor/inline-editor";
 
 // ---------------------------------------------------------------------------
-// Cell-edit annotation — marks dispatches that originate from contenteditable
+// Cell-edit annotation — marks dispatches that originate from inline editor
 // cell syncing so the StateField can map positions instead of rebuilding.
 // ---------------------------------------------------------------------------
 
@@ -59,6 +60,32 @@ import type { ContextMenuItem } from "../app/context-menu";
  * being destroyed mid-edit.
  */
 const cellEditAnnotation = Annotation.define<boolean>();
+
+// ---------------------------------------------------------------------------
+// Active inline editor tracking — only one cell editor at a time
+// ---------------------------------------------------------------------------
+
+/** Module-level reference to the currently active inline cell editor. */
+let activeInlineEditor: {
+  view: EditorView;
+  cell: HTMLElement;
+  tableWidget: TableWidget;
+} | null = null;
+
+/**
+ * Destroy the currently active inline editor (if any) and return
+ * the final document text from that editor.
+ */
+function destroyActiveInlineEditor(): string {
+  if (!activeInlineEditor) return "";
+  const { view: inlineView, cell } = activeInlineEditor;
+  const text = inlineView.state.doc.toString();
+  inlineView.destroy();
+  cell.classList.remove("cg-table-cell-editing");
+  cell.innerHTML = "";
+  activeInlineEditor = null;
+  return text;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -738,7 +765,7 @@ function findTablesFromState(state: EditorState): TableRange[] {
  * Build table decorations from EditorState.
  *
  * For each table: always replace with a rendered HTML <table> via TableWidget.
- * Cell editing happens via contenteditable within the widget.
+ * Cell editing happens via InlineEditor within the widget.
  */
 function buildTableDecorationsFromState(state: EditorState): DecorationSet {
   const tables = findTablesFromState(state);
@@ -1046,14 +1073,12 @@ export const tableRenderPlugin: Extension = [
 /**
  * Widget that renders a markdown table as an HTML <table> element.
  *
- * Used with Decoration.replace to show a rendered table when the cursor
- * is outside the table's source range. Cells are contenteditable so
- * users can click and type directly. On focus, rendered content is
- * replaced with raw markdown; on blur, the edit syncs back to the
- * source document and the cell re-renders inline markdown.
- *
- * Cell content is rendered via renderInlineMarkdown so math, bold,
- * and italic work inside table cells.
+ * Used with Decoration.replace to show a rendered table. Cells display
+ * rendered inline markdown by default. On click, an InlineEditor (nested
+ * CM6 instance) is created inside the cell for Typora-style editing:
+ * math renders with KaTeX, bold/italic markers are hidden when the
+ * cursor is not adjacent, and the cell has its own undo/redo stack.
+ * Only one cell editor is active at a time.
  */
 export class TableWidget extends WidgetType {
   /** Reference to the EditorView, stored on first toDOM() call. */
@@ -1119,7 +1144,7 @@ export class TableWidget extends WidgetType {
   /**
    * Render the parsed table as an HTML <table> with thead/tbody.
    * Each cell gets data attributes for row, column, and section,
-   * contenteditable for direct editing, and inline markdown rendering.
+   * and inline markdown rendering. Clicking a cell creates an InlineEditor.
    */
   toDOM(view: EditorView): HTMLElement {
     this.editorView = view;
@@ -1131,8 +1156,62 @@ export class TableWidget extends WidgetType {
 
     const tableEl = document.createElement("table");
 
-    // ── Active cell tracking ──────────────────────────────────────────
     // ── Shared cell setup ─────────────────────────────────────────────
+    // Cells are NOT contenteditable by default — they show rendered markdown.
+    // On click, an InlineEditor is created inside the cell (one at a time).
+
+    /**
+     * Activate a target cell by dispatching a synthetic mousedown.
+     * Used for Tab/Enter/Arrow navigation between cells.
+     */
+    const activateTargetCell = (
+      linearRow: number,
+      targetCol: number,
+      placeAtEnd = false,
+    ): void => {
+      const targetSection = linearRow === 0 ? "header" : "body";
+      const targetRow = linearRow === 0 ? 0 : linearRow - 1;
+      const target = tableEl.querySelector(
+        `[data-section="${targetSection}"][data-row="${targetRow}"][data-col="${targetCol}"]`,
+      ) as HTMLElement | null;
+      if (target) {
+        // Store placement hint on the element for the mousedown handler
+        target.dataset.placeAtEnd = placeAtEnd ? "true" : "false";
+        target.dispatchEvent(
+          new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+        );
+      }
+    };
+
+    /**
+     * Sync edited text to the root document.
+     * @param useAnnotation - When true, uses cellEditAnnotation to prevent widget rebuild.
+     */
+    const syncToRoot = (
+      editedSection: string,
+      editedRow: number,
+      editedCol: number,
+      editedText: string,
+      useAnnotation: boolean,
+    ): void => {
+      const rootView = this.editorView;
+      if (!rootView) return;
+      const currentTables = findTablesFromState(rootView.state);
+      const currentTable = currentTables.find(
+        (t) => Math.abs(t.from - this.tableFrom) < 50,
+      );
+      if (!currentTable) return;
+      const currentText = rootView.state.sliceDoc(currentTable.from, currentTable.to);
+      const updated = this.buildUpdatedTable(editedSection, editedRow, editedCol, editedText);
+      if (!updated) return;
+      const newText = formatTable(updated).join("\n");
+      if (newText === currentText) return;
+      rootView.dispatch({
+        changes: { from: currentTable.from, to: currentTable.to, insert: newText },
+        ...(useAnnotation ? { annotations: cellEditAnnotation.of(true) } : {}),
+      });
+    };
+
     const setupCell = (
       cell: HTMLElement,
       section: string,
@@ -1143,7 +1222,6 @@ export class TableWidget extends WidgetType {
       cell.dataset.row = String(row);
       cell.dataset.col = String(col);
       cell.dataset.section = section;
-      cell.contentEditable = "true";
 
       // Apply column alignment
       const align = this.table.alignments[col];
@@ -1151,251 +1229,244 @@ export class TableWidget extends WidgetType {
         cell.style.textAlign = align;
       }
 
-      // Initial render: show inline markdown
+      // Initial render: show inline markdown (no editor yet)
       renderInlineMarkdown(cell, content, this.macros);
 
-      // ── Focus: switch to raw markdown for editing ─────────────────
-      cell.addEventListener("focusin", () => {
-        cell.classList.add("cg-table-cell-editing");
-        const rawText = this.getRawCellText(section, row, col);
-        cell.textContent = rawText;
-      });
+      // ── Click: create an InlineEditor in this cell ─────────────────
+      cell.addEventListener("mousedown", (e) => {
+        // If this cell already has the editor, let it handle the click
+        if (activeInlineEditor && activeInlineEditor.cell === cell) return;
 
-      // ── Blur: re-render cell markdown, sync on table exit ─────────
-      cell.addEventListener("focusout", () => {
-        cell.classList.remove("cg-table-cell-editing");
-        const editedText = (cell.textContent ?? "").trim();
+        e.preventDefault();
+        e.stopPropagation();
 
-        // Re-render markdown immediately in this cell
-        cell.innerHTML = "";
-        renderInlineMarkdown(cell, editedText, this.macros);
+        // Read placement hint (set by activateTargetCell for navigation)
+        const placeAtEnd = cell.dataset.placeAtEnd === "true";
+        delete cell.dataset.placeAtEnd;
 
-        // Delay sync: check if focus moved to another cell in this table.
-        // If so, use cellEditAnnotation (map, don't rebuild — keeps widget alive).
-        // If focus left the table entirely, dispatch without annotation (full rebuild).
-        const container = cell.closest(".cg-table-widget");
-        setTimeout(() => {
-          const view = this.editorView;
-          if (!view) return;
-
-          // Re-read current table position from the document — previous cell
-          // edits may have shifted positions via cellEditAnnotation mapping.
-          const currentTables = findTablesFromState(view.state);
-          const currentTable = currentTables.find((t) => {
-            // Match by approximate position (within a few chars of original)
-            return Math.abs(t.from - this.tableFrom) < 50;
-          });
-          if (!currentTable) return;
-
-          const currentText = view.state.sliceDoc(currentTable.from, currentTable.to);
-          const updated = this.buildUpdatedTable(section, row, col, editedText);
-          if (!updated) return;
-          const newText = formatTable(updated).join("\n");
-          if (newText === currentText) return;
-
-          const stillInTable = container && container.contains(document.activeElement);
-          view.dispatch({
-            changes: { from: currentTable.from, to: currentTable.to, insert: newText },
-            ...(stillInTable ? { annotations: cellEditAnnotation.of(true) } : {}),
-          });
-        }, 0);
-      });
-
-      // ── Keydown handlers ──────────────────────────────────────────
-      cell.addEventListener("keydown", (e: KeyboardEvent) => {
-        if (e.key === "Escape") {
-          // Blur the cell, return focus to CM6
-          e.preventDefault();
-          e.stopPropagation();
-          cell.blur();
-          view.focus();
-          return;
+        // Destroy any existing editor (its onBlur won't fire because we
+        // destroy synchronously before the new editor is created).
+        if (activeInlineEditor) {
+          const oldText = activeInlineEditor.view.state.doc.toString();
+          const oldCell = activeInlineEditor.cell;
+          const oldSection = oldCell.dataset.section ?? "body";
+          const oldRow = parseInt(oldCell.dataset.row ?? "0", 10);
+          const oldCol = parseInt(oldCell.dataset.col ?? "0", 10);
+          destroyActiveInlineEditor();
+          renderInlineMarkdown(oldCell, oldText, this.macros);
+          // Sync old cell with annotation (we're staying in the table)
+          syncToRoot(oldSection, oldRow, oldCol, oldText, true);
         }
+
+        // Activate this cell
+        const rawText = this.getRawCellText(section, row, col);
+        cell.innerHTML = "";
+        cell.classList.add("cg-table-cell-editing");
 
         const colCount = this.table.header.cells.length;
         const bodyRowCount = this.table.rows.length;
-        // Total navigable rows: 1 header + bodyRowCount body rows
-        // We use a linear index: 0 = header, 1..bodyRowCount = body rows
         const currentLinear = section === "header" ? 0 : row + 1;
         const totalRows = 1 + bodyRowCount;
 
-        const sel = window.getSelection();
-        const textLen = (cell.textContent ?? "").length;
-        const atStart = sel !== null && sel.isCollapsed && sel.anchorOffset === 0;
-        const atEnd = sel !== null && sel.isCollapsed && sel.anchorOffset >= textLen;
+        const editorView = createInlineEditor({
+          parent: cell,
+          doc: rawText,
+          macros: this.macros,
+          onChange: (newDoc) => {
+            // Sync to root document per keystroke with cellEditAnnotation
+            syncToRoot(section, row, col, newDoc, true);
+          },
+          onBlur: () => {
+            // Delay to check if focus moved to another cell in same table
+            setTimeout(() => {
+              if (!activeInlineEditor || activeInlineEditor.cell !== cell) return;
+              const editedText = destroyActiveInlineEditor();
+              renderInlineMarkdown(cell, editedText, this.macros);
 
-        // Helper: focus a cell by linear row index and column
-        const focusByLinear = (linearRow: number, targetCol: number, placeAtEnd = false): void => {
-          const targetSection = linearRow === 0 ? "header" : "body";
-          const targetRow = linearRow === 0 ? 0 : linearRow - 1;
-          const target = tableEl.querySelector(
-            `[data-section="${targetSection}"][data-row="${targetRow}"][data-col="${targetCol}"]`,
-          ) as HTMLElement | null;
-          if (target) {
-            target.focus();
-            // Place caret at start or end
-            if (placeAtEnd) {
-              const range = document.createRange();
-              const targetSel = window.getSelection();
-              if (target.childNodes.length > 0) {
-                const lastNode = target.childNodes[target.childNodes.length - 1];
-                const nodeLen = lastNode.nodeType === Node.TEXT_NODE
-                  ? (lastNode.textContent ?? "").length
-                  : 0;
-                range.setStart(lastNode, nodeLen);
-              } else {
-                range.setStart(target, 0);
-              }
-              range.collapse(true);
-              targetSel?.removeAllRanges();
-              targetSel?.addRange(range);
+              // Final sync — check if focus is still in the table
+              const widgetContainer = cell.closest(".cg-table-widget");
+              const stillInTable =
+                widgetContainer && widgetContainer.contains(document.activeElement);
+              syncToRoot(section, row, col, editedText, !!stillInTable);
+            }, 0);
+          },
+          onKeydown: (event) => {
+            // ── Escape: exit cell editor, return to root CM6 ──────────
+            if (event.key === "Escape") {
+              event.preventDefault();
+              const text = destroyActiveInlineEditor();
+              renderInlineMarkdown(cell, text, this.macros);
+              syncToRoot(section, row, col, text, false);
+              this.editorView?.focus();
+              return true;
             }
-          }
-        };
 
-        // Helper: add a row to the table and focus a cell in it
-        const addRowAndFocus = (targetCol: number): void => {
-          // Blur current cell to sync content before mutation
-          cell.blur();
-          // Re-parse the table from current document state and add a row
-          const state = view.state;
-          const tables = findTablesFromState(state);
-          const matchingTable = tables.find(
-            (t) => t.from === this.tableFrom,
-          );
-          if (matchingTable) {
-            applyTableMutation(view, matchingTable, (t) => addRow(t));
-          }
-          // After mutation, the widget will be rebuilt by CM6, so we
-          // schedule a focus on the new cell via a microtask
-          setTimeout(() => {
-            // Find the new widget container
-            const containers = view.dom.querySelectorAll(".cg-table-widget");
-            for (const c of containers) {
-              const el = c as HTMLElement;
-              if (el.dataset.tableFrom === String(this.tableFrom)) {
-                const newTarget = el.querySelector(
-                  `[data-section="body"][data-row="${bodyRowCount}"][data-col="${targetCol}"]`,
-                ) as HTMLElement | null;
-                if (newTarget) {
-                  newTarget.focus();
+            // ── Tab: move to next/previous cell ───────────────────────
+            if (event.key === "Tab" && !event.shiftKey) {
+              event.preventDefault();
+              let nextCol = col + 1;
+              let nextLinear = currentLinear;
+              if (nextCol >= colCount) {
+                nextCol = 0;
+                nextLinear++;
+              }
+              if (nextLinear >= totalRows) {
+                // Past last cell: add a row, then focus first cell of new row
+                const text = destroyActiveInlineEditor();
+                renderInlineMarkdown(cell, text, this.macros);
+                syncToRoot(section, row, col, text, true);
+                const rootView = this.editorView;
+                if (rootView) {
+                  const tables = findTablesFromState(rootView.state);
+                  const matchingTable = tables.find(
+                    (t) => Math.abs(t.from - this.tableFrom) < 50,
+                  );
+                  if (matchingTable) {
+                    applyTableMutation(rootView, matchingTable, (t) => addRow(t));
+                  }
+                  // After mutation, widget is rebuilt. Schedule focus on new row.
+                  setTimeout(() => {
+                    const containers = rootView.dom.querySelectorAll(".cg-table-widget");
+                    for (const c of containers) {
+                      const el = c as HTMLElement;
+                      if (Math.abs(parseInt(el.dataset.tableFrom ?? "0", 10) - this.tableFrom) < 50) {
+                        const newTarget = el.querySelector(
+                          `[data-section="body"][data-row="${bodyRowCount}"][data-col="0"]`,
+                        ) as HTMLElement | null;
+                        if (newTarget) {
+                          newTarget.dispatchEvent(
+                            new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+                          );
+                        }
+                        break;
+                      }
+                    }
+                  }, 0);
                 }
-                break;
+              } else {
+                activateTargetCell(nextLinear, nextCol);
               }
+              return true;
             }
-          }, 0);
-        };
 
-        if (e.key === "Tab" && !e.shiftKey) {
-          // Tab: move to next cell (left→right, top→bottom)
-          e.preventDefault();
-          e.stopPropagation();
-          let nextCol = col + 1;
-          let nextLinear = currentLinear;
-          if (nextCol >= colCount) {
-            nextCol = 0;
-            nextLinear++;
-          }
-          if (nextLinear >= totalRows) {
-            // Past last cell: add a row
-            addRowAndFocus(0);
-          } else {
-            focusByLinear(nextLinear, nextCol);
-          }
-          return;
-        }
+            if (event.key === "Tab" && event.shiftKey) {
+              event.preventDefault();
+              let prevCol = col - 1;
+              let prevLinear = currentLinear;
+              if (prevCol < 0) {
+                prevCol = colCount - 1;
+                prevLinear--;
+              }
+              if (prevLinear < 0) return true; // Already at first cell
+              activateTargetCell(prevLinear, prevCol, true);
+              return true;
+            }
 
-        if (e.key === "Tab" && e.shiftKey) {
-          // Shift+Tab: move to previous cell
-          e.preventDefault();
-          e.stopPropagation();
-          let prevCol = col - 1;
-          let prevLinear = currentLinear;
-          if (prevCol < 0) {
-            prevCol = colCount - 1;
-            prevLinear--;
-          }
-          if (prevLinear < 0) return; // Already at first cell
-          focusByLinear(prevLinear, prevCol, true);
-          return;
-        }
+            // ── Enter: move to same column, next row ──────────────────
+            if (event.key === "Enter") {
+              event.preventDefault();
+              const nextLinear = currentLinear + 1;
+              if (nextLinear >= totalRows) {
+                // Add a row
+                const text = destroyActiveInlineEditor();
+                renderInlineMarkdown(cell, text, this.macros);
+                syncToRoot(section, row, col, text, true);
+                const rootView = this.editorView;
+                if (rootView) {
+                  const tables = findTablesFromState(rootView.state);
+                  const matchingTable = tables.find(
+                    (t) => Math.abs(t.from - this.tableFrom) < 50,
+                  );
+                  if (matchingTable) {
+                    applyTableMutation(rootView, matchingTable, (t) => addRow(t));
+                  }
+                  setTimeout(() => {
+                    const containers = rootView.dom.querySelectorAll(".cg-table-widget");
+                    for (const c of containers) {
+                      const el = c as HTMLElement;
+                      if (Math.abs(parseInt(el.dataset.tableFrom ?? "0", 10) - this.tableFrom) < 50) {
+                        const newTarget = el.querySelector(
+                          `[data-section="body"][data-row="${bodyRowCount}"][data-col="${col}"]`,
+                        ) as HTMLElement | null;
+                        if (newTarget) {
+                          newTarget.dispatchEvent(
+                            new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+                          );
+                        }
+                        break;
+                      }
+                    }
+                  }, 0);
+                }
+              } else {
+                activateTargetCell(nextLinear, col);
+              }
+              return true;
+            }
 
-        if (e.key === "Enter") {
-          // Enter: move to same column, next row
-          e.preventDefault();
-          e.stopPropagation();
-          const nextLinear = currentLinear + 1;
-          if (nextLinear >= totalRows) {
-            addRowAndFocus(col);
-          } else {
-            focusByLinear(nextLinear, col);
-          }
-          return;
-        }
+            // ── Arrow navigation ──────────────────────────────────────
+            if (!activeInlineEditor) return false;
+            const pos = activeInlineEditor.view.state.selection.main.head;
+            const len = activeInlineEditor.view.state.doc.length;
 
-        if (e.key === "ArrowLeft" && atStart) {
-          // At caret position 0: focus previous cell, place caret at end
-          e.preventDefault();
-          e.stopPropagation();
-          let prevCol = col - 1;
-          let prevLinear = currentLinear;
-          if (prevCol < 0) {
-            prevCol = colCount - 1;
-            prevLinear--;
-          }
-          if (prevLinear < 0) return;
-          focusByLinear(prevLinear, prevCol, true);
-          return;
-        }
+            if (event.key === "ArrowLeft" && pos === 0) {
+              event.preventDefault();
+              let prevCol = col - 1;
+              let prevLinear = currentLinear;
+              if (prevCol < 0) {
+                prevCol = colCount - 1;
+                prevLinear--;
+              }
+              if (prevLinear < 0) return true;
+              activateTargetCell(prevLinear, prevCol, true);
+              return true;
+            }
 
-        if (e.key === "ArrowRight" && atEnd) {
-          // At caret at end: focus next cell, place caret at start
-          e.preventDefault();
-          e.stopPropagation();
-          let nextCol = col + 1;
-          let nextLinear = currentLinear;
-          if (nextCol >= colCount) {
-            nextCol = 0;
-            nextLinear++;
-          }
-          if (nextLinear >= totalRows) return;
-          focusByLinear(nextLinear, nextCol);
-          return;
-        }
+            if (event.key === "ArrowRight" && pos === len) {
+              event.preventDefault();
+              let nextCol = col + 1;
+              let nextLinear = currentLinear;
+              if (nextCol >= colCount) {
+                nextCol = 0;
+                nextLinear++;
+              }
+              if (nextLinear >= totalRows) return true;
+              activateTargetCell(nextLinear, nextCol);
+              return true;
+            }
 
-        if (e.key === "ArrowUp") {
-          // Move to same column, previous row
-          e.preventDefault();
-          e.stopPropagation();
-          const prevLinear = currentLinear - 1;
-          if (prevLinear < 0) return;
-          focusByLinear(prevLinear, col);
-          return;
-        }
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              const prevLinear = currentLinear - 1;
+              if (prevLinear < 0) return true;
+              activateTargetCell(prevLinear, col);
+              return true;
+            }
 
-        if (e.key === "ArrowDown") {
-          // Move to same column, next row
-          e.preventDefault();
-          e.stopPropagation();
-          const nextLinear = currentLinear + 1;
-          if (nextLinear >= totalRows) return;
-          focusByLinear(nextLinear, col);
-          return;
-        }
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              const nextLinear = currentLinear + 1;
+              if (nextLinear >= totalRows) return true;
+              activateTargetCell(nextLinear, col);
+              return true;
+            }
 
-        if (e.key === "Backspace" && atStart) {
-          // Prevent default at cell start (don't delete into previous cell)
-          e.preventDefault();
-          e.stopPropagation();
-          return;
-        }
+            // Prevent Backspace at position 0 and Delete at end
+            if (event.key === "Backspace" && pos === 0) return true;
+            if (event.key === "Delete" && pos === len) return true;
 
-        if (e.key === "Delete" && atEnd) {
-          // Prevent default at cell end
-          e.preventDefault();
-          e.stopPropagation();
-          return;
+            return false;
+          },
+        });
+
+        activeInlineEditor = { view: editorView, cell, tableWidget: this };
+
+        // Place cursor at end if navigating backward, otherwise at start
+        if (placeAtEnd) {
+          const docLen = editorView.state.doc.length;
+          editorView.dispatch({ selection: { anchor: docLen } });
         }
+        editorView.focus();
       });
     };
 
@@ -1471,7 +1542,7 @@ export class TableWidget extends WidgetType {
 
   /**
    * Return true so CM6 does NOT process events inside this widget.
-   * The contenteditable cells handle their own clicks, input, and
+   * The InlineEditor cells handle their own clicks, input, and
    * keyboard events. CM6 should not interfere.
    */
   ignoreEvent(): boolean {
