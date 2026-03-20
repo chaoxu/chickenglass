@@ -55,8 +55,11 @@ function replaceKatexWithPlaceholders(container: HTMLElement): () => void {
     const rect = el.getBoundingClientRect();
     const img = document.createElement("img");
     img.src = TRANSPARENT_PIXEL;
-    img.width = Math.ceil(rect.width);
-    img.height = Math.ceil(rect.height);
+    // Use exact fractional pixel dimensions via CSS — HTML width/height
+    // attributes only accept integers, and rounding up accumulates error
+    // across multiple math expressions on a line.
+    img.style.width = rect.width + "px";
+    img.style.height = rect.height + "px";
     img.style.verticalAlign = "middle";
     img.setAttribute("aria-hidden", "true");
 
