@@ -6,17 +6,7 @@ import { classHighlighter } from "@lezer/highlight";
 import type { ThemeManager } from "../app/theme-manager";
 import type { EditorPluginManager } from "./editor-plugin";
 
-import { Table, TaskList } from "@lezer/markdown";
-import {
-  removeIndentedCode,
-  removeBlockquote,
-  mathExtension,
-  fencedDiv,
-  equationLabelExtension,
-  strikethroughExtension,
-  highlightExtension,
-  footnoteExtension,
-} from "../parser";
+import { markdownExtensions } from "../parser";
 import { frontmatterField, frontmatterDecoration } from "./frontmatter-state";
 import {
   markdownRenderPlugin,
@@ -108,18 +98,7 @@ export function createEditor(config: EditorConfig): EditorView {
 
       // Parser: markdown with custom extensions + code block language support
       markdown({
-        extensions: [
-          removeIndentedCode,
-          removeBlockquote,
-          mathExtension,
-          fencedDiv,
-          equationLabelExtension,
-          strikethroughExtension,
-          highlightExtension,
-          footnoteExtension,
-          Table,
-          TaskList,
-        ],
+        extensions: markdownExtensions,
         codeLanguages: [
           LanguageDescription.of({ name: "javascript", alias: ["js", "jsx"], load: () => import("@codemirror/lang-javascript").then(m => m.javascript({ jsx: true })) }),
           LanguageDescription.of({ name: "typescript", alias: ["ts", "tsx"], load: () => import("@codemirror/lang-javascript").then(m => m.javascript({ jsx: true, typescript: true })) }),

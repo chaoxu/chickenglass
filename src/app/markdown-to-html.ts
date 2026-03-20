@@ -18,38 +18,16 @@
 
 import katex from "katex";
 import { parser as baseParser } from "@lezer/markdown";
-import { Table, TaskList } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
-import {
-  removeIndentedCode,
-  removeBlockquote,
-  mathExtension,
-  fencedDiv,
-  equationLabelExtension,
-  strikethroughExtension,
-  highlightExtension,
-  footnoteExtension,
-  extractDivClass,
-} from "../parser";
+import { markdownExtensions, extractDivClass } from "../parser";
 
 // ── Standalone Lezer parser ─────────────────────────────────────────────────
 
 /**
- * Standalone Lezer markdown parser configured with the same extensions
- * the editor uses, but without CM6 dependencies.
+ * Standalone Lezer markdown parser using the shared extension list
+ * from src/parser — same extensions the CM6 editor uses.
  */
-const mdParser = baseParser.configure([
-  removeIndentedCode,
-  removeBlockquote,
-  mathExtension,
-  fencedDiv,
-  equationLabelExtension,
-  strikethroughExtension,
-  highlightExtension,
-  footnoteExtension,
-  Table,
-  TaskList,
-]);
+const mdParser = baseParser.configure(markdownExtensions);
 
 // ── Shared utilities ────────────────────────────────────────────────────────
 
