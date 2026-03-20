@@ -262,7 +262,7 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
 
         {/* Status bar */}
         {grouped.size > 0 && (
-          <div className="shrink-0 px-3 py-1 border-t border-[var(--cg-border)] text-xs text-[var(--cg-muted)] bg-[var(--cg-subtle)]">
+          <div className="shrink-0 px-3 py-1 border-t border-[var(--cg-border)] text-xs text-[var(--cg-muted)] bg-[var(--cg-bg)]">
             {statusText}
           </div>
         )}

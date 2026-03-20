@@ -69,7 +69,7 @@ export function Sidebar({ collapsed, onToggle, width, onWidthChange, children }:
       <div
         className={[
           "flex flex-col shrink-0 overflow-hidden",
-          "bg-[var(--cg-subtle)] border-r border-[var(--cg-border)]",
+          "bg-[var(--cg-bg)] border-r border-[var(--cg-border)]",
           collapsed ? "w-0" : "",
           // Only animate width when not dragging
           dragging.current ? "" : "transition-[width] duration-[var(--cg-transition,0.15s)] ease-in-out",

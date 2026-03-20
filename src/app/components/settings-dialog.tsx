@@ -370,7 +370,7 @@ export function SettingsDialog({
           {/* Body: nav + content */}
           <div className="flex flex-1 overflow-hidden">
             {/* Nav */}
-            <nav className="flex flex-col w-36 shrink-0 border-r border-[var(--cg-border)] py-2 bg-[var(--cg-subtle)]">
+            <nav className="flex flex-col w-36 shrink-0 border-r border-[var(--cg-border)] py-2 bg-[var(--cg-bg)]">
               {TABS.map((tab) => (
                 <button
                   key={tab}
