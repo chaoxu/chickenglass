@@ -9,6 +9,7 @@ import type { EditorPluginManager } from "./editor-plugin";
 import { Table, TaskList } from "@lezer/markdown";
 import {
   removeIndentedCode,
+  removeBlockquote,
   mathExtension,
   fencedDiv,
   equationLabelExtension,
@@ -109,6 +110,7 @@ export function createEditor(config: EditorConfig): EditorView {
       markdown({
         extensions: [
           removeIndentedCode,
+          removeBlockquote,
           mathExtension,
           fencedDiv,
           equationLabelExtension,

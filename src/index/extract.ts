@@ -11,6 +11,7 @@ import { parser } from "@lezer/markdown";
 import type { Tree, SyntaxNode } from "@lezer/common";
 import {
   removeIndentedCode,
+  removeBlockquote,
   mathExtension,
   fencedDiv,
   equationLabelExtension,
@@ -25,6 +26,7 @@ import type { IndexEntry, IndexReference, FileIndex } from "./query-api";
  */
 const indexParser = parser.configure([
   removeIndentedCode,
+  removeBlockquote,
   mathExtension,
   fencedDiv,
   equationLabelExtension,

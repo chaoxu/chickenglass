@@ -54,12 +54,17 @@ export const blockThemeStyles = {
     marginBottom: "0.5em",
   },
 
-  /* Blockquote styling: applied to .cm-line elements via Decoration.line */
-  ".cg-blockquote": {
+  /* Blockquote plugin styling: fenced div blockquote blocks */
+  ".cg-block-blockquote": {
     borderLeft: "2px solid var(--cg-border)",
     paddingLeft: "1em",
     color: "var(--cg-muted)",
     fontStyle: "italic",
+  },
+
+  /* Hide header widget for blockquotes — no "Blockquote" label */
+  ".cg-block-blockquote .cg-block-header-rendered": {
+    display: "none",
   },
 
   /* Inline image preview */

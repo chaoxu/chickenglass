@@ -115,10 +115,12 @@ See [@cormen2009] for details.
 
 # Blockquote with Math
 
-> For any $\epsilon > 0$, there exists $\delta > 0$ such that:
-> $$
-> |x - a| < \delta \implies |f(x) - f(a)| < \epsilon
-> $$
+::: Blockquote
+For any $\epsilon > 0$, there exists $\delta > 0$ such that:
+$$
+|x - a| < \delta \implies |f(x) - f(a)| < \epsilon
+$$
+:::
 
 # Footnotes
 

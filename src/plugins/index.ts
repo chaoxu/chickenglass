@@ -48,6 +48,7 @@ export {
 export { proofPlugin, QED_SYMBOL } from "./proof-plugin";
 export { definitionPlugin } from "./definition-plugin";
 export { remarkPlugin, examplePlugin } from "./remark-plugin";
+export { blockquotePlugin } from "./blockquote-plugin";
 export { algorithmPlugin } from "./algorithm-plugin";
 export { problemPlugin } from "./problem-plugin";
 export { defaultPlugins } from "./default-plugins";

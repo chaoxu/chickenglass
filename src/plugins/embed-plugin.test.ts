@@ -280,8 +280,8 @@ describe("embed blocks are not numbered", () => {
 // ---------------------------------------------------------------------------
 
 describe("defaultPlugins includes embed plugins", () => {
-  it("contains all 15 default plugins", () => {
-    expect(defaultPlugins).toHaveLength(15);
+  it("contains all 16 default plugins", () => {
+    expect(defaultPlugins).toHaveLength(16);
   });
 
   it("includes embed plugin names", () => {

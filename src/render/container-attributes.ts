@@ -22,7 +22,6 @@ const TAG_NAME_MAP: Readonly<Record<string, string>> = {
   BulletList: "ul",
   OrderedList: "ol",
   FencedCode: "code",
-  Blockquote: "blockquote",
   HorizontalRule: "hr",
   FencedDiv: "div",
   Paragraph: "p",

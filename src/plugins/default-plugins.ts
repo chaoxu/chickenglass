@@ -17,6 +17,7 @@ import { remarkPlugin, examplePlugin } from "./remark-plugin";
 import { algorithmPlugin } from "./algorithm-plugin";
 import { problemPlugin } from "./problem-plugin";
 import { embedFamilyPlugins } from "./embed-plugin";
+import { blockquotePlugin } from "./blockquote-plugin";
 
 /** All default block plugins as a single array. */
 export const defaultPlugins: readonly BlockPlugin[] = [
@@ -27,5 +28,6 @@ export const defaultPlugins: readonly BlockPlugin[] = [
   remarkPlugin,
   examplePlugin,
   algorithmPlugin,
+  blockquotePlugin,
   ...embedFamilyPlugins,
 ];
