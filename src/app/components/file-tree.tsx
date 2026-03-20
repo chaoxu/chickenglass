@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import type { FileEntry } from "../file-manager";
 import { dirname } from "../lib/utils";
@@ -116,6 +116,20 @@ function InlineCreateInput({ kind, depth, onConfirm, onCancel }: InlineCreateInp
   );
 }
 
+// ── Flatten visible entries ─────────────────────────────────────────────
+
+/** Flatten the file tree into an ordered list of visible entries, respecting open/closed folders. */
+function flattenVisible(entries: FileEntry[], openPaths: ReadonlySet<string>): FileEntry[] {
+  const result: FileEntry[] = [];
+  for (const entry of entries) {
+    result.push(entry);
+    if (entry.isDirectory && openPaths.has(entry.path) && entry.children) {
+      result.push(...flattenVisible(entry.children, openPaths));
+    }
+  }
+  return result;
+}
+
 // ── Types ────────────────────────────────────────────────────────────────
 
 interface FileTreeProps {
@@ -138,7 +152,12 @@ interface FileNodeProps {
   entry: FileEntry;
   depth: number;
   activePath: string | null;
+  selectedPath: string | null;
+  openPaths: ReadonlySet<string>;
+  onToggleFolder: (path: string) => void;
+  onSetOpen: (path: string, open: boolean) => void;
   onSelect: (path: string) => void;
+  onSelectPath: (path: string) => void;
   onRename: (oldPath: string, newPath: string) => Promise<void>;
   onDelete: (path: string) => Promise<void>;
   onCreateFile: (path: string) => void;
@@ -149,13 +168,17 @@ function FileNode({
   entry,
   depth,
   activePath,
+  selectedPath,
+  openPaths,
+  onToggleFolder,
+  onSetOpen,
   onSelect,
+  onSelectPath,
   onRename,
   onDelete,
   onCreateFile,
   onCreateDir,
 }: FileNodeProps) {
-  const [open, setOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -164,6 +187,8 @@ function FileNode({
 
   const indent = depth * 12 + 8;
   const isActive = entry.path === activePath;
+  const isSelected = entry.path === selectedPath;
+  const open = entry.isDirectory && openPaths.has(entry.path);
 
   // ── Rename ────────────────────────────────────────────────────────────────
 
@@ -218,10 +243,10 @@ function FileNode({
       setContextMenu(null);
       // For directories, ensure the folder is open so the input is visible
       if (entry.isDirectory) {
-        setOpen(true);
+        onSetOpen(entry.path, true);
       }
     },
-    [entry.isDirectory],
+    [entry.isDirectory, entry.path, onSetOpen],
   );
 
   const cancelCreate = useCallback(() => {
@@ -292,13 +317,21 @@ function FileNode({
       <div>
         <div
           role="button"
-          tabIndex={0}
-          className="flex items-center gap-1 px-2 py-[2px] cursor-pointer hover:bg-[var(--cg-hover)] text-sm text-[var(--cg-fg)] select-none whitespace-nowrap"
+          tabIndex={-1}
+          className={[
+            "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
+            isSelected
+              ? "bg-[var(--cg-active)]"
+              : "hover:bg-[var(--cg-hover)]",
+          ].join(" ")}
           style={{ paddingLeft: `${indent}px` }}
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => {
+            onSelectPath(entry.path);
+            onToggleFolder(entry.path);
+          }}
           onContextMenu={handleContextMenu}
           onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") setOpen((o) => !o);
+            if (e.key === "Enter" || e.key === " ") onToggleFolder(entry.path);
             if (e.key === "F2") {
               e.preventDefault();
               startRename();
@@ -344,7 +377,12 @@ function FileNode({
                 entry={child}
                 depth={depth + 1}
                 activePath={activePath}
+                selectedPath={selectedPath}
+                openPaths={openPaths}
+                onToggleFolder={onToggleFolder}
+                onSetOpen={onSetOpen}
                 onSelect={onSelect}
+                onSelectPath={onSelectPath}
                 onRename={onRename}
                 onDelete={onDelete}
                 onCreateFile={onCreateFile}
@@ -412,15 +450,18 @@ function FileNode({
     <>
       <div
         role="button"
-        tabIndex={0}
+        tabIndex={-1}
         className={[
           "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
-          isActive
+          isActive || isSelected
             ? "bg-[var(--cg-active)]"
             : "hover:bg-[var(--cg-hover)]",
         ].join(" ")}
         style={{ paddingLeft: `${indent}px` }}
-        onClick={() => onSelect(entry.path)}
+        onClick={() => {
+          onSelectPath(entry.path);
+          onSelect(entry.path);
+        }}
         onContextMenu={handleContextMenu}
         onKeyDown={handleItemKey}
       >
@@ -597,6 +638,108 @@ export function FileTree({
   onCreateFile,
   onCreateDir,
 }: FileTreeProps) {
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [openPaths, setOpenPaths] = useState<Set<string>>(() => new Set());
+
+  const children = root?.children ?? [];
+
+  // Flatten visible entries for keyboard navigation
+  const visibleEntries = useMemo(
+    () => flattenVisible(children, openPaths),
+    [children, openPaths],
+  );
+
+  const toggleFolder = useCallback((path: string) => {
+    setOpenPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
+
+  const setFolderOpen = useCallback((path: string, isOpen: boolean) => {
+    setOpenPaths((prev) => {
+      if (isOpen && prev.has(path)) return prev;
+      if (!isOpen && !prev.has(path)) return prev;
+      const next = new Set(prev);
+      if (isOpen) {
+        next.add(path);
+      } else {
+        next.delete(path);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (visibleEntries.length === 0) return;
+
+      // Don't interfere with input elements (rename, inline create)
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT") return;
+
+      // Compute current index once for all key handlers
+      const currentIndex = selectedPath
+        ? visibleEntries.findIndex((v) => v.path === selectedPath)
+        : -1;
+      const currentEntry = currentIndex >= 0 ? visibleEntries[currentIndex] : null;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const nextIndex = currentIndex + 1;
+        if (nextIndex < visibleEntries.length) {
+          setSelectedPath(visibleEntries[nextIndex].path);
+        } else if (currentIndex === -1) {
+          setSelectedPath(visibleEntries[0].path);
+        }
+        return;
+      }
+
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (currentIndex > 0) {
+          setSelectedPath(visibleEntries[currentIndex - 1].path);
+        } else if (currentIndex === -1) {
+          setSelectedPath(visibleEntries[visibleEntries.length - 1].path);
+        }
+        return;
+      }
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (!currentEntry) return;
+        if (currentEntry.isDirectory) {
+          toggleFolder(currentEntry.path);
+        } else {
+          onSelect(currentEntry.path);
+        }
+        return;
+      }
+
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        if (currentEntry?.isDirectory && !openPaths.has(currentEntry.path)) {
+          setFolderOpen(currentEntry.path, true);
+        }
+        return;
+      }
+
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        if (currentEntry?.isDirectory && openPaths.has(currentEntry.path)) {
+          setFolderOpen(currentEntry.path, false);
+        }
+        return;
+      }
+    },
+    [visibleEntries, selectedPath, toggleFolder, setFolderOpen, onSelect, openPaths],
+  );
+
   if (!root) {
     return (
       <div className="px-3 py-2 text-xs text-[var(--cg-muted)] italic">
@@ -604,8 +747,6 @@ export function FileTree({
       </div>
     );
   }
-
-  const children = root.children ?? [];
 
   if (children.length === 0) {
     return (
@@ -616,14 +757,24 @@ export function FileTree({
   }
 
   return (
-    <div className="py-1">
+    <div
+      className="py-1 outline-none"
+      tabIndex={0}
+      role="tree"
+      onKeyDown={handleKeyDown}
+    >
       {children.map((entry) => (
         <FileNode
           key={entry.path}
           entry={entry}
           depth={0}
           activePath={activePath}
+          selectedPath={selectedPath}
+          openPaths={openPaths}
+          onToggleFolder={toggleFolder}
+          onSetOpen={setFolderOpen}
           onSelect={onSelect}
+          onSelectPath={setSelectedPath}
           onRename={onRename}
           onDelete={onDelete}
           onCreateFile={onCreateFile}
