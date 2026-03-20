@@ -94,12 +94,39 @@ const draculaTheme: WritingTheme = {
   dark: true,
 };
 
+/**
+ * High Contrast — truly flat terminal-style theme inspired by chatgpt-cli.
+ * Same background everywhere, zero background variation. Only thin borders
+ * provide visual separation.
+ */
+const highContrastTheme: WritingTheme = {
+  id: "high-contrast",
+  name: "High Contrast",
+  variables: {
+    "--cg-bg": "#0a0a0a",
+    "--cg-bg-secondary": "#0a0a0a",
+    "--cg-fg": "#f0f0f0",
+    "--cg-muted": "#a0a0a0",
+    "--cg-border": "#3a3a3a",
+    "--cg-subtle": "#0a0a0a",
+    "--cg-hover": "rgba(255, 255, 255, 0.02)",
+    "--cg-active": "rgba(255, 255, 255, 0.04)",
+    "--cg-accent": "#f0f0f0",
+    "--cg-accent-fg": "#0a0a0a",
+    "--cg-bg-overlay": "#0a0a0a",
+    "--cg-border-overlay": "rgba(58, 58, 58, 0.6)",
+    "--cg-separator": "rgba(160, 160, 160, 0.6)",
+  },
+  dark: true,
+};
+
 /** All built-in themes, in display order. */
 export const builtinThemes: WritingTheme[] = [
   defaultTheme,
   sepiaTheme,
   nordTheme,
   draculaTheme,
+  highContrastTheme,
 ];
 
 /** Look up a theme by id, falling back to the default. */
