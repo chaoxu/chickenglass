@@ -20,6 +20,10 @@ import katex from "katex";
 import { parser as baseParser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
 import { markdownExtensions, extractDivClass } from "../parser";
+import { type BibEntry, extractLastName } from "../citations/bibtex-parser";
+
+/** A map of citation keys to bibliography entries. */
+export type BibStore = ReadonlyMap<string, BibEntry>;
 
 // ── Standalone Lezer parser ─────────────────────────────────────────────────
 
@@ -90,6 +94,8 @@ export interface MarkdownToHtmlOptions {
   sectionNumbers?: boolean;
   /** Shared heading counters for recursive calls (internal use). */
   _counters?: number[];
+  /** Bibliography entries for citation resolution. */
+  bibliography?: BibStore;
 }
 
 // ── Inline rendering (standalone, for titles) ───────────────────────────────
@@ -122,6 +128,9 @@ interface WalkContext {
   readonly macros?: Record<string, string>;
   readonly sectionNumbers: boolean;
   readonly headingCounters: number[];
+  readonly bibliography?: BibStore;
+  /** Accumulates cited entry IDs in document order for the bibliography section. */
+  readonly citedIds: string[];
 }
 
 /**
@@ -139,9 +148,18 @@ export function markdownToHtml(
     macros: options?.macros,
     sectionNumbers: options?.sectionNumbers ?? false,
     headingCounters: options?._counters ?? [0, 0, 0, 0, 0, 0, 0],
+    bibliography: options?.bibliography,
+    citedIds: [],
   };
 
-  return renderNode(tree.topNode, ctx);
+  let html = renderNode(tree.topNode, ctx);
+
+  // Render bibliography section if there are cited entries
+  if (ctx.bibliography && ctx.citedIds.length > 0) {
+    html += renderBibliography(ctx.bibliography, ctx.citedIds);
+  }
+
+  return html;
 }
 
 /**
@@ -154,7 +172,7 @@ function renderNode(node: SyntaxNode, ctx: WalkContext): string {
       return renderDocument(node, ctx);
 
     case "Paragraph":
-      return `<p>${renderChildren(node, ctx.doc, ctx.macros)}</p>`;
+      return `<p>${renderChildren(node, ctx.doc, ctx.macros, undefined, undefined, ctx.bibliography, ctx.citedIds)}</p>`;
 
     case "ATXHeading1":
     case "ATXHeading2":
@@ -345,7 +363,7 @@ function renderListItem(node: SyntaxNode, ctx: WalkContext): string {
       parts.push(renderInline(taskContent.trim(), ctx.macros));
     } else if (child.name === "Paragraph") {
       // Inline content — render without <p> wrapping
-      parts.push(renderChildren(child, ctx.doc, ctx.macros));
+      parts.push(renderChildren(child, ctx.doc, ctx.macros, undefined, undefined, ctx.bibliography, ctx.citedIds));
     } else {
       // Block content (nested lists, math, code, divs, etc.)
       const html = renderNode(child, ctx);
@@ -566,6 +584,8 @@ function renderChildren(
   macros?: Record<string, string>,
   rangeFrom?: number,
   rangeTo?: number,
+  bibliography?: BibStore,
+  citedIds?: string[],
 ): string {
   const from = rangeFrom ?? node.from;
   const to = rangeTo ?? node.to;
@@ -581,7 +601,7 @@ function renderChildren(
         parts.push(escapeHtml(doc.slice(pos, child.from)));
       }
 
-      const childHtml = renderInlineNode(child, doc, macros);
+      const childHtml = renderInlineNode(child, doc, macros, bibliography, citedIds);
       if (childHtml !== null) {
         parts.push(childHtml);
       }
@@ -607,6 +627,8 @@ function renderInlineNode(
   node: SyntaxNode,
   doc: string,
   macros?: Record<string, string>,
+  bibliography?: BibStore,
+  citedIds?: string[],
 ): string | null {
   // Skip delimiter marks
   if (MARK_NODES.has(node.name)) {
@@ -646,7 +668,7 @@ function renderInlineNode(
     }
 
     case "Link": {
-      return renderLink(node, doc, macros);
+      return renderLink(node, doc, macros, bibliography, citedIds);
     }
 
     case "Image": {
@@ -677,19 +699,31 @@ function renderInlineNode(
   }
 }
 
-/** Render a Link node, handling cross-references ([@id]). */
+/** Render a Link node, handling citations and cross-references ([@id]). */
 function renderLink(
   node: SyntaxNode,
   doc: string,
   macros?: Record<string, string>,
+  bibliography?: BibStore,
+  citedIds?: string[],
 ): string {
   const fullText = doc.slice(node.from, node.to);
 
-  // Cross-reference: [@id] — Lezer parses this as a Link
+  // Citation / cross-reference: [@id] or [@a; @b] — Lezer parses as a Link
   const crossRefMatch = /^\[@([^\]]+)\]$/.exec(fullText);
   if (crossRefMatch) {
-    const ref = escapeHtml(crossRefMatch[1]);
-    return `<a class="cross-ref" href="#${ref}">${ref}</a>`;
+    const rawRefs = crossRefMatch[1];
+
+    // Multiple citations: [@a; @b; @c]
+    if (rawRefs.includes(";")) {
+      const ids = rawRefs.split(";").map(s => s.trim().replace(/^@/, ""));
+      const parts = ids.map(id => formatCitationRef(id, bibliography, citedIds));
+      return `<span class="citation">(${parts.join("; ")})</span>`;
+    }
+
+    // Single citation: [@id]
+    const id = rawRefs.replace(/^@/, "");
+    return formatCitationRef(id, bibliography, citedIds, true);
   }
 
   // Regular link: [text](url)
@@ -743,4 +777,55 @@ function renderImage(node: SyntaxNode, doc: string): string {
     return `<img src="${escapeHtml(rawSrc)}" alt="${escapeHtml(alt)}">`;
   }
   return `<span class="unsafe-link">[image: ${escapeHtml(alt)}]</span>`;
+}
+
+// ── Citation / bibliography rendering ───────────────────────────────────────
+
+/**
+ * Format a single citation reference. If the id matches a bibliography
+ * entry, renders as "(Author, Year)". Otherwise renders as a cross-ref link.
+ */
+function formatCitationRef(
+  id: string,
+  bibliography?: BibStore,
+  citedIds?: string[],
+  wrap = false,
+): string {
+  const entry = bibliography?.get(id);
+  if (entry) {
+    // Track cited entry for bibliography section
+    if (citedIds && !citedIds.includes(id)) {
+      citedIds.push(id);
+    }
+    const author = entry.author ? extractLastName(entry.author) : id;
+    const year = entry.year ?? "";
+    const label = `${author}, ${year}`;
+    const html = `<a class="citation" href="#bib-${escapeHtml(id)}">${escapeHtml(label)}</a>`;
+    return wrap ? `<span class="citation">(${html})</span>` : html;
+  }
+  // Not in bibliography — render as cross-reference
+  return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`;
+}
+
+/** Render the bibliography section from cited entries. */
+function renderBibliography(bib: BibStore, citedIds: string[]): string {
+  const entries = citedIds
+    .map(id => bib.get(id))
+    .filter((e): e is BibEntry => e !== undefined);
+
+  if (entries.length === 0) return "";
+
+  const items = entries.map(entry => {
+    const author = entry.author ?? "Unknown";
+    const year = entry.year ?? "";
+    const title = entry.title ?? "";
+    const venue = entry.journal ?? entry.booktitle ?? "";
+    let text = `${escapeHtml(author)}. `;
+    if (year) text += `(${escapeHtml(year)}). `;
+    if (title) text += `<em>${escapeHtml(title)}</em>. `;
+    if (venue) text += escapeHtml(venue) + ". ";
+    return `<div class="bib-entry" id="bib-${escapeHtml(entry.id)}">${text.trim()}</div>`;
+  });
+
+  return `\n<section class="bibliography">\n<h2>References</h2>\n${items.join("\n")}\n</section>`;
 }

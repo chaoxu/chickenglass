@@ -11,7 +11,7 @@
  */
 
 import { useRef, useEffect, useMemo, useCallback } from "react";
-import { markdownToHtml, renderInline } from "../markdown-to-html";
+import { markdownToHtml, renderInline, type BibStore } from "../markdown-to-html";
 import { parseFrontmatter } from "../../parser/frontmatter";
 import type { ProjectConfig } from "../project-config";
 import { mergeConfigs } from "../project-config";
@@ -29,6 +29,8 @@ export interface ReadModeViewProps {
   content: string;
   /** Project-level configuration (provides default math macros, etc.). */
   projectConfig?: ProjectConfig;
+  /** Loaded bibliography entries for citation resolution. */
+  bibliography?: BibStore;
   /** Scroll position to restore when entering read mode. */
   scrollTop?: number;
   /** Callback with current scroll position for persistence. */
@@ -77,12 +79,6 @@ async function applyLineBreaking(container: HTMLElement): Promise<void> {
     updateOnWindowResize: false,
   });
 
-  // DEBUG: log width mismatches
-  for (const el of container.querySelectorAll<HTMLElement>("p .katex")) {
-    const newWidth = el.getBoundingClientRect().width;
-    const text = el.textContent?.substring(0, 20) || "";
-    console.log(`KaTeX "${text}" restored width: ${newWidth.toFixed(2)}`);
-  }
 }
 
 /**
@@ -96,6 +92,7 @@ async function applyLineBreaking(container: HTMLElement): Promise<void> {
 export function ReadModeView({
   content,
   projectConfig,
+  bibliography,
   scrollTop,
   onScroll,
 }: ReadModeViewProps) {
@@ -113,6 +110,7 @@ export function ReadModeView({
     const bodyHtml = markdownToHtml(content, {
       macros: config.math,
       sectionNumbers: true,
+      bibliography,
     });
 
     // Render title from frontmatter if present (renderInline handles

@@ -6,6 +6,7 @@ import { SidenoteMargin } from "./sidenote-margin";
 import { ReadModeView } from "./read-mode-view";
 import { extractHeadings } from "../heading-ancestry";
 import { collectFootnotes, sidenotesCollapsedEffect } from "../../render/sidenote-render";
+import { bibDataField } from "../../citations/citation-render";
 import type { EditorMode } from "../../editor";
 
 export interface EditorPaneProps extends UseEditorOptions {
@@ -135,8 +136,9 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
     };
   }, [view, sidenotesCollapsed, getFootnoteContent]);
 
-  // Get the live document content for ReadModeView from the CM6 view
+  // Get the live document content and bibliography for ReadModeView
   const readModeContent = view ? view.state.doc.toString() : editorOptions.doc;
+  const bibData = view ? view.state.field(bibDataField, false) : undefined;
 
   return (
     <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
@@ -160,6 +162,7 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
         <ReadModeView
           content={readModeContent}
           projectConfig={editorOptions.projectConfig}
+          bibliography={bibData?.store}
           scrollTop={scrollTop}
         />
       )}
