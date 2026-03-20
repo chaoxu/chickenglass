@@ -48,12 +48,12 @@ export const typographyThemeStyles = {
 
   /* Heading line styles — font-size on .cm-line so all children (including
    * math widgets) inherit it. Font-weight stays on .cg-heading-N marks. */
-  ".cg-heading-line-1": { fontSize: "2em", lineHeight: "1.2" },
-  ".cg-heading-line-2": { fontSize: "1.5em", lineHeight: "1.3" },
-  ".cg-heading-line-3": { fontSize: "1.25em", lineHeight: "1.4" },
-  ".cg-heading-line-4": { fontSize: "1.1em", lineHeight: "1.4" },
-  ".cg-heading-line-5": { fontSize: "1em", lineHeight: "1.5" },
-  ".cg-heading-line-6": { fontSize: "0.9em", lineHeight: "1.5" },
+  ".cg-heading-line-1": { fontSize: "2em", lineHeight: "1.2", color: "var(--cg-fg)" },
+  ".cg-heading-line-2": { fontSize: "1.5em", lineHeight: "1.3", color: "var(--cg-fg)" },
+  ".cg-heading-line-3": { fontSize: "1.25em", lineHeight: "1.4", color: "var(--cg-fg)" },
+  ".cg-heading-line-4": { fontSize: "1.1em", lineHeight: "1.4", color: "var(--cg-fg)" },
+  ".cg-heading-line-5": { fontSize: "1em", lineHeight: "1.5", color: "var(--cg-fg)" },
+  ".cg-heading-line-6": { fontSize: "0.9em", lineHeight: "1.5", color: "var(--cg-fg)" },
 
   /* Heading mark styles — font-weight on text spans */
   ".cg-heading-1": { fontWeight: "700" },
