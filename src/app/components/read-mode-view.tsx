@@ -36,25 +36,27 @@ export interface ReadModeViewProps {
 }
 
 /**
- * Make .katex elements opaque to tex-linebreak2.
- *
- * Uses display:inline-flex so the else branch in tex-linebreak2 treats
- * the element as a single atomic box. Sets width to 0 so the algorithm
- * doesn't double-count (the DOM element already occupies its natural width
- * in inline flow). The algorithm sees a 0-width box, and the element's
- * natural width provides the actual space.
+ * Replace each .katex element with an empty inline span whose padding
+ * matches the KaTeX width. tex-linebreak2 creates a box from the padding
+ * of inline elements (no recursion, no IGNORE_WHITESPACE) — so it sees
+ * each math expression as a single "word" of the correct width in normal
+ * inline text flow. After line breaking, swap the originals back.
  */
-function makeKatexAtomic(container: HTMLElement): () => void {
-  const elements: HTMLElement[] = [];
+function replaceKatexWithPaddingSpans(container: HTMLElement): () => void {
+  const saved: { placeholder: HTMLSpanElement; original: HTMLElement }[] = [];
+
   for (const el of container.querySelectorAll<HTMLElement>("p .katex")) {
-    el.style.display = "inline-flex";
-    el.style.width = "0px";
-    elements.push(el);
+    const width = el.getBoundingClientRect().width;
+    const placeholder = document.createElement("span");
+    placeholder.style.paddingLeft = width + "px";
+
+    el.parentNode?.replaceChild(placeholder, el);
+    saved.push({ placeholder, original: el });
   }
+
   return () => {
-    for (const el of elements) {
-      el.style.removeProperty("display");
-      el.style.removeProperty("width");
+    for (const { placeholder, original } of saved) {
+      placeholder.parentNode?.replaceChild(original, placeholder);
     }
   };
 }
@@ -73,14 +75,13 @@ async function applyLineBreaking(container: HTMLElement): Promise<void> {
     resetDOMJustification(p);
   }
 
-  const restoreKatex = makeKatexAtomic(container);
+  const restoreKatex = replaceKatexWithPaddingSpans(container);
 
   await texLinebreakDOM(paragraphs, {
     justify: true,
     updateOnWindowResize: false,
   });
 
-  // Restore KaTeX children and un-hide eaten whitespace
   restoreKatex();
 }
 
