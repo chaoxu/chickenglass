@@ -1177,14 +1177,25 @@ export class TableWidget extends WidgetType {
         setTimeout(() => {
           const view = this.editorView;
           if (!view) return;
+
+          // Re-read current table position from the document — previous cell
+          // edits may have shifted positions via cellEditAnnotation mapping.
+          const currentTables = findTablesFromState(view.state);
+          const currentTable = currentTables.find((t) => {
+            // Match by approximate position (within a few chars of original)
+            return Math.abs(t.from - this.tableFrom) < 50;
+          });
+          if (!currentTable) return;
+
+          const currentText = view.state.sliceDoc(currentTable.from, currentTable.to);
           const updated = this.buildUpdatedTable(section, row, col, editedText);
           if (!updated) return;
           const newText = formatTable(updated).join("\n");
-          if (newText === this.tableText) return;
+          if (newText === currentText) return;
 
           const stillInTable = container && container.contains(document.activeElement);
           view.dispatch({
-            changes: { from: this.tableFrom, to: this.tableFrom + this.tableText.length, insert: newText },
+            changes: { from: currentTable.from, to: currentTable.to, insert: newText },
             ...(stillInTable ? { annotations: cellEditAnnotation.of(true) } : {}),
           });
         }, 0);
