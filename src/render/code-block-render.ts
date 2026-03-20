@@ -29,6 +29,7 @@ import {
   decorationHidden,
   RenderWidget,
   editorFocusField,
+  focusEffect,
   focusTracker,
 } from "./render-utils";
 
@@ -205,11 +206,16 @@ const codeBlockDecorationField = StateField.define<DecorationSet>({
     return buildCodeBlockDecorations(state);
   },
 
-  update(_value, tr) {
-    // Rebuild on every transaction — the syntax tree may have advanced from
-    // background parsing, and there's no dedicated signal for tree completion.
-    // Tree iteration is cheap so this is fine.
-    return buildCodeBlockDecorations(tr.state);
+  update(value, tr) {
+    if (
+      tr.docChanged ||
+      tr.selection ||
+      tr.effects.some((e) => e.is(focusEffect)) ||
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+    ) {
+      return buildCodeBlockDecorations(tr.state);
+    }
+    return value;
   },
 
   provide(field) {
