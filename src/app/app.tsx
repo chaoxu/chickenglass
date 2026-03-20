@@ -400,7 +400,12 @@ function AppInner() {
     setEditorModeState(mode);
     const view = editorState?.view;
     if (view) {
-      setEditorMode(view, mode);
+      // Read mode is handled by the ReadModeView component (not CM6), so
+      // only reconfigure CM6 for rich/source modes. When leaving read mode,
+      // CM6 is set to the target mode.
+      if (mode !== "read") {
+        setEditorMode(view, mode);
+      }
     }
   }, [editorState?.view]);
 
@@ -534,6 +539,7 @@ function AppInner() {
             onSidenotesCollapsedChange={setSidenotesCollapsed}
             onDocChange={handleDocChange}
             onStateChange={handleEditorStateChange}
+            editorMode={editorMode}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-[var(--cg-muted)] text-sm select-none">

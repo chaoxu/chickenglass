@@ -193,3 +193,230 @@ body {
   color: var(--cg-fg);
   font-family: 'IBM Plex Mono', 'Fira Code', monospace;
 }
+
+/* ── Read mode HTML renderer ───────────────────────────────────────────────
+ * Semantic HTML view replacing CM6 in read mode. Enables proper typography
+ * (justify, hyphens, Knuth-Plass) that CM6's `.cm-line` divs prevent. */
+
+.cg-read-mode-view {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px 48px;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--cg-fg);
+  background: var(--cg-bg);
+
+  /* Justified text with hyphenation for polished reading */
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  text-wrap: pretty;
+}
+
+/* ── Read mode headings ──────────────────────────────────────────────────── */
+
+.cg-read-mode-view h1,
+.cg-read-mode-view h2,
+.cg-read-mode-view h3,
+.cg-read-mode-view h4,
+.cg-read-mode-view h5,
+.cg-read-mode-view h6 {
+  text-align: left;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.cg-read-mode-view h1 { font-size: 1.8em; }
+.cg-read-mode-view h2 { font-size: 1.4em; }
+.cg-read-mode-view h3 { font-size: 1.15em; }
+.cg-read-mode-view h4 { font-size: 1em; }
+.cg-read-mode-view h5 { font-size: 0.9em; }
+.cg-read-mode-view h6 { font-size: 0.85em; }
+
+/* Document title from frontmatter */
+.cg-read-mode-view .cg-read-title {
+  margin-top: 0;
+  margin-bottom: 1em;
+  font-size: 2em;
+  font-weight: 700;
+  text-align: left;
+}
+
+/* Section numbers */
+.cg-read-mode-view .cg-section-number {
+  color: var(--cg-muted);
+  margin-right: 0.4em;
+}
+
+/* ── Read mode paragraphs & inline ───────────────────────────────────────── */
+
+.cg-read-mode-view p {
+  margin: 0.8em 0;
+}
+
+.cg-read-mode-view a {
+  color: var(--cg-fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cg-read-mode-view a.cross-ref {
+  text-decoration: none;
+  border-bottom: 1px dashed var(--cg-muted);
+}
+
+.cg-read-mode-view mark {
+  background: rgba(255, 255, 0, 0.2);
+  padding: 0.1em 0.2em;
+  border-radius: 2px;
+}
+
+.cg-read-mode-view img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1em auto;
+}
+
+/* ── Read mode code blocks ───────────────────────────────────────────────── */
+
+.cg-read-mode-view code {
+  font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+  font-size: 0.9em;
+  background: var(--cg-hover);
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+}
+
+.cg-read-mode-view pre {
+  background: var(--cg-hover);
+  padding: 1em;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.cg-read-mode-view pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85em;
+}
+
+/* ── Read mode math ──────────────────────────────────────────────────────── */
+
+.cg-read-mode-view .math-display {
+  margin: 1.2em 0;
+  text-align: center;
+}
+
+.cg-read-mode-view .math-error {
+  color: #c00;
+  background: rgba(255, 0, 0, 0.05);
+}
+
+.cg-read-mode-view .katex {
+  color: inherit;
+}
+
+/* ── Read mode fenced divs (theorem, proof, etc.) ────────────────────────── */
+
+.cg-read-mode-view .theorem,
+.cg-read-mode-view .lemma,
+.cg-read-mode-view .corollary,
+.cg-read-mode-view .definition,
+.cg-read-mode-view .proposition,
+.cg-read-mode-view .conjecture,
+.cg-read-mode-view .problem {
+  border-left: 3px solid var(--cg-border);
+  padding: 0.75em 1em;
+  margin: 1.2em 0;
+  background: var(--cg-subtle);
+}
+
+.cg-read-mode-view .proof {
+  border-left: 3px solid var(--cg-muted);
+  padding: 0.75em 1em;
+  margin: 1.2em 0;
+}
+
+.cg-read-mode-view .remark,
+.cg-read-mode-view .example,
+.cg-read-mode-view .note {
+  border-left: 3px solid var(--cg-muted);
+  padding: 0.75em 1em;
+  margin: 1.2em 0;
+  background: var(--cg-subtle);
+}
+
+.cg-read-mode-view .Blockquote,
+.cg-read-mode-view blockquote {
+  border-left: 3px solid var(--cg-border);
+  padding-left: 1em;
+  margin-left: 0;
+  color: var(--cg-fg);
+}
+
+.cg-read-mode-view .div-title {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.3em;
+}
+
+/* ── Read mode tables ────────────────────────────────────────────────────── */
+
+.cg-read-mode-view table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.2em 0;
+  font-size: 0.9em;
+}
+
+.cg-read-mode-view th,
+.cg-read-mode-view td {
+  border: 1px solid var(--cg-border);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+
+.cg-read-mode-view th {
+  font-weight: 600;
+  background: var(--cg-subtle);
+}
+
+/* ── Read mode lists ─────────────────────────────────────────────────────── */
+
+.cg-read-mode-view ul,
+.cg-read-mode-view ol {
+  padding-left: 1.5em;
+  margin: 0.8em 0;
+}
+
+.cg-read-mode-view li {
+  margin: 0.2em 0;
+}
+
+/* ── Read mode footnotes ─────────────────────────────────────────────────── */
+
+.cg-read-mode-view .footnote {
+  font-size: 0.85em;
+  color: var(--cg-muted);
+  padding: 0.25em 0;
+  border-top: 1px solid var(--cg-border);
+  margin-top: 0.5em;
+}
+
+/* ── Read mode horizontal rule ───────────────────────────────────────────── */
+
+.cg-read-mode-view hr {
+  border: none;
+  border-top: 1px solid var(--cg-border);
+  margin: 2em 0;
+}

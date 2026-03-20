@@ -28,16 +28,38 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/** Check if a URL is safe to embed in href/src (blocks javascript:, data:, vbscript:). */
+function isSafeUrl(url: string): boolean {
+  const lower = url.trim().toLowerCase();
+  // Block known dangerous schemes
+  if (
+    lower.startsWith("javascript:") ||
+    lower.startsWith("data:") ||
+    lower.startsWith("vbscript:")
+  ) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * Render KaTeX math, returning HTML string.
  * Falls back to escaped source on error.
  */
-function renderMath(latex: string, displayMode: boolean): string {
+function renderMath(
+  latex: string,
+  displayMode: boolean,
+  macros?: Record<string, string>,
+): string {
   try {
     return katex.renderToString(latex, {
       displayMode,
       throwOnError: false,
-      trust: true,
+      trust: (context: { command: string; url?: string }) =>
+        (context.command === "\\href" || context.command === "\\url") &&
+        context.url != null &&
+        /^https?:\/\//.test(context.url),
+      ...(macros ? { macros: { ...macros } } : {}),
     });
   } catch {
     // KaTeX render failed (e.g. unsupported command) — show raw LaTeX as error
@@ -53,8 +75,13 @@ function renderMath(latex: string, displayMode: boolean): string {
  *
  * Handles: inline math ($..$ and \(..\)), bold, italic, strikethrough,
  * highlight, inline code, links, and images.
+ *
+ * @param macros - Optional KaTeX macros from frontmatter for math rendering.
  */
-export function renderInline(text: string): string {
+export function renderInline(
+  text: string,
+  macros?: Record<string, string>,
+): string {
   let result = "";
   let i = 0;
 
@@ -64,7 +91,7 @@ export function renderInline(text: string): string {
       const closeIdx = text.indexOf("\\)", i + 2);
       if (closeIdx !== -1) {
         const latex = text.slice(i + 2, closeIdx);
-        result += renderMath(latex, false);
+        result += renderMath(latex, false, macros);
         i = closeIdx + 2;
         continue;
       }
@@ -75,7 +102,7 @@ export function renderInline(text: string): string {
       const closeIdx = findClosingDollar(text, i + 1);
       if (closeIdx !== -1) {
         const latex = text.slice(i + 1, closeIdx);
-        result += renderMath(latex, false);
+        result += renderMath(latex, false, macros);
         i = closeIdx + 1;
         continue;
       }
@@ -96,7 +123,7 @@ export function renderInline(text: string): string {
     if (text[i] === "~" && text[i + 1] === "~") {
       const closeIdx = text.indexOf("~~", i + 2);
       if (closeIdx !== -1) {
-        const inner = renderInline(text.slice(i + 2, closeIdx));
+        const inner = renderInline(text.slice(i + 2, closeIdx), macros);
         result += `<del>${inner}</del>`;
         i = closeIdx + 2;
         continue;
@@ -107,7 +134,7 @@ export function renderInline(text: string): string {
     if (text[i] === "=" && text[i + 1] === "=") {
       const closeIdx = text.indexOf("==", i + 2);
       if (closeIdx !== -1) {
-        const inner = renderInline(text.slice(i + 2, closeIdx));
+        const inner = renderInline(text.slice(i + 2, closeIdx), macros);
         result += `<mark>${inner}</mark>`;
         i = closeIdx + 2;
         continue;
@@ -118,7 +145,7 @@ export function renderInline(text: string): string {
     if (text[i] === "*" && text[i + 1] === "*") {
       const closeIdx = text.indexOf("**", i + 2);
       if (closeIdx !== -1) {
-        const inner = renderInline(text.slice(i + 2, closeIdx));
+        const inner = renderInline(text.slice(i + 2, closeIdx), macros);
         result += `<strong>${inner}</strong>`;
         i = closeIdx + 2;
         continue;
@@ -129,7 +156,7 @@ export function renderInline(text: string): string {
     if (text[i] === "*" && text[i + 1] !== "*") {
       const closeIdx = findClosingStar(text, i + 1);
       if (closeIdx !== -1) {
-        const inner = renderInline(text.slice(i + 1, closeIdx));
+        const inner = renderInline(text.slice(i + 1, closeIdx), macros);
         result += `<em>${inner}</em>`;
         i = closeIdx + 1;
         continue;
@@ -141,8 +168,12 @@ export function renderInline(text: string): string {
       const match = text.slice(i).match(/^!\[([^\]]*)\]\(([^)]+)\)/);
       if (match) {
         const alt = escapeHtml(match[1]);
-        const src = escapeHtml(match[2]);
-        result += `<img src="${src}" alt="${alt}">`;
+        const rawSrc = match[2];
+        if (isSafeUrl(rawSrc)) {
+          result += `<img src="${escapeHtml(rawSrc)}" alt="${alt}">`;
+        } else {
+          result += `<span class="unsafe-link">[image: ${alt}]</span>`;
+        }
         i += match[0].length;
         continue;
       }
@@ -150,11 +181,24 @@ export function renderInline(text: string): string {
 
     // Link: [text](url)
     if (text[i] === "[") {
+      // Footnote callout: [^id]
+      const fnMatch = text.slice(i).match(/^\[\^([^\]]+)\]/);
+      if (fnMatch && text[i + 1] === "^") {
+        const fnId = escapeHtml(fnMatch[1]);
+        result += `<sup><a class="footnote-ref" href="#fn-${fnId}">${fnId}</a></sup>`;
+        i += fnMatch[0].length;
+        continue;
+      }
+
       const match = text.slice(i).match(/^\[([^\]]+)\]\(([^)]+)\)/);
       if (match) {
-        const linkText = renderInline(match[1]);
-        const href = escapeHtml(match[2]);
-        result += `<a href="${href}">${linkText}</a>`;
+        const linkText = renderInline(match[1], macros);
+        const rawHref = match[2];
+        if (isSafeUrl(rawHref)) {
+          result += `<a href="${escapeHtml(rawHref)}">${linkText}</a>`;
+        } else {
+          result += `<span class="unsafe-link">${linkText}</span>`;
+        }
         i += match[0].length;
         continue;
       }
@@ -264,6 +308,16 @@ function isIncludeDirective(line: string): boolean {
   return /^:{3,}\s*\{\.include\}/.test(line.trim());
 }
 
+/** Options for the markdown-to-HTML converter. */
+export interface MarkdownToHtmlOptions {
+  /** KaTeX macros from frontmatter for math rendering. */
+  macros?: Record<string, string>;
+  /** When true, add hierarchical section numbers to headings. */
+  sectionNumbers?: boolean;
+  /** Shared heading counters for recursive calls (internal use). */
+  _counters?: number[];
+}
+
 /**
  * Convert markdown content to semantic HTML body content.
  *
@@ -271,8 +325,16 @@ function isIncludeDirective(line: string): boolean {
  * line-by-line, handling block structures (headings, lists, code blocks,
  * fenced divs, blockquotes, tables, horizontal rules) and delegates
  * inline formatting to `renderInline`.
+ *
+ * @param options - Optional configuration for macros and section numbers.
  */
-export function markdownToHtml(content: string): string {
+export function markdownToHtml(
+  content: string,
+  options?: MarkdownToHtmlOptions,
+): string {
+  const macros = options?.macros;
+  const sectionNumbers = options?.sectionNumbers ?? false;
+  const headingCounters = options?._counters ?? [0, 0, 0, 0, 0, 0, 0];
   const lines = content.split("\n");
   const output: string[] = [];
   let i = 0;
@@ -317,8 +379,20 @@ export function markdownToHtml(content: string): string {
     const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)/);
     if (headingMatch) {
       const level = headingMatch[1].length;
-      const text = renderInline(headingMatch[2]);
-      output.push(`<h${level}>${text}</h${level}>`);
+      // Strip trailing attribute blocks {.class #id -} for display
+      const rawText = headingMatch[2].replace(/\s*\{[^}]*\}\s*$/, "");
+      const isUnnumbered = /\{[^}]*(?:-|\.unnumbered)[^}]*\}\s*$/.test(headingMatch[2]);
+      const text = renderInline(rawText, macros);
+
+      let prefix = "";
+      if (sectionNumbers && !isUnnumbered) {
+        headingCounters[level]++;
+        for (let lv = level + 1; lv <= 6; lv++) headingCounters[lv] = 0;
+        const parts: number[] = [];
+        for (let lv = 1; lv <= level; lv++) parts.push(headingCounters[lv]);
+        prefix = `<span class="cg-section-number">${parts.join(".")}</span> `;
+      }
+      output.push(`<h${level}>${prefix}${text}</h${level}>`);
       i++;
       continue;
     }
@@ -332,7 +406,7 @@ export function markdownToHtml(content: string): string {
       const singleLineClose = firstLine.indexOf("$$");
       if (singleLineClose !== -1 && firstLine.length > 2) {
         const latex = firstLine.slice(0, singleLineClose).trim();
-        output.push(`<div class="math-display">${renderMath(latex, true)}</div>`);
+        output.push(`<div class="math-display">${renderMath(latex, true, macros)}</div>`);
         i++;
         continue;
       }
@@ -354,7 +428,7 @@ export function markdownToHtml(content: string): string {
       if (i < lines.length) i++;
 
       const latex = mathLines.join("\n").trim();
-      output.push(`<div class="math-display">${renderMath(latex, true)}</div>`);
+      output.push(`<div class="math-display">${renderMath(latex, true, macros)}</div>`);
       continue;
     }
 
@@ -372,7 +446,7 @@ export function markdownToHtml(content: string): string {
       }
       if (i < lines.length) i++; // skip closing \]
       const latex = mathLines.join("\n").trim();
-      output.push(`<div class="math-display">${renderMath(latex, true)}</div>`);
+      output.push(`<div class="math-display">${renderMath(latex, true, macros)}</div>`);
       continue;
     }
 
@@ -410,7 +484,7 @@ export function markdownToHtml(content: string): string {
         // The content between attrs and closing ::: is captured as the title.
         output.push(`<div${classAttr}${idAttr}>`);
         if (divAttrs.title) {
-          output.push(`<p>${renderInline(divAttrs.title)}</p>`);
+          output.push(`<p>${renderInline(divAttrs.title, macros)}</p>`);
         }
         output.push("</div>");
         i++;
@@ -419,20 +493,36 @@ export function markdownToHtml(content: string): string {
 
       output.push(`<div${classAttr}${idAttr}>`);
       if (divAttrs.title) {
-        output.push(`<strong class="div-title">${renderInline(divAttrs.title)}</strong>`);
+        output.push(`<strong class="div-title">${renderInline(divAttrs.title, macros)}</strong>`);
       }
       i++;
 
-      // Collect content until closing :::
+      // Collect content until matching closing ::: (respecting nesting depth)
       const innerLines: string[] = [];
-      while (i < lines.length && !/^:{3,}\s*$/.test(lines[i].trim())) {
+      let depth = 1;
+      while (i < lines.length && depth > 0) {
+        const ln = lines[i].trim();
+        // Opening ::: with content (not bare closing)
+        if (/^:{3,}\s+\S/.test(ln) || (/^:{3,}\s*\{/.test(ln) && !/^:{3,}\s*$/.test(ln))) {
+          depth++;
+        }
+        // Bare closing :::
+        if (/^:{3,}\s*$/.test(ln)) {
+          depth--;
+          if (depth === 0) {
+            i++; // skip closing :::
+            break;
+          }
+        }
         innerLines.push(lines[i]);
         i++;
       }
-      if (i < lines.length) i++; // skip closing :::
 
-      // Recursively render inner content
-      const innerHtml = markdownToHtml(innerLines.join("\n"));
+      // Recursively render inner content (share heading counters)
+      const innerHtml = markdownToHtml(innerLines.join("\n"), {
+        ...options,
+        _counters: headingCounters,
+      });
       output.push(innerHtml);
       output.push("</div>");
       continue;
@@ -458,7 +548,7 @@ export function markdownToHtml(content: string): string {
           break;
         }
       }
-      const quoteHtml = markdownToHtml(quoteLines.join("\n"));
+      const quoteHtml = markdownToHtml(quoteLines.join("\n"), options);
       output.push(`<blockquote>${quoteHtml}</blockquote>`);
       continue;
     }
@@ -470,13 +560,13 @@ export function markdownToHtml(content: string): string {
         tableLines.push(lines[i].trim());
         i++;
       }
-      output.push(renderTable(tableLines));
+      output.push(renderTable(tableLines, macros));
       continue;
     }
 
     // Unordered list
     if (/^[-*+]\s/.test(trimmed)) {
-      const listResult = parseList(lines, i, "ul");
+      const listResult = parseList(lines, i, "ul", macros);
       output.push(listResult.html);
       i = listResult.nextIndex;
       continue;
@@ -484,7 +574,7 @@ export function markdownToHtml(content: string): string {
 
     // Ordered list
     if (/^\d+\.\s/.test(trimmed)) {
-      const listResult = parseList(lines, i, "ol");
+      const listResult = parseList(lines, i, "ol", macros);
       output.push(listResult.html);
       i = listResult.nextIndex;
       continue;
@@ -494,7 +584,7 @@ export function markdownToHtml(content: string): string {
     const footnoteMatch = trimmed.match(/^\[\^([^\]]+)\]:\s*(.*)/);
     if (footnoteMatch) {
       const fnId = escapeHtml(footnoteMatch[1]);
-      const fnContent = renderInline(footnoteMatch[2]);
+      const fnContent = renderInline(footnoteMatch[2], macros);
       output.push(
         `<div class="footnote" id="fn-${fnId}">` +
         `<sup>${fnId}</sup> ${fnContent}</div>`,
@@ -523,7 +613,7 @@ export function markdownToHtml(content: string): string {
       i++;
     }
     if (paraLines.length > 0) {
-      const paraText = renderInline(paraLines.join(" "));
+      const paraText = renderInline(paraLines.join(" "), macros);
       output.push(`<p>${paraText}</p>`);
     }
   }
@@ -546,6 +636,7 @@ function parseList(
   lines: string[],
   startIndex: number,
   type: "ul" | "ol",
+  macros?: Record<string, string>,
 ): ListParseResult {
   const items: string[] = [];
   let i = startIndex;
@@ -602,10 +693,10 @@ function parseList(
             break;
           }
         }
-        const nestedResult = parseList(nestedLines, 0, nestedType);
-        items.push(renderListItem(itemContent) + nestedResult.html);
+        const nestedResult = parseList(nestedLines, 0, nestedType, macros);
+        items.push(renderListItem(itemContent, macros) + nestedResult.html);
       } else {
-        items.push(renderListItem(itemContent));
+        items.push(renderListItem(itemContent, macros));
       }
       continue;
     }
@@ -625,20 +716,26 @@ function parseList(
 }
 
 /** Render a list item, handling task list checkboxes. */
-function renderListItem(content: string): string {
+function renderListItem(
+  content: string,
+  macros?: Record<string, string>,
+): string {
   // Task list: [x] or [ ]
   const taskMatch = content.match(/^\[([ xX])\]\s*(.*)/);
   if (taskMatch) {
     const checked = taskMatch[1] !== " " ? " checked" : "";
-    return `<input type="checkbox" disabled${checked}> ${renderInline(taskMatch[2])}`;
+    return `<input type="checkbox" disabled${checked}> ${renderInline(taskMatch[2], macros)}`;
   }
-  return renderInline(content);
+  return renderInline(content, macros);
 }
 
 // ── Table rendering ──────────────────────────────────────────────────────────
 
 /** Render a markdown table from its lines. */
-function renderTable(tableLines: string[]): string {
+function renderTable(
+  tableLines: string[],
+  macros?: Record<string, string>,
+): string {
   if (tableLines.length < 2) return "";
 
   const parseRow = (row: string): string[] => {
@@ -664,7 +761,7 @@ function renderTable(tableLines: string[]): string {
   let html = "<table>\n<thead>\n<tr>\n";
   for (let c = 0; c < headerCells.length; c++) {
     const align = alignments[c] ? ` style="text-align: ${alignments[c]}"` : "";
-    html += `<th${align}>${renderInline(headerCells[c])}</th>\n`;
+    html += `<th${align}>${renderInline(headerCells[c], macros)}</th>\n`;
   }
   html += "</tr>\n</thead>\n<tbody>\n";
 
@@ -673,7 +770,7 @@ function renderTable(tableLines: string[]): string {
     html += "<tr>\n";
     for (let c = 0; c < cells.length; c++) {
       const align = alignments[c] ? ` style="text-align: ${alignments[c]}"` : "";
-      html += `<td${align}>${renderInline(cells[c] ?? "")}</td>\n`;
+      html += `<td${align}>${renderInline(cells[c] ?? "", macros)}</td>\n`;
     }
     html += "</tr>\n";
   }

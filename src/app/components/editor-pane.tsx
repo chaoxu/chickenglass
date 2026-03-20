@@ -3,16 +3,21 @@ import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
 import { Breadcrumbs } from "./breadcrumbs";
 import { SidenoteMargin } from "./sidenote-margin";
+import { ReadModeView } from "./read-mode-view";
 import { extractHeadings } from "../heading-ancestry";
 import { collectFootnotes, sidenotesCollapsedEffect } from "../../render/sidenote-render";
+import type { EditorMode } from "../../editor";
 
 export interface EditorPaneProps extends UseEditorOptions {
   sidenotesCollapsed?: boolean;
   onSidenotesCollapsedChange?: (collapsed: boolean) => void;
   onStateChange?: (state: UseEditorReturn) => void;
+  /** Current editor mode — "read" shows the HTML renderer instead of CM6. */
+  editorMode?: EditorMode;
 }
 
-export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesCollapsedChange, ...editorOptions }: EditorPaneProps) {
+export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesCollapsedChange, editorMode, ...editorOptions }: EditorPaneProps) {
+  const isReadMode = editorMode === "read";
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorState = useEditor(containerRef, editorOptions);
 
@@ -130,22 +135,36 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
     };
   }, [view, sidenotesCollapsed, getFootnoteContent]);
 
+  // Get the live document content for ReadModeView from the CM6 view
+  const readModeContent = view ? view.state.doc.toString() : editorOptions.doc;
+
   return (
     <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
-      <Breadcrumbs
-        headings={headings}
-        onSelect={(from) => {
-          if (view) {
-            view.dispatch({ selection: { anchor: from }, scrollIntoView: true });
-            view.focus();
-          }
-        }}
-        scrollTop={scrollTop}
-        viewportFrom={viewportFrom}
-      />
-      <div ref={containerRef} className="h-full" />
+      {!isReadMode && (
+        <Breadcrumbs
+          headings={headings}
+          onSelect={(from) => {
+            if (view) {
+              view.dispatch({ selection: { anchor: from }, scrollIntoView: true });
+              view.focus();
+            }
+          }}
+          scrollTop={scrollTop}
+          viewportFrom={viewportFrom}
+        />
+      )}
+      {/* CM6 editor — hidden (not unmounted) in read mode to preserve state */}
+      <div ref={containerRef} className="h-full" style={isReadMode ? { display: "none" } : undefined} />
+      {/* Read mode HTML renderer */}
+      {isReadMode && (
+        <ReadModeView
+          content={readModeContent}
+          projectConfig={editorOptions.projectConfig}
+          scrollTop={scrollTop}
+        />
+      )}
       {/* Portal target — SidenoteMargin renders into the CM6 scroller via DOM portal */}
-      {!sidenotesCollapsed && <SidenoteMargin view={view} />}
+      {!isReadMode && !sidenotesCollapsed && <SidenoteMargin view={view} />}
     </div>
   );
 }
