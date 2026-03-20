@@ -11,3 +11,4 @@ src-tauri/gen/schemas/
 .playwright-mcp/
 ~/
 .claude/worktrees/
+.playwright-cli/
