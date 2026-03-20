@@ -7,21 +7,21 @@
  * ──────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Backgrounds */
+  /* Backgrounds — flat: secondary matches primary */
   --cg-bg: #ffffff;
-  --cg-bg-secondary: #f4f4f5;
+  --cg-bg-secondary: #ffffff;
 
   /* Text */
   --cg-fg: #09090b;
   --cg-muted: #71717a;
 
-  /* Borders — always 1px solid */
+  /* Borders — always 1px solid, primary separator */
   --cg-border: #e4e4e7;
 
-  /* Interactive states */
-  --cg-subtle: #f4f4f5;
-  --cg-hover: #f4f4f5;
-  --cg-active: #e4e4e7;
+  /* Interactive states — minimal: subtle/hover nearly invisible */
+  --cg-subtle: rgba(0, 0, 0, 0.02);
+  --cg-hover: rgba(0, 0, 0, 0.04);
+  --cg-active: rgba(0, 0, 0, 0.06);
 
   /* Accent — black, one color */
   --cg-accent: #18181b;
@@ -38,13 +38,13 @@
 
 [data-theme="dark"] {
   --cg-bg: #0a0a0a;
-  --cg-bg-secondary: #18181b;
+  --cg-bg-secondary: #0a0a0a;
   --cg-fg: #fafafa;
   --cg-muted: #a1a1aa;
   --cg-border: #27272a;
-  --cg-subtle: #18181b;
-  --cg-hover: #27272a;
-  --cg-active: #3f3f46;
+  --cg-subtle: rgba(255, 255, 255, 0.03);
+  --cg-hover: rgba(255, 255, 255, 0.05);
+  --cg-active: rgba(255, 255, 255, 0.08);
   --cg-accent: #fafafa;
   --cg-accent-fg: #09090b;
   --cg-bg-overlay: rgba(10, 10, 10, 0.82);

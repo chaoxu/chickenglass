@@ -110,7 +110,7 @@ export const blockThemeStyles = {
   ".cg-table-cell-editing": {
     outline: "2px solid var(--cg-active)",
     outlineOffset: "-2px",
-    backgroundColor: "var(--cg-subtle)",
+    backgroundColor: "transparent",
   },
 
   /* Embed block: iframe container */
@@ -125,7 +125,7 @@ export const blockThemeStyles = {
     height: "350px",
     border: "1px solid var(--cg-border)",
     borderRadius: "2px",
-    backgroundColor: "var(--cg-subtle)",
+    backgroundColor: "transparent",
   },
   /* YouTube: responsive 16:9 aspect ratio */
   ".cg-embed-youtube": {

@@ -56,7 +56,7 @@ export const baseThemeStyles = {
     backgroundColor: "var(--cg-hover)",
   },
   ".cm-activeLine": {
-    backgroundColor: "var(--cg-subtle)",
+    backgroundColor: "transparent",
   },
 
   /* Focus mode: dim non-active paragraphs */
