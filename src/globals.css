@@ -134,21 +134,44 @@ body {
 
 /* ── Bibliography / References section ──────────────────────────────────── */
 
+.cg-bibliography {
+  margin: 0;
+  padding: 0;
+  /* Compensate for CM6 widget container offset so [1] aligns with body text */
+  margin-left: -6px;
+}
+
 .cg-bibliography-list {
+  margin: 0;
+  padding: 0;
   line-height: 1.5;
+}
+
+.cg-bibliography-entry {
+  margin: 0;
+  padding: 0;
 }
 
 .cg-bibliography-entry + .cg-bibliography-entry {
   margin-top: 0.15em;
 }
 
-/* CSL-formatted entries: number + text inline, no extra indentation */
+/* CSL-formatted entries: number + text inline, flush left */
+.cg-bibliography-entry .csl-entry {
+  margin: 0;
+  padding: 0;
+}
+
 .cg-bibliography-entry .csl-left-margin {
   display: inline;
+  padding: 0;
+  margin: 0;
 }
 
 .cg-bibliography-entry .csl-right-inline {
   display: inline;
+  padding: 0;
+  margin: 0;
 }
 
 /* ── Math sizing: inherit from surrounding context ─────────────────────── */
