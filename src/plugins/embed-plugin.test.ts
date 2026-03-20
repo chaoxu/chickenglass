@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
+import { syntaxTree } from "@codemirror/language";
 import { fencedDiv } from "../parser/fenced-div";
 
 import {
@@ -289,5 +290,68 @@ describe("defaultPlugins includes embed plugins", () => {
     expect(names).toContain("iframe");
     expect(names).toContain("youtube");
     expect(names).toContain("gist");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Edge case 4: gist embed blocks — full URL handling
+// ---------------------------------------------------------------------------
+
+describe("gist embed block edge cases", () => {
+  it("gist URL is valid for embedding", () => {
+    expect(
+      isValidEmbedUrl("https://gist.github.com/user/abc123"),
+    ).toBe(true);
+  });
+
+  it("gist URL produces correct .pibb embed URL", () => {
+    expect(
+      gistEmbedUrl("https://gist.github.com/user/abc123"),
+    ).toBe("https://gist.github.com/user/abc123.pibb");
+  });
+
+  it("gist URL with revision hash works", () => {
+    expect(
+      gistEmbedUrl("https://gist.github.com/user/abc123/def456"),
+    ).toBe("https://gist.github.com/user/abc123/def456.pibb");
+  });
+
+  it("gist URL with whitespace is trimmed", () => {
+    expect(
+      gistEmbedUrl("  https://gist.github.com/user/abc123  "),
+    ).toBe("https://gist.github.com/user/abc123.pibb");
+  });
+
+  it("gist plugin renders header correctly", () => {
+    const spec = gistPlugin.render({ type: "gist" });
+    expect(spec.header).toBe("Gist");
+    expect(spec.className).toBe("cg-block cg-block-gist");
+  });
+
+  it("gist plugin renders header with title", () => {
+    const spec = gistPlugin.render({ type: "gist", title: "My Snippet" });
+    expect(spec.header).toBe("Gist (My Snippet)");
+  });
+
+  it("gist block parsed as FencedDiv in editor state", () => {
+    const doc = "::: {.gist}\nhttps://gist.github.com/user/abc123\n:::";
+    const state = createState(doc);
+    const tree = syntaxTree(state);
+    let hasFencedDiv = false;
+    tree.iterate({
+      enter(node: { name: string }) {
+        if (node.name === "FencedDiv") hasFencedDiv = true;
+      },
+    });
+    expect(hasFencedDiv).toBe(true);
+  });
+
+  it("gist block is registered and not numbered", () => {
+    const registry = defaultRegistry();
+    const doc = "::: {.gist}\nhttps://gist.github.com/user/abc123\n:::";
+    const state = createState(doc);
+    const result = computeBlockNumbers(state, registry);
+    // Gist blocks should not appear in numbered blocks
+    expect(result.blocks).toHaveLength(0);
   });
 });
