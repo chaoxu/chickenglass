@@ -701,20 +701,24 @@ export function FileTree({
       if (e.key === "ArrowDown") {
         e.preventDefault();
         const nextIndex = currentIndex + 1;
-        if (nextIndex < visibleEntries.length) {
-          setSelectedPath(visibleEntries[nextIndex].path);
-        } else if (currentIndex === -1) {
-          setSelectedPath(visibleEntries[0].path);
+        const target = nextIndex < visibleEntries.length
+          ? visibleEntries[nextIndex]
+          : currentIndex === -1 ? visibleEntries[0] : null;
+        if (target) {
+          setSelectedPath(target.path);
+          if (!target.isDirectory) onSelect(target.path);
         }
         return;
       }
 
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        if (currentIndex > 0) {
-          setSelectedPath(visibleEntries[currentIndex - 1].path);
-        } else if (currentIndex === -1) {
-          setSelectedPath(visibleEntries[visibleEntries.length - 1].path);
+        const target = currentIndex > 0
+          ? visibleEntries[currentIndex - 1]
+          : currentIndex === -1 ? visibleEntries[visibleEntries.length - 1] : null;
+        if (target) {
+          setSelectedPath(target.path);
+          if (!target.isDirectory) onSelect(target.path);
         }
         return;
       }
