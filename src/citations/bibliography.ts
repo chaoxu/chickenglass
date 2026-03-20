@@ -172,7 +172,7 @@ class BibliographyPlugin implements PluginValue {
     // Try CSL-formatted bibliography first
     let cslHtml: string[] = [];
     if (cslProcessor) {
-      cslHtml = cslProcessor.bibliography();
+      cslHtml = cslProcessor.bibliography(citedIds);
     }
 
     const entries = cslHtml.length > 0

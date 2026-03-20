@@ -9,7 +9,7 @@
  *   const processor = new CslProcessor(items);
  *   processor.setStyle(cslXml);       // optional: custom CSL style
  *   const cite = processor.cite(["karger2000"]);
- *   const bib = processor.bibliography();
+ *   const bib = processor.bibliography(["karger2000"]);
  */
 
 import CSL from "citeproc";
@@ -235,13 +235,16 @@ export class CslProcessor {
   }
 
   /**
-   * Generate the full bibliography as an array of formatted HTML strings.
+   * Generate the bibliography as an array of formatted HTML strings.
+   * Only includes entries for the given cited IDs (in order).
    * Each entry is an HTML string (may contain <i>, <span>, etc.).
    */
-  bibliography(): string[] {
-    if (!this.engine) return [];
+  bibliography(citedIds: string[]): string[] {
+    if (!this.engine || citedIds.length === 0) return [];
     try {
-      this.engine.updateItems([...this.items.keys()]);
+      const validIds = citedIds.filter((id) => this.items.has(id));
+      if (validIds.length === 0) return [];
+      this.engine.updateItems(validIds);
       const [, entries] = this.engine.makeBibliography();
       return entries.map((e) => e.trim());
     } catch {
