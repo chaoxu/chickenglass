@@ -764,6 +764,10 @@ class TableRenderPluginValue implements PluginValue {
    * rules via the shared <style> element.
    */
   private measureAndInjectCSS(view: EditorView): void {
+    // Clear existing min-width CSS before measuring so offsetWidth returns
+    // natural content width, not the previous min-width value.
+    this.styleEl.textContent = "";
+
     const dom = view.dom;
     const colSpans = dom.querySelectorAll<HTMLElement>(".cg-table-col");
 
