@@ -324,6 +324,9 @@ body {
 
 .cg-read-mode-view .katex {
   color: inherit;
+  /* Atomic box for tex-linebreak2: inline-block prevents the algorithm
+     from entering the KaTeX span tree and stretching internal spacing */
+  display: inline-block;
 }
 
 /* ── Read mode fenced divs (theorem, proof, etc.) ────────────────────────── */
