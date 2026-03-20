@@ -673,6 +673,132 @@ function showTableContextMenu(
   new ContextMenu(items, x, y);
 }
 
+/**
+ * Show a context menu for a widget table cell using explicit coordinates.
+ *
+ * Unlike showTableContextMenu which reads row/col from the editor cursor,
+ * this variant takes explicit section/row/col from the widget's data
+ * attributes — needed because the widget has ignoreEvent() returning true,
+ * so the CM6 cursor may not be positioned inside the table.
+ */
+function showWidgetContextMenu(
+  view: EditorView,
+  table: TableRange,
+  section: string,
+  row: number,
+  col: number,
+  x: number,
+  y: number,
+): void {
+  // For the context menu, cursorRow is the 0-based body row index (null for header)
+  const cursorRow = section === "header" ? null : row;
+  const cursorCol = col;
+
+  const items: ContextMenuItem[] = [
+    {
+      label: "Insert Row Above",
+      disabled: cursorRow === null,
+      action: () => {
+        applyTableMutation(view, table, (t) =>
+          addRow(t, cursorRow ?? 0),
+        );
+      },
+    },
+    {
+      label: "Insert Row Below",
+      action: () => {
+        applyTableMutation(view, table, (t) =>
+          addRow(t, cursorRow !== null ? cursorRow + 1 : undefined),
+        );
+      },
+    },
+    {
+      label: "Insert Column Left",
+      action: () => {
+        applyTableMutation(view, table, (t) =>
+          addColumn(t, cursorCol),
+        );
+      },
+    },
+    {
+      label: "Insert Column Right",
+      action: () => {
+        applyTableMutation(view, table, (t) =>
+          addColumn(t, cursorCol + 1),
+        );
+      },
+    },
+    { label: "-" },
+    {
+      label: "Delete Row",
+      disabled: cursorRow === null || table.parsed.rows.length === 0,
+      action: () => {
+        if (cursorRow === null) return;
+        applyTableMutation(view, table, (t) => deleteRow(t, cursorRow));
+      },
+    },
+    {
+      label: "Delete Column",
+      disabled: table.parsed.header.cells.length <= 1,
+      action: () => {
+        applyTableMutation(view, table, (t) => deleteColumn(t, cursorCol));
+      },
+    },
+    { label: "-" },
+    {
+      label: "Align Left",
+      action: () => {
+        applyTableMutation(view, table, (t) => setAlignment(t, cursorCol, "left"));
+      },
+    },
+    {
+      label: "Align Center",
+      action: () => {
+        applyTableMutation(view, table, (t) => setAlignment(t, cursorCol, "center"));
+      },
+    },
+    {
+      label: "Align Right",
+      action: () => {
+        applyTableMutation(view, table, (t) => setAlignment(t, cursorCol, "right"));
+      },
+    },
+    { label: "-" },
+    {
+      label: "Move Row Up",
+      disabled: cursorRow === null || cursorRow <= 0,
+      action: () => {
+        if (cursorRow === null) return;
+        applyTableMutation(view, table, (t) => moveRow(t, cursorRow, cursorRow - 1));
+      },
+    },
+    {
+      label: "Move Row Down",
+      disabled: cursorRow === null || cursorRow >= table.parsed.rows.length - 1,
+      action: () => {
+        if (cursorRow === null) return;
+        applyTableMutation(view, table, (t) => moveRow(t, cursorRow, cursorRow + 1));
+      },
+    },
+    {
+      label: "Move Column Left",
+      disabled: cursorCol <= 0,
+      action: () => {
+        applyTableMutation(view, table, (t) => moveColumn(t, cursorCol, cursorCol - 1));
+      },
+    },
+    {
+      label: "Move Column Right",
+      disabled: cursorCol >= table.parsed.header.cells.length - 1,
+      action: () => {
+        applyTableMutation(view, table, (t) => moveColumn(t, cursorCol, cursorCol + 1));
+      },
+    },
+  ];
+
+  new ContextMenu(items, x, y);
+}
+
 // ---------------------------------------------------------------------------
 // Insert Table
 // ---------------------------------------------------------------------------
@@ -1502,6 +1628,32 @@ export class TableWidget extends WidgetType {
     }
 
     tableEl.appendChild(tbody);
+
+    // ── Context menu on right-click ──────────────────────────────────
+    tableEl.addEventListener("contextmenu", (e: MouseEvent) => {
+      // Walk up from the click target to find the cell with data attributes
+      let target = e.target as HTMLElement | null;
+      while (target && target !== tableEl) {
+        if (target.dataset.col !== undefined) break;
+        target = target.parentElement;
+      }
+      if (!target || target === tableEl || target.dataset.col === undefined) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const section = target.dataset.section ?? "body";
+      const row = parseInt(target.dataset.row ?? "0", 10);
+      const col = parseInt(target.dataset.col ?? "0", 10);
+
+      // Re-parse the table from current document state
+      const tables = findTablesFromState(view.state);
+      const tableRange = tables.find((t) => t.from === this.tableFrom);
+      if (!tableRange) return;
+
+      showWidgetContextMenu(view, tableRange, section, row, col, e.clientX, e.clientY);
+    });
+
     container.appendChild(tableEl);
 
     // ── ResizeObserver ────────────────────────────────────────────────
