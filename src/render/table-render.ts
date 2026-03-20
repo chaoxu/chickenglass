@@ -727,8 +727,19 @@ export function insertTable(
 class TableRenderPluginValue implements PluginValue {
   decorations: DecorationSet;
 
+  /** Injected <style> element for dynamic column widths. */
+  private styleEl: HTMLStyleElement;
+  /** Last generated CSS — skip DOM write if unchanged. */
+  private lastCSS = "";
+  /** Guard against redundant rAF scheduling. */
+  private measureScheduled = false;
+
   constructor(view: EditorView) {
     this.decorations = this.buildDecorations(view);
+    this.styleEl = document.createElement("style");
+    this.styleEl.setAttribute("data-cg-table-columns", "");
+    document.head.appendChild(this.styleEl);
+    this.scheduleMeasure(view);
   }
 
   update(update: ViewUpdate): void {
@@ -741,7 +752,82 @@ class TableRenderPluginValue implements PluginValue {
     ) {
       this.decorations = this.buildDecorations(update.view);
     }
+
+    // Only re-measure when layout may have changed
+    if (update.docChanged || update.geometryChanged || update.viewportChanged) {
+      this.scheduleMeasure(update.view);
+    }
   }
+
+  destroy(): void {
+    this.styleEl.remove();
+  }
+
+  // ── Column width measurement ────────────────────────────────────────
+
+  /**
+   * Schedule a single rAF to measure column widths after the browser
+   * has painted the new decorations.
+   */
+  private scheduleMeasure(view: EditorView): void {
+    if (this.measureScheduled) return;
+    this.measureScheduled = true;
+    requestAnimationFrame(() => {
+      this.measureScheduled = false;
+      this.measureAndInjectCSS(view);
+    });
+  }
+
+  /**
+   * Measure the offsetWidth of every `.cg-table-col` span, compute
+   * the maximum width per column per table, and inject CSS min-width
+   * rules via the shared <style> element.
+   */
+  private measureAndInjectCSS(view: EditorView): void {
+    const dom = view.dom;
+    const colSpans = dom.querySelectorAll<HTMLElement>(".cg-table-col");
+
+    // Collect max width per column per table: { tableId: { colIdx: maxWidth } }
+    const widths = new Map<string, Map<number, number>>();
+
+    for (const span of colSpans) {
+      const tableId = span.getAttribute("data-table-id");
+      const colStr = span.getAttribute("data-col");
+      if (tableId === null || colStr === null) continue;
+
+      const colIdx = Number(colStr);
+      const width = span.offsetWidth + 1; // +1 for sub-pixel rounding
+
+      let tableWidths = widths.get(tableId);
+      if (!tableWidths) {
+        tableWidths = new Map<number, number>();
+        widths.set(tableId, tableWidths);
+      }
+
+      const current = tableWidths.get(colIdx) ?? 0;
+      if (width > current) {
+        tableWidths.set(colIdx, width);
+      }
+    }
+
+    // Generate CSS rules
+    const rules: string[] = [];
+    for (const [tableId, tableWidths] of widths) {
+      for (const [colIdx, width] of tableWidths) {
+        rules.push(
+          `[data-table-id="${tableId}"].cg-table-col-${colIdx} { min-width: ${width}px }`,
+        );
+      }
+    }
+
+    const css = rules.join("\n");
+    if (css !== this.lastCSS) {
+      this.styleEl.textContent = css;
+      this.lastCSS = css;
+    }
+  }
+
+  // ── Decoration building ─────────────────────────────────────────────
 
   private buildDecorations(view: EditorView): DecorationSet {
     const tables = findTables(view);
@@ -751,7 +837,9 @@ class TableRenderPluginValue implements PluginValue {
 
     const items: Range<Decoration>[] = [];
 
-    for (const table of tables) {
+    for (let tableIdx = 0; tableIdx < tables.length; tableIdx++) {
+      const table = tables[tableIdx];
+      const tableId = String(tableIdx);
       const cursorInTable =
         hasFocus && cursor.from >= table.from && cursor.to <= table.to;
 
@@ -800,6 +888,7 @@ class TableRenderPluginValue implements PluginValue {
 
         // Wrap each cell content in cg-table-col cg-table-col-N
         // Cells are between consecutive pipes: pipe[i]+1 .. pipe[i+1]
+        // data-table-id scopes column widths per table
         for (let i = 0; i < pipes.length - 1; i++) {
           const cellStart = line.from + pipes[i] + 1;
           const cellEnd = line.from + pipes[i + 1];
@@ -809,7 +898,10 @@ class TableRenderPluginValue implements PluginValue {
             items.push(
               Decoration.mark({
                 class: `cg-table-col cg-table-col-${i}`,
-                attributes: { "data-col": String(i) },
+                attributes: {
+                  "data-col": String(i),
+                  "data-table-id": tableId,
+                },
               }).range(cellStart, cellEnd),
             );
           }
