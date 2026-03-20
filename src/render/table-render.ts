@@ -1240,6 +1240,10 @@ export class TableWidget extends WidgetType {
         e.preventDefault();
         e.stopPropagation();
 
+        // Capture click coordinates for caret placement
+        const clickX = e.clientX;
+        const clickY = e.clientY;
+
         // Read placement hint (set by activateTargetCell for navigation)
         const placeAtEnd = cell.dataset.placeAtEnd === "true";
         delete cell.dataset.placeAtEnd;
@@ -1467,6 +1471,18 @@ export class TableWidget extends WidgetType {
           editorView.dispatch({ selection: { anchor: docLen } });
         }
         editorView.focus();
+
+        // Place caret near click position (skip for synthetic/keyboard navigation)
+        if (e.isTrusted) {
+          const pos = editorView.posAtCoords({ x: clickX, y: clickY });
+          if (pos !== null) {
+            editorView.dispatch({ selection: { anchor: pos } });
+          } else {
+            // Click outside content area — fall back to end of document
+            const docLen = editorView.state.doc.length;
+            editorView.dispatch({ selection: { anchor: docLen } });
+          }
+        }
       });
     };
 
