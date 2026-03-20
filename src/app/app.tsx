@@ -175,8 +175,15 @@ function AppInner() {
   }, [refreshTree]);
 
   // ── Window state persistence ──────────────────────────────────────────────
+  // Track whether init (tab restore or default file open) has completed.
+  // Must be declared before the save effect so it can gate early saves.
+  const didInitRef = useRef(false);
+
   // Save window state whenever tabs or sidebar state changes.
+  // Skip saving until init restore has completed (didInitRef), otherwise the
+  // first render's empty state overwrites the saved tabs before restore runs.
   useEffect(() => {
+    if (!didInitRef.current) return;
     saveWindowState({
       tabs: openTabs.map((t) => ({ path: t.path, name: t.name })),
       activeTab,
@@ -321,7 +328,6 @@ function AppInner() {
   }, [editorState?.view]);
 
   // ── Open first file on init (restore from window state or pick default) ───
-  const didInitRef = useRef(false);
   useEffect(() => {
     if (didInitRef.current || !fileTree) return;
     didInitRef.current = true;
