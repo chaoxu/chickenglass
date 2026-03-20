@@ -196,7 +196,7 @@ const sidenoteDecorationField = StateField.define<DecorationSet>({
       tr.docChanged ||
       tr.selection ||
       tr.effects.some((e) => e.is(focusEffect) || e.is(sidenotesCollapsedEffect)) ||
-      syntaxTree(tr.state).length > syntaxTree(tr.startState).length
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
     ) {
       const focused = tr.state.field(editorFocusField, false) ?? false;
       return buildSidenoteDecorations(tr.state, focused);
@@ -321,7 +321,8 @@ class FootnoteSectionPlugin implements PluginValue {
       update.docChanged ||
       update.transactions.some((tr) =>
         tr.effects.some((e) => e.is(sidenotesCollapsedEffect)),
-      )
+      ) ||
+      syntaxTree(update.state) !== syntaxTree(update.startState)
     ) {
       this.decorations = this.build(update.view);
     }

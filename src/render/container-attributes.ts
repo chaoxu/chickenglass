@@ -97,7 +97,11 @@ export const containerAttributesField = StateField.define<DecorationSet>({
   },
 
   update(decorations, tr) {
-    if (!tr.docChanged && !tr.reconfigured) {
+    if (
+      !tr.docChanged &&
+      !tr.reconfigured &&
+      syntaxTree(tr.state) === syntaxTree(tr.startState)
+    ) {
       return decorations.map(tr.changes);
     }
     return buildContainerDecorations(tr.state);

@@ -71,7 +71,7 @@ const sectionNumberField = StateField.define<DecorationSet>({
   update(value, tr) {
     if (
       tr.docChanged ||
-      syntaxTree(tr.state).length > syntaxTree(tr.startState).length
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
     ) {
       return buildSectionDecorations(tr.state);
     }

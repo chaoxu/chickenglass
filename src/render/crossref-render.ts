@@ -15,6 +15,7 @@ import {
   type EditorView,
 } from "@codemirror/view";
 import { type Extension, type Range } from "@codemirror/state";
+import { syntaxTree } from "@codemirror/language";
 import {
   type ResolvedCrossref,
   type EquationEntry,
@@ -113,7 +114,8 @@ class CrossrefRenderPlugin implements PluginValue {
       update.docChanged ||
       update.selectionSet ||
       update.viewportChanged ||
-      update.focusChanged
+      update.focusChanged ||
+      syntaxTree(update.state) !== syntaxTree(update.startState)
     ) {
       this.decorations = buildDecorations(collectCrossrefRanges(update.view));
     }

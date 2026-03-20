@@ -132,7 +132,7 @@ export const blockCounterField = StateField.define<BlockCounterState>({
   update(value, tr) {
     if (
       tr.docChanged ||
-      syntaxTree(tr.state).length > syntaxTree(tr.startState).length
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
     ) {
       const numbering = tr.state.field(frontmatterField).config.numbering;
       return computeBlockNumbers(tr.state, tr.state.field(pluginRegistryField), numbering);

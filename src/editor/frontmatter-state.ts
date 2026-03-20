@@ -8,6 +8,7 @@
  */
 import { EditorState, type Extension, StateField } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
+import { syntaxTree } from "@codemirror/language";
 import katex from "katex";
 
 import {
@@ -154,7 +155,8 @@ const frontmatterDecorationField = StateField.define<DecorationSet>({
     if (
       tr.docChanged ||
       tr.selection ||
-      tr.effects.some((e) => e.is(focusEffect))
+      tr.effects.some((e) => e.is(focusEffect)) ||
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
     ) {
       return buildDecorations(tr.state);
     }

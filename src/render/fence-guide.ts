@@ -92,7 +92,12 @@ const fenceGuideField = StateField.define<DecorationSet>({
   },
 
   update(value, tr) {
-    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(focusEffect))) {
+    if (
+      tr.docChanged ||
+      tr.selection ||
+      tr.effects.some((e) => e.is(focusEffect)) ||
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+    ) {
       return buildFenceGuides(tr.state);
     }
     return value;

@@ -736,7 +736,8 @@ class TableRenderPluginValue implements PluginValue {
       update.docChanged ||
       update.viewportChanged ||
       update.selectionSet ||
-      update.focusChanged
+      update.focusChanged ||
+      syntaxTree(update.state) !== syntaxTree(update.startState)
     ) {
       this.decorations = this.buildDecorations(update.view);
     }

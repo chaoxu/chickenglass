@@ -70,7 +70,8 @@ class MathPreviewPlugin implements PluginValue {
     if (
       update.docChanged ||
       update.selectionSet ||
-      update.focusChanged
+      update.focusChanged ||
+      syntaxTree(update.state) !== syntaxTree(update.startState)
     ) {
       this.view = update.view;
       this.scheduleCheck();

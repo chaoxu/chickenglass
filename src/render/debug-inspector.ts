@@ -96,7 +96,8 @@ class DebugInspectorPlugin implements PluginValue {
       update.docChanged ||
       update.viewportChanged ||
       update.startState.field(debugActiveField) !==
-        update.state.field(debugActiveField)
+        update.state.field(debugActiveField) ||
+      syntaxTree(update.state) !== syntaxTree(update.startState)
     ) {
       this.decorations = this.build(update.view);
     }

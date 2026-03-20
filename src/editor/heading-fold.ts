@@ -186,7 +186,8 @@ const foldToggleField = StateField.define<DecorationSet>({
   update(value, tr) {
     if (
       tr.docChanged ||
-      tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect))
+      tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)) ||
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
     ) {
       return buildFoldToggles(tr.state);
     }

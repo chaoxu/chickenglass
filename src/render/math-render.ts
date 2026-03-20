@@ -189,7 +189,7 @@ const mathDecorationField = StateField.define<DecorationSet>({
       tr.docChanged ||
       tr.selection ||
       tr.effects.some((e) => e.is(focusEffect)) ||
-      syntaxTree(tr.state).length > syntaxTree(tr.startState).length
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
     ) {
       const focused = tr.state.field(editorFocusField, false) ?? false;
       return buildMathDecorationsFromState(tr.state, focused);
