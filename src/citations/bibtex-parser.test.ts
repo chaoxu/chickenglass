@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBibTeX, extractLastName, type BibEntry } from "./bibtex-parser";
+import { parseBibTeX, extractLastName, cleanBibtex, type BibEntry } from "./bibtex-parser";
 import { formatCitation, formatNarrativeCitation } from "./citation-render";
 
 describe("parseBibTeX", () => {
@@ -54,7 +54,7 @@ describe("parseBibTeX", () => {
     expect(entries[0].title).toBe("A quoted title");
   });
 
-  it("handles nested braces in values", () => {
+  it("strips nested braces from values", () => {
     const bib = `@article{nested2022,
   author = {Smith, John},
   title = {A title with {Proper Nouns} inside},
@@ -62,7 +62,18 @@ describe("parseBibTeX", () => {
 }`;
     const entries = parseBibTeX(bib);
     expect(entries).toHaveLength(1);
-    expect(entries[0].title).toBe("A title with {Proper Nouns} inside");
+    expect(entries[0].title).toBe("A title with Proper Nouns inside");
+  });
+
+  it("converts LaTeX accents to Unicode", () => {
+    const bib = `@article{accent2022,
+  author = {M\\"uller, Hans},
+  title = {Caf\\'e and na\\"{\\i}ve},
+  year = {2022}
+}`;
+    const entries = parseBibTeX(bib);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].title).toContain("Café");
   });
 
   it("handles bare numeric values", () => {
@@ -167,6 +178,94 @@ describe("extractLastName", () => {
 
   it("handles 'First Middle Last' format", () => {
     expect(extractLastName("David Richard Karger")).toBe("Karger");
+  });
+});
+
+describe("cleanBibtex", () => {
+  it("strips protective braces", () => {
+    expect(cleanBibtex("{Title Text}")).toBe("Title Text");
+  });
+
+  it("strips nested braces", () => {
+    expect(cleanBibtex("A {title} with {Proper Nouns}")).toBe(
+      "A title with Proper Nouns",
+    );
+  });
+
+  it("preserves escaped braces", () => {
+    expect(cleanBibtex("Set \\{1, 2, 3\\}")).toBe("Set {1, 2, 3}");
+  });
+
+  it("converts umlaut accent \\\"u → ü", () => {
+    expect(cleanBibtex('\\"u')).toBe("ü");
+  });
+
+  it("converts umlaut accent \\\"{u} → ü", () => {
+    expect(cleanBibtex('\\"{u}')).toBe("ü");
+  });
+
+  it("converts acute accent \\'e → é", () => {
+    expect(cleanBibtex("\\'e")).toBe("é");
+  });
+
+  it("converts tilde accent \\~n → ñ", () => {
+    expect(cleanBibtex("\\~n")).toBe("ñ");
+  });
+
+  it("converts circumflex accent \\^o → ô", () => {
+    expect(cleanBibtex("\\^o")).toBe("ô");
+  });
+
+  it("converts grave accent \\`a → à", () => {
+    expect(cleanBibtex("\\`a")).toBe("à");
+  });
+
+  it("converts macron accent \\=a → ā", () => {
+    expect(cleanBibtex("\\=a")).toBe("ā");
+  });
+
+  it("converts dot accent \\.z → ż", () => {
+    expect(cleanBibtex("\\.z")).toBe("ż");
+  });
+
+  it("converts cedilla \\c{c} → ç", () => {
+    expect(cleanBibtex("\\c{c}")).toBe("ç");
+  });
+
+  it("converts double acute \\H{o} → ő", () => {
+    expect(cleanBibtex("\\H{o}")).toBe("ő");
+  });
+
+  it("converts caron \\v{s} → š", () => {
+    expect(cleanBibtex("\\v{s}")).toBe("š");
+  });
+
+  it("converts breve \\u{a} → ă", () => {
+    expect(cleanBibtex("\\u{a}")).toBe("ă");
+  });
+
+  it("converts ring \\r{a} → å", () => {
+    expect(cleanBibtex("\\r{a}")).toBe("å");
+  });
+
+  it("converts dot below \\d{a} → ạ", () => {
+    expect(cleanBibtex("\\d{a}")).toBe("ạ");
+  });
+
+  it("converts ogonek \\k{a} → ą", () => {
+    expect(cleanBibtex("\\k{a}")).toBe("ą");
+  });
+
+  it("handles multiple accents in one string", () => {
+    expect(cleanBibtex("Caf\\'e na\\\"ive Erd\\H{o}s")).toBe("Café naïve Erdős");
+  });
+
+  it("returns empty string for empty input", () => {
+    expect(cleanBibtex("")).toBe("");
+  });
+
+  it("returns plain text unchanged", () => {
+    expect(cleanBibtex("plain text")).toBe("plain text");
   });
 });
 

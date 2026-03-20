@@ -134,6 +134,10 @@ body {
 
 /* ── Bibliography / References section ──────────────────────────────────── */
 
+.cg-bibliography {
+  font-size: 1rem;
+}
+
 .cg-bibliography-entry + .cg-bibliography-entry {
   margin-top: 0.15em;
 }
