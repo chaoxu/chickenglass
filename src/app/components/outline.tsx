@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import type { HeadingEntry } from "../heading-ancestry";
+import { renderInline } from "../markdown-to-html";
 
 interface OutlineProps {
   headings: HeadingEntry[];
@@ -90,7 +91,10 @@ export function Outline({ headings, onSelect }: OutlineProps) {
               <span className="text-[10px] text-[var(--cg-muted)] shrink-0 font-mono tabular-nums">
                 {heading.number}
               </span>
-              <span className="truncate font-mono">{heading.text}</span>
+              <span
+                className="truncate font-mono"
+                dangerouslySetInnerHTML={{ __html: renderInline(heading.text) }}
+              />
             </button>
           </div>
         );
