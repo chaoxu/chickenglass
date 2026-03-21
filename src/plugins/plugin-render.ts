@@ -628,6 +628,9 @@ const blockDecorationField = StateField.define<DecorationSet>({
   },
 });
 
+/** Exported for unit testing decoration logic without a browser. */
+export { blockDecorationField as _blockDecorationFieldForTest };
+
 /** CM6 extension that renders fenced divs using the block plugin system. */
 export const blockRenderPlugin: Extension = [
   editorFocusField,

@@ -34,8 +34,12 @@ import { editorKeybindings } from "./keybindings";
 import { chickenglassTheme, chickenglassDarkTheme } from "./theme";
 import { headingFold } from "./heading-fold";
 import { listOutlinerExtension } from "./list-outliner";
+import { treeView } from "@overleaf/codemirror-tree-view";
 
 const fallbackDocument = "# Untitled\n";
+
+/** Compartment for the debug tree-view panel — toggled via window.__cmTreeView(). */
+const treeViewCompartment = new Compartment();
 
 /** Editor display modes. */
 export type EditorMode = "rich" | "source" | "read";
@@ -84,6 +88,20 @@ export interface EditorConfig {
   pluginManager?: EditorPluginManager;
   /** Additional CM6 extensions to include. */
   extensions?: Extension[];
+}
+
+let treeViewEnabled = false;
+
+/**
+ * Toggle the Lezer tree-view debug panel.
+ * Call from console: `__cmDebug.toggleTreeView()`.
+ */
+export function toggleTreeView(view: EditorView): boolean {
+  treeViewEnabled = !treeViewEnabled;
+  view.dispatch({
+    effects: treeViewCompartment.reconfigure(treeViewEnabled ? treeView : []),
+  });
+  return treeViewEnabled;
 }
 
 /** Create and mount a CodeMirror 6 markdown editor. */
@@ -146,6 +164,9 @@ export function createEditor(config: EditorConfig): EditorView {
 
       // Dark/light base theme (wrapped in compartment for live switching)
       themeCompartment.of(isDark ? chickenglassDarkTheme : []),
+
+      // Debug tree view (off by default, toggle via window.__cmTreeView())
+      treeViewCompartment.of([]),
 
       // User-provided extensions last
       ...(config.extensions ?? []),

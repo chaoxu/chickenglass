@@ -20,6 +20,7 @@ import { EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
 
 import { createEditor, themeCompartment } from "../../editor/editor";
+import { createDebugHelpers } from "../../editor/debug-helpers";
 import { EditorPluginManager } from "../../editor/editor-plugin";
 import { defaultEditorPlugins } from "../../editor/editor-plugins-registry";
 import { chickenglassDarkTheme } from "../../editor/theme";
@@ -282,8 +283,13 @@ export function useEditor(
       extensions: extraExtensions,
     });
 
-    // Expose view for console debugging.
-    (window as unknown as { __cmView: EditorView }).__cmView = newView;
+    // Expose view and debug helpers for console/Playwright debugging.
+    const w = window as unknown as {
+      __cmView: EditorView;
+      __cmDebug: ReturnType<typeof createDebugHelpers>;
+    };
+    w.__cmView = newView;
+    w.__cmDebug = createDebugHelpers(newView);
 
     // Store imageSaver ref so commands can access it
     imageSaverRef.current = imageSaver;
@@ -326,6 +332,13 @@ export function useEditor(
         wordCountTimerRef.current = null;
       }
       imageSaverRef.current = null;
+      // Clear debug references to destroyed view
+      const wd = window as unknown as {
+        __cmView?: EditorView;
+        __cmDebug?: ReturnType<typeof createDebugHelpers>;
+      };
+      wd.__cmView = undefined;
+      wd.__cmDebug = undefined;
       newView.destroy();
       setView(null);
     };

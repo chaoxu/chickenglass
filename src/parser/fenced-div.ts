@@ -25,6 +25,20 @@ import { COLON, SPACE, TAB, OPEN_BRACE, findMatchingBrace, skipSpaceTab, isSpace
  * parsed as regular markdown automatically.
  */
 
+/**
+ * Toggle fenced div parser logging from the browser console:
+ *   window.__fencedDivDebug = true   // enable
+ *   window.__fencedDivDebug = false  // disable
+ */
+function fencedDivLog(msg: string): void {
+  if (
+    typeof window !== "undefined" &&
+    (window as unknown as { __fencedDivDebug?: boolean }).__fencedDivDebug
+  ) {
+    console.log(`[fencedDiv] ${msg}`);
+  }
+}
+
 /** Count consecutive colons starting at `pos` in `text`. */
 function countColons(text: string, pos: number): number {
   let count = 0;
@@ -204,8 +218,9 @@ function fencedDivComposite(
 
   const colonCount = unpackColonCount(value);
   const closingColons = isClosingFence(line.text, line.pos);
+  fencedDivLog(`composite line="${line.text.slice(0, 40)}" closing=${closingColons} need=${colonCount} lineStart=${cx.lineStart}`);
   if (closingColons >= colonCount) {
-    // Closing fence found -- add a marker for it and end the composite
+    fencedDivLog(`CLOSING at lineStart=${cx.lineStart} depth=${cx.depth}`);
     line.addMarker(
       cx.elt(
         "FencedDivFence",
@@ -243,6 +258,7 @@ const fencedDivBlockParser: BlockParser = {
     // Increment parse generation to prevent incremental parser from
     // reusing old tree fragments inside this composite block.
     parseGeneration = (parseGeneration + 1) & 0xFFFF;
+    fencedDivLog(`OPEN at ${fenceStart} colons=${info.colonCount} gen=${parseGeneration}`);
 
     // Start the composite block. Negative value signals self-closing
     // to the composite callback (it will end immediately).
