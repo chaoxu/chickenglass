@@ -76,6 +76,13 @@ const bulletListDecoration = Decoration.mark({ class: "cg-list-bullet" });
 /** Decoration to style ordered list markers. */
 const numberListDecoration = Decoration.mark({ class: "cg-list-number" });
 
+/**
+ * Line decoration that switches the line to monospace font when the cursor
+ * reveals source syntax in Rich mode (e.g. inside **bold** markers).
+ * Uses Decoration.line so ALL children (including math widgets) inherit it.
+ */
+const sourceLineDecoration = Decoration.line({ class: "cg-source-line" });
+
 /** Map from element node names to their content style decorations. */
 const styleMap: Readonly<Record<string, Decoration>> = {
   StrongEmphasis: boldDecoration,
@@ -157,6 +164,9 @@ class MarkdownRenderPlugin implements PluginValue {
           if (node.name === "Highlight") {
             widgets.push(highlightDecoration.range(node.from, node.to));
             if (cursorInRange(view, node.from, node.to)) {
+              // Cursor inside: show source markers in monospace
+              const line = view.state.doc.lineAt(node.from);
+              widgets.push(sourceLineDecoration.range(line.from));
               return false; // keep highlight style, show markers
             }
             return; // walk children to hide HighlightMark
@@ -165,6 +175,9 @@ class MarkdownRenderPlugin implements PluginValue {
           // --- Link: style as clickable link when cursor is outside ---
           if (node.name === "Link") {
             if (cursorInRange(view, node.from, node.to)) {
+              // Cursor inside: show source in monospace
+              const line = view.state.doc.lineAt(node.from);
+              widgets.push(sourceLineDecoration.range(line.from));
               return false; // cursor inside: show full source for editing
             }
             // Extract URL from the URL child node
@@ -210,6 +223,9 @@ class MarkdownRenderPlugin implements PluginValue {
 
             // If cursor is inside: skip hiding markers (show source) but keep style
             if (cursorInRange(view, node.from, node.to)) {
+              // Switch the line to monospace so source markers are clear
+              const line = view.state.doc.lineAt(node.from);
+              widgets.push(sourceLineDecoration.range(line.from));
               return false;
             }
             // Cursor outside: walk children to hide markers

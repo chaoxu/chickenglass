@@ -120,6 +120,14 @@ export const typographyThemeStyles = {
       color: "var(--cg-fg)",
     },
 
+  /* Source line — applied when cursor reveals source syntax in Rich mode.
+   * Uses Decoration.line so ALL children (including math widgets) inherit
+   * the monospace font. Uses the --cg-code-font CSS variable so theme
+   * presets can override the font stack. */
+  ".cg-source-line": {
+    fontFamily: `var(--cg-code-font, ${monoFont})`,
+  },
+
   /* Horizontal rule styling */
   ".cg-hr": {
     display: "block",

@@ -521,7 +521,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       // Cursor on fence (or inside embed block): show fence syntax as source
       items.push(
         Decoration.line({
-          class: `${plugin.render({ type: div.className }).className} cg-block-source`,
+          class: `${plugin.render({ type: div.className }).className} cg-block-source cg-source-line`,
         }).range(div.from),
       );
 
