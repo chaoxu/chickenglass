@@ -43,7 +43,7 @@ const mdParser = baseParser.configure(markdownExtensions);
 // ── Shared utilities ────────────────────────────────────────────────────────
 
 /** Escape HTML special characters in text. */
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -499,10 +499,14 @@ function renderFootnoteDef(node: SyntaxNode, ctx: WalkContext): string {
   if (!match) return "";
 
   const fnId = escapeHtml(match[1]);
-  // Content is everything after the label
+
+  // The Lezer footnote parser captures a single line: [^id]: content
+  // Render the inline content after the label with block-level formatting
   const contentStart = labelNode.to;
   const rawContent = ctx.doc.slice(contentStart, node.to).trim();
-  const fnContent = renderInline(rawContent, ctx.macros);
+  const fnContent = rawContent
+    ? `<p>${renderInline(rawContent, ctx.macros)}</p>`
+    : "";
 
   return `<div class="footnote" id="fn-${fnId}"><sup>${fnId}</sup> ${fnContent}</div>`;
 }
