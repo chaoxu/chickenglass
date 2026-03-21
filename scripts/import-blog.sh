@@ -137,5 +137,57 @@ for f in "$DEST"/posts/*.md; do
   fi
 done
 
+# 6. Convert indented code blocks (4 spaces) to fenced code blocks
+# The Chickenglass parser has removeIndentedCode — indented code won't parse.
+for f in "$DEST"/posts/*.md; do
+  if grep -q "^    [^ *\-0-9\\\\]" "$f"; then
+    python3 -c "
+import sys
+
+with open('$f', 'r') as fh:
+    lines = fh.read().split('\n')
+
+result = []
+i = 0
+while i < len(lines):
+    # Detect indented code block: 4-space indent, not inside a list,
+    # not a math environment, preceded by a blank line (or start of file)
+    if (lines[i].startswith('    ') and
+        not lines[i].strip().startswith('-') and
+        not lines[i].strip().startswith('*') and
+        not lines[i].strip().startswith('\\\\') and
+        not lines[i].strip().startswith('\$') and
+        (i == 0 or lines[i-1].strip() == '' or lines[i-1].strip() == ':::')):
+        # Check it's not continuation of a list item
+        if i > 0 and any(lines[j].strip().startswith(('-', '*', '1.')) for j in range(max(0,i-3), i) if lines[j].strip()):
+            result.append(lines[i])
+            i += 1
+            continue
+        # Collect the indented block
+        code_lines = []
+        while i < len(lines) and (lines[i].startswith('    ') or lines[i].strip() == ''):
+            if lines[i].startswith('    '):
+                code_lines.append(lines[i][4:])
+            else:
+                # Blank line — only include if more indented lines follow
+                if i + 1 < len(lines) and lines[i+1].startswith('    '):
+                    code_lines.append('')
+                else:
+                    break
+            i += 1
+        if code_lines:
+            result.append('\`\`\`')
+            result.extend(code_lines)
+            result.append('\`\`\`')
+        continue
+    result.append(lines[i])
+    i += 1
+
+with open('$f', 'w') as fh:
+    fh.write('\n'.join(result))
+" 2>/dev/null && echo "Converted indented code in $(basename "$f")"
+  fi
+done
+
 echo ""
 echo "Done. $(ls "$DEST"/posts/*.md | wc -l | tr -d ' ') total posts in $DEST/posts/"

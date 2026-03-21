@@ -1,4 +1,3 @@
-import { monoFont } from "./editor-constants";
 
 /**
  * Base editor chrome styles: container, content area, gutters, cursor,
@@ -7,9 +6,10 @@ import { monoFont } from "./editor-constants";
 export const baseThemeStyles = {
   "&": {
     fontSize: "16px",
-    fontFamily: monoFont,
+    fontFamily: "KaTeX_Main, 'Times New Roman', serif",
   },
   ".cm-content": {
+    fontFamily: "KaTeX_Main, 'Times New Roman', serif",
     padding: "24px 48px 24px 48px",
     maxWidth: "800px",
     marginLeft: "auto",

@@ -48,12 +48,11 @@ export const typographyThemeStyles = {
   },
 
   /* Heading line styles — font-size on .cm-line so all children (including
-   * math widgets) inherit it. Sizes approximate Oxford Lecture Series style
-   * but scaled up slightly for monospace editing legibility. */
-  ".cg-heading-line-1": { fontSize: "1.4em", lineHeight: "1.3", color: "var(--cg-fg)" },
-  ".cg-heading-line-2": { fontSize: "1.3em", lineHeight: "1.3", color: "var(--cg-fg)" },
-  ".cg-heading-line-3": { fontSize: "1.2em", lineHeight: "1.4", color: "var(--cg-fg)" },
-  ".cg-heading-line-4": { fontSize: "1.1em", lineHeight: "1.4", color: "var(--cg-fg)" },
+   * math widgets) inherit it. Matches Oxford Lecture Series / blog style. */
+  ".cg-heading-line-1": { fontSize: "1.15em", lineHeight: "1.3", color: "var(--cg-fg)" },
+  ".cg-heading-line-2": { fontSize: "1.15em", lineHeight: "1.3", color: "var(--cg-fg)" },
+  ".cg-heading-line-3": { fontSize: "1.1em", lineHeight: "1.4", color: "var(--cg-fg)" },
+  ".cg-heading-line-4": { fontSize: "1.05em", lineHeight: "1.4", color: "var(--cg-fg)" },
   ".cg-heading-line-5": { fontSize: "1em", lineHeight: "1.5", color: "var(--cg-fg)" },
   ".cg-heading-line-6": { fontSize: "0.95em", lineHeight: "1.5", color: "var(--cg-fg)" },
 
@@ -99,22 +98,26 @@ export const typographyThemeStyles = {
     marginRight: "4px",
   },
 
-  /* Header markers (# symbols) shown in muted color when editing.
-   * Only target tok-meta (the # and space), not tok-heading (the text). */
+  /* Source syntax elements use monospace — heading markers (#), math
+   * delimiters ($, $$, \[, \]), fenced div fences (:::), list markers.
+   * The base editor font is serif for rendered text, but syntax characters
+   * need monospace for alignment and visual distinction. */
+  ".tok-meta, .tok-processingInstruction": {
+    fontFamily: monoFont,
+    color: "var(--cg-fg)",
+  },
+
+  /* Header markers (# symbols) shown in muted color when editing. */
   ".cg-heading-1 .tok-heading.tok-meta, .cg-heading-2 .tok-heading.tok-meta, .cg-heading-3 .tok-heading.tok-meta":
     {
       color: "var(--cg-muted)",
+      fontFamily: monoFont,
     },
-  /* Heading text should use foreground color, not syntax highlight grey */
+  /* Heading text should use foreground color and inherit serif font */
   ".cg-heading-1 .tok-heading, .cg-heading-2 .tok-heading, .cg-heading-3 .tok-heading, .cg-heading-4 .tok-heading, .cg-heading-5 .tok-heading, .cg-heading-6 .tok-heading":
     {
       color: "var(--cg-fg)",
     },
-
-  /* List markers (1., 2., -, *) should use foreground color */
-  ".tok-meta": {
-    color: "var(--cg-fg)",
-  },
 
   /* Horizontal rule styling */
   ".cg-hr": {
