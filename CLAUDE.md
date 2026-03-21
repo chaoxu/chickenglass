@@ -191,7 +191,7 @@ The `demo/blog/` directory contains 94 files from the user's blog (originally in
 
 - **Typora-style editing design principles**:
   - **Content keeps its natural font when editing**: code blocks stay monospace, prose stays serif. Never switch fonts when cursor enters/leaves a block.
-  - **Show semantic boundaries when editing a block**: when cursor is on a fenced div fence line, show BOTH the opening `:::` and closing `:::` so the user sees the block boundaries. Body content stays rendered.
+  - **Show both fences when editing a block**: when cursor is on either fence of a fenced div, show BOTH the opening `:::` and closing `:::` as source so the user sees the block boundaries. Other blocks are never affected. Body content stays rendered.
   - **Rich and Read mode must look the same**: theorem blocks should be italic in both modes, proof blocks normal, etc. Use the same CSS classes/properties.
   - **Never hide source the user is editing**: if cursor is on a line, that line's source syntax must be visible. But don't reveal unrelated source (e.g., don't show closing fence when editing content inside the block).
 - **Copy what works**: Before implementing any non-trivial technique, find and study an existing open-source project that does it well. Clone it, read the source, copy the proven approach exactly. Don't invent from scratch. Only deviate when you have a specific reason the existing approach doesn't fit.

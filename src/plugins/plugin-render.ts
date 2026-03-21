@@ -229,24 +229,36 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
       let closeFenceFrom = -1;
       let closeFenceTo = -1;
 
-      // Collect all FencedDivFence children (opening + closing)
+      // Collect FencedDivFence children (opening + closing).
+      // Use fences[1] (not fences[last]) as the closing fence. When the
+      // Lezer incremental parser merges sequential blocks into one
+      // corrupted FencedDiv, later fences belong to subsequent blocks.
+      // For inner blocks with only an opening fence (1 child), check
+      // nextSibling — the closing fence may be a sibling in the parent.
       const fences = divNode.getChildren("FencedDivFence");
       if (fences.length > 0) {
         fenceFrom = fences[0].from;
         fenceTo = fences[0].to;
       }
       let singleLine = false;
-      if (fences.length > 1) {
-        const lastFence = fences[fences.length - 1];
+      // Determine the closing fence node
+      let closeFenceNode =
+        fences.length > 1 ? fences[1] : undefined;
+      // Fallback: closing fence may be a sibling (corrupted tree)
+      if (!closeFenceNode) {
+        const next = divNode.nextSibling;
+        if (next && next.type.name === "FencedDivFence") {
+          closeFenceNode = next;
+        }
+      }
+      if (closeFenceNode) {
         const openLine = state.doc.lineAt(fenceFrom);
-        const closeLine = state.doc.lineAt(lastFence.from);
+        const closeLine = state.doc.lineAt(closeFenceNode.from);
         singleLine = openLine.number === closeLine.number;
         if (singleLine) {
-          // Single-line: just the closing colons, not the full line
-          closeFenceFrom = lastFence.from;
-          closeFenceTo = lastFence.to;
+          closeFenceFrom = closeFenceNode.from;
+          closeFenceTo = closeFenceNode.to;
         } else {
-          // Multi-line: the full closing fence line
           closeFenceFrom = closeLine.from;
           closeFenceTo = closeLine.to;
         }
@@ -326,33 +338,27 @@ function addIncludeDecorations(
   }
 }
 
-/**
- * Determine whether a fenced div should show its rendered form or raw source.
- *
- * Returns true when the block should be rendered (cursor is not on the fence).
- * Embed blocks require the cursor to be entirely outside the block; regular
- * blocks only check whether the cursor sits on the opening or closing fence.
- */
-function shouldShowRendered(
+/** Check whether the cursor is on the opening fence line of a fenced div. */
+function isCursorOnOpenFence(
   state: EditorState,
   div: FencedDivInfo,
   focused: boolean,
 ): boolean {
+  if (!focused) return false;
   const cursor = state.selection.main;
   const openLine = state.doc.lineAt(div.fenceFrom);
-  const cursorOnOpenFence =
-    focused && cursor.from >= openLine.from && cursor.from <= openLine.to;
-  const cursorOnCloseFence =
-    focused &&
-    div.closeFenceFrom >= 0 &&
-    cursor.from >= div.closeFenceFrom &&
-    cursor.from <= div.closeFenceTo;
-  const cursorOnFence = cursorOnOpenFence || cursorOnCloseFence;
+  return cursor.from >= openLine.from && cursor.from <= openLine.to;
+}
 
-  const isEmbed = EMBED_CLASSES.has(div.className);
-  const cursorInsideBlock =
-    focused && cursor.from >= div.from && cursor.from <= div.to;
-  return isEmbed ? !cursorInsideBlock : !cursorOnFence;
+/** Check whether the cursor is on the closing fence line of a fenced div. */
+function isCursorOnCloseFence(
+  state: EditorState,
+  div: FencedDivInfo,
+  focused: boolean,
+): boolean {
+  if (!focused || div.closeFenceFrom < 0) return false;
+  const cursor = state.selection.main;
+  return cursor.from >= div.closeFenceFrom && cursor.from <= div.closeFenceTo;
 }
 
 /** Replace the opening fence+attrs with a rendered header widget. */
@@ -365,10 +371,10 @@ function addHeaderWidgetDecoration(
 ): void {
   const replaceEnd = div.titleFrom ?? div.fenceTo;
   const label = div.titleFrom !== undefined ? header + " " : header;
+  const widget = new BlockHeaderWidget(label, macros, macrosKey);
+  widget.sourceFrom = div.fenceFrom;
   items.push(
-    Decoration.replace({
-      widget: new BlockHeaderWidget(label, macros, macrosKey),
-    }).range(div.fenceFrom, replaceEnd),
+    Decoration.replace({ widget }).range(div.fenceFrom, replaceEnd),
   );
 }
 
@@ -479,7 +485,13 @@ function addQedDecoration(
   }
 }
 
-/** Build decorations for all fenced divs using the plugin registry. */
+/**
+ * Build decorations for all fenced divs using the plugin registry.
+ *
+ * Each fence (opening and closing) is independently toggled between
+ * rendered and source mode based on cursor position. Touching one
+ * block's fence never affects any other block's decorations.
+ */
 function buildBlockDecorations(state: EditorState): DecorationSet {
   const registry = state.field(pluginRegistryField);
   const counterState: BlockCounterState | undefined =
@@ -490,6 +502,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
 
   const macros = state.field(mathMacrosField);
   const macrosKey = serializeMacros(macros);
+  const cursor = state.selection.main;
 
   for (const div of divs) {
     const plugin = getPluginOrFallback(registry, div.className);
@@ -500,28 +513,71 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       continue;
     }
 
-    const showRendered = shouldShowRendered(state, div, focused);
+    if (!plugin) continue;
+
     const isEmbed = EMBED_CLASSES.has(div.className);
 
-    if (showRendered && plugin) {
-      const numberEntry = counterState?.byPosition.get(div.from);
-      const labelAttrs: BlockAttrs = {
-        type: div.className,
-        id: div.id,
-        number: numberEntry?.number,
-      };
-      const spec = plugin.render(labelAttrs);
+    // Embed blocks: cursor inside → full source mode (all fences visible)
+    if (isEmbed) {
+      const cursorInsideBlock =
+        focused && cursor.from >= div.from && cursor.from <= div.to;
+      if (cursorInsideBlock) {
+        items.push(
+          Decoration.line({
+            class: `${plugin.render({ type: div.className }).className} cg-block-source`,
+          }).range(div.from),
+        );
+        continue;
+      }
+    }
 
-      // Line decoration for block CSS class
+    // Independent fence checks
+    const cursorOnOpen = isCursorOnOpenFence(state, div, focused);
+    const cursorOnClose = isCursorOnCloseFence(state, div, focused);
+
+    const numberEntry = counterState?.byPosition.get(div.from);
+    const labelAttrs: BlockAttrs = {
+      type: div.className,
+      id: div.id,
+      number: numberEntry?.number,
+    };
+    const spec = plugin.render(labelAttrs);
+
+    const cursorOnEitherFence = cursorOnOpen || cursorOnClose;
+
+    // --- Opening fence ---
+    if (cursorOnEitherFence) {
+      // Source mode: show raw ::: {.class} Title with block styling
+      // Inline math in the title still renders (Typora-style toggle)
+      items.push(
+        Decoration.line({
+          class: `${spec.className} cg-block-source`,
+        }).range(div.from),
+      );
+      addTitleMathDecorations(state, div, focused, cursor.from, macros, items);
+    } else {
+      // Rendered mode: header widget replaces fence syntax
       items.push(
         Decoration.line({
           class: `${spec.className} cg-block-header`,
         }).range(div.from),
       );
-
-      // Header widget (shared for single-line and multi-line)
       addHeaderWidgetDecoration(div, spec.header, macros, macrosKey, items);
+      addTitleMathDecorations(state, div, focused, cursor.from, macros, items);
+    }
 
+    // --- Closing fence ---
+    if (cursorOnEitherFence) {
+      // Source mode: show raw ::: with block styling
+      if (!div.singleLine && div.closeFenceFrom >= 0) {
+        items.push(
+          Decoration.line({
+            class: `${spec.className} cg-block-source`,
+          }).range(div.closeFenceFrom),
+        );
+      }
+    } else {
+      // Rendered mode: hide the closing fence
       if (div.singleLine) {
         addSingleLineClosingFence(state, div, items);
       } else {
@@ -533,22 +589,11 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
           addEmbedWidget(state, div, openLine, items);
         }
       }
+    }
 
-      // Render inline math in title text (rendered mode only)
-      const cursor = state.selection.main;
-      addTitleMathDecorations(state, div, focused, cursor.from, macros, items);
-
-      // QED tombstone for proof blocks (rendered mode only)
-      if (plugin.defaults?.qedSymbol) {
-        addQedDecoration(state, div, items);
-      }
-    } else if (plugin) {
-      // Cursor on fence (or inside embed block): show fence syntax as source
-      items.push(
-        Decoration.line({
-          class: `${plugin.render({ type: div.className }).className} cg-block-source`,
-        }).range(div.from),
-      );
+    // QED tombstone for proof blocks (only when closing fence is hidden)
+    if (plugin.defaults?.qedSymbol && !cursorOnEitherFence) {
+      addQedDecoration(state, div, items);
     }
   }
 

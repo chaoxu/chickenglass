@@ -6,7 +6,20 @@ import type {
   Line,
   Element,
 } from "@lezer/markdown";
-import { OPEN_BRACE, CLOSE_BRACE, skipSpaceTab } from "./char-utils";
+import { OPEN_BRACE, CLOSE_BRACE, COLON, skipSpaceTab } from "./char-utils";
+
+/**
+ * Check if a line is a fenced div closing fence (3+ colons, then only whitespace).
+ * Used to stop display math scanning at composite block boundaries, because
+ * cx.nextLine() inside a composite doesn't respect the closing fence.
+ */
+function isFencedDivClose(text: string, pos: number): boolean {
+  let count = 0;
+  while (pos + count < text.length && text.charCodeAt(pos + count) === COLON) count++;
+  if (count < 3) return false;
+  const afterColons = skipSpaceTab(text, pos + count);
+  return afterColons >= text.length;
+}
 
 /** Regex to validate that a braced string is an equation label: {#eq:...} */
 const LABEL_RE = /^\{#eq:[^}\s]+\}$/;
@@ -97,6 +110,7 @@ const backslashDisplayMathWithLabel: BlockParser = {
     let currentLineEnd = cx.lineStart + line.text.length;
     while (cx.nextLine()) {
       const currentText = line.text;
+      if (isFencedDivClose(currentText, line.pos)) break;
       const closeInLine = currentText.indexOf("\\]");
       if (closeInLine >= 0) {
         endPos = cx.lineStart + closeInLine + 2;
@@ -171,6 +185,9 @@ const dollarDisplayMathWithLabel: BlockParser = {
     let currentLineEnd = cx.lineStart + line.text.length;
     while (cx.nextLine()) {
       const currentText = line.text;
+      // Stop at fenced div closing fences — cx.nextLine() inside a
+      // composite block can advance past the closing fence boundary.
+      if (isFencedDivClose(currentText, line.pos)) break;
       const trimmed = currentText.trimStart();
       if (trimmed.startsWith("$$")) {
         // $$ at start of line

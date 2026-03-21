@@ -2,6 +2,7 @@ import { parser } from "@lezer/markdown";
 import { describe, expect, it } from "vitest";
 
 import { fencedDiv } from "./fenced-div";
+import { markdownExtensions } from "./index";
 
 const fencedDivParser = parser.configure(fencedDiv);
 
@@ -368,6 +369,96 @@ describe("fenced div parser", () => {
       const names = nodeNames(text);
       expect(names).toContain("FencedDiv");
       expect(names).toContain("FencedCode");
+    });
+
+    it("sequential multi-line divs are separate blocks", () => {
+      const text = "::: {.theorem}\nContent A\n:::\n\n::: {.proof}\nContent B\n:::";
+      const infos = nodeInfos(text);
+      const divs = infos.filter((n) => n.name === "FencedDiv");
+      // Should be 2 separate FencedDiv blocks
+      expect(divs.length).toBe(2);
+      // First div should end at the first :::
+      expect(divs[0].text).toBe("::: {.theorem}\nContent A\n:::");
+      // Second div should be the proof
+      expect(divs[1].text).toBe("::: {.proof}\nContent B\n:::");
+      // Each should have 2 FencedDivFence children (opening + closing)
+      for (const div of divs) {
+        const fencesInDiv = infos.filter(
+          (n) => n.name === "FencedDivFence" && n.from >= div.from && n.to <= div.to
+        );
+        expect(fencesInDiv.length, `div "${div.text.slice(0, 20)}" should have 2 fences`).toBe(2);
+      }
+    });
+
+    it("sequential multi-line divs with full parser config", () => {
+      // Use the same parser config as the editor to check for extension interference
+      const fullParser = parser.configure(markdownExtensions);
+      const text = "::: {.theorem}\nContent A\n:::\n\n::: {.proof}\nContent B\n:::";
+      const tree = fullParser.parse(text);
+      const divs: NodeInfo[] = [];
+      tree.iterate({
+        enter(node) {
+          if (node.name === "FencedDiv") {
+            divs.push({ name: node.name, from: node.from, to: node.to, text: text.slice(node.from, node.to) });
+          }
+        },
+      });
+      expect(divs.length, "should have 2 separate FencedDiv blocks").toBe(2);
+      expect(divs[0].text).toBe("::: {.theorem}\nContent A\n:::");
+      expect(divs[1].text).toBe("::: {.proof}\nContent B\n:::");
+    });
+
+    it("single $ inside fenced div does not break block boundaries", () => {
+      // When $$ becomes $ (user deletes one $), the block should still close properly
+      const fullParser = parser.configure(markdownExtensions);
+      const text = [
+        "::: {.theorem} Title",
+        "Content",
+        "$",
+        "\\sum_{k=1}^n k^2",
+        "$$",
+        ":::",
+        "",
+        "::: {.proof}",
+        "Proof content",
+        ":::",
+      ].join("\n");
+      const tree = fullParser.parse(text);
+      const divs: NodeInfo[] = [];
+      tree.iterate({
+        enter(node) {
+          if (node.name === "FencedDiv") {
+            divs.push({ name: node.name, from: node.from, to: node.to, text: text.slice(node.from, node.to) });
+          }
+        },
+      });
+      expect(divs.length, `expected 2 divs but got ${divs.length}`).toBe(2);
+    });
+
+    it("sequential divs with display math before closing fence", () => {
+      const fullParser = parser.configure(markdownExtensions);
+      const text = [
+        "::: {.theorem} Fundamental Theorem",
+        "For all $n \\in \\N$:",
+        "$$",
+        "\\sum_{k=1}^n k^2 = \\frac{n(n+1)(2n+1)}{6}",
+        "$$",
+        ":::",
+        "",
+        "::: {.proof}",
+        "By induction.",
+        ":::",
+      ].join("\n");
+      const tree = fullParser.parse(text);
+      const divs: NodeInfo[] = [];
+      tree.iterate({
+        enter(node) {
+          if (node.name === "FencedDiv") {
+            divs.push({ name: node.name, from: node.from, to: node.to, text: text.slice(node.from, node.to) });
+          }
+        },
+      });
+      expect(divs.length, `got divs: ${divs.map(d => d.text.slice(0, 30)).join(" | ")}`).toBe(2);
     });
 
     it("text after document with div is parsed normally", () => {

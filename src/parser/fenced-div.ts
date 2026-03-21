@@ -163,10 +163,36 @@ interface OpeningFenceInfo {
 }
 
 /**
+ * Generation counter that changes between parser invocations.
+ *
+ * Lezer's incremental parser reuses tree fragments when the composite
+ * block's hash matches. For fenced divs, `takeNodes` can copy the
+ * closing FencedDivFence from the old tree without calling the composite
+ * callback, so the block never ends and swallows subsequent content.
+ *
+ * By encoding a changing generation in the composite value, the hash
+ * differs between parses, preventing fragment reuse inside fenced divs.
+ * This forces a full reparse of fenced div content (typically a few
+ * lines — negligible performance cost).
+ */
+let parseGeneration = 0;
+
+/** Pack colon count + generation into the composite value. */
+function packValue(colonCount: number): number {
+  return (colonCount & 0xFF) | ((parseGeneration & 0xFFFF) << 8);
+}
+
+/** Extract the colon count from a packed composite value. */
+function unpackColonCount(value: number): number {
+  return value & 0xFF;
+}
+
+/**
  * Composite callback for FencedDiv. Called on each new line to decide
  * if the block continues. Returns `true` to continue, `false` to end.
  *
- * The `value` parameter stores the opening fence's colon count.
+ * The `value` parameter packs the colon count (bits 0–7) and starting
+ * position (bits 8–31) to ensure unique hashes per block instance.
  */
 function fencedDivComposite(
   cx: BlockContext,
@@ -176,8 +202,9 @@ function fencedDivComposite(
   // Negative value signals a self-closing div — end immediately
   if (value < 0) return false;
 
+  const colonCount = unpackColonCount(value);
   const closingColons = isClosingFence(line.text, line.pos);
-  if (closingColons >= value) {
+  if (closingColons >= colonCount) {
     // Closing fence found -- add a marker for it and end the composite
     line.addMarker(
       cx.elt(
@@ -213,12 +240,18 @@ const fencedDivBlockParser: BlockParser = {
     const fenceStart = cx.lineStart + line.pos;
     const fenceEnd = cx.lineStart + line.pos + info.colonCount;
 
+    // Increment parse generation to prevent incremental parser from
+    // reusing old tree fragments inside this composite block.
+    parseGeneration = (parseGeneration + 1) & 0xFFFF;
+
     // Start the composite block. Negative value signals self-closing
     // to the composite callback (it will end immediately).
     cx.startComposite(
       "FencedDiv",
       line.pos,
-      info.selfClosing ? -info.colonCount : info.colonCount,
+      info.selfClosing
+        ? -packValue(info.colonCount)
+        : packValue(info.colonCount),
     );
 
     cx.addElement(cx.elt("FencedDivFence", fenceStart, fenceEnd));
