@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { EditorMode } from "../../editor";
 import { computeDocStats, formatReadingTime } from "../writing-stats";
 import type { DocStats } from "../writing-stats";
@@ -116,7 +116,7 @@ function StatsPopover({ stats, anchorRef, onClose }: StatsPopoverProps) {
  *
  * Left:   word count + character count (clickable — opens stats popover)
  * Center: cursor position Ln/Col
- * Right:  mode indicator (clickable to cycle Rendered → Source → Preview)
+ * Right:  mode indicator (clickable to cycle Rich → Source → Read)
  */
 export function StatusBar({
   wordCount,
@@ -129,8 +129,8 @@ export function StatusBar({
   const [popoverOpen, setPopoverOpen] = useState(false);
   const wordCountRef = useRef<HTMLButtonElement | null>(null);
 
-  // Compute stats once per render — shared by the word-count badge and the popover.
-  const stats = computeDocStats(docText);
+  // Compute stats only when docText changes — shared by the word-count badge and the popover.
+  const stats = useMemo(() => computeDocStats(docText), [docText]);
 
   const cycleMode = useCallback(() => {
     const idx = MODE_ORDER.indexOf(editorMode);

@@ -153,13 +153,14 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
 
   const grouped = groupByFile(results);
   const text = query.trim();
-  const statusText = searching
-    ? "Searching…"
-    : results.length === 0
-      ? text || typeFilter
-        ? "No results found"
-        : "Type to search"
-      : `${results.length} result${results.length === 1 ? "" : "s"}`;
+  let statusText: string;
+  if (searching) {
+    statusText = "Searching…";
+  } else if (results.length === 0) {
+    statusText = text || typeFilter ? "No results found" : "Type to search";
+  } else {
+    statusText = `${results.length} result${results.length === 1 ? "" : "s"}`;
+  }
 
   return (
     /* Backdrop */

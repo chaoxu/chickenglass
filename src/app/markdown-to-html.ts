@@ -107,6 +107,22 @@ export interface MarkdownToHtmlOptions {
   cslProcessor?: CslProcessor | null;
 }
 
+// ── Inline context ───────────────────────────────────────────────────────────
+
+/**
+ * Context object for inline rendering functions.
+ *
+ * Replaces the previous positional parameter lists on `renderChildren`,
+ * `renderInlineNode`, and `renderLink`.
+ */
+interface InlineContext {
+  doc: string;
+  macros?: Record<string, string>;
+  bibliography?: BibStore;
+  citedIds?: string[];
+  cslProcessor?: CslProcessor | null;
+}
+
 // ── Inline rendering (standalone, for titles) ───────────────────────────────
 
 /**
@@ -126,7 +142,7 @@ export function renderInline(
   const para = doc.firstChild;
   if (!para) return escapeHtml(text);
   // Render the paragraph's inline content (without wrapping in <p>)
-  return renderChildren(para, text, macros);
+  return renderChildren(para, { doc: text, macros });
 }
 
 // ── Tree walking ────────────────────────────────────────────────────────────
@@ -183,6 +199,7 @@ export function markdownToHtml(
   return html;
 }
 
+
 /**
  * Render a syntax tree node to HTML.
  * Dispatches on node type and delegates to specialized renderers.
@@ -193,7 +210,7 @@ function renderNode(node: SyntaxNode, ctx: WalkContext): string {
       return renderDocument(node, ctx);
 
     case "Paragraph":
-      return `<p>${renderChildren(node, ctx.doc, ctx.macros, undefined, undefined, ctx.bibliography, ctx.citedIds, ctx.cslProcessor)}</p>`;
+      return `<p>${renderChildren(node, ctx)}</p>`;
 
     case "ATXHeading1":
     case "ATXHeading2":
@@ -384,7 +401,7 @@ function renderListItem(node: SyntaxNode, ctx: WalkContext): string {
       parts.push(renderInline(taskContent.trim(), ctx.macros));
     } else if (child.name === "Paragraph") {
       // Inline content — render without <p> wrapping
-      parts.push(renderChildren(child, ctx.doc, ctx.macros, undefined, undefined, ctx.bibliography, ctx.citedIds, ctx.cslProcessor));
+      parts.push(renderChildren(child, ctx));
     } else {
       // Block content (nested lists, math, code, divs, etc.)
       const html = renderNode(child, ctx);
@@ -525,7 +542,7 @@ function renderTable(node: SyntaxNode, ctx: WalkContext): string {
     let row = "";
     for (let c = 0; c < cells.length; c++) {
       const align = alignments[c] ? ` style="text-align: ${alignments[c]}"` : "";
-      const content = renderChildren(cells[c], ctx.doc, ctx.macros, undefined, undefined, ctx.bibliography, ctx.citedIds, ctx.cslProcessor);
+      const content = renderChildren(cells[c], ctx);
       row += `<${tag}${align}>${content}</${tag}>\n`;
     }
     return row;
@@ -605,14 +622,11 @@ const MARK_NODES = new Set([
  */
 function renderChildren(
   node: SyntaxNode,
-  doc: string,
-  macros?: Record<string, string>,
+  ctx: InlineContext,
   rangeFrom?: number,
   rangeTo?: number,
-  bibliography?: BibStore,
-  citedIds?: string[],
-  cslProcessor?: CslProcessor | null,
 ): string {
+  const { doc } = ctx;
   const from = rangeFrom ?? node.from;
   const to = rangeTo ?? node.to;
   const parts: string[] = [];
@@ -627,7 +641,7 @@ function renderChildren(
         parts.push(escapeHtml(doc.slice(pos, child.from)));
       }
 
-      const childHtml = renderInlineNode(child, doc, macros, bibliography, citedIds, cslProcessor);
+      const childHtml = renderInlineNode(child, ctx);
       if (childHtml !== null) {
         parts.push(childHtml);
       }
@@ -651,12 +665,10 @@ function renderChildren(
  */
 function renderInlineNode(
   node: SyntaxNode,
-  doc: string,
-  macros?: Record<string, string>,
-  bibliography?: BibStore,
-  citedIds?: string[],
-  cslProcessor?: CslProcessor | null,
+  ctx: InlineContext,
 ): string | null {
+  const { doc, macros } = ctx;
+
   // Skip delimiter marks
   if (MARK_NODES.has(node.name)) {
     return null;
@@ -664,16 +676,16 @@ function renderInlineNode(
 
   switch (node.name) {
     case "Emphasis":
-      return `<em>${renderChildren(node, doc, macros, undefined, undefined, bibliography, citedIds, cslProcessor)}</em>`;
+      return `<em>${renderChildren(node, ctx)}</em>`;
 
     case "StrongEmphasis":
-      return `<strong>${renderChildren(node, doc, macros, undefined, undefined, bibliography, citedIds, cslProcessor)}</strong>`;
+      return `<strong>${renderChildren(node, ctx)}</strong>`;
 
     case "Strikethrough":
-      return `<del>${renderChildren(node, doc, macros, undefined, undefined, bibliography, citedIds, cslProcessor)}</del>`;
+      return `<del>${renderChildren(node, ctx)}</del>`;
 
     case "Highlight":
-      return `<mark>${renderChildren(node, doc, macros, undefined, undefined, bibliography, citedIds, cslProcessor)}</mark>`;
+      return `<mark>${renderChildren(node, ctx)}</mark>`;
 
     case "InlineCode": {
       // Get code text between the CodeMark delimiters
@@ -695,7 +707,7 @@ function renderInlineNode(
     }
 
     case "Link": {
-      return renderLink(node, doc, macros, bibliography, citedIds, cslProcessor);
+      return renderLink(node, ctx);
     }
 
     case "Image": {
@@ -729,12 +741,9 @@ function renderInlineNode(
 /** Render a Link node, handling citations and cross-references ([@id]). */
 function renderLink(
   node: SyntaxNode,
-  doc: string,
-  macros?: Record<string, string>,
-  bibliography?: BibStore,
-  citedIds?: string[],
-  cslProcessor?: CslProcessor | null,
+  ctx: InlineContext,
 ): string {
+  const { doc, bibliography, citedIds, cslProcessor } = ctx;
   const fullText = doc.slice(node.from, node.to);
 
   // Citation / cross-reference: [@id] or [@a; @b] — Lezer parses as a Link
@@ -757,11 +766,11 @@ function renderLink(
   const urlNode = node.getChild("URL");
   if (!urlNode) {
     // No URL child — just render text
-    return renderChildren(node, doc, macros);
+    return renderChildren(node, ctx);
   }
 
   const rawHref = doc.slice(urlNode.from, urlNode.to);
-  const linkText = renderLinkText(node, doc, macros);
+  const linkText = renderLinkText(node, ctx);
 
   if (isSafeUrl(rawHref)) {
     return `<a href="${escapeHtml(rawHref)}">${linkText}</a>`;
@@ -772,9 +781,9 @@ function renderLink(
 /** Render the text portion of a Link node (between [ and ]). */
 function renderLinkText(
   node: SyntaxNode,
-  doc: string,
-  macros?: Record<string, string>,
+  ctx: InlineContext,
 ): string {
+  const { doc } = ctx;
   // Link text is between the first LinkMark "[" and the second LinkMark "]"
   const marks = node.getChildren("LinkMark");
   if (marks.length < 2) return escapeHtml(doc.slice(node.from, node.to));
@@ -783,7 +792,7 @@ function renderLinkText(
   const textTo = marks[1].from;
   if (textTo <= textFrom) return "";
 
-  return renderChildren(node, doc, macros, textFrom, textTo);
+  return renderChildren(node, ctx, textFrom, textTo);
 }
 
 /** Render an Image node. */

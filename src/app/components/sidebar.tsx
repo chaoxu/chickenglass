@@ -1,5 +1,6 @@
 import { type ReactNode, useRef, useCallback, useEffect } from "react";
 import { PanelLeft } from "lucide-react";
+import { cn } from "../lib/utils";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -67,15 +68,13 @@ export function Sidebar({ collapsed, onToggle, width, onWidthChange, children }:
     <div className="flex shrink-0">
       {/* Sidebar panel */}
       <div
-        className={[
+        className={cn(
           "flex flex-col shrink-0 overflow-hidden",
           "bg-[var(--cg-bg)] border-r border-[var(--cg-border)]",
           collapsed ? "w-0" : "",
           // Only animate width when not dragging
           dragging.current ? "" : "transition-[width] duration-[var(--cg-transition,0.15s)] ease-in-out",
-        ]
-          .filter(Boolean)
-          .join(" ")}
+        )}
         style={collapsed ? undefined : { width: `${width}px` }}
       >
         {/* Header with always-visible collapse button */}

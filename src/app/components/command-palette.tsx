@@ -33,6 +33,7 @@
 import { Command } from "cmdk";
 import { Search } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
+import { cn } from "../lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -114,21 +115,21 @@ export function CommandPalette({
       onOpenChange={onOpenChange}
       label="Command Palette"
       // Overlay: fixed, full-screen semi-transparent backdrop
-      overlayClassName={[
+      overlayClassName={cn(
         "fixed inset-0 z-50",
         "bg-black/40",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
-      ].join(" ")}
+      )}
       // Panel: centered card — borders for depth, no shadows
-      className={[
+      className={cn(
         "fixed left-1/2 top-[20%] z-50 w-full max-w-lg -translate-x-1/2",
         "rounded-lg border border-[var(--cg-border)]",
         "bg-[var(--cg-bg)] text-[var(--cg-fg)]",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
         "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
-      ].join(" ")}
+      )}
     >
       {/* Search input */}
       <div className="flex items-center border-b border-[var(--cg-border)] px-3">
@@ -138,11 +139,11 @@ export function CommandPalette({
         />
         <Command.Input
           placeholder="Type a command..."
-          className={[
+          className={cn(
             "flex h-11 w-full bg-transparent py-3 text-sm outline-none",
             "placeholder:text-[var(--cg-muted)]",
             "disabled:cursor-not-allowed disabled:opacity-50",
-          ].join(" ")}
+          )}
         />
       </div>
 
@@ -166,12 +167,12 @@ export function CommandPalette({
                   onOpenChange(false);
                   cmd.action();
                 }}
-                className={[
+                className={cn(
                   "relative flex cursor-pointer select-none items-center rounded-md px-2 py-2 text-sm",
                   "text-[var(--cg-fg)] outline-none",
                   "aria-selected:bg-[var(--cg-accent)] aria-selected:text-[var(--cg-accent-fg)]",
                   "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-                ].join(" ")}
+                )}
               >
                 <span className="truncate">{cmd.label}</span>
                 {cmd.shortcut && <ShortcutBadge shortcut={cmd.shortcut} />}
