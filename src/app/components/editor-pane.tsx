@@ -163,6 +163,7 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
           content={readModeContent}
           projectConfig={editorOptions.projectConfig}
           bibliography={bibData?.store}
+          cslProcessor={bibData?.cslProcessor}
           scrollTop={scrollTop}
         />
       )}

@@ -20,10 +20,17 @@ import katex from "katex";
 import { parser as baseParser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
 import { markdownExtensions, extractDivClass } from "../parser";
-import { type BibEntry, extractLastName } from "../citations/bibtex-parser";
+import { type BibEntry } from "../citations/bibtex-parser";
+import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
+import {
+  findCitations,
+  formatParenthetical,
+  type BibStore as CitationBibStore,
+} from "../citations/citation-render";
+import type { CslProcessor } from "../citations/csl-processor";
 
 /** A map of citation keys to bibliography entries. */
-export type BibStore = ReadonlyMap<string, BibEntry>;
+export type BibStore = CitationBibStore;
 
 // ── Standalone Lezer parser ─────────────────────────────────────────────────
 
@@ -96,6 +103,8 @@ export interface MarkdownToHtmlOptions {
   _counters?: number[];
   /** Bibliography entries for citation resolution. */
   bibliography?: BibStore;
+  /** CSL processor for citation/bibliography formatting. */
+  cslProcessor?: CslProcessor | null;
 }
 
 // ── Inline rendering (standalone, for titles) ───────────────────────────────
@@ -129,6 +138,7 @@ interface WalkContext {
   readonly sectionNumbers: boolean;
   readonly headingCounters: number[];
   readonly bibliography?: BibStore;
+  readonly cslProcessor?: CslProcessor | null;
   /** Accumulates cited entry IDs in document order for the bibliography section. */
   readonly citedIds: string[];
 }
@@ -142,6 +152,16 @@ export function markdownToHtml(
   content: string,
   options?: MarkdownToHtmlOptions,
 ): string {
+  if (options?.bibliography && options.cslProcessor) {
+    const clusters = findCitations(content, options.bibliography)
+      .filter((match) => match.parenthetical)
+      .map((match) => ({
+        ids: [...match.ids],
+        locators: match.locators ? [...match.locators] : undefined,
+      }));
+    options.cslProcessor.registerCitations(clusters);
+  }
+
   const tree = mdParser.parse(content);
   const ctx: WalkContext = {
     doc: content,
@@ -149,6 +169,7 @@ export function markdownToHtml(
     sectionNumbers: options?.sectionNumbers ?? false,
     headingCounters: options?._counters ?? [0, 0, 0, 0, 0, 0, 0],
     bibliography: options?.bibliography,
+    cslProcessor: options?.cslProcessor,
     citedIds: [],
   };
 
@@ -156,7 +177,7 @@ export function markdownToHtml(
 
   // Render bibliography section if there are cited entries
   if (ctx.bibliography && ctx.citedIds.length > 0) {
-    html += renderBibliography(ctx.bibliography, ctx.citedIds);
+    html += renderBibliography(ctx.bibliography, ctx.citedIds, ctx.cslProcessor);
   }
 
   return html;
@@ -172,7 +193,7 @@ function renderNode(node: SyntaxNode, ctx: WalkContext): string {
       return renderDocument(node, ctx);
 
     case "Paragraph":
-      return `<p>${renderChildren(node, ctx.doc, ctx.macros, undefined, undefined, ctx.bibliography, ctx.citedIds)}</p>`;
+      return `<p>${renderChildren(node, ctx.doc, ctx.macros, undefined, undefined, ctx.bibliography, ctx.citedIds, ctx.cslProcessor)}</p>`;
 
     case "ATXHeading1":
     case "ATXHeading2":
@@ -363,7 +384,7 @@ function renderListItem(node: SyntaxNode, ctx: WalkContext): string {
       parts.push(renderInline(taskContent.trim(), ctx.macros));
     } else if (child.name === "Paragraph") {
       // Inline content — render without <p> wrapping
-      parts.push(renderChildren(child, ctx.doc, ctx.macros, undefined, undefined, ctx.bibliography, ctx.citedIds));
+      parts.push(renderChildren(child, ctx.doc, ctx.macros, undefined, undefined, ctx.bibliography, ctx.citedIds, ctx.cslProcessor));
     } else {
       // Block content (nested lists, math, code, divs, etc.)
       const html = renderNode(child, ctx);
@@ -500,7 +521,7 @@ function renderTable(node: SyntaxNode, ctx: WalkContext): string {
     let row = "";
     for (let c = 0; c < cells.length; c++) {
       const align = alignments[c] ? ` style="text-align: ${alignments[c]}"` : "";
-      const content = renderChildren(cells[c], ctx.doc, ctx.macros);
+      const content = renderChildren(cells[c], ctx.doc, ctx.macros, undefined, undefined, ctx.bibliography, ctx.citedIds, ctx.cslProcessor);
       row += `<${tag}${align}>${content}</${tag}>\n`;
     }
     return row;
@@ -586,6 +607,7 @@ function renderChildren(
   rangeTo?: number,
   bibliography?: BibStore,
   citedIds?: string[],
+  cslProcessor?: CslProcessor | null,
 ): string {
   const from = rangeFrom ?? node.from;
   const to = rangeTo ?? node.to;
@@ -601,7 +623,7 @@ function renderChildren(
         parts.push(escapeHtml(doc.slice(pos, child.from)));
       }
 
-      const childHtml = renderInlineNode(child, doc, macros, bibliography, citedIds);
+      const childHtml = renderInlineNode(child, doc, macros, bibliography, citedIds, cslProcessor);
       if (childHtml !== null) {
         parts.push(childHtml);
       }
@@ -629,6 +651,7 @@ function renderInlineNode(
   macros?: Record<string, string>,
   bibliography?: BibStore,
   citedIds?: string[],
+  cslProcessor?: CslProcessor | null,
 ): string | null {
   // Skip delimiter marks
   if (MARK_NODES.has(node.name)) {
@@ -637,16 +660,16 @@ function renderInlineNode(
 
   switch (node.name) {
     case "Emphasis":
-      return `<em>${renderChildren(node, doc, macros)}</em>`;
+      return `<em>${renderChildren(node, doc, macros, undefined, undefined, bibliography, citedIds, cslProcessor)}</em>`;
 
     case "StrongEmphasis":
-      return `<strong>${renderChildren(node, doc, macros)}</strong>`;
+      return `<strong>${renderChildren(node, doc, macros, undefined, undefined, bibliography, citedIds, cslProcessor)}</strong>`;
 
     case "Strikethrough":
-      return `<del>${renderChildren(node, doc, macros)}</del>`;
+      return `<del>${renderChildren(node, doc, macros, undefined, undefined, bibliography, citedIds, cslProcessor)}</del>`;
 
     case "Highlight":
-      return `<mark>${renderChildren(node, doc, macros)}</mark>`;
+      return `<mark>${renderChildren(node, doc, macros, undefined, undefined, bibliography, citedIds, cslProcessor)}</mark>`;
 
     case "InlineCode": {
       // Get code text between the CodeMark delimiters
@@ -668,7 +691,7 @@ function renderInlineNode(
     }
 
     case "Link": {
-      return renderLink(node, doc, macros, bibliography, citedIds);
+      return renderLink(node, doc, macros, bibliography, citedIds, cslProcessor);
     }
 
     case "Image": {
@@ -706,6 +729,7 @@ function renderLink(
   macros?: Record<string, string>,
   bibliography?: BibStore,
   citedIds?: string[],
+  cslProcessor?: CslProcessor | null,
 ): string {
   const fullText = doc.slice(node.from, node.to);
 
@@ -717,13 +741,12 @@ function renderLink(
     // Multiple citations: [@a; @b; @c]
     if (rawRefs.includes(";")) {
       const ids = rawRefs.split(";").map(s => s.trim().replace(/^@/, ""));
-      const parts = ids.map(id => formatCitationRef(id, bibliography, citedIds));
-      return `<span class="citation">(${parts.join("; ")})</span>`;
+      return renderCitationCluster(ids, bibliography, citedIds, cslProcessor);
     }
 
     // Single citation: [@id]
     const id = rawRefs.replace(/^@/, "");
-    return formatCitationRef(id, bibliography, citedIds, true);
+    return renderCitationCluster([id], bibliography, citedIds, cslProcessor);
   }
 
   // Regular link: [text](url)
@@ -782,50 +805,98 @@ function renderImage(node: SyntaxNode, doc: string): string {
 // ── Citation / bibliography rendering ───────────────────────────────────────
 
 /**
- * Format a single citation reference. If the id matches a bibliography
- * entry, renders as "(Author, Year)". Otherwise renders as a cross-ref link.
+ * Add cited ids to the bibliography accumulator, preserving first-use order.
  */
-function formatCitationRef(
-  id: string,
+function trackCitedIds(
+  ids: readonly string[],
   bibliography?: BibStore,
   citedIds?: string[],
-  wrap = false,
-): string {
-  const entry = bibliography?.get(id);
-  if (entry) {
-    // Track cited entry for bibliography section
-    if (citedIds && !citedIds.includes(id)) {
+): void {
+  if (!bibliography || !citedIds) return;
+  for (const id of ids) {
+    if (bibliography.has(id) && !citedIds.includes(id)) {
       citedIds.push(id);
     }
-    const author = entry.author ? extractLastName(entry.author) : id;
-    const year = entry.year ?? "";
-    const label = `${author}, ${year}`;
-    const html = `<a class="citation" href="#bib-${escapeHtml(id)}">${escapeHtml(label)}</a>`;
-    return wrap ? `<span class="citation">(${html})</span>` : html;
   }
-  // Not in bibliography — render as cross-reference
-  return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`;
+}
+
+/**
+ * Render a parenthetical citation cluster using the same formatting path
+ * as rich mode when bibliography data is available.
+ */
+function renderCitationCluster(
+  ids: readonly string[],
+  bibliography?: BibStore,
+  citedIds?: string[],
+  cslProcessor?: CslProcessor | null,
+): string {
+  const knownCount = bibliography
+    ? ids.filter((id) => bibliography.has(id)).length
+    : 0;
+
+  if (knownCount === 0) {
+    if (ids.length === 1) {
+      return `<a class="cross-ref" href="#${escapeHtml(ids[0])}">${escapeHtml(ids[0])}</a>`;
+    }
+    const parts = ids.map((id) =>
+      `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`);
+    return `<span class="cg-citation">(${parts.join("; ")})</span>`;
+  }
+
+  trackCitedIds(ids, bibliography, citedIds);
+
+  if (bibliography && knownCount === ids.length) {
+    const rendered = cslProcessor
+      ? cslProcessor.cite([...ids])
+      : formatParenthetical(ids, bibliography);
+    return `<span class="cg-citation">${escapeHtml(rendered)}</span>`;
+  }
+
+  const parts = ids.map((id) => {
+    if (bibliography?.has(id)) {
+      const rendered = formatParenthetical([id], bibliography);
+      return escapeHtml(
+        rendered.startsWith("(") && rendered.endsWith(")")
+          ? rendered.slice(1, -1)
+          : rendered,
+      );
+    }
+    return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`;
+  });
+  return `<span class="cg-citation">(${parts.join("; ")})</span>`;
 }
 
 /** Render the bibliography section from cited entries. */
-function renderBibliography(bib: BibStore, citedIds: string[]): string {
-  const entries = citedIds
-    .map(id => bib.get(id))
+function renderBibliography(
+  bib: BibStore,
+  citedIds: string[],
+  cslProcessor?: CslProcessor | null,
+): string {
+  let cslHtml: string[] = [];
+  if (cslProcessor) {
+    cslHtml = cslProcessor.bibliography(citedIds);
+  }
+
+  const unsortedEntries = citedIds
+    .map((id) => bib.get(id))
     .filter((e): e is BibEntry => e !== undefined);
+  const entries = cslHtml.length > 0 ? unsortedEntries : sortBibEntries(unsortedEntries);
 
   if (entries.length === 0) return "";
 
-  const items = entries.map(entry => {
-    const author = entry.author ?? "Unknown";
-    const year = entry.year ?? "";
-    const title = entry.title ?? "";
-    const venue = entry.journal ?? entry.booktitle ?? "";
-    let text = `${escapeHtml(author)}. `;
-    if (year) text += `(${escapeHtml(year)}). `;
-    if (title) text += `<em>${escapeHtml(title)}</em>. `;
-    if (venue) text += escapeHtml(venue) + ". ";
-    return `<div class="bib-entry" id="bib-${escapeHtml(entry.id)}">${text.trim()}</div>`;
-  });
+  const items = cslHtml.length > 0
+    ? entries.map((entry, i) =>
+        `<div class="cg-bibliography-entry" id="bib-${escapeHtml(entry.id)}">${cslHtml[i] ?? ""}</div>`)
+    : entries.map((entry) =>
+        `<div class="cg-bibliography-entry" id="bib-${escapeHtml(entry.id)}">${escapeHtml(formatBibEntry(entry))}</div>`);
 
-  return `\n<section class="bibliography">\n<h2>References</h2>\n${items.join("\n")}\n</section>`;
+  return [
+    "",
+    '<section class="cg-bibliography">',
+    '<h2 class="cg-bibliography-heading">References</h2>',
+    '<div class="cg-bibliography-list">',
+    items.join("\n"),
+    "</div>",
+    "</section>",
+  ].join("\n");
 }

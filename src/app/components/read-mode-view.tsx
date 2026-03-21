@@ -15,6 +15,7 @@ import { markdownToHtml, renderInline, type BibStore } from "../markdown-to-html
 import { parseFrontmatter } from "../../parser/frontmatter";
 import type { ProjectConfig } from "../project-config";
 import { mergeConfigs } from "../project-config";
+import type { CslProcessor } from "../../citations/csl-processor";
 import {
   texLinebreakDOM,
   resetDOMJustification,
@@ -31,6 +32,8 @@ export interface ReadModeViewProps {
   projectConfig?: ProjectConfig;
   /** Loaded bibliography entries for citation resolution. */
   bibliography?: BibStore;
+  /** CSL processor used by rich mode citation rendering. */
+  cslProcessor?: CslProcessor | null;
   /** Scroll position to restore when entering read mode. */
   scrollTop?: number;
   /** Callback with current scroll position for persistence. */
@@ -93,6 +96,7 @@ export function ReadModeView({
   content,
   projectConfig,
   bibliography,
+  cslProcessor,
   scrollTop,
   onScroll,
 }: ReadModeViewProps) {
@@ -111,6 +115,7 @@ export function ReadModeView({
       macros: config.math,
       sectionNumbers: true,
       bibliography,
+      cslProcessor,
     });
 
     // Render title from frontmatter if present (renderInline handles
@@ -120,7 +125,7 @@ export function ReadModeView({
       : "";
 
     return titleHtml + bodyHtml;
-  }, [content, config]);
+  }, [content, config, bibliography, cslProcessor]);
 
   // Stable callback for applying line breaking (used by both effect and resize observer)
   const applyLineBreakingCb = useCallback(() => {

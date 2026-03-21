@@ -160,6 +160,12 @@ body {
   margin-top: 0.15em;
 }
 
+.cg-read-mode-view .cg-bibliography {
+  text-align: left;
+  hyphens: manual;
+  -webkit-hyphens: manual;
+}
+
 /* No heading math size hacks needed — font-size is on .cm-line via
  * Decoration.line (.cg-heading-line-N), so all children inherit it. */
 
