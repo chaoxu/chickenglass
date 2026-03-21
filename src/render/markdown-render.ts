@@ -236,6 +236,14 @@ class MarkdownRenderPlugin implements PluginValue {
             return;
           }
 
+          // --- Escape: hide the backslash (\$ → $, \* → *) unless cursor is on it ---
+          if (node.name === "Escape") {
+            if (cursorInRange(view, node.from, node.to)) return;
+            // Hide just the backslash (first character)
+            widgets.push(Decoration.replace({}).range(node.from, node.from + 1));
+            return;
+          }
+
           // --- ListMark: style bullet/number markers unless cursor touches the marker ---
           if (node.name === "ListMark") {
             if (cursorInRange(view, node.from, node.to)) return;

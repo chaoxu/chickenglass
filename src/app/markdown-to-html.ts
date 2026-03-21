@@ -728,6 +728,10 @@ function renderInlineNode(
     case "HardBreak":
       return "<br>";
 
+    case "Escape":
+      // \$ → $, \* → *, etc. — strip the backslash
+      return escapeHtml(doc.slice(node.from + 1, node.to));
+
     case "URL":
       // URL nodes inside links are handled by renderLink
       return null;
