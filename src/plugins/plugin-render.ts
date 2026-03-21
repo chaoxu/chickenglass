@@ -251,12 +251,17 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
           closeFenceNode = next;
         }
       }
-      if (closeFenceNode) {
+      if (
+        closeFenceNode &&
+        closeFenceNode.from >= 0 &&
+        closeFenceNode.from <= state.doc.length
+      ) {
+        const closePos = closeFenceNode.from;
         const openLine = state.doc.lineAt(fenceFrom);
-        const closeLine = state.doc.lineAt(closeFenceNode.from);
+        const closeLine = state.doc.lineAt(closePos);
         singleLine = openLine.number === closeLine.number;
         if (singleLine) {
-          closeFenceFrom = closeFenceNode.from;
+          closeFenceFrom = closePos;
           closeFenceTo = closeFenceNode.to;
         } else {
           closeFenceFrom = closeLine.from;
