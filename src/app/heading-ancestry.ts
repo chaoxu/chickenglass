@@ -46,8 +46,8 @@ export function extractHeadings(state: EditorState): HeadingEntry[] {
       if (!m) return;
 
       const level = Number(m[1]);
-      const lineText = state.doc.lineAt(node.from).text;
-      const isUnnumbered = unnumberedRe.test(lineText);
+      const rawText = state.sliceDoc(node.from, node.to);
+      const isUnnumbered = unnumberedRe.test(rawText);
 
       let sectionNumber: string;
       if (isUnnumbered) {
@@ -62,9 +62,12 @@ export function extractHeadings(state: EditorState): HeadingEntry[] {
         sectionNumber = parts.join(".");
       }
 
-      // Strip # markers and any trailing attribute block ({...})
-      const text = lineText
-        .replace(/^#+\s*/, "")
+      // Use HeaderMark child node's absolute end position to find where heading text starts
+      const headerMark = node.node.getChild("HeaderMark");
+      const textFrom = headerMark ? headerMark.to : node.from;
+      // Slice from doc using absolute positions, then strip trailing attribute block ({...})
+      const text = state.sliceDoc(textFrom, node.to)
+        .trim()
         .replace(/\s*\{[^}]*\}\s*$/, "");
 
       entries.push({

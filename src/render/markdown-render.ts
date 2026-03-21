@@ -9,6 +9,7 @@ import {
 import { type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { cursorInRange, decorationHidden } from "./render-utils";
+import { unnumberedRe } from "../app/heading-ancestry";
 
 /**
  * Node types whose children's markers should be hidden when
@@ -130,9 +131,7 @@ class MarkdownRenderPlugin implements PluginValue {
             }
             // Cursor outside: hide trailing {-} / {.unnumbered} attribute text
             const hLine = view.state.doc.lineAt(node.from);
-            const attrMatch = hLine.text.match(
-              /\s*\{[^}]*(?:-|\.unnumbered)[^}]*\}\s*$/,
-            );
+            const attrMatch = hLine.text.match(unnumberedRe);
             if (attrMatch && attrMatch.index !== undefined) {
               const attrFrom = hLine.from + attrMatch.index;
               const attrTo =

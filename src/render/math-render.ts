@@ -9,7 +9,6 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 import {
   cursorInRange,
-  collectNodes,
   buildDecorations,
   serializeMacros,
   RenderWidget,
@@ -39,20 +38,17 @@ export const DISPLAY_DELIMITERS: ReadonlyArray<MathDelimiterPair> = [
   { open: "$$", close: "$$" },
 ];
 
-/** Regex matching a trailing equation label like {#eq:foo}. */
-const EQUATION_LABEL_SUFFIX = /\s*\{#eq:[^}\s]+\}\s*$/;
-
-/** Strip math delimiters (and any trailing equation label) from raw source. */
-export function stripMathDelimiters(raw: string, isDisplay: boolean): string {
-  // Remove trailing equation label before checking for closing delimiter
-  const stripped = isDisplay ? raw.replace(EQUATION_LABEL_SUFFIX, "") : raw;
+/** Strip math delimiters from raw source. contentTo is the exclusive end of math content (before any label). */
+export function stripMathDelimiters(raw: string, isDisplay: boolean, contentTo?: number): string {
+  // When a content boundary is provided (display math with EquationLabel child), slice before it
+  const trimmed = contentTo !== undefined ? raw.slice(0, contentTo) : raw;
   const delimiters = isDisplay ? DISPLAY_DELIMITERS : INLINE_DELIMITERS;
   for (const { open, close } of delimiters) {
-    if (stripped.startsWith(open) && stripped.endsWith(close)) {
-      return stripped.slice(open.length, stripped.length - close.length);
+    if (trimmed.startsWith(open) && trimmed.endsWith(close)) {
+      return trimmed.slice(open.length, trimmed.length - close.length);
     }
   }
-  return raw;
+  return trimmed;
 }
 
 /**
@@ -120,27 +116,43 @@ function buildMathItems(
   shouldSkip: (from: number, to: number) => boolean,
 ): Range<Decoration>[] {
   const macros = state.field(mathMacrosField);
-  const nodes = collectNodes(state, MATH_TYPES);
   const items: Range<Decoration>[] = [];
 
-  for (const node of nodes) {
-    if (shouldSkip(node.from, node.to)) continue;
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (!MATH_TYPES.has(node.type.name)) return;
 
-    const raw = state.sliceDoc(node.from, node.to);
-    const isDisplay = node.type === "DisplayMath";
-    const latex = stripMathDelimiters(raw, isDisplay);
+      if (shouldSkip(node.from, node.to)) return false;
 
-    const widget = new MathWidget(latex, raw, isDisplay, macros);
-    widget.sourceFrom = node.from;
+      const raw = state.sliceDoc(node.from, node.to);
+      const isDisplay = node.type.name === "DisplayMath";
 
-    items.push(
-      Decoration.replace({
-        widget,
-        // block: true breaks CM6 height tracking for subsequent lines
-        block: false,
-      }).range(node.from, node.to),
-    );
-  }
+      // For display math, check for an EquationLabel child to determine content boundary
+      let contentTo: number | undefined;
+      if (isDisplay) {
+        const labelNode = node.node.getChild("EquationLabel");
+        if (labelNode) {
+          // Content ends where the label begins (relative to node start)
+          contentTo = labelNode.from - node.from;
+        }
+      }
+
+      const latex = stripMathDelimiters(raw, isDisplay, contentTo);
+
+      const widget = new MathWidget(latex, raw, isDisplay, macros);
+      widget.sourceFrom = node.from;
+
+      items.push(
+        Decoration.replace({
+          widget,
+          // block: true breaks CM6 height tracking for subsequent lines
+          block: false,
+        }).range(node.from, node.to),
+      );
+
+      return false; // don't descend into math children
+    },
+  });
 
   return items;
 }
