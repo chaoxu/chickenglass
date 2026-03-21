@@ -19,7 +19,7 @@ import {
   collectEquationLabels,
 } from "../index/crossref-resolver";
 import { blockCounterField, type NumberedBlock } from "../plugins/block-counter";
-import { bibDataField, findCitations, type BibStore } from "../citations/citation-render";
+import { bibDataField, findCitationsFromTree, type BibStore } from "../citations/citation-render";
 import { formatBibEntry } from "../citations/bibliography";
 import { renderKatex, stripMathDelimiters } from "./math-render";
 import { mathMacrosField } from "./math-macros";
@@ -245,8 +245,9 @@ function hoverSource(
   // Check for citation at this position (single scan)
   const { store } = view.state.field(bibDataField);
   if (store.size > 0) {
+    const tree = syntaxTree(view.state);
     const text = view.state.doc.toString();
-    const matches = findCitations(text, store);
+    const matches = findCitationsFromTree(tree.topNode, text, store);
     const match = matches.find((m) => pos >= m.from && pos <= m.to);
     if (match) {
       return {

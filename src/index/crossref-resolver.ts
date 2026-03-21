@@ -115,19 +115,6 @@ export function resolveCrossref(
   };
 }
 
-/**
- * Regex to find cross-reference patterns in document text.
- *
- * Matches:
- * - [@id] — parenthetical reference (inside brackets)
- * - @id — narrative reference (bare, must end with a word character)
- *
- * The id can contain: letters, digits, hyphens, underscores, colons, periods.
- * For narrative @id, the id must end with a word character to avoid
- * matching trailing punctuation (e.g., "@thm-1." should match "@thm-1").
- */
-export const CROSSREF_PATTERN = /\[@([\w:.'-]+)\]|(?<!\w)@([\w:.'-]*\w)/g;
-
 /** A cross-reference occurrence found in the document text. */
 export interface CrossrefMatch {
   /** The reference id (without @ or brackets). */
@@ -140,25 +127,71 @@ export interface CrossrefMatch {
   readonly bracketed: boolean;
 }
 
+/** Pattern for bracketed cross-references: [@id] (single id, no semicolons). */
+const BRACKETED_REF_RE = /^\[@([\w:.'-]+)\]$/;
+
+/** Pattern for narrative @id references in plain text (not inside brackets). */
+const NARRATIVE_REF_RE = /(?<!\w)@([\w:.'-]*\w)/g;
+
 /**
- * Find all cross-reference patterns in the document text.
- * Scans the full document for [@id] and @id patterns.
+ * Find all cross-reference patterns by walking the Lezer syntax tree.
+ *
+ * Bracketed references ([@id]) are found as Link nodes whose text
+ * starts with `[@`. Narrative references (@id) are found by scanning
+ * text content outside of Link nodes.
  */
 export function findCrossrefs(state: EditorState): CrossrefMatch[] {
-  const text = state.doc.toString();
+  const tree = syntaxTree(state);
+  const doc = state.doc.toString();
   const matches: CrossrefMatch[] = [];
-  const re = new RegExp(CROSSREF_PATTERN.source, CROSSREF_PATTERN.flags);
-  let match: RegExpExecArray | null;
 
-  while ((match = re.exec(text)) !== null) {
-    const id = match[1] ?? match[2];
+  // Set of ranges covered by Link nodes, used to avoid finding
+  // narrative refs inside brackets
+  const linkRanges: { from: number; to: number }[] = [];
+
+  // 1. Walk the tree for Link nodes — bracketed refs like [@id]
+  tree.iterate({
+    enter(node) {
+      if (node.name !== "Link") return;
+
+      const text = doc.slice(node.from, node.to);
+      const crossRefMatch = BRACKETED_REF_RE.exec(text);
+      if (crossRefMatch) {
+        matches.push({
+          id: crossRefMatch[1],
+          from: node.from,
+          to: node.to,
+          bracketed: true,
+        });
+      }
+
+      linkRanges.push({ from: node.from, to: node.to });
+    },
+  });
+
+  // 2. Scan full text for narrative @id refs, skipping Link ranges
+  NARRATIVE_REF_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = NARRATIVE_REF_RE.exec(doc)) !== null) {
+    const matchFrom = m.index;
+    const matchTo = m.index + m[0].length;
+
+    // Skip if inside a Link node
+    const insideLink = linkRanges.some(
+      (r) => matchFrom >= r.from && matchTo <= r.to,
+    );
+    if (insideLink) continue;
+
     matches.push({
-      id,
-      from: match.index,
-      to: match.index + match[0].length,
-      bracketed: match[1] !== undefined,
+      id: m[1],
+      from: matchFrom,
+      to: matchTo,
+      bracketed: false,
     });
   }
+
+  // Sort by document position
+  matches.sort((a, b) => a.from - b.from);
 
   return matches;
 }

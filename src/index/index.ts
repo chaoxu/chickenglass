@@ -16,7 +16,6 @@ export {
   collectEquationLabels,
   resolveCrossref,
   findCrossrefs,
-  CROSSREF_PATTERN,
 } from "./crossref-resolver";
 
 // Background indexer query API (T15)

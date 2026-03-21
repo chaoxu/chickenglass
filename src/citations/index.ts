@@ -11,6 +11,7 @@ export {
   bibDataEffect,
   bibDataField,
   findCitations,
+  findCitationsFromTree,
   formatParenthetical,
   collectCitationRanges,
   CitationWidget,

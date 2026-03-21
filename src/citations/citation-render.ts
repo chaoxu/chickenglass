@@ -21,9 +21,13 @@ import {
   type WidgetType,
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
+import type { SyntaxNode } from "@lezer/common";
+import { parser as baseParser } from "@lezer/markdown";
+import { syntaxTree } from "@codemirror/language";
 import { type BibEntry, extractLastName } from "./bibtex-parser";
 import type { CslProcessor } from "./csl-processor";
 import { cursorInRange, buildDecorations, RenderWidget } from "../render/render-utils";
+import { markdownExtensions } from "../parser";
 
 /** Format a citation label: "(Author, Year)" or "(Author, Year, locator)". */
 export function formatCitation(entry: BibEntry, locator?: string): string {
@@ -127,8 +131,14 @@ interface CitationMatch {
   locators: (string | undefined)[];
 }
 
-/** Pattern for parenthetical citations: [@id], [@id, locator], [@id1; @id2; ...] */
-const PAREN_CITE_RE = /\[(@[a-zA-Z0-9_][\w:./-]*(?:,[^;\]]*)?(?:\s*;\s*@[a-zA-Z0-9_][\w:./-]*(?:,[^;\]]*)?)*)\]/g;
+/** Standalone Lezer parser (same extensions as CM6 editor). */
+const mdParser = baseParser.configure(markdownExtensions);
+
+/**
+ * Pattern for parenthetical citations inside Link nodes.
+ * Matches: [@id], [@id, locator], [@id1; @id2; ...].
+ */
+const PAREN_CITE_RE = /^\[(@[a-zA-Z0-9_][\w:./-]*(?:,[^;\]]*)?(?:\s*;\s*@[a-zA-Z0-9_][\w:./-]*(?:,[^;\]]*)?)*)\]$/;
 
 /** Pattern for narrative citations: @id (not preceded by [ or another @) */
 const NARRATIVE_CITE_RE = /(?<![[@\w])@([a-zA-Z0-9_][\w:./-]*)/g;
@@ -157,47 +167,57 @@ function extractCitations(raw: string): { ids: string[]; locators: (string | und
 }
 
 /**
- * Find all citation matches in the document text.
+ * Find all citation matches by walking a Lezer syntax tree.
+ *
+ * Parenthetical citations ([@id], [@id, locator], [@id1; @id2]) are found
+ * as Link nodes whose text matches the `[@...]` pattern.
+ * Narrative citations (@id) are found by scanning text outside Link nodes.
+ *
  * Only includes matches where at least one id exists in the bib store.
  */
-export function findCitations(
-  text: string,
+export function findCitationsFromTree(
+  topNode: SyntaxNode,
+  doc: string,
   store: BibStore,
 ): CitationMatch[] {
   const matches: CitationMatch[] = [];
+  const linkRanges: { from: number; to: number }[] = [];
 
-  // Find parenthetical citations: [@id], [@id, locator], [@id1; @id2]
-  PAREN_CITE_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = PAREN_CITE_RE.exec(text)) !== null) {
-    const { ids, locators } = extractCitations(m[1]);
-    // Only treat as citation if at least one id is in the bib store
-    if (ids.some((id) => store.has(id))) {
-      matches.push({
-        from: m.index,
-        to: m.index + m[0].length,
-        parenthetical: true,
-        ids,
-        locators,
-      });
+  // 1. Walk the tree for Link nodes — parenthetical citations like [@id]
+  topNode.cursor().iterate((node) => {
+    if (node.name !== "Link") return;
+
+    const text = doc.slice(node.from, node.to);
+    const parenMatch = PAREN_CITE_RE.exec(text);
+    if (parenMatch) {
+      const { ids, locators } = extractCitations(parenMatch[1]);
+      if (ids.some((id) => store.has(id))) {
+        matches.push({
+          from: node.from,
+          to: node.to,
+          parenthetical: true,
+          ids,
+          locators,
+        });
+      }
     }
-  }
 
-  // Build a set of ranges covered by parenthetical matches to avoid overlap
-  const coveredRanges = matches.map((cm) => ({ from: cm.from, to: cm.to }));
+    linkRanges.push({ from: node.from, to: node.to });
+  });
 
-  // Find narrative citations: @id
+  // 2. Scan full text for narrative @id refs, skipping Link ranges
   NARRATIVE_CITE_RE.lastIndex = 0;
-  while ((m = NARRATIVE_CITE_RE.exec(text)) !== null) {
+  let m: RegExpExecArray | null;
+  while ((m = NARRATIVE_CITE_RE.exec(doc)) !== null) {
     const id = m[1];
     const matchFrom = m.index;
     const matchTo = m.index + m[0].length;
 
-    // Skip if this match overlaps with a parenthetical citation
-    const overlaps = coveredRanges.some(
+    // Skip if inside a Link node
+    const insideLink = linkRanges.some(
       (r) => matchFrom >= r.from && matchTo <= r.to,
     );
-    if (overlaps) continue;
+    if (insideLink) continue;
 
     if (store.has(id)) {
       matches.push({
@@ -210,7 +230,26 @@ export function findCitations(
     }
   }
 
+  // Sort by document position
+  matches.sort((a, b) => a.from - b.from);
+
   return matches;
+}
+
+/**
+ * Find all citation matches in the document text.
+ * Only includes matches where at least one id exists in the bib store.
+ *
+ * Parses the text with the standalone Lezer parser internally,
+ * then delegates to `findCitationsFromTree`. This supports CM6-free
+ * callers (e.g., `markdownToHtml`, `collectCitedIds`).
+ */
+export function findCitations(
+  text: string,
+  store: BibStore,
+): CitationMatch[] {
+  const tree = mdParser.parse(text);
+  return findCitationsFromTree(tree.topNode, text, store);
 }
 
 /**
@@ -237,8 +276,9 @@ export function collectCitationRanges(
   cslProcessor?: CslProcessor | null,
 ): Range<Decoration>[] {
   const items: Range<Decoration>[] = [];
+  const tree = syntaxTree(view.state);
   const text = view.state.doc.toString();
-  const matches = findCitations(text, store);
+  const matches = findCitationsFromTree(tree.topNode, text, store);
 
   // Register all citations with CSL processor first (needed for numeric styles)
   if (cslProcessor) {

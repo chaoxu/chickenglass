@@ -23,7 +23,7 @@ import { markdownExtensions, extractDivClass } from "../parser";
 import { type BibEntry } from "../citations/bibtex-parser";
 import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import {
-  findCitations,
+  findCitationsFromTree,
   formatParenthetical,
   type BibStore as CitationBibStore,
 } from "../citations/citation-render";
@@ -168,8 +168,10 @@ export function markdownToHtml(
   content: string,
   options?: MarkdownToHtmlOptions,
 ): string {
+  const tree = mdParser.parse(content);
+
   if (options?.bibliography && options.cslProcessor) {
-    const clusters = findCitations(content, options.bibliography)
+    const clusters = findCitationsFromTree(tree.topNode, content, options.bibliography)
       .filter((match) => match.parenthetical)
       .map((match) => ({
         ids: [...match.ids],
@@ -177,8 +179,6 @@ export function markdownToHtml(
       }));
     options.cslProcessor.registerCitations(clusters);
   }
-
-  const tree = mdParser.parse(content);
   const ctx: WalkContext = {
     doc: content,
     macros: options?.macros,
