@@ -43,11 +43,17 @@ export async function connectEditor(port = DEFAULT_PORT) {
 }
 
 /**
- * Open a file by clicking its name in the sidebar.
- * Waits for the editor to load the file.
+ * Open a file by path (e.g. "posts/2014-11-04-isotonic-....md").
+ * Uses window.__openFile which works regardless of sidebar scroll state.
+ * Falls back to clicking the sidebar if __openFile is unavailable.
  */
-export async function openFile(page, fileName) {
+export async function openFile(page, fileNameOrPath) {
   await page.evaluate((name) => {
+    if (window.__openFile) {
+      window.__openFile(name);
+      return;
+    }
+    // Fallback: click sidebar span
     const spans = document.querySelectorAll("span");
     for (const s of spans) {
       if (s.textContent === name) {
@@ -55,8 +61,8 @@ export async function openFile(page, fileName) {
         return;
       }
     }
-    throw new Error(`File "${name}" not found in sidebar`);
-  }, fileName);
+    throw new Error(`File "${name}" not found`);
+  }, fileNameOrPath);
   await sleep(500);
 }
 

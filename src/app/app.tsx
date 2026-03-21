@@ -158,6 +158,10 @@ function AppInner() {
     pinTab,
   } = fileOps;
 
+  // Expose openFile for console/Playwright debugging.
+  // Usage: window.__openFile("posts/2014-11-04-isotonic-....md")
+  (window as unknown as { __openFile: typeof openFile }).__openFile = openFile;
+
   const handleOutlineSelect = useCallback((from: number) => {
     const view = editorState?.view;
     if (!view) return;
