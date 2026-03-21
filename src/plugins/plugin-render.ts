@@ -525,11 +525,20 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       if (div.singleLine) {
         addSingleLineClosingFence(state, div, items);
       } else {
+        // Apply block class to body lines for type-specific styling
+        const openLine = state.doc.lineAt(div.fenceFrom);
+        const closeLine = state.doc.lineAt(div.closeFenceFrom);
+        for (let ln = openLine.number + 1; ln < closeLine.number; ln++) {
+          const line = state.doc.line(ln);
+          items.push(
+            Decoration.line({ class: spec.className }).range(line.from),
+          );
+        }
+
         addMultiLineClosingFence(div, items);
 
         // Embed blocks: replace body content with iframe widget
         if (isEmbed) {
-          const openLine = state.doc.lineAt(div.fenceFrom);
           addEmbedWidget(state, div, openLine, items);
         }
       }
