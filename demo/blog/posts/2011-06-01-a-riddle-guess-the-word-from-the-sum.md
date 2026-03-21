@@ -4,6 +4,7 @@ title: A riddle, guess the word from the sum
 ---
 
 What is
+
 $$
 \left(a\sum_{n=2}^\infty w^n\right)!
 $$
@@ -15,6 +16,7 @@ What is $\sum_{V\subseteq U} \dim(V)$? Where $U$ is a vector space of dishes for
 
 Hint 2:
 On the internet, you will see the following variation.
+
 $$
 \left(a\sum_{n=2}^\infty w^n\right)!!!!
 $$
@@ -23,8 +25,10 @@ Answer:
 "awesome!" and the answer for the hint is "dim sum"
 
 Here is an extra riddle for fun.
+
 $$
 S = \set{"p","e","r","s","o","n"}
 $$
+
 What is $\frac{1}{6} \sum_{s\in S} s$?
 A mean person...

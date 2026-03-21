@@ -2,11 +2,29 @@
 --
 -- Transforms:
 --   1. BlockQuote → Div with class "Blockquote" (fenced div)
---   2. CodeBlock without fences → adds fences (Pandoc handles this via markdown output)
+--   2. Bare LaTeX math environments → DisplayMath
 --   3. Removes trailing "Reference" or "References" headings
+--   4. Force fenced code blocks (no indented code)
 --
 -- Usage:
 --   pandoc -f markdown -t markdown --lua-filter=scripts/import-filter.lua input.md -o output.md
+
+-- LaTeX environments that should always be display math, not inline.
+local display_envs = {
+  "align", "align*", "aligned", "equation", "equation*",
+  "gather", "gather*", "multline", "multline*", "flalign", "flalign*",
+  "cases", "pmatrix", "bmatrix", "vmatrix", "array",
+}
+
+-- Check if text starts with a display math environment.
+local function is_display_env(text)
+  for _, env in ipairs(display_envs) do
+    if text:match("^\\begin{" .. env:gsub("%*", "%%%%*") .. "}") then
+      return true
+    end
+  end
+  return false
+end
 
 -- Convert blockquotes to fenced divs with class "Blockquote"
 function BlockQuote(el)
@@ -23,38 +41,83 @@ function Header(el)
 end
 
 -- Convert bare LaTeX math environments (RawBlock "tex") to DisplayMath.
--- Pandoc treats \begin{align*}...\end{align*} without \[...\] as raw TeX.
--- We wrap them as proper display math so they render via KaTeX.
 function RawBlock(el)
+  if (el.format == "tex" or el.format == "latex") and is_display_env(el.text) then
+    return pandoc.Para({pandoc.Math("DisplayMath", el.text)})
+  end
+  return el
+end
+
+-- Handle inline raw TeX: promote display-math environments to DisplayMath,
+-- and convert other LaTeX commands to InlineMath.
+function RawInline(el)
   if el.format == "tex" or el.format == "latex" then
-    local text = el.text
-    -- Check if it's a math environment
-    if text:match("^\\begin{align") or
-       text:match("^\\begin{equation") or
-       text:match("^\\begin{gather") or
-       text:match("^\\begin{multline") or
-       text:match("^\\begin{flalign") or
-       text:match("^\\begin{cases") or
-       text:match("^\\begin{pmatrix") or
-       text:match("^\\begin{bmatrix") or
-       text:match("^\\begin{vmatrix") or
-       text:match("^\\begin{array") then
-      return pandoc.Para({pandoc.Math("DisplayMath", text)})
+    if is_display_env(el.text) then
+      return pandoc.Math("DisplayMath", el.text)
+    end
+    if el.text:match("^\\[a-zA-Z]") then
+      return pandoc.Math("InlineMath", el.text)
     end
   end
   return el
 end
 
--- Also handle inline raw TeX that should be math
-function RawInline(el)
-  if el.format == "tex" or el.format == "latex" then
-    local text = el.text
-    -- LaTeX commands that should be inline math
-    if text:match("^\\[a-zA-Z]") then
-      return pandoc.Math("InlineMath", text)
-    end
+-- Promote InlineMath containing display-math environments to DisplayMath.
+function Math(el)
+  if el.mathtype == "InlineMath" and is_display_env(el.text) then
+    return pandoc.Math("DisplayMath", el.text)
   end
   return el
+end
+
+-- Split paragraphs that contain DisplayMath inlines into separate blocks.
+-- When \begin{align*} appears mid-paragraph (after text without blank line),
+-- Pandoc keeps it inline. We split: text before → Para, math → Para(DisplayMath),
+-- text after → Para.
+function Para(el)
+  local has_display = false
+  for _, inline in ipairs(el.content) do
+    if inline.t == "Math" and inline.mathtype == "DisplayMath" then
+      has_display = true
+      break
+    end
+  end
+  if not has_display then return el end
+
+  local blocks = {}
+  local current = {}
+  for _, inline in ipairs(el.content) do
+    if inline.t == "Math" and inline.mathtype == "DisplayMath" then
+      -- Flush preceding inlines as a Para (if non-empty)
+      if #current > 0 then
+        -- Trim trailing spaces/softbreaks
+        while #current > 0 and (current[#current].t == "Space" or current[#current].t == "SoftBreak") do
+          table.remove(current)
+        end
+        if #current > 0 then
+          table.insert(blocks, pandoc.Para(current))
+        end
+        current = {}
+      end
+      -- Add display math as its own block
+      table.insert(blocks, pandoc.Para({inline}))
+    else
+      table.insert(current, inline)
+    end
+  end
+  -- Flush remaining inlines
+  if #current > 0 then
+    -- Trim leading spaces/softbreaks
+    while #current > 0 and (current[1].t == "Space" or current[1].t == "SoftBreak") do
+      table.remove(current, 1)
+    end
+    if #current > 0 then
+      table.insert(blocks, pandoc.Para(current))
+    end
+  end
+
+  if #blocks == 1 then return blocks[1] end
+  return blocks
 end
 
 -- Force fenced code blocks: Pandoc's markdown writer uses indented code

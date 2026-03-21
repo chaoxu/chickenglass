@@ -10,6 +10,7 @@ Mainly, there are a few useful statements.
 
 ::: Theorem
 For a graph $G=(V,E)$ with arboricity $\alpha$, we have
+
 $$
     \sum_{uv\in E} \min(\deg(u),\deg(v)) \leq 2\alpha m
 $$

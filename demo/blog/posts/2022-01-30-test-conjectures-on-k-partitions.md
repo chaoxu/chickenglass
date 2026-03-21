@@ -20,9 +20,11 @@ Let $f:2^V\to \R$ be a submodular function with $|V|\geq k$. Let $\mathcal{X}$ b
 One way to prove the conjecture is to start with a minimum $k$-partition that does not have the desired property, and then use it to construct a new minimum $k$-partition that does. This requires introducing a few additional notions.
 
 For two partitions $\mathcal{X}$ and $\mathcal{Y}$, define
+
 $$
 \mathcal{X}\sqcap \mathcal{Y} = \set{X\cap Y \mid X\in \mathcal{X},\, Y\in\mathcal{Y}}.
 $$
+
 That is, the new partition is obtained by intersecting every part of $\mathcal{X}$ with every part of $\mathcal{Y}$.
 
 For two partitions $\mathcal{X}$ and $\mathcal{Y}$, write $\mathcal{X}\leq \mathcal{Y}$ if for each $X\in\mathcal{X}$ there exists $Y\in\mathcal{Y}$ such that $X\subseteq Y$. If $\mathcal{X}\leq \mathcal{Y}$, then every part of $\mathcal{Y}$ is the union of some parts of $\mathcal{X}$.
@@ -40,6 +42,7 @@ One can first consider all possible ways $\mathcal{X}$ can intersect with $\math
 # Enumerate non-isomorphic configurations
 
 Given $\mathcal{X} = \set{X_1,\ldots,X_{k-1}}$ and $\mathcal{Y} = \set{Y_1,\ldots,Y_{k}}$, let
+
 $$
 Z_{i,j} = X_i\cap Y_j,
 \qquad
@@ -49,9 +52,11 @@ $$
 We want to show that some minimum $k$-partition $\mathcal{Y}'$ satisfies $\mathcal{Z}\leq \mathcal{Y}'$.
 
 Observe that it does not matter whether $Z_{i,j}$ contains $100$ vertices or $1$ vertex -- only whether it is empty. Hence, we can consider a matrix $M$ where
+
 $$
 M_{i,j} = \max(1, |Z_{i,j}|).
 $$
+
 Such a matrix is called a **configuration** of $\mathcal{Z}$, and it encodes the information we care about. $\mathcal{X}$ and $\mathcal{Y}$ is called a realization of $M$. The goal is to prove the conjecture for each configuration. That is, all realizations of the configuration.
 
 Two configurations are **isomorphic** if one can be obtained from the other by permuting rows and columns.
@@ -107,6 +112,7 @@ Let $V$ be the vertex set, with $|V|$ equal to the number of $1$'s in $M$. Let $
 For a partition $\mathcal{S}$, write $x_\mathcal{S} = \sum_{S\in \mathcal{S}} x_S$.
 
 Consider the following linear program:
+
 $$
 \begin{aligned}
 & \max        & & z \\
@@ -126,19 +132,23 @@ If the optimal value is $z=1$, then there exists at least one $k$-partition $\ma
 # Redundant constraints
 
 One can easily prove the conjecture for $k=3,4$ by directly solving the above linear program over all good configurations. However, it becomes difficult for $k=5$ because the linear program is far too large. The number of $k$-partitions of an $n$-element set is the Stirling number of the second kind $\left\{{n\atop k}\right\}$:
+
 $$
 \left\{{20\atop 5}\right\} = 749206090500,
 \qquad
 \left\{{20\atop 4}\right\} = 45232115901.
 $$
+
 It seems many constraints are redundant due to symmetry, and it would be interesting to see if we can reduce the formulation to a manageable size. If so, the conjecture for $k=5$, or even $k=6$, might become solvable.
 
 To do this, consider the following definition. For a vector $s=(s_1,\ldots,s_k)$, say that a family of $k$-partitions $\mathfrak{F}$ is **$s$-complete** if
+
 $$
 f(\mathcal{P})\geq f(\mathcal{Y})\ \forall \mathcal{P}\in \mathfrak{F}
 \quad\Longrightarrow\quad
 f(\mathcal{P})\geq f(\mathcal{Y})\ \forall \mathcal{P}\in P_k(V),
 $$
+
 where $\mathcal{Y}=\{Y_1,\ldots,Y_k\}$ is a $k$-partition with $|Y_i|=s_i$. By the previous discussion, we only need to consider the case $\sum_i s_i \leq k(k-1)$.
 
 Let $\lambda(s)$ be the minimum size of an $s$-complete family. Instead of including constraints for all $k$-partitions, it suffices to include constraints for an $s$-complete family (for the relevant $s$). If $\lambda(s)$ is small for all relevant $s$, there is hope to solve the problem quickly.
@@ -159,22 +169,28 @@ Thus, $|\mathfrak{F}|=(2^a-2)+(2^b-2)+1=2^a+2^b-3$.
 Next, we show that $\mathfrak{F}$ is $(a,b)$-complete. Consider any $(X_1,X_2)\notin \mathfrak{F}$ and its intersection with $(Y_1,Y_2)$. Let $Z_{i,j}=X_i\cap Y_j$.
 
 Let $|Z_{1,1}|=x$ and $|Z_{2,1}|=y$. Then $|Z_{1,2}|=a-x$ and $|Z_{2,2}|=b-y$. Consider the case where all $Z_{i,j}$ are non-empty. Then
-$\begin{align*}
+
+$$
+\begin{align*}
 \sum_{i=1}^2 \sum_{j=1}^2 \bigl(f(X_i)+f(Y_j)\bigr)
   &= 2\bigl(f(X_1)+f(X_2)+f(Y_1)+f(Y_2)\bigr)\\
   &\ge \sum_{i=1}^2 \sum_{j=1}^2 \bigl(f(Z_{i,j}) + f(X_i\cup Y_j)\bigr)\\
   &= \sum_{i=1}^2 \sum_{j=1}^2 \bigl(f(Z_{i,j}) + f(\overline{Z_{i,j}})\bigr)\\
   &\ge 4\bigl(f(Y_1)+f(Y_2)\bigr),
-\end{align*}$
+\end{align*}
+$$
+
 which implies $f(X_1)+f(X_2)\ge f(Y_1)+f(Y_2)$.
 
 Otherwise, if some $Z_{i,j}$ is empty, then necessarily $(X_1,X_2)=(Y_1,Y_2)\in \mathfrak{F}$.
 :::
 
 Currently, I do not know much about $\lambda(s)$ in general, so let us look at a special case. Define
+
 $$
 \lambda_k(d) = \lambda((d,\ldots,d)),
 $$
+
 where $d$ is repeated $k$ times. It would be very interesting to understand how large $\lambda_k(d)$ is, especially $\lambda_5(4)$. If $\lambda_5(4)$ is small, then there is hope of solving the conjecture for $k=5$.
 
 In particular, because we see $\lambda_2(d)\leq 2^{d+1}$, I would conjecture $\lambda_k(d) = O(k^d)$.

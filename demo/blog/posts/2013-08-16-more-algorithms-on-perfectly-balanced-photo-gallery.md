@@ -60,9 +60,10 @@ There is a standard technique on totally monotone matrices that can reduce the c
 
 ::: Definition
 A weight function $w$ is Monge if for every $1<i+1<j\leq n$, we have
+
 $$
   w(i,j) + w(i+1,j+1)\leq w(i,j+1) + w(i+1,j).
-  $$
+$$
 :::
 
 ::: Theorem
@@ -71,6 +72,8 @@ $w$ is Monge.
 
 ::: Proof
 Let $\sum_{k=i+1}^{j-1} a_i - \mu = m$
+\[
+
 $$\begin{aligned}
   w(i,j)+w(i+1,j+1) &=  |\sum_{k=i}^{j-1} a_i - \mu|
                       + |\sum_{k=i+1}^{j} a_i - \mu|\\
@@ -78,6 +81,8 @@ $$\begin{aligned}
                     &\leq |a_i+a_j+m| + |m|\\
                     &= w(i,j+1)+w(i+1,j)
   \end{aligned}$$
+
+\]
 To prove the $\leq$, see that $a_i,a_j$ are positive, one can consider either $m$ is negative or positive, and notice either way the inequality holds true.
 :::
 
@@ -97,9 +102,11 @@ There are isomorphic definition of Monge and totally monotone, depend on if the 
 :::
 
 Define a matrix $M^d$, such that $M_{j,i}^d = C(d-1,j) + w(j,i)$, the original recurrence become
+
 $$
 C(d,i) = \min_{1\leq j\leq n} {M^d_{j,i}}
 $$
+
 In other words, $C(d,i)$ is the $i$th column's minima of $M^d$.
 
 ::: Theorem
@@ -155,10 +162,12 @@ However, algebraic Monge property in general doesn't imply totally monotone matr
 
 Consider the simple matrix, and our operation is $\max$.
 
-$$\begin{bmatrix}
+$$
+\begin{bmatrix}
 1& 2\\
 0& 2
-\end{bmatrix}$$
+\end{bmatrix}
+$$
 
 $\max(1,2)=\max(0,2)$, but the matrix is not totally monotone. $1>0$ but $2\not > 2$.
 

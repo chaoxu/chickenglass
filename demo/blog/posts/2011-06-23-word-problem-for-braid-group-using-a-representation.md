@@ -18,6 +18,7 @@ Another way was to create a faithful homomorphism $^*: B_n \to \mathop{\mathrm{A
 If $B_n \to \mathop{\mathrm{Aut}}(F_n)$ is faithful and it sends $w$ to $w^*$, then $w$ is $I$ iff $w^*(a) = a$ for every generator $a$ of $F_n$.
 
 In the [a survey by Jonathan Boiser](http://campillos.ucmerced.edu/~jboiser/boiserMSThesis.pdf), there is one explicate map. Defined as
+
 $$
 \sigma_i^*(t_j) =
 \begin{cases}
@@ -46,10 +47,14 @@ $((\sigma_2\sigma_1^{-1})^n)^*(t_1)$.
 
 If we define $a_n,b_n,c_n$ to be the amount of $t_1,t_2,t_3$ (include it's inverses) at step $n$, ignoring the possibility of cancellation. We have the following recurrence relation.
 
+\[
+
 $$\begin{aligned}
 a_{n+1} &= 2a_n + b_n\\
 b_{n+1} &= c_n\\
 c_{n+1} &= a_n+2c_n\\
 \end{aligned}$$
+
+\]
 
 One can show $a_n+b_n+c_n = 2F_{2n+1}-1$. It is also true that cancellations are not possible.

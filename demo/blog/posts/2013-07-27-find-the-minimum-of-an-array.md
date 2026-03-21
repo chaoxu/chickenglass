@@ -46,6 +46,7 @@ T(m,n)  = \begin{cases}
          \frac{1}{3}T(m,n) + O(1) & \text{otherwise}
          \end{cases}       
 $$
+
 For $n$ larger than $\frac{m}{6}$, the algorithm will have $O(\log \frac{n}{m})$ recursive calls, each one cost $O(1)$ time. Once it reaches small $n$, it will spend $O(n)=O(m)$ time on a linear search. The algorithm spends a total of $O(m+ \log \frac{n}{m}) = O(m+\log n)$ time.
 
 # Notes

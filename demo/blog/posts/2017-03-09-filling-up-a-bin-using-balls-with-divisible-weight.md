@@ -7,11 +7,15 @@ This post shows how to solve the special case for [this problem](http://cs.stack
 
 ::: {#prob:1 .Problem}
 We are interested in solving the following integer program,
+\[
+
 $$\begin{aligned}
   \text{Minimize:} & \sum_{i=1}^n |x_i-a_i| \\
   \text{subject to:} & \sum_{i=1}^n w_i x_i = c\\
   & 0\leq x_i \leq b_i \text{ for all } 1\leq i \leq n.
   \end{aligned}$$
+
+\]
 where each $w_i$ is a power of $2$ for all $1\leq i\leq n$. Assume $w_i\leq w_{i+1}$.
 :::
 
@@ -21,11 +25,15 @@ Consider a more natural problem without the absolute values.
 
 ::: {#prob:2 .Problem title="$0$-$1$ exact knapsack problem with divisible weights"}
 We are interested in solving the following integer program,
+\[
+
 $$\begin{aligned}
   \text{Minimize:} & \sum_{i=1}^n c_i x_i \\
   \text{subject to:} & \sum_{i=1}^n w_i x_i = t\\
   & x_i \in \{0,1\} \text{ for all } 1\leq i \leq n\\
   \end{aligned}$$
+
+\]
 
 where $w_i|w_{i+1}$ for all $1\leq i\leq n$. $w_i$ can be negative.
 :::
@@ -36,13 +44,19 @@ We show [@prob:1] reduces to [@prob:2] with polynomial blow up, and [@prob:2] ca
 
 The reduction goes through a few steps. We start with the integer program in \[Problem 1\], and let $y_i = a_i-x_i$, and we get
 
+\[
+
 $$\begin{aligned}
 \text{Minimize:} & \sum_{i=1}^n |y_i| \\
 \text{subject to:} & \sum_{i=1}^n w_i y_i = \sum_{i=1}^n w_i a_i - c\\
 & a_i-b_i\leq y_i \leq a_i \text{ for all } 1\leq i \leq n\\
 \end{aligned}$$
 
+\]
+
 Let $c' = \sum_{i=1}^n w_ia_i -c$, and $l_i = a_i-b_i$ and $u_i = a_i$.
+
+\[
 
 $$\begin{aligned}
 \text{Minimize:} & \sum_{i=1}^n |y_i| \\
@@ -50,7 +64,11 @@ $$\begin{aligned}
 & l_i \leq y_i \leq u_i \text{ for all } 1\leq i \leq n\\
 \end{aligned}$$
 
+\]
+
 Let $y_i=y_i^+ - y_i^-$, where $y_i^-,y_i^+\geq 0$, we can remove the absolute value.
+
+\[
 
 $$\begin{aligned}
 \text{Minimize:} & \sum_{i=1}^n y_i^+ + y_i^- \\
@@ -59,11 +77,15 @@ $$\begin{aligned}
 & y_i^-, y_i^+\geq 0 \text{ for all } 1\leq i \leq n\\
 \end{aligned}$$
 
+\]
+
 Observe that we can separate the inequalities involving $y_i^+ - y_i^-$, because there is always an optimal where $y_i^-$ or $y_i^+$ is $0$.
 
 ::: Remark
 This observation fails when the number of bins is more than $1$.
 :::
+
+\[
 
 $$\begin{aligned}
 \text{Minimize:} & \sum_{i=1}^n y_i^+ + y_i^- \\
@@ -72,13 +94,19 @@ $$\begin{aligned}
 & 0 \leq y_i^- \leq -l_i \text{ for all } 1\leq i \leq n\\
 \end{aligned}$$
 
+\]
+
 This is an integer program as a bounded exact knapsack problem.
+
+\[
 
 $$\begin{aligned}
 \text{Minimize:} & \sum_{i=1}^n x_i \\
 \text{subject to:} & \sum_{i=1}^n w_i x_i = c\\
 & 0 \leq x_i \leq b_i \text{ for all } 1\leq i \leq n\\
 \end{aligned}$$
+
+\]
 
 Finally, apply the standard technique that rewrites a bounded knapsack problem to $0$-$1$-knapsack problem (see Section 7.1.1 of [@9783540402862]). The blow up in problem size is at most a factor of $O(\log \max_i b_i)$. We can get the integer program in [@prob:2], and also the weights are all powers of $2$. The reduction runs in polynomial time with respect to input size.
 
@@ -88,11 +116,15 @@ Finally, apply the standard technique that rewrites a bounded knapsack problem t
 
 Let $D[m,k]$ to be the optimal value to the following problem
 
+\[
+
 $$\begin{aligned}
 \text{Minimize:} & \sum_{j=1}^m c_j x_j \\
 \text{subject to:} & \sum_{j=1}^m w_j x_j = k |w_m| + t \bmod |w_m|\\
 & x_j \in \{0,1\} \text{ for all } 1\leq j \leq m\\
 \end{aligned}$$
+
+\]
 
 The claim is that $D[m,k]$ can be expressed by the following recurrence relation.
 

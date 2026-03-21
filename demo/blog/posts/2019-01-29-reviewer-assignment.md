@@ -19,6 +19,7 @@ Apollonio and Sebő shown the following problem is polynomial time solvable [@Ap
 
 ::: {#prob .Problem}
 Given a graph $G=(V,E)$, a integer $k$, convex functions $f_v:\N \to \R$ for each $v\in V$, and an edge cost function $c:E\to \R$. One can find the following in polynomial time.
+
 $$\min \left\{   \sum_{v\in V} f_v(\deg_M(v)) + \sum_{e\in M} c(e) \middle| M\subseteq E, |M|=k  \right\}$$
 :::
 

@@ -16,6 +16,7 @@ $$
 Define $S$ and $T$ be the set of all strings that can be formed by inserting $\diamond$ into $s$ and $t$ respectively.
 
 The alignment score is defined as
+
 $$
 \max \{A(u,v) : |u|=|v|, u\in S, v\in T\}
 $$

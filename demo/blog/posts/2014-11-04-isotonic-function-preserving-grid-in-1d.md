@@ -19,21 +19,22 @@ Let $l_i = |\varphi(x_i)-\varphi(x_{i-1})|$. Note that
 
 1.  $$
         \sum_{i=1}^n l_i = 1
-      $$
+    $$
 
-2.  $$|x_i-x_{i-1}|<\frac{1}{n}-\frac{\delta}{2^i}<|x_{i+1}-x_i|$$
+2.  \[\|x_i-x\_{i-1}\|\<$\frac{1}{n}$-$\frac{\delta}{2^i}$\<\|x\_{i+1}-x_i\|\]
     thus by isotonic function
-    $$|\varphi(x_i)-\varphi(x_{i-1})|<|\varphi(x_{i+1})-\varphi(x_i)|$$.
+    \[\|$\varphi$(x_i)-$\varphi$(x\_{i-1})\|\<\|$\varphi$(x\_{i+1})-$\varphi$(x_i)\|\].
     This is just $l_i<l_{i+1}$.
 
 3.  $\sum_{i=1}^{m} l_i > \sum_{i=n-(m-2)}^{n} l_i$ for all $m$, because
     $\frac{m}{n}\geq |x_m-x_0| > \frac{m}{n}-\delta > \frac{m-1}{n}+2\delta>|x_n - x_{n-(m-2)}|$, thus
-    $$|\varphi(x_m)-\varphi(x_{0})|<|\varphi(x_{n})-\varphi(x_{n-(m-2)})|$$.
+    \[\|$\varphi$(x_m)-$\varphi$(x\_{0})\|\<\|$\varphi$(x\_{n})-$\varphi$(x\_{n-(m-2)})\|\].
 
 Combine the relations above, we have
+
 $$
     \frac{m}{n} \geq \sum_{i=1}^m l_i > \sum_{i=n-(m-2)}^{n} l_i \geq \frac{m-1}{n}
-  $$
+$$
 
 But $\sum_{i=1}^m l_i = \varphi(x_m)$, so $m/n\geq x_m>m/n-\delta$, $m/n\geq \varphi(x_m)>(m-1)/n$. Since $\delta$ is small, we have $|x_i-\varphi(x_i)|<1/n$.
 :::

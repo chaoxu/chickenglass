@@ -4,6 +4,7 @@ title: Number of ways to make change
 ---
 
 A famous dynamic programming problem ask one to find how many ways to make change of a certain value. Formally, a program that take input $d_1,\ldots,d_m$ and $n$, and output
+
 $$
  \left|\{ (c_1,\ldots,c_m) | c_i\in \N , \sum_{i=1}^m c_i d_i = n\} \right|.
 $$
@@ -22,6 +23,8 @@ $$
 
 The coefficient for $x^n$ is our solution. Let $l = \lcm(d_1,\ldots,d_m)$.
 
+\[
+
 $$\begin{aligned}
 C(x) &= \prod_{i=1}^m \sum_{j=0}^\infty x^{j d_i}\\
 &= \prod_{i=1}^m (1-x^{d_i})^{-1}\\
@@ -30,7 +33,10 @@ C(x) &= \prod_{i=1}^m \sum_{j=0}^\infty x^{j d_i}\\
 \sum_{k=0}^\infty { k+m-1 \choose m-1  } x^{lk}\\
 \end{aligned}$$
 
+\]
+
 Now, notice the first part can be precomputed as some polynomial with finite degree. Let it be $P(x)$, then we get that we need to find the coefficient of $x^n$ in the following expression.
+
 $$
 \sum_{k=0}^\infty P(x) { k+m-1 \choose m-1  } x^{lk}
 $$

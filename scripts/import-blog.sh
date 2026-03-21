@@ -51,9 +51,13 @@ for src_file in "$SRC"/posts/*.md; do
   name="$(basename "$src_file")"
   dest_file="$DEST/posts/$name"
 
+  # Pre-process: convert \[...\] to $$...$$ and \(...\) to $...$
+  # so we don't need tex_math_single_backslash (which corrupts \begin, \end, etc.)
+  python3 "$SCRIPT_DIR/preprocess-math.py" "$src_file" "$dest_file.tmp"
+
   if pandoc \
-    -f markdown+fenced_divs+tex_math_dollars+tex_math_single_backslash+footnotes+yaml_metadata_block \
-    -t markdown+fenced_divs+fenced_code_blocks+tex_math_dollars+tex_math_single_backslash+footnotes+yaml_metadata_block-simple_tables-multiline_tables+pipe_tables+fenced_code_attributes \
+    -f markdown+fenced_divs+tex_math_dollars+footnotes+yaml_metadata_block \
+    -t markdown+fenced_divs+fenced_code_blocks+tex_math_dollars+footnotes+yaml_metadata_block-simple_tables-multiline_tables+pipe_tables+fenced_code_attributes \
     --wrap=preserve \
     --columns=9999 \
     --lua-filter="$FILTER" \
@@ -61,11 +65,13 @@ for src_file in "$SRC"/posts/*.md; do
     --markdown-headings=atx \
     --tab-stop=4 \
     -o "$dest_file" \
-    "$src_file" 2>/dev/null; then
+    "$dest_file.tmp" 2>/dev/null; then
+    rm -f "$dest_file.tmp"
     COUNT=$((COUNT + 1))
   else
     echo "ERROR: Failed to convert $name"
     # Fall back to direct copy
+    rm -f "$dest_file.tmp"
     cp "$src_file" "$dest_file"
     ERRORS=$((ERRORS + 1))
   fi

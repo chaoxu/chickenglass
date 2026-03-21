@@ -19,9 +19,11 @@ The rest of the article describe the idea of decomposable function, which lead t
 
 ::: Definition
 A function $f:\cup_{i=1}^\infty X^i \to Y$ is called $(\triangleright,\bowtie,\triangleleft)$-decomposable, if for all $1 \leq k \leq n$,
+
 $$
   f(x_1,\ldots,x_n)=(x_1 \triangleright \ldots \triangleright x_k \triangleright id_{\triangleright}) \bowtie (id_{\triangleleft} \triangleleft x_{k+1}\triangleleft \ldots \triangleleft x_n)
-  $$
+$$
+
 where
 
 1.  $\triangleright:X\times Y_{\triangleright}\to Y_{\triangleright}$ is right associative.

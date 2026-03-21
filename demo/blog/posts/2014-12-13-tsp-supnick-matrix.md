@@ -5,9 +5,10 @@ title: TSP, Max TSP and Supnick
 
 ::: Problem
 Given $f$ and $x_1,\ldots,x_n$. Find a permutation $\pi$ that maximizes (minimizes)
+
 $$
   \sum_{i=1}^n f(x_{\pi(i)},x_{\pi(i+1)}).
-  $$
+$$
 :::
 
 All our index calculations are mod $n$.
@@ -25,9 +26,10 @@ The name Supnick comes from [Supnick matrix](http://en.wikipedia.org/wiki/Supnic
 
 ::: {.Theorem title="Supnick’s"}
 Let $x_1\leq x_2 \leq \ldots \leq x_n$, $f$ is Supnick, then
+
 $$
       \sum_{i=1}^n f(x_{\pi(i)},x_{\pi(i+1)})
-  $$
+$$
 
 1.  is minimized when $\pi = (1~3~5~7~\ldots~8~6~4~2)$.
 

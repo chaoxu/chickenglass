@@ -31,12 +31,14 @@ Since we are only working with $k=2$ case, we will let $\bar{a}$ to be the color
 The optimal solution is $D(a,n+1,n+1)$ for either color $a$.
 
 We express the recursive relation. For $y<z$, we have the following.
+
 $$
 D(a,y,z) =\min \begin{cases}
 \min_{x<y} \set{ C_{\bar{a}}(y+2,z-1) + c_{\bar{a}}(x,y+1) + D(\bar{a},x,y)}\\
 C_{\bar{a}}(y+1,z-1) + D(\bar{a},y,y)
 \end{cases}
 $$
+
 It might be beneficial to see the intuition behind the two cases through the following pictures.
 
 ![First case.](/files/ticketing_case1.png)
@@ -44,11 +46,13 @@ It might be beneficial to see the intuition behind the two cases through the fol
 ![Second case.](/files/ticketing_case2.png)
 
 On the other hand, when $y=z$
+
 $$
 D(a,y,y) =\min_{x<y} \set{
 D(a,x,y) + c_a(x,y),
 D(\bar{a},x,y) + c_{\bar{a}}(x,y)}
 $$
+
 One can easily infer the base case through definition. Note that all values of $C_a$ can be computed in $O(n^2)$ time. It takes $O(n)$ time to compute one value in $D$. Therefore, the total running time is $O(n^3)$.
 
 One can show that even with $k$ different airlines, there is an algorithm with running time $O(n^{O(k)})$.
