@@ -49,18 +49,37 @@ export interface ImagePasteConfig {
 }
 
 /**
- * Insert an image markdown snippet at the current cursor position.
+ * Insert an image markdown snippet at the given position.
  *
- * Inserts on its own line when the cursor is not already on an empty line.
+ * @param view  The editor view.
+ * @param path  The image path or data URL.
+ * @param alt   The alt text.
+ * @param pos   The document position to insert at. Defaults to the current
+ *              cursor position. Pass an explicit value when the insertion
+ *              happens asynchronously (e.g. after a drag-and-drop save)
+ *              to avoid using a stale cursor position.
+ *
+ * Inserts on its own line when the target position is not already on an
+ * empty line.
  */
-export function insertImageMarkdown(view: EditorView, path: string, alt: string): void {
-  const { from, to } = view.state.selection.main;
-  const line = view.state.doc.lineAt(from);
-  const prefix = line.text.trim() === "" && from === line.from ? "" : "\n";
+export function insertImageMarkdown(
+  view: EditorView,
+  path: string,
+  alt: string,
+  pos?: number,
+): void {
+  // When an explicit position is given (e.g. drop), insert there with no
+  // selection replacement. When using the current selection (e.g. paste),
+  // replace the selected range so pasting over a selection works naturally.
+  const sel = view.state.selection.main;
+  const insertFrom = pos ?? sel.from;
+  const insertTo = pos !== undefined ? pos : sel.to;
+  const line = view.state.doc.lineAt(insertFrom);
+  const prefix = line.text.trim() === "" && insertFrom === line.from ? "" : "\n";
   const snippet = `${prefix}![${alt}](${path})\n`;
   view.dispatch({
-    changes: { from, to, insert: snippet },
-    selection: { anchor: from + snippet.length },
+    changes: { from: insertFrom, to: insertTo, insert: snippet },
+    selection: { anchor: insertFrom + snippet.length },
   });
   view.focus();
 }

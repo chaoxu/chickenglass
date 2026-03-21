@@ -78,23 +78,24 @@ export function imageDropExtension(config: ImageDropConfig = {}): Extension {
         const ext = IMAGE_MIME_EXT[file.type] ?? "png";
         const baseName = generateImageFilename(file, ext);
 
-        // Compute the drop position from mouse coordinates
+        // Capture the drop position from mouse coordinates synchronously.
+        // We pass this explicitly to insertImageMarkdown rather than relying
+        // on view.state.selection.main, which may have moved by the time the
+        // async save resolves.
         const dropPos = view.posAtCoords({
           x: event.clientX,
           y: event.clientY,
         });
 
-        // Move cursor to drop position first
-        if (dropPos !== null) {
-          view.dispatch({
-            selection: { anchor: dropPos },
-          });
-        }
-
         // Save and insert asynchronously
         save(file)
           .then((path) => {
-            insertImageMarkdown(view, path, altTextFromFilename(baseName));
+            insertImageMarkdown(
+              view,
+              path,
+              altTextFromFilename(baseName),
+              dropPos ?? undefined,
+            );
           })
           .catch((err: unknown) => {
             logImageError("drop", err);
