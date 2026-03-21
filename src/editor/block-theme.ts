@@ -30,6 +30,15 @@ export const blockThemeStyles = {
     boxShadow: "inset 3px 0 0 var(--cg-fg)",
   },
 
+  /* Theorem-family: italic body (academic convention, matches Read mode) */
+  ".theorem, .lemma, .corollary, .proposition, .conjecture": {
+    fontStyle: "italic",
+  },
+  /* Definition, problem, proof, remark: normal body */
+  ".definition, .problem, .proof, .remark, .example, .algorithm": {
+    fontStyle: "normal",
+  },
+
   /* QED tombstone — right-aligned at end of proof blocks */
   ".cg-block-qed::after": {
     content: "'\\220E'",

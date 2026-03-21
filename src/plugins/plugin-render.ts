@@ -492,6 +492,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       const spec = plugin.render(labelAttrs);
 
       // Line decoration for block CSS class
+      // Apply block class to header line
       items.push(
         Decoration.line({
           class: `${spec.className} cg-block-header`,
@@ -504,11 +505,22 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       if (div.singleLine) {
         addSingleLineClosingFence(state, div, items);
       } else {
+        // Apply block class to ALL body lines so they inherit the
+        // block type's styling (e.g., italic for theorem, normal for proof).
+        // This matches Read mode which wraps the entire block in a <div>.
+        const openLine = state.doc.lineAt(div.fenceFrom);
+        const closeLine = state.doc.lineAt(div.closeFenceFrom);
+        for (let ln = openLine.number + 1; ln < closeLine.number; ln++) {
+          const line = state.doc.line(ln);
+          items.push(
+            Decoration.line({ class: spec.className }).range(line.from),
+          );
+        }
+
         addMultiLineClosingFence(div, items);
 
         // Embed blocks: replace body content with iframe widget
         if (isEmbed) {
-          const openLine = state.doc.lineAt(div.fenceFrom);
           addEmbedWidget(state, div, openLine, items);
         }
       }
