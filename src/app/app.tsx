@@ -392,15 +392,22 @@ function AppInner() {
 
   // Reset mode when active file changes. Non-markdown files get Source mode
   // only (no Rich/Read rendering). Markdown files start in Rich mode.
+  // NOTE: must NOT depend on editorState.view — that changes on every edit
+  // and would reset the user's manual mode switch.
   const isMarkdownFile = activeTab?.endsWith(".md") ?? false;
   useEffect(() => {
     const mode = isMarkdownFile ? "rich" : "source";
     setEditorModeState(mode);
+  }, [activeTab, isMarkdownFile]);
+
+  // Apply the mode to the CM6 view once it's available
+  useEffect(() => {
     const view = editorState?.view;
-    if (view) {
-      setEditorMode(view, mode);
+    if (!view) return;
+    if (!isMarkdownFile) {
+      setEditorMode(view, "source");
     }
-  }, [activeTab, isMarkdownFile, editorState?.view]);
+  }, [editorState?.view, isMarkdownFile]);
 
   const handleModeChange = useCallback((mode: EditorMode) => {
     setEditorModeState(mode);
