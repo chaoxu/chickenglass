@@ -40,7 +40,6 @@ import { defaultEditorPlugins } from "../editor/editor-plugins-registry";
 import { isTauri, openFolder as tauriOpenFolder } from "./tauri-fs";
 import { exportDocument, batchExport } from "./export";
 
-
 // ── Inner app (has access to FileSystem context) ──────────────────────────────
 
 function AppInner() {
@@ -396,30 +395,25 @@ function AppInner() {
   // and would reset the user's manual mode switch.
   const isMarkdownFile = activeTab?.endsWith(".md") ?? false;
   useEffect(() => {
-    const mode = isMarkdownFile ? "rich" : "source";
-    setEditorModeState(mode);
-  }, [activeTab, isMarkdownFile]);
+    setEditorModeState(isMarkdownFile ? "rich" : "source");
+  }, [activeTab]);
 
-  // Apply the mode to the CM6 view once it's available
+  // Apply the initial mode to the CM6 view when it's created.
+  // Always sets the mode so CM6 compartments match React state —
+  // covers both md files (rich) and non-md files (source).
   useEffect(() => {
     const view = editorState?.view;
     if (!view) return;
-    if (!isMarkdownFile) {
-      setEditorMode(view, "source");
-    }
+    setEditorMode(view, isMarkdownFile ? "rich" : "source");
   }, [editorState?.view, isMarkdownFile]);
 
   const handleModeChange = useCallback((mode: EditorMode) => {
     setEditorModeState(mode);
     const view = editorState?.view;
-    if (view) {
-      // Read mode is handled by the ReadModeView component (not CM6), so
-      // only reconfigure CM6 for rich/source modes. When leaving read mode,
-      // CM6 is set to the target mode.
-      if (mode !== "read") {
-        setEditorMode(view, mode);
-      }
-    }
+    if (!view) return;
+    // Always apply to CM6 — including read mode, so the compartments
+    // (editable, modeClass) stay consistent with React state.
+    setEditorMode(view, mode);
   }, [editorState?.view]);
 
   // ── Status bar info ────────────────────────────────────────────────────────

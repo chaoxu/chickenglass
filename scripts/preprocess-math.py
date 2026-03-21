@@ -43,8 +43,9 @@ while i < len(lines):
         continue
 
     # Bare \begin{env} on its own line, not inside math
-    if not in_math and re.match(r'^\s*\\begin\{(\w+\*?)\}', stripped):
-        env = re.match(r'^\s*\\begin\{(\w+\*?)\}', stripped).group(1)
+    begin_match = re.match(r'^\s*\\begin\{(\w+\*?)\}', stripped) if not in_math else None
+    if begin_match:
+        env = begin_match.group(1)
         # Collect until matching \end{env}
         block_lines = [line]
         i += 1

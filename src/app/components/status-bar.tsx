@@ -190,9 +190,10 @@ export function StatusBar({
           )}
           <button
             type="button"
-            title="Click to cycle editor mode"
+            title={isMarkdown ? "Click to cycle editor mode" : "Source mode only for non-markdown files"}
             onClick={cycleMode}
-            className="px-1 rounded hover:bg-[var(--cg-hover)] transition-colors"
+            disabled={!isMarkdown}
+            className="px-1 rounded hover:bg-[var(--cg-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {MODE_LABELS[editorMode]}
           </button>
