@@ -20,9 +20,6 @@ import { mathMacrosField } from "./math-macros";
 
 export const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
 
-/** Mark decoration for math source when cursor is inside — uses KaTeX italic font. */
-const mathSourceDecoration = Decoration.mark({ class: "cg-math-source" });
-
 /** A pair of opening and closing delimiters for math expressions. */
 export interface MathDelimiterPair {
   readonly open: string;
@@ -125,12 +122,7 @@ function buildMathItems(
     enter(node) {
       if (!MATH_TYPES.has(node.type.name)) return;
 
-      if (shouldSkip(node.from, node.to)) {
-        // Cursor inside: apply math-source styling (italic math font)
-        // so raw LaTeX like $e^{i\pi}$ looks natural
-        items.push(mathSourceDecoration.range(node.from, node.to));
-        return false;
-      }
+      if (shouldSkip(node.from, node.to)) return false;
 
       const raw = state.sliceDoc(node.from, node.to);
       const isDisplay = node.type.name === "DisplayMath";
