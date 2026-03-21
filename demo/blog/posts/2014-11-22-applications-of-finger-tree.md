@@ -92,5 +92,3 @@ The ranking sequence of a sequence of distinct numbers $a_1,\ldots,a_n$ is defin
 Given a sequence of unique integers $a_1,\ldots,a_n$, we want to design a data structure to query $Q(i,j)$, which returns the ranking sequence of $a_i,\ldots,a_j$. 
 
 This can be solved by storing sorted subsequences. We just have to return sorted sequence of $a_i,\ldots,a_j$ during the query, and then it become simple to figure out the ranking sequence. This will make sure the running time for $Q(i,j)$ to be $O(j-i)$. There are a few other variants, but seems quite hard to adopt a finger tree for [@Chang2012517]. 
-
-# Reference

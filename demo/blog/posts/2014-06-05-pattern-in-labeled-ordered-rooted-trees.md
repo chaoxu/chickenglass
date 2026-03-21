@@ -34,5 +34,3 @@ Now if we found a run, it's easy to check if it actually correspond to a good ve
 This allows us to solve the problem in $O(n)$ time.
 
 Alternatively, there is a paper with a linear time algorithm to find all subtree repeats inside a tree[@subtreerepeat].
-
-# Reference
