@@ -83,6 +83,11 @@ body {
   outline: none;
 }
 
+/* Source mode uses monospace font for all content */
+.cg-source-mode .cm-content {
+  font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+}
+
 /* ── Sidenote margin (portal + items) ──────────────────────────────────────
  * Styles for the sidenote margin rendered via React portal inside the
  * CM6 scroller. These are outside CM6's theme scope, so they live here. */

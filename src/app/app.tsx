@@ -390,12 +390,17 @@ function AppInner() {
   // ── Editor mode ────────────────────────────────────────────────────────────
   const [editorMode, setEditorModeState] = useState<EditorMode>("rich");
 
-  // Reset mode indicator to "rich" whenever the active file changes so the
-  // status bar stays in sync with the freshly-created CM view (which always
-  // initialises in rendered mode).
+  // Reset mode when active file changes. Non-markdown files get Source mode
+  // only (no Rich/Read rendering). Markdown files start in Rich mode.
+  const isMarkdownFile = activeTab?.endsWith(".md") ?? false;
   useEffect(() => {
-    setEditorModeState("rich");
-  }, [activeTab]);
+    const mode = isMarkdownFile ? "rich" : "source";
+    setEditorModeState(mode);
+    const view = editorState?.view;
+    if (view) {
+      setEditorMode(view, mode);
+    }
+  }, [activeTab, isMarkdownFile, editorState?.view]);
 
   const handleModeChange = useCallback((mode: EditorMode) => {
     setEditorModeState(mode);
@@ -556,6 +561,7 @@ function AppInner() {
           onModeChange={handleModeChange}
           onOpenPalette={() => dialogs.setPaletteOpen(true)}
           docText={docTextForStats}
+          isMarkdown={isMarkdownFile}
         />
       </div>
 

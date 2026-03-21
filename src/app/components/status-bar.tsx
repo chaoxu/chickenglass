@@ -19,6 +19,8 @@ export interface StatusBarProps {
   onOpenPalette?: () => void;
   /** Raw document text — used to compute the stats popover. */
   docText?: string;
+  /** Whether the active file is markdown (non-md files are Source-only). */
+  isMarkdown?: boolean;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -125,6 +127,7 @@ export function StatusBar({
   onModeChange,
   onOpenPalette,
   docText = "",
+  isMarkdown = true,
 }: StatusBarProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const wordCountRef = useRef<HTMLButtonElement | null>(null);
@@ -133,10 +136,12 @@ export function StatusBar({
   const stats = useMemo(() => computeDocStats(docText), [docText]);
 
   const cycleMode = useCallback(() => {
+    // Non-markdown files are Source-only — no mode cycling
+    if (!isMarkdown) return;
     const idx = MODE_ORDER.indexOf(editorMode);
     const next = MODE_ORDER[(idx + 1) % MODE_ORDER.length];
     onModeChange(next);
-  }, [editorMode, onModeChange]);
+  }, [editorMode, onModeChange, isMarkdown]);
 
   const closePopover = useCallback(() => setPopoverOpen(false), []);
 
