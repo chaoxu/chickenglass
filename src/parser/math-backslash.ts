@@ -1,10 +1,7 @@
 import { tags } from "@lezer/highlight";
 import type {
-  BlockParser,
   InlineParser,
   MarkdownConfig,
-  BlockContext,
-  Line,
   InlineContext,
 } from "@lezer/markdown";
 import { BACKSLASH, OPEN_PAREN, CLOSE_PAREN, DOLLAR } from "./char-utils";
@@ -76,114 +73,6 @@ const dollarInlineMathParser: InlineParser = {
   before: "Escape",
 };
 
-/**
- * Block parser for \[...\] display math syntax.
- * Detects \[ at line start, scans for \] (potentially multi-line).
- * Produces DisplayMath nodes matching the same type as $$...$$ math.
- */
-const backslashDisplayMathParser: BlockParser = {
-  name: "BackslashDisplayMath",
-  endLeaf(_cx: BlockContext, line: Line): boolean {
-    return line.text.slice(line.pos).startsWith("\\[");
-  },
-  parse(cx: BlockContext, line: Line) {
-    // Check that line starts with \[ (after container markup like list markers)
-    const textAfterIndent = line.text.slice(line.pos);
-    if (!textAfterIndent.startsWith("\\[")) return false;
-
-    const start = cx.lineStart + line.pos;
-    // Check if \] is on the same line
-    const closeIdx = textAfterIndent.indexOf("\\]", 2);
-    if (closeIdx >= 0) {
-      // Single-line display math: \[...\]
-      const end = cx.lineStart + line.pos + closeIdx + 2;
-      const openMark = cx.elt("DisplayMathMark", start, start + 2);
-      const closeMark = cx.elt("DisplayMathMark", end - 2, end);
-      cx.addElement(cx.elt("DisplayMath", start, end, [openMark, closeMark]));
-      cx.nextLine();
-      return true;
-    }
-
-    // Multi-line: scan subsequent lines for \]
-    let endPos = -1;
-    let currentLineEnd = cx.lineStart + line.text.length;
-    while (cx.nextLine()) {
-      const currentText = line.text;
-      const closeInLine = currentText.indexOf("\\]");
-      if (closeInLine >= 0) {
-        endPos = cx.lineStart + closeInLine + 2;
-        break;
-      }
-      currentLineEnd = cx.lineStart + currentText.length;
-    }
-
-    const foundClose = endPos >= 0;
-    if (!foundClose) endPos = currentLineEnd;
-    const openMark = cx.elt("DisplayMathMark", start, start + 2);
-    const marks = foundClose
-      ? [openMark, cx.elt("DisplayMathMark", endPos - 2, endPos)]
-      : [openMark];
-    cx.addElement(cx.elt("DisplayMath", start, endPos, marks));
-    cx.nextLine();
-    return true;
-  },
-  before: "HorizontalRule",
-};
-
-/**
- * Block parser for $$...$$ display math syntax.
- * Detects $$ at line start, scans for closing $$ (potentially multi-line).
- */
-const dollarDisplayMathParser: BlockParser = {
-  name: "DollarDisplayMath",
-  endLeaf(_cx: BlockContext, line: Line): boolean {
-    return line.text.slice(line.pos).startsWith("$$");
-  },
-  parse(cx: BlockContext, line: Line) {
-    const textAfterIndent = line.text.slice(line.pos);
-    if (!textAfterIndent.startsWith("$$")) return false;
-
-    const start = cx.lineStart + line.pos;
-
-    // Check if closing $$ is on the same line (after the opening $$)
-    const rest = textAfterIndent.slice(2);
-    const closeIdx = rest.indexOf("$$");
-    if (closeIdx >= 0) {
-      const end = start + 2 + closeIdx + 2;
-      const openMark = cx.elt("DisplayMathMark", start, start + 2);
-      const closeMark = cx.elt("DisplayMathMark", end - 2, end);
-      cx.addElement(cx.elt("DisplayMath", start, end, [openMark, closeMark]));
-      cx.nextLine();
-      return true;
-    }
-
-    // Multi-line: scan subsequent lines for $$
-    let endPos = -1;
-    let currentLineEnd = cx.lineStart + line.text.length;
-    while (cx.nextLine()) {
-      const currentText = line.text;
-      const trimmed = currentText.trimStart();
-      if (trimmed.startsWith("$$")) {
-        const leadingSpaces = currentText.length - trimmed.length;
-        endPos = cx.lineStart + leadingSpaces + 2;
-        break;
-      }
-      currentLineEnd = cx.lineStart + currentText.length;
-    }
-
-    const foundClose = endPos >= 0;
-    if (!foundClose) endPos = currentLineEnd;
-    const openMark = cx.elt("DisplayMathMark", start, start + 2);
-    const marks = foundClose
-      ? [openMark, cx.elt("DisplayMathMark", endPos - 2, endPos)]
-      : [openMark];
-    cx.addElement(cx.elt("DisplayMath", start, endPos, marks));
-    cx.nextLine();
-    return true;
-  },
-  before: "HorizontalRule",
-};
-
 /** Markdown extension that adds math syntax for both $ and backslash variants. */
 export const mathExtension: MarkdownConfig = {
   defineNodes: [
@@ -206,5 +95,4 @@ export const mathExtension: MarkdownConfig = {
     },
   ],
   parseInline: [backslashInlineMathParser, dollarInlineMathParser],
-  parseBlock: [backslashDisplayMathParser, dollarDisplayMathParser],
 };
