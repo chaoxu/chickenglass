@@ -18,7 +18,6 @@ import {
   type DecorationSet,
   Decoration,
   EditorView,
-  WidgetType,
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
@@ -46,7 +45,7 @@ import {
 } from "./embed-plugin";
 
 /** Widget that renders a block header string with inline math/bold/italic. */
-class BlockHeaderWidget extends WidgetType {
+class BlockHeaderWidget extends RenderWidget {
   constructor(
     private readonly header: string,
     private readonly macros: Record<string, string>,
@@ -55,7 +54,7 @@ class BlockHeaderWidget extends WidgetType {
     super();
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const el = document.createElement("span");
     el.className = "cg-block-header-rendered";
     renderInlineMarkdown(el, this.header, this.macros);
@@ -64,10 +63,6 @@ class BlockHeaderWidget extends WidgetType {
 
   eq(other: BlockHeaderWidget): boolean {
     return this.header === other.header && this.macrosKey === other.macrosKey;
-  }
-
-  ignoreEvent(): boolean {
-    return false;
   }
 }
 
@@ -538,6 +533,15 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
           addEmbedWidget(state, div, openLine, items);
         }
       }
+
+      // Render inline math in title text (rendered mode only)
+      const cursor = state.selection.main;
+      addTitleMathDecorations(state, div, focused, cursor.from, macros, items);
+
+      // QED tombstone for proof blocks (rendered mode only)
+      if (plugin.defaults?.qedSymbol) {
+        addQedDecoration(state, div, items);
+      }
     } else if (plugin) {
       // Cursor on fence (or inside embed block): show fence syntax as source
       items.push(
@@ -545,15 +549,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
           class: `${plugin.render({ type: div.className }).className} cg-block-source`,
         }).range(div.from),
       );
-    }
-
-    // Render inline math in title text
-    const cursor = state.selection.main;
-    addTitleMathDecorations(state, div, focused, cursor.from, macros, items);
-
-    // QED tombstone for proof blocks
-    if (plugin?.defaults?.qedSymbol) {
-      addQedDecoration(state, div, items);
     }
   }
 
