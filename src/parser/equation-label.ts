@@ -123,6 +123,7 @@ const backslashDisplayMathWithLabel: BlockParser = {
       : endPos;
 
     cx.addElement(cx.elt("DisplayMath", start, blockEnd, children));
+    cx.nextLine();
     return true;
   },
   before: "HorizontalRule",
@@ -195,6 +196,7 @@ const dollarDisplayMathWithLabel: BlockParser = {
       : endPos;
 
     cx.addElement(cx.elt("DisplayMath", start, blockEnd, children));
+    cx.nextLine();
     return true;
   },
   before: "HorizontalRule",
