@@ -12,7 +12,9 @@ The expected life expectancy of some country is 70, and there exist people who d
 
 Most people would answer 10. However, he continuous:
 
-> It could be 10, but for many distributions, it's likely more than that. You can convince yourself by thinking about the expected life expectancy for a 80 year old.
+::: Blockquote
+It could be 10, but for many distributions, it's likely more than that. You can convince yourself by thinking about the expected life expectancy for a 80 year old.
+:::
 
 The quote above would follow directly from the proof of the following theorem:
 
