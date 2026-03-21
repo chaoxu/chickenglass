@@ -128,10 +128,10 @@ interface CitationMatch {
 }
 
 /** Pattern for parenthetical citations: [@id], [@id, locator], [@id1; @id2; ...] */
-const PAREN_CITE_RE = /\[(@[a-zA-Z0-9_][\w:.-]*(?:,[^;\]]*)?(?:\s*;\s*@[a-zA-Z0-9_][\w:.-]*(?:,[^;\]]*)?)*)\]/g;
+const PAREN_CITE_RE = /\[(@[a-zA-Z0-9_][\w:./-]*(?:,[^;\]]*)?(?:\s*;\s*@[a-zA-Z0-9_][\w:./-]*(?:,[^;\]]*)?)*)\]/g;
 
 /** Pattern for narrative citations: @id (not preceded by [ or another @) */
-const NARRATIVE_CITE_RE = /(?<![[@\w])@([a-zA-Z0-9_][\w:.-]*)/g;
+const NARRATIVE_CITE_RE = /(?<![[@\w])@([a-zA-Z0-9_][\w:./-]*)/g;
 
 /** Extract citation ids and locators from a parenthetical citation match. */
 function extractCitations(raw: string): { ids: string[]; locators: (string | undefined)[] } {
