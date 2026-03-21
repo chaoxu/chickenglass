@@ -40,6 +40,19 @@ import { defaultEditorPlugins } from "../editor/editor-plugins-registry";
 import { isTauri, openFolder as tauriOpenFolder } from "./tauri-fs";
 import { exportDocument, batchExport } from "./export";
 
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+/** Shape of app-level debug globals attached to `window` for console/Playwright access. */
+interface AppDebugWindow {
+  __app: {
+    openFile: (path: string) => Promise<void>;
+    saveFile: () => Promise<void>;
+    closeFile: () => void;
+    setMode: (mode: EditorMode) => void;
+    getMode: () => EditorMode;
+  };
+}
+
 // ── Inner app (has access to FileSystem context) ──────────────────────────────
 
 function AppInner() {
@@ -418,8 +431,7 @@ function AppInner() {
 
   // Expose app actions for console/Playwright debugging.
   // Usage: __app.openFile("posts/foo.md"), __app.setMode("source"), etc.
-  // These are the app's real functions, not reimplementations.
-  (window as unknown as { __app: Record<string, unknown> }).__app = {
+  (window as unknown as AppDebugWindow).__app = {
     openFile,
     saveFile,
     closeFile: () => { if (activeTab) void closeFile(activeTab); },

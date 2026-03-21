@@ -20,7 +20,7 @@ import { EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
 
 import { createEditor, themeCompartment } from "../../editor/editor";
-import { createDebugHelpers } from "../../editor/debug-helpers";
+import { createDebugHelpers, type DebugHelpers } from "../../editor/debug-helpers";
 import { EditorPluginManager } from "../../editor/editor-plugin";
 import { defaultEditorPlugins } from "../../editor/editor-plugins-registry";
 import { chickenglassDarkTheme } from "../../editor/theme";
@@ -42,6 +42,12 @@ import { useBibliography } from "./use-bibliography";
 import { useEditorScroll } from "./use-editor-scroll";
 
 // ── Types ───────────────────────────────────────────────────────────────────
+
+/** Shape of debug globals attached to `window` for console/Playwright access. */
+interface DebugWindow {
+  __cmView?: EditorView;
+  __cmDebug?: DebugHelpers;
+}
 
 /** Resolved theme for the CM6 dark/light base extension. */
 export type ResolvedTheme = "light" | "dark";
@@ -284,10 +290,7 @@ export function useEditor(
     });
 
     // Expose view and debug helpers for console/Playwright debugging.
-    const w = window as unknown as {
-      __cmView: EditorView;
-      __cmDebug: ReturnType<typeof createDebugHelpers>;
-    };
+    const w = window as unknown as DebugWindow;
     w.__cmView = newView;
     w.__cmDebug = createDebugHelpers(newView);
 
@@ -333,10 +336,7 @@ export function useEditor(
       }
       imageSaverRef.current = null;
       // Clear debug references to destroyed view
-      const wd = window as unknown as {
-        __cmView?: EditorView;
-        __cmDebug?: ReturnType<typeof createDebugHelpers>;
-      };
+      const wd = window as unknown as DebugWindow;
       wd.__cmView = undefined;
       wd.__cmDebug = undefined;
       newView.destroy();
