@@ -367,10 +367,10 @@ function addHeaderWidgetDecoration(
   const replaceEnd = div.titleTo ?? div.titleFrom ?? div.fenceTo;
   const label =
     div.title !== undefined ? header + " " + div.title : header;
+  const widget = new BlockHeaderWidget(label, macros, macrosKey);
+  widget.sourceFrom = div.fenceFrom;
   items.push(
-    Decoration.replace({
-      widget: new BlockHeaderWidget(label, macros, macrosKey),
-    }).range(div.fenceFrom, replaceEnd),
+    Decoration.replace({ widget }).range(div.fenceFrom, replaceEnd),
   );
 }
 

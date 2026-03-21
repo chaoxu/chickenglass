@@ -31,11 +31,11 @@ export const blockThemeStyles = {
   },
 
   /* Theorem-family: italic body (academic convention, matches Read mode) */
-  ".theorem, .lemma, .corollary, .proposition, .conjecture": {
+  ".cg-block-theorem, .cg-block-lemma, .cg-block-corollary, .cg-block-proposition, .cg-block-conjecture": {
     fontStyle: "italic",
   },
   /* Definition, problem, proof, remark: normal body */
-  ".definition, .problem, .proof, .remark, .example, .algorithm": {
+  ".cg-block-definition, .cg-block-problem, .cg-block-proof, .cg-block-remark, .cg-block-example, .cg-block-algorithm": {
     fontStyle: "normal",
   },
 
