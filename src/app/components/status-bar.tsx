@@ -136,12 +136,10 @@ export function StatusBar({
   const stats = useMemo(() => computeDocStats(docText), [docText]);
 
   const cycleMode = useCallback(() => {
-    // Non-markdown files are Source-only — no mode cycling
-    if (!isMarkdown) return;
     const idx = MODE_ORDER.indexOf(editorMode);
     const next = MODE_ORDER[(idx + 1) % MODE_ORDER.length];
     onModeChange(next);
-  }, [editorMode, onModeChange, isMarkdown]);
+  }, [editorMode, onModeChange]);
 
   const closePopover = useCallback(() => setPopoverOpen(false), []);
 

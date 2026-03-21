@@ -395,7 +395,7 @@ function AppInner() {
   // and would reset the user's manual mode switch.
   const isMarkdownFile = activeTab?.endsWith(".md") ?? false;
   useEffect(() => {
-    setEditorModeState(isMarkdownFile ? "rich" : "source");
+    setEditorModeState(activeTab?.endsWith(".md") ? "rich" : "source");
   }, [activeTab]);
 
   // Apply the initial mode to the CM6 view when it's created.
