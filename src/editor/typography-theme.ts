@@ -6,11 +6,12 @@ import { monoFont } from "./editor-constants";
  * header markers, horizontal rules, hidden markers, lists, and highlights.
  */
 export const typographyThemeStyles = {
-  /* Document title from frontmatter — distinct from # section headings */
+  /* Document title from frontmatter — distinct from # section headings.
+   * Scaled down to academic proportions (was 2.4em, now 1.6em). */
   ".cg-doc-title": {
-    fontSize: "2.4em",
-    fontWeight: "800",
-    lineHeight: "1.2",
+    fontSize: "1.6em",
+    fontWeight: "700",
+    lineHeight: "1.3",
     color: "var(--cg-fg)",
     marginBottom: "0.25em",
     paddingBottom: "0.15em",
@@ -47,18 +48,20 @@ export const typographyThemeStyles = {
   },
 
   /* Heading line styles — font-size on .cm-line so all children (including
-   * math widgets) inherit it. Font-weight stays on .cg-heading-N marks. */
-  ".cg-heading-line-1": { fontSize: "2em", lineHeight: "1.2", color: "var(--cg-fg)" },
-  ".cg-heading-line-2": { fontSize: "1.5em", lineHeight: "1.3", color: "var(--cg-fg)" },
-  ".cg-heading-line-3": { fontSize: "1.25em", lineHeight: "1.4", color: "var(--cg-fg)" },
+   * math widgets) inherit it. Sizes approximate Oxford Lecture Series style
+   * but scaled up slightly for monospace editing legibility. */
+  ".cg-heading-line-1": { fontSize: "1.4em", lineHeight: "1.3", color: "var(--cg-fg)" },
+  ".cg-heading-line-2": { fontSize: "1.3em", lineHeight: "1.3", color: "var(--cg-fg)" },
+  ".cg-heading-line-3": { fontSize: "1.2em", lineHeight: "1.4", color: "var(--cg-fg)" },
   ".cg-heading-line-4": { fontSize: "1.1em", lineHeight: "1.4", color: "var(--cg-fg)" },
   ".cg-heading-line-5": { fontSize: "1em", lineHeight: "1.5", color: "var(--cg-fg)" },
-  ".cg-heading-line-6": { fontSize: "0.9em", lineHeight: "1.5", color: "var(--cg-fg)" },
+  ".cg-heading-line-6": { fontSize: "0.95em", lineHeight: "1.5", color: "var(--cg-fg)" },
 
-  /* Heading mark styles — font-weight on text spans */
+  /* Heading mark styles — font-weight/style on text spans.
+   * H1: bold, H2: italic normal-weight, H3: italic bold (blog style) */
   ".cg-heading-1": { fontWeight: "700" },
-  ".cg-heading-2": { fontWeight: "700" },
-  ".cg-heading-3": { fontWeight: "600" },
+  ".cg-heading-2": { fontWeight: "400", fontStyle: "italic" },
+  ".cg-heading-3": { fontWeight: "600", fontStyle: "italic" },
   ".cg-heading-4": { fontWeight: "600" },
   ".cg-heading-5": { fontWeight: "600" },
   ".cg-heading-6": { fontWeight: "600" },
@@ -87,11 +90,13 @@ export const typographyThemeStyles = {
     cursor: "pointer",
   },
 
-  /* Section numbers (rendered via ::before when cursor is outside) */
+  /* Section numbers (rendered via ::before when cursor is outside).
+   * Period after number matches blog's .header-section-number:after style. */
   "[data-section-number]::before": {
-    content: "attr(data-section-number) '\\2002'",
+    content: "attr(data-section-number) '.\\2002'",
     color: "var(--cg-fg)",
     fontWeight: "400",
+    marginRight: "4px",
   },
 
   /* Header markers (# symbols) shown in muted color when editing.

@@ -201,9 +201,9 @@ body {
   max-width: 800px;
   margin-left: auto;
   margin-right: auto;
-  font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+  font-family: KaTeX_Main, "Times New Roman", serif;
   font-size: 16px;
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--cg-fg);
   background: var(--cg-bg);
 
@@ -214,7 +214,7 @@ body {
   text-wrap: pretty;
 }
 
-/* ── Read mode headings ──────────────────────────────────────────────────── */
+/* ── Read mode headings — Oxford Lecture Series academic style ────────── */
 
 .cg-read-mode-view h1,
 .cg-read-mode-view h2,
@@ -225,30 +225,34 @@ body {
   text-align: left;
   margin-top: 1.5em;
   margin-bottom: 0.5em;
-  font-weight: 600;
   line-height: 1.3;
 }
 
-.cg-read-mode-view h1 { font-size: 1.8em; }
-.cg-read-mode-view h2 { font-size: 1.4em; }
-.cg-read-mode-view h3 { font-size: 1.15em; }
-.cg-read-mode-view h4 { font-size: 1em; }
-.cg-read-mode-view h5 { font-size: 0.9em; }
-.cg-read-mode-view h6 { font-size: 0.85em; }
+.cg-read-mode-view h1 { font-size: 1.15em; font-weight: bold; font-style: normal; }
+.cg-read-mode-view h2 { font-size: 1.2em; font-weight: normal; font-style: italic; }
+.cg-read-mode-view h3 { font-size: 1.1em; font-weight: bold; font-style: italic; }
+.cg-read-mode-view h4 { font-size: 1em; font-weight: bold; font-style: normal; }
+.cg-read-mode-view h5 { font-size: 0.95em; font-weight: bold; font-style: normal; }
+.cg-read-mode-view h6 { font-size: 0.9em; font-weight: bold; font-style: normal; }
 
-/* Document title from frontmatter */
+/* Document title from frontmatter — larger but still academic */
 .cg-read-mode-view .cg-read-title {
   margin-top: 0;
   margin-bottom: 1em;
-  font-size: 2em;
-  font-weight: 700;
+  font-size: 1.5em;
+  font-weight: bold;
+  font-style: normal;
   text-align: left;
 }
 
-/* Section numbers */
+/* Section numbers — period after number, margin matching blog */
 .cg-read-mode-view .cg-section-number {
   color: var(--cg-fg);
-  margin-right: 0.4em;
+  margin-right: 0.6em;
+}
+
+.cg-read-mode-view .cg-section-number::after {
+  content: '.';
 }
 
 /* ── Read mode paragraphs & inline ───────────────────────────────────────── */
@@ -257,10 +261,17 @@ body {
   margin: 0.8em 0;
 }
 
+/* Consecutive paragraphs: indent instead of gap (academic book style) */
+.cg-read-mode-view p + p {
+  text-indent: 1.5em;
+  margin-top: 0;
+}
+
+/* Links: dotted bottom border, no underline (blog style) */
 .cg-read-mode-view a {
   color: var(--cg-fg);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--cg-muted);
 }
 
 .cg-read-mode-view a.cross-ref {
@@ -284,16 +295,19 @@ body {
 /* ── Read mode code blocks ───────────────────────────────────────────────── */
 
 .cg-read-mode-view code {
-  font-size: 0.9em;
+  font-family: Monaco, "DejaVu Sans Mono", Consolas, monospace;
+  font-size: 0.85em;
   background: var(--cg-hover);
   padding: 0.15em 0.35em;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
 .cg-read-mode-view pre {
+  font-family: Monaco, "DejaVu Sans Mono", Consolas, monospace;
   background: var(--cg-hover);
-  padding: 1em;
-  border-radius: 4px;
+  border: 1px solid var(--cg-border);
+  padding: 0.5em 1em;
+  border-radius: 0;
   overflow-x: auto;
   margin: 1em 0;
 }
@@ -322,32 +336,42 @@ body {
 
 /* ── Read mode fenced divs (theorem, proof, etc.) ────────────────────────── */
 
+/* Theorem-family: italic body, inline bold header (academic convention) */
 .cg-read-mode-view .theorem,
 .cg-read-mode-view .lemma,
 .cg-read-mode-view .corollary,
-.cg-read-mode-view .definition,
 .cg-read-mode-view .proposition,
-.cg-read-mode-view .conjecture,
+.cg-read-mode-view .conjecture {
+  font-style: italic;
+  margin: 0.6em 0;
+}
+
+/* Definition, problem: normal body */
+.cg-read-mode-view .definition,
 .cg-read-mode-view .problem {
-  border-left: 3px solid var(--cg-border);
-  padding: 0.75em 1em;
-  margin: 1.2em 0;
-  background: var(--cg-subtle);
+  font-style: normal;
+  margin: 0.6em 0;
 }
 
+/* Proof: normal text, relative position for QED */
 .cg-read-mode-view .proof {
-  border-left: 3px solid var(--cg-muted);
-  padding: 0.75em 1em;
-  margin: 1.2em 0;
+  font-style: normal;
+  margin: 0.6em 0;
+  position: relative;
 }
 
+/* QED tombstone at end of proof */
+.cg-read-mode-view .proof::after {
+  content: '\25FE';
+  float: right;
+}
+
+/* Remark, example, note: normal style with subtle left border */
 .cg-read-mode-view .remark,
 .cg-read-mode-view .example,
 .cg-read-mode-view .note {
-  border-left: 3px solid var(--cg-muted);
-  padding: 0.75em 1em;
-  margin: 1.2em 0;
-  background: var(--cg-subtle);
+  margin: 0.6em 0;
+  font-style: normal;
 }
 
 .cg-read-mode-view .Blockquote,
@@ -358,10 +382,16 @@ body {
   color: var(--cg-fg);
 }
 
+/* Div title (e.g. "Theorem 1."): bold, normal style (not italic), inline */
 .cg-read-mode-view .div-title {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 0.3em;
+  display: inline;
+  font-weight: bold;
+  font-style: normal;
+}
+
+/* Period + en space after the div title (inline header separator) */
+.cg-read-mode-view .div-title::after {
+  content: '.\2002\2002';
 }
 
 /* ── Read mode tables ────────────────────────────────────────────────────── */
