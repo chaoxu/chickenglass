@@ -212,6 +212,7 @@ The `demo/blog/` directory contains 94 files from the user's blog (originally in
 - **Never use `locator.click()` on CM6 content** — it always times out because CM6 renders custom widgets, not plain DOM elements. Instead, use `page.evaluate()` to dispatch cursor positions, type via `page.keyboard`, and read state via `window.__cmView`.
 - **Debug with visual overlays**: Add visual debug overlays (colored boxes, tooltips with positions) when behavior bugs are hard to reproduce.
 - **Wire features into the app**: Every feature must be connected to the editor entry point, not just exported as unused code. Each task's done criteria should include "feature is visible/functional in the running app."
+- **Reviewer/simplifier gate before every commit**: Before running `git commit`, ALWAYS launch `pr-review-toolkit:code-reviewer` and `pr-review-toolkit:code-simplifier` agents in parallel on the staged diff. Apply their findings to the code. Then commit once, clean. This is not optional — treat it like running tests.
 - **Worker gate protocol**: Subagents cannot use the Agent tool. Workers must use `Skill tool with skill: "simplify"` and `Skill tool with skill: "code-reviewer"` for gates. Workers loop until both are clean before reporting done. Lead rejects any non-`pass` status.
 
 ## Key architecture decisions
