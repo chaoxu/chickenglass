@@ -35,13 +35,13 @@ Otherwise, the graph is connected. If there exist a vertex $v$ with degree at mo
 
 Can we generalize this problem to weighted graphs?
 $G=(V,E)$, $(G,w)$ is a weighted graph, where $w: E\to \mathbb{R}$. Define the average weighted degree of graph $G$ to be
-\[
-d_w(G) = `\frac{2\sum_{e\in E} w(e)}{|G|}`{=tex},
-\]
+$$
+d_w(G) = \frac{2\sum_{e\in E} w(e)}{|G|},
+$$
 and the minimum weighted degree
-\[
-`\delta`{=tex}*w(G) = `\min`{=tex}*{e`\in `{=tex}E} {w(e)}.
-\]
+$$
+\delta_w(G) = \min_{e\in E} \{w(e)\}.
+$$
 If $P$ is a path, then the weight of the path is $W(P) = \sum_{e\in P} w(e)$. What can we say about the path with maximum weight?
 It is easy to prove that there is a path of weight at least $\delta_w(G)$.
 
@@ -51,9 +51,9 @@ For a weighted graph $(G,w)$, there exist a path of weight at least $\delta_w(G)
 
 ::: Proof
 Consider the longest path $v_1,\ldots,v_n$. Claim: $w(\{v_i,v_n\})\leq w(\{v_i,v_{i+1}\})$ for all $i$. Assume not, then the path $v_1,\ldots,v_{i-1},v_i,v_n,v_{n-1}\ldots,v_{i+1}$ would be heavier, a contradiction. Therefore we have
-\[
-`\delta`{=tex}*w(G) `\leq `{=tex}`\sum`{=tex}*{{v_i,v_n}`\in `{=tex}E} w({v_i,v_n}) `\leq `{=tex}`\sum`{=tex}*{i=1}\^{n-1} w({v_i,v*{i+1}}) = W(v_1`\ldots `{=tex}v\_{n})
-\]
+$$
+  \delta_w(G) \leq \sum_{\{v_i,v_n\}\in E} w(\{v_i,v_n\}) \leq \sum_{i=1}^{n-1} w(\{v_i,v_{i+1}\})  = W(v_1\ldots v_{n})
+  $$
 :::
 
 However, we want something stronger, say instead of $\delta_w(G)$, can it be $d_w(G)$? I have a proof but it uses a difficult lemma.

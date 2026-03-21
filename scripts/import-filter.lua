@@ -21,3 +21,38 @@ function Header(el)
   end
   return el
 end
+
+-- Convert bare LaTeX math environments (RawBlock "tex") to DisplayMath.
+-- Pandoc treats \begin{align*}...\end{align*} without \[...\] as raw TeX.
+-- We wrap them as proper display math so they render via KaTeX.
+function RawBlock(el)
+  if el.format == "tex" or el.format == "latex" then
+    local text = el.text
+    -- Check if it's a math environment
+    if text:match("^\\begin{align") or
+       text:match("^\\begin{equation") or
+       text:match("^\\begin{gather") or
+       text:match("^\\begin{multline") or
+       text:match("^\\begin{flalign") or
+       text:match("^\\begin{cases") or
+       text:match("^\\begin{pmatrix") or
+       text:match("^\\begin{bmatrix") or
+       text:match("^\\begin{vmatrix") or
+       text:match("^\\begin{array") then
+      return pandoc.Para({pandoc.Math("DisplayMath", text)})
+    end
+  end
+  return el
+end
+
+-- Also handle inline raw TeX that should be math
+function RawInline(el)
+  if el.format == "tex" or el.format == "latex" then
+    local text = el.text
+    -- LaTeX commands that should be inline math
+    if text:match("^\\[a-zA-Z]") then
+      return pandoc.Math("InlineMath", text)
+    end
+  end
+  return el
+end

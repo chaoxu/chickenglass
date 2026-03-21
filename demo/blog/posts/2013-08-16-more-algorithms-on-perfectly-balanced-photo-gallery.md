@@ -42,15 +42,15 @@ If we find a $k$-edge path of minimum weight from $v_1$ to $v_n$, then this impl
 
 Define $C(d,i)$ to be the $d$-edge path from $v_1$ to $v_i$ with minimum weight. We want to find $C(k,n)$.
 
-\[
-C(d,i) = `\min`{=tex}\_{1`\leq `{=tex}j`\leq `{=tex}i} {C(d-1,j) + w(j,i)}
-\]
+$$
+C(d,i) = \min_{1\leq j\leq i} {C(d-1,j) + w(j,i)}
+$$
 
 If we set $w(j,i)=\infty$ if $j>i$, then we have a better representation.
 
-\[
-C(d,i) = `\min`{=tex}\_{1`\leq `{=tex}j`\leq `{=tex}n} {C(d-1,j) + w(j,i)}
-\]
+$$
+C(d,i) = \min_{1\leq j\leq n} {C(d-1,j) + w(j,i)}
+$$
 
 There are $kn$ entries in the DP table for $C$, and $C(d,i)$ requires $O(n)$ time to compute. This means the algorithm will take $O(kn^2)$ time.
 
@@ -60,9 +60,9 @@ There is a standard technique on totally monotone matrices that can reduce the c
 
 ::: Definition
 A weight function $w$ is Monge if for every $1<i+1<j\leq n$, we have
-\[
-w(i,j) + w(i+1,j+1)`\leq `{=tex}w(i,j+1) + w(i+1,j).
-\]
+$$
+  w(i,j) + w(i+1,j+1)\leq w(i,j+1) + w(i+1,j).
+  $$
 :::
 
 ::: Theorem
@@ -71,16 +71,13 @@ $w$ is Monge.
 
 ::: Proof
 Let $\sum_{k=i+1}^{j-1} a_i - \mu = m$
-\[
-\begin{aligned}
+$$\begin{aligned}
   w(i,j)+w(i+1,j+1) &=  |\sum_{k=i}^{j-1} a_i - \mu|
                       + |\sum_{k=i+1}^{j} a_i - \mu|\\
                     &= |a_i + m| + |a_j + m|\\
                     &\leq |a_i+a_j+m| + |m|\\
                     &= w(i,j+1)+w(i+1,j)
-  \end{aligned}
-
-\]
+  \end{aligned}$$
 To prove the $\leq$, see that $a_i,a_j$ are positive, one can consider either $m$ is negative or positive, and notice either way the inequality holds true.
 :::
 
@@ -100,9 +97,9 @@ There are isomorphic definition of Monge and totally monotone, depend on if the 
 :::
 
 Define a matrix $M^d$, such that $M_{j,i}^d = C(d-1,j) + w(j,i)$, the original recurrence become
-\[
-C(d,i) = `\min`{=tex}*{1`\leq `{=tex}j`\leq `{=tex}n} {M\^d*{j,i}}
-\]
+$$
+C(d,i) = \min_{1\leq j\leq n} {M^d_{j,i}}
+$$
 In other words, $C(d,i)$ is the $i$th column's minima of $M^d$.
 
 ::: Theorem
@@ -138,9 +135,9 @@ Here is the very simple code to show how this can be done easily if we have a [H
 
 Now, returning to the original problem. Again, we can reduce the problem to a problem on a directed graph. This time, $w(i,j) = \sum_{k=i}^{j-1} a_i$. The weight of a path is the maximum weight of the edges in the path. A $k$-edge path with minimum weight implies the solution to the original problem.
 
-\[
-C(d,i) = `\min`{=tex}*{1`\leq `{=tex}j`\leq `{=tex}n} M\^d*{j,i}
-\]
+$$
+C(d,i) = \min_{1\leq j\leq n} M^d_{j,i}
+$$
 
 where $M^d_{j,i} = \max (C(d-1,j),w(j,i))$.
 
@@ -156,10 +153,10 @@ However, algebraic Monge property in general doesn't imply totally monotone matr
 
 Consider the simple matrix, and our operation is $\max$.
 
-\begin{bmatrix}
+$$\begin{bmatrix}
 1& 2\\
 0& 2
-\end{bmatrix}
+\end{bmatrix}$$
 
 $\max(1,2)=\max(0,2)$, but the matrix is not totally monotone. $1>0$ but $2\not > 2$.
 

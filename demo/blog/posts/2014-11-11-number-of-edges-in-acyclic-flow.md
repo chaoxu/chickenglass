@@ -26,9 +26,9 @@ If we take shortest augmenting path successively in the residual graph to find a
 ::: Proof
 $v\leq 2(n/d)^2$, thus $d\leq n\sqrt{2}/\sqrt{v}$. If we take the shortest path successively, we have the number of edges we use in each augmenting path is
 
-\[
-`\sum`{=tex}\_{i=1}\^v n`\sqrt{2}`{=tex}/`\sqrt{i}`{=tex} = O(n`\sqrt{v}`{=tex})
-\]
+$$
+    \sum_{i=1}^v n\sqrt{2}/\sqrt{i} = O(n\sqrt{v})
+  $$
 :::
 
 For the above theorem, one might ask what happens if we use $v\leq 2m/d$ inequality instead. Then we get the sum of the length of all the augmenting paths we ever route is $O(m\log m)$, pretty neat.

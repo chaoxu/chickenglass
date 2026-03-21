@@ -18,9 +18,9 @@ The positive braid monoid of $n$ strands is denoted as $B_n^+$. Such that $B_n^+
 
 ::: {.Definition title="The Fundamental Braid"}
 The fundamental braid, or half-twist, on $n$ strands
-\[
-`\Delta`{=tex}\_n = (`\sigma`{=tex}*1`\ldots `{=tex}`\sigma`{=tex}*{n-1})(`\sigma`{=tex}*1`\ldots`{=tex}`\sigma`{=tex}*{n-2})`\ldots`{=tex}(`\sigma`{=tex}\_1`\sigma`{=tex}\_2)`\sigma`{=tex}\_1
-\].
+$$
+\Delta_n = (\sigma_1\ldots \sigma_{n-1})(\sigma_1\ldots\sigma_{n-2})\ldots(\sigma_1\sigma_2)\sigma_1
+$$.
 
 $\Delta$ is used for $\Delta_n$ if $n$ is obvious from the context.
 :::
@@ -63,9 +63,9 @@ Define $\inf[w] = \sup \{\inf(x) | x \in [w]\}$.
 
 ::: {.Definition title="The Summit Set"}
 The summit set of $w$ is written as $SS(w)$.
-\[
-SS(w) = {x \| `\inf`{=tex}(x) = `\inf[w]`{=tex}, x`\in [w] `{=tex}}
-\]
+$$
+SS(w) = \{x | \inf(x) = \inf[w], x\in [w] \}
+$$
 :::
 
 The summit set exists if there is an upper bound on $m$. Manipulate the index formula, we have $m = \frac{\lambda(w) - |p|}{|\Delta|}$. $m \leq \frac{\lambda(w)}{|\Delta|}$, therefore $m$ is bounded above.

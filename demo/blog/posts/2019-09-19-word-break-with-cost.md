@@ -10,7 +10,7 @@ Find elements $w_1,\ldots,w_k\in W$ such that $s=w_1\ldots w_k$, and $\sum_{i=1}
 
 This problem is a generalization of the [word break](https://leetcode.com/problems/word-break/) problem on leetcode. Many algorithms you see online assumes that each string in $W$ has constant length, checking the hash table takes $O(1)$ time, and obtains an $O(n^2)$ time algorithm. It is not as easy if the strings can have arbitrary length. Here we show an algorithm that considers the strings in $W$ have arbitrary length.
 
-Assume the input $s$ has length $n$. Consider the following graph $G=(V,E)$, where $V=\set{0,\ldots,n}$, and there is an edge from $i$ and $j$, if $s[i+1..j]=w\in W$, the label of the edge $(i,j)$ is the string $w$, and the cost is $c(w)$. Let $L$ be total length of the input, namely \$`\sum`{=tex}\_{w`\in `{=tex}W} \|w\| + \|s\|.
+Assume the input $s$ has length $n$. Consider the following graph $G=(V,E)$, where $V=\set{0,\ldots,n}$, and there is an edge from $i$ and $j$, if $s[i+1..j]=w\in W$, the label of the edge $(i,j)$ is the string $w$, and the cost is $c(w)$. Let $L$ be total length of the input, namely \$$\sum$\_{w$\in$W} \|w\| + \|s\|.
 Let $z$ be number of substrings in $s$ matches some element in $W$. The graph has $z$ edges. Note $z=O(n\sqrt{L})$. Indeed, the sum of the length of the labels of all outgoing edges cannot be more than $L$, and the length of each label is different. Hence each vertex can have at most $O(\sqrt{L})$ outgoing edges. The graph is a DAG, so we can find the shortest path from $0$ to $n$ in linear time with respect to the number of edges.
 This shows if we can compute the graph in $O(z+L)$ time, then we solve the problem in $O(z+L)$ time.
 

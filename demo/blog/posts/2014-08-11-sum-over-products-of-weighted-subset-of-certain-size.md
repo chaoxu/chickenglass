@@ -6,9 +6,9 @@ title: Sum over products of weighted subset of certain size
 Consider a commutative semiring $(R,+,\cdot)$. $\mathbb{0}$ is the identity for $(R,+)$, and $\mathbb{1}$ is the identity for $(R,\cdot)$.
 Let $f,g:V\to R$, $w:V\to \mathbb{N}$ and $Z\subset \mathbb{N}$. It is common that we are interested in computing expressions of the following form.
 
-\[
-`\sum`{=tex}*{S`\subset `{=tex}V, `\sum`{=tex}*{x`\in `{=tex}S} w(x) `\in `{=tex}Z} `\prod`{=tex}*{x`\in `{=tex}S} f(x) `\prod`{=tex}*{x`\in `{=tex}V`\backslash `{=tex}S} g(x)
-\]
+$$
+\sum_{S\subset V, \sum_{x\in S} w(x) \in Z} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x)
+$$
 
 Examples:
 
@@ -23,25 +23,23 @@ Examples:
 Let $\max Z = k$ and $|V| = n$. The naive algorithm runs in $O(n2^n)$ time (assuming semiring operation takes $O(1)$ time). There is a common transformation that turns this problem that sum over all subsets to a problem that sums over $Z$. So it runs in $O(nk)$ time.
 
 Let $V=\{v_1,\ldots,v_n\}$ and $V_j = \{v_1,\ldots,v_j\}$. Define
-\[
-D(i,j) = `\sum`{=tex}*{S`\subset `{=tex}V_j, `\sum`{=tex}*{x`\in `{=tex}S} w(x) = i} `\prod`{=tex}*{x`\in `{=tex}S} f(x) `\prod`{=tex}*{x`\in `{=tex}V`\backslash `{=tex}S} g(x)
-\].
+$$
+        D(i,j) = \sum_{S\subset V_j, \sum_{x\in S} w(x) = i} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x)
+    $$.
 
 Certainly,
-\[
-`\sum`{=tex}*{S`\subset `{=tex}V, `\sum`{=tex}*{x`\in `{=tex}S} w(x) `\in `{=tex}Z} `\prod`{=tex}*{x`\in `{=tex}S} f(x) `\prod`{=tex}*{x`\in `{=tex}V`\backslash `{=tex}S} g(x) = `\sum`{=tex}\_{i`\in `{=tex}Z} D(i,n)
-\]
+$$
+        \sum_{S\subset V, \sum_{x\in S} w(x) \in Z} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x) = \sum_{i\in Z} D(i,n)
+    $$
 
 We only incur a $O(k)$ number of semiring operations once we compute all $D(i,n)$ for $0\leq i\leq k$.
 
 Let $[P]$ be the [Iverson bracket notation](http://en.wikipedia.org/wiki/Iverson_bracket), namely
 
-\[
-\[P\] =
-\begin{cases} \mathbb{1} & \text{if } P \text{ is true;}\\
+$$
+[P] = \begin{cases} \mathbb{1} & \text{if } P \text{ is true;}\\
       \mathbb{0} & \text{otherwise.} \end{cases}
-
-\]
+$$
 
 ::: Theorem
 1.  $D(i,0) = [i \neq 0]$
@@ -51,13 +49,10 @@ Let $[P]$ be the [Iverson bracket notation](http://en.wikipedia.org/wiki/Iverson
 ::: Proof
 The base case can be verified easily, we show part of a inductive step.
 
-\[
-\begin{aligned}
+$$\begin{aligned}
   f(v_j)D(i-w(v_j),j-1) + g(v_j)D(i,j-1) &= f(v_j) \sum_{S\subset V_{j-1}, \sum_{x\in S} w(x) = i-w(v_j)} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x)  +
   g(v_j) \sum_{S\subset V_{j-1}, \sum_{x\in S} w(x) = i)} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x) \\
   &=   \sum_{v_j\in S\subset V_j, \sum_{x\in S} w(x) = i} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x) + \sum_{v_j\not\in S\subset V_j, \sum_{x\in S} w(x) = i} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x)\\
   &= \sum_{S\subset V_j, \sum_{x\in S} w(x) = i} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x)
-  \end{aligned}
-
-\]
+  \end{aligned}$$
 :::

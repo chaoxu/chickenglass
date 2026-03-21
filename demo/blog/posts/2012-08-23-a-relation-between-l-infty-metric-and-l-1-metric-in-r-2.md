@@ -7,13 +7,13 @@ While solving the [Meeting Point](https://www.hackerrank.com/challenges/meeting-
 
 ::: Theorem
 Let $x=(x_1,x_2)$, consider the map $f:\R^2\to \R^2$,
-\[
-f(x) = (x_1-x_2,x_1+x_2)
-\]
+$$
+  f(x) = (x_1-x_2,x_1+x_2)
+  $$
 then
-\[
-d\_`\infty`{=tex}(x,y) = `\frac{d_1(f(x),f(y))}{2}`{=tex}
-\]
+$$
+  d_\infty(x,y) = \frac{d_1(f(x),f(y))}{2}
+  $$
 :::
 
 ::: Proof

@@ -10,9 +10,9 @@ Mainly, there are a few useful statements.
 
 ::: Theorem
 For a graph $G=(V,E)$ with arboricity $\alpha$, we have
-\[
-`\sum`{=tex}\_{uv`\in `{=tex}E} `\min`{=tex}(`\deg`{=tex}(u),`\deg`{=tex}(v)) `\leq 2`{=tex}`\alpha `{=tex}m
-\]
+$$
+    \sum_{uv\in E} \min(\deg(u),\deg(v)) \leq 2\alpha m
+$$
 :::
 
 Often, using the arboricity, we can obtain the same complexity algorithm without high-degree low-degree technique. Note the arboricity is $O(\sqrt{m})$. The application of arboricity are from [@ChibaN85].

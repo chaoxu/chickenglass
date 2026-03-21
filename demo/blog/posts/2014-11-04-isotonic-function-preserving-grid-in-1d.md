@@ -17,23 +17,23 @@ Let $X$ be a $\delta$-grid of $n$ points where $\delta<2^{-n}$. $\varphi: X\to [
 It's easy to see that $\varphi$ is a increasing function. Let the points in $X$ ordered as $x_0,x_1,\ldots,x_n$.
 Let $l_i = |\varphi(x_i)-\varphi(x_{i-1})|$. Note that
 
-1.  \[
-    `\sum`{=tex}\_{i=1}\^n l_i = 1
-    \]
+1.  $$
+        \sum_{i=1}^n l_i = 1
+      $$
 
-2.  \[\|x_i-x\_{i-1}\|\<`\frac{1}{n}`{=tex}-`\frac{\delta}{2^i}`{=tex}\<\|x\_{i+1}-x_i\|\]
+2.  $$|x_i-x_{i-1}|<\frac{1}{n}-\frac{\delta}{2^i}<|x_{i+1}-x_i|$$
     thus by isotonic function
-    \[\|`\varphi`{=tex}(x_i)-`\varphi`{=tex}(x\_{i-1})\|\<\|`\varphi`{=tex}(x\_{i+1})-`\varphi`{=tex}(x_i)\|\].
+    $$|\varphi(x_i)-\varphi(x_{i-1})|<|\varphi(x_{i+1})-\varphi(x_i)|$$.
     This is just $l_i<l_{i+1}$.
 
 3.  $\sum_{i=1}^{m} l_i > \sum_{i=n-(m-2)}^{n} l_i$ for all $m$, because
     $\frac{m}{n}\geq |x_m-x_0| > \frac{m}{n}-\delta > \frac{m-1}{n}+2\delta>|x_n - x_{n-(m-2)}|$, thus
-    \[\|`\varphi`{=tex}(x_m)-`\varphi`{=tex}(x\_{0})\|\<\|`\varphi`{=tex}(x\_{n})-`\varphi`{=tex}(x\_{n-(m-2)})\|\].
+    $$|\varphi(x_m)-\varphi(x_{0})|<|\varphi(x_{n})-\varphi(x_{n-(m-2)})|$$.
 
 Combine the relations above, we have
-\[
-`\frac{m}{n}`{=tex} `\geq `{=tex}`\sum`{=tex}*{i=1}\^m l_i \> `\sum`{=tex}*{i=n-(m-2)}\^{n} l_i `\geq `{=tex}`\frac{m-1}{n}`{=tex}
-\]
+$$
+    \frac{m}{n} \geq \sum_{i=1}^m l_i > \sum_{i=n-(m-2)}^{n} l_i \geq \frac{m-1}{n}
+  $$
 
 But $\sum_{i=1}^m l_i = \varphi(x_m)$, so $m/n\geq x_m>m/n-\delta$, $m/n\geq \varphi(x_m)>(m-1)/n$. Since $\delta$ is small, we have $|x_i-\varphi(x_i)|<1/n$.
 :::

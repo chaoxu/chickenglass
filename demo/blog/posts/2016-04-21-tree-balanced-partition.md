@@ -19,16 +19,14 @@ Let $T$ be a rooted binary tree with non-negative weights on the edges, and $0-1
 
 Let $W(v)$ to be the sum of the vertex weights of the subtree rooted at $v$. Let $D(v,k)$ to be the subproblem of minimum cost partition of the the vertices of the tree rooted at $v$ into vertices $(A,B)$ such that $v\in A$ and $\sum_{a\in A} {w(a)}=k$. Assume $v$ have two children $u$ and $w$. There are 4 cases to consider, depending on which of $\{u,w\}$ is on the same side of the partition as $v$.
 
-\[
-D(v,k) = `\min `{=tex}
-\begin{cases}
+$$
+D(v,k) = \min \begin{cases}
 \min_{i} D(u,i) + D(w,k-w(v)-i)\\
 \min_{i} w(vu) + D(u,W(u)-i) + D(w,k-w(v)-i)\\
 \min_{i} w(vw) + D(u,i) + D(w,W(w) - (k-w(v)-i))\\
 \min_{i} w(vu) + w(vw) + D(u,W(u)-i) + D(w,W(w)-(k-w(v)-i))\\
 \end{cases}
-
-\]
+$$
 
 Where $i$ taken over all the numbers that make sense. Other cases are similar and simpler.
 Note that $D(v,k)$ for a particular $k$ can be computed $O(k \min\{W(u),W(w)\})$ time. So computing $D(v,k)$ for all $1\leq k\leq W(v)$ takes $O(W(u)W(w))$ time.

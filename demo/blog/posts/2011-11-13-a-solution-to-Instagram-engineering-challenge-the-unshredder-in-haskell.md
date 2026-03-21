@@ -25,9 +25,9 @@ I used a simple scheme to calculate the closeness between two strips: compare th
 
 The function I used to calculate the difference is
 
-\[
-`\sum`{=tex}*{i=1}\^n (`\sum`{=tex}*{j=0}\^3 \|a\_{i,j}-b\_{i,j}\|)\^{1/4}
-\]
+$$
+\sum_{i=1}^n (\sum_{j=0}^3 |a_{i,j}-b_{i,j}|)^{1/4}
+$$
 
 Where $a_{i,j}$ is the value of the $j$th channel of $i$th pixel in the first strip's last column.
 

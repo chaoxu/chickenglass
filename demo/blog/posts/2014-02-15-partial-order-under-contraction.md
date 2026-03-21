@@ -13,19 +13,16 @@ $(P,\leq)$ be a partial order. Define $U(X) = \{ p| x\leq p, x\in X, p\in P\}\ba
 
 Let $Z\subset P$ and $Q=P\backslash Z \cup \{q\}$ where $q\not\in P$. We define an contraction operation $C(P,Z)=(Q,\preccurlyeq)$, such that
 
-\[
-a`\preccurlyeq `{=tex}b `\Longleftrightarrow `{=tex}a`\leq `{=tex}b `\text{ or }`{=tex} (a`\in `{=tex}D(Z)`\cup `{=tex}{q} `\text{ and }`{=tex} b`\in `{=tex}U(Z)`\cup `{=tex}{q})
-\]
+$$
+a\preccurlyeq b \Longleftrightarrow a\leq b \text{ or } (a\in D(Z)\cup \{q\} \text{ and } b\in U(Z)\cup \{q\})
+$$
 
 If we interpret $(P,\leq)$ as a directed graph, then this operation is contracting the vertices in $Z$ into one vertex $q$, and then take the transitive closure.
 
 There is a cute characterization of when $(Q,\preccurlyeq)$ is also a partial order.
 
 ::: Theorem
-$C(P,Z)=(Q,\preccurlyeq)$ is a partial order if and only if $D(Z)\cap U(Z) = \emptyset$. In particular, the map \[ f(x) =
-\begin{cases} x  & x\in P\backslash Z \\ q & x \in Z\end{cases}
-
-\] is order-preserving.
+$C(P,Z)=(Q,\preccurlyeq)$ is a partial order if and only if $D(Z)\cap U(Z) = \emptyset$. In particular, the map $$ f(x) = \begin{cases} x  & x\in P\backslash Z \\ q & x \in Z\end{cases} $$ is order-preserving.
 :::
 
 ::: Proof

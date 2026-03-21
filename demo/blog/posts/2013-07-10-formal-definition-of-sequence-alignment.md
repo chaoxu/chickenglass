@@ -9,16 +9,16 @@ A gap is the maximal substring consist of only $\diamond$'s. The gap sequence of
 
 $G(x,g,y,a) = xg(a_1) + \sum_{i=2}^{n-1} g(a_i) + yg(a_n)$, where $a$ is a sequence of length $n$.
 
-\[
-A(u,v) = `\sum`{=tex}*{i=1}\^{\|u\|} M(u_i,v_i) + G(b_s,g_s,e_s,u*`\diamond`{=tex}) + G(b_t,g_t,e_t,v\_`\diamond`{=tex})
-\]
+$$
+A(u,v) = \sum_{i=1}^{|u|} M(u_i,v_i) + G(b_s,g_s,e_s,u_\diamond) + G(b_t,g_t,e_t,v_\diamond)
+$$
 
 Define $S$ and $T$ be the set of all strings that can be formed by inserting $\diamond$ into $s$ and $t$ respectively.
 
 The alignment score is defined as
-\[
-`\max `{=tex}{A(u,v) : \|u\|=\|v\|, u`\in `{=tex}S, v`\in `{=tex}T}
-\]
+$$
+\max \{A(u,v) : |u|=|v|, u\in S, v\in T\}
+$$
 
 Now, once one write an algorithm for this problem, it can be used for many sequence alignment problems on [Rosalind](http://rosalind.info/).
 

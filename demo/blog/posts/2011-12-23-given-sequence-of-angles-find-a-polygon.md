@@ -12,9 +12,9 @@ If one consider a polygon's sides are vectors, then a polygon is set of vectors 
 
 Angles at each vertex determines the direction of the vector. Let $u_i$ be the unit vector with direction of $p_ip_{i+1}$, we have
 
-\[
-`\sum`{=tex}\_{i=1}\^n c_iu_i = 0
-\]
+$$
+\sum_{i=1}^n c_iu_i = 0
+$$
 
 $c_i>0$ for all $i$. $u_i$ can be computed from $\alpha_i$ trivially. We assume we have normalized the polygon by rotate it, so $u_1=(0,1)$. Once we find a set of $c_i$, then we determine a solution to the problem. $(c_1,\ldots,c_n)$ is in the intersection of the solutions of two set of linear systems. One might first calculate the solution to the linear systems individually, then take the intersection, and pick a point where all coordinates are positive.
 

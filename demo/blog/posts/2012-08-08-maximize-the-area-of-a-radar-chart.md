@@ -23,17 +23,14 @@ If $x\geq a\geq b \geq c \geq d\geq 0$, then $ax+bx - ab \geq cx+dx-cd$.
 
 ::: Proof
 Let's consider what is required to make sure the property works.
-\[
-\begin{aligned}
+$$\begin{aligned}
   (a+b)x-ab &\geq  (c+d)x-cd\\
   x&\geq \frac{ab-cd}{a-c+b-d}\\
   x&\geq \frac{ab-bc+bc-cd}{a-c+b-d}\\
   x&\geq \frac{b(a-c)+c(b-d)}{a-c+b-d}\\
   x&\geq \frac{b(a-c+b-d)}{a-c+b-d}\\
   x&\geq b
-  \end{aligned}
-
-\]
+  \end{aligned}$$
 The lemma is true, as $x\geq b$ is part of the hypothesis for $x$.
 :::
 
@@ -47,9 +44,9 @@ Let $\pi$ be the following:
 3.  $\pi(1),\ldots,\pi(n) = 1, 3, \ldots, n-2, n, n-1, \ldots, 4, 2$ if $n$ is odd.
 
 $\pi$ maximizes
-\[
-`\sum`{=tex}*{i=1}\^n a*{`\pi`{=tex}(i)}a\_{`\pi`{=tex}(i+1)}
-\]
+$$
+  \sum_{i=1}^n a_{\pi(i)}a_{\pi(i+1)}
+  $$
 :::
 
 ::: Proof

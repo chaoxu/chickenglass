@@ -30,12 +30,10 @@ $x_i$ can be represented as the transposition $(i~i+1)$. Define $(n~n+1) = (n~1)
 
 Represent a element of the group as a permutation $\pi$ in the 2 line notation. wlog, assume $\pi(j) = i$ and $\pi(k) = i+1$.
 
-\[
-\begin{pmatrix} 1 &  \cdots &j & \cdots & k& \cdots & n \\ \pi(1) &  \cdots & i & \cdots & i+1 & \cdots & \pi(n)\end{pmatrix}
-(i\~i+1) =
+$$
+\begin{pmatrix} 1 &  \cdots &j & \cdots & k& \cdots & n \\ \pi(1) &  \cdots & i & \cdots & i+1 & \cdots & \pi(n)\end{pmatrix}(i~i+1) = 
 \begin{pmatrix} 1 & \cdots &j & \cdots & k& \cdots & n \\ \pi(1) & \cdots & i+1 & \cdots & i & \cdots & \pi(n)\end{pmatrix}
-
-\]
+$$
 
 If we call $j$ the index of $i$ if $\pi(j) = i$. Then each transposition is a swap of indices.
 

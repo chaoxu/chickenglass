@@ -12,9 +12,9 @@ Given a list of $2n-1$ non-negative integers. Every number except one appeared t
 The solution was the xor function.
 
 If $a_j$ is the number that didn't appear twice,
-\[
-`\bigoplus`{=tex}\_{i=1}\^{2n-1} a_i = a_j
-\]
+$$
+\bigoplus_{i=1}^{2n-1} a_i = a_j
+$$
 
 The reason was because xor have the following property.
 $a \oplus b = b \oplus a$, $a \oplus a = 0$ and $0 \oplus a = a$ for all $a,b\geq 0$.

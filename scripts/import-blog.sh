@@ -52,8 +52,8 @@ for src_file in "$SRC"/posts/*.md; do
   dest_file="$DEST/posts/$name"
 
   if pandoc \
-    -f markdown+fenced_divs+tex_math_dollars+tex_math_double_backslash+footnotes+yaml_metadata_block \
-    -t markdown+fenced_divs+tex_math_dollars+tex_math_double_backslash+footnotes+yaml_metadata_block-simple_tables-multiline_tables+pipe_tables \
+    -f markdown+fenced_divs+tex_math_dollars+tex_math_single_backslash+footnotes+yaml_metadata_block \
+    -t markdown+fenced_divs+tex_math_dollars+tex_math_single_backslash+footnotes+yaml_metadata_block-simple_tables-multiline_tables+pipe_tables \
     --wrap=preserve \
     --columns=9999 \
     --lua-filter="$FILTER" \

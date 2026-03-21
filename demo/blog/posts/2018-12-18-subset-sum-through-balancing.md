@@ -35,15 +35,13 @@ Also, we know the solution corresponding to $g(j,k)$ must contain $a_{g(j,k)}$ a
 
 One can get a recurrence relation for $g$ as below.
 
-\[
-g(j,k)= `\min `{=tex}
-\begin{cases}
+$$
+g(j,k)= \min \begin{cases}
 g(j-1,k)\\
 g(j-1,k-b_j) & \text{if }k-b_j\leq t\\
 i & \text{if }k-a_i > t \text{ and } i>g(j,k-a_i)
 \end{cases}
-
-\]
+$$
 
 Fix a $k$ and $j$, let $i$ to be as small as possible, such that there is $A_i'\subset A_i$ and $B_j'\subset B_j$ such that $A_i'\cup B_j'$ is balanced and sums to $k$. Note that $a_i\in A_i'$.
 

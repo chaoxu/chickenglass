@@ -13,11 +13,11 @@ $x-y \leq x\oplus y \leq x+y$
 ::: Proof
 $x\oplus y \leq x+y$ is easy to see as $\oplus$ is binary addition without carries.
 Assume $x\oplus y < x-y$ for some $x$ and $y$, then
-\[
-x = x`\oplus`{=tex}(y`\oplus `{=tex}y)
-= (x`\oplus `{=tex}y) `\oplus `{=tex}y \<
-(x-y)`\oplus `{=tex}y`\leq `{=tex}(x-y)+y = x
-\]
+$$
+  x = x\oplus(y\oplus y)
+  = (x\oplus y) \oplus y <
+  (x-y)\oplus y\leq (x-y)+y = x
+  $$
 A contradiction. Therefore $x-y \leq x\oplus y$.
 :::
 
@@ -34,9 +34,9 @@ If $f:\mathbb{N}\to \mathbb{N}$ a surjection such that $x-n\leq f(x)\leq x+m$, t
 
 ::: Proof
 $f$ is a surjection implies all values in any integer interval gets taken. $f^{-1}(y)=\min(\{x|f(x)=y\})$
-\[
-x-n`\leq `{=tex}f(x)`\leq `{=tex}x+m `\implies `{=tex}y+m`\leq `{=tex}f\^{-1}(y)`\leq `{=tex}y-n.
-\]
+$$
+  x-n\leq f(x)\leq x+m \implies y+m\leq f^{-1}(y)\leq y-n.
+  $$
 
 1.  If $y\in [a+m..b-n]$, $f^{-1}(y) \in [(a+m)-m.. (b-n)+n] = [a..b]$.
 2.  If $y\in [0..b-n]$, $f^{-1}(y) \in [\max(0-m,0).. (b-n)+n] = [0..b]$.
