@@ -32,7 +32,6 @@ export function cursorInRange(
 /**
  * @deprecated Use `cursorInRange` which now accepts both EditorView and EditorState.
  */
-export const cursorContainedIn = cursorInRange;
 
 /** Result of collecting renderable nodes from the syntax tree. */
 export interface RenderableNode {

@@ -1,7 +1,6 @@
 export { markdownRenderPlugin } from "./markdown-render";
 export {
   cursorInRange,
-  cursorContainedIn,
   collectNodes,
   buildDecorations,
   serializeMacros,
@@ -27,8 +26,6 @@ export {
 } from "./crossref-render";
 export {
   ImageWidget,
-  collectImageRanges,
-  imageDecorations,
   imageRenderPlugin,
 } from "./image-render";
 export {

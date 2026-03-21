@@ -34,10 +34,6 @@ export interface UseDocumentBufferReturn {
   switchToTab: (path: string) => void;
   /** Move buffer/liveDoc entries from oldPath to newPath and update tabs. */
   renameBuffers: (oldPath: string, newPath: string) => void;
-  /** Clean up buffers/liveDocs for a path. */
-  deleteBuffers: (path: string) => void;
-  /** Mark the active tab as clean (after save). */
-  markClean: (path: string) => void;
 }
 
 export function useDocumentBuffer(): UseDocumentBufferReturn {
@@ -110,19 +106,6 @@ export function useDocumentBuffer(): UseDocumentBufferReturn {
     }
   }, []);
 
-  const deleteBuffers = useCallback((path: string) => {
-    buffers.current.delete(path);
-    liveDocs.current.delete(path);
-  }, []);
-
-  const markClean = useCallback((path: string) => {
-    const doc = liveDocs.current.get(path) ?? "";
-    buffers.current.set(path, doc);
-    setOpenTabs((prev) =>
-      prev.map((t) => (t.path === path ? { ...t, dirty: false } : t)),
-    );
-  }, []);
-
   return {
     openTabs,
     setOpenTabs,
@@ -137,7 +120,5 @@ export function useDocumentBuffer(): UseDocumentBufferReturn {
     handleDocChange,
     switchToTab,
     renameBuffers,
-    deleteBuffers,
-    markClean,
   };
 }

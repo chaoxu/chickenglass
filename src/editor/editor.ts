@@ -3,7 +3,6 @@ import { type Extension, Compartment, EditorState, StateEffect } from "@codemirr
 import { EditorView } from "@codemirror/view";
 import { LanguageDescription, syntaxHighlighting } from "@codemirror/language";
 import { classHighlighter } from "@lezer/highlight";
-import type { ThemeManager } from "../app/theme-manager";
 import type { EditorPluginManager } from "./editor-plugin";
 
 import { markdownExtensions } from "../parser";
@@ -78,8 +77,6 @@ export interface EditorConfig {
   doc?: string;
   /** Project-level configuration to merge with per-file frontmatter. */
   projectConfig?: ProjectConfig;
-  /** Theme manager — used to initialise the CM6 dark/light base theme. */
-  themeManager?: ThemeManager;
   /** Plugin manager for toggleable editor features. */
   pluginManager?: EditorPluginManager;
   /** Additional CM6 extensions to include. */
@@ -88,7 +85,7 @@ export interface EditorConfig {
 
 /** Create and mount a CodeMirror 6 markdown editor. */
 export function createEditor(config: EditorConfig): EditorView {
-  const isDark = config.themeManager?.getResolved() === "dark";
+  const isDark = document.documentElement.dataset.theme === "dark";
 
   const state = EditorState.create({
     doc: config.doc ?? fallbackDocument,

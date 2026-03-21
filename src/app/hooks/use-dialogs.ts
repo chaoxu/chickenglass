@@ -23,11 +23,6 @@ export interface DialogActions {
   setAboutOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setShortcutsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setGotoLineOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  openAbout: () => void;
-  openShortcuts: () => void;
-  openSettings: () => void;
-  openSearch: () => void;
-  openGotoLine: () => void;
   closeAbout: () => void;
   closeShortcuts: () => void;
   closeGotoLine: () => void;
@@ -43,11 +38,6 @@ export function useDialogs(): UseDialogsReturn {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [gotoLineOpen, setGotoLineOpen] = useState(false);
 
-  const openAbout = useCallback(() => setAboutOpen(true), []);
-  const openShortcuts = useCallback(() => setShortcutsOpen(true), []);
-  const openSettings = useCallback(() => setSettingsOpen(true), []);
-  const openSearch = useCallback(() => setSearchOpen(true), []);
-  const openGotoLine = useCallback(() => setGotoLineOpen(true), []);
   const closeAbout = useCallback(() => setAboutOpen(false), []);
   const closeShortcuts = useCallback(() => setShortcutsOpen(false), []);
   const closeGotoLine = useCallback(() => setGotoLineOpen(false), []);
@@ -65,15 +55,9 @@ export function useDialogs(): UseDialogsReturn {
     setAboutOpen,
     setShortcutsOpen,
     setGotoLineOpen,
-    openAbout,
-    openShortcuts,
-    openSettings,
-    openSearch,
-    openGotoLine,
     closeAbout,
     closeShortcuts,
     closeGotoLine,
   }), [paletteOpen, searchOpen, settingsOpen, aboutOpen, shortcutsOpen, gotoLineOpen,
-       openAbout, openShortcuts, openSettings, openSearch, openGotoLine,
        closeAbout, closeShortcuts, closeGotoLine]);
 }

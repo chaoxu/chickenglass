@@ -41,7 +41,7 @@ export function fileToDataUrl(file: File): Promise<string> {
 }
 
 /** Convert a File to a Uint8Array. */
-export function fileToUint8Array(file: File): Promise<Uint8Array> {
+function fileToUint8Array(file: File): Promise<Uint8Array> {
   return new Promise<Uint8Array>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
