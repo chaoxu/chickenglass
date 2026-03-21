@@ -1,11 +1,11 @@
 ---
-title: A riddle, guess the word from the sum
 tags: math, puzzle, joke
+title: A riddle, guess the word from the sum
 ---
 
-What is 
+What is
 \[
-\left(a\sum_{n=2}^\infty w^n\right)!
+`\left`{=tex}(a`\sum`{=tex}\_{n=2}\^`\infty `{=tex}w\^n`\right`{=tex})!
 \]
 
 If you can't figure it out, here are 2 hints.
@@ -16,7 +16,7 @@ What is $\sum_{V\subseteq U} \dim(V)$? Where $U$ is a vector space of dishes for
 Hint 2:
 On the internet, you will see the following variation.
 \[
-\left(a\sum_{n=2}^\infty w^n\right)!!!!
+`\left`{=tex}(a`\sum`{=tex}\_{n=2}\^`\infty `{=tex}w\^n`\right`{=tex})!!!!
 \]
 
 Answer:
@@ -24,7 +24,7 @@ Answer:
 
 Here is an extra riddle for fun.
 \[
-S = \{"p","e","r","s","o","n"\}
+S = `\set{"p","e","r","s","o","n"}`{=tex}
 \]
 What is $\frac{1}{6} \sum_{s\in S} s$?
 A mean person...

@@ -1,6 +1,6 @@
 ---
-title: Densest subgraph variation
 tags: combinatorial optimization
+title: Densest subgraph variation
 ---
 
 Let $G=(V,E)$ be a graph. Consider an edge weight function $w:E\to \R^+$ and a vertex cost function $c:V\to \R^+$.

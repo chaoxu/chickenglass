@@ -1,9 +1,9 @@
 ---
-title: Traditional vs Roth IRA under fixed amount of investment
 tags: Tax
+title: Traditional vs Roth IRA under fixed amount of investment
 ---
 
-I've read a lot of articles on Traditional vs Roth IRA. One can do a serious mathematical analysis of which one is better, given that you want to invest a total of $x$ income into the account for a particular year. Money in excess of $x$ will be put in a normal investment account. 
+I've read a lot of articles on Traditional vs Roth IRA. One can do a serious mathematical analysis of which one is better, given that you want to invest a total of $x$ income into the account for a particular year. Money in excess of $x$ will be put in a normal investment account.
 
 There is a widely held belief that if your effective tax rate is higher today than when you cash out, it is always better to do pre-tax contribution (Traditional IRA). However, we can show this is not always the case. You need effective tax rate to be somewhat lower unless you are in the lowest of tax bracket. Assume for simplicity, you don't have to pay state income tax.
 
@@ -13,7 +13,7 @@ Here are the 3 options.
 
 - Type 1: (Traditional IRA, 401(k)) No tax when contributing, taxed as ordinary income afterwards.
 - Type 2: (Roth IRA, Roth 401(k)) Taxed when contributing, and no taxes with withdrawal.
-- Type 3: Normal account, taxed when contributing, and tax with either ordinary income or capital gain taxes depending on type. 
+- Type 3: Normal account, taxed when contributing, and tax with either ordinary income or capital gain taxes depending on type.
 
 Consider the simplest model. You have a stock that you buy and hold. It generates no dividends. At the time when you sell it, it worths $k$ times more. All your money will be going into that stock.
 
@@ -25,9 +25,9 @@ Let $\alpha$ be the (approximate) effective tax rate today, $\alpha'$ is an (app
 
 The after-tax income contributed by each account is
 
- - Type 1: $kx_1(1-\alpha')$
- - Type 2: $kx_2(1-\alpha)$
- - Type 3: $(k-1)x_3(1-\alpha)(1-\beta') + x_3(1-\alpha) = x_3(1-\alpha)((k-1)(1-\beta')+1)$
+- Type 1: $kx_1(1-\alpha')$
+- Type 2: $kx_2(1-\alpha)$
+- Type 3: $(k-1)x_3(1-\alpha)(1-\beta') + x_3(1-\alpha) = x_3(1-\alpha)((k-1)(1-\beta')+1)$
 
 Now, we also have the following constraint. $x_1+x_2(1-\alpha)=B$, where $B$ is the maximum contribution into type 1 and type 2 accounts. This happens because they share the same bound (this is true for both 401(k) and IRA). Note that $x_1+x_2+x_3=x$. Since $B$ and $x$ are fixed, we have $x_2 = \frac{B-x_1}{1-\alpha}$, and $x_3 = x-x_1-\frac{B-x_1}{1-\alpha}$
 
@@ -36,8 +36,8 @@ Define $f(x_1)=kx_1(1-\alpha') + k(B-x_1) + (x-x_1-\frac{B-x_1}{1-\alpha})(1-\al
 In order for the inequality to work for all $k>1$, we need $\alpha-\alpha'\geq \alpha\beta'$.
 In other words, we need $\alpha'\leq \alpha(1-\beta')$ in order to safely say it is better to maximize type 1.
 
-We didn't even consider what happens if there are dividend involved. It would shift the scale even more toward type 2. 
+We didn't even consider what happens if there are dividend involved. It would shift the scale even more toward type 2.
 
-I think the moral of the story is you have to be careful and actually model everything correctly. Also, since there is no way to know the tax rate in the future, some people hedge the risk by putting money in both type 1 and type 2 accounts. 
+I think the moral of the story is you have to be careful and actually model everything correctly. Also, since there is no way to know the tax rate in the future, some people hedge the risk by putting money in both type 1 and type 2 accounts.
 
 It looks like this still suggest putting money in Traditional IRA is better than Roth IRA if your current tax rate is *much higher* than your future tax rate.

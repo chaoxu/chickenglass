@@ -1,9 +1,9 @@
 ---
-title: A solution to Instagram Engineering Challenge, The Unshredder in Haskell
 tags: Haskell
+title: A solution to Instagram Engineering Challenge, The Unshredder in Haskell
 ---
 
-I have done many Haskell exercises, however, I have never done anything that have a engineering flavor, i.e. useful in real life.
+I have done many Haskell exercises, however, I have never done anything that have a engineering flavor, i.e. useful in real life.
 
 I saw this challenge and believe it's the perfect chance to practice my real life Haskell skills AND get a t-shirt. [The code on github](https://github.com/chaoxu/mgccl-haskell/blob/master/random/unshredder.hs).
 
@@ -23,10 +23,10 @@ I'm pretty sure this is also NP-complete too. Thus I will just use a greedy algo
 
 I used a simple scheme to calculate the closeness between two strips: compare the last column of a strip with the first column of another strip. This decision come from my familiarity with lists instead of arrays. However, smarter move would be taking the average of a larger set of surrounding and see how each side deviates from it.
 
-The function I used to calculate the difference is 
+The function I used to calculate the difference is
 
 \[
-\sum_{i=1}^n (\sum_{j=0}^3 |a_{i,j}-b_{i,j}|)^{1/4}
+`\sum`{=tex}*{i=1}\^n (`\sum`{=tex}*{j=0}\^3 \|a\_{i,j}-b\_{i,j}\|)\^{1/4}
 \]
 
 Where $a_{i,j}$ is the value of the $j$th channel of $i$th pixel in the first strip's last column.

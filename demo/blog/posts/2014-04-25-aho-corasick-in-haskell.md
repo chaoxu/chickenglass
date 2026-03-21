@@ -1,12 +1,13 @@
 ---
-title: The Aho–Corasick Automaton in Haskell
+tags: Algorithm, Haskell
+title: The Aho--Corasick Automaton in Haskell
 ---
 
 It is common that one might want to match $k$ different strings against one single text of length $m$. One can of course apply the [KMP algorithm](/posts/2014-04-11-the-kmp-algorithm-in-haskell.html) individually, and result an algorithm that runs in $O(km)$ time.
 
-Faster algorithms are known. The idea is to build an finite state transducer that can output which strings is the suffix of the string it read. The Aho-Corasick automaton is a compressed version of such transducer, as the size does not depend on the size of the alphabet. 
+Faster algorithms are known. The idea is to build an finite state transducer that can output which strings is the suffix of the string it read. The Aho-Corasick automaton is a compressed version of such transducer, as the size does not depend on the size of the alphabet.
 
-```haskell
+``` haskell
 import           Control.Arrow (first)
 import           Data.Function (on)
 import           Data.List     (lookup, partition)

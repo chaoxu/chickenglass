@@ -1,6 +1,6 @@
 ---
-title: Accepted to Budapest Semesters in Mathematics
 tags: BSM, math
+title: Accepted to Budapest Semesters in Mathematics
 ---
 
 Yes! I am excited about all the combinatorial goodness!

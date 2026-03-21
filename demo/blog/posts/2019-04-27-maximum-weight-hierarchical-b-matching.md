@@ -1,11 +1,11 @@
 ---
-title: Maximum weight hierarchical $b$-matching
 tags: combinatorial optimization, matching, matroid
+title: Maximum weight hierarchical $b$-matching
 ---
 
 We consider the following problem, which appeared in [@EmekKSZ19].
 
-Let $\mathcal{L}$ be a laminar family consists of sets $F_1,\ldots,F_k$. Let $u_1,\ldots,u_k$ to be positive integers. 
+Let $\mathcal{L}$ be a laminar family consists of sets $F_1,\ldots,F_k$. Let $u_1,\ldots,u_k$ to be positive integers.
 Consider a graph $G=(V,E)$ with a weight function $w:E\to \N$ and capacity function $c:E\to \N$. We are interested in finding a $y\leq c$, such that for every $F_i\in \mathcal{L}$, we have $\sum_{v\in F_i} \sum_{e:v\in e\in E} y_e \leq u_i$, and $\sum_{e\in E} y_ew_e$ is maximized.
 
 Formally, it is the following integer program.
@@ -16,9 +16,10 @@ Formally, it is the following integer program.
 & \text{s.t.} & & \sum_{v\in F_i} \sum_{e:v\in e\in E} y_e \leq u_i & i\in [k] \\
 & & &  0\leq y_e \leq c_e & \forall e\in E \\
 \end{aligned}
+
 \]
 
-This is a generalization of the maximum weight $c$-capacitated $b$-matching problem. Indeed, we can simply set $F_i = \set{v_i}$ and $u_i=b_i$. 
+This is a generalization of the maximum weight $c$-capacitated $b$-matching problem. Indeed, we can simply set $F_i = \set{v_i}$ and $u_i=b_i$.
 However, this problem is actually no more general than the maximum weight $c$-capacitated $b$-matching problem.
 
 Let $A \in \Z^{m\times n}$ be a matrix such that $\sum_{i=1}^m |A_{i,j}|\leq 2$ for every $j$. We call $A$ a bidirected matrix.
@@ -27,7 +28,7 @@ Let $A \in \Z^{m\times n}$ be a matrix such that $\sum_{i=1}^m |A_{i,j}|\leq 2$ 
 Given $A \in \Z^{m\times n}$ a bidirected matrix and vectors $a,b\in \Z^m$, $c,d,w\in \Z^n$. The integer program $\max_{x\in \Z^n} \set{wx \mid a\leq Ax\leq b, c\leq x\leq d}$ can be solved in polynomial time. In particular, it is equivalent to the maximum weight $b$-matching problem on graph of size $poly(m,n)$.
 :::
 
-The above theorem can be found in [@Schrijver03, chap. 36]. Note that in Schrijver's book, one requires $\sum_{i=1}^m |A_{i,j}|=2$. It is not hard to see the statement still holds even if we have $\leq$ in place of $=$.
+The above theorem can be found in [@Schrijver03, chap. 36]. Note that in Schrijver's book, one requires $\sum_{i=1}^m |A_{i,j}|=2$. It is not hard to see the statement still holds even if we have $\leq$ in place of $=$.
 
 We will express the maximum weight hierarchical $b$-matching problem as an integer program over a polytope defined over a bidirected matrix. The integer program is a modification of the integer program in [@KaparisLM17]. The integer program here is simpler, because we are not trying to reduce to *perfect* $b$-matching.
 
@@ -43,6 +44,7 @@ $y_e$ denote the amount of capacities we assign to $e$, $x_v$ denotes the capaci
 & & &  0\leq y_e \leq c_e & \forall e\in E \\
 & & &  0\leq z_i \leq u_i & \forall i\in [k] \\
 \end{aligned}
+
 \]
 
-The matrix here is a bidirected matrix. This shows the original problem can be solved in polynomial time. 
+The matrix here is a bidirected matrix. This shows the original problem can be solved in polynomial time.

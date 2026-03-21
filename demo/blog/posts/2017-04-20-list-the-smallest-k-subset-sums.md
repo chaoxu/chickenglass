@@ -1,14 +1,14 @@
 ---
-title: List the smallest $k$ subset sums
 tags: algorithm
+title: List the smallest $k$ subset sums
 ---
 
 ::: Problem
-Given a set of positive reals $\set{x_1,\ldots,x_n}$ where $x_1<x_2<\ldots<x_n$, 
-find the smallest $k$ subset sums. 
+Given a set of positive reals $\set{x_1,\ldots,x_n}$ where $x_1<x_2<\ldots<x_n$,
+find the smallest $k$ subset sums.
 :::
 
-We can assume $n\leq k$, because we do not have to read $x_j$ if $j>k$. 
+We can assume $n\leq k$, because we do not have to read $x_j$ if $j>k$.
 
 Torsten Gross and Nils Blüthgen posted [a $O(k^2)$ time solution on arXiv](https://arxiv.org/abs/1704.05795).
 
@@ -16,9 +16,9 @@ We show a $O(k\log k)$ time algorithm, which is optimal if we want to output the
 
 We list the sums one by one by maintaining a priority queue of sums. We start with the empty set. Assume that we added the sum induced by $I\subset [n]$ (that is, $\sum_{i\in I} x_i$) into the output, let $j=1+\max I$. Now we can consider two possibilities by extending the current solution: the sum induced by $I\cup \set{j}$ or the sum induced by $I\cup \set{k}$ where $k>j$. We will add both possibilities to the queue so that one can inspect them later. We can avoid storing the sets, only the values are required.
 
-Here is a python implementation. 
+Here is a python implementation.
 
-```python
+``` python
 def first_k_subset_sums(x,k):
     n = len(x)
     h = []
@@ -41,6 +41,6 @@ If we don't have to list the smallest $k$ subset sum values in order, then $O(k)
 
 If we are interested in the smallest $k$ *distinct* subset sum. I don't know of any algorithm that performs better than $O(nk)$, even if we know that $n=\Omega(k)$.
 
-# Acknowledgements {-}
+# Acknowledgements {#acknowledgements .unnumbered}
 
-I would like to thank Tana Wattanawaroon for helpful discussions and taking an interest in this problem.  
+I would like to thank Tana Wattanawaroon for helpful discussions and taking an interest in this problem.

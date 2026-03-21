@@ -1,6 +1,6 @@
 ---
-title: Test conjectures on $k$-partitions over submodular functions
 tags: Conjectures, computational experiments, submodular, partition
+title: Test conjectures on $k$-partitions over submodular functions
 ---
 
 This article considers tools one can use to quickly test conjectures. I work in combinatorial optimization, and often there are cases where one can phrase a problem as a conjecture over a finite domain. Testing conjectures using brute force quickly becomes infeasible due to combinatorial explosion. Here, we walk through an actual example and learn a few techniques. We will use [Sage](https://www.sagemath.org/) and any fast linear program solver, such as [Gurobi](https://www.gurobi.com/).
@@ -14,16 +14,14 @@ Let $f:2^V\to \R$ be a submodular function. A **minimum $k$-partition** is a $k$
 A $k$-partition $\mathcal{X}$ and a $j$-partition $\mathcal{Y}$ are **noncrossing** if there exist $X\in \mathcal{X}$ and $Y\in \mathcal{Y}$ such that $X\subseteq Y$. We denote this relation by $\mathcal{X}\lhd\mathcal{Y}$.
 
 ::: Conjecture
-
 Let $f:2^V\to \R$ be a submodular function with $|V|\geq k$. Let $\mathcal{X}$ be a minimum $(k-1)$-partition. Then there exists a minimum $k$-partition $\mathcal{Y}$ such that $\mathcal{X}\lhd \mathcal{Y}$.
-
 :::
 
 One way to prove the conjecture is to start with a minimum $k$-partition that does not have the desired property, and then use it to construct a new minimum $k$-partition that does. This requires introducing a few additional notions.
 
 For two partitions $\mathcal{X}$ and $\mathcal{Y}$, define
 \[
-\mathcal{X}\sqcap \mathcal{Y} = \set{X\cap Y \mid X\in \mathcal{X},\, Y\in\mathcal{Y}}.
+`\mathcal{X}`{=tex}`\sqcap `{=tex}`\mathcal{Y}`{=tex} = `\set{X\cap Y \mid X\in \mathcal{X},\, Y\in\mathcal{Y}}`{=tex}.
 \]
 That is, the new partition is obtained by intersecting every part of $\mathcal{X}$ with every part of $\mathcal{Y}$.
 
@@ -32,9 +30,7 @@ For two partitions $\mathcal{X}$ and $\mathcal{Y}$, write $\mathcal{X}\leq \math
 Now consider the following stronger conjecture, which implies the previous one.
 
 ::: Conjecture
-
 Let $f:2^V\to \R$ be a submodular function with $|V|\geq k$. Let $\mathcal{X}$ be a minimum $(k-1)$-partition, and let $\mathcal{Y}$ be a minimum $k$-partition. Then there exists a minimum $k$-partition $\mathcal{Y}'$ such that $\mathcal{X}\lhd \mathcal{Y}'$ and $\mathcal{X}\sqcap \mathcal{Y} \leq \mathcal{Y}'$.
-
 :::
 
 We are interested in writing a program to test the stronger conjecture for small $k$.
@@ -45,16 +41,16 @@ One can first consider all possible ways $\mathcal{X}$ can intersect with $\math
 
 Given $\mathcal{X} = \set{X_1,\ldots,X_{k-1}}$ and $\mathcal{Y} = \set{Y_1,\ldots,Y_{k}}$, let
 \[
-Z_{i,j} = X_i\cap Y_j,
-\qquad
-\mathcal{Z} = \{Z_{i,j}\} = \mathcal{X}\sqcap \mathcal{Y}.
+Z\_{i,j} = X_i`\cap `{=tex}Y_j,
+`\qquad`{=tex}
+`\mathcal{Z}`{=tex} = {Z\_{i,j}} = `\mathcal{X}`{=tex}`\sqcap `{=tex}`\mathcal{Y}`{=tex}.
 \]
 
 We want to show that some minimum $k$-partition $\mathcal{Y}'$ satisfies $\mathcal{Z}\leq \mathcal{Y}'$.
 
 Observe that it does not matter whether $Z_{i,j}$ contains $100$ vertices or $1$ vertex -- only whether it is empty. Hence, we can consider a matrix $M$ where
 \[
-M_{i,j} = \max(1, |Z_{i,j}|).
+M\_{i,j} = `\max`{=tex}(1, \|Z\_{i,j}\|).
 \]
 Such a matrix is called a **configuration** of $\mathcal{Z}$, and it encodes the information we care about. $\mathcal{X}$ and $\mathcal{Y}$ is called a realization of $M$. The goal is to prove the conjecture for each configuration. That is, all realizations of the configuration.
 
@@ -64,9 +60,7 @@ We are interested in enumerating possible configurations up to isomorphism.
 
 This is the same as enumerating $\{0,1\}$-matrices modulo the action of a permutation group. This part can be done in Sage. There is a function that generates all integer vectors modulo a permutation group; the vectors have length $\ell$ with elements in $\set{0,\ldots,n}$. See the reference on [Integer vectors modulo the action of a permutation group](https://doc.sagemath.org/html/en/reference/combinat/sage/combinat/integer_vectors_mod_permgroup.html).
 
-```
-IntegerVectorsModPermutationGroup(P, max_part=1)
-```
+    IntegerVectorsModPermutationGroup(P, max_part=1)
 
 Once we have the output, we filter it to obtain valid configurations. For example, a configuration must have at least one $1$ in each row.
 
@@ -76,25 +70,23 @@ One might think we can take $S_{k-1}\times S_k$ to obtain $P$, where $S_k$ is th
 
 The correct way is to use wreath products. We want $(S_{k-1} \wr S_k)\cap (S_k \wr S_{k-1})$. However, we must ensure that the element labeling is consistent. The following is Sage code where the elements are labeled $1$ to $k(k-1)$. We ensure the same labeling via the permutation `pi`.
 
-```
-a = SymmetricGroup(k-1)
-b = SymmetricGroup(k)
+    a = SymmetricGroup(k-1)
+    b = SymmetricGroup(k)
 
-matrix = [[k*x+y+1 for y in range(k-1)] for x in range(k)]
-pi = list(itertools.chain.from_iterable(map(list, zip(*matrix))))
+    matrix = [[k*x+y+1 for y in range(k-1)] for x in range(k)]
+    pi = list(itertools.chain.from_iterable(map(list, zip(*matrix))))
 
-# we have to use SAGE to access GAP
-GG = gap.WreathProduct(gap(a),gap(b))
-HH = gap.WreathProduct(gap(b),gap(a))
+    # we have to use SAGE to access GAP
+    GG = gap.WreathProduct(gap(a),gap(b))
+    HH = gap.WreathProduct(gap(b),gap(a))
 
-G = PermutationGroup(gap_group = GG.AsPermGroup())
-Hbad = PermutationGroup(gap_group = HH.AsPermGroup())
-# make sure the elements are labelled correctly.
-H = PermutationGroup([perm_replace(pi,g) for g in Hbad.gens()])
+    G = PermutationGroup(gap_group = GG.AsPermGroup())
+    Hbad = PermutationGroup(gap_group = HH.AsPermGroup())
+    # make sure the elements are labelled correctly.
+    H = PermutationGroup([perm_replace(pi,g) for g in Hbad.gens()])
 
-# The correct permutation group
-P = H.intersection(G)
-```
+    # The correct permutation group
+    P = H.intersection(G)
 
 At this point, we obtain all matrices, some of which correspond to configurations. In particular, for $k=3,4,5,6$, the numbers of configurations are $13, 87, 1053, 28576$.
 
@@ -121,6 +113,7 @@ Consider the following linear program:
 &             & & x_\mathcal{Y} = 1 \\
 &             & & z \leq x_{\mathcal{Y}'} && \forall \mathcal{Y}'\in P_{k}(V)\ \text{with}\ \mathcal{X} \lhd \mathcal{Y}'.
 \end{aligned}
+
 \]
 
 The first set of constraints are the submodular inequalities, which enforce that $x_S=f(S)$ for some submodular function $f$. The next constraints enforce that $\mathcal{X}$ is a minimum $(k-1)$-partition and $\mathcal{Y}$ is a minimum $k$-partition. We normalize the optimal $k$-partition value to be $1$. Finally, among all $k$-partitions that are noncrossing with $\mathcal{X}$, the variable $z$ is a lower bound on their objective values.
@@ -131,17 +124,17 @@ If the optimal value is $z=1$, then there exists at least one $k$-partition $\ma
 
 One can easily prove the conjecture for $k=3,4$ by directly solving the above linear program over all good configurations. However, it becomes difficult for $k=5$ because the linear program is far too large. The number of $k$-partitions of an $n$-element set is the Stirling number of the second kind $\left\{{n\atop k}\right\}$:
 \[
-\left\{{20\atop 5}\right\} = 749206090500,
-\qquad
-\left\{{20\atop 4}\right\} = 45232115901.
+`\left`{=tex}{{20`\atop 5`{=tex}}`\right`{=tex}} = 749206090500,
+`\qquad`{=tex}
+`\left`{=tex}{{20`\atop 4`{=tex}}`\right`{=tex}} = 45232115901.
 \]
 It seems many constraints are redundant due to symmetry, and it would be interesting to see if we can reduce the formulation to a manageable size. If so, the conjecture for $k=5$, or even $k=6$, might become solvable.
 
 To do this, consider the following definition. For a vector $s=(s_1,\ldots,s_k)$, say that a family of $k$-partitions $\mathfrak{F}$ is **$s$-complete** if
 \[
-f(\mathcal{P})\geq f(\mathcal{Y})\ \forall \mathcal{P}\in \mathfrak{F}
-\quad\Longrightarrow\quad
-f(\mathcal{P})\geq f(\mathcal{Y})\ \forall \mathcal{P}\in P_k(V),
+f(`\mathcal{P}`{=tex})`\geq `{=tex}f(`\mathcal{Y}`{=tex}) `\forall `{=tex}`\mathcal{P}`{=tex}`\in `{=tex}`\mathfrak{F}`{=tex}
+`\quad`{=tex}`\Longrightarrow`{=tex}`\quad`{=tex}
+f(`\mathcal{P}`{=tex})`\geq `{=tex}f(`\mathcal{Y}`{=tex}) `\forall `{=tex}`\mathcal{P}`{=tex}`\in `{=tex}P_k(V),
 \]
 where $\mathcal{Y}=\{Y_1,\ldots,Y_k\}$ is a $k$-partition with $|Y_i|=s_i$. By the previous discussion, we only need to consider the case $\sum_i s_i \leq k(k-1)$.
 
@@ -163,15 +156,13 @@ Thus, $|\mathfrak{F}|=(2^a-2)+(2^b-2)+1=2^a+2^b-3$.
 Next, we show that $\mathfrak{F}$ is $(a,b)$-complete. Consider any $(X_1,X_2)\notin \mathfrak{F}$ and its intersection with $(Y_1,Y_2)$. Let $Z_{i,j}=X_i\cap Y_j$.
 
 Let $|Z_{1,1}|=x$ and $|Z_{2,1}|=y$. Then $|Z_{1,2}|=a-x$ and $|Z_{2,2}|=b-y$. Consider the case where all $Z_{i,j}$ are non-empty. Then
-$$
-\begin{align*}
+`\begin{align*}
 \sum_{i=1}^2 \sum_{j=1}^2 \bigl(f(X_i)+f(Y_j)\bigr)
   &= 2\bigl(f(X_1)+f(X_2)+f(Y_1)+f(Y_2)\bigr)\\
   &\ge \sum_{i=1}^2 \sum_{j=1}^2 \bigl(f(Z_{i,j}) + f(X_i\cup Y_j)\bigr)\\
   &= \sum_{i=1}^2 \sum_{j=1}^2 \bigl(f(Z_{i,j}) + f(\overline{Z_{i,j}})\bigr)\\
   &\ge 4\bigl(f(Y_1)+f(Y_2)\bigr),
-\end{align*}
-$$
+\end{align*}`{=tex}
 which implies $f(X_1)+f(X_2)\ge f(Y_1)+f(Y_2)$.
 
 Otherwise, if some $Z_{i,j}$ is empty, then necessarily $(X_1,X_2)=(Y_1,Y_2)\in \mathfrak{F}$.
@@ -179,7 +170,7 @@ Otherwise, if some $Z_{i,j}$ is empty, then necessarily $(X_1,X_2)=(Y_1,Y_2)\in 
 
 Currently, I do not know much about $\lambda(s)$ in general, so let us look at a special case. Define
 \[
-\lambda_k(d) = \lambda((d,\ldots,d)),
+`\lambda`{=tex}\_k(d) = `\lambda`{=tex}((d,`\ldots`{=tex},d)),
 \]
 where $d$ is repeated $k$ times. It would be very interesting to understand how large $\lambda_k(d)$ is, especially $\lambda_5(4)$. If $\lambda_5(4)$ is small, then there is hope of solving the conjecture for $k=5$.
 
