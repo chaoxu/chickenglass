@@ -48,22 +48,23 @@ export const typographyThemeStyles = {
   },
 
   /* Heading line styles — font-size on .cm-line so all children (including
-   * math widgets) inherit it. Matches Oxford Lecture Series / blog style. */
-  ".cg-heading-line-1": { fontSize: "1.15em", lineHeight: "1.3", color: "var(--cg-fg)" },
-  ".cg-heading-line-2": { fontSize: "1.15em", lineHeight: "1.3", color: "var(--cg-fg)" },
-  ".cg-heading-line-3": { fontSize: "1.1em", lineHeight: "1.4", color: "var(--cg-fg)" },
-  ".cg-heading-line-4": { fontSize: "1.05em", lineHeight: "1.4", color: "var(--cg-fg)" },
-  ".cg-heading-line-5": { fontSize: "1em", lineHeight: "1.5", color: "var(--cg-fg)" },
-  ".cg-heading-line-6": { fontSize: "0.95em", lineHeight: "1.5", color: "var(--cg-fg)" },
+   * math widgets) inherit it. Uses CSS variables from theme-config.ts so
+   * presets can override sizes. */
+  ".cg-heading-line-1": { fontSize: "var(--cg-h1-size, 1.15em)", lineHeight: "1.3", color: "var(--cg-fg)" },
+  ".cg-heading-line-2": { fontSize: "var(--cg-h2-size, 1.15em)", lineHeight: "1.3", color: "var(--cg-fg)" },
+  ".cg-heading-line-3": { fontSize: "var(--cg-h3-size, 1.1em)", lineHeight: "1.4", color: "var(--cg-fg)" },
+  ".cg-heading-line-4": { fontSize: "var(--cg-h4-size, 1.05em)", lineHeight: "1.4", color: "var(--cg-fg)" },
+  ".cg-heading-line-5": { fontSize: "var(--cg-h5-size, 1em)", lineHeight: "1.5", color: "var(--cg-fg)" },
+  ".cg-heading-line-6": { fontSize: "var(--cg-h6-size, 0.95em)", lineHeight: "1.5", color: "var(--cg-fg)" },
 
   /* Heading mark styles — font-weight/style on text spans.
-   * H1: bold, H2: italic normal-weight, H3: italic bold (blog style) */
-  ".cg-heading-1": { fontWeight: "700" },
-  ".cg-heading-2": { fontWeight: "400", fontStyle: "italic" },
-  ".cg-heading-3": { fontWeight: "600", fontStyle: "italic" },
-  ".cg-heading-4": { fontWeight: "600" },
-  ".cg-heading-5": { fontWeight: "600" },
-  ".cg-heading-6": { fontWeight: "600" },
+   * Uses CSS variables from theme-config.ts so presets can override. */
+  ".cg-heading-1": { fontWeight: "var(--cg-h1-weight, 700)", fontStyle: "var(--cg-h1-style, normal)" },
+  ".cg-heading-2": { fontWeight: "var(--cg-h2-weight, 400)", fontStyle: "var(--cg-h2-style, italic)" },
+  ".cg-heading-3": { fontWeight: "var(--cg-h3-weight, 600)", fontStyle: "var(--cg-h3-style, italic)" },
+  ".cg-heading-4": { fontWeight: "var(--cg-h4-weight, 600)", fontStyle: "var(--cg-h4-style, normal)" },
+  ".cg-heading-5": { fontWeight: "var(--cg-h5-weight, 600)", fontStyle: "var(--cg-h5-style, normal)" },
+  ".cg-heading-6": { fontWeight: "var(--cg-h6-weight, 600)", fontStyle: "var(--cg-h6-style, normal)" },
 
   /* Inline content styling — always applied for WYSIWYG feel */
   ".cg-bold": {

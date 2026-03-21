@@ -5,13 +5,13 @@
  */
 export const baseThemeStyles = {
   "&": {
-    fontSize: "16px",
-    fontFamily: "KaTeX_Main, 'Times New Roman', serif",
+    fontSize: "var(--cg-base-font-size, 16px)",
+    fontFamily: "var(--cg-content-font, KaTeX_Main, 'Times New Roman', serif)",
   },
   ".cm-content": {
-    fontFamily: "KaTeX_Main, 'Times New Roman', serif",
+    fontFamily: "var(--cg-content-font, KaTeX_Main, 'Times New Roman', serif)",
     padding: "24px 48px 24px 48px",
-    maxWidth: "800px",
+    maxWidth: "var(--cg-content-max-width, 800px)",
     marginLeft: "auto",
     marginRight: "max(224px, calc((100% - 800px) / 2))",
     overflow: "visible",

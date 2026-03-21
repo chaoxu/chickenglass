@@ -5,6 +5,7 @@ import type { Settings, ExportFormat } from "../lib/types";
 import type { Theme } from "../theme-manager";
 import { cn } from "../lib/utils";
 import { builtinThemes } from "../themes";
+import { themePresets, themePresetKeys } from "../../editor/theme-config";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -213,9 +214,37 @@ function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: Appeara
         </div>
       </Row>
 
+      {/* Writing preset (typography: fonts, heading sizes) */}
+      <div className="py-3 border-b border-[var(--cg-border)]">
+        <label className="text-sm text-[var(--cg-fg)] block mb-2">Writing preset</label>
+        <p className="text-xs text-[var(--cg-muted)] mb-2">
+          Font family, heading sizes, and line spacing.
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {themePresetKeys.map((key) => {
+            const preset = themePresets[key];
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => { onUpdateSetting("writingTheme", key); }}
+                className={cn(
+                  "px-3 py-2 text-sm rounded border text-left transition-colors duration-[var(--cg-transition,0.15s)]",
+                  settings.writingTheme === key
+                    ? "bg-[var(--cg-accent)] text-[var(--cg-accent-fg)] border-[var(--cg-accent)]"
+                    : "border-[var(--cg-border)] text-[var(--cg-fg)] hover:bg-[var(--cg-hover)]",
+                )}
+              >
+                <span className="font-medium">{preset.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Writing theme selection */}
       <div className="py-3 border-b border-[var(--cg-border)]">
-        <label className="text-sm text-[var(--cg-fg)] block mb-2">Writing theme</label>
+        <label className="text-sm text-[var(--cg-fg)] block mb-2">Color theme</label>
         <div className="grid grid-cols-2 gap-2">
           {builtinThemes.map((t) => (
             <button

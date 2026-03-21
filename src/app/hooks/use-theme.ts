@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { loadTheme, saveTheme, type Theme } from "../theme-manager";
 import { getThemeById, type WritingTheme } from "../themes";
+import { themePresets, applyThemePreset, clearThemePreset } from "../../editor/theme-config";
 
 // Re-export Theme so consumers only need one import.
 export type { Theme } from "../theme-manager";
@@ -73,7 +74,7 @@ export interface UseThemeReturn {
   resolvedTheme: ResolvedTheme;
 }
 
-export function useTheme(themeName?: string, customCss?: string): UseThemeReturn {
+export function useTheme(themeName?: string, customCss?: string, writingTheme?: string): UseThemeReturn {
   // Single lazy initializer: read localStorage once and derive both states.
   const [theme, setThemeState] = useState<Theme>(loadTheme);
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(
@@ -124,6 +125,14 @@ export function useTheme(themeName?: string, customCss?: string): UseThemeReturn
       prevVariablesRef.current = [];
     };
   }, [themeName]);
+
+  // Apply writing theme preset (typography: fonts, heading sizes) whenever it changes.
+  useEffect(() => {
+    const presetId = writingTheme ?? "academic";
+    const preset = themePresets[presetId] ?? themePresets["academic"];
+    applyThemePreset(preset);
+    return () => { clearThemePreset(); };
+  }, [writingTheme]);
 
   // Inject user custom CSS whenever it changes.
   useEffect(() => {

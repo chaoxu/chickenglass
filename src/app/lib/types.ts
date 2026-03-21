@@ -23,6 +23,8 @@ export interface Settings {
   enabledPlugins: Record<string, boolean>;
   /** Selected writing theme id (e.g., "default", "sepia", "nord", "dracula"). */
   themeName: string;
+  /** Selected writing preset id (e.g., "academic", "monospace", "modern"). */
+  writingTheme: string;
   /** User-provided custom CSS injected via a <style> tag. */
   customCss: string;
 }

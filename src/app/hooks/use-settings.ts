@@ -26,6 +26,7 @@ const DEFAULT_SETTINGS: Settings = {
   defaultExportFormat: "pdf",
   enabledPlugins: {},
   themeName: "default",
+  writingTheme: "academic",
   customCss: "",
 };
 

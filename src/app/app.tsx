@@ -45,7 +45,7 @@ import { exportDocument, batchExport } from "./export";
 function AppInner() {
   const fs = useFileSystem();
   const { settings, updateSetting } = useSettings();
-  const { theme, setTheme, resolvedTheme } = useTheme(settings.themeName, settings.customCss);
+  const { theme, setTheme, resolvedTheme } = useTheme(settings.themeName, settings.customCss, settings.writingTheme);
   const { recentFiles, addRecentFile } = useRecentFiles();
   const { windowState, saveState: saveWindowState } = useWindowState();
 

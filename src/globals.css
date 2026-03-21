@@ -85,7 +85,7 @@ body {
 
 /* Source mode uses monospace font for all content */
 .cg-source-mode .cm-content {
-  font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+  font-family: var(--cg-code-font, 'IBM Plex Mono', 'Fira Code', monospace);
 }
 
 /* ── Sidenote margin (portal + items) ──────────────────────────────────────
@@ -203,12 +203,12 @@ body {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 24px 48px;
-  max-width: 800px;
+  max-width: var(--cg-content-max-width, 800px);
   margin-left: auto;
   margin-right: auto;
-  font-family: KaTeX_Main, "Times New Roman", serif;
-  font-size: 16px;
-  line-height: 1.5;
+  font-family: var(--cg-content-font, KaTeX_Main, "Times New Roman", serif);
+  font-size: var(--cg-base-font-size, 16px);
+  line-height: var(--cg-line-height, 1.5);
   color: var(--cg-fg);
   background: var(--cg-bg);
 
@@ -233,12 +233,12 @@ body {
   line-height: 1.3;
 }
 
-.cg-read-mode-view h1 { font-size: 1.15em; font-weight: bold; font-style: normal; }
-.cg-read-mode-view h2 { font-size: 1.2em; font-weight: normal; font-style: italic; }
-.cg-read-mode-view h3 { font-size: 1.1em; font-weight: bold; font-style: italic; }
-.cg-read-mode-view h4 { font-size: 1em; font-weight: bold; font-style: normal; }
-.cg-read-mode-view h5 { font-size: 0.95em; font-weight: bold; font-style: normal; }
-.cg-read-mode-view h6 { font-size: 0.9em; font-weight: bold; font-style: normal; }
+.cg-read-mode-view h1 { font-size: var(--cg-h1-size, 1.15em); font-weight: var(--cg-h1-weight, bold); font-style: var(--cg-h1-style, normal); }
+.cg-read-mode-view h2 { font-size: var(--cg-h2-size, 1.2em); font-weight: var(--cg-h2-weight, normal); font-style: var(--cg-h2-style, italic); }
+.cg-read-mode-view h3 { font-size: var(--cg-h3-size, 1.1em); font-weight: var(--cg-h3-weight, bold); font-style: var(--cg-h3-style, italic); }
+.cg-read-mode-view h4 { font-size: var(--cg-h4-size, 1em); font-weight: var(--cg-h4-weight, bold); font-style: var(--cg-h4-style, normal); }
+.cg-read-mode-view h5 { font-size: var(--cg-h5-size, 0.95em); font-weight: var(--cg-h5-weight, bold); font-style: var(--cg-h5-style, normal); }
+.cg-read-mode-view h6 { font-size: var(--cg-h6-size, 0.9em); font-weight: var(--cg-h6-weight, bold); font-style: var(--cg-h6-style, normal); }
 
 /* Document title from frontmatter — larger but still academic */
 .cg-read-mode-view .cg-read-title {
