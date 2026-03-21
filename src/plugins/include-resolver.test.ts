@@ -172,6 +172,21 @@ a.md
     );
   });
 
+  it("throws IncludeCycleError on self-referential include (A -> A)", async () => {
+    const fs = new MemoryFileSystem({
+      "a.md": `::: {.include}
+a.md
+:::`,
+    });
+
+    await expect(resolveIncludes("a.md", fs)).rejects.toThrow(
+      IncludeCycleError,
+    );
+    await expect(resolveIncludes("a.md", fs)).rejects.toThrow(
+      /Include cycle detected/,
+    );
+  });
+
   it("throws IncludeCycleError on indirect cycle (A -> B -> C -> A)", async () => {
     const fs = new MemoryFileSystem({
       "a.md": `::: {.include}

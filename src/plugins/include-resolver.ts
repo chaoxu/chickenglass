@@ -121,6 +121,10 @@ async function resolveIncludesRecursive(
   fs: FileSystem,
   ancestorChain: readonly string[],
 ): Promise<readonly ResolvedInclude[]> {
+  // Include filePath itself in the chain so self-referential includes (A -> A)
+  // are detected immediately without reading the file a second time.
+  const selfChain = [...ancestorChain, filePath];
+
   const content = await readFileChecked(filePath, fs);
   const includePaths = extractIncludePaths(content);
 
@@ -129,15 +133,15 @@ async function resolveIncludesRecursive(
     const resolved = resolveIncludePath(filePath, rawPath);
 
     // Cycle detection: check if this path appears in the ancestor chain
-    if (ancestorChain.includes(resolved)) {
-      throw new IncludeCycleError([...ancestorChain, resolved]);
+    if (selfChain.includes(resolved)) {
+      throw new IncludeCycleError([...selfChain, resolved]);
     }
 
     const childContent = await readFileChecked(resolved, fs);
-    const newChain = [...ancestorChain, resolved];
 
-    // Recursively resolve nested includes
-    const children = await resolveIncludesRecursive(resolved, fs, newChain);
+    // Recursively resolve nested includes, passing selfChain so the current
+    // file is part of the ancestry for all descendants.
+    const children = await resolveIncludesRecursive(resolved, fs, selfChain);
 
     results.push({
       path: resolved,
