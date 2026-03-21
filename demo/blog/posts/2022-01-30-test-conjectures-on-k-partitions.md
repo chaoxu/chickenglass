@@ -60,7 +60,9 @@ We are interested in enumerating possible configurations up to isomorphism.
 
 This is the same as enumerating $\{0,1\}$-matrices modulo the action of a permutation group. This part can be done in Sage. There is a function that generates all integer vectors modulo a permutation group; the vectors have length $\ell$ with elements in $\set{0,\ldots,n}$. See the reference on [Integer vectors modulo the action of a permutation group](https://doc.sagemath.org/html/en/reference/combinat/sage/combinat/integer_vectors_mod_permgroup.html).
 
-    IntegerVectorsModPermutationGroup(P, max_part=1)
+```
+IntegerVectorsModPermutationGroup(P, max_part=1)
+```
 
 Once we have the output, we filter it to obtain valid configurations. For example, a configuration must have at least one $1$ in each row.
 
@@ -70,23 +72,25 @@ One might think we can take $S_{k-1}\times S_k$ to obtain $P$, where $S_k$ is th
 
 The correct way is to use wreath products. We want $(S_{k-1} \wr S_k)\cap (S_k \wr S_{k-1})$. However, we must ensure that the element labeling is consistent. The following is Sage code where the elements are labeled $1$ to $k(k-1)$. We ensure the same labeling via the permutation `pi`.
 
-    a = SymmetricGroup(k-1)
-    b = SymmetricGroup(k)
+```
+a = SymmetricGroup(k-1)
+b = SymmetricGroup(k)
 
-    matrix = [[k*x+y+1 for y in range(k-1)] for x in range(k)]
-    pi = list(itertools.chain.from_iterable(map(list, zip(*matrix))))
+matrix = [[k*x+y+1 for y in range(k-1)] for x in range(k)]
+pi = list(itertools.chain.from_iterable(map(list, zip(*matrix))))
 
-    # we have to use SAGE to access GAP
-    GG = gap.WreathProduct(gap(a),gap(b))
-    HH = gap.WreathProduct(gap(b),gap(a))
+# we have to use SAGE to access GAP
+GG = gap.WreathProduct(gap(a),gap(b))
+HH = gap.WreathProduct(gap(b),gap(a))
 
-    G = PermutationGroup(gap_group = GG.AsPermGroup())
-    Hbad = PermutationGroup(gap_group = HH.AsPermGroup())
-    # make sure the elements are labelled correctly.
-    H = PermutationGroup([perm_replace(pi,g) for g in Hbad.gens()])
+G = PermutationGroup(gap_group = GG.AsPermGroup())
+Hbad = PermutationGroup(gap_group = HH.AsPermGroup())
+# make sure the elements are labelled correctly.
+H = PermutationGroup([perm_replace(pi,g) for g in Hbad.gens()])
 
-    # The correct permutation group
-    P = H.intersection(G)
+# The correct permutation group
+P = H.intersection(G)
+```
 
 At this point, we obtain all matrices, some of which correspond to configurations. In particular, for $k=3,4,5,6$, the numbers of configurations are $13, 87, 1053, 28576$.
 

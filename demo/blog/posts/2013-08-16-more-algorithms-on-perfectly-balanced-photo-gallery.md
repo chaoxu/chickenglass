@@ -110,26 +110,28 @@ Using the [SMAWK algorithm](http://en.wikipedia.org/wiki/SMAWK_algorithm), all c
 
 Here is the very simple code to show how this can be done easily if we have a [Haskell implementation of the SMAWK algorithm](http://dailyhaskellexercise.tumblr.com/post/57781874558/column-minima-in-a-totally-monotone-matrix). The indexing is a bit different from the description in the article.
 
-    import Data.Array
-    import SMAWK
+```
+import Data.Array
+import SMAWK
 
-    minCostkEdgePath k n w = d!(k-1,n)
-      where
-        d = array ((0,0),(k-1,n)) [ ((i,j), f i j) | i<-[0..k-1],j<-[0..n]]
-        f 0 i = w 0 i
-        f k i = m k (p!(k,i)) i
-        p = array ((1,0),(k,n)) [((z,i),t) |z<-[1..k],(i,t)<-zip [0..n] (columnMinima (m z) (n+1) (n+1))]
-        m k j i = (+) (d!(k-1,j)) (w j i)
+minCostkEdgePath k n w = d!(k-1,n)
+  where
+    d = array ((0,0),(k-1,n)) [ ((i,j), f i j) | i<-[0..k-1],j<-[0..n]]
+    f 0 i = w 0 i
+    f k i = m k (p!(k,i)) i
+    p = array ((1,0),(k,n)) [((z,i),t) |z<-[1..k],(i,t)<-zip [0..n] (columnMinima (m z) (n+1) (n+1))]
+    m k j i = (+) (d!(k-1,j)) (w j i)
 
-    minCostMuPartition k xs = minCostkEdgePath k n w
-        where 
-            w i j 
-             | i <= j    = abs $! s!j - s!i - avg
-             | otherwise = 2*m
-            s   = listArray (0, n-1) $ scanl (+) 0 xs
-            n   = length xs
-            m   = sum xs
-            avg = m/fromIntegral k
+minCostMuPartition k xs = minCostkEdgePath k n w
+    where 
+        w i j 
+         | i <= j    = abs $! s!j - s!i - avg
+         | otherwise = 2*m
+        s   = listArray (0, n-1) $ scanl (+) 0 xs
+        n   = length xs
+        m   = sum xs
+        avg = m/fromIntegral k
+```
 
 # Solve the linear partition problem
 

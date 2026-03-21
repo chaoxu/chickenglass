@@ -23,10 +23,12 @@ INSERT INTO t VALUES
 
 The correct output should be the following.
 
-    a    b
-    -------
-    0    15
-    20   30
+```
+a    b
+-------
+0    15
+20   30
+```
 
 We do not allow empty intervals, so we cannot have $a=b$.
 

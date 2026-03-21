@@ -56,3 +56,14 @@ function RawInline(el)
   end
   return el
 end
+
+-- Force fenced code blocks: Pandoc's markdown writer uses indented code
+-- by default when there are no attributes. Convert to raw markdown
+-- with explicit ``` fencing.
+function CodeBlock(el)
+  if #el.classes == 0 then
+    local fence = "```\n" .. el.text .. "\n```"
+    return pandoc.RawBlock("markdown", fence)
+  end
+  return el
+end

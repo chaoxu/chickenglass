@@ -53,7 +53,7 @@ for src_file in "$SRC"/posts/*.md; do
 
   if pandoc \
     -f markdown+fenced_divs+tex_math_dollars+tex_math_single_backslash+footnotes+yaml_metadata_block \
-    -t markdown+fenced_divs+tex_math_dollars+tex_math_single_backslash+footnotes+yaml_metadata_block-simple_tables-multiline_tables+pipe_tables \
+    -t markdown+fenced_divs+fenced_code_blocks+tex_math_dollars+tex_math_single_backslash+footnotes+yaml_metadata_block-simple_tables-multiline_tables+pipe_tables+fenced_code_attributes \
     --wrap=preserve \
     --columns=9999 \
     --lua-filter="$FILTER" \
