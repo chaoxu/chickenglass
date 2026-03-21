@@ -364,7 +364,7 @@ function addHeaderWidgetDecoration(
 ): void {
   // Include the title in the replacement range so inline markdown
   // (bold, italic, math) in the title is rendered by the widget.
-  const replaceEnd = div.titleTo ?? div.titleFrom ?? div.fenceTo;
+  const replaceEnd = div.titleFrom ?? div.fenceTo;
   const label =
     div.title !== undefined ? header + " " + div.title : header;
   const widget = new BlockHeaderWidget(label, macros, macrosKey);
