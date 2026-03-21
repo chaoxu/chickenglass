@@ -23,7 +23,6 @@ If $x\geq a\geq b \geq c \geq d\geq 0$, then $ax+bx - ab \geq cx+dx-cd$.
 
 ::: Proof
 Let's consider what is required to make sure the property works.
-\[
 
 $$\begin{aligned}
   (a+b)x-ab &\geq  (c+d)x-cd\\
@@ -34,7 +33,6 @@ $$\begin{aligned}
   x&\geq b
   \end{aligned}$$
 
-\]
 The lemma is true, as $x\geq b$ is part of the hypothesis for $x$.
 :::
 
@@ -51,7 +49,7 @@ $\pi$ maximizes
 
 $$
   \sum_{i=1}^n a_{\pi(i)}a_{\pi(i+1)}
-$$
+  $$
 :::
 
 ::: Proof

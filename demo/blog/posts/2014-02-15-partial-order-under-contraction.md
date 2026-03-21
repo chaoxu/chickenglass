@@ -22,11 +22,11 @@ If we interpret $(P,\leq)$ as a directed graph, then this operation is contracti
 There is a cute characterization of when $(Q,\preccurlyeq)$ is also a partial order.
 
 ::: Theorem
-$C(P,Z)=(Q,\preccurlyeq)$ is a partial order if and only if $D(Z)\cap U(Z) = \emptyset$. In particular, the map \[ f(x) =
+$C(P,Z)=(Q,\preccurlyeq)$ is a partial order if and only if $D(Z)\cap U(Z) = \emptyset$. In particular, the map
 
-$$\begin{cases} x  & x\in P\backslash Z \\ q & x \in Z\end{cases}$$
+$$ f(x) = \begin{cases} x  & x\in P\backslash Z \\ q & x \in Z\end{cases} $$
 
-\] is order-preserving.
+is order-preserving.
 :::
 
 ::: Proof

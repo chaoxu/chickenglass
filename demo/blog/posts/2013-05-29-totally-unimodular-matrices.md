@@ -16,8 +16,7 @@ If $A \in TU$, $A_j$ be the $j$th row of $A$, then
 
 1.  $A^T \in TU$,
 2.  $A'$ is a submatrix of $A$, then $A'\in TU$,
-3.  \[
-    $$
+3.  $$
       \begin{bmatrix}
         0\\
         A_1\\
@@ -26,8 +25,7 @@ If $A \in TU$, $A_j$ be the $j$th row of $A$, then
         \vdots\\
         A_{m}
         \end{bmatrix} \in TU
-    $$
-    \].
+    $$.
 4.  If $A$ is a square matrix, then $A^{-1} \in TU$,
 5.  If $A'$ is formed by row swapping of $A$, then $A'\in TU$.
 6.  Multiply by ${-1,0,1}$ to a row.

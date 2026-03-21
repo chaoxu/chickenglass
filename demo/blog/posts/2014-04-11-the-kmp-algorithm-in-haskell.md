@@ -79,7 +79,6 @@ It is obvious how we can build the entire automaton except for the failure trans
 
 Another way to reason about it.
 We impose an order on a set of strings $S$ by measuring the length of the string, so this order is a linear order when the set of strings have different length. Let $Prefixes(s)$ to be the set of all prefixes of $s$, $Suffixes(s)$ to be the set of all suffixes of $s$.
-\[
 
 $$\begin{aligned}
 Border(s) &= Prefixes(s)\cap Suffixes(s)\\
@@ -87,8 +86,6 @@ Border'(sa) &= \{x|x\in Border(s),xa\not\in Border(sa)\}\\
 b(s) &= \max(Border(s)\backslash \{s\})\\
 b'(sa) &= \max(Border'(sa))
 \end{aligned}$$
-
-\]
 
 Assume we try to compute $b(x)$ for a string $x$, we first build the function $next$, such that $next$ iterates through $Prefix(x)$ by length, and $last$ is a function that returns the last element in the string.
 We have the following relation for $sa$ a prefix of $x$, where $s$ is a string and $a$ is in the alphabet.

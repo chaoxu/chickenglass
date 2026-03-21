@@ -12,13 +12,13 @@ Let $a=(a_1,\ldots,a_n)$ be a vector of positive integers with at least $2$ elem
 
 $$
   \sum_{i=1}^n x_i a_i = 1
-$$
+  $$
 
 such that for all $1\leq i\leq n-1$,
 
 $$
   |x_i|\leq \frac{g_{i+1}}{2g_i}
-$$
+  $$
 
 and $|x_n|\leq \frac{\max(a_1,\ldots,a_{n-1})}{2}$.
 :::
@@ -34,11 +34,11 @@ One can algebraically check that $a/b\leq a-b$ holds if both $a\geq 2b$ and $b\g
 
 $$
   \sum_{i\in I} |x_i| \leq \frac{1}{2} \sum_{i\in I} \frac{g_{i+1}}{g_i} \leq \frac{g_{j+1}}{2} + \frac{1}{2} \sum_{i\in I, i\neq j} g_{i+1} - g_i \leq \frac{g_{j+1}}{2} + \frac{1}{2} \sum_{i=j+1}^{n-1} g_{i+1}-g_i = \frac{1}{2}g_n = \frac{\min(a)}{2}.
-$$
+  $$
 
 $$
       \|x\| = \sum_{i=1}^n |x_i| = |x_n| + \sum_{i\in I} |x_i| \leq \frac{\min(a)+\max(a)}{2}
-$$
+  $$
 :::
 
 ::: Corollary

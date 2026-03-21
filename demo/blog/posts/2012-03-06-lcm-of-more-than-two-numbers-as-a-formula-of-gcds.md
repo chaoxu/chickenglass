@@ -25,19 +25,22 @@ This article shows how we can prove this result, and easily infer a more general
 First, we see there is a group isomorphism from the naturals to it's prime factors $f:\mathbb{N} \to \mathbb{N}^\infty$, $f(p_1^{e_1} \ldots p_n^{e^n}) = (e_1,\ldots,e_n,0,0,\ldots)$, where $p_n$ is the $n$th prime.
 
 It's easy to show
-\[
 
 $$\begin{aligned}
 \lcm(a_1,a_2,\ldots,a_n) &= f^{-1} (\max(f(a_1),\ldots,f(a_n)))\\
 \gcd(a_1,a_2,\ldots,a_n) &= f^{-1} (\min(f(a_1),\ldots,f(a_n)))
 \end{aligned}$$
 
-\]
 where $\max$ and $\min$ are defined coordinate-wise. In fact we only need to concern with one single coordinate. So the problem become proving
-\$\$
-$\max$(a,b,c) = a+b+c+$\min$(a,b,c)-($\min$(a,b)+$\min$(b,c)+$\min$(a,c))
-\], then the formula for $\lcm$ of 3 numbers holds.
+
+$$
+\max(a,b,c) = a+b+c+\min(a,b,c)-(\min(a,b)+\min(b,c)+\min(a,c))
+$$
+
+, then the formula for $\lcm$ of 3 numbers holds.
 
 This look familiar to the inclusion-exclusion principle, and certainly we can use it to prove it and generalize! Let $\mu$ be the Lebesgue measure, then for a finite sequence of non-negative reals $\set{a_i}$,
-\[$\max$(a_1,$\ldots$,a_n) = $\mu$($\bigcup$\_{i=1}\^n \[0,a_i\]).\]
+
+$$\max(a_1,\ldots,a_n) = \mu(\bigcup_{i=1}^n [0,a_i]).$$
+
 It's just some standard arguments to show $\max$ does have the inclusion-exclusion structure. It generalize to allow negative reals by simply add a large enough constant to make them positive, and subtract the constant from the result. Formulas for $\min,\gcd,\lcm$ follows similarly.

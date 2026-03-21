@@ -18,9 +18,12 @@ The positive braid monoid of $n$ strands is denoted as $B_n^+$. Such that $B_n^+
 
 ::: {.Definition title="The Fundamental Braid"}
 The fundamental braid, or half-twist, on $n$ strands
-\$\$
-$\Delta$\_n = ($\sigma$*1$\ldots$$\sigma$*{n-1})($\sigma$*1$\ldots$$\sigma$*{n-2})$\ldots$($\sigma$\_1$\sigma$\_2)$\sigma$\_1
-\].
+
+$$
+\Delta_n = (\sigma_1\ldots \sigma_{n-1})(\sigma_1\ldots\sigma_{n-2})\ldots(\sigma_1\sigma_2)\sigma_1
+$$
+
+.
 
 $\Delta$ is used for $\Delta_n$ if $n$ is obvious from the context.
 :::

@@ -58,7 +58,7 @@ Consider the longest path $v_1,\ldots,v_n$. Claim: $w(\{v_i,v_n\})\leq w(\{v_i,v
 
 $$
   \delta_w(G) \leq \sum_{\{v_i,v_n\}\in E} w(\{v_i,v_n\}) \leq \sum_{i=1}^{n-1} w(\{v_i,v_{i+1}\})  = W(v_1\ldots v_{n})
-$$
+  $$
 :::
 
 However, we want something stronger, say instead of $\delta_w(G)$, can it be $d_w(G)$? I have a proof but it uses a difficult lemma.

@@ -8,7 +8,7 @@ Let $L$ and $L'$ are two lattices. If $f:L \to \R$ is a submodular function and 
 
 $$
     f_P(X) = \min_{Y\in P(X)} f(Y)\\
-$$
+  $$
 
 is submodular.
 :::
@@ -16,7 +16,6 @@ is submodular.
 ::: Proof
 Let $X^* = \argmin_{Y\in P(X)} f(Y)$,
 note since $X^*\in P(X)$ and $Y^*\in P(Y)$, we have $X^*\vee Y^* \in P(X\vee Y)$ and $X^*\vee Y^* \in P(X\wedge Y)$.
-\[
 
 $$\begin{aligned}
   f_P(X) + f_P(Y) &= f(X^*) + f(Y^*)\\
@@ -24,8 +23,6 @@ $$\begin{aligned}
                   &\geq f((X\vee Y)^*) + f((X\wedge Y)^*)\\
                   &= f_P(X\vee Y) + f_P(X\wedge Y)
   \end{aligned}$$
-
-\]
 :::
 
 This is quite useful, for starters, it proves that we can create a monotone submodular function from any submodular function.
@@ -36,7 +33,7 @@ Let $f:2^V\to \R$ be a submodular function, then $f_*,f^*:2^V\to \R$ defined as
 $$
     f_*(X) = \min \{f(Y)|Y\subset X\}\\
     f^*(X) = \min \{f(Y)|X\subset Y\}
-$$
+  $$
 
 are monotone and submodular.
 :::
@@ -50,7 +47,7 @@ Let $f:2^V\to \R$ be a submodular function, then $f_T:2^T\to \R$ defined as
 
 $$
     f_T(X) = \min \{f(Y)|Y\subset X, T\setminus X\subset V\setminus Y\}\\
-$$
+  $$
 
 is submodular.
 :::

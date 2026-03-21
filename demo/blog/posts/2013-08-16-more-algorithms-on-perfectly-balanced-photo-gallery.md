@@ -63,7 +63,7 @@ A weight function $w$ is Monge if for every $1<i+1<j\leq n$, we have
 
 $$
   w(i,j) + w(i+1,j+1)\leq w(i,j+1) + w(i+1,j).
-$$
+  $$
 :::
 
 ::: Theorem
@@ -72,7 +72,6 @@ $w$ is Monge.
 
 ::: Proof
 Let $\sum_{k=i+1}^{j-1} a_i - \mu = m$
-\[
 
 $$\begin{aligned}
   w(i,j)+w(i+1,j+1) &=  |\sum_{k=i}^{j-1} a_i - \mu|
@@ -82,7 +81,6 @@ $$\begin{aligned}
                     &= w(i,j+1)+w(i+1,j)
   \end{aligned}$$
 
-\]
 To prove the $\leq$, see that $a_i,a_j$ are positive, one can consider either $m$ is negative or positive, and notice either way the inequality holds true.
 :::
 

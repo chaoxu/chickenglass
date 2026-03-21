@@ -18,7 +18,6 @@ where $p_k$ is the $k$-th prime.
 Of course, since we are going to manipulate the sum and the product, it is better to replace $\infty$ to some large $N$ so we don't need to define what we mean by infinite product or why we can switch the order of summation, etc.
 
 Now consider the following inequality, left as an exercise to the reader $\floor{a+b}\geq \floor{a} + \floor{b}$. Then everything follows by easy algebraic manipulation.
-\[
 
 $$\begin{aligned}
 {n\choose k} &= \frac{n!}{(n-k)!k!}\\
@@ -26,7 +25,6 @@ $$\begin{aligned}
 &= \prod_{k=1}^N p_k^{\sum_{i=1}^N \floor{ \frac{n}{p_k^i} } - \floor{ \frac{n-k}{p_k^i} } - \floor{ \frac{k}{p_k^i} }}
 \end{aligned}$$
 
-\]
 Using the previous inequality, we see every exponent is a integer greater or equal to $0$. This shows ${n\choose k}$ is a integer.
 
 ::: Remark

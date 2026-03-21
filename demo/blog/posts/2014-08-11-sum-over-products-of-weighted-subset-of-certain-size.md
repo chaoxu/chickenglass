@@ -23,15 +23,18 @@ Examples:
 Let $\max Z = k$ and $|V| = n$. The naive algorithm runs in $O(n2^n)$ time (assuming semiring operation takes $O(1)$ time). There is a common transformation that turns this problem that sum over all subsets to a problem that sums over $Z$. So it runs in $O(nk)$ time.
 
 Let $V=\{v_1,\ldots,v_n\}$ and $V_j = \{v_1,\ldots,v_j\}$. Define
-\$\$
-D(i,j) = $\sum$*{S$\subset$V_j, $\sum$*{x$\in$S} w(x) = i} $\prod$*{x$\in$S} f(x) $\prod$*{x$\in$V$\backslash$S} g(x)
-\].
+
+$$
+        D(i,j) = \sum_{S\subset V_j, \sum_{x\in S} w(x) = i} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x)
+    $$
+
+.
 
 Certainly,
 
 $$
         \sum_{S\subset V, \sum_{x\in S} w(x) \in Z} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x) = \sum_{i\in Z} D(i,n)
-$$
+    $$
 
 We only incur a $O(k)$ number of semiring operations once we compute all $D(i,n)$ for $0\leq i\leq k$.
 
@@ -50,14 +53,10 @@ $$
 ::: Proof
 The base case can be verified easily, we show part of a inductive step.
 
-\[
-
 $$\begin{aligned}
   f(v_j)D(i-w(v_j),j-1) + g(v_j)D(i,j-1) &= f(v_j) \sum_{S\subset V_{j-1}, \sum_{x\in S} w(x) = i-w(v_j)} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x)  +
   g(v_j) \sum_{S\subset V_{j-1}, \sum_{x\in S} w(x) = i)} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x) \\
   &=   \sum_{v_j\in S\subset V_j, \sum_{x\in S} w(x) = i} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x) + \sum_{v_j\not\in S\subset V_j, \sum_{x\in S} w(x) = i} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x)\\
   &= \sum_{S\subset V_j, \sum_{x\in S} w(x) = i} \prod_{x\in S} f(x) \prod_{x\in V\backslash S} g(x)
   \end{aligned}$$
-
-\]
 :::

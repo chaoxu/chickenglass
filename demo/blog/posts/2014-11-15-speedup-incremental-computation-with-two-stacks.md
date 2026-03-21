@@ -22,7 +22,7 @@ A function $f:\cup_{i=1}^\infty X^i \to Y$ is called $(\triangleright,\bowtie,\t
 
 $$
   f(x_1,\ldots,x_n)=(x_1 \triangleright \ldots \triangleright x_k \triangleright id_{\triangleright}) \bowtie (id_{\triangleleft} \triangleleft x_{k+1}\triangleleft \ldots \triangleleft x_n)
-$$
+  $$
 
 where
 

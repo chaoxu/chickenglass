@@ -28,7 +28,7 @@ $v\leq 2(n/d)^2$, thus $d\leq n\sqrt{2}/\sqrt{v}$. If we take the shortest path 
 
 $$
     \sum_{i=1}^v n\sqrt{2}/\sqrt{i} = O(n\sqrt{v})
-$$
+  $$
 :::
 
 For the above theorem, one might ask what happens if we use $v\leq 2m/d$ inequality instead. Then we get the sum of the length of all the augmenting paths we ever route is $O(m\log m)$, pretty neat.

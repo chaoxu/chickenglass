@@ -14,7 +14,7 @@ Output: $S=\{s_1,\ldots,s_n\}$, such that $s_i = \{(x_{2i-1},c_{2i-1}),(x_{2i},c
 
 $$
   \sum_{s\in S} \sum_{(x,i)\in s} x = v_i.
-$$
+  $$
 :::
 
 Here is an algorithm that make sure this can be done in linear time. The idea is to separate the numbers into two bins. $(v_i,i)$ is in the large bin if $v_i > 1$, and it is in the small bin otherwise.

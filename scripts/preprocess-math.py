@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Pre-process markdown math delimiters for Pandoc import.
 
-Converts:
-  - \\[...\\] on own lines to $$...$$
-  - \\(...\\) inline to $...$
-  - Bare \\begin{env}...\\end{env} blocks to $$\\begin{env}...\\end{env}$$
-    (only when not already inside $$ or \\[)
+Converts all LaTeX math delimiters to $ / $$ before Pandoc sees the file,
+because Pandoc's tex_math_single_backslash extension corrupts \\begin/\\end.
+
+Conversions:
+  - \\[ → $$  and  \\] → $$  (display math, anywhere on the line)
+  - \\( → $   and  \\) → $   (inline math)
+  - Bare \\begin{env}...\\end{env} blocks → wrapped in $$
 """
 import sys
 import re
@@ -21,32 +23,30 @@ while i < len(lines):
     line = lines[i]
     stripped = line.rstrip()
 
-    # \[ on its own line → $$
-    if re.match(r'^\s*\\\[\s*$', stripped):
-        result.append('$$\n')
-        in_math = True
-        i += 1
-        continue
-
-    # \] on its own line → $$
-    if re.match(r'^\s*\\\]\s*$', stripped):
-        result.append('$$\n')
-        in_math = False
-        i += 1
-        continue
-
-    # $$ toggles math mode
+    # $$ toggles math mode tracking
     if stripped == '$$':
         in_math = not in_math
         result.append(line)
         i += 1
         continue
 
+    # Replace \[ and \] with $$ (display math delimiters)
+    # These can appear at start of line, end of line, or inline with \begin
+    line = re.sub(r'\\\[', '$$', line)
+    line = re.sub(r'\\\]', '$$', line)
+
+    # Track math mode after replacement
+    for m in re.finditer(r'\$\$', line):
+        in_math = not in_math
+
+    # Replace \( and \) with $ (inline math delimiters)
+    line = re.sub(r'(?<!\\)\\\(', '$', line)
+    line = re.sub(r'(?<!\\)\\\)', '$', line)
+
     # Bare \begin{env} on its own line, not inside math
     begin_match = re.match(r'^\s*\\begin\{(\w+\*?)\}', stripped) if not in_math else None
     if begin_match:
         env = begin_match.group(1)
-        # Collect until matching \end{env}
         block_lines = [line]
         i += 1
         while i < len(lines):
@@ -59,10 +59,6 @@ while i < len(lines):
         result.extend(block_lines)
         result.append('$$\n')
         continue
-
-    # Inline \( → $ and \) → $
-    line = re.sub(r'(?<!\\)\\\(', '$', line)
-    line = re.sub(r'(?<!\\)\\\)', '$', line)
 
     result.append(line)
     i += 1

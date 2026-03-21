@@ -10,7 +10,6 @@ The word problem is solved if one can put $w$ in Garside normal form. The proces
 3.  Move every $\Delta$ factor in the word to the beginning of the word. Read from the end of the word, move it forward using $\Delta$ relations, pick up other $\Delta$ on the way. Check if moving $\Delta$ generates another $\Delta$. $B_3$ don't have $\sigma_i\sigma_j = \sigma_j\sigma_i$ relation, therefore if a new $\Delta$ is created from moving $\Delta$'s around, it is a local event. To be precise, during this process, $x\Delta^m y = x\Delta^{m+1} y'$ if and only if the first 3 letter in the current presentation of $y$ is $\Delta$.
 
 A demonstration on a positive word.
-\[
 
 $$\begin{aligned}
 \sigma_2\sigma_1\sigma_1\sigma_2\sigma_1\sigma_1\sigma_1\sigma_1 &= \sigma_2\sigma_1\sigma_1\sigma_2\sigma_1(\sigma_1\sigma_1\sigma_1)\\
@@ -25,8 +24,6 @@ $$\begin{aligned}
 &= \Delta^2(\sigma_1\sigma_1\cdot 1)\\
 &= \Delta^2\sigma_1^2\\
 \end{aligned}$$
-
-\]
 
 I wrote a [Haskell implementation of the algorithm](https://gist.github.com/1066286).
 <script src="https://gist.github.com/1066286.js?file=word_problem_b3.hs"></script>
