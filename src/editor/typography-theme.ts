@@ -82,6 +82,10 @@ export const typographyThemeStyles = {
     borderRadius: "2px",
     padding: "1px 4px",
   },
+  ".cg-math-source": {
+    fontFamily: "KaTeX_Math, KaTeX_Main, serif",
+    fontStyle: "italic",
+  },
 
   /* Rendered link styling — shown when cursor is outside the link */
   ".cg-link-rendered": {
