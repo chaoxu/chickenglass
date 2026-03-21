@@ -44,25 +44,10 @@ export async function connectEditor(port = DEFAULT_PORT) {
 
 /**
  * Open a file by path (e.g. "posts/2014-11-04-isotonic-....md").
- * Uses window.__openFile which works regardless of sidebar scroll state.
- * Falls back to clicking the sidebar if __openFile is unavailable.
+ * Uses the app's real openFile function via window.__app.
  */
-export async function openFile(page, fileNameOrPath) {
-  await page.evaluate((name) => {
-    if (window.__openFile) {
-      window.__openFile(name);
-      return;
-    }
-    // Fallback: click sidebar span
-    const spans = document.querySelectorAll("span");
-    for (const s of spans) {
-      if (s.textContent === name) {
-        s.click();
-        return;
-      }
-    }
-    throw new Error(`File "${name}" not found`);
-  }, fileNameOrPath);
+export async function openFile(page, path) {
+  await page.evaluate((p) => window.__app.openFile(p), path);
   await sleep(500);
 }
 

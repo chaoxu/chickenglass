@@ -158,10 +158,6 @@ function AppInner() {
     pinTab,
   } = fileOps;
 
-  // Expose openFile for console/Playwright debugging.
-  // Usage: window.__openFile("posts/2014-11-04-isotonic-....md")
-  (window as unknown as { __openFile: typeof openFile }).__openFile = openFile;
-
   const handleOutlineSelect = useCallback((from: number) => {
     const view = editorState?.view;
     if (!view) return;
@@ -419,6 +415,17 @@ function AppInner() {
     // (editable, modeClass) stay consistent with React state.
     setEditorMode(view, mode);
   }, [editorState?.view]);
+
+  // Expose app actions for console/Playwright debugging.
+  // Usage: __app.openFile("posts/foo.md"), __app.setMode("source"), etc.
+  // These are the app's real functions, not reimplementations.
+  (window as unknown as { __app: Record<string, unknown> }).__app = {
+    openFile,
+    saveFile,
+    closeFile: () => { if (activeTab) void closeFile(activeTab); },
+    setMode: handleModeChange,
+    getMode: () => editorMode,
+  };
 
   // ── Status bar info ────────────────────────────────────────────────────────
   const wordCount = editorState?.wordCount ?? 0;
