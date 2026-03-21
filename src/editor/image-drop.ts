@@ -25,23 +25,15 @@ import {
   generateImageFilename,
   altTextFromFilename,
   logImageError,
+  type ImageSaveConfig,
 } from "./image-save";
 import { insertImageMarkdown } from "./image-paste";
 
 /**
  * Configuration for the image-drop extension.
+ * @see ImageSaveConfig
  */
-export interface ImageDropConfig {
-  /**
-   * Save an image and return the path (relative or data URL) to embed.
-   *
-   * @param file  The `File` object from the drag event.
-   * @returns     A promise resolving to the path string used in the markdown.
-   *
-   * The default implementation converts the image to a data URL.
-   */
-  saveImage?: (file: File) => Promise<string>;
-}
+export type ImageDropConfig = ImageSaveConfig;
 
 /**
  * Create a CM6 extension that handles image file drops onto the editor.

@@ -5,6 +5,8 @@ import { codeThemeStyles } from "./code-theme";
 import { blockThemeStyles } from "./block-theme";
 import { marginThemeStyles } from "./margin-theme";
 
+export { monoFont } from "./editor-constants";
+
 /**
  * Composed editor theme for chickenglass — merges all semantic sub-modules
  * into a single CM6 theme extension. Uses CSS custom properties so that
@@ -23,7 +25,7 @@ export const chickenglassTheme = EditorView.theme({
  * picks appropriate defaults for its own UI (scroll gutter, etc.).
  * Applied when the resolved theme is "dark".
  */
-export const chickenglasDarkTheme = EditorView.theme(
+export const chickenglassDarkTheme = EditorView.theme(
   {
     "&": {
       colorScheme: "dark",

@@ -1,4 +1,4 @@
-const monoFont = "'IBM Plex Mono', 'Fira Code', monospace";
+import { monoFont } from "./editor-constants";
 
 /**
  * Typography styles: document title, headings, inline formatting

@@ -16,6 +16,7 @@ import type { BlockPlugin } from "./plugin-types";
 import type { BlockConfig } from "../parser/frontmatter";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { createBlockRender } from "./block-render";
+import { capitalize } from "../app/lib/utils";
 
 /**
  * Immutable snapshot of the registry state.
@@ -98,7 +99,7 @@ export function getPluginOrFallback(
 
   let fallback = fallbackCache.get(name);
   if (!fallback) {
-    const title = name.charAt(0).toUpperCase() + name.slice(1);
+    const title = capitalize(name);
     fallback = {
       name,
       numbered: true,
@@ -133,7 +134,7 @@ export function pluginFromConfig(
   name: string,
   config: BlockConfig,
 ): BlockPlugin {
-  const title = config.title ?? name.charAt(0).toUpperCase() + name.slice(1);
+  const title = config.title ?? capitalize(name);
   const numbered = config.numbered ?? true;
   return {
     name,

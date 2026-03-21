@@ -1,4 +1,4 @@
-const monoFont = "'IBM Plex Mono', 'Fira Code', monospace";
+import { monoFont } from "./editor-constants";
 
 /**
  * Code block styles: container layout (header, body, last line),

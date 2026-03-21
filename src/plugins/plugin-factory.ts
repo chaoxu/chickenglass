@@ -7,6 +7,7 @@
 
 import type { BlockPlugin } from "./plugin-types";
 import { createBlockRender } from "./block-render";
+import { capitalize } from "../app/lib/utils";
 
 /** Shared counter group for all theorem-family blocks. */
 export const THEOREM_COUNTER = "theorem";
@@ -47,7 +48,7 @@ export interface StandardPluginOptions {
  * ```
  */
 export function createStandardPlugin(options: StandardPluginOptions): BlockPlugin {
-  const title = options.title ?? options.name.charAt(0).toUpperCase() + options.name.slice(1);
+  const title = options.title ?? capitalize(options.name);
   const numbered = options.numbered ?? true;
   return {
     name: options.name,

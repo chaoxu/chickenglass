@@ -31,7 +31,7 @@ import {
 import { citationRenderPlugin, bibliographyPlugin, bibDataField } from "../citations";
 import { projectConfigFacet, type ProjectConfig } from "../app/project-config";
 import { editorKeybindings } from "./keybindings";
-import { chickenglassTheme, chickenglasDarkTheme } from "./theme";
+import { chickenglassTheme, chickenglassDarkTheme } from "./theme";
 import { headingFold } from "./heading-fold";
 import { listOutlinerExtension } from "./list-outliner";
 
@@ -139,7 +139,7 @@ export function createEditor(config: EditorConfig): EditorView {
       chickenglassTheme,
 
       // Dark/light base theme (wrapped in compartment for live switching)
-      themeCompartment.of(isDark ? chickenglasDarkTheme : []),
+      themeCompartment.of(isDark ? chickenglassDarkTheme : []),
 
       // User-provided extensions last
       ...(config.extensions ?? []),

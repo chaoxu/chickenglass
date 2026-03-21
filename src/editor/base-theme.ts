@@ -1,3 +1,5 @@
+import { monoFont } from "./editor-constants";
+
 /**
  * Base editor chrome styles: container, content area, gutters, cursor,
  * selection, active line, and fold toggles.
@@ -5,7 +7,7 @@
 export const baseThemeStyles = {
   "&": {
     fontSize: "16px",
-    fontFamily: "'IBM Plex Mono', 'Fira Code', monospace",
+    fontFamily: monoFont,
   },
   ".cm-content": {
     padding: "24px 48px 24px 48px",

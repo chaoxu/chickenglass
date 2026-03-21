@@ -11,6 +11,15 @@ export const isMac =
 export const modKey = isMac ? "Cmd" : "Ctrl";
 
 /**
+ * Return `s` with its first character uppercased.
+ *
+ * Used to derive display titles from plugin/block class names.
+ */
+export function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
  * Extract the last segment of a file path (the filename).
  *
  * Handles both forward-slash (Unix) and backslash (Windows) separators.

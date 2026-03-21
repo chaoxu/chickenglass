@@ -66,47 +66,48 @@ export const bibDataField = StateField.define<BibData>({
   },
 });
 
-/** Widget that renders a parenthetical citation like "(Karger, 2000)". */
+/**
+ * Widget that renders a citation reference.
+ *
+ * Handles both parenthetical citations like "(Karger, 2000)" and narrative
+ * citations like "Karger (2000)". Pass `narrative: true` for the latter.
+ */
 export class CitationWidget extends RenderWidget {
   constructor(
     private readonly text: string,
     private readonly ids: readonly string[],
+    private readonly narrative: boolean = false,
   ) {
     super();
   }
 
   createDOM(): HTMLElement {
     const el = document.createElement("span");
-    el.className = "cg-citation";
+    el.className = this.narrative
+      ? "cg-citation cg-citation-narrative"
+      : "cg-citation";
     el.textContent = this.text;
     el.title = this.ids.join("; ");
     return el;
   }
 
   eq(other: WidgetType): boolean {
-    return other instanceof CitationWidget && this.text === other.text;
+    return (
+      other instanceof CitationWidget &&
+      this.text === other.text &&
+      this.narrative === other.narrative
+    );
   }
 }
 
-/** Widget that renders a narrative citation like "Karger (2000)". */
-export class NarrativeCitationWidget extends RenderWidget {
-  constructor(
-    private readonly text: string,
-    private readonly id: string,
-  ) {
-    super();
-  }
-
-  createDOM(): HTMLElement {
-    const el = document.createElement("span");
-    el.className = "cg-citation cg-citation-narrative";
-    el.textContent = this.text;
-    el.title = this.id;
-    return el;
-  }
-
-  eq(other: WidgetType): boolean {
-    return other instanceof NarrativeCitationWidget && this.text === other.text;
+/**
+ * @deprecated Use `new CitationWidget(text, [id], true)` instead.
+ *
+ * Kept for backwards compatibility with external consumers and tests.
+ */
+export class NarrativeCitationWidget extends CitationWidget {
+  constructor(text: string, id: string) {
+    super(text, [id], true);
   }
 }
 
@@ -269,7 +270,7 @@ export function collectCitationRanges(
         const rendered = cslProcessor
           ? cslProcessor.citeNarrative(match.ids[0])
           : formatNarrativeCitation(entry);
-        const widget = new NarrativeCitationWidget(rendered, match.ids[0]);
+        const widget = new CitationWidget(rendered, match.ids, true);
         widget.sourceFrom = match.from;
         items.push(
           Decoration.replace({ widget }).range(match.from, match.to),

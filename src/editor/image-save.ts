@@ -50,6 +50,25 @@ function fileToUint8Array(file: File): Promise<Uint8Array> {
   });
 }
 
+/**
+ * Shared configuration for image-insert extensions (paste, drop, file picker).
+ *
+ * Used by `imagePasteExtension` and `imageDropExtension` so that both accept
+ * the same shape and callers need not care which extension they configure.
+ */
+export interface ImageSaveConfig {
+  /**
+   * Save an image and return the path (relative or data URL) to embed.
+   *
+   * @param file  The `File` object from the clipboard or drag event.
+   * @returns     A promise resolving to the path string used in the markdown.
+   *
+   * The default implementation converts the image to a data URL, which works
+   * in browser / demo mode without any filesystem access.
+   */
+  saveImage?: (file: File) => Promise<string>;
+}
+
 /** Configuration for the image saver. */
 export interface ImageSaveContext {
   /** The filesystem to write images to (if available). */

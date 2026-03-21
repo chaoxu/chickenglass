@@ -27,6 +27,7 @@ import {
   generateImageFilename,
   altTextFromFilename,
   logImageError,
+  type ImageSaveConfig,
 } from "./image-save";
 
 // Re-export for backwards compatibility
@@ -34,19 +35,9 @@ export { fileToDataUrl } from "./image-save";
 
 /**
  * Configuration for the image-paste extension.
+ * @see ImageSaveConfig
  */
-export interface ImagePasteConfig {
-  /**
-   * Save an image and return the path (relative or data URL) to embed.
-   *
-   * @param file  The `File` object from the clipboard.
-   * @returns     A promise resolving to the path string used in the markdown.
-   *
-   * The default implementation converts the image to a data URL, which works
-   * in browser / demo mode without any filesystem access.
-   */
-  saveImage?: (file: File) => Promise<string>;
-}
+export type ImagePasteConfig = ImageSaveConfig;
 
 /**
  * Insert an image markdown snippet at the given position.

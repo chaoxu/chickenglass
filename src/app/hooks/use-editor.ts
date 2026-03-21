@@ -22,7 +22,7 @@ import type { Extension } from "@codemirror/state";
 import { createEditor, themeCompartment } from "../../editor/editor";
 import { EditorPluginManager } from "../../editor/editor-plugin";
 import { defaultEditorPlugins } from "../../editor/editor-plugins-registry";
-import { chickenglasDarkTheme } from "../../editor/theme";
+import { chickenglassDarkTheme } from "../../editor/theme";
 import { frontmatterField, type FrontmatterState } from "../../editor/frontmatter-state";
 import { imagePasteExtension } from "../../editor/image-paste";
 import { imageDropExtension } from "../../editor/image-drop";
@@ -339,7 +339,7 @@ export function useEditor(
     const isDark = theme === "dark";
     try {
       view.dispatch({
-        effects: themeCompartment.reconfigure(isDark ? chickenglasDarkTheme : []),
+        effects: themeCompartment.reconfigure(isDark ? chickenglassDarkTheme : []),
       });
     } catch {
       // view already destroyed

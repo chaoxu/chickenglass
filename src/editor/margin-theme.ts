@@ -1,4 +1,4 @@
-const monoFont = "'IBM Plex Mono', 'Fira Code', monospace";
+import { monoFont } from "./editor-constants";
 
 /**
  * Margin and overlay styles: sidenotes (reference, definition, number,
