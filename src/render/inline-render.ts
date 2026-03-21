@@ -11,7 +11,12 @@
  */
 
 import katex from "katex";
-import { INLINE_DELIMITERS } from "./math-render";
+import { parser as baseParser } from "@lezer/markdown";
+import { markdownExtensions } from "../parser";
+import { stripMathDelimiters } from "./math-render";
+
+/** Standalone Lezer parser for splitting inline math without a CM6 editor context. */
+const inlineParser = baseParser.configure(markdownExtensions);
 
 /** A segment of text split by inline math delimiters. */
 export interface InlineSegment {
@@ -19,41 +24,27 @@ export interface InlineSegment {
   content: string;
 }
 
-/** Escape a string for use in a regular expression. */
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /**
- * Build a regex that matches any inline math delimiter pair.
- * Each alternative captures the content between its open/close delimiters.
- * Longer delimiters are tried first to avoid prefix conflicts.
+ * Split text by inline math delimiters using Lezer, returning alternating
+ * text/math segments. Math content has delimiters stripped (ready for KaTeX).
  */
-function buildInlineMathRegex(): RegExp {
-  const alternatives = [...INLINE_DELIMITERS]
-    .sort((a, b) => b.open.length - a.open.length)
-    .map(({ open, close }) => `${escapeRegex(open)}([^\\n]+?)${escapeRegex(close)}`);
-  return new RegExp(alternatives.join("|"), "g");
-}
-
-const INLINE_MATH_REGEX = buildInlineMathRegex();
-
-/** Split text by inline math delimiters, returning alternating text/math segments. */
 export function splitByInlineMath(text: string): InlineSegment[] {
   const segments: InlineSegment[] = [];
-  const regex = new RegExp(INLINE_MATH_REGEX.source, INLINE_MATH_REGEX.flags);
+  const tree = inlineParser.parse(text);
   let lastIndex = 0;
-  let match: RegExpExecArray | null;
 
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ isMath: false, content: text.slice(lastIndex, match.index) });
-    }
-    // Find the first capturing group that matched (one per delimiter pair)
-    const content = match.slice(1).find((g) => g !== undefined);
-    segments.push({ isMath: true, content: content ?? "" });
-    lastIndex = regex.lastIndex;
-  }
+  tree.iterate({
+    enter(node) {
+      if (node.type.name !== "InlineMath") return;
+      if (node.from > lastIndex) {
+        segments.push({ isMath: false, content: text.slice(lastIndex, node.from) });
+      }
+      const raw = text.slice(node.from, node.to);
+      segments.push({ isMath: true, content: stripMathDelimiters(raw, false) });
+      lastIndex = node.to;
+      return false; // skip InlineMathMark children
+    },
+  });
 
   if (lastIndex < text.length) {
     segments.push({ isMath: false, content: text.slice(lastIndex) });
