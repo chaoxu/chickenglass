@@ -35,7 +35,6 @@ import {
   RenderWidget,
 } from "../render/render-utils";
 import { mathMacrosField } from "../render/math-macros";
-import { MathWidget } from "../render/math-render";
 import { renderInlineMarkdown } from "../render/inline-render";
 import {
   isValidEmbedUrl,
@@ -355,7 +354,7 @@ function shouldShowRendered(
   return isEmbed ? !cursorInsideBlock : !cursorOnFence;
 }
 
-/** Replace the opening fence+attrs with a rendered header widget. */
+/** Replace the opening fence+attrs+title with a rendered header widget. */
 function addHeaderWidgetDecoration(
   div: FencedDivInfo,
   header: string,
@@ -363,8 +362,11 @@ function addHeaderWidgetDecoration(
   macrosKey: string,
   items: Range<Decoration>[],
 ): void {
-  const replaceEnd = div.titleFrom ?? div.fenceTo;
-  const label = div.titleFrom !== undefined ? header + " " : header;
+  // Include the title in the replacement range so inline markdown
+  // (bold, italic, math) in the title is rendered by the widget.
+  const replaceEnd = div.titleTo ?? div.titleFrom ?? div.fenceTo;
+  const label =
+    div.title !== undefined ? header + " " + div.title : header;
   items.push(
     Decoration.replace({
       widget: new BlockHeaderWidget(label, macros, macrosKey),
@@ -434,29 +436,6 @@ function addEmbedWidget(
     const widget = new EmbedWidget(src, div.className);
     widget.sourceFrom = bodyFrom;
     items.push(Decoration.replace({ widget }).range(bodyFrom, bodyTo));
-  }
-}
-
-/** Render inline math ($...$) in title text (Typora-style: cursor inside shows source). */
-function addTitleMathDecorations(
-  state: EditorState,
-  div: FencedDivInfo,
-  focused: boolean,
-  cursorFrom: number,
-  macros: Record<string, string>,
-  items: Range<Decoration>[],
-): void {
-  if (div.titleFrom === undefined || div.titleTo === undefined) return;
-
-  const titleText = state.sliceDoc(div.titleFrom, div.titleTo);
-  const regex = /\$([^$\n]+)\$/g;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(titleText)) !== null) {
-    const mathFrom = div.titleFrom + match.index;
-    const mathTo = mathFrom + match[0].length;
-    if (focused && cursorFrom >= mathFrom && cursorFrom <= mathTo) continue;
-    const widget = new MathWidget(match[1], match[0], false, macros);
-    items.push(Decoration.replace({ widget }).range(mathFrom, mathTo));
   }
 }
 
@@ -534,10 +513,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
         }
       }
 
-      // Render inline math in title text (rendered mode only)
-      const cursor = state.selection.main;
-      addTitleMathDecorations(state, div, focused, cursor.from, macros, items);
-
       // QED tombstone for proof blocks (rendered mode only)
       if (plugin.defaults?.qedSymbol) {
         addQedDecoration(state, div, items);
@@ -549,6 +524,20 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
           class: `${plugin.render({ type: div.className }).className} cg-block-source`,
         }).range(div.from),
       );
+
+      // Hide closing fence unless the cursor is specifically on it.
+      const cursorPos = state.selection.main.from;
+      const cursorOnCloseFence =
+        div.closeFenceFrom >= 0 &&
+        cursorPos >= div.closeFenceFrom &&
+        cursorPos <= div.closeFenceTo;
+      if (!cursorOnCloseFence) {
+        if (div.singleLine) {
+          addSingleLineClosingFence(state, div, items);
+        } else {
+          addMultiLineClosingFence(div, items);
+        }
+      }
     }
   }
 
