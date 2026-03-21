@@ -46,6 +46,9 @@ const renderCompartment = new Compartment();
 /** Compartment for editability — reconfigured for read mode. */
 const editableCompartment = new Compartment();
 
+/** Compartment for mode-specific CSS classes on .cm-editor. */
+const modeClassCompartment = new Compartment();
+
 /** Compartment for the CM6 dark/light base theme — reconfigured on theme switch. */
 export const themeCompartment = new Compartment();
 
@@ -128,6 +131,9 @@ export function createEditor(config: EditorConfig): EditorView {
       // Editability (wrapped in compartment for preview mode)
       editableCompartment.of([]),
 
+      // Mode-specific CSS classes (source mode, read mode)
+      modeClassCompartment.of([]),
+
       // Toggleable editor plugins (managed by EditorPluginManager)
       ...(config.pluginManager?.initialExtensions() ?? []),
 
@@ -166,20 +172,21 @@ export function setEditorMode(view: EditorView, mode: EditorMode): void {
     case "rich":
       effects.push(renderCompartment.reconfigure(renderingExtensions));
       effects.push(editableCompartment.reconfigure([]));
-      view.dom.classList.remove("cg-read-mode");
-      view.dom.classList.remove("cg-source-mode");
+      effects.push(modeClassCompartment.reconfigure([]));
       break;
     case "source":
       effects.push(renderCompartment.reconfigure([]));
       effects.push(editableCompartment.reconfigure([]));
-      view.dom.classList.remove("cg-read-mode");
-      view.dom.classList.add("cg-source-mode");
+      effects.push(modeClassCompartment.reconfigure(
+        EditorView.editorAttributes.of({ class: "cg-source-mode" }),
+      ));
       break;
     case "read":
       effects.push(renderCompartment.reconfigure(renderingExtensions));
       effects.push(editableCompartment.reconfigure(EditorView.editable.of(false)));
-      view.dom.classList.add("cg-read-mode");
-      view.dom.classList.remove("cg-source-mode");
+      effects.push(modeClassCompartment.reconfigure(
+        EditorView.editorAttributes.of({ class: "cg-read-mode" }),
+      ));
       break;
   }
 
