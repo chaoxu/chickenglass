@@ -162,7 +162,9 @@ const dollarDisplayMathWithLabel: BlockParser = {
       return true;
     }
 
-    // Multi-line: scan subsequent lines for $$
+    // Multi-line: scan subsequent lines for closing $$
+    // The closing $$ can be at the start of a line (standalone $$)
+    // or at the end of a line (e.g., \end{aligned}$$)
     let endPos = -1;
     let closingLineText = "";
     let closingLineStart = -1;
@@ -171,8 +173,17 @@ const dollarDisplayMathWithLabel: BlockParser = {
       const currentText = line.text;
       const trimmed = currentText.trimStart();
       if (trimmed.startsWith("$$")) {
+        // $$ at start of line
         const leadingSpaces = currentText.length - trimmed.length;
         endPos = cx.lineStart + leadingSpaces + 2;
+        closingLineText = currentText;
+        closingLineStart = cx.lineStart;
+        break;
+      }
+      const trimmedEnd = currentText.trimEnd();
+      if (trimmedEnd.endsWith("$$")) {
+        // $$ at end of line (e.g., \end{aligned}$$)
+        endPos = cx.lineStart + trimmedEnd.length;
         closingLineText = currentText;
         closingLineStart = cx.lineStart;
         break;
