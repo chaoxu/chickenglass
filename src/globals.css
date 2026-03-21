@@ -79,17 +79,6 @@ body {
   overscroll-behavior: contain;
 }
 
-/* ── Read mode typography ───────────────────────────────────────────────── *
- * Justified text with hyphenation and improved line breaking for a
- * polished, book-like reading experience. Only active in Read mode. */
-
-.cg-read-mode .cm-content {
-  text-align: justify;
-  hyphens: auto;
-  -webkit-hyphens: auto;
-  text-wrap: pretty;
-}
-
 .cm-editor.cm-focused {
   outline: none;
 }
@@ -258,7 +247,7 @@ body {
 
 /* Section numbers */
 .cg-read-mode-view .cg-section-number {
-  color: var(--cg-muted);
+  color: var(--cg-fg);
   margin-right: 0.4em;
 }
 
@@ -295,7 +284,6 @@ body {
 /* ── Read mode code blocks ───────────────────────────────────────────────── */
 
 .cg-read-mode-view code {
-  font-family: 'IBM Plex Mono', 'Fira Code', monospace;
   font-size: 0.9em;
   background: var(--cg-hover);
   padding: 0.15em 0.35em;

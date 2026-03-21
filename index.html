@@ -6,25 +6,6 @@
     <title>Chickenglass</title>
     <link rel="stylesheet" href="/src/globals.css" />
     <style>
-      :root {
-        --cg-bg: #ffffff;
-        --cg-fg: #09090b;
-        --cg-border: #d4d4d8;
-        --cg-muted: #71717a;
-        --cg-subtle: #f4f4f5;
-        --cg-hover: #e4e4e7;
-        --cg-active: #d4d4d8;
-      }
-      [data-theme="dark"] {
-        --cg-bg: #0a0a0a;
-        --cg-fg: #fafafa;
-        --cg-border: #27272a;
-        --cg-muted: #a1a1aa;
-        --cg-subtle: #18181b;
-        --cg-hover: #27272a;
-        --cg-active: #3f3f46;
-      }
-
       *,
       *::before,
       *::after {
@@ -222,10 +203,6 @@
         font-weight: 500;
       }
 
-      .file-tree-children {
-        /* controlled by JS */
-      }
-
       /* Collapsible sidebar sections */
       .sidebar-section {
         border-top: 1px solid var(--cg-border);
@@ -242,10 +219,6 @@
         color: var(--cg-muted);
         width: 10px;
         flex-shrink: 0;
-      }
-
-      .sidebar-section-body {
-        /* toggleable via JS */
       }
 
       /* Outline */
