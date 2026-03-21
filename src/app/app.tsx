@@ -148,6 +148,7 @@ function AppInner() {
 
   const {
     openFile,
+    openFileWithContent,
     saveFile,
     createFile,
     createDirectory,
@@ -440,17 +441,17 @@ function AppInner() {
     const files = Array.from(e.dataTransfer.files);
     for (const file of files) {
       if (file.name.endsWith(".md")) {
-        // Read .md file and open it
+        // Read .md file content and open it as an unsaved buffer
         const reader = new FileReader();
         reader.onload = () => {
           if (typeof reader.result === "string") {
-            void openFile(file.name);
+            openFileWithContent(file.name, reader.result);
           }
         };
         reader.readAsText(file);
       }
     }
-  }, [openFile]);
+  }, [openFileWithContent]);
 
   return (
     <div className="flex h-screen overflow-hidden overscroll-contain" onDragOver={handleDragOver} onDrop={handleDrop}>

@@ -36,6 +36,8 @@ export interface FileOperationsDeps {
 
 export interface UseFileOperationsReturn {
   openFile: (path: string, options?: { preview?: boolean }) => Promise<void>;
+  /** Open an external file by content string, creating a dirty unsaved buffer. */
+  openFileWithContent: (name: string, content: string) => void;
   saveFile: () => Promise<void>;
   createFile: (path: string) => Promise<void>;
   createDirectory: (path: string) => Promise<void>;
@@ -113,6 +115,25 @@ export function useFileOperations(deps: FileOperationsDeps): UseFileOperationsRe
       // Silently ignore unreadable files
     }
   }, [fs, addRecentFile, openPathsRef, buffers, liveDocs, setOpenTabs, setActiveTab, setEditorDoc, pinTab]);
+
+  const openFileWithContent = useCallback((name: string, content: string) => {
+    // Use the filename as a synthetic path; add a unique suffix if a tab with
+    // the same name is already open so we don't collide.
+    let path = name;
+    let suffix = 1;
+    while (openPathsRef.current.has(path)) {
+      path = `${name} (${suffix++})`;
+    }
+
+    // Store the content in the live buffer. The buffer (saved copy) is left
+    // empty so the tab is immediately considered dirty.
+    buffers.current.set(path, "");
+    liveDocs.current.set(path, content);
+
+    setOpenTabs((prev) => [...prev, { path, name: basename(path), dirty: true, preview: false }]);
+    setActiveTab(path);
+    setEditorDoc(content);
+  }, [openPathsRef, buffers, liveDocs, setOpenTabs, setActiveTab, setEditorDoc]);
 
   const saveFile = useCallback(async () => {
     const path = activeTabRef.current;
@@ -260,6 +281,7 @@ export function useFileOperations(deps: FileOperationsDeps): UseFileOperationsRe
 
   return {
     openFile,
+    openFileWithContent,
     saveFile,
     createFile,
     createDirectory,
