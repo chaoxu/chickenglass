@@ -108,6 +108,7 @@ For a partition $\mathcal{S}$, write $x_\mathcal{S} = \sum_{S\in \mathcal{S}} x_
 
 Consider the following linear program:
 \[
+$$
 \begin{aligned}
 & \max        & & z \\
 & \text{s.t.} & & x_{S\cup \{a\}} + x_{S\cup \{b\}} \geq x_{S\cup \{a,b\}} + x_{S}
@@ -117,6 +118,7 @@ Consider the following linear program:
 &             & & x_\mathcal{Y} = 1 \\
 &             & & z \leq x_{\mathcal{Y}'} && \forall \mathcal{Y}'\in P_{k}(V)\ \text{with}\ \mathcal{X} \lhd \mathcal{Y}'.
 \end{aligned}
+$$
 \]
 
 The first set of constraints are the submodular inequalities, which enforce that $x_S=f(S)$ for some submodular function $f$. The next constraints enforce that $\mathcal{X}$ is a minimum $(k-1)$-partition and $\mathcal{Y}$ is a minimum $k$-partition. We normalize the optimal $k$-partition value to be $1$. Finally, among all $k$-partitions that are noncrossing with $\mathcal{X}$, the variable $z$ is a lower bound on their objective values.
@@ -159,6 +161,7 @@ Thus, $|\mathfrak{F}|=(2^a-2)+(2^b-2)+1=2^a+2^b-3$.
 Next, we show that $\mathfrak{F}$ is $(a,b)$-complete. Consider any $(X_1,X_2)\notin \mathfrak{F}$ and its intersection with $(Y_1,Y_2)$. Let $Z_{i,j}=X_i\cap Y_j$.
 
 Let $|Z_{1,1}|=x$ and $|Z_{2,1}|=y$. Then $|Z_{1,2}|=a-x$ and $|Z_{2,2}|=b-y$. Consider the case where all $Z_{i,j}$ are non-empty. Then
+$$
 \begin{align*}
 \sum_{i=1}^2 \sum_{j=1}^2 \bigl(f(X_i)+f(Y_j)\bigr)
   &= 2\bigl(f(X_1)+f(X_2)+f(Y_1)+f(Y_2)\bigr)\\
@@ -166,6 +169,7 @@ Let $|Z_{1,1}|=x$ and $|Z_{2,1}|=y$. Then $|Z_{1,2}|=a-x$ and $|Z_{2,2}|=b-y$. C
   &= \sum_{i=1}^2 \sum_{j=1}^2 \bigl(f(Z_{i,j}) + f(\overline{Z_{i,j}})\bigr)\\
   &\ge 4\bigl(f(Y_1)+f(Y_2)\bigr),
 \end{align*}
+$$
 which implies $f(X_1)+f(X_2)\ge f(Y_1)+f(Y_2)$.
 
 Otherwise, if some $Z_{i,j}$ is empty, then necessarily $(X_1,X_2)=(Y_1,Y_2)\in \mathfrak{F}$.

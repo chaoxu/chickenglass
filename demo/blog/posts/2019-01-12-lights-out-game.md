@@ -43,12 +43,14 @@ We compute $D[i,j]$ through dynamic programming. First, set $D[1,j] = z_j$ for a
 At this point, we have expressed if $v_{i,j}\in S$ through a linear combination of $Z$. How do we find a $S_1$ that works? The idea is to consider the linear relations defined by $D[n,1], \ldots, D[n,n]$. We can see it is of the following form.
 
 \[
+$$
 \begin{aligned}
 D[n,1] &= C_{1,1} z_1+\ldots +C_{1,n} z_{n} + u_{1}\\
 D[n,2] &= C_{2,1} z_1+\ldots +C_{2,n} z_{n} + u_{2}\\
  \vdots &\qquad  \vdots\\
 D[n,n] &= C_{m,1} z_1+\ldots + C_{m,n} z_n + u_{n}.
 \end{aligned}
+$$
 \]
 
 If we solve the equation $Cz=u$, we find $z_1,\ldots,z_n$, which implies we find $S_1$. Note $C$ is just a $n\times n$ matrix, solving the equation takes $O(n^3)$ time. Now, we use the theorem again to find the entire activation set $S$ through $S_1$ in $O(n^2)$ time. 

@@ -117,8 +117,9 @@ while i < len(lines):
         i += 1
 
 output = '\n'.join(result)
-# Wrap bare align environments in \$\$
-output = re.sub(r'^(\\\\begin\{(\w+\*?)\}.*?\\\\end\{\\2\})', r'\$\$\n\\1\n\$\$', output, flags=re.MULTILINE|re.DOTALL)
+# NOTE: bare \begin{} wrapping removed — it cannot reliably detect
+# whether the environment is already inside \[...\] or $$...$$.
+# Bare environments should be wrapped manually or handled by the editor.
 
 with open('$f', 'w') as fh:
     fh.write(output)
