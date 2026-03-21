@@ -530,26 +530,14 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
         addQedDecoration(state, div, items);
       }
     } else if (plugin) {
-      // Cursor on fence (or inside embed block): show fence syntax as source
+      // Cursor on fence: show both opening and closing ::: fences,
+      // but keep the body content rendered (not raw source).
       items.push(
         Decoration.line({
           class: `${plugin.render({ type: div.className }).className} cg-block-source`,
         }).range(div.from),
       );
-
-      // Hide closing fence unless the cursor is specifically on it.
-      const cursorPos = state.selection.main.from;
-      const cursorOnCloseFence =
-        div.closeFenceFrom >= 0 &&
-        cursorPos >= div.closeFenceFrom &&
-        cursorPos <= div.closeFenceTo;
-      if (!cursorOnCloseFence) {
-        if (div.singleLine) {
-          addSingleLineClosingFence(state, div, items);
-        } else {
-          addMultiLineClosingFence(div, items);
-        }
-      }
+      // Closing fence is visible — don't hide it (no addMultiLineClosingFence)
     }
   }
 
