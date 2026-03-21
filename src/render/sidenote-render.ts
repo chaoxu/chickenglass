@@ -73,39 +73,23 @@ export function collectFootnotes(state: EditorState): {
   tree.iterate({
     enter(node) {
       if (node.type.name === "FootnoteRef") {
-        const text = state.sliceDoc(node.from, node.to);
-        // Extract id from [^id]
-        const id = text.slice(2, -1);
+        // Extract id from [^id] using tree positions: skip [^ (2 chars) and ] (1 char)
+        const id = state.sliceDoc(node.from + 2, node.to - 1);
         refs.push({ id, from: node.from, to: node.to });
       } else if (node.type.name === "FootnoteDef") {
-        const text = state.sliceDoc(node.from, node.to);
-        // Extract id from [^id]: content
-        const bracketEnd = text.indexOf("]:");
-        if (bracketEnd >= 0) {
-          const id = text.slice(2, bracketEnd);
-          // Content starts after "]: " (with optional space)
-          let contentStart = bracketEnd + 2;
-          if (contentStart < text.length && text.charCodeAt(contentStart) === 32) {
-            contentStart++;
-          }
-          const content = text.slice(contentStart);
-
-          // Find the FootnoteDefLabel child to get its end position
-          let labelTo = node.from + bracketEnd + 2;
-          const defNode = node.node;
-          const labelChild = defNode.getChild("FootnoteDefLabel");
-          if (labelChild) {
-            labelTo = labelChild.to;
-          }
-
-          defs.set(id, {
-            id,
-            from: node.from,
-            to: node.to,
-            content,
-            labelTo,
-          });
-        }
+        // Use FootnoteDefLabel child node which spans [^id]:
+        const labelNode = node.node.getChild("FootnoteDefLabel");
+        if (!labelNode) return;
+        // Skip [^ (2 chars) and ]: (2 chars) to get the id
+        const id = state.sliceDoc(labelNode.from + 2, labelNode.to - 2);
+        const content = state.sliceDoc(labelNode.to, node.to).trim();
+        defs.set(id, {
+          id,
+          from: node.from,
+          to: node.to,
+          content,
+          labelTo: labelNode.to,
+        });
       }
     },
   });
