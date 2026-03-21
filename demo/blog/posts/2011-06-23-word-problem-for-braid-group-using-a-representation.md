@@ -27,7 +27,6 @@ $$
  t_{i+1} & \text{if } j=i \\
  t_{i+1}t_it^{-1}_{i+1} & \text{if } j=i+1\\
 \end{cases}
-$$
 \]
 
 Where $t_i$ are generators of $F_n$, and $\sigma_i$ are the generators of the braid group. The inverse can easily be found.

@@ -27,14 +27,12 @@ It is hard to find the worst case complexity when $p=1$. This case is called the
 There are a few methods I found. One is to write it as a linear program on $n+2$ variables and $n$ constraints and solve it using the simplex method. The linear program is as follows.
 
 \[
-$$
 \begin{aligned}
 & \min_{a,b,t_1,\ldots,t_n}
 & & \sum_{i=1}^n t_i & \\
 & \text{s.t.} & &  t_i \geq (ax_i+b)-y_i & \forall 1 \leq i \leq n \\
 & & &  t_i \leq y_i-(ax_i+b) & \forall 1 \leq i \leq n \\
 \end{aligned}
-$$
 \]
 
 There are a bunch of other algorithms that specializes the simplex algorithm on this particular problem. There are also some iterative methods. Unfortunately, those algorithms depends on the actual numbers in the input. I want a running time that only depends on $n$.
@@ -63,13 +61,11 @@ Qizheng mentioned the problem to [Timothy Chan](http://tmc.web.engr.illinois.edu
 Consider the following linear program. Let $k$ be a constant. We are given $a_1,\ldots,a_k,b_1,\ldots,b_n$, $k$D vectors $\beta_1,\ldots,\beta_m$ and reals $\alpha_1,\ldots,\alpha_m$. Sets $J_1,\ldots,J_n$ a partition of $[m]$. 
 
 \[
-$$
 \begin{aligned}
 & \min_{w_1,\ldots,w_k,x_1,\ldots,x_n}
 & & \sum_{i=1}^k a_iw_i + \sum_{i=1}^n b_ix_i & \\
 & \text{s.t.} & &  x_i \geq (\sum_{d=1}^k \beta_{j,d} w_d) - \alpha_j & \forall 1 \leq i \leq n, j\in J_i
 \end{aligned}
-$$
 \]
 
 Zemel showed such linear program can be solved in $O(m)$ time for constant $k$ [@Zemel84]. The idea is a similar algorithm to Megiddo's linear time constant dimension LP algorithm [@Megiddo84]. 

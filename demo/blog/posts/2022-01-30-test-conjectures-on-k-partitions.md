@@ -112,7 +112,6 @@ For a partition $\mathcal{S}$, write $x_\mathcal{S} = \sum_{S\in \mathcal{S}} x_
 
 Consider the following linear program:
 \[
-$$
 \begin{aligned}
 & \max        & & z \\
 & \text{s.t.} & & x_{S\cup \{a\}} + x_{S\cup \{b\}} \geq x_{S\cup \{a,b\}} + x_{S}
@@ -122,7 +121,6 @@ $$
 &             & & x_\mathcal{Y} = 1 \\
 &             & & z \leq x_{\mathcal{Y}'} && \forall \mathcal{Y}'\in P_{k}(V)\ \text{with}\ \mathcal{X} \lhd \mathcal{Y}'.
 \end{aligned}
-$$
 \]
 
 The first set of constraints are the submodular inequalities, which enforce that $x_S=f(S)$ for some submodular function $f$. The next constraints enforce that $\mathcal{X}$ is a minimum $(k-1)$-partition and $\mathcal{Y}$ is a minimum $k$-partition. We normalize the optimal $k$-partition value to be $1$. Finally, among all $k$-partitions that are noncrossing with $\mathcal{X}$, the variable $z$ is a lower bound on their objective values.
