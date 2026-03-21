@@ -73,8 +73,9 @@ export const codeThemeStyles = {
     borderColor: "var(--cg-border)",
   },
 
-  /* Source mode: subtle indication that fences are visible */
+  /* Source mode: keep monospace font and subtle bg when cursor is inside */
   ".cg-codeblock-source": {
+    fontFamily: monoFont,
     backgroundColor: "var(--cg-subtle)",
   },
 

@@ -128,10 +128,17 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
     const cursorInside = focused && cursorInRange(state, block.from, block.to);
 
     if (cursorInside) {
-      // Source mode: show raw markdown, just add a subtle wrapper class.
-      items.push(
-        Decoration.line({ class: "cg-codeblock cg-codeblock-source" }).range(block.openFenceFrom),
-      );
+      // Source mode: show raw markdown with monospace font on all lines.
+      // Apply cg-codeblock-source to every line so code keeps its
+      // monospace font even when render decorations are off.
+      const openLine = state.doc.lineAt(block.openFenceFrom);
+      const closeLine = state.doc.lineAt(block.closeFenceFrom);
+      for (let ln = openLine.number; ln <= closeLine.number; ln++) {
+        const line = state.doc.line(ln);
+        items.push(
+          Decoration.line({ class: "cg-codeblock cg-codeblock-source" }).range(line.from),
+        );
+      }
       continue;
     }
 
