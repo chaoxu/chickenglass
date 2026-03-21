@@ -35,6 +35,7 @@ import {
   RenderWidget,
 } from "../render/render-utils";
 import { mathMacrosField } from "../render/math-macros";
+import { MathWidget } from "../render/math-render";
 import { renderInlineMarkdown } from "../render/inline-render";
 import {
   isValidEmbedUrl,
@@ -354,7 +355,7 @@ function shouldShowRendered(
   return isEmbed ? !cursorInsideBlock : !cursorOnFence;
 }
 
-/** Replace the opening fence+attrs+title with a rendered header widget. */
+/** Replace the opening fence+attrs with a rendered header widget. */
 function addHeaderWidgetDecoration(
   div: FencedDivInfo,
   header: string,
@@ -362,15 +363,12 @@ function addHeaderWidgetDecoration(
   macrosKey: string,
   items: Range<Decoration>[],
 ): void {
-  // Include the title in the replacement range so inline markdown
-  // (bold, italic, math) in the title is rendered by the widget.
   const replaceEnd = div.titleFrom ?? div.fenceTo;
-  const label =
-    div.title !== undefined ? header + " " + div.title : header;
-  const widget = new BlockHeaderWidget(label, macros, macrosKey);
-  widget.sourceFrom = div.fenceFrom;
+  const label = div.titleFrom !== undefined ? header + " " : header;
   items.push(
-    Decoration.replace({ widget }).range(div.fenceFrom, replaceEnd),
+    Decoration.replace({
+      widget: new BlockHeaderWidget(label, macros, macrosKey),
+    }).range(div.fenceFrom, replaceEnd),
   );
 }
 
@@ -439,6 +437,29 @@ function addEmbedWidget(
   }
 }
 
+/** Render inline math ($...$) in title text (Typora-style: cursor inside shows source). */
+function addTitleMathDecorations(
+  state: EditorState,
+  div: FencedDivInfo,
+  focused: boolean,
+  cursorFrom: number,
+  macros: Record<string, string>,
+  items: Range<Decoration>[],
+): void {
+  if (div.titleFrom === undefined || div.titleTo === undefined) return;
+
+  const titleText = state.sliceDoc(div.titleFrom, div.titleTo);
+  const regex = /\$([^$\n]+)\$/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(titleText)) !== null) {
+    const mathFrom = div.titleFrom + match.index;
+    const mathTo = mathFrom + match[0].length;
+    if (focused && cursorFrom >= mathFrom && cursorFrom <= mathTo) continue;
+    const widget = new MathWidget(match[1], match[0], false, macros);
+    items.push(Decoration.replace({ widget }).range(mathFrom, mathTo));
+  }
+}
+
 /** Add right-aligned QED tombstone on the last content line of proof blocks. */
 function addQedDecoration(
   state: EditorState,
@@ -492,7 +513,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       const spec = plugin.render(labelAttrs);
 
       // Line decoration for block CSS class
-      // Apply block class to header line
       items.push(
         Decoration.line({
           class: `${spec.className} cg-block-header`,
@@ -505,39 +525,30 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       if (div.singleLine) {
         addSingleLineClosingFence(state, div, items);
       } else {
-        // Apply block class to ALL body lines so they inherit the
-        // block type's styling (e.g., italic for theorem, normal for proof).
-        // This matches Read mode which wraps the entire block in a <div>.
-        const openLine = state.doc.lineAt(div.fenceFrom);
-        const closeLine = state.doc.lineAt(div.closeFenceFrom);
-        for (let ln = openLine.number + 1; ln < closeLine.number; ln++) {
-          const line = state.doc.line(ln);
-          items.push(
-            Decoration.line({ class: spec.className }).range(line.from),
-          );
-        }
-
         addMultiLineClosingFence(div, items);
 
         // Embed blocks: replace body content with iframe widget
         if (isEmbed) {
+          const openLine = state.doc.lineAt(div.fenceFrom);
           addEmbedWidget(state, div, openLine, items);
         }
       }
+
+      // Render inline math in title text (rendered mode only)
+      const cursor = state.selection.main;
+      addTitleMathDecorations(state, div, focused, cursor.from, macros, items);
 
       // QED tombstone for proof blocks (rendered mode only)
       if (plugin.defaults?.qedSymbol) {
         addQedDecoration(state, div, items);
       }
     } else if (plugin) {
-      // Cursor on fence: show both opening and closing ::: fences,
-      // but keep the body content rendered (not raw source).
+      // Cursor on fence (or inside embed block): show fence syntax as source
       items.push(
         Decoration.line({
           class: `${plugin.render({ type: div.className }).className} cg-block-source`,
         }).range(div.from),
       );
-      // Closing fence is visible — don't hide it (no addMultiLineClosingFence)
     }
   }
 
