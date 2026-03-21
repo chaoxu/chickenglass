@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { markdownToHtml, renderInline } from "./markdown-to-html";
+import type { BibEntry } from "../citations/bibtex-parser";
+import type { CslProcessor } from "../citations/csl-processor";
 
 describe("renderInline", () => {
   it("renders plain text with HTML escaping", () => {
@@ -196,5 +198,56 @@ describe("markdownToHtml", () => {
     expect(html).toContain('class="theorem"');
     expect(html).toContain("<h1>Inner Heading</h1>");
     expect(html).toContain("<p>With a paragraph.</p>");
+  });
+
+  it("renders bibliography with rich-mode classes", () => {
+    const entry: BibEntry = {
+      id: "karger2000",
+      type: "article",
+      author: "David R. Karger",
+      title: "Minimum Cuts in Near-Linear Time",
+      journal: "Journal of the ACM",
+      year: "2000",
+    };
+    const bibliography = new Map([[entry.id, entry]]);
+
+    const html = markdownToHtml("See [@karger2000].", { bibliography });
+
+    expect(html).toContain('class="cg-citation"');
+    expect(html).toContain('class="cg-bibliography"');
+    expect(html).toContain('class="cg-bibliography-heading"');
+    expect(html).toContain('class="cg-bibliography-list"');
+    expect(html).toContain('class="cg-bibliography-entry"');
+    expect(html).not.toContain('class="bibliography"');
+    expect(html).not.toContain('class="bib-entry"');
+  });
+
+  it("uses CSL formatting for read-mode citations and bibliography when provided", () => {
+    const entry: BibEntry = {
+      id: "karger2000",
+      type: "article",
+      author: "David R. Karger",
+      title: "Minimum Cuts in Near-Linear Time",
+      journal: "Journal of the ACM",
+      year: "2000",
+    };
+    const bibliography = new Map([[entry.id, entry]]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Karger [1]"),
+      bibliography: vi.fn(() => ['<span class="csl-entry">[1] Karger.</span>']),
+    } as unknown as CslProcessor;
+
+    const html = markdownToHtml("See [@karger2000].", {
+      bibliography,
+      cslProcessor: fakeCsl,
+    });
+
+    expect(fakeCsl.registerCitations).toHaveBeenCalled();
+    expect(fakeCsl.cite).toHaveBeenCalledWith(["karger2000"]);
+    expect(fakeCsl.bibliography).toHaveBeenCalledWith(["karger2000"]);
+    expect(html).toContain('<span class="cg-citation">[1]</span>');
+    expect(html).toContain('<div class="cg-bibliography-entry" id="bib-karger2000"><span class="csl-entry">[1] Karger.</span></div>');
   });
 });
