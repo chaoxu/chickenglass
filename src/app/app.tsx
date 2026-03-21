@@ -395,12 +395,12 @@ function AppInner() {
   // and would reset the user's manual mode switch.
   const isMarkdownFile = activeTab?.endsWith(".md") ?? false;
   useEffect(() => {
-    setEditorModeState(activeTab?.endsWith(".md") ? "rich" : "source");
-  }, [activeTab]);
+    setEditorModeState(isMarkdownFile ? "rich" : "source");
+  }, [activeTab, isMarkdownFile]);
 
-  // Apply the initial mode to the CM6 view when it's created.
-  // Always sets the mode so CM6 compartments match React state —
-  // covers both md files (rich) and non-md files (source).
+  // Reset CM6 compartments to match the default mode when the view is
+  // created (or recreated via key={activeTab}). This always sets rich
+  // for md files and source for non-md — per-file mode is not persisted.
   useEffect(() => {
     const view = editorState?.view;
     if (!view) return;
