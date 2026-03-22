@@ -39,7 +39,7 @@ import {
   type FencedBlockInfo,
 } from "../render/fenced-block-core";
 import { mathMacrosField } from "../render/math-macros";
-import { renderInlineMarkdown } from "../render/inline-render";
+import { renderDocumentFragmentToDom } from "../document-surfaces";
 import {
   type FencedDivSemantics,
 } from "../semantics/document";
@@ -81,7 +81,11 @@ class BlockHeaderWidget extends RenderWidget {
   createDOM(): HTMLElement {
     const el = document.createElement("span");
     el.className = CSS.blockHeaderRendered;
-    renderInlineMarkdown(el, this.header, this.macros, "document-inline");
+    renderDocumentFragmentToDom(el, {
+      kind: "block-title",
+      text: this.header,
+      macros: this.macros,
+    });
     return el;
   }
 

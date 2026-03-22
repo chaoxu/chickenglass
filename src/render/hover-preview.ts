@@ -23,7 +23,7 @@ import { bibDataField, findCitationsFromTree, type BibStore } from "../citations
 import { formatBibEntry } from "../citations/bibliography";
 import { renderKatex, stripMathDelimiters } from "./math-render";
 import { mathMacrosField } from "./math-macros";
-import { renderInlineMarkdown } from "./inline-render";
+import { renderDocumentFragmentToDom } from "../document-surfaces";
 import { readBracedLabelId } from "../parser/label-utils";
 
 /** Maximum content length shown in hover previews. */
@@ -66,14 +66,17 @@ function extractBlockContent(
 
 /**
  * Render markdown content with full inline formatting into a DOM element.
- * Uses the shared Lezer-based renderInlineMarkdown (math, bold, italic, etc.).
  */
 function renderContentWithMath(
   container: HTMLElement,
   content: string,
   macros: Record<string, string>,
 ): void {
-  renderInlineMarkdown(container, content, macros);
+  renderDocumentFragmentToDom(container, {
+    kind: "hover",
+    text: content,
+    macros,
+  });
 }
 
 /** Create a header div for the tooltip. */
@@ -86,7 +89,11 @@ function createHeader(
   header.className = extraClass
     ? `cf-hover-preview-header ${extraClass}`
     : "cf-hover-preview-header";
-  renderInlineMarkdown(header, text, macros, "document-inline");
+  renderDocumentFragmentToDom(header, {
+    kind: "title",
+    text,
+    macros,
+  });
   return header;
 }
 

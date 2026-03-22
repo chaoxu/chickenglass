@@ -907,3 +907,27 @@ describe("#318 — subsystem pattern", () => {
     expect(claude).toContain("One concept should have one clear owner");
   });
 });
+
+describe("#314 — document surface renderer layer", () => {
+  it("defines a shared document surface renderer module", () => {
+    expect(fileExists("src/document-surfaces.ts")).toBe(true);
+  });
+
+  it("routes title, tooltip, hover, and chrome surfaces through the shared surface layer", () => {
+    const breadcrumbs = fileText("src/app/components/breadcrumbs.tsx");
+    const outline = fileText("src/app/components/outline.tsx");
+    const editorPane = fileText("src/app/components/editor-pane.tsx");
+    const readMode = fileText("src/app/components/read-mode-view.tsx");
+    const hoverPreview = fileText("src/render/hover-preview.ts");
+    const pluginRender = fileText("src/plugins/plugin-render.ts");
+    const frontmatter = fileText("src/editor/frontmatter-state.ts");
+
+    expect(breadcrumbs).toContain("../../document-surfaces");
+    expect(outline).toContain("../../document-surfaces");
+    expect(editorPane).toContain("../../document-surfaces");
+    expect(readMode).toContain("../../document-surfaces");
+    expect(hoverPreview).toContain("../document-surfaces");
+    expect(pluginRender).toContain("../document-surfaces");
+    expect(frontmatter).toContain("../document-surfaces");
+  });
+});

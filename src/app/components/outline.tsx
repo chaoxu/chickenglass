@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import type { HeadingEntry } from "../heading-ancestry";
-import { renderInline } from "../markdown-to-html";
+import { renderDocumentFragmentToHtml } from "../../document-surfaces";
 
 interface OutlineProps {
   headings: HeadingEntry[];
@@ -93,7 +93,7 @@ export function Outline({ headings, onSelect }: OutlineProps) {
               </span>
               <span
                 className="truncate cf-ui-font"
-                dangerouslySetInnerHTML={{ __html: renderInline(heading.text, undefined, "ui-chrome-inline") }}
+                dangerouslySetInnerHTML={{ __html: renderDocumentFragmentToHtml({ kind: "chrome-label", text: heading.text }) }}
               />
             </button>
           </div>

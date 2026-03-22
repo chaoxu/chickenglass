@@ -13,9 +13,9 @@ import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { EditorView } from "@codemirror/view";
 import { collectFootnotes } from "../../render/sidenote-render";
-import { renderInlineMarkdown } from "../../render/inline-render";
 import { mathMacrosField } from "../../render/math-macros";
 import { orderedFootnoteEntries } from "../../semantics/document";
+import { renderDocumentFragmentToDom } from "../../document-surfaces";
 
 interface SidenoteEntry {
   id: string;
@@ -60,13 +60,17 @@ function extractSidenotes(view: EditorView): SidenoteEntry[] {
   return entries;
 }
 
-/** React wrapper around the shared renderInlineMarkdown DOM utility. */
+/** React wrapper around the shared document-surface renderer. */
 function SidenoteContent({ text, macros }: { text: string; macros: Record<string, string> }) {
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     if (!ref.current) return;
     ref.current.innerHTML = "";
-    renderInlineMarkdown(ref.current, text, macros);
+    renderDocumentFragmentToDom(ref.current, {
+      kind: "footnote",
+      text,
+      macros,
+    });
   }, [text, macros]);
   return <span ref={ref} />;
 }

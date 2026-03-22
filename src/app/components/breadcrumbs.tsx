@@ -9,7 +9,7 @@
 import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { cn } from "../lib/utils";
 import { headingAncestryAt, type HeadingEntry } from "../heading-ancestry";
-import { renderInline } from "../markdown-to-html";
+import { renderDocumentFragmentToHtml } from "../../document-surfaces";
 import {
   Breadcrumb,
   BreadcrumbButton,
@@ -121,13 +121,13 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
                 {i === ancestry.length - 1 ? (
                   <BreadcrumbPage
                     title={h.text}
-                    dangerouslySetInnerHTML={{ __html: renderInline(h.text, undefined, "ui-chrome-inline") }}
+                    dangerouslySetInnerHTML={{ __html: renderDocumentFragmentToHtml({ kind: "chrome-label", text: h.text }) }}
                   />
                 ) : (
                   <BreadcrumbButton
                     title={h.text}
                     onClick={() => onSelect(h.pos)}
-                    dangerouslySetInnerHTML={{ __html: renderInline(h.text, undefined, "ui-chrome-inline") }}
+                    dangerouslySetInnerHTML={{ __html: renderDocumentFragmentToHtml({ kind: "chrome-label", text: h.text }) }}
                   />
                 )}
               </BreadcrumbItem>

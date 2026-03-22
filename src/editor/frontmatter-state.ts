@@ -9,7 +9,7 @@
 import { EditorState, type Extension, StateField } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
-import { renderInlineMarkdown } from "../render/inline-render";
+import { renderDocumentFragmentToDom } from "../document-surfaces";
 
 import {
   parseFrontmatter,
@@ -86,15 +86,6 @@ export const frontmatterField = StateField.define<FrontmatterState>({
   },
 });
 
-/** Render title text with inline markdown support (bold, italic, math, etc.). */
-function renderTitleContent(
-  container: HTMLElement,
-  text: string,
-  macros: Record<string, string>,
-): void {
-  renderInlineMarkdown(container, text, macros, "document-inline");
-}
-
 /** Widget that renders the document title from frontmatter. */
 class TitleWidget extends WidgetType {
   constructor(
@@ -107,7 +98,11 @@ class TitleWidget extends WidgetType {
   toDOM(): HTMLElement {
     const el = document.createElement("div");
     el.className = "cf-doc-title";
-    renderTitleContent(el, this.title, this.macros);
+    renderDocumentFragmentToDom(el, {
+      kind: "title",
+      text: this.title,
+      macros: this.macros,
+    });
     return el;
   }
 

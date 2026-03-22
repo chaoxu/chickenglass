@@ -10,7 +10,7 @@ import { bibDataField } from "../../citations/citation-render";
 import { frontmatterField } from "../../editor/frontmatter-state";
 import type { EditorMode } from "../../editor";
 import { mathMacrosField } from "../../render/math-macros";
-import { renderInlineMarkdown } from "../../render/inline-render";
+import { renderDocumentFragmentToDom } from "../../document-surfaces";
 
 export interface EditorPaneProps extends UseEditorOptions {
   sidenotesCollapsed?: boolean;
@@ -108,7 +108,11 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
       }
       tooltip.innerHTML = "";
       const macros = view.state.field(mathMacrosField);
-      renderInlineMarkdown(tooltip, content, macros);
+      renderDocumentFragmentToDom(tooltip, {
+        kind: "footnote",
+        text: content,
+        macros,
+      });
       const rect = target.getBoundingClientRect();
       tooltip.style.left = `${rect.left}px`;
       tooltip.style.top = `${rect.bottom + 4}px`;

@@ -11,7 +11,7 @@
  */
 
 import { useRef, useEffect, useMemo, useCallback } from "react";
-import { markdownToHtml, renderInline } from "../markdown-to-html";
+import { markdownToHtml } from "../markdown-to-html";
 import type { BibStore } from "../../citations/citation-render";
 import type { FrontmatterConfig } from "../../parser/frontmatter";
 import type { CslProcessor } from "../../citations/csl-processor";
@@ -21,6 +21,7 @@ import {
 } from "tex-linebreak2";
 import { getHyphenator, applyHyphensToContainer } from "../hyphenation";
 import { measureAsync, measureSync } from "../perf";
+import { renderDocumentFragmentToHtml } from "../../document-surfaces";
 
 /** Debounce delay (ms) for re-applying line breaking on resize. */
 const RESIZE_DEBOUNCE_MS = 200;
@@ -114,7 +115,11 @@ export function ReadModeView({
     });
 
     const titleHtml = frontmatterConfig.title
-      ? `<h1 class="cf-read-title">${renderInline(frontmatterConfig.title, frontmatterConfig.math, "document-inline")}</h1>`
+      ? `<h1 class="cf-read-title">${renderDocumentFragmentToHtml({
+        kind: "title",
+        text: frontmatterConfig.title,
+        macros: frontmatterConfig.math,
+      })}</h1>`
       : "";
 
     return titleHtml + bodyHtml;

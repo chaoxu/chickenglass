@@ -29,13 +29,13 @@ import {
   focusTracker,
 } from "./render-utils";
 import { mathMacrosField } from "./math-macros";
-import { renderInlineMarkdown } from "./inline-render";
 import {
   type FootnoteSemantics,
   numberFootnotes,
   orderedFootnoteEntries,
 } from "../semantics/document";
 import { documentSemanticsField } from "../semantics/codemirror-source";
+import { renderDocumentFragmentToDom } from "../document-surfaces";
 
 /** StateEffect to toggle sidenote margin visibility. */
 export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
@@ -210,7 +210,11 @@ class FootnoteSectionWidget extends RenderWidget {
       div.appendChild(num);
 
       const content = document.createElement("span");
-      renderInlineMarkdown(content, entry.content, this.macros);
+      renderDocumentFragmentToDom(content, {
+        kind: "footnote",
+        text: entry.content,
+        macros: this.macros,
+      });
       div.appendChild(content);
 
       const defFrom = entry.defFrom;
