@@ -66,10 +66,12 @@ Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile(
 
 ## Browser testing (CDP)
 
-1. Start dev server: `npm run dev`
-2. Launch Chrome: `npm run chrome` (opens http://localhost:5173, CDP on port 9322)
-3. Connect: `chromium.connectOverCDP("http://localhost:9322")`
-4. Use `page.evaluate()` + `__cmView`/`__cmDebug`/`__app` for all interactions. **Never use `locator.click()` on CM6 content** — it times out on custom widgets. Use `__app.openFile()` to open files (not sidebar clicking). Set `page.setDefaultTimeout(10000)`.
+**Only ONE dev server and ONE browser at a time.** Kill previous instances before launching. Use `page.reload()` after code changes — never open new browser instances.
+
+1. Start: `npm run dev`, then `npm run chrome` (CDP on port 9322)
+2. Connect: `chromium.connectOverCDP("http://localhost:9322")`
+3. Use `page.evaluate()` + `__cmView`/`__cmDebug`/`__app`. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout(10000)`.
+4. Kill: `kill $(lsof -ti:5173 -ti:5174 -ti:5175) 2>/dev/null; pkill -f "launch-chrome" 2>/dev/null`
 
 Do NOT use the Playwright MCP plugin — connect directly via CDP.
 
