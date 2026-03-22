@@ -210,6 +210,7 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
         : "";
       const headerWidget = new CodeBlockHeaderWidget(block.language);
       headerWidget.sourceFrom = block.openFenceFrom;
+      headerWidget.sourceTo = block.openFenceTo;
       items.push(
         Decoration.replace({ widget: headerWidget }).range(block.openFenceFrom, block.openFenceTo),
       );

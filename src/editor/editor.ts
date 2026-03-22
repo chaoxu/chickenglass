@@ -21,6 +21,7 @@ import {
   fenceGuidePlugin,
   includeLabelPlugin,
   sidenoteRenderPlugin,
+  searchHighlightPlugin,
 } from "../render";
 import {
   createPluginRegistryField,
@@ -85,6 +86,7 @@ const renderingExtensions: Extension[] = [
   fenceGuidePlugin,
   includeLabelPlugin,
   sidenoteRenderPlugin,
+  searchHighlightPlugin,
 ];
 
 export interface EditorConfig {

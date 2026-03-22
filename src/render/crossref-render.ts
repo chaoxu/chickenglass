@@ -94,6 +94,7 @@ export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
       widget = new UnresolvedRefWidget(raw);
     }
     widget.sourceFrom = ref.from;
+    widget.sourceTo = ref.to;
     items.push(
       Decoration.replace({ widget }).range(ref.from, ref.to),
     );

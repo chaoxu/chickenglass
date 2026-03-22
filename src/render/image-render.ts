@@ -81,6 +81,7 @@ function collectImageRanges(view: EditorView): Range<Decoration>[] {
 
       const widget = new ImageWidget(parsed.alt, parsed.src);
       widget.sourceFrom = node.from;
+      widget.sourceTo = node.to;
       items.push(
         Decoration.replace({ widget }).range(node.from, node.to),
       );

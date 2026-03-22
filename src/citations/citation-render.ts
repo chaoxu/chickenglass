@@ -301,6 +301,7 @@ export function collectCitationRanges(
         : formatParenthetical(match.ids, store, match.locators);
       const widget = new CitationWidget(rendered, match.ids);
       widget.sourceFrom = match.from;
+      widget.sourceTo = match.to;
       items.push(
         Decoration.replace({ widget }).range(match.from, match.to),
       );
@@ -312,6 +313,7 @@ export function collectCitationRanges(
           : formatNarrativeCitation(entry);
         const widget = new CitationWidget(rendered, match.ids, true);
         widget.sourceFrom = match.from;
+        widget.sourceTo = match.to;
         items.push(
           Decoration.replace({ widget }).range(match.from, match.to),
         );

@@ -157,6 +157,7 @@ function buildMathItems(
 
       const widget = new MathWidget(latex, raw, isDisplay, macros);
       widget.sourceFrom = node.from;
+      widget.sourceTo = node.to;
 
       items.push(
         Decoration.replace({

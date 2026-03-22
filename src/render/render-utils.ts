@@ -121,6 +121,7 @@ export function addMarkerReplacement(
 
   if (widget) {
     widget.sourceFrom = markerFrom;
+    widget.sourceTo = markerTo;
     items.push(Decoration.replace({ widget }).range(markerFrom, markerTo));
   } else {
     items.push(decorationHidden.range(markerFrom, markerTo));
@@ -156,6 +157,9 @@ export abstract class RenderWidget extends WidgetType {
   /** Document offset of the start of the source range this widget replaces. */
   sourceFrom = -1;
 
+  /** Document offset of the end of the source range this widget replaces. */
+  sourceTo = -1;
+
   /**
    * Subclasses build their DOM element here.
    *
@@ -169,6 +173,13 @@ export abstract class RenderWidget extends WidgetType {
 
   toDOM(view?: EditorView): HTMLElement {
     const el = this.createDOM();
+    // Store source range as data attributes for search-highlight plugin
+    if (this.sourceFrom >= 0) {
+      el.dataset.sourceFrom = String(this.sourceFrom);
+    }
+    if (this.sourceTo >= 0) {
+      el.dataset.sourceTo = String(this.sourceTo);
+    }
     if (this.sourceFrom >= 0 && view) {
       el.style.cursor = "pointer";
       const from = this.sourceFrom;

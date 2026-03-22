@@ -85,6 +85,7 @@ function buildSidenoteDecorations(state: EditorState, focused: boolean): Decorat
     const num = numberMap.get(ref.id) ?? 0;
     const widget = new FootnoteRefWidget(num, ref.id);
     widget.sourceFrom = ref.from;
+    widget.sourceTo = ref.to;
     items.push(Decoration.replace({ widget }).range(ref.from, ref.to));
   }
 

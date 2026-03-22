@@ -300,6 +300,7 @@ function addEmbedWidget(
   if (src) {
     const widget = new EmbedWidget(src, div.className);
     widget.sourceFrom = bodyFrom;
+    widget.sourceTo = bodyTo;
     items.push(Decoration.replace({ widget }).range(bodyFrom, bodyTo));
   }
 }

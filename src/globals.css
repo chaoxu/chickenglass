@@ -578,3 +578,4 @@ body {
 /* Fence guide lines — no visual styling here; box-shadow is applied per depth
  * level via cf-fence-d1..d4 in block-theme.ts. This class exists as a common
  * hook for all depth levels (used in fence-guide.ts). */
+==
