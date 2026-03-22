@@ -55,6 +55,24 @@ describe("parseProjectConfig", () => {
     expect(config.bibliography).toBe("refs.bib");
   });
 
+  it("parses numbering scheme", () => {
+    const yaml = "numbering: global";
+    const config = parseProjectConfig(yaml);
+    expect(config.numbering).toBe("global");
+  });
+
+  it("parses numbering grouped scheme", () => {
+    const yaml = "numbering: grouped";
+    const config = parseProjectConfig(yaml);
+    expect(config.numbering).toBe("grouped");
+  });
+
+  it("ignores invalid numbering value", () => {
+    const yaml = "numbering: invalid";
+    const config = parseProjectConfig(yaml);
+    expect(config.numbering).toBeUndefined();
+  });
+
   it("returns empty config for empty input", () => {
     const config = parseProjectConfig("");
     expect(config).toEqual({});
@@ -173,6 +191,24 @@ describe("mergeConfigs", () => {
       lemma: false,         // file overrides (disable)
       claim: { counter: "theorem", numbered: true }, // file added
     });
+  });
+
+  it("file numbering overrides project", () => {
+    const merged = mergeConfigs(
+      { numbering: "grouped" },
+      { numbering: "global" },
+    );
+    expect(merged.numbering).toBe("global");
+  });
+
+  it("project numbering used when file has none", () => {
+    const merged = mergeConfigs({ numbering: "global" }, {});
+    expect(merged.numbering).toBe("global");
+  });
+
+  it("no numbering when neither side provides it", () => {
+    const merged = mergeConfigs({}, {});
+    expect(merged.numbering).toBeUndefined();
   });
 
   it("returns empty config when both are empty", () => {

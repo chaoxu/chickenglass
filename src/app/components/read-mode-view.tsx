@@ -4,17 +4,15 @@
  * Replaces the CM6 EditorView when the editor is in "read" mode, enabling
  * proper typography (justify, hyphens) that CM6's `.cm-line` divs prevent.
  *
- * Uses the existing `markdownToHtml` converter with math macros from
- * frontmatter and section numbering support. After rendering, applies
+ * Uses the existing `markdownToHtml` converter with math macros from the
+ * CM6 frontmatter state and section numbering support. After rendering, applies
  * Knuth-Plass optimal line breaking via tex-linebreak2 for book-quality
  * justified text.
  */
 
 import { useRef, useEffect, useMemo, useCallback } from "react";
 import { markdownToHtml, renderInline, type BibStore } from "../markdown-to-html";
-import { parseFrontmatter } from "../../parser/frontmatter";
-import type { ProjectConfig } from "../project-config";
-import { mergeConfigs } from "../project-config";
+import type { FrontmatterConfig } from "../../parser/frontmatter";
 import type { CslProcessor } from "../../citations/csl-processor";
 import {
   texLinebreakDOM,
@@ -29,8 +27,8 @@ const RESIZE_DEBOUNCE_MS = 200;
 export interface ReadModeViewProps {
   /** Raw markdown document content. */
   content: string;
-  /** Project-level configuration (provides default math macros, etc.). */
-  projectConfig?: ProjectConfig;
+  /** Merged frontmatter config from the CM6 state (project + file already merged). */
+  frontmatterConfig: FrontmatterConfig;
   /** Loaded bibliography entries for citation resolution. */
   bibliography?: BibStore;
   /** CSL processor used by rich mode citation rendering. */
@@ -88,14 +86,15 @@ async function applyLineBreaking(container: HTMLElement): Promise<void> {
 /**
  * Render markdown content as semantic HTML for reading.
  *
- * Parses frontmatter directly from the content string to extract math
- * macros and title, then delegates to `markdownToHtml` for conversion.
- * After the DOM renders, applies Knuth-Plass optimal line breaking to
- * all paragraph elements for book-quality justified text.
+ * Receives the already-merged frontmatter config from CM6 state (via
+ * the `frontmatterConfig` prop) for math macros and title, then
+ * delegates to `markdownToHtml` for conversion. After the DOM renders,
+ * applies Knuth-Plass optimal line breaking to all paragraph elements
+ * for book-quality justified text.
  */
 export function ReadModeView({
   content,
-  projectConfig,
+  frontmatterConfig,
   bibliography,
   cslProcessor,
   scrollTop,
@@ -104,27 +103,21 @@ export function ReadModeView({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const didRestoreScroll = useRef(false);
 
-  // Parse frontmatter and merge with project config for macros
-  const config = useMemo(() => {
-    const { config: fileConfig } = parseFrontmatter(content);
-    return mergeConfigs(projectConfig ?? {}, fileConfig);
-  }, [content, projectConfig]);
-
-  // Convert markdown to HTML
+  // Convert markdown to HTML using the already-merged frontmatter config
   const htmlContent = useMemo(() => {
     const bodyHtml = markdownToHtml(content, {
-      macros: config.math,
+      macros: frontmatterConfig.math,
       sectionNumbers: true,
       bibliography,
       cslProcessor,
     });
 
-    const titleHtml = config.title
-      ? `<h1 class="cf-read-title">${renderInline(config.title, config.math, "document-inline")}</h1>`
+    const titleHtml = frontmatterConfig.title
+      ? `<h1 class="cf-read-title">${renderInline(frontmatterConfig.title, frontmatterConfig.math, "document-inline")}</h1>`
       : "";
 
     return titleHtml + bodyHtml;
-  }, [content, config, bibliography, cslProcessor]);
+  }, [content, frontmatterConfig, bibliography, cslProcessor]);
 
   // Stable callback for applying line breaking (used by both effect and resize observer)
   const applyLineBreakingCb = useCallback(() => {

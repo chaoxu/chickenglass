@@ -7,6 +7,7 @@ import { ReadModeView } from "./read-mode-view";
 import { extractHeadings } from "../heading-ancestry";
 import { collectFootnotes, sidenotesCollapsedEffect } from "../../render/sidenote-render";
 import { bibDataField } from "../../citations/citation-render";
+import { frontmatterField } from "../../editor/frontmatter-state";
 import type { EditorMode } from "../../editor";
 
 export interface EditorPaneProps extends UseEditorOptions {
@@ -136,8 +137,10 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
     };
   }, [view, sidenotesCollapsed, getFootnoteContent]);
 
-  // Get the live document content and bibliography for ReadModeView
+  // Get the live document content, frontmatter config, and bibliography for ReadModeView
   const readModeContent = view ? view.state.doc.toString() : editorOptions.doc;
+  const fmState = view ? view.state.field(frontmatterField, false) : undefined;
+  const frontmatterConfig = fmState?.config ?? {};
   const bibData = view ? view.state.field(bibDataField, false) : undefined;
 
   return (
@@ -161,7 +164,7 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
       {isReadMode && (
         <ReadModeView
           content={readModeContent}
-          projectConfig={editorOptions.projectConfig}
+          frontmatterConfig={frontmatterConfig}
           bibliography={bibData?.store}
           cslProcessor={bibData?.cslProcessor}
           scrollTop={scrollTop}

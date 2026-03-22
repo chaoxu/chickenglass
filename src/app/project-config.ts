@@ -12,7 +12,7 @@
 
 import { Facet } from "@codemirror/state";
 
-import type { BlockConfig, FrontmatterConfig } from "../parser/frontmatter";
+import type { BlockConfig, FrontmatterConfig, NumberingScheme } from "../parser/frontmatter";
 import { parseFrontmatter } from "../parser/frontmatter";
 import type { FileSystem } from "./file-manager";
 
@@ -20,6 +20,12 @@ import type { FileSystem } from "./file-manager";
 export interface ProjectConfig {
   bibliography?: string;
   csl?: string;
+  /**
+   * Numbering scheme for theorem-like blocks.
+   * - "global": all numbered blocks share one counter (blog style)
+   * - "grouped": separate counters per group (default, academic style)
+   */
+  numbering?: NumberingScheme;
   blocks?: Record<string, boolean | BlockConfig>;
   math?: Record<string, string>;
   /** Default image folder for all documents in the project. */
@@ -58,6 +64,7 @@ export function parseProjectConfig(yaml: string): ProjectConfig {
   const result: ProjectConfig = {};
   if (config.bibliography) result.bibliography = config.bibliography;
   if (config.csl) result.csl = config.csl;
+  if (config.numbering) result.numbering = config.numbering;
   if (config.blocks) result.blocks = config.blocks;
   if (config.math) result.math = config.math;
   if (config.imageFolder) result.imageFolder = config.imageFolder;
@@ -71,6 +78,7 @@ export function parseProjectConfig(yaml: string): ProjectConfig {
  * - `title`: file only (project config has no title)
  * - `bibliography`: file overrides project
  * - `csl`: file overrides project
+ * - `numbering`: file overrides project
  * - `math`: merged additively — file macros add to and override project macros
  * - `blocks`: merged additively — file entries add to and override project entries
  */
@@ -83,12 +91,15 @@ export function mergeConfigs(
   // title is always from the file
   if (file.title !== undefined) merged.title = file.title;
 
-  // bibliography / csl: file overrides project
+  // bibliography / csl / numbering: file overrides project
   const bib = file.bibliography ?? project.bibliography;
   if (bib !== undefined) merged.bibliography = bib;
 
   const csl = file.csl ?? project.csl;
   if (csl !== undefined) merged.csl = csl;
+
+  const numbering = file.numbering ?? project.numbering;
+  if (numbering !== undefined) merged.numbering = numbering;
 
   // math: additive merge (project base, file overrides)
   if (project.math || file.math) {
