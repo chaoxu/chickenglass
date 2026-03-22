@@ -11,7 +11,8 @@
  */
 
 import { useRef, useEffect, useMemo, useCallback } from "react";
-import { markdownToHtml, renderInline, type BibStore } from "../markdown-to-html";
+import { markdownToHtml, renderInline } from "../markdown-to-html";
+import type { BibStore } from "../../citations/citation-render";
 import type { FrontmatterConfig } from "../../parser/frontmatter";
 import type { CslProcessor } from "../../citations/csl-processor";
 import {

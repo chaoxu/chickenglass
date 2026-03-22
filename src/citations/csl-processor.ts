@@ -272,3 +272,27 @@ export class CslProcessor {
     }
   }
 }
+
+/**
+ * Filter parenthetical citation matches and register them with a CSL processor.
+ *
+ * Both the CM6 editor (citation-render.ts) and the HTML exporter
+ * (markdown-to-html.ts) need this step so numeric styles assign numbers
+ * in document order. Extracted here to avoid duplication.
+ */
+export function registerCitationsWithProcessor(
+  matches: ReadonlyArray<{
+    parenthetical: boolean;
+    ids: readonly string[];
+    locators?: readonly (string | undefined)[];
+  }>,
+  processor: CslProcessor,
+): void {
+  const clusters = matches
+    .filter((m) => m.parenthetical)
+    .map((m) => ({
+      ids: [...m.ids],
+      locators: m.locators ? [...m.locators] : undefined,
+    }));
+  processor.registerCitations(clusters);
+}

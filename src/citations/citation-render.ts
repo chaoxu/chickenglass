@@ -25,7 +25,7 @@ import type { SyntaxNode } from "@lezer/common";
 import { parser as baseParser } from "@lezer/markdown";
 import { syntaxTree } from "@codemirror/language";
 import { type BibEntry, extractLastName } from "./bibtex-parser";
-import type { CslProcessor } from "./csl-processor";
+import { type CslProcessor, registerCitationsWithProcessor } from "./csl-processor";
 import { cursorInRange, buildDecorations, RenderWidget } from "../render/render-utils";
 import { markdownExtensions } from "../parser";
 
@@ -282,13 +282,7 @@ export function collectCitationRanges(
 
   // Register all citations with CSL processor first (needed for numeric styles)
   if (cslProcessor) {
-    const clusters = matches
-      .filter((m) => m.parenthetical)
-      .map((m) => ({
-        ids: [...m.ids],
-        locators: m.locators ? [...m.locators] : undefined,
-      }));
-    cslProcessor.registerCitations(clusters);
+    registerCitationsWithProcessor(matches, cslProcessor);
   }
 
   for (const match of matches) {

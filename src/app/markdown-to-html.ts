@@ -27,9 +27,9 @@ import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import {
   findCitationsFromTree,
   formatParenthetical,
-  type BibStore as CitationBibStore,
+  type BibStore,
 } from "../citations/citation-render";
-import type { CslProcessor } from "../citations/csl-processor";
+import { type CslProcessor, registerCitationsWithProcessor } from "../citations/csl-processor";
 import {
   analyzeFootnotes,
   analyzeDocumentSemantics,
@@ -39,9 +39,6 @@ import {
 } from "../semantics/document";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 import { CSS } from "../constants/css-classes";
-
-/** A map of citation keys to bibliography entries. */
-export type BibStore = CitationBibStore;
 
 // ── Standalone Lezer parser ─────────────────────────────────────────────────
 
@@ -190,13 +187,8 @@ export function markdownToHtml(
   const semantics = analyzeDocumentSemantics(stringTextSource(content), tree);
 
   if (options?.bibliography && options.cslProcessor) {
-    const clusters = findCitationsFromTree(tree.topNode, content, options.bibliography)
-      .filter((match) => match.parenthetical)
-      .map((match) => ({
-        ids: [...match.ids],
-        locators: match.locators ? [...match.locators] : undefined,
-      }));
-    options.cslProcessor.registerCitations(clusters);
+    const matches = findCitationsFromTree(tree.topNode, content, options.bibliography);
+    registerCitationsWithProcessor(matches, options.cslProcessor);
   }
   const ctx: WalkContext = {
     doc: content,
