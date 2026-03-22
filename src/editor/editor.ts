@@ -28,6 +28,7 @@ import {
   blockRenderPlugin,
   defaultPlugins,
 } from "../plugins";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 import { citationRenderPlugin, bibliographyPlugin, bibDataField } from "../citations";
 import { projectConfigFacet, type ProjectConfig } from "../app/project-config";
 import { editorKeybindings } from "./keybindings";
@@ -144,6 +145,9 @@ export function createEditor(config: EditorConfig): EditorView {
 
       // Frontmatter state (always needed — other extensions read it)
       frontmatterField,
+
+      // Shared document semantics (headings, fenced divs, footnotes)
+      documentSemanticsField,
 
       // Block plugin system
       createPluginRegistryField(defaultPlugins),

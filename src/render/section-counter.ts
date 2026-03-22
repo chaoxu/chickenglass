@@ -19,15 +19,13 @@ import {
   type Range,
   StateField,
 } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
 import { buildDecorations } from "./render-utils";
-import { analyzeHeadings } from "../semantics/document";
-import { editorStateTextSource } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 
 /** Build section-number decorations for all headings in the document. */
 export function buildSectionDecorations(state: EditorState): DecorationSet {
   const items: Range<Decoration>[] = [];
-  for (const heading of analyzeHeadings(editorStateTextSource(state), syntaxTree(state))) {
+  for (const heading of state.field(documentSemanticsField).headings) {
     if (!heading.number) continue;
     items.push(
       Decoration.line({
@@ -47,7 +45,7 @@ const sectionNumberField = StateField.define<DecorationSet>({
   update(value, tr) {
     if (
       tr.docChanged ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+      tr.state.field(documentSemanticsField) !== tr.startState.field(documentSemanticsField)
     ) {
       return buildSectionDecorations(tr.state);
     }
@@ -60,4 +58,4 @@ const sectionNumberField = StateField.define<DecorationSet>({
 });
 
 /** CM6 extension that adds hierarchical section numbers to headings. */
-export const sectionNumberPlugin: Extension = sectionNumberField;
+export const sectionNumberPlugin: Extension = [documentSemanticsField, sectionNumberField];

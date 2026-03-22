@@ -3,12 +3,13 @@ import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import type { Decoration } from "@codemirror/view";
 import { buildSectionDecorations } from "./section-counter";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 
 /** Create an EditorState with the markdown parser and a given document. */
 function createState(doc: string): EditorState {
   return EditorState.create({
     doc,
-    extensions: [markdown()],
+    extensions: [markdown(), documentSemanticsField],
   });
 }
 

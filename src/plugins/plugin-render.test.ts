@@ -13,6 +13,7 @@ import { markdownExtensions } from "../parser";
 import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
 import { blockCounterField } from "./block-counter";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 import { editorFocusField, focusEffect } from "../render/render-utils";
 import { mathMacrosField } from "../render/math-macros";
 import { frontmatterField } from "../editor/frontmatter-state";
@@ -30,6 +31,7 @@ function createTestState(doc: string, cursorPos = 0, focused = false) {
     extensions: [
       markdown({ extensions: markdownExtensions }),
       frontmatterField,
+      documentSemanticsField,
       mathMacrosField,
       createPluginRegistryField([]),
       blockCounterField,

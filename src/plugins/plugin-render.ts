@@ -20,7 +20,6 @@ import {
   WidgetType,
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Range } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
 import type { BlockAttrs } from "./plugin-types";
 import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
@@ -42,10 +41,9 @@ import {
 import { mathMacrosField } from "../render/math-macros";
 import { renderInlineMarkdown } from "../render/inline-render";
 import {
-  analyzeFencedDivs,
   type FencedDivSemantics,
 } from "../semantics/document";
-import { editorStateTextSource } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 import {
   isValidEmbedUrl,
   extractYoutubeId,
@@ -217,9 +215,9 @@ interface FencedDivInfo extends FencedBlockInfo, FencedDivSemantics {
   readonly className: string;
 }
 
-/** Extract info about FencedDiv nodes from the syntax tree. */
+/** Extract info about FencedDiv nodes from the shared semantics field. */
 function collectFencedDivs(state: EditorState): FencedDivInfo[] {
-  return analyzeFencedDivs(editorStateTextSource(state), syntaxTree(state))
+  return state.field(documentSemanticsField).fencedDivs
     .filter((div): div is FencedDivSemantics & { primaryClass: string } => Boolean(div.primaryClass))
     .map((div) => ({
       ...div,
@@ -457,6 +455,7 @@ export { blockDecorationField as _blockDecorationFieldForTest };
 
 /** CM6 extension that renders fenced divs using the block plugin system. */
 export const blockRenderPlugin: Extension = [
+  documentSemanticsField,
   editorFocusField,
   focusTracker,
   blockDecorationField,

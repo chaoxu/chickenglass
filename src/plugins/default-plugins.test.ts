@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 
 import {
   createRegistryState,
@@ -30,7 +31,10 @@ import { defaultPlugins } from "./default-plugins";
 function createState(doc: string): EditorState {
   return EditorState.create({
     doc,
-    extensions: [markdown({ extensions: [fencedDiv] })],
+    extensions: [
+      markdown({ extensions: [fencedDiv] }),
+      documentSemanticsField,
+    ],
   });
 }
 

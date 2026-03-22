@@ -8,13 +8,11 @@
  */
 
 import { type EditorState, StateField } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
 import type { NumberingScheme } from "../parser/frontmatter";
 import type { PluginRegistryState } from "./plugin-registry";
 import { getPluginOrFallback, pluginRegistryField } from "./plugin-registry";
 import { frontmatterField } from "../editor/frontmatter-state";
-import { analyzeFencedDivs } from "../semantics/document";
-import { editorStateTextSource } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 
 /** A numbered block entry mapping a fenced div to its assigned number. */
 export interface NumberedBlock {
@@ -60,7 +58,7 @@ export function computeBlockNumbers(
   const byPosition = new Map<number, NumberedBlock>();
   const counters = new Map<string, number>();
 
-  for (const div of analyzeFencedDivs(editorStateTextSource(state), syntaxTree(state))) {
+  for (const div of state.field(documentSemanticsField).fencedDivs) {
     if (!div.primaryClass) continue;
 
     const plugin = getPluginOrFallback(registry, div.primaryClass);
@@ -116,8 +114,7 @@ export const blockCounterField = StateField.define<BlockCounterState>({
 
   update(value, tr) {
     if (
-      tr.docChanged ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+      tr.state.field(documentSemanticsField) !== tr.startState.field(documentSemanticsField)
     ) {
       const numbering = tr.state.field(frontmatterField).config.numbering;
       return computeBlockNumbers(tr.state, tr.state.field(pluginRegistryField), numbering);

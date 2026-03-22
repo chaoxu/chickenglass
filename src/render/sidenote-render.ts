@@ -17,8 +17,8 @@ import {
   type ViewUpdate,
   ViewPlugin,
 } from "@codemirror/view";
-import { type EditorState, type Extension, type Range, StateEffect, StateField } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
+import { type EditorState, type Extension, type Range, StateField, StateEffect } from "@codemirror/state";
+
 import {
   buildDecorations,
   createBooleanToggleField,
@@ -31,12 +31,11 @@ import {
 import { mathMacrosField } from "./math-macros";
 import { renderInlineMarkdown } from "./inline-render";
 import {
-  analyzeFootnotes,
   type FootnoteSemantics,
   numberFootnotes,
   orderedFootnoteEntries,
 } from "../semantics/document";
-import { editorStateTextSource } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 
 /** StateEffect to toggle sidenote margin visibility. */
 export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
@@ -45,9 +44,9 @@ export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
 export const sidenotesCollapsedField = createBooleanToggleField(sidenotesCollapsedEffect);
 
 
-/** Collect footnote references and definitions from the syntax tree. */
+/** Collect footnote references and definitions from the shared semantics field. */
 export function collectFootnotes(state: EditorState): FootnoteSemantics {
-  return analyzeFootnotes(editorStateTextSource(state), syntaxTree(state));
+  return state.field(documentSemanticsField).footnotes;
 }
 
 /** Widget for a footnote reference rendered as a superscript number. */
@@ -122,10 +121,9 @@ const sidenoteDecorationField = StateField.define<DecorationSet>({
 
   update(value, tr) {
     if (
-      tr.docChanged ||
       tr.selection ||
       tr.effects.some((e) => e.is(focusEffect) || e.is(sidenotesCollapsedEffect)) ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+      tr.state.field(documentSemanticsField) !== tr.startState.field(documentSemanticsField)
     ) {
       const focused = tr.state.field(editorFocusField, false) ?? false;
       return buildSidenoteDecorations(tr.state, focused);
@@ -247,11 +245,10 @@ class FootnoteSectionPlugin implements PluginValue {
 
   update(update: ViewUpdate): void {
     if (
-      update.docChanged ||
       update.transactions.some((tr) =>
         tr.effects.some((e) => e.is(sidenotesCollapsedEffect)),
       ) ||
-      syntaxTree(update.state) !== syntaxTree(update.startState)
+      update.state.field(documentSemanticsField) !== update.startState.field(documentSemanticsField)
     ) {
       this.decorations = this.build(update.view);
     }
@@ -287,6 +284,7 @@ const footnoteSectionPlugin = ViewPlugin.fromClass(FootnoteSectionPlugin, {
 /** CM6 extension that renders footnote refs as superscripts and hides defs.
  *  Sidenote content is rendered by the React SidenoteMargin component. */
 export const sidenoteRenderPlugin: Extension = [
+  documentSemanticsField,
   editorFocusField,
   focusTracker,
   sidenotesCollapsedField,

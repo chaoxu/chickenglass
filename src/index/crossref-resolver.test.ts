@@ -7,6 +7,7 @@ import { equationLabelExtension } from "../parser/equation-label";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { createPluginRegistryField } from "../plugins/plugin-registry";
 import { blockCounterField } from "../plugins/block-counter";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 import type { BlockPlugin } from "../plugins/plugin-types";
 import { createEditorState, makeBlockPlugin } from "../test-utils";
 import {
@@ -30,6 +31,7 @@ function createState(doc: string): EditorState {
         extensions: [fencedDiv, mathExtension, equationLabelExtension],
       }),
       frontmatterField,
+      documentSemanticsField,
       createPluginRegistryField(testPlugins),
       blockCounterField,
     ],

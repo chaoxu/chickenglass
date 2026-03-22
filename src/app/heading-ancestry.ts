@@ -6,13 +6,11 @@
  */
 
 import { type EditorState } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
 import {
-  analyzeHeadings,
   findTrailingHeadingAttributes,
   hasUnnumberedHeadingAttributes,
 } from "../semantics/document";
-import { editorStateTextSource } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 
 /** A single heading entry extracted from the document. */
 export interface HeadingEntry {
@@ -42,7 +40,7 @@ export { findTrailingHeadingAttributes, hasUnnumberedHeadingAttributes };
  * Returns entries sorted by document position.
  */
 export function extractHeadings(state: EditorState): HeadingEntry[] {
-  return analyzeHeadings(editorStateTextSource(state), syntaxTree(state)).map((heading) => ({
+  return state.field(documentSemanticsField).headings.map((heading) => ({
     level: heading.level,
     text: heading.text,
     number: heading.number,
