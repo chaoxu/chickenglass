@@ -60,7 +60,7 @@ function extractFromAnalysis(
     entries.push({
       type: "heading",
       label: heading.id,
-      number: heading.level,
+      number: heading.number || undefined,
       title: heading.text,
       file,
       position: { from: heading.from, to: heading.to },
@@ -69,9 +69,10 @@ function extractFromAnalysis(
   }
 
   for (const ref of analysis.references) {
-    if (!ref.bracketed || ref.ids.length !== 1) continue;
     references.push({
-      label: ref.ids[0],
+      bracketed: ref.bracketed,
+      ids: ref.ids,
+      locators: ref.locators,
       sourceFile: file,
       position: { from: ref.from, to: ref.to },
     });

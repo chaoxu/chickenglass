@@ -11,8 +11,10 @@ function makeEntry(overrides: Partial<IndexEntry> & { type: string; file: string
   };
 }
 
-function makeRef(overrides: Partial<IndexReference> & { label: string; sourceFile: string }): IndexReference {
+function makeRef(overrides: Partial<IndexReference> & { ids: readonly string[]; sourceFile: string }): IndexReference {
   return {
+    bracketed: true,
+    locators: overrides.ids.map(() => undefined),
     position: { from: 0, to: 0 },
     ...overrides,
   };
@@ -132,15 +134,15 @@ describe("findReferences", () => {
       file: "chapter1.md",
       entries: [thmEntry],
       references: [
-        makeRef({ label: "thm-1", sourceFile: "chapter1.md", position: { from: 100, to: 108 } }),
+        makeRef({ ids: ["thm-1"], sourceFile: "chapter1.md", position: { from: 100, to: 108 } }),
       ],
     },
     {
       file: "chapter2.md",
       entries: [],
       references: [
-        makeRef({ label: "thm-1", sourceFile: "chapter2.md", position: { from: 50, to: 58 } }),
-        makeRef({ label: "thm-2", sourceFile: "chapter2.md", position: { from: 200, to: 208 } }),
+        makeRef({ ids: ["thm-1"], sourceFile: "chapter2.md", position: { from: 50, to: 58 } }),
+        makeRef({ ids: ["thm-2"], sourceFile: "chapter2.md", position: { from: 200, to: 208 } }),
       ],
     },
   ]);
@@ -167,5 +169,20 @@ describe("findReferences", () => {
     const refs = findReferences(index, "thm-2");
     expect(refs).toHaveLength(1);
     expect(refs[0].target).toBeUndefined();
+  });
+
+  it("finds references within multi-id clusters", () => {
+    const multiRefIndex = makeIndex([
+      {
+        file: "doc.md",
+        entries: [thmEntry],
+        references: [
+          makeRef({ ids: ["thm-1", "thm-2"], sourceFile: "doc.md" }),
+        ],
+      },
+    ]);
+    const refs = findReferences(multiRefIndex, "thm-1");
+    expect(refs).toHaveLength(1);
+    expect(refs[0].reference.ids).toEqual(["thm-1", "thm-2"]);
   });
 });

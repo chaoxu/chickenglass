@@ -23,8 +23,8 @@ export interface IndexEntry {
   readonly type: string;
   /** Label (id) if present, e.g., "thm-1" or "eq:foo". */
   readonly label?: string;
-  /** Assigned number within its counter group, if applicable. */
-  readonly number?: number;
+  /** Rendered number string matching the canonical semantic model (e.g., "1.2.3" for headings). */
+  readonly number?: string;
   /** Title text if present (from fenced div title). */
   readonly title?: string;
   /** Source file path. */
@@ -37,8 +37,12 @@ export interface IndexEntry {
 
 /** A cross-file reference found in the index. */
 export interface IndexReference {
-  /** The label being referenced (e.g., "thm-1"). */
-  readonly label: string;
+  /** Whether this is a bracketed reference ([@id]) vs narrative (@id). */
+  readonly bracketed: boolean;
+  /** All referenced IDs in this cluster (e.g., ["a", "b"] for [@a; @b]). */
+  readonly ids: readonly string[];
+  /** Locator strings parallel to ids (e.g., "p. 5"), undefined when absent. */
+  readonly locators: readonly (string | undefined)[];
   /** The file containing the reference. */
   readonly sourceFile: string;
   /** Position of the reference in the source file. */
@@ -125,7 +129,7 @@ export function findReferences(
 
   for (const [, fileIndex] of index.files) {
     for (const ref of fileIndex.references) {
-      if (ref.label === label) {
+      if (ref.ids.includes(label)) {
         results.push({ reference: ref, target });
       }
     }

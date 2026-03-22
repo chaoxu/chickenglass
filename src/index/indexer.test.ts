@@ -123,9 +123,9 @@ Some text.
       expect(headings).toHaveLength(2);
       expect(headings[0].label).toBe("sec:intro");
       expect(headings[0].title).toBe("Introduction");
-      expect(headings[0].number).toBe(1);
+      expect(headings[0].number).toBe("1");
       expect(headings[1].label).toBe("sec:bg");
-      expect(headings[1].number).toBe(2);
+      expect(headings[1].number).toBe("1.1");
     });
 
     it("extracts headings without labels", () => {
@@ -147,8 +147,8 @@ Some text.
       const result = extractFileIndex(content, "doc.md");
 
       expect(result.references).toHaveLength(2);
-      expect(result.references[0].label).toBe("thm-1");
-      expect(result.references[1].label).toBe("eq:euler");
+      expect(result.references[0].ids).toEqual(["thm-1"]);
+      expect(result.references[1].ids).toEqual(["eq:euler"]);
     });
 
     it("tracks reference positions", () => {
@@ -167,6 +167,62 @@ By [@thm-main] and [@eq:key], this follows.
       const result = extractFileIndex(content, "doc.md");
 
       expect(result.references).toHaveLength(2);
+    });
+
+    it("indexes narrative references (@id)", () => {
+      const content = `As shown in @thm-main, we have the result.`;
+      const result = extractFileIndex(content, "doc.md");
+
+      expect(result.references).toHaveLength(1);
+      expect(result.references[0].ids).toEqual(["thm-main"]);
+      expect(result.references[0].bracketed).toBe(false);
+    });
+
+    it("indexes multi-id reference clusters ([@a; @b])", () => {
+      const content = `See [@thm-1; @thm-2] for details.`;
+      const result = extractFileIndex(content, "doc.md");
+
+      expect(result.references).toHaveLength(1);
+      expect(result.references[0].ids).toEqual(["thm-1", "thm-2"]);
+      expect(result.references[0].bracketed).toBe(true);
+    });
+
+    it("indexes references with locators", () => {
+      const content = `See [@smith2020, p. 42] for the proof.`;
+      const result = extractFileIndex(content, "doc.md");
+
+      expect(result.references).toHaveLength(1);
+      expect(result.references[0].ids).toEqual(["smith2020"]);
+      expect(result.references[0].locators).toEqual(["p. 42"]);
+    });
+  });
+
+  describe("heading numbering", () => {
+    it("produces nested heading numbers", () => {
+      const content = `# Chapter
+
+## Section
+
+### Subsection`;
+      const result = extractFileIndex(content, "doc.md");
+
+      const headings = result.entries.filter((e) => e.type === "heading");
+      expect(headings).toHaveLength(3);
+      expect(headings[0].number).toBe("1");
+      expect(headings[1].number).toBe("1.1");
+      expect(headings[2].number).toBe("1.1.1");
+    });
+
+    it("omits number for unnumbered headings", () => {
+      const content = `# Preface {-}
+
+# Introduction`;
+      const result = extractFileIndex(content, "doc.md");
+
+      const headings = result.entries.filter((e) => e.type === "heading");
+      expect(headings).toHaveLength(2);
+      expect(headings[0].number).toBeUndefined();
+      expect(headings[1].number).toBe("1");
     });
   });
 
@@ -224,7 +280,7 @@ See [@real-ref].`;
       const result = extractFileIndex(content, "test.md");
 
       expect(result.references).toHaveLength(1);
-      expect(result.references[0].label).toBe("real-ref");
+      expect(result.references[0].ids).toEqual(["real-ref"]);
     });
 
     it("ignores references inside inline code", () => {
@@ -232,7 +288,7 @@ See [@real-ref].`;
       const result = extractFileIndex(content, "test.md");
 
       expect(result.references).toHaveLength(1);
-      expect(result.references[0].label).toBe("real-ref");
+      expect(result.references[0].ids).toEqual(["real-ref"]);
     });
   });
 
