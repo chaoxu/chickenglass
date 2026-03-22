@@ -20,11 +20,8 @@ import { type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import {
   isImageMime,
-  IMAGE_MIME_EXT,
   fileToDataUrl,
-  generateImageFilename,
-  altTextFromFilename,
-  logImageError,
+  saveAndInsertImage,
   type ImageSaveConfig,
 } from "./image-save";
 import { insertImageMarkdown } from "./image-paste";
@@ -67,9 +64,6 @@ export function imageDropExtension(config: ImageDropConfig = {}): Extension {
         // We found an image — prevent default and handle it
         event.preventDefault();
 
-        const ext = IMAGE_MIME_EXT[file.type] ?? "png";
-        const baseName = generateImageFilename(file, ext);
-
         // Capture the drop position from mouse coordinates synchronously.
         // We pass this explicitly to insertImageMarkdown rather than relying
         // on view.state.selection.main, which may have moved by the time the
@@ -79,19 +73,12 @@ export function imageDropExtension(config: ImageDropConfig = {}): Extension {
           y: event.clientY,
         });
 
-        // Save and insert asynchronously
-        save(file)
-          .then((path) => {
-            insertImageMarkdown(
-              view,
-              path,
-              altTextFromFilename(baseName),
-              dropPos ?? undefined,
-            );
-          })
-          .catch((err: unknown) => {
-            logImageError("drop", err);
-          });
+        saveAndInsertImage(
+          file,
+          save,
+          (path, alt) => insertImageMarkdown(view, path, alt, dropPos ?? undefined),
+          "drop",
+        );
 
         // Only handle the first image
         return true;

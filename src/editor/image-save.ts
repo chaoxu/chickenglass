@@ -28,6 +28,9 @@ export const IMAGE_MIME_EXT: Record<string, string> = {
   "image/tiff": "tiff",
 };
 
+/** Deduplicated list of accepted image file extensions (for file dialogs). */
+export const IMAGE_EXTENSIONS: string[] = [...new Set(Object.values(IMAGE_MIME_EXT))];
+
 /** Check whether a MIME type is a supported image type. */
 export function isImageMime(mime: string): boolean {
   return mime in IMAGE_MIME_EXT;
@@ -228,4 +231,36 @@ export function createImageSaver(
   ctx: ImageSaveContext,
 ): (file: File) => Promise<string> {
   return (file: File) => saveImage(file, ctx);
+}
+
+/**
+ * Shared save-and-insert pipeline for image files.
+ *
+ * All insertion paths (paste, drop, file picker) go through this function
+ * so that filename generation, alt-text derivation, save callback invocation,
+ * and markdown insertion happen in exactly one place.
+ *
+ * @param file       The image File to process.
+ * @param save       Callback that persists the image and returns a path/URL.
+ * @param insert     Callback that inserts the markdown snippet into the editor.
+ * @param operation  Label used in error logging (e.g. "paste", "drop", "insert").
+ * @returns          A promise that resolves after insert (or after logging an error).
+ */
+export function saveAndInsertImage(
+  file: File,
+  save: (file: File) => Promise<string>,
+  insert: (path: string, alt: string) => void,
+  operation: string,
+): Promise<void> {
+  const ext = IMAGE_MIME_EXT[file.type] ?? "png";
+  const baseName = generateImageFilename(file, ext);
+  const alt = altTextFromFilename(baseName);
+
+  return save(file)
+    .then((path) => {
+      insert(path, alt);
+    })
+    .catch((err: unknown) => {
+      logImageError(operation, err);
+    });
 }

@@ -23,8 +23,10 @@ export { insertImageFromPicker } from "./image-insert";
 export {
   createImageSaver,
   saveImage,
+  saveAndInsertImage,
   isImageMime,
   IMAGE_MIME_EXT,
+  IMAGE_EXTENSIONS,
   type ImageSaveContext,
 } from "./image-save";
 export { type EditorPlugin, EditorPluginManager } from "./editor-plugin";

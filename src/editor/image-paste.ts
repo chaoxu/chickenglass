@@ -24,9 +24,7 @@ import { EditorView } from "@codemirror/view";
 import {
   IMAGE_MIME_EXT,
   fileToDataUrl,
-  generateImageFilename,
-  altTextFromFilename,
-  logImageError,
+  saveAndInsertImage,
   type ImageSaveConfig,
 } from "./image-save";
 
@@ -93,8 +91,7 @@ export function imagePasteExtension(config: ImagePasteConfig = {}): Extension {
       // Check for image items in the clipboard
       for (let i = 0; i < clipboardData.items.length; i++) {
         const item = clipboardData.items[i];
-        const ext = IMAGE_MIME_EXT[item.type];
-        if (!ext) continue;
+        if (!(item.type in IMAGE_MIME_EXT)) continue;
 
         const file = item.getAsFile();
         if (!file) continue;
@@ -102,16 +99,12 @@ export function imagePasteExtension(config: ImagePasteConfig = {}): Extension {
         // Prevent the default paste (which would paste nothing or garbled text)
         event.preventDefault();
 
-        const baseName = generateImageFilename(file, ext);
-
-        // Save and insert asynchronously
-        save(file)
-          .then((path) => {
-            insertImageMarkdown(view, path, altTextFromFilename(baseName));
-          })
-          .catch((err: unknown) => {
-            logImageError("paste", err);
-          });
+        saveAndInsertImage(
+          file,
+          save,
+          (path, alt) => insertImageMarkdown(view, path, alt),
+          "paste",
+        );
 
         // Only handle the first image item
         return true;

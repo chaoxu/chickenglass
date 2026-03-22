@@ -1,10 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   IMAGE_MIME_EXT,
+  IMAGE_EXTENSIONS,
   isImageMime,
   generateImageFilename,
   altTextFromFilename,
   logImageError,
+  saveAndInsertImage,
 } from "./image-save";
 
 describe("IMAGE_MIME_EXT", () => {
@@ -97,5 +99,87 @@ describe("logImageError", () => {
     } finally {
       console.error = orig;
     }
+  });
+});
+
+describe("IMAGE_EXTENSIONS", () => {
+  it("contains every unique extension from IMAGE_MIME_EXT", () => {
+    const expected = [...new Set(Object.values(IMAGE_MIME_EXT))];
+    expect(IMAGE_EXTENSIONS).toEqual(expected);
+  });
+
+  it("has no duplicates", () => {
+    expect(IMAGE_EXTENSIONS.length).toBe(new Set(IMAGE_EXTENSIONS).size);
+  });
+});
+
+describe("saveAndInsertImage", () => {
+  it("calls save then insert with correct path and alt text", async () => {
+    const file = new File(["data"], "chart.png", { type: "image/png" });
+    const save = vi.fn().mockResolvedValue("assets/chart.png");
+    const insert = vi.fn();
+
+    await saveAndInsertImage(file, save, insert, "test");
+
+    expect(save).toHaveBeenCalledWith(file);
+    expect(insert).toHaveBeenCalledWith("assets/chart.png", "chart");
+  });
+
+  it("logs errors from save without throwing", async () => {
+    const file = new File(["data"], "bad.png", { type: "image/png" });
+    const save = vi.fn().mockRejectedValue(new Error("disk full"));
+    const insert = vi.fn();
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await saveAndInsertImage(file, save, insert, "test");
+
+    expect(insert).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "[coflat] image test failed:",
+      expect.any(Error),
+    );
+
+    consoleSpy.mockRestore();
+  });
+
+  it("derives alt text from generated filename for unnamed files", async () => {
+    const file = new File(["data"], "image.png", { type: "image/png" });
+    const save = vi.fn().mockResolvedValue("assets/image-12345.png");
+    const insert = vi.fn();
+
+    await saveAndInsertImage(file, save, insert, "test");
+
+    // Alt text comes from the generated filename, not the saved path
+    const alt = insert.mock.calls[0][1] as string;
+    expect(alt).toMatch(/^image-\d+$/);
+  });
+
+  it("produces identical results regardless of insertion path", async () => {
+    // Simulate the same file going through paste, drop, and picker —
+    // all three should produce the same save call and alt text.
+    const fileData = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const makeFile = () =>
+      new File([fileData], "screenshot.png", { type: "image/png" });
+
+    const savePath = "assets/screenshot.png";
+    const results: Array<{ path: string; alt: string }> = [];
+
+    for (const operation of ["paste", "drop", "insert"]) {
+      const save = vi.fn().mockResolvedValue(savePath);
+      const insert = vi.fn();
+
+      await saveAndInsertImage(makeFile(), save, insert, operation);
+
+      results.push({
+        path: insert.mock.calls[0][0] as string,
+        alt: insert.mock.calls[0][1] as string,
+      });
+    }
+
+    // All three paths produce identical path and alt text
+    expect(results[0]).toEqual(results[1]);
+    expect(results[1]).toEqual(results[2]);
+    expect(results[0].path).toBe(savePath);
+    expect(results[0].alt).toBe("screenshot");
   });
 });

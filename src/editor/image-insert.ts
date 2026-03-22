@@ -8,16 +8,12 @@
 import type { EditorView } from "@codemirror/view";
 import {
   isImageMime,
-  IMAGE_MIME_EXT,
+  IMAGE_EXTENSIONS,
   fileToDataUrl,
-  generateImageFilename,
-  altTextFromFilename,
   logImageError,
+  saveAndInsertImage,
 } from "./image-save";
 import { insertImageMarkdown } from "./image-paste";
-
-/** Accepted image file extensions for file dialogs. */
-const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff"];
 
 /**
  * Open a file picker and insert the selected image into the editor.
@@ -27,16 +23,6 @@ const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ti
  *                   path to use in the markdown. Falls back to data URL.
  */
 export async function insertImageFromPicker(
-  view: EditorView,
-  saveImage?: (file: File) => Promise<string>,
-): Promise<void> {
-  await insertImageBrowser(view, saveImage);
-}
-
-/**
- * Browser mode: open an `<input type="file">` element and read the image.
- */
-async function insertImageBrowser(
   view: EditorView,
   saveImage?: (file: File) => Promise<string>,
 ): Promise<void> {
@@ -56,24 +42,20 @@ async function insertImageBrowser(
       }
 
       if (!isImageMime(file.type)) {
-        console.warn("[coflat] Selected file is not a supported image type:", file.type);
+        logImageError("insert", `unsupported MIME type: ${file.type}`);
         resolve();
         return;
       }
 
-      const ext = IMAGE_MIME_EXT[file.type] ?? "png";
-      const baseName = generateImageFilename(file, ext);
-
-      save(file)
-        .then((path) => {
-          insertImageMarkdown(view, path, altTextFromFilename(baseName));
+      void saveAndInsertImage(
+        file,
+        save,
+        (path, alt) => {
+          insertImageMarkdown(view, path, alt);
           view.focus();
-          resolve();
-        })
-        .catch((err: unknown) => {
-          logImageError("insert", err);
-          resolve();
-        });
+        },
+        "insert",
+      ).then(resolve);
     });
 
     // Handle cancel (user closes the dialog without selecting)
