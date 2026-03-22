@@ -501,3 +501,58 @@ body {
   border-top: 1px solid var(--cf-border);
   margin: 2em 0;
 }
+
+/* ── Cross-references & citations ──────────────────────────────────────────
+ * These classes are shared between editor (CM6 widgets) and read mode HTML.
+ *
+ * Synchronized class pairs (editor ↔ read mode):
+ *   Editor: cf-crossref           ↔ Read: a.cross-ref
+ *   Editor: cf-crossref-unresolved (no read mode equivalent — unresolved refs
+ *           render as plain anchor links in read mode)
+ *   Editor: cf-citation           ↔ Read: span.cf-citation (same class)
+ *   Editor: cf-citation-narrative ↔ Read: (narrative cites inline in read mode)
+ *   Editor: cf-math-error         ↔ Read: .math-error
+ *   Editor: cf-block-header-rendered ↔ Read: strong.div-title
+ *   Editor: cf-strikethrough      ↔ Read: <del> tag
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/* Resolved cross-reference — subtle underline to indicate it's a link */
+.cf-crossref {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--cf-muted);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* Unresolved cross-reference — dashed underline + muted color to signal breakage */
+.cf-crossref-unresolved {
+  color: var(--cf-muted);
+  text-decoration-style: dashed;
+  text-decoration-color: var(--cf-muted);
+}
+
+/* cf-citation — citation widget (editor). Intentionally unstyled: citations
+ * render as parenthetical text like "(1)" and inherit surrounding styles.
+ * cf-citation-narrative — narrative variant, e.g. "Author (2024)". Also
+ * intentionally unstyled; appears as inline prose. */
+
+/* Math rendering error — red text on light red background */
+.cf-math-error {
+  color: #c00;
+  background: rgba(255, 0, 0, 0.05);
+  border-radius: 2px;
+  padding: 1px 4px;
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: 0.85em;
+}
+
+/* Block source fence lines — monospace font for ::: fence syntax when visible */
+.cf-block-source {
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-style: normal;
+}
+
+/* Fence guide lines — no visual styling here; box-shadow is applied per depth
+ * level via cf-fence-d1..d4 in block-theme.ts. This class exists as a common
+ * hook for all depth levels (used in fence-guide.ts). */
