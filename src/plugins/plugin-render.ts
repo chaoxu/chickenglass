@@ -397,8 +397,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     }
 
     // Body lines: apply block-type class for per-type styling (italic, etc.)
-    // Only in rendered mode — source mode should show natural font.
-    if (!div.singleLine && !cursorOnEitherFence) {
+    if (!div.singleLine) {
       const openLine = state.doc.lineAt(div.from);
       const closeFrom = div.closeFenceFrom >= 0 ? div.closeFenceFrom : div.to;
       const closeLine = state.doc.lineAt(closeFrom);
