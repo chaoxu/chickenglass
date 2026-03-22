@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
+import type { ItemInstance } from "@headless-tree/core";
 import type { FileEntry } from "../file-manager";
 import { dirname } from "../lib/utils";
 import { isTauri, revealInFinder } from "../tauri-fs";
@@ -124,17 +125,11 @@ function InlineCreateInput({
   );
 }
 
-export interface FileTreeNodeProps {
-  entry: FileEntry;
-  depth: number;
+interface FileTreeNodeProps {
+  item: ItemInstance<FileEntry>;
   activePath: string | null;
-  selectedPath: string | null;
-  openPaths: ReadonlySet<string>;
-  onToggleFolder: (path: string) => void;
-  onSetOpen: (path: string, open: boolean) => void;
   onSelect: (path: string) => void;
   onDoubleClick?: (path: string) => void;
-  onSelectPath: (path: string) => void;
   onRename: (oldPath: string, newPath: string) => Promise<void>;
   onDelete: (path: string) => Promise<void>;
   onCreateFile: (path: string) => void;
@@ -142,21 +137,17 @@ export interface FileTreeNodeProps {
 }
 
 export function FileTreeNode({
-  entry,
-  depth,
+  item,
   activePath,
-  selectedPath,
-  openPaths,
-  onToggleFolder,
-  onSetOpen,
   onSelect,
   onDoubleClick,
-  onSelectPath,
   onRename,
   onDelete,
   onCreateFile,
   onCreateDir,
 }: FileTreeNodeProps) {
+  const entry = item.getItemData();
+  const depth = Math.max(0, item.getItemMeta().level - 1);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [creating, setCreating] = useState<CreateKind | null>(null);
@@ -164,8 +155,9 @@ export function FileTreeNode({
 
   const indent = depth * 12 + 8;
   const isActive = entry.path === activePath;
-  const isSelected = entry.path === selectedPath;
-  const open = entry.isDirectory && openPaths.has(entry.path);
+  const isFocused = item.isFocused();
+  const isFolder = item.isFolder();
+  const open = isFolder && item.isExpanded();
 
   const startRename = useCallback(() => {
     setRenameValue(entry.name);
@@ -195,7 +187,7 @@ export function FileTreeNode({
     }
   }, [cancelRename, commitRename]);
 
-  const handleFileKey = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+  const handleRowKey = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "F2") {
       event.preventDefault();
       startRename();
@@ -204,10 +196,10 @@ export function FileTreeNode({
 
   const startCreate = useCallback((kind: CreateKind) => {
     setCreating(kind);
-    if (entry.isDirectory) {
-      onSetOpen(entry.path, true);
+    if (isFolder) {
+      item.expand();
     }
-  }, [entry.isDirectory, entry.path, onSetOpen]);
+  }, [isFolder, item]);
 
   const cancelCreate = useCallback(() => {
     setCreating(null);
@@ -220,7 +212,24 @@ export function FileTreeNode({
       }
     : null;
 
-  if (entry.isDirectory) {
+  const rowProps = item.getProps();
+
+  const handleFolderClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.currentTarget.focus();
+    rowProps.onClick?.(event.nativeEvent);
+  };
+
+  const handleFileClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.currentTarget.focus();
+    rowProps.onClick?.(event.nativeEvent);
+  };
+
+  const handleContextSelection = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.currentTarget.focus();
+    item.setFocused();
+  };
+
+  if (isFolder) {
     const handleCreateConfirm = (name: string) => {
       const fullPath = `${entry.path}/${name}`;
       if (creating === "folder") {
@@ -253,27 +262,15 @@ export function FileTreeNode({
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div
-              role="button"
-              tabIndex={-1}
+              {...rowProps}
               className={[
                 "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
-                isSelected ? "bg-[var(--cg-active)]" : "hover:bg-[var(--cg-hover)]",
+                isActive || isFocused ? "bg-[var(--cg-active)]" : "hover:bg-[var(--cg-hover)]",
               ].join(" ")}
               style={{ paddingLeft: `${indent}px` }}
-              onClick={() => {
-                onSelectPath(entry.path);
-                onToggleFolder(entry.path);
-              }}
-              onContextMenu={() => {
-                onSelectPath(entry.path);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") onToggleFolder(entry.path);
-                if (event.key === "F2") {
-                  event.preventDefault();
-                  startRename();
-                }
-              }}
+              onClick={handleFolderClick}
+              onContextMenu={handleContextSelection}
+              onKeyDown={handleRowKey}
             >
               {open
                 ? <FolderOpen size={ICON_SIZE} className={ICON_CLASS} />
@@ -297,48 +294,25 @@ export function FileTreeNode({
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent className="min-w-[160px]">
-            {dirMenuItems.map((item, index) => (
-              item.label === "-"
+            {dirMenuItems.map((menuItem, index) => (
+              menuItem.label === "-"
                 ? <ContextMenuSeparator key={index} />
                 : (
-                  <ContextMenuItem key={index} onSelect={() => item.action?.()}>
-                    {item.label}
+                  <ContextMenuItem key={index} onSelect={() => menuItem.action?.()}>
+                    {menuItem.label}
                   </ContextMenuItem>
                 )
             ))}
           </ContextMenuContent>
         </ContextMenu>
 
-        {open && (
-          <div>
-            {creating && (
-              <InlineCreateInput
-                kind={creating}
-                depth={depth + 1}
-                onConfirm={handleCreateConfirm}
-                onCancel={cancelCreate}
-              />
-            )}
-            {entry.children?.map((child) => (
-              <FileTreeNode
-                key={child.path}
-                entry={child}
-                depth={depth + 1}
-                activePath={activePath}
-                selectedPath={selectedPath}
-                openPaths={openPaths}
-                onToggleFolder={onToggleFolder}
-                onSetOpen={onSetOpen}
-                onSelect={onSelect}
-                onDoubleClick={onDoubleClick}
-                onSelectPath={onSelectPath}
-                onRename={onRename}
-                onDelete={onDelete}
-                onCreateFile={onCreateFile}
-                onCreateDir={onCreateDir}
-              />
-            ))}
-          </div>
+        {open && creating && (
+          <InlineCreateInput
+            kind={creating}
+            depth={depth + 1}
+            onConfirm={handleCreateConfirm}
+            onCancel={cancelCreate}
+          />
         )}
       </div>
     );
@@ -379,24 +353,18 @@ export function FileTreeNode({
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div
-            role="button"
-            tabIndex={-1}
+            {...rowProps}
             className={[
               "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
-              isActive || isSelected ? "bg-[var(--cg-active)]" : "hover:bg-[var(--cg-hover)]",
+              isActive || isFocused ? "bg-[var(--cg-active)]" : "hover:bg-[var(--cg-hover)]",
             ].join(" ")}
             style={{ paddingLeft: `${indent}px` }}
-            onClick={() => {
-              onSelectPath(entry.path);
-              onSelect(entry.path);
-            }}
+            onClick={handleFileClick}
             onDoubleClick={() => {
               onDoubleClick?.(entry.path);
             }}
-            onContextMenu={() => {
-              onSelectPath(entry.path);
-            }}
-            onKeyDown={handleFileKey}
+            onContextMenu={handleContextSelection}
+            onKeyDown={handleRowKey}
           >
             <FileIcon name={entry.name} />
 
@@ -418,12 +386,12 @@ export function FileTreeNode({
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="min-w-[160px]">
-          {fileMenuItems.map((item, index) => (
-            item.label === "-"
+          {fileMenuItems.map((menuItem, index) => (
+            menuItem.label === "-"
               ? <ContextMenuSeparator key={index} />
               : (
-                <ContextMenuItem key={index} onSelect={() => item.action?.()}>
-                  {item.label}
+                <ContextMenuItem key={index} onSelect={() => menuItem.action?.()}>
+                  {menuItem.label}
                 </ContextMenuItem>
               )
           ))}

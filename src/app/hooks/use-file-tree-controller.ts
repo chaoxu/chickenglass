@@ -1,6 +1,16 @@
-import { useState, useMemo, useCallback } from "react";
-import type { KeyboardEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  hotkeysCoreFeature,
+  syncDataLoaderFeature,
+  type ItemInstance,
+  type TreeConfig,
+  type TreeInstance,
+  type TreeState,
+} from "@headless-tree/core";
+import { useTree } from "@headless-tree/react";
 import type { FileEntry } from "../file-manager";
+
+const ROOT_ITEM_ID = "__cg-file-tree-root__";
 
 export interface FileTreeKeyResult {
   readonly handled: boolean;
@@ -13,7 +23,7 @@ export interface FileTreeKeyResult {
   };
 }
 
-/** Flatten the tree to the currently visible rows, respecting open folders. */
+/** Legacy helper retained for compatibility with #284 tests and pure callers. */
 export function flattenVisibleEntries(
   entries: readonly FileEntry[],
   openPaths: ReadonlySet<string>,
@@ -28,43 +38,7 @@ export function flattenVisibleEntries(
   return result;
 }
 
-function getCurrentEntry(
-  visibleEntries: readonly FileEntry[],
-  selectedPath: string | null,
-): {
-  readonly currentIndex: number;
-  readonly currentEntry: FileEntry | null;
-} {
-  const currentIndex = selectedPath
-    ? visibleEntries.findIndex((entry) => entry.path === selectedPath)
-    : -1;
-
-  return {
-    currentIndex,
-    currentEntry: currentIndex >= 0 ? visibleEntries[currentIndex] : null,
-  };
-}
-
-function getAdjacentEntry(
-  visibleEntries: readonly FileEntry[],
-  selectedPath: string | null,
-  direction: 1 | -1,
-): FileEntry | null {
-  if (visibleEntries.length === 0) return null;
-
-  const { currentIndex } = getCurrentEntry(visibleEntries, selectedPath);
-  if (direction === 1) {
-    if (currentIndex === -1) return visibleEntries[0];
-    return currentIndex + 1 < visibleEntries.length
-      ? visibleEntries[currentIndex + 1]
-      : null;
-  }
-
-  if (currentIndex === -1) return visibleEntries[visibleEntries.length - 1];
-  return currentIndex > 0 ? visibleEntries[currentIndex - 1] : null;
-}
-
-/** Resolve a tree-level keyboard event into state transitions and actions. */
+/** Legacy helper retained for compatibility with #284 tests and pure callers. */
 export function resolveFileTreeKey(
   key: string,
   visibleEntries: readonly FileEntry[],
@@ -73,10 +47,15 @@ export function resolveFileTreeKey(
 ): FileTreeKeyResult {
   if (visibleEntries.length === 0) return { handled: false };
 
-  const { currentEntry } = getCurrentEntry(visibleEntries, selectedPath);
+  const currentIndex = selectedPath
+    ? visibleEntries.findIndex((entry) => entry.path === selectedPath)
+    : -1;
+  const currentEntry = currentIndex >= 0 ? visibleEntries[currentIndex] : null;
 
   if (key === "ArrowDown") {
-    const target = getAdjacentEntry(visibleEntries, selectedPath, 1);
+    const target = currentIndex === -1
+      ? visibleEntries[0]
+      : visibleEntries[currentIndex + 1];
     return target
       ? {
           handled: true,
@@ -87,7 +66,9 @@ export function resolveFileTreeKey(
   }
 
   if (key === "ArrowUp") {
-    const target = getAdjacentEntry(visibleEntries, selectedPath, -1);
+    const target = currentIndex === -1
+      ? visibleEntries[visibleEntries.length - 1]
+      : visibleEntries[currentIndex - 1];
     return target
       ? {
           handled: true,
@@ -112,23 +93,184 @@ export function resolveFileTreeKey(
 
   if (key === "ArrowRight") {
     return currentEntry?.isDirectory && !openPaths.has(currentEntry.path)
-      ? {
-          handled: true,
-          setFolderOpen: { path: currentEntry.path, open: true },
-        }
+      ? { handled: true, setFolderOpen: { path: currentEntry.path, open: true } }
       : { handled: true };
   }
 
   if (key === "ArrowLeft") {
     return currentEntry?.isDirectory && openPaths.has(currentEntry.path)
-      ? {
-          handled: true,
-          setFolderOpen: { path: currentEntry.path, open: false },
-        }
+      ? { handled: true, setFolderOpen: { path: currentEntry.path, open: false } }
       : { handled: true };
   }
 
   return { handled: false };
+}
+
+function buildTreeIndex(root: FileEntry | null): {
+  readonly entriesById: Map<string, FileEntry>;
+  readonly childrenById: Map<string, string[]>;
+} {
+  const entriesById = new Map<string, FileEntry>();
+  const childrenById = new Map<string, string[]>();
+
+  const syntheticRoot: FileEntry = root ?? {
+    name: "root",
+    path: "",
+    isDirectory: true,
+    children: [],
+  };
+
+  entriesById.set(ROOT_ITEM_ID, syntheticRoot);
+  childrenById.set(
+    ROOT_ITEM_ID,
+    syntheticRoot.children?.map((entry) => entry.path) ?? [],
+  );
+
+  const visit = (entry: FileEntry) => {
+    entriesById.set(entry.path, entry);
+    childrenById.set(
+      entry.path,
+      entry.isDirectory ? entry.children?.map((child) => child.path) ?? [] : [],
+    );
+    entry.children?.forEach(visit);
+  };
+
+  syntheticRoot.children?.forEach(visit);
+
+  return { entriesById, childrenById };
+}
+
+function getIndexedEntry(
+  index: ReturnType<typeof buildTreeIndex>,
+  itemId: string,
+): FileEntry {
+  return index.entriesById.get(itemId)
+    ?? index.entriesById.get(ROOT_ITEM_ID)
+    ?? {
+      name: "root",
+      path: "",
+      isDirectory: true,
+      children: [],
+    };
+}
+
+function getFocusedItemOrNull(
+  tree: TreeInstance<FileEntry>,
+): ItemInstance<FileEntry> | null {
+  const focusedItemId = tree.getState().focusedItem;
+  return focusedItemId !== null
+    ? tree.getItemInstance(focusedItemId)
+    : null;
+}
+
+function focusVisibleItem(
+  item: ItemInstance<FileEntry> | undefined,
+  onSelect: (path: string) => void,
+) {
+  if (!item) return;
+  item.setFocused();
+  item.getTree().updateDomFocus();
+  if (!item.isFolder()) {
+    onSelect(item.getId());
+  }
+}
+
+export function createFileTreeHotkeys(
+  onSelect: (path: string) => void,
+): NonNullable<TreeConfig<FileEntry>["hotkeys"]> {
+  return {
+    focusNextItem: {
+      hotkey: "ArrowDown",
+      canRepeat: true,
+      preventDefault: true,
+      handler: (_event, currentTree) => {
+        const focused = getFocusedItemOrNull(currentTree);
+        if (!focused) {
+          focusVisibleItem(currentTree.getItems()[0], onSelect);
+          return;
+        }
+        currentTree.focusNextItem();
+        currentTree.updateDomFocus();
+        const nextFocused = getFocusedItemOrNull(currentTree);
+        if (nextFocused && !nextFocused.isFolder()) {
+          onSelect(nextFocused.getId());
+        }
+      },
+    },
+    focusPreviousItem: {
+      hotkey: "ArrowUp",
+      canRepeat: true,
+      preventDefault: true,
+      handler: (_event, currentTree) => {
+        const focused = getFocusedItemOrNull(currentTree);
+        if (!focused) {
+          focusVisibleItem(
+            currentTree.getItems()[currentTree.getItems().length - 1],
+            onSelect,
+          );
+          return;
+        }
+        currentTree.focusPreviousItem();
+        currentTree.updateDomFocus();
+        const previousFocused = getFocusedItemOrNull(currentTree);
+        if (previousFocused && !previousFocused.isFolder()) {
+          onSelect(previousFocused.getId());
+        }
+      },
+    },
+    expandOrDown: {
+      hotkey: "ArrowRight",
+      canRepeat: true,
+      preventDefault: true,
+      handler: (_event, currentTree) => {
+        const focused = getFocusedItemOrNull(currentTree);
+        if (focused?.isFolder() && !focused.isExpanded()) {
+          focused.expand();
+        }
+      },
+    },
+    collapseOrUp: {
+      hotkey: "ArrowLeft",
+      canRepeat: true,
+      preventDefault: true,
+      handler: (_event, currentTree) => {
+        const focused = getFocusedItemOrNull(currentTree);
+        if (focused?.isFolder() && focused.isExpanded()) {
+          focused.collapse();
+        }
+      },
+    },
+    customActivateFocusedItem: {
+      hotkey: "Enter",
+      preventDefault: true,
+      handler: (_event, currentTree) => {
+        const focused = getFocusedItemOrNull(currentTree);
+        if (!focused) return;
+        if (focused.isFolder()) {
+          if (focused.isExpanded()) {
+            focused.collapse();
+          } else {
+            focused.expand();
+          }
+          return;
+        }
+        onSelect(focused.getId());
+      },
+    },
+    customToggleFocusedFolder: {
+      hotkey: "Space",
+      preventDefault: true,
+      handler: (_event, currentTree) => {
+        const focused = getFocusedItemOrNull(currentTree);
+        if (!focused?.isFolder()) return;
+        if (focused.isExpanded()) {
+          focused.collapse();
+        } else {
+          focused.expand();
+        }
+      },
+    },
+  };
 }
 
 interface UseFileTreeControllerProps {
@@ -136,93 +278,60 @@ interface UseFileTreeControllerProps {
   onSelect: (path: string) => void;
 }
 
-export interface FileTreeController {
-  readonly openPaths: ReadonlySet<string>;
-  readonly selectedPath: string | null;
-  readonly visibleEntries: readonly FileEntry[];
-  readonly setSelectedPath: React.Dispatch<React.SetStateAction<string | null>>;
-  readonly toggleFolder: (path: string) => void;
-  readonly setFolderOpen: (path: string, isOpen: boolean) => void;
-  readonly handleKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+interface FileTreeController {
+  readonly tree: TreeInstance<FileEntry>;
+  readonly visibleItems: readonly ItemInstance<FileEntry>[];
 }
 
 export function useFileTreeController({
   root,
   onSelect,
 }: UseFileTreeControllerProps): FileTreeController {
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [openPaths, setOpenPaths] = useState<Set<string>>(() => new Set());
-  const children = root?.children ?? [];
+  const index = useMemo(() => buildTreeIndex(root), [root]);
+  const [state, setState] = useState<Partial<TreeState<FileEntry>>>({
+    expandedItems: [],
+    focusedItem: null,
+  });
 
-  const visibleEntries = useMemo(
-    () => flattenVisibleEntries(children, openPaths),
-    [children, openPaths],
-  );
+  useEffect(() => {
+    setState((prev) => ({
+      ...prev,
+      expandedItems: (prev.expandedItems ?? []).filter((id) => index.entriesById.has(id)),
+      focusedItem:
+        prev.focusedItem && index.entriesById.has(prev.focusedItem)
+          ? prev.focusedItem
+          : null,
+    }));
+  }, [index]);
 
-  const toggleFolder = useCallback((path: string) => {
-    setOpenPaths((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
+  const tree = useTree<FileEntry>({
+    rootItemId: ROOT_ITEM_ID,
+    state,
+    setState,
+    indent: 12,
+    ignoreHotkeysOnInputs: true,
+    dataLoader: {
+      getItem: (itemId) => getIndexedEntry(index, itemId),
+      getChildren: (itemId) => index.childrenById.get(itemId) ?? [],
+    },
+    getItemName: (item) => item.getItemData().name,
+    isItemFolder: (item) => item.getItemData().isDirectory,
+    onPrimaryAction: (item) => {
+      if (!item.isFolder()) {
+        onSelect(item.getId());
       }
-      return next;
-    });
-  }, []);
+    },
+    hotkeys: createFileTreeHotkeys(onSelect),
+    features: [
+      syncDataLoaderFeature,
+      hotkeysCoreFeature,
+    ],
+  });
 
-  const setFolderOpen = useCallback((path: string, isOpen: boolean) => {
-    setOpenPaths((prev) => {
-      if (isOpen && prev.has(path)) return prev;
-      if (!isOpen && !prev.has(path)) return prev;
-
-      const next = new Set(prev);
-      if (isOpen) {
-        next.add(path);
-      } else {
-        next.delete(path);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
-    if (visibleEntries.length === 0) return;
-
-    const target = event.target as HTMLElement;
-    if (target.tagName === "INPUT") return;
-
-    const result = resolveFileTreeKey(
-      event.key,
-      visibleEntries,
-      selectedPath,
-      openPaths,
-    );
-    if (!result.handled) return;
-
-    event.preventDefault();
-
-    if (result.nextSelectedPath) {
-      setSelectedPath(result.nextSelectedPath);
-    }
-    if (result.activatePath) {
-      onSelect(result.activatePath);
-    }
-    if (result.toggleFolderPath) {
-      toggleFolder(result.toggleFolderPath);
-    }
-    if (result.setFolderOpen) {
-      setFolderOpen(result.setFolderOpen.path, result.setFolderOpen.open);
-    }
-  }, [onSelect, openPaths, selectedPath, setFolderOpen, toggleFolder, visibleEntries]);
+  const visibleItems = tree.getItems().filter((item) => item.getId() !== ROOT_ITEM_ID);
 
   return {
-    openPaths,
-    selectedPath,
-    visibleEntries,
-    setSelectedPath,
-    toggleFolder,
-    setFolderOpen,
-    handleKeyDown,
+    tree,
+    visibleItems,
   };
 }

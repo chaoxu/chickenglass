@@ -609,6 +609,22 @@ describe("#284 — FileTree controller extraction", () => {
   });
 });
 
+describe("#288 — Headless Tree explorer migration", () => {
+  it("file tree controller uses Headless Tree", () => {
+    const controller = fileText("src/app/hooks/use-file-tree-controller.ts");
+    expect(controller).toContain('from "@headless-tree/react"');
+    expect(controller).toContain("useTree<FileEntry>");
+    expect(controller).toContain("syncDataLoaderFeature");
+    expect(controller).toContain("hotkeysCoreFeature");
+  });
+
+  it("package dependencies include Headless Tree", () => {
+    const pkg = fileText("package.json");
+    expect(pkg).toContain('"@headless-tree/core"');
+    expect(pkg).toContain('"@headless-tree/react"');
+  });
+});
+
 describe("#283 — backend command module decomposition", () => {
   it("commands module tree exists", () => {
     expect(fileExists("src-tauri/src/commands/mod.rs")).toBe(true);

@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { FileEntry } from "../file-manager";
 import {
+  createFileTreeHotkeys,
   flattenVisibleEntries,
   resolveFileTreeKey,
 } from "./use-file-tree-controller";
@@ -99,5 +100,96 @@ describe("resolveFileTreeKey", () => {
         open: false,
       },
     });
+  });
+});
+
+describe("createFileTreeHotkeys", () => {
+  it("focuses the first item on ArrowDown when nothing is focused", () => {
+    const onSelect = vi.fn();
+    const hotkeys = createFileTreeHotkeys(onSelect);
+    const handler = hotkeys.focusNextItem?.handler;
+    const setFocused = vi.fn();
+    const updateDomFocus = vi.fn();
+    const tree = {
+      getState: () => ({ focusedItem: null }),
+      getItems: () => [
+        {
+          setFocused,
+          getTree: () => ({ updateDomFocus }),
+          isFolder: () => true,
+          getId: () => "docs",
+        },
+      ],
+    };
+
+    expect(handler).toBeTypeOf("function");
+    if (!handler) throw new Error("focusNextItem hotkey missing");
+    handler(undefined as never, tree as never);
+
+    expect(setFocused).toHaveBeenCalledTimes(1);
+    expect(updateDomFocus).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("focuses the last item on ArrowUp when nothing is focused", () => {
+    const onSelect = vi.fn();
+    const hotkeys = createFileTreeHotkeys(onSelect);
+    const handler = hotkeys.focusPreviousItem?.handler;
+    const updateDomFocus = vi.fn();
+    const first = {
+      setFocused: vi.fn(),
+      getTree: () => ({ updateDomFocus }),
+      isFolder: () => true,
+      getId: () => "docs",
+    };
+    const last = {
+      setFocused: vi.fn(),
+      getTree: () => ({ updateDomFocus }),
+      isFolder: () => false,
+      getId: () => "index.md",
+    };
+    const tree = {
+      getState: () => ({ focusedItem: null }),
+      getItems: () => [first, last],
+    };
+
+    expect(handler).toBeTypeOf("function");
+    if (!handler) throw new Error("focusPreviousItem hotkey missing");
+    handler(undefined as never, tree as never);
+
+    expect(first.setFocused).not.toHaveBeenCalled();
+    expect(last.setFocused).toHaveBeenCalledTimes(1);
+    expect(updateDomFocus).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith("index.md");
+  });
+
+  it("does nothing on Enter when nothing is focused", () => {
+    const onSelect = vi.fn();
+    const hotkeys = createFileTreeHotkeys(onSelect);
+    const handler = hotkeys.customActivateFocusedItem?.handler;
+    const tree = {
+      getState: () => ({ focusedItem: null }),
+    };
+
+    expect(handler).toBeTypeOf("function");
+    if (!handler) throw new Error("customActivateFocusedItem hotkey missing");
+    handler(undefined as never, tree as never);
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("does nothing on Space when nothing is focused", () => {
+    const onSelect = vi.fn();
+    const hotkeys = createFileTreeHotkeys(onSelect);
+    const handler = hotkeys.customToggleFocusedFolder?.handler;
+    const tree = {
+      getState: () => ({ focusedItem: null }),
+    };
+
+    expect(handler).toBeTypeOf("function");
+    if (!handler) throw new Error("customToggleFocusedFolder hotkey missing");
+    handler(undefined as never, tree as never);
+
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });
