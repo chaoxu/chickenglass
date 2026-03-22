@@ -179,6 +179,59 @@ describe("blockDecorationField", () => {
     expect(widgets[0].to).toBeLessThan(line1.to);
   });
 
+  /**
+   * REGRESSION GUARD — Block header rendering must behave like headings.
+   *
+   * The widget MUST replace only the fence prefix ("::: {.class}"), leaving
+   * the title text as editable document content. This ensures:
+   * 1. Inline plugins render math/bold/italic in the title (Lezer parses them)
+   * 2. Cursor-aware toggling works (only source when cursor touches inline element)
+   * 3. Title parens are added via Decoration.widget (not CSS ::before/::after
+   *    which breaks when Decoration.replace splits the mark around math widgets)
+   *
+   * This has regressed 3+ times. See CLAUDE.md "Block headers must behave like headings."
+   */
+  it("title text NOT inside widget — inline plugins can render it (REGRESSION)", () => {
+    const doc = `::: {.theorem} Fundamental Theorem $x^2$\nContent\n:::`;
+    const state = createTestState(doc);
+    const specs = getDecoSpecs(state);
+
+    const line1 = state.doc.line(1);
+    const widgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
+    expect(widgets.length).toBe(1);
+
+    // Widget must NOT extend to end of line (title text is outside widget)
+    expect(widgets[0].to).toBeLessThan(line1.to);
+
+    // Title text ($x^2$) range must not be covered by any replace decoration
+    const titleText = "Fundamental Theorem $x^2$";
+    const titleFrom = line1.text.indexOf(titleText) + line1.from;
+    const titleTo = titleFrom + titleText.length;
+    const replaceSpecs = specs.filter(
+      (s) => s.widgetClass && s.from < titleTo && s.to > titleFrom,
+    );
+    // Only the header widget should exist, and it must end before the title
+    for (const r of replaceSpecs) {
+      expect(r.to).toBeLessThanOrEqual(titleFrom);
+    }
+  });
+
+  it("title paren widgets present in rendered mode, absent in source mode (REGRESSION)", () => {
+    const doc = `::: {.theorem} Main Result\nContent\n:::`;
+
+    // Rendered mode (unfocused — cursor not on fence)
+    const rendered = createTestState(doc);
+    const renderedSpecs = getDecoSpecs(rendered);
+    const renderedParens = renderedSpecs.filter((s) => s.widgetClass === "TextWidget");
+    expect(renderedParens.length).toBe(2); // ( and )
+
+    // Source mode (cursor on opening fence)
+    const source = createTestState(doc, 0, true);
+    const sourceSpecs = getDecoSpecs(source);
+    const sourceParens = sourceSpecs.filter((s) => s.widgetClass === "TextWidget");
+    expect(sourceParens.length).toBe(0); // no parens in source mode
+  });
+
   it("does not crash on an incomplete fenced div without a closing fence", () => {
     const doc = [
       "::: {.definition}",

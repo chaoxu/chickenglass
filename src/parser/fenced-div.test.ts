@@ -6,6 +6,29 @@ import { markdownExtensions } from "./index";
 
 const fencedDivParser = parser.configure(fencedDiv);
 
+/** Parser with all markdown extensions (math, etc.) for inline-in-title tests. */
+const fullParser = parser.configure(markdownExtensions);
+
+/** Like nodeNames but using the full parser (includes math, etc.). */
+function fullNodeNames(text: string): string[] {
+  const tree = fullParser.parse(text);
+  const names: string[] = [];
+  tree.iterate({ enter: (node) => { names.push(node.name); } });
+  return names;
+}
+
+/** Like nodeInfos but using the full parser. */
+function fullNodeInfos(text: string): NodeInfo[] {
+  const tree = fullParser.parse(text);
+  const infos: NodeInfo[] = [];
+  tree.iterate({
+    enter: (node) => {
+      infos.push({ name: node.name, from: node.from, to: node.to, text: text.slice(node.from, node.to) });
+    },
+  });
+  return infos;
+}
+
 /** Collect all node type names from parsing `text`. */
 function nodeNames(text: string): string[] {
   const tree = fencedDivParser.parse(text);
@@ -124,6 +147,56 @@ describe("fenced div parser", () => {
       expect(attr.text).toBe("Title");
       const title = findNode(infos, "FencedDivTitle");
       expect(title.text).toBe("Only");
+    });
+
+    /**
+     * REGRESSION GUARD — Title inline content parsing.
+     *
+     * FencedDivTitle MUST parse inline content (math, bold, italic, etc.)
+     * exactly like ATXHeading does for heading text. Without this, inline
+     * render plugins (math → KaTeX, bold, italic, highlight, links) don't
+     * see any nodes in the title range, so $x^2$ shows as raw text instead
+     * of rendered math.
+     *
+     * This has regressed 3+ times because:
+     * 1. FencedDivTitle was defined as block-only (no inline children)
+     * 2. Simplifications moved title rendering into a widget, killing inline parsing
+     * 3. The old plugin-level workaround (addTitleMathDecorations) only handled math
+     *
+     * The fix is at the parser level: call cx.parser.parseInline() on title text,
+     * producing InlineMath/Emphasis/etc. child nodes. This makes ALL inline plugins
+     * work automatically. See CLAUDE.md "Block headers must behave like headings."
+     */
+    it("parses inline math in title text (REGRESSION: must have InlineMath children)", () => {
+      const text = "::: {.theorem} Fundamental Theorem $x^2$\nContent.\n:::";
+      const names = fullNodeNames(text);
+      // FencedDivTitle must contain InlineMath as a child node
+      expect(names).toContain("FencedDivTitle");
+      expect(names).toContain("InlineMath");
+    });
+
+    it("parses bold/italic in title text (REGRESSION: must have Emphasis/StrongEmphasis)", () => {
+      const text = "::: {.theorem} A **bold** and *italic* title\nContent.\n:::";
+      const names = fullNodeNames(text);
+      expect(names).toContain("StrongEmphasis");
+      expect(names).toContain("Emphasis");
+    });
+
+    it("inline math in title has correct positions", () => {
+      const text = "::: {.theorem} Fundamental $x^2$\nContent.\n:::";
+      const infos = fullNodeInfos(text);
+      const mathNodes = infos.filter((n) => n.name === "InlineMath");
+      expect(mathNodes.length).toBeGreaterThanOrEqual(1);
+      const mathNode = mathNodes[0];
+      expect(mathNode.text).toBe("$x^2$");
+    });
+
+    it("title with multiple inline elements all parsed", () => {
+      const text = "::: {.theorem} The **Main** $\\alpha$-Result\nBody.\n:::";
+      const names = fullNodeNames(text);
+      expect(names).toContain("FencedDivTitle");
+      expect(names).toContain("StrongEmphasis");
+      expect(names).toContain("InlineMath");
     });
   });
 
