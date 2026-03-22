@@ -2,6 +2,7 @@ import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 
 import { frontmatterField } from "../editor/frontmatter-state";
+import type { FrontmatterConfig } from "../parser/frontmatter";
 import { MemoryFileSystem } from "./file-manager";
 import {
   loadProjectConfig,
@@ -9,7 +10,17 @@ import {
   parseProjectConfig,
   projectConfigFacet,
   PROJECT_CONFIG_FILE,
+  type ProjectConfig,
 } from "./project-config";
+
+// ---------------------------------------------------------------------------
+// Type-level test: ProjectConfig = Omit<FrontmatterConfig, "title">.
+// These assignments will fail to compile if the relationship breaks.
+// ---------------------------------------------------------------------------
+const _fmAsProject: ProjectConfig = {} as Omit<FrontmatterConfig, "title">;
+const _projectAsFm: Omit<FrontmatterConfig, "title"> = {} as ProjectConfig;
+void _fmAsProject;
+void _projectAsFm;
 
 // ---------------------------------------------------------------------------
 // parseProjectConfig

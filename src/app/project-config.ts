@@ -5,32 +5,19 @@
  * config file at the root. The config provides default settings inherited
  * by all documents in the project. Per-file frontmatter overrides these.
  *
- * The project config uses the same shape as FrontmatterConfig (minus `title`,
- * which is always per-file). A CM6 Facet makes the config available to
- * the frontmatter StateField for merging.
+ * ProjectConfig is derived from FrontmatterConfig (minus `title`, which is
+ * always per-file). A CM6 Facet makes the config available to the frontmatter
+ * StateField for merging.
  */
 
 import { Facet } from "@codemirror/state";
 
-import type { BlockConfig, FrontmatterConfig, NumberingScheme } from "../parser/frontmatter";
+import type { FrontmatterConfig } from "../parser/frontmatter";
 import { parseFrontmatter } from "../parser/frontmatter";
 import type { FileSystem } from "./file-manager";
 
-/** Project-level configuration. Same shape as FrontmatterConfig but without title. */
-export interface ProjectConfig {
-  bibliography?: string;
-  csl?: string;
-  /**
-   * Numbering scheme for theorem-like blocks.
-   * - "global": all numbered blocks share one counter (blog style)
-   * - "grouped": separate counters per group (default, academic style)
-   */
-  numbering?: NumberingScheme;
-  blocks?: Record<string, boolean | BlockConfig>;
-  math?: Record<string, string>;
-  /** Default image folder for all documents in the project. */
-  imageFolder?: string;
-}
+/** Project-level configuration. Derived from FrontmatterConfig, minus title (always per-file). */
+export type ProjectConfig = Omit<FrontmatterConfig, "title">;
 
 /** Well-known project config file name. */
 export const PROJECT_CONFIG_FILE = "coflat.yaml";
@@ -61,26 +48,21 @@ export function parseProjectConfig(yaml: string): ProjectConfig {
   const { config } = parseFrontmatter(wrapped);
 
   // ProjectConfig excludes title (title is always per-file)
-  const result: ProjectConfig = {};
-  if (config.bibliography) result.bibliography = config.bibliography;
-  if (config.csl) result.csl = config.csl;
-  if (config.numbering) result.numbering = config.numbering;
-  if (config.blocks) result.blocks = config.blocks;
-  if (config.math) result.math = config.math;
-  if (config.imageFolder) result.imageFolder = config.imageFolder;
-  return result;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { title, ...projectConfig } = config;
+  return projectConfig;
 }
+
+/** Keys whose values are Record objects and merge additively (project base, file overrides). */
+const ADDITIVE_KEYS: ReadonlySet<keyof FrontmatterConfig> = new Set(["math", "blocks"]);
 
 /**
  * Merge project-level config with per-file frontmatter config.
  *
  * Merge rules:
  * - `title`: file only (project config has no title)
- * - `bibliography`: file overrides project
- * - `csl`: file overrides project
- * - `numbering`: file overrides project
- * - `math`: merged additively — file macros add to and override project macros
- * - `blocks`: merged additively — file entries add to and override project entries
+ * - Additive keys (`math`, `blocks`): spread-merge (project base, file overrides)
+ * - All other keys: file overrides project
  */
 export function mergeConfigs(
   project: ProjectConfig,
@@ -88,32 +70,30 @@ export function mergeConfigs(
 ): FrontmatterConfig {
   const merged: FrontmatterConfig = {};
 
-  // title is always from the file
+  // title is always from the file (project has no title)
   if (file.title !== undefined) merged.title = file.title;
 
-  // bibliography / csl / numbering: file overrides project
-  const bib = file.bibliography ?? project.bibliography;
-  if (bib !== undefined) merged.bibliography = bib;
+  const allKeys = new Set([
+    ...Object.keys(project) as (keyof ProjectConfig)[],
+    ...Object.keys(file).filter((k) => k !== "title") as (keyof ProjectConfig)[],
+  ]);
 
-  const csl = file.csl ?? project.csl;
-  if (csl !== undefined) merged.csl = csl;
-
-  const numbering = file.numbering ?? project.numbering;
-  if (numbering !== undefined) merged.numbering = numbering;
-
-  // math: additive merge (project base, file overrides)
-  if (project.math || file.math) {
-    merged.math = { ...project.math, ...file.math };
+  for (const key of allKeys) {
+    if (ADDITIVE_KEYS.has(key)) {
+      // Additive: spread-merge both sides
+      const projVal = project[key] as Record<string, unknown> | undefined;
+      const fileVal = file[key] as Record<string, unknown> | undefined;
+      if (projVal || fileVal) {
+        (merged as Record<string, unknown>)[key] = { ...projVal, ...fileVal };
+      }
+    } else {
+      // Scalar: file overrides project
+      const value = file[key] ?? project[key];
+      if (value !== undefined) {
+        (merged as Record<string, unknown>)[key] = value;
+      }
+    }
   }
-
-  // blocks: additive merge (project base, file overrides)
-  if (project.blocks || file.blocks) {
-    merged.blocks = { ...project.blocks, ...file.blocks };
-  }
-
-  // imageFolder: file overrides project
-  const imgFolder = file.imageFolder ?? project.imageFolder;
-  if (imgFolder !== undefined) merged.imageFolder = imgFolder;
 
   return merged;
 }
