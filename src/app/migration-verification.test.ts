@@ -706,6 +706,19 @@ describe("#287 — Chrome for Testing app facility", () => {
   });
 });
 
+describe("#266 — Playwright mode switching helper", () => {
+  it("status bar exposes a stable mode button test id", () => {
+    const statusBar = fileText("src/app/components/status-bar.tsx");
+    expect(statusBar).toContain('data-testid="mode-button"');
+  });
+
+  it("test helpers export switchToMode", () => {
+    const helpers = fileText("scripts/test-helpers.mjs");
+    expect(helpers).toContain("export async function switchToMode");
+    expect(helpers).toContain('page.getByTestId("mode-button")');
+  });
+});
+
 describe("#279 — shared Lezer document semantics", () => {
   it("shared document semantics analyzers exist", async () => {
     const mod = await import("../semantics/document");

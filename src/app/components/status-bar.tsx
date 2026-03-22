@@ -188,6 +188,7 @@ export function StatusBar({
           )}
           <button
             type="button"
+            data-testid="mode-button"
             title={isMarkdown ? "Click to cycle editor mode" : "Source mode only for non-markdown files"}
             onClick={cycleMode}
             disabled={!isMarkdown}

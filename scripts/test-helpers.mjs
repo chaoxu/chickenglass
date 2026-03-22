@@ -1,3 +1,4 @@
+/* global setTimeout, window */
 /**
  * Playwright test helpers for CDP-based browser testing.
  *
@@ -14,6 +15,11 @@
 import { chromium } from "playwright";
 
 const DEFAULT_PORT = 9322;
+const MODE_LABELS = {
+  rich: "Rich",
+  source: "Source",
+  read: "Read",
+};
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -49,6 +55,27 @@ export async function connectEditor(port = DEFAULT_PORT) {
 export async function openFile(page, path) {
   await page.evaluate((p) => window.__app.openFile(p), path);
   await sleep(500);
+}
+
+/**
+ * Cycle the editor mode button until the requested mode is active.
+ *
+ * @param {import("playwright").Page} page
+ * @param {"rich" | "source" | "read" | "Rich" | "Source" | "Read"} mode
+ */
+export async function switchToMode(page, mode) {
+  const targetLabel = MODE_LABELS[mode] ?? mode;
+  const modeButton = page.getByTestId("mode-button");
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const currentLabel = (await modeButton.textContent())?.trim();
+    if (currentLabel === targetLabel) return;
+    await modeButton.click();
+    await sleep(200);
+  }
+
+  const finalLabel = (await modeButton.textContent())?.trim();
+  throw new Error(`Failed to switch editor mode to ${targetLabel}; current mode is ${finalLabel ?? "<unknown>"}.`);
 }
 
 /**
