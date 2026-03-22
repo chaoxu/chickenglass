@@ -5,6 +5,8 @@ import type {
   MarkdownConfig,
   NodeSpec,
 } from "@lezer/markdown";
+import { tags } from "@lezer/highlight";
+import { styleTags } from "@lezer/highlight";
 import { COLON, SPACE, TAB, OPEN_BRACE, findMatchingBrace, skipSpaceTab, isSpaceTab } from "./char-utils";
 
 /**
@@ -329,6 +331,12 @@ export const fencedDiv: MarkdownConfig = {
     { name: "FencedDivFence", block: true },
     { name: "FencedDivAttributes", block: true },
     { name: "FencedDivTitle", block: true },
+  ],
+  props: [
+    styleTags({
+      FencedDivFence: tags.processingInstruction,
+      FencedDivAttributes: tags.processingInstruction,
+    }),
   ],
   parseBlock: [fencedDivBlockParser],
 };

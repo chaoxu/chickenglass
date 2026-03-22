@@ -122,7 +122,23 @@ function buildMathItems(
     enter(node) {
       if (!MATH_TYPES.has(node.type.name)) return;
 
-      if (shouldSkip(node.from, node.to)) return false;
+      if (shouldSkip(node.from, node.to)) {
+        // Cursor inside math — add monospace mark on content between delimiters.
+        // The delimiters ($, $$, \(, \[) already get monospace via tok-processingInstruction.
+        const isDisplay = node.type.name === "DisplayMath";
+        const markName = isDisplay ? "DisplayMathMark" : "InlineMathMark";
+        const marks = node.node.getChildren(markName);
+        if (marks.length >= 2) {
+          const contentFrom = marks[0].to;
+          const contentTo = marks[marks.length - 1].from;
+          if (contentFrom < contentTo) {
+            items.push(
+              Decoration.mark({ class: "cg-math-source" }).range(contentFrom, contentTo),
+            );
+          }
+        }
+        return false;
+      }
 
       const raw = state.sliceDoc(node.from, node.to);
       const isDisplay = node.type.name === "DisplayMath";

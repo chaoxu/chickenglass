@@ -104,9 +104,14 @@ export const typographyThemeStyles = {
    * delimiters ($, $$, \[, \]), fenced div fences (:::), list markers.
    * The base editor font is serif for rendered text, but syntax characters
    * need monospace for alignment and visual distinction. */
-  ".tok-meta, .tok-processingInstruction": {
+  ".tok-meta, .tok-processingInstruction, .tok-url": {
     fontFamily: monoFont,
     color: "var(--cg-fg)",
+  },
+
+  /* Math source content — LaTeX between $ delimiters when editing */
+  ".cg-math-source": {
+    fontFamily: monoFont,
   },
 
   /* Header markers (# symbols) shown in muted color when editing. */

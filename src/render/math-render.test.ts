@@ -8,6 +8,11 @@ import { MathWidget, collectMathRanges } from "./math-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
 
+/** Count only widget (replace) decorations, ignoring mark decorations like cg-math-source. */
+function countWidgets(ranges: ReturnType<typeof collectMathRanges>): number {
+  return ranges.filter(r => r.value.spec.widget).length;
+}
+
 /** Create an EditorView with math parser extensions at the given cursor position. */
 function createMathView(doc: string, cursorPos?: number): EditorView {
   const state = EditorState.create({
@@ -135,14 +140,14 @@ describe("collectMathRanges", () => {
     // Cursor at position 7 is inside "$x^2$" which spans 5..10
     view = createMathView("text $x^2$ more", 7);
     const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countWidgets(ranges)).toBe(0);
   });
 
   it("does not collect math when cursor is at math boundary", () => {
     // Cursor at position 5 is at the start of "$x^2$"
     view = createMathView("text $x^2$ more", 5);
     const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countWidgets(ranges)).toBe(0);
   });
 
   it("collects display math with dollar-dollar syntax", () => {
@@ -164,7 +169,7 @@ describe("collectMathRanges", () => {
     // Cursor inside the $$ block
     view = createMathView(doc, 10);
     const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countWidgets(ranges)).toBe(0);
   });
 
   it("collects multiple math expressions", () => {
@@ -178,13 +183,13 @@ describe("collectMathRanges", () => {
   it("handles empty document", () => {
     view = createMathView("");
     const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countWidgets(ranges)).toBe(0);
   });
 
   it("handles document with no math", () => {
     view = createMathView("just plain text", 0);
     const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countWidgets(ranges)).toBe(0);
   });
 });
 
@@ -204,14 +209,14 @@ describe("cursor toggle behavior", () => {
     // Move cursor inside the math
     view.dispatch({ selection: { anchor: 7 } });
     ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countWidgets(ranges)).toBe(0);
   });
 
   it("renders when cursor leaves math region", () => {
     view = createMathView("text $x^2$ more", 7);
     // Cursor inside math - no decorations
     let ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(0);
+    expect(countWidgets(ranges)).toBe(0);
 
     // Move cursor outside
     view.dispatch({ selection: { anchor: 0 } });
@@ -223,7 +228,7 @@ describe("cursor toggle behavior", () => {
     view = createMathView("$a$ and $b$ and $c$", 9);
     // Cursor is inside $b$ (positions 8..10), so $a$ and $c$ should be collected
     const ranges = collectMathRanges(view);
-    expect(ranges.length).toBe(2);
+    expect(countWidgets(ranges)).toBe(2);
   });
 });
 
