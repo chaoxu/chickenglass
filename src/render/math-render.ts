@@ -69,7 +69,7 @@ export function renderKatex(
       macros: { ...macros },
     });
   } catch (err: unknown) {
-    element.className = "cg-math-error";
+    element.className = "cf-math-error";
     element.textContent = err instanceof Error ? err.message : "KaTeX error";
   }
 }
@@ -90,7 +90,7 @@ export class MathWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const el = document.createElement(this.isDisplay ? "div" : "span");
-    el.className = this.isDisplay ? "cg-math-display" : "cg-math-inline";
+    el.className = this.isDisplay ? "cf-math-display" : "cf-math-inline";
     renderKatex(el, this.latex, this.isDisplay, this.macros);
     return el;
   }
@@ -133,7 +133,7 @@ function buildMathItems(
           const contentTo = marks[marks.length - 1].from;
           if (contentFrom < contentTo) {
             items.push(
-              Decoration.mark({ class: "cg-math-source" }).range(contentFrom, contentTo),
+              Decoration.mark({ class: "cf-math-source" }).range(contentFrom, contentTo),
             );
           }
         }

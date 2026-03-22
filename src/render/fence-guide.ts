@@ -78,7 +78,7 @@ function buildFenceGuides(state: EditorState): DecorationSet {
     const d = Math.min(depth, 6);
     items.push(
       Decoration.line({
-        class: `cg-fence-guide cg-fence-d${d}`,
+        class: `cf-fence-guide cf-fence-d${d}`,
       }).range(line.from),
     );
   }

@@ -101,7 +101,7 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
     <div
       className={cn(
         "absolute top-0 left-0 z-[100]",
-        !instant && "transition-opacity duration-[var(--cg-transition,0.15s)]",
+        !instant && "transition-opacity duration-[var(--cf-transition,0.15s)]",
         visible ? "opacity-100" : "opacity-0",
       )}
       style={{
@@ -112,7 +112,7 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <Breadcrumb className="max-w-[min(calc(100vw-1rem),70rem)] overflow-x-auto rounded-br border border-[var(--cg-border)] bg-[var(--cg-bg)]/80 px-3 py-1 backdrop-blur-sm">
+      <Breadcrumb className="max-w-[min(calc(100vw-1rem),70rem)] overflow-x-auto rounded-br border border-[var(--cf-border)] bg-[var(--cf-bg)]/80 px-3 py-1 backdrop-blur-sm">
         <BreadcrumbList className="min-w-max flex-nowrap whitespace-nowrap">
           {ancestry.map((h, i) => (
             <Fragment key={h.pos}>

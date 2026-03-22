@@ -71,7 +71,7 @@ function inspectLine(view: EditorView, lineNum: number): LineInfo | null {
   return {
     line: lineNum,
     text: el.textContent?.slice(0, 60) ?? "",
-    classes: Array.from(el.classList).filter((c) => c.startsWith("cg-")),
+    classes: Array.from(el.classList).filter((c) => c.startsWith("cf-")),
     height: cs.height,
     hidden: cs.height === "0px",
   };

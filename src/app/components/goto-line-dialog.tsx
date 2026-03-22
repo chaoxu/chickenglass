@@ -52,7 +52,7 @@ export function GotoLineDialog({ open, onOpenChange, onGoto, currentLine }: Goto
         <DialogTitle className="sr-only">Go to line</DialogTitle>
         <Input
           type="text"
-          className="bg-[var(--cg-bg-secondary)] font-mono"
+          className="bg-[var(--cf-bg-secondary)] font-mono"
           placeholder={String(currentLine)}
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -62,7 +62,7 @@ export function GotoLineDialog({ open, onOpenChange, onGoto, currentLine }: Goto
           autoComplete="off"
           autoFocus
         />
-        <p className="mt-1.5 text-[11px] leading-tight text-[var(--cg-muted)]">
+        <p className="mt-1.5 text-[11px] leading-tight text-[var(--cf-muted)]">
           line or line:column -- Enter to jump, Esc to dismiss
         </p>
       </DialogContent>

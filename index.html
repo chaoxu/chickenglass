@@ -23,8 +23,8 @@
           "Segoe UI",
           Roboto,
           sans-serif;
-        background: var(--cg-bg);
-        color: var(--cg-fg);
+        background: var(--cf-bg);
+        color: var(--cf-fg);
         overscroll-behavior: none;
       }
 
@@ -59,8 +59,8 @@
       .tab-bar {
         display: flex;
         align-items: center;
-        background: var(--cg-subtle);
-        border-bottom: 1px solid var(--cg-border);
+        background: var(--cf-subtle);
+        border-bottom: 1px solid var(--cf-border);
         min-height: 32px;
         overflow-x: auto;
         flex-shrink: 0;
@@ -73,19 +73,19 @@
         padding: 4px 12px;
         font-size: 13px;
         cursor: pointer;
-        border-right: 1px solid var(--cg-border);
+        border-right: 1px solid var(--cf-border);
         white-space: nowrap;
         user-select: none;
-        color: var(--cg-muted);
+        color: var(--cf-muted);
       }
 
       .tab:hover {
-        background: var(--cg-hover);
+        background: var(--cf-hover);
       }
 
       .tab-active {
-        background: var(--cg-bg);
-        color: var(--cg-fg);
+        background: var(--cf-bg);
+        color: var(--cf-fg);
         font-weight: 500;
       }
 
@@ -94,7 +94,7 @@
       }
 
       .tab-dirty {
-        color: var(--cg-fg);
+        color: var(--cf-fg);
         font-size: 16px;
         line-height: 1;
       }
@@ -104,20 +104,20 @@
         line-height: 1;
         padding: 0 2px;
         border-radius: 2px;
-        color: var(--cg-muted);
+        color: var(--cf-muted);
       }
 
       .tab-close:hover {
-        background: var(--cg-active);
-        color: var(--cg-fg);
+        background: var(--cf-active);
+        color: var(--cf-fg);
       }
 
       /* Sidebar */
       .sidebar {
         width: 220px;
         min-width: 180px;
-        background: var(--cg-subtle);
-        border-right: 1px solid var(--cg-border);
+        background: var(--cf-subtle);
+        border-right: 1px solid var(--cf-border);
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -139,24 +139,24 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        color: var(--cg-muted);
-        border-bottom: 1px solid var(--cg-border);
+        color: var(--cf-muted);
+        border-bottom: 1px solid var(--cf-border);
       }
 
       .sidebar-btn {
         background: none;
-        border: 1px solid var(--cg-border);
+        border: 1px solid var(--cf-border);
         border-radius: 2px;
         cursor: pointer;
         font-size: 14px;
         line-height: 1;
         padding: 2px 6px;
-        color: var(--cg-muted);
+        color: var(--cf-muted);
       }
 
       .sidebar-btn:hover {
-        background: var(--cg-hover);
-        color: var(--cg-fg);
+        background: var(--cf-hover);
+        color: var(--cf-fg);
       }
 
       /* File tree */
@@ -174,16 +174,16 @@
         font-size: 13px;
         cursor: pointer;
         user-select: none;
-        color: var(--cg-fg);
+        color: var(--cf-fg);
       }
 
       .file-tree-item:hover {
-        background: var(--cg-hover);
+        background: var(--cf-hover);
       }
 
       .file-tree-active {
-        background: var(--cg-active);
-        color: var(--cg-fg);
+        background: var(--cf-active);
+        color: var(--cf-fg);
       }
 
       .file-tree-icon {
@@ -205,7 +205,7 @@
 
       /* Collapsible sidebar sections */
       .sidebar-section {
-        border-top: 1px solid var(--cg-border);
+        border-top: 1px solid var(--cf-border);
       }
 
       .sidebar-header-collapsible {
@@ -216,7 +216,7 @@
 
       .sidebar-toggle {
         font-size: 8px;
-        color: var(--cg-muted);
+        color: var(--cf-muted);
         width: 10px;
         flex-shrink: 0;
       }
@@ -236,17 +236,17 @@
         font-size: 13px;
         cursor: pointer;
         user-select: none;
-        color: var(--cg-fg);
+        color: var(--cf-fg);
         line-height: 1.4;
       }
 
       .outline-item:hover {
-        background: var(--cg-hover);
+        background: var(--cf-hover);
       }
 
       .outline-toggle {
         font-size: 8px;
-        color: var(--cg-muted);
+        color: var(--cf-muted);
         width: 10px;
         flex-shrink: 0;
         cursor: pointer;
@@ -254,7 +254,7 @@
       }
 
       .outline-toggle:hover {
-        color: var(--cg-fg);
+        color: var(--cf-fg);
       }
 
       .outline-toggle-spacer {
@@ -262,7 +262,7 @@
       }
 
       .outline-number {
-        color: var(--cg-muted);
+        color: var(--cf-muted);
         font-size: 11px;
         flex-shrink: 0;
         font-variant-numeric: tabular-nums;
@@ -276,12 +276,12 @@
 
       /* Outline active state */
       .outline-item-active {
-        background: var(--cg-active);
-        color: var(--cg-fg);
+        background: var(--cf-active);
+        color: var(--cf-fg);
       }
 
       .outline-item-active:hover {
-        background: var(--cg-active);
+        background: var(--cf-active);
       }
 
       /* Breadcrumb bar */
@@ -291,9 +291,9 @@
         gap: 2px;
         padding: 4px 12px;
         font-size: 12px;
-        color: var(--cg-muted);
-        background: var(--cg-bg);
-        border-bottom: 1px solid var(--cg-border);
+        color: var(--cf-muted);
+        background: var(--cf-bg);
+        border-bottom: 1px solid var(--cf-border);
         min-height: 24px;
         overflow: hidden;
         white-space: nowrap;
@@ -304,14 +304,14 @@
       }
 
       .breadcrumb-separator {
-        color: var(--cg-border);
+        color: var(--cf-border);
         margin: 0 2px;
         flex-shrink: 0;
       }
 
       .breadcrumb-segment {
         cursor: pointer;
-        color: var(--cg-muted);
+        color: var(--cf-muted);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -320,12 +320,12 @@
       }
 
       .breadcrumb-segment:hover {
-        background: var(--cg-hover);
-        color: var(--cg-fg);
+        background: var(--cf-hover);
+        color: var(--cf-fg);
       }
 
       .breadcrumb-segment:last-child {
-        color: var(--cg-fg);
+        color: var(--cf-fg);
         font-weight: 500;
       }
 
@@ -350,8 +350,8 @@
         width: 480px;
         max-width: 90vw;
         max-height: 400px;
-        background: var(--cg-bg);
-        border: 1px solid var(--cg-border);
+        background: var(--cf-bg);
+        border: 1px solid var(--cf-border);
         border-radius: 4px;
         display: flex;
         flex-direction: column;
@@ -370,14 +370,14 @@
           Roboto,
           sans-serif;
         border: none;
-        border-bottom: 1px solid var(--cg-border);
+        border-bottom: 1px solid var(--cf-border);
         outline: none;
         background: transparent;
-        color: var(--cg-fg);
+        color: var(--cf-fg);
       }
 
       .cmd-palette-input::placeholder {
-        color: var(--cg-muted);
+        color: var(--cf-muted);
       }
 
       .cmd-palette-results {
@@ -393,12 +393,12 @@
         padding: 8px 16px;
         cursor: pointer;
         font-size: 14px;
-        color: var(--cg-fg);
+        color: var(--cf-fg);
       }
 
       .cmd-palette-item:hover,
       .cmd-palette-item-active {
-        background: var(--cg-hover);
+        background: var(--cf-hover);
       }
 
       .cmd-palette-item-label {
@@ -412,12 +412,12 @@
         flex-shrink: 0;
         margin-left: 16px;
         font-size: 12px;
-        color: var(--cg-muted);
+        color: var(--cf-muted);
         font-family: "SF Mono", "Fira Code", monospace;
-        background: var(--cg-subtle);
+        background: var(--cf-subtle);
         padding: 2px 6px;
         border-radius: 2px;
-        border: 1px solid var(--cg-border);
+        border: 1px solid var(--cf-border);
       }
 
       /* Context menus */
@@ -425,8 +425,8 @@
         position: fixed;
         z-index: 3000;
         min-width: 140px;
-        background: var(--cg-bg);
-        border: 1px solid var(--cg-border);
+        background: var(--cf-bg);
+        border: 1px solid var(--cf-border);
         border-radius: 4px;
         padding: 4px 0;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
@@ -437,23 +437,23 @@
         padding: 6px 14px;
         font-size: 13px;
         cursor: pointer;
-        color: var(--cg-fg);
+        color: var(--cf-fg);
         white-space: nowrap;
       }
 
       .context-menu-item:hover {
-        background: var(--cg-hover);
+        background: var(--cf-hover);
       }
 
       .context-menu-item-disabled {
-        color: var(--cg-muted);
+        color: var(--cf-muted);
         cursor: default;
         pointer-events: none;
       }
 
       .context-menu-separator {
         height: 1px;
-        background: var(--cg-border);
+        background: var(--cf-border);
         margin: 4px 0;
       }
     </style>

@@ -11,7 +11,7 @@ import { useState, useCallback } from "react";
 import type { Settings } from "../lib/types";
 import { readLocalStorage, writeLocalStorage } from "../lib/utils";
 
-const STORAGE_KEY = "cg-settings";
+const STORAGE_KEY = "cf-settings";
 
 const DEFAULT_SETTINGS: Settings = {
   autoSaveInterval: 30000,

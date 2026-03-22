@@ -199,14 +199,14 @@ export function setEditorMode(view: EditorView, mode: EditorMode): void {
       effects.push(renderCompartment.reconfigure([]));
       effects.push(editableCompartment.reconfigure([]));
       effects.push(modeClassCompartment.reconfigure(
-        EditorView.editorAttributes.of({ class: "cg-source-mode" }),
+        EditorView.editorAttributes.of({ class: "cf-source-mode" }),
       ));
       break;
     case "read":
       effects.push(renderCompartment.reconfigure(renderingExtensions));
       effects.push(editableCompartment.reconfigure(EditorView.editable.of(false)));
       effects.push(modeClassCompartment.reconfigure(
-        EditorView.editorAttributes.of({ class: "cg-read-mode" }),
+        EditorView.editorAttributes.of({ class: "cf-read-mode" }),
       ));
       break;
   }

@@ -89,8 +89,8 @@ class FoldToggleWidget extends RenderWidget {
 
   toDOM(view: EditorView): HTMLElement {
     const span = document.createElement("span");
-    const classes = ["cg-fold-toggle", `cg-fold-h${this.level}`];
-    if (this.folded) classes.push("cg-fold-toggle-folded");
+    const classes = ["cf-fold-toggle", `cf-fold-h${this.level}`];
+    if (this.folded) classes.push("cf-fold-toggle-folded");
     span.className = classes.join(" ");
     span.textContent = this.folded ? "▶" : "▼";
     span.title = this.folded ? "Unfold section" : "Fold section";
@@ -167,7 +167,7 @@ function buildFoldToggles(state: EditorState): DecorationSet {
       const widget = new FoldToggleWidget(node.from, isFolded, level);
       // Line class for position:relative context
       items.push(
-        Decoration.line({ class: "cg-fold-line" }).range(node.from),
+        Decoration.line({ class: "cf-fold-line" }).range(node.from),
       );
       items.push(
         Decoration.widget({ widget, side: -1 }).range(node.from),

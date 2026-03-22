@@ -7,45 +7,45 @@ import { monoFont } from "./editor-constants";
 export const codeThemeStyles = {
   /* Code block: unified container via per-line classes.
      Header = top border + radius, body = side borders, last = bottom border + radius. */
-  ".cg-codeblock-header": {
+  ".cf-codeblock-header": {
     position: "relative",
     fontFamily: monoFont,
     fontSize: "0.85em",
-    backgroundColor: "var(--cg-subtle)",
-    borderTop: "1px solid var(--cg-border)",
-    borderLeft: "1px solid var(--cg-border)",
-    borderRight: "1px solid var(--cg-border)",
+    backgroundColor: "var(--cf-subtle)",
+    borderTop: "1px solid var(--cf-border)",
+    borderLeft: "1px solid var(--cf-border)",
+    borderRight: "1px solid var(--cf-border)",
     borderTopLeftRadius: "4px",
     borderTopRightRadius: "4px",
     padding: "0 12px",
     lineHeight: "inherit",
   },
-  ".cg-codeblock-header-widget": {
+  ".cf-codeblock-header-widget": {
     display: "inline",
   },
-  ".cg-codeblock-language": {
+  ".cf-codeblock-language": {
     fontWeight: "600",
-    color: "var(--cg-muted)",
+    color: "var(--cf-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
     fontFamily: monoFont,
   },
-  ".cg-codeblock-body": {
+  ".cf-codeblock-body": {
     fontFamily: monoFont,
     fontSize: "0.85em",
-    backgroundColor: "var(--cg-subtle)",
-    borderLeft: "1px solid var(--cg-border)",
-    borderRight: "1px solid var(--cg-border)",
+    backgroundColor: "var(--cf-subtle)",
+    borderLeft: "1px solid var(--cf-border)",
+    borderRight: "1px solid var(--cf-border)",
     paddingLeft: "12px",
     paddingRight: "12px",
   },
-  ".cg-codeblock-last": {
+  ".cf-codeblock-last": {
     fontFamily: monoFont,
     fontSize: "0.85em",
-    backgroundColor: "var(--cg-subtle)",
-    borderLeft: "1px solid var(--cg-border)",
-    borderRight: "1px solid var(--cg-border)",
-    borderBottom: "1px solid var(--cg-border)",
+    backgroundColor: "var(--cf-subtle)",
+    borderLeft: "1px solid var(--cf-border)",
+    borderRight: "1px solid var(--cf-border)",
+    borderBottom: "1px solid var(--cf-border)",
     borderBottomLeftRadius: "4px",
     borderBottomRightRadius: "4px",
     paddingLeft: "12px",
@@ -54,7 +54,7 @@ export const codeThemeStyles = {
   },
 
   /* Copy button in code block header */
-  ".cg-codeblock-copy": {
+  ".cf-codeblock-copy": {
     position: "absolute",
     right: "8px",
     top: "50%",
@@ -65,7 +65,7 @@ export const codeThemeStyles = {
     width: "24px",
     height: "24px",
     padding: "0",
-    color: "var(--cg-muted)",
+    color: "var(--cf-muted)",
     backgroundColor: "transparent",
     border: "1px solid transparent",
     borderRadius: "2px",
@@ -73,39 +73,39 @@ export const codeThemeStyles = {
     opacity: "0",
     transition: "opacity 0.15s",
   },
-  ".cg-codeblock-copy svg": {
+  ".cf-codeblock-copy svg": {
     width: "14px",
     height: "14px",
     display: "block",
   },
-  ".cg-codeblock-header:hover .cg-codeblock-copy, .cg-codeblock-header.cg-codeblock-hovered .cg-codeblock-copy":
+  ".cf-codeblock-header:hover .cf-codeblock-copy, .cf-codeblock-header.cf-codeblock-hovered .cf-codeblock-copy":
     {
     opacity: "1",
     },
-  ".cg-codeblock-copy:hover": {
-    color: "var(--cg-fg)",
+  ".cf-codeblock-copy:hover": {
+    color: "var(--cf-fg)",
   },
 
   /* Source mode: keep monospace font and subtle bg when cursor is inside */
-  ".cg-codeblock-source": {
+  ".cf-codeblock-source": {
     fontFamily: monoFont,
     fontSize: "0.85em",
-    backgroundColor: "var(--cg-subtle)",
+    backgroundColor: "var(--cf-subtle)",
   },
-  ".cg-codeblock-source-open": {
-    borderTop: "1px solid var(--cg-border)",
-    borderLeft: "1px solid var(--cg-border)",
-    borderRight: "1px solid var(--cg-border)",
+  ".cf-codeblock-source-open": {
+    borderTop: "1px solid var(--cf-border)",
+    borderLeft: "1px solid var(--cf-border)",
+    borderRight: "1px solid var(--cf-border)",
     borderTopLeftRadius: "4px",
     borderTopRightRadius: "4px",
     lineHeight: "inherit",
     paddingLeft: "12px",
     paddingRight: "12px",
   },
-  ".cg-codeblock-source-close": {
-    borderLeft: "1px solid var(--cg-border)",
-    borderRight: "1px solid var(--cg-border)",
-    borderBottom: "1px solid var(--cg-border)",
+  ".cf-codeblock-source-close": {
+    borderLeft: "1px solid var(--cf-border)",
+    borderRight: "1px solid var(--cf-border)",
+    borderBottom: "1px solid var(--cf-border)",
     borderBottomLeftRadius: "4px",
     borderBottomRightRadius: "4px",
     lineHeight: "inherit",
@@ -116,40 +116,40 @@ export const codeThemeStyles = {
   /* ── B&W syntax highlighting ─────────────────────────────────
      Monochrome theme: bold for keywords, italic for comments/strings,
      no color — just font-weight and font-style variation. */
-  ".cg-codeblock-body .tok-keyword, .cg-codeblock-last .tok-keyword": {
+  ".cf-codeblock-body .tok-keyword, .cf-codeblock-last .tok-keyword": {
     fontWeight: "700",
   },
-  ".cg-codeblock-body .tok-controlKeyword, .cg-codeblock-last .tok-controlKeyword":
+  ".cf-codeblock-body .tok-controlKeyword, .cf-codeblock-last .tok-controlKeyword":
     {
       fontWeight: "700",
     },
-  ".cg-codeblock-body .tok-definitionKeyword, .cg-codeblock-last .tok-definitionKeyword":
+  ".cf-codeblock-body .tok-definitionKeyword, .cf-codeblock-last .tok-definitionKeyword":
     {
       fontWeight: "700",
     },
-  ".cg-codeblock-body .tok-operatorKeyword, .cg-codeblock-last .tok-operatorKeyword":
+  ".cf-codeblock-body .tok-operatorKeyword, .cf-codeblock-last .tok-operatorKeyword":
     {
       fontWeight: "700",
     },
-  ".cg-codeblock-body .tok-modifier, .cg-codeblock-last .tok-modifier": {
+  ".cf-codeblock-body .tok-modifier, .cf-codeblock-last .tok-modifier": {
     fontWeight: "700",
   },
-  ".cg-codeblock-body .tok-comment, .cg-codeblock-last .tok-comment": {
+  ".cf-codeblock-body .tok-comment, .cf-codeblock-last .tok-comment": {
     fontStyle: "italic",
-    color: "var(--cg-muted)",
+    color: "var(--cf-muted)",
   },
-  ".cg-codeblock-body .tok-string, .cg-codeblock-last .tok-string": {
+  ".cf-codeblock-body .tok-string, .cf-codeblock-last .tok-string": {
     fontStyle: "italic",
   },
-  ".cg-codeblock-body .tok-typeName, .cg-codeblock-last .tok-typeName": {
+  ".cf-codeblock-body .tok-typeName, .cf-codeblock-last .tok-typeName": {
     textDecoration: "underline",
-    textDecorationColor: "var(--cg-border)",
+    textDecorationColor: "var(--cf-border)",
     textUnderlineOffset: "2px",
   },
-  ".cg-codeblock-body .tok-number, .cg-codeblock-last .tok-number": {
+  ".cf-codeblock-body .tok-number, .cf-codeblock-last .tok-number": {
     fontWeight: "500",
   },
-  ".cg-codeblock-body .tok-bool, .cg-codeblock-last .tok-bool": {
+  ".cf-codeblock-body .tok-bool, .cf-codeblock-last .tok-bool": {
     fontWeight: "700",
   },
 };

@@ -7,81 +7,81 @@
  * ──────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  --cg-ui-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --cg-content-font: KaTeX_Main, "Times New Roman", serif;
-  --cg-code-font: Monaco, "DejaVu Sans Mono", Consolas, monospace;
+  --cf-ui-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --cf-content-font: KaTeX_Main, "Times New Roman", serif;
+  --cf-code-font: Monaco, "DejaVu Sans Mono", Consolas, monospace;
 
   /* Backgrounds — flat: secondary matches primary */
-  --cg-bg: #ffffff;
-  --cg-bg-secondary: #ffffff;
+  --cf-bg: #ffffff;
+  --cf-bg-secondary: #ffffff;
 
   /* Text */
-  --cg-fg: #09090b;
-  --cg-muted: #71717a;
+  --cf-fg: #09090b;
+  --cf-muted: #71717a;
 
   /* Borders — always 1px solid, primary separator */
-  --cg-border: #e4e4e7;
+  --cf-border: #e4e4e7;
 
   /* Interactive states — minimal: subtle/hover nearly invisible */
-  --cg-subtle: rgba(0, 0, 0, 0.02);
-  --cg-hover: rgba(0, 0, 0, 0.04);
-  --cg-active: rgba(0, 0, 0, 0.06);
+  --cf-subtle: rgba(0, 0, 0, 0.02);
+  --cf-hover: rgba(0, 0, 0, 0.04);
+  --cf-active: rgba(0, 0, 0, 0.06);
 
   /* Accent — black, one color */
-  --cg-accent: #18181b;
-  --cg-accent-fg: #ffffff;
+  --cf-accent: #18181b;
+  --cf-accent-fg: #ffffff;
 
   /* Overlay (semi-transparent background for floating bars) */
-  --cg-bg-overlay: rgba(255, 255, 255, 0.82);
-  --cg-border-overlay: rgba(212, 212, 216, 0.6);
-  --cg-separator: rgba(161, 161, 170, 0.8);
+  --cf-bg-overlay: rgba(255, 255, 255, 0.82);
+  --cf-border-overlay: rgba(212, 212, 216, 0.6);
+  --cf-separator: rgba(161, 161, 170, 0.8);
 
   /* Theme-owned special surfaces */
-  --cg-block-header-accent: var(--cg-fg);
-  --cg-block-header-padding: 12px;
-  --cg-block-title-color: var(--cg-fg);
-  --cg-block-title-weight: 700;
-  --cg-block-theorem-style: italic;
-  --cg-block-body-style: normal;
-  --cg-block-nest-1: var(--cg-border);
-  --cg-block-nest-2: var(--cg-active);
-  --cg-block-nest-3: var(--cg-muted);
-  --cg-block-nest-4: var(--cg-fg);
-  --cg-proof-marker: "\220E";
-  --cg-proof-marker-color: var(--cg-fg);
-  --cg-proof-marker-size: 1.2em;
-  --cg-blockquote-border: var(--cg-border);
-  --cg-blockquote-color: var(--cg-fg);
-  --cg-block-margin: 0.6em 0;
-  --cg-block-title-display: inline;
-  --cg-block-title-separator: ".\2002\2002";
-  --cg-include-accent: var(--cg-border);
-  --cg-include-label-color: var(--cg-border);
-  --cg-include-label-active-color: var(--cg-muted);
-  --cg-table-border: var(--cg-border);
-  --cg-table-header-border: var(--cg-border);
-  --cg-table-edit-outline: var(--cg-active);
-  --cg-table-cell-padding: 0.5em 0.75em;
-  --cg-embed-border: var(--cg-border);
+  --cf-block-header-accent: var(--cf-fg);
+  --cf-block-header-padding: 12px;
+  --cf-block-title-color: var(--cf-fg);
+  --cf-block-title-weight: 700;
+  --cf-block-theorem-style: italic;
+  --cf-block-body-style: normal;
+  --cf-block-nest-1: var(--cf-border);
+  --cf-block-nest-2: var(--cf-active);
+  --cf-block-nest-3: var(--cf-muted);
+  --cf-block-nest-4: var(--cf-fg);
+  --cf-proof-marker: "\220E";
+  --cf-proof-marker-color: var(--cf-fg);
+  --cf-proof-marker-size: 1.2em;
+  --cf-blockquote-border: var(--cf-border);
+  --cf-blockquote-color: var(--cf-fg);
+  --cf-block-margin: 0.6em 0;
+  --cf-block-title-display: inline;
+  --cf-block-title-separator: ".\2002\2002";
+  --cf-include-accent: var(--cf-border);
+  --cf-include-label-color: var(--cf-border);
+  --cf-include-label-active-color: var(--cf-muted);
+  --cf-table-border: var(--cf-border);
+  --cf-table-header-border: var(--cf-border);
+  --cf-table-edit-outline: var(--cf-active);
+  --cf-table-cell-padding: 0.5em 0.75em;
+  --cf-embed-border: var(--cf-border);
 
   /* Transitions */
-  --cg-transition: 0.15s ease;
+  --cf-transition: 0.15s ease;
 }
 
 [data-theme="dark"] {
-  --cg-bg: #0a0a0a;
-  --cg-bg-secondary: #0a0a0a;
-  --cg-fg: #fafafa;
-  --cg-muted: #a1a1aa;
-  --cg-border: #27272a;
-  --cg-subtle: rgba(255, 255, 255, 0.03);
-  --cg-hover: rgba(255, 255, 255, 0.05);
-  --cg-active: rgba(255, 255, 255, 0.08);
-  --cg-accent: #fafafa;
-  --cg-accent-fg: #09090b;
-  --cg-bg-overlay: rgba(10, 10, 10, 0.82);
-  --cg-border-overlay: rgba(63, 63, 70, 0.6);
-  --cg-separator: rgba(161, 161, 170, 0.6);
+  --cf-bg: #0a0a0a;
+  --cf-bg-secondary: #0a0a0a;
+  --cf-fg: #fafafa;
+  --cf-muted: #a1a1aa;
+  --cf-border: #27272a;
+  --cf-subtle: rgba(255, 255, 255, 0.03);
+  --cf-hover: rgba(255, 255, 255, 0.05);
+  --cf-active: rgba(255, 255, 255, 0.08);
+  --cf-accent: #fafafa;
+  --cf-accent-fg: #09090b;
+  --cf-bg-overlay: rgba(10, 10, 10, 0.82);
+  --cf-border-overlay: rgba(63, 63, 70, 0.6);
+  --cf-separator: rgba(161, 161, 170, 0.6);
 }
 
 /* ── Base styles ────────────────────────────────────────────────────────────── */
@@ -92,20 +92,20 @@ body {
 }
 
 body {
-  font-family: var(--cg-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  font-family: var(--cf-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--cg-bg);
-  color: var(--cg-fg);
+  background-color: var(--cf-bg);
+  color: var(--cf-fg);
 }
 
-.cg-ui-font {
-  font-family: var(--cg-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+.cf-ui-font {
+  font-family: var(--cf-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
 }
 
-.cg-code-font,
+.cf-code-font,
 .font-mono {
-  font-family: var(--cg-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
 }
 
 /* ── CodeMirror 6 overrides ─────────────────────────────────────────────────── */
@@ -124,8 +124,8 @@ body {
 }
 
 /* Source mode uses monospace font for all content */
-.cg-source-mode .cm-content {
-  font-family: var(--cg-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+.cf-source-mode .cm-content {
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
 }
 
 /* ── Sidenote margin (portal + items) ──────────────────────────────────────
@@ -133,7 +133,7 @@ body {
  * CM6 scroller. These are outside CM6's theme scope, so they live here. */
 
 /* Portal container — absolutely positioned to the right of content */
-.cg-sidenote-portal {
+.cf-sidenote-portal {
   position: absolute;
   top: 0;
   right: 0;
@@ -147,27 +147,27 @@ body {
 
 /* Sidenote margin separator — sticky pseudo-element stays visible
    during scrolling without contributing to scroll height */
-.cg-sidenote-portal::before {
+.cf-sidenote-portal::before {
   content: "";
   position: sticky;
   top: 0;
   display: block;
   width: 1px;
   height: 100vh;
-  background: var(--cg-border);
+  background: var(--cf-border);
   opacity: 0.5;
   pointer-events: none;
 }
 
 /* Individual sidenote entry in the margin */
-.cg-sidenote-entry {
+.cf-sidenote-entry {
   position: absolute;
   width: 100%;
   padding: 0 12px;
   font-size: 0.75rem;
   line-height: 1.625;
-  color: var(--cg-fg);
-  font-family: var(--cg-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  color: var(--cf-fg);
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   pointer-events: auto;
   cursor: pointer;
   overflow-wrap: break-word;
@@ -175,9 +175,9 @@ body {
 }
 
 /* Superscript number inside a sidenote entry */
-.cg-sidenote-entry-number {
+.cf-sidenote-entry-number {
   font-weight: 600;
-  color: var(--cg-fg);
+  color: var(--cf-fg);
   font-size: 0.7em;
   vertical-align: super;
   margin-right: 2px;
@@ -185,23 +185,23 @@ body {
 
 /* ── Bibliography / References section ──────────────────────────────────── */
 
-.cg-bibliography {
+.cf-bibliography {
   font-size: 0.85rem;
   line-height: 1.4;
 }
 
-.cg-bibliography-entry + .cg-bibliography-entry {
+.cf-bibliography-entry + .cf-bibliography-entry {
   margin-top: 0.15em;
 }
 
-.cg-read-mode-view .cg-bibliography {
+.cf-read-mode-view .cf-bibliography {
   text-align: left;
   hyphens: manual;
   -webkit-hyphens: manual;
 }
 
 /* No heading math size hacks needed — font-size is on .cm-line via
- * Decoration.line (.cg-heading-line-N), so all children inherit it. */
+ * Decoration.line (.cf-heading-line-N), so all children inherit it. */
 
 /* ── Math sizing & color: inherit from surrounding context ─────────────── */
 
@@ -209,48 +209,48 @@ body {
   color: inherit;
 }
 
-.cg-math-inline .katex {
+.cf-math-inline .katex {
   font-size: inherit;
 }
 
-.cg-math-display .katex-display {
+.cf-math-display .katex-display {
   font-size: inherit;
 }
 
 /* ── Hover preview tooltip (appended to document.body) ─────────────────────
  * Used when sidenote margin is collapsed to show footnote content. */
-.cg-hover-preview-tooltip {
+.cf-hover-preview-tooltip {
   position: fixed;
   z-index: 1000;
-  background: var(--cg-bg);
-  border: 1px solid var(--cg-border);
+  background: var(--cf-bg);
+  border: 1px solid var(--cf-border);
   border-radius: 2px;
   pointer-events: none;
   max-width: 320px;
   padding: 8px 12px;
   font-size: 0.8em;
   line-height: 1.5;
-  color: var(--cg-fg);
-  font-family: var(--cg-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  color: var(--cf-fg);
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
 }
 
 /* ── Read mode HTML renderer ───────────────────────────────────────────────
  * Semantic HTML view replacing CM6 in read mode. Enables proper typography
  * (justify, hyphens, Knuth-Plass) that CM6's `.cm-line` divs prevent. */
 
-.cg-read-mode-view {
+.cf-read-mode-view {
   height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 24px 48px;
-  max-width: var(--cg-content-max-width, 800px);
+  max-width: var(--cf-content-max-width, 800px);
   margin-left: auto;
   margin-right: auto;
-  font-family: var(--cg-content-font, KaTeX_Main, "Times New Roman", serif);
-  font-size: var(--cg-base-font-size, 16px);
-  line-height: var(--cg-line-height, 1.5);
-  color: var(--cg-fg);
-  background: var(--cg-bg);
+  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
+  font-size: var(--cf-base-font-size, 16px);
+  line-height: var(--cf-line-height, 1.5);
+  color: var(--cf-fg);
+  background: var(--cf-bg);
 
   /* Justified text with hyphenation for polished reading */
   text-align: justify;
@@ -261,27 +261,27 @@ body {
 
 /* ── Read mode headings — Oxford Lecture Series academic style ────────── */
 
-.cg-read-mode-view h1,
-.cg-read-mode-view h2,
-.cg-read-mode-view h3,
-.cg-read-mode-view h4,
-.cg-read-mode-view h5,
-.cg-read-mode-view h6 {
+.cf-read-mode-view h1,
+.cf-read-mode-view h2,
+.cf-read-mode-view h3,
+.cf-read-mode-view h4,
+.cf-read-mode-view h5,
+.cf-read-mode-view h6 {
   text-align: left;
   margin-top: 1.5em;
   margin-bottom: 0.5em;
   line-height: 1.3;
 }
 
-.cg-read-mode-view h1 { font-size: var(--cg-h1-size, 1.15em); font-weight: var(--cg-h1-weight, bold); font-style: var(--cg-h1-style, normal); }
-.cg-read-mode-view h2 { font-size: var(--cg-h2-size, 1.2em); font-weight: var(--cg-h2-weight, normal); font-style: var(--cg-h2-style, italic); }
-.cg-read-mode-view h3 { font-size: var(--cg-h3-size, 1.1em); font-weight: var(--cg-h3-weight, bold); font-style: var(--cg-h3-style, italic); }
-.cg-read-mode-view h4 { font-size: var(--cg-h4-size, 1em); font-weight: var(--cg-h4-weight, bold); font-style: var(--cg-h4-style, normal); }
-.cg-read-mode-view h5 { font-size: var(--cg-h5-size, 0.95em); font-weight: var(--cg-h5-weight, bold); font-style: var(--cg-h5-style, normal); }
-.cg-read-mode-view h6 { font-size: var(--cg-h6-size, 0.9em); font-weight: var(--cg-h6-weight, bold); font-style: var(--cg-h6-style, normal); }
+.cf-read-mode-view h1 { font-size: var(--cf-h1-size, 1.15em); font-weight: var(--cf-h1-weight, bold); font-style: var(--cf-h1-style, normal); }
+.cf-read-mode-view h2 { font-size: var(--cf-h2-size, 1.2em); font-weight: var(--cf-h2-weight, normal); font-style: var(--cf-h2-style, italic); }
+.cf-read-mode-view h3 { font-size: var(--cf-h3-size, 1.1em); font-weight: var(--cf-h3-weight, bold); font-style: var(--cf-h3-style, italic); }
+.cf-read-mode-view h4 { font-size: var(--cf-h4-size, 1em); font-weight: var(--cf-h4-weight, bold); font-style: var(--cf-h4-style, normal); }
+.cf-read-mode-view h5 { font-size: var(--cf-h5-size, 0.95em); font-weight: var(--cf-h5-weight, bold); font-style: var(--cf-h5-style, normal); }
+.cf-read-mode-view h6 { font-size: var(--cf-h6-size, 0.9em); font-weight: var(--cf-h6-weight, bold); font-style: var(--cf-h6-style, normal); }
 
 /* Document title from frontmatter — larger but still academic */
-.cg-read-mode-view .cg-read-title {
+.cf-read-mode-view .cf-read-title {
   margin-top: 0;
   margin-bottom: 1em;
   font-size: 1.5em;
@@ -291,46 +291,46 @@ body {
 }
 
 /* Section numbers — period after number, margin matching blog */
-.cg-read-mode-view .cg-section-number {
-  color: var(--cg-fg);
+.cf-read-mode-view .cf-section-number {
+  color: var(--cf-fg);
   margin-right: 0.6em;
 }
 
-.cg-read-mode-view .cg-section-number::after {
+.cf-read-mode-view .cf-section-number::after {
   content: '.';
 }
 
 /* ── Read mode paragraphs & inline ───────────────────────────────────────── */
 
-.cg-read-mode-view p {
+.cf-read-mode-view p {
   margin: 0.8em 0;
 }
 
 /* Consecutive paragraphs: indent instead of gap (academic book style) */
-.cg-read-mode-view p + p {
+.cf-read-mode-view p + p {
   text-indent: 1.5em;
   margin-top: 0;
 }
 
 /* Links: dotted bottom border, no underline (blog style) */
-.cg-read-mode-view a {
-  color: var(--cg-fg);
+.cf-read-mode-view a {
+  color: var(--cf-fg);
   text-decoration: none;
-  border-bottom: 1px dotted var(--cg-muted);
+  border-bottom: 1px dotted var(--cf-muted);
 }
 
-.cg-read-mode-view a.cross-ref {
+.cf-read-mode-view a.cross-ref {
   text-decoration: none;
-  border-bottom: 1px dashed var(--cg-muted);
+  border-bottom: 1px dashed var(--cf-muted);
 }
 
-.cg-read-mode-view mark {
+.cf-read-mode-view mark {
   background: rgba(255, 255, 0, 0.2);
   padding: 0.1em 0.2em;
   border-radius: 2px;
 }
 
-.cg-read-mode-view img {
+.cf-read-mode-view img {
   max-width: 100%;
   height: auto;
   display: block;
@@ -339,25 +339,25 @@ body {
 
 /* ── Read mode code blocks ───────────────────────────────────────────────── */
 
-.cg-read-mode-view code {
-  font-family: var(--cg-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+.cf-read-mode-view code {
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   font-size: 0.85em;
-  background: var(--cg-hover);
+  background: var(--cf-hover);
   padding: 0.15em 0.35em;
   border-radius: 2px;
 }
 
-.cg-read-mode-view pre {
-  font-family: var(--cg-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-  background: var(--cg-hover);
-  border: 1px solid var(--cg-border);
+.cf-read-mode-view pre {
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  background: var(--cf-hover);
+  border: 1px solid var(--cf-border);
   padding: 0.5em 1em;
   border-radius: 0;
   overflow-x: auto;
   margin: 1em 0;
 }
 
-.cg-read-mode-view pre code {
+.cf-read-mode-view pre code {
   background: none;
   padding: 0;
   font-size: 0.85em;
@@ -365,131 +365,131 @@ body {
 
 /* ── Read mode math ──────────────────────────────────────────────────────── */
 
-.cg-read-mode-view .math-display {
+.cf-read-mode-view .math-display {
   margin: 1.2em 0;
   text-align: center;
 }
 
-.cg-read-mode-view .math-error {
+.cf-read-mode-view .math-error {
   color: #c00;
   background: rgba(255, 0, 0, 0.05);
 }
 
-.cg-read-mode-view .katex {
+.cf-read-mode-view .katex {
   color: inherit;
 }
 
 /* ── Read mode fenced divs (theorem, proof, etc.) ────────────────────────── */
 
 /* Theorem-family: italic body, inline bold header (academic convention) */
-.cg-read-mode-view .theorem,
-.cg-read-mode-view .lemma,
-.cg-read-mode-view .corollary,
-.cg-read-mode-view .proposition,
-.cg-read-mode-view .conjecture {
-  font-style: var(--cg-block-theorem-style);
-  margin: var(--cg-block-margin);
+.cf-read-mode-view .theorem,
+.cf-read-mode-view .lemma,
+.cf-read-mode-view .corollary,
+.cf-read-mode-view .proposition,
+.cf-read-mode-view .conjecture {
+  font-style: var(--cf-block-theorem-style);
+  margin: var(--cf-block-margin);
 }
 
 /* Definition, problem: normal body */
-.cg-read-mode-view .definition,
-.cg-read-mode-view .problem {
-  font-style: var(--cg-block-body-style);
-  margin: var(--cg-block-margin);
+.cf-read-mode-view .definition,
+.cf-read-mode-view .problem {
+  font-style: var(--cf-block-body-style);
+  margin: var(--cf-block-margin);
 }
 
 /* Proof: normal text, relative position for QED */
-.cg-read-mode-view .proof {
-  font-style: var(--cg-block-body-style);
-  margin: var(--cg-block-margin);
+.cf-read-mode-view .proof {
+  font-style: var(--cf-block-body-style);
+  margin: var(--cf-block-margin);
   position: relative;
 }
 
 /* QED tombstone at end of proof */
-.cg-read-mode-view .proof::after {
-  content: var(--cg-proof-marker);
-  color: var(--cg-proof-marker-color);
-  font-size: var(--cg-proof-marker-size);
+.cf-read-mode-view .proof::after {
+  content: var(--cf-proof-marker);
+  color: var(--cf-proof-marker-color);
+  font-size: var(--cf-proof-marker-size);
   float: right;
 }
 
 /* Remark, example, note: normal style with subtle left border */
-.cg-read-mode-view .remark,
-.cg-read-mode-view .example,
-.cg-read-mode-view .note {
-  margin: var(--cg-block-margin);
-  font-style: var(--cg-block-body-style);
+.cf-read-mode-view .remark,
+.cf-read-mode-view .example,
+.cf-read-mode-view .note {
+  margin: var(--cf-block-margin);
+  font-style: var(--cf-block-body-style);
 }
 
-.cg-read-mode-view .Blockquote,
-.cg-read-mode-view blockquote {
-  border-left: 3px solid var(--cg-blockquote-border);
+.cf-read-mode-view .Blockquote,
+.cf-read-mode-view blockquote {
+  border-left: 3px solid var(--cf-blockquote-border);
   padding-left: 1em;
   margin-left: 0;
-  color: var(--cg-blockquote-color);
+  color: var(--cf-blockquote-color);
 }
 
 /* Div title (e.g. "Theorem 1."): bold, normal style (not italic), inline */
-.cg-read-mode-view .div-title {
-  display: var(--cg-block-title-display);
-  font-weight: var(--cg-block-title-weight);
-  color: var(--cg-block-title-color);
+.cf-read-mode-view .div-title {
+  display: var(--cf-block-title-display);
+  font-weight: var(--cf-block-title-weight);
+  color: var(--cf-block-title-color);
   font-style: normal;
 }
 
 /* Period + en space after the div title (inline header separator) */
-.cg-read-mode-view .div-title::after {
-  content: var(--cg-block-title-separator);
+.cf-read-mode-view .div-title::after {
+  content: var(--cf-block-title-separator);
 }
 
 /* ── Read mode tables ────────────────────────────────────────────────────── */
 
-.cg-read-mode-view table {
+.cf-read-mode-view table {
   border-collapse: collapse;
   width: 100%;
   margin: 1.2em 0;
   font-size: 0.9em;
 }
 
-.cg-read-mode-view th,
-.cg-read-mode-view td {
-  border: 1px solid var(--cg-table-border);
-  padding: var(--cg-table-cell-padding);
+.cf-read-mode-view th,
+.cf-read-mode-view td {
+  border: 1px solid var(--cf-table-border);
+  padding: var(--cf-table-cell-padding);
   text-align: left;
 }
 
-.cg-read-mode-view th {
+.cf-read-mode-view th {
   font-weight: 600;
-  border-bottom: 2px solid var(--cg-table-header-border);
-  background: var(--cg-subtle);
+  border-bottom: 2px solid var(--cf-table-header-border);
+  background: var(--cf-subtle);
 }
 
 /* ── Read mode lists ─────────────────────────────────────────────────────── */
 
-.cg-read-mode-view ul,
-.cg-read-mode-view ol {
+.cf-read-mode-view ul,
+.cf-read-mode-view ol {
   padding-left: 1.5em;
   margin: 0.8em 0;
 }
 
-.cg-read-mode-view li {
+.cf-read-mode-view li {
   margin: 0.2em 0;
 }
 
 /* ── Read mode footnotes ─────────────────────────────────────────────────── */
 
-.cg-read-mode-view .footnote {
+.cf-read-mode-view .footnote {
   font-size: 0.85em;
-  color: var(--cg-muted);
+  color: var(--cf-muted);
   padding: 0.25em 0;
-  border-top: 1px solid var(--cg-border);
+  border-top: 1px solid var(--cf-border);
   margin-top: 0.5em;
 }
 
 /* ── Read mode horizontal rule ───────────────────────────────────────────── */
 
-.cg-read-mode-view hr {
+.cf-read-mode-view hr {
   border: none;
-  border-top: 1px solid var(--cg-border);
+  border-top: 1px solid var(--cf-border);
   margin: 2em 0;
 }

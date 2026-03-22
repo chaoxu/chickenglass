@@ -166,7 +166,7 @@ describe("embedPlugin", () => {
   it("renders header without number", () => {
     const spec = embedPlugin.render({ type: "embed" });
     expect(spec.header).toBe("Embed");
-    expect(spec.className).toBe("cg-block cg-block-embed");
+    expect(spec.className).toBe("cf-block cf-block-embed");
   });
 
   it("renders header with title", () => {
@@ -190,7 +190,7 @@ describe("iframePlugin", () => {
   it("renders correctly", () => {
     const spec = iframePlugin.render({ type: "iframe" });
     expect(spec.header).toBe("Iframe");
-    expect(spec.className).toBe("cg-block cg-block-iframe");
+    expect(spec.className).toBe("cf-block cf-block-iframe");
   });
 });
 
@@ -206,7 +206,7 @@ describe("youtubePlugin", () => {
   it("renders correctly", () => {
     const spec = youtubePlugin.render({ type: "youtube" });
     expect(spec.header).toBe("YouTube");
-    expect(spec.className).toBe("cg-block cg-block-youtube");
+    expect(spec.className).toBe("cf-block cf-block-youtube");
   });
 });
 
@@ -222,7 +222,7 @@ describe("gistPlugin", () => {
   it("renders correctly", () => {
     const spec = gistPlugin.render({ type: "gist" });
     expect(spec.header).toBe("Gist");
-    expect(spec.className).toBe("cg-block cg-block-gist");
+    expect(spec.className).toBe("cf-block cf-block-gist");
   });
 });
 
@@ -325,7 +325,7 @@ describe("gist embed block edge cases", () => {
   it("gist plugin renders header correctly", () => {
     const spec = gistPlugin.render({ type: "gist" });
     expect(spec.header).toBe("Gist");
-    expect(spec.className).toBe("cg-block cg-block-gist");
+    expect(spec.className).toBe("cf-block cf-block-gist");
   });
 
   it("gist plugin renders header with title", () => {

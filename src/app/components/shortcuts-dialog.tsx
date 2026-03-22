@@ -116,10 +116,10 @@ export function ShortcutsDialog({ open, onClose }: ShortcutsDialogProps) {
           <DialogCloseButton aria-label="Close keyboard shortcuts" />
         </DialogHeader>
 
-        <div className="shrink-0 border-b border-[var(--cg-border)] px-4 py-2">
+        <div className="shrink-0 border-b border-[var(--cf-border)] px-4 py-2">
           <Input
             type="search"
-            className="bg-[var(--cg-bg-secondary)]"
+            className="bg-[var(--cf-bg-secondary)]"
             placeholder="Filter shortcuts..."
             aria-label="Filter shortcuts"
             value={query}
@@ -131,29 +131,29 @@ export function ShortcutsDialog({ open, onClose }: ShortcutsDialogProps) {
         <DialogBody className="flex-1 p-0">
           <ScrollArea className="h-full" viewportClassName="px-4 py-3">
             {filtered.length === 0 ? (
-              <p className="py-4 text-center text-sm italic text-[var(--cg-muted)]">
+              <p className="py-4 text-center text-sm italic text-[var(--cf-muted)]">
                 No shortcuts match your search.
               </p>
             ) : (
               filtered.map((cat) => (
                 <section key={cat.name} className="mb-4 last:mb-0">
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-[var(--cg-muted)]">
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-[var(--cf-muted)]">
                     {cat.name}
                   </h3>
                   <dl className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1.5">
                     {cat.items.map((item) => (
                       <Fragment key={item.label}>
-                        <dt className="text-sm text-[var(--cg-fg)]">
+                        <dt className="text-sm text-[var(--cf-fg)]">
                           {item.label}
                         </dt>
-                        <dd className="flex items-center justify-end gap-0.5 text-right font-mono text-sm text-[var(--cg-muted)]">
+                        <dd className="flex items-center justify-end gap-0.5 text-right font-mono text-sm text-[var(--cf-muted)]">
                           {item.keys.split("+").map((part, i, arr) => (
                             <span key={i} className="flex items-center gap-0.5">
-                              <kbd className="rounded border border-[var(--cg-border)] bg-[var(--cg-bg-secondary)] px-1.5 py-0.5 text-[11px] font-sans text-[var(--cg-fg)]">
+                              <kbd className="rounded border border-[var(--cf-border)] bg-[var(--cf-bg-secondary)] px-1.5 py-0.5 text-[11px] font-sans text-[var(--cf-fg)]">
                                 {part}
                               </kbd>
                               {i < arr.length - 1 && (
-                                <span className="text-xs text-[var(--cg-muted)]">+</span>
+                                <span className="text-xs text-[var(--cf-muted)]">+</span>
                               )}
                             </span>
                           ))}
@@ -167,7 +167,7 @@ export function ShortcutsDialog({ open, onClose }: ShortcutsDialogProps) {
           </ScrollArea>
         </DialogBody>
 
-        <DialogFooter className="justify-center py-2 text-center text-xs text-[var(--cg-muted)]">
+        <DialogFooter className="justify-center py-2 text-center text-xs text-[var(--cf-muted)]">
           Press Escape to close
         </DialogFooter>
       </DialogContent>

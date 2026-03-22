@@ -163,9 +163,9 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
       >
         <DialogTitle className="sr-only">Search</DialogTitle>
         {/* Header: search input + type filter */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--cg-border)] shrink-0">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--cf-border)] shrink-0">
           <Search
-            className="w-4 h-4 text-[var(--cg-muted)] shrink-0"
+            className="w-4 h-4 text-[var(--cf-muted)] shrink-0"
             aria-hidden="true"
           />
           <Input
@@ -182,7 +182,7 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
           >
             <SelectTrigger
               aria-label="Filter search results by block type"
-              className="h-8 w-[8.5rem] border-[var(--cg-border)] bg-[var(--cg-subtle)] px-2 text-xs shadow-none"
+              className="h-8 w-[8.5rem] border-[var(--cf-border)] bg-[var(--cf-subtle)] px-2 text-xs shadow-none"
             >
               <SelectValue placeholder="All types" />
             </SelectTrigger>
@@ -200,14 +200,14 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
         {/* Results list */}
         <ScrollArea className="flex-1">
           {grouped.size === 0 ? (
-            <div className="px-4 py-3 text-xs text-[var(--cg-muted)] italic">{statusText}</div>
+            <div className="px-4 py-3 text-xs text-[var(--cf-muted)] italic">{statusText}</div>
           ) : (
             Array.from(grouped.entries()).map(([file, entries]) => (
               <div key={file}>
                 {/* File group header */}
-                <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--cg-muted)] bg-[var(--cg-subtle)] border-b border-[var(--cg-border)] sticky top-0">
+                <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--cf-muted)] bg-[var(--cf-subtle)] border-b border-[var(--cf-border)] sticky top-0">
                   {basename(file)}
-                  <span className="ml-1 font-normal normal-case text-[var(--cg-muted)]">
+                  <span className="ml-1 font-normal normal-case text-[var(--cf-muted)]">
                     — {file}
                   </span>
                 </div>
@@ -216,26 +216,26 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
                 {entries.map((entry, i) => (
                   <button
                     key={i}
-                    className="w-full text-left px-3 py-2 flex flex-col gap-0.5 hover:bg-[var(--cg-hover)] border-b border-[var(--cg-border)] last:border-b-0 transition-colors duration-[var(--cg-transition,0.15s)]"
+                    className="w-full text-left px-3 py-2 flex flex-col gap-0.5 hover:bg-[var(--cf-hover)] border-b border-[var(--cf-border)] last:border-b-0 transition-colors duration-[var(--cf-transition,0.15s)]"
                     onClick={() => handleResultClick(entry)}
                   >
                     {/* Top row: type badge + number + title */}
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1 py-0.5 rounded bg-[var(--cg-subtle)] text-[var(--cg-muted)]">
+                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1 py-0.5 rounded bg-[var(--cf-subtle)] text-[var(--cf-muted)]">
                         {entry.type}
                       </span>
                       {entry.number !== undefined && (
-                        <span className="shrink-0 text-xs text-[var(--cg-muted)] font-mono">
+                        <span className="shrink-0 text-xs text-[var(--cf-muted)] font-mono">
                           {entry.number}
                         </span>
                       )}
                       {entry.title && (
-                        <span className="truncate text-sm text-[var(--cg-fg)] font-medium">
+                        <span className="truncate text-sm text-[var(--cf-fg)] font-medium">
                           {entry.title}
                         </span>
                       )}
                       {entry.label && (
-                        <span className="ml-auto shrink-0 text-[10px] font-mono text-[var(--cg-muted)]">
+                        <span className="ml-auto shrink-0 text-[10px] font-mono text-[var(--cf-muted)]">
                           #{entry.label}
                         </span>
                       )}
@@ -243,7 +243,7 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
 
                     {/* Content preview */}
                     {entry.content && (
-                      <span className="text-xs text-[var(--cg-muted)] truncate">
+                      <span className="text-xs text-[var(--cf-muted)] truncate">
                         {previewContent(entry.content)}
                       </span>
                     )}
@@ -256,7 +256,7 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
 
         {/* Status bar */}
         {grouped.size > 0 && (
-          <div className="shrink-0 px-3 py-1 border-t border-[var(--cg-border)] text-xs text-[var(--cg-muted)] bg-[var(--cg-bg)]">
+          <div className="shrink-0 px-3 py-1 border-t border-[var(--cf-border)] text-xs text-[var(--cf-muted)] bg-[var(--cf-bg)]">
             {statusText}
           </div>
         )}

@@ -77,7 +77,7 @@ export function serializeMacros(macros: Record<string, string>): string {
 }
 
 /** Shared Decoration.mark that visually hides source markers via CSS while keeping them in the DOM. */
-export const decorationHidden = Decoration.mark({ class: "cg-hidden" });
+export const decorationHidden = Decoration.mark({ class: "cf-hidden" });
 
 /**
  * Build a DecorationSet from an array of decoration ranges.

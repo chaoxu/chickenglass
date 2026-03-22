@@ -59,9 +59,9 @@ function deriveOutputPath(sourcePath: string, format: ExportFormat): string {
  */
 function buildHtmlDocument(content: string, title: string): string {
   const bodyHtml = markdownToHtml(content);
-  const uiFont = resolveExportFontStack("--cg-ui-font", defaultUIFontStack);
-  const contentFont = resolveExportFontStack("--cg-content-font", defaultContentFontStack);
-  const codeFont = resolveExportFontStack("--cg-code-font", defaultCodeFontStack);
+  const uiFont = resolveExportFontStack("--cf-ui-font", defaultUIFontStack);
+  const contentFont = resolveExportFontStack("--cf-content-font", defaultContentFontStack);
+  const codeFont = resolveExportFontStack("--cf-code-font", defaultCodeFontStack);
 
   return `<!DOCTYPE html>
 <html lang="en">

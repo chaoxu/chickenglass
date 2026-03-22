@@ -80,8 +80,8 @@ function renderContentWithMath(
 function createHeader(text: string, extraClass?: string): HTMLElement {
   const header = document.createElement("div");
   header.className = extraClass
-    ? `cg-hover-preview-header ${extraClass}`
-    : "cg-hover-preview-header";
+    ? `cf-hover-preview-header ${extraClass}`
+    : "cf-hover-preview-header";
   header.textContent = text;
   return header;
 }
@@ -125,7 +125,7 @@ function buildCrossrefTooltip(
 ): HTMLElement {
   const macros = view.state.field(mathMacrosField);
   const container = document.createElement("div");
-  container.className = "cg-hover-preview";
+  container.className = "cf-hover-preview";
 
   if (resolved.kind === "block") {
     container.appendChild(createHeader(resolved.label));
@@ -136,7 +136,7 @@ function buildCrossrefTooltip(
       const content = extractBlockContent(view, block);
       if (content) {
         const body = document.createElement("div");
-        body.className = "cg-hover-preview-body";
+        body.className = "cf-hover-preview-body";
         renderContentWithMath(body, content, macros);
         container.appendChild(body);
       }
@@ -147,13 +147,13 @@ function buildCrossrefTooltip(
     const eqContent = findEquationSource(view, ref.id);
     if (eqContent) {
       const body = document.createElement("div");
-      body.className = "cg-hover-preview-body";
+      body.className = "cf-hover-preview-body";
       renderKatex(body, eqContent, true, macros);
       container.appendChild(body);
     }
   } else {
     container.appendChild(
-      createHeader(`Unresolved: ${ref.id}`, "cg-hover-preview-unresolved"),
+      createHeader(`Unresolved: ${ref.id}`, "cf-hover-preview-unresolved"),
     );
   }
 
@@ -168,21 +168,21 @@ function buildCitationTooltip(
   store: BibStore,
 ): HTMLElement {
   const container = document.createElement("div");
-  container.className = "cg-hover-preview";
+  container.className = "cf-hover-preview";
 
   for (const id of ids) {
     const entry = store.get(id);
     if (!entry) continue;
 
     const item = document.createElement("div");
-    item.className = "cg-hover-preview-citation";
+    item.className = "cf-hover-preview-citation";
     item.textContent = formatBibEntry(entry);
     container.appendChild(item);
   }
 
   if (container.children.length === 0) {
     container.appendChild(
-      createHeader(`Unknown citation: ${ids.join(", ")}`, "cg-hover-preview-unresolved"),
+      createHeader(`Unknown citation: ${ids.join(", ")}`, "cf-hover-preview-unresolved"),
     );
   }
 

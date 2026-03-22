@@ -1,8 +1,8 @@
 #!/bin/bash
 # Forge API wrapper for GitHub using gh CLI
 # Usage: forge-api.sh <METHOD> <PATH> [BODY]
-# Example: forge-api.sh GET "/repos/chaoxu/chickenglass/issues?state=open"
-# Example: forge-api.sh PATCH "/repos/chaoxu/chickenglass/issues/1" '{"state":"closed"}'
+# Example: forge-api.sh GET "/repos/chaoxu/coflat/issues?state=open"
+# Example: forge-api.sh PATCH "/repos/chaoxu/coflat/issues/1" '{"state":"closed"}'
 
 set -e
 

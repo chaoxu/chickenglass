@@ -120,7 +120,7 @@ export function ReadModeView({
     });
 
     const titleHtml = config.title
-      ? `<h1 class="cg-read-title">${renderInline(config.title, config.math)}</h1>`
+      ? `<h1 class="cf-read-title">${renderInline(config.title, config.math)}</h1>`
       : "";
 
     return titleHtml + bodyHtml;
@@ -226,7 +226,7 @@ export function ReadModeView({
   return (
     <div
       ref={containerRef}
-      className="cg-read-mode-view"
+      className="cf-read-mode-view"
       dangerouslySetInnerHTML={{ __html: htmlContent }}
     />
   );

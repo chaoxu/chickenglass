@@ -36,12 +36,12 @@ const HIDDEN_NODES = new Set([
 
 /** Heading mark decorations (font-weight, text styling on spans). */
 const headingMarkByLevel: Record<string, Decoration> = {
-  ATXHeading1: Decoration.mark({ class: "cg-heading-1" }),
-  ATXHeading2: Decoration.mark({ class: "cg-heading-2" }),
-  ATXHeading3: Decoration.mark({ class: "cg-heading-3" }),
-  ATXHeading4: Decoration.mark({ class: "cg-heading-4" }),
-  ATXHeading5: Decoration.mark({ class: "cg-heading-5" }),
-  ATXHeading6: Decoration.mark({ class: "cg-heading-6" }),
+  ATXHeading1: Decoration.mark({ class: "cf-heading-1" }),
+  ATXHeading2: Decoration.mark({ class: "cf-heading-2" }),
+  ATXHeading3: Decoration.mark({ class: "cf-heading-3" }),
+  ATXHeading4: Decoration.mark({ class: "cf-heading-4" }),
+  ATXHeading5: Decoration.mark({ class: "cf-heading-5" }),
+  ATXHeading6: Decoration.mark({ class: "cf-heading-6" }),
 };
 
 /**
@@ -50,31 +50,31 @@ const headingMarkByLevel: Record<string, Decoration> = {
  * rather than only text spans wrapped by Decoration.mark.
  */
 const headingLineByLevel: Record<string, Decoration> = {
-  ATXHeading1: Decoration.line({ class: "cg-heading-line-1" }),
-  ATXHeading2: Decoration.line({ class: "cg-heading-line-2" }),
-  ATXHeading3: Decoration.line({ class: "cg-heading-line-3" }),
-  ATXHeading4: Decoration.line({ class: "cg-heading-line-4" }),
-  ATXHeading5: Decoration.line({ class: "cg-heading-line-5" }),
-  ATXHeading6: Decoration.line({ class: "cg-heading-line-6" }),
+  ATXHeading1: Decoration.line({ class: "cf-heading-line-1" }),
+  ATXHeading2: Decoration.line({ class: "cf-heading-line-2" }),
+  ATXHeading3: Decoration.line({ class: "cf-heading-line-3" }),
+  ATXHeading4: Decoration.line({ class: "cf-heading-line-4" }),
+  ATXHeading5: Decoration.line({ class: "cf-heading-line-5" }),
+  ATXHeading6: Decoration.line({ class: "cf-heading-line-6" }),
 };
 
 /** Decoration to style horizontal rules. */
-const hrDecoration = Decoration.mark({ class: "cg-hr" });
+const hrDecoration = Decoration.mark({ class: "cf-hr" });
 
 /** Decoration to style highlighted text. Always applied (like headings). */
-const highlightDecoration = Decoration.mark({ class: "cg-highlight" });
+const highlightDecoration = Decoration.mark({ class: "cf-highlight" });
 
 /** Content style decorations — always applied for seamless WYSIWYG. */
-const boldDecoration = Decoration.mark({ class: "cg-bold" });
-const italicDecoration = Decoration.mark({ class: "cg-italic" });
-const strikethroughDecoration = Decoration.mark({ class: "cg-strikethrough" });
-const inlineCodeDecoration = Decoration.mark({ class: "cg-inline-code" });
+const boldDecoration = Decoration.mark({ class: "cf-bold" });
+const italicDecoration = Decoration.mark({ class: "cf-italic" });
+const strikethroughDecoration = Decoration.mark({ class: "cf-strikethrough" });
+const inlineCodeDecoration = Decoration.mark({ class: "cf-inline-code" });
 
 /** Decoration to style bullet list markers. */
-const bulletListDecoration = Decoration.mark({ class: "cg-list-bullet" });
+const bulletListDecoration = Decoration.mark({ class: "cf-list-bullet" });
 
 /** Decoration to style ordered list markers. */
-const numberListDecoration = Decoration.mark({ class: "cg-list-number" });
+const numberListDecoration = Decoration.mark({ class: "cf-list-number" });
 
 /** Map from element node names to their content style decorations. */
 const styleMap: Readonly<Record<string, Decoration>> = {
@@ -189,7 +189,7 @@ class MarkdownRenderPlugin implements PluginValue {
               const textTo = marks[1].from;
               if (textFrom < textTo) {
                 const linkDeco = Decoration.mark({
-                  class: "cg-link-rendered",
+                  class: "cf-link-rendered",
                   attributes: { "data-url": url },
                 });
                 widgets.push(linkDeco.range(textFrom, textTo));

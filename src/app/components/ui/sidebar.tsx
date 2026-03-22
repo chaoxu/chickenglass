@@ -165,14 +165,14 @@ const Sidebar = React.forwardRef<
       aria-hidden={!open}
       inert={open ? undefined : true}
       className={cn(
-        "flex min-w-0 shrink-0 flex-col overflow-hidden bg-[var(--cg-bg)]",
-        open ? "w-[var(--cg-sidebar-width)] border-r border-[var(--cg-border)]" : "w-0 border-r-0 pointer-events-none",
-        !isDragging && "transition-[width] duration-[var(--cg-transition,0.15s)] ease-in-out",
+        "flex min-w-0 shrink-0 flex-col overflow-hidden bg-[var(--cf-bg)]",
+        open ? "w-[var(--cf-sidebar-width)] border-r border-[var(--cf-border)]" : "w-0 border-r-0 pointer-events-none",
+        !isDragging && "transition-[width] duration-[var(--cf-transition,0.15s)] ease-in-out",
         className,
       )}
       style={{
         ...style,
-        "--cg-sidebar-width": `${width}px`,
+        "--cf-sidebar-width": `${width}px`,
       } as React.CSSProperties}
       {...props}
     />
@@ -187,7 +187,7 @@ const SidebarHeader = React.forwardRef<
     <div
       ref={ref}
       className={cn(
-        "flex shrink-0 items-center justify-between gap-3 border-b border-[var(--cg-border)] px-3 py-2",
+        "flex shrink-0 items-center justify-between gap-3 border-b border-[var(--cf-border)] px-3 py-2",
         className,
       )}
       {...props}
@@ -235,7 +235,7 @@ const SidebarTrigger = React.forwardRef<
       title={title ?? (open ? "Collapse sidebar" : "Expand sidebar")}
       aria-label={ariaLabel ?? (open ? "Collapse sidebar" : "Expand sidebar")}
       className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--cg-muted)] transition-colors duration-[var(--cg-transition,0.15s)] hover:bg-[var(--cg-hover)] hover:text-[var(--cg-fg)]",
+        "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--cf-muted)] transition-colors duration-[var(--cf-transition,0.15s)] hover:bg-[var(--cf-hover)] hover:text-[var(--cf-fg)]",
         className,
       )}
       onClick={(event) => {
@@ -257,7 +257,7 @@ function SidebarRail({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
   if (!open) {
     return (
       <div
-        className={cn("shrink-0 flex flex-col border-r border-[var(--cg-border)]", className)}
+        className={cn("shrink-0 flex flex-col border-r border-[var(--cf-border)]", className)}
         {...props}
       >
         <div className="px-1 py-2">
@@ -271,8 +271,8 @@ function SidebarRail({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
     <div
       className={cn(
         "shrink-0 w-1 cursor-col-resize relative -ml-[2px] z-10",
-        "hover:bg-[var(--cg-active)] active:bg-[var(--cg-active)]",
-        "transition-colors duration-[var(--cg-transition,0.15s)]",
+        "hover:bg-[var(--cf-active)] active:bg-[var(--cf-active)]",
+        "transition-colors duration-[var(--cf-transition,0.15s)]",
         className,
       )}
       onMouseDown={startResize}

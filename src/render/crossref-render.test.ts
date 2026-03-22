@@ -25,7 +25,7 @@ function makePlugin(
     numbered: true,
     title: overrides.name.charAt(0).toUpperCase() + overrides.name.slice(1),
     render: (attrs) => ({
-      className: `cg-block cg-block-${attrs.type}`,
+      className: `cf-block cf-block-${attrs.type}`,
       header: `${overrides.name} ${attrs.number ?? ""}`.trim(),
     }),
     ...overrides,
@@ -73,7 +73,7 @@ describe("CrossrefWidget", () => {
     );
     const el = widget.toDOM();
     expect(el.tagName).toBe("SPAN");
-    expect(el.className).toBe("cg-crossref");
+    expect(el.className).toBe("cf-crossref");
     expect(el.textContent).toBe("Theorem 1");
     expect(el.title).toBe("[@thm-main]");
   });
@@ -117,7 +117,7 @@ describe("UnresolvedRefWidget", () => {
     const widget = new UnresolvedRefWidget("[@unknown]");
     const el = widget.toDOM();
     expect(el.tagName).toBe("SPAN");
-    expect(el.className).toContain("cg-crossref-unresolved");
+    expect(el.className).toContain("cf-crossref-unresolved");
     expect(el.textContent).toBe("[@unknown]");
     expect(el.title).toBe("Unresolved reference");
   });

@@ -71,10 +71,10 @@ describe("codeBlockDecorationField", () => {
     const state = createTestState(TWO_BLOCKS, bodyPos, true);
     const specs = getDecoSpecs(state);
 
-    expect(hasLineClassAt(specs, state.doc.line(1).from, "cg-codeblock-header")).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(1).from, "cg-codeblock-source-open")).toBe(false);
-    expect(hasLineClassAt(specs, state.doc.line(2).from, "cg-codeblock-last")).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, "cg-include-fence")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, "cf-codeblock-header")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, "cf-codeblock-source-open")).toBe(false);
+    expect(hasLineClassAt(specs, state.doc.line(2).from, "cf-codeblock-last")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(3).from, "cf-include-fence")).toBe(true);
 
     const widgets = specs.filter((s) => s.widgetClass === "CodeBlockHeaderWidget");
     expect(widgets.length).toBe(2);
@@ -84,12 +84,12 @@ describe("codeBlockDecorationField", () => {
     const state = createTestState(TWO_BLOCKS, 0, true);
     const specs = getDecoSpecs(state);
 
-    expect(hasLineClassAt(specs, state.doc.line(1).from, "cg-codeblock-source-open")).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(1).from, "cg-codeblock-header")).toBe(false);
-    expect(hasLineClassAt(specs, state.doc.line(2).from, "cg-codeblock-body")).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(2).from, "cg-codeblock-last")).toBe(false);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, "cg-codeblock-source-close")).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, "cg-include-fence")).toBe(false);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, "cf-codeblock-source-open")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, "cf-codeblock-header")).toBe(false);
+    expect(hasLineClassAt(specs, state.doc.line(2).from, "cf-codeblock-body")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(2).from, "cf-codeblock-last")).toBe(false);
+    expect(hasLineClassAt(specs, state.doc.line(3).from, "cf-codeblock-source-close")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(3).from, "cf-include-fence")).toBe(false);
 
     const widgets = specs.filter((s) => s.widgetClass === "CodeBlockHeaderWidget");
     expect(widgets.length).toBe(1);
@@ -100,17 +100,17 @@ describe("codeBlockDecorationField", () => {
     const state = createTestState(TWO_BLOCKS, closeFencePos, true);
     const specs = getDecoSpecs(state);
 
-    expect(hasLineClassAt(specs, state.doc.line(1).from, "cg-codeblock-source-open")).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, "cg-codeblock-source-close")).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, "cg-include-fence")).toBe(false);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, "cf-codeblock-source-open")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(3).from, "cf-codeblock-source-close")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(3).from, "cf-include-fence")).toBe(false);
   });
 
   it("other code blocks stay rendered when one block fence is active", () => {
     const state = createTestState(TWO_BLOCKS, 0, true);
     const specs = getDecoSpecs(state);
 
-    expect(hasLineClassAt(specs, state.doc.line(5).from, "cg-codeblock-header")).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(5).from, "cg-codeblock-source-open")).toBe(false);
-    expect(hasLineClassAt(specs, state.doc.line(7).from, "cg-include-fence")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(5).from, "cf-codeblock-header")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(5).from, "cf-codeblock-source-open")).toBe(false);
+    expect(hasLineClassAt(specs, state.doc.line(7).from, "cf-include-fence")).toBe(true);
   });
 });

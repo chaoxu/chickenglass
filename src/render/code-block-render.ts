@@ -49,7 +49,7 @@ class CodeBlockHeaderWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const label = document.createElement("span");
-    label.className = "cg-codeblock-language";
+    label.className = "cf-codeblock-language";
     label.textContent = this.language;
     return label;
   }
@@ -97,7 +97,7 @@ class CopyButtonWidget extends RenderWidget {
 
   toDOM(): HTMLElement {
     const btn = document.createElement("button");
-    btn.className = "cg-codeblock-copy";
+    btn.className = "cf-codeblock-copy";
     btn.type = "button";
     btn.title = "Copy code to clipboard";
     btn.setAttribute("aria-label", "Copy code to clipboard");
@@ -187,19 +187,19 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
   }, items) => {
     if (cursorOnEitherFence) {
       items.push(
-        Decoration.line({ class: "cg-codeblock-source cg-codeblock-source-open" })
+        Decoration.line({ class: "cf-codeblock-source cf-codeblock-source-open" })
           .range(block.openFenceFrom),
       );
       if (block.closeFenceFrom !== block.openFenceFrom) {
         items.push(
-          Decoration.line({ class: "cg-codeblock-source cg-codeblock-source-close" })
+          Decoration.line({ class: "cf-codeblock-source cf-codeblock-source-close" })
             .range(block.closeFenceFrom),
         );
       }
     } else {
       items.push(
         Decoration.line({
-          class: "cg-codeblock-header",
+          class: "cf-codeblock-header",
         }).range(block.openFenceFrom),
       );
       const codeText = bodyLineCount > 0
@@ -228,14 +228,14 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
       const isLast = ln === closeLine.number - 1;
       items.push(
         Decoration.line({
-          class: !cursorOnEitherFence && isLast ? "cg-codeblock-last" : "cg-codeblock-body",
+          class: !cursorOnEitherFence && isLast ? "cf-codeblock-last" : "cf-codeblock-body",
         }).range(line.from),
       );
     }
 
     if (bodyLineCount === 0 && !cursorOnEitherFence) {
       items.push(
-        Decoration.line({ class: "cg-codeblock-last" }).range(block.openFenceFrom),
+        Decoration.line({ class: "cf-codeblock-last" }).range(block.openFenceFrom),
       );
     }
 
@@ -317,21 +317,21 @@ class CodeBlockHoverPlugin {
     }
 
     const headerEl = getLineElement(this.view, block.openFenceFrom);
-    if (!headerEl || !headerEl.classList.contains("cg-codeblock-header")) {
+    if (!headerEl || !headerEl.classList.contains("cf-codeblock-header")) {
       this.clearHoveredHeader();
       return;
     }
 
     if (this.hoveredHeaderEl && this.hoveredHeaderEl !== headerEl) {
-      this.hoveredHeaderEl.classList.remove("cg-codeblock-hovered");
+      this.hoveredHeaderEl.classList.remove("cf-codeblock-hovered");
     }
     this.hoveredHeaderEl = headerEl;
-    this.hoveredHeaderEl.classList.add("cg-codeblock-hovered");
+    this.hoveredHeaderEl.classList.add("cf-codeblock-hovered");
   }
 
   private clearHoveredHeader(): void {
     if (this.hoveredHeaderEl) {
-      this.hoveredHeaderEl.classList.remove("cg-codeblock-hovered");
+      this.hoveredHeaderEl.classList.remove("cf-codeblock-hovered");
       this.hoveredHeaderEl = null;
     }
     this.hoveredBlockOpenFence = null;

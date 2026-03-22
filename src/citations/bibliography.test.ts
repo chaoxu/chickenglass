@@ -147,13 +147,13 @@ describe("BibliographyWidget", () => {
     const el = widget.toDOM();
 
     expect(el.tagName).toBe("DIV");
-    expect(el.className).toBe("cg-bibliography");
+    expect(el.className).toBe("cf-bibliography");
 
     const heading = el.querySelector("h2");
     expect(heading).not.toBeNull();
     expect(heading?.textContent).toBe("References");
 
-    const items = el.querySelectorAll(".cg-bibliography-entry");
+    const items = el.querySelectorAll(".cf-bibliography-entry");
     expect(items).toHaveLength(2);
     expect(items[0].id).toBe("bib-karger2000");
     expect(items[1].id).toBe("bib-stein2001");

@@ -4,7 +4,7 @@
  *
  * - Sets `data-theme` on `<html>` so CSS custom properties pick it up.
  * - System mode follows `prefers-color-scheme` via matchMedia listener.
- * - Persists choice in localStorage under key "cg-theme".
+ * - Persists choice in localStorage under key "cf-theme".
  * - Applies writing theme CSS variable overrides on `document.documentElement`.
  * - Injects user custom CSS via a managed `<style>` element.
  * - Guards matchMedia and localStorage access for test environments.
@@ -50,7 +50,7 @@ function applyThemeVariables(
 }
 
 /** ID for the injected custom CSS style element. */
-const CUSTOM_CSS_STYLE_ID = "cg-custom-css";
+const CUSTOM_CSS_STYLE_ID = "cf-custom-css";
 
 /** Inject or update user custom CSS in a managed <style> tag. */
 function applyCustomCss(css: string): void {

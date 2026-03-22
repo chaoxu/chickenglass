@@ -287,7 +287,7 @@ describe("#126 — breadcrumbs", () => {
 // ─── Issue #127: B&W design overhaul ─────────────────────────────────────────
 
 describe("#127 — minimal B&W design", () => {
-  it("globals.css has --cg-* CSS variables", () => {
+  it("globals.css has --cf-* CSS variables", () => {
     expect(fileExists("src/globals.css")).toBe(true);
   });
 
@@ -693,20 +693,20 @@ describe("#273 — theme-driven typography", () => {
 describe("#277 — first-class theme surface tokens", () => {
   it("globals.css defines block and special-surface theme tokens", () => {
     const css = fileText("src/globals.css");
-    expect(css).toContain("--cg-block-header-accent");
-    expect(css).toContain("--cg-proof-marker");
-    expect(css).toContain("--cg-blockquote-border");
-    expect(css).toContain("--cg-table-border");
-    expect(css).toContain("--cg-embed-border");
+    expect(css).toContain("--cf-block-header-accent");
+    expect(css).toContain("--cf-proof-marker");
+    expect(css).toContain("--cf-blockquote-border");
+    expect(css).toContain("--cf-table-border");
+    expect(css).toContain("--cf-embed-border");
   });
 
   it("rich and read block styling consume the shared theme tokens", () => {
     const richCss = fileText("src/editor/block-theme.ts");
     const readCss = fileText("src/globals.css");
-    expect(richCss).toContain("var(--cg-block-header-accent)");
-    expect(richCss).toContain("var(--cg-proof-marker)");
-    expect(readCss).toContain("var(--cg-block-title-separator)");
-    expect(readCss).toContain("var(--cg-table-header-border)");
+    expect(richCss).toContain("var(--cf-block-header-accent)");
+    expect(richCss).toContain("var(--cf-proof-marker)");
+    expect(readCss).toContain("var(--cf-block-title-separator)");
+    expect(readCss).toContain("var(--cf-table-header-border)");
   });
 });
 

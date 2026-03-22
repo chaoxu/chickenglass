@@ -63,7 +63,7 @@ class BlockHeaderWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const el = document.createElement("span");
-    el.className = "cg-block-header-rendered";
+    el.className = "cf-block-header-rendered";
     renderInlineMarkdown(el, this.header, this.macros);
     return el;
   }
@@ -164,7 +164,7 @@ class EmbedWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const wrapper = document.createElement("div");
-    wrapper.className = `cg-embed cg-embed-${this.embedType}`;
+    wrapper.className = `cf-embed cf-embed-${this.embedType}`;
 
     const iframe = document.createElement("iframe");
     iframe.src = this.src;
@@ -175,9 +175,9 @@ class EmbedWidget extends RenderWidget {
 
     if (this.embedType === "youtube") {
       iframe.setAttribute("allowfullscreen", "");
-      iframe.className = "cg-embed-iframe cg-embed-youtube-iframe";
+      iframe.className = "cf-embed-iframe cf-embed-youtube-iframe";
     } else {
-      iframe.className = "cg-embed-iframe";
+      iframe.className = "cf-embed-iframe";
     }
 
     // Gist embeds: auto-resize iframe to match content height
@@ -230,11 +230,11 @@ function addIncludeDecorations(
   }
   // Collapse fence lines to zero height
   items.push(
-    Decoration.line({ class: "cg-include-fence" }).range(div.openFenceFrom),
+    Decoration.line({ class: "cf-include-fence" }).range(div.openFenceFrom),
   );
   if (div.closeFenceFrom >= 0) {
     items.push(
-      Decoration.line({ class: "cg-include-fence" }).range(div.closeFenceFrom),
+      Decoration.line({ class: "cf-include-fence" }).range(div.closeFenceFrom),
     );
   }
 }
@@ -291,7 +291,7 @@ function addQedDecoration(
     const lastContentLine = state.doc.line(closeLine.number - 1);
     if (lastContentLine.from > div.openFenceFrom) {
       items.push(
-        Decoration.line({ class: "cg-block-qed" }).range(lastContentLine.from),
+        Decoration.line({ class: "cf-block-qed" }).range(lastContentLine.from),
       );
     }
   }
@@ -336,7 +336,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       if (cursorInsideBlock) {
         items.push(
           Decoration.line({
-            class: `${plugin.render({ type: div.className }).className} cg-block-source`,
+            class: `${plugin.render({ type: div.className }).className} cf-block-source`,
           }).range(div.from),
         );
         return;
@@ -358,14 +358,14 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       // Inline math in the title still renders (Typora-style toggle)
       items.push(
         Decoration.line({
-          class: `${spec.className} cg-block-source`,
+          class: `${spec.className} cf-block-source`,
         }).range(div.from),
       );
     } else {
       // Rendered mode: header widget replaces fence syntax
       items.push(
         Decoration.line({
-          class: `${spec.className} cg-block-header`,
+          class: `${spec.className} cf-block-header`,
         }).range(div.from),
       );
       addHeaderWidgetDecoration(div, spec.header, macros, macrosKey, items);
@@ -377,7 +377,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       if (!div.singleLine && div.closeFenceFrom >= 0) {
         items.push(
           Decoration.line({
-            class: `${spec.className} cg-block-source`,
+            class: `${spec.className} cf-block-source`,
           }).range(div.closeFenceFrom),
         );
       }

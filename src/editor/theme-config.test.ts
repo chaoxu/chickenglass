@@ -9,13 +9,13 @@ describe("theme presets", () => {
   it("applyThemePreset sets UI, content, and code font variables", () => {
     applyThemePreset(themePresets.academic);
 
-    expect(document.documentElement.style.getPropertyValue("--cg-ui-font")).toBe(
+    expect(document.documentElement.style.getPropertyValue("--cf-ui-font")).toBe(
       themePresets.academic.uiFont,
     );
-    expect(document.documentElement.style.getPropertyValue("--cg-content-font")).toBe(
+    expect(document.documentElement.style.getPropertyValue("--cf-content-font")).toBe(
       themePresets.academic.contentFont,
     );
-    expect(document.documentElement.style.getPropertyValue("--cg-code-font")).toBe(
+    expect(document.documentElement.style.getPropertyValue("--cf-code-font")).toBe(
       themePresets.academic.codeFont,
     );
   });
@@ -24,8 +24,8 @@ describe("theme presets", () => {
     applyThemePreset(themePresets.modern);
     clearThemePreset();
 
-    expect(document.documentElement.style.getPropertyValue("--cg-ui-font")).toBe("");
-    expect(document.documentElement.style.getPropertyValue("--cg-content-font")).toBe("");
-    expect(document.documentElement.style.getPropertyValue("--cg-code-font")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--cf-ui-font")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--cf-content-font")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--cf-code-font")).toBe("");
   });
 });

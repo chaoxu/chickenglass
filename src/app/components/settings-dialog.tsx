@@ -64,10 +64,10 @@ interface RowProps {
 
 function Row({ label, htmlFor, children }: RowProps) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-[var(--cg-border)] last:border-b-0">
+    <div className="flex items-center justify-between py-2 border-b border-[var(--cf-border)] last:border-b-0">
       <label
         htmlFor={htmlFor}
-        className="text-sm text-[var(--cg-fg)] cursor-pointer select-none"
+        className="text-sm text-[var(--cf-fg)] cursor-pointer select-none"
       >
         {label}
       </label>
@@ -207,10 +207,10 @@ function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: Appeara
               type="button"
               onClick={() => { onSetTheme(t.value); }}
               className={cn(
-                "px-3 py-1 text-sm rounded border transition-colors duration-[var(--cg-transition,0.15s)]",
+                "px-3 py-1 text-sm rounded border transition-colors duration-[var(--cf-transition,0.15s)]",
                 theme === t.value
-                  ? "bg-[var(--cg-accent)] text-[var(--cg-accent-fg)] border-[var(--cg-accent)]"
-                  : "border-[var(--cg-border)] text-[var(--cg-fg)] hover:bg-[var(--cg-hover)]",
+                  ? "bg-[var(--cf-accent)] text-[var(--cf-accent-fg)] border-[var(--cf-accent)]"
+                  : "border-[var(--cf-border)] text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]",
               )}
             >
               {t.label}
@@ -220,9 +220,9 @@ function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: Appeara
       </Row>
 
       {/* Writing preset (typography: fonts, heading sizes) */}
-      <div className="py-3 border-b border-[var(--cg-border)]">
-        <label className="text-sm text-[var(--cg-fg)] block mb-2">Writing preset</label>
-        <p className="text-xs text-[var(--cg-muted)] mb-2">
+      <div className="py-3 border-b border-[var(--cf-border)]">
+        <label className="text-sm text-[var(--cf-fg)] block mb-2">Writing preset</label>
+        <p className="text-xs text-[var(--cf-muted)] mb-2">
           UI, prose, and code fonts plus heading sizes and line spacing.
         </p>
         <div className="grid grid-cols-3 gap-2">
@@ -234,10 +234,10 @@ function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: Appeara
                 type="button"
                 onClick={() => { onUpdateSetting("writingTheme", key); }}
                 className={cn(
-                  "px-3 py-2 text-sm rounded border text-left transition-colors duration-[var(--cg-transition,0.15s)]",
+                  "px-3 py-2 text-sm rounded border text-left transition-colors duration-[var(--cf-transition,0.15s)]",
                   settings.writingTheme === key
-                    ? "bg-[var(--cg-accent)] text-[var(--cg-accent-fg)] border-[var(--cg-accent)]"
-                    : "border-[var(--cg-border)] text-[var(--cg-fg)] hover:bg-[var(--cg-hover)]",
+                    ? "bg-[var(--cf-accent)] text-[var(--cf-accent-fg)] border-[var(--cf-accent)]"
+                    : "border-[var(--cf-border)] text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]",
                 )}
               >
                 <span className="font-medium">{preset.name}</span>
@@ -248,8 +248,8 @@ function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: Appeara
       </div>
 
       {/* Writing theme selection */}
-      <div className="py-3 border-b border-[var(--cg-border)]">
-        <label className="text-sm text-[var(--cg-fg)] block mb-2">Color theme</label>
+      <div className="py-3 border-b border-[var(--cf-border)]">
+        <label className="text-sm text-[var(--cf-fg)] block mb-2">Color theme</label>
         <div className="grid grid-cols-2 gap-2">
           {builtinThemes.map((t) => (
             <button
@@ -257,10 +257,10 @@ function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: Appeara
               type="button"
               onClick={() => { onUpdateSetting("themeName", t.id); }}
               className={cn(
-                "px-3 py-2 text-sm rounded border text-left transition-colors duration-[var(--cg-transition,0.15s)]",
+                "px-3 py-2 text-sm rounded border text-left transition-colors duration-[var(--cf-transition,0.15s)]",
                 settings.themeName === t.id
-                  ? "bg-[var(--cg-accent)] text-[var(--cg-accent-fg)] border-[var(--cg-accent)]"
-                  : "border-[var(--cg-border)] text-[var(--cg-fg)] hover:bg-[var(--cg-hover)]",
+                  ? "bg-[var(--cf-accent)] text-[var(--cf-accent-fg)] border-[var(--cf-accent)]"
+                  : "border-[var(--cf-border)] text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]",
               )}
             >
               <span className="font-medium">{t.name}</span>
@@ -274,10 +274,10 @@ function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: Appeara
 
       {/* Custom CSS */}
       <div className="py-3">
-        <label htmlFor="sd-custom-css" className="text-sm text-[var(--cg-fg)] block mb-1">
+        <label htmlFor="sd-custom-css" className="text-sm text-[var(--cf-fg)] block mb-1">
           Custom CSS
         </label>
-        <p className="text-xs text-[var(--cg-muted)] mb-2">
+        <p className="text-xs text-[var(--cf-muted)] mb-2">
           Add your own CSS overrides. Changes apply immediately.
         </p>
         <Textarea
@@ -332,7 +332,7 @@ function PluginsTab({ settings, onUpdateSetting, plugins }: PluginsTabProps) {
   if (plugins.length === 0) {
     return (
       <section>
-        <p className="text-sm text-[var(--cg-muted)]">No plugins registered.</p>
+        <p className="text-sm text-[var(--cf-muted)]">No plugins registered.</p>
       </section>
     );
   }
@@ -344,12 +344,12 @@ function PluginsTab({ settings, onUpdateSetting, plugins }: PluginsTabProps) {
         return (
           <div
             key={plugin.id}
-            className="flex items-center justify-between py-2 border-b border-[var(--cg-border)] last:border-b-0"
+            className="flex items-center justify-between py-2 border-b border-[var(--cf-border)] last:border-b-0"
           >
             <div className="flex flex-col">
-              <span className="text-sm font-medium text-[var(--cg-fg)]">{plugin.name}</span>
+              <span className="text-sm font-medium text-[var(--cf-fg)]">{plugin.name}</span>
               {plugin.description && (
-                <span className="text-xs text-[var(--cg-muted)]">{plugin.description}</span>
+                <span className="text-xs text-[var(--cf-muted)]">{plugin.description}</span>
               )}
             </div>
             <Checkbox
@@ -392,7 +392,7 @@ export function SettingsDialog({
         <DialogTitle className="sr-only">Settings</DialogTitle>
 
         <DialogHeader>
-          <h2 className="text-base font-semibold text-[var(--cg-fg)]">Settings</h2>
+          <h2 className="text-base font-semibold text-[var(--cf-fg)]">Settings</h2>
           <DialogCloseButton aria-label="Close settings" />
         </DialogHeader>
 
@@ -402,14 +402,14 @@ export function SettingsDialog({
           orientation="vertical"
           className="flex flex-1 overflow-hidden"
         >
-          <TabsList className="flex w-36 shrink-0 flex-col items-stretch border-r border-[var(--cg-border)] bg-[var(--cg-bg)] py-2">
+          <TabsList className="flex w-36 shrink-0 flex-col items-stretch border-r border-[var(--cf-border)] bg-[var(--cf-bg)] py-2">
             {TABS.map((tab) => (
               <TabsTrigger
                 key={tab}
                 value={tab}
                 className={cn(
                   "justify-start rounded-none border-b-0 px-4 py-2 text-left text-sm normal-case tracking-normal",
-                  "data-[state=active]:border-b-0 data-[state=active]:bg-[var(--cg-bg)]",
+                  "data-[state=active]:border-b-0 data-[state=active]:bg-[var(--cf-bg)]",
                   "data-[state=active]:font-medium",
                 )}
               >

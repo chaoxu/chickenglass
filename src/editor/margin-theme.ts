@@ -6,24 +6,24 @@ import { monoFont } from "./editor-constants";
  */
 export const marginThemeStyles = {
   /* Math preview floating panel */
-  ".cg-math-preview": {
+  ".cf-math-preview": {
     position: "fixed",
     zIndex: "1000",
-    backgroundColor: "var(--cg-bg)",
-    border: "1px solid var(--cg-border)",
+    backgroundColor: "var(--cf-bg)",
+    border: "1px solid var(--cf-border)",
     borderRadius: "2px",
     width: "fit-content",
     cursor: "grab",
   },
-  ".cg-math-preview-content": {
+  ".cf-math-preview-content": {
     padding: "12px 16px",
     lineHeight: "1.6",
   },
 
   /* Sidenote reference: superscript number */
-  ".cg-sidenote-ref": {
+  ".cf-sidenote-ref": {
     fontSize: "0.75em",
-    color: "var(--cg-fg)",
+    color: "var(--cf-fg)",
     cursor: "pointer",
     verticalAlign: "super",
     lineHeight: "0",
@@ -31,21 +31,21 @@ export const marginThemeStyles = {
   },
 
   /* Sidenote definition rendered in the right margin */
-  ".cg-sidenote": {
+  ".cf-sidenote": {
     position: "absolute",
     right: "-280px",
     width: "240px",
     fontSize: "0.8em",
     lineHeight: "1.4",
-    color: "var(--cg-fg)",
+    color: "var(--cf-fg)",
     fontFamily: monoFont,
     transition: "transform 0.15s ease-out",
   },
 
   /* Sidenote number label */
-  ".cg-sidenote-number": {
+  ".cf-sidenote-number": {
     fontSize: "0.75em",
-    color: "var(--cg-fg)",
+    color: "var(--cf-fg)",
     fontWeight: "600",
     verticalAlign: "super",
     lineHeight: "0",
@@ -53,12 +53,12 @@ export const marginThemeStyles = {
   },
 
   /* Sidenote content */
-  ".cg-sidenote-content": {
+  ".cf-sidenote-content": {
     display: "inline",
   },
 
   /* The definition line when sidenote is shown in margin */
-  ".cg-sidenote-def-line": {
+  ".cf-sidenote-def-line": {
     position: "relative",
     height: "0",
     lineHeight: "0",
@@ -68,7 +68,7 @@ export const marginThemeStyles = {
   },
 
   /* Hover preview tooltip for cross-references and citations */
-  ".cg-hover-preview": {
+  ".cf-hover-preview": {
     maxWidth: "400px",
     maxHeight: "300px",
     overflow: "auto",
@@ -77,24 +77,24 @@ export const marginThemeStyles = {
     lineHeight: "1.5",
     fontFamily: monoFont,
   },
-  ".cg-hover-preview-header": {
+  ".cf-hover-preview-header": {
     fontWeight: "700",
     marginBottom: "4px",
-    color: "var(--cg-fg)",
+    color: "var(--cf-fg)",
   },
-  ".cg-hover-preview-body": {
-    color: "var(--cg-muted)",
+  ".cf-hover-preview-body": {
+    color: "var(--cf-muted)",
     whiteSpace: "pre-wrap",
   },
-  ".cg-hover-preview-unresolved": {
-    color: "var(--cg-muted)",
+  ".cf-hover-preview-unresolved": {
+    color: "var(--cf-muted)",
     fontStyle: "italic",
   },
-  ".cg-hover-preview-citation": {
-    color: "var(--cg-muted)",
+  ".cf-hover-preview-citation": {
+    color: "var(--cf-muted)",
     marginBottom: "4px",
   },
-  ".cg-hover-preview-citation:last-child": {
+  ".cf-hover-preview-citation:last-child": {
     marginBottom: "0",
   },
 };

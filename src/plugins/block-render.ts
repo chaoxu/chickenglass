@@ -32,17 +32,17 @@ export function formatBlockHeader(
  * Create a standard render function for a block plugin.
  *
  * Returns a function that produces a BlockDecorationSpec with:
- * - className: custom or default "cg-block cg-block-{type}"
+ * - className: custom or default "cf-block cf-block-{type}"
  * - header: formatted header string
  *
  * @param displayTitle - The title shown in the rendered header.
  * @param className - Optional custom className. If omitted, uses
- *   "cg-block cg-block-{type}" based on the block's type attribute.
+ *   "cf-block cf-block-{type}" based on the block's type attribute.
  */
 export function createBlockRender(displayTitle: string, className?: string) {
   return function render(attrs: BlockAttrs): BlockDecorationSpec {
     return {
-      className: className ?? `cg-block cg-block-${attrs.type}`,
+      className: className ?? `cf-block cf-block-${attrs.type}`,
       header: formatBlockHeader(displayTitle, attrs),
     };
   };

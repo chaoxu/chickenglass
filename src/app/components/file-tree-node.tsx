@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 const ICON_SIZE = 14;
-const ICON_CLASS = "shrink-0 text-[var(--cg-muted)]";
+const ICON_CLASS = "shrink-0 text-[var(--cf-muted)]";
 
 type CreateKind = "file" | "folder";
 
@@ -105,7 +105,7 @@ function InlineCreateInput({
 
   return (
     <div
-      className="flex items-center gap-1 px-2 py-[2px] text-sm text-[var(--cg-fg)] whitespace-nowrap"
+      className="flex items-center gap-1 px-2 py-[2px] text-sm text-[var(--cf-fg)] whitespace-nowrap"
       style={{ paddingLeft: `${indent}px` }}
     >
       {kind === "folder"
@@ -115,7 +115,7 @@ function InlineCreateInput({
         ref={inputRef}
         type="text"
         placeholder={kind === "folder" ? "Folder name" : "File name"}
-        className="flex-1 text-sm cg-ui-font bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
+        className="flex-1 text-sm cf-ui-font bg-[var(--cf-bg)] border border-[var(--cf-border)] rounded px-1 outline-none min-w-0"
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={handleKey}
@@ -264,8 +264,8 @@ export function FileTreeNode({
             <div
               {...rowProps}
               className={[
-                "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
-                isActive || isFocused ? "bg-[var(--cg-active)]" : "hover:bg-[var(--cg-hover)]",
+                "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cf-fg)] select-none whitespace-nowrap",
+                isActive || isFocused ? "bg-[var(--cf-active)]" : "hover:bg-[var(--cf-hover)]",
               ].join(" ")}
               style={{ paddingLeft: `${indent}px` }}
               onClick={handleFolderClick}
@@ -280,7 +280,7 @@ export function FileTreeNode({
                 <input
                   ref={renameInputRef}
                   type="text"
-                  className="flex-1 text-sm cg-ui-font bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
+                  className="flex-1 text-sm cf-ui-font bg-[var(--cf-bg)] border border-[var(--cf-border)] rounded px-1 outline-none min-w-0"
                   value={renameValue}
                   autoFocus
                   onChange={(event) => setRenameValue(event.target.value)}
@@ -289,7 +289,7 @@ export function FileTreeNode({
                   onClick={(event) => event.stopPropagation()}
                 />
               ) : (
-                <span className="cg-ui-font truncate">{entry.name}</span>
+                <span className="cf-ui-font truncate">{entry.name}</span>
               )}
             </div>
           </ContextMenuTrigger>
@@ -355,8 +355,8 @@ export function FileTreeNode({
           <div
             {...rowProps}
             className={[
-              "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
-              isActive || isFocused ? "bg-[var(--cg-active)]" : "hover:bg-[var(--cg-hover)]",
+              "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cf-fg)] select-none whitespace-nowrap",
+              isActive || isFocused ? "bg-[var(--cf-active)]" : "hover:bg-[var(--cf-hover)]",
             ].join(" ")}
             style={{ paddingLeft: `${indent}px` }}
             onClick={handleFileClick}
@@ -372,7 +372,7 @@ export function FileTreeNode({
               <input
                 ref={renameInputRef}
                 type="text"
-                className="flex-1 text-sm cg-ui-font bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
+                className="flex-1 text-sm cf-ui-font bg-[var(--cf-bg)] border border-[var(--cf-border)] rounded px-1 outline-none min-w-0"
                 value={renameValue}
                 autoFocus
                 onChange={(event) => setRenameValue(event.target.value)}
@@ -381,7 +381,7 @@ export function FileTreeNode({
                 onClick={(event) => event.stopPropagation()}
               />
             ) : (
-              <span className="cg-ui-font truncate">{entry.name}</span>
+              <span className="cf-ui-font truncate">{entry.name}</span>
             )}
           </div>
         </ContextMenuTrigger>

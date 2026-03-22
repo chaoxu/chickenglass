@@ -10,7 +10,7 @@ import {
  * Each preset declares UI/content/code fonts, heading sizes/weights/styles,
  * line-height, and content width. These values are applied as CSS custom
  * properties on `document.documentElement` so app chrome, CM6, Read mode,
- * and export helpers can all reference them via `var(--cg-*)`.
+ * and export helpers can all reference them via `var(--cf-*)`.
  */
 
 export interface HeadingStyle {
@@ -106,15 +106,15 @@ export const themePresetKeys: string[] = Object.keys(themePresets);
 
 /** All CSS custom property names set by applyThemePreset. */
 const PRESET_PROPERTIES = [
-  "--cg-ui-font",
-  "--cg-content-font",
-  "--cg-code-font",
-  "--cg-base-font-size",
-  "--cg-line-height",
-  "--cg-content-max-width",
+  "--cf-ui-font",
+  "--cf-content-font",
+  "--cf-code-font",
+  "--cf-base-font-size",
+  "--cf-line-height",
+  "--cf-content-max-width",
   ...Array.from({ length: 6 }, (_, i) => {
     const n = i + 1;
-    return [`--cg-h${n}-size`, `--cg-h${n}-weight`, `--cg-h${n}-style`];
+    return [`--cf-h${n}-size`, `--cf-h${n}-weight`, `--cf-h${n}-style`];
   }).flat(),
 ];
 
@@ -124,19 +124,19 @@ const PRESET_PROPERTIES = [
  */
 export function applyThemePreset(preset: ThemePreset): void {
   const root = document.documentElement;
-  root.style.setProperty("--cg-ui-font", preset.uiFont);
-  root.style.setProperty("--cg-content-font", preset.contentFont);
-  root.style.setProperty("--cg-code-font", preset.codeFont);
-  root.style.setProperty("--cg-base-font-size", preset.baseFontSize);
-  root.style.setProperty("--cg-line-height", preset.lineHeight);
-  root.style.setProperty("--cg-content-max-width", preset.contentMaxWidth);
+  root.style.setProperty("--cf-ui-font", preset.uiFont);
+  root.style.setProperty("--cf-content-font", preset.contentFont);
+  root.style.setProperty("--cf-code-font", preset.codeFont);
+  root.style.setProperty("--cf-base-font-size", preset.baseFontSize);
+  root.style.setProperty("--cf-line-height", preset.lineHeight);
+  root.style.setProperty("--cf-content-max-width", preset.contentMaxWidth);
 
   const levels = [preset.h1, preset.h2, preset.h3, preset.h4, preset.h5, preset.h6];
   for (let i = 0; i < levels.length; i++) {
     const n = i + 1;
-    root.style.setProperty(`--cg-h${n}-size`, levels[i].size);
-    root.style.setProperty(`--cg-h${n}-weight`, levels[i].weight);
-    root.style.setProperty(`--cg-h${n}-style`, levels[i].style);
+    root.style.setProperty(`--cf-h${n}-size`, levels[i].size);
+    root.style.setProperty(`--cf-h${n}-weight`, levels[i].weight);
+    root.style.setProperty(`--cf-h${n}-style`, levels[i].style);
   }
 }
 

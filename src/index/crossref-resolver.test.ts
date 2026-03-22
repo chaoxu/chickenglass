@@ -22,7 +22,7 @@ function makePlugin(
     numbered: true,
     title: overrides.name.charAt(0).toUpperCase() + overrides.name.slice(1),
     render: (attrs) => ({
-      className: `cg-block cg-block-${attrs.type}`,
+      className: `cf-block cf-block-${attrs.type}`,
       header: `${overrides.name} ${attrs.number ?? ""}`.trim(),
     }),
     ...overrides,

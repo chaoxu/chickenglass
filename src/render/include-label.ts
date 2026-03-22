@@ -37,7 +37,7 @@ class IncludeLabelWidget extends RenderWidget {
   }
   createDOM(): HTMLElement {
     const span = document.createElement("span");
-    span.className = this.active ? "cg-include-label cg-include-label-active" : "cg-include-label";
+    span.className = this.active ? "cf-include-label cf-include-label-active" : "cf-include-label";
     span.textContent = this.filename;
     return span;
   }
@@ -61,7 +61,7 @@ class IncludeLabelPlugin implements PluginValue {
     const items: Range<Decoration>[] = [];
     const cursor = view.state.selection.main.head;
     const doc = view.state.doc;
-    const lineDeco = Decoration.line({ class: "cg-include-region" });
+    const lineDeco = Decoration.line({ class: "cf-include-region" });
 
     for (const region of sourceMap.regions) {
       const from = Math.min(region.from, doc.length);

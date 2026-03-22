@@ -234,8 +234,8 @@ export function SplitPane({
         onMouseDown={handleDividerMouseDown}
         onKeyDown={handleDividerKeyDown}
         className={cn(
-          "split-pane-divider shrink-0 bg-[var(--cg-border)] z-10 transition-colors duration-[var(--cg-transition,0.15s)]",
-          "hover:bg-[var(--cg-active)] focus-visible:bg-[var(--cg-active)] focus-visible:outline-none",
+          "split-pane-divider shrink-0 bg-[var(--cf-border)] z-10 transition-colors duration-[var(--cf-transition,0.15s)]",
+          "hover:bg-[var(--cf-active)] focus-visible:bg-[var(--cf-active)] focus-visible:outline-none",
           isVertical
             ? "w-1 h-full cursor-col-resize"
             : "h-1 w-full cursor-row-resize",

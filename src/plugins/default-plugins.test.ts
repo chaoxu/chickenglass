@@ -79,7 +79,7 @@ describe("createBlockRender", () => {
   it("returns a render function that produces correct spec", () => {
     const render = createBlockRender("Definition");
     const spec = render({ type: "definition", number: 2 });
-    expect(spec.className).toBe("cg-block cg-block-definition");
+    expect(spec.className).toBe("cf-block cf-block-definition");
     expect(spec.header).toBe("Definition 2");
   });
 });
@@ -149,7 +149,7 @@ describe("proofPlugin", () => {
       title: "of Theorem 1",
     });
     expect(spec.header).toBe("Proof (of Theorem 1)");
-    expect(spec.className).toBe("cg-block cg-block-proof");
+    expect(spec.className).toBe("cf-block cf-block-proof");
   });
 
   it("renders without title", () => {
@@ -171,7 +171,7 @@ describe("definitionPlugin", () => {
       title: "Continuity",
     });
     expect(spec.header).toBe("Definition 1 (Continuity)");
-    expect(spec.className).toBe("cg-block cg-block-definition");
+    expect(spec.className).toBe("cf-block cf-block-definition");
   });
 });
 
@@ -221,7 +221,7 @@ describe("algorithmPlugin", () => {
       title: "Dijkstra",
     });
     expect(spec.header).toBe("Algorithm 2 (Dijkstra)");
-    expect(spec.className).toBe("cg-block cg-block-algorithm");
+    expect(spec.className).toBe("cf-block cf-block-algorithm");
   });
 });
 
@@ -456,7 +456,7 @@ describe("rendering", () => {
       number: 1,
       title: "Fermat's Last",
     });
-    expect(spec.className).toBe("cg-block cg-block-theorem");
+    expect(spec.className).toBe("cf-block cf-block-theorem");
     expect(spec.header).toBe("Theorem 1 (Fermat's Last)");
   });
 
@@ -487,7 +487,7 @@ describe("rendering", () => {
   it("proof renders without number", () => {
     const spec = proofPlugin.render({ type: "proof" });
     expect(spec.header).toBe("Proof");
-    expect(spec.className).toBe("cg-block cg-block-proof");
+    expect(spec.className).toBe("cf-block cf-block-proof");
   });
 
   it("definition renders with number", () => {
@@ -519,7 +519,7 @@ describe("rendering", () => {
         type: plugin.name,
         number: plugin.numbered ? 1 : undefined,
       });
-      expect(spec.className).toBe(`cg-block cg-block-${plugin.name}`);
+      expect(spec.className).toBe(`cf-block cf-block-${plugin.name}`);
     }
   });
 });

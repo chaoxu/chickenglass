@@ -5,13 +5,13 @@
  */
 export const baseThemeStyles = {
   "&": {
-    fontSize: "var(--cg-base-font-size, 16px)",
-    fontFamily: "var(--cg-content-font, KaTeX_Main, 'Times New Roman', serif)",
+    fontSize: "var(--cf-base-font-size, 16px)",
+    fontFamily: "var(--cf-content-font, KaTeX_Main, 'Times New Roman', serif)",
   },
   ".cm-content": {
-    fontFamily: "var(--cg-content-font, KaTeX_Main, 'Times New Roman', serif)",
+    fontFamily: "var(--cf-content-font, KaTeX_Main, 'Times New Roman', serif)",
     padding: "24px 48px 24px 48px",
-    maxWidth: "var(--cg-content-max-width, 800px)",
+    maxWidth: "var(--cf-content-max-width, 800px)",
     marginLeft: "auto",
     marginRight: "max(224px, calc((100% - 800px) / 2))",
     overflow: "visible",
@@ -20,14 +20,14 @@ export const baseThemeStyles = {
     display: "none",
   },
   /* Fold toggle sits in the left margin outside the line */
-  ".cg-fold-line": {
+  ".cf-fold-line": {
     position: "relative",
   },
-  ".cg-fold-toggle": {
+  ".cf-fold-toggle": {
     position: "absolute",
     right: "100%",
     marginRight: "4px",
-    color: "var(--cg-border)",
+    color: "var(--cf-border)",
     fontSize: "14px",
     cursor: "pointer",
     userSelect: "none",
@@ -36,33 +36,33 @@ export const baseThemeStyles = {
     transition: "opacity 0.15s",
   },
   /* Show fold toggle when hovering the heading line */
-  ".cm-line:hover .cg-fold-toggle": {
+  ".cm-line:hover .cf-fold-toggle": {
     opacity: "1",
   },
   /* Always show fold toggle when section is folded */
-  ".cg-fold-toggle-folded": {
+  ".cf-fold-toggle-folded": {
     opacity: "1",
   },
-  ".cg-fold-toggle:hover": {
-    color: "var(--cg-fg)",
+  ".cf-fold-toggle:hover": {
+    color: "var(--cf-fg)",
   },
   /* Fold toggle sizes per heading level */
-  ".cg-fold-h1": { fontSize: "24px" },
-  ".cg-fold-h2": { fontSize: "20px" },
-  ".cg-fold-h3": { fontSize: "16px" },
+  ".cf-fold-h1": { fontSize: "24px" },
+  ".cf-fold-h2": { fontSize: "20px" },
+  ".cf-fold-h3": { fontSize: "16px" },
   ".cm-cursor": {
-    borderLeftColor: "var(--cg-fg)",
+    borderLeftColor: "var(--cf-fg)",
     borderLeftWidth: "2px",
   },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-    backgroundColor: "var(--cg-hover)",
+    backgroundColor: "var(--cf-hover)",
   },
   ".cm-activeLine": {
     backgroundColor: "transparent",
   },
 
   /* Focus mode: dim non-active paragraphs */
-  ".cg-focus-dimmed": {
+  ".cf-focus-dimmed": {
     opacity: "0.3",
     transition: "opacity 0.15s",
   },

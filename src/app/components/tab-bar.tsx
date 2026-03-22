@@ -116,7 +116,7 @@ export function TabBar({ tabs, activeTab, onSelect, onClose, onReorder, onPin }:
       <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
         <div
           data-tabbar
-          className="flex flex-row items-stretch border-b border-[var(--cg-border)] bg-[var(--cg-bg-secondary)] relative overflow-x-auto overflow-y-hidden select-none overscroll-x-contain"
+          className="flex flex-row items-stretch border-b border-[var(--cf-border)] bg-[var(--cf-bg-secondary)] relative overflow-x-auto overflow-y-hidden select-none overscroll-x-contain"
         >
           {tabs.map((tab) => (
             <SortableTab
@@ -170,17 +170,17 @@ function SortableTab({ tab, isActive, isDragActive, onSelect, onClose, onPin }: 
       onClick={() => { onSelect(tab.path); }}
       onDoubleClick={() => { onPin?.(tab.path); }}
       className={cn(
-        "group relative flex items-center gap-1 px-3 h-8 text-sm cursor-pointer border-r border-[var(--cg-border)] shrink-0 whitespace-nowrap",
-        "transition-[background-color,color] duration-[var(--cg-transition,0.15s)]",
+        "group relative flex items-center gap-1 px-3 h-8 text-sm cursor-pointer border-r border-[var(--cf-border)] shrink-0 whitespace-nowrap",
+        "transition-[background-color,color] duration-[var(--cf-transition,0.15s)]",
         isActive
-          ? "bg-[var(--cg-bg)] text-[var(--cg-fg)]"
-          : "bg-[var(--cg-bg-secondary)] text-[var(--cg-muted)] hover:bg-[var(--cg-hover)]",
+          ? "bg-[var(--cf-bg)] text-[var(--cf-fg)]"
+          : "bg-[var(--cf-bg-secondary)] text-[var(--cf-muted)] hover:bg-[var(--cf-hover)]",
         (isDragging || isDragActive) && "opacity-40",
       )}
     >
       {/* Dirty dot before name */}
       {tab.dirty && (
-        <span className="text-[var(--cg-muted)] leading-none">&bull;</span>
+        <span className="text-[var(--cf-muted)] leading-none">&bull;</span>
       )}
 
       {/* File name — italic when preview tab */}
@@ -194,7 +194,7 @@ function SortableTab({ tab, isActive, isDragActive, onSelect, onClose, onPin }: 
           e.stopPropagation();
           onClose(tab.path);
         }}
-        className="ml-1 flex items-center justify-center w-4 h-4 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-[var(--cg-transition,0.15s)] hover:bg-[var(--cg-hover)] text-[var(--cg-muted)] leading-none shrink-0"
+        className="ml-1 flex items-center justify-center w-4 h-4 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-[var(--cf-transition,0.15s)] hover:bg-[var(--cf-hover)] text-[var(--cf-muted)] leading-none shrink-0"
         aria-label={`Close ${tab.name}`}
       >
         &times;

@@ -30,7 +30,7 @@ export function Outline({ headings, onSelect }: OutlineProps) {
 
   if (headings.length === 0) {
     return (
-      <div className="px-3 py-2 text-xs text-[var(--cg-muted)] italic">
+      <div className="px-3 py-2 text-xs text-[var(--cf-muted)] italic">
         No headings
       </div>
     );
@@ -67,12 +67,12 @@ export function Outline({ headings, onSelect }: OutlineProps) {
         return (
           <div
             key={i}
-            className="flex items-baseline w-full hover:bg-[var(--cg-hover)] transition-colors duration-[var(--cg-transition,0.15s)]"
+            className="flex items-baseline w-full hover:bg-[var(--cf-hover)] transition-colors duration-[var(--cf-transition,0.15s)]"
             style={{ paddingLeft: `${indent}px`, paddingRight: "8px" }}
           >
             {/* Collapse toggle */}
             <button
-              className="shrink-0 w-4 text-[10px] text-[var(--cg-muted)] font-mono leading-none cursor-pointer select-none"
+              className="shrink-0 w-4 text-[10px] text-[var(--cf-muted)] font-mono leading-none cursor-pointer select-none"
               onClick={(e) => {
                 e.stopPropagation();
                 if (canCollapse) toggleCollapse(i);
@@ -84,15 +84,15 @@ export function Outline({ headings, onSelect }: OutlineProps) {
             </button>
             {/* Heading text — click to navigate */}
             <button
-              className="flex-1 text-left flex items-baseline gap-1 py-[2px] text-sm text-[var(--cg-fg)] cursor-pointer truncate min-w-0"
+              className="flex-1 text-left flex items-baseline gap-1 py-[2px] text-sm text-[var(--cf-fg)] cursor-pointer truncate min-w-0"
               onClick={() => onSelect(heading.pos)}
               title={heading.text}
             >
-              <span className="text-[10px] text-[var(--cg-muted)] shrink-0 font-mono tabular-nums">
+              <span className="text-[10px] text-[var(--cf-muted)] shrink-0 font-mono tabular-nums">
                 {heading.number}
               </span>
               <span
-                className="truncate cg-ui-font"
+                className="truncate cf-ui-font"
                 dangerouslySetInnerHTML={{ __html: renderInline(heading.text) }}
               />
             </button>

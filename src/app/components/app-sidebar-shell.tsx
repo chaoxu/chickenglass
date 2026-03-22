@@ -31,7 +31,7 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
     <div className="flex shrink-0">
       <Sidebar>
         <SidebarHeader>
-          <span className="overflow-hidden whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-[var(--cg-muted)]">
+          <span className="overflow-hidden whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-[var(--cf-muted)]">
             Explorer
           </span>
           <SidebarTrigger />
@@ -44,7 +44,7 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
           }}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <TabsList className="flex shrink-0 border-b border-[var(--cg-border)]">
+          <TabsList className="flex shrink-0 border-b border-[var(--cf-border)]">
             <TabsTrigger value="files">Files</TabsTrigger>
             <TabsTrigger value="outline">Outline</TabsTrigger>
             <TabsTrigger value="symbols">Symbols</TabsTrigger>

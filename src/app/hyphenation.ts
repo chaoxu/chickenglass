@@ -115,7 +115,7 @@ function collectTextNodes(root: Element): Text[] {
  * Only processes text inside <p> elements to avoid hyphenating headings,
  * captions, labels, etc. Math and code subtrees are skipped.
  *
- * @param container - The .cg-read-mode-view div
+ * @param container - The .cf-read-mode-view div
  * @param hyphenate - The hyphenateText function from Hyphenopoly
  */
 export function applyHyphensToContainer(

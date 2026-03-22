@@ -8,7 +8,7 @@ import { MathWidget, collectMathRanges } from "./math-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
 
-/** Count only widget (replace) decorations, ignoring mark decorations like cg-math-source. */
+/** Count only widget (replace) decorations, ignoring mark decorations like cf-math-source. */
 function countWidgets(ranges: ReturnType<typeof collectMathRanges>): number {
   return ranges.filter(r => r.value.spec.widget).length;
 }
@@ -34,11 +34,11 @@ function createMathView(doc: string, cursorPos?: number): EditorView {
 }
 
 describe("MathWidget (inline)", () => {
-  it("creates a span with cg-math-inline class", () => {
+  it("creates a span with cf-math-inline class", () => {
     const widget = new MathWidget("x^2", "$x^2$", false);
     const el = widget.toDOM();
     expect(el.tagName).toBe("SPAN");
-    expect(el.className).toBe("cg-math-inline");
+    expect(el.className).toBe("cf-math-inline");
   });
 
   it("renders KaTeX content inside the span", () => {
@@ -81,11 +81,11 @@ describe("MathWidget (inline)", () => {
 });
 
 describe("MathWidget (display)", () => {
-  it("creates a div with cg-math-display class", () => {
+  it("creates a div with cf-math-display class", () => {
     const widget = new MathWidget("x^2", "$$x^2$$", true);
     const el = widget.toDOM();
     expect(el.tagName).toBe("DIV");
-    expect(el.className).toBe("cg-math-display");
+    expect(el.className).toBe("cf-math-display");
   });
 
   it("renders KaTeX content in display mode", () => {

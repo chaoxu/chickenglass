@@ -50,7 +50,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
         <DialogHeader>
           <div className="flex items-baseline gap-2">
             <DialogTitle className="text-base">Coflat</DialogTitle>
-            <span className="text-sm text-[var(--cg-muted)]">v0.1.0</span>
+            <span className="text-sm text-[var(--cf-muted)]">v0.1.0</span>
           </div>
           <DialogCloseButton aria-label="Close about dialog" />
         </DialogHeader>
@@ -61,7 +61,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
           </DialogDescription>
 
           <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-[var(--cg-muted)]">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-[var(--cf-muted)]">
               Built with
             </p>
             <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0">
@@ -71,7 +71,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
                     href={c.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-[var(--cg-fg)] underline transition-opacity duration-[var(--cg-transition,0.15s)] hover:opacity-60"
+                    className="text-sm text-[var(--cf-fg)] underline transition-opacity duration-[var(--cf-transition,0.15s)] hover:opacity-60"
                   >
                     {c.name}
                   </a>
@@ -86,7 +86,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-[var(--cg-fg)] underline transition-opacity duration-[var(--cg-transition,0.15s)] hover:opacity-60"
+            className="text-sm text-[var(--cf-fg)] underline transition-opacity duration-[var(--cf-transition,0.15s)] hover:opacity-60"
           >
             View on GitHub
           </a>

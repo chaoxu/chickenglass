@@ -26,16 +26,16 @@ export class ImageWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const wrapper = document.createElement("span");
-    wrapper.className = "cg-image-wrapper";
+    wrapper.className = "cf-image-wrapper";
 
     const img = document.createElement("img");
-    img.className = "cg-image";
+    img.className = "cf-image";
     img.src = this.src;
     img.alt = this.alt;
     img.title = this.alt;
     img.addEventListener("error", () => {
       wrapper.textContent = `[Image: ${this.alt}]`;
-      wrapper.className = "cg-image-error";
+      wrapper.className = "cf-image-error";
     });
 
     wrapper.appendChild(img);

@@ -102,21 +102,21 @@ export class BibliographyWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const section = document.createElement("div");
-    section.className = "cg-bibliography";
+    section.className = "cf-bibliography";
 
     const heading = document.createElement("h2");
-    heading.className = "cg-bibliography-heading";
+    heading.className = "cf-bibliography-heading";
     heading.textContent = "References";
     section.appendChild(heading);
 
     const list = document.createElement("div");
-    list.className = "cg-bibliography-list";
+    list.className = "cf-bibliography-list";
 
     if (this.cslHtml.length > 0) {
       // Use CSL-formatted entries (already include [1] numbering for IEEE)
       for (let i = 0; i < this.cslHtml.length; i++) {
         const div = document.createElement("div");
-        div.className = "cg-bibliography-entry";
+        div.className = "cf-bibliography-entry";
         div.innerHTML = this.cslHtml[i];
         list.appendChild(div);
       }
@@ -125,7 +125,7 @@ export class BibliographyWidget extends RenderWidget {
       for (let i = 0; i < this.entries.length; i++) {
         const entry = this.entries[i];
         const div = document.createElement("div");
-        div.className = "cg-bibliography-entry";
+        div.className = "cf-bibliography-entry";
         div.id = `bib-${entry.id}`;
         div.textContent = `[${i + 1}] ${formatBibEntry(entry)}`;
         list.appendChild(div);

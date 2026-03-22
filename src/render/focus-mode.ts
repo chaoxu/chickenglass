@@ -33,7 +33,7 @@ const focusModeField = StateField.define<boolean>({
 });
 
 /** Line decoration that dims content. */
-const dimmedLine = Decoration.line({ class: "cg-focus-dimmed" });
+const dimmedLine = Decoration.line({ class: "cf-focus-dimmed" });
 
 /**
  * Find the paragraph block containing the given position.

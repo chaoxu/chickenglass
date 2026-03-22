@@ -23,7 +23,7 @@ function cycleEditorMode(view: EditorView): boolean {
 
   // Dispatch a DOM event so the app can update the UI indicator
   view.dom.dispatchEvent(
-    new CustomEvent("cg-mode-change", { detail: currentMode, bubbles: true }),
+    new CustomEvent("cf-mode-change", { detail: currentMode, bubbles: true }),
   );
   return true;
 }
@@ -43,7 +43,7 @@ function jumpToSourceFile(view: EditorView): boolean {
   if (!region) return false;
 
   view.dom.dispatchEvent(
-    new CustomEvent("cg-open-file", { detail: region.file, bubbles: true }),
+    new CustomEvent("cf-open-file", { detail: region.file, bubbles: true }),
   );
   return true;
 }

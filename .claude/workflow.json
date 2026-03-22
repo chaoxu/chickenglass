@@ -6,7 +6,7 @@
   "forge": {
     "type": "github",
     "base_url": "https://api.github.com",
-    "repo": "chaoxu/chickenglass",
+    "repo": "chaoxu/coflat",
     "deferred_label": "deferred",
     "auth": {}
   },

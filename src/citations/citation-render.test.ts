@@ -160,7 +160,7 @@ describe("CitationWidget", () => {
     const widget = new CitationWidget("(Karger, 2000)", ["karger2000"]);
     const el = widget.toDOM();
     expect(el.tagName).toBe("SPAN");
-    expect(el.className).toBe("cg-citation");
+    expect(el.className).toBe("cf-citation");
     expect(el.textContent).toBe("(Karger, 2000)");
     expect(el.title).toBe("karger2000");
   });
@@ -192,8 +192,8 @@ describe("NarrativeCitationWidget", () => {
     const widget = new NarrativeCitationWidget("Karger (2000)", "karger2000");
     const el = widget.toDOM();
     expect(el.tagName).toBe("SPAN");
-    expect(el.className).toContain("cg-citation");
-    expect(el.className).toContain("cg-citation-narrative");
+    expect(el.className).toContain("cf-citation");
+    expect(el.className).toContain("cf-citation-narrative");
     expect(el.textContent).toBe("Karger (2000)");
   });
 

@@ -33,7 +33,7 @@ function destroyActiveInlineEditor(): string {
   const { view: inlineView, cell } = activeInlineEditor;
   const text = inlineView.state.doc.toString();
   inlineView.destroy();
-  cell.classList.remove("cg-table-cell-editing");
+  cell.classList.remove("cf-table-cell-editing");
   cell.innerHTML = "";
   activeInlineEditor = null;
   return text;
@@ -119,7 +119,7 @@ export class TableWidget extends WidgetType {
     this.editorView = view;
 
     const container = document.createElement("div");
-    container.className = "cg-table-widget";
+    container.className = "cf-table-widget";
     container.dataset.tableTextHash = this.tableText;
     container.dataset.tableFrom = String(this.tableFrom);
 
@@ -208,7 +208,7 @@ export class TableWidget extends WidgetType {
 
         const rawText = this.getRawCellText(section, row, col);
         cell.innerHTML = "";
-        cell.classList.add("cg-table-cell-editing");
+        cell.classList.add("cf-table-cell-editing");
 
         const colCount = this.table.header.cells.length;
         const bodyRowCount = this.table.rows.length;
@@ -228,7 +228,7 @@ export class TableWidget extends WidgetType {
               const editedText = destroyActiveInlineEditor();
               renderInlineMarkdown(cell, editedText, this.macros);
 
-              const widgetContainer = cell.closest(".cg-table-widget");
+              const widgetContainer = cell.closest(".cf-table-widget");
               const stillInTable =
                 widgetContainer && widgetContainer.contains(document.activeElement);
               syncToRoot(section, row, col, editedText, !!stillInTable);

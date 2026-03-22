@@ -1,4 +1,4 @@
-# Chickenglass v2
+# Coflat v2
 
 Semantic document editor for mathematical writing. Runs as a native desktop app (Tauri) or in the browser for development.
 
@@ -92,7 +92,7 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
 
 ## Workspace hygiene
 
-- Temporary files go in `/tmp/chickenglass-*` — never in the project directory.
+- Temporary files go in `/tmp/coflat-*` — never in the project directory.
 
 ## Development rules
 

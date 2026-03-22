@@ -106,7 +106,7 @@ class TitleWidget extends WidgetType {
 
   toDOM(): HTMLElement {
     const el = document.createElement("div");
-    el.className = "cg-doc-title";
+    el.className = "cf-doc-title";
     renderTitleContent(el, this.title, this.macros);
     return el;
   }

@@ -100,7 +100,7 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
 
       if (!tooltip) {
         tooltip = document.createElement("div");
-        tooltip.className = "cg-hover-preview-tooltip";
+        tooltip.className = "cf-hover-preview-tooltip";
         document.body.appendChild(tooltip);
       }
       tooltip.textContent = content;
@@ -120,11 +120,11 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
 
     const onOver = (e: Event) => {
       const target = (e as MouseEvent).target as HTMLElement;
-      if (target.classList.contains("cg-sidenote-ref")) show(target);
+      if (target.classList.contains("cf-sidenote-ref")) show(target);
     };
     const onOut = (e: Event) => {
       const target = (e as MouseEvent).target as HTMLElement;
-      if (target.classList.contains("cg-sidenote-ref")) hide();
+      if (target.classList.contains("cf-sidenote-ref")) hide();
     };
 
     scroller.addEventListener("mouseover", onOver);

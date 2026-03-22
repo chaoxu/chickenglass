@@ -27,7 +27,7 @@ function makePlugin(overrides: Partial<BlockPlugin> & { name: string }): BlockPl
     numbered: true,
     title: overrides.name.charAt(0).toUpperCase() + overrides.name.slice(1),
     render: (attrs) => ({
-      className: `cg-block cg-block-${attrs.type}`,
+      className: `cf-block cf-block-${attrs.type}`,
       header: `${overrides.title ?? overrides.name} ${attrs.number ?? ""}`.trim(),
     }),
     ...overrides,
@@ -144,7 +144,7 @@ describe("getPluginOrFallback", () => {
     const fallback = getPluginOrFallback(state, "hypothesis");
     expect(fallback).toBeDefined();
     const spec = fallback!.render({ type: "hypothesis", number: 3, title: "Key" });
-    expect(spec.className).toBe("cg-block cg-block-hypothesis");
+    expect(spec.className).toBe("cf-block cf-block-hypothesis");
     expect(spec.header).toBe("Hypothesis 3 (Key)");
   });
 
@@ -208,7 +208,7 @@ describe("pluginFromConfig", () => {
       number: 3,
       title: "Main",
     });
-    expect(spec.className).toBe("cg-block cg-block-theorem");
+    expect(spec.className).toBe("cf-block cf-block-theorem");
     expect(spec.header).toBe("Theorem 3 (Main)");
   });
 
@@ -421,7 +421,7 @@ describe("createPluginRegistryField (CM6 integration)", () => {
     if (!claim) throw new Error("claim plugin missing");
     const spec = claim.render({ type: "claim", number: 5, title: "Main" });
     expect(spec.header).toBe("Claim 5 (Main)");
-    expect(spec.className).toBe("cg-block cg-block-claim");
+    expect(spec.className).toBe("cf-block cf-block-claim");
   });
 
   it("rebuilds registry from defaults when frontmatter changes", () => {

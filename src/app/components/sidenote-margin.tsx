@@ -86,10 +86,10 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
 
     const scroller = view.scrollDOM;
     // Check if we already have a container
-    let container = scroller.querySelector(".cg-sidenote-portal") as HTMLDivElement | null;
+    let container = scroller.querySelector(".cf-sidenote-portal") as HTMLDivElement | null;
     if (!container) {
       container = document.createElement("div");
-      container.className = "cg-sidenote-portal";
+      container.className = "cf-sidenote-portal";
       scroller.style.position = "relative";
       scroller.appendChild(container);
     }
@@ -198,10 +198,10 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
                 view.dispatch({ effects: EditorView.scrollIntoView(entry.defFrom) });
               });
             }}
-            className="cg-sidenote-entry"
+            className="cf-sidenote-entry"
             style={{ top: `${docY}px` }}
           >
-            <span className="cg-sidenote-entry-number">
+            <span className="cf-sidenote-entry-number">
               {entry.number}
             </span>
             <SidenoteContent text={entry.content} macros={macros} />

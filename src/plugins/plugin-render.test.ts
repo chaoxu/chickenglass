@@ -89,9 +89,9 @@ describe("blockDecorationField", () => {
     // Should have decorations for both blocks
     expect(specs.length).toBeGreaterThan(0);
 
-    // Opening fence lines should have cg-block-header class
+    // Opening fence lines should have cf-block-header class
     const theoremLine = state.doc.line(1).from;
-    expect(hasLineClassAt(specs, theoremLine, "cg-block-header")).toBe(true);
+    expect(hasLineClassAt(specs, theoremLine, "cf-block-header")).toBe(true);
 
     // Should have BlockHeaderWidget replacements
     const widgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
@@ -103,15 +103,15 @@ describe("blockDecorationField", () => {
     const state = createTestState(TWO_BLOCKS, theoremStart, true);
     const specs = getDecoSpecs(state);
 
-    // Opening fence should have cg-block-source, not cg-block-header
+    // Opening fence should have cf-block-source, not cf-block-header
     const theoremLine = state.doc.line(1).from;
-    expect(hasLineClassAt(specs, theoremLine, "cg-block-source")).toBe(true);
-    expect(hasLineClassAt(specs, theoremLine, "cg-block-header")).toBe(false);
+    expect(hasLineClassAt(specs, theoremLine, "cf-block-source")).toBe(true);
+    expect(hasLineClassAt(specs, theoremLine, "cf-block-header")).toBe(false);
 
     // No header widget for theorem (source mode)
     // But proof should still have its header widget
     const proofLine = state.doc.line(5).from;
-    expect(hasLineClassAt(specs, proofLine, "cg-block-header")).toBe(true);
+    expect(hasLineClassAt(specs, proofLine, "cf-block-header")).toBe(true);
   });
 
   it("hides closing fence when cursor is not on it", () => {
@@ -120,9 +120,9 @@ describe("blockDecorationField", () => {
     const state = createTestState(TWO_BLOCKS, contentPos, true);
     const specs = getDecoSpecs(state);
 
-    // Closing fence line (:::) should have cg-include-fence (collapsed)
+    // Closing fence line (:::) should have cf-include-fence (collapsed)
     const closeFenceLine = state.doc.line(3).from;
-    expect(hasLineClassAt(specs, closeFenceLine, "cg-include-fence")).toBe(true);
+    expect(hasLineClassAt(specs, closeFenceLine, "cf-include-fence")).toBe(true);
   });
 
   it("shows closing fence source when cursor is on closing fence", () => {
@@ -130,10 +130,10 @@ describe("blockDecorationField", () => {
     const state = createTestState(TWO_BLOCKS, closeFencePos, true);
     const specs = getDecoSpecs(state);
 
-    // Closing fence should have cg-block-source (visible)
+    // Closing fence should have cf-block-source (visible)
     const closeFenceLine = state.doc.line(3).from;
-    expect(hasLineClassAt(specs, closeFenceLine, "cg-block-source")).toBe(true);
-    expect(hasLineClassAt(specs, closeFenceLine, "cg-include-fence")).toBe(false);
+    expect(hasLineClassAt(specs, closeFenceLine, "cf-block-source")).toBe(true);
+    expect(hasLineClassAt(specs, closeFenceLine, "cf-include-fence")).toBe(false);
   });
 
   it("shows both fences when cursor is on opening fence", () => {
@@ -141,12 +141,12 @@ describe("blockDecorationField", () => {
     const specs = getDecoSpecs(state);
 
     // Opening: source mode
-    expect(hasLineClassAt(specs, state.doc.line(1).from, "cg-block-source")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, "cf-block-source")).toBe(true);
 
     // Closing: also source mode (show both fences)
     const closeFenceLine = state.doc.line(3).from;
-    expect(hasLineClassAt(specs, closeFenceLine, "cg-block-source")).toBe(true);
-    expect(hasLineClassAt(specs, closeFenceLine, "cg-include-fence")).toBe(false);
+    expect(hasLineClassAt(specs, closeFenceLine, "cf-block-source")).toBe(true);
+    expect(hasLineClassAt(specs, closeFenceLine, "cf-include-fence")).toBe(false);
   });
 
   it("other blocks unaffected when cursor is on one block's fence", () => {
@@ -156,12 +156,12 @@ describe("blockDecorationField", () => {
 
     // Proof block should be fully rendered (not in source mode)
     const proofOpenLine = state.doc.line(5).from;
-    expect(hasLineClassAt(specs, proofOpenLine, "cg-block-header")).toBe(true);
-    expect(hasLineClassAt(specs, proofOpenLine, "cg-block-source")).toBe(false);
+    expect(hasLineClassAt(specs, proofOpenLine, "cf-block-header")).toBe(true);
+    expect(hasLineClassAt(specs, proofOpenLine, "cf-block-source")).toBe(false);
 
     // Proof closing fence should be hidden
     const proofCloseLine = state.doc.line(7).from;
-    expect(hasLineClassAt(specs, proofCloseLine, "cg-include-fence")).toBe(true);
+    expect(hasLineClassAt(specs, proofCloseLine, "cf-include-fence")).toBe(true);
   });
 
   it("includes title in header widget replace range", () => {

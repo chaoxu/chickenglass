@@ -35,8 +35,8 @@ function BreadcrumbButton({ className, type = "button", ...props }: BreadcrumbBu
       type={type}
       className={cn(
         "inline-flex min-w-0 items-center rounded px-1 py-[1px]",
-        "text-[var(--cg-muted)] transition-colors duration-[var(--cg-transition,0.15s)]",
-        "hover:bg-[var(--cg-hover)] hover:text-[var(--cg-fg)]",
+        "text-[var(--cf-muted)] transition-colors duration-[var(--cf-transition,0.15s)]",
+        "hover:bg-[var(--cf-hover)] hover:text-[var(--cf-fg)]",
         className,
       )}
       {...props}
@@ -48,7 +48,7 @@ function BreadcrumbPage({ className, ...props }: React.ComponentPropsWithoutRef<
   return (
     <span
       aria-current="page"
-      className={cn("inline-flex min-w-0 items-center rounded px-1 py-[1px] font-medium text-[var(--cg-fg)]", className)}
+      className={cn("inline-flex min-w-0 items-center rounded px-1 py-[1px] font-medium text-[var(--cf-fg)]", className)}
       {...props}
     />
   );
@@ -58,7 +58,7 @@ function BreadcrumbSeparator({ className, children, ...props }: React.ComponentP
   return (
     <li
       aria-hidden="true"
-      className={cn("mx-0.5 shrink-0 text-[var(--cg-muted)] opacity-60", className)}
+      className={cn("mx-0.5 shrink-0 text-[var(--cf-muted)] opacity-60", className)}
       {...props}
     >
       {children ?? <ChevronRight size={12} />}

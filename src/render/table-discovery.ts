@@ -145,7 +145,7 @@ export function findClosestTable(
 }
 
 /**
- * Find the closest `.cg-table-widget` DOM container to the given
+ * Find the closest `.cf-table-widget` DOM container to the given
  * tracked position. Used after add-row mutations to locate the
  * rebuilt widget in the DOM for focus scheduling.
  */
@@ -153,7 +153,7 @@ export function findClosestWidgetContainer(
   view: EditorView,
   trackedFrom: number,
 ): HTMLElement | null {
-  const containers = view.dom.querySelectorAll(".cg-table-widget");
+  const containers = view.dom.querySelectorAll(".cf-table-widget");
   let closest: HTMLElement | null = null;
   let closestDist = Infinity;
   for (const container of containers) {

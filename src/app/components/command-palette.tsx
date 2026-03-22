@@ -90,7 +90,7 @@ function ShortcutBadge({ shortcut }: { shortcut: string }): ReactNode {
       {shortcut.split("+").map((key) => (
         <kbd
           key={key}
-          className="inline-flex items-center justify-center rounded border border-[var(--cg-border)] bg-[var(--cg-subtle)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--cg-muted)] leading-none"
+          className="inline-flex items-center justify-center rounded border border-[var(--cf-border)] bg-[var(--cf-subtle)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--cf-muted)] leading-none"
         >
           {key}
         </kbd>
@@ -151,7 +151,7 @@ export function CommandPalette({
       </CommandList>
 
       {/* Footer hint */}
-      <div className="border-t border-[var(--cg-border)] px-3 py-2 flex items-center gap-3 text-[10px] text-[var(--cg-muted)]">
+      <div className="border-t border-[var(--cf-border)] px-3 py-2 flex items-center gap-3 text-[10px] text-[var(--cf-muted)]">
         <span>
           <kbd className="font-mono">↑↓</kbd> navigate
         </span>

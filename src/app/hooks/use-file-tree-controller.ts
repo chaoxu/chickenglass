@@ -10,7 +10,7 @@ import {
 import { useTree } from "@headless-tree/react";
 import type { FileEntry } from "../file-manager";
 
-const ROOT_ITEM_ID = "__cg-file-tree-root__";
+const ROOT_ITEM_ID = "__cf-file-tree-root__";
 
 export interface FileTreeKeyResult {
   readonly handled: boolean;

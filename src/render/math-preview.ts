@@ -107,7 +107,7 @@ class MathPreviewPlugin implements PluginValue {
     this.measureFromPos = info.from;
     this.measureToPos = info.to;
     this.view.requestMeasure({
-      key: "cg-math-preview-pos",
+      key: "cf-math-preview-pos",
       read: () => {
         if (this.measureFromPos < 0) return null;
         const fromCoords = this.view.coordsAtPos(this.measureFromPos);
@@ -125,7 +125,7 @@ class MathPreviewPlugin implements PluginValue {
 
   private createPanel(): void {
     const panel = document.createElement("div");
-    panel.className = "cg-math-preview";
+    panel.className = "cf-math-preview";
 
     // Panel itself is draggable
     panel.addEventListener("mousedown", (e) => {
@@ -151,7 +151,7 @@ class MathPreviewPlugin implements PluginValue {
 
     // Content area
     const content = document.createElement("div");
-    content.className = "cg-math-preview-content";
+    content.className = "cf-math-preview-content";
     panel.appendChild(content);
 
     this.contentEl = content;

@@ -32,7 +32,7 @@ const DialogContent = React.forwardRef<
         ref={ref}
         className={cn(
           "fixed left-1/2 top-1/2 z-[10000] -translate-x-1/2 -translate-y-1/2",
-          "rounded-lg border border-[var(--cg-border)] bg-[var(--cg-bg)] text-[var(--cg-fg)] outline-none",
+          "rounded-lg border border-[var(--cf-border)] bg-[var(--cf-bg)] text-[var(--cf-fg)] outline-none",
           className,
         )}
         {...props}
@@ -47,7 +47,7 @@ function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-between gap-3 border-b border-[var(--cg-border)] px-5 py-3",
+        "flex shrink-0 items-center justify-between gap-3 border-b border-[var(--cf-border)] px-5 py-3",
         className,
       )}
       {...props}
@@ -68,7 +68,7 @@ function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-end gap-2 border-t border-[var(--cg-border)] px-5 py-3",
+        "flex shrink-0 items-center justify-end gap-2 border-t border-[var(--cf-border)] px-5 py-3",
         className,
       )}
       {...props}
@@ -83,7 +83,7 @@ const DialogTitle = React.forwardRef<
   return (
     <DialogPrimitive.Title
       ref={ref}
-      className={cn("text-sm font-semibold text-[var(--cg-fg)]", className)}
+      className={cn("text-sm font-semibold text-[var(--cf-fg)]", className)}
       {...props}
     />
   );
@@ -96,7 +96,7 @@ const DialogDescription = React.forwardRef<
   return (
     <DialogPrimitive.Description
       ref={ref}
-      className={cn("text-sm text-[var(--cg-muted)]", className)}
+      className={cn("text-sm text-[var(--cf-muted)]", className)}
       {...props}
     />
   );
@@ -110,7 +110,7 @@ const DialogCloseButton = React.forwardRef<
     <DialogPrimitive.Close
       ref={ref}
       className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--cg-muted)] transition-colors duration-[var(--cg-transition,0.15s)] hover:bg-[var(--cg-hover)] hover:text-[var(--cg-fg)]",
+        "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--cf-muted)] transition-colors duration-[var(--cf-transition,0.15s)] hover:bg-[var(--cf-hover)] hover:text-[var(--cf-fg)]",
         className,
       )}
       {...props}

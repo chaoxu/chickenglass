@@ -93,15 +93,15 @@ function StatsPopover({ stats, anchorRef, onClose }: StatsPopoverProps) {
         role="dialog"
         aria-label="Writing statistics"
         tabIndex={-1}
-        className="fixed z-50 min-w-[200px] rounded-md border border-[var(--cg-border)] bg-[var(--cg-bg)] p-3 text-xs text-[var(--cg-fg)]"
+        className="fixed z-50 min-w-[200px] rounded-md border border-[var(--cf-border)] bg-[var(--cf-bg)] p-3 text-xs text-[var(--cf-fg)]"
       >
-        <div className="font-semibold text-sm mb-2 text-[var(--cg-fg)]">
+        <div className="font-semibold text-sm mb-2 text-[var(--cf-fg)]">
           Writing Statistics
         </div>
         <div className="flex flex-col gap-1">
           {rows.map(([label, value]) => (
             <div key={label} className="flex justify-between gap-6">
-              <span className="text-[var(--cg-muted)]">{label}</span>
+              <span className="text-[var(--cf-muted)]">{label}</span>
               <span className="font-medium tabular-nums">{value}</span>
             </div>
           ))}
@@ -148,7 +148,7 @@ export function StatusBar({
 
   return (
     <>
-      <div className="shrink-0 flex items-center border-t border-[var(--cg-border)] bg-[var(--cg-bg)] h-6 px-2 text-xs text-[var(--cg-muted)] select-none">
+      <div className="shrink-0 flex items-center border-t border-[var(--cf-border)] bg-[var(--cf-bg)] h-6 px-2 text-xs text-[var(--cf-muted)] select-none">
         {/* Left: word + char count */}
         <div className="flex items-center gap-2">
           <button
@@ -157,8 +157,8 @@ export function StatusBar({
             title="Click for writing statistics"
             onClick={() => setPopoverOpen((v) => !v)}
             className={cn(
-              "px-1 rounded hover:bg-[var(--cg-hover)] transition-colors",
-              popoverOpen && "bg-[var(--cg-hover)]",
+              "px-1 rounded hover:bg-[var(--cf-hover)] transition-colors",
+              popoverOpen && "bg-[var(--cf-hover)]",
             )}
           >
             {wordLabel}
@@ -181,7 +181,7 @@ export function StatusBar({
               type="button"
               title="Command Palette (⇧⌘P)"
               onClick={onOpenPalette}
-              className="px-1 rounded hover:bg-[var(--cg-hover)] transition-colors"
+              className="px-1 rounded hover:bg-[var(--cf-hover)] transition-colors"
             >
               ⌘
             </button>
@@ -192,7 +192,7 @@ export function StatusBar({
             title={isMarkdown ? "Click to cycle editor mode" : "Source mode only for non-markdown files"}
             onClick={cycleMode}
             disabled={!isMarkdown}
-            className="px-1 rounded hover:bg-[var(--cg-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-1 rounded hover:bg-[var(--cf-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {MODE_LABELS[editorMode]}
           </button>

@@ -27,7 +27,7 @@ export function FileTree({
 
   if (!root || controller.visibleItems.length === 0) {
     return (
-      <div className="px-3 py-2 text-xs text-[var(--cg-muted)] italic">
+      <div className="px-3 py-2 text-xs text-[var(--cf-muted)] italic">
         No files
       </div>
     );

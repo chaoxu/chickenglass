@@ -2,7 +2,7 @@
  * Theme manager: handles Light / Dark / System theme switching.
  *
  * Strategy:
- * - CSS custom properties (--cg-*) define all colors in :root (light) and
+ * - CSS custom properties (--cf-*) define all colors in :root (light) and
  *   [data-theme="dark"] (dark). The manager sets data-theme on <html>.
  * - "System" mode listens to the OS prefers-color-scheme media query and
  *   updates automatically.
@@ -11,7 +11,7 @@
 
 export type Theme = "light" | "dark" | "system";
 
-const STORAGE_KEY = "cg-theme";
+const STORAGE_KEY = "cf-theme";
 
 /** Read the persisted theme, defaulting to "system". */
 export function loadTheme(): Theme {

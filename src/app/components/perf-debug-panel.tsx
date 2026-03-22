@@ -52,11 +52,11 @@ export function PerfDebugPanel() {
   const recentOperations = snapshot.frontend.operations.slice(0, 8);
 
   return (
-    <div className="fixed bottom-4 right-4 z-[120] w-[460px] rounded-lg border border-[var(--cg-border)] bg-[var(--cg-bg)] shadow-lg">
-      <div className="flex items-center justify-between border-b border-[var(--cg-border)] px-3 py-2">
+    <div className="fixed bottom-4 right-4 z-[120] w-[460px] rounded-lg border border-[var(--cf-border)] bg-[var(--cf-bg)] shadow-lg">
+      <div className="flex items-center justify-between border-b border-[var(--cf-border)] px-3 py-2">
         <div>
-          <div className="text-sm font-semibold text-[var(--cg-fg)]">Perf Debug</div>
-          <div className="text-xs text-[var(--cg-muted)]">
+          <div className="text-sm font-semibold text-[var(--cf-fg)]">Perf Debug</div>
+          <div className="text-xs text-[var(--cf-muted)]">
             Aggregated frontend and Tauri timings
           </div>
         </div>
@@ -64,21 +64,21 @@ export function PerfDebugPanel() {
           <button
             type="button"
             onClick={() => { void getCombinedPerfSnapshot().then(setSnapshot); }}
-            className="rounded border border-[var(--cg-border)] px-2 py-1 text-[var(--cg-fg)] hover:bg-[var(--cg-hover)]"
+            className="rounded border border-[var(--cf-border)] px-2 py-1 text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]"
           >
             Refresh
           </button>
           <button
             type="button"
             onClick={() => { void clearCombinedPerf().then(() => getCombinedPerfSnapshot().then(setSnapshot)); }}
-            className="rounded border border-[var(--cg-border)] px-2 py-1 text-[var(--cg-fg)] hover:bg-[var(--cg-hover)]"
+            className="rounded border border-[var(--cf-border)] px-2 py-1 text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]"
           >
             Clear
           </button>
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="rounded border border-[var(--cg-border)] px-2 py-1 text-[var(--cg-fg)] hover:bg-[var(--cg-hover)]"
+            className="rounded border border-[var(--cf-border)] px-2 py-1 text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]"
           >
             Close
           </button>
@@ -87,14 +87,14 @@ export function PerfDebugPanel() {
 
       <div className="max-h-[60vh] space-y-4 overflow-auto p-3 text-xs">
         <section>
-          <div className="mb-2 font-medium text-[var(--cg-fg)]">Recent operations</div>
+          <div className="mb-2 font-medium text-[var(--cf-fg)]">Recent operations</div>
           <div className="space-y-1">
             {recentOperations.length === 0 ? (
-              <div className="text-[var(--cg-muted)]">No frontend operations recorded yet.</div>
+              <div className="text-[var(--cf-muted)]">No frontend operations recorded yet.</div>
             ) : recentOperations.map((operation) => (
               <div key={operation.id} className="flex items-center justify-between gap-4">
-                <span className="truncate text-[var(--cg-fg)]">{operation.name}</span>
-                <span className="tabular-nums text-[var(--cg-muted)]">
+                <span className="truncate text-[var(--cf-fg)]">{operation.name}</span>
+                <span className="tabular-nums text-[var(--cf-muted)]">
                   {formatMs(operation.durationMs)}
                 </span>
               </div>
@@ -103,17 +103,17 @@ export function PerfDebugPanel() {
         </section>
 
         <section>
-          <div className="mb-2 font-medium text-[var(--cg-fg)]">Frontend spans</div>
+          <div className="mb-2 font-medium text-[var(--cf-fg)]">Frontend spans</div>
           <div className="space-y-1">
             {frontendSummaries.length === 0 ? (
-              <div className="text-[var(--cg-muted)]">No frontend spans recorded yet.</div>
+              <div className="text-[var(--cf-muted)]">No frontend spans recorded yet.</div>
             ) : frontendSummaries.map((entry) => (
               <div key={`frontend-${entry.name}`} className="grid grid-cols-[1fr_auto_auto] gap-3">
-                <span className="truncate text-[var(--cg-fg)]">{entry.name}</span>
-                <span className="tabular-nums text-[var(--cg-muted)]">
+                <span className="truncate text-[var(--cf-fg)]">{entry.name}</span>
+                <span className="tabular-nums text-[var(--cf-muted)]">
                   avg {formatMs(entry.avgMs)}
                 </span>
-                <span className="tabular-nums text-[var(--cg-muted)]">
+                <span className="tabular-nums text-[var(--cf-muted)]">
                   max {formatMs(entry.maxMs)}
                 </span>
               </div>
@@ -122,17 +122,17 @@ export function PerfDebugPanel() {
         </section>
 
         <section>
-          <div className="mb-2 font-medium text-[var(--cg-fg)]">Backend spans</div>
+          <div className="mb-2 font-medium text-[var(--cf-fg)]">Backend spans</div>
           <div className="space-y-1">
             {backendSummaries.length === 0 ? (
-              <div className="text-[var(--cg-muted)]">No Tauri spans recorded yet.</div>
+              <div className="text-[var(--cf-muted)]">No Tauri spans recorded yet.</div>
             ) : backendSummaries.map((entry) => (
               <div key={`backend-${entry.name}`} className="grid grid-cols-[1fr_auto_auto] gap-3">
-                <span className="truncate text-[var(--cg-fg)]">{entry.name}</span>
-                <span className="tabular-nums text-[var(--cg-muted)]">
+                <span className="truncate text-[var(--cf-fg)]">{entry.name}</span>
+                <span className="tabular-nums text-[var(--cf-muted)]">
                   avg {formatMs(entry.avgMs)}
                 </span>
-                <span className="tabular-nums text-[var(--cg-muted)]">
+                <span className="tabular-nums text-[var(--cf-muted)]">
                   max {formatMs(entry.maxMs)}
                 </span>
               </div>

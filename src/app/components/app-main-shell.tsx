@@ -56,7 +56,7 @@ export function AppMainShell({
           editorMode={editor.editorMode}
         />
       ) : (
-        <div className="flex flex-1 items-center justify-center select-none text-sm text-[var(--cg-muted)]">
+        <div className="flex flex-1 items-center justify-center select-none text-sm text-[var(--cf-muted)]">
           Open a file to start editing
         </div>
       )}

@@ -36,7 +36,7 @@ export class CrossrefWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const span = document.createElement("span");
-    span.className = "cg-crossref";
+    span.className = "cf-crossref";
     span.textContent = this.resolved.label;
     span.title = this.raw;
     return span;
@@ -59,7 +59,7 @@ export class UnresolvedRefWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const span = document.createElement("span");
-    span.className = "cg-crossref cg-crossref-unresolved";
+    span.className = "cf-crossref cf-crossref-unresolved";
     span.textContent = this.raw;
     span.title = "Unresolved reference";
     return span;

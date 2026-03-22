@@ -327,7 +327,7 @@ function renderHeading(node: SyntaxNode, ctx: WalkContext): string {
   const level = Number(levelChar);
   const text = renderInline(heading?.text ?? ctx.doc.slice(node.from, node.to).trim(), ctx.macros);
   const prefix = ctx.sectionNumbers && heading?.number
-    ? `<span class="cg-section-number">${heading.number}</span> `
+    ? `<span class="cf-section-number">${heading.number}</span> `
     : "";
 
   return `<h${heading?.level ?? level}>${prefix}${text}</h${heading?.level ?? level}>`;
@@ -813,7 +813,7 @@ function renderCitationCluster(
     }
     const parts = ids.map((id) =>
       `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`);
-    return `<span class="cg-citation">(${parts.join("; ")})</span>`;
+    return `<span class="cf-citation">(${parts.join("; ")})</span>`;
   }
 
   trackCitedIds(ids, bibliography, citedIds);
@@ -822,7 +822,7 @@ function renderCitationCluster(
     const rendered = cslProcessor
       ? cslProcessor.cite([...ids])
       : formatParenthetical(ids, bibliography);
-    return `<span class="cg-citation">${escapeHtml(rendered)}</span>`;
+    return `<span class="cf-citation">${escapeHtml(rendered)}</span>`;
   }
 
   const parts = ids.map((id) => {
@@ -836,7 +836,7 @@ function renderCitationCluster(
     }
     return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`;
   });
-  return `<span class="cg-citation">(${parts.join("; ")})</span>`;
+  return `<span class="cf-citation">(${parts.join("; ")})</span>`;
 }
 
 /** Render the bibliography section from cited entries. */
@@ -859,15 +859,15 @@ function renderBibliography(
 
   const items = cslHtml.length > 0
     ? entries.map((entry, i) =>
-        `<div class="cg-bibliography-entry" id="bib-${escapeHtml(entry.id)}">${cslHtml[i] ?? ""}</div>`)
+        `<div class="cf-bibliography-entry" id="bib-${escapeHtml(entry.id)}">${cslHtml[i] ?? ""}</div>`)
     : entries.map((entry) =>
-        `<div class="cg-bibliography-entry" id="bib-${escapeHtml(entry.id)}">${escapeHtml(formatBibEntry(entry))}</div>`);
+        `<div class="cf-bibliography-entry" id="bib-${escapeHtml(entry.id)}">${escapeHtml(formatBibEntry(entry))}</div>`);
 
   return [
     "",
-    '<section class="cg-bibliography">',
-    '<h2 class="cg-bibliography-heading">References</h2>',
-    '<div class="cg-bibliography-list">',
+    '<section class="cf-bibliography">',
+    '<h2 class="cf-bibliography-heading">References</h2>',
+    '<div class="cf-bibliography-list">',
     items.join("\n"),
     "</div>",
     "</section>",

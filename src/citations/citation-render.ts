@@ -88,8 +88,8 @@ export class CitationWidget extends RenderWidget {
   createDOM(): HTMLElement {
     const el = document.createElement("span");
     el.className = this.narrative
-      ? "cg-citation cg-citation-narrative"
-      : "cg-citation";
+      ? "cf-citation cf-citation-narrative"
+      : "cf-citation";
     el.textContent = this.text;
     el.title = this.ids.join("; ");
     return el;

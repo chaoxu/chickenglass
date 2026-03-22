@@ -68,7 +68,7 @@ export function SymbolPanel({ onInsert, view }: SymbolPanelProps) {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Search */}
-      <div className="shrink-0 px-2 py-1.5 border-b border-[var(--cg-border)]">
+      <div className="shrink-0 px-2 py-1.5 border-b border-[var(--cf-border)]">
         <Input
           type="text"
           value={query}
@@ -81,13 +81,13 @@ export function SymbolPanel({ onInsert, view }: SymbolPanelProps) {
       {/* Symbol list */}
       <ScrollArea className="flex-1 min-h-0" viewportClassName="px-2 py-1 overscroll-contain">
         {visible.length === 0 ? (
-          <p className="text-xs text-[var(--cg-muted)] text-center py-4">
+          <p className="text-xs text-[var(--cf-muted)] text-center py-4">
             No symbols found.
           </p>
         ) : (
           visible.map((cat) => (
             <div key={cat.name} className="mb-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--cg-muted)] mb-1 px-0.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--cf-muted)] mb-1 px-0.5">
                 {cat.name}
               </div>
               <div className="grid grid-cols-6 gap-0.5">
@@ -103,8 +103,8 @@ export function SymbolPanel({ onInsert, view }: SymbolPanelProps) {
                     }}
                     className={cn(
                       "flex items-center justify-center h-7 rounded text-sm leading-none",
-                      "hover:bg-[var(--cg-hover)] active:bg-[var(--cg-active)]",
-                      "text-[var(--cg-fg)] transition-colors",
+                      "hover:bg-[var(--cf-hover)] active:bg-[var(--cf-active)]",
+                      "text-[var(--cf-fg)] transition-colors",
                     )}
                     aria-label={`${sym.label}: ${sym.latex}`}
                   >

@@ -12,7 +12,7 @@ const Command = React.forwardRef<
     <CommandPrimitive
       ref={ref}
       className={cn(
-        "flex h-full w-full flex-col overflow-hidden rounded-lg bg-[var(--cg-bg)] text-[var(--cg-fg)]",
+        "flex h-full w-full flex-col overflow-hidden rounded-lg bg-[var(--cf-bg)] text-[var(--cf-fg)]",
         className,
       )}
       {...props}
@@ -51,16 +51,16 @@ const CommandInput = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(function CommandInput({ className, ...props }, ref) {
   return (
-    <div className="flex items-center border-b border-[var(--cg-border)] px-3" cmdk-input-wrapper="">
+    <div className="flex items-center border-b border-[var(--cf-border)] px-3" cmdk-input-wrapper="">
       <Search
-        className="mr-2 h-4 w-4 shrink-0 text-[var(--cg-muted)]"
+        className="mr-2 h-4 w-4 shrink-0 text-[var(--cf-muted)]"
         aria-hidden="true"
       />
       <CommandPrimitive.Input
         ref={ref}
         className={cn(
           "flex h-11 w-full bg-transparent py-3 text-sm outline-none",
-          "placeholder:text-[var(--cg-muted)]",
+          "placeholder:text-[var(--cf-muted)]",
           "disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
@@ -90,7 +90,7 @@ const CommandEmpty = React.forwardRef<
   return (
     <CommandPrimitive.Empty
       ref={ref}
-      className={cn("py-6 text-center text-sm text-[var(--cg-muted)]", className)}
+      className={cn("py-6 text-center text-sm text-[var(--cf-muted)]", className)}
       {...props}
     />
   );
@@ -104,11 +104,11 @@ const CommandGroup = React.forwardRef<
     <CommandPrimitive.Group
       ref={ref}
       className={cn(
-        "overflow-hidden p-1 text-[var(--cg-fg)]",
+        "overflow-hidden p-1 text-[var(--cf-fg)]",
         "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5",
         "[&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold",
         "[&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider",
-        "[&_[cmdk-group-heading]]:text-[var(--cg-muted)]",
+        "[&_[cmdk-group-heading]]:text-[var(--cf-muted)]",
         className,
       )}
       {...props}
@@ -123,7 +123,7 @@ const CommandSeparator = React.forwardRef<
   return (
     <CommandPrimitive.Separator
       ref={ref}
-      className={cn("-mx-1 h-px bg-[var(--cg-border)]", className)}
+      className={cn("-mx-1 h-px bg-[var(--cf-border)]", className)}
       {...props}
     />
   );
@@ -138,7 +138,7 @@ const CommandItem = React.forwardRef<
       ref={ref}
       className={cn(
         "relative flex cursor-pointer select-none items-center rounded-md px-2 py-2 text-sm outline-none",
-        "text-[var(--cg-fg)] aria-selected:bg-[var(--cg-accent)] aria-selected:text-[var(--cg-accent-fg)]",
+        "text-[var(--cf-fg)] aria-selected:bg-[var(--cf-accent)] aria-selected:text-[var(--cf-accent-fg)]",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}

@@ -78,7 +78,7 @@ describe("markdownToHtml", () => {
 
   it("keeps hyphenated heading classes numbered in read mode", () => {
     const html = markdownToHtml("# Intro {.foo-bar}", { sectionNumbers: true });
-    expect(html).toContain('<h1><span class="cg-section-number">1</span> Intro</h1>');
+    expect(html).toContain('<h1><span class="cf-section-number">1</span> Intro</h1>');
   });
 
   it("renders paragraphs", () => {
@@ -234,11 +234,11 @@ describe("markdownToHtml", () => {
 
     const html = markdownToHtml("See [@karger2000].", { bibliography });
 
-    expect(html).toContain('class="cg-citation"');
-    expect(html).toContain('class="cg-bibliography"');
-    expect(html).toContain('class="cg-bibliography-heading"');
-    expect(html).toContain('class="cg-bibliography-list"');
-    expect(html).toContain('class="cg-bibliography-entry"');
+    expect(html).toContain('class="cf-citation"');
+    expect(html).toContain('class="cf-bibliography"');
+    expect(html).toContain('class="cf-bibliography-heading"');
+    expect(html).toContain('class="cf-bibliography-list"');
+    expect(html).toContain('class="cf-bibliography-entry"');
     expect(html).not.toContain('class="bibliography"');
     expect(html).not.toContain('class="bib-entry"');
   });
@@ -268,7 +268,7 @@ describe("markdownToHtml", () => {
     expect(fakeCsl.registerCitations).toHaveBeenCalled();
     expect(fakeCsl.cite).toHaveBeenCalledWith(["karger2000"]);
     expect(fakeCsl.bibliography).toHaveBeenCalledWith(["karger2000"]);
-    expect(html).toContain('<span class="cg-citation">[1]</span>');
-    expect(html).toContain('<div class="cg-bibliography-entry" id="bib-karger2000"><span class="csl-entry">[1] Karger.</span></div>');
+    expect(html).toContain('<span class="cf-citation">[1]</span>');
+    expect(html).toContain('<div class="cf-bibliography-entry" id="bib-karger2000"><span class="csl-entry">[1] Karger.</span></div>');
   });
 });

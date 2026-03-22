@@ -7,7 +7,7 @@
  * - Sidebar collapsed state per section
  * - Sidebar width
  *
- * State is persisted to localStorage under the key `cg-window-state`.
+ * State is persisted to localStorage under the key `cf-window-state`.
  */
 
 import { readLocalStorage, writeLocalStorage } from "./lib/utils";
@@ -42,7 +42,7 @@ export interface WindowState {
   version: number;
 }
 
-const STORAGE_KEY = "cg-window-state";
+const STORAGE_KEY = "cf-window-state";
 const STATE_VERSION = 1;
 
 /** Default state used when no persisted state is found. */

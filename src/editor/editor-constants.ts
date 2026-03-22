@@ -15,11 +15,11 @@ export const defaultContentFontStack = 'KaTeX_Main, "Times New Roman", serif';
 /** Default monospace stack, matching read mode code blocks. */
 export const defaultCodeFontStack = 'Monaco, "DejaVu Sans Mono", Consolas, monospace';
 
-/** UI font used throughout the app shell, theme-overridable via --cg-ui-font. */
-export const uiFont = `var(--cg-ui-font, ${defaultUIFontStack})`;
+/** UI font used throughout the app shell, theme-overridable via --cf-ui-font. */
+export const uiFont = `var(--cf-ui-font, ${defaultUIFontStack})`;
 
-/** Prose font used throughout document content, theme-overridable via --cg-content-font. */
-export const contentFont = `var(--cg-content-font, ${defaultContentFontStack})`;
+/** Prose font used throughout document content, theme-overridable via --cf-content-font. */
+export const contentFont = `var(--cf-content-font, ${defaultContentFontStack})`;
 
-/** Monospace font used throughout the editor theme, theme-overridable via --cg-code-font. */
-export const monoFont = `var(--cg-code-font, ${defaultCodeFontStack})`;
+/** Monospace font used throughout the editor theme, theme-overridable via --cf-code-font. */
+export const monoFont = `var(--cf-code-font, ${defaultCodeFontStack})`;

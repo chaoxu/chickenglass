@@ -68,7 +68,7 @@ class FootnoteRefWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const sup = document.createElement("sup");
-    sup.className = "cg-sidenote-ref";
+    sup.className = "cf-sidenote-ref";
     sup.textContent = String(this.number);
     sup.title = `Footnote ${this.id}`;
     sup.setAttribute("data-footnote-id", this.id);
@@ -104,7 +104,7 @@ function buildSidenoteDecorations(state: EditorState, focused: boolean): Decorat
 
     // Collapse the definition line to zero height
     items.push(
-      Decoration.line({ class: "cg-sidenote-def-line" }).range(def.from),
+      Decoration.line({ class: "cf-sidenote-def-line" }).range(def.from),
     );
     // Replace text content (after label) with empty widget to hide it visually
     if (def.labelTo < def.to) {
@@ -192,20 +192,20 @@ class FootnoteSectionWidget extends RenderWidget {
 
   toDOM(view: EditorView): HTMLElement {
     const section = document.createElement("div");
-    section.className = "cg-bibliography";
+    section.className = "cf-bibliography";
     section.style.marginTop = "2em";
 
     const heading = document.createElement("h2");
-    heading.className = "cg-bibliography-heading";
+    heading.className = "cf-bibliography-heading";
     heading.textContent = "Footnotes";
     section.appendChild(heading);
 
     const list = document.createElement("div");
-    list.className = "cg-bibliography-list";
+    list.className = "cf-bibliography-list";
 
     for (const entry of this.entries) {
       const div = document.createElement("div");
-      div.className = "cg-bibliography-entry";
+      div.className = "cf-bibliography-entry";
       div.style.cursor = "pointer";
       div.style.fontSize = "0.85em";
       div.style.lineHeight = "1.6";
