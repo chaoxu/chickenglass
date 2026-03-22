@@ -36,6 +36,34 @@
   --cg-border-overlay: rgba(212, 212, 216, 0.6);
   --cg-separator: rgba(161, 161, 170, 0.8);
 
+  /* Theme-owned special surfaces */
+  --cg-block-header-accent: var(--cg-fg);
+  --cg-block-header-padding: 12px;
+  --cg-block-title-color: var(--cg-fg);
+  --cg-block-title-weight: 700;
+  --cg-block-theorem-style: italic;
+  --cg-block-body-style: normal;
+  --cg-block-nest-1: var(--cg-border);
+  --cg-block-nest-2: var(--cg-active);
+  --cg-block-nest-3: var(--cg-muted);
+  --cg-block-nest-4: var(--cg-fg);
+  --cg-proof-marker: "\220E";
+  --cg-proof-marker-color: var(--cg-fg);
+  --cg-proof-marker-size: 1.2em;
+  --cg-blockquote-border: var(--cg-border);
+  --cg-blockquote-color: var(--cg-fg);
+  --cg-block-margin: 0.6em 0;
+  --cg-block-title-display: inline;
+  --cg-block-title-separator: ".\2002\2002";
+  --cg-include-accent: var(--cg-border);
+  --cg-include-label-color: var(--cg-border);
+  --cg-include-label-active-color: var(--cg-muted);
+  --cg-table-border: var(--cg-border);
+  --cg-table-header-border: var(--cg-border);
+  --cg-table-edit-outline: var(--cg-active);
+  --cg-table-cell-padding: 0.5em 0.75em;
+  --cg-embed-border: var(--cg-border);
+
   /* Transitions */
   --cg-transition: 0.15s ease;
 }
@@ -359,27 +387,29 @@ body {
 .cg-read-mode-view .corollary,
 .cg-read-mode-view .proposition,
 .cg-read-mode-view .conjecture {
-  font-style: italic;
-  margin: 0.6em 0;
+  font-style: var(--cg-block-theorem-style);
+  margin: var(--cg-block-margin);
 }
 
 /* Definition, problem: normal body */
 .cg-read-mode-view .definition,
 .cg-read-mode-view .problem {
-  font-style: normal;
-  margin: 0.6em 0;
+  font-style: var(--cg-block-body-style);
+  margin: var(--cg-block-margin);
 }
 
 /* Proof: normal text, relative position for QED */
 .cg-read-mode-view .proof {
-  font-style: normal;
-  margin: 0.6em 0;
+  font-style: var(--cg-block-body-style);
+  margin: var(--cg-block-margin);
   position: relative;
 }
 
 /* QED tombstone at end of proof */
 .cg-read-mode-view .proof::after {
-  content: '\25FE';
+  content: var(--cg-proof-marker);
+  color: var(--cg-proof-marker-color);
+  font-size: var(--cg-proof-marker-size);
   float: right;
 }
 
@@ -387,28 +417,29 @@ body {
 .cg-read-mode-view .remark,
 .cg-read-mode-view .example,
 .cg-read-mode-view .note {
-  margin: 0.6em 0;
-  font-style: normal;
+  margin: var(--cg-block-margin);
+  font-style: var(--cg-block-body-style);
 }
 
 .cg-read-mode-view .Blockquote,
 .cg-read-mode-view blockquote {
-  border-left: 3px solid var(--cg-border);
+  border-left: 3px solid var(--cg-blockquote-border);
   padding-left: 1em;
   margin-left: 0;
-  color: var(--cg-fg);
+  color: var(--cg-blockquote-color);
 }
 
 /* Div title (e.g. "Theorem 1."): bold, normal style (not italic), inline */
 .cg-read-mode-view .div-title {
-  display: inline;
-  font-weight: bold;
+  display: var(--cg-block-title-display);
+  font-weight: var(--cg-block-title-weight);
+  color: var(--cg-block-title-color);
   font-style: normal;
 }
 
 /* Period + en space after the div title (inline header separator) */
 .cg-read-mode-view .div-title::after {
-  content: '.\2002\2002';
+  content: var(--cg-block-title-separator);
 }
 
 /* ── Read mode tables ────────────────────────────────────────────────────── */
@@ -422,13 +453,14 @@ body {
 
 .cg-read-mode-view th,
 .cg-read-mode-view td {
-  border: 1px solid var(--cg-border);
-  padding: 0.5em 0.75em;
+  border: 1px solid var(--cg-table-border);
+  padding: var(--cg-table-cell-padding);
   text-align: left;
 }
 
 .cg-read-mode-view th {
   font-weight: 600;
+  border-bottom: 2px solid var(--cg-table-header-border);
   background: var(--cg-subtle);
 }
 

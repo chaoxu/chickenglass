@@ -6,13 +6,17 @@
  * behavioral tests — they confirm that claimed work is present.
  */
 import { describe, it, expect } from "vitest";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 
 const ROOT = resolve(__dirname, "../..");
 
 function fileExists(relativePath: string): boolean {
   return existsSync(resolve(ROOT, relativePath));
+}
+
+function fileText(relativePath: string): string {
+  return readFileSync(resolve(ROOT, relativePath), "utf8");
 }
 
 // ─── Issue #87: Declarative block plugins from YAML ──────────────────────────
@@ -667,6 +671,26 @@ describe("#273 — theme-driven typography", () => {
 
   it("theme config test coverage exists", () => {
     expect(fileExists("src/editor/theme-config.test.ts")).toBe(true);
+  });
+});
+
+describe("#277 — first-class theme surface tokens", () => {
+  it("globals.css defines block and special-surface theme tokens", () => {
+    const css = fileText("src/globals.css");
+    expect(css).toContain("--cg-block-header-accent");
+    expect(css).toContain("--cg-proof-marker");
+    expect(css).toContain("--cg-blockquote-border");
+    expect(css).toContain("--cg-table-border");
+    expect(css).toContain("--cg-embed-border");
+  });
+
+  it("rich and read block styling consume the shared theme tokens", () => {
+    const richCss = fileText("src/editor/block-theme.ts");
+    const readCss = fileText("src/globals.css");
+    expect(richCss).toContain("var(--cg-block-header-accent)");
+    expect(richCss).toContain("var(--cg-proof-marker)");
+    expect(readCss).toContain("var(--cg-block-title-separator)");
+    expect(readCss).toContain("var(--cg-table-header-border)");
   });
 });
 

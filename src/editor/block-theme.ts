@@ -5,45 +5,46 @@
 export const blockThemeStyles = {
   /* Block header line — left border accent for fenced div blocks */
   ".cg-block-header": {
-    borderLeft: "2px solid var(--cg-fg)",
-    paddingLeft: "12px",
+    borderLeft: "2px solid var(--cg-block-header-accent)",
+    paddingLeft: "var(--cg-block-header-padding)",
   },
 
   /* Block header: rendered widget label (e.g. "Theorem 1.") */
   ".cg-block-header-rendered": {
-    fontWeight: "700",
-    color: "var(--cg-fg)",
+    fontWeight: "var(--cg-block-title-weight)",
+    color: "var(--cg-block-title-color)",
   },
 
   /* Fenced div nesting guides — vertical lines on the left, editing only.
      Uses inset box-shadow so the guide never shifts content layout. */
   ".cg-fence-d1": {
-    boxShadow: "inset 3px 0 0 var(--cg-border)",
+    boxShadow: "inset 3px 0 0 var(--cg-block-nest-1)",
   },
   ".cg-fence-d2": {
-    boxShadow: "inset 3px 0 0 var(--cg-active)",
+    boxShadow: "inset 3px 0 0 var(--cg-block-nest-2)",
   },
   ".cg-fence-d3": {
-    boxShadow: "inset 3px 0 0 var(--cg-muted)",
+    boxShadow: "inset 3px 0 0 var(--cg-block-nest-3)",
   },
   ".cg-fence-d4": {
-    boxShadow: "inset 3px 0 0 var(--cg-fg)",
+    boxShadow: "inset 3px 0 0 var(--cg-block-nest-4)",
   },
 
   /* Theorem-family: italic body (academic convention, matches Read mode) */
   ".cg-block-theorem, .cg-block-lemma, .cg-block-corollary, .cg-block-proposition, .cg-block-conjecture": {
-    fontStyle: "italic",
+    fontStyle: "var(--cg-block-theorem-style)",
   },
   /* Definition, problem, proof, remark: normal body */
   ".cg-block-definition, .cg-block-problem, .cg-block-proof, .cg-block-remark, .cg-block-example, .cg-block-algorithm": {
-    fontStyle: "normal",
+    fontStyle: "var(--cg-block-body-style)",
   },
 
   /* QED tombstone — right-aligned at end of proof blocks */
   ".cg-block-qed::after": {
-    content: "'\\220E'",
+    content: "var(--cg-proof-marker)",
     float: "right",
-    fontSize: "1.2em",
+    color: "var(--cg-proof-marker-color)",
+    fontSize: "var(--cg-proof-marker-size)",
     lineHeight: "1",
   },
 
@@ -58,14 +59,15 @@ export const blockThemeStyles = {
 
   /* Include block styling */
   ".cg-block-include": {
-    borderLeft: "2px solid var(--cg-border)",
+    borderLeft: "2px solid var(--cg-include-accent)",
     paddingLeft: "1em",
     marginBottom: "0.5em",
   },
 
   /* Blockquote plugin styling: fenced div blockquote blocks */
   ".cg-block-blockquote": {
-    borderLeft: "2px solid var(--cg-border)",
+    borderLeft: "2px solid var(--cg-blockquote-border)",
+    color: "var(--cg-blockquote-color)",
     paddingLeft: "1em",
     fontStyle: "italic",
   },
@@ -108,20 +110,20 @@ export const blockThemeStyles = {
   },
 
   ".cg-table-widget th, .cg-table-widget td": {
-    border: "1px solid var(--cg-border)",
-    padding: "4px 8px",
+    border: "1px solid var(--cg-table-border)",
+    padding: "var(--cg-table-cell-padding)",
     textAlign: "left",
     verticalAlign: "top",
   },
 
   ".cg-table-widget th": {
     fontWeight: "700",
-    borderBottom: "2px solid var(--cg-border)",
+    borderBottom: "2px solid var(--cg-table-header-border)",
   },
 
   /* Active cell editing indicator */
   ".cg-table-cell-editing": {
-    outline: "2px solid var(--cg-active)",
+    outline: "2px solid var(--cg-table-edit-outline)",
     outlineOffset: "-2px",
     backgroundColor: "transparent",
   },
@@ -136,7 +138,7 @@ export const blockThemeStyles = {
     display: "block",
     width: "100%",
     height: "350px",
-    border: "1px solid var(--cg-border)",
+    border: "1px solid var(--cg-embed-border)",
     borderRadius: "2px",
     backgroundColor: "transparent",
   },
@@ -154,7 +156,7 @@ export const blockThemeStyles = {
     left: "0",
     width: "100%",
     height: "100%",
-    border: "1px solid var(--cg-border)",
+    border: "1px solid var(--cg-embed-border)",
     borderRadius: "2px",
   },
   /* Gist embed: auto-size to content instead of fixed height */
@@ -166,7 +168,7 @@ export const blockThemeStyles = {
   /* Include region: right border spans the full height, label anchors to it */
   ".cg-include-region": {
     position: "relative",
-    borderRight: "1px solid var(--cg-border)",
+    borderRight: "1px solid var(--cg-include-accent)",
   },
 
   /* Include label: rotated filename inside the right padding of .cm-content */
@@ -179,7 +181,7 @@ export const blockThemeStyles = {
     userSelect: "none",
     pointerEvents: "none",
     fontSize: "10px",
-    color: "var(--cg-border)",
+    color: "var(--cg-include-label-color)",
     whiteSpace: "nowrap",
     letterSpacing: "0.3px",
     lineHeight: "1",
@@ -187,6 +189,6 @@ export const blockThemeStyles = {
   },
 
   ".cg-include-label-active": {
-    color: "var(--cg-muted)",
+    color: "var(--cg-include-label-active-color)",
   },
 };
