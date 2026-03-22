@@ -7,6 +7,10 @@
  * ──────────────────────────────────────────────────────────────────────────── */
 
 :root {
+  --cg-ui-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --cg-content-font: KaTeX_Main, "Times New Roman", serif;
+  --cg-code-font: Monaco, "DejaVu Sans Mono", Consolas, monospace;
+
   /* Backgrounds — flat: secondary matches primary */
   --cg-bg: #ffffff;
   --cg-bg-secondary: #ffffff;
@@ -60,12 +64,20 @@ body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--cg-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--cg-bg);
   color: var(--cg-fg);
+}
+
+.cg-ui-font {
+  font-family: var(--cg-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+}
+
+.cg-code-font,
+.font-mono {
+  font-family: var(--cg-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
 }
 
 /* ── CodeMirror 6 overrides ─────────────────────────────────────────────────── */
@@ -300,7 +312,7 @@ body {
 /* ── Read mode code blocks ───────────────────────────────────────────────── */
 
 .cg-read-mode-view code {
-  font-family: Monaco, "DejaVu Sans Mono", Consolas, monospace;
+  font-family: var(--cg-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   font-size: 0.85em;
   background: var(--cg-hover);
   padding: 0.15em 0.35em;
@@ -308,7 +320,7 @@ body {
 }
 
 .cg-read-mode-view pre {
-  font-family: Monaco, "DejaVu Sans Mono", Consolas, monospace;
+  font-family: var(--cg-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   background: var(--cg-hover);
   border: 1px solid var(--cg-border);
   padding: 0.5em 1em;

@@ -657,6 +657,19 @@ describe("#282 — interactive table subsystem decomposition", () => {
   });
 });
 
+describe("#273 — theme-driven typography", () => {
+  it("theme presets expose a UI font alongside content and code fonts", async () => {
+    const mod = await import("../editor/theme-config");
+    expect(mod.themePresets.academic.uiFont).toBeTruthy();
+    expect(mod.themePresets.academic.contentFont).toBeTruthy();
+    expect(mod.themePresets.academic.codeFont).toBeTruthy();
+  });
+
+  it("theme config test coverage exists", () => {
+    expect(fileExists("src/editor/theme-config.test.ts")).toBe(true);
+  });
+});
+
 describe("#279 — shared Lezer document semantics", () => {
   it("shared document semantics analyzers exist", async () => {
     const mod = await import("../semantics/document");

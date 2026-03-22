@@ -223,7 +223,7 @@ function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: Appeara
       <div className="py-3 border-b border-[var(--cg-border)]">
         <label className="text-sm text-[var(--cg-fg)] block mb-2">Writing preset</label>
         <p className="text-xs text-[var(--cg-muted)] mb-2">
-          Font family, heading sizes, and line spacing.
+          UI, prose, and code fonts plus heading sizes and line spacing.
         </p>
         <div className="grid grid-cols-3 gap-2">
           {themePresetKeys.map((key) => {

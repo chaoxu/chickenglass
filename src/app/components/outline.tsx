@@ -92,7 +92,7 @@ export function Outline({ headings, onSelect }: OutlineProps) {
                 {heading.number}
               </span>
               <span
-                className="truncate font-mono"
+                className="truncate cg-ui-font"
                 dangerouslySetInnerHTML={{ __html: renderInline(heading.text) }}
               />
             </button>

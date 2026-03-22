@@ -114,7 +114,7 @@ function InlineCreateInput({
         ref={inputRef}
         type="text"
         placeholder={kind === "folder" ? "Folder name" : "File name"}
-        className="flex-1 text-sm font-mono bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
+        className="flex-1 text-sm cg-ui-font bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={handleKey}
@@ -283,7 +283,7 @@ export function FileTreeNode({
                 <input
                   ref={renameInputRef}
                   type="text"
-                  className="flex-1 text-sm font-mono bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
+                  className="flex-1 text-sm cg-ui-font bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
                   value={renameValue}
                   autoFocus
                   onChange={(event) => setRenameValue(event.target.value)}
@@ -292,7 +292,7 @@ export function FileTreeNode({
                   onClick={(event) => event.stopPropagation()}
                 />
               ) : (
-                <span className="font-mono truncate">{entry.name}</span>
+                <span className="cg-ui-font truncate">{entry.name}</span>
               )}
             </div>
           </ContextMenuTrigger>
@@ -404,7 +404,7 @@ export function FileTreeNode({
               <input
                 ref={renameInputRef}
                 type="text"
-                className="flex-1 text-sm font-mono bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
+                className="flex-1 text-sm cg-ui-font bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
                 value={renameValue}
                 autoFocus
                 onChange={(event) => setRenameValue(event.target.value)}
@@ -413,7 +413,7 @@ export function FileTreeNode({
                 onClick={(event) => event.stopPropagation()}
               />
             ) : (
-              <span className="font-mono truncate">{entry.name}</span>
+              <span className="cg-ui-font truncate">{entry.name}</span>
             )}
           </div>
         </ContextMenuTrigger>

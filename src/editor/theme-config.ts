@@ -1,12 +1,16 @@
-import { defaultCodeFontStack } from "./editor-constants";
+import {
+  defaultCodeFontStack,
+  defaultContentFontStack,
+  defaultUIFontStack,
+} from "./editor-constants";
 
 /**
- * Theme presets: typed typography configurations for the editor.
+ * Theme presets: typed typography configurations for the editor and app chrome.
  *
- * Each preset declares fonts, heading sizes/weights/styles, line-height,
- * and content width. These values are applied as CSS custom properties on
- * `document.documentElement` so both the CM6 editor theme and Read mode
- * CSS reference them via `var(--cg-*)`.
+ * Each preset declares UI/content/code fonts, heading sizes/weights/styles,
+ * line-height, and content width. These values are applied as CSS custom
+ * properties on `document.documentElement` so app chrome, CM6, Read mode,
+ * and export helpers can all reference them via `var(--cg-*)`.
  */
 
 export interface HeadingStyle {
@@ -17,6 +21,7 @@ export interface HeadingStyle {
 
 export interface ThemePreset {
   name: string;
+  uiFont: string;
   contentFont: string;
   codeFont: string;
   baseFontSize: string;
@@ -36,7 +41,8 @@ export interface ThemePreset {
  */
 const academic: ThemePreset = {
   name: "Academic",
-  contentFont: "KaTeX_Main, 'Times New Roman', serif",
+  uiFont: defaultUIFontStack,
+  contentFont: defaultContentFontStack,
   codeFont: defaultCodeFontStack,
   baseFontSize: "16px",
   lineHeight: "1.5",
@@ -55,6 +61,7 @@ const academic: ThemePreset = {
  */
 const monospace: ThemePreset = {
   name: "Monospace",
+  uiFont: "'IBM Plex Mono', 'Fira Code', monospace",
   contentFont: "'IBM Plex Mono', 'Fira Code', monospace",
   codeFont: defaultCodeFontStack,
   baseFontSize: "15px",
@@ -73,6 +80,7 @@ const monospace: ThemePreset = {
  */
 const modern: ThemePreset = {
   name: "Modern",
+  uiFont: defaultUIFontStack,
   contentFont: "system-ui, -apple-system, 'Segoe UI', sans-serif",
   codeFont: defaultCodeFontStack,
   baseFontSize: "16px",
@@ -98,6 +106,7 @@ export const themePresetKeys: string[] = Object.keys(themePresets);
 
 /** All CSS custom property names set by applyThemePreset. */
 const PRESET_PROPERTIES = [
+  "--cg-ui-font",
   "--cg-content-font",
   "--cg-code-font",
   "--cg-base-font-size",
@@ -115,6 +124,7 @@ const PRESET_PROPERTIES = [
  */
 export function applyThemePreset(preset: ThemePreset): void {
   const root = document.documentElement;
+  root.style.setProperty("--cg-ui-font", preset.uiFont);
   root.style.setProperty("--cg-content-font", preset.contentFont);
   root.style.setProperty("--cg-code-font", preset.codeFont);
   root.style.setProperty("--cg-base-font-size", preset.baseFontSize);

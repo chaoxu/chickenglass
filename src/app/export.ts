@@ -13,6 +13,11 @@ import type { FileSystem, FileEntry } from "./file-manager";
 import { markdownToHtml, escapeHtml } from "./markdown-to-html";
 import type { ExportFormat } from "./lib/types";
 import { basename } from "./lib/utils";
+import {
+  defaultCodeFontStack,
+  defaultContentFontStack,
+  defaultUIFontStack,
+} from "../editor/editor-constants";
 
 export type { ExportFormat };
 
@@ -54,6 +59,9 @@ function deriveOutputPath(sourcePath: string, format: ExportFormat): string {
  */
 function buildHtmlDocument(content: string, title: string): string {
   const bodyHtml = markdownToHtml(content);
+  const uiFont = resolveExportFontStack("--cg-ui-font", defaultUIFontStack);
+  const contentFont = resolveExportFontStack("--cg-content-font", defaultContentFontStack);
+  const codeFont = resolveExportFontStack("--cg-code-font", defaultCodeFontStack);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -65,7 +73,7 @@ function buildHtmlDocument(content: string, title: string): string {
   <style>
     /* Document typography */
     body {
-      font-family: "Georgia", "Times New Roman", serif;
+      font-family: ${contentFont};
       font-size: 16px;
       line-height: 1.7;
       max-width: 800px;
@@ -75,7 +83,7 @@ function buildHtmlDocument(content: string, title: string): string {
       background: #fff;
     }
     h1, h2, h3, h4, h5, h6 {
-      font-family: sans-serif;
+      font-family: ${uiFont};
       margin-top: 2rem;
       margin-bottom: 0.5rem;
     }
@@ -86,7 +94,7 @@ function buildHtmlDocument(content: string, title: string): string {
       border-radius: 4px;
     }
     code {
-      font-family: "Fira Code", "Consolas", monospace;
+      font-family: ${codeFont};
       font-size: 0.9em;
       background: #f4f4f4;
       padding: 0.1em 0.3em;
@@ -179,6 +187,16 @@ function buildHtmlDocument(content: string, title: string): string {
 ${bodyHtml}
 </body>
 </html>`;
+}
+
+function resolveExportFontStack(variableName: string, fallback: string): string {
+  if (typeof window === "undefined" || typeof getComputedStyle !== "function") {
+    return fallback;
+  }
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue(variableName)
+    .trim();
+  return value || fallback;
 }
 
 /**
