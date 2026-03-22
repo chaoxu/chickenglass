@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { MemoryFileSystem, createDemoFileSystem } from "./file-manager";
+import {
+  MemoryFileSystem,
+  createBlogDemoFileSystem,
+  createDemoFileSystem,
+} from "./file-manager";
 
 describe("MemoryFileSystem", () => {
   it("reads files that exist", async () => {
@@ -91,6 +95,13 @@ describe("createDemoFileSystem", () => {
     expect(await fs.exists("main.md")).toBe(true);
     expect(await fs.exists("notes.md")).toBe(true);
     expect(await fs.exists("chapters/introduction.md")).toBe(true);
+  });
+});
+
+describe("createBlogDemoFileSystem", () => {
+  it("includes FORMAT.md from the repo root in the demo project", async () => {
+    const fs = createBlogDemoFileSystem();
+    expect(await fs.exists("FORMAT.md")).toBe(true);
   });
 });
 
