@@ -1,5 +1,5 @@
 ---
-title: Feature Test Page
+title: "**Feature** Test Page with $x^2$ and `code`"
 bibliography: reference.bib
 ---
 
@@ -20,6 +20,14 @@ Uses `{.unnumbered}` — also no number.
 ## Numbered Subsection
 
 Should be "1.1".
+
+# A Very Long Heading With **Bold**, `code`, $x^2$, a [link](https://example.com), and [@cormen2009] That Should Stay Readable in Breadcrumbs and Outline
+
+This heading exists to verify:
+
+- document-inline rendering inside the document body
+- ui-chrome-inline degradation in breadcrumbs / outline / other chrome surfaces
+- full breadcrumb text (no truncation)
 
 # Inline Rendering
 
@@ -47,6 +55,26 @@ Display math without blank line before:
 $$
 a^2 + b^2 = c^2
 $$
+
+# Labeled Display Math and Equation References
+
+Plain labeled `$$` block:
+
+$$
+\int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2}
+$$ {#eq:gaussian}
+
+Labeled `\[\]` block:
+
+\[
+\sum_{k=0}^n \binom{n}{k} = 2^n
+\] {#eq:binomial}
+
+Equation references should work in both bracketed and narrative forms:
+
+- Bracketed: [@eq:gaussian], [@eq:binomial]
+- Narrative: @eq:gaussian and @eq:binomial
+- Clustered: [@eq:gaussian; @eq:binomial]
 
 # Math in Lists
 
@@ -134,14 +162,52 @@ This theorem title should render "Main Result" in bold.
 This problem title uses the `title=` attribute and should render "3SUM" in bold.
 :::
 
+# Rich Block Titles
+
+::: {.remark} Title with [a link](https://example.com), [@cormen2009], `code`, and $x^2$
+This block title should stay rich inside the document surface.
+:::
+
 # Footnotes
 
-This has a footnote[^1].
+This has a footnote[^1] and a richer footnote[^2].
 
 [^1]: This is the footnote content with math $x^2 + y^2 = r^2$.
+[^2]: This footnote has **bold**, `code`, a [link](https://example.com), a citation [@cormen2009], and math $\alpha^2 + \beta^2 = \gamma^2$.
 
 # Cross-References and Citations
 
 See [@cormen2009] for details.
 
 By [@thm:fundamental], the sum formula holds. See also [@prop:tu].
+
+Narrative block reference: @thm:fundamental.
+
+Reference cluster: [@thm:fundamental; @prop:tu; @eq:gaussian].
+
+# Search Rich-Mode Coverage
+
+Search for `SearchNeedle` and `@cormen2009`.
+
+Plain prose SearchNeedle should highlight.
+
+Inline math SearchNeedle: $SearchNeedle^2 + 1$.
+
+Display math SearchNeedle:
+
+$$
+\text{SearchNeedle} = x + y
+$$
+
+::: {.definition} SearchNeedle Block Title
+This block body also contains SearchNeedle and [@cormen2009].
+:::
+
+| Surface | Token |
+|---------|-------|
+| table cell | SearchNeedle |
+| citation source | @cormen2009 |
+
+Another SearchNeedle footnote[^search].
+
+[^search]: SearchNeedle inside footnote tooltip and inline rendering.
