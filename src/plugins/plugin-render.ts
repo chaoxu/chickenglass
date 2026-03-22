@@ -39,7 +39,6 @@ import {
   type FencedBlockInfo,
 } from "../render/fenced-block-core";
 import { mathMacrosField } from "../render/math-macros";
-import { MathWidget } from "../render/math-render";
 import { renderInlineMarkdown } from "../render/inline-render";
 import {
   isValidEmbedUrl,
@@ -353,9 +352,8 @@ function addHeaderWidgetDecoration(
   macrosKey: string,
   items: Range<Decoration>[],
 ): void {
-  const replaceEnd = div.titleFrom ?? div.openFenceTo;
-  const label = div.titleFrom !== undefined ? header + " " : header;
-  const widget = new BlockHeaderWidget(label, macros, macrosKey);
+  const replaceEnd = div.titleTo ?? div.openFenceTo;
+  const widget = new BlockHeaderWidget(header, macros, macrosKey);
   widget.sourceFrom = div.openFenceFrom;
   items.push(
     Decoration.replace({ widget }).range(div.openFenceFrom, replaceEnd),
@@ -382,29 +380,6 @@ function addEmbedWidget(
     const widget = new EmbedWidget(src, div.className);
     widget.sourceFrom = bodyFrom;
     items.push(Decoration.replace({ widget }).range(bodyFrom, bodyTo));
-  }
-}
-
-/** Render inline math ($...$) in title text (Typora-style: cursor inside shows source). */
-function addTitleMathDecorations(
-  state: EditorState,
-  div: FencedDivInfo,
-  focused: boolean,
-  cursorFrom: number,
-  macros: Record<string, string>,
-  items: Range<Decoration>[],
-): void {
-  if (div.titleFrom === undefined || div.titleTo === undefined) return;
-
-  const titleText = state.sliceDoc(div.titleFrom, div.titleTo);
-  const regex = /\$([^$\n]+)\$/g;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(titleText)) !== null) {
-    const mathFrom = div.titleFrom + match.index;
-    const mathTo = mathFrom + match[0].length;
-    if (focused && cursorFrom >= mathFrom && cursorFrom <= mathTo) continue;
-    const widget = new MathWidget(match[1], match[0], false, macros);
-    items.push(Decoration.replace({ widget }).range(mathFrom, mathTo));
   }
 }
 
@@ -477,6 +452,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     const labelAttrs: BlockAttrs = {
       type: div.className,
       id: div.id,
+      title: div.title,
       number: numberEntry?.number,
     };
     const spec = plugin.render(labelAttrs);
@@ -490,7 +466,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
           class: `${spec.className} cg-block-source`,
         }).range(div.from),
       );
-      addTitleMathDecorations(state, div, focused, cursor.from, macros, items);
     } else {
       // Rendered mode: header widget replaces fence syntax
       items.push(
@@ -499,7 +474,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
         }).range(div.from),
       );
       addHeaderWidgetDecoration(div, spec.header, macros, macrosKey, items);
-      addTitleMathDecorations(state, div, focused, cursor.from, macros, items);
     }
 
     // --- Closing fence ---

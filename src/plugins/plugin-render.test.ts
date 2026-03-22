@@ -164,6 +164,21 @@ describe("blockDecorationField", () => {
     expect(hasLineClassAt(specs, proofCloseLine, "cg-include-fence")).toBe(true);
   });
 
+  it("includes title in header widget replace range", () => {
+    const doc = `::: {.theorem} **Main Result**\nContent\n:::`;
+    const state = createTestState(doc);
+    const specs = getDecoSpecs(state);
+
+    // Widget should cover the entire opening line (including title)
+    const widgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
+    expect(widgets.length).toBe(1);
+
+    const line1 = state.doc.line(1);
+    // Replace range should cover from line start to end of title
+    expect(widgets[0].from).toBe(line1.from);
+    expect(widgets[0].to).toBe(line1.to);
+  });
+
   it("does not crash on an incomplete fenced div without a closing fence", () => {
     const doc = [
       "::: {.definition}",
