@@ -14,6 +14,7 @@ import {
   SidebarRail,
   SidebarTrigger,
 } from "./components/sidebar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { FileTree } from "./components/file-tree";
 import { Outline } from "./components/outline";
 import { EditorPane } from "./components/editor-pane";
@@ -507,63 +508,38 @@ function AppInner() {
               <SidebarTrigger />
             </SidebarHeader>
 
-            {/* Tab switcher */}
-            <div className="flex border-b border-[var(--cg-border)] shrink-0">
-              <button
-                className={[
-                  "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-[var(--cg-transition,0.15s)]",
-                  sidebarTab === "files"
-                    ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent)]"
-                    : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
-                ].join(" ")}
-                onClick={() => setSidebarTab("files")}
-              >
-                Files
-              </button>
-              <button
-                className={[
-                  "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-[var(--cg-transition,0.15s)]",
-                  sidebarTab === "outline"
-                    ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent)]"
-                    : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
-                ].join(" ")}
-                onClick={() => setSidebarTab("outline")}
-              >
-                Outline
-              </button>
-              <button
-                className={[
-                  "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-[var(--cg-transition,0.15s)]",
-                  sidebarTab === "symbols"
-                    ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent)]"
-                    : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
-                ].join(" ")}
-                onClick={() => setSidebarTab("symbols")}
-              >
-                Symbols
-              </button>
-            </div>
+            <Tabs
+              value={sidebarTab}
+              onValueChange={(value) => setSidebarTab(value as "files" | "outline" | "symbols")}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <TabsList className="flex shrink-0 border-b border-[var(--cg-border)]">
+                <TabsTrigger value="files">Files</TabsTrigger>
+                <TabsTrigger value="outline">Outline</TabsTrigger>
+                <TabsTrigger value="symbols">Symbols</TabsTrigger>
+              </TabsList>
 
-            <SidebarContent>
-              {sidebarTab === "files" && (
-                <FileTree
-                  root={fileTree}
-                  activePath={activeTab}
-                  onSelect={(path) => { void openFile(path, { preview: true }); }}
-                  onDoubleClick={(path) => { void openFile(path, { preview: false }); }}
-                  onRename={handleRename}
-                  onDelete={handleDelete}
-                  onCreateFile={(path) => { void createFile(path); }}
-                  onCreateDir={(path) => { void createDirectory(path); }}
-                />
-              )}
-              {sidebarTab === "outline" && (
-                <Outline headings={headings} onSelect={handleOutlineSelect} />
-              )}
-              {sidebarTab === "symbols" && (
-                <SymbolPanel onInsert={handleSymbolInsert} view={editorState?.view ?? null} />
-              )}
-            </SidebarContent>
+              <SidebarContent>
+                <TabsContent value="files" className="min-h-full">
+                  <FileTree
+                    root={fileTree}
+                    activePath={activeTab}
+                    onSelect={(path) => { void openFile(path, { preview: true }); }}
+                    onDoubleClick={(path) => { void openFile(path, { preview: false }); }}
+                    onRename={handleRename}
+                    onDelete={handleDelete}
+                    onCreateFile={(path) => { void createFile(path); }}
+                    onCreateDir={(path) => { void createDirectory(path); }}
+                  />
+                </TabsContent>
+                <TabsContent value="outline" className="min-h-full">
+                  <Outline headings={headings} onSelect={handleOutlineSelect} />
+                </TabsContent>
+                <TabsContent value="symbols" className="min-h-full">
+                  <SymbolPanel onInsert={handleSymbolInsert} view={editorState?.view ?? null} />
+                </TabsContent>
+              </SidebarContent>
+            </Tabs>
           </Sidebar>
           <SidebarRail />
         </div>

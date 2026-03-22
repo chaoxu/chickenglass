@@ -520,11 +520,40 @@ describe("React migration — #143 cleanup", () => {
 });
 
 describe("#286 — shared app chrome primitives", () => {
+  it("shared dialog and breadcrumb primitives exist", () => {
+    expect(fileExists("src/app/components/ui/dialog.tsx")).toBe(true);
+    expect(fileExists("src/app/components/ui/breadcrumb.tsx")).toBe(true);
+  });
+
   it("sidebar ui primitives exist", async () => {
     const mod = await import("./components/sidebar");
     expect(mod.SidebarProvider).toBeDefined();
     expect(mod.SidebarTrigger).toBeDefined();
     expect(mod.SidebarRail).toBeDefined();
     expect(mod.SidebarInset).toBeDefined();
+  });
+
+  it("shared scroll area primitive exists", () => {
+    expect(fileExists("src/app/components/ui/scroll-area.tsx")).toBe(true);
+  });
+
+  it("shared tabs primitive exists", () => {
+    expect(fileExists("src/app/components/ui/tabs.tsx")).toBe(true);
+  });
+
+  it("shared chrome action primitives exist", () => {
+    expect(fileExists("src/app/components/ui/command.tsx")).toBe(true);
+    expect(fileExists("src/app/components/ui/context-menu.tsx")).toBe(true);
+  });
+
+  it("shared input primitives exist", () => {
+    expect(fileExists("src/app/components/ui/input.tsx")).toBe(true);
+    expect(fileExists("src/app/components/ui/textarea.tsx")).toBe(true);
+  });
+
+  it("shared form primitives exist", () => {
+    expect(fileExists("src/app/components/ui/select.tsx")).toBe(true);
+    expect(fileExists("src/app/components/ui/checkbox.tsx")).toBe(true);
+    expect(fileExists("src/app/components/ui/slider.tsx")).toBe(true);
   });
 });

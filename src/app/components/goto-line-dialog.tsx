@@ -9,6 +9,7 @@
 import { useState, useEffect } from "react";
 import { parseTarget } from "../goto-line";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
+import { Input } from "./ui/input";
 
 interface GotoLineDialogProps {
   open: boolean;
@@ -49,9 +50,9 @@ export function GotoLineDialog({ open, onOpenChange, onGoto, currentLine }: Goto
         overlayClassName="bg-transparent"
       >
         <DialogTitle className="sr-only">Go to line</DialogTitle>
-        <input
+        <Input
           type="text"
-          className="w-full rounded border border-[var(--cg-border)] bg-[var(--cg-bg-secondary)] px-3 py-1.5 font-mono text-sm text-[var(--cg-fg)] outline-none focus:ring-1 focus:ring-[var(--cg-accent)] placeholder:text-[var(--cg-muted)]"
+          className="bg-[var(--cg-bg-secondary)] font-mono"
           placeholder={String(currentLine)}
           value={value}
           onChange={(e) => setValue(e.target.value)}

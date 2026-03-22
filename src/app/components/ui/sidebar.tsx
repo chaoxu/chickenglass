@@ -1,6 +1,7 @@
 import * as React from "react";
 import { PanelLeft } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { ScrollArea } from "./scroll-area";
 
 const SIDEBAR_DEFAULT_WIDTH = 224;
 const SIDEBAR_MIN_WIDTH = 140;
@@ -195,13 +196,14 @@ const SidebarHeader = React.forwardRef<
 });
 
 const SidebarContent = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
+  React.ElementRef<typeof ScrollArea>,
+  React.ComponentPropsWithoutRef<typeof ScrollArea>
 >(function SidebarContent({ className, ...props }, ref) {
   return (
-    <div
+    <ScrollArea
       ref={ref}
-      className={cn("flex-1 overflow-y-auto overflow-x-hidden min-w-0 overscroll-contain", className)}
+      className={cn("flex-1 min-w-0", className)}
+      viewportClassName="h-full min-w-0 overscroll-contain"
       {...props}
     />
   );

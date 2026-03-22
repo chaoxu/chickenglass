@@ -11,6 +11,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { BackgroundIndexer } from "../../index/indexer";
 import type { IndexEntry, IndexQuery } from "../../index/query-api";
 import { basename } from "../lib/utils";
+import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
+import { Input } from "./ui/input";
+import { ScrollArea } from "./ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 /** Known block types for the filter dropdown. */
 const BLOCK_TYPES = [
@@ -27,6 +31,8 @@ const BLOCK_TYPES = [
   "equation",
   "heading",
 ] as const;
+
+const ALL_TYPES_VALUE = "__all__";
 
 export interface SearchPanelProps {
   /** Whether the panel is visible. */
@@ -128,19 +134,6 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
     };
   }, [open, query, typeFilter, indexer]);
 
-  // Escape closes the panel. Cmd/Ctrl+Shift+F is handled by the parent app.
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onOpenChange(false);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onOpenChange]);
-
   const handleResultClick = useCallback(
     (entry: IndexEntry) => {
       onResultSelect(entry.file, entry.position.from);
@@ -163,49 +156,49 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
   }
 
   return (
-    /* Backdrop */
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] bg-black/40"
-      onMouseDown={(e) => {
-        // Close when clicking backdrop (not the panel itself).
-        if (e.target === e.currentTarget) onOpenChange(false);
-      }}
-    >
-      {/* Panel */}
-      <div
-        className="w-full max-w-xl bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded-lg flex flex-col overflow-hidden"
-        style={{ maxHeight: "70vh" }}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="top-[10vh] flex max-h-[70vh] w-full max-w-xl -translate-y-0 flex-col overflow-hidden p-0"
+        aria-describedby={undefined}
       >
+        <DialogTitle className="sr-only">Search</DialogTitle>
         {/* Header: search input + type filter */}
         <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--cg-border)] shrink-0">
           <Search
             className="w-4 h-4 text-[var(--cg-muted)] shrink-0"
             aria-hidden="true"
           />
-          <input
+          <Input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search blocks, labels, math…"
-            className="flex-1 bg-transparent outline-none text-sm text-[var(--cg-fg)] placeholder:text-[var(--cg-muted)]"
+            className="h-8 flex-1 border-0 bg-transparent px-0 py-0 shadow-none focus:ring-0"
           />
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="text-xs bg-[var(--cg-subtle)] border border-[var(--cg-border)] rounded px-1 py-0.5 text-[var(--cg-fg)] outline-none cursor-pointer"
+          <Select
+            value={typeFilter || ALL_TYPES_VALUE}
+            onValueChange={(value) => setTypeFilter(value === ALL_TYPES_VALUE ? "" : value)}
           >
-            <option value="">All types</option>
-            {BLOCK_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              aria-label="Filter search results by block type"
+              className="h-8 w-[8.5rem] border-[var(--cg-border)] bg-[var(--cg-subtle)] px-2 text-xs shadow-none"
+            >
+              <SelectValue placeholder="All types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_TYPES_VALUE}>All types</SelectItem>
+              {BLOCK_TYPES.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Results list */}
-        <div className="flex-1 overflow-y-auto">
+        <ScrollArea className="flex-1">
           {grouped.size === 0 ? (
             <div className="px-4 py-3 text-xs text-[var(--cg-muted)] italic">{statusText}</div>
           ) : (
@@ -259,7 +252,7 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
               </div>
             ))
           )}
-        </div>
+        </ScrollArea>
 
         {/* Status bar */}
         {grouped.size > 0 && (
@@ -267,7 +260,7 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
             {statusText}
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -12,6 +12,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
+import { Checkbox } from "./ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Slider } from "./ui/slider";
+import { Textarea } from "./ui/textarea";
+import { ScrollArea } from "./ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -39,9 +45,6 @@ interface SettingsDialogProps {
 }
 
 // ── Shared constants ──────────────────────────────────────────────────────────
-
-const SELECT_CLASS =
-  "text-sm border border-[var(--cg-border)] rounded px-2 py-1 bg-[var(--cg-bg)] text-[var(--cg-fg)] focus:outline-none focus:ring-1 focus:ring-[var(--cg-accent)]";
 
 const TABS: SettingsTab[] = ["General", "Editor", "Appearance", "Plugins", "Export"];
 
@@ -86,26 +89,28 @@ function GeneralTab({ settings, onUpdateSetting }: GeneralTabProps) {
       ? "off"
       : String(Math.round(settings.autoSaveInterval / 1000));
 
-  function handleIntervalChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const v = e.target.value;
+  function handleIntervalChange(v: string) {
     onUpdateSetting("autoSaveInterval", v === "off" ? 0 : Number(v) * 1000);
   }
 
   return (
     <section>
-      <Row label="Auto-save interval" htmlFor="sd-autosave-interval">
-        <select
-          id="sd-autosave-interval"
+      <Row label="Auto-save interval">
+        <Select
           value={intervalValue}
-          onChange={handleIntervalChange}
-          className={SELECT_CLASS}
+          onValueChange={handleIntervalChange}
         >
-          <option value="off">Off</option>
-          <option value="30">30 seconds</option>
-          <option value="60">1 minute</option>
-          <option value="120">2 minutes</option>
-          <option value="300">5 minutes</option>
-        </select>
+          <SelectTrigger className="w-40" aria-label="Auto-save interval">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="off">Off</SelectItem>
+            <SelectItem value="30">30 seconds</SelectItem>
+            <SelectItem value="60">1 minute</SelectItem>
+            <SelectItem value="120">2 minutes</SelectItem>
+            <SelectItem value="300">5 minutes</SelectItem>
+          </SelectContent>
+        </Select>
       </Row>
     </section>
   );
@@ -120,68 +125,62 @@ function EditorTab({ settings, onUpdateSetting }: EditorTabProps) {
   return (
     <section>
       {/* Font size */}
-      <Row label={`Font size: ${settings.fontSize}px`} htmlFor="sd-font-size">
-        <input
-          id="sd-font-size"
-          type="range"
+      <Row label={`Font size: ${settings.fontSize}px`}>
+        <Slider
+          aria-label="Font size"
           min={10}
           max={28}
           step={1}
-          value={settings.fontSize}
-          onChange={(e) => { onUpdateSetting("fontSize", Number(e.target.value)); }}
-          className="w-32 accent-[var(--cg-accent)]"
+          value={[settings.fontSize]}
+          onValueChange={([value]) => { onUpdateSetting("fontSize", value); }}
+          className="w-32"
         />
       </Row>
 
       {/* Line height */}
-      <Row
-        label={`Line height: ${settings.lineHeight.toFixed(1)}`}
-        htmlFor="sd-line-height"
-      >
-        <input
-          id="sd-line-height"
-          type="range"
+      <Row label={`Line height: ${settings.lineHeight.toFixed(1)}`}>
+        <Slider
+          aria-label="Line height"
           min={1.2}
           max={2.0}
           step={0.1}
-          value={settings.lineHeight}
-          onChange={(e) => { onUpdateSetting("lineHeight", Number(e.target.value)); }}
-          className="w-32 accent-[var(--cg-accent)]"
+          value={[settings.lineHeight]}
+          onValueChange={([value]) => { onUpdateSetting("lineHeight", value); }}
+          className="w-32"
         />
       </Row>
 
       {/* Tab size */}
-      <Row label="Tab size" htmlFor="sd-tab-size">
-        <select
-          id="sd-tab-size"
-          value={settings.tabSize}
-          onChange={(e) => { onUpdateSetting("tabSize", Number(e.target.value)); }}
-          className={SELECT_CLASS}
+      <Row label="Tab size">
+        <Select
+          value={String(settings.tabSize)}
+          onValueChange={(value) => { onUpdateSetting("tabSize", Number(value)); }}
         >
-          <option value={2}>2 spaces</option>
-          <option value={4}>4 spaces</option>
-        </select>
+          <SelectTrigger className="w-32" aria-label="Tab size">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="2">2 spaces</SelectItem>
+            <SelectItem value="4">4 spaces</SelectItem>
+          </SelectContent>
+        </Select>
       </Row>
 
       {/* Show line numbers */}
       <Row label="Show line numbers" htmlFor="sd-line-numbers">
-        <input
+        <Checkbox
           id="sd-line-numbers"
-          type="checkbox"
           checked={settings.showLineNumbers}
-          onChange={(e) => { onUpdateSetting("showLineNumbers", e.target.checked); }}
-          className="w-4 h-4 accent-[var(--cg-accent)]"
+          onCheckedChange={(checked) => { onUpdateSetting("showLineNumbers", checked === true); }}
         />
       </Row>
 
       {/* Word wrap */}
       <Row label="Word wrap" htmlFor="sd-word-wrap">
-        <input
+        <Checkbox
           id="sd-word-wrap"
-          type="checkbox"
           checked={settings.wordWrap}
-          onChange={(e) => { onUpdateSetting("wordWrap", e.target.checked); }}
-          className="w-4 h-4 accent-[var(--cg-accent)]"
+          onCheckedChange={(checked) => { onUpdateSetting("wordWrap", checked === true); }}
         />
       </Row>
 
@@ -281,12 +280,12 @@ function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: Appeara
         <p className="text-xs text-[var(--cg-muted)] mb-2">
           Add your own CSS overrides. Changes apply immediately.
         </p>
-        <textarea
+        <Textarea
           id="sd-custom-css"
           value={settings.customCss}
           onChange={(e) => { onUpdateSetting("customCss", e.target.value); }}
           placeholder={`/* Example: change editor font */\n.cm-content {\n  font-family: "Georgia", serif;\n}`}
-          className="w-full h-32 text-xs font-mono border border-[var(--cg-border)] rounded px-3 py-2 bg-[var(--cg-bg)] text-[var(--cg-fg)] resize-y focus:outline-none focus:ring-1 focus:ring-[var(--cg-accent)]"
+          className="h-32 resize-y text-xs font-mono"
           spellCheck={false}
         />
       </div>
@@ -302,19 +301,22 @@ interface ExportTabProps {
 function ExportTab({ settings, onUpdateSetting }: ExportTabProps) {
   return (
     <section>
-      <Row label="Default format" htmlFor="sd-export-format">
-        <select
-          id="sd-export-format"
+      <Row label="Default format">
+        <Select
           value={settings.defaultExportFormat}
-          onChange={(e) => {
-            onUpdateSetting("defaultExportFormat", e.target.value as ExportFormat);
+          onValueChange={(value) => {
+            onUpdateSetting("defaultExportFormat", value as ExportFormat);
           }}
-          className={SELECT_CLASS}
         >
-          <option value="pdf">PDF</option>
-          <option value="latex">LaTeX</option>
-          <option value="html">HTML</option>
-        </select>
+          <SelectTrigger className="w-32" aria-label="Default export format">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pdf">PDF</SelectItem>
+            <SelectItem value="latex">LaTeX</SelectItem>
+            <SelectItem value="html">HTML</SelectItem>
+          </SelectContent>
+        </Select>
       </Row>
     </section>
   );
@@ -350,16 +352,16 @@ function PluginsTab({ settings, onUpdateSetting, plugins }: PluginsTabProps) {
                 <span className="text-xs text-[var(--cg-muted)]">{plugin.description}</span>
               )}
             </div>
-            <input
-              type="checkbox"
+            <Checkbox
               checked={isEnabled}
-              onChange={() => {
+              aria-label={`Enable ${plugin.name}`}
+              onCheckedChange={() => {
                 onUpdateSetting("enabledPlugins", {
                   ...settings.enabledPlugins,
                   [plugin.id]: !isEnabled,
                 });
               }}
-              className="w-4 h-4 accent-[var(--cg-accent)] shrink-0 ml-4"
+              className="ml-4 shrink-0"
             />
           </div>
         );
@@ -394,48 +396,51 @@ export function SettingsDialog({
           <DialogCloseButton aria-label="Close settings" />
         </DialogHeader>
 
-        <div className="flex flex-1 overflow-hidden">
-          <nav className="flex w-36 shrink-0 flex-col border-r border-[var(--cg-border)] bg-[var(--cg-bg)] py-2">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as SettingsTab)}
+          orientation="vertical"
+          className="flex flex-1 overflow-hidden"
+        >
+          <TabsList className="flex w-36 shrink-0 flex-col items-stretch border-r border-[var(--cg-border)] bg-[var(--cg-bg)] py-2">
             {TABS.map((tab) => (
-              <button
+              <TabsTrigger
                 key={tab}
-                type="button"
-                onClick={() => { setActiveTab(tab); }}
+                value={tab}
                 className={cn(
-                  "px-4 py-2 text-left text-sm transition-colors",
-                  activeTab === tab
-                    ? "bg-[var(--cg-bg)] font-medium text-[var(--cg-fg)]"
-                    : "text-[var(--cg-muted)] hover:bg-[var(--cg-bg)] hover:text-[var(--cg-fg)]",
+                  "justify-start rounded-none border-b-0 px-4 py-2 text-left text-sm normal-case tracking-normal",
+                  "data-[state=active]:border-b-0 data-[state=active]:bg-[var(--cg-bg)]",
+                  "data-[state=active]:font-medium",
                 )}
               >
                 {tab}
-              </button>
+              </TabsTrigger>
             ))}
-          </nav>
+          </TabsList>
 
-          <div className="flex-1 overflow-y-auto px-5 py-4">
-            {activeTab === "General" && (
+          <ScrollArea className="flex-1" viewportClassName="px-5 py-4">
+            <TabsContent value="General">
               <GeneralTab settings={settings} onUpdateSetting={onUpdateSetting} />
-            )}
-            {activeTab === "Editor" && (
+            </TabsContent>
+            <TabsContent value="Editor">
               <EditorTab settings={settings} onUpdateSetting={onUpdateSetting} />
-            )}
-            {activeTab === "Appearance" && (
+            </TabsContent>
+            <TabsContent value="Appearance">
               <AppearanceTab
                 theme={theme}
                 onSetTheme={onSetTheme}
                 settings={settings}
                 onUpdateSetting={onUpdateSetting}
               />
-            )}
-            {activeTab === "Plugins" && (
+            </TabsContent>
+            <TabsContent value="Plugins">
               <PluginsTab settings={settings} onUpdateSetting={onUpdateSetting} plugins={plugins} />
-            )}
-            {activeTab === "Export" && (
+            </TabsContent>
+            <TabsContent value="Export">
               <ExportTab settings={settings} onUpdateSetting={onUpdateSetting} />
-            )}
-          </div>
-        </div>
+            </TabsContent>
+          </ScrollArea>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

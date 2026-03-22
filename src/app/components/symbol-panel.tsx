@@ -1,5 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { cn } from "../lib/utils";
+import { ScrollArea } from "./ui/scroll-area";
+import { Input } from "./ui/input";
 import {
   SYMBOL_CATEGORIES,
   insertSymbol,
@@ -67,22 +69,17 @@ export function SymbolPanel({ onInsert, view }: SymbolPanelProps) {
     <div className="flex flex-col h-full min-h-0">
       {/* Search */}
       <div className="shrink-0 px-2 py-1.5 border-b border-[var(--cg-border)]">
-        <input
+        <Input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search symbols…"
-          className={cn(
-            "w-full text-xs rounded px-2 py-1",
-            "bg-[var(--cg-bg)] border border-[var(--cg-border)]",
-            "text-[var(--cg-fg)] placeholder:text-[var(--cg-muted)]",
-            "focus:outline-none focus:ring-1 focus:ring-[var(--cg-accent)]",
-          )}
+          className={cn("h-7 text-xs")}
         />
       </div>
 
       {/* Symbol list */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-2 py-1 overscroll-contain">
+      <ScrollArea className="flex-1 min-h-0" viewportClassName="px-2 py-1 overscroll-contain">
         {visible.length === 0 ? (
           <p className="text-xs text-[var(--cg-muted)] text-center py-4">
             No symbols found.
@@ -118,7 +115,7 @@ export function SymbolPanel({ onInsert, view }: SymbolPanelProps) {
             </div>
           ))
         )}
-      </div>
+      </ScrollArea>
     </div>
   );
 }

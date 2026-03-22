@@ -1,8 +1,15 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import type { KeyboardEvent, MouseEvent } from "react";
+import type { KeyboardEvent } from "react";
 import type { FileEntry } from "../file-manager";
 import { dirname } from "../lib/utils";
 import { isTauri, revealInFinder } from "../tauri-fs";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "./ui/context-menu";
 import {
   File,
   FileText,
@@ -144,12 +151,6 @@ interface FileTreeProps {
   onCreateDir: (path: string) => void;
 }
 
-interface ContextMenuState {
-  x: number;
-  y: number;
-  entry: FileEntry;
-}
-
 interface FileNodeProps {
   entry: FileEntry;
   depth: number;
@@ -185,7 +186,6 @@ function FileNode({
 }: FileNodeProps) {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [creating, setCreating] = useState<CreateKind | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
@@ -199,7 +199,6 @@ function FileNode({
   const startRename = useCallback(() => {
     setRenameValue(entry.name);
     setRenaming(true);
-    setContextMenu(null);
     // Focus after state flushes
     setTimeout(() => renameInputRef.current?.select(), 0);
   }, [entry.name]);
@@ -244,7 +243,6 @@ function FileNode({
   const startCreate = useCallback(
     (kind: CreateKind) => {
       setCreating(kind);
-      setContextMenu(null);
       // For directories, ensure the folder is open so the input is visible
       if (entry.isDirectory) {
         onSetOpen(entry.path, true);
@@ -256,16 +254,6 @@ function FileNode({
   const cancelCreate = useCallback(() => {
     setCreating(null);
   }, []);
-
-  // ── Context menu ─────────────────────────────────────────────────────────
-
-  const handleContextMenu = useCallback((e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY, entry });
-  }, [entry]);
-
-  const dismissMenu = useCallback(() => setContextMenu(null), []);
 
   const parentPath = dirname(entry.path);
 
@@ -319,50 +307,67 @@ function FileNode({
 
     return (
       <div>
-        <div
-          role="button"
-          tabIndex={-1}
-          className={[
-            "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
-            isSelected
-              ? "bg-[var(--cg-active)]"
-              : "hover:bg-[var(--cg-hover)]",
-          ].join(" ")}
-          style={{ paddingLeft: `${indent}px` }}
-          onClick={() => {
-            onSelectPath(entry.path);
-            onToggleFolder(entry.path);
-          }}
-          onContextMenu={handleContextMenu}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") onToggleFolder(entry.path);
-            if (e.key === "F2") {
-              e.preventDefault();
-              startRename();
-            }
-          }}
-        >
-          {open
-            ? <FolderOpen size={ICON_SIZE} className={ICON_CLASS} />
-            : <FolderClosed size={ICON_SIZE} className={ICON_CLASS} />
-          }
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div
+              role="button"
+              tabIndex={-1}
+              className={[
+                "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
+                isSelected
+                  ? "bg-[var(--cg-active)]"
+                  : "hover:bg-[var(--cg-hover)]",
+              ].join(" ")}
+              style={{ paddingLeft: `${indent}px` }}
+              onClick={() => {
+                onSelectPath(entry.path);
+                onToggleFolder(entry.path);
+              }}
+              onContextMenu={() => {
+                onSelectPath(entry.path);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") onToggleFolder(entry.path);
+                if (e.key === "F2") {
+                  e.preventDefault();
+                  startRename();
+                }
+              }}
+            >
+              {open
+                ? <FolderOpen size={ICON_SIZE} className={ICON_CLASS} />
+                : <FolderClosed size={ICON_SIZE} className={ICON_CLASS} />
+              }
 
-          {renaming ? (
-            <input
-              ref={renameInputRef}
-              type="text"
-              className="flex-1 text-sm font-mono bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
-              value={renameValue}
-              autoFocus
-              onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={handleRenameKey}
-              onBlur={cancelRename}
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <span className="font-mono truncate">{entry.name}</span>
-          )}
-        </div>
+              {renaming ? (
+                <input
+                  ref={renameInputRef}
+                  type="text"
+                  className="flex-1 text-sm font-mono bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
+                  value={renameValue}
+                  autoFocus
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={handleRenameKey}
+                  onBlur={cancelRename}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="font-mono truncate">{entry.name}</span>
+              )}
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent className="min-w-[160px]">
+            {dirMenuItems.map((item, i) => (
+              item.label === "-"
+                ? <ContextMenuSeparator key={i} />
+                : (
+                  <ContextMenuItem key={i} onSelect={() => item.action?.()}>
+                    {item.label}
+                  </ContextMenuItem>
+                )
+            ))}
+          </ContextMenuContent>
+        </ContextMenu>
 
         {open && (
           <div>
@@ -397,15 +402,6 @@ function FileNode({
           </div>
         )}
 
-        {/* Directory context menu */}
-        {contextMenu && (
-          <ContextMenuPortal
-            x={contextMenu.x}
-            y={contextMenu.y}
-            onDismiss={dismissMenu}
-            items={dirMenuItems}
-          />
-        )}
       </div>
     );
   }
@@ -453,54 +449,61 @@ function FileNode({
 
   return (
     <>
-      <div
-        role="button"
-        tabIndex={-1}
-        className={[
-          "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
-          isActive || isSelected
-            ? "bg-[var(--cg-active)]"
-            : "hover:bg-[var(--cg-hover)]",
-        ].join(" ")}
-        style={{ paddingLeft: `${indent}px` }}
-        onClick={() => {
-          onSelectPath(entry.path);
-          onSelect(entry.path);
-        }}
-        onDoubleClick={() => {
-          onDoubleClick?.(entry.path);
-        }}
-        onContextMenu={handleContextMenu}
-        onKeyDown={handleItemKey}
-      >
-        <FileIcon name={entry.name} />
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div
+            role="button"
+            tabIndex={-1}
+            className={[
+              "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cg-fg)] select-none whitespace-nowrap",
+              isActive || isSelected
+                ? "bg-[var(--cg-active)]"
+                : "hover:bg-[var(--cg-hover)]",
+            ].join(" ")}
+            style={{ paddingLeft: `${indent}px` }}
+            onClick={() => {
+              onSelectPath(entry.path);
+              onSelect(entry.path);
+            }}
+            onDoubleClick={() => {
+              onDoubleClick?.(entry.path);
+            }}
+            onContextMenu={() => {
+              onSelectPath(entry.path);
+            }}
+            onKeyDown={handleItemKey}
+          >
+            <FileIcon name={entry.name} />
 
-        {renaming ? (
-          <input
-            ref={renameInputRef}
-            type="text"
-            className="flex-1 text-sm font-mono bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
-            value={renameValue}
-            autoFocus
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={handleRenameKey}
-            onBlur={cancelRename}
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span className="font-mono truncate">{entry.name}</span>
-        )}
-
-        {/* File context menu */}
-        {contextMenu && (
-          <ContextMenuPortal
-            x={contextMenu.x}
-            y={contextMenu.y}
-            onDismiss={dismissMenu}
-            items={fileMenuItems}
-          />
-        )}
-      </div>
+            {renaming ? (
+              <input
+                ref={renameInputRef}
+                type="text"
+                className="flex-1 text-sm font-mono bg-[var(--cg-bg)] border border-[var(--cg-border)] rounded px-1 outline-none min-w-0"
+                value={renameValue}
+                autoFocus
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={handleRenameKey}
+                onBlur={cancelRename}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="font-mono truncate">{entry.name}</span>
+            )}
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="min-w-[160px]">
+          {fileMenuItems.map((item, i) => (
+            item.label === "-"
+              ? <ContextMenuSeparator key={i} />
+              : (
+                <ContextMenuItem key={i} onSelect={() => item.action?.()}>
+                  {item.label}
+                </ContextMenuItem>
+              )
+          ))}
+        </ContextMenuContent>
+      </ContextMenu>
 
       {/* Inline create input appears as sibling row below the file */}
       {creating && (
@@ -520,119 +523,6 @@ function FileNode({
 interface MenuItem {
   label: string;
   action?: () => void;
-}
-
-interface ContextMenuPortalProps {
-  x: number;
-  y: number;
-  items: MenuItem[];
-  onDismiss: () => void;
-}
-
-function ContextMenuPortal({ x, y, items, onDismiss }: ContextMenuPortalProps) {
-  const [focusedIndex, setFocusedIndex] = useState(-1);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const actionItems = items.filter((item) => item.label !== "-");
-
-  // Focus the menu container on mount for keyboard navigation
-  useEffect(() => {
-    menuRef.current?.focus();
-  }, []);
-
-  const handleMenuKey = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        onDismiss();
-        return;
-      }
-
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setFocusedIndex((prev) => {
-          const next = prev + 1;
-          return next >= actionItems.length ? 0 : next;
-        });
-        return;
-      }
-
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setFocusedIndex((prev) => {
-          const next = prev - 1;
-          return next < 0 ? actionItems.length - 1 : next;
-        });
-        return;
-      }
-
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        if (focusedIndex >= 0 && focusedIndex < actionItems.length) {
-          onDismiss();
-          actionItems[focusedIndex].action?.();
-        }
-        return;
-      }
-    },
-    [onDismiss, focusedIndex, actionItems],
-  );
-
-  // Map from the full items array index to the action-item index
-  let actionIdx = -1;
-
-  return (
-    <>
-      {/* Click-away backdrop */}
-      <div
-        className="fixed inset-0 z-40"
-        onClick={onDismiss}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          onDismiss();
-        }}
-      />
-      <div
-        ref={menuRef}
-        role="menu"
-        tabIndex={0}
-        className="fixed z-50 min-w-[160px] py-1 bg-[var(--cg-bg)] border border-[var(--cg-border)] ring-1 ring-[var(--cg-border)] rounded text-sm text-[var(--cg-fg)] outline-none"
-        style={{ left: x, top: y }}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={handleMenuKey}
-      >
-        {items.map((item, i) => {
-          if (item.label === "-") {
-            return (
-              <div key={i} className="my-1 border-t border-[var(--cg-border)]" />
-            );
-          }
-
-          actionIdx++;
-          const isFocused = actionIdx === focusedIndex;
-
-          return (
-            <button
-              key={i}
-              role="menuitem"
-              className={[
-                "w-full text-left px-3 py-1 whitespace-nowrap",
-                isFocused
-                  ? "bg-[var(--cg-hover)]"
-                  : "hover:bg-[var(--cg-hover)]",
-              ].join(" ")}
-              onClick={() => {
-                onDismiss();
-                item.action?.();
-              }}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
-    </>
-  );
 }
 
 // ── Public component ──────────────────────────────────────────────────────
