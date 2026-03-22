@@ -16,8 +16,8 @@ import {
   type ResolvedCrossref,
   findCrossrefs,
   resolveCrossref,
-  equationLabelsField,
 } from "../index/crossref-resolver";
+import { documentAnalysisField } from "../semantics/codemirror-source";
 import { cursorInRange, RenderWidget } from "./render-utils";
 
 /** Widget for a resolved cross-reference (block or equation). */
@@ -69,7 +69,7 @@ export class UnresolvedRefWidget extends RenderWidget {
 export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
   const refs = findCrossrefs(view.state);
   const items: Range<Decoration>[] = [];
-  const equationLabels = view.state.field(equationLabelsField);
+  const equationLabels = view.state.field(documentAnalysisField).equationById;
 
   for (const ref of refs) {
     if (cursorInRange(view, ref.from, ref.to)) continue;

@@ -12,7 +12,6 @@ import type { BlockPlugin } from "../plugins/plugin-types";
 import { createEditorState, makeBlockPlugin } from "../test-utils";
 import {
   collectEquationLabels,
-  equationLabelsField,
   resolveCrossref,
   findCrossrefs,
 } from "./crossref-resolver";
@@ -33,7 +32,6 @@ function createState(doc: string): EditorState {
       }),
       frontmatterField,
       documentSemanticsField,
-      equationLabelsField,
       createPluginRegistryField(testPlugins),
       blockCounterField,
     ],

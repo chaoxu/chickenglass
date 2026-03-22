@@ -3,9 +3,11 @@ import { parser as baseParser } from "@lezer/markdown";
 import { markdownExtensions } from "../parser";
 import {
   analyzeDocumentSemantics,
+  analyzeEquations,
   analyzeFencedDivs,
   analyzeFootnotes,
   analyzeHeadings,
+  analyzeReferences,
   stringTextSource,
 } from "./document";
 
@@ -24,6 +26,7 @@ describe("document semantics analyzers", () => {
         to: 18,
         level: 1,
         text: "Intro",
+        id: undefined,
         number: "1",
         unnumbered: false,
       },
@@ -32,10 +35,20 @@ describe("document semantics analyzers", () => {
         to: 34,
         level: 2,
         text: "Details",
+        id: undefined,
         number: "",
         unnumbered: true,
       },
     ]);
+  });
+
+  it("extracts heading ids into the shared heading slice", () => {
+    const doc = "# Intro {#sec:intro}\n";
+    const tree = parser.parse(doc);
+
+    const headings = analyzeHeadings(stringTextSource(doc), tree);
+
+    expect(headings[0]?.id).toBe("sec:intro");
   });
 
   it("analyzes footnote refs and definitions once", () => {
@@ -76,5 +89,50 @@ describe("document semantics analyzers", () => {
 
     expect(semantics.headingByFrom.get(0)?.text).toBe("Intro");
     expect(semantics.footnotes.refByFrom.get(13)?.id).toBe("n");
+  });
+
+  it("analyzes equations once for shared numbering and lookup", () => {
+    const doc = "$$x^2$$ {#eq:first}\n\n$$y^2$$ {#eq:second}\n";
+    const tree = parser.parse(doc);
+
+    const equations = analyzeEquations(stringTextSource(doc), tree);
+
+    expect(equations).toHaveLength(2);
+    expect(equations[0]).toMatchObject({ id: "eq:first", number: 1 });
+    expect(equations[1]).toMatchObject({ id: "eq:second", number: 2 });
+  });
+
+  it("analyzes bracketed and narrative references once", () => {
+    const doc = "See [@thm-main] and @eq:first.\n";
+    const tree = parser.parse(doc);
+
+    const refs = analyzeReferences(stringTextSource(doc), tree);
+
+    expect(refs).toEqual([
+      {
+        from: 4,
+        to: 15,
+        bracketed: true,
+        ids: ["thm-main"],
+        locators: [undefined],
+      },
+      {
+        from: 20,
+        to: 29,
+        bracketed: false,
+        ids: ["eq:first"],
+        locators: [undefined],
+      },
+    ]);
+  });
+
+  it("includes equations and references in canonical document analysis", () => {
+    const doc = "$$x^2$$ {#eq:first}\n\nSee [@eq:first]\n";
+    const tree = parser.parse(doc);
+
+    const semantics = analyzeDocumentSemantics(stringTextSource(doc), tree);
+
+    expect(semantics.equationById.get("eq:first")?.number).toBe(1);
+    expect(semantics.references[0]?.ids).toEqual(["eq:first"]);
   });
 });

@@ -1,415 +1,218 @@
 /**
  * Shared inline markdown renderer for DOM elements.
  *
- * Handles:
- * - Inline math ($...$ and \(...\)) via KaTeX
- * - Bold (**text**)
- * - Italic (*text*)
- * - Strikethrough (~~text~~)
- * - Highlight (==text==)
- * - Inline code (`code`)
- * - Escape sequences (\* etc.)
- * - Hard breaks
- *
- * Uses Lezer tree-walking for correct parsing of nested inline formatting.
- *
- * Used by block header widgets, sidenote margin, and footnote section
- * to avoid duplicating the same parsing/rendering logic.
+ * Parsing and fragment building now live in `src/inline-fragments.ts`.
+ * This file is intentionally only the DOM render adapter.
  */
 
 import katex from "katex";
-import { parser as baseParser } from "@lezer/markdown";
-import type { SyntaxNode } from "@lezer/common";
-import { markdownExtensions } from "../parser";
 import type { InlineRenderSurface } from "../inline-surface";
-import { stripMathDelimiters } from "./math-render";
-import { MARK_NODES, isSafeUrl, buildKatexOptions } from "./inline-shared";
+import {
+  type InlineFragment,
+  parseInlineFragments,
+} from "../inline-fragments";
+import { buildKatexOptions, isSafeUrl } from "./inline-shared";
 
-/** Standalone Lezer parser for splitting inline math without a CM6 editor context. */
-const inlineParser = baseParser.configure(markdownExtensions);
-
-/** A segment of text split by inline math delimiters. */
 interface InlineSegment {
   isMath: boolean;
   content: string;
 }
 
-/**
- * Split text by inline math delimiters using Lezer, returning alternating
- * text/math segments. Math content has delimiters stripped (ready for KaTeX).
- */
-export function splitByInlineMath(text: string): InlineSegment[] {
-  const segments: InlineSegment[] = [];
-  const tree = inlineParser.parse(text);
-  let lastIndex = 0;
-
-  tree.iterate({
-    enter(node) {
-      if (node.type.name !== "InlineMath") return;
-      if (node.from > lastIndex) {
-        segments.push({ isMath: false, content: text.slice(lastIndex, node.from) });
-      }
-      const raw = text.slice(node.from, node.to);
-      segments.push({ isMath: true, content: stripMathDelimiters(raw, false) });
-      lastIndex = node.to;
-      return false; // skip InlineMathMark children
-    },
-  });
-
-  if (lastIndex < text.length) {
-    segments.push({ isMath: false, content: text.slice(lastIndex) });
-  }
-
-  return segments;
-}
-
-// ── Lezer tree-walking inline renderer ──────────────────────────────────────
-
 type DomInlineSurface = InlineRenderSurface | "document-body";
 
-function isUiChromeSurface(surface: DomInlineSurface): boolean {
-  return surface === "ui-chrome-inline";
-}
-
-/**
- * Render the inline children of a node (e.g., Paragraph, Emphasis) as DOM
- * nodes, appending them to the given container.
- *
- * Walks the node's children, rendering inline elements and collecting
- * plain text gaps between them as text nodes.
- */
-function renderChildren(
-  node: SyntaxNode,
-  text: string,
+function renderFragments(
+  container: HTMLElement | DocumentFragment,
+  fragments: readonly InlineFragment[],
   macros: Record<string, string>,
   surface: DomInlineSurface,
-  container: HTMLElement | DocumentFragment,
 ): void {
-  let pos = node.from;
-  let child = node.firstChild;
-
-  while (child) {
-    // Text gap between previous position and this child
-    if (child.from > pos) {
-      container.appendChild(document.createTextNode(text.slice(pos, child.from)));
-    }
-
-    renderInlineNode(child, text, macros, surface, container);
-    pos = child.to;
-    child = child.nextSibling;
-  }
-
-  // Trailing text after last child
-  if (pos < node.to) {
-    container.appendChild(document.createTextNode(text.slice(pos, node.to)));
+  for (const fragment of fragments) {
+    renderFragment(container, fragment, macros, surface);
   }
 }
 
-/**
- * Render a single inline node as a DOM element (or skip it for marks).
- * Appends the result to the container.
- */
-function renderInlineNode(
-  node: SyntaxNode,
-  text: string,
-  macros: Record<string, string>,
-  surface: DomInlineSurface,
+function renderReference(
   container: HTMLElement | DocumentFragment,
+  fragment: Extract<InlineFragment, { kind: "reference" }>,
+  surface: DomInlineSurface,
 ): void {
-  // Skip delimiter marks
-  if (MARK_NODES.has(node.name)) {
+  if (surface === "ui-chrome-inline") {
+    container.appendChild(document.createTextNode(fragment.rawText));
     return;
   }
 
-  switch (node.name) {
-    case "Emphasis": {
+  if (fragment.ids.length === 1) {
+    const anchor = document.createElement("a");
+    anchor.className = "cross-ref";
+    anchor.href = `#${fragment.ids[0]}`;
+    anchor.textContent = fragment.ids[0];
+    container.appendChild(anchor);
+    return;
+  }
+
+  const span = document.createElement("span");
+  span.className = "cf-citation";
+  span.appendChild(document.createTextNode("("));
+  fragment.ids.forEach((id, index) => {
+    if (index > 0) span.appendChild(document.createTextNode("; "));
+    const anchor = document.createElement("a");
+    anchor.className = "cross-ref";
+    anchor.href = `#${id}`;
+    anchor.textContent = id;
+    span.appendChild(anchor);
+  });
+  span.appendChild(document.createTextNode(")"));
+  container.appendChild(span);
+}
+
+function renderFragment(
+  container: HTMLElement | DocumentFragment,
+  fragment: InlineFragment,
+  macros: Record<string, string>,
+  surface: DomInlineSurface,
+): void {
+  switch (fragment.kind) {
+    case "text":
+      container.appendChild(document.createTextNode(fragment.text));
+      return;
+
+    case "emphasis": {
       const em = document.createElement("em");
-      renderChildren(node, text, macros, surface, em);
+      renderFragments(em, fragment.children, macros, surface);
       container.appendChild(em);
       return;
     }
 
-    case "StrongEmphasis": {
+    case "strong": {
       const strong = document.createElement("strong");
-      renderChildren(node, text, macros, surface, strong);
+      renderFragments(strong, fragment.children, macros, surface);
       container.appendChild(strong);
       return;
     }
 
-    case "Strikethrough": {
+    case "strikethrough": {
       const del = document.createElement("del");
-      renderChildren(node, text, macros, surface, del);
+      renderFragments(del, fragment.children, macros, surface);
       container.appendChild(del);
       return;
     }
 
-    case "Highlight": {
+    case "highlight": {
       const mark = document.createElement("mark");
-      renderChildren(node, text, macros, surface, mark);
+      renderFragments(mark, fragment.children, macros, surface);
       container.appendChild(mark);
       return;
     }
 
-    case "InlineCode": {
+    case "code": {
       const code = document.createElement("code");
-      const marks = node.getChildren("CodeMark");
-      if (marks.length >= 2) {
-        code.textContent = text.slice(marks[0].to, marks[marks.length - 1].from);
-      } else {
-        code.textContent = text.slice(node.from, node.to);
-      }
+      code.textContent = fragment.text;
       container.appendChild(code);
       return;
     }
 
-    case "Link": {
-      renderLink(node, text, macros, surface, container);
-      return;
-    }
-
-    case "Image": {
-      renderImage(node, text, surface, container);
-      return;
-    }
-
-    case "InlineMath": {
+    case "math": {
       const span = document.createElement("span");
-      const raw = text.slice(node.from, node.to);
-      const latex = stripMathDelimiters(raw, false);
       try {
-        span.innerHTML = katex.renderToString(latex, buildKatexOptions(false, macros));
+        span.innerHTML = katex.renderToString(fragment.latex, buildKatexOptions(false, macros));
       } catch {
-        // KaTeX render failed — show raw LaTeX source as fallback
-        span.textContent = raw;
+        span.textContent = fragment.raw;
       }
       container.appendChild(span);
       return;
     }
 
-    case "FootnoteRef": {
-      renderFootnoteRef(node, text, surface, container);
-      return;
-    }
-
-    case "Escape": {
-      // \$ → $, \* → *, etc. — strip the backslash
-      container.appendChild(document.createTextNode(text.slice(node.from + 1, node.to)));
-      return;
-    }
-
-    case "HardBreak": {
-      if (surface === "document-body") {
-        container.appendChild(document.createElement("br"));
-      } else {
-        container.appendChild(document.createTextNode(" "));
+    case "link": {
+      if (surface === "ui-chrome-inline") {
+        renderFragments(container, fragment.children, macros, surface);
+        return;
       }
-      return;
-    }
 
-    case "URL": {
-      return;
-    }
-
-    default: {
-      // Unknown inline node — render its text
-      container.appendChild(document.createTextNode(text.slice(node.from, node.to)));
-      return;
-    }
-  }
-}
-
-function getDelimitedText(
-  node: SyntaxNode,
-  text: string,
-  fallbackFrom: number = node.from,
-  fallbackTo: number = node.to,
-): string {
-  const marks = node.getChildren("LinkMark");
-  if (marks.length >= 2) {
-    return text.slice(marks[0].to, marks[1].from);
-  }
-  return text.slice(fallbackFrom, fallbackTo);
-}
-
-function renderLinkText(
-  node: SyntaxNode,
-  text: string,
-  macros: Record<string, string>,
-  surface: DomInlineSurface,
-): DocumentFragment {
-  const fragment = document.createDocumentFragment();
-  const marks = node.getChildren("LinkMark");
-  if (marks.length < 2) {
-    fragment.appendChild(document.createTextNode(text.slice(node.from, node.to)));
-    return fragment;
-  }
-
-  const textFrom = marks[0].to;
-  const textTo = marks[1].from;
-  let pos = textFrom;
-  let child = node.firstChild;
-
-  while (child) {
-    if (child.to > textFrom && child.from < textTo) {
-      if (child.from > pos) {
-        fragment.appendChild(document.createTextNode(text.slice(pos, child.from)));
+      const href = fragment.href?.trim();
+      if (!href || !isSafeUrl(href)) {
+        renderFragments(container, fragment.children, macros, surface);
+        return;
       }
-      renderInlineNode(child, text, macros, surface, fragment);
-      pos = child.to;
-    }
-    child = child.nextSibling;
-  }
 
-  if (pos < textTo) {
-    fragment.appendChild(document.createTextNode(text.slice(pos, textTo)));
-  }
-
-  return fragment;
-}
-
-function renderCrossReferences(
-  rawLinkText: string,
-  surface: DomInlineSurface,
-  container: HTMLElement | DocumentFragment,
-): void {
-  if (surface === "document-body" || surface === "document-inline") {
-    const ids = rawLinkText.split(";").map((part) => part.trim().replace(/^@/, ""));
-    if (ids.length === 1) {
       const anchor = document.createElement("a");
-      anchor.className = "cross-ref";
-      anchor.href = `#${ids[0]}`;
-      anchor.textContent = ids[0];
+      anchor.href = href;
+      renderFragments(anchor, fragment.children, macros, surface);
       container.appendChild(anchor);
       return;
     }
 
-    const span = document.createElement("span");
-    span.className = "cf-citation";
-    span.appendChild(document.createTextNode("("));
-    ids.forEach((id, index) => {
-      if (index > 0) span.appendChild(document.createTextNode("; "));
-      const anchor = document.createElement("a");
-      anchor.className = "cross-ref";
-      anchor.href = `#${id}`;
-      anchor.textContent = id;
-      span.appendChild(anchor);
-    });
-    span.appendChild(document.createTextNode(")"));
-    container.appendChild(span);
-    return;
-  }
+    case "reference":
+      renderReference(container, fragment, surface);
+      return;
 
-  container.appendChild(document.createTextNode(rawLinkText));
-}
-
-function renderLink(
-  node: SyntaxNode,
-  text: string,
-  macros: Record<string, string>,
-  surface: DomInlineSurface,
-  container: HTMLElement | DocumentFragment,
-): void {
-  const raw = text.slice(node.from, node.to);
-  const crossRefMatch = /^\[@([^\]]+)\]$/.exec(raw);
-  if (crossRefMatch) {
-    const fragment = renderLinkText(node, text, macros, surface);
-    renderCrossReferences(fragment.textContent ?? crossRefMatch[1], surface, container);
-    return;
-  }
-
-  const linkText = renderLinkText(node, text, macros, surface);
-  if (isUiChromeSurface(surface)) {
-    container.appendChild(linkText);
-    return;
-  }
-
-  const urlNode = node.getChild("URL");
-  if (!urlNode) {
-    container.appendChild(linkText);
-    return;
-  }
-
-  const href = text.slice(urlNode.from, urlNode.to).trim();
-  if (!isSafeUrl(href)) {
-    container.appendChild(linkText);
-    return;
-  }
-  const anchor = document.createElement("a");
-  anchor.href = href;
-  anchor.appendChild(linkText);
-  container.appendChild(anchor);
-}
-
-function renderImage(
-  node: SyntaxNode,
-  text: string,
-  surface: DomInlineSurface,
-  container: HTMLElement | DocumentFragment,
-): void {
-  const alt = getDelimitedText(node, text);
-  if (surface === "document-body") {
-    const urlNode = node.getChild("URL");
-    if (urlNode) {
-      const src = text.slice(urlNode.from, urlNode.to).trim();
-      if (!isSafeUrl(src)) {
-        if (alt) {
-          container.appendChild(document.createTextNode(alt));
-        }
+    case "image": {
+      const src = fragment.src?.trim();
+      if (surface === "document-body" && src && isSafeUrl(src)) {
+        const img = document.createElement("img");
+        img.src = src;
+        img.alt = fragment.rawAlt;
+        container.appendChild(img);
         return;
       }
-      const img = document.createElement("img");
-      img.src = src;
-      img.alt = alt;
-      container.appendChild(img);
+      renderFragments(container, fragment.alt, macros, surface);
       return;
     }
-  }
 
-  if (alt) {
-    container.appendChild(document.createTextNode(alt));
+    case "footnote-ref": {
+      const sup = document.createElement("sup");
+      if (surface === "ui-chrome-inline") {
+        sup.textContent = fragment.id;
+      } else {
+        const anchor = document.createElement("a");
+        anchor.className = "footnote-ref";
+        anchor.href = `#fn-${fragment.id}`;
+        anchor.textContent = fragment.id;
+        sup.appendChild(anchor);
+      }
+      container.appendChild(sup);
+      return;
+    }
+
+    case "hard-break":
+      container.appendChild(
+        surface === "document-body" ? document.createElement("br") : document.createTextNode(" "),
+      );
+      return;
   }
 }
 
-function renderFootnoteRef(
-  node: SyntaxNode,
-  text: string,
-  surface: DomInlineSurface,
-  container: HTMLElement | DocumentFragment,
-): void {
-  const raw = text.slice(node.from, node.to);
-  const match = /^\[\^([^\]]+)\]$/.exec(raw);
-  if (!match) {
-    container.appendChild(document.createTextNode(raw));
-    return;
+export function splitByInlineMath(text: string): InlineSegment[] {
+  const fragments = parseInlineFragments(text);
+  const segments: InlineSegment[] = [];
+  let currentText = "";
+
+  const flushText = (): void => {
+    if (!currentText) return;
+    segments.push({ isMath: false, content: currentText });
+    currentText = "";
+  };
+
+  for (const fragment of fragments) {
+    if (fragment.kind === "math") {
+      flushText();
+      segments.push({ isMath: true, content: fragment.latex });
+      continue;
+    }
+
+    if (fragment.kind === "text") {
+      currentText += fragment.text;
+      continue;
+    }
+
+    const scratch = document.createElement("div");
+    renderFragment(scratch, fragment, {}, "document-inline");
+    currentText += scratch.textContent ?? "";
   }
 
-  const sup = document.createElement("sup");
-  if (isUiChromeSurface(surface)) {
-    sup.textContent = match[1];
-  } else {
-    const anchor = document.createElement("a");
-    anchor.className = "footnote-ref";
-    anchor.href = `#fn-${match[1]}`;
-    anchor.textContent = match[1];
-    sup.appendChild(anchor);
-  }
-  container.appendChild(sup);
+  flushText();
+  return segments;
 }
 
-/**
- * Render inline markdown (math + bold + italic + strikethrough + highlight +
- * inline code + escapes + hard breaks) into a DOM container.
- *
- * This is the single entry point for all inline content rendering in
- * widgets, sidenote panels, and footnote sections.
- *
- * Parses the text with Lezer and walks the syntax tree to produce DOM nodes,
- * giving correct handling of nested inline formatting.
- *
- * @param container - The DOM element to append rendered content to.
- * @param text - Markdown text with inline formatting.
- * @param macros - KaTeX macro definitions from frontmatter.
- */
 export function renderInlineMarkdown(
   container: HTMLElement,
   text: string,
@@ -417,25 +220,5 @@ export function renderInlineMarkdown(
   surface: DomInlineSurface = "document-body",
 ): void {
   if (!text) return;
-
-  const tree = inlineParser.parse(text);
-  const doc = tree.topNode;
-  // Lezer wraps the text in Document > Paragraph
-  const para = doc.firstChild;
-  if (!para) {
-    container.appendChild(document.createTextNode(text));
-    return;
-  }
-
-  // Text before paragraph (e.g., leading whitespace not included by Lezer)
-  if (para.from > 0) {
-    container.appendChild(document.createTextNode(text.slice(0, para.from)));
-  }
-
-  renderChildren(para, text, macros, surface, container);
-
-  // Text after paragraph (e.g., trailing content not included by Lezer)
-  if (para.to < text.length) {
-    container.appendChild(document.createTextNode(text.slice(para.to)));
-  }
+  renderFragments(container, parseInlineFragments(text), macros, surface);
 }

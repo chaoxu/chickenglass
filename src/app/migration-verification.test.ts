@@ -807,14 +807,10 @@ describe("#279 — shared Lezer document semantics", () => {
 
 describe("#290 — Lezer-first markdown parsing", () => {
   it("equation label extraction uses the shared braced-label helper", () => {
-    const crossrefs = fileText("src/index/crossref-resolver.ts");
-    const extract = fileText("src/index/extract.ts");
-    const hoverPreview = fileText("src/render/hover-preview.ts");
+    const semantics = fileText("src/semantics/document.ts");
 
     expect(fileExists("src/parser/label-utils.ts")).toBe(true);
-    expect(crossrefs).toContain("readBracedLabelId");
-    expect(extract).toContain("readBracedLabelId");
-    expect(hoverPreview).toContain("readBracedLabelId");
+    expect(semantics).toContain("readBracedLabelId");
   });
 
   it("image and list handling no longer regex-parse markdown markers", () => {

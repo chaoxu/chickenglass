@@ -14,7 +14,6 @@ export type {
 } from "./crossref-resolver";
 export {
   collectEquationLabels,
-  equationLabelsField,
   resolveCrossref,
   findCrossrefs,
 } from "./crossref-resolver";

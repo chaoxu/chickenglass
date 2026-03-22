@@ -14,17 +14,8 @@
  */
 
 import {
-  closeSearchPanel,
-  findNext,
-  findPrevious,
-  getSearchQuery,
-  openSearchPanel,
-  replaceAll,
-  replaceNext,
   search,
-  SearchQuery,
   searchKeymap,
-  setSearchQuery,
 } from "@codemirror/search";
 import { type Extension } from "@codemirror/state";
 import {
@@ -33,31 +24,19 @@ import {
   type ViewUpdate,
   keymap,
 } from "@codemirror/view";
-
-// ---------------------------------------------------------------------------
-// Match counting
-// ---------------------------------------------------------------------------
-
-/** Count total matches and the 1-based index of the current selection match. */
-function countMatches(
-  view: EditorView,
-): { current: number; total: number } {
-  const query = getSearchQuery(view.state);
-  if (!query.valid) return { current: 0, total: 0 };
-
-  const cursor = query.getCursor(view.state);
-  const sel = view.state.selection.main;
-  let total = 0;
-  let current = 0;
-
-  for (let result = cursor.next(); !result.done; result = cursor.next()) {
-    total++;
-    if (result.value.from === sel.from && result.value.to === sel.to) {
-      current = total;
-    }
-  }
-  return { current, total };
-}
+import {
+  closeSearch,
+  getSearchControllerState,
+  nextSearchMatch,
+  openFindSearch,
+  openReplaceSearch,
+  previousSearchMatch,
+  replaceAllSearchMatches,
+  replaceCurrentSearchMatch,
+  searchControllerExtensions,
+  setSearchControllerQuery,
+  setSearchUiState,
+} from "./search-controller";
 
 // ---------------------------------------------------------------------------
 // Toggle button helper
@@ -112,9 +91,6 @@ function createAction(
 // Custom search panel
 // ---------------------------------------------------------------------------
 
-/** Whether to show the replace row. Set by Cmd+H vs Cmd+F. */
-let showReplace = false;
-
 function createSearchPanel(view: EditorView): Panel {
   const dom = document.createElement("div");
   dom.className = "cf-search-panel";
@@ -141,18 +117,17 @@ function createSearchPanel(view: EditorView): Panel {
   let wholeWord = false;
 
   function commitQuery(): void {
-    const query = new SearchQuery({
+    setSearchControllerQuery(view, {
       search: searchInput.value,
+      replace: replaceInput.value,
       caseSensitive,
       regexp: isRegexp,
       wholeWord,
-      replace: replaceInput.value,
     });
-    view.dispatch({ effects: setSearchQuery.of(query) });
   }
 
   function updateMatchInfo(): void {
-    const { current, total } = countMatches(view);
+    const { current, total } = getSearchControllerState(view);
     if (total === 0) {
       matchInfo.textContent = searchInput.value ? "No results" : "";
     } else {
@@ -161,7 +136,9 @@ function createSearchPanel(view: EditorView): Panel {
   }
 
   /** Sync toggle button DOM to match the given query's options. */
-  function syncToggles(q: SearchQuery): void {
+  function syncPanelState(): void {
+    const state = getSearchControllerState(view);
+    const q = state.query;
     caseSensitive = q.caseSensitive;
     isRegexp = q.regexp;
     wholeWord = q.wholeWord;
@@ -171,6 +148,8 @@ function createSearchPanel(view: EditorView): Panel {
     toggleRegex.setAttribute("aria-pressed", String(isRegexp));
     toggleWord.classList.toggle("cf-search-toggle-active", wholeWord);
     toggleWord.setAttribute("aria-pressed", String(wholeWord));
+    replaceRow.style.display = state.replaceVisible ? "" : "none";
+    toggleReplaceBtn.textContent = state.replaceVisible ? "\u25be" : "\u25b8";
   }
 
   const toggleCase = createToggle("Aa", "Match Case", caseSensitive, (v) => {
@@ -193,11 +172,11 @@ function createSearchPanel(view: EditorView): Panel {
   const navGroup = document.createElement("div");
   navGroup.className = "cf-search-nav";
   navGroup.append(
-    createAction("\u2191", "Previous Match (Shift+Enter)", () => findPrevious(view)),
-    createAction("\u2193", "Next Match (Enter)", () => findNext(view)),
+    createAction("\u2191", "Previous Match (Shift+Enter)", () => previousSearchMatch(view)),
+    createAction("\u2193", "Next Match (Enter)", () => nextSearchMatch(view)),
   );
 
-  const closeBtn = createAction("\u00d7", "Close (Escape)", () => closeSearchPanel(view));
+  const closeBtn = createAction("\u00d7", "Close (Escape)", () => closeSearch(view));
   closeBtn.className = "cf-search-close";
 
   const searchInputWrap = document.createElement("div");
@@ -225,37 +204,33 @@ function createSearchPanel(view: EditorView): Panel {
   replaceActions.className = "cf-search-replace-actions";
   replaceActions.append(
     createAction("Replace", "Replace Current Match", () => {
-      replaceNext(view);
+      replaceCurrentSearchMatch(view);
       updateMatchInfo();
     }),
     createAction("All", "Replace All Matches", () => {
-      replaceAll(view);
+      replaceAllSearchMatches(view);
       updateMatchInfo();
     }),
   );
 
   replaceRow.append(replaceInputWrap, replaceActions);
 
-  // Toggle replace row visibility
-  function syncReplaceVisibility(): void {
-    replaceRow.style.display = showReplace ? "" : "none";
-  }
-
   const toggleReplaceBtn = createAction("\u25b8", "Toggle Replace", () => {
-    showReplace = !showReplace;
-    syncReplaceVisibility();
-    toggleReplaceBtn.textContent = showReplace ? "\u25be" : "\u25b8";
-    if (showReplace) {
+    const state = getSearchControllerState(view);
+    const replaceVisible = !state.replaceVisible;
+    setSearchUiState(view, { replaceVisible });
+    syncPanelState();
+    if (replaceVisible) {
       replaceInput.focus();
     }
   });
   toggleReplaceBtn.className = "cf-search-toggle-replace";
-  toggleReplaceBtn.textContent = showReplace ? "\u25be" : "\u25b8";
+  toggleReplaceBtn.textContent = "\u25b8";
 
   // ── Assemble ────────────────────────────────────────────────────────────
 
   dom.append(toggleReplaceBtn, searchRow, replaceRow);
-  syncReplaceVisibility();
+  syncPanelState();
 
   // ── Events ──────────────────────────────────────────────────────────────
 
@@ -267,14 +242,14 @@ function createSearchPanel(view: EditorView): Panel {
     if (e.key === "Enter") {
       e.preventDefault();
       if (e.shiftKey) {
-        findPrevious(view);
+        previousSearchMatch(view);
       } else {
-        findNext(view);
+        nextSearchMatch(view);
       }
     }
     if (e.key === "Escape") {
       e.preventDefault();
-      closeSearchPanel(view);
+      closeSearch(view);
       view.focus();
     }
   });
@@ -286,22 +261,22 @@ function createSearchPanel(view: EditorView): Panel {
   replaceInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      replaceNext(view);
+      replaceCurrentSearchMatch(view);
       updateMatchInfo();
     }
     if (e.key === "Escape") {
       e.preventDefault();
-      closeSearchPanel(view);
+      closeSearch(view);
       view.focus();
     }
   });
 
   // Populate from existing query if reopening
-  const existing = getSearchQuery(view.state);
-  if (existing.valid) {
-    searchInput.value = existing.search;
-    replaceInput.value = existing.replace;
-    syncToggles(existing);
+  const existing = getSearchControllerState(view);
+  if (existing.query.valid) {
+    searchInput.value = existing.query.search;
+    replaceInput.value = existing.query.replace;
+    syncPanelState();
   }
 
   return {
@@ -316,7 +291,8 @@ function createSearchPanel(view: EditorView): Panel {
 
     update(update: ViewUpdate) {
       // React to external query changes (e.g. from select-next-occurrence)
-      const q = getSearchQuery(update.state);
+      const state = getSearchControllerState(update.view);
+      const q = state.query;
       if (q.search !== searchInput.value) {
         searchInput.value = q.search;
       }
@@ -326,21 +302,13 @@ function createSearchPanel(view: EditorView): Panel {
       if (
         q.caseSensitive !== caseSensitive ||
         q.regexp !== isRegexp ||
-        q.wholeWord !== wholeWord
+        q.wholeWord !== wholeWord ||
+        state.replaceVisible !== (replaceRow.style.display !== "none")
       ) {
-        syncToggles(q);
+        syncPanelState();
       }
 
-      // Update match count on query, doc, or selection changes
-      if (
-        update.docChanged ||
-        update.selectionSet ||
-        update.transactions.some((tr) =>
-          tr.effects.some((e) => e.is(setSearchQuery)),
-        )
-      ) {
-        updateMatchInfo();
-      }
+      updateMatchInfo();
     },
   };
 }
@@ -353,11 +321,12 @@ function createSearchPanel(view: EditorView): Panel {
 function syncReplaceRow(view: EditorView): void {
   const replaceRow = view.dom.querySelector<HTMLElement>(".cf-replace-row");
   const toggleBtn = view.dom.querySelector<HTMLElement>(".cf-search-toggle-replace");
+  const state = getSearchControllerState(view);
   if (replaceRow) {
-    replaceRow.style.display = showReplace ? "" : "none";
+    replaceRow.style.display = state.replaceVisible ? "" : "none";
   }
   if (toggleBtn) {
-    toggleBtn.textContent = showReplace ? "\u25be" : "\u25b8";
+    toggleBtn.textContent = state.replaceVisible ? "\u25be" : "\u25b8";
   }
 }
 
@@ -367,8 +336,7 @@ function syncReplaceRow(view: EditorView): void {
 
 /** Open the search panel in find-only mode (Cmd+F). */
 function openFindPanel(view: EditorView): boolean {
-  showReplace = false;
-  openSearchPanel(view);
+  openFindSearch(view);
   // If panel was already open, sync the replace row visibility
   syncReplaceRow(view);
   return true;
@@ -376,8 +344,7 @@ function openFindPanel(view: EditorView): boolean {
 
 /** Open the search panel with replace row visible (Cmd+H). */
 function openFindReplacePanel(view: EditorView): boolean {
-  showReplace = true;
-  openSearchPanel(view);
+  openReplaceSearch(view);
   // Sync visibility + focus replace input after panel renders
   syncReplaceRow(view);
   requestAnimationFrame(() => {
@@ -403,6 +370,7 @@ function openFindReplacePanel(view: EditorView): boolean {
  * - Escape: close panel
  */
 export const findReplaceExtension: Extension = [
+  searchControllerExtensions,
   search({ top: true, createPanel: createSearchPanel }),
   keymap.of([
     ...searchKeymap,

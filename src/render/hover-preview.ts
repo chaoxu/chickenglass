@@ -16,15 +16,14 @@ import {
   type ResolvedCrossref,
   findCrossrefs,
   resolveCrossref,
-  equationLabelsField,
 } from "../index/crossref-resolver";
 import { blockCounterField, type NumberedBlock } from "../plugins/block-counter";
-import { bibDataField, findCitationsFromTree, type BibStore } from "../citations/citation-render";
+import { bibDataField, type BibStore } from "../citations/citation-render";
 import { formatBibEntry } from "../citations/bibliography";
-import { renderKatex, stripMathDelimiters } from "./math-render";
+import { renderKatex } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
-import { readBracedLabelId } from "../parser/label-utils";
+import { documentAnalysisField } from "../semantics/codemirror-source";
 
 /** Maximum content length shown in hover previews. */
 const MAX_PREVIEW_LENGTH = 500;
@@ -103,26 +102,9 @@ function createHeader(
  * parent DisplayMath content.
  */
 function findEquationSource(view: EditorView, id: string): string | undefined {
-  const tree = syntaxTree(view.state);
-  const doc = view.state.doc.toString();
-  let result: string | undefined;
-
-  tree.iterate({
-    enter(node) {
-      if (result !== undefined) return false; // stop after first match
-      if (node.type.name !== "EquationLabel") return;
-      const labelId = readBracedLabelId(doc, node.from, node.to, "eq:");
-      if (labelId === id) {
-        const parent = node.node.parent;
-        if (parent) {
-          const raw = view.state.doc.sliceString(parent.from, node.from);
-          result = stripMathDelimiters(raw.trim(), true);
-        }
-      }
-    },
-  });
-
-  return result;
+  const equation = view.state.field(documentAnalysisField).equationById.get(id);
+  if (!equation) return undefined;
+  return equation.latex.trim();
 }
 
 /**
@@ -212,7 +194,7 @@ function hoverSource(
   const refs = findCrossrefs(view.state);
   const crossref = refs.find((ref) => pos >= ref.from && pos <= ref.to);
   if (crossref) {
-    const equationLabels = view.state.field(equationLabelsField);
+    const equationLabels = view.state.field(documentAnalysisField).equationById;
     const resolved = resolveCrossref(view.state, crossref.id, equationLabels);
 
     // Skip citations — they are handled below
@@ -232,9 +214,8 @@ function hoverSource(
   // Check for citation at this position (single scan)
   const { store } = view.state.field(bibDataField);
   if (store.size > 0) {
-    const tree = syntaxTree(view.state);
-    const text = view.state.doc.toString();
-    const matches = findCitationsFromTree(tree.topNode, text, store);
+    const matches = view.state.field(documentAnalysisField).references
+      .filter((ref) => ref.ids.some((id) => store.has(id)));
     const match = matches.find((m) => pos >= m.from && pos <= m.to);
     if (match) {
       return {

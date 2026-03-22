@@ -22,7 +22,7 @@ import {
   ViewPlugin,
 } from "@codemirror/view";
 import { buildDecorations, collectNodes, createBooleanToggleField, MATH_TYPES } from "../render";
-import { findCrossrefs } from "../index/crossref-resolver";
+import { documentAnalysisField } from "../semantics/codemirror-source";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -45,12 +45,14 @@ const noSpellcheck = Decoration.mark({
 
 /**
  * Build a DecorationSet marking math, code, and citation ranges with
- * spellcheck="false". Reuses collectNodes (syntax tree) and findCrossrefs
- * (regex scan) from existing utilities to avoid duplicate work.
+ * spellcheck="false". Reuses shared syntax discovery plus document analysis
+ * so reference ranges are not re-scanned locally.
  */
 function buildSpellcheckDecorations(view: EditorView): DecorationSet {
   const syntaxNodes = collectNodes(view, NO_SPELLCHECK_TYPES);
-  const crossrefRanges = findCrossrefs(view.state);
+  const crossrefRanges = view.state.field(documentAnalysisField).references
+    .filter((ref) => ref.ids.length === 1)
+    .map((ref) => ({ from: ref.from, to: ref.to }));
 
   const items = [
     ...syntaxNodes.map((n) => noSpellcheck.range(n.from, n.to)),

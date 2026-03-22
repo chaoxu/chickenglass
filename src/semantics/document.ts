@@ -1,5 +1,10 @@
 import type { Tree } from "@lezer/common";
 import { extractDivClass } from "../parser/fenced-div-attrs";
+import { readBracedLabelId } from "../parser/label-utils";
+import {
+  matchBracketedReference,
+  NARRATIVE_REFERENCE_RE,
+} from "./reference-parts";
 
 export interface TextSourceLine {
   readonly from: number;
@@ -38,6 +43,7 @@ export interface HeadingSemantics {
   readonly to: number;
   readonly level: number;
   readonly text: string;
+  readonly id?: string;
   readonly number: string;
   readonly unnumbered: boolean;
 }
@@ -89,13 +95,37 @@ export interface FencedDivSemantics {
   readonly title?: string;
 }
 
-export interface DocumentSemantics {
+export interface EquationSemantics {
+  readonly id: string;
+  readonly from: number;
+  readonly to: number;
+  readonly labelFrom: number;
+  readonly labelTo: number;
+  readonly number: number;
+  readonly latex: string;
+}
+
+export interface ReferenceSemantics {
+  readonly from: number;
+  readonly to: number;
+  readonly bracketed: boolean;
+  readonly ids: readonly string[];
+  readonly locators: readonly (string | undefined)[];
+}
+
+export interface DocumentAnalysis {
   readonly headings: readonly HeadingSemantics[];
   readonly headingByFrom: ReadonlyMap<number, HeadingSemantics>;
   readonly footnotes: FootnoteSemantics;
   readonly fencedDivs: readonly FencedDivSemantics[];
   readonly fencedDivByFrom: ReadonlyMap<number, FencedDivSemantics>;
+  readonly equations: readonly EquationSemantics[];
+  readonly equationById: ReadonlyMap<string, EquationSemantics>;
+  readonly references: readonly ReferenceSemantics[];
+  readonly referenceByFrom: ReadonlyMap<number, ReferenceSemantics>;
 }
+
+export type DocumentSemantics = DocumentAnalysis;
 
 export interface TrailingHeadingAttributes {
   readonly index: number;
@@ -118,6 +148,13 @@ export function findTrailingHeadingAttributes(
 export function hasUnnumberedHeadingAttributes(text: string): boolean {
   const attrs = findTrailingHeadingAttributes(text);
   return attrs !== null && /(?:^|\s)(?:-|\.unnumbered)(?=\s|$)/.test(attrs.content);
+}
+
+function extractHeadingId(text: string): string | undefined {
+  const attrs = findTrailingHeadingAttributes(text);
+  if (!attrs) return undefined;
+  const match = /(?:^|\s)#([^\s}]+)/.exec(attrs.content);
+  return match?.[1];
 }
 
 export function analyzeHeadings(doc: TextSource, tree: Tree): HeadingSemantics[] {
@@ -155,6 +192,7 @@ export function analyzeHeadings(doc: TextSource, tree: Tree): HeadingSemantics[]
         to: node.to,
         level,
         text,
+        id: extractHeadingId(rawHeadingText),
         number,
         unnumbered,
       });
@@ -343,6 +381,91 @@ export function analyzeFencedDivs(doc: TextSource, tree: Tree): FencedDivSemanti
   return divs;
 }
 
+function extractDisplayMathLatex(raw: string): string {
+  const text = raw.trim();
+  if (text.startsWith("$$") && text.endsWith("$$")) {
+    return text.slice(2, -2).trim();
+  }
+  if (text.startsWith("\\[") && text.endsWith("\\]")) {
+    return text.slice(2, -2).trim();
+  }
+  return text;
+}
+
+export function analyzeEquations(doc: TextSource, tree: Tree): EquationSemantics[] {
+  const equations: EquationSemantics[] = [];
+  let counter = 0;
+
+  tree.iterate({
+    enter(node) {
+      if (node.type.name !== "EquationLabel") return;
+      const id = readBracedLabelId(doc.slice(node.from, node.to), 0, node.to - node.from, "eq:");
+      if (!id) return;
+
+      const parent = node.node.parent;
+      if (!parent || parent.type.name !== "DisplayMath") return;
+
+      counter++;
+      equations.push({
+        id,
+        from: parent.from,
+        to: parent.to,
+        labelFrom: node.from,
+        labelTo: node.to,
+        number: counter,
+        latex: extractDisplayMathLatex(doc.slice(parent.from, node.from)),
+      });
+    },
+  });
+
+  return equations;
+}
+
+export function analyzeReferences(doc: TextSource, tree: Tree): ReferenceSemantics[] {
+  const refs: ReferenceSemantics[] = [];
+  const linkRanges: { from: number; to: number }[] = [];
+  const fullText = doc.slice(0, doc.length);
+
+  tree.iterate({
+    enter(node) {
+      if (node.name !== "Link") return;
+
+      const raw = doc.slice(node.from, node.to);
+      const match = matchBracketedReference(raw);
+      if (match) {
+        refs.push({
+          from: node.from,
+          to: node.to,
+          bracketed: true,
+          ids: [...match.ids],
+          locators: [...match.locators],
+        });
+      }
+      linkRanges.push({ from: node.from, to: node.to });
+    },
+  });
+
+  NARRATIVE_REFERENCE_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = NARRATIVE_REFERENCE_RE.exec(fullText)) !== null) {
+    const from = match.index;
+    const to = from + match[0].length;
+    const insideLink = linkRanges.some((range) => from >= range.from && to <= range.to);
+    if (insideLink) continue;
+
+    refs.push({
+      from,
+      to,
+      bracketed: false,
+      ids: [match[1]],
+      locators: [undefined],
+    });
+  }
+
+  refs.sort((a, b) => a.from - b.from);
+  return refs;
+}
+
 export function analyzeDocumentSemantics(
   doc: TextSource,
   tree: Tree,
@@ -350,6 +473,8 @@ export function analyzeDocumentSemantics(
   const headings = analyzeHeadings(doc, tree);
   const footnotes = analyzeFootnotes(doc, tree);
   const fencedDivs = analyzeFencedDivs(doc, tree);
+  const equations = analyzeEquations(doc, tree);
+  const references = analyzeReferences(doc, tree);
 
   return {
     headings,
@@ -357,5 +482,9 @@ export function analyzeDocumentSemantics(
     footnotes,
     fencedDivs,
     fencedDivByFrom: new Map(fencedDivs.map((div) => [div.from, div])),
+    equations,
+    equationById: new Map(equations.map((equation) => [equation.id, equation])),
+    references,
+    referenceByFrom: new Map(references.map((reference) => [reference.from, reference])),
   };
 }

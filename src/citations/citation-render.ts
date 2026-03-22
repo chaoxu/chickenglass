@@ -24,6 +24,11 @@ import { type BibEntry, extractLastName } from "./bibtex-parser";
 import { type CslProcessor, registerCitationsWithProcessor } from "./csl-processor";
 import { cursorInRange, RenderWidget } from "../render/render-utils";
 import { markdownExtensions } from "../parser";
+import {
+  analyzeDocumentSemantics,
+  stringTextSource,
+} from "../semantics/document";
+import { extractReferenceCluster } from "../semantics/reference-parts";
 
 /** Format a citation label: "(Author, Year)" or "(Author, Year, locator)". */
 export function formatCitation(entry: BibEntry, locator?: string): string {
@@ -141,25 +146,8 @@ const NARRATIVE_CITE_RE = /(?<![[@\w])@([a-zA-Z0-9_][\w:./-]*)/g;
 
 /** Extract citation ids and locators from a parenthetical citation match. */
 export function extractCitations(raw: string): { ids: string[]; locators: (string | undefined)[] } {
-  const ids: string[] = [];
-  const locators: (string | undefined)[] = [];
-
-  for (const part of raw.split(";")) {
-    const trimmed = part.trim();
-    const key = trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
-
-    const commaIdx = key.indexOf(",");
-    if (commaIdx >= 0) {
-      ids.push(key.slice(0, commaIdx).trim());
-      const loc = key.slice(commaIdx + 1).trim();
-      locators.push(loc || undefined);
-    } else {
-      ids.push(key.trim());
-      locators.push(undefined);
-    }
-  }
-
-  return { ids, locators };
+  const { ids, locators } = extractReferenceCluster(raw);
+  return { ids: [...ids], locators: [...locators] };
 }
 
 /**
@@ -245,7 +233,8 @@ export function findCitations(
   store: BibStore,
 ): CitationMatch[] {
   const tree = mdParser.parse(text);
-  return findCitationsFromTree(tree.topNode, text, store);
+  const analysis = analyzeDocumentSemantics(stringTextSource(text), tree);
+  return citationMatchesFromReferences(analysis.references, store);
 }
 
 /**

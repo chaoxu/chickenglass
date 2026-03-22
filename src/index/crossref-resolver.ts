@@ -8,12 +8,13 @@
  * Uses the block counter state and the syntax tree to find targets.
  */
 
-import { type EditorState, StateField } from "@codemirror/state";
+import { type EditorState } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import type { BlockCounterState } from "../plugins/block-counter";
 import { blockCounterField } from "../plugins/block-counter";
 import { pluginRegistryField, getPlugin } from "../plugins/plugin-registry";
-import { readBracedLabelId } from "../parser/label-utils";
+import { analyzeDocumentSemantics } from "../semantics/document";
+import { documentAnalysisField, editorStateTextSource } from "../semantics/codemirror-source";
 
 /** The kind of target a cross-reference resolves to. */
 export type CrossrefKind = "block" | "equation" | "citation" | "unresolved";
@@ -36,61 +37,20 @@ export interface EquationEntry {
   readonly number: number;
 }
 
-/**
- * Scan the syntax tree for EquationLabel nodes and assign sequential numbers.
- * Returns a map from equation id to its entry.
- */
 export function collectEquationLabels(
   state: EditorState,
 ): ReadonlyMap<string, EquationEntry> {
-  const tree = syntaxTree(state);
-  const doc = state.doc.toString();
-  const result = new Map<string, EquationEntry>();
-  let counter = 0;
-
-  tree.iterate({
-    enter(node) {
-      if (node.type.name !== "EquationLabel") return;
-      const id = readBracedLabelId(
-        doc,
-        node.from,
-        node.to,
-        "eq:",
-      );
-      if (id) {
-        counter++;
-        result.set(id, { id, number: counter });
-      }
-    },
-  });
-
-  return result;
+  const equations = (
+    state.field(documentAnalysisField, false)?.equationById ??
+    analyzeDocumentSemantics(editorStateTextSource(state), syntaxTree(state)).equationById
+  );
+  return new Map(
+    [...equations.entries()].map(([id, equation]) => [
+      id,
+      { id, number: equation.number },
+    ]),
+  );
 }
-
-/**
- * CM6 StateField that caches equation labels.
- *
- * Recomputes only when the document or syntax tree changes,
- * avoiding redundant tree walks across multiple consumers
- * (crossref-render, hover-preview, resolveCrossref).
- */
-export const equationLabelsField = StateField.define<
-  ReadonlyMap<string, EquationEntry>
->({
-  create(state) {
-    return collectEquationLabels(state);
-  },
-
-  update(value, tr) {
-    if (
-      tr.docChanged ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
-    ) {
-      return collectEquationLabels(tr.state);
-    }
-    return value;
-  },
-});
 
 /**
  * Resolve a single reference id to its target.
@@ -126,7 +86,7 @@ export function resolveCrossref(
   // 2. Check equation labels
   const eqLabels =
     equationLabels ??
-    state.field(equationLabelsField, false) ??
+    state.field(documentAnalysisField, false)?.equationById ??
     collectEquationLabels(state);
   const eqEntry = eqLabels.get(id);
   if (eqEntry) {
@@ -159,71 +119,17 @@ export interface CrossrefMatch {
   readonly bracketed: boolean;
 }
 
-/** Pattern for bracketed cross-references: [@id] (single id, no semicolons). */
-const BRACKETED_REF_RE = /^\[@([\w:.'-]+)\]$/;
-
-/** Pattern for narrative @id references in plain text (not inside brackets). */
-const NARRATIVE_REF_RE = /(?<!\w)@([\w:.'-]*\w)/g;
-
-/**
- * Find all cross-reference patterns by walking the Lezer syntax tree.
- *
- * Bracketed references ([@id]) are found as Link nodes whose text
- * starts with `[@`. Narrative references (@id) are found by scanning
- * text content outside of Link nodes.
- */
 export function findCrossrefs(state: EditorState): CrossrefMatch[] {
-  const tree = syntaxTree(state);
-  const doc = state.doc.toString();
-  const matches: CrossrefMatch[] = [];
+  const references =
+    state.field(documentAnalysisField, false)?.references ??
+    analyzeDocumentSemantics(editorStateTextSource(state), syntaxTree(state)).references;
 
-  // Set of ranges covered by Link nodes, used to avoid finding
-  // narrative refs inside brackets
-  const linkRanges: { from: number; to: number }[] = [];
-
-  // 1. Walk the tree for Link nodes — bracketed refs like [@id]
-  tree.iterate({
-    enter(node) {
-      if (node.name !== "Link") return;
-
-      const text = doc.slice(node.from, node.to);
-      const crossRefMatch = BRACKETED_REF_RE.exec(text);
-      if (crossRefMatch) {
-        matches.push({
-          id: crossRefMatch[1],
-          from: node.from,
-          to: node.to,
-          bracketed: true,
-        });
-      }
-
-      linkRanges.push({ from: node.from, to: node.to });
-    },
-  });
-
-  // 2. Scan full text for narrative @id refs, skipping Link ranges
-  NARRATIVE_REF_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = NARRATIVE_REF_RE.exec(doc)) !== null) {
-    const matchFrom = m.index;
-    const matchTo = m.index + m[0].length;
-
-    // Skip if inside a Link node
-    const insideLink = linkRanges.some(
-      (r) => matchFrom >= r.from && matchTo <= r.to,
-    );
-    if (insideLink) continue;
-
-    matches.push({
-      id: m[1],
-      from: matchFrom,
-      to: matchTo,
-      bracketed: false,
-    });
-  }
-
-  // Sort by document position
-  matches.sort((a, b) => a.from - b.from);
-
-  return matches;
+  return references
+    .filter((ref) => ref.ids.length === 1)
+    .map((ref) => ({
+      id: ref.ids[0],
+      from: ref.from,
+      to: ref.to,
+      bracketed: ref.bracketed,
+    }));
 }

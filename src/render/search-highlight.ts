@@ -13,36 +13,10 @@
 import { type Extension } from "@codemirror/state";
 import { type EditorView, type PluginValue, type ViewUpdate, ViewPlugin } from "@codemirror/view";
 import { getSearchQuery, searchPanelOpen } from "@codemirror/search";
+import { collectVisibleSearchMatches } from "../editor/search-controller";
 
 const MATCH_CLASS = "cf-search-match";
 const SELECTED_MATCH_CLASS = "cf-search-match-selected";
-
-/**
- * Collect search match ranges that overlap the visible viewport.
- *
- * Uses the public SearchQuery.getCursor() API scoped to visible ranges
- * (with margin) to avoid scanning the entire document.
- */
-function collectVisibleMatches(view: EditorView): { from: number; to: number }[] {
-  if (!searchPanelOpen(view.state)) return [];
-
-  const spec = getSearchQuery(view.state);
-  if (!spec.valid) return [];
-
-  const matches: { from: number; to: number }[] = [];
-
-  for (const { from: vFrom, to: vTo } of view.visibleRanges) {
-    // Add margin to match CM6's own search highlighter behavior
-    const searchFrom = Math.max(0, vFrom - 500);
-    const searchTo = Math.min(view.state.doc.length, vTo + 500);
-
-    const cursor = spec.getCursor(view.state.doc, searchFrom, searchTo);
-    for (let result = cursor.next(); !result.done; result = cursor.next()) {
-      matches.push({ from: result.value.from, to: result.value.to });
-    }
-  }
-  return matches;
-}
 
 /**
  * Check whether two ranges overlap.
@@ -88,7 +62,7 @@ class SearchHighlightPlugin implements PluginValue {
    * based on whether any search match overlaps their source range.
    */
   private syncHighlights(view: EditorView): void {
-    const matches = collectVisibleMatches(view);
+    const matches = collectVisibleSearchMatches(view);
 
     // Fast path: no matches and nothing to clear
     if (matches.length === 0 && !this.hadHighlights) return;

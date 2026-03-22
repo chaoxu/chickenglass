@@ -20,22 +20,24 @@ import katex from "katex";
 import { parser as baseParser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
 import type { InlineRenderSurface } from "../inline-surface";
+import {
+  type InlineFragment,
+  buildInlineFragments,
+  parseInlineFragments,
+} from "../inline-fragments";
 import { markdownExtensions } from "../parser";
-import { MARK_NODES, isSafeUrl, buildKatexOptions } from "../render/inline-shared";
+import { buildKatexOptions, isSafeUrl } from "../render/inline-shared";
 import { type BibEntry } from "../citations/bibtex-parser";
 import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import {
-  findCitationsFromTree,
   formatParenthetical,
   type BibStore,
 } from "../citations/citation-render";
 import { type CslProcessor, registerCitationsWithProcessor } from "../citations/csl-processor";
 import {
-  analyzeFootnotes,
   analyzeDocumentSemantics,
   stringTextSource,
   type DocumentSemantics,
-  type FootnoteSemantics,
 } from "../semantics/document";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 import { CSS } from "../constants/css-classes";
@@ -97,16 +99,15 @@ export interface MarkdownToHtmlOptions {
 /**
  * Context object for inline rendering functions.
  *
- * Replaces the previous positional parameter lists on `renderChildren`,
- * `renderInlineNode`, and `renderLink`.
+ * `src/inline-fragments.ts` owns the shared tree walk. This context only
+ * carries rendering policy and output concerns.
  */
 interface InlineContext {
-  doc: string;
+  readonly doc: string;
   macros?: Record<string, string>;
   bibliography?: BibStore;
   citedIds?: string[];
   cslProcessor?: CslProcessor | null;
-  footnotes?: FootnoteSemantics;
   surface: HtmlInlineSurface;
 }
 
@@ -129,31 +130,22 @@ export function renderInline(
   macros?: Record<string, string>,
   surface: HtmlInlineSurface = "document-body",
 ): string {
-  return renderInlineWithSurface(text, { macros, surface });
+  return renderInlineWithSurface(text, { doc: text, macros, surface });
 }
 
 function renderInlineWithSurface(
   text: string,
   options: Pick<
     InlineContext,
-    "macros" | "bibliography" | "citedIds" | "cslProcessor" | "surface"
+    "macros" | "bibliography" | "citedIds" | "cslProcessor" | "surface" | "doc"
   >,
 ): string {
-  // Parse just the text as a paragraph (Lezer wraps it in Document > Paragraph)
-  const tree = mdParser.parse(text);
-  const footnotes = analyzeFootnotes(stringTextSource(text), tree);
-  const doc = tree.topNode;
-  // The text becomes a single Paragraph inside Document
-  const para = doc.firstChild;
-  if (!para) return escapeHtml(text);
-  // Render the paragraph's inline content (without wrapping in <p>)
-  return renderChildren(para, {
-    doc: text,
+  return renderInlineFragments(parseInlineFragments(text), {
+    doc: options.doc,
     macros: options.macros,
     bibliography: options.bibliography,
     citedIds: options.citedIds,
     cslProcessor: options.cslProcessor,
-    footnotes,
     surface: options.surface,
   });
 }
@@ -166,7 +158,6 @@ interface WalkContext {
   readonly macros?: Record<string, string>;
   readonly sectionNumbers: boolean;
   readonly semantics: DocumentSemantics;
-  readonly footnotes: FootnoteSemantics;
   readonly bibliography?: BibStore;
   readonly cslProcessor?: CslProcessor | null;
   readonly surface: "document-body";
@@ -187,7 +178,7 @@ export function markdownToHtml(
   const semantics = analyzeDocumentSemantics(stringTextSource(content), tree);
 
   if (options?.bibliography && options.cslProcessor) {
-    const matches = findCitationsFromTree(tree.topNode, content, options.bibliography);
+    const matches = ctxLikeCitationMatches(semantics.references, options.bibliography);
     registerCitationsWithProcessor(matches, options.cslProcessor);
   }
   const ctx: WalkContext = {
@@ -195,7 +186,6 @@ export function markdownToHtml(
     macros: options?.macros,
     sectionNumbers: options?.sectionNumbers ?? false,
     semantics,
-    footnotes: semantics.footnotes,
     bibliography: options?.bibliography,
     cslProcessor: options?.cslProcessor,
     surface: "document-body",
@@ -393,6 +383,7 @@ function renderListItem(node: SyntaxNode, ctx: WalkContext): string {
       const contentStart = taskMarker ? taskMarker.to + 1 : child.from;
       const taskContent = ctx.doc.slice(contentStart, child.to);
       parts.push(renderInlineWithSurface(taskContent.trim(), {
+        doc: taskContent.trim(),
         macros: ctx.macros,
         bibliography: ctx.bibliography,
         citedIds: ctx.citedIds,
@@ -494,6 +485,7 @@ function renderFootnoteDef(node: SyntaxNode, ctx: WalkContext): string {
 
   const fnContent = def.content
     ? `<p>${renderInlineWithSurface(def.content, {
+        doc: def.content,
         macros: ctx.macros,
         bibliography: ctx.bibliography,
         citedIds: ctx.citedIds,
@@ -574,223 +566,115 @@ function renderBlockquote(node: SyntaxNode, ctx: WalkContext): string {
 
 // ── Inline content rendering ────────────────────────────────────────────────
 
-/**
- * Render the inline children of a node (e.g., Paragraph, Emphasis).
- *
- * Walks the node's children, rendering inline elements and collecting
- * plain text between them. Text gaps between children are escaped.
- *
- * When `rangeFrom`/`rangeTo` are provided, only children and text within
- * that range are rendered (used by renderLinkText to extract [text] portion).
- */
 function renderChildren(
   node: SyntaxNode,
   ctx: InlineContext,
   rangeFrom?: number,
   rangeTo?: number,
 ): string {
-  const { doc } = ctx;
-  const from = rangeFrom ?? node.from;
-  const to = rangeTo ?? node.to;
-  const parts: string[] = [];
-  let pos = from;
-  let child = node.firstChild;
-
-  while (child) {
-    // Only process children within the range
-    if (child.to > from && child.from < to) {
-      // Text gap between previous position and this child
-      if (child.from > pos) {
-        parts.push(escapeHtml(doc.slice(pos, child.from)));
-      }
-
-      const childHtml = renderInlineNode(child, ctx);
-      if (childHtml !== null) {
-        parts.push(childHtml);
-      }
-
-      pos = child.to;
-    }
-    child = child.nextSibling;
-  }
-
-  // Trailing text after last child
-  if (pos < to) {
-    parts.push(escapeHtml(doc.slice(pos, to)));
-  }
-
-  return parts.join("");
+  return renderInlineFragments(buildInlineFragments(node, ctx.doc, rangeFrom, rangeTo), ctx);
 }
 
-/**
- * Render a single inline node. Returns HTML string, or null if the node
- * should be skipped (marks).
- */
-function renderInlineNode(
-  node: SyntaxNode,
+function renderInlineFragments(
+  fragments: readonly InlineFragment[],
   ctx: InlineContext,
-): string | null {
-  const { doc, macros } = ctx;
+): string {
+  return fragments.map((fragment) => renderInlineFragment(fragment, ctx)).join("");
+}
 
-  // Skip delimiter marks
-  if (MARK_NODES.has(node.name)) {
-    return null;
-  }
+function renderInlineFragment(
+  fragment: InlineFragment,
+  ctx: InlineContext,
+): string {
+  switch (fragment.kind) {
+    case "text":
+      return escapeHtml(fragment.text);
 
-  switch (node.name) {
-    case "Emphasis":
-      return `<em>${renderChildren(node, ctx)}</em>`;
+    case "emphasis":
+      return `<em>${renderInlineFragments(fragment.children, ctx)}</em>`;
 
-    case "StrongEmphasis":
-      return `<strong>${renderChildren(node, ctx)}</strong>`;
+    case "strong":
+      return `<strong>${renderInlineFragments(fragment.children, ctx)}</strong>`;
 
-    case "Strikethrough":
-      return `<del>${renderChildren(node, ctx)}</del>`;
+    case "strikethrough":
+      return `<del>${renderInlineFragments(fragment.children, ctx)}</del>`;
 
-    case "Highlight":
-      return `<mark>${renderChildren(node, ctx)}</mark>`;
+    case "highlight":
+      return `<mark>${renderInlineFragments(fragment.children, ctx)}</mark>`;
 
-    case "InlineCode": {
-      // Get code text between the CodeMark delimiters
-      const marks = node.getChildren("CodeMark");
-      if (marks.length >= 2) {
-        const code = doc.slice(marks[0].to, marks[marks.length - 1].from);
-        return `<code>${escapeHtml(code)}</code>`;
+    case "code":
+      return `<code>${escapeHtml(fragment.text)}</code>`;
+
+    case "math":
+      return renderMath(fragment.latex, false, ctx.macros);
+
+    case "link": {
+      const label = renderInlineFragments(fragment.children, ctx);
+      if (isUiChromeSurface(ctx.surface)) return label;
+      const href = fragment.href?.trim();
+      if (!href) return label;
+      if (isSafeUrl(href)) {
+        return `<a href="${escapeHtml(href)}">${label}</a>`;
       }
-      return `<code>${escapeHtml(doc.slice(node.from, node.to))}</code>`;
+      return `<span class="unsafe-link">${label}</span>`;
     }
 
-    case "InlineMath": {
-      const marks = node.getChildren("InlineMathMark");
-      if (marks.length >= 2) {
-        const latex = doc.slice(marks[0].to, marks[marks.length - 1].from);
-        return renderMath(latex, false, macros);
+    case "reference":
+      if (isUiChromeSurface(ctx.surface)) {
+        return escapeHtml(fragment.rawText);
       }
-      return escapeHtml(doc.slice(node.from, node.to));
-    }
+      return renderCitationCluster(
+        fragment.ids,
+        ctx.bibliography,
+        ctx.citedIds,
+        ctx.cslProcessor,
+        fragment.locators,
+      );
 
-    case "Link": {
-      return renderLink(node, ctx);
-    }
-
-    case "Image": {
-      return renderImage(node, ctx);
-    }
-
-    case "FootnoteRef": {
-      const ref = ctx.footnotes?.refByFrom.get(node.from);
-      if (!ref) {
-        return escapeHtml(doc.slice(node.from, node.to));
+    case "image": {
+      const alt = renderInlineFragments(fragment.alt, ctx);
+      if (ctx.surface !== "document-body") return alt;
+      const src = fragment.src?.trim();
+      if (!src) return alt;
+      if (isSafeUrl(src)) {
+        return `<img src="${escapeHtml(src)}" alt="${escapeHtml(fragment.rawAlt)}">`;
       }
-      const fnId = escapeHtml(ref.id);
+      return `<span class="unsafe-link">${alt}</span>`;
+    }
+
+    case "footnote-ref": {
+      const fnId = escapeHtml(fragment.id);
       if (isUiChromeSurface(ctx.surface)) {
         return `<sup>${fnId}</sup>`;
       }
       return `<sup><a class="footnote-ref" href="#fn-${fnId}">${fnId}</a></sup>`;
     }
 
-    case "HardBreak":
+    case "hard-break":
       return ctx.surface === "document-body" ? "<br>" : " ";
-
-    case "Escape":
-      // \$ → $, \* → *, etc. — strip the backslash
-      return escapeHtml(doc.slice(node.from + 1, node.to));
-
-    case "URL":
-      // URL nodes inside links are handled by renderLink
-      return null;
-
-    default:
-      // Unknown inline node — render its text
-      return escapeHtml(doc.slice(node.from, node.to));
   }
-}
-
-/** Render a Link node, handling citations and cross-references ([@id]). */
-function renderLink(
-  node: SyntaxNode,
-  ctx: InlineContext,
-): string {
-  const { doc, bibliography, citedIds, cslProcessor, surface } = ctx;
-  const fullText = doc.slice(node.from, node.to);
-  const linkText = renderLinkText(node, ctx);
-
-  // Citation / cross-reference: [@id] or [@a; @b] — Lezer parses as a Link
-  const crossRefMatch = /^\[@([^\]]+)\]$/.exec(fullText);
-  if (crossRefMatch) {
-    if (isUiChromeSurface(surface)) {
-      return linkText;
-    }
-    const rawRefs = crossRefMatch[1];
-
-    // Multiple citations: [@a; @b; @c]
-    if (rawRefs.includes(";")) {
-      const ids = rawRefs.split(";").map(s => s.trim().replace(/^@/, ""));
-      return renderCitationCluster(ids, bibliography, citedIds, cslProcessor);
-    }
-
-    // Single citation: [@id]
-    const id = rawRefs.replace(/^@/, "");
-    return renderCitationCluster([id], bibliography, citedIds, cslProcessor);
-  }
-
-  // Regular link: [text](url)
-  const urlNode = node.getChild("URL");
-  if (!urlNode) {
-    // No URL child — just render text
-    return linkText;
-  }
-
-  const rawHref = doc.slice(urlNode.from, urlNode.to);
-  if (isUiChromeSurface(surface)) {
-    return linkText;
-  }
-
-  if (isSafeUrl(rawHref)) {
-    return `<a href="${escapeHtml(rawHref)}">${linkText}</a>`;
-  }
-  return `<span class="unsafe-link">${linkText}</span>`;
-}
-
-/** Render the text portion of a Link node (between [ and ]). */
-function renderLinkText(
-  node: SyntaxNode,
-  ctx: InlineContext,
-): string {
-  const { doc } = ctx;
-  // Link text is between the first LinkMark "[" and the second LinkMark "]"
-  const marks = node.getChildren("LinkMark");
-  if (marks.length < 2) return escapeHtml(doc.slice(node.from, node.to));
-
-  const textFrom = marks[0].to;
-  const textTo = marks[1].from;
-  if (textTo <= textFrom) return "";
-
-  return renderChildren(node, ctx, textFrom, textTo);
-}
-
-/** Render an Image node. */
-function renderImage(node: SyntaxNode, ctx: InlineContext): string {
-  const { doc, surface } = ctx;
-  const urlNode = node.getChild("URL");
-  const marks = node.getChildren("LinkMark");
-  const rawAlt = marks.length >= 2 ? doc.slice(marks[0].to, marks[1].from) : "";
-  const alt = renderLinkText(node, ctx);
-  if (!urlNode) return alt;
-
-  const rawSrc = doc.slice(urlNode.from, urlNode.to);
-
-  if (surface !== "document-body") {
-    return alt;
-  }
-
-  if (isSafeUrl(rawSrc)) {
-    return `<img src="${escapeHtml(rawSrc)}" alt="${escapeHtml(rawAlt)}">`;
-  }
-  return `<span class="unsafe-link">${alt}</span>`;
 }
 
 // ── Citation / bibliography rendering ───────────────────────────────────────
+
+function ctxLikeCitationMatches(
+  refs: readonly {
+    readonly bracketed: boolean;
+    readonly ids: readonly string[];
+    readonly locators: readonly (string | undefined)[];
+  }[],
+  bibliography: BibStore,
+): { parenthetical: boolean; ids: string[]; locators: (string | undefined)[] }[] {
+  return refs
+    .filter((ref) => ref.ids.some((id) => bibliography.has(id)))
+    .map((ref) => ({
+      parenthetical: ref.bracketed,
+      ids: [...ref.ids],
+      locators: ref.locators.some((locator) => locator != null)
+        ? [...ref.locators]
+        : [],
+    }));
+}
 
 /**
  * Add cited ids to the bibliography accumulator, preserving first-use order.
@@ -817,6 +701,7 @@ function renderCitationCluster(
   bibliography?: BibStore,
   citedIds?: string[],
   cslProcessor?: CslProcessor | null,
+  locators?: readonly (string | undefined)[],
 ): string {
   const knownCount = bibliography
     ? ids.filter((id) => bibliography.has(id)).length
@@ -834,15 +719,23 @@ function renderCitationCluster(
   trackCitedIds(ids, bibliography, citedIds);
 
   if (bibliography && knownCount === ids.length) {
+    const normalizedLocators =
+      locators && locators.some((locator) => locator != null) ? locators : undefined;
     const rendered = cslProcessor
-      ? cslProcessor.cite([...ids])
-      : formatParenthetical(ids, bibliography);
+      ? normalizedLocators
+        ? cslProcessor.cite([...ids], [...normalizedLocators])
+        : cslProcessor.cite([...ids])
+      : formatParenthetical(ids, bibliography, normalizedLocators);
     return `<span class="${CSS.citation}">${escapeHtml(rendered)}</span>`;
   }
 
-  const parts = ids.map((id) => {
+  const parts = ids.map((id, index) => {
     if (bibliography?.has(id)) {
-      const rendered = formatParenthetical([id], bibliography);
+      const rendered = formatParenthetical(
+        [id],
+        bibliography,
+        locators ? [locators[index]] : undefined,
+      );
       return escapeHtml(
         rendered.startsWith("(") && rendered.endsWith(")")
           ? rendered.slice(1, -1)

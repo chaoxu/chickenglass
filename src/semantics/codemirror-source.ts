@@ -1,7 +1,7 @@
 import type { EditorState } from "@codemirror/state";
 import { StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import type { TextSource, DocumentSemantics } from "./document";
+import type { TextSource, DocumentAnalysis } from "./document";
 import { analyzeDocumentSemantics } from "./document";
 
 export function editorStateTextSource(state: EditorState): TextSource {
@@ -31,7 +31,7 @@ export function editorStateTextSource(state: EditorState): TextSource {
  * `markdown-to-html.ts` stays CM6-free and calls
  * `analyzeDocumentSemantics()` directly.
  */
-export const documentSemanticsField = StateField.define<DocumentSemantics>({
+export const documentAnalysisField = StateField.define<DocumentAnalysis>({
   create(state) {
     return analyzeDocumentSemantics(editorStateTextSource(state), syntaxTree(state));
   },
@@ -49,3 +49,5 @@ export const documentSemanticsField = StateField.define<DocumentSemantics>({
     return value;
   },
 });
+
+export const documentSemanticsField = documentAnalysisField;
