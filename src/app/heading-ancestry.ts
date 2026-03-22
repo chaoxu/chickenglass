@@ -7,6 +7,12 @@
 
 import { type EditorState } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
+import {
+  analyzeHeadings,
+  findTrailingHeadingAttributes,
+  hasUnnumberedHeadingAttributes,
+} from "../semantics/document";
+import { editorStateTextSource } from "../semantics/codemirror-source";
 
 /** A single heading entry extracted from the document. */
 export interface HeadingEntry {
@@ -25,7 +31,7 @@ export interface HeadingEntry {
  * Matches `{-}`, `{.unnumbered}`, or attribute blocks containing either
  * (e.g. `{- .someclass}`, `{.unnumbered #id}`).
  */
-export const unnumberedRe = /\{[^}]*(?:-|\.unnumbered)[^}]*\}\s*$/;
+export { findTrailingHeadingAttributes, hasUnnumberedHeadingAttributes };
 
 /**
  * Extract all headings from the editor state.
@@ -36,50 +42,12 @@ export const unnumberedRe = /\{[^}]*(?:-|\.unnumbered)[^}]*\}\s*$/;
  * Returns entries sorted by document position.
  */
 export function extractHeadings(state: EditorState): HeadingEntry[] {
-  const entries: HeadingEntry[] = [];
-  const counters = [0, 0, 0, 0, 0, 0, 0];
-  const tree = syntaxTree(state);
-
-  tree.iterate({
-    enter(node) {
-      const m = /^ATXHeading(\d)$/.exec(node.name);
-      if (!m) return;
-
-      const level = Number(m[1]);
-      const rawText = state.sliceDoc(node.from, node.to);
-      const isUnnumbered = unnumberedRe.test(rawText);
-
-      let sectionNumber: string;
-      if (isUnnumbered) {
-        // Unnumbered headings get no section number and don't affect counters
-        sectionNumber = "";
-      } else {
-        counters[level]++;
-        for (let i = level + 1; i <= 6; i++) counters[i] = 0;
-
-        const parts: number[] = [];
-        for (let i = 1; i <= level; i++) parts.push(counters[i]);
-        sectionNumber = parts.join(".");
-      }
-
-      // Use HeaderMark child node's absolute end position to find where heading text starts
-      const headerMark = node.node.getChild("HeaderMark");
-      const textFrom = headerMark ? headerMark.to : node.from;
-      // Slice from doc using absolute positions, then strip trailing attribute block ({...})
-      const text = state.sliceDoc(textFrom, node.to)
-        .trim()
-        .replace(/\s*\{[^}]*\}\s*$/, "");
-
-      entries.push({
-        level,
-        text,
-        number: sectionNumber,
-        pos: node.from,
-      });
-    },
-  });
-
-  return entries;
+  return analyzeHeadings(editorStateTextSource(state), syntaxTree(state)).map((heading) => ({
+    level: heading.level,
+    text: heading.text,
+    number: heading.number,
+    pos: heading.from,
+  }));
 }
 
 /**

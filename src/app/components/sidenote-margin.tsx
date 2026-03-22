@@ -15,6 +15,7 @@ import { EditorView } from "@codemirror/view";
 import { collectFootnotes } from "../../render/sidenote-render";
 import { renderInlineMarkdown } from "../../render/inline-render";
 import { mathMacrosField } from "../../render/math-macros";
+import { orderedFootnoteEntries } from "../../semantics/document";
 
 interface SidenoteEntry {
   id: string;
@@ -34,31 +35,24 @@ const GAP = 8;
 
 function extractSidenotes(view: EditorView): SidenoteEntry[] {
   const state = view.state;
-  const { refs, defs } = collectFootnotes(state);
-
-  const numberMap = new Map<string, number>();
-  let nextNum = 1;
-  for (const ref of refs) {
-    if (!numberMap.has(ref.id)) numberMap.set(ref.id, nextNum++);
-  }
+  const footnotes = collectFootnotes(state);
 
   const entries: SidenoteEntry[] = [];
 
-  for (const ref of refs) {
-    const def = defs.get(ref.id);
-    if (!def) continue;
-    if (entries.some((e) => e.id === ref.id)) continue;
+  for (const entry of orderedFootnoteEntries(footnotes)) {
+    const firstRef = footnotes.refs.find((ref) => ref.id === entry.id);
+    if (!firstRef) continue;
 
     // lineBlockAt returns document-coordinate top that works for off-screen positions
-    const block = view.lineBlockAt(ref.from);
+    const block = view.lineBlockAt(firstRef.from);
     const anchorY = block.top;
 
     entries.push({
-      id: ref.id,
-      number: numberMap.get(ref.id) ?? 0,
-      content: def.content,
+      id: entry.id,
+      number: entry.number,
+      content: entry.def.content,
       anchorY,
-      defFrom: def.from,
+      defFrom: entry.def.from,
     });
   }
 

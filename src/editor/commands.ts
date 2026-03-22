@@ -6,9 +6,9 @@
  */
 
 import type { EditorView } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
 import type { PaletteCommand } from "../app/command-palette";
 import { insertTable } from "../render/table-render";
+import { extractHeadings } from "../app/heading-ancestry";
 
 /** Insert a fenced div block at the cursor. */
 function insertBlock(view: EditorView, className: string): void {
@@ -90,32 +90,9 @@ function createMathCommands(): PaletteCommand[] {
   ];
 }
 
-/** Extract headings from the editor for "Navigate to heading" commands. */
-function extractHeadings(
-  view: EditorView,
-): Array<{ text: string; pos: number; level: number }> {
-  const headings: Array<{ text: string; pos: number; level: number }> = [];
-  const tree = syntaxTree(view.state);
-
-  tree.iterate({
-    enter(node) {
-      const m = /^ATXHeading(\d)$/.exec(node.name);
-      if (!m) return;
-
-      const level = Number(m[1]);
-      const lineText = view.state.doc.lineAt(node.from).text;
-      const text = lineText.replace(/^#+\s*/, "");
-
-      headings.push({ text, pos: node.from, level });
-    },
-  });
-
-  return headings;
-}
-
 /** Create dynamic heading navigation commands from the current document. */
 export function createHeadingCommands(view: EditorView): PaletteCommand[] {
-  const headings = extractHeadings(view);
+  const headings = extractHeadings(view.state);
   return headings.map((h, i) => ({
     id: `goto-heading-${i}`,
     label: `${"  ".repeat(h.level - 1)}${h.text}`,

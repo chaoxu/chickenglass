@@ -9,11 +9,12 @@
 
 import { type EditorState, StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { extractDivClass } from "../parser/fenced-div-attrs";
 import type { NumberingScheme } from "../parser/frontmatter";
 import type { PluginRegistryState } from "./plugin-registry";
 import { getPluginOrFallback, pluginRegistryField } from "./plugin-registry";
 import { frontmatterField } from "../editor/frontmatter-state";
+import { analyzeFencedDivs } from "../semantics/document";
+import { editorStateTextSource } from "../semantics/codemirror-source";
 
 /** A numbered block entry mapping a fenced div to its assigned number. */
 export interface NumberedBlock {
@@ -54,54 +55,38 @@ export function computeBlockNumbers(
   registry: PluginRegistryState,
   numbering: NumberingScheme = "grouped",
 ): BlockCounterState {
-  const tree = syntaxTree(state);
   const blocks: NumberedBlock[] = [];
   const byId = new Map<string, NumberedBlock>();
   const byPosition = new Map<number, NumberedBlock>();
   const counters = new Map<string, number>();
 
-  tree.iterate({
-    enter(node) {
-      if (node.type.name !== "FencedDiv") return;
+  for (const div of analyzeFencedDivs(editorStateTextSource(state), syntaxTree(state))) {
+    if (!div.primaryClass) continue;
 
-      // Find the FencedDivAttributes child to extract the class
-      let attrText: string | undefined;
-      const child = node.node.getChild("FencedDivAttributes");
-      if (child) {
-        attrText = state.doc.sliceString(child.from, child.to);
-      }
+    const plugin = getPluginOrFallback(registry, div.primaryClass);
+    if (!plugin || !plugin.numbered) continue;
 
-      if (!attrText) return;
+    const counterGroup =
+      numbering === "global"
+        ? GLOBAL_COUNTER
+        : (plugin.counter ?? plugin.name);
+    const current = (counters.get(counterGroup) ?? 0) + 1;
+    counters.set(counterGroup, current);
 
-      const attrs = extractDivClass(attrText);
-      if (!attrs || attrs.classes.length === 0) return;
+    const entry: NumberedBlock = {
+      from: div.from,
+      to: div.to,
+      type: div.primaryClass,
+      id: div.id,
+      number: current,
+    };
 
-      const className = attrs.classes[0];
-      const plugin = getPluginOrFallback(registry, className);
-      if (!plugin || !plugin.numbered) return;
-
-      const counterGroup =
-        numbering === "global"
-          ? GLOBAL_COUNTER
-          : (plugin.counter ?? plugin.name);
-      const current = (counters.get(counterGroup) ?? 0) + 1;
-      counters.set(counterGroup, current);
-
-      const entry: NumberedBlock = {
-        from: node.from,
-        to: node.to,
-        type: className,
-        id: attrs.id,
-        number: current,
-      };
-
-      blocks.push(entry);
-      if (attrs.id) {
-        byId.set(attrs.id, entry);
-      }
-      byPosition.set(node.from, entry);
-    },
-  });
+    blocks.push(entry);
+    if (div.id) {
+      byId.set(div.id, entry);
+    }
+    byPosition.set(div.from, entry);
+  }
 
   return { blocks, byId, byPosition };
 }

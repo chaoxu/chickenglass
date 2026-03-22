@@ -61,6 +61,11 @@ describe("renderInline", () => {
       '<img src="image.png" alt="alt">',
     );
   });
+
+  it("renders inline footnote references", () => {
+    expect(renderInline("Title[^1]")).toContain('class="footnote-ref"');
+    expect(renderInline("Title[^1]")).toContain('href="#fn-1"');
+  });
 });
 
 describe("markdownToHtml", () => {
@@ -69,6 +74,11 @@ describe("markdownToHtml", () => {
     expect(html).toContain("<h1>Heading 1</h1>");
     expect(html).toContain("<h2>Heading 2</h2>");
     expect(html).toContain("<h3>Heading 3</h3>");
+  });
+
+  it("keeps hyphenated heading classes numbered in read mode", () => {
+    const html = markdownToHtml("# Intro {.foo-bar}", { sectionNumbers: true });
+    expect(html).toContain('<h1><span class="cg-section-number">1</span> Intro</h1>');
   });
 
   it("renders paragraphs", () => {
@@ -145,6 +155,11 @@ describe("markdownToHtml", () => {
     expect(html).toContain('class="theorem"');
   });
 
+  it("renders fenced div titles from title= attributes", () => {
+    const html = markdownToHtml('::: {.problem title="**3SUM**"}\nBody.\n:::');
+    expect(html).toContain("<strong>3SUM</strong>");
+  });
+
   it("renders self-closing fenced divs", () => {
     const html = markdownToHtml("::: {.remark} The converse is false. :::");
     expect(html).toContain('class="remark"');
@@ -190,6 +205,12 @@ describe("markdownToHtml", () => {
     const html = markdownToHtml("[^1]: This is a footnote.");
     expect(html).toContain('class="footnote"');
     expect(html).toContain("This is a footnote.");
+  });
+
+  it("renders footnote references in headings and task items", () => {
+    const html = markdownToHtml("# Title[^1]\n\n- [ ] Task[^1]\n\n[^1]: Note");
+    expect(html).toContain('<h1>Title<sup><a class="footnote-ref" href="#fn-1">1</a></sup></h1>');
+    expect(html).toContain('Task<sup><a class="footnote-ref" href="#fn-1">1</a></sup>');
   });
 
   it("renders nested content inside fenced divs", () => {

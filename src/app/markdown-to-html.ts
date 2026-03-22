@@ -19,7 +19,7 @@
 import katex from "katex";
 import { parser as baseParser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
-import { markdownExtensions, extractDivClass } from "../parser";
+import { markdownExtensions } from "../parser";
 import { type BibEntry } from "../citations/bibtex-parser";
 import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import {
@@ -28,6 +28,13 @@ import {
   type BibStore as CitationBibStore,
 } from "../citations/citation-render";
 import type { CslProcessor } from "../citations/csl-processor";
+import {
+  analyzeFootnotes,
+  analyzeDocumentSemantics,
+  stringTextSource,
+  type DocumentSemantics,
+  type FootnoteSemantics,
+} from "../semantics/document";
 
 /** A map of citation keys to bibliography entries. */
 export type BibStore = CitationBibStore;
@@ -99,8 +106,6 @@ export interface MarkdownToHtmlOptions {
   macros?: Record<string, string>;
   /** When true, add hierarchical section numbers to headings. */
   sectionNumbers?: boolean;
-  /** Shared heading counters for recursive calls (internal use). */
-  _counters?: number[];
   /** Bibliography entries for citation resolution. */
   bibliography?: BibStore;
   /** CSL processor for citation/bibliography formatting. */
@@ -121,6 +126,7 @@ interface InlineContext {
   bibliography?: BibStore;
   citedIds?: string[];
   cslProcessor?: CslProcessor | null;
+  footnotes?: FootnoteSemantics;
 }
 
 // ── Inline rendering (standalone, for titles) ───────────────────────────────
@@ -137,12 +143,13 @@ export function renderInline(
 ): string {
   // Parse just the text as a paragraph (Lezer wraps it in Document > Paragraph)
   const tree = mdParser.parse(text);
+  const footnotes = analyzeFootnotes(stringTextSource(text), tree);
   const doc = tree.topNode;
   // The text becomes a single Paragraph inside Document
   const para = doc.firstChild;
   if (!para) return escapeHtml(text);
   // Render the paragraph's inline content (without wrapping in <p>)
-  return renderChildren(para, { doc: text, macros });
+  return renderChildren(para, { doc: text, macros, footnotes });
 }
 
 // ── Tree walking ────────────────────────────────────────────────────────────
@@ -152,7 +159,8 @@ interface WalkContext {
   readonly doc: string;
   readonly macros?: Record<string, string>;
   readonly sectionNumbers: boolean;
-  readonly headingCounters: number[];
+  readonly semantics: DocumentSemantics;
+  readonly footnotes: FootnoteSemantics;
   readonly bibliography?: BibStore;
   readonly cslProcessor?: CslProcessor | null;
   /** Accumulates cited entry IDs in document order for the bibliography section. */
@@ -169,6 +177,7 @@ export function markdownToHtml(
   options?: MarkdownToHtmlOptions,
 ): string {
   const tree = mdParser.parse(content);
+  const semantics = analyzeDocumentSemantics(stringTextSource(content), tree);
 
   if (options?.bibliography && options.cslProcessor) {
     const clusters = findCitationsFromTree(tree.topNode, content, options.bibliography)
@@ -183,7 +192,8 @@ export function markdownToHtml(
     doc: content,
     macros: options?.macros,
     sectionNumbers: options?.sectionNumbers ?? false,
-    headingCounters: options?._counters ?? [0, 0, 0, 0, 0, 0, 0],
+    semantics,
+    footnotes: semantics.footnotes,
     bibliography: options?.bibliography,
     cslProcessor: options?.cslProcessor,
     citedIds: [],
@@ -312,38 +322,15 @@ function renderDocChildren(node: SyntaxNode, ctx: WalkContext): string {
 
 /** Render an ATXHeading node. */
 function renderHeading(node: SyntaxNode, ctx: WalkContext): string {
+  const heading = ctx.semantics.headingByFrom.get(node.from);
   const levelChar = node.name[node.name.length - 1];
   const level = Number(levelChar);
+  const text = renderInline(heading?.text ?? ctx.doc.slice(node.from, node.to).trim(), ctx.macros);
+  const prefix = ctx.sectionNumbers && heading?.number
+    ? `<span class="cg-section-number">${heading.number}</span> `
+    : "";
 
-  // Get text after the HeaderMark (# symbols)
-  const headerMark = node.getChild("HeaderMark");
-  const textStart = headerMark ? headerMark.to : node.from;
-  let rawText = ctx.doc.slice(textStart, node.to).trim();
-
-  // Check for attribute block {.class #id -} at end
-  const attrMatch = rawText.match(/\s*\{([^}]*)\}\s*$/);
-  const isUnnumbered = attrMatch
-    ? /(?:^|\s)(?:-|\.unnumbered)(?:\s|$)/.test(attrMatch[1])
-    : false;
-
-  // Strip the attribute block from text
-  if (attrMatch) {
-    rawText = rawText.slice(0, attrMatch.index).trim();
-  }
-
-  // Render inline content within the heading text
-  const text = renderInline(rawText, ctx.macros);
-
-  let prefix = "";
-  if (ctx.sectionNumbers && !isUnnumbered) {
-    ctx.headingCounters[level]++;
-    for (let lv = level + 1; lv <= 6; lv++) ctx.headingCounters[lv] = 0;
-    const parts: number[] = [];
-    for (let lv = 1; lv <= level; lv++) parts.push(ctx.headingCounters[lv]);
-    prefix = `<span class="cg-section-number">${parts.join(".")}</span> `;
-  }
-
-  return `<h${level}>${prefix}${text}</h${level}>`;
+  return `<h${heading?.level ?? level}>${prefix}${text}</h${heading?.level ?? level}>`;
 }
 
 /** Render a FencedCode node. */
@@ -416,19 +403,9 @@ function renderListItem(node: SyntaxNode, ctx: WalkContext): string {
 
 /** Render a FencedDiv node. */
 function renderFencedDiv(node: SyntaxNode, ctx: WalkContext): string {
-  // Parse attributes
-  const attrNode = node.getChild("FencedDivAttributes");
-  let classes: string[] = [];
-  let id: string | undefined;
-
-  if (attrNode) {
-    const attrText = ctx.doc.slice(attrNode.from, attrNode.to);
-    const parsed = extractDivClass(attrText);
-    if (parsed) {
-      classes = [...parsed.classes];
-      id = parsed.id;
-    }
-  }
+  const semantics = ctx.semantics.fencedDivByFrom.get(node.from);
+  const classes = semantics ? [...semantics.classes] : [];
+  const id = semantics?.id;
 
   // Check for include directive — skip entirely
   if (classes.includes("include")) {
@@ -440,16 +417,8 @@ function renderFencedDiv(node: SyntaxNode, ctx: WalkContext): string {
     : "";
   const idAttr = id ? ` id="${escapeHtml(id)}"` : "";
 
-  // Parse title
-  const titleNode = node.getChild("FencedDivTitle");
-  const title = titleNode
-    ? ctx.doc.slice(titleNode.from, titleNode.to).trim()
-    : "";
-
-  // Check if self-closing (has two FencedDivFence children on the same line)
-  const fences = node.getChildren("FencedDivFence");
-  const isSelfClosing = fences.length >= 2 &&
-    !ctx.doc.slice(fences[0].from, fences[fences.length - 1].to).includes("\n");
+  const title = semantics?.title ?? "";
+  const isSelfClosing = semantics?.isSelfClosing ?? false;
 
   const output: string[] = [];
   output.push(`<div${classAttr}${idAttr}>`);
@@ -507,25 +476,14 @@ function renderDisplayMath(node: SyntaxNode, ctx: WalkContext): string {
 
 /** Render a FootnoteDef node. */
 function renderFootnoteDef(node: SyntaxNode, ctx: WalkContext): string {
-  const labelNode = node.getChild("FootnoteDefLabel");
-  if (!labelNode) return "";
+  const def = ctx.semantics.footnotes.defByFrom.get(node.from);
+  if (!def) return "";
 
-  const labelText = ctx.doc.slice(labelNode.from, labelNode.to);
-  // Label text is like "[^1]:" — extract the id
-  const match = /^\[\^([^\]]+)\]:?$/.exec(labelText);
-  if (!match) return "";
-
-  const fnId = escapeHtml(match[1]);
-
-  // The Lezer footnote parser captures a single line: [^id]: content
-  // Render the inline content after the label with block-level formatting
-  const contentStart = labelNode.to;
-  const rawContent = ctx.doc.slice(contentStart, node.to).trim();
-  const fnContent = rawContent
-    ? `<p>${renderInline(rawContent, ctx.macros)}</p>`
+  const fnContent = def.content
+    ? `<p>${renderInline(def.content, ctx.macros)}</p>`
     : "";
 
-  return `<div class="footnote" id="fn-${fnId}"><sup>${fnId}</sup> ${fnContent}</div>`;
+  return `<div class="footnote" id="fn-${escapeHtml(def.id)}"><sup>${escapeHtml(def.id)}</sup> ${fnContent}</div>`;
 }
 
 /** Render a Table node. */
@@ -715,14 +673,12 @@ function renderInlineNode(
     }
 
     case "FootnoteRef": {
-      // FootnoteRef text is [^id]
-      const refText = doc.slice(node.from, node.to);
-      const match = /^\[\^([^\]]+)\]$/.exec(refText);
-      if (match) {
-        const fnId = escapeHtml(match[1]);
-        return `<sup><a class="footnote-ref" href="#fn-${fnId}">${fnId}</a></sup>`;
+      const ref = ctx.footnotes?.refByFrom.get(node.from);
+      if (!ref) {
+        return escapeHtml(doc.slice(node.from, node.to));
       }
-      return escapeHtml(refText);
+      const fnId = escapeHtml(ref.id);
+      return `<sup><a class="footnote-ref" href="#fn-${fnId}">${fnId}</a></sup>`;
     }
 
     case "HardBreak":

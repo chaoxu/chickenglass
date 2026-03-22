@@ -633,3 +633,18 @@ describe("#281 — useEditor internal hook decomposition", () => {
     expect(debugMod.useEditorDebugBridge).toBeDefined();
   });
 });
+
+describe("#279 — shared Lezer document semantics", () => {
+  it("shared document semantics analyzers exist", async () => {
+    const mod = await import("../semantics/document");
+    expect(mod.analyzeDocumentSemantics).toBeDefined();
+    expect(mod.analyzeHeadings).toBeDefined();
+    expect(mod.analyzeFootnotes).toBeDefined();
+    expect(mod.analyzeFencedDivs).toBeDefined();
+  });
+
+  it("CodeMirror text-source adapter exists", async () => {
+    const mod = await import("../semantics/codemirror-source");
+    expect(mod.editorStateTextSource).toBeDefined();
+  });
+});

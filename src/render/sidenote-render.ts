@@ -29,6 +29,13 @@ import {
 } from "./render-utils";
 import { mathMacrosField } from "./math-macros";
 import { renderInlineMarkdown } from "./inline-render";
+import {
+  analyzeFootnotes,
+  type FootnoteSemantics,
+  numberFootnotes,
+  orderedFootnoteEntries,
+} from "../semantics/document";
+import { editorStateTextSource } from "../semantics/codemirror-source";
 
 /** StateEffect to toggle sidenote margin visibility. */
 export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
@@ -45,54 +52,9 @@ export const sidenotesCollapsedField = StateField.define<boolean>({
 });
 
 
-interface FootnoteRef {
-  readonly id: string;
-  readonly from: number;
-  readonly to: number;
-}
-
-interface FootnoteDef {
-  readonly id: string;
-  readonly from: number;
-  readonly to: number;
-  readonly content: string;
-  readonly labelTo: number;
-}
-
 /** Collect footnote references and definitions from the syntax tree. */
-export function collectFootnotes(state: EditorState): {
-  refs: FootnoteRef[];
-  defs: Map<string, FootnoteDef>;
-} {
-  const refs: FootnoteRef[] = [];
-  const defs = new Map<string, FootnoteDef>();
-  const tree = syntaxTree(state);
-
-  tree.iterate({
-    enter(node) {
-      if (node.type.name === "FootnoteRef") {
-        // Extract id from [^id] using tree positions: skip [^ (2 chars) and ] (1 char)
-        const id = state.sliceDoc(node.from + 2, node.to - 1);
-        refs.push({ id, from: node.from, to: node.to });
-      } else if (node.type.name === "FootnoteDef") {
-        // Use FootnoteDefLabel child node which spans [^id]:
-        const labelNode = node.node.getChild("FootnoteDefLabel");
-        if (!labelNode) return;
-        // Skip [^ (2 chars) and ]: (2 chars) to get the id
-        const id = state.sliceDoc(labelNode.from + 2, labelNode.to - 2);
-        const content = state.sliceDoc(labelNode.to, node.to).trim();
-        defs.set(id, {
-          id,
-          from: node.from,
-          to: node.to,
-          content,
-          labelTo: labelNode.to,
-        });
-      }
-    },
-  });
-
-  return { refs, defs };
+export function collectFootnotes(state: EditorState): FootnoteSemantics {
+  return analyzeFootnotes(editorStateTextSource(state), syntaxTree(state));
 }
 
 /** Widget for a footnote reference rendered as a superscript number. */
@@ -120,20 +82,12 @@ class FootnoteRefWidget extends RenderWidget {
 
 /** Build sidenote decorations from editor state. */
 function buildSidenoteDecorations(state: EditorState, focused: boolean): DecorationSet {
-  const { refs, defs } = collectFootnotes(state);
+  const footnotes = collectFootnotes(state);
   const items: Range<Decoration>[] = [];
-
-  // Assign numbers to footnotes in order of first reference appearance
-  const numberMap = new Map<string, number>();
-  let nextNumber = 1;
-  for (const ref of refs) {
-    if (!numberMap.has(ref.id)) {
-      numberMap.set(ref.id, nextNumber++);
-    }
-  }
+  const numberMap = numberFootnotes(footnotes);
 
   // Render refs as superscript numbers
-  for (const ref of refs) {
+  for (const ref of footnotes.refs) {
     if (focused && cursorInRange(state, ref.from, ref.to)) continue;
 
     const num = numberMap.get(ref.id) ?? 0;
@@ -145,7 +99,7 @@ function buildSidenoteDecorations(state: EditorState, focused: boolean): Decorat
   // Hide footnote definition lines — whether margin is visible (content shown
   // in margin) or collapsed (content shown in bottom footnote section).
   // When cursor is inside a def, show source for editing.
-  for (const [, def] of defs) {
+  for (const [, def] of footnotes.defs) {
     if (focused && cursorInRange(state, def.from, def.to)) continue;
 
     // Collapse the definition line to zero height
@@ -314,27 +268,15 @@ class FootnoteSectionPlugin implements PluginValue {
     const collapsed = view.state.field(sidenotesCollapsedField, false) ?? false;
     if (!collapsed) return Decoration.none;
 
-    const { refs, defs } = collectFootnotes(view.state);
-    if (defs.size === 0) return Decoration.none;
+    const footnotes = collectFootnotes(view.state);
+    if (footnotes.defs.size === 0) return Decoration.none;
 
-    // Assign numbers in reference order
-    const numberMap = new Map<string, number>();
-    let nextNum = 1;
-    for (const ref of refs) {
-      if (!numberMap.has(ref.id)) numberMap.set(ref.id, nextNum++);
-    }
-
-    const entries: Array<{ num: number; id: string; content: string; defFrom: number }> = [];
-    for (const ref of refs) {
-      const def = defs.get(ref.id);
-      if (!def || entries.some((e) => e.id === ref.id)) continue;
-      entries.push({
-        num: numberMap.get(ref.id) ?? 0,
-        id: ref.id,
-        content: def.content,
-        defFrom: def.from,
-      });
-    }
+    const entries = orderedFootnoteEntries(footnotes).map((entry) => ({
+      num: entry.number,
+      id: entry.id,
+      content: entry.def.content,
+      defFrom: entry.def.from,
+    }));
 
     const endPos = view.state.doc.length;
     const macros = view.state.field(mathMacrosField);

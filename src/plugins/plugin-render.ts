@@ -20,7 +20,6 @@ import {
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { extractDivClass } from "../parser/fenced-div-attrs";
 import type { BlockAttrs } from "./plugin-types";
 import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
@@ -40,6 +39,11 @@ import {
 } from "../render/fenced-block-core";
 import { mathMacrosField } from "../render/math-macros";
 import { renderInlineMarkdown } from "../render/inline-render";
+import {
+  analyzeFencedDivs,
+  type FencedDivSemantics,
+} from "../semantics/document";
+import { editorStateTextSource } from "../semantics/codemirror-source";
 import {
   isValidEmbedUrl,
   extractYoutubeId,
@@ -192,132 +196,18 @@ class EmbedWidget extends RenderWidget {
   }
 }
 
-interface FencedDivInfo extends FencedBlockInfo {
-  readonly from: number;
-  readonly to: number;
-  readonly openFenceFrom: number;
-  readonly openFenceTo: number;
-  readonly attrFrom?: number;
-  readonly attrTo?: number;
-  readonly titleFrom?: number;
-  readonly titleTo?: number;
-  readonly closeFenceFrom: number;
-  readonly closeFenceTo: number;
+interface FencedDivInfo extends FencedBlockInfo, FencedDivSemantics {
   readonly className: string;
-  readonly id?: string;
-  readonly title?: string;
 }
 
 /** Extract info about FencedDiv nodes from the syntax tree. */
 function collectFencedDivs(state: EditorState): FencedDivInfo[] {
-  const results: FencedDivInfo[] = [];
-  const tree = syntaxTree(state);
-
-  tree.iterate({
-    enter(node) {
-      if (node.type.name !== "FencedDiv") return;
-
-      const divNode = node.node;
-      let className: string | undefined;
-      let id: string | undefined;
-      let title: string | undefined;
-      let openFenceFrom = node.from;
-      let openFenceTo = node.from;
-      let attrFrom: number | undefined;
-      let attrTo: number | undefined;
-      let titleFrom: number | undefined;
-      let titleTo: number | undefined;
-      let closeFenceFrom = -1;
-      let closeFenceTo = -1;
-
-      // Collect FencedDivFence children (opening + closing).
-      // Use fences[1] (not fences[last]) as the closing fence. When the
-      // Lezer incremental parser merges sequential blocks into one
-      // corrupted FencedDiv, later fences belong to subsequent blocks.
-      // For inner blocks with only an opening fence (1 child), check
-      // nextSibling — the closing fence may be a sibling in the parent.
-      const fences = divNode.getChildren("FencedDivFence");
-      if (fences.length > 0) {
-        openFenceFrom = fences[0].from;
-        openFenceTo = fences[0].to;
-      }
-      let singleLine = false;
-      // Determine the closing fence node
-      let closeFenceNode =
-        fences.length > 1 ? fences[1] : undefined;
-      // Fallback: closing fence may be a sibling (corrupted tree)
-      if (!closeFenceNode) {
-        const next = divNode.nextSibling;
-        if (next && next.type.name === "FencedDivFence") {
-          closeFenceNode = next;
-        }
-      }
-      if (
-        closeFenceNode &&
-        closeFenceNode.from >= 0 &&
-        closeFenceNode.from <= state.doc.length
-      ) {
-        const closePos = closeFenceNode.from;
-        const openLine = state.doc.lineAt(openFenceFrom);
-        const closeLine = state.doc.lineAt(closePos);
-        singleLine = openLine.number === closeLine.number;
-        if (singleLine) {
-          closeFenceFrom = closePos;
-          closeFenceTo = closeFenceNode.to;
-        } else {
-          closeFenceFrom = closeLine.from;
-          closeFenceTo = closeLine.to;
-        }
-      }
-
-      let kvTitle: string | undefined;
-      const attrNode = divNode.getChild("FencedDivAttributes");
-      if (attrNode) {
-        const attrText = state.doc.sliceString(attrNode.from, attrNode.to);
-        const attrs = extractDivClass(attrText);
-        if (attrs && attrs.classes.length > 0) {
-          className = attrs.classes[0];
-          id = attrs.id;
-          kvTitle = attrs.keyValues["title"];
-        }
-        attrFrom = attrNode.from;
-        attrTo = attrNode.to;
-        openFenceTo = Math.max(openFenceTo, attrNode.to);
-      }
-
-      const titleNode = divNode.getChild("FencedDivTitle");
-      if (titleNode) {
-        title = state.doc.sliceString(titleNode.from, titleNode.to).trim();
-        titleFrom = titleNode.from;
-        titleTo = titleNode.to;
-        openFenceTo = Math.max(openFenceTo, titleNode.to);
-      } else if (kvTitle) {
-        // Fallback: title from key-value attribute (e.g., title="**3SUM**")
-        title = kvTitle;
-      }
-
-      if (className) {
-        results.push({
-          from: node.from,
-          to: node.to,
-          openFenceFrom,
-          openFenceTo,
-          attrFrom,
-          attrTo,
-          titleFrom,
-          titleTo,
-          closeFenceFrom,
-          closeFenceTo,
-          singleLine,
-          className,
-          id,
-          title,
-        });
-      }
-    },
-  });
-
-  return results;
+  return analyzeFencedDivs(editorStateTextSource(state), syntaxTree(state))
+    .filter((div): div is FencedDivSemantics & { primaryClass: string } => Boolean(div.primaryClass))
+    .map((div) => ({
+      ...div,
+      className: div.primaryClass,
+    }));
 }
 
 

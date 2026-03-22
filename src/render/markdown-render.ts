@@ -9,7 +9,7 @@ import {
 import { type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { cursorInRange, decorationHidden } from "./render-utils";
-import { unnumberedRe } from "../app/heading-ancestry";
+import { findTrailingHeadingAttributes, hasUnnumberedHeadingAttributes } from "../app/heading-ancestry";
 
 /**
  * Node types whose children's markers should be hidden when
@@ -131,11 +131,10 @@ class MarkdownRenderPlugin implements PluginValue {
             }
             // Cursor outside: hide trailing {-} / {.unnumbered} attribute text
             const hLine = view.state.doc.lineAt(node.from);
-            const attrMatch = hLine.text.match(unnumberedRe);
-            if (attrMatch && attrMatch.index !== undefined) {
+            const attrMatch = findTrailingHeadingAttributes(hLine.text);
+            if (attrMatch && hasUnnumberedHeadingAttributes(hLine.text)) {
               const attrFrom = hLine.from + attrMatch.index;
-              const attrTo =
-                hLine.from + attrMatch.index + attrMatch[0].length;
+              const attrTo = attrFrom + attrMatch.raw.length;
               widgets.push(decorationHidden.range(attrFrom, attrTo));
             }
             // Walk children to find and hide HeaderMark
