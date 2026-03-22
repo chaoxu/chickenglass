@@ -1,7 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { insertImageFromPicker } from "../../editor/image-insert";
 import type { EditorMode } from "../../editor";
-import { setEditorMode } from "../../editor";
+import {
+  setEditorMode,
+  wordWrapCompartment,
+  lineNumbersCompartment,
+  tabSizeCompartment,
+  tabSizeExtension,
+} from "../../editor";
+import { EditorView, lineNumbers } from "@codemirror/view";
 import { defaultEditorPlugins } from "../../editor/editor-plugins-registry";
 import { EditorPluginManager } from "../../editor/editor-plugin";
 import type { UseEditorReturn } from "./use-editor";
@@ -139,6 +146,23 @@ export function useAppEditorShell({
       }
     }
   }, [settings.enabledPlugins, editorState?.view, pluginManager]);
+
+  // Sync wordWrap, showLineNumbers, tabSize settings to CM6 compartments
+  useEffect(() => {
+    const view = editorState?.view;
+    if (!view) return;
+    view.dispatch({
+      effects: [
+        wordWrapCompartment.reconfigure(
+          settings.wordWrap ? EditorView.lineWrapping : [],
+        ),
+        lineNumbersCompartment.reconfigure(
+          settings.showLineNumbers ? lineNumbers() : [],
+        ),
+        tabSizeCompartment.reconfigure(tabSizeExtension(settings.tabSize)),
+      ],
+    });
+  }, [editorState?.view, settings.wordWrap, settings.showLineNumbers, settings.tabSize]);
 
   const handleOutlineSelect = useCallback((from: number) => {
     const view = editorState?.view;

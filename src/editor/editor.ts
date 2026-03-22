@@ -1,7 +1,7 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { type Extension, Compartment, EditorState, StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { LanguageDescription, syntaxHighlighting } from "@codemirror/language";
+import { LanguageDescription, syntaxHighlighting, indentUnit } from "@codemirror/language";
 import { classHighlighter } from "@lezer/highlight";
 import type { EditorPluginManager } from "./editor-plugin";
 
@@ -55,6 +55,15 @@ const modeClassCompartment = new Compartment();
 
 /** Compartment for the CM6 dark/light base theme — reconfigured on theme switch. */
 export const themeCompartment = new Compartment();
+
+/** Compartment for word wrap (EditorView.lineWrapping). */
+export const wordWrapCompartment = new Compartment();
+
+/** Compartment for line numbers gutter. */
+export const lineNumbersCompartment = new Compartment();
+
+/** Compartment for tab size (EditorState.tabSize + indentUnit). */
+export const tabSizeCompartment = new Compartment();
 
 /** All rendering extensions that get toggled by mode. */
 const renderingExtensions: Extension[] = [
@@ -155,8 +164,12 @@ export function createEditor(config: EditorConfig): EditorView {
       // Toggleable editor plugins (managed by EditorPluginManager)
       ...(config.pluginManager?.initialExtensions() ?? []),
 
+      // User-configurable settings (wrapped in compartments for live reconfiguration)
+      wordWrapCompartment.of(EditorView.lineWrapping),
+      lineNumbersCompartment.of([]),
+      tabSizeCompartment.of(tabSizeExtension(2)),
+
       // Editor chrome
-      EditorView.lineWrapping,
       headingFold,
       listOutlinerExtension,
       editorKeybindings,
@@ -212,4 +225,9 @@ export function setEditorMode(view: EditorView, mode: EditorMode): void {
   }
 
   view.dispatch({ effects });
+}
+
+/** Build a tab-size extension from a numeric size (used by compartment reconfiguration). */
+export function tabSizeExtension(size: number): Extension {
+  return [EditorState.tabSize.of(size), indentUnit.of(" ".repeat(size))];
 }

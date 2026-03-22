@@ -1,5 +1,14 @@
 export { getEditorCommands, createHeadingCommands } from "./commands";
-export { createEditor, setEditorMode, type EditorConfig, type EditorMode } from "./editor";
+export {
+  createEditor,
+  setEditorMode,
+  tabSizeExtension,
+  wordWrapCompartment,
+  lineNumbersCompartment,
+  tabSizeCompartment,
+  type EditorConfig,
+  type EditorMode,
+} from "./editor";
 export {
   frontmatterDecoration,
   frontmatterField,
