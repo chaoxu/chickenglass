@@ -178,13 +178,13 @@ export function ReadModeView({
   }, [htmlContent]);
 
   // Restore scroll position after each document render.
+  // Always set scrollTop (defaulting to 0) so that switching documents
+  // resets the container rather than keeping the previous file's position.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || didRestoreScroll.current) return;
     didRestoreScroll.current = true;
-    if (scrollTop !== undefined && scrollTop > 0) {
-      el.scrollTop = scrollTop;
-    }
+    el.scrollTop = scrollTop ?? 0;
   }, [htmlContent, scrollTop]);
 
   // Apply Hyphenopoly soft hyphens to text nodes after HTML renders.
