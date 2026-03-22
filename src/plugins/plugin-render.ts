@@ -270,6 +270,7 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
         }
       }
 
+      let kvTitle: string | undefined;
       const attrNode = divNode.getChild("FencedDivAttributes");
       if (attrNode) {
         const attrText = state.doc.sliceString(attrNode.from, attrNode.to);
@@ -277,6 +278,7 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
         if (attrs && attrs.classes.length > 0) {
           className = attrs.classes[0];
           id = attrs.id;
+          kvTitle = attrs.keyValues["title"];
         }
         attrFrom = attrNode.from;
         attrTo = attrNode.to;
@@ -289,6 +291,9 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
         titleFrom = titleNode.from;
         titleTo = titleNode.to;
         openFenceTo = Math.max(openFenceTo, titleNode.to);
+      } else if (kvTitle) {
+        // Fallback: title from key-value attribute (e.g., title="**3SUM**")
+        title = kvTitle;
       }
 
       if (className) {
