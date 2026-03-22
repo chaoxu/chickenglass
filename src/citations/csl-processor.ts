@@ -113,7 +113,11 @@ export function bibEntryToCsl(entry: BibEntry): CslItem {
   if (entry.pages) item.page = entry.pages.replace("--", "-");
   if (entry.doi) item.DOI = entry.doi;
   if (entry.url) item.URL = entry.url;
-  if (entry.edition) item.edition = entry.edition;
+  if (entry.edition) {
+    // Strip ordinal suffixes — citeproc formats ordinals itself.
+    // "3rd" → "3", "1st" → "1", "Second" → "Second" (kept as-is).
+    item.edition = entry.edition.replace(/(\d+)(?:st|nd|rd|th)\b/i, "$1");
+  }
 
   if (entry.year) {
     const y = parseInt(entry.year, 10);

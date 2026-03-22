@@ -73,6 +73,8 @@ Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile(
 3. Use `page.evaluate()` + `__cmView`/`__cmDebug`/`__app`. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout(10000)`.
 4. Kill: `kill $(lsof -ti:5173 -ti:5174 -ti:5175) 2>/dev/null; pkill -f "launch-chrome" 2>/dev/null`
 
+When launching `Google Chrome for Testing` directly in app mode (for example `open -na ... --args --app=URL`), always pass `--disable-infobars` so the Chrome for Testing warning banner does not cover the app UI.
+
 Do NOT use the Playwright MCP plugin — connect directly via CDP.
 
 ## Conventions
