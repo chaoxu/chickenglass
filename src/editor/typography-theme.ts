@@ -15,7 +15,7 @@ export const typographyThemeStyles = {
     color: "var(--cf-fg)",
     marginBottom: "0.25em",
     paddingBottom: "0.15em",
-    borderBottom: "1px solid var(--cf-border)",
+    borderBottom: "var(--cf-border-width) solid var(--cf-border)",
     display: "block",
     cursor: "text",
     userSelect: "none",
@@ -43,7 +43,7 @@ export const typographyThemeStyles = {
   /* Highlight styling (==text==) */
   ".cf-highlight": {
     backgroundColor: "var(--cf-hover)",
-    borderRadius: "2px",
+    borderRadius: "var(--cf-border-radius)",
     padding: "1px 0",
   },
 
@@ -80,7 +80,7 @@ export const typographyThemeStyles = {
     fontFamily: monoFont,
     fontSize: "0.85em",
     backgroundColor: "var(--cf-subtle)",
-    borderRadius: "2px",
+    borderRadius: "var(--cf-border-radius)",
     padding: "1px 4px",
   },
 
@@ -97,7 +97,7 @@ export const typographyThemeStyles = {
     content: "attr(data-section-number) '.\\2002'",
     color: "var(--cf-fg)",
     fontWeight: "400",
-    marginRight: "4px",
+    marginRight: "var(--cf-spacing-xs)",
   },
 
   /* Source syntax elements use monospace — heading markers (#), math
@@ -131,7 +131,7 @@ export const typographyThemeStyles = {
     display: "block",
     textAlign: "center",
     fontSize: "0",
-    borderBottom: "1px solid var(--cf-border)",
+    borderBottom: "var(--cf-border-width) solid var(--cf-border)",
     margin: "0.5em 0",
   },
 };

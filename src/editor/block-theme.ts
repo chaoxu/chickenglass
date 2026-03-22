@@ -87,14 +87,14 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
 
   /* Include block styling */
   ".cf-block-include": {
-    borderLeft: "2px solid var(--cf-include-accent)",
+    borderLeft: "var(--cf-border-width-accent) solid var(--cf-include-accent)",
     paddingLeft: "1em",
     marginBottom: "0.5em",
   },
 
   /* Blockquote plugin styling: fenced div blockquote blocks */
   ".cf-block-blockquote": {
-    borderLeft: "2px solid var(--cf-blockquote-border)",
+    borderLeft: "var(--cf-border-width-accent) solid var(--cf-blockquote-border)",
     color: "var(--cf-blockquote-color)",
     paddingLeft: "1em",
     fontStyle: "italic",
@@ -122,14 +122,14 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     fontStyle: "italic",
     fontSize: "0.85em",
     padding: "2px 6px",
-    border: "1px solid var(--cf-fg)",
-    borderRadius: "2px",
+    border: "var(--cf-border-width) solid var(--cf-fg)",
+    borderRadius: "var(--cf-border-radius)",
     verticalAlign: "middle",
   },
 
   /* HTML table widget styles */
   ".cf-table-widget": {
-    margin: "8px 0",
+    margin: "var(--cf-spacing-sm) 0",
   },
 
   ".cf-table-widget table": {
@@ -138,7 +138,7 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
   },
 
   ".cf-table-widget th, .cf-table-widget td": {
-    border: "1px solid var(--cf-table-border)",
+    border: "var(--cf-border-width) solid var(--cf-table-border)",
     padding: "var(--cf-table-cell-padding)",
     textAlign: "left",
     verticalAlign: "top",
@@ -146,13 +146,13 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
 
   ".cf-table-widget th": {
     fontWeight: "700",
-    borderBottom: "2px solid var(--cf-table-header-border)",
+    borderBottom: "var(--cf-border-width-accent) solid var(--cf-table-header-border)",
   },
 
   /* Active cell editing indicator */
   ".cf-table-cell-editing": {
-    outline: "2px solid var(--cf-table-edit-outline)",
-    outlineOffset: "-2px",
+    outline: "var(--cf-border-width-accent) solid var(--cf-table-edit-outline)",
+    outlineOffset: "calc(-1 * var(--cf-border-width-accent))",
     backgroundColor: "transparent",
   },
 
@@ -160,14 +160,14 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
   ".cf-embed": {
     display: "block",
     width: "100%",
-    margin: "4px 0",
+    margin: "var(--cf-spacing-xs) 0",
   },
   ".cf-embed-iframe": {
     display: "block",
     width: "100%",
     height: "350px",
-    border: "1px solid var(--cf-embed-border)",
-    borderRadius: "2px",
+    border: "var(--cf-border-width) solid var(--cf-embed-border)",
+    borderRadius: "var(--cf-border-radius)",
     backgroundColor: "transparent",
   },
   /* YouTube: responsive 16:9 aspect ratio */
@@ -176,7 +176,7 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     width: "100%",
     paddingBottom: "56.25%",
     height: "0",
-    margin: "4px 0",
+    margin: "var(--cf-spacing-xs) 0",
   },
   ".cf-embed-youtube-iframe": {
     position: "absolute",
@@ -184,8 +184,8 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     left: "0",
     width: "100%",
     height: "100%",
-    border: "1px solid var(--cf-embed-border)",
-    borderRadius: "2px",
+    border: "var(--cf-border-width) solid var(--cf-embed-border)",
+    borderRadius: "var(--cf-border-radius)",
   },
   /* Gist embed: auto-size to content instead of fixed height */
   ".cf-embed-gist .cf-embed-iframe": {
@@ -196,7 +196,7 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
   /* Include region: right border spans the full height, label anchors to it */
   ".cf-include-region": {
     position: "relative",
-    borderRight: "1px solid var(--cf-include-accent)",
+    borderRight: "var(--cf-border-width) solid var(--cf-include-accent)",
   },
 
   /* Include label: rotated filename inside the right padding of .cm-content */

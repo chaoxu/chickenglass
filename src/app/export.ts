@@ -154,6 +154,7 @@ ${themeTokens}
       font-size: 0.85em;
       background: var(--cf-hover);
       padding: 0.15em 0.35em;
+
       border-radius: 2px;
     }
     pre code {

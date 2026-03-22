@@ -26,9 +26,9 @@ export const baseThemeStyles = {
   ".cf-fold-toggle": {
     position: "absolute",
     right: "100%",
-    marginRight: "4px",
+    marginRight: "var(--cf-spacing-xs)",
     color: "var(--cf-border)",
-    fontSize: "14px",
+    fontSize: "var(--cf-ui-font-size-base)",
     cursor: "pointer",
     userSelect: "none",
     lineHeight: "inherit",
@@ -52,7 +52,7 @@ export const baseThemeStyles = {
   ".cf-fold-h3": { fontSize: "16px" },
   ".cm-cursor": {
     borderLeftColor: "var(--cf-fg)",
-    borderLeftWidth: "2px",
+    borderLeftWidth: "var(--cf-border-width-accent)",
   },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
     backgroundColor: "var(--cf-hover)",

@@ -10,13 +10,13 @@ export const marginThemeStyles = {
     position: "fixed",
     zIndex: "1000",
     backgroundColor: "var(--cf-bg)",
-    border: "1px solid var(--cf-border)",
-    borderRadius: "2px",
+    border: "var(--cf-border-width) solid var(--cf-border)",
+    borderRadius: "var(--cf-border-radius)",
     width: "fit-content",
     cursor: "grab",
   },
   ".cf-math-preview-content": {
-    padding: "12px 16px",
+    padding: "var(--cf-spacing-md) var(--cf-spacing-lg)",
     lineHeight: "1.6",
   },
 
@@ -72,14 +72,14 @@ export const marginThemeStyles = {
     maxWidth: "400px",
     maxHeight: "300px",
     overflow: "auto",
-    padding: "8px 12px",
+    padding: "var(--cf-spacing-sm) var(--cf-spacing-md)",
     fontSize: "0.9em",
     lineHeight: "1.5",
     fontFamily: monoFont,
   },
   ".cf-hover-preview-header": {
     fontWeight: "700",
-    marginBottom: "4px",
+    marginBottom: "var(--cf-spacing-xs)",
     color: "var(--cf-fg)",
   },
   ".cf-hover-preview-body": {
@@ -92,7 +92,7 @@ export const marginThemeStyles = {
   },
   ".cf-hover-preview-citation": {
     color: "var(--cf-muted)",
-    marginBottom: "4px",
+    marginBottom: "var(--cf-spacing-xs)",
   },
   ".cf-hover-preview-citation:last-child": {
     marginBottom: "0",
