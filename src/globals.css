@@ -55,8 +55,18 @@
   --cf-block-algorithm-accent: var(--cf-block-header-accent);
   --cf-block-title-color: var(--cf-fg);
   --cf-block-title-weight: 700;
+  /* Per-block-type body font style */
   --cf-block-theorem-style: italic;
-  --cf-block-body-style: normal;
+  --cf-block-lemma-style: italic;
+  --cf-block-corollary-style: italic;
+  --cf-block-proposition-style: italic;
+  --cf-block-conjecture-style: italic;
+  --cf-block-definition-style: normal;
+  --cf-block-problem-style: normal;
+  --cf-block-example-style: normal;
+  --cf-block-remark-style: normal;
+  --cf-block-proof-style: normal;
+  --cf-block-algorithm-style: normal;
   --cf-block-nest-1: var(--cf-border);
   --cf-block-nest-2: var(--cf-active);
   --cf-block-nest-3: var(--cf-muted);
@@ -395,29 +405,17 @@ body {
 
 /* ── Read mode fenced divs (theorem, proof, etc.) ────────────────────────── */
 
-/* Theorem-family: italic body, inline bold header (academic convention) */
-.cf-read-mode-view .theorem,
-.cf-read-mode-view .lemma,
-.cf-read-mode-view .corollary,
-.cf-read-mode-view .proposition,
-.cf-read-mode-view .conjecture {
-  font-style: var(--cf-block-theorem-style);
-  margin: var(--cf-block-margin);
-}
-
-/* Definition, problem: normal body */
-.cf-read-mode-view .definition,
-.cf-read-mode-view .problem {
-  font-style: var(--cf-block-body-style);
-  margin: var(--cf-block-margin);
-}
-
-/* Proof: normal text, relative position for QED */
-.cf-read-mode-view .proof {
-  font-style: var(--cf-block-body-style);
-  margin: var(--cf-block-margin);
-  position: relative;
-}
+/* Per-block-type body font style (read mode) */
+.cf-read-mode-view .theorem { font-style: var(--cf-block-theorem-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .lemma { font-style: var(--cf-block-lemma-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .corollary { font-style: var(--cf-block-corollary-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .proposition { font-style: var(--cf-block-proposition-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .conjecture { font-style: var(--cf-block-conjecture-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .definition { font-style: var(--cf-block-definition-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .problem { font-style: var(--cf-block-problem-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .example { font-style: var(--cf-block-example-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .remark { font-style: var(--cf-block-remark-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .proof { font-style: var(--cf-block-proof-style); margin: var(--cf-block-margin); position: relative; }
 
 /* QED tombstone at end of proof */
 .cf-read-mode-view .proof::after {
@@ -427,12 +425,8 @@ body {
   float: right;
 }
 
-/* Remark, example, note: normal style with subtle left border */
-.cf-read-mode-view .remark,
-.cf-read-mode-view .example,
 .cf-read-mode-view .note {
   margin: var(--cf-block-margin);
-  font-style: var(--cf-block-body-style);
 }
 
 .cf-read-mode-view .Blockquote,

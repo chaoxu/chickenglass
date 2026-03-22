@@ -6,7 +6,6 @@ export const blockThemeStyles = {
   /* Block header line — left border accent for fenced div blocks */
   ".cf-block-header": {
     borderLeft: "var(--cf-block-header-border-width) solid var(--cf-block-header-accent)",
-    paddingLeft: "var(--cf-block-header-padding)",
   },
 
   /* Per-block-type accent overrides (borderLeftColor only) */
@@ -65,14 +64,18 @@ export const blockThemeStyles = {
     boxShadow: "inset 3px 0 0 var(--cf-block-nest-4)",
   },
 
-  /* Theorem-family: italic body (academic convention, matches Read mode) */
-  ".cf-block-theorem, .cf-block-lemma, .cf-block-corollary, .cf-block-proposition, .cf-block-conjecture": {
-    fontStyle: "var(--cf-block-theorem-style)",
-  },
-  /* Definition, problem, proof, remark: normal body */
-  ".cf-block-definition, .cf-block-problem, .cf-block-proof, .cf-block-remark, .cf-block-example, .cf-block-algorithm": {
-    fontStyle: "var(--cf-block-body-style)",
-  },
+  /* Per-block-type body font style */
+  ".cf-block-theorem": { fontStyle: "var(--cf-block-theorem-style)" },
+  ".cf-block-lemma": { fontStyle: "var(--cf-block-lemma-style)" },
+  ".cf-block-corollary": { fontStyle: "var(--cf-block-corollary-style)" },
+  ".cf-block-proposition": { fontStyle: "var(--cf-block-proposition-style)" },
+  ".cf-block-conjecture": { fontStyle: "var(--cf-block-conjecture-style)" },
+  ".cf-block-definition": { fontStyle: "var(--cf-block-definition-style)" },
+  ".cf-block-problem": { fontStyle: "var(--cf-block-problem-style)" },
+  ".cf-block-example": { fontStyle: "var(--cf-block-example-style)" },
+  ".cf-block-remark": { fontStyle: "var(--cf-block-remark-style)" },
+  ".cf-block-proof": { fontStyle: "var(--cf-block-proof-style)" },
+  ".cf-block-algorithm": { fontStyle: "var(--cf-block-algorithm-style)" },
 
   /* QED tombstone — right-aligned at end of proof blocks */
   ".cf-block-qed::after": {

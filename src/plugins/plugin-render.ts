@@ -396,6 +396,17 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       }
     }
 
+    // Body lines: apply block-type class for per-type styling (italic, etc.)
+    if (!div.singleLine) {
+      const openLine = state.doc.lineAt(div.from);
+      const closeFrom = div.closeFenceFrom >= 0 ? div.closeFenceFrom : div.to;
+      const closeLine = state.doc.lineAt(closeFrom);
+      for (let lineNum = openLine.number + 1; lineNum < closeLine.number; lineNum++) {
+        const line = state.doc.line(lineNum);
+        items.push(Decoration.line({ class: spec.className }).range(line.from));
+      }
+    }
+
     // QED tombstone for proof blocks (only when closing fence is hidden)
     if (plugin.defaults?.qedSymbol && !cursorOnEitherFence) {
       addQedDecoration(state, div, items);
