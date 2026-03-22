@@ -383,6 +383,7 @@ function AppInner() {
     const rootFiles = (fileTree.children ?? []).filter((c) => !c.isDirectory);
     const preferred = rootFiles.find((f) => f.path === "main.md")
       ?? rootFiles.find((f) => f.path === "index.md")
+      ?? rootFiles.find((f) => f.path === "test-features.md")
       ?? rootFiles.find((f) => f.path.endsWith(".md"));
 
     const findFirst = (entry: FileEntry): string | null => {
