@@ -39,7 +39,7 @@
   /* Theme-owned special surfaces */
   --cf-block-header-accent: var(--cf-fg);
   --cf-block-header-border-width: 0px;
-  --cf-block-header-padding: 12px;
+  --cf-block-header-padding: 0px;
 
   /* Per-block-type accent colors (default to shared fallback) */
   --cf-block-theorem-accent: var(--cf-block-header-accent);
