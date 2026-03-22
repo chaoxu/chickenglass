@@ -5,7 +5,7 @@
 export const blockThemeStyles = {
   /* Block header line — left border accent for fenced div blocks */
   ".cf-block-header": {
-    borderLeft: "2px solid var(--cf-block-header-accent)",
+    borderLeft: "var(--cf-block-header-border-width) solid var(--cf-block-header-accent)",
     paddingLeft: "var(--cf-block-header-padding)",
   },
 
