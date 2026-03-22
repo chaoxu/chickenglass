@@ -4,7 +4,7 @@
 mod commands;
 mod menu;
 
-use commands::{FileWatcherState, ProjectRoot};
+use commands::state::{FileWatcherState, ProjectRoot};
 use std::sync::Mutex;
 
 fn main() {
@@ -19,22 +19,22 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::open_folder,
-            commands::read_file,
-            commands::write_file,
-            commands::create_file,
-            commands::create_directory,
-            commands::file_exists,
-            commands::rename_file,
-            commands::list_tree,
-            commands::check_pandoc,
-            commands::export_document,
-            commands::watch_directory,
-            commands::unwatch_directory,
-            commands::delete_file,
-            commands::reveal_in_finder,
-            commands::write_file_binary,
-            commands::copy_file_to_project,
+            commands::fs::open_folder,
+            commands::fs::read_file,
+            commands::fs::write_file,
+            commands::fs::create_file,
+            commands::fs::create_directory,
+            commands::fs::file_exists,
+            commands::fs::rename_file,
+            commands::fs::list_tree,
+            commands::export::check_pandoc,
+            commands::export::export_document,
+            commands::watch::watch_directory,
+            commands::watch::unwatch_directory,
+            commands::fs::delete_file,
+            commands::shell::reveal_in_finder,
+            commands::fs::write_file_binary,
+            commands::fs::copy_file_to_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Chickenglass");

@@ -209,7 +209,7 @@ describe("#119 — rename file", () => {
   });
 
   it("Rust rename command exists", () => {
-    expect(fileExists("src-tauri/src/commands.rs")).toBe(true);
+    expect(fileExists("src-tauri/src/commands/fs.rs")).toBe(true);
   });
 });
 
@@ -602,5 +602,20 @@ describe("#284 — FileTree controller extraction", () => {
   it("recursive file tree node component exists", async () => {
     const mod = await import("./components/file-tree-node");
     expect(mod.FileTreeNode).toBeDefined();
+  });
+});
+
+describe("#283 — backend command module decomposition", () => {
+  it("commands module tree exists", () => {
+    expect(fileExists("src-tauri/src/commands/mod.rs")).toBe(true);
+    expect(fileExists("src-tauri/src/commands/state.rs")).toBe(true);
+    expect(fileExists("src-tauri/src/commands/path.rs")).toBe(true);
+  });
+
+  it("backend command domains are split by responsibility", () => {
+    expect(fileExists("src-tauri/src/commands/fs.rs")).toBe(true);
+    expect(fileExists("src-tauri/src/commands/watch.rs")).toBe(true);
+    expect(fileExists("src-tauri/src/commands/export.rs")).toBe(true);
+    expect(fileExists("src-tauri/src/commands/shell.rs")).toBe(true);
   });
 });
