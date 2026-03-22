@@ -101,7 +101,7 @@ $$
 :::
 
 ::: {.proof}
-By induction. Base case $n=1$: $1 = \frac{1 \cdot 2 \cdot 3}{6}$. ∎
+By induction. Base case $n=1$: $1 = \frac{1 \cdot 2 \cdot 3}{6}$.
 :::
 
 ::: {#prop:tu .proposition}
