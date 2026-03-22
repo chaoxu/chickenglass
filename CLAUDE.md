@@ -130,7 +130,7 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
   - Guard `closeFenceNode.from` against out-of-range positions — incomplete trees can have `-1`.
 - **Testing**:
   - ALWAYS test before claiming fixed. Use `npm run dev` + `npm run chrome` + `__cmDebug.dump()` to verify. Never ask the user to test unless it's something you literally cannot test (e.g., native OS interactions).
-  - Always open `test-features.md` in the browser to verify rendering. If a feature you changed is not covered by `test-features.md`, add a test case to it.
+  - Always open `index.md` in the browser to verify rendering. It opens by default on startup. If a feature you changed is not covered by `index.md`, add a test case to it.
   - Test StateFields without a browser: `EditorState.create({extensions}).update({changes}).state.field(myField)`.
   - For parser bugs, write a Vitest test with the exact document content first, then check browser for incremental parsing issues.
 - **Reviewer/simplifier gate before every commit**: Before `git commit`, ALWAYS launch `pr-review-toolkit:code-reviewer` and `pr-review-toolkit:code-simplifier` in parallel on the diff. Apply findings. Then commit once, clean. Not optional. Subagents use `Skill tool` for the same gates and loop until both pass.
