@@ -5,8 +5,9 @@ use base64::Engine;
 use serde::Serialize;
 use tauri::{State, command};
 
+use super::perf::measure_command;
 use super::path::{current_project_root, resolve_existing_path, resolve_project_path};
-use super::state::ProjectRoot;
+use super::state::{PerfState, ProjectRoot};
 
 /// A file or directory entry for the sidebar tree.
 #[derive(Serialize, Clone)]
@@ -20,177 +21,256 @@ pub struct FileEntry {
 
 /// Open a folder dialog and set it as the project root.
 #[command]
-pub fn open_folder(root: State<'_, ProjectRoot>, path: String) -> Result<(), String> {
-    let path = std::path::PathBuf::from(&path);
-    if !path.is_dir() {
-        return Err(format!("Not a directory: {}", path.display()));
-    }
-    let canonical = path
-        .canonicalize()
-        .map_err(|e| format!("Cannot resolve path: {}", e))?;
-    let mut lock = root.0.lock().map_err(|e| e.to_string())?;
-    *lock = Some(canonical);
-    Ok(())
+pub fn open_folder(
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    path: String,
+) -> Result<(), String> {
+    measure_command(&perf, "tauri.open_folder", "tauri.fs.open_folder", "tauri", Some(&path), || {
+        let path = std::path::PathBuf::from(&path);
+        if !path.is_dir() {
+            return Err(format!("Not a directory: {}", path.display()));
+        }
+        let canonical = path
+            .canonicalize()
+            .map_err(|e| format!("Cannot resolve path: {}", e))?;
+        let mut lock = root.0.lock().map_err(|e| e.to_string())?;
+        *lock = Some(canonical);
+        Ok(())
+    })
 }
 
 /// Read a file's content as UTF-8 text.
 #[command]
-pub fn read_file(root: State<'_, ProjectRoot>, path: String) -> Result<String, String> {
-    let project_root = current_project_root(&root)?;
-    let resolved = resolve_existing_path(&project_root, &path)?;
-    fs::read_to_string(&resolved).map_err(|e| format!("Failed to read '{}': {}", path, e))
+pub fn read_file(
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    path: String,
+) -> Result<String, String> {
+    measure_command(&perf, "tauri.read_file", "tauri.fs.read_file", "tauri", Some(&path), || {
+        let project_root = current_project_root(&root)?;
+        let resolved = resolve_existing_path(&project_root, &path)?;
+        fs::read_to_string(&resolved).map_err(|e| format!("Failed to read '{}': {}", path, e))
+    })
 }
 
 /// Write content to a file (must already exist).
 #[command]
 pub fn write_file(
     root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
     path: String,
     content: String,
 ) -> Result<(), String> {
-    let project_root = current_project_root(&root)?;
-    let resolved = resolve_existing_path(&project_root, &path)?;
-    if !resolved.exists() {
-        return Err(format!("File not found: {}", path));
-    }
-    fs::write(&resolved, &content).map_err(|e| format!("Failed to write '{}': {}", path, e))
+    measure_command(&perf, "tauri.write_file", "tauri.fs.write_file", "tauri", Some(&path), || {
+        let project_root = current_project_root(&root)?;
+        let resolved = resolve_existing_path(&project_root, &path)?;
+        if !resolved.exists() {
+            return Err(format!("File not found: {}", path));
+        }
+        fs::write(&resolved, &content).map_err(|e| format!("Failed to write '{}': {}", path, e))
+    })
 }
 
 /// Create a new file with optional content.
 #[command]
 pub fn create_file(
     root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
     path: String,
     content: Option<String>,
 ) -> Result<(), String> {
-    let project_root = current_project_root(&root)?;
-    let full = resolve_project_path(&project_root, &path)?;
+    measure_command(&perf, "tauri.create_file", "tauri.fs.create_file", "tauri", Some(&path), || {
+        let project_root = current_project_root(&root)?;
+        let full = resolve_project_path(&project_root, &path)?;
 
-    if full.exists() {
-        return Err(format!("File already exists: {}", path));
-    }
-    if let Some(parent) = full.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directories: {}", e))?;
-    }
-    fs::write(&full, content.unwrap_or_default())
-        .map_err(|e| format!("Failed to create '{}': {}", path, e))
+        if full.exists() {
+            return Err(format!("File already exists: {}", path));
+        }
+        if let Some(parent) = full.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create directories: {}", e))?;
+        }
+        fs::write(&full, content.clone().unwrap_or_default())
+            .map_err(|e| format!("Failed to create '{}': {}", path, e))
+    })
 }
 
 /// Create a new directory (and any missing ancestors) within the project root.
 #[command]
-pub fn create_directory(root: State<'_, ProjectRoot>, path: String) -> Result<(), String> {
-    let project_root = current_project_root(&root)?;
-    let full = resolve_project_path(&project_root, &path)?;
+pub fn create_directory(
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    path: String,
+) -> Result<(), String> {
+    measure_command(
+        &perf,
+        "tauri.create_directory",
+        "tauri.fs.create_directory",
+        "tauri",
+        Some(&path),
+        || {
+            let project_root = current_project_root(&root)?;
+            let full = resolve_project_path(&project_root, &path)?;
 
-    if full.exists() {
-        return Err(format!("Directory already exists: {}", path));
-    }
-    fs::create_dir_all(&full)
-        .map_err(|e| format!("Failed to create directory '{}': {}", path, e))
+            if full.exists() {
+                return Err(format!("Directory already exists: {}", path));
+            }
+            fs::create_dir_all(&full)
+                .map_err(|e| format!("Failed to create directory '{}': {}", path, e))
+        },
+    )
 }
 
 /// Check whether a file exists.
 #[command]
-pub fn file_exists(root: State<'_, ProjectRoot>, path: String) -> Result<bool, String> {
-    let project_root = current_project_root(&root)?;
-    let full = resolve_project_path(&project_root, &path)?;
-    Ok(full.exists())
+pub fn file_exists(
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    path: String,
+) -> Result<bool, String> {
+    measure_command(&perf, "tauri.file_exists", "tauri.fs.file_exists", "tauri", Some(&path), || {
+        let project_root = current_project_root(&root)?;
+        let full = resolve_project_path(&project_root, &path)?;
+        Ok(full.exists())
+    })
 }
 
 /// Rename (move) a file within the project root.
 #[command]
 pub fn rename_file(
     root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
     old_path: String,
     new_path: String,
 ) -> Result<(), String> {
-    let project_root = current_project_root(&root)?;
-    let old_resolved = resolve_existing_path(&project_root, &old_path)?;
-    let new_full = resolve_project_path(&project_root, &new_path)?;
+    measure_command(
+        &perf,
+        "tauri.rename_file",
+        "tauri.fs.rename_file",
+        "tauri",
+        Some(&old_path),
+        || {
+            let project_root = current_project_root(&root)?;
+            let old_resolved = resolve_existing_path(&project_root, &old_path)?;
+            let new_full = resolve_project_path(&project_root, &new_path)?;
 
-    if new_full.exists() {
-        return Err(format!("File already exists: {}", new_path));
-    }
-    fs::rename(&old_resolved, &new_full)
-        .map_err(|e| format!("Failed to rename '{}' to '{}': {}", old_path, new_path, e))
+            if new_full.exists() {
+                return Err(format!("File already exists: {}", new_path));
+            }
+            fs::rename(&old_resolved, &new_full)
+                .map_err(|e| format!("Failed to rename '{}' to '{}': {}", old_path, new_path, e))
+        },
+    )
 }
 
 /// List the file tree starting from the project root.
 #[command]
-pub fn list_tree(root: State<'_, ProjectRoot>) -> Result<FileEntry, String> {
-    let project_root = current_project_root(&root)?;
-    let name = project_root
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "project".to_string());
-    build_tree(&project_root, &name, "")
+pub fn list_tree(
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+) -> Result<FileEntry, String> {
+    measure_command(&perf, "tauri.list_tree", "tauri.fs.list_tree", "tauri", None, || {
+        let project_root = current_project_root(&root)?;
+        let name = project_root
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "project".to_string());
+        build_tree(&project_root, &name, "")
+    })
 }
 
 /// Delete a file within the project root.
 #[command]
-pub fn delete_file(root: State<'_, ProjectRoot>, path: String) -> Result<(), String> {
-    let project_root = current_project_root(&root)?;
-    let resolved = resolve_existing_path(&project_root, &path)?;
-    if resolved.is_dir() {
-        fs::remove_dir_all(&resolved)
-            .map_err(|e| format!("Failed to delete directory '{}': {}", path, e))
-    } else {
-        fs::remove_file(&resolved).map_err(|e| format!("Failed to delete '{}': {}", path, e))
-    }
+pub fn delete_file(
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    path: String,
+) -> Result<(), String> {
+    measure_command(&perf, "tauri.delete_file", "tauri.fs.delete_file", "tauri", Some(&path), || {
+        let project_root = current_project_root(&root)?;
+        let resolved = resolve_existing_path(&project_root, &path)?;
+        if resolved.is_dir() {
+            fs::remove_dir_all(&resolved)
+                .map_err(|e| format!("Failed to delete directory '{}': {}", path, e))
+        } else {
+            fs::remove_file(&resolved).map_err(|e| format!("Failed to delete '{}': {}", path, e))
+        }
+    })
 }
 
 /// Copy a file from an absolute source path into the project root.
 #[command]
 pub fn copy_file_to_project(
     root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
     source: String,
     dest: String,
 ) -> Result<(), String> {
-    let project_root = current_project_root(&root)?;
-    let source_path = std::path::PathBuf::from(&source);
+    measure_command(
+        &perf,
+        "tauri.copy_file_to_project",
+        "tauri.fs.copy_file_to_project",
+        "tauri",
+        Some(&dest),
+        || {
+            let project_root = current_project_root(&root)?;
+            let source_path = std::path::PathBuf::from(&source);
 
-    if !source_path.is_absolute() {
-        return Err(format!("Source path must be absolute: {}", source));
-    }
-    if !source_path.exists() {
-        return Err(format!("Source file not found: {}", source));
-    }
+            if !source_path.is_absolute() {
+                return Err(format!("Source path must be absolute: {}", source));
+            }
+            if !source_path.exists() {
+                return Err(format!("Source file not found: {}", source));
+            }
 
-    let full_dest = resolve_project_path(&project_root, &dest)?;
-    if let Some(parent) = full_dest.parent() {
-        if !parent.exists() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create directories: {}", e))?;
-        }
-    }
+            let full_dest = resolve_project_path(&project_root, &dest)?;
+            if let Some(parent) = full_dest.parent() {
+                if !parent.exists() {
+                    fs::create_dir_all(parent)
+                        .map_err(|e| format!("Failed to create directories: {}", e))?;
+                }
+            }
 
-    fs::copy(&source_path, &full_dest)
-        .map_err(|e| format!("Failed to copy '{}' to '{}': {}", source, dest, e))?;
-    Ok(())
+            fs::copy(&source_path, &full_dest)
+                .map_err(|e| format!("Failed to copy '{}' to '{}': {}", source, dest, e))?;
+            Ok(())
+        },
+    )
 }
 
 /// Write binary data (received as base64) to a file within the project root.
 #[command]
 pub fn write_file_binary(
     root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
     path: String,
     data_base64: String,
 ) -> Result<(), String> {
-    let project_root = current_project_root(&root)?;
-    let full = resolve_project_path(&project_root, &path)?;
+    measure_command(
+        &perf,
+        "tauri.write_file_binary",
+        "tauri.fs.write_file_binary",
+        "tauri",
+        Some(&path),
+        || {
+            let project_root = current_project_root(&root)?;
+            let full = resolve_project_path(&project_root, &path)?;
 
-    if let Some(parent) = full.parent() {
-        if !parent.exists() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create directories: {}", e))?;
-        }
-    }
+            if let Some(parent) = full.parent() {
+                if !parent.exists() {
+                    fs::create_dir_all(parent)
+                        .map_err(|e| format!("Failed to create directories: {}", e))?;
+                }
+            }
 
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(&data_base64)
-        .map_err(|e| format!("Invalid base64 data: {}", e))?;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(&data_base64)
+                .map_err(|e| format!("Invalid base64 data: {}", e))?;
 
-    fs::write(&full, &bytes).map_err(|e| format!("Failed to write binary file '{}': {}", path, e))
+            fs::write(&full, &bytes)
+                .map_err(|e| format!("Failed to write binary file '{}': {}", path, e))
+        },
+    )
 }
 
 /// Recursively build a FileEntry tree from a directory.

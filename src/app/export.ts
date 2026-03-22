@@ -7,8 +7,8 @@
  *   proper semantic HTML (headings, lists, math via KaTeX, fenced divs).
  */
 
-import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "./tauri-fs";
+import { invokeWithPerf, measureAsync } from "./perf";
 import type { FileSystem, FileEntry } from "./file-manager";
 import { markdownToHtml, escapeHtml } from "./markdown-to-html";
 import type { ExportFormat } from "./lib/types";
@@ -23,7 +23,7 @@ export type { ExportFormat };
 
 /** Check whether Pandoc is installed. Returns the version string on success. */
 export async function checkPandoc(): Promise<string> {
-  return invoke<string>("check_pandoc");
+  return invokeWithPerf<string>("check_pandoc");
 }
 
 /**
@@ -243,7 +243,7 @@ export async function exportDocument(
 
   const outputPath = deriveOutputPath(sourcePath, format);
 
-  const result = await invoke<string>("export_document", {
+  const result = await invokeWithPerf<string>("export_document", {
     content,
     format,
     outputPath,
@@ -328,7 +328,10 @@ export async function batchExport(
     const path = mdPaths[i];
     try {
       const content = await fs.readFile(path);
-      const outputPath = await exportDocument(content, format, path, fs);
+      const outputPath = await measureAsync("export.batch_item", () => exportDocument(content, format, path, fs), {
+        category: "export",
+        detail: path,
+      });
       results.push({ path, outputPath });
     } catch (err: unknown) {
       results.push({

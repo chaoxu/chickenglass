@@ -1,5 +1,11 @@
 import { useEffect } from "react";
 import type { EditorMode } from "../../editor";
+import {
+  clearCombinedPerf,
+  getCombinedPerfSnapshot,
+  printPerfSummary,
+  togglePerfPanel,
+} from "../perf";
 
 interface AppDebugWindow {
   __app?: {
@@ -8,6 +14,12 @@ interface AppDebugWindow {
     closeFile: () => void;
     setMode: (mode: EditorMode) => void;
     getMode: () => EditorMode;
+  };
+  __cgDebug?: {
+    perfSummary: () => Promise<unknown>;
+    printPerfSummary: () => Promise<unknown>;
+    clearPerf: () => Promise<void>;
+    togglePerfPanel: () => void;
   };
 }
 
@@ -34,6 +46,12 @@ export function useAppDebug({
       closeFile,
       setMode,
       getMode,
+    };
+    debugWindow.__cgDebug = {
+      perfSummary: getCombinedPerfSnapshot,
+      printPerfSummary,
+      clearPerf: clearCombinedPerf,
+      togglePerfPanel,
     };
   }, [openFile, saveFile, closeFile, setMode, getMode]);
 }

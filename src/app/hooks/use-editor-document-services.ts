@@ -14,39 +14,45 @@ import {
 import type { FileSystem } from "../file-manager";
 import type { IncludeRegion } from "../source-map";
 import { useBibliography } from "./use-bibliography";
+import { measureAsync } from "../perf";
 
 async function expandIncludes(
   mainPath: string,
   rawContent: string,
   fs: FileSystem,
 ): Promise<{ text: string; regions: IncludeRegion[] }> {
-  const paths = extractIncludePaths(rawContent);
-  if (paths.length === 0) return { text: rawContent, regions: [] };
+  return measureAsync("includes.expand", async () => {
+    const paths = extractIncludePaths(rawContent);
+    if (paths.length === 0) return { text: rawContent, regions: [] };
 
-  const includes: ResolvedInclude[] = [];
-  for (const rawPath of paths) {
-    const resolved = resolveIncludePath(mainPath, rawPath);
-    let content: string;
-    try {
-      content = await fs.readFile(resolved);
-    } catch {
-      return { text: rawContent, regions: [] };
+    const includes: ResolvedInclude[] = [];
+    for (const rawPath of paths) {
+      const resolved = resolveIncludePath(mainPath, rawPath);
+      let content: string;
+      try {
+        content = await fs.readFile(resolved);
+      } catch {
+        return { text: rawContent, regions: [] };
+      }
+      includes.push({ path: resolved, content, children: [] });
     }
-    includes.push({ path: resolved, content, children: [] });
-  }
 
-  const result = flattenIncludesWithSourceMap(rawContent, includes);
-  return {
-    text: result.text,
-    regions: result.regions.map((region) => ({
-      from: region.from,
-      to: region.to,
-      file: region.file,
-      originalRef: region.originalRef,
-      rawFrom: region.rawFrom,
-      rawTo: region.rawTo,
-    })),
-  };
+    const result = flattenIncludesWithSourceMap(rawContent, includes);
+    return {
+      text: result.text,
+      regions: result.regions.map((region) => ({
+        from: region.from,
+        to: region.to,
+        file: region.file,
+        originalRef: region.originalRef,
+        rawFrom: region.rawFrom,
+        rawTo: region.rawTo,
+      })),
+    };
+  }, {
+    category: "includes",
+    detail: mainPath,
+  });
 }
 
 interface UseEditorDocumentServicesOptions {

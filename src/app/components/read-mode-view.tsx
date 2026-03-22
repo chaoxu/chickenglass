@@ -21,6 +21,7 @@ import {
   resetDOMJustification,
 } from "tex-linebreak2";
 import { getHyphenator, applyHyphensToContainer } from "../hyphenation";
+import { measureAsync, measureSync } from "../perf";
 
 /** Debounce delay (ms) for re-applying line breaking on resize. */
 const RESIZE_DEBOUNCE_MS = 200;
@@ -118,8 +119,6 @@ export function ReadModeView({
       cslProcessor,
     });
 
-    // Render title from frontmatter if present (renderInline handles
-    // HTML escaping and inline math like $x^2$ in titles)
     const titleHtml = config.title
       ? `<h1 class="cg-read-title">${renderInline(config.title, config.math)}</h1>`
       : "";
@@ -131,7 +130,9 @@ export function ReadModeView({
   const applyLineBreakingCb = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
-    applyLineBreaking(el).catch(() => {
+    measureAsync("read_mode.line_breaking", () => applyLineBreaking(el), {
+      category: "read_mode",
+    }).catch(() => {
       // Silently ignore line-breaking errors — CSS justify is the fallback
     });
   }, []);
@@ -194,7 +195,9 @@ export function ReadModeView({
     getHyphenator()
       .then((hyphenate) => {
         if (!cancelled) {
-          applyHyphensToContainer(el, hyphenate);
+          measureSync("read_mode.hyphenation", () => {
+            applyHyphensToContainer(el, hyphenate);
+          }, { category: "read_mode" });
         }
       })
       .catch((err: unknown) => {

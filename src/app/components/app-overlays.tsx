@@ -4,6 +4,7 @@ import { GotoLineDialog } from "./goto-line-dialog";
 import { SearchPanel } from "./search-panel";
 import { SettingsDialog } from "./settings-dialog";
 import { ShortcutsDialog } from "./shortcuts-dialog";
+import { PerfDebugPanel } from "./perf-debug-panel";
 import type { AppEditorShellController } from "../hooks/use-app-editor-shell";
 import type { AppOverlayController } from "../hooks/use-app-overlays";
 import type { AppWorkspaceSessionController } from "../hooks/use-app-workspace-session";
@@ -59,6 +60,7 @@ export function AppOverlays({ workspace, editor, overlays }: AppOverlaysProps) {
         }}
         currentLine={editor.cursorLineCol.line}
       />
+      <PerfDebugPanel />
     </>
   );
 }

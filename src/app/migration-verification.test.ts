@@ -706,6 +706,27 @@ describe("#287 — Chrome for Testing app facility", () => {
   });
 });
 
+describe("#275 — app-wide perf instrumentation", () => {
+  it("frontend perf module exports aggregation helpers", async () => {
+    const mod = await import("./perf");
+    expect(mod.getCombinedPerfSnapshot).toBeDefined();
+    expect(mod.measureAsync).toBeDefined();
+    expect(mod.withPerfOperation).toBeDefined();
+  });
+
+  it("perf debug panel exists", async () => {
+    const mod = await import("./components/perf-debug-panel");
+    expect(mod.PerfDebugPanel).toBeDefined();
+  });
+
+  it("tauri perf commands are registered", () => {
+    expect(fileExists("src-tauri/src/commands/perf.rs")).toBe(true);
+    const mainRs = fileText("src-tauri/src/main.rs");
+    expect(mainRs).toContain("commands::perf::get_perf_snapshot");
+    expect(mainRs).toContain("commands::perf::clear_perf_snapshot");
+  });
+});
+
 describe("#266 — Playwright mode switching helper", () => {
   it("status bar exposes a stable mode button test id", () => {
     const statusBar = fileText("src/app/components/status-bar.tsx");

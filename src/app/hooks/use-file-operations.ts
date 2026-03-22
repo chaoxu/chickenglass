@@ -10,6 +10,7 @@ import type { FileSystem } from "../file-manager";
 import type { Tab } from "../tab-bar";
 import { isTauri } from "../tauri-fs";
 import { basename } from "../lib/utils";
+import { measureAsync, withPerfOperation } from "../perf";
 export interface FileOperationsDeps {
   fs: FileSystem;
   /** Ref-backed set of currently open paths. */
@@ -76,44 +77,50 @@ export function useFileOperations(deps: FileOperationsDeps): UseFileOperationsRe
   const openFile = useCallback(async (path: string, options?: { preview?: boolean }) => {
     const isPreview = options?.preview ?? false;
 
-    // If already open, just activate. If opening as pinned, also pin.
-    if (openPathsRef.current.has(path)) {
-      setActiveTab(path);
-      setEditorDoc(liveDocs.current.get(path) ?? buffers.current.get(path) ?? "");
-      if (!isPreview) {
-        pinTab(path);
-      }
-      addRecentFile(path);
-      return;
-    }
-
-    try {
-      const content = await fs.readFile(path);
-      buffers.current.set(path, content);
-      liveDocs.current.set(path, content);
-
-      setOpenTabs((prev) => {
-        if (isPreview) {
-          // Replace existing preview tab if any
-          const previewIdx = prev.findIndex((t) => t.preview);
-          if (previewIdx !== -1) {
-            const oldPreview = prev[previewIdx];
-            // Clean up buffers for the old preview tab
-            buffers.current.delete(oldPreview.path);
-            liveDocs.current.delete(oldPreview.path);
-            const next = [...prev];
-            next[previewIdx] = { path, name: basename(path), dirty: false, preview: true };
-            return next;
+    await withPerfOperation("open_file", async (operation) => {
+      if (openPathsRef.current.has(path)) {
+        operation.measureSync("open_file.activate", () => {
+          setActiveTab(path);
+          setEditorDoc(liveDocs.current.get(path) ?? buffers.current.get(path) ?? "");
+          if (!isPreview) {
+            pinTab(path);
           }
-        }
-        return [...prev, { path, name: basename(path), dirty: false, preview: isPreview }];
-      });
-      setActiveTab(path);
-      setEditorDoc(content);
-      addRecentFile(path);
-    } catch {
-      // Silently ignore unreadable files
-    }
+          addRecentFile(path);
+        }, { category: "open_file", detail: path });
+        return;
+      }
+
+      try {
+        const content = await operation.measureAsync("open_file.read", () => fs.readFile(path), {
+          category: "open_file",
+          detail: path,
+        });
+        operation.measureSync("open_file.tab_state", () => {
+          buffers.current.set(path, content);
+          liveDocs.current.set(path, content);
+
+          setOpenTabs((prev) => {
+            if (isPreview) {
+              const previewIdx = prev.findIndex((t) => t.preview);
+              if (previewIdx !== -1) {
+                const oldPreview = prev[previewIdx];
+                buffers.current.delete(oldPreview.path);
+                liveDocs.current.delete(oldPreview.path);
+                const next = [...prev];
+                next[previewIdx] = { path, name: basename(path), dirty: false, preview: true };
+                return next;
+              }
+            }
+            return [...prev, { path, name: basename(path), dirty: false, preview: isPreview }];
+          });
+          setActiveTab(path);
+          setEditorDoc(content);
+          addRecentFile(path);
+        }, { category: "open_file", detail: path });
+      } catch {
+        // Silently ignore unreadable files
+      }
+    }, path);
   }, [fs, addRecentFile, openPathsRef, buffers, liveDocs, setOpenTabs, setActiveTab, setEditorDoc, pinTab]);
 
   const openFileWithContent = useCallback((name: string, content: string) => {
@@ -142,7 +149,10 @@ export function useFileOperations(deps: FileOperationsDeps): UseFileOperationsRe
     const doc = liveDocs.current.get(path) ?? "";
 
     try {
-      await fs.writeFile(path, doc);
+      await measureAsync("save_file.write", () => fs.writeFile(path, doc), {
+        category: "save_file",
+        detail: path,
+      });
       buffers.current.set(path, doc);
       liveDocs.current.set(path, doc);
       setOpenTabs((prev) =>
@@ -155,7 +165,10 @@ export function useFileOperations(deps: FileOperationsDeps): UseFileOperationsRe
 
   const createFile = useCallback(async (path: string) => {
     try {
-      await fs.createFile(path, "");
+      await measureAsync("create_file.write", () => fs.createFile(path, ""), {
+        category: "create_file",
+        detail: path,
+      });
       await refreshTree();
       await openFile(path);
     } catch {
@@ -165,7 +178,10 @@ export function useFileOperations(deps: FileOperationsDeps): UseFileOperationsRe
 
   const createDirectory = useCallback(async (path: string) => {
     try {
-      await fs.createDirectory(path);
+      await measureAsync("create_directory.write", () => fs.createDirectory(path), {
+        category: "create_directory",
+        detail: path,
+      });
       await refreshTree();
     } catch {
       // Directory may already exist
@@ -221,7 +237,10 @@ export function useFileOperations(deps: FileOperationsDeps): UseFileOperationsRe
     const ok = window.confirm(`Delete "${basename(path)}"? This cannot be undone.`);
     if (!ok) return;
     try {
-      await fs.deleteFile(path);
+      await measureAsync("delete_file.write", () => fs.deleteFile(path), {
+        category: "delete_file",
+        detail: path,
+      });
     } catch {
       // deleteFile may not be supported
     }

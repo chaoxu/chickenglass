@@ -6,6 +6,7 @@ import { useRecentFiles } from "./use-recent-files";
 import { useSettings } from "./use-settings";
 import { useTheme } from "./use-theme";
 import { useWindowState } from "./use-window-state";
+import { measureAsync, withPerfOperation } from "../perf";
 import { isTauri, openFolder as tauriOpenFolder } from "../tauri-fs";
 
 export type SidebarTab = "files" | "outline" | "symbols";
@@ -51,13 +52,19 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [sidenotesCollapsed, setSidenotesCollapsed] = useState(true);
   const refreshProjectConfig = useCallback(async () => {
-    const nextProjectConfig = await loadProjectConfig(fs);
+    const nextProjectConfig = await measureAsync(
+      "startup.project_config",
+      () => loadProjectConfig(fs),
+      { category: "startup" },
+    );
     setProjectConfig(nextProjectConfig);
   }, [fs]);
 
   const refreshTree = useCallback(async () => {
     try {
-      const tree = await fs.listTree();
+      const tree = await measureAsync("sidebar.file_tree", () => fs.listTree(), {
+        category: "sidebar",
+      });
       setFileTree(tree);
     } catch {
       setFileTree(null);
@@ -65,8 +72,9 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   }, [fs]);
 
   useEffect(() => {
-    void refreshTree();
-    void refreshProjectConfig();
+    void withPerfOperation("startup.initial_session", async () => {
+      await Promise.all([refreshTree(), refreshProjectConfig()]);
+    });
   }, [refreshProjectConfig, refreshTree]);
 
   const handleOpenFolder = useCallback(() => {

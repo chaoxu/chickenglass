@@ -28,6 +28,7 @@ import { useEditorScroll } from "./use-editor-scroll";
 import { useEditorDebugBridge } from "./use-editor-debug-bridge";
 import { useEditorDocumentServices } from "./use-editor-document-services";
 import { useEditorThemeSync } from "./use-editor-theme-sync";
+import { measureSync } from "../perf";
 
 /** Resolved theme for the CM6 dark/light base extension. */
 export type ResolvedTheme = "light" | "dark";
@@ -185,13 +186,13 @@ export function useEditor(
       ...(extensions ?? []),
     ]);
 
-    const newView = createEditor({
+    const newView = measureSync("editor.create", () => createEditor({
       parent: container,
       doc,
       projectConfig,
       pluginManager,
       extensions: extraExtensions,
-    });
+    }), { category: "editor" });
 
     debugBridge.attachDebugView(newView);
     setView(newView);

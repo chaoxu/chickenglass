@@ -5,9 +5,9 @@
  * silently reloads clean files or shows a notification bar for dirty files.
  */
 
-import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { basename } from "./lib/utils";
+import { invokeWithPerf, measureAsync } from "./perf";
 
 /** Callback to check whether a file is open in a tab. */
 export type IsFileOpenFn = (path: string) => boolean;
@@ -55,7 +55,7 @@ export class FileWatcher {
     await this.unwatch();
 
     // Tell the Rust backend to start watching
-    await invoke("watch_directory", { path: directoryPath });
+    await invokeWithPerf("watch_directory", { path: directoryPath });
 
     // Listen for file-changed events from the backend
     this.unlisten = await listen<string>("file-changed", (event) => {
@@ -71,7 +71,7 @@ export class FileWatcher {
     }
 
     try {
-      await invoke("unwatch_directory");
+      await invokeWithPerf("unwatch_directory");
     } catch {
       // Backend may already be stopped
     }
@@ -88,7 +88,10 @@ export class FileWatcher {
 
     if (!this.config.isFileDirty(relativePath)) {
       // File is clean — reload silently
-      this.config.reloadFile(relativePath);
+      void measureAsync("watch.reload_clean_file", () => this.config.reloadFile(relativePath), {
+        category: "watch",
+        detail: relativePath,
+      });
       return;
     }
 

@@ -5,10 +5,10 @@
  * Requires a project folder to be opened first via openFolder().
  */
 
-import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { FileEntry, FileSystem } from "./file-manager";
 import { uint8ArrayToBase64 } from "./lib/utils";
+import { invokeWithPerf } from "./perf";
 
 /** Check whether we're running inside a Tauri webview. */
 export function isTauri(): boolean {
@@ -23,7 +23,7 @@ export async function openFolder(): Promise<string | null> {
   const selected = await open({ directory: true, multiple: false });
   if (!selected) return null;
   const path = selected as string;
-  await invoke("open_folder", { path });
+  await invokeWithPerf("open_folder", { path });
   return path;
 }
 
@@ -35,45 +35,45 @@ export async function openFolder(): Promise<string | null> {
  */
 export async function revealInFinder(path: string): Promise<void> {
   if (!isTauri()) return;
-  await invoke("reveal_in_finder", { path });
+  await invokeWithPerf("reveal_in_finder", { path });
 }
 
 /** FileSystem implementation backed by Tauri Rust commands. */
 export class TauriFileSystem implements FileSystem {
   async listTree(): Promise<FileEntry> {
-    return invoke<FileEntry>("list_tree");
+    return invokeWithPerf<FileEntry>("list_tree");
   }
 
   async readFile(path: string): Promise<string> {
-    return invoke<string>("read_file", { path });
+    return invokeWithPerf<string>("read_file", { path });
   }
 
   async writeFile(path: string, content: string): Promise<void> {
-    await invoke("write_file", { path, content });
+    await invokeWithPerf("write_file", { path, content });
   }
 
   async createFile(path: string, content?: string): Promise<void> {
-    await invoke("create_file", { path, content: content ?? "" });
+    await invokeWithPerf("create_file", { path, content: content ?? "" });
   }
 
   async exists(path: string): Promise<boolean> {
-    return invoke<boolean>("file_exists", { path });
+    return invokeWithPerf<boolean>("file_exists", { path });
   }
 
   async renameFile(oldPath: string, newPath: string): Promise<void> {
-    await invoke("rename_file", { oldPath, newPath });
+    await invokeWithPerf("rename_file", { oldPath, newPath });
   }
 
   async createDirectory(path: string): Promise<void> {
-    await invoke("create_directory", { path });
+    await invokeWithPerf("create_directory", { path });
   }
 
   async deleteFile(path: string): Promise<void> {
-    await invoke("delete_file", { path });
+    await invokeWithPerf("delete_file", { path });
   }
 
   async writeFileBinary(path: string, data: Uint8Array): Promise<void> {
     const dataBase64 = uint8ArrayToBase64(data);
-    await invoke("write_file_binary", { path, dataBase64 });
+    await invokeWithPerf("write_file_binary", { path, dataBase64 });
   }
 }

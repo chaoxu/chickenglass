@@ -12,6 +12,7 @@ import { bibDataEffect } from "../../citations/citation-render";
 import { CslProcessor } from "../../citations/csl-processor";
 import type { FileSystem } from "../file-manager";
 import { dirname } from "../lib/utils";
+import { measureAsync, withPerfOperation } from "../perf";
 
 /**
  * Load a bibliography file (and optional CSL style) relative to the document,
@@ -38,34 +39,48 @@ export async function loadBibliography(
     return fs.readFile(p);
   };
 
-  try {
-    const bibText = await readWithFallback(bibPath);
-    const entries = parseBibTeX(bibText);
-    const store = new Map(entries.map((e) => [e.id, e]));
+  await withPerfOperation("citations.load", async (operation) => {
+    try {
+      const bibText = await operation.measureAsync("citations.read_bib", () => readWithFallback(bibPath), {
+        category: "citations",
+        detail: bibPath,
+      });
+      const entries = operation.measureSync("citations.parse_bib", () => parseBibTeX(bibText), {
+        category: "citations",
+        detail: bibPath,
+      });
+      const store = new Map(entries.map((e) => [e.id, e]));
 
-    let cslXml: string | undefined;
-    if (cslPath) {
+      let cslXml: string | undefined;
+      if (cslPath) {
+        try {
+          cslXml = await measureAsync("citations.read_csl", () => readWithFallback(cslPath), {
+            category: "citations",
+            detail: cslPath,
+          });
+        } catch {
+          // CSL file not found — use default style
+        }
+      }
+
+      const cslProcessor = operation.measureSync(
+        "citations.create_processor",
+        () => new CslProcessor(entries, cslXml),
+        { category: "citations", detail: cslPath || bibPath },
+      );
       try {
-        cslXml = await readWithFallback(cslPath);
+        view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor }) });
       } catch {
-        // CSL file not found — use default style
+        // view destroyed
+      }
+    } catch {
+      try {
+        view.dispatch({ effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) });
+      } catch {
+        // view destroyed
       }
     }
-
-    const cslProcessor = new CslProcessor(entries, cslXml);
-    try {
-      view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor }) });
-    } catch {
-      // view destroyed
-    }
-  } catch {
-    // BibTeX file unreadable or unparseable — clear bibliography data
-    try {
-      view.dispatch({ effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) });
-    } catch {
-      // view destroyed
-    }
-  }
+  }, bibPath);
 }
 
 export interface UseBibliographyOptions {

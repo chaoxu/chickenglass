@@ -4,7 +4,7 @@
 mod commands;
 mod menu;
 
-use commands::state::{FileWatcherState, ProjectRoot};
+use commands::state::{FileWatcherState, PerfState, ProjectRoot};
 use std::sync::Mutex;
 
 fn main() {
@@ -12,6 +12,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(ProjectRoot(Mutex::new(None)))
         .manage(FileWatcherState(Mutex::new(None)))
+        .manage(PerfState::new())
         .setup(|app| {
             let menu = menu::build_menu(app)?;
             app.set_menu(menu)?;
@@ -35,6 +36,8 @@ fn main() {
             commands::shell::reveal_in_finder,
             commands::fs::write_file_binary,
             commands::fs::copy_file_to_project,
+            commands::perf::get_perf_snapshot,
+            commands::perf::clear_perf_snapshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Chickenglass");
