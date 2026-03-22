@@ -18,10 +18,9 @@ import { type Extension, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   type ResolvedCrossref,
-  type EquationEntry,
   findCrossrefs,
   resolveCrossref,
-  collectEquationLabels,
+  equationLabelsField,
 } from "../index/crossref-resolver";
 import { buildDecorations, cursorInRange, RenderWidget } from "./render-utils";
 
@@ -74,9 +73,7 @@ export class UnresolvedRefWidget extends RenderWidget {
 export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
   const refs = findCrossrefs(view.state);
   const items: Range<Decoration>[] = [];
-  // Precompute equation labels once for all references
-  const equationLabels: ReadonlyMap<string, EquationEntry> =
-    collectEquationLabels(view.state);
+  const equationLabels = view.state.field(equationLabelsField);
 
   for (const ref of refs) {
     if (cursorInRange(view, ref.from, ref.to)) continue;

@@ -16,7 +16,7 @@ import {
   type ResolvedCrossref,
   findCrossrefs,
   resolveCrossref,
-  collectEquationLabels,
+  equationLabelsField,
 } from "../index/crossref-resolver";
 import { blockCounterField, type NumberedBlock } from "../plugins/block-counter";
 import { bibDataField, findCitationsFromTree, type BibStore } from "../citations/citation-render";
@@ -205,7 +205,7 @@ function hoverSource(
   const refs = findCrossrefs(view.state);
   const crossref = refs.find((ref) => pos >= ref.from && pos <= ref.to);
   if (crossref) {
-    const equationLabels = collectEquationLabels(view.state);
+    const equationLabels = view.state.field(equationLabelsField);
     const resolved = resolveCrossref(view.state, crossref.id, equationLabels);
 
     // Skip citations — they are handled below

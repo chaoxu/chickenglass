@@ -8,7 +8,7 @@
  * Uses the block counter state and the syntax tree to find targets.
  */
 
-import type { EditorState } from "@codemirror/state";
+import { type EditorState, StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import type { BlockCounterState } from "../plugins/block-counter";
 import { blockCounterField } from "../plugins/block-counter";
@@ -68,6 +68,31 @@ export function collectEquationLabels(
 }
 
 /**
+ * CM6 StateField that caches equation labels.
+ *
+ * Recomputes only when the document or syntax tree changes,
+ * avoiding redundant tree walks across multiple consumers
+ * (crossref-render, hover-preview, resolveCrossref).
+ */
+export const equationLabelsField = StateField.define<
+  ReadonlyMap<string, EquationEntry>
+>({
+  create(state) {
+    return collectEquationLabels(state);
+  },
+
+  update(value, tr) {
+    if (
+      tr.docChanged ||
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+    ) {
+      return collectEquationLabels(tr.state);
+    }
+    return value;
+  },
+});
+
+/**
  * Resolve a single reference id to its target.
  *
  * Resolution order:
@@ -99,7 +124,10 @@ export function resolveCrossref(
   }
 
   // 2. Check equation labels
-  const eqLabels = equationLabels ?? collectEquationLabels(state);
+  const eqLabels =
+    equationLabels ??
+    state.field(equationLabelsField, false) ??
+    collectEquationLabels(state);
   const eqEntry = eqLabels.get(id);
   if (eqEntry) {
     return {

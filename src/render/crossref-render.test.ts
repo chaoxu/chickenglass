@@ -10,6 +10,7 @@ import {
 } from "../plugins/plugin-registry";
 import { blockCounterField } from "../plugins/block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
+import { equationLabelsField } from "../index/crossref-resolver";
 import type { BlockPlugin } from "../plugins/plugin-types";
 import { createTestView, makeBlockPlugin } from "../test-utils";
 import {
@@ -38,6 +39,7 @@ function createView(doc: string, cursorPos?: number): EditorView {
       }),
       frontmatterField,
       documentSemanticsField,
+      equationLabelsField,
       createPluginRegistryField(testPlugins),
       blockCounterField,
     ],

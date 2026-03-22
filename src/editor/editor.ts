@@ -31,6 +31,7 @@ import {
 } from "../plugins";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { citationRenderPlugin, bibliographyPlugin, bibDataField } from "../citations";
+import { equationLabelsField } from "../index/crossref-resolver";
 import { projectConfigFacet, type ProjectConfig } from "../app/project-config";
 import { editorKeybindings } from "./keybindings";
 import { coflatTheme, coflatDarkTheme } from "./theme";
@@ -154,6 +155,9 @@ export function createEditor(config: EditorConfig): EditorView {
       // Block plugin system
       createPluginRegistryField(defaultPlugins),
       blockCounterField,
+
+      // Equation labels (cached for cross-reference resolution)
+      equationLabelsField,
 
       // Bibliography state (must come before citation plugins)
       bibDataField,
