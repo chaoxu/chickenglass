@@ -26,6 +26,7 @@ import { cursorInRange, RenderWidget } from "../render/render-utils";
 import { markdownExtensions } from "../parser";
 import {
   analyzeDocumentSemantics,
+  type ReferenceSemantics,
   stringTextSource,
 } from "../semantics/document";
 import { extractReferenceCluster } from "../semantics/reference-parts";
@@ -218,6 +219,21 @@ export function findCitationsFromTree(
   matches.sort((a, b) => a.from - b.from);
 
   return matches;
+}
+
+function citationMatchesFromReferences(
+  references: readonly ReferenceSemantics[],
+  store: BibStore,
+): CitationMatch[] {
+  return references
+    .filter((ref) => ref.ids.some((id) => store.has(id)))
+    .map((ref) => ({
+      from: ref.from,
+      to: ref.to,
+      parenthetical: ref.bracketed,
+      ids: [...ref.ids],
+      locators: [...ref.locators],
+    }));
 }
 
 /**

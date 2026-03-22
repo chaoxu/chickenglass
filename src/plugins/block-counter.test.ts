@@ -11,29 +11,15 @@ import {
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
 import { documentSemanticsField } from "../semantics/codemirror-source";
-
-/** Helper to make a minimal plugin for testing. */
-function makePlugin(overrides: Partial<BlockPlugin> & { name: string }): BlockPlugin {
-  return {
-    numbered: true,
-    title: overrides.name.charAt(0).toUpperCase() + overrides.name.slice(1),
-    render: (attrs) => ({
-      className: `cf-block cf-block-${attrs.type}`,
-      header: `${overrides.name} ${attrs.number ?? ""}`.trim(),
-    }),
-    ...overrides,
-  };
-}
+import { createEditorState, makeBlockPlugin } from "../test-utils";
 
 /** Create an EditorState with the fenced div parser and a given document. */
-function createState(doc: string): EditorState {
-  return EditorState.create({
-    doc,
+function createState(doc: string) {
+  return createEditorState(doc, {
     extensions: [
       markdown({ extensions: [fencedDiv] }),
       documentSemanticsField,
     ],
-
   });
 }
 
