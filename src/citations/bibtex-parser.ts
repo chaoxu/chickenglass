@@ -133,6 +133,8 @@ function toBibEntry(entry: Entry): BibEntry {
 
   for (const [key, value] of Object.entries(entry.fields)) {
     if (value === undefined || value === null) continue;
+    // Never let a BibTeX "id" field overwrite the citation key from @type{key,
+    if (key === "id") continue;
 
     if (CREATOR_FIELDS.has(key) && Array.isArray(value)) {
       result[key] = cleanBibtex(formatCreators(value as Creator[]));
