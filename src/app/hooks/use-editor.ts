@@ -133,12 +133,12 @@ export function useEditor(
   const onCursorChangeRef = useRef(onCursorChange);
   const onFrontmatterChangeRef = useRef(onFrontmatterChange);
   const handleFrontmatterChangeRef = useRef(documentServices.handleFrontmatterChange);
-  useEffect(() => { onDocChangeRef.current = onDocChange; }, [onDocChange]);
-  useEffect(() => { onCursorChangeRef.current = onCursorChange; }, [onCursorChange]);
-  useEffect(() => { onFrontmatterChangeRef.current = onFrontmatterChange; }, [onFrontmatterChange]);
   useEffect(() => {
+    onDocChangeRef.current = onDocChange;
+    onCursorChangeRef.current = onCursorChange;
+    onFrontmatterChangeRef.current = onFrontmatterChange;
     handleFrontmatterChangeRef.current = documentServices.handleFrontmatterChange;
-  }, [documentServices.handleFrontmatterChange]);
+  }, [onDocChange, onCursorChange, onFrontmatterChange, documentServices.handleFrontmatterChange]);
 
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

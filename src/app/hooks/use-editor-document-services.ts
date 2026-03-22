@@ -1,7 +1,7 @@
 import { useRef, useCallback } from "react";
 import { EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
-import { frontmatterField, type FrontmatterState } from "../../editor/frontmatter-state";
+import type { FrontmatterState } from "../../editor/frontmatter-state";
 import { imagePasteExtension } from "../../editor/image-paste";
 import { imageDropExtension } from "../../editor/image-drop";
 import { createImageSaver, type ImageSaveContext } from "../../editor/image-save";
@@ -88,26 +88,21 @@ export function useEditorDocumentServices({
     imageSaverRef.current = null;
   }, [bibliography]);
 
+  const imageFolderRef = useRef<string | undefined>(undefined);
+
   const createExtensions = useCallback((baseExtensions: readonly Extension[]) => {
-    let currentImageFolder: string | undefined;
     const imageSaveCtx: ImageSaveContext = {
       fs,
       docPath,
       get imageFolder() {
-        return currentImageFolder;
+        return imageFolderRef.current;
       },
     };
     const imageSaver = createImageSaver(imageSaveCtx);
     imageSaverRef.current = imageSaver;
 
-    const imageAwareUpdateListener = EditorView.updateListener.of((update) => {
-      const frontmatter = update.state.field(frontmatterField, false);
-      currentImageFolder = frontmatter?.config.imageFolder;
-    });
-
     return [
       ...baseExtensions,
-      imageAwareUpdateListener,
       imagePasteExtension({ saveImage: imageSaver }),
       imageDropExtension({ saveImage: imageSaver }),
     ];
@@ -117,6 +112,7 @@ export function useEditorDocumentServices({
     frontmatter: FrontmatterState | undefined,
     view: EditorView,
   ) => {
+    imageFolderRef.current = frontmatter?.config.imageFolder;
     const bibliographyPath = frontmatter?.config.bibliography ?? "";
     const cslPath = frontmatter?.config.csl ?? "";
     bibliography.handleBibChange(bibliographyPath, cslPath, view);
