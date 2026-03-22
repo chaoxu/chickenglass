@@ -66,7 +66,7 @@ async function insertImageBrowser(
       }
 
       if (!isImageMime(file.type)) {
-        console.warn("[chickenglass] Selected file is not a supported image type:", file.type);
+        console.warn("[coflat] Selected file is not a supported image type:", file.type);
         resolve();
         return;
       }

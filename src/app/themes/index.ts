@@ -1,5 +1,5 @@
 /**
- * Built-in writing themes for Chickenglass.
+ * Built-in writing themes for Coflat.
  *
  * Each theme is a set of CSS custom property overrides applied to
  * `document.documentElement`. The `dark` flag tells CM6 whether to

@@ -1,4 +1,4 @@
--- Pandoc Lua filter for importing blog posts into Chickenglass.
+-- Pandoc Lua filter for importing blog posts into Coflat.
 --
 -- Transforms:
 --   1. BlockQuote → Div with class "Blockquote" (fenced div)

@@ -92,7 +92,7 @@ describe("logImageError", () => {
     try {
       logImageError("paste", new Error("test"));
       expect(errors).toHaveLength(1);
-      expect(errors[0][0]).toBe("[chickenglass] image paste failed:");
+      expect(errors[0][0]).toBe("[coflat] image paste failed:");
       expect(errors[0][1]).toBeInstanceOf(Error);
     } finally {
       console.error = orig;

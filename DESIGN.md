@@ -1,4 +1,4 @@
-# Chickenglass v2 — Design Document
+# Coflat v2 — Design Document
 
 ## What is it
 
@@ -32,7 +32,7 @@ Pandoc-flavored markdown with these modifications:
 - **Semantic blocks**: Pandoc fenced divs.
 - **References**: `[@id]` for parenthetical, `@id` for narrative. Same syntax for both cross-references and citations. The editor resolves which is which by checking if the id matches a block label or a bib entry.
 - **Nesting**: More colons on outer fences.
-- **Prefer fenced divs over line-prefix syntax for multi-line blocks.** Line-prefix syntax (like `>` for blockquotes) requires a marker on every line, breaks with text reflow, and is a visual convention rather than a semantic one. Fenced divs have clear start/end boundaries, no per-line markers, and named semantics. `>` is still parsed for compatibility when importing existing markdown, but the canonical Chickenglass way is `::: Quote`. This extends to any block-level construct: `::: Note`, `::: Warning`, `::: Aside`, etc. — all are just plugins.
+- **Prefer fenced divs over line-prefix syntax for multi-line blocks.** Line-prefix syntax (like `>` for blockquotes) requires a marker on every line, breaks with text reflow, and is a visual convention rather than a semantic one. Fenced divs have clear start/end boundaries, no per-line markers, and named semantics. `>` is still parsed for compatibility when importing existing markdown, but the canonical Coflat way is `::: Quote`. This extends to any block-level construct: `::: Note`, `::: Warning`, `::: Aside`, etc. — all are just plugins.
 
 ### Semantic blocks
 

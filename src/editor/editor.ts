@@ -31,7 +31,7 @@ import {
 import { citationRenderPlugin, bibliographyPlugin, bibDataField } from "../citations";
 import { projectConfigFacet, type ProjectConfig } from "../app/project-config";
 import { editorKeybindings } from "./keybindings";
-import { chickenglassTheme, chickenglassDarkTheme } from "./theme";
+import { coflatTheme, coflatDarkTheme } from "./theme";
 import { headingFold } from "./heading-fold";
 import { listOutlinerExtension } from "./list-outliner";
 import { treeView } from "@overleaf/codemirror-tree-view";
@@ -160,10 +160,10 @@ export function createEditor(config: EditorConfig): EditorView {
       headingFold,
       listOutlinerExtension,
       editorKeybindings,
-      chickenglassTheme,
+      coflatTheme,
 
       // Dark/light base theme (wrapped in compartment for live switching)
-      themeCompartment.of(isDark ? chickenglassDarkTheme : []),
+      themeCompartment.of(isDark ? coflatDarkTheme : []),
 
       // Debug tree view (off by default, toggle via window.__cmTreeView())
       treeViewCompartment.of([]),

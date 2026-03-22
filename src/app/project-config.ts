@@ -1,7 +1,7 @@
 /**
  * Project configuration system.
  *
- * A project is a folder (typically a git repo) with a `chickenglass.yaml`
+ * A project is a folder (typically a git repo) with a `coflat.yaml`
  * config file at the root. The config provides default settings inherited
  * by all documents in the project. Per-file frontmatter overrides these.
  *
@@ -27,7 +27,7 @@ export interface ProjectConfig {
 }
 
 /** Well-known project config file name. */
-export const PROJECT_CONFIG_FILE = "chickenglass.yaml";
+export const PROJECT_CONFIG_FILE = "coflat.yaml";
 
 /**
  * CM6 Facet that holds the project-level configuration.
@@ -43,7 +43,7 @@ export const projectConfigFacet = Facet.define<ProjectConfig, ProjectConfig>({
 });
 
 /**
- * Parse a `chickenglass.yaml` file into a ProjectConfig.
+ * Parse a `coflat.yaml` file into a ProjectConfig.
  *
  * The config file uses the same YAML subset as frontmatter (without the
  * `---` delimiters). We wrap the content in `---` delimiters and reuse

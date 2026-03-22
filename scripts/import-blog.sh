@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Import blog posts from the Hakyll source repo into Chickenglass demo/blog/.
+# Import blog posts from the Hakyll source repo into Coflat demo/blog/.
 #
 # Uses Pandoc to parse and re-emit markdown, with a Lua filter that:
 #   - Converts > blockquotes to ::: Blockquote fenced divs
@@ -11,14 +11,14 @@
 #
 # Usage:
 #   ./scripts/import-blog.sh /path/to/chaoxu.github.io
-#   ./scripts/import-blog.sh  # defaults to /tmp/chickenglass-blog-source
+#   ./scripts/import-blog.sh  # defaults to /tmp/coflat-blog-source
 #
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SRC="${1:-/tmp/chickenglass-blog-source}"
+SRC="${1:-/tmp/coflat-blog-source}"
 DEST="$REPO_ROOT/demo/blog"
 FILTER="$SCRIPT_DIR/import-filter.lua"
 

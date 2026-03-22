@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { EditorView } from "@codemirror/view";
 import { themeCompartment } from "../../editor/editor";
-import { chickenglassDarkTheme } from "../../editor/theme";
+import { coflatDarkTheme } from "../../editor/theme";
 import type { ResolvedTheme } from "./use-editor";
 
 export function useEditorThemeSync(
@@ -13,7 +13,7 @@ export function useEditorThemeSync(
     const isDark = theme === "dark";
     try {
       view.dispatch({
-        effects: themeCompartment.reconfigure(isDark ? chickenglassDarkTheme : []),
+        effects: themeCompartment.reconfigure(isDark ? coflatDarkTheme : []),
       });
     } catch {
       // view already destroyed

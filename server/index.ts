@@ -138,7 +138,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", shutdown);
 
   server.listen(port, () => {
-    console.log(`Chickenglass server running at http://localhost:${port}`);
+    console.log(`Coflat server running at http://localhost:${port}`);
     console.log(`Serving project: ${projectDir}`);
     console.log(`Static files: ${distDir}`);
   });

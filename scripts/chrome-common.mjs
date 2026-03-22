@@ -25,7 +25,7 @@ export function parseChromeArgs(argv = process.argv.slice(2)) {
     port,
     url,
     activate,
-    profileDir: resolve(homedir(), ".codex/tmp/chickenglass/chrome-testing", profileName),
+    profileDir: resolve(homedir(), ".codex/tmp/coflat/chrome-testing", profileName),
   };
 }
 

@@ -1,5 +1,5 @@
 /**
- * Lightweight YAML frontmatter parser for chickenglass documents.
+ * Lightweight YAML frontmatter parser for Coflat documents.
  *
  * Parses the subset of YAML used in document frontmatter:
  * flat string keys, boolean values, and one level of nested objects.

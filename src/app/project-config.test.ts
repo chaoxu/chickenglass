@@ -195,7 +195,7 @@ describe("mergeConfigs", () => {
 // ---------------------------------------------------------------------------
 
 describe("loadProjectConfig", () => {
-  it("loads config from chickenglass.yaml", async () => {
+  it("loads config from coflat.yaml", async () => {
     const fs = new MemoryFileSystem({
       [PROJECT_CONFIG_FILE]: "bibliography: refs.bib\nmath:\n  \\R: \\mathbb{R}",
     });

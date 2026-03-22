@@ -4,7 +4,7 @@
  * Plugins register themselves by class name. The renderer and counter
  * systems look up plugins through this registry. Supports runtime
  * registration and unregistration for custom block types defined
- * in frontmatter or project-level chickenglass.yaml.
+ * in frontmatter or project-level coflat.yaml.
  *
  * Also provides the CM6 StateField that holds the registry state,
  * so that both the counter and renderer can depend on it without

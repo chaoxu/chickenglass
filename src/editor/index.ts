@@ -7,7 +7,7 @@ export {
 } from "./frontmatter-state";
 export { editorKeybindings } from "./keybindings";
 export { listOutlinerExtension } from "./list-outliner";
-export { chickenglassTheme } from "./theme";
+export { coflatTheme } from "./theme";
 export { imagePasteExtension, fileToDataUrl, insertImageMarkdown, type ImagePasteConfig } from "./image-paste";
 export { imageDropExtension, type ImageDropConfig } from "./image-drop";
 export { insertImageFromPicker } from "./image-insert";

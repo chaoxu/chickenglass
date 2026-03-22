@@ -1,6 +1,6 @@
-# Chickenglass Markdown Format
+# Coflat Markdown Format
 
-Chickenglass uses Pandoc-flavored markdown with the following specifics.
+Coflat uses Pandoc-flavored markdown with the following specifics.
 
 ## Math
 

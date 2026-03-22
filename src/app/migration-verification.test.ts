@@ -293,7 +293,7 @@ describe("#127 — minimal B&W design", () => {
 
   it("editor theme uses CSS variables", async () => {
     const mod = await import("../editor/theme");
-    expect(mod.chickenglassTheme).toBeDefined();
+    expect(mod.coflatTheme).toBeDefined();
   });
 });
 
@@ -798,5 +798,27 @@ describe("#290 — Lezer-first markdown parsing", () => {
     const writingStats = fileText("src/app/writing-stats.ts");
     expect(writingStats).toContain("parseFrontmatter");
     expect(writingStats).not.toContain("replace(/^---[\\\\s\\\\S]*?---\\\\n?/, \"\")");
+  });
+});
+
+describe("#291 — project rename to Coflat", () => {
+  it("core product metadata uses the Coflat name", () => {
+    const pkg = fileText("package.json");
+    const tauri = fileText("src-tauri/tauri.conf.json");
+    const html = fileText("index.html");
+
+    expect(pkg).toContain('"name": "coflat"');
+    expect(tauri).toContain('"productName": "Coflat"');
+    expect(tauri).toContain('"identifier": "com.coflat.app"');
+    expect(html).toContain("<title>Coflat</title>");
+  });
+
+  it("theme exports and project config filename are renamed", async () => {
+    const theme = await import("../editor/theme");
+    const config = await import("./project-config");
+
+    expect(theme.coflatTheme).toBeDefined();
+    expect(theme.coflatDarkTheme).toBeDefined();
+    expect(config.PROJECT_CONFIG_FILE).toBe("coflat.yaml");
   });
 });

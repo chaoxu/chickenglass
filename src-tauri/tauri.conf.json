@@ -1,7 +1,7 @@
 {
-  "productName": "Chickenglass",
+  "productName": "Coflat",
   "version": "2.0.0",
-  "identifier": "com.chickenglass.app",
+  "identifier": "com.coflat.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Chickenglass",
+        "title": "Coflat",
         "width": 1200,
         "height": 800,
         "minWidth": 800,

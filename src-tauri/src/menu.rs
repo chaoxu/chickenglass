@@ -136,7 +136,7 @@ pub fn build_menu(app: &App<Wry>) -> Result<tauri::menu::Menu<Wry>, tauri::Error
         .build()?;
 
     let help_menu = SubmenuBuilder::new(app, "Help")
-        .item(&MenuItemBuilder::with_id("help_about", "About Chickenglass").build(app)?)
+        .item(&MenuItemBuilder::with_id("help_about", "About Coflat").build(app)?)
         .item(
             &MenuItemBuilder::with_id("help_shortcuts", "Keyboard Shortcuts")
                 .accelerator("CmdOrCtrl+/")

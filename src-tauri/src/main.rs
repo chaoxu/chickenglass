@@ -40,5 +40,5 @@ fn main() {
             commands::perf::clear_perf_snapshot,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Chickenglass");
+        .expect("error while running Coflat");
 }

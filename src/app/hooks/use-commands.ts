@@ -228,7 +228,7 @@ export function useCommands(handlers: CommandHandlers): PaletteCommand[] {
       },
       {
         id: "help.about",
-        label: "About Chickenglass",
+        label: "About Coflat",
         category: "Help",
         action: () => handlers.onAbout?.(),
       },

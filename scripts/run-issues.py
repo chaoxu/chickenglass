@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deterministic issue orchestrator for Chickenglass.
+Deterministic issue orchestrator for Coflat.
 
 Spawns Claude Code workers in isolated git worktrees, verifies isolation,
 merges results in order, and pushes. No steps can be skipped — this is a
@@ -718,7 +718,7 @@ def run_batch(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run Chickenglass issues through isolated Claude workers")
+    parser = argparse.ArgumentParser(description="Run Coflat issues through isolated Claude workers")
     parser.add_argument("issues", nargs="*", type=int, help="Issue numbers to implement")
     parser.add_argument("--all", action="store_true", help="Fetch and run all open non-deferred issues")
     parser.add_argument("--dry-run", action="store_true", help="Show plan without executing")

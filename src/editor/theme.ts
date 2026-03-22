@@ -8,11 +8,11 @@ import { marginThemeStyles } from "./margin-theme";
 export { monoFont } from "./editor-constants";
 
 /**
- * Composed editor theme for chickenglass — merges all semantic sub-modules
+ * Composed editor theme for Coflat — merges all semantic sub-modules
  * into a single CM6 theme extension. Uses CSS custom properties so that
  * light/dark switching only requires changing variables on the html element.
  */
-export const chickenglassTheme = EditorView.theme({
+export const coflatTheme = EditorView.theme({
   ...baseThemeStyles,
   ...typographyThemeStyles,
   ...codeThemeStyles,
@@ -25,7 +25,7 @@ export const chickenglassTheme = EditorView.theme({
  * picks appropriate defaults for its own UI (scroll gutter, etc.).
  * Applied when the resolved theme is "dark".
  */
-export const chickenglassDarkTheme = EditorView.theme(
+export const coflatDarkTheme = EditorView.theme(
   {
     "&": {
       colorScheme: "dark",

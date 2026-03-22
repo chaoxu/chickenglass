@@ -1,7 +1,7 @@
 /**
  * About dialog React component.
  *
- * Simple modal: "Chickenglass v0.1.0", description, credits, GitHub link.
+ * Simple modal: "Coflat v0.1.0", description, credits, GitHub link.
  * Uses the shared app dialog primitives for escape, focus trap, and overlay.
  */
 
@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 
-const GITHUB_URL = "https://github.com/chickenglass/chickenglass";
+const GITHUB_URL = "https://github.com/chaoxu/coflat";
 
 interface Credit {
   name: string;
@@ -49,7 +49,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
       >
         <DialogHeader>
           <div className="flex items-baseline gap-2">
-            <DialogTitle className="text-base">Chickenglass</DialogTitle>
+            <DialogTitle className="text-base">Coflat</DialogTitle>
             <span className="text-sm text-[var(--cg-muted)]">v0.1.0</span>
           </div>
           <DialogCloseButton aria-label="Close about dialog" />

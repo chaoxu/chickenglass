@@ -221,7 +221,7 @@ function sortTree(entry: FileEntry): void {
 /** Create a demo filesystem with sample markdown files. */
 export function createDemoFileSystem(): MemoryFileSystem {
   return new MemoryFileSystem({
-    "chickenglass.yaml": `# Project configuration — shared settings inherited by all documents.
+    "coflat.yaml": `# Project configuration — shared settings inherited by all documents.
 # Per-file frontmatter can override any of these.
 bibliography: refs.bib
 math:
@@ -237,7 +237,7 @@ math:
   \\bm: "\\\\boldsymbol{#1}"
 `,
     "main.md": `---
-title: Chickenglass Demo
+title: Coflat Demo
 ---
 
 A semantic document editor for **mathematical writing**. It supports *Typora-style* inline rendering, ~~strikethrough~~, ==highlights==, and \`inline code\`.
@@ -409,7 +409,7 @@ chapters/background.md
 `,
     "chapters/introduction.md": `# Introduction
 
-This document demonstrates the features of Chickenglass, a semantic editor for mathematical writing. The editor provides:
+This document demonstrates the features of Coflat, a semantic editor for mathematical writing. The editor provides:
 
 - **Typora-style rendering**: source revealed only where you click
 - **KaTeX math**: inline $x^2$ and display mode with equation labels

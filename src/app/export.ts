@@ -226,7 +226,7 @@ export async function exportDocument(
   // PDF and LaTeX require Tauri + Pandoc
   if (!isTauri()) {
     throw new Error(
-      "Export requires the Chickenglass desktop app. " +
+      "Export requires the Coflat desktop app. " +
         "PDF/LaTeX export is not available in browser mode.",
     );
   }

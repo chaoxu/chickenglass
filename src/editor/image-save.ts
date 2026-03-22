@@ -110,7 +110,7 @@ export function altTextFromFilename(filename: string): string {
  * All image modules use this for uniform error reporting.
  */
 export function logImageError(operation: string, err: unknown): void {
-  console.error(`[chickenglass] image ${operation} failed:`, err);
+  console.error(`[coflat] image ${operation} failed:`, err);
 }
 
 /**
