@@ -16,7 +16,6 @@ export const CR = 13;
 export const DOLLAR = 36;
 export const OPEN_PAREN = 40;
 export const CLOSE_PAREN = 41;
-export const DOT = 46;
 export const COLON = 58;
 export const EQUALS = 61;
 export const OPEN_BRACKET = 91;

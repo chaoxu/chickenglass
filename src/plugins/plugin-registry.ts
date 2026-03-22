@@ -180,7 +180,7 @@ export function applyFrontmatterBlocks(
  * whenever frontmatter changes, instead of accumulating on top of
  * previous state.
  */
-export const builtinPluginsFacet = Facet.define<
+const builtinPluginsFacet = Facet.define<
   readonly BlockPlugin[],
   readonly BlockPlugin[]
 >({

@@ -73,15 +73,6 @@ export function saveWindowState(state: WindowState): void {
   writeLocalStorage(STORAGE_KEY, state);
 }
 
-/** Clear the persisted window state from localStorage. */
-export function clearWindowState(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // localStorage unavailable
-  }
-}
-
 /**
  * Build a WindowState snapshot from the current live state.
  * Pass the arrays/values from the app rather than DOM-query them here so this
@@ -100,68 +91,6 @@ export function buildWindowState(opts: {
     sidebarSections: opts.sidebarSections,
     version: STATE_VERSION,
   };
-}
-
-/**
- * Read the current collapsed state of all sidebar sections by querying the
- * sidebar DOM element.
- *
- * Sidebar sections are identified by their `.sidebar-title` text content.
- * Section bodies carry `display: none` when collapsed.
- */
-export function readSidebarSections(
-  sidebarEl: HTMLElement,
-): SidebarSectionState[] {
-  const sections: SidebarSectionState[] = [];
-  const sectionEls = sidebarEl.querySelectorAll<HTMLElement>(".sidebar-section");
-  for (const section of sectionEls) {
-    const titleEl = section.querySelector<HTMLElement>(".sidebar-title");
-    const bodyEl = section.querySelector<HTMLElement>(".sidebar-section-body");
-    if (!titleEl || !bodyEl) continue;
-    sections.push({
-      title: titleEl.textContent ?? "",
-      collapsed: bodyEl.style.display === "none",
-    });
-  }
-  return sections;
-}
-
-/**
- * Apply persisted sidebar section states to the sidebar DOM element.
- *
- * Only sections whose title matches an entry in `sections` are affected.
- */
-export function applySidebarSections(
-  sidebarEl: HTMLElement,
-  sections: SidebarSectionState[],
-): void {
-  const map = new Map(sections.map((s) => [s.title, s.collapsed]));
-  const sectionEls = sidebarEl.querySelectorAll<HTMLElement>(".sidebar-section");
-  for (const section of sectionEls) {
-    const titleEl = section.querySelector<HTMLElement>(".sidebar-title");
-    const bodyEl = section.querySelector<HTMLElement>(".sidebar-section-body");
-    const toggleEl = section.querySelector<HTMLElement>(".sidebar-toggle");
-    if (!titleEl || !bodyEl) continue;
-
-    const title = titleEl.textContent ?? "";
-    const collapsed = map.get(title);
-    if (collapsed === undefined) continue;
-
-    bodyEl.style.display = collapsed ? "none" : "";
-    if (toggleEl) {
-      toggleEl.textContent = collapsed ? "▶" : "▼";
-    }
-  }
-}
-
-/**
- * Apply a persisted sidebar width to the sidebar DOM element.
- */
-export function applySidebarWidth(
-  sidebarEl: HTMLElement,
-  width: number,
-): void {
-  sidebarEl.style.width = `${width}px`;
 }
 
 // ---------------------------------------------------------------------------

@@ -21,7 +21,7 @@ import { mathMacrosField } from "./math-macros";
 export const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
 
 /** A pair of opening and closing delimiters for math expressions. */
-export interface MathDelimiterPair {
+interface MathDelimiterPair {
   readonly open: string;
   readonly close: string;
 }
@@ -181,11 +181,6 @@ function buildMathItems(
  */
 export function collectMathRanges(view: EditorView): Range<Decoration>[] {
   return buildMathItems(view.state, (from, to) => cursorInRange(view, from, to));
-}
-
-/** Build a DecorationSet for math elements (convenience wrapper). */
-export function mathDecorations(view: EditorView): DecorationSet {
-  return buildDecorations(collectMathRanges(view));
 }
 
 /**

@@ -45,13 +45,13 @@ export const sidenotesCollapsedField = StateField.define<boolean>({
 });
 
 
-export interface FootnoteRef {
+interface FootnoteRef {
   readonly id: string;
   readonly from: number;
   readonly to: number;
 }
 
-export interface FootnoteDef {
+interface FootnoteDef {
   readonly id: string;
   readonly from: number;
   readonly to: number;

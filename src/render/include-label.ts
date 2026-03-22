@@ -16,14 +16,14 @@ import { buildDecorations, RenderWidget } from "./render-utils";
 import { basename } from "../app/lib/utils";
 
 /** A region of the document that came from an included file. */
-export interface IncludeRegion {
+interface IncludeRegion {
   from: number;
   to: number;
   file: string;
 }
 
 /** Maps document positions to their source files. */
-export interface SourceMap {
+interface SourceMap {
   regions: IncludeRegion[];
 }
 

@@ -27,7 +27,7 @@ import { stripMathDelimiters } from "./math-render";
 const inlineParser = baseParser.configure(markdownExtensions);
 
 /** A segment of text split by inline math delimiters. */
-export interface InlineSegment {
+interface InlineSegment {
   isMath: boolean;
   content: string;
 }

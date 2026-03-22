@@ -1127,7 +1127,7 @@ export const tableRenderPlugin: Extension = [
  * cursor is not adjacent, and the cell has its own undo/redo stack.
  * Only one cell editor is active at a time.
  */
-export class TableWidget extends WidgetType {
+class TableWidget extends WidgetType {
   /** Reference to the EditorView, stored on first toDOM() call. */
   private editorView: EditorView | null = null;
 

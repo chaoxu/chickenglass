@@ -17,10 +17,10 @@ import {
 import { type Extension, StateEffect, StateField } from "@codemirror/state";
 
 /** Effect to toggle focus mode on/off. */
-export const toggleFocusEffect = StateEffect.define<boolean>();
+const toggleFocusEffect = StateEffect.define<boolean>();
 
 /** StateField tracking whether focus mode is active. */
-export const focusModeField = StateField.define<boolean>({
+const focusModeField = StateField.define<boolean>({
   create() {
     return false;
   },

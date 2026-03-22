@@ -64,7 +64,7 @@ function parseImageContent(
 }
 
 /** Collect decoration ranges for images outside the cursor. */
-export function collectImageRanges(view: EditorView): Range<Decoration>[] {
+function collectImageRanges(view: EditorView): Range<Decoration>[] {
   const nodes = collectNodes(view, IMAGE_TYPES);
   const items: Range<Decoration>[] = [];
 
@@ -85,7 +85,7 @@ export function collectImageRanges(view: EditorView): Range<Decoration>[] {
 }
 
 /** Build a DecorationSet for images (convenience wrapper). */
-export function imageDecorations(view: EditorView): DecorationSet {
+function imageDecorations(view: EditorView): DecorationSet {
   return buildDecorations(collectImageRanges(view));
 }
 
