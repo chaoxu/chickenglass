@@ -8,6 +8,8 @@ import { extractHeadings } from "../heading-ancestry";
 import { collectFootnotes, sidenotesCollapsedEffect } from "../../render/sidenote-render";
 import { bibDataField } from "../../citations/citation-render";
 import type { EditorMode } from "../../editor";
+import { mathMacrosField } from "../../render/math-macros";
+import { renderInlineMarkdown } from "../../render/inline-render";
 
 export interface EditorPaneProps extends UseEditorOptions {
   sidenotesCollapsed?: boolean;
@@ -103,7 +105,9 @@ export function EditorPane({ onStateChange, sidenotesCollapsed, onSidenotesColla
         tooltip.className = "cf-hover-preview-tooltip";
         document.body.appendChild(tooltip);
       }
-      tooltip.textContent = content;
+      tooltip.innerHTML = "";
+      const macros = view.state.field(mathMacrosField);
+      renderInlineMarkdown(tooltip, content, macros);
       const rect = target.getBoundingClientRect();
       tooltip.style.left = `${rect.left}px`;
       tooltip.style.top = `${rect.bottom + 4}px`;
