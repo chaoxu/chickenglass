@@ -6,6 +6,8 @@
  * `formatReadingTime` helper. Used by the React StatusBar component.
  */
 
+import { parseFrontmatter } from "../parser/frontmatter";
+
 /** Computed document statistics. */
 export interface DocStats {
   words: number;
@@ -28,8 +30,8 @@ export function formatReadingTime(minutes: number): string {
 
 /** Compute document statistics from raw markdown text. */
 export function computeDocStats(text: string): DocStats {
-  // Strip YAML frontmatter
-  const body = text.replace(/^---[\s\S]*?---\n?/, "");
+  const { end } = parseFrontmatter(text);
+  const body = end >= 0 ? text.slice(end) : text;
 
   // Word count
   const wordTokens = body.split(/\s+/).filter((t) => t.length > 0);

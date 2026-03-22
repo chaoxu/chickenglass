@@ -13,6 +13,7 @@ import { syntaxTree } from "@codemirror/language";
 import type { BlockCounterState } from "../plugins/block-counter";
 import { blockCounterField } from "../plugins/block-counter";
 import { pluginRegistryField, getPlugin } from "../plugins/plugin-registry";
+import { readBracedLabelId } from "../parser/label-utils";
 
 /** The kind of target a cross-reference resolves to. */
 export type CrossrefKind = "block" | "equation" | "citation" | "unresolved";
@@ -43,19 +44,22 @@ export function collectEquationLabels(
   state: EditorState,
 ): ReadonlyMap<string, EquationEntry> {
   const tree = syntaxTree(state);
+  const doc = state.doc.toString();
   const result = new Map<string, EquationEntry>();
   let counter = 0;
 
   tree.iterate({
     enter(node) {
       if (node.type.name !== "EquationLabel") return;
-
-      const text = state.doc.sliceString(node.from, node.to);
-      // EquationLabel text is like {#eq:foo}
-      const match = /^\{#(eq:[^}\s]+)\}$/.exec(text);
-      if (match) {
+      const id = readBracedLabelId(
+        doc,
+        node.from,
+        node.to,
+        "eq:",
+      );
+      if (id) {
         counter++;
-        result.set(match[1], { id: match[1], number: counter });
+        result.set(id, { id, number: counter });
       }
     },
   });

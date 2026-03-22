@@ -770,3 +770,33 @@ describe("#279 — shared Lezer document semantics", () => {
     expect(mod.editorStateTextSource).toBeDefined();
   });
 });
+
+describe("#290 — Lezer-first markdown parsing", () => {
+  it("equation label extraction uses the shared braced-label helper", () => {
+    const crossrefs = fileText("src/index/crossref-resolver.ts");
+    const extract = fileText("src/index/extract.ts");
+    const hoverPreview = fileText("src/render/hover-preview.ts");
+
+    expect(fileExists("src/parser/label-utils.ts")).toBe(true);
+    expect(crossrefs).toContain("readBracedLabelId");
+    expect(extract).toContain("readBracedLabelId");
+    expect(hoverPreview).toContain("readBracedLabelId");
+  });
+
+  it("image and list handling no longer regex-parse markdown markers", () => {
+    const imageRender = fileText("src/render/image-render.ts");
+    const listOutliner = fileText("src/editor/list-outliner.ts");
+
+    expect(imageRender).toContain('node.getChild("URL")');
+    expect(imageRender).not.toContain('/^!\\[([^\\]]*)\\]\\(([^)]*)\\)$/');
+    expect(listOutliner).toContain('getChild("ListMark")');
+    expect(listOutliner).not.toContain('lineText.match(/^(\\s*)([-*+])\\s/)');
+    expect(listOutliner).not.toContain('lineText.match(/^(\\s*)(\\d+)([.)]\\s)/');
+  });
+
+  it("writing stats strips frontmatter via the frontmatter parser", () => {
+    const writingStats = fileText("src/app/writing-stats.ts");
+    expect(writingStats).toContain("parseFrontmatter");
+    expect(writingStats).not.toContain("replace(/^---[\\\\s\\\\S]*?---\\\\n?/, \"\")");
+  });
+});

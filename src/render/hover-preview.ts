@@ -24,6 +24,7 @@ import { formatBibEntry } from "../citations/bibliography";
 import { renderKatex, stripMathDelimiters } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { renderInlineMarkdown } from "./inline-render";
+import { readBracedLabelId } from "../parser/label-utils";
 
 /** Maximum content length shown in hover previews. */
 const MAX_PREVIEW_LENGTH = 500;
@@ -92,15 +93,15 @@ function createHeader(text: string, extraClass?: string): HTMLElement {
  */
 function findEquationSource(view: EditorView, id: string): string | undefined {
   const tree = syntaxTree(view.state);
+  const doc = view.state.doc.toString();
   let result: string | undefined;
 
   tree.iterate({
     enter(node) {
       if (result !== undefined) return false; // stop after first match
       if (node.type.name !== "EquationLabel") return;
-      const labelText = view.state.doc.sliceString(node.from, node.to);
-      const match = /^\{#(eq:[^}\s]+)\}$/.exec(labelText);
-      if (match && match[1] === id) {
+      const labelId = readBracedLabelId(doc, node.from, node.to, "eq:");
+      if (labelId === id) {
         const parent = node.node.parent;
         if (parent) {
           const raw = view.state.doc.sliceString(parent.from, node.from);

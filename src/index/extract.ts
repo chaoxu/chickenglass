@@ -18,6 +18,7 @@ import {
   footnoteExtension,
 } from "../parser";
 import { extractDivClass } from "../parser/fenced-div-attrs";
+import { readBracedLabelId } from "../parser/label-utils";
 import type { IndexEntry, IndexReference, FileIndex } from "./query-api";
 
 /**
@@ -217,12 +218,8 @@ function extractDisplayMath(
   const labelNode = node.getChild("EquationLabel");
   if (!labelNode) return;
 
-  const labelText = content.slice(labelNode.from, labelNode.to);
-  // EquationLabel text is like {#eq:foo}
-  const match = /^\{#([^}\s]+)\}$/.exec(labelText);
-  if (!match) return;
-
-  const label = match[1];
+  const label = readBracedLabelId(content, labelNode.from, labelNode.to);
+  if (!label) return;
 
   // Extract math content between the DisplayMathMark delimiters
   const marks = node.getChildren("DisplayMathMark");

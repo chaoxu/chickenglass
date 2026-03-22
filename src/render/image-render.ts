@@ -1,5 +1,6 @@
 import { type Extension, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
+import type { SyntaxNode } from "@lezer/common";
 import {
   Decoration,
   type DecorationSet,
@@ -10,12 +11,9 @@ import {
 } from "@codemirror/view";
 import {
   cursorInRange,
-  collectNodes,
   buildDecorations,
   RenderWidget,
 } from "./render-utils";
-
-const IMAGE_TYPES = new Set(["Image"]);
 
 /** Widget that renders an inline image. */
 export class ImageWidget extends RenderWidget {
@@ -49,37 +47,45 @@ export class ImageWidget extends RenderWidget {
   }
 }
 
-/** Parse ![alt](src) from the document range. */
-function parseImageContent(
+/** Read alt/src from an Image syntax node. */
+function readImageContent(
   view: EditorView,
-  from: number,
-  to: number,
+  node: SyntaxNode,
 ): { alt: string; src: string } | null {
-  const raw = view.state.sliceDoc(from, to);
-  const match = /^!\[([^\]]*)\]\(([^)]*)\)$/.exec(raw);
-  if (match && match[2]) {
-    return { alt: match[1], src: match[2] };
-  }
-  return null;
+  const urlNode = node.getChild("URL");
+  if (!urlNode) return null;
+
+  const src = view.state.sliceDoc(urlNode.from, urlNode.to);
+  if (!src) return null;
+
+  const marks = node.getChildren("LinkMark");
+  const alt = marks.length >= 2
+    ? view.state.sliceDoc(marks[0].to, marks[1].from)
+    : "";
+
+  return { alt, src };
 }
 
 /** Collect decoration ranges for images outside the cursor. */
 function collectImageRanges(view: EditorView): Range<Decoration>[] {
-  const nodes = collectNodes(view, IMAGE_TYPES);
   const items: Range<Decoration>[] = [];
+  const tree = syntaxTree(view.state);
 
-  for (const node of nodes) {
-    if (cursorInRange(view, node.from, node.to)) continue;
+  tree.iterate({
+    enter(node) {
+      if (node.type.name !== "Image") return;
+      if (cursorInRange(view, node.from, node.to)) return;
 
-    const parsed = parseImageContent(view, node.from, node.to);
-    if (!parsed) continue;
+      const parsed = readImageContent(view, node.node);
+      if (!parsed) return;
 
-    const widget = new ImageWidget(parsed.alt, parsed.src);
-    widget.sourceFrom = node.from;
-    items.push(
-      Decoration.replace({ widget }).range(node.from, node.to),
-    );
-  }
+      const widget = new ImageWidget(parsed.alt, parsed.src);
+      widget.sourceFrom = node.from;
+      items.push(
+        Decoration.replace({ widget }).range(node.from, node.to),
+      );
+    },
+  });
 
   return items;
 }

@@ -120,6 +120,64 @@ function lineIndent(lineText: string): number {
   return match ? match[1].length : 0;
 }
 
+interface ListMarkerInfo {
+  readonly indent: string;
+  readonly marker: string;
+  readonly contentStart: number;
+  readonly orderedNumber?: number;
+  readonly orderedDelimiter?: "." | ")";
+}
+
+function parseOrderedMarker(
+  marker: string,
+): { number: number; delimiter: "." | ")" } | null {
+  const delimiter = marker.at(-1);
+  if (delimiter !== "." && delimiter !== ")") return null;
+
+  const digits = marker.slice(0, -1);
+  if (digits.length === 0) return null;
+  for (let i = 0; i < digits.length; i++) {
+    const code = digits.charCodeAt(i);
+    if (code < 48 || code > 57) return null;
+  }
+
+  return {
+    number: Number(digits),
+    delimiter,
+  };
+}
+
+function getListMarkerInfo(
+  doc: EditorView["state"]["doc"],
+  listItem: SyntaxNode,
+  line = doc.lineAt(listItem.from),
+): ListMarkerInfo | null {
+  const itemLine = doc.lineAt(listItem.from);
+  if (itemLine.from !== line.from) {
+    return null;
+  }
+
+  const listMark = listItem.getChild("ListMark");
+  if (!listMark) return null;
+
+  const indent = doc.sliceString(itemLine.from, listMark.from);
+  const marker = doc.sliceString(listMark.from, listMark.to);
+  let contentStart = listMark.to;
+  if (contentStart < line.to && doc.sliceString(contentStart, contentStart + 1) === " ") {
+    contentStart += 1;
+  }
+
+  const ordered = parseOrderedMarker(marker);
+
+  return {
+    indent,
+    marker,
+    contentStart,
+    orderedNumber: ordered?.number,
+    orderedDelimiter: ordered?.delimiter,
+  };
+}
+
 /**
  * Find the parent ListItem of the given ListItem node.
  * In the Lezer tree: ListItem -> BulletList/OrderedList -> ListItem (parent).
@@ -337,25 +395,11 @@ function enterInListItem(view: EditorView): boolean {
   const line = doc.lineAt(cursorPos);
   const lineText = line.text;
 
-  // Determine the marker on this line
-  const bulletMatch = lineText.match(/^(\s*)([-*+])\s/);
-  const orderedMatch = lineText.match(/^(\s*)(\d+)([.)]\s)/);
-
-  if (!bulletMatch && !orderedMatch) return false;
-
-  const ordered = orderedMatch;
-  const indent = bulletMatch ? bulletMatch[1] : (ordered?.[1] ?? "");
-
-  // Calculate marker end position (where content starts)
-  let markerEnd: number;
-  if (bulletMatch) {
-    markerEnd = line.from + indent.length + bulletMatch[2].length + 1; // +1 for the space after marker
-  } else {
-    markerEnd = line.from + indent.length + (ordered?.[2].length ?? 0) + (ordered?.[3].length ?? 0);
-  }
+  const markerInfo = getListMarkerInfo(doc, listItem, line);
+  if (!markerInfo) return false;
 
   // Check if the item content is empty (just the marker with no text after)
-  const contentAfterMarker = lineText.slice(markerEnd - line.from).trim();
+  const contentAfterMarker = lineText.slice(markerInfo.contentStart - line.from).trim();
 
   if (contentAfterMarker.length === 0) {
     // Empty item: remove the entire line (including the newline before it if possible)
@@ -373,13 +417,12 @@ function enterInListItem(view: EditorView): boolean {
   const textAfterCursor = doc.sliceString(cursorPos, line.to);
 
   // Build the new line marker
-  let newMarker: string;
-  if (bulletMatch) {
-    newMarker = indent + bulletMatch[2] + " ";
-  } else {
-    const num = parseInt(ordered?.[2] ?? "1", 10);
-    newMarker = indent + String(num + 1) + (ordered?.[3] ?? ". ");
-  }
+  const newMarker = (
+    markerInfo.orderedNumber !== undefined &&
+    markerInfo.orderedDelimiter !== undefined
+  )
+    ? `${markerInfo.indent}${markerInfo.orderedNumber + 1}${markerInfo.orderedDelimiter} `
+    : `${markerInfo.indent}${markerInfo.marker} `;
 
   const newLine = "\n" + newMarker + textAfterCursor;
 
@@ -415,21 +458,9 @@ function backspaceAtListItemStart(view: EditorView): boolean {
   const line = doc.lineAt(cursorPos);
   const lineText = line.text;
 
-  // Find the marker on this line
-  const bulletMatch = lineText.match(/^(\s*)([-*+])\s/);
-  const orderedMatch = lineText.match(/^(\s*)(\d+)[.)]\s/);
-
-  if (!bulletMatch && !orderedMatch) return false;
-
-  // Calculate where the content starts (after the marker)
-  let contentStart: number;
-  if (bulletMatch) {
-    contentStart = line.from + bulletMatch[0].length;
-  } else {
-    const fullMatch = lineText.match(/^(\s*\d+[.)]\s)/);
-    if (!fullMatch) return false;
-    contentStart = line.from + fullMatch[0].length;
-  }
+  const markerInfo = getListMarkerInfo(doc, listItem, line);
+  if (!markerInfo) return false;
+  const contentStart = markerInfo.contentStart;
 
   // Only trigger if cursor is exactly at content start (right after marker)
   if (cursorPos !== contentStart) return false;
