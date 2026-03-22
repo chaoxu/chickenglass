@@ -578,4 +578,183 @@ body {
 /* Fence guide lines — no visual styling here; box-shadow is applied per depth
  * level via cf-fence-d1..d4 in block-theme.ts. This class exists as a common
  * hook for all depth levels (used in fence-guide.ts). */
-==
+
+/* ── Coflat search panel (in-document find & replace) ──────────────────────
+ * Custom CM6 panel replacing the stock search UI. Uses --cf-* design tokens
+ * for consistent look with the rest of the app. */
+
+.cf-search-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cf-spacing-xs);
+  padding: var(--cf-spacing-sm) var(--cf-spacing-md);
+  background: var(--cf-bg);
+  border-bottom: 1px solid var(--cf-border);
+  font-family: var(--cf-ui-font);
+  font-size: var(--cf-ui-font-size-sm);
+  color: var(--cf-fg);
+}
+
+.cf-search-toggle-replace {
+  align-self: center;
+  background: none;
+  border: none;
+  color: var(--cf-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+  line-height: 1;
+  border-radius: var(--cf-border-radius);
+  flex-shrink: 0;
+}
+
+.cf-search-toggle-replace:hover {
+  color: var(--cf-fg);
+  background: var(--cf-hover);
+}
+
+.cf-search-row {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-spacing-xs);
+  flex-wrap: nowrap;
+}
+
+.cf-search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 160px;
+  max-width: 280px;
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-border-radius);
+  background: var(--cf-bg);
+  transition: border-color var(--cf-transition);
+}
+
+.cf-search-input-wrap:focus-within {
+  border-color: var(--cf-accent);
+}
+
+.cf-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 4px 6px;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--cf-fg);
+}
+
+.cf-search-input::placeholder {
+  color: var(--cf-muted);
+}
+
+.cf-search-match-info {
+  flex-shrink: 0;
+  padding-right: 6px;
+  color: var(--cf-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.cf-search-toggles {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.cf-search-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--cf-border-radius);
+  background: transparent;
+  color: var(--cf-muted);
+  font-family: var(--cf-code-font);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--cf-transition);
+  user-select: none;
+}
+
+.cf-search-toggle:hover {
+  background: var(--cf-hover);
+  color: var(--cf-fg);
+}
+
+.cf-search-toggle-active {
+  background: var(--cf-active);
+  color: var(--cf-fg);
+  border-color: var(--cf-border);
+}
+
+.cf-search-nav {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.cf-search-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-border-radius);
+  background: var(--cf-bg);
+  color: var(--cf-fg);
+  font-family: var(--cf-ui-font);
+  font-size: var(--cf-ui-font-size-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--cf-transition);
+  user-select: none;
+}
+
+.cf-search-action:hover {
+  background: var(--cf-hover);
+}
+
+.cf-search-close {
+  border: none;
+  background: transparent;
+  color: var(--cf-muted);
+  font-size: 16px;
+  margin-left: auto;
+}
+
+.cf-search-close:hover {
+  color: var(--cf-fg);
+  background: var(--cf-hover);
+}
+
+.cf-replace-row {
+  margin-top: var(--cf-spacing-xs);
+}
+
+.cf-search-replace-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* Stack the search and replace rows when the toggle-replace button is present */
+.cf-search-panel {
+  flex-wrap: wrap;
+}
+
+/* Reset the default CM6 search panel chrome — our panel sits inside .cm-panel */
+.cm-panel.cm-search {
+  padding: 0;
+  background: none;
+}
