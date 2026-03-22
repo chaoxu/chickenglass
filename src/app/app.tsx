@@ -16,7 +16,6 @@ import { SettingsDialog } from "./components/settings-dialog";
 import { AboutDialog } from "./components/about-dialog";
 import { ShortcutsDialog } from "./components/shortcuts-dialog";
 import { GotoLineDialog } from "./components/goto-line-dialog";
-// Breadcrumbs needs editor scroll position — TODO wire once EditorPane exposes scrollTop
 import { SymbolPanel } from "./components/symbol-panel";
 import { useTheme } from "./hooks/use-theme";
 import { useSettings } from "./hooks/use-settings";
