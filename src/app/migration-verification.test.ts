@@ -619,3 +619,17 @@ describe("#283 — backend command module decomposition", () => {
     expect(fileExists("src-tauri/src/commands/shell.rs")).toBe(true);
   });
 });
+
+describe("#281 — useEditor internal hook decomposition", () => {
+  it("document services hook exists", async () => {
+    const mod = await import("./hooks/use-editor-document-services");
+    expect(mod.useEditorDocumentServices).toBeDefined();
+  });
+
+  it("theme sync and debug bridge hooks exist", async () => {
+    const themeMod = await import("./hooks/use-editor-theme-sync");
+    const debugMod = await import("./hooks/use-editor-debug-bridge");
+    expect(themeMod.useEditorThemeSync).toBeDefined();
+    expect(debugMod.useEditorDebugBridge).toBeDefined();
+  });
+});
