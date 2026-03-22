@@ -68,16 +68,18 @@ export async function loadBibliography(
         () => new CslProcessor(entries, cslXml),
         { category: "citations", detail: cslPath || bibPath },
       );
+      if (!view.dom.isConnected) return;
       try {
         view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor }) });
-      } catch {
-        // view destroyed
+      } catch (err) {
+        if (view.dom?.isConnected) console.error("Bibliography dispatch error:", err);
       }
-    } catch {
+    } catch (err) {
+      if (!view.dom.isConnected) return;
       try {
         view.dispatch({ effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) });
-      } catch {
-        // view destroyed
+      } catch (dispatchErr) {
+        if (view.dom?.isConnected) console.error("Bibliography dispatch error:", dispatchErr);
       }
     }
   }, bibPath);
@@ -134,12 +136,13 @@ export function useBibliography(options: UseBibliographyOptions): UseBibliograph
       lastCslPathRef.current = cslPath;
 
       if (!bibPath) {
+        if (!view.dom.isConnected) return;
         try {
           view.dispatch({
             effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }),
           });
-        } catch {
-          // view destroyed
+        } catch (err) {
+          if (view.dom?.isConnected) console.error("Bibliography dispatch error:", err);
         }
       } else {
         void loadBibliography(docPath, bibPath, cslPath, fs, view);
