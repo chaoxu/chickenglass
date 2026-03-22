@@ -69,11 +69,6 @@ describe("inline math with $", () => {
     expect(nodes[1].to).toBe(3);
   });
 
-  it("does not parse $$ as inline math", () => {
-    const nodes = findNodes("$$x$$", "InlineMath");
-    expect(nodes).toHaveLength(0);
-  });
-
   it("handles backslash escapes inside $ math", () => {
     const nodes = findNodes("$a\\$b$", "InlineMath");
     // The \$ inside should be escaped, matching the outer $
@@ -94,75 +89,11 @@ describe("both inline syntaxes produce the same node type", () => {
   });
 });
 
-describe("display math with \\[\\]", () => {
-  it("parses \\[x^2\\] as DisplayMath", () => {
-    const nodes = findNodes("\\[x^2\\]", "DisplayMath");
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0].from).toBe(0);
-    expect(nodes[0].to).toBe(7);
-  });
-
-  it("produces DisplayMathMark nodes for delimiters", () => {
-    const nodes = findNodes("\\[x\\]", "DisplayMathMark");
-    expect(nodes).toHaveLength(2);
-    expect(nodes[0].from).toBe(0);
-    expect(nodes[0].to).toBe(2);
-    expect(nodes[1].from).toBe(3);
-    expect(nodes[1].to).toBe(5);
-  });
-
-  it("handles multi-line display math", () => {
-    const text = "\\[\na + b\n\\]";
-    const nodes = findNodes(text, "DisplayMath");
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0].from).toBe(0);
-    expect(nodes[0].to).toBe(text.indexOf("\\]") + 2);
-  });
-});
-
-describe("display math with $$", () => {
-  it("parses $$x^2$$ as DisplayMath", () => {
-    const nodes = findNodes("$$x^2$$", "DisplayMath");
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0].from).toBe(0);
-    expect(nodes[0].to).toBe(7);
-  });
-
-  it("handles multi-line $$ display math", () => {
-    const text = "$$\na + b\n$$";
-    const nodes = findNodes(text, "DisplayMath");
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0].from).toBe(0);
-    expect(nodes[0].to).toBe(text.lastIndexOf("$$") + 2);
-  });
-
-  it("produces DisplayMathMark for $$ delimiters", () => {
-    const nodes = findNodes("$$x$$", "DisplayMathMark");
-    expect(nodes).toHaveLength(2);
-  });
-});
-
-describe("both display syntaxes produce the same node type", () => {
-  it("\\[x\\] and $$x$$ both produce DisplayMath", () => {
-    const backslashNodes = findNodes("\\[x\\]", "DisplayMath");
-    const dollarNodes = findNodes("$$x$$", "DisplayMath");
-    expect(backslashNodes).toHaveLength(1);
-    expect(dollarNodes).toHaveLength(1);
-    expect(backslashNodes[0].name).toBe(dollarNodes[0].name);
-  });
-});
-
 describe("escaped backslash does NOT trigger math parsing", () => {
   it("\\\\( does not parse as inline math", () => {
     // \\( in source means an escaped backslash followed by literal (
     const text = "\\\\(x^2\\\\)";
     const inlineMath = findNodes(text, "InlineMath");
     expect(inlineMath).toHaveLength(0);
-  });
-
-  it("\\\\[ does not parse as display math", () => {
-    const text = "\\\\[x^2\\\\]";
-    const displayMath = findNodes(text, "DisplayMath");
-    expect(displayMath).toHaveLength(0);
   });
 });

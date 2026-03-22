@@ -1,15 +1,21 @@
 import { describe, test, expect } from "vitest";
 import { parser } from "@lezer/markdown";
 import { mathExtension } from "./math-backslash";
+import { equationLabelExtension } from "./equation-label";
 import { fencedDiv } from "./fenced-div";
 import { removeIndentedCode } from "./remove-indented-code";
 
-const mathParser = parser.configure([removeIndentedCode, mathExtension]);
+const mathParser = parser.configure([
+  removeIndentedCode,
+  mathExtension,
+  equationLabelExtension,
+]);
 
 /** Parser with both math and fenced divs for integration tests. */
 const fullParser = parser.configure([
   removeIndentedCode,
   mathExtension,
+  equationLabelExtension,
   fencedDiv,
 ]);
 

@@ -231,13 +231,15 @@ const dollarDisplayMathWithLabel: BlockParser = {
 };
 
 /**
- * Markdown extension that adds equation label support to display math blocks.
+ * Canonical block parsers for ALL display math (`$$...$$` and `\[...\]`).
  *
- * This extension replaces the display math block parsers from `mathExtension`
- * with versions that detect trailing `{#eq:...}` labels. It must be used
- * alongside `mathExtension` (which it overrides by parser name).
+ * Both plain display math and labeled display math (`{#eq:...}`) are handled
+ * here. Use alongside `mathExtension` (from `math-backslash.ts`), which
+ * provides the node type definitions and inline math parsers.
  *
  * Supported syntax:
+ *   $$ x^2 $$
+ *   \[ x^2 \]
  *   $$ x^2 $$ {#eq:quadratic}
  *   \[ x^2 \] {#eq:quadratic}
  *   $$

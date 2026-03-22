@@ -19,7 +19,7 @@ function createMathView(doc: string, cursorPos?: number): EditorView {
     doc,
     selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
     extensions: [
-      markdown({ extensions: [mathExtension] }),
+      markdown({ extensions: [mathExtension, equationLabelExtension] }),
       frontmatterField,
       mathMacrosField,
     ],
