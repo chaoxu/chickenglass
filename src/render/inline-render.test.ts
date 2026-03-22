@@ -227,3 +227,49 @@ describe("renderInlineMarkdown — mixed content", () => {
     expect(container.textContent).toContain("and");
   });
 });
+
+describe("renderInlineMarkdown — strikethrough", () => {
+  it("renders ~~text~~ as <del>", () => {
+    const html = render("~~deleted~~");
+    expect(html).toContain("<del>");
+    expect(html).toContain("deleted");
+  });
+});
+
+describe("renderInlineMarkdown — highlight", () => {
+  it("renders ==text== as <mark>", () => {
+    const html = render("==highlighted==");
+    expect(html).toContain("<mark>");
+    expect(html).toContain("highlighted");
+  });
+});
+
+describe("renderInlineMarkdown — inline code", () => {
+  it("renders `code` as <code>", () => {
+    const html = render("`code`");
+    expect(html).toContain("<code>");
+    expect(html).toContain("code");
+  });
+});
+
+describe("renderInlineMarkdown — nested emphasis", () => {
+  it("renders bold nested inside italic", () => {
+    const html = render("*text with **bold** inside*");
+    expect(html).toContain("<em>");
+    expect(html).toContain("<strong>");
+  });
+
+  it("renders bold inside parentheses (issue #260 scenario)", () => {
+    const html = render("Theorem 1 (**3SUM**)");
+    expect(html).toContain("<strong>");
+    expect(html).toContain("3SUM");
+  });
+});
+
+describe("renderInlineMarkdown — escape sequences", () => {
+  it("does not render escaped asterisks as italic", () => {
+    const html = render("\\*not italic\\*");
+    expect(html).not.toContain("<em>");
+    expect(html).toContain("*not italic*");
+  });
+});
