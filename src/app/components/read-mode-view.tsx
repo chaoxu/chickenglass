@@ -173,7 +173,11 @@ export function ReadModeView({
     };
   }, [applyLineBreakingCb]);
 
-  // Restore scroll position on mount
+  useEffect(() => {
+    didRestoreScroll.current = false;
+  }, [htmlContent]);
+
+  // Restore scroll position after each document render.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || didRestoreScroll.current) return;
@@ -181,7 +185,7 @@ export function ReadModeView({
     if (scrollTop !== undefined && scrollTop > 0) {
       el.scrollTop = scrollTop;
     }
-  }, [scrollTop]);
+  }, [htmlContent, scrollTop]);
 
   // Apply Hyphenopoly soft hyphens to text nodes after HTML renders.
   // Runs after each htmlContent change. Math (.katex) and code subtrees

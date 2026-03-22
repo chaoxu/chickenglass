@@ -11,7 +11,9 @@ import type { FileSystem } from "../file-manager";
 import type { Tab } from "../tab-bar";
 import { isTauri } from "../tauri-fs";
 import { basename } from "../lib/utils";
+import { toProjectRelativePathCommand } from "../tauri-client/fs";
 import { measureAsync, withPerfOperation } from "../perf";
+import { applySaveAsResult } from "../editor-session-save";
 import {
   activateSessionTab,
   closeSessionTab,
@@ -318,8 +320,24 @@ export function useEditorSession({
           filters: [{ name: "Markdown", extensions: ["md"] }],
         });
         if (!savePath) return;
-        await fs.writeFile(savePath, doc);
-        addRecentFile(savePath);
+        const relativePath = await toProjectRelativePathCommand(savePath);
+        const exists = await fs.exists(relativePath);
+        if (exists) {
+          await fs.writeFile(relativePath, doc);
+        } else {
+          await fs.createFile(relativePath, doc);
+        }
+        commitSessionState(applySaveAsResult({
+          state: sessionStateRef.current,
+          buffers: buffers.current,
+          liveDocs: liveDocs.current,
+          oldPath: path,
+          newPath: relativePath,
+          doc,
+        }));
+        setEditorDoc(doc);
+        addRecentFile(relativePath);
+        await refreshTree();
       } catch {
         // Save dialog failed or was cancelled.
       }
@@ -333,7 +351,7 @@ export function useEditorSession({
     anchor.download = basename(path);
     anchor.click();
     URL.revokeObjectURL(url);
-  }, [addRecentFile, fs]);
+  }, [addRecentFile, commitSessionState, fs, refreshTree]);
 
   return {
     openTabs,

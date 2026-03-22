@@ -43,8 +43,10 @@ export class FileWatcher {
   private readonly config: FileWatcherConfig;
   private unlisten: UnlistenFn | null = null;
   private notificationBar: HTMLElement | null = null;
-  /** Tracks paths with pending reload notifications to avoid duplicates. */
-  private readonly pendingNotifications = new Set<string>();
+  /** Tracks dirty files waiting for user action. */
+  private readonly pendingNotifications: string[] = [];
+  /** Path currently shown in the notification bar. */
+  private activeNotificationPath: string | null = null;
 
   constructor(config: FileWatcherConfig) {
     this.config = config;
@@ -78,7 +80,8 @@ export class FileWatcher {
     }
 
     this.dismissNotification();
-    this.pendingNotifications.clear();
+    this.pendingNotifications.length = 0;
+    this.activeNotificationPath = null;
   }
 
   /** Handle a file-changed event from the backend. */
@@ -97,15 +100,22 @@ export class FileWatcher {
     }
 
     // File is dirty — show notification bar
-    if (!this.pendingNotifications.has(relativePath)) {
-      this.pendingNotifications.add(relativePath);
-      this.showNotification(relativePath);
+    if (
+      this.activeNotificationPath !== relativePath &&
+      !this.pendingNotifications.includes(relativePath)
+    ) {
+      this.pendingNotifications.push(relativePath);
+      this.showNextNotification();
     }
   }
 
-  /** Show a notification bar asking the user to reload a dirty file. */
-  private showNotification(path: string): void {
-    // Remove any existing notification bar
+  /** Show the next pending notification, if no file is currently active. */
+  private showNextNotification(): void {
+    if (this.activeNotificationPath !== null) return;
+    const path = this.pendingNotifications[0];
+    if (!path) return;
+
+    this.activeNotificationPath = path;
     this.dismissNotification();
 
     const bar = document.createElement("div");
@@ -121,9 +131,9 @@ export class FileWatcher {
     yesBtn.className = "file-watcher-btn file-watcher-btn-yes";
     yesBtn.textContent = "Yes";
     yesBtn.addEventListener("click", () => {
-      this.config.reloadFile(path);
-      this.pendingNotifications.delete(path);
-      this.dismissNotification();
+      void this.config.reloadFile(path).finally(() => {
+        this.resolveNotification(path);
+      });
     });
     bar.appendChild(yesBtn);
 
@@ -131,13 +141,25 @@ export class FileWatcher {
     noBtn.className = "file-watcher-btn file-watcher-btn-no";
     noBtn.textContent = "No";
     noBtn.addEventListener("click", () => {
-      this.pendingNotifications.delete(path);
-      this.dismissNotification();
+      this.resolveNotification(path);
     });
     bar.appendChild(noBtn);
 
     this.notificationBar = bar;
     this.config.container.prepend(bar);
+  }
+
+  private resolveNotification(path: string): void {
+    if (this.activeNotificationPath !== path) return;
+    this.dismissNotification();
+    this.activeNotificationPath = null;
+    if (this.pendingNotifications[0] === path) {
+      this.pendingNotifications.shift();
+    } else {
+      const index = this.pendingNotifications.indexOf(path);
+      if (index >= 0) this.pendingNotifications.splice(index, 1);
+    }
+    this.showNextNotification();
   }
 
   /** Dismiss the current notification bar. */

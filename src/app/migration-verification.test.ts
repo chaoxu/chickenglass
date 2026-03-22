@@ -867,9 +867,9 @@ describe("#317 — typed frontend Tauri client", () => {
     const fileWatcher = fileText("src/app/file-watcher.ts");
 
     expect(tauriFs).toContain('./tauri-client/fs');
-    expect(imageInsert).toContain("../app/tauri-client/fs");
     expect(fileWatcher).toContain("./tauri-client/watch");
     expect(imageInsert).not.toContain('@tauri-apps/api/core');
+    expect(imageInsert).not.toContain("@tauri-apps/plugin-dialog");
     expect(fileWatcher).not.toContain('invokeWithPerf("watch_directory"');
     expect(fileWatcher).not.toContain('invokeWithPerf("unwatch_directory"');
   });

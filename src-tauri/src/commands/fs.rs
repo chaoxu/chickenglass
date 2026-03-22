@@ -198,46 +198,6 @@ pub fn delete_file(
     })
 }
 
-/// Copy a file from an absolute source path into the project root.
-#[command]
-pub fn copy_file_to_project(
-    root: State<'_, ProjectRoot>,
-    perf: State<'_, PerfState>,
-    source: String,
-    dest: String,
-) -> Result<(), String> {
-    measure_command(
-        &perf,
-        "tauri.copy_file_to_project",
-        "tauri.fs.copy_file_to_project",
-        "tauri",
-        Some(&dest),
-        || {
-            let project_root = current_project_root(&root)?;
-            let source_path = std::path::PathBuf::from(&source);
-
-            if !source_path.is_absolute() {
-                return Err(format!("Source path must be absolute: {}", source));
-            }
-            if !source_path.exists() {
-                return Err(format!("Source file not found: {}", source));
-            }
-
-            let full_dest = resolve_project_path(&project_root, &dest)?;
-            if let Some(parent) = full_dest.parent() {
-                if !parent.exists() {
-                    fs::create_dir_all(parent)
-                        .map_err(|e| format!("Failed to create directories: {}", e))?;
-                }
-            }
-
-            fs::copy(&source_path, &full_dest)
-                .map_err(|e| format!("Failed to copy '{}' to '{}': {}", source, dest, e))?;
-            Ok(())
-        },
-    )
-}
-
 /// Write binary data (received as base64) to a file within the project root.
 #[command]
 pub fn write_file_binary(

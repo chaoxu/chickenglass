@@ -45,6 +45,6 @@ export function writeFileBinaryCommand(path: string, dataBase64: string): Promis
   return invokeWithPerf("write_file_binary", { path, dataBase64 });
 }
 
-export function copyFileToProjectCommand(source: string, dest: string): Promise<void> {
-  return invokeWithPerf("copy_file_to_project", { source, dest });
+export function toProjectRelativePathCommand(path: string): Promise<string> {
+  return invokeWithPerf<string>("to_project_relative_path", { path });
 }
