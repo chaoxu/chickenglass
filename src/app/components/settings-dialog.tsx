@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import type { Settings, ExportFormat } from "../lib/types";
-import type { Theme } from "../theme-manager";
+import type { Settings, ExportFormat, Theme } from "../lib/types";
 import { cn } from "../lib/utils";
 import { builtinThemes } from "../themes";
 import { themePresets, themePresetKeys } from "../../editor/theme-config";

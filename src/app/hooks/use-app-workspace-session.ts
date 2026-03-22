@@ -38,6 +38,8 @@ export interface AppWorkspaceSessionController {
 export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionController {
   const { settings, updateSetting } = useSettings();
   const { theme, setTheme, resolvedTheme } = useTheme(
+    settings.theme,
+    (next) => { updateSetting("theme", next); },
     settings.themeName,
     settings.customCss,
     settings.writingTheme,

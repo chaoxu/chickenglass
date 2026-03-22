@@ -2,16 +2,20 @@
  * useTheme — React hook for Light / Dark / System theme management,
  * writing theme (CSS variable overrides), and user custom CSS.
  *
+ * Theme state is owned by useSettings (persisted in the unified "cf-settings"
+ * localStorage key). This hook is purely a side-effect applier: it reads the
+ * theme value passed in from settings and applies DOM changes (data-theme
+ * attribute, CSS variables, custom CSS injection).
+ *
  * - Sets `data-theme` on `<html>` so CSS custom properties pick it up.
  * - System mode follows `prefers-color-scheme` via matchMedia listener.
- * - Persists choice in localStorage under key "cf-theme".
  * - Applies writing theme CSS variable overrides on `document.documentElement`.
  * - Injects user custom CSS via a managed `<style>` element.
  * - Guards matchMedia and localStorage access for test environments.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { loadTheme, saveTheme, type Theme } from "../theme-manager";
+import { useState, useEffect, useRef } from "react";
+import type { Theme } from "../theme-manager";
 import { getThemeById, type WritingTheme } from "../themes";
 import { themePresets, applyThemePreset, clearThemePreset } from "../../editor/theme-config";
 
@@ -74,11 +78,24 @@ export interface UseThemeReturn {
   resolvedTheme: ResolvedTheme;
 }
 
-export function useTheme(themeName?: string, customCss?: string, writingTheme?: string): UseThemeReturn {
-  // Single lazy initializer: read localStorage once and derive both states.
-  const [theme, setThemeState] = useState<Theme>(loadTheme);
+/**
+ * Apply theme side effects based on settings state.
+ *
+ * @param theme - Light/dark/system preference from settings
+ * @param onThemeChange - Callback to persist theme changes (delegates to updateSetting)
+ * @param themeName - Writing theme ID for CSS variable overrides
+ * @param customCss - User custom CSS to inject
+ * @param writingTheme - Writing preset ID for typography
+ */
+export function useTheme(
+  theme: Theme,
+  onThemeChange: (next: Theme) => void,
+  themeName?: string,
+  customCss?: string,
+  writingTheme?: string,
+): UseThemeReturn {
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(
-    () => resolveTheme(loadTheme()),
+    () => resolveTheme(theme),
   );
 
   // Track previously applied CSS variable keys so we can clear them.
@@ -105,13 +122,13 @@ export function useTheme(themeName?: string, customCss?: string, writingTheme?: 
 
   // Apply writing theme CSS variable overrides whenever themeName changes.
   useEffect(() => {
-    const writingTheme = getThemeById(themeName ?? "default");
-    applyThemeVariables(writingTheme, prevVariablesRef);
+    const wt = getThemeById(themeName ?? "default");
+    applyThemeVariables(wt, prevVariablesRef);
 
     // If the writing theme declares itself as dark/light, override the
     // light/dark toggle for non-default themes.
-    if (writingTheme.id !== "default") {
-      const resolved: ResolvedTheme = writingTheme.dark ? "dark" : "light";
+    if (wt.id !== "default") {
+      const resolved: ResolvedTheme = wt.dark ? "dark" : "light";
       setResolvedTheme(resolved);
       applyTheme(resolved);
     }
@@ -140,10 +157,5 @@ export function useTheme(themeName?: string, customCss?: string, writingTheme?: 
     return () => { applyCustomCss(""); };
   }, [customCss]);
 
-  const setTheme = useCallback((next: Theme) => {
-    saveTheme(next);
-    setThemeState(next);
-  }, []);
-
-  return { theme, setTheme, resolvedTheme };
+  return { theme, setTheme: onThemeChange, resolvedTheme };
 }

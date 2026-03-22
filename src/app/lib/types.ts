@@ -1,8 +1,10 @@
 // Re-export canonical types from their source modules.
 export type { Tab } from "../tab-bar";
 export type { EditorMode } from "../../editor/editor";
+export type { Theme } from "../theme-manager";
 
 import type { EditorMode } from "../../editor/editor";
+import type { Theme } from "../theme-manager";
 
 export type ExportFormat = "pdf" | "latex" | "html";
 
@@ -17,7 +19,7 @@ export interface Settings {
   /** @deprecated Use `enabledPlugins["spellcheck"]` instead. Kept for migration. */
   spellCheck: boolean;
   editorMode: EditorMode;
-  theme: string;
+  theme: Theme;
   defaultExportFormat: ExportFormat;
   /** Per-plugin enabled/disabled overrides. Keys are plugin IDs, values are booleans. */
   enabledPlugins: Record<string, boolean>;

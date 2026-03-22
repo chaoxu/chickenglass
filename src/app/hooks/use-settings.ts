@@ -30,6 +30,13 @@ const DEFAULT_SETTINGS: Settings = {
   customCss: "",
 };
 
+/** Key used by the legacy standalone theme-manager. */
+const LEGACY_THEME_KEY = "cf-theme";
+
+function isValidTheme(value: unknown): value is Settings["theme"] {
+  return value === "light" || value === "dark" || value === "system";
+}
+
 function loadSettings(): Settings {
   const parsed = readLocalStorage<Partial<Settings>>(STORAGE_KEY, {});
   const loaded = { ...DEFAULT_SETTINGS, ...parsed };
@@ -37,6 +44,27 @@ function loadSettings(): Settings {
   // Migrate legacy spellCheck boolean into enabledPlugins
   if (loaded.spellCheck !== undefined && loaded.enabledPlugins?.spellcheck === undefined) {
     loaded.enabledPlugins = { ...loaded.enabledPlugins, spellcheck: loaded.spellCheck };
+  }
+
+  // Migrate legacy standalone theme key ("cf-theme") into unified settings.
+  // Only applies when settings don't already have a non-default theme and the
+  // legacy key exists.
+  if (loaded.theme === "system" && !parsed.theme) {
+    try {
+      const legacy = localStorage.getItem(LEGACY_THEME_KEY);
+      if (isValidTheme(legacy)) {
+        loaded.theme = legacy;
+      }
+      // Clean up legacy key after migration
+      localStorage.removeItem(LEGACY_THEME_KEY);
+    } catch {
+      // localStorage unavailable
+    }
+  }
+
+  // Validate theme value in case of corrupt data
+  if (!isValidTheme(loaded.theme)) {
+    loaded.theme = "system";
   }
 
   return loaded;
