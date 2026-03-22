@@ -121,12 +121,13 @@ export class BibliographyWidget extends RenderWidget {
         list.appendChild(div);
       }
     } else {
-      // Fallback: plain text format
-      for (const entry of this.entries) {
+      // Fallback: plain text format with numbering
+      for (let i = 0; i < this.entries.length; i++) {
+        const entry = this.entries[i];
         const div = document.createElement("div");
         div.className = "cg-bibliography-entry";
         div.id = `bib-${entry.id}`;
-        div.textContent = formatBibEntry(entry);
+        div.textContent = `[${i + 1}] ${formatBibEntry(entry)}`;
         list.appendChild(div);
       }
     }
