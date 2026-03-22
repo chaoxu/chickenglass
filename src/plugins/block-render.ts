@@ -9,23 +9,24 @@
 import type { BlockAttrs, BlockDecorationSpec } from "./plugin-types";
 
 /**
- * Build a standard block header string.
+ * Build a standard block header label string (widget text only).
  *
- * Format: "Title N (User Title)" where N and user title are optional.
- * Examples: "Theorem 1", "Theorem 1 (Main)", "Proof", "Proof (of Theorem 1)".
+ * Format: "Title N" where N is optional.
+ * Examples: "Theorem 1", "Proof", "Definition 3".
+ *
+ * NOTE: This does NOT include the user's title text (e.g., "(Main)").
+ * Title text stays as editable document content where inline plugins
+ * render math/bold/etc. See CLAUDE.md "Block headers must behave like headings."
+ * The CSS separator (--cf-block-title-separator) is added via ::after.
  */
 export function formatBlockHeader(
   displayTitle: string,
   attrs: BlockAttrs,
 ): string {
-  const parts = [displayTitle];
   if (attrs.number !== undefined) {
-    parts.push(` ${attrs.number}`);
+    return `${displayTitle} ${attrs.number}`;
   }
-  if (attrs.title) {
-    parts.push(` (${attrs.title})`);
-  }
-  return parts.join("");
+  return displayTitle;
 }
 
 /**

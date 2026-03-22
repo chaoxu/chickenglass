@@ -50,7 +50,7 @@ describe("formatBlockHeader", () => {
       number: 3,
       title: "Main Result",
     });
-    expect(result).toBe("Theorem 3 (Main Result)");
+    expect(result).toBe("Theorem 3");
   });
 
   it("formats numbered block without title", () => {
@@ -66,7 +66,7 @@ describe("formatBlockHeader", () => {
       type: "proof",
       title: "of Theorem 1",
     });
-    expect(result).toBe("Proof (of Theorem 1)");
+    expect(result).toBe("Proof");
   });
 
   it("formats unnumbered block without title", () => {
@@ -148,7 +148,7 @@ describe("proofPlugin", () => {
       type: "proof",
       title: "of Theorem 1",
     });
-    expect(spec.header).toBe("Proof (of Theorem 1)");
+    expect(spec.header).toBe("Proof");
     expect(spec.className).toBe("cf-block cf-block-proof");
   });
 
@@ -170,7 +170,7 @@ describe("definitionPlugin", () => {
       number: 1,
       title: "Continuity",
     });
-    expect(spec.header).toBe("Definition 1 (Continuity)");
+    expect(spec.header).toBe("Definition 1");
     expect(spec.className).toBe("cf-block cf-block-definition");
   });
 });
@@ -204,7 +204,7 @@ describe("examplePlugin", () => {
       type: "example",
       title: "Cantor's diagonal",
     });
-    expect(spec.header).toBe("Example (Cantor's diagonal)");
+    expect(spec.header).toBe("Example");
   });
 });
 
@@ -220,7 +220,7 @@ describe("algorithmPlugin", () => {
       number: 2,
       title: "Dijkstra",
     });
-    expect(spec.header).toBe("Algorithm 2 (Dijkstra)");
+    expect(spec.header).toBe("Algorithm 2");
     expect(spec.className).toBe("cf-block cf-block-algorithm");
   });
 });
@@ -457,7 +457,7 @@ describe("rendering", () => {
       title: "Fermat's Last",
     });
     expect(spec.className).toBe("cf-block cf-block-theorem");
-    expect(spec.header).toBe("Theorem 1 (Fermat's Last)");
+    expect(spec.header).toBe("Theorem 1");
   });
 
   it("lemma renders with number", () => {
@@ -476,7 +476,7 @@ describe("rendering", () => {
       number: 3,
       title: "Key step",
     });
-    expect(spec.header).toBe("Proposition 3 (Key step)");
+    expect(spec.header).toBe("Proposition 3");
   });
 
   it("conjecture renders with number", () => {
@@ -505,7 +505,7 @@ describe("rendering", () => {
       type: "example",
       title: "A simple case",
     });
-    expect(spec.header).toBe("Example (A simple case)");
+    expect(spec.header).toBe("Example");
   });
 
   it("algorithm renders with number", () => {

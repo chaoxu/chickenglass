@@ -49,6 +49,16 @@ export const blockThemeStyles = {
     color: "var(--cf-block-title-color)",
   },
 
+  /* Block title text: visual parentheses around the user's title via CSS.
+   * "::: {.theorem} Main Result" renders as "Theorem 1. (Main Result)".
+   * Only applied in rendered mode — source mode shows raw text without parens. */
+  ".cf-block-title::before": {
+    content: '"("',
+  },
+  ".cf-block-title::after": {
+    content: '")"',
+  },
+
   /* Fenced div nesting guides — vertical lines on the left, editing only.
      Uses inset box-shadow so the guide never shifts content layout. */
   ".cf-fence-d1": {

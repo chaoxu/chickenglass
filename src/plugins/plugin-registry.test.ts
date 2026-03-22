@@ -145,7 +145,7 @@ describe("getPluginOrFallback", () => {
     expect(fallback).toBeDefined();
     const spec = fallback!.render({ type: "hypothesis", number: 3, title: "Key" });
     expect(spec.className).toBe("cf-block cf-block-hypothesis");
-    expect(spec.header).toBe("Hypothesis 3 (Key)");
+    expect(spec.header).toBe("Hypothesis 3");
   });
 
   it("fallback uses class name as counter group (no explicit counter)", () => {
@@ -209,7 +209,7 @@ describe("pluginFromConfig", () => {
       title: "Main",
     });
     expect(spec.className).toBe("cf-block cf-block-theorem");
-    expect(spec.header).toBe("Theorem 3 (Main)");
+    expect(spec.header).toBe("Theorem 3");
   });
 
   it("render omits number when undefined", () => {
@@ -420,7 +420,7 @@ describe("createPluginRegistryField (CM6 integration)", () => {
     expect(claim).toBeDefined();
     if (!claim) throw new Error("claim plugin missing");
     const spec = claim.render({ type: "claim", number: 5, title: "Main" });
-    expect(spec.header).toBe("Claim 5 (Main)");
+    expect(spec.header).toBe("Claim 5");
     expect(spec.className).toBe("cf-block cf-block-claim");
   });
 

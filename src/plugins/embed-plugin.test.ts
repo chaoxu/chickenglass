@@ -174,7 +174,7 @@ describe("embedPlugin", () => {
       type: "embed",
       title: "My Widget",
     });
-    expect(spec.header).toBe("Embed (My Widget)");
+    expect(spec.header).toBe("Embed");
   });
 });
 
@@ -330,7 +330,7 @@ describe("gist embed block edge cases", () => {
 
   it("gist plugin renders header with title", () => {
     const spec = gistPlugin.render({ type: "gist", title: "My Snippet" });
-    expect(spec.header).toBe("Gist (My Snippet)");
+    expect(spec.header).toBe("Gist");
   });
 
   it("gist block parsed as FencedDiv in editor state", () => {

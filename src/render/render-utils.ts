@@ -80,6 +80,46 @@ export function serializeMacros(macros: Record<string, string>): string {
 export const decorationHidden = Decoration.mark({ class: "cf-hidden" });
 
 /**
+ * Heading-like marker replacement pattern.
+ *
+ * Both ATX headings and fenced div block headers follow the same principle:
+ *
+ *   1. A syntactic marker (# or ::: {.class}) is hidden/replaced when cursor is outside.
+ *   2. Content text AFTER the marker stays as normal editable document content.
+ *   3. Inline render plugins (math, bold, italic) handle the content naturally.
+ *   4. When cursor enters the marker area, the marker becomes source.
+ *
+ * THIS IS CRITICAL — DO NOT "simplify" by replacing the full line with a single widget.
+ * Doing so kills inline rendering of content text (e.g., $x^2$ won't render as KaTeX
+ * in source mode). This has regressed 3+ times. See CLAUDE.md "Block headers must
+ * behave like headings."
+ *
+ * @param markerFrom  Start of syntactic marker (# position, or ::: position)
+ * @param markerTo    End of marker (before content text, e.g., titleFrom or openFenceTo)
+ * @param cursorInside  True when cursor is in the marker's "source zone" (marker stays visible)
+ * @param widget      Widget to show when marker is hidden. Null = hide without replacement (headings).
+ *                    Widget must extend RenderWidget (sourceFrom will be set automatically).
+ * @param items       Decoration range accumulator
+ */
+export function addMarkerReplacement(
+  markerFrom: number,
+  markerTo: number,
+  cursorInside: boolean,
+  widget: RenderWidget | null,
+  items: Range<Decoration>[],
+): void {
+  if (cursorInside) return; // marker visible as source — nothing to replace
+  if (markerFrom >= markerTo) return; // degenerate range
+
+  if (widget) {
+    widget.sourceFrom = markerFrom;
+    items.push(Decoration.replace({ widget }).range(markerFrom, markerTo));
+  } else {
+    items.push(decorationHidden.range(markerFrom, markerTo));
+  }
+}
+
+/**
  * Build a DecorationSet from an array of decoration ranges.
  * Sorts by position before building (RangeSetBuilder requires sorted input).
  */

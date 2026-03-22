@@ -119,6 +119,15 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
   - Show both fences when editing a block: cursor on either fence → BOTH opening and closing `:::` visible as source. Other blocks unaffected.
   - Rich and Read mode must look the same (same CSS classes/properties).
   - Never hide source the user is editing.
+  - **Block headers must behave like headings (CRITICAL — regressed 3+ times):**
+    - `Decoration.replace` covers ONLY the fence prefix (`::: {.class}` → `titleFrom`), NOT the title text.
+    - The widget shows only the label ("**Theorem 1.**" + separator), not the title.
+    - Title text (`titleFrom → titleTo`) stays as normal editable document content.
+    - Inline render plugins (math, bold, italic) handle title content naturally — `$x^2$` renders as KaTeX.
+    - When cursor is on either fence: fence prefix becomes source (`::: {.theorem}`), but title text stays rendered. Only direct cursor contact on `$x^2$` makes it source.
+    - When cursor is off both fences: widget replaces fence prefix with rendered label.
+    - NEVER replace the full line (`openFenceFrom → titleTo`) with a single widget — this kills inline rendering in source mode.
+    - No-title case: widget replaces `openFenceFrom → openFenceTo` (nothing to split).
 - **CM6 decoration rules**:
   - `Decoration.line` for inherited CSS (font-size, line-height). `Decoration.mark` for text-only (font-weight, color).
   - `Decoration.replace` + `ignoreEvent() { return true }` + mousedown handler dispatching to `sourceFrom` for widgets.

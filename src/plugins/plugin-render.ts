@@ -29,6 +29,7 @@ import {
   editorFocusField,
   focusTracker,
   RenderWidget,
+  addMarkerReplacement,
 } from "../render/render-utils";
 import {
   addCollapsedClosingFence,
@@ -240,19 +241,31 @@ function addIncludeDecorations(
 }
 
 /** Replace the opening fence+attrs with a rendered header widget. */
+/**
+ * Add header widget decoration using the heading-like marker replacement pattern.
+ *
+ * CRITICAL: The widget replaces ONLY the fence prefix ("::: {.class}"), NOT the
+ * title text. Title text stays as editable content where inline plugins (math,
+ * bold, etc.) render naturally. See addMarkerReplacement() and CLAUDE.md
+ * "Block headers must behave like headings."
+ *
+ * DO NOT change replaceEnd to titleTo — this kills inline rendering and has
+ * regressed 3+ times.
+ */
 function addHeaderWidgetDecoration(
   div: FencedDivInfo,
   header: string,
+  cursorInside: boolean,
   macros: Record<string, string>,
   macrosKey: string,
   items: Range<Decoration>[],
 ): void {
-  const replaceEnd = div.titleTo ?? div.openFenceTo;
+  // Replace only the fence prefix, leave title text as editable content.
+  // No-title case: replaceEnd = openFenceTo (whole fence line, nothing to split).
+  // With-title case: replaceEnd = titleFrom (stop before title text).
+  const replaceEnd = div.titleFrom ?? div.openFenceTo;
   const widget = new BlockHeaderWidget(header, macros, macrosKey);
-  widget.sourceFrom = div.openFenceFrom;
-  items.push(
-    Decoration.replace({ widget }).range(div.openFenceFrom, replaceEnd),
-  );
+  addMarkerReplacement(div.openFenceFrom, replaceEnd, cursorInside, widget, items);
 }
 
 /** Replace embed block body content with an iframe widget. */
@@ -353,22 +366,22 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     const spec = plugin.render(labelAttrs);
 
     // --- Opening fence ---
-    if (cursorOnEitherFence) {
-      // Source mode: show raw ::: {.class} Title with block styling
-      // Inline math in the title still renders (Typora-style toggle)
+    // Heading-like pattern: ALWAYS apply block styling, toggle marker visibility.
+    // The widget replaces only the fence prefix (::: {.class}), NOT the title text.
+    // Title text stays as editable content — inline plugins render math/bold/etc.
+    // See CLAUDE.md "Block headers must behave like headings."
+    const headerClass = cursorOnEitherFence
+      ? `${spec.className} cf-block-source`
+      : `${spec.className} cf-block-header`;
+    items.push(Decoration.line({ class: headerClass }).range(div.from));
+    addHeaderWidgetDecoration(div, spec.header, cursorOnEitherFence, macros, macrosKey, items);
+
+    // Title text: wrap in visual parentheses via CSS mark (rendered mode only).
+    // Source mode shows the raw title without parens.
+    if (!cursorOnEitherFence && div.titleFrom !== undefined && div.titleTo !== undefined) {
       items.push(
-        Decoration.line({
-          class: `${spec.className} cf-block-source`,
-        }).range(div.from),
+        Decoration.mark({ class: "cf-block-title" }).range(div.titleFrom, div.titleTo),
       );
-    } else {
-      // Rendered mode: header widget replaces fence syntax
-      items.push(
-        Decoration.line({
-          class: `${spec.className} cf-block-header`,
-        }).range(div.from),
-      );
-      addHeaderWidgetDecoration(div, spec.header, macros, macrosKey, items);
     }
 
     // --- Closing fence ---

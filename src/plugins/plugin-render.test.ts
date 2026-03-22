@@ -164,19 +164,19 @@ describe("blockDecorationField", () => {
     expect(hasLineClassAt(specs, proofCloseLine, "cf-include-fence")).toBe(true);
   });
 
-  it("includes title in header widget replace range", () => {
+  it("header widget replaces only fence prefix, not title text", () => {
     const doc = `::: {.theorem} **Main Result**\nContent\n:::`;
     const state = createTestState(doc);
     const specs = getDecoSpecs(state);
 
-    // Widget should cover the entire opening line (including title)
+    // Widget should replace only the fence prefix, not the title text
     const widgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
     expect(widgets.length).toBe(1);
 
     const line1 = state.doc.line(1);
-    // Replace range should cover from line start to end of title
+    // Replace range should start at line start but NOT extend to end of line
     expect(widgets[0].from).toBe(line1.from);
-    expect(widgets[0].to).toBe(line1.to);
+    expect(widgets[0].to).toBeLessThan(line1.to);
   });
 
   it("does not crash on an incomplete fenced div without a closing fence", () => {

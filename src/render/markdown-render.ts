@@ -8,7 +8,7 @@ import {
 } from "@codemirror/view";
 import { type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { cursorInRange, decorationHidden } from "./render-utils";
+import { cursorInRange, decorationHidden, addMarkerReplacement } from "./render-utils";
 import { findTrailingHeadingAttributes, hasUnnumberedHeadingAttributes } from "../app/heading-ancestry";
 
 /**
@@ -142,13 +142,17 @@ class MarkdownRenderPlugin implements PluginValue {
           }
 
           // --- HeaderMark (the # symbols + trailing space) ---
+          // Uses the same marker replacement pattern as fenced div headers.
+          // See addMarkerReplacement() and CLAUDE.md "Block headers must behave like headings."
           if (node.name === "HeaderMark") {
             const end = node.to;
             const docLen = view.state.doc.length;
             const nextChar =
               end < docLen ? view.state.sliceDoc(end, end + 1) : "";
             const hideEnd = nextChar === " " ? end + 1 : end;
-            widgets.push(decorationHidden.range(node.from, hideEnd));
+            // cursorInside=false here because we only reach this code when cursor is
+            // OUTSIDE the heading (cursor inside returns early at line 129-131 above).
+            addMarkerReplacement(node.from, hideEnd, false, null, widgets);
             return;
           }
 
