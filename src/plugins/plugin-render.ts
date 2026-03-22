@@ -17,23 +17,27 @@
 import {
   type DecorationSet,
   Decoration,
-  EditorView,
 } from "@codemirror/view";
-import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
+import { type EditorState, type Extension, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { extractDivClass } from "../parser/fenced-div-attrs";
 import type { BlockAttrs } from "./plugin-types";
 import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
 import {
-  buildDecorations,
   decorationHidden,
   serializeMacros,
   editorFocusField,
-  focusEffect,
   focusTracker,
   RenderWidget,
 } from "../render/render-utils";
+import {
+  addCollapsedClosingFence,
+  addSingleLineClosingFence,
+  buildFencedBlockDecorations,
+  createFencedBlockDecorationField,
+  type FencedBlockInfo,
+} from "../render/fenced-block-core";
 import { mathMacrosField } from "../render/math-macros";
 import { MathWidget } from "../render/math-render";
 import { renderInlineMarkdown } from "../render/inline-render";
@@ -189,19 +193,17 @@ class EmbedWidget extends RenderWidget {
   }
 }
 
-interface FencedDivInfo {
+interface FencedDivInfo extends FencedBlockInfo {
   readonly from: number;
   readonly to: number;
-  readonly fenceFrom: number;
-  readonly fenceTo: number;
+  readonly openFenceFrom: number;
+  readonly openFenceTo: number;
   readonly attrFrom?: number;
   readonly attrTo?: number;
   readonly titleFrom?: number;
   readonly titleTo?: number;
   readonly closeFenceFrom: number;
   readonly closeFenceTo: number;
-  /** True when opening and closing fence are on the same line. */
-  readonly singleLine: boolean;
   readonly className: string;
   readonly id?: string;
   readonly title?: string;
@@ -220,8 +222,8 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
       let className: string | undefined;
       let id: string | undefined;
       let title: string | undefined;
-      let fenceFrom = node.from;
-      let fenceTo = node.from;
+      let openFenceFrom = node.from;
+      let openFenceTo = node.from;
       let attrFrom: number | undefined;
       let attrTo: number | undefined;
       let titleFrom: number | undefined;
@@ -237,8 +239,8 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
       // nextSibling — the closing fence may be a sibling in the parent.
       const fences = divNode.getChildren("FencedDivFence");
       if (fences.length > 0) {
-        fenceFrom = fences[0].from;
-        fenceTo = fences[0].to;
+        openFenceFrom = fences[0].from;
+        openFenceTo = fences[0].to;
       }
       let singleLine = false;
       // Determine the closing fence node
@@ -257,7 +259,7 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
         closeFenceNode.from <= state.doc.length
       ) {
         const closePos = closeFenceNode.from;
-        const openLine = state.doc.lineAt(fenceFrom);
+        const openLine = state.doc.lineAt(openFenceFrom);
         const closeLine = state.doc.lineAt(closePos);
         singleLine = openLine.number === closeLine.number;
         if (singleLine) {
@@ -279,7 +281,7 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
         }
         attrFrom = attrNode.from;
         attrTo = attrNode.to;
-        fenceTo = Math.max(fenceTo, attrNode.to);
+        openFenceTo = Math.max(openFenceTo, attrNode.to);
       }
 
       const titleNode = divNode.getChild("FencedDivTitle");
@@ -287,15 +289,15 @@ function collectFencedDivs(state: EditorState): FencedDivInfo[] {
         title = state.doc.sliceString(titleNode.from, titleNode.to).trim();
         titleFrom = titleNode.from;
         titleTo = titleNode.to;
-        fenceTo = Math.max(fenceTo, titleNode.to);
+        openFenceTo = Math.max(openFenceTo, titleNode.to);
       }
 
       if (className) {
         results.push({
           from: node.from,
           to: node.to,
-          fenceFrom,
-          fenceTo,
+          openFenceFrom,
+          openFenceTo,
           attrFrom,
           attrTo,
           titleFrom,
@@ -321,7 +323,7 @@ function addIncludeDecorations(
   items: Range<Decoration>[],
 ): void {
   // Hide the entire opening fence line
-  items.push(decorationHidden.range(div.fenceFrom, div.fenceTo));
+  items.push(decorationHidden.range(div.openFenceFrom, div.openFenceTo));
   if (div.attrFrom !== undefined && div.attrTo !== undefined) {
     items.push(decorationHidden.range(div.attrFrom, div.attrTo));
   }
@@ -334,36 +336,13 @@ function addIncludeDecorations(
   }
   // Collapse fence lines to zero height
   items.push(
-    Decoration.line({ class: "cg-include-fence" }).range(div.fenceFrom),
+    Decoration.line({ class: "cg-include-fence" }).range(div.openFenceFrom),
   );
   if (div.closeFenceFrom >= 0) {
     items.push(
       Decoration.line({ class: "cg-include-fence" }).range(div.closeFenceFrom),
     );
   }
-}
-
-/** Check whether the cursor is on the opening fence line of a fenced div. */
-function isCursorOnOpenFence(
-  state: EditorState,
-  div: FencedDivInfo,
-  focused: boolean,
-): boolean {
-  if (!focused) return false;
-  const cursor = state.selection.main;
-  const openLine = state.doc.lineAt(div.fenceFrom);
-  return cursor.from >= openLine.from && cursor.from <= openLine.to;
-}
-
-/** Check whether the cursor is on the closing fence line of a fenced div. */
-function isCursorOnCloseFence(
-  state: EditorState,
-  div: FencedDivInfo,
-  focused: boolean,
-): boolean {
-  if (!focused || div.closeFenceFrom < 0) return false;
-  const cursor = state.selection.main;
-  return cursor.from >= div.closeFenceFrom && cursor.from <= div.closeFenceTo;
 }
 
 /** Replace the opening fence+attrs with a rendered header widget. */
@@ -374,54 +353,12 @@ function addHeaderWidgetDecoration(
   macrosKey: string,
   items: Range<Decoration>[],
 ): void {
-  const replaceEnd = div.titleFrom ?? div.fenceTo;
+  const replaceEnd = div.titleFrom ?? div.openFenceTo;
   const label = div.titleFrom !== undefined ? header + " " : header;
   const widget = new BlockHeaderWidget(label, macros, macrosKey);
-  widget.sourceFrom = div.fenceFrom;
+  widget.sourceFrom = div.openFenceFrom;
   items.push(
-    Decoration.replace({ widget }).range(div.fenceFrom, replaceEnd),
-  );
-}
-
-/**
- * Hide the trailing closing fence colons on a single-line block.
- *
- * Also trims any whitespace immediately before the closing `:::`.
- */
-function addSingleLineClosingFence(
-  state: EditorState,
-  div: FencedDivInfo,
-  items: Range<Decoration>[],
-): void {
-  if (div.closeFenceFrom < 0) return;
-
-  let hideFrom = div.closeFenceFrom;
-  const lineText = state.doc.lineAt(div.closeFenceFrom).text;
-  const lineStart = state.doc.lineAt(div.closeFenceFrom).from;
-  const relPos = hideFrom - lineStart;
-  // Walk back to trim trailing whitespace before :::
-  let trimFrom = relPos;
-  while (
-    trimFrom > 0 &&
-    (lineText.charCodeAt(trimFrom - 1) === 32 ||
-      lineText.charCodeAt(trimFrom - 1) === 9)
-  ) {
-    trimFrom--;
-  }
-  hideFrom = lineStart + trimFrom;
-  items.push(decorationHidden.range(hideFrom, div.closeFenceTo));
-}
-
-/** Hide closing fence text and collapse the line to zero height for multi-line blocks. */
-function addMultiLineClosingFence(
-  div: FencedDivInfo,
-  items: Range<Decoration>[],
-): void {
-  if (div.closeFenceFrom < 0 || div.closeFenceTo < div.closeFenceFrom) return;
-
-  items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
-  items.push(
-    Decoration.line({ class: "cg-include-fence" }).range(div.closeFenceFrom),
+    Decoration.replace({ widget }).range(div.openFenceFrom, replaceEnd),
   );
 }
 
@@ -482,7 +419,7 @@ function addQedDecoration(
   const closeLine = state.doc.lineAt(div.closeFenceFrom);
   if (closeLine.number > 1) {
     const lastContentLine = state.doc.line(closeLine.number - 1);
-    if (lastContentLine.from > div.fenceFrom) {
+    if (lastContentLine.from > div.openFenceFrom) {
       items.push(
         Decoration.line({ class: "cg-block-qed" }).range(lastContentLine.from),
       );
@@ -501,24 +438,24 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const registry = state.field(pluginRegistryField);
   const counterState: BlockCounterState | undefined =
     state.field(blockCounterField, false) ?? undefined;
-  const focused = state.field(editorFocusField, false) ?? false;
-  const divs = collectFencedDivs(state);
-  const items: Range<Decoration>[] = [];
-
   const macros = state.field(mathMacrosField);
   const macrosKey = serializeMacros(macros);
   const cursor = state.selection.main;
-
-  for (const div of divs) {
+  return buildFencedBlockDecorations(state, collectFencedDivs, ({
+    state,
+    block: div,
+    focused,
+    cursorOnEitherFence,
+  }, items) => {
     const plugin = getPluginOrFallback(registry, div.className);
 
     // Include blocks are always invisible — content flows seamlessly
     if (div.className === "include") {
       addIncludeDecorations(div, items);
-      continue;
+      return;
     }
 
-    if (!plugin) continue;
+    if (!plugin) return;
 
     const isEmbed = EMBED_CLASSES.has(div.className);
 
@@ -532,13 +469,9 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
             class: `${plugin.render({ type: div.className }).className} cg-block-source`,
           }).range(div.from),
         );
-        continue;
+        return;
       }
     }
-
-    // Independent fence checks
-    const cursorOnOpen = isCursorOnOpenFence(state, div, focused);
-    const cursorOnClose = isCursorOnCloseFence(state, div, focused);
 
     const numberEntry = counterState?.byPosition.get(div.from);
     const labelAttrs: BlockAttrs = {
@@ -547,8 +480,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       number: numberEntry?.number,
     };
     const spec = plugin.render(labelAttrs);
-
-    const cursorOnEitherFence = cursorOnOpen || cursorOnClose;
 
     // --- Opening fence ---
     if (cursorOnEitherFence) {
@@ -584,13 +515,13 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     } else {
       // Rendered mode: hide the closing fence
       if (div.singleLine) {
-        addSingleLineClosingFence(state, div, items);
+        addSingleLineClosingFence(state, div.closeFenceFrom, div.closeFenceTo, items);
       } else {
-        addMultiLineClosingFence(div, items);
+        addCollapsedClosingFence(div.closeFenceFrom, div.closeFenceTo, items);
 
         // Embed blocks: replace body content with iframe widget
         if (isEmbed) {
-          const openLine = state.doc.lineAt(div.fenceFrom);
+          const openLine = state.doc.lineAt(div.openFenceFrom);
           addEmbedWidget(state, div, openLine, items);
         }
       }
@@ -600,9 +531,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     if (plugin.defaults?.qedSymbol && !cursorOnEitherFence) {
       addQedDecoration(state, div, items);
     }
-  }
-
-  return buildDecorations(items);
+  });
 }
 
 /**
@@ -611,27 +540,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
  * Uses a StateField so that line decorations (Decoration.line) and
  * mark decorations are permitted by CM6.
  */
-const blockDecorationField = StateField.define<DecorationSet>({
-  create(state) {
-    return buildBlockDecorations(state);
-  },
-
-  update(value, tr) {
-    if (
-      tr.docChanged ||
-      tr.selection ||
-      tr.effects.some((e) => e.is(focusEffect)) ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
-    ) {
-      return buildBlockDecorations(tr.state);
-    }
-    return value;
-  },
-
-  provide(field) {
-    return EditorView.decorations.from(field);
-  },
-});
+const blockDecorationField = createFencedBlockDecorationField(buildBlockDecorations);
 
 /** Exported for unit testing decoration logic without a browser. */
 export { blockDecorationField as _blockDecorationFieldForTest };

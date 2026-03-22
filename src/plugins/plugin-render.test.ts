@@ -163,4 +163,16 @@ describe("blockDecorationField", () => {
     const proofCloseLine = state.doc.line(7).from;
     expect(hasLineClassAt(specs, proofCloseLine, "cg-include-fence")).toBe(true);
   });
+
+  it("does not crash on an incomplete fenced div without a closing fence", () => {
+    const doc = [
+      "::: {.definition}",
+      "Body",
+    ].join("\n");
+
+    expect(() => {
+      const state = createTestState(doc, 0, true);
+      getDecoSpecs(state);
+    }).not.toThrow();
+  });
 });

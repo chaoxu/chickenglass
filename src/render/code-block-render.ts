@@ -21,18 +21,23 @@ import {
 import {
   type EditorState,
   type Extension,
-  type Range,
-  StateField,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
-  buildDecorations,
-  decorationHidden,
   RenderWidget,
   editorFocusField,
-  focusEffect,
   focusTracker,
 } from "./render-utils";
+import {
+  addCollapsedClosingFence,
+  buildFencedBlockDecorations,
+  createFencedBlockDecorationField,
+  findFencedBlockAt,
+  type FencedBlockInfo,
+  getLineElement,
+  isCursorOnCloseFence,
+  isCursorOnOpenFence,
+} from "./fenced-block-core";
 import { __iconNode as copyIconNode } from "lucide-react/dist/esm/icons/copy.js";
 import { __iconNode as checkIconNode } from "lucide-react/dist/esm/icons/check.js";
 
@@ -119,61 +124,13 @@ class CopyButtonWidget extends RenderWidget {
   }
 }
 
-function getLineElement(view: EditorView, pos: number): HTMLElement | null {
-  const domPos = view.domAtPos(pos);
-  let el: Node | null = domPos.node;
-  if (el.nodeType === Node.TEXT_NODE) el = el.parentNode;
-  while (el && !(el instanceof HTMLElement && el.classList.contains("cm-line"))) {
-    el = el.parentNode;
-  }
-  return el as HTMLElement | null;
-}
-
-function findCodeBlockAt(state: EditorState, pos: number): CodeBlockInfo | null {
-  for (const block of collectCodeBlocks(state)) {
-    if (pos >= block.from && pos <= block.to) return block;
-  }
-  return null;
-}
-
-interface CodeBlockInfo {
+interface CodeBlockInfo extends FencedBlockInfo {
   /** Start of the FencedCode node (opening fence line start). */
   readonly from: number;
   /** End of the FencedCode node (closing fence line end). */
   readonly to: number;
-  /** Start of opening fence line. */
-  readonly openFenceFrom: number;
-  /** End of opening fence line (including language tag). */
-  readonly openFenceTo: number;
-  /** Start of closing fence line. */
-  readonly closeFenceFrom: number;
-  /** End of closing fence line. */
-  readonly closeFenceTo: number;
   /** Language identifier (empty string if none). */
   readonly language: string;
-}
-
-/** Check whether the cursor is on the opening fence line of a fenced code block. */
-function isCursorOnOpenFence(
-  state: EditorState,
-  block: CodeBlockInfo,
-  focused: boolean,
-): boolean {
-  if (!focused) return false;
-  const cursor = state.selection.main;
-  const openLine = state.doc.lineAt(block.openFenceFrom);
-  return cursor.from >= openLine.from && cursor.from <= openLine.to;
-}
-
-/** Check whether the cursor is on the closing fence line of a fenced code block. */
-function isCursorOnCloseFence(
-  state: EditorState,
-  block: CodeBlockInfo,
-  focused: boolean,
-): boolean {
-  if (!focused) return false;
-  const cursor = state.selection.main;
-  return cursor.from >= block.closeFenceFrom && cursor.from <= block.closeFenceTo;
 }
 
 /** Extract info about FencedCode nodes from the syntax tree. */
@@ -209,6 +166,7 @@ function collectCodeBlocks(state: EditorState): CodeBlockInfo[] {
         openFenceTo,
         closeFenceFrom,
         closeFenceTo,
+        singleLine: closeFenceFrom === openFenceFrom,
         language,
       });
     },
@@ -219,19 +177,14 @@ function collectCodeBlocks(state: EditorState): CodeBlockInfo[] {
 
 /** Build decorations for all fenced code blocks. */
 function buildCodeBlockDecorations(state: EditorState): DecorationSet {
-  const focused = state.field(editorFocusField, false) ?? false;
-  const blocks = collectCodeBlocks(state);
-  const items: Range<Decoration>[] = [];
-
-  for (const block of blocks) {
-    const cursorOnOpenFence = isCursorOnOpenFence(state, block, focused);
-    const cursorOnCloseFence = isCursorOnCloseFence(state, block, focused);
-    const cursorOnEitherFence = cursorOnOpenFence || cursorOnCloseFence;
-
-    const openLine = state.doc.lineAt(block.openFenceFrom);
-    const closeLine = state.doc.lineAt(block.closeFenceFrom);
-    const bodyLineCount = closeLine.number - openLine.number - 1;
-
+  return buildFencedBlockDecorations(state, collectCodeBlocks, ({
+    state,
+    block,
+    cursorOnEitherFence,
+    openLine,
+    closeLine,
+    bodyLineCount,
+  }, items) => {
     if (cursorOnEitherFence) {
       items.push(
         Decoration.line({ class: "cg-codeblock-source cg-codeblock-source-open" })
@@ -244,8 +197,6 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
         );
       }
     } else {
-      // Replace the opening fence source with a real widget so the visible
-      // header still behaves like the underlying fence line on click.
       items.push(
         Decoration.line({
           class: "cg-codeblock-header",
@@ -272,8 +223,6 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
       }
     }
 
-    // Body lines: side borders only, bottom border stays on the closing fence
-    // when the cursor is editing either fence line.
     for (let ln = openLine.number + 1; ln < closeLine.number; ln++) {
       const line = state.doc.line(ln);
       const isLast = ln === closeLine.number - 1;
@@ -284,24 +233,16 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
       );
     }
 
-    // If no body lines, header also gets bottom border when the closing fence is hidden.
     if (bodyLineCount === 0 && !cursorOnEitherFence) {
       items.push(
         Decoration.line({ class: "cg-codeblock-last" }).range(block.openFenceFrom),
       );
     }
 
-    // Hide closing fence line and collapse to zero height unless the cursor is
-    // directly editing one of the fence lines.
     if (!cursorOnEitherFence && block.closeFenceFrom !== block.openFenceFrom) {
-      items.push(decorationHidden.range(block.closeFenceFrom, block.closeFenceTo));
-      items.push(
-        Decoration.line({ class: "cg-include-fence" }).range(block.closeFenceFrom),
-      );
+      addCollapsedClosingFence(block.closeFenceFrom, block.closeFenceTo, items);
     }
-  }
-
-  return buildDecorations(items);
+  });
 }
 
 class CodeBlockHoverPlugin {
@@ -342,7 +283,7 @@ class CodeBlockHoverPlugin {
       return;
     }
 
-    const block = findCodeBlockAt(this.view.state, pos);
+    const block = findFencedBlockAt(collectCodeBlocks(this.view.state), pos);
     if (!block) {
       this.clearHoveredHeader();
       return;
@@ -403,27 +344,7 @@ class CodeBlockHoverPlugin {
  * Uses a StateField so that line decorations (Decoration.line) are
  * permitted by CM6.
  */
-const codeBlockDecorationField = StateField.define<DecorationSet>({
-  create(state) {
-    return buildCodeBlockDecorations(state);
-  },
-
-  update(value, tr) {
-    if (
-      tr.docChanged ||
-      tr.selection ||
-      tr.effects.some((e) => e.is(focusEffect)) ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
-    ) {
-      return buildCodeBlockDecorations(tr.state);
-    }
-    return value;
-  },
-
-  provide(field) {
-    return EditorView.decorations.from(field);
-  },
-});
+const codeBlockDecorationField = createFencedBlockDecorationField(buildCodeBlockDecorations);
 
 /** Exported for unit testing decoration logic without a browser. */
 export { codeBlockDecorationField as _codeBlockDecorationFieldForTest };
