@@ -2,18 +2,12 @@ import { parser } from "@lezer/markdown";
 import { describe, expect, it } from "vitest";
 
 import { removeIndentedCode } from "./remove-indented-code";
+import { parseNodeNames } from "../test-utils";
 
 /** Collect all node type names from parsing `text`. */
 function nodeNames(text: string, configured = true): string[] {
   const p = configured ? parser.configure(removeIndentedCode) : parser;
-  const tree = p.parse(text);
-  const names: string[] = [];
-  tree.iterate({
-    enter: (node) => {
-      names.push(node.name);
-    },
-  });
-  return names;
+  return parseNodeNames(text, p);
 }
 
 describe("removeIndentedCode", () => {

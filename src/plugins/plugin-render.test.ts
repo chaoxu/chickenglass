@@ -16,12 +16,17 @@ import { blockCounterField } from "./block-counter";
 import { editorFocusField, focusEffect } from "../render/render-utils";
 import { mathMacrosField } from "../render/math-macros";
 import { frontmatterField } from "../editor/frontmatter-state";
+import {
+  applyStateEffects,
+  createEditorState,
+  getDecorationSpecs,
+  hasLineClassAt,
+} from "../test-utils";
 
 /** Create an EditorState with all extensions needed for block decorations. */
 function createTestState(doc: string, cursorPos = 0, focused = false) {
-  const state = EditorState.create({
-    doc,
-    selection: { anchor: cursorPos },
+  const state = createEditorState(doc, {
+    cursorPos,
     extensions: [
       markdown({ extensions: markdownExtensions }),
       frontmatterField,
@@ -33,42 +38,11 @@ function createTestState(doc: string, cursorPos = 0, focused = false) {
     ],
   });
 
-  if (focused) {
-    // Dispatch focus effect to simulate editor focus
-    return state.update({ effects: focusEffect.of(true) }).state;
-  }
-  return state;
+  return focused ? applyStateEffects(state, focusEffect.of(true)) : state;
 }
 
-/** Collect decoration specs from the blockDecorationField. */
 function getDecoSpecs(state: EditorState) {
-  const decoSet = state.field(blockDecorationField);
-  const specs: Array<{
-    from: number;
-    to: number;
-    class?: string;
-    widgetClass?: string;
-  }> = [];
-
-  const cursor = decoSet.iter();
-  while (cursor.value) {
-    const spec = cursor.value.spec;
-    specs.push({
-      from: cursor.from,
-      to: cursor.to,
-      class: spec.class as string | undefined,
-      widgetClass: spec.widget?.constructor?.name,
-    });
-    cursor.next();
-  }
-  return specs;
-}
-
-/** Check if any line decoration at a position has a specific CSS class. */
-function hasLineClassAt(specs: ReturnType<typeof getDecoSpecs>, lineStart: number, classSubstr: string) {
-  return specs.some(
-    (s) => s.from === lineStart && s.from === s.to && s.class?.includes(classSubstr),
-  );
+  return getDecorationSpecs(state.field(blockDecorationField));
 }
 
 const TWO_BLOCKS = [

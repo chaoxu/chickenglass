@@ -21,25 +21,15 @@ import {
   type Extension,
   type Range,
   StateEffect,
-  StateField,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
+import { createBooleanToggleField } from "./render-utils";
 
 /** Effect to toggle the debug inspector on/off. */
 const toggleDebugEffect = StateEffect.define<boolean>();
 
 /** StateField tracking whether the debug inspector is active. */
-const debugActiveField = StateField.define<boolean>({
-  create() {
-    return false;
-  },
-  update(active, tr) {
-    for (const effect of tr.effects) {
-      if (effect.is(toggleDebugEffect)) return effect.value;
-    }
-    return active;
-  },
-});
+const debugActiveField = createBooleanToggleField(toggleDebugEffect);
 
 /** Color categories for syntax node types. */
 const INLINE_NODES = new Set([

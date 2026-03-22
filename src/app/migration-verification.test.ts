@@ -625,6 +625,40 @@ describe("#288 — Headless Tree explorer migration", () => {
   });
 });
 
+describe("#300 — shared test-utils module", () => {
+  it("shared test utilities module exists", async () => {
+    const mod = await import("../test-utils");
+    expect(mod.createTestView).toBeDefined();
+    expect(mod.createEditorState).toBeDefined();
+    expect(mod.getDecorationSpecs).toBeDefined();
+    expect(mod.makeBlockPlugin).toBeDefined();
+  });
+});
+
+describe("#303 — boolean toggle field factory", () => {
+  it("render-utils exports the shared boolean toggle field factory", async () => {
+    const mod = await import("../render/render-utils");
+    expect(mod.createBooleanToggleField).toBeDefined();
+  });
+});
+
+describe("#309 — export theme tokens", () => {
+  it("export.ts resolves theme tokens for standalone HTML export", async () => {
+    const mod = await import("./export");
+    expect(mod._resolveExportThemeTokensForTest).toBeDefined();
+    expect(mod._buildHtmlDocumentForTest).toBeDefined();
+  });
+});
+
+describe("#312 — unified editor session hook", () => {
+  it("useEditorSession exists and old split hooks are removed", async () => {
+    const mod = await import("./hooks/use-editor-session");
+    expect(mod.useEditorSession).toBeDefined();
+    expect(fileExists("src/app/hooks/use-document-buffer.ts")).toBe(false);
+    expect(fileExists("src/app/hooks/use-file-operations.ts")).toBe(false);
+  });
+});
+
 describe("#283 — backend command module decomposition", () => {
   it("commands module tree exists", () => {
     expect(fileExists("src-tauri/src/commands/mod.rs")).toBe(true);

@@ -21,6 +21,45 @@ import {
 
 export type { ExportFormat };
 
+const exportThemeTokenDefaults: Record<string, string> = {
+  "--cf-bg": "#ffffff",
+  "--cf-bg-secondary": "#ffffff",
+  "--cf-fg": "#09090b",
+  "--cf-muted": "#71717a",
+  "--cf-border": "#e4e4e7",
+  "--cf-subtle": "rgba(0, 0, 0, 0.02)",
+  "--cf-hover": "rgba(0, 0, 0, 0.04)",
+  "--cf-active": "rgba(0, 0, 0, 0.06)",
+  "--cf-accent": "#18181b",
+  "--cf-accent-fg": "#ffffff",
+  "--cf-block-title-color": "var(--cf-fg)",
+  "--cf-block-title-weight": "700",
+  "--cf-block-title-display": "inline",
+  "--cf-block-title-separator": '".\\2002\\2002"',
+  "--cf-block-margin": "0.6em 0",
+  "--cf-block-theorem-style": "italic",
+  "--cf-block-lemma-style": "italic",
+  "--cf-block-corollary-style": "italic",
+  "--cf-block-proposition-style": "italic",
+  "--cf-block-conjecture-style": "italic",
+  "--cf-block-definition-style": "normal",
+  "--cf-block-problem-style": "normal",
+  "--cf-block-example-style": "normal",
+  "--cf-block-remark-style": "normal",
+  "--cf-block-proof-style": "normal",
+  "--cf-proof-marker": '"\\220E"',
+  "--cf-proof-marker-color": "var(--cf-fg)",
+  "--cf-proof-marker-size": "1.2em",
+  "--cf-blockquote-border": "var(--cf-border)",
+  "--cf-blockquote-color": "var(--cf-fg)",
+  "--cf-table-border": "var(--cf-border)",
+  "--cf-table-header-border": "var(--cf-border)",
+  "--cf-table-cell-padding": "0.5em 0.75em",
+  "--cf-mark-bg": "rgba(255, 255, 0, 0.2)",
+  "--cf-math-error-fg": "#c00",
+  "--cf-math-error-bg": "rgba(255, 0, 0, 0.05)",
+};
+
 /** Check whether Pandoc is installed. Returns the version string on success. */
 export async function checkPandoc(): Promise<string> {
   return invokeWithPerf<string>("check_pandoc");
@@ -62,6 +101,12 @@ function buildHtmlDocument(content: string, title: string): string {
   const uiFont = resolveExportFontStack("--cf-ui-font", defaultUIFontStack);
   const contentFont = resolveExportFontStack("--cf-content-font", defaultContentFontStack);
   const codeFont = resolveExportFontStack("--cf-code-font", defaultCodeFontStack);
+  const themeTokens = serializeExportThemeTokens({
+    ...resolveExportThemeTokens(),
+    "--cf-ui-font": uiFont,
+    "--cf-content-font": contentFont,
+    "--cf-code-font": codeFont,
+  });
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -71,34 +116,45 @@ function buildHtmlDocument(content: string, title: string): string {
   <title>${escapeHtml(title)}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
   <style>
+    :root {
+${themeTokens}
+    }
     /* Document typography */
     body {
-      font-family: ${contentFont};
+      font-family: var(--cf-content-font);
       font-size: 16px;
       line-height: 1.7;
       max-width: 800px;
       margin: 3rem auto;
       padding: 0 1.5rem;
-      color: #111;
-      background: #fff;
+      color: var(--cf-fg);
+      background: var(--cf-bg);
     }
     h1, h2, h3, h4, h5, h6 {
-      font-family: ${uiFont};
+      font-family: var(--cf-ui-font);
       margin-top: 2rem;
       margin-bottom: 0.5rem;
+      color: var(--cf-fg);
+    }
+    a {
+      color: var(--cf-fg);
+      text-decoration: none;
+      border-bottom: 1px dotted var(--cf-muted);
     }
     pre {
-      background: #f4f4f4;
+      font-family: var(--cf-code-font);
+      background: var(--cf-hover);
+      border: 1px solid var(--cf-border);
       padding: 1rem;
       overflow-x: auto;
-      border-radius: 4px;
+      border-radius: 0;
     }
     code {
-      font-family: ${codeFont};
-      font-size: 0.9em;
-      background: #f4f4f4;
-      padding: 0.1em 0.3em;
-      border-radius: 3px;
+      font-family: var(--cf-code-font);
+      font-size: 0.85em;
+      background: var(--cf-hover);
+      padding: 0.15em 0.35em;
+      border-radius: 2px;
     }
     pre code {
       background: none;
@@ -106,9 +162,9 @@ function buildHtmlDocument(content: string, title: string): string {
     }
     blockquote {
       margin-left: 0;
-      padding-left: 1.5rem;
-      border-left: 3px solid #ccc;
-      color: #555;
+      padding-left: 1em;
+      border-left: 3px solid var(--cf-blockquote-border);
+      color: var(--cf-blockquote-color);
     }
     table {
       border-collapse: collapse;
@@ -116,67 +172,76 @@ function buildHtmlDocument(content: string, title: string): string {
       margin: 1.5rem 0;
     }
     th, td {
-      border: 1px solid #ddd;
-      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--cf-table-border);
+      padding: var(--cf-table-cell-padding);
+      text-align: left;
     }
     th {
-      background: #f8f8f8;
       font-weight: 600;
+      border-bottom: 2px solid var(--cf-table-header-border);
+      background: var(--cf-subtle);
     }
     hr {
       border: none;
-      border-top: 1px solid #ddd;
+      border-top: 1px solid var(--cf-border);
       margin: 2rem 0;
     }
     mark {
-      background: #fff3a3;
+      background: var(--cf-mark-bg);
       padding: 0.1em 0.2em;
+      border-radius: 2px;
     }
     .math-display {
       margin: 1.5rem 0;
       text-align: center;
     }
-    /* Fenced div blocks (theorem, proof, lemma, etc.) */
-    .theorem, .lemma, .corollary, .definition, .proposition, .conjecture, .problem {
-      border-left: 3px solid #4a9eff;
-      padding: 0.75rem 1rem;
-      margin: 1.5rem 0;
-      background: #f7faff;
-    }
+    .theorem { font-style: var(--cf-block-theorem-style); margin: var(--cf-block-margin); }
+    .lemma { font-style: var(--cf-block-lemma-style); margin: var(--cf-block-margin); }
+    .corollary { font-style: var(--cf-block-corollary-style); margin: var(--cf-block-margin); }
+    .proposition { font-style: var(--cf-block-proposition-style); margin: var(--cf-block-margin); }
+    .conjecture { font-style: var(--cf-block-conjecture-style); margin: var(--cf-block-margin); }
+    .definition { font-style: var(--cf-block-definition-style); margin: var(--cf-block-margin); }
+    .problem { font-style: var(--cf-block-problem-style); margin: var(--cf-block-margin); }
+    .example { font-style: var(--cf-block-example-style); margin: var(--cf-block-margin); }
+    .remark, .note { font-style: var(--cf-block-remark-style); margin: var(--cf-block-margin); }
     .proof {
-      border-left: 3px solid #888;
-      padding: 0.75rem 1rem;
-      margin: 1.5rem 0;
-      background: #fafafa;
+      font-style: var(--cf-block-proof-style);
+      margin: var(--cf-block-margin);
+      position: relative;
     }
-    .remark, .example, .note {
-      border-left: 3px solid #e8a838;
-      padding: 0.75rem 1rem;
-      margin: 1.5rem 0;
-      background: #fffdf5;
+    .proof::after {
+      content: var(--cf-proof-marker);
+      color: var(--cf-proof-marker-color);
+      font-size: var(--cf-proof-marker-size);
+      float: right;
     }
     .div-title {
-      display: block;
-      margin-bottom: 0.5rem;
+      display: var(--cf-block-title-display);
+      font-weight: var(--cf-block-title-weight);
+      color: var(--cf-block-title-color);
+      font-style: normal;
+    }
+    .div-title::after {
+      content: var(--cf-block-title-separator);
     }
     .cross-ref {
-      color: #4a9eff;
+      color: var(--cf-fg);
       text-decoration: none;
-      border-bottom: 1px dashed #4a9eff;
+      border-bottom: 1px dashed var(--cf-muted);
     }
     .cross-ref:hover {
       border-bottom-style: solid;
     }
     .footnote {
-      font-size: 0.9em;
-      color: #555;
+      font-size: 0.85em;
+      color: var(--cf-muted);
       padding: 0.25rem 0;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--cf-border);
       margin-top: 0.5rem;
     }
     .math-error {
-      color: #c00;
-      background: #fff0f0;
+      color: var(--cf-math-error-fg);
+      background: var(--cf-math-error-bg);
     }
     input[type="checkbox"] {
       margin-right: 0.4em;
@@ -189,7 +254,19 @@ ${bodyHtml}
 </html>`;
 }
 
+function resolveExportThemeTokens(): Record<string, string> {
+  const tokens: Record<string, string> = {};
+  for (const [name, fallback] of Object.entries(exportThemeTokenDefaults)) {
+    tokens[name] = resolveExportCssValue(name, fallback);
+  }
+  return tokens;
+}
+
 function resolveExportFontStack(variableName: string, fallback: string): string {
+  return resolveExportCssValue(variableName, fallback);
+}
+
+function resolveExportCssValue(variableName: string, fallback: string): string {
   if (typeof window === "undefined" || typeof getComputedStyle !== "function") {
     return fallback;
   }
@@ -198,6 +275,15 @@ function resolveExportFontStack(variableName: string, fallback: string): string 
     .trim();
   return value || fallback;
 }
+
+function serializeExportThemeTokens(tokens: Record<string, string>): string {
+  return Object.entries(tokens)
+    .map(([name, value]) => `      ${name}: ${value};`)
+    .join("\n");
+}
+
+export const _buildHtmlDocumentForTest = buildHtmlDocument;
+export const _resolveExportThemeTokensForTest = resolveExportThemeTokens;
 
 /**
  * Export a document to PDF, LaTeX, or HTML.

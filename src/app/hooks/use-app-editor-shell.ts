@@ -5,8 +5,7 @@ import { setEditorMode } from "../../editor";
 import { defaultEditorPlugins } from "../../editor/editor-plugins-registry";
 import { EditorPluginManager } from "../../editor/editor-plugin";
 import type { UseEditorReturn } from "./use-editor";
-import { useDocumentBuffer } from "./use-document-buffer";
-import { useFileOperations } from "./use-file-operations";
+import { useEditorSession } from "./use-editor-session";
 import type { FileSystem } from "../file-manager";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import type { Settings } from "../lib/types";
@@ -20,27 +19,27 @@ export interface AppEditorShellDeps {
 
 export interface AppEditorShellController {
   pluginManager: EditorPluginManager;
-  openTabs: ReturnType<typeof useDocumentBuffer>["openTabs"];
-  setOpenTabs: ReturnType<typeof useDocumentBuffer>["setOpenTabs"];
-  activeTab: ReturnType<typeof useDocumentBuffer>["activeTab"];
-  setActiveTab: ReturnType<typeof useDocumentBuffer>["setActiveTab"];
-  editorDoc: ReturnType<typeof useDocumentBuffer>["editorDoc"];
-  setEditorDoc: ReturnType<typeof useDocumentBuffer>["setEditorDoc"];
-  buffers: ReturnType<typeof useDocumentBuffer>["buffers"];
-  liveDocs: ReturnType<typeof useDocumentBuffer>["liveDocs"];
-  openPathsRef: ReturnType<typeof useDocumentBuffer>["openPathsRef"];
-  openFile: ReturnType<typeof useFileOperations>["openFile"];
-  openFileWithContent: ReturnType<typeof useFileOperations>["openFileWithContent"];
-  saveFile: ReturnType<typeof useFileOperations>["saveFile"];
-  createFile: ReturnType<typeof useFileOperations>["createFile"];
-  createDirectory: ReturnType<typeof useFileOperations>["createDirectory"];
-  closeFile: ReturnType<typeof useFileOperations>["closeFile"];
-  handleRename: ReturnType<typeof useFileOperations>["handleRename"];
-  handleDelete: ReturnType<typeof useFileOperations>["handleDelete"];
-  saveAs: ReturnType<typeof useFileOperations>["saveAs"];
-  pinTab: ReturnType<typeof useFileOperations>["pinTab"];
-  switchToTab: ReturnType<typeof useDocumentBuffer>["switchToTab"];
-  handleDocChange: ReturnType<typeof useDocumentBuffer>["handleDocChange"];
+  openTabs: ReturnType<typeof useEditorSession>["openTabs"];
+  setOpenTabs: ReturnType<typeof useEditorSession>["setOpenTabs"];
+  activeTab: ReturnType<typeof useEditorSession>["activeTab"];
+  setActiveTab: ReturnType<typeof useEditorSession>["setActiveTab"];
+  editorDoc: ReturnType<typeof useEditorSession>["editorDoc"];
+  setEditorDoc: ReturnType<typeof useEditorSession>["setEditorDoc"];
+  buffers: ReturnType<typeof useEditorSession>["buffers"];
+  liveDocs: ReturnType<typeof useEditorSession>["liveDocs"];
+  openPathsRef: ReturnType<typeof useEditorSession>["openPathsRef"];
+  openFile: ReturnType<typeof useEditorSession>["openFile"];
+  openFileWithContent: ReturnType<typeof useEditorSession>["openFileWithContent"];
+  saveFile: ReturnType<typeof useEditorSession>["saveFile"];
+  createFile: ReturnType<typeof useEditorSession>["createFile"];
+  createDirectory: ReturnType<typeof useEditorSession>["createDirectory"];
+  closeFile: ReturnType<typeof useEditorSession>["closeFile"];
+  handleRename: ReturnType<typeof useEditorSession>["handleRename"];
+  handleDelete: ReturnType<typeof useEditorSession>["handleDelete"];
+  saveAs: ReturnType<typeof useEditorSession>["saveAs"];
+  pinTab: ReturnType<typeof useEditorSession>["pinTab"];
+  switchToTab: ReturnType<typeof useEditorSession>["switchToTab"];
+  handleDocChange: ReturnType<typeof useEditorSession>["handleDocChange"];
   editorState: UseEditorReturn | null;
   headings: HeadingEntry[];
   handleEditorStateChange: (state: UseEditorReturn) => void;
@@ -72,7 +71,11 @@ export function useAppEditorShell({
     return manager;
   });
 
-  const docBuffer = useDocumentBuffer();
+  const session = useEditorSession({
+    fs,
+    refreshTree,
+    addRecentFile,
+  });
   const {
     openTabs,
     setOpenTabs,
@@ -83,28 +86,8 @@ export function useAppEditorShell({
     buffers,
     liveDocs,
     openPathsRef,
-    activeTabRef,
     handleDocChange,
     switchToTab,
-    renameBuffers,
-  } = docBuffer;
-
-  const fileOps = useFileOperations({
-    fs,
-    openPathsRef,
-    activeTabRef,
-    buffers,
-    liveDocs,
-    openTabs,
-    setOpenTabs,
-    setActiveTab,
-    setEditorDoc,
-    renameBuffers,
-    refreshTree,
-    addRecentFile,
-  });
-
-  const {
     openFile,
     openFileWithContent,
     saveFile,
@@ -115,7 +98,7 @@ export function useAppEditorShell({
     handleDelete,
     saveAs,
     pinTab,
-  } = fileOps;
+  } = session;
 
   const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);

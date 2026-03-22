@@ -4,11 +4,16 @@ import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import { editorFocusField, focusEffect } from "./render-utils";
 import { _codeBlockDecorationFieldForTest as codeBlockDecorationField } from "./code-block-render";
+import {
+  applyStateEffects,
+  createEditorState,
+  getDecorationSpecs,
+  hasLineClassAt,
+} from "../test-utils";
 
 function createTestState(doc: string, cursorPos = 0, focused = false) {
-  const state = EditorState.create({
-    doc,
-    selection: { anchor: cursorPos },
+  const state = createEditorState(doc, {
+    cursorPos,
     extensions: [
       markdown({ extensions: markdownExtensions }),
       editorFocusField,
@@ -16,43 +21,11 @@ function createTestState(doc: string, cursorPos = 0, focused = false) {
     ],
   });
 
-  if (focused) {
-    return state.update({ effects: focusEffect.of(true) }).state;
-  }
-  return state;
+  return focused ? applyStateEffects(state, focusEffect.of(true)) : state;
 }
 
 function getDecoSpecs(state: EditorState) {
-  const decoSet = state.field(codeBlockDecorationField);
-  const specs: Array<{
-    from: number;
-    to: number;
-    class?: string;
-    widgetClass?: string;
-  }> = [];
-
-  const cursor = decoSet.iter();
-  while (cursor.value) {
-    const spec = cursor.value.spec;
-    specs.push({
-      from: cursor.from,
-      to: cursor.to,
-      class: spec.class as string | undefined,
-      widgetClass: spec.widget?.constructor?.name,
-    });
-    cursor.next();
-  }
-  return specs;
-}
-
-function hasLineClassAt(
-  specs: ReturnType<typeof getDecoSpecs>,
-  lineStart: number,
-  classSubstr: string,
-) {
-  return specs.some(
-    (s) => s.from === lineStart && s.from === s.to && s.class?.includes(classSubstr),
-  );
+  return getDecorationSpecs(state.field(codeBlockDecorationField));
 }
 
 const TWO_BLOCKS = [

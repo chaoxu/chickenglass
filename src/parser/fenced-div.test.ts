@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { fencedDiv } from "./fenced-div";
 import { markdownExtensions } from "./index";
+import { findNodeInfo, parseNodeInfos, parseNodeNames, type NodeInfo } from "../test-utils";
 
 const fencedDivParser = parser.configure(fencedDiv);
 
@@ -11,68 +12,27 @@ const fullParser = parser.configure(markdownExtensions);
 
 /** Like nodeNames but using the full parser (includes math, etc.). */
 function fullNodeNames(text: string): string[] {
-  const tree = fullParser.parse(text);
-  const names: string[] = [];
-  tree.iterate({ enter: (node) => { names.push(node.name); } });
-  return names;
+  return parseNodeNames(text, fullParser);
 }
 
 /** Like nodeInfos but using the full parser. */
 function fullNodeInfos(text: string): NodeInfo[] {
-  const tree = fullParser.parse(text);
-  const infos: NodeInfo[] = [];
-  tree.iterate({
-    enter: (node) => {
-      infos.push({ name: node.name, from: node.from, to: node.to, text: text.slice(node.from, node.to) });
-    },
-  });
-  return infos;
+  return parseNodeInfos(text, fullParser);
 }
 
 /** Collect all node type names from parsing `text`. */
 function nodeNames(text: string): string[] {
-  const tree = fencedDivParser.parse(text);
-  const names: string[] = [];
-  tree.iterate({
-    enter: (node) => {
-      names.push(node.name);
-    },
-  });
-  return names;
-}
-
-interface NodeInfo {
-  readonly name: string;
-  readonly from: number;
-  readonly to: number;
-  readonly text: string;
+  return parseNodeNames(text, fencedDivParser);
 }
 
 /** Collect node info with positions from parsing `text`. */
 function nodeInfos(text: string): NodeInfo[] {
-  const tree = fencedDivParser.parse(text);
-  const infos: NodeInfo[] = [];
-  tree.iterate({
-    enter: (node) => {
-      infos.push({
-        name: node.name,
-        from: node.from,
-        to: node.to,
-        text: text.slice(node.from, node.to),
-      });
-    },
-  });
-  return infos;
+  return parseNodeInfos(text, fencedDivParser);
 }
 
 /** Find the first node with a given name. Fails the test if not found. */
 function findNode(infos: NodeInfo[], name: string): NodeInfo {
-  const node = infos.find((n) => n.name === name);
-  expect(node, `expected to find node "${name}"`).toBeDefined();
-  // After the assertion above, node is guaranteed to be defined.
-  // Use a conditional return to satisfy strict null checks without non-null assertion.
-  if (!node) throw new Error(`unreachable: node "${name}" not found`);
-  return node;
+  return findNodeInfo(infos, name);
 }
 
 describe("fenced div parser", () => {

@@ -12,7 +12,6 @@ import {
   Compartment,
   type Extension,
   StateEffect,
-  StateField,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -22,7 +21,7 @@ import {
   type ViewUpdate,
   ViewPlugin,
 } from "@codemirror/view";
-import { buildDecorations, collectNodes, MATH_TYPES } from "../render";
+import { buildDecorations, collectNodes, createBooleanToggleField, MATH_TYPES } from "../render";
 import { findCrossrefs } from "../index/crossref-resolver";
 
 // ---------------------------------------------------------------------------
@@ -104,17 +103,7 @@ export const setSpellcheckEffect = StateEffect.define<boolean>();
  * StateField that tracks whether spellcheck is enabled (true by default).
  * Updated atomically with the compartment reconfiguration in toggleSpellcheck.
  */
-export const spellcheckEnabledField = StateField.define<boolean>({
-  create() {
-    return true;
-  },
-  update(enabled, tr) {
-    for (const effect of tr.effects) {
-      if (effect.is(setSpellcheckEffect)) return effect.value;
-    }
-    return enabled;
-  },
-});
+export const spellcheckEnabledField = createBooleanToggleField(setSpellcheckEffect, true);
 
 /** Compartment wrapping the active spellcheck extensions. */
 const spellcheckCompartment = new Compartment();

@@ -1,19 +1,22 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { type BibEntry } from "./bibtex-parser";
-import { type BibStore, bibDataEffect, bibDataField } from "./citation-render";
+import { bibDataEffect, bibDataField } from "./citation-render";
+import {
+  createTestView as createSharedTestView,
+  createEditorState,
+  getDecorationSpecs,
+  makeBibStore,
+} from "../test-utils";
 import {
   collectCitedIds,
   formatBibEntry,
   sortBibEntries,
   BibliographyWidget,
+  buildBibliographyDecorations,
   bibliographyPlugin,
 } from "./bibliography";
-function makeBibStore(entries: BibEntry[]): BibStore {
-  return new Map(entries.map((e) => [e.id, e]));
-}
 
 const karger: BibEntry = {
   id: "karger2000",
@@ -178,6 +181,19 @@ describe("BibliographyWidget", () => {
   });
 });
 
+describe("buildBibliographyDecorations", () => {
+  it("inserts the bibliography as a block widget at document end", () => {
+    const specs = getDecorationSpecs(
+      buildBibliographyDecorations(createEditorState("hello world"), [karger], []),
+    );
+
+    expect(specs).toHaveLength(1);
+    expect(specs[0].from).toBe(11);
+    expect(specs[0].to).toBe(11);
+    expect(specs[0].block).toBe(true);
+  });
+});
+
 describe("bibliographyPlugin integration", () => {
   let view: EditorView;
 
@@ -186,16 +202,13 @@ describe("bibliographyPlugin integration", () => {
   });
 
   function createTestView(doc: string, useStore = true): EditorView {
-    const state = EditorState.create({
-      doc,
+    const view = createSharedTestView(doc, {
       extensions: [markdown(), bibDataField, bibliographyPlugin],
     });
-    const parent = document.createElement("div");
-    const v = new EditorView({ state, parent });
     if (useStore) {
-      v.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: null }) });
+      view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: null }) });
     }
-    return v;
+    return view;
   }
 
   it("creates a view without errors", () => {

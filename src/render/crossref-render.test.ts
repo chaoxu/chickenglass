@@ -1,5 +1,4 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
@@ -11,38 +10,23 @@ import {
 } from "../plugins/plugin-registry";
 import { blockCounterField } from "../plugins/block-counter";
 import type { BlockPlugin } from "../plugins/plugin-types";
+import { createTestView, makeBlockPlugin } from "../test-utils";
 import {
   CrossrefWidget,
   UnresolvedRefWidget,
   collectCrossrefRanges,
 } from "./crossref-render";
 
-/** Helper to make a minimal plugin for testing. */
-function makePlugin(
-  overrides: Partial<BlockPlugin> & { name: string },
-): BlockPlugin {
-  return {
-    numbered: true,
-    title: overrides.name.charAt(0).toUpperCase() + overrides.name.slice(1),
-    render: (attrs) => ({
-      className: `cf-block cf-block-${attrs.type}`,
-      header: `${overrides.name} ${attrs.number ?? ""}`.trim(),
-    }),
-    ...overrides,
-  };
-}
-
 const testPlugins: readonly BlockPlugin[] = [
-  makePlugin({ name: "theorem", counter: "theorem", title: "Theorem" }),
-  makePlugin({ name: "lemma", counter: "theorem", title: "Lemma" }),
-  makePlugin({ name: "definition", title: "Definition" }),
+  makeBlockPlugin({ name: "theorem", counter: "theorem", title: "Theorem" }),
+  makeBlockPlugin({ name: "lemma", counter: "theorem", title: "Lemma" }),
+  makeBlockPlugin({ name: "definition", title: "Definition" }),
 ];
 
 /** Create an EditorView with all necessary extensions. */
 function createView(doc: string, cursorPos?: number): EditorView {
-  const state = EditorState.create({
-    doc,
-    selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
+  return createTestView(doc, {
+    cursorPos,
     extensions: [
       markdown({
         extensions: [
@@ -56,13 +40,6 @@ function createView(doc: string, cursorPos?: number): EditorView {
       blockCounterField,
     ],
   });
-  const parent = document.createElement("div");
-  document.body.appendChild(parent);
-  const view = new EditorView({ state, parent });
-  view.focus();
-  const origDestroy = view.destroy.bind(view);
-  view.destroy = () => { origDestroy(); parent.remove(); };
-  return view;
 }
 
 describe("CrossrefWidget", () => {
