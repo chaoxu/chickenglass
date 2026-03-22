@@ -11,7 +11,7 @@ interface AppSessionPersistenceDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "openTabs" | "activeTab" | "openFile" | "setActiveTab" | "setEditorDoc" | "liveDocs" | "buffers" | "openPathsRef"
+    "openTabs" | "activeTab" | "openFile" | "switchToTab" | "liveDocs" | "buffers" | "openPathsRef"
   >;
 }
 
@@ -52,10 +52,7 @@ export function useAppSessionPersistence({
     openTabs,
     activeTab,
     openFile,
-    setActiveTab,
-    setEditorDoc,
-    liveDocs,
-    buffers,
+    switchToTab,
     openPathsRef,
   } = editor;
 
@@ -95,12 +92,7 @@ export function useAppSessionPersistence({
           if (windowState.activeTab) {
             const restored = openPathsRef.current.has(windowState.activeTab);
             if (restored) {
-              setActiveTab(windowState.activeTab);
-              setEditorDoc(
-                liveDocs.current.get(windowState.activeTab)
-                ?? buffers.current.get(windowState.activeTab)
-                ?? "",
-              );
+              switchToTab(windowState.activeTab);
             }
           }
         } else {
@@ -120,15 +112,12 @@ export function useAppSessionPersistence({
       restorePromiseRef.current = null;
     });
   }, [
-    buffers,
     fileTree,
-    liveDocs,
     openFile,
     openPathsRef,
-    setActiveTab,
-    setEditorDoc,
     setSidebarCollapsed,
     setSidebarWidth,
+    switchToTab,
     windowState.activeTab,
     windowState.sidebarWidth,
     windowState.tabs,

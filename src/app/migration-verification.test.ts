@@ -931,3 +931,23 @@ describe("#314 — document surface renderer layer", () => {
     expect(frontmatter).toContain("../document-surfaces");
   });
 });
+
+describe("#315 — editor session subsystem", () => {
+  it("extracts the editor session model and pure session actions", () => {
+    expect(fileExists("src/app/editor-session-model.ts")).toBe(true);
+    expect(fileExists("src/app/editor-session-actions.ts")).toBe(true);
+    expect(fileExists("src/app/editor-session-actions.test.ts")).toBe(true);
+  });
+
+  it("routes the app shell through explicit session intents instead of raw tab setters", () => {
+    const appMainShell = fileText("src/app/components/app-main-shell.tsx");
+    const sessionHook = fileText("src/app/hooks/use-editor-session.ts");
+    const persistence = fileText("src/app/hooks/use-app-session-persistence.ts");
+
+    expect(appMainShell).toContain("reorderTabs");
+    expect(appMainShell).not.toContain("setOpenTabs");
+    expect(sessionHook).toContain("../editor-session-actions");
+    expect(persistence).toContain("switchToTab");
+    expect(persistence).not.toContain("setActiveTab");
+  });
+});

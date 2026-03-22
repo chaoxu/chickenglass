@@ -12,6 +12,23 @@ import type { Tab } from "../tab-bar";
 import { isTauri } from "../tauri-fs";
 import { basename } from "../lib/utils";
 import { measureAsync, withPerfOperation } from "../perf";
+import {
+  activateSessionTab,
+  closeSessionTab,
+  closeSessionTabs,
+  markSessionTabDirty,
+  openSessionTab,
+  pinSessionTab,
+  renameSessionTab,
+  reorderSessionTabs,
+} from "../editor-session-actions";
+import {
+  createEditorSessionState,
+  findPreviewTab,
+  findSessionTab,
+  hasSessionPath,
+  type EditorSessionState,
+} from "../editor-session-model";
 
 export interface EditorSessionDeps {
   fs: FileSystem;
@@ -21,9 +38,7 @@ export interface EditorSessionDeps {
 
 export interface UseEditorSessionReturn {
   openTabs: Tab[];
-  setOpenTabs: React.Dispatch<React.SetStateAction<Tab[]>>;
   activeTab: string | null;
-  setActiveTab: React.Dispatch<React.SetStateAction<string | null>>;
   editorDoc: string;
   setEditorDoc: React.Dispatch<React.SetStateAction<string>>;
   buffers: React.RefObject<Map<string, string>>;
@@ -32,6 +47,7 @@ export interface UseEditorSessionReturn {
   activeTabRef: React.RefObject<string | null>;
   handleDocChange: (doc: string) => void;
   switchToTab: (path: string) => void;
+  reorderTabs: (tabs: Tab[]) => void;
   renameBuffers: (oldPath: string, newPath: string) => void;
   openFile: (path: string, options?: { preview?: boolean }) => Promise<void>;
   openFileWithContent: (name: string, content: string) => void;
@@ -50,27 +66,36 @@ export function useEditorSession({
   refreshTree,
   addRecentFile,
 }: EditorSessionDeps): UseEditorSessionReturn {
-  const [openTabs, setOpenTabs] = useState<Tab[]>([]);
-  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [sessionState, setSessionState] = useState<EditorSessionState>(() => createEditorSessionState());
   const [editorDoc, setEditorDoc] = useState("");
 
   const buffers = useRef<Map<string, string>>(new Map());
   const liveDocs = useRef<Map<string, string>>(new Map());
   const openPathsRef = useRef<Set<string>>(new Set());
   const activeTabRef = useRef<string | null>(null);
+  const sessionStateRef = useRef<EditorSessionState>(sessionState);
+
+  const openTabs = sessionState.tabs;
+  const activeTab = sessionState.activePath;
 
   useEffect(() => {
-    openPathsRef.current = new Set(openTabs.map((tab) => tab.path));
-  }, [openTabs]);
-
-  useEffect(() => {
-    activeTabRef.current = activeTab;
-  }, [activeTab]);
+    sessionStateRef.current = sessionState;
+    openPathsRef.current = new Set(sessionState.tabs.map((tab) => tab.path));
+    activeTabRef.current = sessionState.activePath;
+  }, [sessionState]);
 
   const docForPath = useCallback((path: string | null): string => {
     if (!path) return "";
     return liveDocs.current.get(path) ?? buffers.current.get(path) ?? "";
   }, []);
+
+  const commitSessionState = useCallback((nextState: EditorSessionState) => {
+    sessionStateRef.current = nextState;
+    openPathsRef.current = new Set(nextState.tabs.map((tab) => tab.path));
+    activeTabRef.current = nextState.activePath;
+    setSessionState(nextState);
+    setEditorDoc(docForPath(nextState.activePath));
+  }, [docForPath]);
 
   const handleDocChange = useCallback((doc: string) => {
     const path = activeTabRef.current;
@@ -78,27 +103,19 @@ export function useEditorSession({
     liveDocs.current.set(path, doc);
 
     const isDirty = doc !== (buffers.current.get(path) ?? "");
-    setOpenTabs((prev) => {
-      const tab = prev.find((candidate) => candidate.path === path);
-      if (!tab) return prev;
-      const shouldPin = isDirty && tab.preview;
-      if (tab.dirty === isDirty && !shouldPin) return prev;
-      return prev.map((candidate) =>
-        candidate.path === path
-          ? {
-              ...candidate,
-              dirty: isDirty,
-              ...(shouldPin ? { preview: false } : {}),
-            }
-          : candidate,
-      );
-    });
-  }, []);
+    const nextState = markSessionTabDirty(sessionStateRef.current, path, isDirty);
+    if (nextState !== sessionStateRef.current) {
+      commitSessionState(nextState);
+    }
+  }, [commitSessionState]);
 
   const switchToTab = useCallback((path: string) => {
-    setActiveTab(path);
-    setEditorDoc(docForPath(path));
-  }, [docForPath]);
+    commitSessionState(activateSessionTab(sessionStateRef.current, path));
+  }, [commitSessionState]);
+
+  const reorderTabs = useCallback((tabs: Tab[]) => {
+    commitSessionState(reorderSessionTabs(sessionStateRef.current, tabs));
+  }, [commitSessionState]);
 
   const renameBuffers = useCallback((oldPath: string, newPath: string) => {
     const content = buffers.current.get(oldPath);
@@ -113,38 +130,29 @@ export function useEditorSession({
       liveDocs.current.set(newPath, liveDoc);
     }
 
-    setOpenTabs((prev) =>
-      prev.map((tab) =>
-        tab.path === oldPath ? { ...tab, path: newPath, name: basename(newPath) } : tab,
-      ),
+    commitSessionState(
+      renameSessionTab(sessionStateRef.current, oldPath, newPath, basename(newPath)),
     );
-
-    if (activeTabRef.current === oldPath) {
-      setActiveTab(newPath);
-    }
-  }, []);
+  }, [commitSessionState]);
 
   const pinTab = useCallback((path: string) => {
-    setOpenTabs((prev) => {
-      const tab = prev.find((candidate) => candidate.path === path);
-      if (!tab || !tab.preview) return prev;
-      return prev.map((candidate) =>
-        candidate.path === path ? { ...candidate, preview: false } : candidate,
-      );
-    });
-  }, []);
+    commitSessionState(pinSessionTab(sessionStateRef.current, path));
+  }, [commitSessionState]);
 
   const openFile = useCallback(async (path: string, options?: { preview?: boolean }) => {
     const isPreview = options?.preview ?? false;
 
     await withPerfOperation("open_file", async (operation) => {
-      if (openPathsRef.current.has(path)) {
+      if (hasSessionPath(sessionStateRef.current, path)) {
         operation.measureSync("open_file.activate", () => {
-          setActiveTab(path);
-          setEditorDoc(docForPath(path));
-          if (!isPreview) {
-            pinTab(path);
-          }
+          const existing = findSessionTab(sessionStateRef.current, path);
+          if (!existing) return;
+          commitSessionState(openSessionTab(sessionStateRef.current, {
+            path,
+            name: existing.name,
+            dirty: existing.dirty,
+            preview: isPreview,
+          }));
           addRecentFile(path);
         }, { category: "open_file", detail: path });
         return;
@@ -157,31 +165,20 @@ export function useEditorSession({
         });
 
         operation.measureSync("open_file.tab_state", () => {
+          const currentState = sessionStateRef.current;
+          const replacedPreview = isPreview ? findPreviewTab(currentState) : undefined;
           buffers.current.set(path, content);
           liveDocs.current.set(path, content);
-
-          setOpenTabs((prev) => {
-            if (isPreview) {
-              const previewIdx = prev.findIndex((tab) => tab.preview);
-              if (previewIdx !== -1) {
-                const oldPreview = prev[previewIdx];
-                buffers.current.delete(oldPreview.path);
-                liveDocs.current.delete(oldPreview.path);
-                const next = [...prev];
-                next[previewIdx] = {
-                  path,
-                  name: basename(path),
-                  dirty: false,
-                  preview: true,
-                };
-                return next;
-              }
-            }
-
-            return [...prev, { path, name: basename(path), dirty: false, preview: isPreview }];
-          });
-
-          setActiveTab(path);
+          if (replacedPreview && replacedPreview.path !== path) {
+            buffers.current.delete(replacedPreview.path);
+            liveDocs.current.delete(replacedPreview.path);
+          }
+          commitSessionState(openSessionTab(currentState, {
+            path,
+            name: basename(path),
+            dirty: false,
+            preview: isPreview,
+          }));
           setEditorDoc(content);
           addRecentFile(path);
         }, { category: "open_file", detail: path });
@@ -189,7 +186,7 @@ export function useEditorSession({
         // Silently ignore unreadable files.
       }
     }, path);
-  }, [addRecentFile, docForPath, fs, pinTab]);
+  }, [addRecentFile, commitSessionState, fs]);
 
   const openFileWithContent = useCallback((name: string, content: string) => {
     let path = name;
@@ -201,15 +198,14 @@ export function useEditorSession({
     buffers.current.set(path, "");
     liveDocs.current.set(path, content);
 
-    setOpenTabs((prev) => [...prev, {
+    commitSessionState(openSessionTab(sessionStateRef.current, {
       path,
       name: basename(path),
       dirty: true,
       preview: false,
-    }]);
-    setActiveTab(path);
+    }));
     setEditorDoc(content);
-  }, []);
+  }, [commitSessionState]);
 
   const saveFile = useCallback(async () => {
     const path = activeTabRef.current;
@@ -224,13 +220,11 @@ export function useEditorSession({
       });
       buffers.current.set(path, doc);
       liveDocs.current.set(path, doc);
-      setOpenTabs((prev) =>
-        prev.map((tab) => (tab.path === path ? { ...tab, dirty: false } : tab)),
-      );
+      commitSessionState(markSessionTabDirty(sessionStateRef.current, path, false));
     } catch {
       // Save failed — leave dirty.
     }
-  }, [fs]);
+  }, [commitSessionState, fs]);
 
   const createFile = useCallback(async (path: string) => {
     try {
@@ -258,7 +252,7 @@ export function useEditorSession({
   }, [fs, refreshTree]);
 
   const closeFile = useCallback(async (path: string) => {
-    const tab = openTabs.find((candidate) => candidate.path === path);
+    const tab = findSessionTab(sessionStateRef.current, path);
     if (tab?.dirty) {
       const answer = window.confirm(
         `"${tab.name}" has unsaved changes.\n\nPress OK to discard, or Cancel to keep editing.`,
@@ -266,21 +260,10 @@ export function useEditorSession({
       if (!answer) return;
     }
 
-    const remaining = openTabs.filter((candidate) => candidate.path !== path);
-
-    setOpenTabs((prev) => prev.filter((candidate) => candidate.path !== path));
-
-    if (path === activeTabRef.current) {
-      setTimeout(() => {
-        const nextPath = remaining[0]?.path ?? null;
-        setActiveTab(nextPath);
-        setEditorDoc(docForPath(nextPath));
-      }, 0);
-    }
-
+    commitSessionState(closeSessionTab(sessionStateRef.current, path));
     buffers.current.delete(path);
     liveDocs.current.delete(path);
-  }, [docForPath, openTabs]);
+  }, [commitSessionState]);
 
   const handleRename = useCallback(async (oldPath: string, newPath: string) => {
     try {
@@ -308,26 +291,19 @@ export function useEditorSession({
     const prefix = path + "/";
     const isAffected = (candidate: string) => candidate === path || candidate.startsWith(prefix);
 
-    setOpenTabs((prev) => {
-      const affected = new Set(prev.filter((tab) => isAffected(tab.path)).map((tab) => tab.path));
-      if (affected.size === 0) return prev;
-
-      for (const affectedPath of affected) {
-        buffers.current.delete(affectedPath);
-        liveDocs.current.delete(affectedPath);
-      }
-
-      const remaining = prev.filter((tab) => !affected.has(tab.path));
-      if (affected.has(activeTabRef.current ?? "")) {
-        const nextPath = remaining[0]?.path ?? null;
-        setActiveTab(nextPath);
-        setEditorDoc(docForPath(nextPath));
-      }
-      return remaining;
-    });
+    const affected = new Set(
+      sessionStateRef.current.tabs
+        .filter((tab) => isAffected(tab.path))
+        .map((tab) => tab.path),
+    );
+    for (const affectedPath of affected) {
+      buffers.current.delete(affectedPath);
+      liveDocs.current.delete(affectedPath);
+    }
+    commitSessionState(closeSessionTabs(sessionStateRef.current, affected));
 
     await refreshTree();
-  }, [docForPath, fs, refreshTree]);
+  }, [commitSessionState, fs, refreshTree]);
 
   const saveAs = useCallback(async () => {
     const path = activeTabRef.current;
@@ -361,9 +337,7 @@ export function useEditorSession({
 
   return {
     openTabs,
-    setOpenTabs,
     activeTab,
-    setActiveTab,
     editorDoc,
     setEditorDoc,
     buffers,
@@ -372,6 +346,7 @@ export function useEditorSession({
     activeTabRef,
     handleDocChange,
     switchToTab,
+    reorderTabs,
     renameBuffers,
     openFile,
     openFileWithContent,

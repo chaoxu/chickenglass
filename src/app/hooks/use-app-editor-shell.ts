@@ -27,9 +27,7 @@ export interface AppEditorShellDeps {
 export interface AppEditorShellController {
   pluginManager: EditorPluginManager;
   openTabs: ReturnType<typeof useEditorSession>["openTabs"];
-  setOpenTabs: ReturnType<typeof useEditorSession>["setOpenTabs"];
   activeTab: ReturnType<typeof useEditorSession>["activeTab"];
-  setActiveTab: ReturnType<typeof useEditorSession>["setActiveTab"];
   editorDoc: ReturnType<typeof useEditorSession>["editorDoc"];
   setEditorDoc: ReturnType<typeof useEditorSession>["setEditorDoc"];
   buffers: ReturnType<typeof useEditorSession>["buffers"];
@@ -37,6 +35,7 @@ export interface AppEditorShellController {
   openPathsRef: ReturnType<typeof useEditorSession>["openPathsRef"];
   openFile: ReturnType<typeof useEditorSession>["openFile"];
   openFileWithContent: ReturnType<typeof useEditorSession>["openFileWithContent"];
+  reorderTabs: ReturnType<typeof useEditorSession>["reorderTabs"];
   saveFile: ReturnType<typeof useEditorSession>["saveFile"];
   createFile: ReturnType<typeof useEditorSession>["createFile"];
   createDirectory: ReturnType<typeof useEditorSession>["createDirectory"];
@@ -85,9 +84,7 @@ export function useAppEditorShell({
   });
   const {
     openTabs,
-    setOpenTabs,
     activeTab,
-    setActiveTab,
     editorDoc,
     setEditorDoc,
     buffers,
@@ -95,6 +92,7 @@ export function useAppEditorShell({
     openPathsRef,
     handleDocChange,
     switchToTab,
+    reorderTabs,
     openFile,
     openFileWithContent,
     saveFile,
@@ -252,9 +250,7 @@ export function useAppEditorShell({
   return {
     pluginManager,
     openTabs,
-    setOpenTabs,
     activeTab,
-    setActiveTab,
     editorDoc,
     setEditorDoc,
     buffers,
@@ -262,6 +258,7 @@ export function useAppEditorShell({
     openPathsRef,
     openFile,
     openFileWithContent,
+    reorderTabs,
     saveFile,
     createFile,
     createDirectory,
