@@ -1,11 +1,17 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
 import type { Settings, ExportFormat } from "../lib/types";
 import type { Theme } from "../theme-manager";
 import { cn } from "../lib/utils";
 import { builtinThemes } from "../themes";
 import { themePresets, themePresetKeys } from "../../editor/theme-config";
+import {
+  Dialog,
+  DialogCloseButton,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -376,73 +382,61 @@ export function SettingsDialog({
   const [activeTab, setActiveTab] = useState<SettingsTab>("General");
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
-        <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 flex flex-col w-[560px] max-h-[80vh] rounded-lg bg-[var(--cg-bg)] border border-[var(--cg-border)] overflow-hidden outline-none"
-          aria-describedby={undefined}
-        >
-          <Dialog.Title className="sr-only">Settings</Dialog.Title>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="flex max-h-[80vh] w-[560px] flex-col overflow-hidden p-0"
+        aria-describedby={undefined}
+      >
+        <DialogTitle className="sr-only">Settings</DialogTitle>
 
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--cg-border)] shrink-0">
-            <h2 className="text-base font-semibold text-[var(--cg-fg)]">Settings</h2>
-            <Dialog.Close
-              aria-label="Close settings"
-              className="text-[var(--cg-muted)] hover:text-[var(--cg-fg)] text-lg leading-none"
-            >
-              ×
-            </Dialog.Close>
+        <DialogHeader>
+          <h2 className="text-base font-semibold text-[var(--cg-fg)]">Settings</h2>
+          <DialogCloseButton aria-label="Close settings" />
+        </DialogHeader>
+
+        <div className="flex flex-1 overflow-hidden">
+          <nav className="flex w-36 shrink-0 flex-col border-r border-[var(--cg-border)] bg-[var(--cg-bg)] py-2">
+            {TABS.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => { setActiveTab(tab); }}
+                className={cn(
+                  "px-4 py-2 text-left text-sm transition-colors",
+                  activeTab === tab
+                    ? "bg-[var(--cg-bg)] font-medium text-[var(--cg-fg)]"
+                    : "text-[var(--cg-muted)] hover:bg-[var(--cg-bg)] hover:text-[var(--cg-fg)]",
+                )}
+              >
+                {tab}
+              </button>
+            ))}
+          </nav>
+
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            {activeTab === "General" && (
+              <GeneralTab settings={settings} onUpdateSetting={onUpdateSetting} />
+            )}
+            {activeTab === "Editor" && (
+              <EditorTab settings={settings} onUpdateSetting={onUpdateSetting} />
+            )}
+            {activeTab === "Appearance" && (
+              <AppearanceTab
+                theme={theme}
+                onSetTheme={onSetTheme}
+                settings={settings}
+                onUpdateSetting={onUpdateSetting}
+              />
+            )}
+            {activeTab === "Plugins" && (
+              <PluginsTab settings={settings} onUpdateSetting={onUpdateSetting} plugins={plugins} />
+            )}
+            {activeTab === "Export" && (
+              <ExportTab settings={settings} onUpdateSetting={onUpdateSetting} />
+            )}
           </div>
-
-          {/* Body: nav + content */}
-          <div className="flex flex-1 overflow-hidden">
-            {/* Nav */}
-            <nav className="flex flex-col w-36 shrink-0 border-r border-[var(--cg-border)] py-2 bg-[var(--cg-bg)]">
-              {TABS.map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => { setActiveTab(tab); }}
-                  className={cn(
-                    "text-left px-4 py-2 text-sm transition-colors",
-                    activeTab === tab
-                      ? "bg-[var(--cg-bg)] text-[var(--cg-fg)] font-medium"
-                      : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)] hover:bg-[var(--cg-bg)]",
-                  )}
-                >
-                  {tab}
-                </button>
-              ))}
-            </nav>
-
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              {activeTab === "General" && (
-                <GeneralTab settings={settings} onUpdateSetting={onUpdateSetting} />
-              )}
-              {activeTab === "Editor" && (
-                <EditorTab settings={settings} onUpdateSetting={onUpdateSetting} />
-              )}
-              {activeTab === "Appearance" && (
-                <AppearanceTab
-                  theme={theme}
-                  onSetTheme={onSetTheme}
-                  settings={settings}
-                  onUpdateSetting={onUpdateSetting}
-                />
-              )}
-              {activeTab === "Plugins" && (
-                <PluginsTab settings={settings} onUpdateSetting={onUpdateSetting} plugins={plugins} />
-              )}
-              {activeTab === "Export" && (
-                <ExportTab settings={settings} onUpdateSetting={onUpdateSetting} />
-              )}
-            </div>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

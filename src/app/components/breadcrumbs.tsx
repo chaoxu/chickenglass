@@ -6,10 +6,18 @@
  * Auto-hides 2 s after the last scroll, re-appears on hover.
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { cn } from "../lib/utils";
 import { headingAncestryAt, type HeadingEntry } from "../heading-ancestry";
 import { renderInline } from "../markdown-to-html";
+import {
+  Breadcrumb,
+  BreadcrumbButton,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "./ui/breadcrumb";
 
 interface BreadcrumbsProps {
   /** All headings extracted from the document. */
@@ -104,31 +112,29 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <div className="inline-flex items-center gap-0.5 px-3 py-1 text-xs bg-[var(--cg-bg)]/80 backdrop-blur-sm border border-[var(--cg-border)] rounded-br whitespace-nowrap overflow-hidden">
-        {ancestry.map((h, i) => (
-          <span key={h.pos} className="flex items-center gap-0.5 min-w-0">
-            {i > 0 && (
-              <span
-                className="text-[var(--cg-muted)] opacity-60 mx-0.5 shrink-0 select-none"
-                aria-hidden="true"
-              >
-                ›
-              </span>
-            )}
-            <span
-              className={cn(
-                "cursor-pointer rounded px-1 py-[1px] max-w-[200px] truncate",
-                "text-[var(--cg-muted)] hover:bg-[var(--cg-hover)] hover:text-[var(--cg-fg)]",
-                "transition-colors duration-[var(--cg-transition,0.15s)]",
-                i === ancestry.length - 1 && "text-[var(--cg-fg)] font-medium",
-              )}
-              title={h.text}
-              onClick={() => onSelect(h.pos)}
-              dangerouslySetInnerHTML={{ __html: renderInline(h.text) }}
-            />
-          </span>
-        ))}
-      </div>
+      <Breadcrumb className="max-w-[min(calc(100vw-1rem),70rem)] overflow-x-auto rounded-br border border-[var(--cg-border)] bg-[var(--cg-bg)]/80 px-3 py-1 backdrop-blur-sm">
+        <BreadcrumbList className="min-w-max flex-nowrap whitespace-nowrap">
+          {ancestry.map((h, i) => (
+            <Fragment key={h.pos}>
+              {i > 0 && <BreadcrumbSeparator />}
+              <BreadcrumbItem>
+                {i === ancestry.length - 1 ? (
+                  <BreadcrumbPage
+                    title={h.text}
+                    dangerouslySetInnerHTML={{ __html: renderInline(h.text) }}
+                  />
+                ) : (
+                  <BreadcrumbButton
+                    title={h.text}
+                    onClick={() => onSelect(h.pos)}
+                    dangerouslySetInnerHTML={{ __html: renderInline(h.text) }}
+                  />
+                )}
+              </BreadcrumbItem>
+            </Fragment>
+          ))}
+        </BreadcrumbList>
+      </Breadcrumb>
     </div>
   );
 }
