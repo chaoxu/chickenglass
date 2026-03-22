@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "tauri:dev": "cargo tauri dev",
     "tauri:build": "cargo tauri build",
-    "chrome": "node scripts/launch-chrome.mjs",
+    "chrome": "npm run chrome:app --",
+    "chrome:app": "node scripts/launch-chrome.mjs --activate",
+    "chrome:cdp": "node scripts/launch-chrome.mjs --no-activate",
     "chrome:test": "node scripts/test-chrome.mjs"
   },
   "license": "MIT",

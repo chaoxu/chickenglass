@@ -694,6 +694,18 @@ describe("#277 — first-class theme surface tokens", () => {
   });
 });
 
+describe("#287 — Chrome for Testing app facility", () => {
+  it("shared Chrome launcher helper exists", () => {
+    expect(fileExists("scripts/chrome-common.mjs")).toBe(true);
+  });
+
+  it("package scripts expose explicit app and cdp launcher roles", () => {
+    const pkg = fileText("package.json");
+    expect(pkg).toContain('"chrome:app"');
+    expect(pkg).toContain('"chrome:cdp"');
+  });
+});
+
 describe("#279 — shared Lezer document semantics", () => {
   it("shared document semantics analyzers exist", async () => {
     const mod = await import("../semantics/document");
