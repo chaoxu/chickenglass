@@ -46,7 +46,7 @@ export function GotoLineDialog({ open, onOpenChange, onGoto, currentLine }: Goto
       <DialogContent
         className="top-24 w-72 -translate-y-0 p-3"
         aria-describedby={undefined}
-        overlayClassName="fixed inset-0 z-[10000] bg-transparent"
+        overlayClassName="bg-transparent"
       >
         <DialogTitle className="sr-only">Go to line</DialogTitle>
         <input
