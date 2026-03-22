@@ -23,6 +23,7 @@ import {
   buildDecorations,
   createBooleanToggleField,
   cursorInRange,
+  serializeMacros,
   RenderWidget,
   editorFocusField,
   focusEffect,
@@ -49,6 +50,34 @@ export function collectFootnotes(state: EditorState): FootnoteSemantics {
   return state.field(documentSemanticsField).footnotes;
 }
 
+/** Widget that renders footnote body content inline (math, bold, etc.). */
+export class FootnoteBodyWidget extends RenderWidget {
+  private readonly macrosKey: string;
+
+  constructor(
+    private readonly content: string,
+    private readonly macros: Record<string, string>,
+  ) {
+    super();
+    this.macrosKey = serializeMacros(macros);
+  }
+
+  createDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "cf-sidenote-body-rendered";
+    renderDocumentFragmentToDom(span, {
+      kind: "footnote",
+      text: this.content,
+      macros: this.macros,
+    });
+    return span;
+  }
+
+  eq(other: FootnoteBodyWidget): boolean {
+    return this.content === other.content && this.macrosKey === other.macrosKey;
+  }
+}
+
 /** Widget for a footnote reference rendered as a superscript number. */
 class FootnoteRefWidget extends RenderWidget {
   constructor(
@@ -73,7 +102,7 @@ class FootnoteRefWidget extends RenderWidget {
 }
 
 /** Build sidenote decorations from editor state. */
-function buildSidenoteDecorations(state: EditorState, focused: boolean): DecorationSet {
+export function buildSidenoteDecorations(state: EditorState, focused: boolean): DecorationSet {
   const footnotes = collectFootnotes(state);
   const items: Range<Decoration>[] = [];
   const numberMap = numberFootnotes(footnotes);
@@ -89,17 +118,33 @@ function buildSidenoteDecorations(state: EditorState, focused: boolean): Decorat
     items.push(Decoration.replace({ widget }).range(ref.from, ref.to));
   }
 
-  // Hide footnote definition lines — whether margin is visible (content shown
-  // in margin) or collapsed (content shown in bottom footnote section).
-  // When cursor is inside a def, show source for editing.
+  // Heading-like pattern for footnote defs: when cursor is inside the def,
+  // the [^id]: label stays as source but the body keeps inline rendering
+  // via a widget. When cursor enters the body text, it drops to raw source.
+  const macros = state.field(mathMacrosField);
   for (const [, def] of footnotes.defs) {
-    if (focused && cursorInRange(state, def.from, def.to)) continue;
+    const cursorInDef = focused && cursorInRange(state, def.from, def.to);
 
-    // Collapse the definition line to zero height
+    if (cursorInDef) {
+      const cursorInBody = def.labelTo < def.to && cursorInRange(state, def.labelTo, def.to);
+      if (cursorInBody) {
+        // Cursor in body text — show everything as raw source for editing.
+        continue;
+      }
+      // Cursor on the label — render body inline, keep label as source.
+      if (def.labelTo < def.to) {
+        const widget = new FootnoteBodyWidget(def.content, macros);
+        widget.sourceFrom = def.labelTo;
+        widget.sourceTo = def.to;
+        items.push(Decoration.replace({ widget }).range(def.labelTo, def.to));
+      }
+      continue;
+    }
+
+    // Cursor outside def — collapse the definition line.
     items.push(
       Decoration.line({ class: "cf-sidenote-def-line" }).range(def.from),
     );
-    // Replace text content (after label) with empty widget to hide it visually
     if (def.labelTo < def.to) {
       items.push(
         Decoration.replace({}).range(def.labelTo, def.to),

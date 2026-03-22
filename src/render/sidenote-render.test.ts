@@ -1,5 +1,32 @@
 import { describe, it, expect } from "vitest";
-import { computeSidenoteOffsets, type SidenoteMeasurement } from "./sidenote-render";
+import { EditorState } from "@codemirror/state";
+import { markdown } from "@codemirror/lang-markdown";
+import { footnoteExtension } from "../parser/footnote";
+import { frontmatterField } from "../editor/frontmatter-state";
+import { mathMacrosField } from "./math-macros";
+import { documentSemanticsField } from "../semantics/codemirror-source";
+import { renderInlineMarkdown } from "./inline-render";
+import {
+  computeSidenoteOffsets,
+  type SidenoteMeasurement,
+  FootnoteBodyWidget,
+  buildSidenoteDecorations,
+} from "./sidenote-render";
+import { getDecorationSpecs } from "../test-utils";
+
+/** Create an EditorState with footnote parsing and all fields needed by sidenote decorations. */
+function createState(doc: string, cursorPos?: number): EditorState {
+  return EditorState.create({
+    doc,
+    selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
+    extensions: [
+      markdown({ extensions: [footnoteExtension] }),
+      frontmatterField,
+      mathMacrosField,
+      documentSemanticsField,
+    ],
+  });
+}
 
 describe("computeSidenoteOffsets", () => {
   it("returns all zeros when sidenotes don't overlap", () => {
@@ -72,5 +99,125 @@ describe("computeSidenoteOffsets", () => {
     // Sidenote 2: 200 >= 88 → offset=0, bottom=240
     // Sidenote 3: 210 < 244 → offset=34, bottom=210+34+40=284
     expect(computeSidenoteOffsets(measurements)).toEqual([0, 34, 0, 34]);
+  });
+});
+
+describe("FootnoteBodyWidget", () => {
+  it("renders inline math in footnote body", () => {
+    const widget = new FootnoteBodyWidget("See $x^2$ here", {});
+    const el = widget.createDOM();
+    expect(el.className).toBe("cf-sidenote-body-rendered");
+    expect(el.querySelector(".katex")).not.toBeNull();
+  });
+
+  it("renders bold in footnote body", () => {
+    const widget = new FootnoteBodyWidget("Some **bold** text", {});
+    const el = widget.createDOM();
+    expect(el.querySelector("strong")).not.toBeNull();
+    expect(el.querySelector("strong")?.textContent).toBe("bold");
+  });
+
+  it("renders plain text in footnote body", () => {
+    const widget = new FootnoteBodyWidget("plain text", {});
+    const el = widget.createDOM();
+    expect(el.textContent).toBe("plain text");
+  });
+
+  it("eq returns true for same content and macros", () => {
+    const macros = { "\\RR": "\\mathbb{R}" };
+    const a = new FootnoteBodyWidget("$\\RR$", macros);
+    const b = new FootnoteBodyWidget("$\\RR$", macros);
+    expect(a.eq(b)).toBe(true);
+  });
+
+  it("eq returns false for different content", () => {
+    const a = new FootnoteBodyWidget("$x$", {});
+    const b = new FootnoteBodyWidget("$y$", {});
+    expect(a.eq(b)).toBe(false);
+  });
+});
+
+describe("buildSidenoteDecorations — footnote def cursor zones", () => {
+  // Document: "Text [^1] end\n\n[^1]: See $x^2$ here"
+  // The ref [^1] spans some range, and the def [^1]: spans the last line.
+  const doc = "Text [^1] end\n\n[^1]: See $x^2$ here";
+
+  it("collapses def line when cursor is outside the def", () => {
+    // Cursor at start of document, well outside the def
+    const state = createState(doc, 0);
+    const decos = buildSidenoteDecorations(state, true);
+    const specs = getDecorationSpecs(decos);
+
+    // Should have a line class decoration on the def line
+    const lineDecos = specs.filter((s) => s.class?.includes("cf-sidenote-def-line"));
+    expect(lineDecos.length).toBe(1);
+  });
+
+  it("renders body as widget when cursor is on the label", () => {
+    // The def starts at position 15 (after "Text [^1] end\n\n")
+    // [^1]: spans 15..20 (label), body starts after that
+    // Place cursor at position 15 (start of label)
+    const defStart = doc.indexOf("[^1]:");
+    const state = createState(doc, defStart);
+    const decos = buildSidenoteDecorations(state, true);
+    const specs = getDecorationSpecs(decos);
+
+    // Should NOT have the line-hide class (line is visible for editing)
+    const lineDecos = specs.filter((s) => s.class?.includes("cf-sidenote-def-line"));
+    expect(lineDecos.length).toBe(0);
+
+    // Should have a widget replacement for the body (FootnoteBodyWidget)
+    const bodyWidgets = specs.filter((s) => s.widgetClass === "FootnoteBodyWidget");
+    expect(bodyWidgets.length).toBe(1);
+  });
+
+  it("shows raw source when cursor is in the body text", () => {
+    // Place cursor inside the body text (after [^1]:)
+    const bodyStart = doc.indexOf("See $x^2$");
+    const state = createState(doc, bodyStart);
+    const decos = buildSidenoteDecorations(state, true);
+    const specs = getDecorationSpecs(decos);
+
+    // Should NOT have the line-hide class
+    const lineDecos = specs.filter((s) => s.class?.includes("cf-sidenote-def-line"));
+    expect(lineDecos.length).toBe(0);
+
+    // Should NOT have a body widget — body is raw source for editing
+    const bodyWidgets = specs.filter((s) => s.widgetClass === "FootnoteBodyWidget");
+    expect(bodyWidgets.length).toBe(0);
+  });
+
+  it("keeps def hidden when editor is unfocused", () => {
+    const state = createState(doc, 0);
+    const decos = buildSidenoteDecorations(state, false);
+    const specs = getDecorationSpecs(decos);
+
+    // Should have the line-hide class even with cursor at 0
+    const lineDecos = specs.filter((s) => s.class?.includes("cf-sidenote-def-line"));
+    expect(lineDecos.length).toBe(1);
+  });
+});
+
+describe("tooltip inline rendering", () => {
+  it("renderInlineMarkdown renders math in footnote content", () => {
+    const container = document.createElement("div");
+    renderInlineMarkdown(container, "See $x^2$ for details", {}, "document-body");
+    expect(container.querySelector(".katex")).not.toBeNull();
+    expect(container.textContent).toContain("See");
+    expect(container.textContent).toContain("for details");
+  });
+
+  it("renderInlineMarkdown renders bold in footnote content", () => {
+    const container = document.createElement("div");
+    renderInlineMarkdown(container, "**Important** note", {}, "document-body");
+    expect(container.querySelector("strong")).not.toBeNull();
+    expect(container.querySelector("strong")?.textContent).toBe("Important");
+  });
+
+  it("renderInlineMarkdown uses macros for math rendering", () => {
+    const container = document.createElement("div");
+    const macros = { "\\RR": "\\mathbb{R}" };
+    renderInlineMarkdown(container, "$\\RR$", macros, "document-body");
+    expect(container.querySelector(".katex")).not.toBeNull();
   });
 });
