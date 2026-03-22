@@ -66,6 +66,26 @@ describe("renderInline", () => {
     expect(renderInline("Title[^1]")).toContain('class="footnote-ref"');
     expect(renderInline("Title[^1]")).toContain('href="#fn-1"');
   });
+
+  it("degrades links to inert text in ui-chrome-inline", () => {
+    expect(renderInline("[text](http://example.com)", undefined, "ui-chrome-inline")).toBe(
+      "text",
+    );
+  });
+
+  it("degrades cross references to inert text in ui-chrome-inline", () => {
+    expect(renderInline("See [@thm-evt]", undefined, "ui-chrome-inline")).toBe(
+      "See @thm-evt",
+    );
+  });
+
+  it("degrades footnote references to inert superscripts in ui-chrome-inline", () => {
+    expect(renderInline("Title[^1]", undefined, "ui-chrome-inline")).toBe("Title<sup>1</sup>");
+  });
+
+  it("degrades images to alt text in document-inline", () => {
+    expect(renderInline("![alt](image.png)", undefined, "document-inline")).toBe("alt");
+  });
 });
 
 describe("markdownToHtml", () => {

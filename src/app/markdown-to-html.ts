@@ -19,6 +19,7 @@
 import katex from "katex";
 import { parser as baseParser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
+import type { InlineRenderSurface } from "../inline-surface";
 import { markdownExtensions } from "../parser";
 import { type BibEntry } from "../citations/bibtex-parser";
 import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
@@ -127,6 +128,13 @@ interface InlineContext {
   citedIds?: string[];
   cslProcessor?: CslProcessor | null;
   footnotes?: FootnoteSemantics;
+  surface: HtmlInlineSurface;
+}
+
+type HtmlInlineSurface = InlineRenderSurface | "document-body";
+
+function isUiChromeSurface(surface: HtmlInlineSurface): boolean {
+  return surface === "ui-chrome-inline";
 }
 
 // ── Inline rendering (standalone, for titles) ───────────────────────────────
@@ -140,6 +148,17 @@ interface InlineContext {
 export function renderInline(
   text: string,
   macros?: Record<string, string>,
+  surface: HtmlInlineSurface = "document-body",
+): string {
+  return renderInlineWithSurface(text, { macros, surface });
+}
+
+function renderInlineWithSurface(
+  text: string,
+  options: Pick<
+    InlineContext,
+    "macros" | "bibliography" | "citedIds" | "cslProcessor" | "surface"
+  >,
 ): string {
   // Parse just the text as a paragraph (Lezer wraps it in Document > Paragraph)
   const tree = mdParser.parse(text);
@@ -149,7 +168,15 @@ export function renderInline(
   const para = doc.firstChild;
   if (!para) return escapeHtml(text);
   // Render the paragraph's inline content (without wrapping in <p>)
-  return renderChildren(para, { doc: text, macros, footnotes });
+  return renderChildren(para, {
+    doc: text,
+    macros: options.macros,
+    bibliography: options.bibliography,
+    citedIds: options.citedIds,
+    cslProcessor: options.cslProcessor,
+    footnotes,
+    surface: options.surface,
+  });
 }
 
 // ── Tree walking ────────────────────────────────────────────────────────────
@@ -163,6 +190,7 @@ interface WalkContext {
   readonly footnotes: FootnoteSemantics;
   readonly bibliography?: BibStore;
   readonly cslProcessor?: CslProcessor | null;
+  readonly surface: "document-body";
   /** Accumulates cited entry IDs in document order for the bibliography section. */
   readonly citedIds: string[];
 }
@@ -196,6 +224,7 @@ export function markdownToHtml(
     footnotes: semantics.footnotes,
     bibliography: options?.bibliography,
     cslProcessor: options?.cslProcessor,
+    surface: "document-body",
     citedIds: [],
   };
 
@@ -325,12 +354,16 @@ function renderHeading(node: SyntaxNode, ctx: WalkContext): string {
   const heading = ctx.semantics.headingByFrom.get(node.from);
   const levelChar = node.name[node.name.length - 1];
   const level = Number(levelChar);
-  const text = renderInline(heading?.text ?? ctx.doc.slice(node.from, node.to).trim(), ctx.macros);
+  const renderedText = renderInline(
+    heading?.text ?? ctx.doc.slice(node.from, node.to).trim(),
+    ctx.macros,
+    "document-inline",
+  );
   const prefix = ctx.sectionNumbers && heading?.number
     ? `<span class="cf-section-number">${heading.number}</span> `
     : "";
 
-  return `<h${heading?.level ?? level}>${prefix}${text}</h${heading?.level ?? level}>`;
+  return `<h${heading?.level ?? level}>${prefix}${renderedText}</h${heading?.level ?? level}>`;
 }
 
 /** Render a FencedCode node. */
@@ -385,7 +418,13 @@ function renderListItem(node: SyntaxNode, ctx: WalkContext): string {
       // Render the task content (everything after TaskMarker)
       const contentStart = taskMarker ? taskMarker.to + 1 : child.from;
       const taskContent = ctx.doc.slice(contentStart, child.to);
-      parts.push(renderInline(taskContent.trim(), ctx.macros));
+      parts.push(renderInlineWithSurface(taskContent.trim(), {
+        macros: ctx.macros,
+        bibliography: ctx.bibliography,
+        citedIds: ctx.citedIds,
+        cslProcessor: ctx.cslProcessor,
+        surface: "document-body",
+      }));
     } else if (child.name === "Paragraph") {
       // Inline content — render without <p> wrapping
       parts.push(renderChildren(child, ctx));
@@ -425,9 +464,9 @@ function renderFencedDiv(node: SyntaxNode, ctx: WalkContext): string {
 
   if (title) {
     if (isSelfClosing) {
-      output.push(`<p>${renderInline(title, ctx.macros)}</p>`);
+      output.push(`<p>${renderInline(title, ctx.macros, "document-inline")}</p>`);
     } else {
-      output.push(`<strong class="div-title">${renderInline(title, ctx.macros)}</strong>`);
+      output.push(`<strong class="div-title">${renderInline(title, ctx.macros, "document-inline")}</strong>`);
     }
   }
 
@@ -480,7 +519,13 @@ function renderFootnoteDef(node: SyntaxNode, ctx: WalkContext): string {
   if (!def) return "";
 
   const fnContent = def.content
-    ? `<p>${renderInline(def.content, ctx.macros)}</p>`
+    ? `<p>${renderInlineWithSurface(def.content, {
+        macros: ctx.macros,
+        bibliography: ctx.bibliography,
+        citedIds: ctx.citedIds,
+        cslProcessor: ctx.cslProcessor,
+        surface: "document-body",
+      })}</p>`
     : "";
 
   return `<div class="footnote" id="fn-${escapeHtml(def.id)}"><sup>${escapeHtml(def.id)}</sup> ${fnContent}</div>`;
@@ -669,7 +714,7 @@ function renderInlineNode(
     }
 
     case "Image": {
-      return renderImage(node, doc);
+      return renderImage(node, ctx);
     }
 
     case "FootnoteRef": {
@@ -678,11 +723,14 @@ function renderInlineNode(
         return escapeHtml(doc.slice(node.from, node.to));
       }
       const fnId = escapeHtml(ref.id);
+      if (isUiChromeSurface(ctx.surface)) {
+        return `<sup>${fnId}</sup>`;
+      }
       return `<sup><a class="footnote-ref" href="#fn-${fnId}">${fnId}</a></sup>`;
     }
 
     case "HardBreak":
-      return "<br>";
+      return ctx.surface === "document-body" ? "<br>" : " ";
 
     case "Escape":
       // \$ → $, \* → *, etc. — strip the backslash
@@ -703,12 +751,16 @@ function renderLink(
   node: SyntaxNode,
   ctx: InlineContext,
 ): string {
-  const { doc, bibliography, citedIds, cslProcessor } = ctx;
+  const { doc, bibliography, citedIds, cslProcessor, surface } = ctx;
   const fullText = doc.slice(node.from, node.to);
+  const linkText = renderLinkText(node, ctx);
 
   // Citation / cross-reference: [@id] or [@a; @b] — Lezer parses as a Link
   const crossRefMatch = /^\[@([^\]]+)\]$/.exec(fullText);
   if (crossRefMatch) {
+    if (isUiChromeSurface(surface)) {
+      return linkText;
+    }
     const rawRefs = crossRefMatch[1];
 
     // Multiple citations: [@a; @b; @c]
@@ -726,11 +778,13 @@ function renderLink(
   const urlNode = node.getChild("URL");
   if (!urlNode) {
     // No URL child — just render text
-    return renderChildren(node, ctx);
+    return linkText;
   }
 
   const rawHref = doc.slice(urlNode.from, urlNode.to);
-  const linkText = renderLinkText(node, ctx);
+  if (isUiChromeSurface(surface)) {
+    return linkText;
+  }
 
   if (isSafeUrl(rawHref)) {
     return `<a href="${escapeHtml(rawHref)}">${linkText}</a>`;
@@ -756,23 +810,24 @@ function renderLinkText(
 }
 
 /** Render an Image node. */
-function renderImage(node: SyntaxNode, doc: string): string {
+function renderImage(node: SyntaxNode, ctx: InlineContext): string {
+  const { doc, surface } = ctx;
   const urlNode = node.getChild("URL");
-  if (!urlNode) return "";
+  const marks = node.getChildren("LinkMark");
+  const rawAlt = marks.length >= 2 ? doc.slice(marks[0].to, marks[1].from) : "";
+  const alt = renderLinkText(node, ctx);
+  if (!urlNode) return alt;
 
   const rawSrc = doc.slice(urlNode.from, urlNode.to);
 
-  // Alt text is between ![ and ]
-  const marks = node.getChildren("LinkMark");
-  let alt = "";
-  if (marks.length >= 2) {
-    alt = doc.slice(marks[0].to, marks[1].from);
+  if (surface !== "document-body") {
+    return alt;
   }
 
   if (isSafeUrl(rawSrc)) {
-    return `<img src="${escapeHtml(rawSrc)}" alt="${escapeHtml(alt)}">`;
+    return `<img src="${escapeHtml(rawSrc)}" alt="${escapeHtml(rawAlt)}">`;
   }
-  return `<span class="unsafe-link">[image: ${escapeHtml(alt)}]</span>`;
+  return `<span class="unsafe-link">${alt}</span>`;
 }
 
 // ── Citation / bibliography rendering ───────────────────────────────────────

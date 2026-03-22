@@ -120,7 +120,7 @@ export function ReadModeView({
     });
 
     const titleHtml = config.title
-      ? `<h1 class="cf-read-title">${renderInline(config.title, config.math)}</h1>`
+      ? `<h1 class="cf-read-title">${renderInline(config.title, config.math, "document-inline")}</h1>`
       : "";
 
     return titleHtml + bodyHtml;

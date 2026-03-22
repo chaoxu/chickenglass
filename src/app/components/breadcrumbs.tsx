@@ -121,13 +121,13 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
                 {i === ancestry.length - 1 ? (
                   <BreadcrumbPage
                     title={h.text}
-                    dangerouslySetInnerHTML={{ __html: renderInline(h.text) }}
+                    dangerouslySetInnerHTML={{ __html: renderInline(h.text, undefined, "ui-chrome-inline") }}
                   />
                 ) : (
                   <BreadcrumbButton
                     title={h.text}
                     onClick={() => onSelect(h.pos)}
-                    dangerouslySetInnerHTML={{ __html: renderInline(h.text) }}
+                    dangerouslySetInnerHTML={{ __html: renderInline(h.text, undefined, "ui-chrome-inline") }}
                   />
                 )}
               </BreadcrumbItem>

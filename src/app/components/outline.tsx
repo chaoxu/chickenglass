@@ -93,7 +93,7 @@ export function Outline({ headings, onSelect }: OutlineProps) {
               </span>
               <span
                 className="truncate cf-ui-font"
-                dangerouslySetInnerHTML={{ __html: renderInline(heading.text) }}
+                dangerouslySetInnerHTML={{ __html: renderInline(heading.text, undefined, "ui-chrome-inline") }}
               />
             </button>
           </div>

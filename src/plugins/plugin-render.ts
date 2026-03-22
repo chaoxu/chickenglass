@@ -81,7 +81,7 @@ class BlockHeaderWidget extends RenderWidget {
   createDOM(): HTMLElement {
     const el = document.createElement("span");
     el.className = "cf-block-header-rendered";
-    renderInlineMarkdown(el, this.header, this.macros);
+    renderInlineMarkdown(el, this.header, this.macros, "document-inline");
     return el;
   }
 

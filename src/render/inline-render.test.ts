@@ -1,10 +1,15 @@
 import { describe, it, expect } from "vitest";
+import type { InlineRenderSurface } from "../inline-surface";
 import { renderInlineMarkdown, splitByInlineMath } from "./inline-render";
 
 /** Render inline markdown into a div and return innerHTML. */
-function render(text: string, macros: Record<string, string> = {}): string {
+function render(
+  text: string,
+  macros: Record<string, string> = {},
+  surface: InlineRenderSurface | "document-body" = "document-body",
+): string {
   const container = document.createElement("div");
-  renderInlineMarkdown(container, text, macros);
+  renderInlineMarkdown(container, text, macros, surface);
   return container.innerHTML;
 }
 
@@ -110,7 +115,7 @@ describe("renderInlineMarkdown — bold", () => {
     renderInlineMarkdown(container, "a **b** c");
     const strong = container.querySelector("strong");
     expect(strong).not.toBeNull();
-    expect(strong!.textContent).toBe("b");
+    expect(strong?.textContent).toBe("b");
     expect(container.textContent).toBe("a b c");
   });
 
@@ -141,7 +146,7 @@ describe("renderInlineMarkdown — italic", () => {
     renderInlineMarkdown(container, "a *b* c");
     const em = container.querySelector("em");
     expect(em).not.toBeNull();
-    expect(em!.textContent).toBe("b");
+    expect(em?.textContent).toBe("b");
     expect(container.textContent).toBe("a b c");
   });
 
@@ -162,14 +167,14 @@ describe("renderInlineMarkdown — inline math", () => {
     const span = container.querySelector("span");
     expect(span).not.toBeNull();
     // KaTeX output contains a .katex element
-    expect(span!.querySelector(".katex")).not.toBeNull();
+    expect(span?.querySelector(".katex")).not.toBeNull();
   });
 
   it("does not include dollar delimiters in rendered output text", () => {
     const container = document.createElement("div");
     renderInlineMarkdown(container, "$x$");
     // The math span should not contain literal dollar signs
-    expect(container.querySelector("span")!.textContent).not.toContain("$");
+    expect(container.querySelector("span")?.textContent).not.toContain("$");
   });
 
   it("renders invalid LaTeX as fallback text with dollar signs", () => {
@@ -200,14 +205,14 @@ describe("renderInlineMarkdown — mixed content", () => {
   it("renders bold and italic together", () => {
     const container = document.createElement("div");
     renderInlineMarkdown(container, "**bold** and *italic*");
-    expect(container.querySelector("strong")!.textContent).toBe("bold");
-    expect(container.querySelector("em")!.textContent).toBe("italic");
+    expect(container.querySelector("strong")?.textContent).toBe("bold");
+    expect(container.querySelector("em")?.textContent).toBe("italic");
   });
 
   it("renders math alongside bold text", () => {
     const container = document.createElement("div");
     renderInlineMarkdown(container, "**Theorem** $x^2 = y$");
-    expect(container.querySelector("strong")!.textContent).toBe("Theorem");
+    expect(container.querySelector("strong")?.textContent).toBe("Theorem");
     expect(container.querySelector(".katex")).not.toBeNull();
   });
 
@@ -271,5 +276,37 @@ describe("renderInlineMarkdown — escape sequences", () => {
     const html = render("\\*not italic\\*");
     expect(html).not.toContain("<em>");
     expect(html).toContain("*not italic*");
+  });
+});
+
+describe("renderInlineMarkdown — surface policies", () => {
+  it("renders links as anchors in document-inline", () => {
+    const html = render("[text](https://example.com)", {}, "document-inline");
+    expect(html).toBe('<a href="https://example.com">text</a>');
+  });
+
+  it("degrades links to inert text in ui-chrome-inline", () => {
+    const html = render("[text](https://example.com)", {}, "ui-chrome-inline");
+    expect(html).toBe("text");
+  });
+
+  it("degrades images to alt text in document-inline", () => {
+    const html = render("![alt text](image.png)", {}, "document-inline");
+    expect(html).toBe("alt text");
+  });
+
+  it("renders body images as img elements in document-body", () => {
+    const html = render("![alt text](image.png)");
+    expect(html).toBe('<img src="image.png" alt="alt text">');
+  });
+
+  it("renders footnote refs as inert superscripts in ui-chrome-inline", () => {
+    const html = render("Title[^1]", {}, "ui-chrome-inline");
+    expect(html).toBe("Title<sup>1</sup>");
+  });
+
+  it("renders cross references as inert text in ui-chrome-inline", () => {
+    const html = render("See [@thm-evt]", {}, "ui-chrome-inline");
+    expect(html).toBe("See @thm-evt");
   });
 });

@@ -92,7 +92,7 @@ function renderTitleContent(
   text: string,
   macros: Record<string, string>,
 ): void {
-  renderInlineMarkdown(container, text, macros);
+  renderInlineMarkdown(container, text, macros, "document-inline");
 }
 
 /** Widget that renders the document title from frontmatter. */
