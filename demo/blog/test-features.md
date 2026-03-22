@@ -122,6 +122,22 @@ $$
 $$
 :::
 
+# Links and Images
+
+[Link text](https://example.com) should render as underlined text, reveal source on click.
+
+![Alt text](https://via.placeholder.com/150) should render as inline image.
+
+# Bold in Fenced-Div Titles
+
+::: {.theorem} **Main Result**
+This theorem title should render "Main Result" in bold.
+:::
+
+::: {.problem title="**3SUM**"}
+This problem title uses the `title=` attribute and should render "3SUM" in bold.
+:::
+
 # Footnotes
 
 This has a footnote[^1].

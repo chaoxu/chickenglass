@@ -92,6 +92,24 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
 
 ## Development rules
 
+- **Default rigor mode**:
+  - Unless the user explicitly asks for a quick patch, brainstorming only, or issue-only investigation, default to rigorous implementation.
+  - Start with root-cause analysis, not symptom patching.
+  - Prefer the smallest clean fix at the correct architectural layer over local hacks.
+  - Check adjacent cases and duplicated code paths, not just the exact repro.
+  - Add regression coverage for the bug class when feasible, not only the single example.
+  - Run targeted verification before claiming fixed.
+  - Do a self-review/simplification pass before commit.
+  - If the architecture is wrong, say so and fix that instead of preserving a bad shape.
+- **Rigor prompt patterns**:
+  - `Be rigorous. Don't stop at the first fix.`
+  - `Do root-cause analysis first, then implement.`
+  - `Treat this like a refactor, not a patch.`
+  - `I care more about correctness than speed.`
+  - `Review your own change before committing.`
+  - `Add regression tests for the bug class, not just the exact repro.`
+  - `Check for adjacent cases and duplicates in the codebase.`
+  - `If the architecture is wrong, say so and fix that instead.`
 - **Typora-style editing**:
   - Content keeps its natural font when editing (code stays monospace, prose stays serif).
   - Show both fences when editing a block: cursor on either fence → BOTH opening and closing `:::` visible as source. Other blocks unaffected.
@@ -103,12 +121,14 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
   - Never extend `Decoration.replace` over user-editable text — edits get swallowed.
   - Never use `ignoreEvent() { return false }` with custom mousedown handlers.
 - **Lezer parser rules**:
+  - Prefer Lezer tree walking over regex for markdown/document parsing. If the task is really about document structure, syntax, or block boundaries, use the syntax tree.
   - `endLeaf` callbacks for paragraph interruption (display math after text without blank line).
   - Fenced div composite blocks use a generation counter in the `value` parameter to prevent incremental parser fragment reuse (see `packValue` in fenced-div.ts).
   - Block parsers using `cx.nextLine()` inside a composite must check for `:::` closing fences to avoid crossing composite boundaries (see `isFencedDivClose` in equation-label.ts).
   - Guard `closeFenceNode.from` against out-of-range positions — incomplete trees can have `-1`.
 - **Testing**:
   - ALWAYS test before claiming fixed. Use `npm run dev` + `npm run chrome` + `__cmDebug.dump()` to verify. Never ask the user to test unless it's something you literally cannot test (e.g., native OS interactions).
+  - Always open `test-features.md` in the browser to verify rendering. If a feature you changed is not covered by `test-features.md`, add a test case to it.
   - Test StateFields without a browser: `EditorState.create({extensions}).update({changes}).state.field(myField)`.
   - For parser bugs, write a Vitest test with the exact document content first, then check browser for incremental parsing issues.
 - **Reviewer/simplifier gate before every commit**: Before `git commit`, ALWAYS launch `pr-review-toolkit:code-reviewer` and `pr-review-toolkit:code-simplifier` in parallel on the diff. Apply findings. Then commit once, clean. Not optional. Subagents use `Skill tool` for the same gates and loop until both pass.
