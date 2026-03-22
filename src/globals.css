@@ -39,6 +39,19 @@
   /* Theme-owned special surfaces */
   --cf-block-header-accent: var(--cf-fg);
   --cf-block-header-padding: 12px;
+
+  /* Per-block-type accent colors (default to shared fallback) */
+  --cf-block-theorem-accent: var(--cf-block-header-accent);
+  --cf-block-lemma-accent: var(--cf-block-header-accent);
+  --cf-block-corollary-accent: var(--cf-block-header-accent);
+  --cf-block-proposition-accent: var(--cf-block-header-accent);
+  --cf-block-conjecture-accent: var(--cf-block-header-accent);
+  --cf-block-definition-accent: var(--cf-block-header-accent);
+  --cf-block-problem-accent: var(--cf-block-header-accent);
+  --cf-block-example-accent: var(--cf-block-header-accent);
+  --cf-block-remark-accent: var(--cf-block-header-accent);
+  --cf-block-proof-accent: var(--cf-block-header-accent);
+  --cf-block-algorithm-accent: var(--cf-block-header-accent);
   --cf-block-title-color: var(--cf-fg);
   --cf-block-title-weight: 700;
   --cf-block-theorem-style: italic;

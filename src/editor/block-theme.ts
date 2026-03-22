@@ -9,6 +9,41 @@ export const blockThemeStyles = {
     paddingLeft: "var(--cf-block-header-padding)",
   },
 
+  /* Per-block-type accent overrides (borderLeftColor only) */
+  ".cf-block-theorem .cf-block-header, .cf-block-theorem.cf-block-header": {
+    borderLeftColor: "var(--cf-block-theorem-accent)",
+  },
+  ".cf-block-lemma .cf-block-header, .cf-block-lemma.cf-block-header": {
+    borderLeftColor: "var(--cf-block-lemma-accent)",
+  },
+  ".cf-block-corollary .cf-block-header, .cf-block-corollary.cf-block-header": {
+    borderLeftColor: "var(--cf-block-corollary-accent)",
+  },
+  ".cf-block-proposition .cf-block-header, .cf-block-proposition.cf-block-header": {
+    borderLeftColor: "var(--cf-block-proposition-accent)",
+  },
+  ".cf-block-conjecture .cf-block-header, .cf-block-conjecture.cf-block-header": {
+    borderLeftColor: "var(--cf-block-conjecture-accent)",
+  },
+  ".cf-block-definition .cf-block-header, .cf-block-definition.cf-block-header": {
+    borderLeftColor: "var(--cf-block-definition-accent)",
+  },
+  ".cf-block-problem .cf-block-header, .cf-block-problem.cf-block-header": {
+    borderLeftColor: "var(--cf-block-problem-accent)",
+  },
+  ".cf-block-example .cf-block-header, .cf-block-example.cf-block-header": {
+    borderLeftColor: "var(--cf-block-example-accent)",
+  },
+  ".cf-block-remark .cf-block-header, .cf-block-remark.cf-block-header": {
+    borderLeftColor: "var(--cf-block-remark-accent)",
+  },
+  ".cf-block-proof .cf-block-header, .cf-block-proof.cf-block-header": {
+    borderLeftColor: "var(--cf-block-proof-accent)",
+  },
+  ".cf-block-algorithm .cf-block-header, .cf-block-algorithm.cf-block-header": {
+    borderLeftColor: "var(--cf-block-algorithm-accent)",
+  },
+
   /* Block header: rendered widget label (e.g. "Theorem 1.") */
   ".cf-block-header-rendered": {
     fontWeight: "var(--cf-block-title-weight)",
