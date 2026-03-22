@@ -44,8 +44,6 @@ export const sidenotesCollapsedField = StateField.define<boolean>({
   },
 });
 
-// Re-export splitByInlineMath for consumers that imported it from here
-export { splitByInlineMath } from "./inline-render";
 
 export interface FootnoteRef {
   readonly id: string;

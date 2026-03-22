@@ -109,10 +109,6 @@ fibonacci n = fibonacci (n-1) + fibonacci (n-2)
 https://gist.github.com/chaoxu/6094392
 :::
 
-# Cross-References and Citations
-
-See [@cormen2009] for details.
-
 # Blockquote with Math
 
 ::: Blockquote
@@ -143,3 +139,7 @@ This problem title uses the `title=` attribute and should render "3SUM" in bold.
 This has a footnote[^1].
 
 [^1]: This is the footnote content with math $x^2 + y^2 = r^2$.
+
+# Cross-References and Citations
+
+See [@cormen2009] for details.

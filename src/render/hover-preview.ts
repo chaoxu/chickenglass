@@ -23,7 +23,7 @@ import { bibDataField, findCitationsFromTree, type BibStore } from "../citations
 import { formatBibEntry } from "../citations/bibliography";
 import { renderKatex, stripMathDelimiters } from "./math-render";
 import { mathMacrosField } from "./math-macros";
-import { splitByInlineMath } from "./inline-render";
+import { renderInlineMarkdown } from "./inline-render";
 
 /** Maximum content length shown in hover previews. */
 const MAX_PREVIEW_LENGTH = 500;
@@ -64,23 +64,15 @@ function extractBlockContent(
 }
 
 /**
- * Render markdown content with inline KaTeX math into a DOM element.
- * Delegates to splitByInlineMath (Lezer-based) to avoid duplicate regex logic.
+ * Render markdown content with full inline formatting into a DOM element.
+ * Uses the shared Lezer-based renderInlineMarkdown (math, bold, italic, etc.).
  */
 function renderContentWithMath(
   container: HTMLElement,
   content: string,
   macros: Record<string, string>,
 ): void {
-  for (const seg of splitByInlineMath(content)) {
-    if (seg.isMath) {
-      const mathEl = document.createElement("span");
-      renderKatex(mathEl, seg.content, false, macros);
-      container.appendChild(mathEl);
-    } else {
-      container.appendChild(document.createTextNode(seg.content));
-    }
-  }
+  renderInlineMarkdown(container, content, macros);
 }
 
 /** Create a header div for the tooltip. */
