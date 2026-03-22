@@ -1,0 +1,485 @@
+import { Annotation } from "@codemirror/state";
+import { EditorView, WidgetType } from "@codemirror/view";
+import { createInlineEditor } from "../editor/inline-editor";
+import { renderInlineMarkdown } from "./inline-render";
+import { showWidgetContextMenu, applyTableMutation } from "./table-actions";
+import {
+  findClosestTable,
+  findClosestWidgetContainer,
+  findTablesInState,
+} from "./table-discovery";
+import { addRow, formatTable, type ParsedTable } from "./table-utils";
+
+/**
+ * Annotation attached to transactions dispatched by cell-edit sync.
+ * When `true`, the StateField maps existing decorations through the
+ * change instead of fully rebuilding — preventing the widget from
+ * being destroyed mid-edit.
+ */
+export const cellEditAnnotation = Annotation.define<boolean>();
+
+/** Module-level reference to the currently active inline cell editor. */
+let activeInlineEditor: {
+  view: EditorView;
+  cell: HTMLElement;
+} | null = null;
+
+/**
+ * Destroy the currently active inline editor (if any) and return
+ * the final document text from that editor.
+ */
+function destroyActiveInlineEditor(): string {
+  if (!activeInlineEditor) return "";
+  const { view: inlineView, cell } = activeInlineEditor;
+  const text = inlineView.state.doc.toString();
+  inlineView.destroy();
+  cell.classList.remove("cg-table-cell-editing");
+  cell.innerHTML = "";
+  activeInlineEditor = null;
+  return text;
+}
+
+/**
+ * Widget that renders a markdown table as an HTML <table> element.
+ *
+ * Used with Decoration.replace to show a rendered table. Cells display
+ * rendered inline markdown by default. On click, an InlineEditor (nested
+ * CM6 instance) is created inside the cell for Typora-style editing:
+ * math renders with KaTeX, bold/italic markers are hidden when the
+ * cursor is not adjacent, and the cell has its own undo/redo stack.
+ * Only one cell editor is active at a time.
+ */
+export class TableWidget extends WidgetType {
+  /** Reference to the EditorView, stored on first toDOM() call. */
+  private editorView: EditorView | null = null;
+
+  constructor(
+    private readonly table: ParsedTable,
+    private readonly tableText: string,
+    private tableFrom: number,
+    private readonly macros: Record<string, string>,
+  ) {
+    super();
+  }
+
+  /**
+   * Content-based equality check for DOM reuse.
+   * If the table text changed, CM6 will rebuild the DOM via toDOM().
+   */
+  eq(other: TableWidget): boolean {
+    return this.tableText === other.tableText;
+  }
+
+  /**
+   * Return the raw markdown text for a cell given its section and indices.
+   */
+  private getRawCellText(section: string, row: number, col: number): string {
+    if (section === "header") {
+      return col < this.table.header.cells.length
+        ? this.table.header.cells[col].content
+        : "";
+    }
+    if (row < this.table.rows.length && col < this.table.rows[row].cells.length) {
+      return this.table.rows[row].cells[col].content;
+    }
+    return "";
+  }
+
+  /**
+   * Build a new ParsedTable with one cell replaced.
+   */
+  private buildUpdatedTable(
+    section: string,
+    row: number,
+    col: number,
+    newContent: string,
+  ): ParsedTable {
+    if (section === "header") {
+      const cells = this.table.header.cells.map((cell, index) =>
+        index === col ? { content: newContent } : cell,
+      );
+      return { ...this.table, header: { cells } };
+    }
+    const rows = this.table.rows.map((tableRow, rowIndex) => {
+      if (rowIndex !== row) return tableRow;
+      const cells = tableRow.cells.map((cell, colIndex) =>
+        colIndex === col ? { content: newContent } : cell,
+      );
+      return { cells };
+    });
+    return { ...this.table, rows };
+  }
+
+  /**
+   * Render the parsed table as an HTML <table> with thead/tbody.
+   * Each cell gets data attributes for row, column, and section,
+   * and inline markdown rendering. Clicking a cell creates an InlineEditor.
+   */
+  toDOM(view: EditorView): HTMLElement {
+    this.editorView = view;
+
+    const container = document.createElement("div");
+    container.className = "cg-table-widget";
+    container.dataset.tableTextHash = this.tableText;
+    container.dataset.tableFrom = String(this.tableFrom);
+
+    const tableEl = document.createElement("table");
+
+    const activateTargetCell = (
+      linearRow: number,
+      targetCol: number,
+      placeAtEnd = false,
+    ): void => {
+      const targetSection = linearRow === 0 ? "header" : "body";
+      const targetRow = linearRow === 0 ? 0 : linearRow - 1;
+      const target = tableEl.querySelector(
+        `[data-section="${targetSection}"][data-row="${targetRow}"][data-col="${targetCol}"]`,
+      ) as HTMLElement | null;
+      if (target) {
+        target.dataset.placeAtEnd = placeAtEnd ? "true" : "false";
+        target.dispatchEvent(
+          new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+        );
+      }
+    };
+
+    const syncToRoot = (
+      editedSection: string,
+      editedRow: number,
+      editedCol: number,
+      editedText: string,
+      useAnnotation: boolean,
+    ): void => {
+      const rootView = this.editorView;
+      if (!rootView) return;
+      const currentTables = findTablesInState(rootView.state);
+      const bestTable = findClosestTable(currentTables, this.tableFrom);
+      if (!bestTable) return;
+      this.tableFrom = bestTable.from;
+      const currentText = rootView.state.sliceDoc(bestTable.from, bestTable.to);
+      const updated = this.buildUpdatedTable(editedSection, editedRow, editedCol, editedText);
+      const newText = formatTable(updated).join("\n");
+      if (newText === currentText) return;
+      rootView.dispatch({
+        changes: { from: bestTable.from, to: bestTable.to, insert: newText },
+        ...(useAnnotation ? { annotations: cellEditAnnotation.of(true) } : {}),
+      });
+    };
+
+    const setupCell = (
+      cell: HTMLElement,
+      section: string,
+      row: number,
+      col: number,
+      content: string,
+    ): void => {
+      cell.dataset.row = String(row);
+      cell.dataset.col = String(col);
+      cell.dataset.section = section;
+
+      const align = this.table.alignments[col];
+      if (align && align !== "none") {
+        cell.style.textAlign = align;
+      }
+
+      renderInlineMarkdown(cell, content, this.macros);
+
+      cell.addEventListener("mousedown", (event) => {
+        if (activeInlineEditor && activeInlineEditor.cell === cell) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const clickX = event.clientX;
+        const clickY = event.clientY;
+        const placeAtEnd = cell.dataset.placeAtEnd === "true";
+        delete cell.dataset.placeAtEnd;
+
+        if (activeInlineEditor) {
+          const oldText = activeInlineEditor.view.state.doc.toString();
+          const oldCell = activeInlineEditor.cell;
+          const oldSection = oldCell.dataset.section ?? "body";
+          const oldRow = parseInt(oldCell.dataset.row ?? "0", 10);
+          const oldCol = parseInt(oldCell.dataset.col ?? "0", 10);
+          destroyActiveInlineEditor();
+          renderInlineMarkdown(oldCell, oldText, this.macros);
+          syncToRoot(oldSection, oldRow, oldCol, oldText, true);
+        }
+
+        const rawText = this.getRawCellText(section, row, col);
+        cell.innerHTML = "";
+        cell.classList.add("cg-table-cell-editing");
+
+        const colCount = this.table.header.cells.length;
+        const bodyRowCount = this.table.rows.length;
+        const currentLinear = section === "header" ? 0 : row + 1;
+        const totalRows = 1 + bodyRowCount;
+
+        const editorView = createInlineEditor({
+          parent: cell,
+          doc: rawText,
+          macros: this.macros,
+          onChange: (newDoc) => {
+            syncToRoot(section, row, col, newDoc, true);
+          },
+          onBlur: () => {
+            setTimeout(() => {
+              if (!activeInlineEditor || activeInlineEditor.cell !== cell) return;
+              const editedText = destroyActiveInlineEditor();
+              renderInlineMarkdown(cell, editedText, this.macros);
+
+              const widgetContainer = cell.closest(".cg-table-widget");
+              const stillInTable =
+                widgetContainer && widgetContainer.contains(document.activeElement);
+              syncToRoot(section, row, col, editedText, !!stillInTable);
+            }, 0);
+          },
+          onKeydown: (event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              const text = destroyActiveInlineEditor();
+              renderInlineMarkdown(cell, text, this.macros);
+              syncToRoot(section, row, col, text, false);
+              this.editorView?.focus();
+              return true;
+            }
+
+            if (event.key === "Tab" && !event.shiftKey) {
+              event.preventDefault();
+              let nextCol = col + 1;
+              let nextLinear = currentLinear;
+              if (nextCol >= colCount) {
+                nextCol = 0;
+                nextLinear++;
+              }
+              if (nextLinear >= totalRows) {
+                const text = destroyActiveInlineEditor();
+                renderInlineMarkdown(cell, text, this.macros);
+                syncToRoot(section, row, col, text, true);
+                const rootView = this.editorView;
+                if (rootView) {
+                  const tables = findTablesInState(rootView.state);
+                  const matchingTable = findClosestTable(tables, this.tableFrom);
+                  if (matchingTable) {
+                    applyTableMutation(rootView, matchingTable, (parsed) => addRow(parsed));
+                  }
+                  setTimeout(() => {
+                    const closestEl = findClosestWidgetContainer(rootView, this.tableFrom);
+                    if (closestEl) {
+                      const newTarget = closestEl.querySelector(
+                        `[data-section="body"][data-row="${bodyRowCount}"][data-col="0"]`,
+                      ) as HTMLElement | null;
+                      if (newTarget) {
+                        newTarget.dispatchEvent(
+                          new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+                        );
+                      }
+                    }
+                  }, 0);
+                }
+              } else {
+                activateTargetCell(nextLinear, nextCol);
+              }
+              return true;
+            }
+
+            if (event.key === "Tab" && event.shiftKey) {
+              event.preventDefault();
+              let prevCol = col - 1;
+              let prevLinear = currentLinear;
+              if (prevCol < 0) {
+                prevCol = colCount - 1;
+                prevLinear--;
+              }
+              if (prevLinear < 0) return true;
+              activateTargetCell(prevLinear, prevCol, true);
+              return true;
+            }
+
+            if (event.key === "Enter") {
+              event.preventDefault();
+              const nextLinear = currentLinear + 1;
+              if (nextLinear >= totalRows) {
+                const text = destroyActiveInlineEditor();
+                renderInlineMarkdown(cell, text, this.macros);
+                syncToRoot(section, row, col, text, true);
+                const rootView = this.editorView;
+                if (rootView) {
+                  const tables = findTablesInState(rootView.state);
+                  const matchingTable = findClosestTable(tables, this.tableFrom);
+                  if (matchingTable) {
+                    applyTableMutation(rootView, matchingTable, (parsed) => addRow(parsed));
+                  }
+                  setTimeout(() => {
+                    const closestEl = findClosestWidgetContainer(rootView, this.tableFrom);
+                    if (closestEl) {
+                      const newTarget = closestEl.querySelector(
+                        `[data-section="body"][data-row="${bodyRowCount}"][data-col="${col}"]`,
+                      ) as HTMLElement | null;
+                      if (newTarget) {
+                        newTarget.dispatchEvent(
+                          new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+                        );
+                      }
+                    }
+                  }, 0);
+                }
+              } else {
+                activateTargetCell(nextLinear, col);
+              }
+              return true;
+            }
+
+            if (!activeInlineEditor) return false;
+            const pos = activeInlineEditor.view.state.selection.main.head;
+            const len = activeInlineEditor.view.state.doc.length;
+
+            if (event.key === "ArrowLeft" && pos === 0) {
+              event.preventDefault();
+              let prevCol = col - 1;
+              let prevLinear = currentLinear;
+              if (prevCol < 0) {
+                prevCol = colCount - 1;
+                prevLinear--;
+              }
+              if (prevLinear < 0) return true;
+              activateTargetCell(prevLinear, prevCol, true);
+              return true;
+            }
+
+            if (event.key === "ArrowRight" && pos === len) {
+              event.preventDefault();
+              let nextCol = col + 1;
+              let nextLinear = currentLinear;
+              if (nextCol >= colCount) {
+                nextCol = 0;
+                nextLinear++;
+              }
+              if (nextLinear >= totalRows) return true;
+              activateTargetCell(nextLinear, nextCol);
+              return true;
+            }
+
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              const prevLinear = currentLinear - 1;
+              if (prevLinear < 0) return true;
+              activateTargetCell(prevLinear, col);
+              return true;
+            }
+
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              const nextLinear = currentLinear + 1;
+              if (nextLinear >= totalRows) return true;
+              activateTargetCell(nextLinear, col);
+              return true;
+            }
+
+            if (event.key === "Backspace" && pos === 0) return true;
+            if (event.key === "Delete" && pos === len) return true;
+
+            return false;
+          },
+        });
+
+        activeInlineEditor = { view: editorView, cell };
+
+        if (placeAtEnd) {
+          const docLen = editorView.state.doc.length;
+          editorView.dispatch({ selection: { anchor: docLen } });
+        }
+        editorView.focus();
+
+        if (event.isTrusted) {
+          const pos = editorView.posAtCoords({ x: clickX, y: clickY });
+          if (pos !== null) {
+            editorView.dispatch({ selection: { anchor: pos } });
+          } else {
+            const docLen = editorView.state.doc.length;
+            editorView.dispatch({ selection: { anchor: docLen } });
+          }
+        }
+      });
+    };
+
+    const thead = document.createElement("thead");
+    const headerTr = document.createElement("tr");
+    const headerCells = this.table.header.cells;
+
+    for (let col = 0; col < headerCells.length; col++) {
+      const th = document.createElement("th");
+      setupCell(th, "header", 0, col, headerCells[col].content);
+      headerTr.appendChild(th);
+    }
+
+    thead.appendChild(headerTr);
+    tableEl.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+
+    for (let row = 0; row < this.table.rows.length; row++) {
+      const tr = document.createElement("tr");
+      const rowCells = this.table.rows[row].cells;
+
+      for (let col = 0; col < rowCells.length; col++) {
+        const td = document.createElement("td");
+        setupCell(td, "body", row, col, rowCells[col].content);
+        tr.appendChild(td);
+      }
+
+      tbody.appendChild(tr);
+    }
+
+    tableEl.appendChild(tbody);
+
+    tableEl.addEventListener("contextmenu", (event: MouseEvent) => {
+      let target = event.target as HTMLElement | null;
+      while (target && target !== tableEl) {
+        if (target.dataset.col !== undefined) break;
+        target = target.parentElement;
+      }
+      if (!target || target === tableEl || target.dataset.col === undefined) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const section = target.dataset.section ?? "body";
+      const row = parseInt(target.dataset.row ?? "0", 10);
+      const col = parseInt(target.dataset.col ?? "0", 10);
+
+      const tables = findTablesInState(view.state);
+      const tableRange = tables.find((range) => range.from === this.tableFrom);
+      if (!tableRange) return;
+
+      showWidgetContextMenu(view, tableRange, section, row, col, event.clientX, event.clientY);
+    });
+
+    container.appendChild(tableEl);
+
+    const observer = new ResizeObserver(() => {
+      view.requestMeasure();
+    });
+    observer.observe(container);
+
+    return container;
+  }
+
+  /**
+   * Return true so CM6 does NOT process events inside this widget.
+   * The InlineEditor cells handle their own clicks, input, and
+   * keyboard events. CM6 should not interfere.
+   */
+  ignoreEvent(): boolean {
+    return true;
+  }
+
+  /**
+   * Estimated height for CM6 scroll calculations.
+   * Approximates based on row count: ~32px per row + ~40px header.
+   */
+  get estimatedHeight(): number {
+    const rowCount = this.table.rows.length;
+    return 40 + rowCount * 32;
+  }
+}

@@ -634,6 +634,29 @@ describe("#281 — useEditor internal hook decomposition", () => {
   });
 });
 
+describe("#282 — interactive table subsystem decomposition", () => {
+  it("table discovery and helper module exists", async () => {
+    const mod = await import("../render/table-discovery");
+    expect(mod.findTablesInState).toBeDefined();
+    expect(mod.findTablesInView).toBeDefined();
+    expect(mod.findCellBounds).toBeDefined();
+  });
+
+  it("table action and navigation modules exist", async () => {
+    const actionMod = await import("../render/table-actions");
+    const navMod = await import("../render/table-navigation");
+    expect(actionMod.applyTableMutation).toBeDefined();
+    expect(actionMod.showTableContextMenu).toBeDefined();
+    expect(navMod.tableKeybindings).toBeDefined();
+  });
+
+  it("table widget module exists", async () => {
+    const mod = await import("../render/table-widget");
+    expect(mod.TableWidget).toBeDefined();
+    expect(mod.cellEditAnnotation).toBeDefined();
+  });
+});
+
 describe("#279 — shared Lezer document semantics", () => {
   it("shared document semantics analyzers exist", async () => {
     const mod = await import("../semantics/document");
