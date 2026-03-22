@@ -1,3 +1,4 @@
+export { MARK_NODES, isSafeUrl, buildKatexOptions } from "./inline-shared";
 export { markdownRenderPlugin } from "./markdown-render";
 export {
   cursorInRange,

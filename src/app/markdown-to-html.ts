@@ -21,6 +21,7 @@ import { parser as baseParser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
 import type { InlineRenderSurface } from "../inline-surface";
 import { markdownExtensions } from "../parser";
+import { MARK_NODES, isSafeUrl, buildKatexOptions } from "../render/inline-shared";
 import { type BibEntry } from "../citations/bibtex-parser";
 import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import {
@@ -61,19 +62,6 @@ export function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Check if a URL is safe to embed in href/src (blocks javascript:, data:, vbscript:). */
-function isSafeUrl(url: string): boolean {
-  const lower = url.trim().toLowerCase();
-  if (
-    lower.startsWith("javascript:") ||
-    lower.startsWith("data:") ||
-    lower.startsWith("vbscript:")
-  ) {
-    return false;
-  }
-  return true;
-}
-
 /**
  * Render KaTeX math, returning HTML string.
  * Falls back to escaped source on error.
@@ -84,15 +72,7 @@ function renderMath(
   macros?: Record<string, string>,
 ): string {
   try {
-    return katex.renderToString(latex, {
-      displayMode,
-      throwOnError: false,
-      trust: (context: { command: string; url?: string }) =>
-        (context.command === "\\href" || context.command === "\\url") &&
-        context.url != null &&
-        /^https?:\/\//.test(context.url),
-      ...(macros ? { macros: { ...macros } } : {}),
-    });
+    return katex.renderToString(latex, buildKatexOptions(displayMode, macros));
   } catch {
     const escaped = escapeHtml(latex);
     return displayMode
@@ -601,20 +581,6 @@ function renderBlockquote(node: SyntaxNode, ctx: WalkContext): string {
 }
 
 // ── Inline content rendering ────────────────────────────────────────────────
-
-/** Set of node names that are "marks" (delimiters) to skip. */
-const MARK_NODES = new Set([
-  "EmphasisMark",
-  "CodeMark",
-  "LinkMark",
-  "StrikethroughMark",
-  "HighlightMark",
-  "InlineMathMark",
-  "HeaderMark",
-  "ListMark",
-  "TaskMarker",
-  "TableDelimiter",
-]);
 
 /**
  * Render the inline children of a node (e.g., Paragraph, Emphasis).

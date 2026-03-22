@@ -23,6 +23,7 @@ import type { SyntaxNode } from "@lezer/common";
 import { markdownExtensions } from "../parser";
 import type { InlineRenderSurface } from "../inline-surface";
 import { stripMathDelimiters } from "./math-render";
+import { MARK_NODES, isSafeUrl, buildKatexOptions } from "./inline-shared";
 
 /** Standalone Lezer parser for splitting inline math without a CM6 editor context. */
 const inlineParser = baseParser.configure(markdownExtensions);
@@ -64,29 +65,10 @@ export function splitByInlineMath(text: string): InlineSegment[] {
 
 // ── Lezer tree-walking inline renderer ──────────────────────────────────────
 
-/** Set of node names that are "marks" (delimiters) to skip. */
-const MARK_NODES = new Set([
-  "EmphasisMark",
-  "CodeMark",
-  "LinkMark",
-  "StrikethroughMark",
-  "HighlightMark",
-  "InlineMathMark",
-]);
-
 type DomInlineSurface = InlineRenderSurface | "document-body";
 
 function isUiChromeSurface(surface: DomInlineSurface): boolean {
   return surface === "ui-chrome-inline";
-}
-
-function isSafeUrl(url: string): boolean {
-  const lower = url.trim().toLowerCase();
-  return !(
-    lower.startsWith("javascript:") ||
-    lower.startsWith("data:") ||
-    lower.startsWith("vbscript:")
-  );
 }
 
 /**
@@ -195,11 +177,7 @@ function renderInlineNode(
       const raw = text.slice(node.from, node.to);
       const latex = stripMathDelimiters(raw, false);
       try {
-        span.innerHTML = katex.renderToString(latex, {
-          throwOnError: false,
-          displayMode: false,
-          macros,
-        });
+        span.innerHTML = katex.renderToString(latex, buildKatexOptions(false, macros));
       } catch {
         // KaTeX render failed — show raw LaTeX source as fallback
         span.textContent = raw;
