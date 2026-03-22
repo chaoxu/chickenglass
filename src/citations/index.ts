@@ -11,9 +11,7 @@ export {
   bibDataEffect,
   bibDataField,
   findCitations,
-  findCitationsFromTree,
   formatParenthetical,
-  collectCitationRanges,
   CitationWidget,
   NarrativeCitationWidget,
 } from "./citation-render";
