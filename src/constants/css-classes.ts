@@ -1,0 +1,122 @@
+/**
+ * Typed constants for all cf-* CSS class names used in decorations.
+ *
+ * Central registry so class names are never hardcoded as bare strings
+ * in decoration code. Downstream files import from here instead of
+ * duplicating string literals.
+ */
+
+/** CSS class name builders and constants for block decorations. */
+export const CSS = {
+  /** Block wrapper: "cf-block cf-block-{type}" */
+  block: (type: string) => `cf-block cf-block-${type}`,
+
+  /** Block header line (rendered mode). */
+  blockHeader: "cf-block-header",
+
+  /** Block source line (editing mode — cursor on fence). */
+  blockSource: "cf-block-source",
+
+  /** Rendered block header widget (label text). */
+  blockHeaderRendered: "cf-block-header-rendered",
+
+  /** Title paren widgets around user-supplied title text. */
+  blockTitleParen: "cf-block-title-paren",
+
+  /** QED tombstone marker on last content line of proof blocks. */
+  blockQed: "cf-block-qed",
+
+  /** Include fence lines — collapsed to zero height. */
+  includeFence: "cf-include-fence",
+
+  /** Fenced div nesting guide by depth (1-based). */
+  fenceDepth: (depth: number) => `cf-fence-d${depth}`,
+
+  /** Source mode editor attribute. */
+  sourceMode: "cf-source-mode",
+
+  /** Read mode editor attribute. */
+  readMode: "cf-read-mode",
+
+  /** Embed container: "cf-embed cf-embed-{type}". */
+  embed: (type: string) => `cf-embed cf-embed-${type}`,
+
+  /** Embed iframe element. */
+  embedIframe: "cf-embed-iframe",
+
+  /** YouTube-specific iframe class. */
+  embedYoutubeIframe: "cf-embed-iframe cf-embed-youtube-iframe",
+
+  /** Image wrapper, image element, and error state. */
+  imageWrapper: "cf-image-wrapper",
+  image: "cf-image",
+  imageError: "cf-image-error",
+
+  /** Heading fold toggle. */
+  foldToggle: "cf-fold-toggle",
+  foldToggleFolded: "cf-fold-toggle-folded",
+  foldLine: "cf-fold-line",
+
+  /** Heading line decoration: "cf-heading-line-{level}". */
+  headingLine: (level: number) => `cf-heading-line-${level}`,
+
+  /** Inline math wrapper. */
+  mathInline: "cf-math-inline",
+
+  /** Display math wrapper. */
+  mathDisplay: "cf-math-display",
+
+  /** Code block decorations. */
+  codeblockHeader: "cf-codeblock-header",
+  codeblockBody: "cf-codeblock-body",
+  codeblockLast: "cf-codeblock-last",
+  codeblockLanguage: "cf-codeblock-language",
+  codeblockCopy: "cf-codeblock-copy",
+  codeblockHovered: "cf-codeblock-hovered",
+
+  /** Table widget. */
+  tableWidget: "cf-table-widget",
+  tableCellEditing: "cf-table-cell-editing",
+
+  /** Include region and label. */
+  includeRegion: "cf-include-region",
+  includeLabel: "cf-include-label",
+  includeLabelActive: "cf-include-label-active",
+
+  /** Sidenote margin. */
+  sidenoteRef: "cf-sidenote-ref",
+  sidenoteDefLine: "cf-sidenote-def-line",
+
+  /** Bibliography. */
+  bibliography: "cf-bibliography",
+  bibliographyHeading: "cf-bibliography-heading",
+  bibliographyList: "cf-bibliography-list",
+  bibliographyEntry: "cf-bibliography-entry",
+
+  /** Cross-reference. */
+  crossref: "cf-crossref",
+
+  /** Citation. */
+  citation: "cf-citation",
+
+  /** Hover preview. */
+  hoverPreview: "cf-hover-preview",
+  hoverPreviewBody: "cf-hover-preview-body",
+  hoverPreviewHeader: "cf-hover-preview-header",
+  hoverPreviewUnresolved: "cf-hover-preview-unresolved",
+  hoverPreviewCitation: "cf-hover-preview-citation",
+
+  /** Document title from frontmatter. */
+  docTitle: "cf-doc-title",
+
+  /** Read mode view container. */
+  readModeView: "cf-read-mode-view",
+  readTitle: "cf-read-title",
+  sectionNumber: "cf-section-number",
+
+  /** Block blockquote. */
+  blockBlockquote: "cf-block-blockquote",
+
+  /** Block include. */
+  blockInclude: "cf-block-include",
+} as const;

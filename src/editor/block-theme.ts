@@ -1,47 +1,40 @@
 /**
  * Block and structural styles: fenced div headers/nesting, QED tombstone,
  * blockquotes, images, tables, table toolbar, embeds, and include regions.
+ *
+ * Per-block-type accent and body-style rules are auto-generated from
+ * STYLED_BLOCK_NAMES (derived from BLOCK_MANIFEST in src/constants/).
  */
-export const blockThemeStyles = {
+
+import { STYLED_BLOCK_NAMES } from "../constants/block-manifest";
+
+/** Auto-generate per-block-type accent override rules from the manifest. */
+function buildAccentRules(): Record<string, Record<string, string>> {
+  const rules: Record<string, Record<string, string>> = {};
+  for (const name of STYLED_BLOCK_NAMES) {
+    const selector = `.cf-block-${name} .cf-block-header, .cf-block-${name}.cf-block-header`;
+    rules[selector] = { borderLeftColor: `var(--cf-block-${name}-accent)` };
+  }
+  return rules;
+}
+
+/** Auto-generate per-block-type body font-style rules from the manifest. */
+function buildBodyStyleRules(): Record<string, Record<string, string>> {
+  const rules: Record<string, Record<string, string>> = {};
+  for (const name of STYLED_BLOCK_NAMES) {
+    rules[`.cf-block-${name}`] = { fontStyle: `var(--cf-block-${name}-style)` };
+  }
+  return rules;
+}
+
+export const blockThemeStyles: Record<string, Record<string, string>> = {
   /* Block header line — left border accent for fenced div blocks */
   ".cf-block-header": {
     borderLeft: "var(--cf-block-header-border-width) solid var(--cf-block-header-accent)",
   },
 
-  /* Per-block-type accent overrides (borderLeftColor only) */
-  ".cf-block-theorem .cf-block-header, .cf-block-theorem.cf-block-header": {
-    borderLeftColor: "var(--cf-block-theorem-accent)",
-  },
-  ".cf-block-lemma .cf-block-header, .cf-block-lemma.cf-block-header": {
-    borderLeftColor: "var(--cf-block-lemma-accent)",
-  },
-  ".cf-block-corollary .cf-block-header, .cf-block-corollary.cf-block-header": {
-    borderLeftColor: "var(--cf-block-corollary-accent)",
-  },
-  ".cf-block-proposition .cf-block-header, .cf-block-proposition.cf-block-header": {
-    borderLeftColor: "var(--cf-block-proposition-accent)",
-  },
-  ".cf-block-conjecture .cf-block-header, .cf-block-conjecture.cf-block-header": {
-    borderLeftColor: "var(--cf-block-conjecture-accent)",
-  },
-  ".cf-block-definition .cf-block-header, .cf-block-definition.cf-block-header": {
-    borderLeftColor: "var(--cf-block-definition-accent)",
-  },
-  ".cf-block-problem .cf-block-header, .cf-block-problem.cf-block-header": {
-    borderLeftColor: "var(--cf-block-problem-accent)",
-  },
-  ".cf-block-example .cf-block-header, .cf-block-example.cf-block-header": {
-    borderLeftColor: "var(--cf-block-example-accent)",
-  },
-  ".cf-block-remark .cf-block-header, .cf-block-remark.cf-block-header": {
-    borderLeftColor: "var(--cf-block-remark-accent)",
-  },
-  ".cf-block-proof .cf-block-header, .cf-block-proof.cf-block-header": {
-    borderLeftColor: "var(--cf-block-proof-accent)",
-  },
-  ".cf-block-algorithm .cf-block-header, .cf-block-algorithm.cf-block-header": {
-    borderLeftColor: "var(--cf-block-algorithm-accent)",
-  },
+  /* Per-block-type accent overrides (auto-generated from BLOCK_MANIFEST) */
+  ...buildAccentRules(),
 
   /* Block header: rendered widget label (e.g. "Theorem 1.") */
   ".cf-block-header-rendered": {
@@ -71,18 +64,8 @@ export const blockThemeStyles = {
     boxShadow: "inset 3px 0 0 var(--cf-block-nest-4)",
   },
 
-  /* Per-block-type body font style */
-  ".cf-block-theorem": { fontStyle: "var(--cf-block-theorem-style)" },
-  ".cf-block-lemma": { fontStyle: "var(--cf-block-lemma-style)" },
-  ".cf-block-corollary": { fontStyle: "var(--cf-block-corollary-style)" },
-  ".cf-block-proposition": { fontStyle: "var(--cf-block-proposition-style)" },
-  ".cf-block-conjecture": { fontStyle: "var(--cf-block-conjecture-style)" },
-  ".cf-block-definition": { fontStyle: "var(--cf-block-definition-style)" },
-  ".cf-block-problem": { fontStyle: "var(--cf-block-problem-style)" },
-  ".cf-block-example": { fontStyle: "var(--cf-block-example-style)" },
-  ".cf-block-remark": { fontStyle: "var(--cf-block-remark-style)" },
-  ".cf-block-proof": { fontStyle: "var(--cf-block-proof-style)" },
-  ".cf-block-algorithm": { fontStyle: "var(--cf-block-algorithm-style)" },
+  /* Per-block-type body font style (auto-generated from BLOCK_MANIFEST) */
+  ...buildBodyStyleRules(),
 
   /* QED tombstone — right-aligned at end of proof blocks */
   ".cf-block-qed::after": {

@@ -41,7 +41,11 @@
   --cf-block-header-border-width: 0px;
   --cf-block-header-padding: 0px;
 
-  /* Per-block-type accent colors (default to shared fallback) */
+  /* Per-block-type accent colors (default to shared fallback).
+   * These tokens match the STYLED_BLOCK_NAMES list derived from
+   * BLOCK_MANIFEST in src/constants/block-manifest.ts. When adding
+   * a new block type, add its entry to the manifest and corresponding
+   * --cf-block-{name}-accent and --cf-block-{name}-style tokens here. */
   --cf-block-theorem-accent: var(--cf-block-header-accent);
   --cf-block-lemma-accent: var(--cf-block-header-accent);
   --cf-block-corollary-accent: var(--cf-block-header-accent);
@@ -55,7 +59,7 @@
   --cf-block-algorithm-accent: var(--cf-block-header-accent);
   --cf-block-title-color: var(--cf-fg);
   --cf-block-title-weight: 700;
-  /* Per-block-type body font style */
+  /* Per-block-type body font style — must match BLOCK_MANIFEST bodyStyle values */
   --cf-block-theorem-style: italic;
   --cf-block-lemma-style: italic;
   --cf-block-corollary-style: italic;
