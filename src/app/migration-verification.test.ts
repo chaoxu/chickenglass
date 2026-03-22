@@ -557,3 +557,36 @@ describe("#286 — shared app chrome primitives", () => {
     expect(fileExists("src/app/components/ui/slider.tsx")).toBe(true);
   });
 });
+
+describe("#280 — AppInner controller decomposition", () => {
+  it("workspace/session controller hook exists", async () => {
+    const mod = await import("./hooks/use-app-workspace-session");
+    expect(mod.useAppWorkspaceSession).toBeDefined();
+  });
+
+  it("editor shell controller hook exists", async () => {
+    const mod = await import("./hooks/use-app-editor-shell");
+    expect(mod.useAppEditorShell).toBeDefined();
+  });
+
+  it("session persistence and overlay controller hooks exist", async () => {
+    const sessionMod = await import("./hooks/use-app-session-persistence");
+    const overlayMod = await import("./hooks/use-app-overlays");
+    expect(sessionMod.useAppSessionPersistence).toBeDefined();
+    expect(overlayMod.useAppOverlays).toBeDefined();
+  });
+
+  it("debug controller hook exists", async () => {
+    const mod = await import("./hooks/use-app-debug");
+    expect(mod.useAppDebug).toBeDefined();
+  });
+
+  it("app shell composition components exist", async () => {
+    const sidebarMod = await import("./components/app-sidebar-shell");
+    const mainMod = await import("./components/app-main-shell");
+    const overlaysMod = await import("./components/app-overlays");
+    expect(sidebarMod.AppSidebarShell).toBeDefined();
+    expect(mainMod.AppMainShell).toBeDefined();
+    expect(overlaysMod.AppOverlays).toBeDefined();
+  });
+});
