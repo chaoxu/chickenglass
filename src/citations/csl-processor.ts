@@ -1,9 +1,10 @@
 /**
  * CSL (Citation Style Language) processor.
  *
- * Wraps citeproc-js to format citations and bibliographies according to
- * a CSL style. Converts BibEntry objects to CSL-JSON, processes them
- * through citeproc, and returns formatted HTML strings.
+ * Wraps citation-js (@citation-js/core + @citation-js/plugin-csl) to format
+ * citations and bibliographies according to a CSL style. Converts BibEntry
+ * objects to CSL-JSON, processes them through citeproc (via citation-js),
+ * and returns formatted HTML strings.
  *
  * Usage:
  *   const processor = new CslProcessor(items);
@@ -12,10 +13,10 @@
  *   const bib = processor.bibliography(["karger2000"]);
  */
 
-import CSL from "citeproc";
+import { plugins, type CiteprocEngine } from "@citation-js/core";
+import "@citation-js/plugin-csl";
 import { type BibEntry, parseAuthorNames } from "./bibtex-parser";
 import { formatParenthetical, type BibStore } from "./citation-render";
-import enUsLocale from "./en-us-locale.xml?raw";
 import defaultCslStyle from "./ieee.csl?raw";
 
 /** CSL-JSON item (subset of fields used by citeproc). */
@@ -63,9 +64,9 @@ const SORTED_LOCATOR_KEYS = [...LOCATOR_TERMS.keys()].sort(
 
 /**
  * Parse a Pandoc-style locator string into a CSL label and locator value.
- * E.g. "chap. 36" → { label: "chapter", locator: "36" }
- * E.g. "pp. 100-120" → { label: "page", locator: "100-120" }
- * E.g. "theorem 3" → { locator: "theorem 3" } (no recognized label)
+ * E.g. "chap. 36" -> { label: "chapter", locator: "36" }
+ * E.g. "pp. 100-120" -> { label: "page", locator: "100-120" }
+ * E.g. "theorem 3" -> { locator: "theorem 3" } (no recognized label)
  */
 export function parseLocator(raw: string): { locator: string; label?: string } {
   const text = raw.trim();
@@ -114,8 +115,8 @@ export function bibEntryToCsl(entry: BibEntry): CslItem {
   if (entry.doi) item.DOI = entry.doi;
   if (entry.url) item.URL = entry.url;
   if (entry.edition) {
-    // Strip ordinal suffixes — citeproc formats ordinals itself.
-    // "3rd" → "3", "1st" → "1", "Second" → "Second" (kept as-is).
+    // Strip ordinal suffixes -- citeproc formats ordinals itself.
+    // "3rd" -> "3", "1st" -> "1", "Second" -> "Second" (kept as-is).
     item.edition = entry.edition.replace(/(\d+)(?:st|nd|rd|th)\b/i, "$1");
   }
 
@@ -127,16 +128,19 @@ export function bibEntryToCsl(entry: BibEntry): CslItem {
   return item;
 }
 
+/** Unique template name used to register the active CSL style with citation-js. */
+const STYLE_NAME = "coflat-active";
+
 /**
  * CSL citation processor.
  *
- * Wraps citeproc-js with a simple API for formatting citations
+ * Wraps citation-js with a simple API for formatting citations
  * and bibliographies from BibEntry data.
  */
 export class CslProcessor {
   private items: Map<string, CslItem>;
   private bibStore: BibStore;
-  private engine: InstanceType<typeof CSL.Engine> | null = null;
+  private engine: CiteprocEngine | null = null;
   private styleXml: string;
 
   constructor(entries: BibEntry[], styleXml?: string) {
@@ -207,8 +211,7 @@ export class CslProcessor {
         }
         return { id };
       });
-      const result = this.engine.makeCitationCluster(items);
-      return result;
+      return this.engine.makeCitationCluster(items);
     } catch {
       // Fallback: delegate to the shared formatting utility
       return formatParenthetical(ids, this.bibStore, locators);
@@ -219,7 +222,7 @@ export class CslProcessor {
   citeNarrative(id: string): string {
     const item = this.items.get(id);
     if (!item) return id;
-    // citeproc doesn't have a direct narrative mode —
+    // citeproc doesn't have a direct narrative mode --
     // we extract author and year separately
     const author = item.author?.map((a) => a.family).join(", ") ?? id;
     const year = item.issued?.["date-parts"]?.[0]?.[0] ?? "";
@@ -250,28 +253,21 @@ export class CslProcessor {
       if (validIds.length === 0) return [];
       this.engine.updateItems(validIds);
       const [, entries] = this.engine.makeBibliography();
-      return entries.map((e) => e.trim());
+      return entries.map((e: string) => e.trim());
     } catch {
-      // CSL engine may fail on malformed entries — return empty bibliography
+      // CSL engine may fail on malformed entries -- return empty bibliography
       return [];
     }
   }
 
   private initEngine(): void {
-    const items = this.items;
-    const sys = {
-      retrieveLocale(): string {
-        return enUsLocale;
-      },
-      retrieveItem(id: string): CslItem | undefined {
-        return items.get(id);
-      },
-    };
-
     try {
-      this.engine = new CSL.Engine(sys, this.styleXml);
+      const cslConfig = plugins.config.get("@csl");
+      cslConfig.templates.add(STYLE_NAME, this.styleXml);
+      const data = [...this.items.values()];
+      this.engine = cslConfig.engine(data, STYLE_NAME, "en-US", "html");
     } catch {
-      // Invalid or unsupported CSL style XML — disable engine, fall back to simple formatting
+      // Invalid or unsupported CSL style XML -- disable engine, fall back to simple formatting
       this.engine = null;
     }
   }

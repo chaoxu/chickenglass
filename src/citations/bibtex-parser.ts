@@ -1,11 +1,13 @@
 /**
- * BibTeX parser adapter using @retorquere/bibtex-parser.
+ * BibTeX parser adapter using citation-js (@citation-js/plugin-bibtex).
  *
- * Normalizes the library's rich output into the flat BibEntry interface
- * used throughout the application.
+ * Parses BibTeX content via citation-js (which produces CSL-JSON) and
+ * normalizes the output into the flat BibEntry interface used throughout
+ * the application.
  */
 
-import { parse, type Entry, type Creator } from "@retorquere/bibtex-parser";
+import { Cite } from "@citation-js/core";
+import "@citation-js/plugin-bibtex";
 
 /** A single parsed BibTeX entry. */
 export interface BibEntry {
@@ -27,23 +29,92 @@ export interface BibEntry {
   [field: string]: string | undefined;
 }
 
+/** CSL-JSON type mapping back to BibTeX entry types. */
+const CSL_TO_BIBTEX_TYPE: Record<string, string> = {
+  "article-journal": "article",
+  "book": "book",
+  "paper-conference": "inproceedings",
+  "chapter": "incollection",
+  "thesis": "thesis",
+  "report": "techreport",
+  "document": "misc",
+  "manuscript": "unpublished",
+  "webpage": "misc",
+};
+
+/** CSL-JSON item shape (subset of fields we read). */
+interface CslJsonItem {
+  id: string;
+  type: string;
+  "citation-key"?: string;
+  author?: Array<{ family?: string; given?: string; literal?: string }>;
+  title?: string;
+  "container-title"?: string;
+  publisher?: string;
+  volume?: string;
+  issue?: string;
+  page?: string;
+  DOI?: string;
+  URL?: string;
+  edition?: string;
+  issued?: { "date-parts"?: number[][] };
+  [key: string]: unknown;
+}
+
 /**
- * Format a Creator array back into a BibTeX-style author string.
+ * Format a CSL-JSON name array back into a BibTeX-style author string.
  * Produces "Last, First and Last, First" format.
  */
-function formatCreators(creators: Creator[]): string {
-  return creators
-    .map((c) => {
-      if (c.name) return c.name;
-      const parts: string[] = [];
-      if (c.prefix) parts.push(c.prefix);
-      if (c.lastName) parts.push(c.lastName);
-      if (c.firstName) {
-        return `${parts.join(" ")}, ${c.firstName}`;
-      }
-      return parts.join(" ");
+function formatCslAuthors(
+  authors: Array<{ family?: string; given?: string; literal?: string }>,
+): string {
+  return authors
+    .map((a) => {
+      if (a.literal) return a.literal;
+      const family = a.family ?? "";
+      const given = a.given ?? "";
+      if (given) return `${family}, ${given}`;
+      return family;
     })
     .join(" and ");
+}
+
+/**
+ * Convert a CSL-JSON item (from citation-js) into our flat BibEntry interface.
+ */
+function cslItemToBibEntry(item: CslJsonItem): BibEntry {
+  const result: BibEntry = {
+    id: (item["citation-key"] as string) ?? item.id,
+    type: CSL_TO_BIBTEX_TYPE[item.type] ?? "misc",
+  };
+
+  if (item.author && item.author.length > 0) {
+    result.author = formatCslAuthors(item.author);
+  }
+  if (item.title) result.title = item.title;
+
+  // Map container-title back to journal or booktitle based on entry type
+  if (item["container-title"]) {
+    if (item.type === "article-journal") {
+      result.journal = item["container-title"];
+    } else {
+      result.booktitle = item["container-title"];
+    }
+  }
+
+  if (item.publisher) result.publisher = item.publisher;
+  if (item.volume) result.volume = String(item.volume);
+  if (item.issue) result.number = String(item.issue);
+  if (item.page) result.pages = item.page;
+  if (item.DOI) result.doi = item.DOI;
+  if (item.URL) result.url = item.URL;
+  if (item.edition) result.edition = String(item.edition);
+
+  if (item.issued?.["date-parts"]?.[0]?.[0] != null) {
+    result.year = String(item.issued["date-parts"][0][0]);
+  }
+
+  return result;
 }
 
 /** Placeholder tokens for escaped braces during brace stripping. */
@@ -109,47 +180,11 @@ export function cleanBibtex(text: string): string {
   return result;
 }
 
-/** Fields where the library returns Creator[] instead of string. */
-const CREATOR_FIELDS = new Set([
-  "author", "bookauthor", "collaborator", "commentator", "director",
-  "editor", "editora", "editorb", "editors", "holder",
-  "scriptwriter", "translator",
-]);
-
-/** Fields where the library returns string[] instead of string. */
-const ARRAY_FIELDS = new Set([
-  "keywords", "institution", "publisher", "origpublisher",
-  "organization", "location", "origlocation",
-]);
-
-/**
- * Convert a library Entry into our flat BibEntry interface.
- */
-function toBibEntry(entry: Entry): BibEntry {
-  const result: BibEntry = {
-    id: entry.key,
-    type: entry.type.toLowerCase(),
-  };
-
-  for (const [key, value] of Object.entries(entry.fields)) {
-    if (value === undefined || value === null) continue;
-    // Never let a BibTeX "id" field overwrite the citation key from @type{key,
-    if (key === "id") continue;
-
-    if (CREATOR_FIELDS.has(key) && Array.isArray(value)) {
-      result[key] = cleanBibtex(formatCreators(value as Creator[]));
-    } else if (ARRAY_FIELDS.has(key) && Array.isArray(value)) {
-      result[key] = cleanBibtex((value as string[]).join(" and "));
-    } else if (typeof value === "string") {
-      result[key] = cleanBibtex(value);
-    }
-  }
-
-  return result;
-}
-
 /**
  * Parse BibTeX content into an array of structured entries.
+ *
+ * Uses citation-js for BibTeX parsing (BibTeX -> CSL-JSON), then maps
+ * CSL-JSON items back to the flat BibEntry interface.
  *
  * @param content - The full text content of a .bib file
  * @returns Array of parsed BibEntry objects
@@ -158,13 +193,10 @@ export function parseBibTeX(content: string): BibEntry[] {
   if (!content.trim()) return [];
 
   try {
-    const library = parse(content, {
-      english: false,
-      raw: true,
-    });
-    return library.entries.map(toBibEntry);
+    const cite = new Cite(content);
+    return (cite.data as CslJsonItem[]).map(cslItemToBibEntry);
   } catch {
-    // Malformed BibTeX content — return empty list rather than crashing
+    // Malformed BibTeX content -- return empty list rather than crashing
     return [];
   }
 }
