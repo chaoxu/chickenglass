@@ -1,3 +1,5 @@
+import { defaultCodeFontStack } from "./editor-constants";
+
 /**
  * Theme presets: typed typography configurations for the editor.
  *
@@ -35,7 +37,7 @@ export interface ThemePreset {
 const academic: ThemePreset = {
   name: "Academic",
   contentFont: "KaTeX_Main, 'Times New Roman', serif",
-  codeFont: "'IBM Plex Mono', 'Fira Code', monospace",
+  codeFont: defaultCodeFontStack,
   baseFontSize: "16px",
   lineHeight: "1.5",
   contentMaxWidth: "800px",
@@ -54,7 +56,7 @@ const academic: ThemePreset = {
 const monospace: ThemePreset = {
   name: "Monospace",
   contentFont: "'IBM Plex Mono', 'Fira Code', monospace",
-  codeFont: "'IBM Plex Mono', 'Fira Code', monospace",
+  codeFont: defaultCodeFontStack,
   baseFontSize: "15px",
   lineHeight: "1.6",
   contentMaxWidth: "800px",
@@ -72,7 +74,7 @@ const monospace: ThemePreset = {
 const modern: ThemePreset = {
   name: "Modern",
   contentFont: "system-ui, -apple-system, 'Segoe UI', sans-serif",
-  codeFont: "'IBM Plex Mono', 'Fira Code', monospace",
+  codeFont: defaultCodeFontStack,
   baseFontSize: "16px",
   lineHeight: "1.5",
   contentMaxWidth: "800px",

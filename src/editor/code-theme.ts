@@ -10,18 +10,20 @@ export const codeThemeStyles = {
   ".cg-codeblock-header": {
     position: "relative",
     fontFamily: monoFont,
+    fontSize: "0.85em",
     backgroundColor: "var(--cg-subtle)",
     borderTop: "1px solid var(--cg-border)",
     borderLeft: "1px solid var(--cg-border)",
     borderRight: "1px solid var(--cg-border)",
     borderTopLeftRadius: "4px",
     borderTopRightRadius: "4px",
-    padding: "4px 12px 0 12px",
-    fontSize: "0.75em",
-    lineHeight: "2",
+    padding: "0 12px",
+    lineHeight: "inherit",
   },
-  ".cg-codeblock-header[data-language]::before": {
-    content: "attr(data-language)",
+  ".cg-codeblock-header-widget": {
+    display: "inline",
+  },
+  ".cg-codeblock-language": {
     fontWeight: "600",
     color: "var(--cg-muted)",
     textTransform: "uppercase",
@@ -30,6 +32,7 @@ export const codeThemeStyles = {
   },
   ".cg-codeblock-body": {
     fontFamily: monoFont,
+    fontSize: "0.85em",
     backgroundColor: "var(--cg-subtle)",
     borderLeft: "1px solid var(--cg-border)",
     borderRight: "1px solid var(--cg-border)",
@@ -38,6 +41,7 @@ export const codeThemeStyles = {
   },
   ".cg-codeblock-last": {
     fontFamily: monoFont,
+    fontSize: "0.85em",
     backgroundColor: "var(--cg-subtle)",
     borderLeft: "1px solid var(--cg-border)",
     borderRight: "1px solid var(--cg-border)",
@@ -53,30 +57,60 @@ export const codeThemeStyles = {
   ".cg-codeblock-copy": {
     position: "absolute",
     right: "8px",
-    top: "4px",
-    padding: "2px 6px",
-    fontSize: "11px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "24px",
+    height: "24px",
+    padding: "0",
     color: "var(--cg-muted)",
     backgroundColor: "transparent",
     border: "1px solid transparent",
     borderRadius: "2px",
     cursor: "pointer",
-    fontFamily: monoFont,
     opacity: "0",
     transition: "opacity 0.15s",
   },
-  ".cg-codeblock-header:hover .cg-codeblock-copy": {
-    opacity: "1",
+  ".cg-codeblock-copy svg": {
+    width: "14px",
+    height: "14px",
+    display: "block",
   },
+  ".cg-codeblock-header:hover .cg-codeblock-copy, .cg-codeblock-header.cg-codeblock-hovered .cg-codeblock-copy":
+    {
+    opacity: "1",
+    },
   ".cg-codeblock-copy:hover": {
     color: "var(--cg-fg)",
-    borderColor: "var(--cg-border)",
   },
 
   /* Source mode: keep monospace font and subtle bg when cursor is inside */
   ".cg-codeblock-source": {
     fontFamily: monoFont,
+    fontSize: "0.85em",
     backgroundColor: "var(--cg-subtle)",
+  },
+  ".cg-codeblock-source-open": {
+    borderTop: "1px solid var(--cg-border)",
+    borderLeft: "1px solid var(--cg-border)",
+    borderRight: "1px solid var(--cg-border)",
+    borderTopLeftRadius: "4px",
+    borderTopRightRadius: "4px",
+    lineHeight: "inherit",
+    paddingLeft: "12px",
+    paddingRight: "12px",
+  },
+  ".cg-codeblock-source-close": {
+    borderLeft: "1px solid var(--cg-border)",
+    borderRight: "1px solid var(--cg-border)",
+    borderBottom: "1px solid var(--cg-border)",
+    borderBottomLeftRadius: "4px",
+    borderBottomRightRadius: "4px",
+    lineHeight: "inherit",
+    paddingLeft: "12px",
+    paddingRight: "12px",
   },
 
   /* ── B&W syntax highlighting ─────────────────────────────────

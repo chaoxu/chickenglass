@@ -85,7 +85,7 @@ body {
 
 /* Source mode uses monospace font for all content */
 .cg-source-mode .cm-content {
-  font-family: var(--cg-code-font, 'IBM Plex Mono', 'Fira Code', monospace);
+  font-family: var(--cg-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
 }
 
 /* ── Sidenote margin (portal + items) ──────────────────────────────────────
@@ -127,7 +127,7 @@ body {
   font-size: 0.75rem;
   line-height: 1.625;
   color: var(--cg-fg);
-  font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+  font-family: var(--cg-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   pointer-events: auto;
   cursor: pointer;
   overflow-wrap: break-word;
@@ -191,7 +191,7 @@ body {
   font-size: 0.8em;
   line-height: 1.5;
   color: var(--cg-fg);
-  font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+  font-family: var(--cg-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
 }
 
 /* ── Read mode HTML renderer ───────────────────────────────────────────────

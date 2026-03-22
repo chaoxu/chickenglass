@@ -2,10 +2,10 @@
  * CM6 decoration provider for fenced code blocks (```lang ... ```).
  *
  * For each FencedCode node in the syntax tree:
- * - When cursor is outside: hide opening/closing fence lines with
- *   decorationHidden, add Decoration.line with data-language and cg-codeblock
- *   class. Language label shown via CSS ::before.
- * - When cursor is inside: show source (no hiding decorations).
+ * - When cursor is outside the fence lines: replace the opening fence with a
+ *   header widget, hide the closing fence line, and style the block body.
+ * - When cursor is on either fence line: keep the body rendered, but show both
+ *   opening and closing fences as source.
  *
  * Uses a StateField (not ViewPlugin) so that Decoration.line is permitted
  * by CM6.
@@ -15,6 +15,8 @@ import {
   type DecorationSet,
   Decoration,
   EditorView,
+  ViewPlugin,
+  type ViewUpdate,
 } from "@codemirror/view";
 import {
   type EditorState,
@@ -24,7 +26,6 @@ import {
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
-  cursorInRange,
   buildDecorations,
   decorationHidden,
   RenderWidget,
@@ -32,6 +33,56 @@ import {
   focusEffect,
   focusTracker,
 } from "./render-utils";
+import { __iconNode as copyIconNode } from "lucide-react/dist/esm/icons/copy.js";
+import { __iconNode as checkIconNode } from "lucide-react/dist/esm/icons/check.js";
+
+/** Widget that renders the opening fence line as a clickable code-block header. */
+class CodeBlockHeaderWidget extends RenderWidget {
+  constructor(private readonly language: string) {
+    super();
+  }
+
+  createDOM(): HTMLElement {
+    const label = document.createElement("span");
+    label.className = "cg-codeblock-language";
+    label.textContent = this.language;
+    return label;
+  }
+
+  eq(other: CodeBlockHeaderWidget): boolean {
+    return this.language === other.language;
+  }
+}
+
+type IconNode = ReadonlyArray<readonly [string, Readonly<Record<string, string>>]>;
+
+function createLucideIcon(iconNode: IconNode): SVGSVGElement {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("xmlns", ns);
+  svg.setAttribute("width", "24");
+  svg.setAttribute("height", "24");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  svg.classList.add("lucide");
+
+  for (const [tag, attrs] of iconNode) {
+    const child = document.createElementNS(ns, tag);
+    for (const [name, value] of Object.entries(attrs)) {
+      if (name === "key") continue;
+      child.setAttribute(name, value);
+    }
+    svg.appendChild(child);
+  }
+
+  return svg;
+}
 
 /** Widget that renders a copy-to-clipboard button in the code block header. */
 class CopyButtonWidget extends RenderWidget {
@@ -42,14 +93,22 @@ class CopyButtonWidget extends RenderWidget {
   toDOM(): HTMLElement {
     const btn = document.createElement("button");
     btn.className = "cg-codeblock-copy";
-    btn.textContent = "Copy";
+    btn.type = "button";
     btn.title = "Copy code to clipboard";
+    btn.setAttribute("aria-label", "Copy code to clipboard");
+    btn.appendChild(createLucideIcon(copyIconNode));
     btn.addEventListener("mousedown", (e) => {
       e.preventDefault();
       e.stopPropagation();
       void navigator.clipboard.writeText(this.code).then(() => {
-        btn.textContent = "Copied!";
-        setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+        btn.replaceChildren(createLucideIcon(checkIconNode));
+        btn.title = "Copied";
+        btn.setAttribute("aria-label", "Copied");
+        setTimeout(() => {
+          btn.replaceChildren(createLucideIcon(copyIconNode));
+          btn.title = "Copy code to clipboard";
+          btn.setAttribute("aria-label", "Copy code to clipboard");
+        }, 1500);
       });
     });
     return btn;
@@ -58,6 +117,23 @@ class CopyButtonWidget extends RenderWidget {
   eq(other: CopyButtonWidget): boolean {
     return this.code === other.code;
   }
+}
+
+function getLineElement(view: EditorView, pos: number): HTMLElement | null {
+  const domPos = view.domAtPos(pos);
+  let el: Node | null = domPos.node;
+  if (el.nodeType === Node.TEXT_NODE) el = el.parentNode;
+  while (el && !(el instanceof HTMLElement && el.classList.contains("cm-line"))) {
+    el = el.parentNode;
+  }
+  return el as HTMLElement | null;
+}
+
+function findCodeBlockAt(state: EditorState, pos: number): CodeBlockInfo | null {
+  for (const block of collectCodeBlocks(state)) {
+    if (pos >= block.from && pos <= block.to) return block;
+  }
+  return null;
 }
 
 interface CodeBlockInfo {
@@ -75,6 +151,29 @@ interface CodeBlockInfo {
   readonly closeFenceTo: number;
   /** Language identifier (empty string if none). */
   readonly language: string;
+}
+
+/** Check whether the cursor is on the opening fence line of a fenced code block. */
+function isCursorOnOpenFence(
+  state: EditorState,
+  block: CodeBlockInfo,
+  focused: boolean,
+): boolean {
+  if (!focused) return false;
+  const cursor = state.selection.main;
+  const openLine = state.doc.lineAt(block.openFenceFrom);
+  return cursor.from >= openLine.from && cursor.from <= openLine.to;
+}
+
+/** Check whether the cursor is on the closing fence line of a fenced code block. */
+function isCursorOnCloseFence(
+  state: EditorState,
+  block: CodeBlockInfo,
+  focused: boolean,
+): boolean {
+  if (!focused) return false;
+  const cursor = state.selection.main;
+  return cursor.from >= block.closeFenceFrom && cursor.from <= block.closeFenceTo;
 }
 
 /** Extract info about FencedCode nodes from the syntax tree. */
@@ -125,73 +224,76 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
   const items: Range<Decoration>[] = [];
 
   for (const block of blocks) {
-    const cursorInside = focused && cursorInRange(state, block.from, block.to);
-
-    if (cursorInside) {
-      // Source mode: show raw markdown with monospace font on all lines.
-      // Apply cg-codeblock-source to every line so code keeps its
-      // monospace font even when render decorations are off.
-      const openLine = state.doc.lineAt(block.openFenceFrom);
-      const closeLine = state.doc.lineAt(block.closeFenceFrom);
-      for (let ln = openLine.number; ln <= closeLine.number; ln++) {
-        const line = state.doc.line(ln);
-        items.push(
-          Decoration.line({ class: "cg-codeblock cg-codeblock-source" }).range(line.from),
-        );
-      }
-      continue;
-    }
-
-    // Rendered mode: unified container appearance via per-line classes.
+    const cursorOnOpenFence = isCursorOnOpenFence(state, block, focused);
+    const cursorOnCloseFence = isCursorOnCloseFence(state, block, focused);
+    const cursorOnEitherFence = cursorOnOpenFence || cursorOnCloseFence;
 
     const openLine = state.doc.lineAt(block.openFenceFrom);
     const closeLine = state.doc.lineAt(block.closeFenceFrom);
     const bodyLineCount = closeLine.number - openLine.number - 1;
 
-    // Header line: language label via ::before, fence text hidden, position:relative for copy btn
-    items.push(
-      Decoration.line({
-        class: "cg-codeblock-header",
-        attributes: block.language ? { "data-language": block.language } : {},
-      }).range(block.openFenceFrom),
-    );
-    items.push(decorationHidden.range(block.openFenceFrom, block.openFenceTo));
-
-    // Copy button widget in the header line
-    if (bodyLineCount > 0) {
-      const codeText = state.doc.sliceString(
-        state.doc.line(openLine.number + 1).from,
-        state.doc.line(closeLine.number - 1).to,
-      );
+    if (cursorOnEitherFence) {
       items.push(
-        Decoration.widget({
-          widget: new CopyButtonWidget(codeText),
-          side: 1,
+        Decoration.line({ class: "cg-codeblock-source cg-codeblock-source-open" })
+          .range(block.openFenceFrom),
+      );
+      if (block.closeFenceFrom !== block.openFenceFrom) {
+        items.push(
+          Decoration.line({ class: "cg-codeblock-source cg-codeblock-source-close" })
+            .range(block.closeFenceFrom),
+        );
+      }
+    } else {
+      // Replace the opening fence source with a real widget so the visible
+      // header still behaves like the underlying fence line on click.
+      items.push(
+        Decoration.line({
+          class: "cg-codeblock-header",
         }).range(block.openFenceFrom),
       );
+      const codeText = bodyLineCount > 0
+        ? state.doc.sliceString(
+          state.doc.line(openLine.number + 1).from,
+          state.doc.line(closeLine.number - 1).to,
+        )
+        : "";
+      const headerWidget = new CodeBlockHeaderWidget(block.language);
+      headerWidget.sourceFrom = block.openFenceFrom;
+      items.push(
+        Decoration.replace({ widget: headerWidget }).range(block.openFenceFrom, block.openFenceTo),
+      );
+      if (bodyLineCount > 0) {
+        items.push(
+          Decoration.widget({
+            widget: new CopyButtonWidget(codeText),
+            side: 1,
+          }).range(block.openFenceFrom),
+        );
+      }
     }
 
-    // Body lines: side borders only (no top/bottom)
+    // Body lines: side borders only, bottom border stays on the closing fence
+    // when the cursor is editing either fence line.
     for (let ln = openLine.number + 1; ln < closeLine.number; ln++) {
       const line = state.doc.line(ln);
       const isLast = ln === closeLine.number - 1;
       items.push(
         Decoration.line({
-          class: isLast ? "cg-codeblock-last" : "cg-codeblock-body",
+          class: !cursorOnEitherFence && isLast ? "cg-codeblock-last" : "cg-codeblock-body",
         }).range(line.from),
       );
     }
 
-    // If no body lines, header also gets bottom border
-    if (bodyLineCount === 0) {
-      // Single empty code block — header is also the last line
+    // If no body lines, header also gets bottom border when the closing fence is hidden.
+    if (bodyLineCount === 0 && !cursorOnEitherFence) {
       items.push(
         Decoration.line({ class: "cg-codeblock-last" }).range(block.openFenceFrom),
       );
     }
 
-    // Hide closing fence line and collapse to zero height
-    if (block.closeFenceFrom !== block.openFenceFrom) {
+    // Hide closing fence line and collapse to zero height unless the cursor is
+    // directly editing one of the fence lines.
+    if (!cursorOnEitherFence && block.closeFenceFrom !== block.openFenceFrom) {
       items.push(decorationHidden.range(block.closeFenceFrom, block.closeFenceTo));
       items.push(
         Decoration.line({ class: "cg-include-fence" }).range(block.closeFenceFrom),
@@ -200,6 +302,99 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
   }
 
   return buildDecorations(items);
+}
+
+class CodeBlockHoverPlugin {
+  private hoveredBlockOpenFence: number | null = null;
+  private hoveredHeaderEl: HTMLElement | null = null;
+
+  constructor(private readonly view: EditorView) {}
+
+  update(update: ViewUpdate): void {
+    if (this.hoveredBlockOpenFence === null) return;
+    if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged) {
+      this.refreshHoveredHeader();
+    }
+  }
+
+  destroy(): void {
+    this.clearHoveredHeader();
+  }
+
+  handleMouseMove(event: MouseEvent): void {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      this.clearHoveredHeader();
+      return;
+    }
+
+    const lineEl = target.closest(".cm-line");
+    if (!(lineEl instanceof HTMLElement)) {
+      this.clearHoveredHeader();
+      return;
+    }
+
+    let pos: number;
+    try {
+      pos = this.view.posAtDOM(lineEl, 0);
+    } catch {
+      this.clearHoveredHeader();
+      return;
+    }
+
+    const block = findCodeBlockAt(this.view.state, pos);
+    if (!block) {
+      this.clearHoveredHeader();
+      return;
+    }
+
+    if (this.hoveredBlockOpenFence !== block.openFenceFrom) {
+      this.clearHoveredHeader();
+      this.hoveredBlockOpenFence = block.openFenceFrom;
+    }
+    this.refreshHoveredHeader();
+  }
+
+  handleMouseLeave(): void {
+    this.clearHoveredHeader();
+  }
+
+  private refreshHoveredHeader(): void {
+    if (this.hoveredBlockOpenFence === null) return;
+
+    const block = collectCodeBlocks(this.view.state)
+      .find((candidate) => candidate.openFenceFrom === this.hoveredBlockOpenFence);
+    if (!block) {
+      this.clearHoveredHeader();
+      return;
+    }
+
+    const focused = this.view.state.field(editorFocusField, false) ?? false;
+    if (isCursorOnOpenFence(this.view.state, block, focused) || isCursorOnCloseFence(this.view.state, block, focused)) {
+      this.clearHoveredHeader();
+      return;
+    }
+
+    const headerEl = getLineElement(this.view, block.openFenceFrom);
+    if (!headerEl || !headerEl.classList.contains("cg-codeblock-header")) {
+      this.clearHoveredHeader();
+      return;
+    }
+
+    if (this.hoveredHeaderEl && this.hoveredHeaderEl !== headerEl) {
+      this.hoveredHeaderEl.classList.remove("cg-codeblock-hovered");
+    }
+    this.hoveredHeaderEl = headerEl;
+    this.hoveredHeaderEl.classList.add("cg-codeblock-hovered");
+  }
+
+  private clearHoveredHeader(): void {
+    if (this.hoveredHeaderEl) {
+      this.hoveredHeaderEl.classList.remove("cg-codeblock-hovered");
+      this.hoveredHeaderEl = null;
+    }
+    this.hoveredBlockOpenFence = null;
+  }
 }
 
 /**
@@ -230,9 +425,22 @@ const codeBlockDecorationField = StateField.define<DecorationSet>({
   },
 });
 
+/** Exported for unit testing decoration logic without a browser. */
+export { codeBlockDecorationField as _codeBlockDecorationFieldForTest };
+
 /** CM6 extension that renders fenced code blocks with language label and fence hiding. */
 export const codeBlockRenderPlugin: Extension = [
   editorFocusField,
   focusTracker,
   codeBlockDecorationField,
+  ViewPlugin.fromClass(CodeBlockHoverPlugin, {
+    eventHandlers: {
+      mousemove(event) {
+        this.handleMouseMove(event);
+      },
+      mouseleave() {
+        this.handleMouseLeave();
+      },
+    },
+  }),
 ];

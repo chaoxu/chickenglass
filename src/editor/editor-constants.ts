@@ -5,5 +5,8 @@
  * (which imports sub-modules) and the sub-modules themselves.
  */
 
-/** Monospace font stack used throughout the editor theme. */
-export const monoFont = "'IBM Plex Mono', 'Fira Code', monospace";
+/** Default monospace stack, matching read mode code blocks. */
+export const defaultCodeFontStack = 'Monaco, "DejaVu Sans Mono", Consolas, monospace';
+
+/** Monospace font used throughout the editor theme, theme-overridable via --cg-code-font. */
+export const monoFont = `var(--cg-code-font, ${defaultCodeFontStack})`;

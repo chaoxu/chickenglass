@@ -78,6 +78,7 @@ export const typographyThemeStyles = {
   },
   ".cg-inline-code": {
     fontFamily: monoFont,
+    fontSize: "0.85em",
     backgroundColor: "var(--cg-subtle)",
     borderRadius: "2px",
     padding: "1px 4px",
