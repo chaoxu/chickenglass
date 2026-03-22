@@ -1,9 +1,10 @@
 /**
- * CM6 ViewPlugin that renders citation references in the document.
+ * Citation data types, state fields, widget classes, and standalone finders.
  *
- * Finds [@id] patterns and renders them as formatted citations when the
- * id matches a bibliography entry. Unmatched ids are left for the
- * cross-reference system to handle.
+ * The ViewPlugin that rendered citations has been merged into the unified
+ * `referenceRenderPlugin` in `../render/reference-render.ts`. This module
+ * still exports everything needed by bibliography, HTML export, hover-preview,
+ * CSL processor, and the unified plugin itself.
  *
  * Supports:
  * - [@id] parenthetical citations: "(Author, Year)"
@@ -13,20 +14,15 @@
 import { type Range, StateEffect, StateField } from "@codemirror/state";
 import {
   Decoration,
-  type DecorationSet,
   type EditorView,
-  type PluginValue,
-  type ViewUpdate,
-  ViewPlugin,
   type WidgetType,
 } from "@codemirror/view";
-import { type Extension } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 import { parser as baseParser } from "@lezer/markdown";
 import { syntaxTree } from "@codemirror/language";
 import { type BibEntry, extractLastName } from "./bibtex-parser";
 import { type CslProcessor, registerCitationsWithProcessor } from "./csl-processor";
-import { cursorInRange, buildDecorations, RenderWidget } from "../render/render-utils";
+import { cursorInRange, RenderWidget } from "../render/render-utils";
 import { markdownExtensions } from "../parser";
 
 /** Format a citation label: "(Author, Year)" or "(Author, Year, locator)". */
@@ -144,7 +140,7 @@ const PAREN_CITE_RE = /^\[(@[a-zA-Z0-9_][\w:./-]*(?:,[^;\]]*)?(?:\s*;\s*@[a-zA-Z
 const NARRATIVE_CITE_RE = /(?<![[@\w])@([a-zA-Z0-9_][\w:./-]*)/g;
 
 /** Extract citation ids and locators from a parenthetical citation match. */
-function extractCitations(raw: string): { ids: string[]; locators: (string | undefined)[] } {
+export function extractCitations(raw: string): { ids: string[]; locators: (string | undefined)[] } {
   const ids: string[] = [];
   const locators: (string | undefined)[] = [];
 
@@ -318,37 +314,10 @@ export function collectCitationRanges(
   return items;
 }
 
-class CitationRenderPlugin implements PluginValue {
-  decorations: DecorationSet;
-
-  constructor(view: EditorView) {
-    this.decorations = this.buildAll(view);
-  }
-
-  update(update: ViewUpdate): void {
-    if (
-      update.docChanged ||
-      update.selectionSet ||
-      update.viewportChanged ||
-      update.focusChanged ||
-      update.transactions.some((tr) =>
-        tr.effects.some((e) => e.is(bibDataEffect)),
-      )
-    ) {
-      this.decorations = this.buildAll(update.view);
-    }
-  }
-
-  private buildAll(view: EditorView): DecorationSet {
-    const { store, cslProcessor } = view.state.field(bibDataField);
-    return buildDecorations(collectCitationRanges(view, store, cslProcessor));
-  }
-}
-
-/** CM6 extension that renders citation references as formatted citations. */
-export const citationRenderPlugin: Extension = ViewPlugin.fromClass(
-  CitationRenderPlugin,
-  {
-    decorations: (v) => v.decorations,
-  },
-);
+/**
+ * @deprecated Use `referenceRenderPlugin` from `../render/reference-render` instead.
+ * The standalone citation ViewPlugin has been merged into the unified
+ * reference render plugin. This module still exports widget classes,
+ * state fields, and standalone functions used by bibliography, HTML export,
+ * hover-preview, and CSL processor.
+ */

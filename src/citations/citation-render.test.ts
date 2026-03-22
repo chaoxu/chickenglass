@@ -10,8 +10,9 @@ import {
   NarrativeCitationWidget,
   bibDataEffect,
   bibDataField,
-  citationRenderPlugin,
 } from "./citation-render";
+import { referenceRenderPlugin } from "../render/reference-render";
+import { equationLabelsField } from "../index/crossref-resolver";
 
 const karger: BibEntry = {
   id: "karger2000",
@@ -199,7 +200,7 @@ describe("NarrativeCitationWidget", () => {
   });
 });
 
-describe("citationRenderPlugin integration", () => {
+describe("referenceRenderPlugin citation integration", () => {
   let view: EditorView;
 
   afterEach(() => {
@@ -209,7 +210,7 @@ describe("citationRenderPlugin integration", () => {
   function createTestView(doc: string, cursorPos?: number): EditorView {
     const view = createSharedTestView(doc, {
       cursorPos,
-      extensions: [markdown(), bibDataField, citationRenderPlugin],
+      extensions: [markdown(), bibDataField, equationLabelsField, referenceRenderPlugin],
     });
     view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: null }) });
     return view;

@@ -1,28 +1,24 @@
 /**
- * CM6 ViewPlugin for rendering cross-references.
+ * Cross-reference widget classes and collection helper.
  *
- * Finds [@id] and @id patterns in the document, resolves them using
- * the crossref-resolver, and renders them as styled inline text
- * with Typora-style toggle (rendered by default, source on focus).
+ * The ViewPlugin that used these has been merged into the unified
+ * `referenceRenderPlugin` in `./reference-render.ts`. This module
+ * still exports widget classes and `collectCrossrefRanges` for
+ * tests and other consumers (e.g., hover-preview).
  */
 
 import {
-  type DecorationSet,
-  type PluginValue,
-  type ViewUpdate,
-  ViewPlugin,
   Decoration,
   type EditorView,
 } from "@codemirror/view";
-import { type Extension, type Range } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
+import { type Range } from "@codemirror/state";
 import {
   type ResolvedCrossref,
   findCrossrefs,
   resolveCrossref,
   equationLabelsField,
 } from "../index/crossref-resolver";
-import { buildDecorations, cursorInRange, RenderWidget } from "./render-utils";
+import { cursorInRange, RenderWidget } from "./render-utils";
 
 /** Widget for a resolved cross-reference (block or equation). */
 export class CrossrefWidget extends RenderWidget {
@@ -100,30 +96,9 @@ export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
   return items;
 }
 
-class CrossrefRenderPlugin implements PluginValue {
-  decorations: DecorationSet;
-
-  constructor(view: EditorView) {
-    this.decorations = buildDecorations(collectCrossrefRanges(view));
-  }
-
-  update(update: ViewUpdate): void {
-    if (
-      update.docChanged ||
-      update.selectionSet ||
-      update.viewportChanged ||
-      update.focusChanged ||
-      syntaxTree(update.state) !== syntaxTree(update.startState)
-    ) {
-      this.decorations = buildDecorations(collectCrossrefRanges(update.view));
-    }
-  }
-}
-
-/** CM6 extension that renders cross-references with Typora-style toggle. */
-export const crossrefRenderPlugin: Extension = ViewPlugin.fromClass(
-  CrossrefRenderPlugin,
-  {
-    decorations: (v) => v.decorations,
-  },
-);
+/**
+ * @deprecated Use `referenceRenderPlugin` from `./reference-render` instead.
+ * The standalone crossref ViewPlugin has been merged into the unified
+ * reference render plugin. This module still exports the widget classes
+ * and `collectCrossrefRanges` for tests and other consumers.
+ */

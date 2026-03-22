@@ -16,7 +16,6 @@ export {
   collectCitationRanges,
   CitationWidget,
   NarrativeCitationWidget,
-  citationRenderPlugin,
 } from "./citation-render";
 
 export {

@@ -24,8 +24,11 @@ export {
   CrossrefWidget,
   UnresolvedRefWidget,
   collectCrossrefRanges,
-  crossrefRenderPlugin,
 } from "./crossref-render";
+export {
+  referenceRenderPlugin,
+  collectReferenceRanges,
+} from "./reference-render";
 export {
   ImageWidget,
   imageRenderPlugin,

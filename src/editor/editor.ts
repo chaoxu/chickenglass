@@ -10,7 +10,6 @@ import { frontmatterField, frontmatterDecoration } from "./frontmatter-state";
 import {
   markdownRenderPlugin,
   mathRenderPlugin,
-  crossrefRenderPlugin,
   containerAttributesPlugin,
   imageRenderPlugin,
   codeBlockRenderPlugin,
@@ -22,6 +21,7 @@ import {
   includeLabelPlugin,
   sidenoteRenderPlugin,
   searchHighlightPlugin,
+  referenceRenderPlugin,
 } from "../render";
 import {
   createPluginRegistryField,
@@ -30,7 +30,7 @@ import {
   defaultPlugins,
 } from "../plugins";
 import { documentSemanticsField } from "../semantics/codemirror-source";
-import { citationRenderPlugin, bibliographyPlugin, bibDataField } from "../citations";
+import { bibliographyPlugin, bibDataField } from "../citations";
 import { equationLabelsField } from "../index/crossref-resolver";
 import { projectConfigFacet, type ProjectConfig } from "../app/project-config";
 import { editorKeybindings } from "./keybindings";
@@ -75,9 +75,8 @@ const renderingExtensions: Extension[] = [
   mathRenderPlugin,
   imageRenderPlugin,
   blockRenderPlugin,
-  crossrefRenderPlugin,
+  referenceRenderPlugin,
   codeBlockRenderPlugin,
-  citationRenderPlugin,
   bibliographyPlugin,
   containerAttributesPlugin,
   tableRenderPlugin,
