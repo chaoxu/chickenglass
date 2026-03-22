@@ -19,20 +19,37 @@
   },
   "tiers": {
     "small": {
-      "verify": ["build"]
+      "verify": [
+        "build"
+      ]
     },
     "medium": {
-      "verify": ["lint", "build"]
+      "verify": [
+        "lint",
+        "build"
+      ]
     },
     "full": {
-      "verify": ["lint", "build", "test"]
+      "verify": [
+        "lint",
+        "build",
+        "test"
+      ]
     }
   },
   "tier_triggers": {
-    "medium": ["src/**/*.ts", "src/**/*.tsx"],
-    "full": ["src/parser/**", "src/plugins/**"]
+    "medium": [
+      "src/**/*.ts",
+      "src/**/*.tsx"
+    ],
+    "full": [
+      "src/parser/**",
+      "src/plugins/**"
+    ]
   },
-  "preflight": ["build"],
+  "preflight": [
+    "build"
+  ],
   "commit_format": "conventional",
   "co_author": "Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
   "orchestration": {
@@ -49,7 +66,10 @@
     "skill": "code-reviewer",
     "dispatch_mode": "lead_reviewer_worker",
     "subagent_type": "feature-dev:code-reviewer",
-    "severities_that_block": ["critical", "high"],
+    "severities_that_block": [
+      "critical",
+      "high"
+    ],
     "severity_aliases": {},
     "max_fix_rounds": 2,
     "conventions_file": "CLAUDE.md"
@@ -63,7 +83,9 @@
   "integration_verify_gate": {
     "enabled": true,
     "run_once_after_merge": true,
-    "command_keys": ["build"],
+    "command_keys": [
+      "build"
+    ],
     "owner": "verifier",
     "fail_run_on_failure": true
   },
@@ -75,8 +97,14 @@
   },
   "issue_closure": {
     "check_all_task_lists": true,
-    "hard_fail_on_unchecked": false,
-    "update_checkboxes_before_close": true
+    "hard_fail_on_unchecked": true,
+    "update_checkboxes_before_close": true,
+    "completeness_review": {
+      "enabled": true,
+      "subagent_type": "feature-dev:code-reviewer",
+      "fail_on_incomplete": true,
+      "max_retry_rounds": 2
+    }
   },
   "post_merge": {
     "always": []
