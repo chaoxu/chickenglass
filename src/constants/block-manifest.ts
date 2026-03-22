@@ -116,3 +116,9 @@ export const STYLED_BLOCK_NAMES: readonly string[] = entries
 
 /** Shared counter group name for theorem-family blocks. */
 export const THEOREM_COUNTER = "theorem";
+
+/** Counter group name for definition blocks. */
+export const DEFINITION_COUNTER = "definition";
+
+/** Counter group name for algorithm blocks. */
+export const ALGORITHM_COUNTER = "algorithm";

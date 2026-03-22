@@ -7,7 +7,8 @@
  */
 
 import type { BlockPlugin } from "./plugin-types";
-import { createStandardPlugin, THEOREM_COUNTER } from "./plugin-factory";
+import { createStandardPlugin } from "./plugin-factory";
+import { THEOREM_COUNTER } from "../constants/block-manifest";
 
 export const theoremPlugin: BlockPlugin = createStandardPlugin({
   name: "theorem",

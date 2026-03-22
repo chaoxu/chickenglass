@@ -50,13 +50,15 @@ import {
   youtubeEmbedUrl,
   gistEmbedUrl,
 } from "./embed-plugin";
+import { CSS } from "../constants/css-classes";
+import { EMBED_CLASSES, EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 
 /** Simple widget that renders a single text character (used for title parens). */
 class TextWidget extends WidgetType {
   constructor(private readonly text: string) { super(); }
   toDOM(): HTMLElement {
     const el = document.createElement("span");
-    el.className = "cf-block-title-paren";
+    el.className = CSS.blockTitleParen;
     el.textContent = this.text;
     return el;
   }
@@ -78,7 +80,7 @@ class BlockHeaderWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const el = document.createElement("span");
-    el.className = "cf-block-header-rendered";
+    el.className = CSS.blockHeaderRendered;
     renderInlineMarkdown(el, this.header, this.macros, "document-inline");
     return el;
   }
@@ -87,9 +89,6 @@ class BlockHeaderWidget extends RenderWidget {
     return this.header === other.header && this.macrosKey === other.macrosKey;
   }
 }
-
-/** Set of fenced div class names that are embed types. */
-const EMBED_CLASSES = new Set(["embed", "iframe", "youtube", "gist"]);
 
 /**
  * Compute the iframe src URL for an embed block.
@@ -179,7 +178,7 @@ class EmbedWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const wrapper = document.createElement("div");
-    wrapper.className = `cf-embed cf-embed-${this.embedType}`;
+    wrapper.className = CSS.embed(this.embedType);
 
     const iframe = document.createElement("iframe");
     iframe.src = this.src;
@@ -190,9 +189,9 @@ class EmbedWidget extends RenderWidget {
 
     if (this.embedType === "youtube") {
       iframe.setAttribute("allowfullscreen", "");
-      iframe.className = "cf-embed-iframe cf-embed-youtube-iframe";
+      iframe.className = CSS.embedYoutubeIframe;
     } else {
-      iframe.className = "cf-embed-iframe";
+      iframe.className = CSS.embedIframe;
     }
 
     // Gist embeds: auto-resize iframe to match content height
@@ -245,11 +244,11 @@ function addIncludeDecorations(
   }
   // Collapse fence lines to zero height
   items.push(
-    Decoration.line({ class: "cf-include-fence" }).range(div.openFenceFrom),
+    Decoration.line({ class: CSS.includeFence }).range(div.openFenceFrom),
   );
   if (div.closeFenceFrom >= 0) {
     items.push(
-      Decoration.line({ class: "cf-include-fence" }).range(div.closeFenceFrom),
+      Decoration.line({ class: CSS.includeFence }).range(div.closeFenceFrom),
     );
   }
 }
@@ -318,7 +317,7 @@ function addQedDecoration(
     const lastContentLine = state.doc.line(closeLine.number - 1);
     if (lastContentLine.from > div.openFenceFrom) {
       items.push(
-        Decoration.line({ class: "cf-block-qed" }).range(lastContentLine.from),
+        Decoration.line({ class: CSS.blockQed }).range(lastContentLine.from),
       );
     }
   }
@@ -347,7 +346,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     const plugin = getPluginOrFallback(registry, div.className);
 
     // Include blocks are always invisible — content flows seamlessly
-    if (div.className === "include") {
+    if (EXCLUDED_FROM_FALLBACK.has(div.className)) {
       addIncludeDecorations(div, items);
       return;
     }
@@ -363,7 +362,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       if (cursorInsideBlock) {
         items.push(
           Decoration.line({
-            class: `${plugin.render({ type: div.className }).className} cf-block-source`,
+            class: `${plugin.render({ type: div.className }).className} ${CSS.blockSource}`,
           }).range(div.from),
         );
         return;
@@ -385,8 +384,8 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // Title text stays as editable content — inline plugins render math/bold/etc.
     // See CLAUDE.md "Block headers must behave like headings."
     const headerClass = cursorOnEitherFence
-      ? `${spec.className} cf-block-source`
-      : `${spec.className} cf-block-header`;
+      ? `${spec.className} ${CSS.blockSource}`
+      : `${spec.className} ${CSS.blockHeader}`;
     items.push(Decoration.line({ class: headerClass }).range(div.from));
     addHeaderWidgetDecoration(div, spec.header, cursorOnEitherFence, macros, macrosKey, items);
 
@@ -405,7 +404,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       if (!div.singleLine && div.closeFenceFrom >= 0) {
         items.push(
           Decoration.line({
-            class: `${spec.className} cf-block-source`,
+            class: `${spec.className} ${CSS.blockSource}`,
           }).range(div.closeFenceFrom),
         );
       }

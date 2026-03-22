@@ -32,10 +32,10 @@ export {
   createBlockRender,
 } from "./block-render";
 export {
-  THEOREM_COUNTER,
   createStandardPlugin,
   type StandardPluginOptions,
 } from "./plugin-factory";
+export { THEOREM_COUNTER } from "../constants/block-manifest";
 export {
   theoremPlugin,
   lemmaPlugin,

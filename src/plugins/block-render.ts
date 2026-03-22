@@ -7,6 +7,7 @@
  */
 
 import type { BlockAttrs, BlockDecorationSpec } from "./plugin-types";
+import { CSS } from "../constants/css-classes";
 
 /**
  * Build a standard block header label string (widget text only).
@@ -43,7 +44,7 @@ export function formatBlockHeader(
 export function createBlockRender(displayTitle: string, className?: string) {
   return function render(attrs: BlockAttrs): BlockDecorationSpec {
     return {
-      className: className ?? `cf-block cf-block-${attrs.type}`,
+      className: className ?? CSS.block(attrs.type),
       header: formatBlockHeader(displayTitle, attrs),
     };
   };

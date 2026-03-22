@@ -7,6 +7,7 @@ import {
   editorFocusField,
   focusEffect,
 } from "./render-utils";
+import { CSS } from "../constants/css-classes";
 
 /** Shared document ranges for blocks bounded by an opening and closing fence line. */
 export interface FencedBlockInfo {
@@ -136,7 +137,7 @@ export function addCollapsedClosingFence(
 
   items.push(decorationHidden.range(closeFenceFrom, closeFenceTo));
   items.push(
-    Decoration.line({ class: "cf-include-fence" }).range(closeFenceFrom),
+    Decoration.line({ class: CSS.includeFence }).range(closeFenceFrom),
   );
 }
 

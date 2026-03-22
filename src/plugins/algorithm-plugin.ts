@@ -8,8 +8,9 @@
 
 import type { BlockPlugin } from "./plugin-types";
 import { createStandardPlugin } from "./plugin-factory";
+import { ALGORITHM_COUNTER } from "../constants/block-manifest";
 
 export const algorithmPlugin: BlockPlugin = createStandardPlugin({
   name: "algorithm",
-  counter: "algorithm",
+  counter: ALGORITHM_COUNTER,
 });

@@ -8,8 +8,9 @@
 
 import type { BlockPlugin } from "./plugin-types";
 import { createStandardPlugin } from "./plugin-factory";
+import { DEFINITION_COUNTER } from "../constants/block-manifest";
 
 export const definitionPlugin: BlockPlugin = createStandardPlugin({
   name: "definition",
-  counter: "definition",
+  counter: DEFINITION_COUNTER,
 });

@@ -36,6 +36,8 @@ import {
   type DocumentSemantics,
   type FootnoteSemantics,
 } from "../semantics/document";
+import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
+import { CSS } from "../constants/css-classes";
 
 /** A map of citation keys to bibliography entries. */
 export type BibStore = CitationBibStore;
@@ -360,7 +362,7 @@ function renderHeading(node: SyntaxNode, ctx: WalkContext): string {
     "document-inline",
   );
   const prefix = ctx.sectionNumbers && heading?.number
-    ? `<span class="cf-section-number">${heading.number}</span> `
+    ? `<span class="${CSS.sectionNumber}">${heading.number}</span> `
     : "";
 
   return `<h${heading?.level ?? level}>${prefix}${renderedText}</h${heading?.level ?? level}>`;
@@ -447,7 +449,7 @@ function renderFencedDiv(node: SyntaxNode, ctx: WalkContext): string {
   const id = semantics?.id;
 
   // Check for include directive — skip entirely
-  if (classes.includes("include")) {
+  if (classes.some((c) => EXCLUDED_FROM_FALLBACK.has(c))) {
     return "";
   }
 
@@ -868,7 +870,7 @@ function renderCitationCluster(
     }
     const parts = ids.map((id) =>
       `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`);
-    return `<span class="cf-citation">(${parts.join("; ")})</span>`;
+    return `<span class="${CSS.citation}">(${parts.join("; ")})</span>`;
   }
 
   trackCitedIds(ids, bibliography, citedIds);
@@ -877,7 +879,7 @@ function renderCitationCluster(
     const rendered = cslProcessor
       ? cslProcessor.cite([...ids])
       : formatParenthetical(ids, bibliography);
-    return `<span class="cf-citation">${escapeHtml(rendered)}</span>`;
+    return `<span class="${CSS.citation}">${escapeHtml(rendered)}</span>`;
   }
 
   const parts = ids.map((id) => {
@@ -891,7 +893,7 @@ function renderCitationCluster(
     }
     return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`;
   });
-  return `<span class="cf-citation">(${parts.join("; ")})</span>`;
+  return `<span class="${CSS.citation}">(${parts.join("; ")})</span>`;
 }
 
 /** Render the bibliography section from cited entries. */
@@ -914,15 +916,15 @@ function renderBibliography(
 
   const items = cslHtml.length > 0
     ? entries.map((entry, i) =>
-        `<div class="cf-bibliography-entry" id="bib-${escapeHtml(entry.id)}">${cslHtml[i] ?? ""}</div>`)
+        `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${cslHtml[i] ?? ""}</div>`)
     : entries.map((entry) =>
-        `<div class="cf-bibliography-entry" id="bib-${escapeHtml(entry.id)}">${escapeHtml(formatBibEntry(entry))}</div>`);
+        `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${escapeHtml(formatBibEntry(entry))}</div>`);
 
   return [
     "",
-    '<section class="cf-bibliography">',
-    '<h2 class="cf-bibliography-heading">References</h2>',
-    '<div class="cf-bibliography-list">',
+    `<section class="${CSS.bibliography}">`,
+    `<h2 class="${CSS.bibliographyHeading}">References</h2>`,
+    `<div class="${CSS.bibliographyList}">`,
     items.join("\n"),
     "</div>",
     "</section>",

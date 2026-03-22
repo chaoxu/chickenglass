@@ -8,9 +8,6 @@
 import type { BlockPlugin } from "./plugin-types";
 import { createBlockRender } from "./block-render";
 import { capitalize } from "../app/lib/utils";
-import { THEOREM_COUNTER } from "../constants/block-manifest";
-
-export { THEOREM_COUNTER };
 
 /** Options for creating a standard block plugin. */
 export interface StandardPluginOptions {
