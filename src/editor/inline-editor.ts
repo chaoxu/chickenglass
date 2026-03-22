@@ -8,15 +8,13 @@
 
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { markdown } from "@codemirror/lang-markdown";
-
-import { mathExtension } from "../parser/math-backslash";
-import { highlightExtension } from "../parser/highlight";
-import { strikethroughExtension } from "../parser/strikethrough";
-import { mathRenderPlugin } from "../render/math-render";
-import { markdownRenderPlugin } from "../render/markdown-render";
-import { projectConfigFacet } from "../app/project-config";
-import { frontmatterField } from "./frontmatter-state";
+import {
+  createMarkdownLanguageExtensions,
+  createProjectConfigExtensions,
+  inlineMarkdownExtensions,
+  sharedDocumentStateExtensions,
+  sharedInlineRenderExtensions,
+} from "./base-editor-extensions";
 
 /** Options for creating a lightweight inline editor. */
 export interface InlineEditorOptions {
@@ -82,21 +80,18 @@ const inlineEditorTheme = EditorView.theme({
 export function createInlineEditor(opts: InlineEditorOptions): EditorView {
   const extensions: Extension[] = [
     // Parser: markdown with only inline-relevant extensions
-    markdown({
-      extensions: [mathExtension, highlightExtension, strikethroughExtension],
+    ...createMarkdownLanguageExtensions({
+      extensions: inlineMarkdownExtensions,
     }),
 
     // Math macros: provide via project config facet so frontmatterField picks them up
-    projectConfigFacet.of({ math: opts.macros }),
+    ...createProjectConfigExtensions({ math: opts.macros }),
 
     // Math rendering (includes editorFocusField, focusTracker, mathMacrosField)
-    mathRenderPlugin,
+    ...sharedInlineRenderExtensions,
 
     // Frontmatter state field (reads macros from projectConfigFacet)
-    frontmatterField,
-
-    // Inline mark hiding (bold/italic/code/strikethrough markers)
-    markdownRenderPlugin,
+    ...sharedDocumentStateExtensions,
 
     // Theme: transparent, no gutters, inherit font
     inlineEditorTheme,

@@ -878,3 +878,20 @@ describe("#317 — typed frontend Tauri client", () => {
     expect(fileWatcher).not.toContain('invokeWithPerf("unwatch_directory"');
   });
 });
+
+describe("#308 — shared base editor extensions", () => {
+  it("extracts common editor setup into a reusable helper module", () => {
+    expect(fileExists("src/editor/base-editor-extensions.ts")).toBe(true);
+  });
+
+  it("both editor entry points consume the shared base extension module", () => {
+    const editor = fileText("src/editor/editor.ts");
+    const inlineEditor = fileText("src/editor/inline-editor.ts");
+
+    expect(editor).toContain("./base-editor-extensions");
+    expect(inlineEditor).toContain("./base-editor-extensions");
+    expect(inlineEditor).not.toContain("../parser/math-backslash");
+    expect(inlineEditor).not.toContain("../parser/highlight");
+    expect(inlineEditor).not.toContain("../parser/strikethrough");
+  });
+});

@@ -1,15 +1,10 @@
-import { markdown } from "@codemirror/lang-markdown";
 import { type Extension, Compartment, EditorState, StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { LanguageDescription, syntaxHighlighting, indentUnit } from "@codemirror/language";
-import { classHighlighter } from "@lezer/highlight";
+import { LanguageDescription, indentUnit } from "@codemirror/language";
 import type { EditorPluginManager } from "./editor-plugin";
 
-import { markdownExtensions } from "../parser";
-import { frontmatterField, frontmatterDecoration } from "./frontmatter-state";
+import { frontmatterDecoration } from "./frontmatter-state";
 import {
-  markdownRenderPlugin,
-  mathRenderPlugin,
   containerAttributesPlugin,
   imageRenderPlugin,
   codeBlockRenderPlugin,
@@ -32,12 +27,18 @@ import {
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { bibliographyPlugin, bibDataField } from "../citations";
 import { equationLabelsField } from "../index/crossref-resolver";
-import { projectConfigFacet, type ProjectConfig } from "../app/project-config";
+import { type ProjectConfig } from "../app/project-config";
 import { editorKeybindings } from "./keybindings";
 import { coflatTheme, coflatDarkTheme } from "./theme";
 import { headingFold } from "./heading-fold";
 import { listOutlinerExtension } from "./list-outliner";
 import { treeView } from "@overleaf/codemirror-tree-view";
+import {
+  createMarkdownLanguageExtensions,
+  createProjectConfigExtensions,
+  sharedDocumentStateExtensions,
+  sharedInlineRenderExtensions,
+} from "./base-editor-extensions";
 
 const fallbackDocument = "# Untitled\n";
 
@@ -71,8 +72,7 @@ export const tabSizeCompartment = new Compartment();
 /** All rendering extensions that get toggled by mode. */
 const renderingExtensions: Extension[] = [
   frontmatterDecoration,
-  markdownRenderPlugin,
-  mathRenderPlugin,
+  ...sharedInlineRenderExtensions,
   imageRenderPlugin,
   blockRenderPlugin,
   referenceRenderPlugin,
@@ -124,11 +124,10 @@ export function createEditor(config: EditorConfig): EditorView {
     doc: config.doc ?? fallbackDocument,
     extensions: [
       // Project config (must come before frontmatterField so the facet is available)
-      ...(config.projectConfig ? [projectConfigFacet.of(config.projectConfig)] : []),
+      ...createProjectConfigExtensions(config.projectConfig),
 
       // Parser: markdown with custom extensions + code block language support
-      markdown({
-        extensions: markdownExtensions,
+      ...createMarkdownLanguageExtensions({
         codeLanguages: [
           LanguageDescription.of({ name: "javascript", alias: ["js", "jsx"], load: () => import("@codemirror/lang-javascript").then(m => m.javascript({ jsx: true })) }),
           LanguageDescription.of({ name: "typescript", alias: ["ts", "tsx"], load: () => import("@codemirror/lang-javascript").then(m => m.javascript({ jsx: true, typescript: true })) }),
@@ -140,13 +139,11 @@ export function createEditor(config: EditorConfig): EditorView {
           LanguageDescription.of({ name: "cpp", alias: ["c", "c++", "cc", "cxx", "h"], load: () => import("@codemirror/lang-cpp").then(m => m.cpp()) }),
           LanguageDescription.of({ name: "rust", alias: ["rs"], load: () => import("@codemirror/lang-rust").then(m => m.rust()) }),
         ],
+        syntaxHighlighting: true,
       }),
 
-      // Syntax highlighting: apply tok-* CSS classes from parse tree tags
-      syntaxHighlighting(classHighlighter),
-
       // Frontmatter state (always needed — other extensions read it)
-      frontmatterField,
+      ...sharedDocumentStateExtensions,
 
       // Shared document semantics (headings, fenced divs, footnotes)
       documentSemanticsField,
