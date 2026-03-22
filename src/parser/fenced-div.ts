@@ -285,12 +285,16 @@ const fencedDivBlockParser: BlockParser = {
     }
 
     if (info.titleFrom < info.titleTo) {
+      // Parse inline content (math, bold, italic, etc.) within the title,
+      // just like ATXHeading does for heading text. This makes all inline
+      // render plugins work on fenced div titles automatically.
+      // See CLAUDE.md "Block headers must behave like headings."
+      const titleAbsFrom = cx.lineStart + info.titleFrom;
+      const titleAbsTo = cx.lineStart + info.titleTo;
+      const titleText = line.text.slice(info.titleFrom, info.titleTo);
+      const inlineChildren = cx.parser.parseInline(titleText, titleAbsFrom);
       cx.addElement(
-        cx.elt(
-          "FencedDivTitle",
-          cx.lineStart + info.titleFrom,
-          cx.lineStart + info.titleTo,
-        ),
+        cx.elt("FencedDivTitle", titleAbsFrom, titleAbsTo, inlineChildren),
       );
     }
 
@@ -330,7 +334,7 @@ export const fencedDiv: MarkdownConfig = {
     fencedDivNodeSpec,
     { name: "FencedDivFence", block: true },
     { name: "FencedDivAttributes", block: true },
-    { name: "FencedDivTitle", block: true },
+    { name: "FencedDivTitle" },
   ],
   props: [
     styleTags({
