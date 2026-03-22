@@ -153,6 +153,11 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
   - Do not inline long natural-language text directly in shell commands when it contains quotes, backticks, or `$`.
   - For GitHub comments, commit messages, or other multi-sentence CLI text, prefer stdin, a quoted here-doc, or a temp file (`--body-file`, `--comment-file`) over shell interpolation.
   - Short literal commands can stay inline; human prose should usually go through a file.
+- **Error handling policy**:
+  - User-initiated operations should throw or return a structured failure so the UI can surface the error.
+  - System-level parsing/loading that can degrade safely may return empty/default values, but that fallback should be intentional and documented.
+  - Async background tasks that dispatch into CM6 must use a connected-view guard (for example `dispatchIfConnected`) so teardown races become noops instead of noisy exceptions.
+  - Never use bare `catch {}` without an explicit reason; at minimum, decide whether the error is expected, should be logged, or should be surfaced.
 - **Reviewer/simplifier gate before every commit**: Before `git commit`, ALWAYS launch `pr-review-toolkit:code-reviewer` and `pr-review-toolkit:code-simplifier` in parallel on the diff. Apply findings. Then commit once, clean. Not optional. Subagents use `Skill tool` for the same gates and loop until both pass.
 - **Copy what works**: Study existing open-source projects before implementing. Reference repos: [codemirror-rich-markdoc](https://github.com/segphault/codemirror-rich-markdoc), [obsidian-codemirror-options](https://github.com/nothingislost/obsidian-codemirror-options), [advanced-tables-obsidian](https://github.com/tgrosinger/advanced-tables-obsidian).
 - **Use Context7**: Fetch up-to-date API docs before implementing with any library.

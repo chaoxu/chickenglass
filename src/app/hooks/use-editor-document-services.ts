@@ -13,6 +13,7 @@ import {
 } from "../../plugins/include-resolver";
 import type { FileSystem } from "../file-manager";
 import type { IncludeRegion } from "../source-map";
+import { dispatchIfConnected } from "../lib/view-dispatch";
 import { useBibliography } from "./use-bibliography";
 import { measureAsync } from "../perf";
 
@@ -129,13 +130,13 @@ export function useEditorDocumentServices({
     if (fs && docPath) {
       void expandIncludes(docPath, doc, fs).then(({ text: expanded, regions }) => {
         if (expanded === doc) return;
-        if (view.dom.isConnected) {
-          if (regions.length > 0) {
-            (window as unknown as { __cgSourceMap?: { regions: IncludeRegion[] } }).__cgSourceMap = { regions };
-          }
-          view.dispatch({
-            changes: { from: 0, to: view.state.doc.length, insert: expanded },
-          });
+        const dispatched = dispatchIfConnected(
+          view,
+          { changes: { from: 0, to: view.state.doc.length, insert: expanded } },
+          { context: "Include expansion dispatch error:" },
+        );
+        if (dispatched && regions.length > 0) {
+          (window as unknown as { __cgSourceMap?: { regions: IncludeRegion[] } }).__cgSourceMap = { regions };
         }
       });
     }

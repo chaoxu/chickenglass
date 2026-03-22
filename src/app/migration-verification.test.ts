@@ -805,6 +805,68 @@ describe("#279 — shared Lezer document semantics", () => {
   });
 });
 
+describe("#298 — canonical document analysis pass", () => {
+  it("defines the shared analysis field and standalone analyzer", async () => {
+    const cmSource = await import("../semantics/codemirror-source");
+    const semantics = await import("../semantics/document");
+
+    expect(cmSource.documentAnalysisField).toBeDefined();
+    expect(semantics.analyzeDocumentSemantics).toBeDefined();
+  });
+
+  it("routes high-overlap consumers through shared document analysis", () => {
+    const extract = fileText("src/index/extract.ts");
+    const html = fileText("src/app/markdown-to-html.ts");
+    const crossrefs = fileText("src/index/crossref-resolver.ts");
+    const references = fileText("src/render/reference-render.ts");
+
+    expect(extract).toContain("analyzeDocumentSemantics");
+    expect(html).toContain("analyzeDocumentSemantics");
+    expect(crossrefs).toContain("documentAnalysisField");
+    expect(references).toContain("documentAnalysisField");
+  });
+});
+
+describe("#299 — centralized block manifest and CSS registry", () => {
+  it("ships typed block manifest, css class registry, and node constants", async () => {
+    const blockManifest = await import("../constants/block-manifest");
+    const css = await import("../constants/css-classes");
+    const nodes = await import("../constants/node-types");
+
+    expect(blockManifest.BLOCK_MANIFEST.length).toBeGreaterThan(0);
+    expect(css.CSS.blockHeader).toBe("cf-block-header");
+    expect(nodes.NODE.FencedDiv).toBe("FencedDiv");
+  });
+
+  it("uses the shared registries in block rendering paths", () => {
+    const blockTheme = fileText("src/editor/block-theme.ts");
+    const pluginRender = fileText("src/plugins/plugin-render.ts");
+
+    expect(blockTheme).toContain("STYLED_BLOCK_NAMES");
+    expect(pluginRender).toContain("CSS.blockHeaderRendered");
+    expect(pluginRender).toContain("EMBED_CLASSES");
+  });
+});
+
+describe("#321 — standardized background dispatch handling", () => {
+  it("documents the error-handling policy and exports the dispatch helper", async () => {
+    const dispatch = await import("./lib/view-dispatch");
+    const claude = fileText("CLAUDE.md");
+
+    expect(dispatch.dispatchIfConnected).toBeDefined();
+    expect(claude).toContain("Error handling policy");
+    expect(claude).toContain("Never use bare `catch {}`");
+  });
+
+  it("uses the shared helper in background editor services", () => {
+    const bibliography = fileText("src/app/hooks/use-bibliography.ts");
+    const services = fileText("src/app/hooks/use-editor-document-services.ts");
+
+    expect(bibliography).toContain("dispatchIfConnected");
+    expect(services).toContain("dispatchIfConnected");
+  });
+});
+
 describe("#290 — Lezer-first markdown parsing", () => {
   it("equation label extraction uses the shared braced-label helper", () => {
     const semantics = fileText("src/semantics/document.ts");

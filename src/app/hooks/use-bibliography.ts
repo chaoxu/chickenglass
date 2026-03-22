@@ -12,6 +12,7 @@ import { bibDataEffect } from "../../citations/citation-render";
 import { CslProcessor } from "../../citations/csl-processor";
 import type { FileSystem } from "../file-manager";
 import { projectPathCandidatesFromDocument } from "../lib/project-paths";
+import { dispatchIfConnected } from "../lib/view-dispatch";
 import { measureAsync, withPerfOperation } from "../perf";
 
 /**
@@ -68,19 +69,18 @@ export async function loadBibliography(
         () => new CslProcessor(entries, cslXml),
         { category: "citations", detail: cslPath || bibPath },
       );
-      if (!view.dom.isConnected) return;
-      try {
-        view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor }) });
-      } catch (err) {
-        if (view.dom?.isConnected) console.error("Bibliography dispatch error:", err);
-      }
-    } catch (err) {
-      if (!view.dom.isConnected) return;
-      try {
-        view.dispatch({ effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) });
-      } catch (dispatchErr) {
-        if (view.dom?.isConnected) console.error("Bibliography dispatch error:", dispatchErr);
-      }
+      dispatchIfConnected(
+        view,
+        { effects: bibDataEffect.of({ store, cslProcessor }) },
+        { context: "Bibliography dispatch error:" },
+      );
+    } catch (error) {
+      void error;
+      dispatchIfConnected(
+        view,
+        { effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) },
+        { context: "Bibliography dispatch error:" },
+      );
     }
   }, bibPath);
 }
@@ -136,14 +136,11 @@ export function useBibliography(options: UseBibliographyOptions): UseBibliograph
       lastCslPathRef.current = cslPath;
 
       if (!bibPath) {
-        if (!view.dom.isConnected) return;
-        try {
-          view.dispatch({
-            effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }),
-          });
-        } catch (err) {
-          if (view.dom?.isConnected) console.error("Bibliography dispatch error:", err);
-        }
+        dispatchIfConnected(
+          view,
+          { effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) },
+          { context: "Bibliography dispatch error:" },
+        );
       } else {
         void loadBibliography(docPath, bibPath, cslPath, fs, view);
       }

@@ -24,6 +24,14 @@ let activeInlineEditor: {
   cell: HTMLElement;
 } | null = null;
 
+export function shouldCommitBlurredInlineEditor(
+  snapshot: typeof activeInlineEditor,
+  current: typeof activeInlineEditor,
+  cell: HTMLElement,
+): snapshot is NonNullable<typeof activeInlineEditor> {
+  return snapshot !== null && current === snapshot && snapshot.cell === cell;
+}
+
 /**
  * Destroy the currently active inline editor (if any) and return
  * the final document text from that editor.
@@ -223,8 +231,9 @@ export class TableWidget extends WidgetType {
             syncToRoot(section, row, col, newDoc, true);
           },
           onBlur: () => {
+            const blurredEditor = activeInlineEditor;
             setTimeout(() => {
-              if (!activeInlineEditor || activeInlineEditor.cell !== cell) return;
+              if (!shouldCommitBlurredInlineEditor(blurredEditor, activeInlineEditor, cell)) return;
               const editedText = destroyActiveInlineEditor();
               renderInlineMarkdown(cell, editedText, this.macros);
 
