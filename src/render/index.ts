@@ -3,6 +3,7 @@ export {
   cursorInRange,
   collectNodes,
   buildDecorations,
+  createBooleanToggleField,
   serializeMacros,
   RenderWidget,
   editorFocusField,

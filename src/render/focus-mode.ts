@@ -14,23 +14,14 @@ import {
   type ViewUpdate,
   ViewPlugin,
 } from "@codemirror/view";
-import { type Extension, StateEffect, StateField } from "@codemirror/state";
+import { type Extension, StateEffect } from "@codemirror/state";
+import { createBooleanToggleField } from "./render-utils";
 
 /** Effect to toggle focus mode on/off. */
 const toggleFocusEffect = StateEffect.define<boolean>();
 
 /** StateField tracking whether focus mode is active. */
-const focusModeField = StateField.define<boolean>({
-  create() {
-    return false;
-  },
-  update(active, tr) {
-    for (const effect of tr.effects) {
-      if (effect.is(toggleFocusEffect)) return effect.value;
-    }
-    return active;
-  },
-});
+const focusModeField = createBooleanToggleField(toggleFocusEffect);
 
 /** Line decoration that dims content. */
 const dimmedLine = Decoration.line({ class: "cf-focus-dimmed" });

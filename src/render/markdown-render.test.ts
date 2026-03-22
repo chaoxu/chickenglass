@@ -1,27 +1,20 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownRenderPlugin } from "./markdown-render";
 import { cursorInRange } from "./render-utils";
+import { createTestView as createSharedTestView } from "../test-utils";
 
 /** Create an EditorView with the markdown render plugin at the given cursor position. */
 function createTestView(doc: string, cursorPos?: number): EditorView {
-  const state = EditorState.create({
-    doc,
-    selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
+  return createTestViewShared(doc, cursorPos);
+}
+
+function createTestViewShared(doc: string, cursorPos?: number): EditorView {
+  return createSharedTestView(doc, {
+    cursorPos,
     extensions: [markdown(), markdownRenderPlugin],
   });
-  const parent = document.createElement("div");
-  document.body.appendChild(parent);
-  const view = new EditorView({ state, parent });
-  view.focus();
-  const origDestroy = view.destroy.bind(view);
-  view.destroy = () => {
-    origDestroy();
-    parent.remove();
-  };
-  return view;
 }
 
 describe("cursorInRange", () => {
@@ -148,4 +141,3 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
     expect(view.state.doc.toString()).toBe(doc);
   });
 });
-

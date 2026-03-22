@@ -5,8 +5,8 @@ import { fencedDiv } from "../parser/fenced-div";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { projectConfigFacet } from "../app/project-config";
 import type { BlockConfig } from "../parser/frontmatter";
-
 import type { BlockPlugin } from "./plugin-types";
+import { createEditorState as createTestEditorState, makeBlockPlugin } from "../test-utils";
 import {
   createRegistryState,
   registerPlugin,
@@ -21,19 +21,6 @@ import {
   createPluginRegistryField,
 } from "./plugin-registry";
 
-/** Helper to make a minimal plugin for testing. */
-function makePlugin(overrides: Partial<BlockPlugin> & { name: string }): BlockPlugin {
-  return {
-    numbered: true,
-    title: overrides.name.charAt(0).toUpperCase() + overrides.name.slice(1),
-    render: (attrs) => ({
-      className: `cf-block cf-block-${attrs.type}`,
-      header: `${overrides.title ?? overrides.name} ${attrs.number ?? ""}`.trim(),
-    }),
-    ...overrides,
-  };
-}
-
 describe("createRegistryState", () => {
   it("creates an empty registry", () => {
     const state = createRegistryState();
@@ -44,22 +31,22 @@ describe("createRegistryState", () => {
 describe("registerPlugin", () => {
   it("adds a plugin to the registry", () => {
     const state = createRegistryState();
-    const plugin = makePlugin({ name: "theorem" });
+    const plugin = makeBlockPlugin({ name: "theorem" });
     const next = registerPlugin(state, plugin);
     expect(getPlugin(next, "theorem")).toBe(plugin);
   });
 
   it("does not mutate the original state", () => {
     const state = createRegistryState();
-    const plugin = makePlugin({ name: "theorem" });
+    const plugin = makeBlockPlugin({ name: "theorem" });
     registerPlugin(state, plugin);
     expect(getPlugin(state, "theorem")).toBeUndefined();
   });
 
   it("overwrites a plugin with the same name", () => {
     const state = createRegistryState();
-    const plugin1 = makePlugin({ name: "theorem", title: "Theorem" });
-    const plugin2 = makePlugin({ name: "theorem", title: "Satz" });
+    const plugin1 = makeBlockPlugin({ name: "theorem", title: "Theorem" });
+    const plugin2 = makeBlockPlugin({ name: "theorem", title: "Satz" });
     const next = registerPlugin(registerPlugin(state, plugin1), plugin2);
     expect(getPlugin(next, "theorem")?.title).toBe("Satz");
   });
@@ -69,8 +56,8 @@ describe("registerPlugins", () => {
   it("adds multiple plugins at once", () => {
     const state = createRegistryState();
     const plugins = [
-      makePlugin({ name: "theorem" }),
-      makePlugin({ name: "proof", numbered: false }),
+      makeBlockPlugin({ name: "theorem" }),
+      makeBlockPlugin({ name: "proof", numbered: false }),
     ];
     const next = registerPlugins(state, plugins);
     expect(getPlugin(next, "theorem")).toBeDefined();
@@ -82,8 +69,8 @@ describe("registerPlugins", () => {
 describe("unregisterPlugin", () => {
   it("removes a plugin by name", () => {
     let state = createRegistryState();
-    state = registerPlugin(state, makePlugin({ name: "theorem" }));
-    state = registerPlugin(state, makePlugin({ name: "proof" }));
+    state = registerPlugin(state, makeBlockPlugin({ name: "theorem" }));
+    state = registerPlugin(state, makeBlockPlugin({ name: "proof" }));
     const next = unregisterPlugin(state, "theorem");
     expect(getPlugin(next, "theorem")).toBeUndefined();
     expect(getPlugin(next, "proof")).toBeDefined();
@@ -97,7 +84,7 @@ describe("unregisterPlugin", () => {
 
   it("does not mutate the original state", () => {
     let state = createRegistryState();
-    state = registerPlugin(state, makePlugin({ name: "theorem" }));
+    state = registerPlugin(state, makeBlockPlugin({ name: "theorem" }));
     unregisterPlugin(state, "theorem");
     expect(getPlugin(state, "theorem")).toBeDefined();
   });
@@ -113,7 +100,7 @@ describe("getPlugin", () => {
 describe("getPluginOrFallback", () => {
   it("returns registered plugin when available", () => {
     let state = createRegistryState();
-    const plugin = makePlugin({ name: "theorem" });
+    const plugin = makeBlockPlugin({ name: "theorem" });
     state = registerPlugin(state, plugin);
     expect(getPluginOrFallback(state, "theorem")).toBe(plugin);
   });
@@ -143,7 +130,8 @@ describe("getPluginOrFallback", () => {
     const state = createRegistryState();
     const fallback = getPluginOrFallback(state, "hypothesis");
     expect(fallback).toBeDefined();
-    const spec = fallback!.render({ type: "hypothesis", number: 3, title: "Key" });
+    if (!fallback) throw new Error("expected fallback plugin");
+    const spec = fallback.render({ type: "hypothesis", number: 3, title: "Key" });
     expect(spec.className).toBe("cf-block cf-block-hypothesis");
     expect(spec.header).toBe("Hypothesis 3");
   });
@@ -152,7 +140,8 @@ describe("getPluginOrFallback", () => {
     const state = createRegistryState();
     const fallback = getPluginOrFallback(state, "axiom");
     expect(fallback).toBeDefined();
-    expect(fallback!.counter).toBeUndefined();
+    if (!fallback) throw new Error("expected fallback plugin");
+    expect(fallback.counter).toBeUndefined();
     // counter ?? name falls back to "axiom" in the numbering logic
   });
 });
@@ -161,9 +150,9 @@ describe("getRegisteredNames", () => {
   it("returns all registered names", () => {
     let state = createRegistryState();
     state = registerPlugins(state, [
-      makePlugin({ name: "theorem" }),
-      makePlugin({ name: "lemma" }),
-      makePlugin({ name: "proof" }),
+      makeBlockPlugin({ name: "theorem" }),
+      makeBlockPlugin({ name: "lemma" }),
+      makeBlockPlugin({ name: "proof" }),
     ]);
     const names = getRegisteredNames(state);
     expect(names).toContain("theorem");
@@ -242,14 +231,14 @@ describe("applyFrontmatterBlocks", () => {
 
   it("ignores true entries", () => {
     let state = createRegistryState();
-    state = registerPlugin(state, makePlugin({ name: "theorem" }));
+    state = registerPlugin(state, makeBlockPlugin({ name: "theorem" }));
     const next = applyFrontmatterBlocks(state, { theorem: true });
     expect(getPlugin(next, "theorem")).toBeDefined();
   });
 
   it("removes plugins with false entries", () => {
     let state = createRegistryState();
-    state = registerPlugin(state, makePlugin({ name: "theorem" }));
+    state = registerPlugin(state, makeBlockPlugin({ name: "theorem" }));
     const next = applyFrontmatterBlocks(state, { theorem: false });
     expect(getPlugin(next, "theorem")).toBeUndefined();
   });
@@ -257,8 +246,8 @@ describe("applyFrontmatterBlocks", () => {
   it("handles mixed entries", () => {
     let state = createRegistryState();
     state = registerPlugins(state, [
-      makePlugin({ name: "theorem" }),
-      makePlugin({ name: "proof" }),
+      makeBlockPlugin({ name: "theorem" }),
+      makeBlockPlugin({ name: "proof" }),
     ]);
     const next = applyFrontmatterBlocks(state, {
       theorem: true,
@@ -278,15 +267,14 @@ describe("applyFrontmatterBlocks", () => {
 
 /** Default plugins used in CM6 integration tests. */
 const builtinTestPlugins: readonly BlockPlugin[] = [
-  makePlugin({ name: "theorem", counter: "theorem", title: "Theorem" }),
-  makePlugin({ name: "lemma", counter: "theorem", title: "Lemma" }),
-  makePlugin({ name: "proof", numbered: false, title: "Proof" }),
+  makeBlockPlugin({ name: "theorem", counter: "theorem", title: "Theorem" }),
+  makeBlockPlugin({ name: "lemma", counter: "theorem", title: "Lemma" }),
+  makeBlockPlugin({ name: "proof", numbered: false, title: "Proof" }),
 ];
 
 /** Create an EditorState with the plugin registry loaded from builtins. */
 function createEditorState(doc: string, projectBlocks?: Record<string, boolean | BlockConfig>): EditorState {
-  return EditorState.create({
-    doc,
+  return createTestEditorState(doc, {
     extensions: [
       ...(projectBlocks ? [projectConfigFacet.of({ blocks: projectBlocks })] : []),
       markdown({ extensions: [fencedDiv] }),

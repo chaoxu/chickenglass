@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-
-import type { BlockPlugin } from "./plugin-types";
 import {
   createRegistryState,
   registerPlugins,
@@ -10,40 +8,24 @@ import {
   computeBlockNumbers,
   emptyCounterState,
 } from "./block-counter";
-import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
-
-/** Helper to make a minimal plugin for testing. */
-function makePlugin(overrides: Partial<BlockPlugin> & { name: string }): BlockPlugin {
-  return {
-    numbered: true,
-    title: overrides.name.charAt(0).toUpperCase() + overrides.name.slice(1),
-    render: (attrs) => ({
-      className: `cf-block cf-block-${attrs.type}`,
-      header: `${overrides.name} ${attrs.number ?? ""}`.trim(),
-    }),
-    ...overrides,
-  };
-}
+import { createEditorState, makeBlockPlugin } from "../test-utils";
 
 /** Create an EditorState with the fenced div parser and a given document. */
-function createState(doc: string): EditorState {
-  return EditorState.create({
-    doc,
-    extensions: [
-      markdown({ extensions: [fencedDiv] }),
-    ],
+function createState(doc: string) {
+  return createEditorState(doc, {
+    extensions: [markdown({ extensions: [fencedDiv] })],
   });
 }
 
 /** Create a registry with common test plugins. */
 function testRegistry(): PluginRegistryState {
   return registerPlugins(createRegistryState(), [
-    makePlugin({ name: "theorem", counter: "theorem" }),
-    makePlugin({ name: "lemma", counter: "theorem" }),
-    makePlugin({ name: "definition" }),
-    makePlugin({ name: "proof", numbered: false }),
+    makeBlockPlugin({ name: "theorem", counter: "theorem" }),
+    makeBlockPlugin({ name: "lemma", counter: "theorem" }),
+    makeBlockPlugin({ name: "definition" }),
+    makeBlockPlugin({ name: "proof", numbered: false }),
   ]);
 }
 
@@ -267,8 +249,8 @@ describe("computeBlockNumbers", () => {
 
   it("uses plugin name as counter group when counter is undefined", () => {
     const registry = registerPlugins(createRegistryState(), [
-      makePlugin({ name: "theorem" }), // no explicit counter
-      makePlugin({ name: "lemma" }),    // no explicit counter
+      makeBlockPlugin({ name: "theorem" }), // no explicit counter
+      makeBlockPlugin({ name: "lemma" }),    // no explicit counter
     ]);
 
     const doc = [

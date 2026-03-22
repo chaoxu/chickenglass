@@ -1,10 +1,9 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { type BibEntry } from "./bibtex-parser";
+import { createTestView as createSharedTestView, makeBibStore } from "../test-utils";
 import {
-  type BibStore,
   findCitations,
   formatParenthetical,
   CitationWidget,
@@ -13,10 +12,6 @@ import {
   bibDataField,
   citationRenderPlugin,
 } from "./citation-render";
-
-function makeBibStore(entries: BibEntry[]): BibStore {
-  return new Map(entries.map((e) => [e.id, e]));
-}
 
 const karger: BibEntry = {
   id: "karger2000",
@@ -212,15 +207,12 @@ describe("citationRenderPlugin integration", () => {
   });
 
   function createTestView(doc: string, cursorPos?: number): EditorView {
-    const state = EditorState.create({
-      doc,
-      selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
+    const view = createSharedTestView(doc, {
+      cursorPos,
       extensions: [markdown(), bibDataField, citationRenderPlugin],
     });
-    const parent = document.createElement("div");
-    const v = new EditorView({ state, parent });
-    v.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: null }) });
-    return v;
+    view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: null }) });
+    return view;
   }
 
   it("creates a view with the plugin without errors", () => {

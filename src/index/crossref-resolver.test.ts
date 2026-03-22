@@ -8,38 +8,23 @@ import { frontmatterField } from "../editor/frontmatter-state";
 import { createPluginRegistryField } from "../plugins/plugin-registry";
 import { blockCounterField } from "../plugins/block-counter";
 import type { BlockPlugin } from "../plugins/plugin-types";
+import { createEditorState, makeBlockPlugin } from "../test-utils";
 import {
   collectEquationLabels,
   resolveCrossref,
   findCrossrefs,
 } from "./crossref-resolver";
 
-/** Helper to make a minimal plugin for testing. */
-function makePlugin(
-  overrides: Partial<BlockPlugin> & { name: string },
-): BlockPlugin {
-  return {
-    numbered: true,
-    title: overrides.name.charAt(0).toUpperCase() + overrides.name.slice(1),
-    render: (attrs) => ({
-      className: `cf-block cf-block-${attrs.type}`,
-      header: `${overrides.name} ${attrs.number ?? ""}`.trim(),
-    }),
-    ...overrides,
-  };
-}
-
 const testPlugins: readonly BlockPlugin[] = [
-  makePlugin({ name: "theorem", counter: "theorem", title: "Theorem" }),
-  makePlugin({ name: "lemma", counter: "theorem", title: "Lemma" }),
-  makePlugin({ name: "definition", title: "Definition" }),
-  makePlugin({ name: "proof", numbered: false, title: "Proof" }),
+  makeBlockPlugin({ name: "theorem", counter: "theorem", title: "Theorem" }),
+  makeBlockPlugin({ name: "lemma", counter: "theorem", title: "Lemma" }),
+  makeBlockPlugin({ name: "definition", title: "Definition" }),
+  makeBlockPlugin({ name: "proof", numbered: false, title: "Proof" }),
 ];
 
 /** Create an EditorState with all necessary extensions for testing. */
 function createState(doc: string): EditorState {
-  return EditorState.create({
-    doc,
+  return createEditorState(doc, {
     extensions: [
       markdown({
         extensions: [fencedDiv, mathExtension, equationLabelExtension],
@@ -53,8 +38,7 @@ function createState(doc: string): EditorState {
 
 /** Create a minimal state with only math extensions (no block plugins). */
 function createMathState(doc: string): EditorState {
-  return EditorState.create({
-    doc,
+  return createEditorState(doc, {
     extensions: [
       markdown({
         extensions: [mathExtension, equationLabelExtension],

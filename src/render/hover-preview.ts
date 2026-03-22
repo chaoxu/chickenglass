@@ -77,12 +77,16 @@ function renderContentWithMath(
 }
 
 /** Create a header div for the tooltip. */
-function createHeader(text: string, extraClass?: string): HTMLElement {
+function createHeader(
+  text: string,
+  macros: Record<string, string> = {},
+  extraClass?: string,
+): HTMLElement {
   const header = document.createElement("div");
   header.className = extraClass
     ? `cf-hover-preview-header ${extraClass}`
     : "cf-hover-preview-header";
-  header.textContent = text;
+  renderInlineMarkdown(header, text, macros, "document-inline");
   return header;
 }
 
@@ -128,7 +132,7 @@ function buildCrossrefTooltip(
   container.className = "cf-hover-preview";
 
   if (resolved.kind === "block") {
-    container.appendChild(createHeader(resolved.label));
+    container.appendChild(createHeader(resolved.label, macros));
 
     const counterState = view.state.field(blockCounterField, false);
     const block = counterState?.byId.get(ref.id);
@@ -142,7 +146,7 @@ function buildCrossrefTooltip(
       }
     }
   } else if (resolved.kind === "equation") {
-    container.appendChild(createHeader(resolved.label));
+    container.appendChild(createHeader(resolved.label, macros));
 
     const eqContent = findEquationSource(view, ref.id);
     if (eqContent) {
@@ -153,7 +157,7 @@ function buildCrossrefTooltip(
     }
   } else {
     container.appendChild(
-      createHeader(`Unresolved: ${ref.id}`, "cf-hover-preview-unresolved"),
+      createHeader(`Unresolved: ${ref.id}`, macros, "cf-hover-preview-unresolved"),
     );
   }
 
@@ -182,7 +186,7 @@ function buildCitationTooltip(
 
   if (container.children.length === 0) {
     container.appendChild(
-      createHeader(`Unknown citation: ${ids.join(", ")}`, "cf-hover-preview-unresolved"),
+      createHeader(`Unknown citation: ${ids.join(", ")}`, {}, "cf-hover-preview-unresolved"),
     );
   }
 

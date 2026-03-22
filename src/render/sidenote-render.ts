@@ -17,10 +17,11 @@ import {
   type ViewUpdate,
   ViewPlugin,
 } from "@codemirror/view";
-import { type EditorState, type Extension, type Range, StateField, StateEffect } from "@codemirror/state";
+import { type EditorState, type Extension, type Range, StateEffect, StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   buildDecorations,
+  createBooleanToggleField,
   cursorInRange,
   RenderWidget,
   editorFocusField,
@@ -41,15 +42,7 @@ import { editorStateTextSource } from "../semantics/codemirror-source";
 export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
 
 /** StateField tracking whether the sidenote margin is collapsed. */
-export const sidenotesCollapsedField = StateField.define<boolean>({
-  create() { return false; },
-  update(value, tr) {
-    for (const e of tr.effects) {
-      if (e.is(sidenotesCollapsedEffect)) return e.value;
-    }
-    return value;
-  },
-});
+export const sidenotesCollapsedField = createBooleanToggleField(sidenotesCollapsedEffect);
 
 
 /** Collect footnote references and definitions from the syntax tree. */

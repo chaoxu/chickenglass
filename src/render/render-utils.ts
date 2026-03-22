@@ -1,5 +1,13 @@
 import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
-import { type EditorState, type Extension, type Range, RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
+import {
+  type EditorState,
+  type Extension,
+  type Range,
+  RangeSetBuilder,
+  StateEffect,
+  StateField,
+  type StateEffectType,
+} from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 
 /**
@@ -190,22 +198,35 @@ export abstract class RenderWidget extends WidgetType {
 export const focusEffect = StateEffect.define<boolean>();
 
 /**
+ * Build a boolean StateField controlled solely by a matching StateEffect.
+ *
+ * The field preserves its previous value unless the transaction contains the
+ * given effect, in which case it adopts the effect's boolean payload.
+ */
+export function createBooleanToggleField(
+  effect: StateEffectType<boolean>,
+  initialValue = false,
+): StateField<boolean> {
+  return StateField.define<boolean>({
+    create() {
+      return initialValue;
+    },
+    update(value, tr) {
+      for (const candidate of tr.effects) {
+        if (candidate.is(effect)) return candidate.value;
+      }
+      return value;
+    },
+  });
+}
+
+/**
  * Shared StateField that tracks whether the editor is focused.
  *
  * Used by StateField-based renderers (math, block plugins) that need
  * to know focus state to decide whether to show source or rendered view.
  */
-export const editorFocusField = StateField.define<boolean>({
-  create() {
-    return false;
-  },
-  update(focused, tr) {
-    for (const effect of tr.effects) {
-      if (effect.is(focusEffect)) return effect.value;
-    }
-    return focused;
-  },
-});
+export const editorFocusField = createBooleanToggleField(focusEffect);
 
 /**
  * Extension that dispatches focus-change effects when the editor
