@@ -590,3 +590,17 @@ describe("#280 — AppInner controller decomposition", () => {
     expect(overlaysMod.AppOverlays).toBeDefined();
   });
 });
+
+describe("#284 — FileTree controller extraction", () => {
+  it("file tree controller hook exists", async () => {
+    const mod = await import("./hooks/use-file-tree-controller");
+    expect(mod.useFileTreeController).toBeDefined();
+    expect(mod.flattenVisibleEntries).toBeDefined();
+    expect(mod.resolveFileTreeKey).toBeDefined();
+  });
+
+  it("recursive file tree node component exists", async () => {
+    const mod = await import("./components/file-tree-node");
+    expect(mod.FileTreeNode).toBeDefined();
+  });
+});
