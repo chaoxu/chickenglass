@@ -96,6 +96,11 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
 
 ## Development rules
 
+- **Subsystem pattern**:
+  - For any non-trivial feature, use the subsystem pattern in `docs/architecture/subsystem-pattern.md`.
+  - A complex feature should usually have explicit model, controller, render adapter, side-effect, and invariant-test seams.
+  - One concept should have one clear owner. Avoid splitting the same policy across unrelated files.
+  - When a new subsystem owner exists, remove stale legacy paths instead of keeping both.
 - **Default rigor mode**:
   - Unless the user explicitly asks for a quick patch, brainstorming only, or issue-only investigation, default to rigorous implementation.
   - Start with root-cause analysis, not symptom patching.

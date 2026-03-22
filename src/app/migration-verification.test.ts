@@ -895,3 +895,15 @@ describe("#308 — shared base editor extensions", () => {
     expect(inlineEditor).not.toContain("../parser/strikethrough");
   });
 });
+
+describe("#318 — subsystem pattern", () => {
+  it("documents the subsystem pattern in repo docs", () => {
+    expect(fileExists("docs/architecture/subsystem-pattern.md")).toBe(true);
+  });
+
+  it("adds subsystem guidance to the agent instructions", () => {
+    const claude = fileText("CLAUDE.md");
+    expect(claude).toContain("docs/architecture/subsystem-pattern.md");
+    expect(claude).toContain("One concept should have one clear owner");
+  });
+});
