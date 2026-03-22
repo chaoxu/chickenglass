@@ -60,7 +60,7 @@
         display: flex;
         align-items: center;
         background: var(--cf-subtle);
-        border-bottom: 1px solid var(--cf-border);
+        border-bottom: var(--cf-border-width) solid var(--cf-border);
         min-height: 32px;
         overflow-x: auto;
         flex-shrink: 0;
@@ -69,11 +69,11 @@
       .tab {
         display: flex;
         align-items: center;
-        gap: 4px;
-        padding: 4px 12px;
+        gap: var(--cf-spacing-xs);
+        padding: var(--cf-spacing-xs) var(--cf-spacing-md);
         font-size: 13px;
         cursor: pointer;
-        border-right: 1px solid var(--cf-border);
+        border-right: var(--cf-border-width) solid var(--cf-border);
         white-space: nowrap;
         user-select: none;
         color: var(--cf-muted);
@@ -100,10 +100,10 @@
       }
 
       .tab-close {
-        font-size: 14px;
+        font-size: var(--cf-ui-font-size-base);
         line-height: 1;
         padding: 0 2px;
-        border-radius: 2px;
+        border-radius: var(--cf-border-radius);
         color: var(--cf-muted);
       }
 
@@ -117,7 +117,7 @@
         width: 220px;
         min-width: 180px;
         background: var(--cf-subtle);
-        border-right: 1px solid var(--cf-border);
+        border-right: var(--cf-border-width) solid var(--cf-border);
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -134,21 +134,21 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 8px 12px;
+        padding: var(--cf-spacing-sm) var(--cf-spacing-md);
         font-size: 11px;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         color: var(--cf-muted);
-        border-bottom: 1px solid var(--cf-border);
+        border-bottom: var(--cf-border-width) solid var(--cf-border);
       }
 
       .sidebar-btn {
         background: none;
-        border: 1px solid var(--cf-border);
-        border-radius: 2px;
+        border: var(--cf-border-width) solid var(--cf-border);
+        border-radius: var(--cf-border-radius);
         cursor: pointer;
-        font-size: 14px;
+        font-size: var(--cf-ui-font-size-base);
         line-height: 1;
         padding: 2px 6px;
         color: var(--cf-muted);
@@ -163,14 +163,14 @@
       .file-tree {
         overflow-y: auto;
         flex: 1;
-        padding: 4px 0;
+        padding: var(--cf-spacing-xs) 0;
       }
 
       .file-tree-item {
         display: flex;
         align-items: center;
-        gap: 4px;
-        padding: 4px 8px;
+        gap: var(--cf-spacing-xs);
+        padding: var(--cf-spacing-xs) var(--cf-spacing-sm);
         font-size: 13px;
         cursor: pointer;
         user-select: none;
@@ -205,13 +205,13 @@
 
       /* Collapsible sidebar sections */
       .sidebar-section {
-        border-top: 1px solid var(--cf-border);
+        border-top: var(--cf-border-width) solid var(--cf-border);
       }
 
       .sidebar-header-collapsible {
         cursor: pointer;
         user-select: none;
-        gap: 4px;
+        gap: var(--cf-spacing-xs);
       }
 
       .sidebar-toggle {
@@ -224,14 +224,14 @@
       /* Outline */
       .outline-list {
         overflow-y: auto;
-        padding: 4px 0;
+        padding: var(--cf-spacing-xs) 0;
         max-height: 300px;
       }
 
       .outline-item {
         display: flex;
         align-items: baseline;
-        gap: 4px;
+        gap: var(--cf-spacing-xs);
         padding: 2px 8px;
         font-size: 13px;
         cursor: pointer;
@@ -289,11 +289,11 @@
         display: flex;
         align-items: center;
         gap: 2px;
-        padding: 4px 12px;
-        font-size: 12px;
+        padding: var(--cf-spacing-xs) var(--cf-spacing-md);
+        font-size: var(--cf-ui-font-size-sm);
         color: var(--cf-muted);
         background: var(--cf-bg);
-        border-bottom: 1px solid var(--cf-border);
+        border-bottom: var(--cf-border-width) solid var(--cf-border);
         min-height: 24px;
         overflow: hidden;
         white-space: nowrap;
@@ -315,8 +315,8 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        border-radius: 2px;
-        padding: 1px 4px;
+        border-radius: var(--cf-border-radius);
+        padding: 1px var(--cf-spacing-xs);
       }
 
       .breadcrumb-segment:hover {
@@ -351,8 +351,8 @@
         max-width: 90vw;
         max-height: 400px;
         background: var(--cf-bg);
-        border: 1px solid var(--cf-border);
-        border-radius: 4px;
+        border: var(--cf-border-width) solid var(--cf-border);
+        border-radius: var(--cf-border-radius-lg);
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -361,7 +361,7 @@
 
       .cmd-palette-input {
         width: 100%;
-        padding: 12px 16px;
+        padding: var(--cf-spacing-md) var(--cf-spacing-lg);
         font-size: 16px;
         font-family:
           -apple-system,
@@ -370,7 +370,7 @@
           Roboto,
           sans-serif;
         border: none;
-        border-bottom: 1px solid var(--cf-border);
+        border-bottom: var(--cf-border-width) solid var(--cf-border);
         outline: none;
         background: transparent;
         color: var(--cf-fg);
@@ -383,16 +383,16 @@
       .cmd-palette-results {
         overflow-y: auto;
         flex: 1;
-        padding: 4px 0;
+        padding: var(--cf-spacing-xs) 0;
       }
 
       .cmd-palette-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 8px 16px;
+        padding: var(--cf-spacing-sm) var(--cf-spacing-lg);
         cursor: pointer;
-        font-size: 14px;
+        font-size: var(--cf-ui-font-size-base);
         color: var(--cf-fg);
       }
 
@@ -410,14 +410,14 @@
 
       .cmd-palette-item-shortcut {
         flex-shrink: 0;
-        margin-left: 16px;
-        font-size: 12px;
+        margin-left: var(--cf-spacing-lg);
+        font-size: var(--cf-ui-font-size-sm);
         color: var(--cf-muted);
         font-family: "SF Mono", "Fira Code", monospace;
         background: var(--cf-subtle);
         padding: 2px 6px;
-        border-radius: 2px;
-        border: 1px solid var(--cf-border);
+        border-radius: var(--cf-border-radius);
+        border: var(--cf-border-width) solid var(--cf-border);
       }
 
       /* Context menus */
@@ -426,9 +426,9 @@
         z-index: 3000;
         min-width: 140px;
         background: var(--cf-bg);
-        border: 1px solid var(--cf-border);
-        border-radius: 4px;
-        padding: 4px 0;
+        border: var(--cf-border-width) solid var(--cf-border);
+        border-radius: var(--cf-border-radius-lg);
+        padding: var(--cf-spacing-xs) 0;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
         user-select: none;
       }
@@ -452,9 +452,9 @@
       }
 
       .context-menu-separator {
-        height: 1px;
+        height: var(--cf-border-width);
         background: var(--cf-border);
-        margin: 4px 0;
+        margin: var(--cf-spacing-xs) 0;
       }
     </style>
   </head>
