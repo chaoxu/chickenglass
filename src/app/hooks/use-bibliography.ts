@@ -11,7 +11,7 @@ import { parseBibTeX } from "../../citations/bibtex-parser";
 import { bibDataEffect } from "../../citations/citation-render";
 import { CslProcessor } from "../../citations/csl-processor";
 import type { FileSystem } from "../file-manager";
-import { dirname } from "../lib/utils";
+import { projectPathCandidatesFromDocument } from "../lib/project-paths";
 import { measureAsync, withPerfOperation } from "../perf";
 
 /**
@@ -26,17 +26,17 @@ export async function loadBibliography(
   fs: FileSystem,
   view: EditorView,
 ): Promise<void> {
-  const dir = dirname(docPath);
-
   const readWithFallback = async (p: string): Promise<string> => {
-    if (dir) {
+    const candidates = projectPathCandidatesFromDocument(docPath, p);
+    let lastError: unknown;
+    for (const candidate of candidates) {
       try {
-        return await fs.readFile(`${dir}/${p}`);
+        return await fs.readFile(candidate);
       } catch {
-        // Fall through to project-root resolution
+        lastError = lastError ?? new Error(`Unable to read ${candidate}`);
       }
     }
-    return fs.readFile(p);
+    throw lastError ?? new Error(`Unable to read ${p}`);
   };
 
   await withPerfOperation("citations.load", async (operation) => {

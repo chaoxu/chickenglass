@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 
+use tauri::command;
 use tauri::State;
 
+use super::perf::measure_command;
+use super::state::PerfState;
 use super::state::ProjectRoot;
 
 pub fn current_project_root(root: &State<'_, ProjectRoot>) -> Result<PathBuf, String> {
@@ -43,4 +46,35 @@ pub fn resolve_existing_path(root: &Path, relative: &str) -> Result<PathBuf, Str
         return Err(format!("Path '{}' escapes project root", relative));
     }
     Ok(resolved)
+}
+
+pub fn project_relative_path(root: &Path, candidate: &Path) -> Result<String, String> {
+    let relative = candidate
+        .strip_prefix(root)
+        .map_err(|_| format!("Path '{}' escapes project root", candidate.display()))?;
+
+    Ok(relative
+        .to_string_lossy()
+        .replace('\\', "/"))
+}
+
+#[command]
+pub fn to_project_relative_path(
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    path: String,
+) -> Result<String, String> {
+    measure_command(
+        &perf,
+        "tauri.to_project_relative_path",
+        "tauri.path.to_project_relative_path",
+        "tauri",
+        Some(&path),
+        || {
+            let project_root = current_project_root(&root)?;
+            let candidate = PathBuf::from(&path);
+            ensure_within_root(&project_root, &candidate, &path)?;
+            project_relative_path(&project_root, &candidate)
+        },
+    )
 }

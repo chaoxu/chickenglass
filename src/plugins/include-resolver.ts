@@ -1,5 +1,5 @@
 import type { FileSystem } from "../app/file-manager";
-import { dirname } from "../app/lib/utils";
+import { resolveProjectPathFromDocument } from "../app/lib/project-paths";
 
 /** A single resolved include: the file path and its content. */
 export interface ResolvedInclude {
@@ -76,28 +76,7 @@ export function resolveIncludePath(
   fromPath: string,
   includePath: string,
 ): string {
-  if (includePath.startsWith("/")) {
-    return includePath.slice(1); // strip leading slash for FileSystem compatibility
-  }
-  const dir = dirname(fromPath);
-  const combined = dir ? `${dir}/${includePath}` : includePath;
-  return normalizePath(combined);
-}
-
-/** Normalize a path by resolving `.` and `..` segments. */
-function normalizePath(path: string): string {
-  const parts = path.split("/");
-  const resolved: string[] = [];
-  for (const part of parts) {
-    if (part === "." || part === "") {
-      continue;
-    } else if (part === "..") {
-      resolved.pop();
-    } else {
-      resolved.push(part);
-    }
-  }
-  return resolved.join("/");
+  return resolveProjectPathFromDocument(fromPath, includePath);
 }
 
 /**

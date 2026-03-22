@@ -10,7 +10,10 @@
  */
 
 import type { FileSystem } from "../app/file-manager";
-import { dirname } from "../app/lib/utils";
+import {
+  relativeProjectPathFromDocument,
+  resolveProjectPathFromDocument,
+} from "../app/lib/project-paths";
 import { isTauri } from "../app/tauri-fs";
 
 /** Supported image MIME types and their default file extensions. */
@@ -137,6 +140,46 @@ async function deduplicateFilename(
   return candidate;
 }
 
+export interface PlannedImageTarget {
+  /** Project-relative path used for filesystem writes. */
+  targetPath: string;
+  /** Markdown path inserted into the document. */
+  markdownPath: string;
+}
+
+/**
+ * Allocate a unique image target path for a document.
+ */
+export async function planImageTarget(
+  fs: FileSystem,
+  docPath: string,
+  imageFolder: string,
+  rawFilename: string,
+): Promise<PlannedImageTarget> {
+  const targetDir = resolveProjectPathFromDocument(docPath, imageFolder);
+
+  if (targetDir) {
+    try {
+      const dirExists = await fs.exists(targetDir);
+      if (!dirExists) {
+        await fs.createDirectory(targetDir);
+      }
+    } catch {
+      // Directory might already exist (race condition or implicit via file creation)
+    }
+  }
+
+  const filename = targetDir
+    ? await deduplicateFilename(fs, targetDir, rawFilename)
+    : rawFilename;
+  const targetPath = targetDir ? `${targetDir}/${filename}` : filename;
+
+  return {
+    targetPath,
+    markdownPath: relativeProjectPathFromDocument(docPath, targetPath),
+  };
+}
+
 /**
  * Save an image file and return the path to use in markdown.
  *
@@ -163,31 +206,16 @@ export async function saveImage(
   }
   const imageFolder = ctx.imageFolder || "assets";
 
-  // Compute the directory relative to the document
-  const docDir = dirname(docPath);
-  const targetDir = docDir ? `${docDir}/${imageFolder}` : imageFolder;
-
-  // Ensure the target directory exists
-  try {
-    const dirExists = await fs.exists(targetDir);
-    if (!dirExists) {
-      await fs.createDirectory(targetDir);
-    }
-  } catch {
-    // Directory might already exist (race condition or implicit via file creation)
-  }
-
   // Generate a unique filename
   const rawFilename = generateImageFilename(file, ext);
-  const filename = await deduplicateFilename(fs, targetDir, rawFilename);
-  const relativePath = `${targetDir}/${filename}`;
+  const target = await planImageTarget(fs, docPath, imageFolder, rawFilename);
 
   // Write the binary data
   const data = await fileToUint8Array(file);
-  await fs.writeFileBinary(relativePath, data);
+  await fs.writeFileBinary(target.targetPath, data);
 
   // Return the path relative to the document for markdown insertion
-  return `${imageFolder}/${filename}`;
+  return target.markdownPath;
 }
 
 /**

@@ -1,16 +1,11 @@
 /**
  * Insert Image command — opens a file picker and inserts the chosen image.
  *
- * - In **browser mode**: opens an `<input type="file">` element, reads the
- *   image as a data URL, and inserts `![alt](data:...)`.
- * - In **Tauri mode**: uses Tauri's native file dialog to pick an image,
- *   copies it to the assets folder via a Rust command, and inserts
- *   `![alt](assets/filename.png)`.
+ * Uses the browser file input in both browser and Tauri mode so all insertion
+ * paths flow through the same `saveImage` callback and image-path resolution.
  */
 
 import type { EditorView } from "@codemirror/view";
-import { isTauri } from "../app/tauri-fs";
-import { basename } from "../app/lib/utils";
 import {
   isImageMime,
   IMAGE_MIME_EXT,
@@ -20,8 +15,6 @@ import {
   logImageError,
 } from "./image-save";
 import { insertImageMarkdown } from "./image-paste";
-import { frontmatterField } from "./frontmatter-state";
-import { copyFileToProjectCommand } from "../app/tauri-client/fs";
 
 /** Accepted image file extensions for file dialogs. */
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff"];
@@ -37,11 +30,7 @@ export async function insertImageFromPicker(
   view: EditorView,
   saveImage?: (file: File) => Promise<string>,
 ): Promise<void> {
-  if (isTauri()) {
-    await insertImageTauri(view);
-  } else {
-    await insertImageBrowser(view, saveImage);
-  }
+  await insertImageBrowser(view, saveImage);
 }
 
 /**
@@ -99,46 +88,4 @@ async function insertImageBrowser(
       input.remove();
     }, 60000);
   });
-}
-
-/**
- * Tauri mode: use the native file dialog to pick an image, then copy it
- * into the project's asset folder via the Rust `copy_file_to_project` command.
- */
-async function insertImageTauri(view: EditorView): Promise<void> {
-  try {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const selected = await open({
-      multiple: false,
-      filters: [
-        {
-          name: "Images",
-          extensions: IMAGE_EXTENSIONS,
-        },
-      ],
-    });
-
-    if (!selected) return; // User cancelled
-
-    const sourcePath = selected as string;
-    const fileName = basename(sourcePath);
-    const alt = altTextFromFilename(fileName);
-
-    // Read the imageFolder from frontmatter (or default to "assets")
-    const fm = view.state.field(frontmatterField, false);
-    const imageFolder = fm?.config.imageFolder ?? "assets";
-
-    // Get the docPath from the window global (set by use-editor)
-    // The docPath is available as a data attribute on the editor DOM
-    // For now, we determine the target relative path within the project
-    const destPath = `${imageFolder}/${fileName}`;
-
-    await copyFileToProjectCommand(sourcePath, destPath);
-
-    // Insert the relative path (imageFolder/filename)
-    insertImageMarkdown(view, destPath, alt);
-    view.focus();
-  } catch (err: unknown) {
-    logImageError("file picker", err);
-  }
 }

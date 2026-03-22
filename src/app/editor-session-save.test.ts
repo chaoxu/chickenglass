@@ -1,0 +1,53 @@
+import { describe, expect, it } from "vitest";
+
+import { applySaveAsResult } from "./editor-session-save";
+import { createEditorSessionState } from "./editor-session-model";
+
+describe("applySaveAsResult", () => {
+  it("renames the active session path and clears dirty state", () => {
+    const buffers = new Map([["draft.md", "new content"]]);
+    const liveDocs = new Map([["draft.md", "new content"]]);
+    const state = createEditorSessionState([
+      { path: "draft.md", name: "draft.md", dirty: true },
+    ], "draft.md");
+
+    const next = applySaveAsResult({
+      state,
+      buffers,
+      liveDocs,
+      oldPath: "draft.md",
+      newPath: "notes/final.md",
+      doc: "new content",
+    });
+
+    expect(next.activePath).toBe("notes/final.md");
+    expect(next.tabs).toEqual([
+      { path: "notes/final.md", name: "final.md", dirty: false },
+    ]);
+    expect(buffers.has("draft.md")).toBe(false);
+    expect(liveDocs.has("draft.md")).toBe(false);
+    expect(buffers.get("notes/final.md")).toBe("new content");
+    expect(liveDocs.get("notes/final.md")).toBe("new content");
+  });
+
+  it("clears dirty state when saving in place", () => {
+    const buffers = new Map([["notes/final.md", "new content"]]);
+    const liveDocs = new Map([["notes/final.md", "new content"]]);
+    const state = createEditorSessionState([
+      { path: "notes/final.md", name: "final.md", dirty: true },
+    ], "notes/final.md");
+
+    const next = applySaveAsResult({
+      state,
+      buffers,
+      liveDocs,
+      oldPath: "notes/final.md",
+      newPath: "notes/final.md",
+      doc: "new content",
+    });
+
+    expect(next.tabs[0]?.dirty).toBe(false);
+    expect(buffers.get("notes/final.md")).toBe("new content");
+    expect(liveDocs.get("notes/final.md")).toBe("new content");
+  });
+});
