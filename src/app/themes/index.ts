@@ -5,6 +5,7 @@
  * `document.documentElement`. The `dark` flag tells CM6 whether to
  * activate its dark-mode base theme (colorScheme, scroll gutter, etc.).
  */
+import type { WritingThemeVariables } from "../../theme-contract";
 
 export interface WritingTheme {
   /** Unique identifier stored in settings. */
@@ -12,7 +13,7 @@ export interface WritingTheme {
   /** Human-readable display name. */
   name: string;
   /** CSS variable overrides (keys include the `--cf-` prefix). */
-  variables: Record<string, string>;
+  variables: WritingThemeVariables;
   /** Whether this theme is dark (drives CM6 dark base theme). */
   dark: boolean;
 }

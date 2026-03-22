@@ -16,61 +16,20 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { Theme } from "../theme-manager";
-import { getThemeById, type WritingTheme } from "../themes";
-import { themePresets, applyThemePreset, clearThemePreset } from "../../editor/theme-config";
+import { getThemeById } from "../themes";
+import {
+  applyCustomCss,
+  applyResolvedThemeToDom,
+  applyTypographyPreset,
+  applyWritingThemeVariables,
+  clearTypographyPreset,
+  resolveTheme,
+  type ResolvedTheme,
+} from "../theme-dom";
 
 // Re-export Theme so consumers only need one import.
 export type { Theme } from "../theme-manager";
-export type ResolvedTheme = "light" | "dark";
-
-function resolveTheme(theme: Theme): ResolvedTheme {
-  if (theme !== "system") return theme;
-  if (typeof window.matchMedia !== "function") return "light";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-function applyTheme(resolved: ResolvedTheme): void {
-  document.documentElement.setAttribute("data-theme", resolved);
-}
-
-/** Apply or clear CSS variable overrides from a WritingTheme on <html>. */
-function applyThemeVariables(
-  writingTheme: WritingTheme,
-  prevVariablesRef: React.RefObject<string[]>,
-): void {
-  const root = document.documentElement;
-
-  // Clear previous overrides
-  for (const key of prevVariablesRef.current) {
-    root.style.removeProperty(key);
-  }
-
-  // Apply new overrides
-  const keys = Object.keys(writingTheme.variables);
-  for (const key of keys) {
-    root.style.setProperty(key, writingTheme.variables[key]);
-  }
-  prevVariablesRef.current = keys;
-}
-
-/** ID for the injected custom CSS style element. */
-const CUSTOM_CSS_STYLE_ID = "cf-custom-css";
-
-/** Inject or update user custom CSS in a managed <style> tag. */
-function applyCustomCss(css: string): void {
-  let styleEl = document.getElementById(CUSTOM_CSS_STYLE_ID) as HTMLStyleElement | null;
-  if (!css) {
-    // Remove the style element if CSS is empty
-    if (styleEl) styleEl.remove();
-    return;
-  }
-  if (!styleEl) {
-    styleEl = document.createElement("style");
-    styleEl.id = CUSTOM_CSS_STYLE_ID;
-    document.head.appendChild(styleEl);
-  }
-  styleEl.textContent = css;
-}
+export type { ResolvedTheme } from "../theme-dom";
 
 export interface UseThemeReturn {
   theme: Theme;
@@ -105,7 +64,7 @@ export function useTheme(
   useEffect(() => {
     const resolved = resolveTheme(theme);
     setResolvedTheme(resolved);
-    applyTheme(resolved);
+    applyResolvedThemeToDom(resolved);
 
     if (theme !== "system" || typeof window.matchMedia !== "function") return;
 
@@ -113,7 +72,7 @@ export function useTheme(
     const listener = (e: MediaQueryListEvent): void => {
       const next: ResolvedTheme = e.matches ? "dark" : "light";
       setResolvedTheme(next);
-      applyTheme(next);
+      applyResolvedThemeToDom(next);
     };
 
     mq.addEventListener("change", listener);
@@ -123,14 +82,14 @@ export function useTheme(
   // Apply writing theme CSS variable overrides whenever themeName changes.
   useEffect(() => {
     const wt = getThemeById(themeName ?? "default");
-    applyThemeVariables(wt, prevVariablesRef);
+    applyWritingThemeVariables(wt, prevVariablesRef);
 
     // If the writing theme declares itself as dark/light, override the
     // light/dark toggle for non-default themes.
     if (wt.id !== "default") {
       const resolved: ResolvedTheme = wt.dark ? "dark" : "light";
       setResolvedTheme(resolved);
-      applyTheme(resolved);
+      applyResolvedThemeToDom(resolved);
     }
 
     // Cleanup: remove overrides when unmounting or switching themes
@@ -145,10 +104,8 @@ export function useTheme(
 
   // Apply writing theme preset (typography: fonts, heading sizes) whenever it changes.
   useEffect(() => {
-    const presetId = writingTheme ?? "academic";
-    const preset = themePresets[presetId] ?? themePresets["academic"];
-    applyThemePreset(preset);
-    return () => { clearThemePreset(); };
+    applyTypographyPreset(writingTheme);
+    return () => { clearTypographyPreset(); };
   }, [writingTheme]);
 
   // Inject user custom CSS whenever it changes.

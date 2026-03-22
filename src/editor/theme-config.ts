@@ -3,6 +3,7 @@ import {
   defaultContentFontStack,
   defaultUIFontStack,
 } from "./editor-constants";
+import { themeTypographyTokens } from "../theme-contract";
 
 /**
  * Theme presets: typed typography configurations for the editor and app chrome.
@@ -105,18 +106,7 @@ export const themePresets: Record<string, ThemePreset> = {
 export const themePresetKeys: string[] = Object.keys(themePresets);
 
 /** All CSS custom property names set by applyThemePreset. */
-const PRESET_PROPERTIES = [
-  "--cf-ui-font",
-  "--cf-content-font",
-  "--cf-code-font",
-  "--cf-base-font-size",
-  "--cf-line-height",
-  "--cf-content-max-width",
-  ...Array.from({ length: 6 }, (_, i) => {
-    const n = i + 1;
-    return [`--cf-h${n}-size`, `--cf-h${n}-weight`, `--cf-h${n}-style`];
-  }).flat(),
-];
+const PRESET_PROPERTIES = [...themeTypographyTokens];
 
 /**
  * Apply a theme preset by setting CSS custom properties on `document.documentElement`.

@@ -13,52 +13,10 @@ import type { FileSystem, FileEntry } from "./file-manager";
 import { markdownToHtml, escapeHtml } from "./markdown-to-html";
 import type { ExportFormat } from "./lib/types";
 import { basename } from "./lib/utils";
-import {
-  defaultCodeFontStack,
-  defaultContentFontStack,
-  defaultUIFontStack,
-} from "../editor/editor-constants";
+import { exportThemeTokenDefaults } from "../theme-contract";
 
 export type { ExportFormat };
 
-const exportThemeTokenDefaults: Record<string, string> = {
-  "--cf-bg": "#ffffff",
-  "--cf-bg-secondary": "#ffffff",
-  "--cf-fg": "#09090b",
-  "--cf-muted": "#71717a",
-  "--cf-border": "#e4e4e7",
-  "--cf-subtle": "rgba(0, 0, 0, 0.02)",
-  "--cf-hover": "rgba(0, 0, 0, 0.04)",
-  "--cf-active": "rgba(0, 0, 0, 0.06)",
-  "--cf-accent": "#18181b",
-  "--cf-accent-fg": "#ffffff",
-  "--cf-block-title-color": "var(--cf-fg)",
-  "--cf-block-title-weight": "700",
-  "--cf-block-title-display": "inline",
-  "--cf-block-title-separator": '".\\2002\\2002"',
-  "--cf-block-margin": "0.6em 0",
-  "--cf-block-theorem-style": "italic",
-  "--cf-block-lemma-style": "italic",
-  "--cf-block-corollary-style": "italic",
-  "--cf-block-proposition-style": "italic",
-  "--cf-block-conjecture-style": "italic",
-  "--cf-block-definition-style": "normal",
-  "--cf-block-problem-style": "normal",
-  "--cf-block-example-style": "normal",
-  "--cf-block-remark-style": "normal",
-  "--cf-block-proof-style": "normal",
-  "--cf-proof-marker": '"\\220E"',
-  "--cf-proof-marker-color": "var(--cf-fg)",
-  "--cf-proof-marker-size": "1.2em",
-  "--cf-blockquote-border": "var(--cf-border)",
-  "--cf-blockquote-color": "var(--cf-fg)",
-  "--cf-table-border": "var(--cf-border)",
-  "--cf-table-header-border": "var(--cf-border)",
-  "--cf-table-cell-padding": "0.5em 0.75em",
-  "--cf-mark-bg": "rgba(255, 255, 0, 0.2)",
-  "--cf-math-error-fg": "#c00",
-  "--cf-math-error-bg": "rgba(255, 0, 0, 0.05)",
-};
 
 /** Check whether Pandoc is installed. Returns the version string on success. */
 export async function checkPandoc(): Promise<string> {
@@ -98,14 +56,8 @@ function deriveOutputPath(sourcePath: string, format: ExportFormat): string {
  */
 function buildHtmlDocument(content: string, title: string): string {
   const bodyHtml = markdownToHtml(content);
-  const uiFont = resolveExportFontStack("--cf-ui-font", defaultUIFontStack);
-  const contentFont = resolveExportFontStack("--cf-content-font", defaultContentFontStack);
-  const codeFont = resolveExportFontStack("--cf-code-font", defaultCodeFontStack);
   const themeTokens = serializeExportThemeTokens({
     ...resolveExportThemeTokens(),
-    "--cf-ui-font": uiFont,
-    "--cf-content-font": contentFont,
-    "--cf-code-font": codeFont,
   });
 
   return `<!DOCTYPE html>
@@ -261,10 +213,6 @@ function resolveExportThemeTokens(): Record<string, string> {
     tokens[name] = resolveExportCssValue(name, fallback);
   }
   return tokens;
-}
-
-function resolveExportFontStack(variableName: string, fallback: string): string {
-  return resolveExportCssValue(variableName, fallback);
 }
 
 function resolveExportCssValue(variableName: string, fallback: string): string {

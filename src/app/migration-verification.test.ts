@@ -951,3 +951,18 @@ describe("#315 — editor session subsystem", () => {
     expect(persistence).not.toContain("setActiveTab");
   });
 });
+
+describe("#316 — theme contract and surface token map", () => {
+  it("defines a shared theme contract and architecture note", () => {
+    expect(fileExists("src/theme-contract.ts")).toBe(true);
+    expect(fileExists("docs/architecture/theme-contract.md")).toBe(true);
+  });
+
+  it("separates theme DOM application from stateful theme orchestration", () => {
+    const useTheme = fileText("src/app/hooks/use-theme.ts");
+    const exportFile = fileText("src/app/export.ts");
+
+    expect(useTheme).toContain("../theme-dom");
+    expect(exportFile).toContain("../theme-contract");
+  });
+});
