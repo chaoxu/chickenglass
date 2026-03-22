@@ -17,6 +17,7 @@
 import {
   type DecorationSet,
   Decoration,
+  WidgetType,
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
@@ -51,6 +52,21 @@ import {
   youtubeEmbedUrl,
   gistEmbedUrl,
 } from "./embed-plugin";
+
+/** Simple widget that renders a single text character (used for title parens). */
+class TextWidget extends WidgetType {
+  constructor(private readonly text: string) { super(); }
+  toDOM(): HTMLElement {
+    const el = document.createElement("span");
+    el.className = "cf-block-title-paren";
+    el.textContent = this.text;
+    return el;
+  }
+  eq(other: TextWidget): boolean { return this.text === other.text; }
+}
+
+const openParenWidget = Decoration.widget({ widget: new TextWidget("("), side: -1 });
+const closeParenWidget = Decoration.widget({ widget: new TextWidget(")"), side: 1 });
 
 /** Widget that renders a block header string with inline math/bold/italic. */
 class BlockHeaderWidget extends RenderWidget {
@@ -376,12 +392,13 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     items.push(Decoration.line({ class: headerClass }).range(div.from));
     addHeaderWidgetDecoration(div, spec.header, cursorOnEitherFence, macros, macrosKey, items);
 
-    // Title text: wrap in visual parentheses via CSS mark (rendered mode only).
-    // Source mode shows the raw title without parens.
+    // Title text: wrap in visual parentheses via widget decorations (rendered mode only).
+    // Uses Decoration.widget instead of Decoration.mark with CSS ::before/::after
+    // because marks get split around Decoration.replace (math widgets), causing
+    // ") $x^2$" instead of "$x^2$)".
     if (!cursorOnEitherFence && div.titleFrom !== undefined && div.titleTo !== undefined) {
-      items.push(
-        Decoration.mark({ class: "cf-block-title" }).range(div.titleFrom, div.titleTo),
-      );
+      items.push(openParenWidget.range(div.titleFrom));
+      items.push(closeParenWidget.range(div.titleTo));
     }
 
     // --- Closing fence ---

@@ -49,14 +49,11 @@ export const blockThemeStyles = {
     color: "var(--cf-block-title-color)",
   },
 
-  /* Block title text: visual parentheses around the user's title via CSS.
-   * "::: {.theorem} Main Result" renders as "Theorem 1. (Main Result)".
-   * Only applied in rendered mode — source mode shows raw text without parens. */
-  ".cf-block-title::before": {
-    content: '"("',
-  },
-  ".cf-block-title::after": {
-    content: '")"',
+  /* Block title paren widgets — inserted via Decoration.widget, not CSS
+   * pseudo-elements. CSS ::before/::after breaks when Decoration.replace
+   * (math widgets) splits the mark, causing ") $x^2$" instead of "$x^2$)". */
+  ".cf-block-title-paren": {
+    userSelect: "none",
   },
 
   /* Fenced div nesting guides — vertical lines on the left, editing only.
