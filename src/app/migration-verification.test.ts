@@ -856,3 +856,25 @@ describe("#291 — project rename to Coflat", () => {
     expect(config.PROJECT_CONFIG_FILE).toBe("coflat.yaml");
   });
 });
+
+describe("#317 — typed frontend Tauri client", () => {
+  it("frontend tauri-client modules exist for the current command families", () => {
+    expect(fileExists("src/app/tauri-client/core.ts")).toBe(true);
+    expect(fileExists("src/app/tauri-client/fs.ts")).toBe(true);
+    expect(fileExists("src/app/tauri-client/perf.ts")).toBe(true);
+    expect(fileExists("src/app/tauri-client/watch.ts")).toBe(true);
+  });
+
+  it("feature code uses the tauri-client layer instead of raw invoke strings", () => {
+    const tauriFs = fileText("src/app/tauri-fs.ts");
+    const imageInsert = fileText("src/editor/image-insert.ts");
+    const fileWatcher = fileText("src/app/file-watcher.ts");
+
+    expect(tauriFs).toContain('./tauri-client/fs');
+    expect(imageInsert).toContain("../app/tauri-client/fs");
+    expect(fileWatcher).toContain("./tauri-client/watch");
+    expect(imageInsert).not.toContain('@tauri-apps/api/core');
+    expect(fileWatcher).not.toContain('invokeWithPerf("watch_directory"');
+    expect(fileWatcher).not.toContain('invokeWithPerf("unwatch_directory"');
+  });
+});

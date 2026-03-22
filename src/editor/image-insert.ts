@@ -21,6 +21,7 @@ import {
 } from "./image-save";
 import { insertImageMarkdown } from "./image-paste";
 import { frontmatterField } from "./frontmatter-state";
+import { copyFileToProjectCommand } from "../app/tauri-client/fs";
 
 /** Accepted image file extensions for file dialogs. */
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff"];
@@ -132,11 +133,7 @@ async function insertImageTauri(view: EditorView): Promise<void> {
     // For now, we determine the target relative path within the project
     const destPath = `${imageFolder}/${fileName}`;
 
-    const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("copy_file_to_project", {
-      source: sourcePath,
-      dest: destPath,
-    });
+    await copyFileToProjectCommand(sourcePath, destPath);
 
     // Insert the relative path (imageFolder/filename)
     insertImageMarkdown(view, destPath, alt);

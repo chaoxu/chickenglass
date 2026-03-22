@@ -7,7 +7,8 @@
 
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { basename } from "./lib/utils";
-import { invokeWithPerf, measureAsync } from "./perf";
+import { measureAsync } from "./perf";
+import { watchDirectoryCommand, unwatchDirectoryCommand } from "./tauri-client/watch";
 
 /** Callback to check whether a file is open in a tab. */
 export type IsFileOpenFn = (path: string) => boolean;
@@ -55,7 +56,7 @@ export class FileWatcher {
     await this.unwatch();
 
     // Tell the Rust backend to start watching
-    await invokeWithPerf("watch_directory", { path: directoryPath });
+    await watchDirectoryCommand(directoryPath);
 
     // Listen for file-changed events from the backend
     this.unlisten = await listen<string>("file-changed", (event) => {
@@ -71,7 +72,7 @@ export class FileWatcher {
     }
 
     try {
-      await invokeWithPerf("unwatch_directory");
+      await unwatchDirectoryCommand();
     } catch {
       // Backend may already be stopped
     }

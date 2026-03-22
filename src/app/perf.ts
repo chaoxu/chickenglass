@@ -1,4 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
+import { clearPerfSnapshotCommand, getPerfSnapshotCommand } from "./tauri-client/perf";
+import { invokeTauriCommandRaw } from "./tauri-client/core";
 
 export type PerfSource = "frontend" | "backend";
 
@@ -282,7 +283,7 @@ export function clearFrontendPerf(): void {
 export async function getBackendPerfSnapshot(): Promise<PerfSnapshot | null> {
   if (!isTauriRuntime()) return null;
   try {
-    return await invoke<PerfSnapshot>("get_perf_snapshot");
+    return await getPerfSnapshotCommand();
   } catch {
     return null;
   }
@@ -291,7 +292,7 @@ export async function getBackendPerfSnapshot(): Promise<PerfSnapshot | null> {
 export async function clearBackendPerf(): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
-    await invoke("clear_perf_snapshot");
+    await clearPerfSnapshotCommand();
   } catch {
     // Ignore when backend perf support is unavailable.
   }
@@ -326,7 +327,7 @@ export async function invokeWithPerf<T>(
   command: string,
   args?: Record<string, unknown>,
 ): Promise<T> {
-  return measureAsync(`tauri.invoke.${command}`, () => invoke<T>(command, args), {
+  return measureAsync(`tauri.invoke.${command}`, () => invokeTauriCommandRaw<T>(command, args), {
     category: "tauri",
     detail: command,
   });
