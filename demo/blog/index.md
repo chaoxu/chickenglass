@@ -65,7 +65,7 @@ $$
 
 # Math in Fenced Divs
 
-::: {.theorem} Fundamental Theorem
+::: {#thm:fundamental .theorem} Fundamental Theorem
 For all $n \in \N$:
 $$
 \sum_{k=1}^n k^2 = \frac{n(n+1)(2n+1)}{6}
@@ -76,7 +76,7 @@ $$
 By induction. Base case $n=1$: $1 = \frac{1 \cdot 2 \cdot 3}{6}$. ∎
 :::
 
-::: {.proposition}
+::: {#prop:tu .proposition}
 Properties:
 
 1. $A^T \in TU$
@@ -143,3 +143,5 @@ This has a footnote[^1].
 # Cross-References and Citations
 
 See [@cormen2009] for details.
+
+By [@thm:fundamental], the sum formula holds. See also [@prop:tu].

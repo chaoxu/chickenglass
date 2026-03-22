@@ -1,113 +1,367 @@
-# Coflat Markdown Format
+# Coflat Document Format
 
-Coflat uses Pandoc-flavored markdown with the following specifics.
-
-## Math
-
-- Inline math: `$...$` or `\(...\)`
-- Display math: `$$...$$` or `\[...\]`
-- Equation labels: `$$ ... $$ {#eq:label}`
-- LaTeX environments (`\begin{align*}`, etc.) must be wrapped in `$$` or `\[...\]`
-- Escaped dollar sign: `\$` renders as `$`
-
-## Fenced Divs
-
-Semantic block containers using `:::` fences:
-
-```
-::: Theorem Optional Title
-Content (parsed as full markdown).
-:::
-
-::: Proof
-Proof content with QED tombstone.
-:::
-```
-
-Supported block types: Theorem, Lemma, Corollary, Conjecture, Proposition, Definition, Problem, Remark, Example, Algorithm, Proof, Blockquote.
-
-Attribute syntax: `::: {.class #id key=val} Title`
-
-Nesting is supported — fenced divs can contain other fenced divs.
-
-## Headings
-
-ATX headings only (`#`, `##`, etc.). No setext (underline) headings.
-
-Pandoc attributes: `## Heading {#id .class -}` where `-` or `.unnumbered` suppresses section numbering.
-
-## Code Blocks
-
-Fenced code blocks only (`` ``` ``). Indented code blocks are disabled.
-
-Language label: `` ```python ``
-
-## Footnotes
-
-- Definition: `[^id]: content`
-- Reference: `[^id]`
-
-## Citations and Cross-References
-
-- Parenthetical citation: `[@key]` or `[@key1; @key2]`
-- Narrative citation: `@key`
-- Cross-reference: `[@thm:label]`, `[@eq:label]`
-- Citation keys may contain letters, digits, `_`, `:`, `.`, `-`, `/`
-
-## Escape Characters
-
-- `\$` → `$` (literal dollar sign, not math delimiter)
-- `\*` → `*`, `\_` → `_`, etc. (standard markdown escapes)
-
-## Lists
-
-- Unordered: `-`, `*`, `+`
-- Ordered: `1.`, `2.`, etc.
-- Task lists: `- [ ]`, `- [x]`
-
-## Tables
-
-GitHub-flavored markdown (GFM) pipe tables with alignment:
-
-```
-| Left | Center | Right |
-|:-----|:------:|------:|
-| a    |   b    |     c |
-```
-
-## Inline Formatting
-
-- Bold: `**text**`
-- Italic: `*text*`
-- Strikethrough: `~~text~~`
-- Highlight: `==text==`
-- Inline code: `` `code` ``
-- Links: `[text](url)`
-- Images: `![alt](url)`
+Pandoc-flavored markdown with custom extensions for mathematical writing. This document specifies the exact input format the editor expects.
 
 ## Frontmatter
 
-YAML frontmatter between `---` delimiters:
+YAML block delimited by `---`. All fields optional.
 
 ```yaml
 ---
 title: Document Title
-tags: tag1, tag2
 bibliography: reference.bib
 csl: style.csl
+numbering: global
+imageFolder: images
 math:
-  \R: \mathbb{R}
-  \N: \mathbb{N}
-numbering: true
+  \R: "\\mathbb{R}"
+  \N: "\\mathbb{N}"
+blocks:
+  claim:
+    title: Claim
+    counter: theorem
 ---
 ```
 
-## Blockquotes
+| Key | Type | Description |
+|-----|------|-------------|
+| `title` | string | Document title (rendered as H1 widget) |
+| `bibliography` | string | Path to `.bib` file (relative to document) |
+| `csl` | string | Path to CSL style file |
+| `numbering` | `"global"` \| `"grouped"` | Block numbering scheme. `global`: all numbered blocks share one counter. `grouped`: each type has its own. |
+| `math` | map | KaTeX macro definitions (`\command: "expansion"`) |
+| `blocks` | map | Custom block type definitions |
+| `imageFolder` | string | Default folder for pasted/dropped images. Also accepts `image-folder`. |
 
-Standard `>` blockquotes are **disabled**. Use `::: Blockquote` fenced divs instead.
+Project-level config in `coflat.yaml` uses the same keys. File frontmatter overrides project config. Math macros merge additively (file adds to project).
 
-## Not Supported
+## Text Formatting
 
-- Indented code blocks (use fenced `` ``` `` instead)
-- `>` blockquotes (use `::: Blockquote` instead)
-- Setext headings (use `#` ATX headings)
+| Syntax | Renders as |
+|--------|-----------|
+| `**bold**` | **bold** |
+| `*italic*` | *italic* |
+| `` `code` `` | `code` |
+| `~~strikethrough~~` | ~~strikethrough~~ |
+| `==highlight==` | highlighted text |
+| `[text](url)` | hyperlink |
+| `![alt](src)` | image |
+
+## Headings
+
+ATX headings (`#` through `######`). Auto-numbered unless marked unnumbered.
+
+```markdown
+# Numbered Heading              --> "1. Numbered Heading"
+## Subsection                   --> "1.1. Subsection"
+# Another Section               --> "2. Another Section"
+
+# Unnumbered Heading {-}        --> no number
+## Also Unnumbered {.unnumbered} --> no number
+```
+
+Trailing `{-}` or `{.unnumbered}` suppresses numbering. These attributes are hidden when the cursor is outside the heading.
+
+## Math
+
+Four delimiter styles, all producing the same KaTeX output:
+
+### Inline math
+
+```
+$e^{i\pi} + 1 = 0$
+\(e^{i\pi} + 1 = 0\)
+```
+
+### Display math
+
+```
+$$
+\int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2}
+$$
+
+\[
+\sum_{k=0}^n \binom{n}{k} = 2^n
+\]
+```
+
+Display math can interrupt a paragraph (no blank line required before `$$` or `\[`).
+
+### Equation labels
+
+Append `{#eq:label}` after the closing `$$`:
+
+```
+$$
+E = mc^2
+$$ {#eq:einstein}
+```
+
+Equations are numbered sequentially across the document. Reference with `[@eq:einstein]`.
+
+### Custom macros
+
+Define in frontmatter under `math:`. Available in all math expressions:
+
+```yaml
+math:
+  \R: "\\mathbb{R}"
+  \set: "\\left\\{#1\\right\\}"
+```
+
+Usage: `$x \in \R$`, `$\set{1,2,3}$`.
+
+## Fenced Divs
+
+Pandoc-style fenced divs for semantic blocks. Minimum 3 colons.
+
+### Basic syntax
+
+```markdown
+::: {.theorem}
+Content here.
+:::
+```
+
+### With ID, class, and title
+
+```markdown
+::: {#thm:main .theorem} Main Result
+Statement of the theorem with $math$.
+:::
+```
+
+The title text after `}` supports full inline markdown (bold, italic, math, code). In rendered mode, the title appears parenthesized after the block label: **Theorem 1** (Main Result).
+
+Attributes inside `{...}`:
+- `.classname` -- block type (required, first class is the primary type)
+- `#id` -- cross-reference ID
+- `key="value"` -- key-value attributes (e.g., `title="Alternative Title"`)
+- Multiple classes: `{.theorem .important}` (first is the block type)
+
+### Short form
+
+First word is the class, rest is the title:
+
+```markdown
+::: Theorem Main Result
+Content.
+:::
+```
+
+Equivalent to `::: {.theorem} Main Result`.
+
+### Self-closing
+
+Single-line fenced divs:
+
+```markdown
+::: {.theorem} Short statement. :::
+```
+
+### Nesting
+
+Use more colons for outer divs:
+
+```markdown
+::::: {.theorem}
+Statement.
+
+:::: {.proof}
+Proof content.
+::::
+:::::
+```
+
+The inner block must use fewer colons than the outer. The parser uses a generation counter to prevent incremental fragment reuse across composite block boundaries.
+
+### Built-in block types
+
+| Type | Counter group | Body style | Special behavior |
+|------|--------------|-----------|-----------------|
+| `theorem` | theorem | italic | -- |
+| `lemma` | theorem | italic | -- |
+| `corollary` | theorem | italic | -- |
+| `proposition` | theorem | italic | -- |
+| `conjecture` | theorem | italic | -- |
+| `definition` | definition | normal | -- |
+| `problem` | theorem | normal | -- |
+| `example` | -- (unnumbered) | normal | -- |
+| `remark` | -- (unnumbered) | normal | -- |
+| `proof` | -- (unnumbered) | normal | QED tombstone at end |
+| `algorithm` | algorithm | normal | -- |
+| `blockquote` | -- (unnumbered) | italic | header label hidden |
+| `embed` | -- | -- | renders iframe |
+| `iframe` | -- | -- | renders iframe |
+| `youtube` | -- | -- | YouTube embed |
+| `gist` | -- | -- | GitHub Gist embed |
+| `include` | -- | -- | file inclusion (special, not a plugin) |
+
+Counter groups: blocks sharing a counter group are numbered together. E.g., Theorem 1, Lemma 2, Corollary 3 all share the "theorem" counter.
+
+### Custom block types
+
+Define in frontmatter:
+
+```yaml
+blocks:
+  claim:
+    title: Claim
+    counter: theorem    # share counter with theorem family
+  axiom:
+    title: Axiom
+    counter: axiom      # own counter group
+```
+
+## Cross-References
+
+Reference any block or equation by its `#id` attribute.
+
+### Bracketed (rendered inline)
+
+```markdown
+See [@thm:main] for the proof.     --> "See Theorem 1 for the proof."
+By [@eq:einstein], energy is...     --> "By Eq. (1), energy is..."
+```
+
+### Narrative (bare @)
+
+```markdown
+@thm:main shows that...             --> "Theorem 1 shows that..."
+```
+
+Resolution order: blocks (by fenced div `#id`) -> equations (by `{#eq:id}`) -> citations (by bib key). If an ID matches a block, it takes priority over a citation with the same key.
+
+## Citations
+
+Require a `.bib` file specified in frontmatter `bibliography:` or project `coflat.yaml`.
+
+### Parenthetical
+
+```markdown
+See [@karger2000] for details.
+Results from [@karger2000; @stein2001].
+```
+
+### With locators
+
+```markdown
+[@karger2000, p. 42]
+[@karger2000, Theorem 3; @stein2001, Ch. 2]
+```
+
+### Narrative
+
+```markdown
+@karger2000 showed that...          --> "Karger (2000) showed that..."
+```
+
+Citation formatting depends on the CSL style. Default: IEEE numeric (`[1]`, `[2]`). A bibliography section is automatically appended at the end of the document listing all cited entries.
+
+## Footnotes
+
+```markdown
+This has a footnote[^1].
+
+[^1]: This is the footnote content with math $x^2$.
+```
+
+Footnote IDs can be any string: `[^note]`, `[^long-id]`. Rendered as sidenotes in the margin when space allows. Footnote definitions can appear anywhere in the document.
+
+## Code Blocks
+
+Fenced code blocks only. **Indented code blocks are disabled** (4-space indent is cosmetic only, does not create a code block).
+
+````markdown
+```haskell
+fibonacci :: Int -> Int
+fibonacci 0 = 0
+fibonacci n = fibonacci (n-1) + fibonacci (n-2)
+```
+````
+
+Language tag after opening fence enables syntax highlighting.
+
+## Tables
+
+Pipe-delimited tables with optional alignment:
+
+```markdown
+| Algorithm | Time          | Space       |
+|-----------|---------------|-------------|
+| Quicksort | $O(n \log n)$ | $O(\log n)$ |
+| Mergesort | $O(n \log n)$ | $O(n)$      |
+```
+
+Alignment: `|:---|` left, `|:---:|` center, `|---:|` right. Math works inside table cells.
+
+## Lists
+
+Ordered, unordered, and task lists. Math works inside list items:
+
+```markdown
+1. First item with $O(n \log n)$
+2. Display math in list:
+   $$
+   T(n) = 2T(n/2) + O(n)
+   $$
+
+- Bullet with macros: $\R$, $\N$, $\Z$
+- [ ] Unchecked task
+- [x] Checked task
+```
+
+## Embeds
+
+### GitHub Gist
+
+```markdown
+::: {.gist}
+https://gist.github.com/user/hash
+:::
+```
+
+### Generic iframe
+
+```markdown
+::: {.embed}
+https://example.com/widget
+:::
+```
+
+### YouTube
+
+```markdown
+::: {.youtube}
+https://www.youtube.com/watch?v=dQw4w9WgXcQ
+:::
+```
+
+## Include Blocks
+
+Include content from another file:
+
+```markdown
+::: {.include}
+chapters/introduction.md
+:::
+```
+
+The included file's content replaces the block seamlessly. Paths are relative to the current document. Included files are re-read on change.
+
+## Removed Features
+
+These standard markdown features are **intentionally disabled**:
+
+| Feature | Reason | Alternative |
+|---------|--------|-------------|
+| Indented code blocks | Conflicts with fenced div content indentation | Use fenced code blocks (```) |
+| `>` blockquotes | Limited (no math, no nesting with fenced divs) | Use `::: Blockquote` fenced divs |
+
+## Horizontal Rules
+
+```markdown
+---
+```
+
+Three or more hyphens on a line. Must not be at the start of the document (where `---` is frontmatter). A blank line before `---` distinguishes it from frontmatter.
