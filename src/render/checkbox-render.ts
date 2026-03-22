@@ -19,7 +19,7 @@ import { syntaxTree } from "@codemirror/language";
 import { cursorInRange, RenderWidget } from "./render-utils";
 
 /** Checkbox widget that toggles task marker content on click. */
-class CheckboxWidget extends RenderWidget {
+export class CheckboxWidget extends RenderWidget {
   constructor(
     private readonly checked: boolean,
     private readonly from: number,
