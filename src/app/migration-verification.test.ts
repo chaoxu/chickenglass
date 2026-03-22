@@ -51,10 +51,10 @@ describe("#92 — collapsible sidebar", () => {
     expect(mod.Sidebar).toBeDefined();
   });
 
-  it("Sidebar accepts collapsed prop", async () => {
+  it("Sidebar module exposes the controlled sidebar shell", async () => {
     const mod = await import("./components/sidebar");
-    // Type check — component function exists
-    expect(typeof mod.Sidebar).toBe("function");
+    expect(mod.SidebarProvider).toBeDefined();
+    expect(mod.SidebarTrigger).toBeDefined();
   });
 });
 
@@ -516,5 +516,15 @@ describe("React migration — #143 cleanup", () => {
     expect(fileExists("src/render/math-render.ts")).toBe(true);
     expect(fileExists("src/citations/bibtex-parser.ts")).toBe(true);
     expect(fileExists("src/index/indexer.ts")).toBe(true);
+  });
+});
+
+describe("#286 — shared app chrome primitives", () => {
+  it("sidebar ui primitives exist", async () => {
+    const mod = await import("./components/sidebar");
+    expect(mod.SidebarProvider).toBeDefined();
+    expect(mod.SidebarTrigger).toBeDefined();
+    expect(mod.SidebarRail).toBeDefined();
+    expect(mod.SidebarInset).toBeDefined();
   });
 });

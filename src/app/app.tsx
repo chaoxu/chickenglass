@@ -5,7 +5,15 @@ import { loadProjectConfig } from "./project-config";
 import type { ProjectConfig } from "./project-config";
 import { insertImageFromPicker } from "../editor/image-insert";
 import { TabBar } from "./components/tab-bar";
-import { Sidebar } from "./components/sidebar";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarInset,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+} from "./components/sidebar";
 import { FileTree } from "./components/file-tree";
 import { Outline } from "./components/outline";
 import { EditorPane } from "./components/editor-pane";
@@ -482,142 +490,161 @@ function AppInner() {
   }, [openFileWithContent]);
 
   return (
-    <div className="flex h-screen overflow-hidden overscroll-contain" onDragOver={handleDragOver} onDrop={handleDrop}>
-      {/* Sidebar */}
-      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((v) => !v)} width={sidebarWidth} onWidthChange={setSidebarWidth}>
-        {/* Tab switcher */}
-        <div className="flex border-b border-[var(--cg-border)] shrink-0">
-          <button
-            className={[
-              "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-[var(--cg-transition,0.15s)]",
-              sidebarTab === "files"
-                ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent)]"
-                : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
-            ].join(" ")}
-            onClick={() => setSidebarTab("files")}
-          >
-            Files
-          </button>
-          <button
-            className={[
-              "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-[var(--cg-transition,0.15s)]",
-              sidebarTab === "outline"
-                ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent)]"
-                : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
-            ].join(" ")}
-            onClick={() => setSidebarTab("outline")}
-          >
-            Outline
-          </button>
-          <button
-            className={[
-              "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-[var(--cg-transition,0.15s)]",
-              sidebarTab === "symbols"
-                ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent)]"
-                : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
-            ].join(" ")}
-            onClick={() => setSidebarTab("symbols")}
-          >
-            Symbols
-          </button>
+    <SidebarProvider
+      open={!sidebarCollapsed}
+      onOpenChange={(open) => setSidebarCollapsed(!open)}
+      width={sidebarWidth}
+      onWidthChange={setSidebarWidth}
+    >
+      <div className="flex h-screen overflow-hidden overscroll-contain" onDragOver={handleDragOver} onDrop={handleDrop}>
+        {/* Sidebar */}
+        <div className="flex shrink-0">
+          <Sidebar>
+            <SidebarHeader>
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--cg-muted)] whitespace-nowrap overflow-hidden">
+                Explorer
+              </span>
+              <SidebarTrigger />
+            </SidebarHeader>
+
+            {/* Tab switcher */}
+            <div className="flex border-b border-[var(--cg-border)] shrink-0">
+              <button
+                className={[
+                  "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-[var(--cg-transition,0.15s)]",
+                  sidebarTab === "files"
+                    ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent)]"
+                    : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
+                ].join(" ")}
+                onClick={() => setSidebarTab("files")}
+              >
+                Files
+              </button>
+              <button
+                className={[
+                  "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-[var(--cg-transition,0.15s)]",
+                  sidebarTab === "outline"
+                    ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent)]"
+                    : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
+                ].join(" ")}
+                onClick={() => setSidebarTab("outline")}
+              >
+                Outline
+              </button>
+              <button
+                className={[
+                  "flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-[var(--cg-transition,0.15s)]",
+                  sidebarTab === "symbols"
+                    ? "text-[var(--cg-fg)] border-b-2 border-[var(--cg-accent)]"
+                    : "text-[var(--cg-muted)] hover:text-[var(--cg-fg)]",
+                ].join(" ")}
+                onClick={() => setSidebarTab("symbols")}
+              >
+                Symbols
+              </button>
+            </div>
+
+            <SidebarContent>
+              {sidebarTab === "files" && (
+                <FileTree
+                  root={fileTree}
+                  activePath={activeTab}
+                  onSelect={(path) => { void openFile(path, { preview: true }); }}
+                  onDoubleClick={(path) => { void openFile(path, { preview: false }); }}
+                  onRename={handleRename}
+                  onDelete={handleDelete}
+                  onCreateFile={(path) => { void createFile(path); }}
+                  onCreateDir={(path) => { void createDirectory(path); }}
+                />
+              )}
+              {sidebarTab === "outline" && (
+                <Outline headings={headings} onSelect={handleOutlineSelect} />
+              )}
+              {sidebarTab === "symbols" && (
+                <SymbolPanel onInsert={handleSymbolInsert} view={editorState?.view ?? null} />
+              )}
+            </SidebarContent>
+          </Sidebar>
+          <SidebarRail />
         </div>
 
-        {sidebarTab === "files" && (
-          <FileTree
-            root={fileTree}
-            activePath={activeTab}
-            onSelect={(path) => { void openFile(path, { preview: true }); }}
-            onDoubleClick={(path) => { void openFile(path, { preview: false }); }}
-            onRename={handleRename}
-            onDelete={handleDelete}
-            onCreateFile={(path) => { void createFile(path); }}
-            onCreateDir={(path) => { void createDirectory(path); }}
+        {/* Main area */}
+        <SidebarInset>
+          {/* Tab bar */}
+          <TabBar
+            tabs={openTabs}
+            activeTab={activeTab}
+            onSelect={switchToTab}
+            onClose={closeFile}
+            onReorder={setOpenTabs}
+            onPin={pinTab}
           />
-        )}
-        {sidebarTab === "outline" && (
-          <Outline headings={headings} onSelect={handleOutlineSelect} />
-        )}
-        {sidebarTab === "symbols" && (
-          <SymbolPanel onInsert={handleSymbolInsert} view={editorState?.view ?? null} />
-        )}
-      </Sidebar>
 
-      {/* Main area */}
-      <div className="flex flex-col flex-1 min-w-0">
-        {/* Tab bar */}
-        <TabBar
-          tabs={openTabs}
-          activeTab={activeTab}
-          onSelect={switchToTab}
-          onClose={closeFile}
-          onReorder={setOpenTabs}
-          onPin={pinTab}
-        />
+          {/* Editor */}
+          {activeTab ? (
+            <EditorPane
+              key={activeTab}
+              doc={editorDoc}
+              docPath={activeTab}
+              projectConfig={projectConfig}
+              theme={resolvedTheme}
+              fs={fs}
+              pluginManager={pluginManager}
+              sidenotesCollapsed={sidenotesCollapsed}
+              onSidenotesCollapsedChange={setSidenotesCollapsed}
+              onDocChange={handleDocChange}
+              onStateChange={handleEditorStateChange}
+              editorMode={editorMode}
+            />
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-[var(--cg-muted)] text-sm select-none">
+              Open a file to start editing
+            </div>
+          )}
 
-        {/* Editor */}
-        {activeTab ? (
-          <EditorPane
-            key={activeTab}
-            doc={editorDoc}
-            docPath={activeTab}
-            projectConfig={projectConfig}
-            theme={resolvedTheme}
-            fs={fs}
-            pluginManager={pluginManager}
-            sidenotesCollapsed={sidenotesCollapsed}
-            onSidenotesCollapsedChange={setSidenotesCollapsed}
-            onDocChange={handleDocChange}
-            onStateChange={handleEditorStateChange}
+          {/* Status bar */}
+          <StatusBar
+            wordCount={wordCount}
+            cursorPos={cursorLineCol}
             editorMode={editorMode}
+            onModeChange={handleModeChange}
+            onOpenPalette={() => dialogs.setPaletteOpen(true)}
+            docText={docTextForStats}
+            isMarkdown={isMarkdownFile}
           />
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-[var(--cg-muted)] text-sm select-none">
-            Open a file to start editing
-          </div>
-        )}
+        </SidebarInset>
 
-        {/* Status bar */}
-        <StatusBar
-          wordCount={wordCount}
-          cursorPos={cursorLineCol}
-          editorMode={editorMode}
-          onModeChange={handleModeChange}
-          onOpenPalette={() => dialogs.setPaletteOpen(true)}
-          docText={docTextForStats}
-          isMarkdown={isMarkdownFile}
+        {/* ── Overlays & Dialogs ────────────────────────────────────────────── */}
+        <CommandPalette
+          open={dialogs.paletteOpen}
+          onOpenChange={dialogs.setPaletteOpen}
+          commands={commands}
+        />
+        <SearchPanel
+          open={dialogs.searchOpen}
+          onOpenChange={dialogs.setSearchOpen}
+          onResultSelect={handleSearchResult}
+          indexer={indexer}
+        />
+        <SettingsDialog
+          open={dialogs.settingsOpen}
+          onOpenChange={dialogs.setSettingsOpen}
+          settings={settings}
+          onUpdateSetting={updateSetting}
+          theme={theme}
+          onSetTheme={setTheme}
+          plugins={pluginManager.getPlugins()}
+        />
+        <AboutDialog open={dialogs.aboutOpen} onClose={dialogs.closeAbout} />
+        <ShortcutsDialog open={dialogs.shortcutsOpen} onClose={dialogs.closeShortcuts} />
+        <GotoLineDialog
+          open={dialogs.gotoLineOpen}
+          onOpenChange={dialogs.setGotoLineOpen}
+          onGoto={handleGotoLine}
+          currentLine={cursorLineCol.line}
         />
       </div>
-
-      {/* ── Overlays & Dialogs ────────────────────────────────────────────── */}
-      <CommandPalette
-        open={dialogs.paletteOpen}
-        onOpenChange={dialogs.setPaletteOpen}
-        commands={commands}
-      />
-      <SearchPanel
-        open={dialogs.searchOpen}
-        onOpenChange={dialogs.setSearchOpen}
-        onResultSelect={handleSearchResult}
-        indexer={indexer}
-      />
-      <SettingsDialog
-        open={dialogs.settingsOpen}
-        onOpenChange={dialogs.setSettingsOpen}
-        settings={settings}
-        onUpdateSetting={updateSetting}
-        theme={theme}
-        onSetTheme={setTheme}
-        plugins={pluginManager.getPlugins()}
-      />
-      <AboutDialog open={dialogs.aboutOpen} onClose={dialogs.closeAbout} />
-      <ShortcutsDialog open={dialogs.shortcutsOpen} onClose={dialogs.closeShortcuts} />
-      <GotoLineDialog
-        open={dialogs.gotoLineOpen}
-        onOpenChange={dialogs.setGotoLineOpen}
-        onGoto={handleGotoLine}
-        currentLine={cursorLineCol.line}
-      />
-    </div>
+    </SidebarProvider>
   );
 }
 
