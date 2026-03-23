@@ -590,85 +590,105 @@ function renderInlineFragments(
   return fragments.map((fragment) => renderInlineFragment(fragment, ctx)).join("");
 }
 
+type InlineFragmentRenderer = (fragment: InlineFragment, ctx: InlineContext) => string;
+
+/**
+ * Dispatch map for inline fragment rendering.
+ * Each entry handles one fragment kind; index type is narrowed by the caller.
+ */
+const inlineFragmentRenderers: {
+  [K in InlineFragment["kind"]]: (
+    fragment: Extract<InlineFragment, { kind: K }>,
+    ctx: InlineContext,
+  ) => string;
+} = {
+  text: (fragment) => escapeHtml(fragment.text),
+
+  emphasis: (fragment, ctx) =>
+    `<em>${renderInlineFragments(fragment.children, ctx)}</em>`,
+
+  strong: (fragment, ctx) =>
+    `<strong>${renderInlineFragments(fragment.children, ctx)}</strong>`,
+
+  strikethrough: (fragment, ctx) =>
+    `<del>${renderInlineFragments(fragment.children, ctx)}</del>`,
+
+  highlight: (fragment, ctx) =>
+    `<mark>${renderInlineFragments(fragment.children, ctx)}</mark>`,
+
+  code: (fragment) => `<code>${escapeHtml(fragment.text)}</code>`,
+
+  math: (fragment, ctx) => renderMath(fragment.latex, false, ctx.macros),
+
+  link: (fragment, ctx) => {
+    const label = renderInlineFragments(fragment.children, ctx);
+    if (isUiChromeSurface(ctx.surface)) return label;
+    const href = fragment.href?.trim();
+    if (!href) return label;
+    if (isSafeUrl(href)) {
+      return `<a href="${escapeHtml(href)}">${label}</a>`;
+    }
+    return `<span class="unsafe-link">${label}</span>`;
+  },
+
+  reference: (fragment, ctx) => {
+    if (isUiChromeSurface(ctx.surface)) {
+      return escapeHtml(fragment.rawText);
+    }
+    const citCtx: CitationRenderContext = {
+      bibliography: ctx.bibliography,
+      citedIds: ctx.citedIds,
+      cslProcessor: ctx.cslProcessor,
+      semantics: ctx.semantics,
+    };
+    return fragment.parenthetical
+      ? renderCitationCluster(fragment.ids, fragment.locators, citCtx)
+      : renderNarrativeReference(fragment.ids[0], citCtx);
+  },
+
+  image: (fragment, ctx) => {
+    const alt = renderInlineFragments(fragment.alt, ctx);
+    if (ctx.surface !== "document-body") return alt;
+    const src = fragment.src?.trim();
+    if (!src) return alt;
+    if (isSafeUrl(src)) {
+      return `<img src="${escapeHtml(src)}" alt="${escapeHtml(fragment.rawAlt)}">`;
+    }
+    return `<span class="unsafe-link">${alt}</span>`;
+  },
+
+  "footnote-ref": (fragment, ctx) => {
+    const fnId = escapeHtml(fragment.id);
+    if (isUiChromeSurface(ctx.surface)) {
+      return `<sup>${fnId}</sup>`;
+    }
+    return `<sup><a class="footnote-ref" href="#fn-${fnId}">${fnId}</a></sup>`;
+  },
+
+  "hard-break": (_fragment, ctx) =>
+    ctx.surface === "document-body" ? "<br>" : " ",
+};
+
 function renderInlineFragment(
   fragment: InlineFragment,
   ctx: InlineContext,
 ): string {
-  switch (fragment.kind) {
-    case "text":
-      return escapeHtml(fragment.text);
+  const renderer = inlineFragmentRenderers[fragment.kind] as InlineFragmentRenderer;
+  return renderer(fragment, ctx);
+}
 
-    case "emphasis":
-      return `<em>${renderInlineFragments(fragment.children, ctx)}</em>`;
+// ── Citation render context ──────────────────────────────────────────────────
 
-    case "strong":
-      return `<strong>${renderInlineFragments(fragment.children, ctx)}</strong>`;
-
-    case "strikethrough":
-      return `<del>${renderInlineFragments(fragment.children, ctx)}</del>`;
-
-    case "highlight":
-      return `<mark>${renderInlineFragments(fragment.children, ctx)}</mark>`;
-
-    case "code":
-      return `<code>${escapeHtml(fragment.text)}</code>`;
-
-    case "math":
-      return renderMath(fragment.latex, false, ctx.macros);
-
-    case "link": {
-      const label = renderInlineFragments(fragment.children, ctx);
-      if (isUiChromeSurface(ctx.surface)) return label;
-      const href = fragment.href?.trim();
-      if (!href) return label;
-      if (isSafeUrl(href)) {
-        return `<a href="${escapeHtml(href)}">${label}</a>`;
-      }
-      return `<span class="unsafe-link">${label}</span>`;
-    }
-
-    case "reference":
-      if (isUiChromeSurface(ctx.surface)) {
-        return escapeHtml(fragment.rawText);
-      }
-      return fragment.parenthetical
-        ? renderCitationCluster(
-            fragment.ids,
-            ctx.bibliography,
-            ctx.citedIds,
-            ctx.cslProcessor,
-            fragment.locators,
-            ctx.semantics,
-          )
-        : renderNarrativeReference(
-            fragment.ids[0],
-            ctx.bibliography,
-            ctx.citedIds,
-            ctx.cslProcessor,
-          );
-
-    case "image": {
-      const alt = renderInlineFragments(fragment.alt, ctx);
-      if (ctx.surface !== "document-body") return alt;
-      const src = fragment.src?.trim();
-      if (!src) return alt;
-      if (isSafeUrl(src)) {
-        return `<img src="${escapeHtml(src)}" alt="${escapeHtml(fragment.rawAlt)}">`;
-      }
-      return `<span class="unsafe-link">${alt}</span>`;
-    }
-
-    case "footnote-ref": {
-      const fnId = escapeHtml(fragment.id);
-      if (isUiChromeSurface(ctx.surface)) {
-        return `<sup>${fnId}</sup>`;
-      }
-      return `<sup><a class="footnote-ref" href="#fn-${fnId}">${fnId}</a></sup>`;
-    }
-
-    case "hard-break":
-      return ctx.surface === "document-body" ? "<br>" : " ";
-  }
+/**
+ * Bundled context for citation and cross-reference rendering.
+ * Replaces the four repeated parameters across renderCitationCluster /
+ * renderNarrativeReference call sites.
+ */
+interface CitationRenderContext {
+  bibliography?: BibStore;
+  citedIds?: string[];
+  cslProcessor?: CslProcessor;
+  semantics?: DocumentSemantics;
 }
 
 // ── Citation / bibliography rendering ───────────────────────────────────────
@@ -738,12 +758,10 @@ function trackCitedIds(
  */
 function renderCitationCluster(
   ids: readonly string[],
-  bibliography?: BibStore,
-  citedIds?: string[],
-  cslProcessor?: CslProcessor,
-  locators?: readonly (string | undefined)[],
-  semantics?: DocumentSemantics,
+  locators: readonly (string | undefined)[] | undefined,
+  citCtx: CitationRenderContext,
 ): string {
+  const { bibliography, citedIds, cslProcessor, semantics } = citCtx;
   const knownCount = bibliography
     ? ids.filter((id) => bibliography.has(id)).length
     : 0;
@@ -792,10 +810,9 @@ function renderCitationCluster(
 
 function renderNarrativeReference(
   id: string,
-  bibliography?: BibStore,
-  citedIds?: string[],
-  cslProcessor?: CslProcessor,
+  citCtx: CitationRenderContext,
 ): string {
+  const { bibliography, citedIds, cslProcessor } = citCtx;
   if (bibliography?.has(id)) {
     trackCitedIds([id], bibliography, citedIds);
     if (cslProcessor) {

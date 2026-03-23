@@ -260,124 +260,70 @@ function createAction(
 }
 
 // ===========================================================================
-// Custom search panel
+// Custom search panel — shared context
 // ===========================================================================
 
-function createSearchPanel(view: EditorView): Panel {
-  const dom = document.createElement("div");
-  dom.className = CSS.searchPanel;
+/** Shared mutable state threaded between the three panel builder functions. */
+interface SearchPanelContext {
+  view: EditorView;
+  searchInput: HTMLInputElement;
+  replaceInput: HTMLInputElement;
+  matchInfo: HTMLSpanElement;
+  toggleCase: HTMLButtonElement;
+  toggleRegex: HTMLButtonElement;
+  toggleWord: HTMLButtonElement;
+  replaceRow: HTMLDivElement;
+  toggleReplaceBtn: HTMLButtonElement;
+  matchCache: MatchCache | null;
+  getToggles(): { caseSensitive: boolean; isRegexp: boolean; wholeWord: boolean };
+  commitQuery(): void;
+  updateMatchInfo(): void;
+  syncPanelState(): void;
+}
 
-  // -- Search row -----------------------------------------------------------
+/** Reference-identity cache to avoid rescanning on every ViewUpdate. */
+interface MatchCache {
+  /** CM6 Text object from state.doc — used for reference equality. */
+  doc: object;
+  selFrom: number;
+  selTo: number;
+  queryKey: string;
+  current: number;
+  total: number;
+}
+
+function serializeQuery(q: ReturnType<typeof getSearchQuery>): string {
+  if (!q.valid) return "";
+  return `${q.search}\0${String(q.caseSensitive)}\0${String(q.regexp)}\0${String(q.wholeWord)}`;
+}
+
+// ===========================================================================
+// Search row builder
+// ===========================================================================
+
+function createSearchInputRow(ctx: SearchPanelContext): HTMLDivElement {
+  const { view, searchInput, matchInfo } = ctx;
 
   const searchRow = document.createElement("div");
   searchRow.className = CSS.searchRow;
 
-  const searchInput = document.createElement("input");
-  searchInput.type = "text";
-  searchInput.className = CSS.searchInput;
-  searchInput.placeholder = "Find";
-  searchInput.setAttribute("main-field", "true");
-  searchInput.setAttribute("aria-label", "Find");
-
-  const matchInfo = document.createElement("span");
-  matchInfo.className = CSS.searchMatchInfo;
-  matchInfo.textContent = "No results";
-
-  // Toggle state is read from and written to searchUiStateField so it
-  // persists across panel close/reopen within the same editor session.
-  function getToggles(): { caseSensitive: boolean; isRegexp: boolean; wholeWord: boolean } {
-    const ui = view.state.field(searchUiStateField);
-    return { caseSensitive: ui.caseSensitive, isRegexp: ui.isRegexp, wholeWord: ui.wholeWord };
-  }
-
-  function commitQuery(): void {
-    const toggles = getToggles();
-    setSearchControllerQuery(view, {
-      search: searchInput.value,
-      replace: replaceInput.value,
-      caseSensitive: toggles.caseSensitive,
-      regexp: toggles.isRegexp,
-      wholeWord: toggles.wholeWord,
-    });
-  }
-
-  // Cache the last match counts to avoid re-scanning the full document on
-  // every ViewUpdate (e.g. cursor moves that don't change search results).
-  // We recompute only when the doc identity, selection, or query changes.
-  interface MatchCache {
-    /** Reference-identity key: the CM6 Text object from state.doc. */
-    doc: object;
-    selFrom: number;
-    selTo: number;
-    queryKey: string;
-    current: number;
-    total: number;
-  }
-  let matchCache: MatchCache | null = null;
-
-  function serializeQuery(q: ReturnType<typeof getSearchQuery>): string {
-    if (!q.valid) return "";
-    return `${q.search}\0${String(q.caseSensitive)}\0${String(q.regexp)}\0${String(q.wholeWord)}`;
-  }
-
-  function updateMatchInfo(): void {
-    const state = view.state;
-    const q = getSearchQuery(state);
-    const sel = state.selection.main;
-    const queryKey = serializeQuery(q);
-
-    // Check cache validity — only recount when something material changed.
-    if (
-      matchCache === null ||
-      matchCache.doc !== state.doc ||
-      matchCache.selFrom !== sel.from ||
-      matchCache.selTo !== sel.to ||
-      matchCache.queryKey !== queryKey
-    ) {
-      const { current, total } = countSearchMatches(view);
-      matchCache = { doc: state.doc, selFrom: sel.from, selTo: sel.to, queryKey, current, total };
-    }
-
-    const { current, total } = matchCache;
-    if (total === 0) {
-      matchInfo.textContent = searchInput.value ? "No results" : "";
-    } else {
-      matchInfo.textContent =
-        current > 0 ? `${current} of ${total}` : `${total} results`;
-    }
-  }
-
-  /** Sync toggle button DOM from searchUiStateField and the CM6 query. */
-  function syncPanelState(): void {
-    const state = getSearchControllerState(view);
-    const { caseSensitive, isRegexp, wholeWord } = getToggles();
-    toggleCase.classList.toggle(CSS.searchToggleActive, caseSensitive);
-    toggleCase.setAttribute("aria-pressed", String(caseSensitive));
-    toggleRegex.classList.toggle(CSS.searchToggleActive, isRegexp);
-    toggleRegex.setAttribute("aria-pressed", String(isRegexp));
-    toggleWord.classList.toggle(CSS.searchToggleActive, wholeWord);
-    toggleWord.setAttribute("aria-pressed", String(wholeWord));
-    replaceRow.style.display = state.replaceVisible ? "" : "none";
-    toggleReplaceBtn.textContent = state.replaceVisible ? "\u25be" : "\u25b8";
-  }
-
-  const { caseSensitive: initCase, isRegexp: initRegexp, wholeWord: initWord } = getToggles();
-  const toggleCase = createToggle("Aa", "Match Case", initCase, (v) => {
+  const { caseSensitive: initCase, isRegexp: initRegexp, wholeWord: initWord } = ctx.getToggles();
+  ctx.toggleCase = createToggle("Aa", "Match Case", initCase, (v) => {
     setSearchUiState(view, { caseSensitive: v });
-    commitQuery();
+    ctx.commitQuery();
   });
-  const toggleRegex = createToggle(".*", "Use Regular Expression", initRegexp, (v) => {
+  ctx.toggleRegex = createToggle(".*", "Use Regular Expression", initRegexp, (v) => {
     setSearchUiState(view, { isRegexp: v });
-    commitQuery();
+    ctx.commitQuery();
   });
-  const toggleWord = createToggle("\\b", "Match Whole Word", initWord, (v) => {
+  ctx.toggleWord = createToggle("\\b", "Match Whole Word", initWord, (v) => {
     setSearchUiState(view, { wholeWord: v });
-    commitQuery();
+    ctx.commitQuery();
   });
 
   const toggleGroup = document.createElement("div");
   toggleGroup.className = CSS.searchToggles;
-  toggleGroup.append(toggleCase, toggleRegex, toggleWord);
+  toggleGroup.append(ctx.toggleCase, ctx.toggleRegex, ctx.toggleWord);
 
   const navGroup = document.createElement("div");
   navGroup.className = CSS.searchNav;
@@ -394,58 +340,49 @@ function createSearchPanel(view: EditorView): Panel {
   searchInputWrap.append(searchInput, matchInfo);
 
   searchRow.append(searchInputWrap, toggleGroup, navGroup, closeBtn);
+  return searchRow;
+}
 
-  // -- Replace row ----------------------------------------------------------
+// ===========================================================================
+// Replace row builder
+// ===========================================================================
 
-  const replaceRow = document.createElement("div");
+function createReplaceRow(ctx: SearchPanelContext): HTMLDivElement {
+  const { view } = ctx;
+
+  const replaceRow = document.createElement("div") as HTMLDivElement;
   replaceRow.className = `${CSS.searchRow} ${CSS.searchReplaceRow}`;
-
-  const replaceInput = document.createElement("input");
-  replaceInput.type = "text";
-  replaceInput.className = CSS.searchInput;
-  replaceInput.placeholder = "Replace";
-  replaceInput.setAttribute("aria-label", "Replace");
 
   const replaceInputWrap = document.createElement("div");
   replaceInputWrap.className = CSS.searchInputWrap;
-  replaceInputWrap.append(replaceInput);
+  replaceInputWrap.append(ctx.replaceInput);
 
   const replaceActions = document.createElement("div");
   replaceActions.className = CSS.searchReplaceActions;
   replaceActions.append(
     createAction("Replace", "Replace Current Match", () => {
       replaceCurrentSearchMatch(view);
-      updateMatchInfo();
+      ctx.updateMatchInfo();
     }),
     createAction("All", "Replace All Matches", () => {
       replaceAllSearchMatches(view);
-      updateMatchInfo();
+      ctx.updateMatchInfo();
     }),
   );
 
   replaceRow.append(replaceInputWrap, replaceActions);
+  return replaceRow;
+}
 
-  const toggleReplaceBtn = createAction("\u25b8", "Toggle Replace", () => {
-    const state = getSearchControllerState(view);
-    const replaceVisible = !state.replaceVisible;
-    setSearchUiState(view, { replaceVisible });
-    syncPanelState();
-    if (replaceVisible) {
-      replaceInput.focus();
-    }
-  });
-  toggleReplaceBtn.className = CSS.searchToggleReplace;
-  toggleReplaceBtn.textContent = "\u25b8";
+// ===========================================================================
+// Event handler attachment
+// ===========================================================================
 
-  // -- Assemble -------------------------------------------------------------
-
-  dom.append(toggleReplaceBtn, searchRow, replaceRow);
-  syncPanelState();
-
-  // -- Events ---------------------------------------------------------------
+function attachEventHandlers(ctx: SearchPanelContext): void {
+  const { view, searchInput, replaceInput } = ctx;
 
   searchInput.addEventListener("input", () => {
-    commitQuery();
+    ctx.commitQuery();
   });
 
   searchInput.addEventListener("keydown", (e) => {
@@ -465,14 +402,14 @@ function createSearchPanel(view: EditorView): Panel {
   });
 
   replaceInput.addEventListener("input", () => {
-    commitQuery();
+    ctx.commitQuery();
   });
 
   replaceInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       replaceCurrentSearchMatch(view);
-      updateMatchInfo();
+      ctx.updateMatchInfo();
     }
     if (e.key === "Escape") {
       e.preventDefault();
@@ -480,13 +417,134 @@ function createSearchPanel(view: EditorView): Panel {
       view.focus();
     }
   });
+}
+
+// ===========================================================================
+// Custom search panel
+// ===========================================================================
+
+function createSearchPanel(view: EditorView): Panel {
+  const dom = document.createElement("div");
+  dom.className = CSS.searchPanel;
+
+  const searchInput = document.createElement("input");
+  searchInput.type = "text";
+  searchInput.className = CSS.searchInput;
+  searchInput.placeholder = "Find";
+  searchInput.setAttribute("main-field", "true");
+  searchInput.setAttribute("aria-label", "Find");
+
+  const replaceInput = document.createElement("input");
+  replaceInput.type = "text";
+  replaceInput.className = CSS.searchInput;
+  replaceInput.placeholder = "Replace";
+  replaceInput.setAttribute("aria-label", "Replace");
+
+  const matchInfo = document.createElement("span");
+  matchInfo.className = CSS.searchMatchInfo;
+  matchInfo.textContent = "No results";
+
+  // Build context object — functions that cross-reference each other are
+  // assigned after construction so closures close over the ctx reference.
+  const ctx: SearchPanelContext = {
+    view,
+    searchInput,
+    replaceInput,
+    matchInfo,
+    // These will be assigned by createSearchInputRow:
+    toggleCase: null as unknown as HTMLButtonElement,
+    toggleRegex: null as unknown as HTMLButtonElement,
+    toggleWord: null as unknown as HTMLButtonElement,
+    // These will be assigned below:
+    replaceRow: null as unknown as HTMLDivElement,
+    toggleReplaceBtn: null as unknown as HTMLButtonElement,
+    matchCache: null,
+
+    getToggles() {
+      const ui = view.state.field(searchUiStateField);
+      return { caseSensitive: ui.caseSensitive, isRegexp: ui.isRegexp, wholeWord: ui.wholeWord };
+    },
+
+    commitQuery() {
+      const toggles = ctx.getToggles();
+      setSearchControllerQuery(view, {
+        search: searchInput.value,
+        replace: replaceInput.value,
+        caseSensitive: toggles.caseSensitive,
+        regexp: toggles.isRegexp,
+        wholeWord: toggles.wholeWord,
+      });
+    },
+
+    updateMatchInfo() {
+      const state = view.state;
+      const q = getSearchQuery(state);
+      const sel = state.selection.main;
+      const queryKey = serializeQuery(q);
+
+      // Recompute only when doc, selection, or query changes.
+      if (
+        ctx.matchCache === null ||
+        ctx.matchCache.doc !== state.doc ||
+        ctx.matchCache.selFrom !== sel.from ||
+        ctx.matchCache.selTo !== sel.to ||
+        ctx.matchCache.queryKey !== queryKey
+      ) {
+        const { current, total } = countSearchMatches(view);
+        ctx.matchCache = { doc: state.doc, selFrom: sel.from, selTo: sel.to, queryKey, current, total };
+      }
+
+      const { current, total } = ctx.matchCache;
+      if (total === 0) {
+        matchInfo.textContent = searchInput.value ? "No results" : "";
+      } else {
+        matchInfo.textContent =
+          current > 0 ? `${current} of ${total}` : `${total} results`;
+      }
+    },
+
+    syncPanelState() {
+      const state = getSearchControllerState(view);
+      const { caseSensitive, isRegexp, wholeWord } = ctx.getToggles();
+      ctx.toggleCase.classList.toggle(CSS.searchToggleActive, caseSensitive);
+      ctx.toggleCase.setAttribute("aria-pressed", String(caseSensitive));
+      ctx.toggleRegex.classList.toggle(CSS.searchToggleActive, isRegexp);
+      ctx.toggleRegex.setAttribute("aria-pressed", String(isRegexp));
+      ctx.toggleWord.classList.toggle(CSS.searchToggleActive, wholeWord);
+      ctx.toggleWord.setAttribute("aria-pressed", String(wholeWord));
+      ctx.replaceRow.style.display = state.replaceVisible ? "" : "none";
+      ctx.toggleReplaceBtn.textContent = state.replaceVisible ? "\u25be" : "\u25b8";
+    },
+  };
+
+  const searchRow = createSearchInputRow(ctx);
+
+  ctx.replaceRow = createReplaceRow(ctx);
+
+  const toggleReplaceBtn = createAction("\u25b8", "Toggle Replace", () => {
+    const state = getSearchControllerState(view);
+    const replaceVisible = !state.replaceVisible;
+    setSearchUiState(view, { replaceVisible });
+    ctx.syncPanelState();
+    if (replaceVisible) {
+      replaceInput.focus();
+    }
+  });
+  toggleReplaceBtn.className = CSS.searchToggleReplace;
+  toggleReplaceBtn.textContent = "\u25b8";
+  ctx.toggleReplaceBtn = toggleReplaceBtn;
+
+  dom.append(toggleReplaceBtn, searchRow, ctx.replaceRow);
+  ctx.syncPanelState();
+
+  attachEventHandlers(ctx);
 
   // Populate from existing query if reopening
   const existing = getSearchControllerState(view);
   if (existing.query.valid) {
     searchInput.value = existing.query.search;
     replaceInput.value = existing.query.replace;
-    syncPanelState();
+    ctx.syncPanelState();
   }
 
   return {
@@ -496,7 +554,7 @@ function createSearchPanel(view: EditorView): Panel {
     mount() {
       searchInput.focus();
       searchInput.select();
-      updateMatchInfo();
+      ctx.updateMatchInfo();
     },
 
     update(update: ViewUpdate) {
@@ -509,17 +567,17 @@ function createSearchPanel(view: EditorView): Panel {
       if (q.replace !== replaceInput.value) {
         replaceInput.value = q.replace;
       }
-      const { caseSensitive, isRegexp, wholeWord } = getToggles();
+      const { caseSensitive, isRegexp, wholeWord } = ctx.getToggles();
       if (
         q.caseSensitive !== caseSensitive ||
         q.regexp !== isRegexp ||
         q.wholeWord !== wholeWord ||
-        state.replaceVisible !== (replaceRow.style.display !== "none")
+        state.replaceVisible !== (ctx.replaceRow.style.display !== "none")
       ) {
-        syncPanelState();
+        ctx.syncPanelState();
       }
 
-      updateMatchInfo();
+      ctx.updateMatchInfo();
     },
   };
 }

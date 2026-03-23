@@ -58,27 +58,27 @@ function isClosingFence(text: string, pos: number): number {
 }
 
 /**
- * Parse an opening fence line. Returns fence info or undefined.
- * Opening fence: 3+ colons, optional attributes `{...}`, optional title.
+ * Stage 1: Parse the colon count and attribute span from an opening fence line.
+ * Returns `{ colonCount, attrFrom, attrTo, cursorAfterAttr }` or `undefined`
+ * if the line is not a valid opening fence.
  */
-function parseOpeningFence(
+function parseFenceColonsAndAttrs(
   text: string,
   pos: number,
-): OpeningFenceInfo | undefined {
+): { colonCount: number; attrFrom: number; attrTo: number; cursorAfterAttr: number } | undefined {
   const colonCount = countColons(text, pos);
   if (colonCount < 3) return undefined;
 
   let cursor = skipSpaceTab(text, pos + colonCount);
 
-  // Must have at least attributes or be followed by non-whitespace
   // A bare `:::` with nothing after is a closing fence, not an opening one
   if (cursor >= text.length) return undefined;
 
   let attrFrom: number;
   let attrTo: number;
 
-  // Check for attribute block
   if (text.charCodeAt(cursor) === OPEN_BRACE) {
+    // Braced attribute block: ::: {.class #id key=val}
     const end = findMatchingBrace(text, cursor);
     if (end === -1) return undefined;
     attrFrom = cursor;
@@ -104,21 +104,27 @@ function parseOpeningFence(
     cursor = skipSpaceTab(text, cursor);
   }
 
-  // Check for trailing ::: (self-closing single-line div)
+  return { colonCount, attrFrom, attrTo, cursorAfterAttr: cursor };
+}
+
+/**
+ * Stage 2: Detect whether the line is self-closing (ends with `:::`) and
+ * locate the closing fence span.
+ * Returns `{ isSelfClosing, closingFenceFrom, closingFenceTo }`.
+ */
+function detectSelfClosingFence(
+  text: string,
+  cursorAfterAttr: number,
+): { isSelfClosing: boolean; closingFenceFrom: number; closingFenceTo: number } {
   // Scan backwards from end of line past whitespace, then check for 3+ colons
   let lineEnd = text.length;
-  while (lineEnd > cursor && isSpaceTab(text.charCodeAt(lineEnd - 1))) {
+  while (lineEnd > cursorAfterAttr && isSpaceTab(text.charCodeAt(lineEnd - 1))) {
     lineEnd--;
   }
 
-  let isSelfClosing = false;
-  let closingFenceFrom = lineEnd;
-  let closingFenceTo = lineEnd;
-
-  // Count colons backwards from lineEnd
   let closingColonStart = lineEnd;
   while (
-    closingColonStart > cursor &&
+    closingColonStart > cursorAfterAttr &&
     text.charCodeAt(closingColonStart - 1) === COLON
   ) {
     closingColonStart--;
@@ -126,27 +132,57 @@ function parseOpeningFence(
   const trailingColons = lineEnd - closingColonStart;
 
   if (trailingColons >= 3) {
-    // Verify there's whitespace (or nothing) between the title and the closing colons
+    // Verify there's whitespace (or nothing) between the title and the closing colons.
+    // Only self-closing if there's content between attrs and the trailing :::
+    // (otherwise it's ambiguous with a bare opening fence).
     let beforeClosing = closingColonStart;
-    while (beforeClosing > cursor && isSpaceTab(text.charCodeAt(beforeClosing - 1))) {
+    while (beforeClosing > cursorAfterAttr && isSpaceTab(text.charCodeAt(beforeClosing - 1))) {
       beforeClosing--;
     }
-    // Only self-closing if there's content between attrs and the trailing :::
-    // (otherwise it's ambiguous with a bare opening fence)
-    if (beforeClosing > cursor || closingColonStart > cursor) {
-      isSelfClosing = true;
-      closingFenceFrom = closingColonStart;
-      closingFenceTo = lineEnd;
+    if (beforeClosing > cursorAfterAttr || closingColonStart > cursorAfterAttr) {
+      return { isSelfClosing: true, closingFenceFrom: closingColonStart, closingFenceTo: lineEnd };
     }
   }
 
-  // Remaining text is the title (may be empty)
-  const titleFrom = cursor;
-  // Trim trailing whitespace from title — but stop before closing fence if self-closing
+  return { isSelfClosing: false, closingFenceFrom: lineEnd, closingFenceTo: lineEnd };
+}
+
+/**
+ * Stage 3: Extract the title span from the remaining text between the
+ * attribute block and the optional closing fence.
+ */
+function parseFenceTitle(
+  text: string,
+  titleFrom: number,
+  isSelfClosing: boolean,
+  closingFenceFrom: number,
+): { titleFrom: number; titleTo: number } {
   let titleTo = isSelfClosing ? closingFenceFrom : text.length;
   while (titleTo > titleFrom && isSpaceTab(text.charCodeAt(titleTo - 1))) {
     titleTo--;
   }
+  return { titleFrom, titleTo };
+}
+
+/**
+ * Parse an opening fence line. Returns fence info or undefined.
+ * Opening fence: 3+ colons, optional attributes `{...}`, optional title.
+ *
+ * Delegates to three focused helpers:
+ *   1. parseFenceColonsAndAttrs — colon count + attribute span
+ *   2. detectSelfClosingFence  — trailing ::: detection
+ *   3. parseFenceTitle         — title span trimming
+ */
+function parseOpeningFence(
+  text: string,
+  pos: number,
+): OpeningFenceInfo | undefined {
+  const stage1 = parseFenceColonsAndAttrs(text, pos);
+  if (!stage1) return undefined;
+
+  const { colonCount, attrFrom, attrTo, cursorAfterAttr } = stage1;
+  const { isSelfClosing, closingFenceFrom, closingFenceTo } = detectSelfClosingFence(text, cursorAfterAttr);
+  const { titleFrom, titleTo } = parseFenceTitle(text, cursorAfterAttr, isSelfClosing, closingFenceFrom);
 
   return {
     colonCount,

@@ -654,8 +654,11 @@ describe("#312 — unified editor session hook", () => {
   it("useEditorSession exists and old split hooks are removed", async () => {
     const mod = await import("./hooks/use-editor-session");
     expect(mod.useEditorSession).toBeDefined();
+    // use-document-buffer.ts was the old rejected split — must stay removed.
     expect(fileExists("src/app/hooks/use-document-buffer.ts")).toBe(false);
-    expect(fileExists("src/app/hooks/use-file-operations.ts")).toBe(false);
+    // use-file-operations.ts was reintroduced in #375 as a deliberate helper
+    // module extracted from useEditorSession. It is an internal implementation
+    // detail, not a replacement top-level hook.
   });
 });
 

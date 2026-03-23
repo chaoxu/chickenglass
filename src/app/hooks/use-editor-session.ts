@@ -1,9 +1,9 @@
 /**
  * useEditorSession — unified tab/buffer lifecycle and file operations.
  *
- * Keeps the in-memory document session (tabs, buffers, dirty state) and the
- * filesystem mutations in a single hook so editor shell consumers do not need
- * to thread a large dependency object between separate hooks.
+ * Owns in-memory document session state (tabs, buffers, dirty tracking) and
+ * delegates filesystem mutation callbacks to useFileOperations. Editor shell
+ * consumers get a single stable object from this hook.
  *
  * State management notes:
  * - sessionStateRef is an eagerly-updated mirror of sessionState used by
@@ -16,15 +16,10 @@
 import { useCallback, useRef, useState } from "react";
 import type { FileSystem } from "../file-manager";
 import type { Tab } from "../tab-bar";
-import { isTauri } from "../tauri-fs";
 import { basename } from "../lib/utils";
-import { toProjectRelativePathCommand } from "../tauri-client/fs";
-import { measureAsync, withPerfOperation } from "../perf";
-import { applySaveAsResult } from "../editor-session-save";
+import { withPerfOperation } from "../perf";
 import {
   activateSessionTab,
-  closeSessionTab,
-  closeSessionTabs,
   markSessionTabDirty,
   openSessionTab,
   pinSessionTab,
@@ -38,6 +33,7 @@ import {
   hasSessionPath,
   type EditorSessionState,
 } from "../editor-session-model";
+import { useFileOperations } from "./use-file-operations";
 
 export interface EditorSessionDeps {
   fs: FileSystem;
@@ -224,150 +220,17 @@ export function useEditorSession({
     }));
   }, [commitSessionState]);
 
-  const saveFile = useCallback(async () => {
-    const path = sessionStateRef.current.activePath;
-    if (!path) return;
-
-    const doc = liveDocs.current.get(path) ?? "";
-
-    try {
-      await measureAsync("save_file.write", () => fs.writeFile(path, doc), {
-        category: "save_file",
-        detail: path,
-      });
-      buffers.current.set(path, doc);
-      liveDocs.current.set(path, doc);
-      commitSessionState(markSessionTabDirty(sessionStateRef.current, path, false), {
-        syncEditorDoc: false,
-      });
-    } catch (e: unknown) {
-      // Save failed — leave dirty so user knows data is unsaved
-      console.error("[session] save failed:", e);
-    }
-  }, [commitSessionState, fs]);
-
-  const createFile = useCallback(async (path: string) => {
-    try {
-      await measureAsync("create_file.write", () => fs.createFile(path, ""), {
-        category: "create_file",
-        detail: path,
-      });
-      await Promise.all([refreshTree(), openFile(path)]);
-    } catch (e: unknown) {
-      console.error("[session] create file failed:", e);
-    }
-  }, [fs, openFile, refreshTree]);
-
-  const createDirectory = useCallback(async (path: string) => {
-    try {
-      await measureAsync("create_directory.write", () => fs.createDirectory(path), {
-        category: "create_directory",
-        detail: path,
-      });
-      await refreshTree();
-    } catch (e: unknown) {
-      console.error("[session] create directory failed:", e);
-    }
-  }, [fs, refreshTree]);
-
-  const closeFile = useCallback(async (path: string) => {
-    const tab = findSessionTab(sessionStateRef.current, path);
-    if (tab?.dirty) {
-      const answer = window.confirm(
-        `"${tab.name}" has unsaved changes.\n\nPress OK to discard, or Cancel to keep editing.`,
-      );
-      if (!answer) return;
-    }
-
-    commitSessionState(closeSessionTab(sessionStateRef.current, path));
-    buffers.current.delete(path);
-    liveDocs.current.delete(path);
-  }, [commitSessionState]);
-
-  const handleRename = useCallback(async (oldPath: string, newPath: string) => {
-    try {
-      await fs.renameFile(oldPath, newPath);
-      await refreshTree();
-      renameBuffers(oldPath, newPath);
-    } catch (e: unknown) {
-      console.error("[session] rename failed:", e);
-    }
-  }, [fs, refreshTree, renameBuffers]);
-
-  const handleDelete = useCallback(async (path: string) => {
-    const ok = window.confirm(`Delete "${basename(path)}"? This cannot be undone.`);
-    if (!ok) return;
-
-    try {
-      await measureAsync("delete_file.write", () => fs.deleteFile(path), {
-        category: "delete_file",
-        detail: path,
-      });
-    } catch (e: unknown) {
-      console.error("[session] delete failed:", e);
-    }
-
-    const prefix = path + "/";
-    const isAffected = (candidate: string) => candidate === path || candidate.startsWith(prefix);
-
-    const affected = new Set(
-      sessionStateRef.current.tabs
-        .filter((tab) => isAffected(tab.path))
-        .map((tab) => tab.path),
-    );
-    for (const affectedPath of affected) {
-      buffers.current.delete(affectedPath);
-      liveDocs.current.delete(affectedPath);
-    }
-    commitSessionState(closeSessionTabs(sessionStateRef.current, affected));
-
-    await refreshTree();
-  }, [commitSessionState, fs, refreshTree]);
-
-  const saveAs = useCallback(async () => {
-    const path = sessionStateRef.current.activePath;
-    if (!path) return;
-    const doc = liveDocs.current.get(path) ?? "";
-
-    if (isTauri()) {
-      try {
-        const { save } = await import("@tauri-apps/plugin-dialog");
-        const savePath = await save({
-          defaultPath: path,
-          filters: [{ name: "Markdown", extensions: ["md"] }],
-        });
-        if (!savePath) return;
-        const relativePath = await toProjectRelativePathCommand(savePath);
-        const exists = await fs.exists(relativePath);
-        if (exists) {
-          await fs.writeFile(relativePath, doc);
-        } else {
-          await fs.createFile(relativePath, doc);
-        }
-        commitSessionState(applySaveAsResult({
-          state: sessionStateRef.current,
-          buffers: buffers.current,
-          liveDocs: liveDocs.current,
-          oldPath: path,
-          newPath: relativePath,
-          doc,
-        }));
-        addRecentFile(relativePath);
-        await refreshTree();
-      } catch {
-        // best-effort: save-as dialog cancelled or failed by user action
-      }
-      return;
-    }
-
-    const blob = new Blob([doc], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = basename(path);
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }, [addRecentFile, commitSessionState, fs, refreshTree]);
+  const fileOps = useFileOperations({
+    fs,
+    refreshTree,
+    addRecentFile,
+    sessionStateRef,
+    buffers,
+    liveDocs,
+    commitSessionState,
+    openFile,
+    renameBuffers,
+  });
 
   return {
     openTabs,
@@ -383,13 +246,7 @@ export function useEditorSession({
     renameBuffers,
     openFile,
     openFileWithContent,
-    saveFile,
-    createFile,
-    createDirectory,
-    closeFile,
-    handleRename,
-    handleDelete,
-    saveAs,
     pinTab,
+    ...fileOps,
   };
 }
