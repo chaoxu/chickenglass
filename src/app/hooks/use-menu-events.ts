@@ -78,14 +78,16 @@ export function useMenuEvents(handlers: MenuEventHandlers): void {
   useEffect(() => {
     if (!isTauri()) return;
 
-    let unlisten: (() => void) | null = null;
     let cancelled = false;
 
-    const setup = async () => {
+    // Store the promise so cleanup can await it before calling unlisten.
+    // Without this, if the effect is cleaned up before setup() resolves,
+    // the Tauri listener registers after cleanup and is never removed.
+    const setupPromise = (async () => {
       const { listen } = await import("@tauri-apps/api/event");
-      if (cancelled) return;
+      if (cancelled) return undefined;
 
-      unlisten = await listen<string>("menu-event", (event) => {
+      return listen<string>("menu-event", (event) => {
         const id = event.payload;
         const h = handlersRef.current;
 
@@ -107,13 +109,13 @@ export function useMenuEvents(handlers: MenuEventHandlers): void {
         // view_focus_mode, view_debug, edit_replace: not yet wired to frontend
         // handlers. They can be added when those features are implemented.
       });
-    };
-
-    void setup();
+    })();
 
     return () => {
       cancelled = true;
-      unlisten?.();
+      // Await the setup promise so we always call unlisten even if the effect
+      // is torn down while the dynamic import is still in flight.
+      void setupPromise.then((unlisten) => unlisten?.());
     };
   }, []);
 }

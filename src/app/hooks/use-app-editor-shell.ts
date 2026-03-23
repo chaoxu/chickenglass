@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { insertImageFromPicker } from "../../editor/image-insert";
 import type { EditorMode } from "../../editor";
 import {
@@ -107,9 +107,13 @@ export function useAppEditorShell({
 
   const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
+  // Stable ref always pointing at the latest view, so async callbacks (e.g.
+  // handleSearchResult) never capture a stale closure after openFile resolves.
+  const latestViewRef = useRef<UseEditorReturn["view"]>(null);
 
   const handleEditorStateChange = useCallback((state: UseEditorReturn) => {
     setEditorState(state);
+    latestViewRef.current = state.view;
 
     if (state.view) {
       setHeadings(extractHeadings(state.view.state));
@@ -164,7 +168,9 @@ export function useAppEditorShell({
   const handleSearchResult = useCallback((file: string, pos: number, onComplete?: () => void) => {
     void openFile(file).then(() => {
       setTimeout(() => {
-        const view = editorState?.view;
+        // Use latestViewRef so we get the view after openFile has updated
+        // editorState — the closure over editorState?.view would be stale.
+        const view = latestViewRef.current;
         if (view) {
           view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
           view.focus();
@@ -172,7 +178,7 @@ export function useAppEditorShell({
         onComplete?.();
       }, 100);
     });
-  }, [openFile, editorState?.view]);
+  }, [openFile]);
 
   const handleSymbolInsert = useCallback((latex: string) => {
     const view = editorState?.view;

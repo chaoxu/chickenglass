@@ -216,7 +216,9 @@ export function useEditor(
       setView(null);
     };
     // Doc changes intentionally recreate the editor (same as switchEditor).
-  }, [doc, containerRef]);
+    // documentServices must be included so extension wiring (image save, bib)
+    // updates when docPath or fs change between files.
+  }, [doc, containerRef, documentServices]);
 
   return {
     view,

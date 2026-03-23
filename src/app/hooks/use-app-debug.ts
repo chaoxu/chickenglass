@@ -53,5 +53,11 @@ export function useAppDebug({
       clearPerf: clearCombinedPerf,
       togglePerfPanel,
     };
+    return () => {
+      // Clear debug globals on unmount / HMR so stale closures are not left
+      // on window between hot-reloads or component teardowns.
+      delete debugWindow.__app;
+      delete debugWindow.__cfDebug;
+    };
   }, [openFile, saveFile, closeFile, setMode, getMode]);
 }
