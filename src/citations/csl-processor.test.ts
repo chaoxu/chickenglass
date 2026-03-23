@@ -71,6 +71,39 @@ describe("CslProcessor narrative citations", () => {
     expect(processor.citeNarrative("karger2000")).toBe("Karger [1]");
   });
 
+  it("produces author plus bracketed number for default IEEE numeric style", () => {
+    // Regression: numeric styles like IEEE must use suppress-author fallback
+    // (e.g. "Karger [1]"), not the author-year format "Karger (2000)".
+    // See #359.
+    const processor = new CslProcessor([entry]);
+    const result = processor.citeNarrative("karger2000");
+    expect(result).toBe("Karger [1]");
+    expect(result).not.toContain("(2000)");
+  });
+
+  it("falls back to author (year) only when engine is null", () => {
+    // The Author (Year) catch-all should only trigger when the engine
+    // is unavailable, not when the style is numeric.
+    const processor = new CslProcessor([entry]);
+    // Force engine to null to simulate init failure
+    (processor as unknown as { engine: null }).engine = null;
+    expect(processor.citeNarrative("karger2000")).toBe("Karger (2000)");
+  });
+
+  it("falls back to author (year) when all citeproc calls throw", () => {
+    const processor = new CslProcessor([entry]);
+    (processor as unknown as {
+      engine: {
+        processCitationCluster: () => never;
+        makeCitationCluster: () => never;
+      };
+    }).engine = {
+      processCitationCluster: () => { throw new Error("citeproc error"); },
+      makeCitationCluster: () => { throw new Error("citeproc error"); },
+    };
+    expect(processor.citeNarrative("karger2000")).toBe("Karger (2000)");
+  });
+
   it("registers narrative citations in document order too", () => {
     const processor = {
       registerCitations: (clusters: Array<{ ids: string[] }>) => {
