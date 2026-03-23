@@ -113,6 +113,12 @@ export interface ReferenceSemantics {
   readonly locators: readonly (string | undefined)[];
 }
 
+export interface IncludeSemantics {
+  readonly from: number;
+  readonly to: number;
+  readonly path: string;
+}
+
 export interface DocumentAnalysis {
   readonly headings: readonly HeadingSemantics[];
   readonly headingByFrom: ReadonlyMap<number, HeadingSemantics>;
@@ -123,6 +129,8 @@ export interface DocumentAnalysis {
   readonly equationById: ReadonlyMap<string, EquationSemantics>;
   readonly references: readonly ReferenceSemantics[];
   readonly referenceByFrom: ReadonlyMap<number, ReferenceSemantics>;
+  readonly includes: readonly IncludeSemantics[];
+  readonly includeByFrom: ReadonlyMap<number, IncludeSemantics>;
 }
 
 export type DocumentSemantics = DocumentAnalysis;
@@ -526,6 +534,45 @@ export function analyzeReferences(doc: TextSource, tree: Tree): ReferenceSemanti
 }
 
 // ---------------------------------------------------------------------------
+// Include extraction from fenced divs
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive include entries from fenced divs with class "include".
+ *
+ * For single-line form (`::: {.include} chapter1.md :::`), the path is in the
+ * title field. For multi-line form, the path is the trimmed content between
+ * the opening fence line and the closing fence line.
+ */
+function extractIncludesFromDivs(
+  doc: TextSource,
+  divs: readonly FencedDivSemantics[],
+): IncludeSemantics[] {
+  const includes: IncludeSemantics[] = [];
+  for (const div of divs) {
+    if (div.primaryClass !== "include") continue;
+
+    // Single-line: `::: {.include} chapter1.md :::`  — path lives in the title
+    if (div.title) {
+      const path = div.title.trim();
+      if (path.length > 0) {
+        includes.push({ from: div.from, to: div.to, path });
+        continue;
+      }
+    }
+
+    // Multi-line: path is the body between the opening and closing fences
+    if (div.closeFenceFrom >= 0 && div.openFenceTo < div.closeFenceFrom) {
+      const path = doc.slice(div.openFenceTo, div.closeFenceFrom).trim();
+      if (path.length > 0) {
+        includes.push({ from: div.from, to: div.to, path });
+      }
+    }
+  }
+  return includes;
+}
+
+// ---------------------------------------------------------------------------
 // Canonical full-document analysis (single walk + assembly)
 // ---------------------------------------------------------------------------
 
@@ -549,6 +596,8 @@ export function analyzeDocumentSemantics(
   const references = [...w.bracketedRefs, ...narrativeRefs];
   references.sort((a, b) => a.from - b.from);
 
+  const includes = extractIncludesFromDivs(doc, fencedDivs);
+
   return {
     headings,
     headingByFrom: new Map(headings.map((heading) => [heading.from, heading])),
@@ -559,5 +608,7 @@ export function analyzeDocumentSemantics(
     equationById: new Map(equations.map((equation) => [equation.id, equation])),
     references,
     referenceByFrom: new Map(references.map((reference) => [reference.from, reference])),
+    includes,
+    includeByFrom: new Map(includes.map((inc) => [inc.from, inc])),
   };
 }

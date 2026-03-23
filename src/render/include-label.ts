@@ -1,6 +1,9 @@
 /**
- * Right-margin filename decoration for include regions.
+ * Right-margin filename decoration for include blocks.
  * Single ViewPlugin computes both line decorations and widget labels in one pass.
+ *
+ * Reads include block positions and paths from the shared
+ * `documentAnalysisField` rather than the global `__cfSourceMap`.
  */
 
 import {
@@ -14,22 +17,8 @@ import {
 import { type Extension, type Range } from "@codemirror/state";
 import { buildDecorations, RenderWidget } from "./render-utils";
 import { basename } from "../app/lib/utils";
-
-/** A region of the document that came from an included file. */
-interface IncludeRegion {
-  from: number;
-  to: number;
-  file: string;
-}
-
-/** Maps document positions to their source files. */
-interface SourceMap {
-  regions: IncludeRegion[];
-}
-
-function getSourceMap(): SourceMap | null {
-  return (window as unknown as { __cfSourceMap?: SourceMap }).__cfSourceMap ?? null;
-}
+import { documentAnalysisField } from "../semantics/codemirror-source";
+import type { IncludeSemantics } from "../semantics/document";
 
 class IncludeLabelWidget extends RenderWidget {
   constructor(private readonly filename: string, private readonly active: boolean) {
@@ -55,26 +44,27 @@ class IncludeLabelPlugin implements PluginValue {
     }
   }
   private build(view: EditorView): DecorationSet {
-    const sourceMap = getSourceMap();
-    if (!sourceMap || sourceMap.regions.length === 0) return Decoration.none;
+    const includes: readonly IncludeSemantics[] =
+      view.state.field(documentAnalysisField, false)?.includes ?? [];
+    if (includes.length === 0) return Decoration.none;
 
     const items: Range<Decoration>[] = [];
     const cursor = view.state.selection.main.head;
     const doc = view.state.doc;
     const lineDeco = Decoration.line({ class: "cf-include-region" });
 
-    for (const region of sourceMap.regions) {
-      const from = Math.min(region.from, doc.length);
-      const to = Math.min(region.to, doc.length);
+    for (const inc of includes) {
+      const from = Math.min(inc.from, doc.length);
+      const to = Math.min(inc.to, doc.length);
       if (from >= to) continue;
 
-      // Widget label at start of region
+      // Widget label at start of include block
       const active = cursor >= from && cursor <= to;
-      const filename = basename(region.file);
+      const filename = basename(inc.path);
       const startLine = doc.lineAt(from);
       items.push(Decoration.widget({ widget: new IncludeLabelWidget(filename, active), side: 1 }).range(startLine.from));
 
-      // Line decorations for every line in the region
+      // Line decorations for every line in the include block
       const endLine = doc.lineAt(to);
       for (let ln = startLine.number; ln <= endLine.number; ln++) {
         items.push(lineDeco.range(doc.line(ln).from));
