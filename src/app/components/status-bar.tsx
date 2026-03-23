@@ -148,7 +148,7 @@ export function StatusBar({
 
   return (
     <>
-      <div className="shrink-0 flex items-center border-t border-[var(--cf-border)] bg-[var(--cf-bg)] h-6 px-2 text-xs text-[var(--cf-muted)] select-none">
+      <div data-statusbar className="shrink-0 flex items-center border-t border-[var(--cf-border)] bg-[var(--cf-bg)] h-6 px-2 text-xs text-[var(--cf-muted)] select-none">
         {/* Left: word + char count */}
         <div className="flex items-center gap-2">
           <button

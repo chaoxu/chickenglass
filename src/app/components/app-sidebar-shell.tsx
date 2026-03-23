@@ -28,7 +28,7 @@ interface AppSidebarShellProps {
 
 export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
   return (
-    <div className="flex shrink-0">
+    <div data-sidebar className="flex shrink-0">
       <Sidebar>
         <SidebarHeader>
           <span className="overflow-hidden whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-[var(--cf-muted)]">

@@ -785,3 +785,73 @@ body {
     --cf-transition: 0s;
   }
 }
+
+/* ── High-contrast preferences ───────────────────────────────────────────── */
+
+@media (prefers-contrast: more) {
+  :root {
+    --cf-border: #71717a;
+    --cf-muted: #3f3f46;
+    --cf-subtle: rgba(0, 0, 0, 0.08);
+    --cf-hover: rgba(0, 0, 0, 0.12);
+    --cf-active: rgba(0, 0, 0, 0.18);
+  }
+
+  [data-theme="dark"] {
+    --cf-border: #a1a1aa;
+    --cf-muted: #d4d4d8;
+    --cf-subtle: rgba(255, 255, 255, 0.10);
+    --cf-hover: rgba(255, 255, 255, 0.18);
+    --cf-active: rgba(255, 255, 255, 0.28);
+  }
+}
+
+/* ── Print ───────────────────────────────────────────────────────────────── */
+
+@media print {
+  /* Hide UI chrome — sidebar, tab bar, status bar */
+  [data-sidebar],
+  [data-tabbar],
+  [data-statusbar] {
+    display: none !important;
+  }
+
+  /* Let content fill the full page */
+  html,
+  body,
+  #root {
+    height: auto;
+    overflow: visible;
+  }
+
+  /* Remove fixed/absolute decoration from the editor scroller */
+  .cm-scroller {
+    overflow: visible !important;
+  }
+
+  /* Ensure editor content and read mode view use full width */
+  .cm-editor,
+  .cf-read-mode-view {
+    height: auto;
+    overflow: visible;
+    max-width: 100%;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* Hide sidenote margin and hover tooltips */
+  .cf-sidenote-portal,
+  .cf-hover-preview-tooltip {
+    display: none !important;
+  }
+
+  /* Avoid page breaks inside theorem/proof blocks */
+  .cf-read-mode-view .theorem,
+  .cf-read-mode-view .lemma,
+  .cf-read-mode-view .corollary,
+  .cf-read-mode-view .proposition,
+  .cf-read-mode-view .proof,
+  .cf-read-mode-view .definition {
+    break-inside: avoid;
+  }
+}
