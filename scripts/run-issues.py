@@ -210,10 +210,8 @@ def fetch_issue(number: int) -> IssueTask:
 
 def fetch_all_open_issues() -> list[IssueTask]:
     """Fetch all open non-deferred issues from GitHub."""
-    result = run_cmd(["gh", "issue", "list", "--state", "open", "--json", "number,title,body,labels", "--limit", "50"])
+    result = run_cmd(["gh", "issue", "list", "--state", "open", "--json", "number,title,body,labels", "--limit", "500"])
     all_issues = json.loads(result.stdout)
-    if len(all_issues) == 50:
-        log("Warning: 50 issues returned — there may be more (pagination not implemented)", "WARN")
     tasks = []
     for i in all_issues:
         labels = {lbl.get("name", "") for lbl in i.get("labels", [])}
