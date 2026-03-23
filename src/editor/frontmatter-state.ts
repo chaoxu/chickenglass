@@ -21,6 +21,7 @@ import {
   editorFocusField,
   focusEffect,
   focusTracker,
+  serializeMacros,
 } from "../render/render-utils";
 
 export { type FrontmatterConfig, type NumberingScheme } from "../parser/frontmatter";
@@ -84,11 +85,14 @@ export const frontmatterField = StateField.define<FrontmatterState>({
 
 /** Widget that renders the document title from frontmatter. */
 class TitleWidget extends WidgetType {
+  private readonly macrosKey: string;
+
   constructor(
     private readonly title: string,
     private readonly macros: Record<string, string>,
   ) {
     super();
+    this.macrosKey = serializeMacros(macros);
   }
 
   toDOM(): HTMLElement {
@@ -103,7 +107,7 @@ class TitleWidget extends WidgetType {
   }
 
   eq(other: TitleWidget): boolean {
-    return this.title === other.title;
+    return this.title === other.title && this.macrosKey === other.macrosKey;
   }
 
   ignoreEvent(): boolean {

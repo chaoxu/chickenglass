@@ -10,6 +10,13 @@ function createState(doc: string): EditorState {
   });
 }
 
+function getTitleWidget(state: EditorState): { eq(other: unknown): boolean } {
+  const iter = state.field(frontmatterDecorationField).iter();
+  const widget = iter.value?.spec.widget as { eq(other: unknown): boolean } | undefined;
+  expect(widget).toBeDefined();
+  return widget!;
+}
+
 describe("frontmatterField", () => {
   it("parses frontmatter on creation", () => {
     const state = createState(
@@ -127,5 +134,26 @@ describe("frontmatterDecoration", () => {
     const decos = state.field(frontmatterDecorationField);
     const iter = decos.iter();
     expect(iter.value).toBeNull();
+  });
+
+  it("refreshes the title widget when math macros change but title text stays the same", () => {
+    const originalDoc = [
+      "---",
+      "title: $\\R$",
+      "math:",
+      "  \\R: \\mathbb{R}",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createState(originalDoc);
+    const oldWidget = getTitleWidget(state);
+
+    const nextDoc = originalDoc.replace("\\mathbb{R}", "\\mathbf{R}");
+    const tr = state.update({
+      changes: { from: 0, to: originalDoc.length, insert: nextDoc },
+    });
+    const newWidget = getTitleWidget(tr.state);
+
+    expect(oldWidget.eq(newWidget)).toBe(false);
   });
 });
