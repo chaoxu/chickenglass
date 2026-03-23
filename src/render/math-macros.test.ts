@@ -1,6 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { frontmatterField } from "../editor/frontmatter-state";
@@ -10,6 +9,7 @@ import {
   MathWidget,
   collectMathRanges,
 } from "./math-render";
+import { createTestView } from "../test-utils";
 
 /** Create an EditorView with frontmatter and math parser extensions. */
 function createView(
@@ -17,9 +17,8 @@ function createView(
   cursorPos?: number,
   projectConfig?: Record<string, string>,
 ): EditorView {
-  const state = EditorState.create({
-    doc,
-    selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
+  return createTestView(doc, {
+    cursorPos,
     extensions: [
       markdown({ extensions: [mathExtension] }),
       ...(projectConfig ? [projectConfigFacet.of({ math: projectConfig })] : []),
@@ -27,15 +26,14 @@ function createView(
       mathMacrosField,
     ],
   });
-  const parent = document.createElement("div");
-  return new EditorView({ state, parent });
 }
 
 describe("getMathMacros", () => {
-  let view: EditorView;
+  let view: EditorView | undefined;
 
   afterEach(() => {
     view?.destroy();
+    view = undefined;
   });
 
   it("returns macros from frontmatter", () => {
@@ -70,10 +68,11 @@ describe("getMathMacros", () => {
 });
 
 describe("getMathMacros with project config", () => {
-  let view: EditorView;
+  let view: EditorView | undefined;
 
   afterEach(() => {
     view?.destroy();
+    view = undefined;
   });
 
   it("returns project macros when file has no math frontmatter", () => {
@@ -193,10 +192,11 @@ describe("macros in MathWidget (display)", () => {
 });
 
 describe("collectMathRanges with frontmatter macros", () => {
-  let view: EditorView;
+  let view: EditorView | undefined;
 
   afterEach(() => {
     view?.destroy();
+    view = undefined;
   });
 
   it("passes macros from frontmatter to math widgets", () => {
@@ -216,10 +216,11 @@ describe("collectMathRanges with frontmatter macros", () => {
 });
 
 describe("live update on frontmatter change", () => {
-  let view: EditorView;
+  let view: EditorView | undefined;
 
   afterEach(() => {
     view?.destroy();
+    view = undefined;
   });
 
   it("detects macro changes when frontmatter is edited", () => {

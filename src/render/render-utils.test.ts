@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { Decoration } from "@codemirror/view";
 import type { Range } from "@codemirror/state";
 import { StateEffect } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
+import type { EditorView } from "@codemirror/view";
 import {
   serializeMacros,
   collectNodes,
@@ -58,6 +59,13 @@ describe("serializeMacros", () => {
 });
 
 describe("collectNodes", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
   it("collects nodes of matching types from EditorState", () => {
     const state = createEditorState("# Hello\n\nworld", {
       extensions: markdown(),
@@ -96,12 +104,11 @@ describe("collectNodes", () => {
   });
 
   it("works with EditorView as well as EditorState", () => {
-    const view = createTestView("# Title", {
+    view = createTestView("# Title", {
       extensions: markdown(),
     });
     const nodes = collectNodes(view, new Set(["ATXHeading1"]));
     expect(nodes).toHaveLength(1);
-    view.destroy();
   });
 });
 
@@ -334,6 +341,13 @@ describe("pushWidgetDecoration", () => {
 });
 
 describe("createSimpleViewPlugin", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
   it("returns an Extension (non-null, non-undefined)", () => {
     const ext = createSimpleViewPlugin(() => Decoration.none);
     expect(ext).toBeDefined();
@@ -341,9 +355,8 @@ describe("createSimpleViewPlugin", () => {
 
   it("can be installed in an EditorView without errors", () => {
     const ext = createSimpleViewPlugin(() => Decoration.none);
-    const view = createTestView("hello", { extensions: [markdown(), ext] });
+    view = createTestView("hello", { extensions: [markdown(), ext] });
     expect(view.state.doc.toString()).toBe("hello");
-    view.destroy();
   });
 
   it("calls buildFn on construction", () => {
@@ -352,9 +365,8 @@ describe("createSimpleViewPlugin", () => {
       callCount++;
       return Decoration.none;
     });
-    const view = createTestView("test", { extensions: [markdown(), ext] });
+    view = createTestView("test", { extensions: [markdown(), ext] });
     expect(callCount).toBe(1);
-    view.destroy();
   });
 
   it("calls buildFn on docChanged by default", () => {
@@ -363,11 +375,10 @@ describe("createSimpleViewPlugin", () => {
       callCount++;
       return Decoration.none;
     });
-    const view = createTestView("test", { extensions: [markdown(), ext] });
+    view = createTestView("test", { extensions: [markdown(), ext] });
     callCount = 0; // reset after construction
     view.dispatch({ changes: { from: 0, insert: "x" } });
     expect(callCount).toBe(1);
-    view.destroy();
   });
 
   it("accepts a custom shouldUpdate that prevents rebuilds", () => {
@@ -379,11 +390,10 @@ describe("createSimpleViewPlugin", () => {
       },
       { shouldUpdate: () => false },
     );
-    const view = createTestView("test", { extensions: [markdown(), ext] });
+    view = createTestView("test", { extensions: [markdown(), ext] });
     buildCount = 0; // reset
     view.dispatch({ changes: { from: 0, insert: "x" } });
     expect(buildCount).toBe(0);
-    view.destroy();
   });
 
   it("accepts a custom shouldUpdate that always rebuilds", () => {
@@ -395,11 +405,10 @@ describe("createSimpleViewPlugin", () => {
       },
       { shouldUpdate: () => true },
     );
-    const view = createTestView("test", { extensions: [markdown(), ext] });
+    view = createTestView("test", { extensions: [markdown(), ext] });
     buildCount = 0;
     view.dispatch({ changes: { from: 0, insert: "x" } });
     expect(buildCount).toBe(1);
-    view.destroy();
   });
 });
 
@@ -410,6 +419,13 @@ describe("defaultShouldUpdate", () => {
 });
 
 describe("createDecorationsField", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
   it("calls builder on create and provides decorations", () => {
     let callCount = 0;
     const field = createDecorationsField(() => {
@@ -511,11 +527,10 @@ describe("createDecorationsField", () => {
     const field = createDecorationsField(() => {
       return Decoration.set([lineDeco.range(0)]);
     });
-    const view = createTestView("hello", { extensions: [markdown(), field] });
+    view = createTestView("hello", { extensions: [markdown(), field] });
     const specs = getDecorationSpecs(view.state.field(field));
     expect(specs).toHaveLength(1);
     expect(specs[0].class).toBe("test-line");
-    view.destroy();
   });
 });
 
@@ -551,9 +566,16 @@ describe("defaultShouldRebuild", () => {
 });
 
 describe("collectNodeRangesExcludingCursor", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
   it("collects matching nodes and calls buildItem for each", () => {
     const nodeTypes = new Set(["ATXHeading1"]);
-    const view = createTestView("# Hello\n\nworld", {
+    view = createTestView("# Hello\n\nworld", {
       extensions: markdown(),
       cursorPos: 14, // cursor at end (outside heading)
     });
@@ -565,12 +587,11 @@ describe("collectNodeRangesExcludingCursor", () => {
     expect(items).toHaveLength(1);
     expect(items[0].from).toBe(0);
     expect(items[0].to).toBe(7);
-    view.destroy();
   });
 
   it("skips nodes where cursor is inside", () => {
     const nodeTypes = new Set(["ATXHeading1"]);
-    const view = createTestView("# Hello\n\nworld", {
+    view = createTestView("# Hello\n\nworld", {
       extensions: markdown(),
       cursorPos: 3, // cursor inside heading
     });
@@ -580,12 +601,11 @@ describe("collectNodeRangesExcludingCursor", () => {
     });
 
     expect(items).toHaveLength(0);
-    view.destroy();
   });
 
   it("ignores non-matching node types", () => {
     const nodeTypes = new Set(["FencedCode"]);
-    const view = createTestView("# Hello\n\nworld", {
+    view = createTestView("# Hello\n\nworld", {
       extensions: markdown(),
       cursorPos: 14,
     });
@@ -595,14 +615,13 @@ describe("collectNodeRangesExcludingCursor", () => {
     });
 
     expect(items).toHaveLength(0);
-    view.destroy();
   });
 
   it("collects multiple nodes of different types", () => {
     const nodeTypes = new Set(["Emphasis", "StrongEmphasis"]);
     // Place cursor well outside both emphasis nodes:
     // *em*(0-4) and(5-8) **bold**(9-17)
-    const view = createTestView("*em* and **bold** trailing", {
+    view = createTestView("*em* and **bold** trailing", {
       extensions: markdown(),
       cursorPos: 25, // cursor in "trailing", outside both nodes
     });
@@ -614,12 +633,11 @@ describe("collectNodeRangesExcludingCursor", () => {
 
     expect(collected).toContain("Emphasis");
     expect(collected).toContain("StrongEmphasis");
-    view.destroy();
   });
 
   it("passes SyntaxNodeRef with accessible .node property", () => {
     const nodeTypes = new Set(["ATXHeading1"]);
-    const view = createTestView("# Hello\n\nworld", {
+    view = createTestView("# Hello\n\nworld", {
       extensions: markdown(),
       cursorPos: 14,
     });
@@ -631,12 +649,11 @@ describe("collectNodeRangesExcludingCursor", () => {
     });
 
     expect(hadNodeAccess).toBe(true);
-    view.destroy();
   });
 
   it("returns false from buildItem to prevent descending into children", () => {
     const nodeTypes = new Set(["ATXHeading1", "HeaderMark"]);
-    const view = createTestView("# Hello\n\nworld", {
+    view = createTestView("# Hello\n\nworld", {
       extensions: markdown(),
       cursorPos: 14,
     });
@@ -649,6 +666,5 @@ describe("collectNodeRangesExcludingCursor", () => {
 
     // Should only get ATXHeading1, not HeaderMark (which is a child)
     expect(collected).toEqual(["ATXHeading1"]);
-    view.destroy();
   });
 });

@@ -16,19 +16,21 @@
  * `<input type="file">` element.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { EditorView } from "@codemirror/view";
 
 import * as imageSave from "./image-save";
 import { insertImageMarkdown } from "./image-paste";
 import { insertImageFromPicker } from "./image-insert";
+import { createTestView } from "../test-utils";
+
+const views: EditorView[] = [];
 
 /** Create a minimal EditorView with the given document content. */
 function makeView(doc = ""): EditorView {
-  return new EditorView({
-    state: EditorState.create({ doc }),
-  });
+  const view = createTestView(doc, { focus: false });
+  views.push(view);
+  return view;
 }
 
 /** Create a fake image File with a given name and MIME type. */
@@ -64,6 +66,12 @@ function stubFilePicker(file: File): void {
 describe("image insertion parity (#330)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    while (views.length > 0) {
+      views.pop()?.destroy();
+    }
   });
 
   describe("picker calls saveAndInsertImage", () => {

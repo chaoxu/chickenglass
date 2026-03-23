@@ -1,12 +1,12 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { MathWidget, collectMathRanges, stripMathDelimiters } from "./math-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
+import { createTestView } from "../test-utils";
 
 /** Count only widget (replace) decorations, ignoring mark decorations like cf-math-source. */
 function countWidgets(ranges: ReturnType<typeof collectMathRanges>): number {
@@ -15,22 +15,34 @@ function countWidgets(ranges: ReturnType<typeof collectMathRanges>): number {
 
 /** Create an EditorView with math parser extensions at the given cursor position. */
 function createMathView(doc: string, cursorPos?: number): EditorView {
-  const state = EditorState.create({
-    doc,
-    selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
+  return createTestView(doc, {
+    cursorPos,
     extensions: [
       markdown({ extensions: [mathExtension, equationLabelExtension] }),
       frontmatterField,
       mathMacrosField,
     ],
   });
-  const parent = document.createElement("div");
-  document.body.appendChild(parent);
-  const view = new EditorView({ state, parent });
-  view.focus();
-  const origDestroy = view.destroy.bind(view);
-  view.destroy = () => { origDestroy(); parent.remove(); };
-  return view;
+}
+
+/**
+ * Create an EditorView with math + equation label extensions.
+ *
+ * focus: false mirrors the original createMathViewWithLabels behaviour which
+ * did not call view.focus(). collectMathRanges() guards on view.hasFocus via
+ * cursorInRange(), so an unfocused view always produces widget decorations
+ * regardless of cursor position — which is what the equation-label tests need.
+ */
+function createMathViewWithLabels(doc: string, cursorPos?: number): EditorView {
+  return createTestView(doc, {
+    cursorPos,
+    focus: false,
+    extensions: [
+      markdown({ extensions: [mathExtension, equationLabelExtension] }),
+      frontmatterField,
+      mathMacrosField,
+    ],
+  });
 }
 
 describe("MathWidget (inline)", () => {
@@ -114,10 +126,11 @@ describe("MathWidget (display)", () => {
 });
 
 describe("collectMathRanges", () => {
-  let view: EditorView;
+  let view: EditorView | undefined;
 
   afterEach(() => {
     view?.destroy();
+    view = undefined;
   });
 
   it("collects inline math with dollar syntax", () => {
@@ -194,10 +207,11 @@ describe("collectMathRanges", () => {
 });
 
 describe("cursor toggle behavior", () => {
-  let view: EditorView;
+  let view: EditorView | undefined;
 
   afterEach(() => {
     view?.destroy();
+    view = undefined;
   });
 
   it("reveals source when cursor enters math region", () => {
@@ -252,10 +266,11 @@ describe("error handling", () => {
 });
 
 describe("performance", () => {
-  let view: EditorView;
+  let view: EditorView | undefined;
 
   afterEach(() => {
     view?.destroy();
+    view = undefined;
   });
 
   it("handles 100+ equations without error", () => {
@@ -278,21 +293,6 @@ describe("performance", () => {
     expect(ranges.length).toBe(50);
   });
 });
-
-/** Create an EditorView with math + equation label extensions. */
-function createMathViewWithLabels(doc: string, cursorPos?: number): EditorView {
-  const state = EditorState.create({
-    doc,
-    selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
-    extensions: [
-      markdown({ extensions: [mathExtension, equationLabelExtension] }),
-      frontmatterField,
-      mathMacrosField,
-    ],
-  });
-  const parent = document.createElement("div");
-  return new EditorView({ state, parent });
-}
 
 /** Extract the MathWidget from the first widget decoration in ranges (throws if none). */
 function getFirstWidget(ranges: ReturnType<typeof collectMathRanges>): MathWidget {
@@ -325,10 +325,11 @@ describe("stripMathDelimiters with contentTo", () => {
 });
 
 describe("display math with equation labels", () => {
-  let view: EditorView;
+  let view: EditorView | undefined;
 
   afterEach(() => {
     view?.destroy();
+    view = undefined;
   });
 
   it("collects single-line display math with equation label", () => {

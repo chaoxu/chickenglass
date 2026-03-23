@@ -1,24 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { installLocalStorageMock } from "../../test-utils";
 
 // ── localStorage shim ───────────────────────────────────────────────
 // Node 25+ exposes a native `localStorage` that lacks standard methods
 // when --localstorage-file is not set.  Install a spec-compliant shim
 // so the source module (and our assertions) can call getItem / setItem /
 // removeItem / clear without hitting the broken native object.
-const storage = new Map<string, string>();
-const localStorageShim: Storage = {
-  getItem: (key: string) => storage.get(key) ?? null,
-  setItem: (key: string, value: string) => { storage.set(key, String(value)); },
-  removeItem: (key: string) => { storage.delete(key); },
-  clear: () => { storage.clear(); },
-  get length() { return storage.size; },
-  key: (index: number) => [...storage.keys()][index] ?? null,
-};
-Object.defineProperty(globalThis, "localStorage", {
-  value: localStorageShim,
-  writable: true,
-  configurable: true,
-});
+const ls = installLocalStorageMock();
 
 // ── React mock ──────────────────────────────────────────────────────
 // Replace useState / useCallback with synchronous stubs so we can drive
@@ -54,7 +42,7 @@ function storedSettings(): Settings | null {
 
 describe("useSettings", () => {
   beforeEach(() => {
-    localStorage.clear();
+    ls.clear();
     capturedState = undefined;
   });
 
