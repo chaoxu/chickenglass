@@ -1,4 +1,4 @@
-import { monoFont } from "../constants/editor-constants";
+import { contentFont, monoFont } from "../constants/editor-constants";
 
 /**
  * Typography styles: document title, headings, inline formatting
@@ -30,19 +30,21 @@ export const typographyThemeStyles = {
   },
 
   /* List marker styling.
-   * fontFamily: "inherit" overrides the `.tok-processingInstruction` monospace
-   * rule — @lezer/markdown tags ListMark as processingInstruction, but list
-   * markers (1. 2. 3. / - / *) should use the surrounding document font. */
+   * Uses explicit contentFont to override the `.tok-processingInstruction`
+   * monospace rule — @lezer/markdown tags ListMark as processingInstruction,
+   * but rendered list markers (1. 2. 3. / - / *) should use the document
+   * serif font. "inherit" doesn't work because it resolves through CM6's
+   * generated scope to the default editor font, not the content font. */
   ".cf-list-bullet": {
     color: "var(--cf-fg)",
     fontWeight: "700",
-    fontFamily: "inherit",
+    fontFamily: contentFont,
   },
   ".cf-list-number": {
     color: "var(--cf-fg)",
     fontWeight: "600",
     fontVariantNumeric: "tabular-nums",
-    fontFamily: "inherit",
+    fontFamily: contentFont,
   },
 
   /* Highlight styling (==text==) */
@@ -107,22 +109,22 @@ export const typographyThemeStyles = {
 
   /* Source syntax elements use monospace — heading markers (#), math
    * delimiters ($, $$, \[, \]), fenced div fences (:::).
-   * List markers are NOT included here: they use fontFamily: inherit via
-   * .cf-list-bullet / .cf-list-number to stay in the document serif font. */
+   * List markers are also tagged as processingInstruction by @lezer/markdown,
+   * but their monospace font is overridden by the descendant selector below. */
   ".tok-meta, .tok-processingInstruction, .tok-url": {
     fontFamily: monoFont,
     color: "var(--cf-fg)",
   },
 
-  /* Override: rendered structural markers inherit ambient typography.
-   * @lezer/markdown tags ListMark as processingInstruction, so the token
-   * span gets fontFamily: monoFont above. When the marker is rendered
-   * (cursor away), the .cf-list-* mark decoration wraps that token span,
-   * but the inner .tok-processingInstruction still wins via explicit value.
-   * These descendant selectors ensure rendered markers inherit the document
-   * font from their container (heading, blockquote, fenced div, etc.). */
+  /* Override: rendered list markers use the document content font.
+   * @lezer/markdown tags ListMark as processingInstruction, so the inner
+   * token span gets fontFamily: monoFont from the rule above. When the
+   * marker is rendered (cursor away), the .cf-list-* mark decoration wraps
+   * that token span. This descendant selector overrides the monospace font
+   * on the inner span with the explicit content font. Using "inherit" here
+   * would resolve through CM6's scope to the wrong font stack. */
   ".cf-list-bullet .tok-processingInstruction, .cf-list-number .tok-processingInstruction": {
-    fontFamily: "inherit",
+    fontFamily: contentFont,
   },
 
   /* Math source content — LaTeX between $ delimiters when editing */
