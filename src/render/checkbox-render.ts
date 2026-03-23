@@ -29,6 +29,7 @@ export class CheckboxWidget extends RenderWidget {
     const input = document.createElement("input");
     input.type = "checkbox";
     input.checked = this.checked;
+    input.setAttribute("aria-label", this.checked ? "Completed task" : "Incomplete task");
     input.style.cursor = "pointer";
     input.style.verticalAlign = "middle";
     input.style.marginRight = "4px";

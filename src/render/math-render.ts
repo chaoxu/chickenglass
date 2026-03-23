@@ -70,6 +70,7 @@ export function renderKatex(
     });
   } catch (err: unknown) {
     element.className = "cf-math-error";
+    element.setAttribute("role", "alert");
     element.textContent = err instanceof Error ? err.message : "KaTeX error";
   }
 }
@@ -91,6 +92,8 @@ export class MathWidget extends RenderWidget {
   createDOM(): HTMLElement {
     const el = document.createElement(this.isDisplay ? "div" : "span");
     el.className = this.isDisplay ? "cf-math-display" : "cf-math-inline";
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", this.latex);
     renderKatex(el, this.latex, this.isDisplay, this.macros);
     return el;
   }

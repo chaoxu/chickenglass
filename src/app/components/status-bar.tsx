@@ -155,6 +155,8 @@ export function StatusBar({
             ref={wordCountRef}
             type="button"
             title="Click for writing statistics"
+            aria-label="Writing statistics"
+            aria-expanded={popoverOpen}
             onClick={() => setPopoverOpen((v) => !v)}
             className={cn(
               "px-1 rounded hover:bg-[var(--cf-hover)] transition-colors",
@@ -180,6 +182,7 @@ export function StatusBar({
             <button
               type="button"
               title="Command Palette (⇧⌘P)"
+              aria-label="Command Palette (⇧⌘P)"
               onClick={onOpenPalette}
               className="px-1 rounded hover:bg-[var(--cf-hover)] transition-colors"
             >
@@ -190,6 +193,7 @@ export function StatusBar({
             type="button"
             data-testid="mode-button"
             title={isMarkdown ? "Click to cycle editor mode" : "Source mode only for non-markdown files"}
+            aria-label={isMarkdown ? `Editor mode: ${MODE_LABELS[editorMode]}. Click to cycle mode` : "Source mode only for non-markdown files"}
             onClick={cycleMode}
             disabled={!isMarkdown}
             className="px-1 rounded hover:bg-[var(--cf-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

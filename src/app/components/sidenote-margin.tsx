@@ -188,6 +188,9 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
           <div
             key={entry.id}
             ref={(el) => setItemRef(entry.id, el)}
+            role="button"
+            tabIndex={0}
+            aria-label={`Footnote ${entry.number}: navigate to definition`}
             onClick={() => {
               if (!view) return;
               // Focus first so the editor knows it's focused when rebuilding decorations
@@ -201,6 +204,17 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
               requestAnimationFrame(() => {
                 view.dispatch({ effects: EditorView.scrollIntoView(entry.defFrom) });
               });
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                if (!view) return;
+                view.focus();
+                view.dispatch({ selection: { anchor: entry.defFrom } });
+                requestAnimationFrame(() => {
+                  view.dispatch({ effects: EditorView.scrollIntoView(entry.defFrom) });
+                });
+              }
             }}
             className="cf-sidenote-entry"
             style={{ top: `${docY}px` }}

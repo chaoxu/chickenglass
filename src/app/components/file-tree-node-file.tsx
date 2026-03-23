@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import type { KeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import type { ItemInstance } from "@headless-tree/core";
 import type { FileEntry } from "../file-manager";
@@ -44,6 +44,11 @@ export function FileTreeNodeFile({ item }: FileTreeNodeFileProps) {
 
   const isActive = entry.path === activePath;
   const isFocused = item.isFocused();
+  const rowRef = useRef<HTMLDivElement | null>(null);
+
+  const restoreFocus = useCallback(() => {
+    rowRef.current?.focus();
+  }, []);
 
   const startRename = useCallback(() => {
     setRenameValue(entry.name);
@@ -53,10 +58,14 @@ export function FileTreeNodeFile({ item }: FileTreeNodeFileProps) {
   const commitRename = useCallback(async () => {
     const newName = renameValue.trim();
     setRenaming(false);
-    if (!newName || newName === entry.name) return;
+    if (!newName || newName === entry.name) {
+      restoreFocus();
+      return;
+    }
     const dir = dirname(entry.path);
     await onRename(entry.path, dir ? `${dir}/${newName}` : newName);
-  }, [entry.name, entry.path, onRename, renameValue]);
+    restoreFocus();
+  }, [entry.name, entry.path, onRename, renameValue, restoreFocus]);
 
   const cancelRename = useCallback(() => {
     setRenaming(false);
@@ -112,7 +121,7 @@ export function FileTreeNodeFile({ item }: FileTreeNodeFileProps) {
     { label: "Open", action: () => onSelect(entry.path) },
     { label: "-" },
     { label: "Rename", action: startRename },
-    { label: "Delete", action: () => void onDelete(entry.path) },
+    { label: "Delete", action: () => { void onDelete(entry.path).then(restoreFocus); } },
     { label: "-" },
     { label: "New File", action: () => startCreate("file") },
     { label: "New Folder", action: () => startCreate("folder") },
@@ -130,6 +139,7 @@ export function FileTreeNodeFile({ item }: FileTreeNodeFileProps) {
         <ContextMenuTrigger asChild>
           <div
             {...rowProps}
+            ref={rowRef}
             className={[
               "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cf-fg)] select-none whitespace-nowrap",
               isActive || isFocused ? "bg-[var(--cf-active)]" : "hover:bg-[var(--cf-hover)]",

@@ -228,6 +228,11 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
           )}
         </ScrollArea>
 
+        {/* Visually-hidden live region — announces result count to screen readers */}
+        <div aria-live="polite" aria-atomic="true" className="sr-only">
+          {statusText}
+        </div>
+
         {/* Status bar */}
         {grouped.size > 0 && (
           <div className="shrink-0 px-3 py-1 border-t border-[var(--cf-border)] text-xs text-[var(--cf-muted)] bg-[var(--cf-bg)]">
