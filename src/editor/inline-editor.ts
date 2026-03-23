@@ -42,6 +42,7 @@ const inlineEditorTheme = EditorView.theme({
     backgroundColor: "transparent !important",
     fontFamily: "inherit !important",
     fontSize: "inherit !important",
+    lineHeight: "inherit !important",
     padding: "0 !important",
     margin: "0 !important",
     border: "none !important",
@@ -55,12 +56,18 @@ const inlineEditorTheme = EditorView.theme({
   },
   ".cm-scroller": {
     overflow: "visible !important",
+    lineHeight: "inherit !important",
+    fontFamily: "inherit !important",
+    fontSize: "inherit !important",
   },
   ".cm-content": {
     padding: "0 !important",
     margin: "0 !important",
     minHeight: "auto !important",
     maxWidth: "none !important",
+    fontFamily: "inherit !important",
+    fontSize: "inherit !important",
+    lineHeight: "inherit !important",
   },
   ".cm-line": {
     padding: "0 !important",
