@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { parseBibTeX, extractLastName, cleanBibtex } from "./bibtex-parser";
+import {
+  parseBibTeX,
+  extractFirstFamilyName,
+  extractYear,
+  formatCslAuthors,
+  cleanBibtex,
+} from "./bibtex-parser";
 
 describe("parseBibTeX", () => {
   it("parses a single article entry", () => {
@@ -12,11 +18,11 @@ describe("parseBibTeX", () => {
     const entries = parseBibTeX(bib);
     expect(entries).toHaveLength(1);
     expect(entries[0].id).toBe("karger2000");
-    expect(entries[0].type).toBe("article");
-    expect(entries[0].author).toBe("Karger, David R.");
+    expect(entries[0].type).toBe("article-journal");
+    expect(entries[0].author).toEqual([{ family: "Karger", given: "David R." }]);
     expect(entries[0].title).toBe("Minimum cuts in near-linear time");
-    expect(entries[0].year).toBe("2000");
-    expect(entries[0].journal).toBe("JACM");
+    expect(extractYear(entries[0])).toBe("2000");
+    expect(entries[0]["container-title"]).toBe("JACM");
   });
 
   it("parses multiple entries", () => {
@@ -35,7 +41,7 @@ describe("parseBibTeX", () => {
     const entries = parseBibTeX(bib);
     expect(entries).toHaveLength(2);
     expect(entries[0].id).toBe("alpha2020");
-    expect(entries[0].type).toBe("article");
+    expect(entries[0].type).toBe("article-journal");
     expect(entries[1].id).toBe("beta2021");
     expect(entries[1].type).toBe("book");
     expect(entries[1].publisher).toBe("Some Publisher");
@@ -49,7 +55,7 @@ describe("parseBibTeX", () => {
 }`;
     const entries = parseBibTeX(bib);
     expect(entries).toHaveLength(1);
-    expect(entries[0].author).toBe("Doe, John");
+    expect(entries[0].author).toEqual([{ family: "Doe", given: "John" }]);
     expect(entries[0].title).toBe("A quoted title");
   });
 
@@ -83,7 +89,7 @@ describe("parseBibTeX", () => {
 }`;
     const entries = parseBibTeX(bib);
     expect(entries).toHaveLength(1);
-    expect(entries[0].year).toBe("2020");
+    expect(extractYear(entries[0])).toBe("2020");
     expect(entries[0].volume).toBe("42");
   });
 
@@ -110,8 +116,8 @@ describe("parseBibTeX", () => {
 }`;
     const entries = parseBibTeX(bib);
     expect(entries).toHaveLength(1);
-    expect(entries[0].type).toBe("inproceedings");
-    expect(entries[0].booktitle).toBe("Proceedings of CONF 2019");
+    expect(entries[0].type).toBe("paper-conference");
+    expect(entries[0]["container-title"]).toBe("Proceedings of CONF 2019");
   });
 
   it("handles case-insensitive entry types", () => {
@@ -121,7 +127,7 @@ describe("parseBibTeX", () => {
 }`;
     const entries = parseBibTeX(bib);
     expect(entries).toHaveLength(1);
-    expect(entries[0].type).toBe("article");
+    expect(entries[0].type).toBe("article-journal");
   });
 
   it("handles case-insensitive field names", () => {
@@ -132,7 +138,7 @@ describe("parseBibTeX", () => {
 }`;
     const entries = parseBibTeX(bib);
     expect(entries).toHaveLength(1);
-    expect(entries[0].author).toBe("Mixed, Case");
+    expect(entries[0].author).toEqual([{ family: "Mixed", given: "Case" }]);
     expect(entries[0].title).toBe("Mixed Case Title");
   });
 
@@ -153,30 +159,70 @@ describe("parseBibTeX", () => {
 }`;
     const entries = parseBibTeX(bib);
     expect(entries).toHaveLength(1);
-    expect(entries[0].doi).toBe("10.1234/test.2020");
-    expect(entries[0].url).toBe("https://example.com/paper");
+    expect(entries[0].DOI).toBe("10.1234/test.2020");
+    expect(entries[0].URL).toBe("https://example.com/paper");
   });
 });
 
-describe("extractLastName", () => {
-  it("extracts last name from 'Last, First' format", () => {
-    expect(extractLastName("Karger, David R.")).toBe("Karger");
+describe("extractFirstFamilyName", () => {
+  it("extracts family name from CSL author array", () => {
+    expect(
+      extractFirstFamilyName([{ family: "Karger", given: "David R." }], "fallback"),
+    ).toBe("Karger");
   });
 
-  it("extracts last name from 'First Last' format", () => {
-    expect(extractLastName("David Karger")).toBe("Karger");
+  it("handles literal author name", () => {
+    expect(
+      extractFirstFamilyName([{ literal: "ACME Corp" }], "fallback"),
+    ).toBe("ACME Corp");
   });
 
-  it("extracts first author's last name from multiple authors", () => {
-    expect(extractLastName("Karger, David and Stein, Clifford")).toBe("Karger");
+  it("extracts first author from multiple authors", () => {
+    expect(
+      extractFirstFamilyName(
+        [{ family: "Karger", given: "David" }, { family: "Stein", given: "Clifford" }],
+        "fallback",
+      ),
+    ).toBe("Karger");
   });
 
-  it("handles single name", () => {
-    expect(extractLastName("Dijkstra")).toBe("Dijkstra");
+  it("returns fallback when no authors", () => {
+    expect(extractFirstFamilyName(undefined, "myid")).toBe("myid");
+    expect(extractFirstFamilyName([], "myid")).toBe("myid");
+  });
+});
+
+describe("extractYear", () => {
+  it("extracts year from issued field", () => {
+    expect(extractYear({ id: "x", type: "article-journal", issued: { "date-parts": [[2000]] } })).toBe("2000");
   });
 
-  it("handles 'First Middle Last' format", () => {
-    expect(extractLastName("David Richard Karger")).toBe("Karger");
+  it("returns undefined when no issued field", () => {
+    expect(extractYear({ id: "x", type: "article-journal" })).toBeUndefined();
+  });
+});
+
+describe("formatCslAuthors", () => {
+  it("formats single author", () => {
+    expect(formatCslAuthors([{ family: "Karger", given: "David R." }])).toBe("Karger, David R.");
+  });
+
+  it("formats multiple authors with 'and'", () => {
+    expect(
+      formatCslAuthors([
+        { family: "Karger", given: "David" },
+        { family: "Stein", given: "Clifford" },
+      ]),
+    ).toBe("Karger, David and Stein, Clifford");
+  });
+
+  it("formats literal author name", () => {
+    expect(formatCslAuthors([{ literal: "ACME Corp" }])).toBe("ACME Corp");
+  });
+
+  it("returns empty string for no authors", () => {
+    expect(formatCslAuthors(undefined)).toBe("");
+    expect(formatCslAuthors([])).toBe("");
   });
 });
 
@@ -195,68 +241,68 @@ describe("cleanBibtex", () => {
     expect(cleanBibtex("Set \\{1, 2, 3\\}")).toBe("Set {1, 2, 3}");
   });
 
-  it("converts umlaut accent \\\"u → ü", () => {
-    expect(cleanBibtex('\\"u')).toBe("ü");
+  it("converts umlaut accent \\\"u -> u with umlaut", () => {
+    expect(cleanBibtex('\\"u')).toBe("\u00fc");
   });
 
-  it("converts umlaut accent \\\"{u} → ü", () => {
-    expect(cleanBibtex('\\"{u}')).toBe("ü");
+  it("converts umlaut accent \\\"{u} -> u with umlaut", () => {
+    expect(cleanBibtex('\\"{u}')).toBe("\u00fc");
   });
 
-  it("converts acute accent \\'e → é", () => {
-    expect(cleanBibtex("\\'e")).toBe("é");
+  it("converts acute accent \\'e -> e with acute", () => {
+    expect(cleanBibtex("\\'e")).toBe("\u00e9");
   });
 
-  it("converts tilde accent \\~n → ñ", () => {
-    expect(cleanBibtex("\\~n")).toBe("ñ");
+  it("converts tilde accent \\~n -> n with tilde", () => {
+    expect(cleanBibtex("\\~n")).toBe("\u00f1");
   });
 
-  it("converts circumflex accent \\^o → ô", () => {
-    expect(cleanBibtex("\\^o")).toBe("ô");
+  it("converts circumflex accent \\^o -> o with circumflex", () => {
+    expect(cleanBibtex("\\^o")).toBe("\u00f4");
   });
 
-  it("converts grave accent \\`a → à", () => {
-    expect(cleanBibtex("\\`a")).toBe("à");
+  it("converts grave accent \\`a -> a with grave", () => {
+    expect(cleanBibtex("\\`a")).toBe("\u00e0");
   });
 
-  it("converts macron accent \\=a → ā", () => {
-    expect(cleanBibtex("\\=a")).toBe("ā");
+  it("converts macron accent \\=a -> a with macron", () => {
+    expect(cleanBibtex("\\=a")).toBe("\u0101");
   });
 
-  it("converts dot accent \\.z → ż", () => {
-    expect(cleanBibtex("\\.z")).toBe("ż");
+  it("converts dot accent \\.z -> z with dot above", () => {
+    expect(cleanBibtex("\\.z")).toBe("\u017c");
   });
 
-  it("converts cedilla \\c{c} → ç", () => {
-    expect(cleanBibtex("\\c{c}")).toBe("ç");
+  it("converts cedilla \\c{c} -> c with cedilla", () => {
+    expect(cleanBibtex("\\c{c}")).toBe("\u00e7");
   });
 
-  it("converts double acute \\H{o} → ő", () => {
-    expect(cleanBibtex("\\H{o}")).toBe("ő");
+  it("converts double acute \\H{o} -> o with double acute", () => {
+    expect(cleanBibtex("\\H{o}")).toBe("\u0151");
   });
 
-  it("converts caron \\v{s} → š", () => {
-    expect(cleanBibtex("\\v{s}")).toBe("š");
+  it("converts caron \\v{s} -> s with caron", () => {
+    expect(cleanBibtex("\\v{s}")).toBe("\u0161");
   });
 
-  it("converts breve \\u{a} → ă", () => {
-    expect(cleanBibtex("\\u{a}")).toBe("ă");
+  it("converts breve \\u{a} -> a with breve", () => {
+    expect(cleanBibtex("\\u{a}")).toBe("\u0103");
   });
 
-  it("converts ring \\r{a} → å", () => {
-    expect(cleanBibtex("\\r{a}")).toBe("å");
+  it("converts ring \\r{a} -> a with ring above", () => {
+    expect(cleanBibtex("\\r{a}")).toBe("\u00e5");
   });
 
-  it("converts dot below \\d{a} → ạ", () => {
-    expect(cleanBibtex("\\d{a}")).toBe("ạ");
+  it("converts dot below \\d{a} -> a with dot below", () => {
+    expect(cleanBibtex("\\d{a}")).toBe("\u1ea1");
   });
 
-  it("converts ogonek \\k{a} → ą", () => {
-    expect(cleanBibtex("\\k{a}")).toBe("ą");
+  it("converts ogonek \\k{a} -> a with ogonek", () => {
+    expect(cleanBibtex("\\k{a}")).toBe("\u0105");
   });
 
   it("handles multiple accents in one string", () => {
-    expect(cleanBibtex("Caf\\'e na\\\"ive Erd\\H{o}s")).toBe("Café naïve Erdős");
+    expect(cleanBibtex("Caf\\'e na\\\"ive Erd\\H{o}s")).toBe("Caf\u00e9 na\u00efve Erd\u0151s");
   });
 
   it("returns empty string for empty input", () => {
@@ -267,4 +313,3 @@ describe("cleanBibtex", () => {
     expect(cleanBibtex("plain text")).toBe("plain text");
   });
 });
-

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { markdownToHtml, renderInline } from "./markdown-to-html";
-import type { BibEntry } from "../citations/bibtex-parser";
+import type { CslJsonItem } from "../citations/bibtex-parser";
 import type { CslProcessor } from "../citations/csl-processor";
 
 describe("renderInline", () => {
@@ -242,13 +242,13 @@ describe("markdownToHtml", () => {
   });
 
   it("renders bibliography with rich-mode classes", () => {
-    const entry: BibEntry = {
+    const entry: CslJsonItem = {
       id: "karger2000",
-      type: "article",
-      author: "David R. Karger",
+      type: "article-journal",
+      author: [{ family: "Karger", given: "David R." }],
       title: "Minimum Cuts in Near-Linear Time",
-      journal: "Journal of the ACM",
-      year: "2000",
+      "container-title": "Journal of the ACM",
+      issued: { "date-parts": [[2000]] },
     };
     const bibliography = new Map([[entry.id, entry]]);
 
@@ -264,13 +264,13 @@ describe("markdownToHtml", () => {
   });
 
   it("uses CSL formatting for read-mode citations and bibliography when provided", () => {
-    const entry: BibEntry = {
+    const entry: CslJsonItem = {
       id: "karger2000",
-      type: "article",
-      author: "David R. Karger",
+      type: "article-journal",
+      author: [{ family: "Karger", given: "David R." }],
       title: "Minimum Cuts in Near-Linear Time",
-      journal: "Journal of the ACM",
-      year: "2000",
+      "container-title": "Journal of the ACM",
+      issued: { "date-parts": [[2000]] },
     };
     const bibliography = new Map([[entry.id, entry]]);
     const fakeCsl = {

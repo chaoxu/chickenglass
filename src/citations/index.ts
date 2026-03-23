@@ -1,8 +1,9 @@
 export {
-  type BibEntry,
+  type CslJsonItem,
   parseBibTeX,
-  parseAuthorNames,
-  extractLastName,
+  extractFirstFamilyName,
+  extractYear,
+  formatCslAuthors,
 } from "./bibtex-parser";
 
 export {
@@ -16,7 +17,6 @@ export {
 } from "./citation-render";
 
 export {
-  type CslItem,
   CslProcessor,
   parseLocator,
 } from "./csl-processor";

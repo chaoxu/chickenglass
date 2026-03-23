@@ -9,7 +9,7 @@ import { createPluginRegistryField } from "../plugins/plugin-registry";
 import { blockCounterField } from "../plugins/block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import type { BlockPlugin } from "../plugins/plugin-types";
-import type { BibEntry } from "../citations/bibtex-parser";
+import type { CslJsonItem } from "../citations/bibtex-parser";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CslProcessor } from "../citations/csl-processor";
 import { createTestView, makeBlockPlugin, makeBibStore } from "../test-utils";
@@ -21,21 +21,21 @@ const testPlugins: readonly BlockPlugin[] = [
   makeBlockPlugin({ name: "definition", title: "Definition" }),
 ];
 
-const karger: BibEntry = {
+const karger: CslJsonItem = {
   id: "karger2000",
-  type: "article",
-  author: "Karger, David R.",
+  type: "article-journal",
+  author: [{ family: "Karger", given: "David R." }],
   title: "Minimum cuts in near-linear time",
-  year: "2000",
-  journal: "JACM",
+  issued: { "date-parts": [[2000]] },
+  "container-title": "JACM",
 };
 
-const stein: BibEntry = {
+const stein: CslJsonItem = {
   id: "stein2001",
   type: "book",
-  author: "Stein, Clifford",
+  author: [{ family: "Stein", given: "Clifford" }],
   title: "Algorithms",
-  year: "2001",
+  issued: { "date-parts": [[2001]] },
 };
 
 const store = makeBibStore([karger, stein]);

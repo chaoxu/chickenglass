@@ -1,7 +1,7 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
-import { type BibEntry } from "./bibtex-parser";
+import { type CslJsonItem } from "./bibtex-parser";
 import { bibDataEffect, bibDataField } from "./citation-render";
 import { CslProcessor } from "./csl-processor";
 import {
@@ -19,34 +19,34 @@ import {
   bibliographyPlugin,
 } from "./bibliography";
 
-const karger: BibEntry = {
+const karger: CslJsonItem = {
   id: "karger2000",
-  type: "article",
-  author: "Karger, David R.",
+  type: "article-journal",
+  author: [{ family: "Karger", given: "David R." }],
   title: "Minimum cuts in near-linear time",
-  year: "2000",
-  journal: "JACM",
+  issued: { "date-parts": [[2000]] },
+  "container-title": "JACM",
   volume: "47",
-  number: "1",
-  pages: "46-76",
+  issue: "1",
+  page: "46-76",
 };
 
-const stein: BibEntry = {
+const stein: CslJsonItem = {
   id: "stein2001",
   type: "book",
-  author: "Stein, Clifford",
+  author: [{ family: "Stein", given: "Clifford" }],
   title: "Algorithms",
-  year: "2001",
+  issued: { "date-parts": [[2001]] },
   publisher: "MIT Press",
 };
 
-const alpha: BibEntry = {
+const alpha: CslJsonItem = {
   id: "alpha2019",
-  type: "inproceedings",
-  author: "Alpha, A.",
+  type: "paper-conference",
+  author: [{ family: "Alpha", given: "A." }],
   title: "A conference paper",
-  year: "2019",
-  booktitle: "Proceedings of CONF 2019",
+  issued: { "date-parts": [[2019]] },
+  "container-title": "Proceedings of CONF 2019",
 };
 
 const store = makeBibStore([karger, stein, alpha]);
@@ -106,7 +106,7 @@ describe("formatBibEntry", () => {
   });
 
   it("handles entry with minimal fields", () => {
-    const minimal: BibEntry = { id: "min", type: "misc", year: "2020" };
+    const minimal: CslJsonItem = { id: "min", type: "document", issued: { "date-parts": [[2020]] } };
     expect(formatBibEntry(minimal)).toBe("2020.");
   });
 });
@@ -122,24 +122,24 @@ describe("sortBibEntries", () => {
   });
 
   it("sorts by year when names are equal", () => {
-    const a: BibEntry = {
+    const a: CslJsonItem = {
       id: "smith2020",
-      type: "article",
-      author: "Smith, John",
-      year: "2020",
+      type: "article-journal",
+      author: [{ family: "Smith", given: "John" }],
+      issued: { "date-parts": [[2020]] },
     };
-    const b: BibEntry = {
+    const b: CslJsonItem = {
       id: "smith2019",
-      type: "article",
-      author: "Smith, John",
-      year: "2019",
+      type: "article-journal",
+      author: [{ family: "Smith", given: "John" }],
+      issued: { "date-parts": [[2019]] },
     };
     const sorted = sortBibEntries([a, b]);
     expect(sorted.map((e) => e.id)).toEqual(["smith2019", "smith2020"]);
   });
 
   it("uses id when author is missing", () => {
-    const noAuthor: BibEntry = { id: "aaa", type: "misc" };
+    const noAuthor: CslJsonItem = { id: "aaa", type: "document" };
     const sorted = sortBibEntries([stein, noAuthor]);
     expect(sorted[0].id).toBe("aaa");
   });

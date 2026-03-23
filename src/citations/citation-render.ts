@@ -14,7 +14,7 @@
 import { StateEffect, StateField } from "@codemirror/state";
 import { type WidgetType } from "@codemirror/view";
 import { parser as baseParser } from "@lezer/markdown";
-import { type BibEntry } from "./bibtex-parser";
+import { type CslJsonItem } from "./bibtex-parser";
 import { CslProcessor } from "./csl-processor";
 import { RenderWidget } from "../render/render-utils";
 import { markdownExtensions } from "../parser";
@@ -24,7 +24,7 @@ import {
 } from "../semantics/document";
 
 /** A store of bibliography entries keyed by citation id. */
-export type BibStore = ReadonlyMap<string, BibEntry>;
+export type BibStore = ReadonlyMap<string, CslJsonItem>;
 
 /** Bibliography data stored in the editor state. */
 export interface BibData {

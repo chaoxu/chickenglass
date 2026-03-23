@@ -3,7 +3,7 @@ import { EditorState, type Extension, type StateEffect } from "@codemirror/state
 import { EditorView, type DecorationSet } from "@codemirror/view";
 import type { Parser } from "@lezer/common";
 import type { BlockPlugin } from "./plugins/plugin-types";
-import type { BibEntry } from "./citations/bibtex-parser";
+import type { CslJsonItem } from "./citations/bibtex-parser";
 import type { BibStore } from "./citations/citation-render";
 
 export interface NodeInfo {
@@ -164,6 +164,6 @@ export function makeBlockPlugin(
   };
 }
 
-export function makeBibStore(entries: BibEntry[]): BibStore {
-  return new Map(entries.map((entry) => [entry.id, entry]));
+export function makeBibStore(items: CslJsonItem[]): BibStore {
+  return new Map(items.map((item) => [item.id, item]));
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
-import { type BibEntry } from "./bibtex-parser";
+import { type CslJsonItem } from "./bibtex-parser";
 import { createTestView as createSharedTestView, makeBibStore } from "../test-utils";
 import {
   findCitations,
@@ -14,21 +14,21 @@ import { CslProcessor } from "./csl-processor";
 import { referenceRenderPlugin } from "../render/reference-render";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 
-const karger: BibEntry = {
+const karger: CslJsonItem = {
   id: "karger2000",
-  type: "article",
-  author: "Karger, David R.",
+  type: "article-journal",
+  author: [{ family: "Karger", given: "David R." }],
   title: "Minimum cuts in near-linear time",
-  year: "2000",
-  journal: "JACM",
+  issued: { "date-parts": [[2000]] },
+  "container-title": "JACM",
 };
 
-const stein: BibEntry = {
+const stein: CslJsonItem = {
   id: "stein2001",
   type: "book",
-  author: "Stein, Clifford",
+  author: [{ family: "Stein", given: "Clifford" }],
   title: "Algorithms",
-  year: "2001",
+  issued: { "date-parts": [[2001]] },
 };
 
 const store = makeBibStore([karger, stein]);

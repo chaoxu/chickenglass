@@ -47,11 +47,11 @@ export async function loadBibliography(
         category: "citations",
         detail: bibPath,
       });
-      const entries = operation.measureSync("citations.parse_bib", () => parseBibTeX(bibText), {
+      const items = operation.measureSync("citations.parse_bib", () => parseBibTeX(bibText), {
         category: "citations",
         detail: bibPath,
       });
-      const store = new Map(entries.map((e) => [e.id, e]));
+      const store = new Map(items.map((item) => [item.id, item]));
 
       let cslXml: string | undefined;
       if (cslPath) {
@@ -67,7 +67,7 @@ export async function loadBibliography(
 
       const cslProcessor = operation.measureSync(
         "citations.create_processor",
-        () => new CslProcessor(entries, cslXml),
+        () => new CslProcessor(items, cslXml),
         { category: "citations", detail: cslPath || bibPath },
       );
       dispatchIfConnected(

@@ -2,48 +2,14 @@
  * BibTeX parser adapter using citation-js (@citation-js/plugin-bibtex).
  *
  * Parses BibTeX content via citation-js (which produces CSL-JSON) and
- * normalizes the output into the flat BibEntry interface used throughout
- * the application.
+ * returns CSL-JSON items directly — no intermediate adapter layer.
  */
 
 import { Cite } from "@citation-js/core";
 import "@citation-js/plugin-bibtex";
 
-/** A single parsed BibTeX entry. */
-export interface BibEntry {
-  /** Citation key, e.g. "karger2000". */
-  id: string;
-  /** Entry type, e.g. "article", "book", "inproceedings". */
-  type: string;
-  author?: string;
-  title?: string;
-  year?: string;
-  journal?: string;
-  booktitle?: string;
-  publisher?: string;
-  volume?: string;
-  number?: string;
-  pages?: string;
-  doi?: string;
-  url?: string;
-  [field: string]: string | undefined;
-}
-
-/** CSL-JSON type mapping back to BibTeX entry types. */
-const CSL_TO_BIBTEX_TYPE: Record<string, string> = {
-  "article-journal": "article",
-  "book": "book",
-  "paper-conference": "inproceedings",
-  "chapter": "incollection",
-  "thesis": "thesis",
-  "report": "techreport",
-  "document": "misc",
-  "manuscript": "unpublished",
-  "webpage": "misc",
-};
-
-/** CSL-JSON item shape (subset of fields we read). */
-interface CslJsonItem {
+/** CSL-JSON item shape produced by citation-js. */
+export interface CslJsonItem {
   id: string;
   type: string;
   "citation-key"?: string;
@@ -59,62 +25,6 @@ interface CslJsonItem {
   edition?: string;
   issued?: { "date-parts"?: number[][] };
   [key: string]: unknown;
-}
-
-/**
- * Format a CSL-JSON name array back into a BibTeX-style author string.
- * Produces "Last, First and Last, First" format.
- */
-function formatCslAuthors(
-  authors: Array<{ family?: string; given?: string; literal?: string }>,
-): string {
-  return authors
-    .map((a) => {
-      if (a.literal) return a.literal;
-      const family = a.family ?? "";
-      const given = a.given ?? "";
-      if (given) return `${family}, ${given}`;
-      return family;
-    })
-    .join(" and ");
-}
-
-/**
- * Convert a CSL-JSON item (from citation-js) into our flat BibEntry interface.
- */
-function cslItemToBibEntry(item: CslJsonItem): BibEntry {
-  const result: BibEntry = {
-    id: (item["citation-key"] as string) ?? item.id,
-    type: CSL_TO_BIBTEX_TYPE[item.type] ?? "misc",
-  };
-
-  if (item.author && item.author.length > 0) {
-    result.author = formatCslAuthors(item.author);
-  }
-  if (item.title) result.title = item.title;
-
-  // Map container-title back to journal or booktitle based on entry type
-  if (item["container-title"]) {
-    if (item.type === "article-journal") {
-      result.journal = item["container-title"];
-    } else {
-      result.booktitle = item["container-title"];
-    }
-  }
-
-  if (item.publisher) result.publisher = item.publisher;
-  if (item.volume) result.volume = String(item.volume);
-  if (item.issue) result.number = String(item.issue);
-  if (item.page) result.pages = item.page;
-  if (item.DOI) result.doi = item.DOI;
-  if (item.URL) result.url = item.URL;
-  if (item.edition) result.edition = String(item.edition);
-
-  if (item.issued?.["date-parts"]?.[0]?.[0] != null) {
-    result.year = String(item.issued["date-parts"][0][0]);
-  }
-
-  return result;
 }
 
 /** Placeholder tokens for escaped braces during brace stripping. */
@@ -181,20 +91,31 @@ export function cleanBibtex(text: string): string {
 }
 
 /**
- * Parse BibTeX content into an array of structured entries.
+ * Normalize a CSL-JSON item from citation-js: use citation-key as id when present.
+ */
+function normalizeCslItem(item: CslJsonItem): CslJsonItem {
+  const citationKey = item["citation-key"] as string | undefined;
+  if (citationKey && citationKey !== item.id) {
+    return { ...item, id: citationKey };
+  }
+  return item;
+}
+
+/**
+ * Parse BibTeX content into an array of CSL-JSON items.
  *
- * Uses citation-js for BibTeX parsing (BibTeX -> CSL-JSON), then maps
- * CSL-JSON items back to the flat BibEntry interface.
+ * Uses citation-js for BibTeX parsing (BibTeX -> CSL-JSON).
+ * The citation-key is promoted to id when present.
  *
  * @param content - The full text content of a .bib file
- * @returns Array of parsed BibEntry objects
+ * @returns Array of parsed CslJsonItem objects
  */
-export function parseBibTeX(content: string): BibEntry[] {
+export function parseBibTeX(content: string): CslJsonItem[] {
   if (!content.trim()) return [];
 
   try {
     const cite = new Cite(content);
-    return (cite.data as CslJsonItem[]).map(cslItemToBibEntry);
+    return (cite.data as CslJsonItem[]).map(normalizeCslItem);
   } catch (e: unknown) {
     // Malformed BibTeX content -- return empty list rather than crashing
     console.warn("[bibtex] parse failed, returning empty list", e);
@@ -203,33 +124,42 @@ export function parseBibTeX(content: string): BibEntry[] {
 }
 
 /**
- * Parse a BibTeX author string into structured name objects.
- * Handles "Last, First and Last, First" and "First Last" formats.
- *
- * Shared by CSL conversion (which needs full {family, given} pairs)
- * and extractLastName (which only needs the first author's family name).
+ * Extract the first author's family name from a CSL-JSON author array.
+ * Returns the id string as fallback when no authors are present.
  */
-export function parseAuthorNames(
-  authorStr: string,
-): Array<{ family: string; given: string }> {
-  return authorStr.split(/\s+and\s+/i).map((name) => {
-    const trimmed = name.trim();
-    if (trimmed.includes(",")) {
-      const [family, given] = trimmed.split(",", 2);
-      return { family: family.trim(), given: (given ?? "").trim() };
-    }
-    // "First Middle Last" -> given="First Middle", family="Last"
-    const parts = trimmed.split(/\s+/);
-    const family = parts.pop() ?? trimmed;
-    return { family, given: parts.join(" ") };
-  });
+export function extractFirstFamilyName(
+  authors: CslJsonItem["author"],
+  fallback: string,
+): string {
+  if (!authors || authors.length === 0) return fallback;
+  const first = authors[0];
+  return first.literal ?? first.family ?? fallback;
 }
 
 /**
- * Extract the last name from a BibTeX author string.
- * Handles "Last, First" and "First Last" formats.
- * For multiple authors, returns the first author's last name.
+ * Extract the year string from a CSL-JSON issued field.
+ * Returns undefined when no year is present.
  */
-export function extractLastName(author: string): string {
-  return parseAuthorNames(author)[0]?.family ?? author;
+export function extractYear(item: CslJsonItem): string | undefined {
+  const y = item.issued?.["date-parts"]?.[0]?.[0];
+  return y != null ? String(y) : undefined;
+}
+
+/**
+ * Format a CSL-JSON author array as a flat string ("Last, First and Last, First").
+ * Used for fallback display when the CSL processor is unavailable.
+ */
+export function formatCslAuthors(
+  authors: CslJsonItem["author"],
+): string {
+  if (!authors || authors.length === 0) return "";
+  return authors
+    .map((a) => {
+      if (a.literal) return a.literal;
+      const family = a.family ?? "";
+      const given = a.given ?? "";
+      if (given) return `${family}, ${given}`;
+      return family;
+    })
+    .join(" and ");
 }

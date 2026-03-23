@@ -11,7 +11,7 @@ import {
   EditorView,
 } from "@codemirror/view";
 import { type EditorState, type Extension, StateField } from "@codemirror/state";
-import { type BibEntry, extractLastName } from "./bibtex-parser";
+import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors } from "./bibtex-parser";
 import { type BibStore, bibDataEffect, bibDataField, findCitations } from "./citation-render";
 import { RenderWidget, buildDecorations } from "../render/render-utils";
 
@@ -40,34 +40,36 @@ export function collectCitedIds(text: string, store: BibStore): string[] {
  * Format a bibliography entry as a text string.
  * Uses a simplified format: Author. Title. Venue, Year.
  */
-export function formatBibEntry(entry: BibEntry): string {
+export function formatBibEntry(entry: CslJsonItem): string {
   const parts: string[] = [];
 
-  if (entry.author) {
-    parts.push(entry.author);
+  const authorStr = formatCslAuthors(entry.author);
+  if (authorStr) {
+    parts.push(authorStr);
   }
 
   if (entry.title) {
     parts.push(entry.title);
   }
 
-  const venue = entry.journal ?? entry.booktitle;
+  const venue = entry["container-title"];
   if (venue) {
     let venuePart = venue;
     if (entry.volume) {
       venuePart += `, ${entry.volume}`;
-      if (entry.number) {
-        venuePart += `(${entry.number})`;
+      if (entry.issue) {
+        venuePart += `(${entry.issue})`;
       }
     }
-    if (entry.pages) {
-      venuePart += `, ${entry.pages}`;
+    if (entry.page) {
+      venuePart += `, ${entry.page}`;
     }
     parts.push(venuePart);
   }
 
-  if (entry.year) {
-    parts.push(entry.year);
+  const year = extractYear(entry);
+  if (year) {
+    parts.push(year);
   }
 
   return parts.join(". ") + ".";
@@ -77,13 +79,13 @@ export function formatBibEntry(entry: BibEntry): string {
  * Sort bibliography entries alphabetically by first author's last name,
  * then by year.
  */
-export function sortBibEntries(entries: BibEntry[]): BibEntry[] {
+export function sortBibEntries(entries: CslJsonItem[]): CslJsonItem[] {
   return [...entries].sort((a, b) => {
-    const nameA = a.author ? extractLastName(a.author).toLowerCase() : a.id.toLowerCase();
-    const nameB = b.author ? extractLastName(b.author).toLowerCase() : b.id.toLowerCase();
+    const nameA = extractFirstFamilyName(a.author, a.id).toLowerCase();
+    const nameB = extractFirstFamilyName(b.author, b.id).toLowerCase();
     if (nameA !== nameB) return nameA < nameB ? -1 : 1;
-    const yearA = a.year ?? "";
-    const yearB = b.year ?? "";
+    const yearA = extractYear(a) ?? "";
+    const yearB = extractYear(b) ?? "";
     return yearA < yearB ? -1 : yearA > yearB ? 1 : 0;
   });
 }
@@ -91,7 +93,7 @@ export function sortBibEntries(entries: BibEntry[]): BibEntry[] {
 /** Widget that renders the full bibliography section. */
 export class BibliographyWidget extends RenderWidget {
   constructor(
-    private readonly entries: readonly BibEntry[],
+    private readonly entries: readonly CslJsonItem[],
     private readonly cslHtml: readonly string[],
   ) {
     super();
@@ -142,7 +144,7 @@ export class BibliographyWidget extends RenderWidget {
 
 export function buildBibliographyDecorations(
   state: EditorState,
-  entries: readonly BibEntry[],
+  entries: readonly CslJsonItem[],
   cslHtml: readonly string[],
 ): DecorationSet {
   const widget = new BibliographyWidget(entries, cslHtml);
@@ -165,9 +167,9 @@ function buildBibliographyDecorationsFromState(state: EditorState): DecorationSe
   }
 
   const entries = cslHtml.length > 0
-    ? citedIds.map((id) => store.get(id)).filter((e): e is BibEntry => e !== undefined)
+    ? citedIds.map((id) => store.get(id)).filter((e): e is CslJsonItem => e !== undefined)
     : sortBibEntries(
-        citedIds.map((id) => store.get(id)).filter((e): e is BibEntry => e !== undefined),
+        citedIds.map((id) => store.get(id)).filter((e): e is CslJsonItem => e !== undefined),
       );
 
   return buildBibliographyDecorations(state, entries, cslHtml);

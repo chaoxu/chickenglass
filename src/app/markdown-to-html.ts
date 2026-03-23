@@ -27,7 +27,7 @@ import {
 } from "../inline-fragments";
 import { markdownExtensions } from "../parser";
 import { buildKatexOptions, isSafeUrl } from "../render/inline-shared";
-import { type BibEntry } from "../citations/bibtex-parser";
+import { type CslJsonItem } from "../citations/bibtex-parser";
 import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import {
   type BibStore,
@@ -763,7 +763,7 @@ function renderBibliography(
 
   const unsortedEntries = citedIds
     .map((id) => bib.get(id))
-    .filter((e): e is BibEntry => e !== undefined);
+    .filter((e): e is CslJsonItem => e !== undefined);
   const entries = cslHtml.length > 0 ? unsortedEntries : sortBibEntries(unsortedEntries);
 
   if (entries.length === 0) return "";

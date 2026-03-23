@@ -2,9 +2,9 @@
  * CSL (Citation Style Language) processor.
  *
  * Wraps citation-js (@citation-js/core + @citation-js/plugin-csl) to format
- * citations and bibliographies according to a CSL style. Converts BibEntry
- * objects to CSL-JSON, processes them through citeproc (via citation-js),
- * and returns formatted HTML strings.
+ * citations and bibliographies according to a CSL style. Accepts CSL-JSON
+ * items directly (no intermediate adapter), processes them through citeproc
+ * (via citation-js), and returns formatted HTML strings.
  *
  * Usage:
  *   const processor = new CslProcessor(items);
@@ -15,26 +15,8 @@
 
 import { plugins, type CiteprocEngine } from "@citation-js/core";
 import "@citation-js/plugin-csl";
-import { type BibEntry, parseAuthorNames } from "./bibtex-parser";
+import { type CslJsonItem } from "./bibtex-parser";
 import defaultCslStyle from "./ieee.csl?raw";
-
-/** CSL-JSON item (subset of fields used by citeproc). */
-export interface CslItem {
-  id: string;
-  type: string;
-  author?: Array<{ family: string; given: string }>;
-  title?: string;
-  "container-title"?: string;
-  publisher?: string;
-  volume?: string;
-  issue?: string;
-  page?: string;
-  DOI?: string;
-  URL?: string;
-  issued?: { "date-parts": number[][] };
-  edition?: string;
-  [key: string]: unknown;
-}
 
 /** Pandoc-style locator label terms mapped to CSL locator labels. */
 const LOCATOR_TERMS: ReadonlyMap<string, string> = new Map([
@@ -82,51 +64,6 @@ export function parseLocator(raw: string): { locator: string; label?: string } {
   return { locator: text };
 }
 
-/** Map from BibTeX entry types to CSL types. */
-const BIBTEX_TO_CSL_TYPE: Record<string, string> = {
-  article: "article-journal",
-  book: "book",
-  inproceedings: "paper-conference",
-  incollection: "chapter",
-  phdthesis: "thesis",
-  mastersthesis: "thesis",
-  techreport: "report",
-  misc: "document",
-  unpublished: "manuscript",
-  proceedings: "book",
-};
-
-/** Convert a BibEntry to a CSL-JSON item. */
-export function bibEntryToCsl(entry: BibEntry): CslItem {
-  const item: CslItem = {
-    id: entry.id,
-    type: BIBTEX_TO_CSL_TYPE[entry.type] ?? "document",
-  };
-
-  if (entry.author) item.author = parseAuthorNames(entry.author);
-  if (entry.title) item.title = entry.title;
-  if (entry.journal) item["container-title"] = entry.journal;
-  if (entry.booktitle) item["container-title"] = entry.booktitle;
-  if (entry.publisher) item.publisher = entry.publisher;
-  if (entry.volume) item.volume = entry.volume;
-  if (entry.number) item.issue = entry.number;
-  if (entry.pages) item.page = entry.pages.replace("--", "-");
-  if (entry.doi) item.DOI = entry.doi;
-  if (entry.url) item.URL = entry.url;
-  if (entry.edition) {
-    // Strip ordinal suffixes -- citeproc formats ordinals itself.
-    // "3rd" -> "3", "1st" -> "1", "Second" -> "Second" (kept as-is).
-    item.edition = entry.edition.replace(/(\d+)(?:st|nd|rd|th)\b/i, "$1");
-  }
-
-  if (entry.year) {
-    const y = parseInt(entry.year, 10);
-    if (!isNaN(y)) item.issued = { "date-parts": [[y]] };
-  }
-
-  return item;
-}
-
 /** Unique template name used to register the active CSL style with citation-js. */
 const STYLE_NAME = "coflat-active";
 
@@ -134,18 +71,17 @@ const STYLE_NAME = "coflat-active";
  * CSL citation processor.
  *
  * Wraps citation-js with a simple API for formatting citations
- * and bibliographies from BibEntry data.
+ * and bibliographies from CSL-JSON data.
  */
 export class CslProcessor {
-  private items: Map<string, CslItem>;
+  private items: Map<string, CslJsonItem>;
   private engine: CiteprocEngine | null = null;
   private styleXml: string;
 
-  constructor(entries: BibEntry[], styleXml?: string) {
+  constructor(entries: CslJsonItem[], styleXml?: string) {
     this.items = new Map();
-    for (const entry of entries) {
-      const csl = bibEntryToCsl(entry);
-      this.items.set(csl.id, csl);
+    for (const item of entries) {
+      this.items.set(item.id, item);
     }
     this.styleXml = styleXml ?? defaultCslStyle;
     this.initEngine();
