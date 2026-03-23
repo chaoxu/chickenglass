@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -9,6 +9,33 @@ use tauri::{AppHandle, Emitter, State, command};
 use super::perf::measure_command;
 use super::state::FileWatcherState;
 use super::state::PerfState;
+
+fn should_ignore_relative_path(relative: &str) -> bool {
+    relative.starts_with('.')
+        || relative.contains("/.")
+        || relative.starts_with("node_modules")
+        || relative.contains("/node_modules")
+        || relative.starts_with("target")
+        || relative.contains("/target")
+}
+
+fn should_emit_debounced_event(
+    last_events: &mut HashMap<PathBuf, Instant>,
+    path: &Path,
+    now: Instant,
+    debounce_window: Duration,
+) -> bool {
+    last_events.retain(|_, last_seen| now.duration_since(*last_seen) < debounce_window);
+
+    if let Some(last_seen) = last_events.get(path) {
+        if now.duration_since(*last_seen) < debounce_window {
+            return false;
+        }
+    }
+
+    last_events.insert(path.to_path_buf(), now);
+    true
+}
 
 /// Start watching a directory for file changes.
 #[command]
@@ -61,33 +88,24 @@ pub fn watch_directory(
                             continue;
                         }
 
+                        let relative = match path.strip_prefix(&root_for_closure) {
+                            Ok(relative) => relative.to_string_lossy().replace('\\', "/"),
+                            Err(_) => continue,
+                        };
+
+                        if should_ignore_relative_path(&relative) {
+                            continue;
+                        }
+
                         {
                             let mut map = match last_events_clone.lock() {
                                 Ok(map) => map,
                                 Err(_) => continue,
                             };
                             let now = Instant::now();
-                            if let Some(last) = map.get(path) {
-                                if now.duration_since(*last) < debounce_ms {
-                                    continue;
-                                }
+                            if !should_emit_debounced_event(&mut map, path, now, debounce_ms) {
+                                continue;
                             }
-                            map.insert(path.clone(), now);
-                        }
-
-                        let relative = match path.strip_prefix(&root_for_closure) {
-                            Ok(relative) => relative.to_string_lossy().replace('\\', "/"),
-                            Err(_) => continue,
-                        };
-
-                        if relative.starts_with('.')
-                            || relative.contains("/.")
-                            || relative.starts_with("node_modules")
-                            || relative.contains("/node_modules")
-                            || relative.starts_with("target")
-                            || relative.contains("/target")
-                        {
-                            continue;
                         }
 
                         let _ = app.emit("file-changed", &relative);
@@ -105,6 +123,71 @@ pub fn watch_directory(
             Ok(())
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{should_emit_debounced_event, should_ignore_relative_path};
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn ignores_hidden_and_generated_relative_paths() {
+        assert!(should_ignore_relative_path(".git/config"));
+        assert!(should_ignore_relative_path("nested/.cache/file.txt"));
+        assert!(should_ignore_relative_path("node_modules/pkg/index.js"));
+        assert!(should_ignore_relative_path("target/debug/app"));
+        assert!(!should_ignore_relative_path("notes/index.md"));
+    }
+
+    #[test]
+    fn prunes_stale_entries_before_recording_new_paths() {
+        let debounce_window = Duration::from_millis(500);
+        let now = Instant::now();
+        let stale_instant = now - Duration::from_secs(5);
+        let mut last_events = HashMap::from([(PathBuf::from("old.md"), stale_instant)]);
+
+        let should_emit =
+            should_emit_debounced_event(&mut last_events, Path::new("new.md"), now, debounce_window);
+
+        assert!(should_emit);
+        assert_eq!(last_events.len(), 1);
+        assert!(last_events.contains_key(Path::new("new.md")));
+        assert!(!last_events.contains_key(Path::new("old.md")));
+    }
+
+    #[test]
+    fn suppresses_duplicate_events_within_the_debounce_window() {
+        let debounce_window = Duration::from_millis(500);
+        let now = Instant::now();
+        let mut last_events = HashMap::new();
+        let path = Path::new("notes/index.md");
+
+        assert!(should_emit_debounced_event(&mut last_events, path, now, debounce_window));
+        assert!(!should_emit_debounced_event(
+            &mut last_events,
+            path,
+            now + Duration::from_millis(200),
+            debounce_window,
+        ));
+    }
+
+    #[test]
+    fn re_emits_paths_after_the_debounce_window_expires() {
+        let debounce_window = Duration::from_millis(500);
+        let now = Instant::now();
+        let mut last_events = HashMap::new();
+        let path = Path::new("notes/index.md");
+
+        assert!(should_emit_debounced_event(&mut last_events, path, now, debounce_window));
+        assert!(should_emit_debounced_event(
+            &mut last_events,
+            path,
+            now + Duration::from_millis(750),
+            debounce_window,
+        ));
+    }
 }
 
 /// Stop watching the current directory.
