@@ -32,7 +32,6 @@ export {
   exportDocument,
   batchExport,
   collectMdPaths,
-  checkPandoc,
   type ExportFormat,
   type BatchExportProgress,
 } from "./export";

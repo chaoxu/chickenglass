@@ -54,12 +54,12 @@ function createTableRange(
 /** Find the positions of all unescaped pipe characters in a string. */
 export function findPipePositions(text: string): number[] {
   const pipes: number[] = [];
-  let escaped = false;
+  let isEscaped = false;
   for (let i = 0; i < text.length; i++) {
-    if (escaped) {
-      escaped = false;
+    if (isEscaped) {
+      isEscaped = false;
     } else if (text[i] === "\\") {
-      escaped = true;
+      isEscaped = true;
     } else if (text[i] === "|") {
       pipes.push(i);
     }

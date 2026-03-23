@@ -20,7 +20,7 @@ export type { ExportFormat };
 
 
 /** Check whether Pandoc is installed. Returns the version string on success. */
-export async function checkPandoc(): Promise<string> {
+async function checkPandoc(): Promise<string> {
   return checkPandocCommand();
 }
 

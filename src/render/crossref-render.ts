@@ -160,9 +160,3 @@ export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
   return items;
 }
 
-/**
- * @deprecated Use `referenceRenderPlugin` from `./reference-render` instead.
- * The standalone crossref ViewPlugin has been merged into the unified
- * reference render plugin. This module still exports the widget classes
- * and `collectCrossrefRanges` for tests and other consumers.
- */

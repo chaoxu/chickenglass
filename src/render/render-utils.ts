@@ -37,10 +37,6 @@ export function cursorInRange(
   return cursor.from >= from && cursor.to <= to;
 }
 
-/**
- * @deprecated Use `cursorInRange` which now accepts both EditorView and EditorState.
- */
-
 /** Result of collecting renderable nodes from the syntax tree. */
 export interface RenderableNode {
   readonly type: string;

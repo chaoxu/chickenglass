@@ -115,7 +115,7 @@ function parseOpeningFence(
     lineEnd--;
   }
 
-  let selfClosing = false;
+  let isSelfClosing = false;
   let closingFenceFrom = lineEnd;
   let closingFenceTo = lineEnd;
 
@@ -139,7 +139,7 @@ function parseOpeningFence(
     // Only self-closing if there's content between attrs and the trailing :::
     // (otherwise it's ambiguous with a bare opening fence)
     if (beforeClosing > cursor || closingColonStart > cursor) {
-      selfClosing = true;
+      isSelfClosing = true;
       closingFenceFrom = closingColonStart;
       closingFenceTo = closingColonEnd;
     }
@@ -148,7 +148,7 @@ function parseOpeningFence(
   // Remaining text is the title (may be empty)
   const titleFrom = cursor;
   // Trim trailing whitespace from title — but stop before closing fence if self-closing
-  let titleTo = selfClosing ? closingFenceFrom : text.length;
+  let titleTo = isSelfClosing ? closingFenceFrom : text.length;
   while (titleTo > titleFrom && isSpaceTab(text.charCodeAt(titleTo - 1))) {
     titleTo--;
   }
@@ -159,7 +159,7 @@ function parseOpeningFence(
     attrTo,
     titleFrom,
     titleTo,
-    selfClosing,
+    isSelfClosing,
     closingFenceFrom,
     closingFenceTo,
   };
@@ -172,8 +172,8 @@ interface OpeningFenceInfo {
   readonly titleFrom: number;
   readonly titleTo: number;
   /** True if the line ends with ::: (self-closing single-line div). */
-  readonly selfClosing: boolean;
-  /** End of the closing fence colons (only set when selfClosing). */
+  readonly isSelfClosing: boolean;
+  /** End of the closing fence colons (only set when isSelfClosing). */
   readonly closingFenceFrom: number;
   readonly closingFenceTo: number;
 }
@@ -267,7 +267,7 @@ const fencedDivBlockParser: BlockParser = {
     cx.startComposite(
       "FencedDiv",
       line.pos,
-      info.selfClosing
+      info.isSelfClosing
         ? -packValue(info.colonCount)
         : packValue(info.colonCount),
     );
@@ -299,7 +299,7 @@ const fencedDivBlockParser: BlockParser = {
     }
 
     // Add closing fence marker for self-closing divs
-    if (info.selfClosing) {
+    if (info.isSelfClosing) {
       cx.addElement(
         cx.elt(
           "FencedDivFence",
