@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   MemoryFileSystem,
@@ -102,6 +102,28 @@ describe("createBlogDemoFileSystem", () => {
   it("includes FORMAT.md from the repo root in the demo project", async () => {
     const fs = createBlogDemoFileSystem();
     expect(await fs.exists("FORMAT.md")).toBe(true);
+  });
+});
+
+describe("createBlogDemoFileSystem fallback", () => {
+  afterEach(() => {
+    vi.doUnmock("./demo-blog");
+    vi.resetModules();
+  });
+
+  it("falls back to the built-in sample project when demo/blog is absent", async () => {
+    vi.resetModules();
+    vi.doMock("./demo-blog", () => ({
+      getBlogFiles: () => ({ "FORMAT.md": "# Format" }),
+    }));
+
+    const mod = await import("./file-manager");
+    const fs = mod.createBlogDemoFileSystem();
+
+    expect(await fs.exists("FORMAT.md")).toBe(true);
+    expect(await fs.exists("main.md")).toBe(true);
+    expect(await fs.exists("index.md")).toBe(true);
+    expect(await fs.exists("notes.md")).toBe(true);
   });
 });
 

@@ -185,9 +185,7 @@ function sortTree(entry: FileEntry): void {
   }
 }
 
-/** Create a demo filesystem with sample markdown files. */
-export function createDemoFileSystem(): MemoryFileSystem {
-  return new MemoryFileSystem({
+const defaultDemoFiles: Record<string, string> = {
     "coflat.yaml": `# Project configuration — shared settings inherited by all documents.
 # Per-file frontmatter can override any of these.
 bibliography: refs.bib
@@ -403,10 +401,27 @@ A function $f$ is **continuous** at $x_0$ if for every $\\varepsilon > 0$ there 
 
 This is equivalent to requiring that preimages of open sets are open.
 `,
-  });
+};
+
+/** Create a demo filesystem with sample markdown files. */
+export function createDemoFileSystem(): MemoryFileSystem {
+  return new MemoryFileSystem(defaultDemoFiles);
 }
 
 /** Create a demo filesystem with the blog project. */
 export function createBlogDemoFileSystem(): MemoryFileSystem {
-  return new MemoryFileSystem(getBlogFiles());
+  const blogFiles = getBlogFiles();
+  const hasLocalBlogProject = Object.keys(blogFiles).some((path) => path !== "FORMAT.md");
+
+  if (hasLocalBlogProject) {
+    return new MemoryFileSystem(blogFiles);
+  }
+
+  return new MemoryFileSystem({
+    ...defaultDemoFiles,
+    ...(blogFiles["FORMAT.md"] ? { "FORMAT.md": blogFiles["FORMAT.md"] } : {}),
+    // Keep browser-only tooling that opens index.md working when the local
+    // blog fixture is absent and we fall back to the built-in sample project.
+    "index.md": defaultDemoFiles["main.md"],
+  });
 }

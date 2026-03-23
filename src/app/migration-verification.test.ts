@@ -1049,6 +1049,18 @@ describe("#318 — subsystem pattern", () => {
   });
 });
 
+describe("document format instructions", () => {
+  it("points agent instructions at FORMAT.md as the canonical markdown spec", () => {
+    const claude = fileText("CLAUDE.md");
+    const agents = fileText("AGENTS.md");
+
+    expect(claude).toContain("FORMAT.md");
+    expect(claude).toContain("All markdown files in this repo must follow `FORMAT.md`.");
+    expect(agents).toContain("FORMAT.md");
+    expect(agents).toContain("All markdown files in this repo must follow `FORMAT.md`.");
+  });
+});
+
 describe("#314 — document surface renderer layer", () => {
   it("defines a shared document surface renderer module", () => {
     expect(fileExists("src/document-surfaces.ts")).toBe(true);
