@@ -159,7 +159,11 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
   - Async background tasks that dispatch into CM6 must use a connected-view guard (for example `dispatchIfConnected`) so teardown races become noops instead of noisy exceptions.
   - Never use bare `catch {}` without an explicit reason; at minimum, decide whether the error is expected, should be logged, or should be surfaced.
 - **Reviewer/simplifier gate before every commit**: Before `git commit`, ALWAYS launch `pr-review-toolkit:code-reviewer` and `pr-review-toolkit:code-simplifier` in parallel on the diff. Apply findings. Then commit once, clean. Not optional. Subagents use `Skill tool` for the same gates and loop until both pass.
-- **Closure gate before every `gh issue close`**: A PreToolUse hook enforces this — `gh issue close N` is blocked unless `.claude/state/closure-verified-N` exists. The completeness review agent must write this marker after verifying all acceptance criteria are met in the actual codebase. The marker is consumed on close. Never bypass this.
+- **Closure gate before every `gh issue close`**: Two PreToolUse hooks enforce this:
+  1. `closure-gate.sh` — blocks `gh issue close N` unless `.claude/state/closure-verified-N` exists AND contains valid JSON with `{"verdict": "COMPLETE", "criteria": [...]}`. The marker is consumed on close.
+  2. `closure-marker-guard.sh` — blocks any Bash command that touches `closure-verified` files. Markers can only be created via the Write tool by a completeness review agent.
+  - The completeness review agent must write the marker with structured JSON after verifying all acceptance criteria in the actual codebase.
+  - **After every fix round, re-run the completeness review.** Never close based on fix worker self-reports alone. The review→fix→review loop continues until the review returns COMPLETE or retries are exhausted.
 - **Copy what works**: Study existing open-source projects before implementing. Reference repos: [codemirror-rich-markdoc](https://github.com/segphault/codemirror-rich-markdoc), [obsidian-codemirror-options](https://github.com/nothingislost/obsidian-codemirror-options), [advanced-tables-obsidian](https://github.com/tgrosinger/advanced-tables-obsidian).
 - **Use Context7**: Fetch up-to-date API docs before implementing with any library.
 - **Wire features into the app**: Every feature must be connected to the editor entry point, not just exported.
