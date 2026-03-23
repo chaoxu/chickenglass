@@ -6,6 +6,8 @@
  * looks up the registry to decide how to display each fenced div.
  */
 
+import type { SpecialBehavior } from "../constants/block-manifest";
+
 /** Attributes extracted from a fenced div and enriched with numbering info. */
 export interface BlockAttrs {
   /** The plugin/class name (e.g. "theorem", "proof"). */
@@ -50,6 +52,15 @@ export interface BlockPlugin {
   readonly numbered: boolean;
   /** Display title shown in the rendered header (e.g. "Theorem"). */
   readonly title: string;
+  /**
+   * Special rendering behavior for this block type, mirroring BlockManifestEntry.
+   *
+   * - `"qed"`: appends a QED tombstone to the last content line (e.g. proof)
+   * - `"embed"`: replaces block body with an iframe widget
+   * - `"blockquote"`: renders as a blockquote-style block
+   * - `undefined`: standard numbered/unnumbered block
+   */
+  readonly specialBehavior?: SpecialBehavior;
   /** Optional custom parser for the block body content. */
   readonly bodyParser?: (content: string) => unknown;
   /** Produce a decoration spec from the block's attributes. */

@@ -457,8 +457,8 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       }
     }
 
-    // QED tombstone for proof blocks (only when closing fence is hidden)
-    if (plugin.defaults?.qedSymbol && !cursorOnEitherFence) {
+    // QED tombstone for blocks with "qed" special behavior (only when closing fence is hidden)
+    if (plugin.specialBehavior === "qed" && !cursorOnEitherFence) {
       addQedDecoration(state, div, items);
     }
   });

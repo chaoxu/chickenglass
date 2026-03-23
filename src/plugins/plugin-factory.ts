@@ -6,6 +6,7 @@
  */
 
 import type { BlockPlugin } from "./plugin-types";
+import type { SpecialBehavior } from "../constants/block-manifest";
 import { createBlockRender } from "./block-render";
 import { capitalize } from "../lib/utils";
 
@@ -26,6 +27,12 @@ export interface StandardPluginOptions {
    * as the counter group when `numbered` is true.
    */
   readonly counter?: string;
+  /**
+   * Special rendering behavior for this block type.
+   * Mirrors BlockManifestEntry.specialBehavior — set this to keep
+   * the plugin in sync with the manifest.
+   */
+  readonly specialBehavior?: SpecialBehavior;
   /** Default settings (e.g. QED symbol, CSS overrides). */
   readonly defaults?: Readonly<Record<string, unknown>>;
 }
@@ -53,6 +60,7 @@ export function createStandardPlugin(options: StandardPluginOptions): BlockPlugi
     numbered,
     title,
     render: createBlockRender(title),
+    ...(options.specialBehavior !== undefined ? { specialBehavior: options.specialBehavior } : {}),
     ...(options.defaults !== undefined ? { defaults: options.defaults } : {}),
   };
 }

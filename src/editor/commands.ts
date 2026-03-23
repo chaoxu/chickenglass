@@ -9,6 +9,7 @@ import type { EditorView } from "@codemirror/view";
 import type { PaletteCommand } from "../lib/command-palette";
 import { insertTable } from "../render/table-render";
 import { extractHeadings } from "../semantics/heading-ancestry";
+import { BLOCK_MANIFEST_ENTRIES } from "../constants/block-manifest";
 
 /** Insert a fenced div block at the cursor. */
 function insertBlock(view: EditorView, className: string): void {
@@ -25,19 +26,15 @@ function insertBlock(view: EditorView, className: string): void {
   view.focus();
 }
 
-/** Block types available for insertion. */
-const BLOCK_TYPES = [
-  "theorem",
-  "lemma",
-  "corollary",
-  "proposition",
-  "conjecture",
-  "definition",
-  "proof",
-  "remark",
-  "example",
-  "algorithm",
-] as const;
+/**
+ * Block types available for insertion via the command palette.
+ *
+ * Derived from BLOCK_MANIFEST — excludes embed types (iframe-based) and
+ * blockquote (special rendering) since those are not standard insertable blocks.
+ */
+const BLOCK_TYPES: readonly string[] = BLOCK_MANIFEST_ENTRIES
+  .filter((e) => e.specialBehavior !== "embed" && e.specialBehavior !== "blockquote")
+  .map((e) => e.name);
 
 /** Create commands for inserting each block type. */
 function createBlockCommands(): PaletteCommand[] {

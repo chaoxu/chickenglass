@@ -86,8 +86,16 @@ export const COUNTER_GROUPS: Readonly<Record<string, readonly BlockName[]>> = ((
   return groups;
 })();
 
-/** Convenience alias typed as BlockManifestEntry[] for property access. */
-const entries: readonly BlockManifestEntry[] = BLOCK_MANIFEST;
+/**
+ * BLOCK_MANIFEST typed as readonly BlockManifestEntry[] for property access.
+ *
+ * BLOCK_MANIFEST itself is inferred as a const tuple of narrow literal types,
+ * so accessing optional properties like `specialBehavior` requires this alias.
+ */
+export const BLOCK_MANIFEST_ENTRIES: readonly BlockManifestEntry[] = BLOCK_MANIFEST;
+
+/** @internal convenience alias used within this module */
+const entries: readonly BlockManifestEntry[] = BLOCK_MANIFEST_ENTRIES;
 
 /** Block names that use embed rendering (iframe replacement). */
 export const EMBED_CLASSES: ReadonlySet<string> = new Set(
