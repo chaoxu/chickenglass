@@ -64,7 +64,7 @@ export {
   sidenotesCollapsedEffect,
   sidenotesCollapsedField,
 } from "./sidenote-render";
-export { hoverPreviewExtension, refIdFromElement } from "./hover-preview";
+export { hoverPreviewExtension } from "./hover-preview";
 export { searchHighlightPlugin } from "./search-highlight";
 export {
   type FencedBlockInfo,

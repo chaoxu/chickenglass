@@ -1,15 +1,19 @@
 /**
- * CM6 hover tooltip for cross-references and citations.
+ * Hover tooltip for cross-references and citations.
  *
  * When hovering over a [@id] cross-reference, shows a preview of the
  * referenced block content (with KaTeX math rendering). When hovering
  * over a citation, shows the formatted bibliography entry.
  *
- * Uses CM6's hoverTooltip extension for positioning and lifecycle.
+ * Uses @floating-ui/dom for positioning and DOM mouseenter/mouseleave
+ * events for lifecycle. This replaces CM6's hoverTooltip, which cannot
+ * re-invoke when the mouse moves between items within the same widget
+ * (same `pos`), causing stale tooltips in clustered crossref widgets (#397).
  */
 
 import { type Extension } from "@codemirror/state";
-import { type EditorView, type Tooltip, hoverTooltip, ViewPlugin } from "@codemirror/view";
+import { type EditorView, ViewPlugin } from "@codemirror/view";
+import { computePosition, flip, shift, offset } from "@floating-ui/dom";
 import {
   type ResolvedCrossref,
   resolveCrossref,
@@ -26,6 +30,51 @@ import { SEARCH_CONTEXT_BUFFER, HOVER_DELAY_MS } from "../constants";
 
 /** Maximum content length shown in hover previews. */
 const MAX_PREVIEW_LENGTH = SEARCH_CONTEXT_BUFFER;
+
+// ── Singleton tooltip element ───────────────────────────────────────────────
+
+let tooltipEl: HTMLDivElement | null = null;
+
+function getTooltipEl(): HTMLDivElement {
+  if (!tooltipEl) {
+    tooltipEl = document.createElement("div");
+    tooltipEl.className = "cf-hover-preview-tooltip";
+    tooltipEl.style.display = "none";
+    document.body.appendChild(tooltipEl);
+  }
+  return tooltipEl;
+}
+
+/**
+ * Position and show the singleton tooltip near an anchor element using
+ * @floating-ui/dom's `computePosition` with flip+shift middleware.
+ */
+function showFloatingTooltip(anchor: HTMLElement, content: HTMLElement): void {
+  const el = getTooltipEl();
+  el.innerHTML = "";
+  el.appendChild(content);
+  el.style.display = "";
+
+  void computePosition(anchor, el, {
+    placement: "top",
+    middleware: [offset(6), flip(), shift({ padding: 5 })],
+  }).then(({ x, y }) => {
+    Object.assign(el.style, {
+      left: `${x}px`,
+      top: `${y}px`,
+    });
+  });
+}
+
+/** Hide and clear the singleton tooltip. */
+function hideFloatingTooltip(): void {
+  if (tooltipEl) {
+    tooltipEl.style.display = "none";
+    tooltipEl.innerHTML = "";
+  }
+}
+
+// ── Content extraction helpers ──────────────────────────────────────────────
 
 /**
  * Extract the content of a fenced div block for the given NumberedBlock.
@@ -86,6 +135,8 @@ function findEquationSource(view: EditorView, id: string): string | undefined {
   if (!equation) return undefined;
   return equation.latex.trim();
 }
+
+// ── Tooltip content builders ────────────────────────────────────────────────
 
 /**
  * Append the preview content for a single cross-reference id to a container.
@@ -175,63 +226,6 @@ function buildCitationTooltip(
 }
 
 /**
- * Lightweight ViewPlugin that records the last mouse position within the
- * editor. CM6's hoverTooltip collapses widget positions to the widget's
- * start, so we need the real mouse coordinates to distinguish sub-items
- * inside clustered crossref widgets via `document.elementFromPoint`.
- */
-let lastMouseX = 0;
-let lastMouseY = 0;
-
-const mouseTrackerPlugin = ViewPlugin.define((view) => {
-  const onMouseMove = (e: MouseEvent) => {
-    lastMouseX = e.clientX;
-    lastMouseY = e.clientY;
-  };
-  view.dom.addEventListener("mousemove", onMouseMove);
-  return {
-    destroy() {
-      view.dom.removeEventListener("mousemove", onMouseMove);
-    },
-  };
-});
-
-/**
- * Walk up from a DOM element to find the nearest ancestor (or self) with
- * a `data-ref-id` attribute. Returns the attribute value or null.
- *
- * Exported for testing: the DOM walk is the core logic that enables
- * per-item targeting, and can be tested without `elementFromPoint`.
- */
-export function refIdFromElement(el: Element | null): string | null {
-  let node: Element | null = el;
-  while (node) {
-    if (node.hasAttribute("data-ref-id")) {
-      return node.getAttribute("data-ref-id");
-    }
-    node = node.parentElement;
-  }
-  return null;
-}
-
-/**
- * Find the `data-ref-id` of the hovered sub-span inside a cluster widget
- * using actual mouse coordinates.
- *
- * CM6's hoverTooltip gives us a document `pos` that collapses to the
- * widget start for replaced ranges — useless for distinguishing items
- * within the widget. Instead we use `document.elementFromPoint` with
- * the real mouse position tracked by `mouseTrackerPlugin`.
- *
- * Returns null when the pointer is on a separator text node or outside
- * any item span (no tooltip should be shown).
- */
-function findHoveredRefId(_view: EditorView, _pos: number): string | null {
-  const el = document.elementFromPoint(lastMouseX, lastMouseY);
-  return refIdFromElement(el);
-}
-
-/**
  * Build a single-item tooltip for a specific id within a cluster.
  */
 function buildSingleItemTooltip(
@@ -263,102 +257,205 @@ function buildSingleItemTooltip(
   return container;
 }
 
+// ── DOM walk helper ─────────────────────────────────────────────────────────
+
 /**
- * The hover tooltip source function for cross-references and citations.
+ * Walk up from a DOM element to find the nearest ancestor (or self) with
+ * a `data-ref-id` attribute. Returns the attribute value or null.
  *
- * Handles single-id refs, multi-id crossref clusters, pure citation
- * clusters, and mixed crossref+citation clusters.
- *
- * For multi-id clusters, performs per-item targeting: checks which sub-span
- * the hover position falls on and shows a tooltip for that single item.
- * Hovering on a separator ("; ") returns null (no tooltip).
+ * Exported for testing: the DOM walk is the core logic that enables
+ * per-item targeting, and can be tested without `elementFromPoint`.
  */
-function hoverSource(
-  view: EditorView,
-  pos: number,
-  _side: -1 | 1,
-): Tooltip | null {
+export function refIdFromElement(el: Element | null): string | null {
+  let node: Element | null = el;
+  while (node) {
+    if (node.hasAttribute("data-ref-id")) {
+      return node.getAttribute("data-ref-id");
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+// ── Hover logic: determine what to show ─────────────────────────────────────
+
+/**
+ * Find the ReferenceSemantics at a given document position.
+ */
+function findRefAt(view: EditorView, pos: number): ReferenceSemantics | undefined {
   const analysis = view.state.field(documentAnalysisField);
-  const allRefs = analysis.references;
+  return analysis.references.find((r) => pos >= r.from && pos <= r.to);
+}
+
+/**
+ * Determine tooltip content for a hovered element that belongs to a
+ * cross-reference or citation widget.
+ *
+ * Returns the tooltip content element, or null if no tooltip should show
+ * (e.g., hovering on a separator text node).
+ */
+function buildTooltipForElement(
+  view: EditorView,
+  target: HTMLElement,
+): HTMLElement | null {
+  const analysis = view.state.field(documentAnalysisField);
   const equationLabels = analysis.equationById;
 
-  // Find the reference at this position
-  const ref = allRefs.find((r) => pos >= r.from && pos <= r.to);
+  // Check if we're hovering a data-ref-id span (cluster item)
+  const refId = refIdFromElement(target);
+
+  // Find the widget container to determine if this is crossref or citation
+  const widgetEl = target.closest(".cf-crossref, .cf-citation");
+  if (!widgetEl) return null;
+
+  // Find the CM6 widget position — walk up to find the cm-widgetBuffer sibling
+  // or the widget wrapper, then use view.posAtDOM
+  let pos: number;
+  try {
+    pos = view.posAtDOM(widgetEl);
+  } catch {
+    return null;
+  }
+
+  const ref = findRefAt(view, pos);
   if (!ref) return null;
 
-  // Resolve every id in the reference
   const resolutions = ref.ids.map((id) =>
     resolveCrossref(view.state, id, equationLabels),
   );
   const hasCrossref = resolutions.some((r) => r.kind !== "citation");
 
-  // Single-id crossref — use the original compact tooltip
+  // Single-id crossref
   if (ref.ids.length === 1 && hasCrossref) {
-    return {
-      pos: ref.from,
-      end: ref.to,
-      above: true,
-      create() {
-        const dom = buildCrossrefTooltip(view, ref, resolutions[0]);
-        return { dom };
-      },
-    };
+    return buildCrossrefTooltip(view, ref, resolutions[0]);
   }
 
-  // Multi-id cluster containing at least one crossref — per-item targeting
+  // Multi-id cluster — per-item targeting via data-ref-id
   if (ref.ids.length > 1 && hasCrossref) {
-    const { store } = view.state.field(bibDataField);
-    // Find which sub-span the hover pos falls on
-    const hoveredId = findHoveredRefId(view, pos);
-    if (!hoveredId) return null; // Hovering on separator — no tooltip
-
-    const itemIndex = ref.ids.indexOf(hoveredId);
+    if (!refId) return null; // Hovering on separator — no tooltip
+    const itemIndex = ref.ids.indexOf(refId);
     if (itemIndex < 0) return null;
-
-    const hoveredResolved = resolutions[itemIndex];
-    return {
-      pos: ref.from,
-      end: ref.to,
-      above: true,
-      create() {
-        const dom = buildSingleItemTooltip(view, hoveredId, hoveredResolved, store);
-        return { dom };
-      },
-    };
+    const { store } = view.state.field(bibDataField);
+    return buildSingleItemTooltip(view, refId, resolutions[itemIndex], store);
   }
 
-  // Pure citation cluster (no crossrefs resolved)
+  // Pure citation cluster
   const { store } = view.state.field(bibDataField);
   if (store.size > 0 && ref.ids.some((id) => store.has(id))) {
-    return {
-      pos: ref.from,
-      end: ref.to,
-      above: true,
-      create() {
-        const dom = buildCitationTooltip(ref.ids, store);
-        return { dom };
-      },
-    };
+    // If we have a specific ref-id in the cluster, show single item
+    if (refId && ref.ids.includes(refId)) {
+      const itemIndex = ref.ids.indexOf(refId);
+      return buildSingleItemTooltip(view, refId, resolutions[itemIndex], store);
+    }
+    return buildCitationTooltip(ref.ids, store);
   }
 
   return null;
 }
 
+// ── ViewPlugin: event delegation on scrollDOM ───────────────────────────────
+
+/**
+ * CM6 ViewPlugin that attaches mouseenter/mouseleave event handlers to
+ * the editor's scrollDOM via event delegation. Shows tooltip previews
+ * for cross-reference and citation widgets.
+ *
+ * Each `<span data-ref-id>` within a cluster widget fires its own
+ * mouseenter/mouseleave, naturally solving the item-switching bug (#397)
+ * that CM6's hoverTooltip could not handle.
+ */
+const hoverPreviewPlugin = ViewPlugin.define((view) => {
+  let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+  let currentTarget: HTMLElement | null = null;
+
+  const clearTimer = () => {
+    if (hoverTimer !== null) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
+  };
+
+  const onMouseOver = (e: Event) => {
+    const target = e.target as HTMLElement;
+    if (!target || target === currentTarget) return;
+
+    // Check if the target (or ancestor) is a crossref/citation widget item
+    const widgetItem = target.closest("[data-ref-id]") as HTMLElement | null;
+    const widgetContainer = target.closest(".cf-crossref, .cf-citation") as HTMLElement | null;
+
+    // Determine the hover anchor: prefer the specific item span for clusters
+    const anchor = widgetItem ?? widgetContainer;
+    if (!anchor) {
+      // Mouse moved off any widget — hide tooltip
+      if (currentTarget) {
+        clearTimer();
+        currentTarget = null;
+        hideFloatingTooltip();
+      }
+      return;
+    }
+
+    // Same anchor — no change needed
+    if (anchor === currentTarget) return;
+
+    // Different anchor — start new hover delay
+    clearTimer();
+    currentTarget = anchor;
+    hideFloatingTooltip();
+
+    hoverTimer = setTimeout(() => {
+      // Guard: view must still be connected
+      if (!view.dom.ownerDocument) return;
+
+      const content = buildTooltipForElement(view, anchor);
+      if (content) {
+        showFloatingTooltip(anchor, content);
+      }
+    }, HOVER_DELAY_MS);
+  };
+
+  const onMouseOut = (e: Event) => {
+    const me = e as MouseEvent;
+    const relatedTarget = me.relatedTarget as HTMLElement | null;
+
+    // Check if mouse moved to the tooltip itself — keep it visible
+    if (relatedTarget && tooltipEl?.contains(relatedTarget)) return;
+
+    // Check if mouse moved to another widget item/container
+    if (relatedTarget) {
+      const stillInWidget = relatedTarget.closest(
+        "[data-ref-id], .cf-crossref, .cf-citation",
+      );
+      if (stillInWidget) return; // onMouseOver will handle the switch
+    }
+
+    clearTimer();
+    currentTarget = null;
+    hideFloatingTooltip();
+  };
+
+  const scroller = view.scrollDOM;
+  scroller.addEventListener("mouseover", onMouseOver);
+  scroller.addEventListener("mouseout", onMouseOut);
+
+  return {
+    destroy() {
+      scroller.removeEventListener("mouseover", onMouseOver);
+      scroller.removeEventListener("mouseout", onMouseOut);
+      clearTimer();
+      hideFloatingTooltip();
+    },
+  };
+});
+
 /**
  * CM6 extension that shows hover previews for cross-references and citations.
  *
- * Includes a mouse-position tracker so that clustered crossref widgets can
- * use `document.elementFromPoint` to distinguish individual sub-items.
- * CM6's hoverTooltip collapses widget positions to the widget start, making
- * `view.domAtPos(pos)` useless for per-item targeting inside widgets.
- *
- * Positioning is handled entirely by CM6's hoverTooltip, which includes its
- * own collision detection. @floating-ui/dom was evaluated (#180, #189) but
- * is not applicable here — CM6's tooltip system already manages placement.
+ * Uses @floating-ui/dom for tooltip positioning and DOM event delegation
+ * (mouseenter/mouseleave) for lifecycle. Each `<span data-ref-id>` in a
+ * cluster widget fires its own events, solving the stale-tooltip bug (#397)
+ * that CM6's hoverTooltip could not handle (same pos for all items).
  */
 export const hoverPreviewExtension: Extension = [
-  mouseTrackerPlugin,
-  hoverTooltip(hoverSource, {
-    hoverTime: HOVER_DELAY_MS,
-  }),
+  hoverPreviewPlugin,
 ];

@@ -1,16 +1,15 @@
 import { useEffect, useCallback } from "react";
 import { EditorView } from "@codemirror/view";
+import { computePosition, flip, shift, offset } from "@floating-ui/dom";
 import { collectFootnotes, mathMacrosField } from "../../render";
 import { renderDocumentFragmentToDom } from "../../document-surfaces";
 
 /**
  * Hover tooltip for sidenote refs when the margin is collapsed.
  *
- * Manual positioning via getBoundingClientRect is sufficient — the tooltip
- * is small (max-width 320px), pointer-events:none, and only appears on
- * hover. @floating-ui was evaluated (#180, #189) but rejected for this
- * use case: minimal collision risk and the bundle cost (~8KB) is not
- * justified for 2 trivial positioning sites in the codebase.
+ * Uses @floating-ui/dom for positioning (flip+shift middleware) to handle
+ * viewport edge collisions correctly. Tooltip lifecycle is managed via
+ * mouseover/mouseout event delegation on the editor's scrollDOM.
  */
 export function useFootnoteTooltip(
   view: EditorView | null,
@@ -46,9 +45,19 @@ export function useFootnoteTooltip(
       tooltip.innerHTML = "";
       const macros = view.state.field(mathMacrosField);
       renderDocumentFragmentToDom(tooltip, { kind: "footnote", text: content, macros });
-      const rect = target.getBoundingClientRect();
-      tooltip.style.left = `${rect.left}px`;
-      tooltip.style.top = `${rect.bottom + 4}px`;
+
+      const el = tooltip;
+      void computePosition(target, el, {
+        placement: "bottom",
+        middleware: [offset(4), flip(), shift({ padding: 5 })],
+      }).then(({ x, y }) => {
+        // Guard: tooltip may have been removed by hide() before resolve
+        if (!el.isConnected) return;
+        Object.assign(el.style, {
+          left: `${x}px`,
+          top: `${y}px`,
+        });
+      });
     };
 
     const hide = () => {

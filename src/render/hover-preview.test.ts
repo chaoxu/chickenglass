@@ -1,14 +1,15 @@
 /**
  * Tests for hover-preview per-item targeting in clustered crossref widgets.
  *
- * Regression (#397, reopened twice): CM6's hoverTooltip collapses widget
- * positions to the widget start, so `view.domAtPos(pos)` cannot distinguish
- * sub-items inside a cluster widget. The fix uses `document.elementFromPoint`
- * with tracked mouse coordinates instead.
+ * Regression (#397, reopened 3x): CM6's hoverTooltip collapses widget
+ * positions to the widget start, so sliding the mouse from item 1 to item 2
+ * within the same widget kept showing item 1's tooltip. The fix replaces
+ * CM6's hoverTooltip entirely with @floating-ui/dom + DOM mouseenter/mouseleave
+ * event delegation, where each `<span data-ref-id>` fires its own events.
  *
  * The core DOM-walk logic (`refIdFromElement`) is tested directly here.
- * The `elementFromPoint` integration is verified via browser testing, not
- * JSDOM, since JSDOM does not implement hit-testing.
+ * The full integration (tooltip positioning, hover delay) is verified via
+ * browser testing since JSDOM does not implement hit-testing or layout.
  */
 import { describe, expect, it } from "vitest";
 import { refIdFromElement } from "./hover-preview";
@@ -69,7 +70,7 @@ describe("refIdFromElement", () => {
   });
 
   it("walks up from nested child to find data-ref-id on ancestor", () => {
-    // Simulate elementFromPoint landing on a deeply nested element
+    // Simulate a mouseenter event landing on a deeply nested element
     // inside a data-ref-id span (e.g. a <em> or <strong> inside the label)
     const outer = document.createElement("span");
     outer.setAttribute("data-ref-id", "thm-deep");
@@ -109,9 +110,9 @@ describe("refIdFromElement", () => {
 
 describe("per-item targeting invariants (#397 regression)", () => {
   it("different items in a cluster resolve to different ref ids", () => {
-    // Regression: the old view.domAtPos(pos) approach returned the same
-    // element for all items because CM6 collapses widget positions.
-    // With elementFromPoint + refIdFromElement, each item span is distinct.
+    // Regression (#397, reopened 3x): CM6's hoverTooltip returned the same
+    // tooltip for all items because it collapsed widget positions to one pos.
+    // With DOM event delegation + refIdFromElement, each item span is distinct.
     const { spans } = createClusterDOM([
       { id: "eq:alpha", label: "Eq. (1)" },
       { id: "eq:beta", label: "Eq. (2)" },
@@ -139,9 +140,9 @@ describe("per-item targeting invariants (#397 regression)", () => {
   });
 
   it("separator text node (converted to parent) yields null", () => {
-    // When elementFromPoint lands on a text node, the browser returns
-    // the parent element. For separator text nodes, the parent is the
-    // container which has no data-ref-id.
+    // When a mouseenter fires on a text node, the browser reports the parent
+    // element as the target. For separator text nodes, the parent is the
+    // container which has no data-ref-id — so no tooltip should show.
     const { container } = createClusterDOM([
       { id: "thm-a", label: "Theorem 1" },
       { id: "thm-b", label: "Theorem 2" },
