@@ -34,8 +34,8 @@ function cycleEditorMode(view: EditorView): boolean {
  */
 function jumpToSourceFile(view: EditorView): boolean {
   const sourceMap = (
-    window as unknown as { __cgSourceMap?: SourceMap | null }
-  ).__cgSourceMap;
+    window as unknown as { __cfSourceMap?: SourceMap | null }
+  ).__cfSourceMap;
   if (!sourceMap) return false;
 
   const pos = view.state.selection.main.head;

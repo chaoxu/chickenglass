@@ -28,7 +28,7 @@ interface SourceMap {
 }
 
 function getSourceMap(): SourceMap | null {
-  return (window as unknown as { __cgSourceMap?: SourceMap }).__cgSourceMap ?? null;
+  return (window as unknown as { __cfSourceMap?: SourceMap }).__cfSourceMap ?? null;
 }
 
 class IncludeLabelWidget extends RenderWidget {

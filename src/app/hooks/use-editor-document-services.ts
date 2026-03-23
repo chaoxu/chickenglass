@@ -136,7 +136,7 @@ export function useEditorDocumentServices({
           { context: "Include expansion dispatch error:" },
         );
         if (dispatched && regions.length > 0) {
-          (window as unknown as { __cgSourceMap?: { regions: IncludeRegion[] } }).__cgSourceMap = { regions };
+          (window as unknown as { __cfSourceMap?: { regions: IncludeRegion[] } }).__cfSourceMap = { regions };
         }
       });
     }

@@ -15,7 +15,7 @@ interface AppDebugWindow {
     setMode: (mode: EditorMode) => void;
     getMode: () => EditorMode;
   };
-  __cgDebug?: {
+  __cfDebug?: {
     perfSummary: () => Promise<unknown>;
     printPerfSummary: () => Promise<unknown>;
     clearPerf: () => Promise<void>;
@@ -47,7 +47,7 @@ export function useAppDebug({
       setMode,
       getMode,
     };
-    debugWindow.__cgDebug = {
+    debugWindow.__cfDebug = {
       perfSummary: getCombinedPerfSnapshot,
       printPerfSummary,
       clearPerf: clearCombinedPerf,
