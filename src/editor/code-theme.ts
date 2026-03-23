@@ -1,4 +1,4 @@
-import { monoFont } from "./editor-constants";
+import { monoFont } from "../constants/editor-constants";
 
 /**
  * Code block styles: container layout (header, body, last line),

@@ -1,4 +1,4 @@
-import { monoFont } from "./editor-constants";
+import { monoFont } from "../constants/editor-constants";
 
 /**
  * Typography styles: document title, headings, inline formatting

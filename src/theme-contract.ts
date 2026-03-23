@@ -1,9 +1,8 @@
-// Direct import: barrel would create circular dependency (editor/index → theme-config → theme-contract → editor/index)
 import {
   defaultCodeFontStack,
   defaultContentFontStack,
   defaultUIFontStack,
-} from "./editor/editor-constants";
+} from "./constants/editor-constants";
 
 export const themeFoundationTokens = [
   "--cf-bg",

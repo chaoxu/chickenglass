@@ -2,7 +2,7 @@ import {
   defaultCodeFontStack,
   defaultContentFontStack,
   defaultUIFontStack,
-} from "./editor-constants";
+} from "../constants/editor-constants";
 import { themeTypographyTokens } from "../theme-contract";
 
 /**

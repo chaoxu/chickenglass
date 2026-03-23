@@ -5,7 +5,7 @@ import { codeThemeStyles } from "./code-theme";
 import { blockThemeStyles } from "./block-theme";
 import { marginThemeStyles } from "./margin-theme";
 
-export { monoFont } from "./editor-constants";
+export { monoFont } from "../constants/editor-constants";
 
 /**
  * Composed editor theme for Coflat — merges all semantic sub-modules

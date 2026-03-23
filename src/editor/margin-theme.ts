@@ -1,4 +1,4 @@
-import { monoFont } from "./editor-constants";
+import { monoFont } from "../constants/editor-constants";
 import {
   HOVER_PREVIEW_MAX_HEIGHT,
   HOVER_PREVIEW_MAX_WIDTH,
