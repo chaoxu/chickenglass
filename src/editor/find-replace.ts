@@ -34,6 +34,7 @@ import {
   type ViewUpdate,
   keymap,
 } from "@codemirror/view";
+import { SEARCH_CONTEXT_BUFFER, CSS } from "../constants";
 
 // ===========================================================================
 // Search controller state
@@ -111,8 +112,8 @@ export function collectVisibleSearchMatches(view: EditorView): SearchMatchRange[
 
   const matches: SearchMatchRange[] = [];
   for (const { from, to } of view.visibleRanges) {
-    const searchFrom = Math.max(0, from - 500);
-    const searchTo = Math.min(view.state.doc.length, to + 500);
+    const searchFrom = Math.max(0, from - SEARCH_CONTEXT_BUFFER);
+    const searchTo = Math.min(view.state.doc.length, to + SEARCH_CONTEXT_BUFFER);
     const cursor = spec.getCursor(view.state.doc, searchFrom, searchTo);
     for (let result = cursor.next(); !result.done; result = cursor.next()) {
       matches.push({ from: result.value.from, to: result.value.to });
@@ -216,9 +217,9 @@ function createToggle(
   btn.type = "button";
   btn.textContent = label;
   btn.title = title;
-  btn.className = "cf-search-toggle";
+  btn.className = CSS.searchToggle;
   btn.setAttribute("aria-pressed", String(initialActive));
-  if (initialActive) btn.classList.add("cf-search-toggle-active");
+  if (initialActive) btn.classList.add(CSS.searchToggleActive);
 
   btn.addEventListener("mousedown", (e) => {
     e.preventDefault(); // Prevent focus steal
@@ -226,7 +227,7 @@ function createToggle(
   btn.addEventListener("click", () => {
     const next = btn.getAttribute("aria-pressed") !== "true";
     btn.setAttribute("aria-pressed", String(next));
-    btn.classList.toggle("cf-search-toggle-active", next);
+    btn.classList.toggle(CSS.searchToggleActive, next);
     onChange(next);
   });
   return btn;
@@ -245,7 +246,7 @@ function createAction(
   btn.type = "button";
   btn.textContent = label;
   btn.title = title;
-  btn.className = "cf-search-action";
+  btn.className = CSS.searchAction;
   btn.addEventListener("mousedown", (e) => e.preventDefault());
   btn.addEventListener("click", onClick);
   return btn;
@@ -257,22 +258,22 @@ function createAction(
 
 function createSearchPanel(view: EditorView): Panel {
   const dom = document.createElement("div");
-  dom.className = "cf-search-panel";
+  dom.className = CSS.searchPanel;
 
   // -- Search row -----------------------------------------------------------
 
   const searchRow = document.createElement("div");
-  searchRow.className = "cf-search-row";
+  searchRow.className = CSS.searchRow;
 
   const searchInput = document.createElement("input");
   searchInput.type = "text";
-  searchInput.className = "cf-search-input";
+  searchInput.className = CSS.searchInput;
   searchInput.placeholder = "Find";
   searchInput.setAttribute("main-field", "true");
   searchInput.setAttribute("aria-label", "Find");
 
   const matchInfo = document.createElement("span");
-  matchInfo.className = "cf-search-match-info";
+  matchInfo.className = CSS.searchMatchInfo;
   matchInfo.textContent = "No results";
 
   // Toggles
@@ -343,11 +344,11 @@ function createSearchPanel(view: EditorView): Panel {
     caseSensitive = q.caseSensitive;
     isRegexp = q.regexp;
     wholeWord = q.wholeWord;
-    toggleCase.classList.toggle("cf-search-toggle-active", caseSensitive);
+    toggleCase.classList.toggle(CSS.searchToggleActive, caseSensitive);
     toggleCase.setAttribute("aria-pressed", String(caseSensitive));
-    toggleRegex.classList.toggle("cf-search-toggle-active", isRegexp);
+    toggleRegex.classList.toggle(CSS.searchToggleActive, isRegexp);
     toggleRegex.setAttribute("aria-pressed", String(isRegexp));
-    toggleWord.classList.toggle("cf-search-toggle-active", wholeWord);
+    toggleWord.classList.toggle(CSS.searchToggleActive, wholeWord);
     toggleWord.setAttribute("aria-pressed", String(wholeWord));
     replaceRow.style.display = state.replaceVisible ? "" : "none";
     toggleReplaceBtn.textContent = state.replaceVisible ? "\u25be" : "\u25b8";
@@ -367,21 +368,21 @@ function createSearchPanel(view: EditorView): Panel {
   });
 
   const toggleGroup = document.createElement("div");
-  toggleGroup.className = "cf-search-toggles";
+  toggleGroup.className = CSS.searchToggles;
   toggleGroup.append(toggleCase, toggleRegex, toggleWord);
 
   const navGroup = document.createElement("div");
-  navGroup.className = "cf-search-nav";
+  navGroup.className = CSS.searchNav;
   navGroup.append(
     createAction("\u2191", "Previous Match (Shift+Enter)", () => previousSearchMatch(view)),
     createAction("\u2193", "Next Match (Enter)", () => nextSearchMatch(view)),
   );
 
   const closeBtn = createAction("\u00d7", "Close (Escape)", () => closeSearch(view));
-  closeBtn.className = "cf-search-close";
+  closeBtn.className = CSS.searchClose;
 
   const searchInputWrap = document.createElement("div");
-  searchInputWrap.className = "cf-search-input-wrap";
+  searchInputWrap.className = CSS.searchInputWrap;
   searchInputWrap.append(searchInput, matchInfo);
 
   searchRow.append(searchInputWrap, toggleGroup, navGroup, closeBtn);
@@ -389,20 +390,20 @@ function createSearchPanel(view: EditorView): Panel {
   // -- Replace row ----------------------------------------------------------
 
   const replaceRow = document.createElement("div");
-  replaceRow.className = "cf-search-row cf-replace-row";
+  replaceRow.className = `${CSS.searchRow} ${CSS.searchReplaceRow}`;
 
   const replaceInput = document.createElement("input");
   replaceInput.type = "text";
-  replaceInput.className = "cf-search-input";
+  replaceInput.className = CSS.searchInput;
   replaceInput.placeholder = "Replace";
   replaceInput.setAttribute("aria-label", "Replace");
 
   const replaceInputWrap = document.createElement("div");
-  replaceInputWrap.className = "cf-search-input-wrap";
+  replaceInputWrap.className = CSS.searchInputWrap;
   replaceInputWrap.append(replaceInput);
 
   const replaceActions = document.createElement("div");
-  replaceActions.className = "cf-search-replace-actions";
+  replaceActions.className = CSS.searchReplaceActions;
   replaceActions.append(
     createAction("Replace", "Replace Current Match", () => {
       replaceCurrentSearchMatch(view);
@@ -425,7 +426,7 @@ function createSearchPanel(view: EditorView): Panel {
       replaceInput.focus();
     }
   });
-  toggleReplaceBtn.className = "cf-search-toggle-replace";
+  toggleReplaceBtn.className = CSS.searchToggleReplace;
   toggleReplaceBtn.textContent = "\u25b8";
 
   // -- Assemble -------------------------------------------------------------
@@ -520,8 +521,8 @@ function createSearchPanel(view: EditorView): Panel {
 
 /** Update the replace row and toggle button in an already-open panel. */
 function syncReplaceRow(view: EditorView): void {
-  const replaceRow = view.dom.querySelector<HTMLElement>(".cf-replace-row");
-  const toggleBtn = view.dom.querySelector<HTMLElement>(".cf-search-toggle-replace");
+  const replaceRow = view.dom.querySelector<HTMLElement>(`.${CSS.searchReplaceRow}`);
+  const toggleBtn = view.dom.querySelector<HTMLElement>(`.${CSS.searchToggleReplace}`);
   const state = getSearchControllerState(view);
   if (replaceRow) {
     replaceRow.style.display = state.replaceVisible ? "" : "none";
@@ -550,7 +551,7 @@ function openFindReplacePanel(view: EditorView): boolean {
   syncReplaceRow(view);
   requestAnimationFrame(() => {
     const replaceField = view.dom.querySelector<HTMLInputElement>(
-      ".cf-replace-row .cf-search-input",
+      `.${CSS.searchReplaceRow} .${CSS.searchInput}`,
     );
     replaceField?.focus();
     replaceField?.select();

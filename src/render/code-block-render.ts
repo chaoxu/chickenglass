@@ -40,6 +40,7 @@ import {
 } from "./fenced-block-core";
 import { __iconNode as copyIconNode } from "lucide-react/dist/esm/icons/copy.js";
 import { __iconNode as checkIconNode } from "lucide-react/dist/esm/icons/check.js";
+import { COPY_RESET_MS } from "../constants";
 
 /** Widget that renders the opening fence line as a clickable code-block header. */
 class CodeBlockHeaderWidget extends RenderWidget {
@@ -113,7 +114,7 @@ class CopyButtonWidget extends RenderWidget {
           btn.replaceChildren(createLucideIcon(copyIconNode));
           btn.title = "Copy code to clipboard";
           btn.setAttribute("aria-label", "Copy code to clipboard");
-        }, 1500);
+        }, COPY_RESET_MS);
       });
     });
     return btn;

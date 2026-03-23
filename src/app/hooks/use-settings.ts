@@ -10,8 +10,7 @@
 import { useState, useCallback } from "react";
 import type { Settings } from "../lib/types";
 import { readLocalStorage, writeLocalStorage } from "../lib/utils";
-
-const STORAGE_KEY = "cf-settings";
+import { SETTINGS_KEY, LEGACY_THEME_KEY } from "../../constants";
 
 const DEFAULT_SETTINGS: Settings = {
   autoSaveInterval: 30000,
@@ -30,15 +29,12 @@ const DEFAULT_SETTINGS: Settings = {
   customCss: "",
 };
 
-/** Key used by the legacy standalone theme-manager. */
-const LEGACY_THEME_KEY = "cf-theme";
-
 function isValidTheme(value: unknown): value is Settings["theme"] {
   return value === "light" || value === "dark" || value === "system";
 }
 
 function loadSettings(): Settings {
-  const parsed = readLocalStorage<Partial<Settings>>(STORAGE_KEY, {});
+  const parsed = readLocalStorage<Partial<Settings>>(SETTINGS_KEY, {});
   const loaded = { ...DEFAULT_SETTINGS, ...parsed };
 
   // Migrate legacy spellCheck boolean into enabledPlugins
@@ -71,7 +67,7 @@ function loadSettings(): Settings {
 }
 
 function persistSettings(settings: Settings): void {
-  writeLocalStorage(STORAGE_KEY, settings);
+  writeLocalStorage(SETTINGS_KEY, settings);
 }
 
 export interface UseSettingsReturn {

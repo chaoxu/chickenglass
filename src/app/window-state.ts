@@ -11,6 +11,7 @@
  */
 
 import { readLocalStorage, writeLocalStorage } from "./lib/utils";
+import { WINDOW_STATE_KEY } from "../constants";
 
 /** Persisted state for a single editor tab. */
 export interface TabState {
@@ -42,7 +43,6 @@ export interface WindowState {
   version: number;
 }
 
-const STORAGE_KEY = "cf-window-state";
 const STATE_VERSION = 1;
 
 /** Default state used when no persisted state is found. */
@@ -60,7 +60,7 @@ const DEFAULT_STATE: WindowState = {
  * malformed.
  */
 export function loadWindowState(): WindowState {
-  const parsed = readLocalStorage<unknown>(STORAGE_KEY, null);
+  const parsed = readLocalStorage<unknown>(WINDOW_STATE_KEY, null);
   if (!isWindowState(parsed)) return { ...DEFAULT_STATE };
   return parsed;
 }
@@ -70,7 +70,7 @@ export function loadWindowState(): WindowState {
  * Silently ignores storage errors (e.g. private-browsing quota limits).
  */
 export function saveWindowState(state: WindowState): void {
-  writeLocalStorage(STORAGE_KEY, state);
+  writeLocalStorage(WINDOW_STATE_KEY, state);
 }
 
 /**

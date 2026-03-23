@@ -1,5 +1,11 @@
 import { clearPerfSnapshotCommand, getPerfSnapshotCommand } from "./tauri-client/perf";
 import { invokeTauriCommandRaw } from "./tauri-client/core";
+import {
+  MAX_PERF_RECORDS,
+  MAX_PERF_OPERATIONS,
+  PERF_PANEL_TOGGLE_EVENT,
+  PERF_PANEL_REFRESH_EVENT,
+} from "../constants";
 
 export type PerfSource = "frontend" | "backend";
 
@@ -73,10 +79,6 @@ export interface PerfOperationHandle {
   end: () => void;
 }
 
-const MAX_RECENT_RECORDS = 200;
-const MAX_RECENT_OPERATIONS = 50;
-const PERF_PANEL_TOGGLE_EVENT = "cf:perf-panel-toggle";
-const PERF_PANEL_REFRESH_EVENT = "cf:perf-panel-refresh";
 let nextMeasureId = 0;
 
 function isTauriRuntime(): boolean {
@@ -130,8 +132,8 @@ class FrontendPerfStore {
     };
 
     this.recent.unshift(record);
-    if (this.recent.length > MAX_RECENT_RECORDS) {
-      this.recent.length = MAX_RECENT_RECORDS;
+    if (this.recent.length > MAX_PERF_RECORDS) {
+      this.recent.length = MAX_PERF_RECORDS;
     }
 
     const key = `${record.source}:${category}:${name}`;
@@ -175,8 +177,8 @@ class FrontendPerfStore {
       durationMs: endedAt - startedAt,
     };
     this.operations.unshift(operation);
-    if (this.operations.length > MAX_RECENT_OPERATIONS) {
-      this.operations.length = MAX_RECENT_OPERATIONS;
+    if (this.operations.length > MAX_PERF_OPERATIONS) {
+      this.operations.length = MAX_PERF_OPERATIONS;
     }
     return operation;
   }

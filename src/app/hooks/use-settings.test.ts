@@ -43,9 +43,9 @@ vi.mock("react", () => ({
 
 import type { Settings } from "../lib/types";
 import { useSettings } from "./use-settings";
+import { SETTINGS_KEY, LEGACY_THEME_KEY } from "../../constants";
 
-const STORAGE_KEY = "cf-settings";
-const LEGACY_THEME_KEY = "cf-theme";
+const STORAGE_KEY = SETTINGS_KEY;
 
 function storedSettings(): Settings | null {
   const raw = localStorage.getItem(STORAGE_KEY);

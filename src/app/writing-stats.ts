@@ -7,6 +7,7 @@
  */
 
 import { parseFrontmatter } from "../parser/frontmatter";
+import { READING_WPM } from "../constants";
 
 /** Computed document statistics. */
 export interface DocStats {
@@ -46,8 +47,8 @@ export function computeDocStats(text: string): DocStats {
   const sentenceMatches = body.match(/[.!?]+(?:\s|$)/g);
   const sentences = words === 0 ? 0 : Math.max(1, sentenceMatches?.length ?? 1);
 
-  // Reading time at 200 words per minute, minimum 1 min when there are words
-  const readingMinutes = words === 0 ? 0 : Math.max(1, Math.ceil(words / 200));
+  // Reading time, minimum 1 min when there are words
+  const readingMinutes = words === 0 ? 0 : Math.max(1, Math.ceil(words / READING_WPM));
 
   return { words, chars, charsNoSpaces, sentences, readingMinutes };
 }

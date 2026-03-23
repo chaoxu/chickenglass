@@ -22,9 +22,10 @@ import { renderKatex } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import { documentAnalysisField } from "../semantics/codemirror-source";
+import { SEARCH_CONTEXT_BUFFER, HOVER_DELAY_MS } from "../constants";
 
 /** Maximum content length shown in hover previews. */
-const MAX_PREVIEW_LENGTH = 500;
+const MAX_PREVIEW_LENGTH = SEARCH_CONTEXT_BUFFER;
 
 /**
  * Extract the content of a fenced div block for the given NumberedBlock.
@@ -234,5 +235,5 @@ function hoverSource(
  * is not applicable here — CM6's tooltip system already manages placement.
  */
 export const hoverPreviewExtension: Extension = hoverTooltip(hoverSource, {
-  hoverTime: 300,
+  hoverTime: HOVER_DELAY_MS,
 });

@@ -170,6 +170,7 @@ export const CSS = {
   /** Search/replace panel. */
   searchPanel: "cf-search-panel",
   searchRow: "cf-search-row",
+  searchReplaceRow: "cf-replace-row",
   searchInput: "cf-search-input",
   searchInputWrap: "cf-search-input-wrap",
   searchMatchInfo: "cf-search-match-info",

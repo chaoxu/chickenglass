@@ -6,9 +6,7 @@
  */
 
 import { readLocalStorage, writeLocalStorage } from "./lib/utils";
-
-const RECENT_FILES_KEY = "cf-recent-files";
-const RECENT_FOLDERS_KEY = "cf-recent-folders";
+import { RECENT_FILES_KEY, RECENT_FOLDERS_KEY } from "../constants";
 const MAX_FILES = 10;
 const MAX_FOLDERS = 5;
 

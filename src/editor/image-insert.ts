@@ -14,6 +14,7 @@ import {
   saveAndInsertImage,
 } from "./image-save";
 import { insertImageMarkdown } from "./image-paste";
+import { IMAGE_TIMEOUT_MS } from "../constants";
 
 /**
  * Open a file picker and insert the selected image into the editor.
@@ -68,6 +69,6 @@ export async function insertImageFromPicker(
     // Clean up the input element after a delay
     setTimeout(() => {
       input.remove();
-    }, 60000);
+    }, IMAGE_TIMEOUT_MS);
   });
 }
