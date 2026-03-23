@@ -29,15 +29,20 @@ export const typographyThemeStyles = {
     overflow: "hidden",
   },
 
-  /* List marker styling */
+  /* List marker styling.
+   * fontFamily: "inherit" overrides the `.tok-processingInstruction` monospace
+   * rule — @lezer/markdown tags ListMark as processingInstruction, but list
+   * markers (1. 2. 3. / - / *) should use the surrounding document font. */
   ".cf-list-bullet": {
     color: "var(--cf-fg)",
     fontWeight: "700",
+    fontFamily: "inherit",
   },
   ".cf-list-number": {
     color: "var(--cf-fg)",
     fontWeight: "600",
     fontVariantNumeric: "tabular-nums",
+    fontFamily: "inherit",
   },
 
   /* Highlight styling (==text==) */
@@ -101,9 +106,9 @@ export const typographyThemeStyles = {
   },
 
   /* Source syntax elements use monospace — heading markers (#), math
-   * delimiters ($, $$, \[, \]), fenced div fences (:::), list markers.
-   * The base editor font is serif for rendered text, but syntax characters
-   * need monospace for alignment and visual distinction. */
+   * delimiters ($, $$, \[, \]), fenced div fences (:::).
+   * List markers are NOT included here: they use fontFamily: inherit via
+   * .cf-list-bullet / .cf-list-number to stay in the document serif font. */
   ".tok-meta, .tok-processingInstruction, .tok-url": {
     fontFamily: monoFont,
     color: "var(--cf-fg)",
