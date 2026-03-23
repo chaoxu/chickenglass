@@ -9,7 +9,7 @@
  */
 
 import { type Extension } from "@codemirror/state";
-import { type EditorView, type Tooltip, hoverTooltip } from "@codemirror/view";
+import { type EditorView, type Tooltip, hoverTooltip, ViewPlugin } from "@codemirror/view";
 import {
   type ResolvedCrossref,
   resolveCrossref,
@@ -175,33 +175,60 @@ function buildCitationTooltip(
 }
 
 /**
- * Find the `data-ref-id` of the hovered sub-span inside a cluster widget.
- *
- * Clustered crossref and mixed cluster widgets render per-item `<span>`
- * elements with `data-ref-id` attributes. This helper walks the DOM from
- * the node at the hover position up to the widget container, returning
- * the hovered item's id — or null if the mouse is on a separator text
- * node or otherwise not on an item span.
+ * Lightweight ViewPlugin that records the last mouse position within the
+ * editor. CM6's hoverTooltip collapses widget positions to the widget's
+ * start, so we need the real mouse coordinates to distinguish sub-items
+ * inside clustered crossref widgets via `document.elementFromPoint`.
  */
-function findHoveredRefId(view: EditorView, pos: number): string | null {
-  let domPos: { node: Node; offset: number };
-  try {
-    domPos = view.domAtPos(pos);
-  } catch {
-    return null;
-  }
-  let node: Node | null = domPos.node;
-  // Walk up from the text node / element to find a [data-ref-id] span
-  while (node && node !== view.dom) {
-    if (
-      node instanceof HTMLElement &&
-      node.hasAttribute("data-ref-id")
-    ) {
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+const mouseTrackerPlugin = ViewPlugin.define((view) => {
+  const onMouseMove = (e: MouseEvent) => {
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+  };
+  view.dom.addEventListener("mousemove", onMouseMove);
+  return {
+    destroy() {
+      view.dom.removeEventListener("mousemove", onMouseMove);
+    },
+  };
+});
+
+/**
+ * Walk up from a DOM element to find the nearest ancestor (or self) with
+ * a `data-ref-id` attribute. Returns the attribute value or null.
+ *
+ * Exported for testing: the DOM walk is the core logic that enables
+ * per-item targeting, and can be tested without `elementFromPoint`.
+ */
+export function refIdFromElement(el: Element | null): string | null {
+  let node: Element | null = el;
+  while (node) {
+    if (node.hasAttribute("data-ref-id")) {
       return node.getAttribute("data-ref-id");
     }
-    node = node.parentNode;
+    node = node.parentElement;
   }
   return null;
+}
+
+/**
+ * Find the `data-ref-id` of the hovered sub-span inside a cluster widget
+ * using actual mouse coordinates.
+ *
+ * CM6's hoverTooltip gives us a document `pos` that collapses to the
+ * widget start for replaced ranges — useless for distinguishing items
+ * within the widget. Instead we use `document.elementFromPoint` with
+ * the real mouse position tracked by `mouseTrackerPlugin`.
+ *
+ * Returns null when the pointer is on a separator text node or outside
+ * any item span (no tooltip should be shown).
+ */
+function findHoveredRefId(_view: EditorView, _pos: number): string | null {
+  const el = document.elementFromPoint(lastMouseX, lastMouseY);
+  return refIdFromElement(el);
 }
 
 /**
@@ -320,10 +347,18 @@ function hoverSource(
 /**
  * CM6 extension that shows hover previews for cross-references and citations.
  *
+ * Includes a mouse-position tracker so that clustered crossref widgets can
+ * use `document.elementFromPoint` to distinguish individual sub-items.
+ * CM6's hoverTooltip collapses widget positions to the widget start, making
+ * `view.domAtPos(pos)` useless for per-item targeting inside widgets.
+ *
  * Positioning is handled entirely by CM6's hoverTooltip, which includes its
  * own collision detection. @floating-ui/dom was evaluated (#180, #189) but
  * is not applicable here — CM6's tooltip system already manages placement.
  */
-export const hoverPreviewExtension: Extension = hoverTooltip(hoverSource, {
-  hoverTime: HOVER_DELAY_MS,
-});
+export const hoverPreviewExtension: Extension = [
+  mouseTrackerPlugin,
+  hoverTooltip(hoverSource, {
+    hoverTime: HOVER_DELAY_MS,
+  }),
+];
