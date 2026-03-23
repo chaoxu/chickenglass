@@ -1,11 +1,10 @@
-import { type EditorState, type Line, type Range, StateField } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
+import { type EditorState, type Line, type Range, type StateField } from "@codemirror/state";
 import { type DecorationSet, Decoration, EditorView } from "@codemirror/view";
 import {
   buildDecorations,
+  createDecorationsField,
   decorationHidden,
   editorFocusField,
-  focusEffect,
 } from "./render-utils";
 import { CSS } from "../constants/css-classes";
 
@@ -162,25 +161,5 @@ export function buildFencedBlockDecorations<T extends FencedBlockInfo>(
 export function createFencedBlockDecorationField(
   build: (state: EditorState) => DecorationSet,
 ): StateField<DecorationSet> {
-  return StateField.define<DecorationSet>({
-    create(state) {
-      return build(state);
-    },
-
-    update(value, tr) {
-      if (
-        tr.docChanged ||
-        tr.selection ||
-        tr.effects.some((e) => e.is(focusEffect)) ||
-        syntaxTree(tr.state) !== syntaxTree(tr.startState)
-      ) {
-        return build(tr.state);
-      }
-      return value;
-    },
-
-    provide(field) {
-      return EditorView.decorations.from(field);
-    },
-  });
+  return createDecorationsField(build);
 }

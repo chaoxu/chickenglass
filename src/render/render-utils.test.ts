@@ -9,9 +9,14 @@ import {
   addMarkerReplacement,
   buildDecorations,
   createBooleanToggleField,
+  createDecorationsField,
+  collectNodeRangesExcludingCursor,
+  defaultShouldRebuild,
   pushWidgetDecoration,
   createSimpleViewPlugin,
   defaultShouldUpdate,
+  focusEffect,
+  editorFocusField,
   RenderWidget,
   decorationHidden,
 } from "./render-utils";
@@ -360,5 +365,249 @@ describe("createSimpleViewPlugin", () => {
 describe("defaultShouldUpdate", () => {
   it("is a function", () => {
     expect(typeof defaultShouldUpdate).toBe("function");
+  });
+});
+
+describe("createDecorationsField", () => {
+  it("calls builder on create and provides decorations", () => {
+    let callCount = 0;
+    const field = createDecorationsField(() => {
+      callCount++;
+      return Decoration.none;
+    });
+    const state = createEditorState("hello", { extensions: [markdown(), field] });
+    expect(callCount).toBe(1);
+    expect(state.field(field)).toBe(Decoration.none);
+  });
+
+  it("rebuilds when document changes (default predicate)", () => {
+    let callCount = 0;
+    const field = createDecorationsField(() => {
+      callCount++;
+      return Decoration.none;
+    });
+    const state = createEditorState("hello", {
+      extensions: [markdown(), editorFocusField, field],
+    });
+    callCount = 0;
+    const updated = state.update({ changes: { from: 0, insert: "x" } }).state;
+    expect(callCount).toBe(1);
+    expect(updated.field(field)).toBe(Decoration.none);
+  });
+
+  it("rebuilds when selection changes (default predicate)", () => {
+    let callCount = 0;
+    const field = createDecorationsField(() => {
+      callCount++;
+      return Decoration.none;
+    });
+    const state = createEditorState("hello world", {
+      extensions: [markdown(), editorFocusField, field],
+    });
+    callCount = 0;
+    const updated = state.update({ selection: { anchor: 5 } }).state;
+    expect(callCount).toBe(1);
+    expect(updated.field(field)).toBe(Decoration.none);
+  });
+
+  it("rebuilds when focusEffect is dispatched (default predicate)", () => {
+    let callCount = 0;
+    const field = createDecorationsField(() => {
+      callCount++;
+      return Decoration.none;
+    });
+    const state = createEditorState("hello", {
+      extensions: [markdown(), editorFocusField, field],
+    });
+    callCount = 0;
+    const updated = state.update({ effects: focusEffect.of(true) }).state;
+    expect(callCount).toBe(1);
+    expect(updated.field(field)).toBe(Decoration.none);
+  });
+
+  it("does not rebuild on unrelated effect (default predicate)", () => {
+    let callCount = 0;
+    const otherEffect = StateEffect.define<boolean>();
+    const field = createDecorationsField(() => {
+      callCount++;
+      return Decoration.none;
+    });
+    const state = createEditorState("hello", {
+      extensions: [markdown(), editorFocusField, field],
+    });
+    callCount = 0;
+    const unchanged = state.update({ effects: otherEffect.of(true) }).state;
+    expect(callCount).toBe(0);
+    expect(unchanged.field(field)).toBe(Decoration.none);
+  });
+
+  it("accepts a custom shouldRebuild predicate", () => {
+    const customEffect = StateEffect.define<boolean>();
+    let callCount = 0;
+    const field = createDecorationsField(
+      () => {
+        callCount++;
+        return Decoration.none;
+      },
+      (tr) => tr.effects.some((e) => e.is(customEffect)),
+    );
+    const state = createEditorState("hello", { extensions: [markdown(), field] });
+    callCount = 0;
+
+    // Doc change should NOT trigger rebuild with custom predicate
+    const afterDoc = state.update({ changes: { from: 0, insert: "x" } }).state;
+    expect(callCount).toBe(0);
+    expect(afterDoc.field(field)).toBe(Decoration.none);
+
+    // Custom effect should trigger rebuild
+    const afterEffect = state.update({ effects: customEffect.of(true) }).state;
+    expect(callCount).toBe(1);
+    expect(afterEffect.field(field)).toBe(Decoration.none);
+  });
+
+  it("provides decorations to EditorView.decorations facet", () => {
+    const lineDeco = Decoration.line({ class: "test-line" });
+    const field = createDecorationsField(() => {
+      return Decoration.set([lineDeco.range(0)]);
+    });
+    const view = createTestView("hello", { extensions: [markdown(), field] });
+    const specs = getDecorationSpecs(view.state.field(field));
+    expect(specs).toHaveLength(1);
+    expect(specs[0].class).toBe("test-line");
+    view.destroy();
+  });
+});
+
+describe("defaultShouldRebuild", () => {
+  it("returns true on docChanged", () => {
+    const field = editorFocusField;
+    const state = createEditorState("hello", { extensions: [markdown(), field] });
+    const tr = state.update({ changes: { from: 0, insert: "x" } });
+    expect(defaultShouldRebuild(tr)).toBe(true);
+  });
+
+  it("returns true on selection change", () => {
+    const field = editorFocusField;
+    const state = createEditorState("hello world", { extensions: [markdown(), field] });
+    const tr = state.update({ selection: { anchor: 5 } });
+    expect(defaultShouldRebuild(tr)).toBe(true);
+  });
+
+  it("returns true on focusEffect", () => {
+    const field = editorFocusField;
+    const state = createEditorState("hello", { extensions: [markdown(), field] });
+    const tr = state.update({ effects: focusEffect.of(true) });
+    expect(defaultShouldRebuild(tr)).toBe(true);
+  });
+
+  it("returns false on unrelated transaction", () => {
+    const otherEffect = StateEffect.define<boolean>();
+    const field = editorFocusField;
+    const state = createEditorState("hello", { extensions: [markdown(), field] });
+    const tr = state.update({ effects: otherEffect.of(true) });
+    expect(defaultShouldRebuild(tr)).toBe(false);
+  });
+});
+
+describe("collectNodeRangesExcludingCursor", () => {
+  it("collects matching nodes and calls buildItem for each", () => {
+    const nodeTypes = new Set(["ATXHeading1"]);
+    const view = createTestView("# Hello\n\nworld", {
+      extensions: markdown(),
+      cursorPos: 14, // cursor at end (outside heading)
+    });
+
+    const items = collectNodeRangesExcludingCursor(view, nodeTypes, (node, acc) => {
+      acc.push(decorationHidden.range(node.from, node.to));
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0].from).toBe(0);
+    expect(items[0].to).toBe(7);
+    view.destroy();
+  });
+
+  it("skips nodes where cursor is inside", () => {
+    const nodeTypes = new Set(["ATXHeading1"]);
+    const view = createTestView("# Hello\n\nworld", {
+      extensions: markdown(),
+      cursorPos: 3, // cursor inside heading
+    });
+
+    const items = collectNodeRangesExcludingCursor(view, nodeTypes, (node, acc) => {
+      acc.push(decorationHidden.range(node.from, node.to));
+    });
+
+    expect(items).toHaveLength(0);
+    view.destroy();
+  });
+
+  it("ignores non-matching node types", () => {
+    const nodeTypes = new Set(["FencedCode"]);
+    const view = createTestView("# Hello\n\nworld", {
+      extensions: markdown(),
+      cursorPos: 14,
+    });
+
+    const items = collectNodeRangesExcludingCursor(view, nodeTypes, (node, acc) => {
+      acc.push(decorationHidden.range(node.from, node.to));
+    });
+
+    expect(items).toHaveLength(0);
+    view.destroy();
+  });
+
+  it("collects multiple nodes of different types", () => {
+    const nodeTypes = new Set(["Emphasis", "StrongEmphasis"]);
+    // Place cursor well outside both emphasis nodes:
+    // *em*(0-4) and(5-8) **bold**(9-17)
+    const view = createTestView("*em* and **bold** trailing", {
+      extensions: markdown(),
+      cursorPos: 25, // cursor in "trailing", outside both nodes
+    });
+
+    const collected: string[] = [];
+    collectNodeRangesExcludingCursor(view, nodeTypes, (node) => {
+      collected.push(node.type.name);
+    });
+
+    expect(collected).toContain("Emphasis");
+    expect(collected).toContain("StrongEmphasis");
+    view.destroy();
+  });
+
+  it("passes SyntaxNodeRef with accessible .node property", () => {
+    const nodeTypes = new Set(["ATXHeading1"]);
+    const view = createTestView("# Hello\n\nworld", {
+      extensions: markdown(),
+      cursorPos: 14,
+    });
+
+    let hadNodeAccess = false;
+    collectNodeRangesExcludingCursor(view, nodeTypes, (node) => {
+      // SyntaxNodeRef should have a .node property for child access
+      hadNodeAccess = node.node !== undefined;
+    });
+
+    expect(hadNodeAccess).toBe(true);
+    view.destroy();
+  });
+
+  it("returns false from buildItem to prevent descending into children", () => {
+    const nodeTypes = new Set(["ATXHeading1", "HeaderMark"]);
+    const view = createTestView("# Hello\n\nworld", {
+      extensions: markdown(),
+      cursorPos: 14,
+    });
+
+    const collected: string[] = [];
+    collectNodeRangesExcludingCursor(view, nodeTypes, (node) => {
+      collected.push(node.type.name);
+      return false; // don't descend
+    });
+
+    // Should only get ATXHeading1, not HeaderMark (which is a child)
+    expect(collected).toEqual(["ATXHeading1"]);
+    view.destroy();
   });
 });

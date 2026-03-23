@@ -8,12 +8,11 @@
 import {
   Decoration,
   type DecorationSet,
-  EditorView,
 } from "@codemirror/view";
-import { type EditorState, type Extension, StateField } from "@codemirror/state";
+import { type EditorState, type Extension } from "@codemirror/state";
 import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors } from "./bibtex-parser";
 import { type BibStore, bibDataEffect, bibDataField, findCitations } from "./citation-render";
-import { RenderWidget, buildDecorations } from "../render/render-utils";
+import { RenderWidget, buildDecorations, createDecorationsField } from "../render/render-utils";
 import { sanitizeCslHtml } from "../render/inline-shared";
 
 /**
@@ -178,20 +177,9 @@ function buildBibliographyDecorationsFromState(state: EditorState): DecorationSe
 }
 
 /** CM6 extension that renders a bibliography section at the end of the document. */
-export const bibliographyPlugin: Extension = StateField.define<DecorationSet>({
-  create(state) {
-    return buildBibliographyDecorationsFromState(state);
-  },
-  update(value, tr) {
-    if (
-      tr.docChanged ||
-      tr.effects.some((effect) => effect.is(bibDataEffect))
-    ) {
-      return buildBibliographyDecorationsFromState(tr.state);
-    }
-    return value;
-  },
-  provide(field) {
-    return EditorView.decorations.from(field);
-  },
-});
+export const bibliographyPlugin: Extension = createDecorationsField(
+  buildBibliographyDecorationsFromState,
+  (tr) =>
+    tr.docChanged ||
+    tr.effects.some((effect) => effect.is(bibDataEffect)),
+);

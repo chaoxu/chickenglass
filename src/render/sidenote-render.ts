@@ -17,16 +17,17 @@ import {
   type ViewUpdate,
   ViewPlugin,
 } from "@codemirror/view";
-import { type EditorState, type Extension, type Range, StateField, StateEffect } from "@codemirror/state";
+import { type EditorState, type Extension, type Range, StateEffect } from "@codemirror/state";
 
 import {
   buildDecorations,
   createBooleanToggleField,
+  createDecorationsField,
   cursorInRange,
+  defaultShouldRebuild,
   serializeMacros,
   RenderWidget,
   editorFocusField,
-  focusEffect,
   focusTracker,
 } from "./render-utils";
 import { mathMacrosField } from "./math-macros";
@@ -159,29 +160,16 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
  *
  * Uses a StateField so that line decorations (Decoration.line) are permitted.
  */
-const sidenoteDecorationField = StateField.define<DecorationSet>({
-  create(state) {
+const sidenoteDecorationField = createDecorationsField(
+  (state) => {
     const focused = state.field(editorFocusField, false) ?? false;
     return buildSidenoteDecorations(state, focused);
   },
-
-  update(value, tr) {
-    if (
-      tr.docChanged ||
-      tr.selection ||
-      tr.effects.some((e) => e.is(focusEffect) || e.is(sidenotesCollapsedEffect)) ||
-      tr.state.field(documentSemanticsField) !== tr.startState.field(documentSemanticsField)
-    ) {
-      const focused = tr.state.field(editorFocusField, false) ?? false;
-      return buildSidenoteDecorations(tr.state, focused);
-    }
-    return value;
-  },
-
-  provide(field) {
-    return EditorView.decorations.from(field);
-  },
-});
+  (tr) =>
+    defaultShouldRebuild(tr) ||
+    tr.effects.some((e) => e.is(sidenotesCollapsedEffect)) ||
+    tr.state.field(documentSemanticsField) !== tr.startState.field(documentSemanticsField),
+);
 
 export { sidenoteDecorationField };
 

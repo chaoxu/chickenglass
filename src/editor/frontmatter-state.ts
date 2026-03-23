@@ -7,8 +7,7 @@
  * revealing the raw YAML when the cursor is inside the region.
  */
 import { EditorState, type Extension, StateField } from "@codemirror/state";
-import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
+import { Decoration, DecorationSet, WidgetType } from "@codemirror/view";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 
 import {
@@ -18,8 +17,8 @@ import {
 } from "../parser/frontmatter";
 import { projectConfigFacet, mergeConfigs } from "./project-config";
 import {
+  createDecorationsField,
   editorFocusField,
-  focusEffect,
   focusTracker,
   serializeMacros,
 } from "../render/render-utils";
@@ -122,27 +121,7 @@ class TitleWidget extends WidgetType {
  * - Otherwise: replace with a document title widget (if title present)
  *   or hide entirely (if no title)
  */
-const frontmatterDecorationField = StateField.define<DecorationSet>({
-  create(state) {
-    return buildDecorations(state);
-  },
-
-  update(value, tr) {
-    if (
-      tr.docChanged ||
-      tr.selection ||
-      tr.effects.some((e) => e.is(focusEffect)) ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
-    ) {
-      return buildDecorations(tr.state);
-    }
-    return value;
-  },
-
-  provide(field) {
-    return EditorView.decorations.from(field);
-  },
-});
+const frontmatterDecorationField = createDecorationsField(buildDecorations);
 
 /**
  * The StateField for tests and direct field access.

@@ -1,4 +1,4 @@
-import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
+import { type EditorState, type Extension, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   Decoration,
@@ -10,10 +10,10 @@ import "katex/dist/katex.min.css";
 import {
   cursorInRange,
   buildDecorations,
+  createDecorationsField,
   serializeMacros,
   RenderWidget,
   editorFocusField,
-  focusEffect,
   focusTracker,
 } from "./render-utils";
 import { mathMacrosField } from "./math-macros";
@@ -207,27 +207,9 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
  * Uses a StateField (not ViewPlugin) so that block-level replace decorations
  * for display math (which cross line breaks) are permitted by CM6.
  */
-const mathDecorationField = StateField.define<DecorationSet>({
-  create(state) {
-    return buildMathDecorationsFromState(state, false);
-  },
-
-  update(value, tr) {
-    if (
-      tr.docChanged ||
-      tr.selection ||
-      tr.effects.some((e) => e.is(focusEffect)) ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
-    ) {
-      const focused = tr.state.field(editorFocusField, false) ?? false;
-      return buildMathDecorationsFromState(tr.state, focused);
-    }
-    return value;
-  },
-
-  provide(field) {
-    return EditorView.decorations.from(field);
-  },
+const mathDecorationField = createDecorationsField((state) => {
+  const focused = state.field(editorFocusField, false) ?? false;
+  return buildMathDecorationsFromState(state, focused);
 });
 
 /** CM6 extension that renders math expressions with KaTeX (Typora-style toggle). */

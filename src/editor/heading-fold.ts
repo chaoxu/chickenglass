@@ -10,7 +10,6 @@ import {
   type EditorState,
   type Extension,
   type Range,
-  StateField,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -26,7 +25,7 @@ import {
   foldedRanges,
   syntaxTree,
 } from "@codemirror/language";
-import { buildDecorations, RenderWidget } from "../render/render-utils";
+import { buildDecorations, createDecorationsField, RenderWidget } from "../render/render-utils";
 
 /** Extract heading level (1–6) from a node name, or 0 if not a heading. */
 function headingLevel(name: string): number {
@@ -178,26 +177,13 @@ function buildFoldToggles(state: EditorState): DecorationSet {
   return buildDecorations(items);
 }
 
-const foldToggleField = StateField.define<DecorationSet>({
-  create(state) {
-    return buildFoldToggles(state);
-  },
-
-  update(value, tr) {
-    if (
-      tr.docChanged ||
-      tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)) ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
-    ) {
-      return buildFoldToggles(tr.state);
-    }
-    return value;
-  },
-
-  provide(field) {
-    return EditorView.decorations.from(field);
-  },
-});
+const foldToggleField = createDecorationsField(
+  buildFoldToggles,
+  (tr) =>
+    tr.docChanged ||
+    tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)) ||
+    syntaxTree(tr.state) !== syntaxTree(tr.startState),
+);
 
 /** CM6 extension for heading-based folding with inline toggles. */
 export const headingFold: Extension = [

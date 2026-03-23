@@ -12,19 +12,17 @@
 import {
   type DecorationSet,
   Decoration,
-  EditorView,
 } from "@codemirror/view";
 import {
   type EditorState,
   type Extension,
   type Range,
-  StateField,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   buildDecorations,
+  createDecorationsField,
   editorFocusField,
-  focusEffect,
   focusTracker,
 } from "./render-utils";
 
@@ -86,27 +84,7 @@ function buildFenceGuides(state: EditorState): DecorationSet {
   return buildDecorations(items);
 }
 
-const fenceGuideField = StateField.define<DecorationSet>({
-  create(state) {
-    return buildFenceGuides(state);
-  },
-
-  update(value, tr) {
-    if (
-      tr.docChanged ||
-      tr.selection ||
-      tr.effects.some((e) => e.is(focusEffect)) ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
-    ) {
-      return buildFenceGuides(tr.state);
-    }
-    return value;
-  },
-
-  provide(field) {
-    return EditorView.decorations.from(field);
-  },
-});
+const fenceGuideField = createDecorationsField(buildFenceGuides);
 
 /** CM6 extension that draws vertical nesting guides for fenced divs (editing only). */
 export const fenceGuidePlugin: Extension = [

@@ -1,14 +1,13 @@
-import { type Extension, type Range } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
+import { type Extension } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 import {
-  Decoration,
   type DecorationSet,
   type EditorView,
 } from "@codemirror/view";
 import {
-  cursorInRange,
   buildDecorations,
+  collectNodeRangesExcludingCursor,
+  pushWidgetDecoration,
   RenderWidget,
   createSimpleViewPlugin,
 } from "./render-utils";
@@ -64,29 +63,16 @@ function readImageContent(
   return { alt, src };
 }
 
+const IMAGE_TYPES = new Set(["Image"]);
+
 /** Collect decoration ranges for images outside the cursor. */
-function collectImageRanges(view: EditorView): Range<Decoration>[] {
-  const items: Range<Decoration>[] = [];
-  const tree = syntaxTree(view.state);
+function collectImageRanges(view: EditorView) {
+  return collectNodeRangesExcludingCursor(view, IMAGE_TYPES, (node, items) => {
+    const parsed = readImageContent(view, node.node);
+    if (!parsed) return;
 
-  tree.iterate({
-    enter(node) {
-      if (node.type.name !== "Image") return;
-      if (cursorInRange(view, node.from, node.to)) return;
-
-      const parsed = readImageContent(view, node.node);
-      if (!parsed) return;
-
-      const widget = new ImageWidget(parsed.alt, parsed.src);
-      widget.sourceFrom = node.from;
-      widget.sourceTo = node.to;
-      items.push(
-        Decoration.replace({ widget }).range(node.from, node.to),
-      );
-    },
+    pushWidgetDecoration(items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to);
   });
-
-  return items;
 }
 
 /** Build a DecorationSet for images (convenience wrapper). */

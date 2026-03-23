@@ -16,8 +16,10 @@ import {
   StateEffect,
   StateField,
   type StateEffectType,
+  type Transaction,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
+import type { SyntaxNodeRef } from "@lezer/common";
 
 /**
  * Check whether the primary cursor is contained within [from, to].
@@ -335,4 +337,109 @@ export function createSimpleViewPlugin(
     ...options?.pluginSpec,
     decorations: (v) => v.decorations,
   });
+}
+
+/**
+ * Default rebuild predicate for StateField-based decoration providers.
+ *
+ * Returns true when any of the four standard conditions hold:
+ * docChanged, selection changed, focusEffect dispatched, or syntaxTree changed.
+ *
+ * This mirrors the most common pattern across fence-guide, math-render,
+ * frontmatter-state, and sidenote-render fields.
+ */
+export function defaultShouldRebuild(tr: Transaction): boolean {
+  return (
+    tr.docChanged ||
+    tr.selection !== undefined ||
+    tr.effects.some((e) => e.is(focusEffect)) ||
+    syntaxTree(tr.state) !== syntaxTree(tr.startState)
+  );
+}
+
+/**
+ * Factory that creates a CM6 StateField providing DecorationSet.
+ *
+ * Eliminates the repeated boilerplate of:
+ *   StateField.define<DecorationSet>({
+ *     create(state) { return builder(state); },
+ *     update(value, tr) {
+ *       if (shouldRebuild(tr)) return builder(tr.state);
+ *       return value;
+ *     },
+ *     provide: f => EditorView.decorations.from(f),
+ *   })
+ *
+ * @param builder         Pure function that computes the DecorationSet from state.
+ * @param shouldRebuild   Predicate that decides when to rebuild (defaults to
+ *                        docChanged || selection || focusEffect || tree changed).
+ */
+export function createDecorationsField(
+  builder: (state: EditorState) => DecorationSet,
+  shouldRebuild?: (tr: Transaction) => boolean,
+): StateField<DecorationSet> {
+  const predicate = shouldRebuild ?? defaultShouldRebuild;
+
+  return StateField.define<DecorationSet>({
+    create(state) {
+      return builder(state);
+    },
+
+    update(value, tr) {
+      if (predicate(tr)) {
+        return builder(tr.state);
+      }
+      return value;
+    },
+
+    provide(field) {
+      return EditorView.decorations.from(field);
+    },
+  });
+}
+
+/**
+ * Iterate the syntax tree within visible ranges, skip nodes where the
+ * cursor is inside, and call `buildItem` for each remaining match.
+ *
+ * Consolidates the repeated pattern of:
+ *   for (const { from, to } of view.visibleRanges) {
+ *     syntaxTree(view.state).iterate({ from, to, enter(node) {
+ *       if (nodeTypes.has(node.name)) return;
+ *       if (cursorInRange(view, node.from, node.to)) return;
+ *       buildItem(node, items);
+ *     }});
+ *   }
+ *
+ * Returns the accumulated decoration ranges. The caller can pass them
+ * to `buildDecorations()` or `Decoration.set(items, true)`.
+ *
+ * @param view        The editor view (used for visible ranges and cursor).
+ * @param nodeTypes   Set of Lezer node type names to match.
+ * @param buildItem   Callback invoked for each matching node outside the cursor.
+ *                    Receives the SyntaxNodeRef and the accumulator array.
+ *                    Return false to prevent descending into children.
+ */
+export function collectNodeRangesExcludingCursor(
+  view: EditorView,
+  nodeTypes: ReadonlySet<string>,
+  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+  buildItem: (node: SyntaxNodeRef, items: Range<Decoration>[]) => false | void,
+): Range<Decoration>[] {
+  const items: Range<Decoration>[] = [];
+  const tree = syntaxTree(view.state);
+
+  for (const { from, to } of view.visibleRanges) {
+    tree.iterate({
+      from,
+      to,
+      enter(node) {
+        if (!nodeTypes.has(node.type.name)) return;
+        if (cursorInRange(view, node.from, node.to)) return false;
+        return buildItem(node, items);
+      },
+    });
+  }
+
+  return items;
 }

@@ -11,9 +11,8 @@ import {
   type DecorationSet,
   type EditorView,
 } from "@codemirror/view";
-import { type Extension, type Range } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
-import { cursorInRange, RenderWidget, createSimpleViewPlugin } from "./render-utils";
+import { type Extension } from "@codemirror/state";
+import { collectNodeRangesExcludingCursor, RenderWidget, createSimpleViewPlugin } from "./render-utils";
 
 /** Checkbox widget that toggles task marker content on click. */
 export class CheckboxWidget extends RenderWidget {
@@ -54,31 +53,20 @@ export class CheckboxWidget extends RenderWidget {
   }
 }
 
+const TASK_MARKER_TYPES = new Set(["TaskMarker"]);
+
 /** Build checkbox decorations for task list markers. */
 function buildCheckboxDecorations(view: EditorView): DecorationSet {
-  const widgets: Range<Decoration>[] = [];
+  const widgets = collectNodeRangesExcludingCursor(view, TASK_MARKER_TYPES, (node, items) => {
+    const text = view.state.sliceDoc(node.from, node.to);
+    const checked = text.includes("x") || text.includes("X");
 
-  for (const { from, to } of view.visibleRanges) {
-    syntaxTree(view.state).iterate({
-      from,
-      to,
-      enter(node) {
-        if (node.name !== "TaskMarker") return;
-
-        // Show source only when cursor touches the marker itself
-        if (cursorInRange(view, node.from, node.to)) return;
-
-        const text = view.state.sliceDoc(node.from, node.to);
-        const checked = text.includes("x") || text.includes("X");
-
-        widgets.push(
-          Decoration.replace({
-            widget: new CheckboxWidget(checked, node.from, node.to),
-          }).range(node.from, node.to),
-        );
-      },
-    });
-  }
+    items.push(
+      Decoration.replace({
+        widget: new CheckboxWidget(checked, node.from, node.to),
+      }).range(node.from, node.to),
+    );
+  });
 
   return Decoration.set(widgets, true);
 }
