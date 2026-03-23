@@ -18,6 +18,7 @@ import {
   focusEffect,
   editorFocusField,
   RenderWidget,
+  SimpleTextRenderWidget,
   decorationHidden,
 } from "./render-utils";
 import {
@@ -119,6 +120,46 @@ class TestWidget extends RenderWidget {
     return this.label === other.label;
   }
 }
+
+describe("SimpleTextRenderWidget", () => {
+  it("renders a text element with optional title and attrs", () => {
+    const widget = new SimpleTextRenderWidget({
+      tagName: "sup",
+      className: "cf-test",
+      text: "7",
+      title: "Footnote 7",
+      attrs: { "data-footnote-id": "fn-7" },
+    });
+
+    const el = widget.toDOM();
+    expect(el.tagName).toBe("SUP");
+    expect(el.className).toBe("cf-test");
+    expect(el.textContent).toBe("7");
+    expect(el.getAttribute("title")).toBe("Footnote 7");
+    expect(el.getAttribute("data-footnote-id")).toBe("fn-7");
+  });
+
+  it("compares equality by rendered text spec", () => {
+    const left = new SimpleTextRenderWidget({
+      tagName: "span",
+      className: "cf-label",
+      text: "demo",
+    });
+    const right = new SimpleTextRenderWidget({
+      tagName: "span",
+      className: "cf-label",
+      text: "demo",
+    });
+    const different = new SimpleTextRenderWidget({
+      tagName: "span",
+      className: "cf-label-active",
+      text: "demo",
+    });
+
+    expect(left.eq(right)).toBe(true);
+    expect(left.eq(different)).toBe(false);
+  });
+});
 
 describe("addMarkerReplacement", () => {
   it("does nothing when cursorInside is true", () => {

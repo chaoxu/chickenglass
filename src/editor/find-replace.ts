@@ -259,7 +259,13 @@ function createAction(
   btn.title = title;
   btn.className = CSS.searchAction;
   btn.addEventListener("mousedown", (e) => e.preventDefault());
-  btn.addEventListener("click", onClick);
+  btn.addEventListener("click", () => {
+    try {
+      onClick();
+    } catch (e: unknown) {
+      console.error("[find-replace] action click handler failed", e);
+    }
+  });
   return btn;
 }
 

@@ -49,7 +49,7 @@ describe("codeBlockDecorationField", () => {
     expect(hasLineClassAt(specs, state.doc.line(2).from, "cf-codeblock-last")).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(3).from, "cf-include-fence")).toBe(true);
 
-    const widgets = specs.filter((s) => s.widgetClass === "CodeBlockHeaderWidget");
+    const widgets = specs.filter((s) => s.widgetClass === "SimpleTextRenderWidget");
     expect(widgets.length).toBe(2);
   });
 
@@ -64,7 +64,7 @@ describe("codeBlockDecorationField", () => {
     expect(hasLineClassAt(specs, state.doc.line(3).from, "cf-codeblock-source-close")).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(3).from, "cf-include-fence")).toBe(false);
 
-    const widgets = specs.filter((s) => s.widgetClass === "CodeBlockHeaderWidget");
+    const widgets = specs.filter((s) => s.widgetClass === "SimpleTextRenderWidget");
     expect(widgets.length).toBe(1);
   });
 

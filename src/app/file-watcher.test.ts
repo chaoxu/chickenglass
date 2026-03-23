@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { FileWatcher } from "./file-watcher";
 
-function createWatcher(reloadFile = vi.fn(async () => {})) {
+function createWatcher(
+  reloadFile: ((path: string) => Promise<void>) = vi.fn(async (_path: string) => {}),
+) {
   const container = document.createElement("div");
   const watcher = new FileWatcher({
     isFileOpen: () => true,
@@ -60,8 +62,36 @@ describe("FileWatcher", () => {
     expect(yesButton).not.toBeNull();
     yesButton?.click();
     await Promise.resolve();
+    await Promise.resolve();
 
     expect(reloadFile).toHaveBeenCalledWith("a.md");
     expect(container.textContent).toContain("\"b.md\" changed externally. Reload?");
+  });
+
+  it("catches synchronous reload handler failures and still advances the queue", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const reloadFile = vi.fn<(_: string) => Promise<void>>(() => {
+      throw new Error("boom");
+    });
+    const { container, watcher } = createWatcher(reloadFile);
+    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => void })
+      .handleFileChanged
+      .bind(watcher as unknown as { handleFileChanged: (path: string) => void });
+
+    handleFileChanged("a.md");
+    handleFileChanged("b.md");
+
+    const yesButton = container.querySelector<HTMLButtonElement>(".file-watcher-btn-yes");
+    expect(yesButton).not.toBeNull();
+    yesButton?.click();
+    await Promise.resolve();
+
+    expect(consoleError).toHaveBeenCalledWith(
+      "[file-watcher] reload button handler failed",
+      "a.md",
+      expect.any(Error),
+    );
+    expect(container.textContent).toContain("\"b.md\" changed externally. Reload?");
+    consoleError.mockRestore();
   });
 });

@@ -84,14 +84,16 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
 
   const handleOpenFolder = useCallback(() => {
     if (!isTauri()) return;
-    void tauriOpenFolder().then((folderPath) => {
-      if (folderPath) {
-        void refreshTree();
-        void refreshProjectConfig();
+    void (async () => {
+      try {
+        const folderPath = await tauriOpenFolder();
+        if (folderPath) {
+          await Promise.all([refreshTree(), refreshProjectConfig()]);
+        }
+      } catch (e: unknown) {
+        console.error("[workspace] handleOpenFolder failed", e);
       }
-    }).catch((e: unknown) => {
-      console.error("[workspace] handleOpenFolder failed", e);
-    });
+    })();
   }, [refreshProjectConfig, refreshTree]);
 
   return {

@@ -485,6 +485,64 @@ export function makeTextElement(
   return el;
 }
 
+/** Shared spec for text-only render widgets. */
+export interface SimpleTextRenderSpec {
+  readonly tagName: string;
+  readonly className: string;
+  readonly text: string;
+  readonly title?: string;
+  readonly attrs?: Readonly<Record<string, string>>;
+}
+
+function serializeSimpleTextAttrs(
+  attrs: Readonly<Record<string, string>> | undefined,
+): string {
+  if (!attrs) return "";
+  return Object.entries(attrs)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}\0${value}`)
+    .join("\0\0");
+}
+
+/**
+ * Parameterized RenderWidget for the common "single text node + optional attrs"
+ * pattern used by citations, labels, and small chrome widgets.
+ */
+export class SimpleTextRenderWidget extends RenderWidget {
+  private readonly attrsKey: string;
+
+  constructor(protected readonly spec: SimpleTextRenderSpec) {
+    super();
+    this.attrsKey = serializeSimpleTextAttrs(spec.attrs);
+  }
+
+  createDOM(): HTMLElement {
+    const el = makeTextElement(
+      this.spec.tagName,
+      this.spec.className,
+      this.spec.text,
+      this.spec.title,
+    );
+    if (this.spec.attrs) {
+      for (const [name, value] of Object.entries(this.spec.attrs)) {
+        el.setAttribute(name, value);
+      }
+    }
+    return el;
+  }
+
+  eq(other: WidgetType): boolean {
+    return (
+      other instanceof SimpleTextRenderWidget &&
+      this.spec.tagName === other.spec.tagName &&
+      this.spec.className === other.spec.className &&
+      this.spec.text === other.spec.text &&
+      this.spec.title === other.spec.title &&
+      this.attrsKey === other.attrsKey
+    );
+  }
+}
+
 /**
  * Base class for widgets whose identity depends on math macro state.
  *

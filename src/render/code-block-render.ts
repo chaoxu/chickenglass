@@ -25,9 +25,10 @@ import {
 import { syntaxTree } from "@codemirror/language";
 import {
   RenderWidget,
-  makeTextElement,
   editorFocusField,
   focusTracker,
+  pushWidgetDecoration,
+  SimpleTextRenderWidget,
 } from "./render-utils";
 import {
   addCollapsedClosingFence,
@@ -42,21 +43,6 @@ import {
 import { __iconNode as copyIconNode } from "lucide-react/dist/esm/icons/copy.js";
 import { __iconNode as checkIconNode } from "lucide-react/dist/esm/icons/check.js";
 import { COPY_RESET_MS } from "../constants";
-
-/** Widget that renders the opening fence line as a clickable code-block header. */
-class CodeBlockHeaderWidget extends RenderWidget {
-  constructor(private readonly language: string) {
-    super();
-  }
-
-  createDOM(): HTMLElement {
-    return makeTextElement("span", "cf-codeblock-language", this.language);
-  }
-
-  eq(other: CodeBlockHeaderWidget): boolean {
-    return this.language === other.language;
-  }
-}
 
 type IconNode = ReadonlyArray<readonly [string, Readonly<Record<string, string>>]>;
 
@@ -220,12 +206,11 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
           state.doc.line(closeLine.number - 1).to,
         )
         : "";
-      const headerWidget = new CodeBlockHeaderWidget(block.language);
-      headerWidget.sourceFrom = block.openFenceFrom;
-      headerWidget.sourceTo = block.openFenceTo;
-      items.push(
-        Decoration.replace({ widget: headerWidget }).range(block.openFenceFrom, block.openFenceTo),
-      );
+      pushWidgetDecoration(items, new SimpleTextRenderWidget({
+        tagName: "span",
+        className: "cf-codeblock-language",
+        text: block.language,
+      }), block.openFenceFrom, block.openFenceTo);
       if (bodyLineCount > 0) {
         items.push(
           Decoration.widget({

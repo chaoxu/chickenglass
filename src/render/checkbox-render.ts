@@ -7,12 +7,17 @@
  */
 
 import {
-  Decoration,
   type DecorationSet,
   type EditorView,
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
-import { collectNodeRangesExcludingCursor, RenderWidget, createSimpleViewPlugin } from "./render-utils";
+import {
+  buildDecorations,
+  collectNodeRangesExcludingCursor,
+  createSimpleViewPlugin,
+  pushWidgetDecoration,
+  RenderWidget,
+} from "./render-utils";
 
 /** Checkbox widget that toggles task marker content on click. */
 export class CheckboxWidget extends RenderWidget {
@@ -61,14 +66,10 @@ function buildCheckboxDecorations(view: EditorView): DecorationSet {
     const text = view.state.sliceDoc(node.from, node.to);
     const checked = text.includes("x") || text.includes("X");
 
-    items.push(
-      Decoration.replace({
-        widget: new CheckboxWidget(checked, node.from, node.to),
-      }).range(node.from, node.to),
-    );
+    pushWidgetDecoration(items, new CheckboxWidget(checked, node.from, node.to), node.from, node.to);
   });
 
-  return Decoration.set(widgets, true);
+  return buildDecorations(widgets);
 }
 
 /** CM6 extension that renders task list checkboxes with toggle support. */

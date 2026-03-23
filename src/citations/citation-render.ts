@@ -16,7 +16,7 @@ import { type WidgetType } from "@codemirror/view";
 import { parser as baseParser } from "@lezer/markdown";
 import { type CslJsonItem } from "./bibtex-parser";
 import { CslProcessor } from "./csl-processor";
-import { makeTextElement, RenderWidget } from "../render/render-utils";
+import { SimpleTextRenderWidget } from "../render/render-utils";
 import { markdownExtensions } from "../parser";
 import {
   analyzeDocumentSemantics,
@@ -54,28 +54,28 @@ export const bibDataField = StateField.define<BibData>({
  * Handles both parenthetical citations like "(Karger, 2000)" and narrative
  * citations like "Karger (2000)". Pass `narrative: true` for the latter.
  */
-export class CitationWidget extends RenderWidget {
+export class CitationWidget extends SimpleTextRenderWidget {
+  private readonly idsKey: string;
+
   constructor(
     private readonly text: string,
-    private readonly ids: readonly string[],
+    ids: readonly string[],
     private readonly narrative: boolean = false,
   ) {
-    super();
-  }
-
-  createDOM(): HTMLElement {
-    return makeTextElement(
-      "span",
-      this.narrative ? "cf-citation cf-citation-narrative" : "cf-citation",
-      this.text,
-      this.ids.join("; "),
-    );
+    super({
+      tagName: "span",
+      className: narrative ? "cf-citation cf-citation-narrative" : "cf-citation",
+      text,
+      title: ids.join("; "),
+    });
+    this.idsKey = ids.join("\0");
   }
 
   eq(other: WidgetType): boolean {
     return (
       other instanceof CitationWidget &&
       this.text === other.text &&
+      this.idsKey === other.idsKey &&
       this.narrative === other.narrative
     );
   }
@@ -135,4 +135,3 @@ export function findCitations(
       locators: [...ref.locators],
     }));
 }
-

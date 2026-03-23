@@ -873,6 +873,78 @@ describe("#321 — standardized background dispatch handling", () => {
   });
 });
 
+describe("#370 — shared decoration/widget factories", () => {
+  it("exports the shared decoration and widget helpers from render-utils", async () => {
+    const renderUtils = await import("../render/render-utils");
+
+    expect(renderUtils.createSimpleViewPlugin).toBeDefined();
+    expect(renderUtils.createDecorationsField).toBeDefined();
+    expect(renderUtils.pushWidgetDecoration).toBeDefined();
+    expect(renderUtils.collectNodeRangesExcludingCursor).toBeDefined();
+  });
+
+  it("routes representative renderers through the shared helpers", () => {
+    const checkbox = fileText("src/render/checkbox-render.ts");
+    const image = fileText("src/render/image-render.ts");
+    const reference = fileText("src/render/reference-render.ts");
+    const pluginRender = fileText("src/plugins/plugin-render.ts");
+
+    expect(checkbox).toContain("collectNodeRangesExcludingCursor");
+    expect(checkbox).toContain("pushWidgetDecoration");
+    expect(image).toContain("createSimpleViewPlugin");
+    expect(reference).toContain("createSimpleViewPlugin");
+    expect(pluginRender).toContain("pushWidgetDecoration");
+  });
+});
+
+describe("#372 — error handling coverage", () => {
+  it("keeps the app root behind an ErrorBoundary and logs guarded UI handlers", () => {
+    const app = fileText("src/app/app.tsx");
+    const boundary = fileText("src/app/components/error-boundary.tsx");
+    const fileWatcher = fileText("src/app/file-watcher.ts");
+    const findReplace = fileText("src/editor/find-replace.ts");
+
+    expect(app).toContain("<ErrorBoundary>");
+    expect(boundary).toContain("getDerivedStateFromError");
+    expect(fileWatcher).toContain("reload button handler failed");
+    expect(findReplace).toContain("action click handler failed");
+  });
+});
+
+describe("#376 — shared text widget primitives", () => {
+  it("exports the shared simple-text and macro-aware widget bases", async () => {
+    const renderUtils = await import("../render/render-utils");
+
+    expect(renderUtils.SimpleTextRenderWidget).toBeDefined();
+    expect(renderUtils.MacroAwareWidget).toBeDefined();
+  });
+
+  it("routes representative widget families through the shared text helpers", () => {
+    const citations = fileText("src/citations/citation-render.ts");
+    const crossrefs = fileText("src/render/crossref-render.ts");
+    const codeBlocks = fileText("src/render/code-block-render.ts");
+    const includeLabels = fileText("src/render/include-label.ts");
+    const sidenotes = fileText("src/render/sidenote-render.ts");
+
+    expect(citations).toContain("extends SimpleTextRenderWidget");
+    expect(crossrefs).toContain("extends SimpleTextRenderWidget");
+    expect(codeBlocks).toContain("new SimpleTextRenderWidget");
+    expect(includeLabels).toContain("new SimpleTextRenderWidget");
+    expect(sidenotes).toContain("extends SimpleTextRenderWidget");
+  });
+});
+
+describe("#386 — async cleanup and parallelization", () => {
+  it("parallelizes the open-folder refresh path and keeps save/create flows on the shared hooks", () => {
+    const workspace = fileText("src/app/hooks/use-app-workspace-session.ts");
+    const fileOps = fileText("src/app/hooks/use-file-operations.ts");
+
+    expect(workspace).toContain("await Promise.all([refreshTree(), refreshProjectConfig()])");
+    expect(fileOps).toContain("await Promise.all([refreshTree(), openFile(path)])");
+    expect(fileOps).toContain("await (exists ? fs.writeFile(relativePath, doc) : fs.createFile(relativePath, doc))");
+  });
+});
+
 describe("#290 — Lezer-first markdown parsing", () => {
   it("equation label extraction uses the shared braced-label helper", () => {
     const semantics = fileText("src/semantics/document.ts");

@@ -45,20 +45,22 @@ export function useSearchIndexer(
     setSearching(true);
     let cancelled = false;
 
-    indexer.query(indexQuery).then(
-      (entries) => {
+    void (async () => {
+      try {
+        const entries = await indexer.query(indexQuery);
         if (!cancelled) {
           setResults(entries);
-          setSearching(false);
         }
-      },
-      () => {
+      } catch {
         if (!cancelled) {
           setResults([]);
+        }
+      } finally {
+        if (!cancelled) {
           setSearching(false);
         }
-      },
-    );
+      }
+    })();
 
     return () => {
       cancelled = true;

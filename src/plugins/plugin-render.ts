@@ -30,6 +30,7 @@ import {
   MacroAwareWidget,
   RenderWidget,
   addMarkerReplacement,
+  pushWidgetDecoration,
 } from "../render/render-utils";
 import {
   addCollapsedClosingFence,
@@ -304,10 +305,7 @@ function addEmbedWidget(
   const rawUrl = bodyText.trim();
   const src = computeEmbedSrc(div.className, rawUrl);
   if (src) {
-    const widget = new EmbedWidget(src, div.className);
-    widget.sourceFrom = bodyFrom;
-    widget.sourceTo = bodyTo;
-    items.push(Decoration.replace({ widget }).range(bodyFrom, bodyTo));
+    pushWidgetDecoration(items, new EmbedWidget(src, div.className), bodyFrom, bodyTo);
   }
 }
 

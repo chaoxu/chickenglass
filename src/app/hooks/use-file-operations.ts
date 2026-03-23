@@ -82,8 +82,7 @@ async function executeSaveAs(
       if (!savePath) return;
       const relativePath = await toProjectRelativePathCommand(savePath);
       const exists = await fs.exists(relativePath);
-      if (exists) { await fs.writeFile(relativePath, doc); }
-      else { await fs.createFile(relativePath, doc); }
+      await (exists ? fs.writeFile(relativePath, doc) : fs.createFile(relativePath, doc));
       commitSessionState(applySaveAsResult({
         state: getSessionState(), buffers: buffers.current, liveDocs: liveDocs.current,
         oldPath: path, newPath: relativePath, doc,

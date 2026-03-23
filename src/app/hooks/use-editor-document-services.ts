@@ -57,7 +57,7 @@ async function expandIncludes(
       let content: string;
       try {
         content = await fs.readFile(resolved);
-      } catch (_e) {
+      } catch {
         // best-effort: included file unreadable, fall back to raw content without includes
         return { text: rawContent, regions: [] };
       }
@@ -154,19 +154,22 @@ export function useEditorDocumentServices({
     bibliography.loadInitial(bibliographyPath, cslPath, view);
 
     if (fs && docPath) {
-      void expandIncludes(docPath, doc, fs).then(({ text: expanded, regions }) => {
-        if (expanded === doc) return;
-        const dispatched = dispatchIfConnected(
-          view,
-          { changes: { from: 0, to: view.state.doc.length, insert: expanded } },
-          { context: "Include expansion dispatch error:" },
-        );
-        if (dispatched && regions.length > 0) {
-          window.__cfSourceMap = new SourceMap(regions);
+      void (async () => {
+        try {
+          const { text: expanded, regions } = await expandIncludes(docPath, doc, fs);
+          if (expanded === doc) return;
+          const dispatched = dispatchIfConnected(
+            view,
+            { changes: { from: 0, to: view.state.doc.length, insert: expanded } },
+            { context: "Include expansion dispatch error:" },
+          );
+          if (dispatched && regions.length > 0) {
+            window.__cfSourceMap = new SourceMap(regions);
+          }
+        } catch (e: unknown) {
+          console.error("[editor] expandIncludes failed", e);
         }
-      }).catch((e: unknown) => {
-        console.error("[editor] expandIncludes failed", e);
-      });
+      })();
     }
   }, [bibliography, doc, docPath, fs]);
 

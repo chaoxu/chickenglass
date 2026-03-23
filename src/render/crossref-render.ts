@@ -17,19 +17,25 @@ import {
   resolveCrossref,
 } from "../index/crossref-resolver";
 import { documentAnalysisField } from "../semantics/codemirror-source";
-import { cursorInRange, makeTextElement, pushWidgetDecoration, RenderWidget } from "./render-utils";
+import {
+  cursorInRange,
+  pushWidgetDecoration,
+  RenderWidget,
+  SimpleTextRenderWidget,
+} from "./render-utils";
 
 /** Widget for a resolved cross-reference (block or equation). */
-export class CrossrefWidget extends RenderWidget {
+export class CrossrefWidget extends SimpleTextRenderWidget {
   constructor(
     private readonly resolved: ResolvedCrossref,
     private readonly raw: string,
   ) {
-    super();
-  }
-
-  createDOM(): HTMLElement {
-    return makeTextElement("span", "cf-crossref", this.resolved.label, this.raw);
+    super({
+      tagName: "span",
+      className: "cf-crossref",
+      text: resolved.label,
+      title: raw,
+    });
   }
 
   eq(other: CrossrefWidget): boolean {
@@ -42,16 +48,17 @@ export class CrossrefWidget extends RenderWidget {
 }
 
 /** Widget for a clustered cross-reference (multiple resolved crossrefs in one bracket). */
-export class ClusteredCrossrefWidget extends RenderWidget {
+export class ClusteredCrossrefWidget extends SimpleTextRenderWidget {
   constructor(
     private readonly resolvedItems: readonly ResolvedCrossref[],
     private readonly raw: string,
   ) {
-    super();
-  }
-
-  createDOM(): HTMLElement {
-    return makeTextElement("span", "cf-crossref", this.resolvedItems.map((r) => r.label).join("; "), this.raw);
+    super({
+      tagName: "span",
+      className: "cf-crossref",
+      text: resolvedItems.map((r) => r.label).join("; "),
+      title: raw,
+    });
   }
 
   eq(other: ClusteredCrossrefWidget): boolean {
@@ -75,16 +82,17 @@ export interface MixedClusterPart {
 }
 
 /** Widget for a mixed crossref+citation cluster like '[@eq:foo; @smith2020]'. */
-export class MixedClusterWidget extends RenderWidget {
+export class MixedClusterWidget extends SimpleTextRenderWidget {
   constructor(
     private readonly parts: readonly MixedClusterPart[],
     private readonly raw: string,
   ) {
-    super();
-  }
-
-  createDOM(): HTMLElement {
-    return makeTextElement("span", "cf-citation", `(${this.parts.map((p) => p.text).join("; ")})`, this.raw);
+    super({
+      tagName: "span",
+      className: "cf-citation",
+      text: `(${parts.map((p) => p.text).join("; ")})`,
+      title: raw,
+    });
   }
 
   eq(other: MixedClusterWidget): boolean {
@@ -97,13 +105,14 @@ export class MixedClusterWidget extends RenderWidget {
 }
 
 /** Widget for an unresolved cross-reference. */
-export class UnresolvedRefWidget extends RenderWidget {
+export class UnresolvedRefWidget extends SimpleTextRenderWidget {
   constructor(private readonly raw: string) {
-    super();
-  }
-
-  createDOM(): HTMLElement {
-    return makeTextElement("span", "cf-crossref cf-crossref-unresolved", this.raw, "Unresolved reference");
+    super({
+      tagName: "span",
+      className: "cf-crossref cf-crossref-unresolved",
+      text: raw,
+      title: "Unresolved reference",
+    });
   }
 
   eq(other: UnresolvedRefWidget): boolean {
@@ -137,4 +146,3 @@ export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
 
   return items;
 }
-

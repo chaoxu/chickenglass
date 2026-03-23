@@ -306,20 +306,23 @@ export function useAppEditorShell({
   }, [editorState?.view]);
 
   const handleSearchResult = useCallback((file: string, pos: number, onComplete?: () => void) => {
-    void openFile(file).then(() => {
-      setTimeout(() => {
-        // Use latestViewRef so we get the view after openFile has updated
-        // editorState — the closure over editorState?.view would be stale.
-        const view = latestViewRef.current;
-        if (view) {
-          view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
-          view.focus();
-        }
-        onComplete?.();
-      }, 100);
-    }).catch((e: unknown) => {
-      console.error("[editor] handleSearchResult: failed to open file", file, e);
-    });
+    void (async () => {
+      try {
+        await openFile(file);
+        setTimeout(() => {
+          // Use latestViewRef so we get the view after openFile has updated
+          // editorState — the closure over editorState?.view would be stale.
+          const view = latestViewRef.current;
+          if (view) {
+            view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+            view.focus();
+          }
+          onComplete?.();
+        }, 100);
+      } catch (e: unknown) {
+        console.error("[editor] handleSearchResult: failed to open file", file, e);
+      }
+    })();
   }, [openFile]);
 
   const handleSymbolInsert = useCallback((latex: string) => {

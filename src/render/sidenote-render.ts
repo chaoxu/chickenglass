@@ -25,11 +25,11 @@ import {
   createDecorationsField,
   cursorInRange,
   defaultShouldRebuild,
-  makeTextElement,
   pushWidgetDecoration,
   serializeMacros,
   MacroAwareWidget,
   RenderWidget,
+  SimpleTextRenderWidget,
   editorFocusField,
   focusTracker,
 } from "./render-utils";
@@ -80,18 +80,18 @@ export class FootnoteBodyWidget extends MacroAwareWidget {
 }
 
 /** Widget for a footnote reference rendered as a superscript number. */
-class FootnoteRefWidget extends RenderWidget {
+class FootnoteRefWidget extends SimpleTextRenderWidget {
   constructor(
     private readonly number: number,
     private readonly id: string,
   ) {
-    super();
-  }
-
-  createDOM(): HTMLElement {
-    const sup = makeTextElement("sup", "cf-sidenote-ref", String(this.number), `Footnote ${this.id}`);
-    sup.setAttribute("data-footnote-id", this.id);
-    return sup;
+    super({
+      tagName: "sup",
+      className: "cf-sidenote-ref",
+      text: String(number),
+      title: `Footnote ${id}`,
+      attrs: { "data-footnote-id": id },
+    });
   }
 
   eq(other: FootnoteRefWidget): boolean {

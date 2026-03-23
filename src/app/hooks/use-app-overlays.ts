@@ -40,16 +40,18 @@ export function useAppOverlays({ fs, workspace, editor }: AppOverlayDeps): AppOv
   }, [indexer]);
 
   const handleExportHtml = useCallback(() => {
-    if (!editor.activeTab) return;
-    const doc = editor.liveDocs.current.get(editor.activeTab) ?? "";
-    void exportDocument(doc, "html", editor.activeTab, fs).then(
-      (outputPath) => {
+    const activeTab = editor.activeTab;
+    if (!activeTab) return;
+    const activeTabPath = activeTab;
+    const doc = editor.liveDocs.current.get(activeTabPath) ?? "";
+    void (async () => {
+      try {
+        const outputPath = await exportDocument(doc, "html", activeTabPath, fs);
         window.alert(`Exported to ${outputPath}`);
-      },
-      (err: unknown) => {
+      } catch (err: unknown) {
         window.alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
-      },
-    );
+      }
+    })();
   }, [editor.activeTab, editor.liveDocs, fs]);
 
   const handleBatchExportHtml = useCallback(() => {

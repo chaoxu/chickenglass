@@ -13,26 +13,14 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import { type Extension, type Range } from "@codemirror/state";
-import { buildDecorations, makeTextElement, RenderWidget, createSimpleViewPlugin } from "./render-utils";
+import {
+  buildDecorations,
+  createSimpleViewPlugin,
+  SimpleTextRenderWidget,
+} from "./render-utils";
 import { basename } from "../lib/utils";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import type { IncludeSemantics } from "../semantics/document";
-
-class IncludeLabelWidget extends RenderWidget {
-  constructor(private readonly filename: string, private readonly active: boolean) {
-    super();
-  }
-  createDOM(): HTMLElement {
-    return makeTextElement(
-      "span",
-      this.active ? "cf-include-label cf-include-label-active" : "cf-include-label",
-      this.filename,
-    );
-  }
-  eq(other: IncludeLabelWidget): boolean {
-    return this.filename === other.filename && this.active === other.active;
-  }
-}
 
 /** Build include label decorations (line highlights + filename labels). */
 function buildIncludeDecorations(view: EditorView): DecorationSet {
@@ -54,7 +42,14 @@ function buildIncludeDecorations(view: EditorView): DecorationSet {
     const active = cursor >= from && cursor <= to;
     const filename = basename(inc.path);
     const startLine = doc.lineAt(from);
-    items.push(Decoration.widget({ widget: new IncludeLabelWidget(filename, active), side: 1 }).range(startLine.from));
+    items.push(Decoration.widget({
+      widget: new SimpleTextRenderWidget({
+        tagName: "span",
+        className: active ? "cf-include-label cf-include-label-active" : "cf-include-label",
+        text: filename,
+      }),
+      side: 1,
+    }).range(startLine.from));
 
     // Line decorations for every line in the include block
     const endLine = doc.lineAt(to);

@@ -133,13 +133,18 @@ export class FileWatcher {
     yesBtn.className = "file-watcher-btn file-watcher-btn-yes";
     yesBtn.textContent = "Yes";
     yesBtn.addEventListener("click", () => {
-      void this.config.reloadFile(path)
-        .catch((e: unknown) => {
-          console.error("[file-watcher] reloadFile failed", path, e);
-        })
-        .finally(() => {
-          this.resolveNotification(path);
-        });
+      try {
+        void this.config.reloadFile(path)
+          .catch((e: unknown) => {
+            console.error("[file-watcher] reloadFile failed", path, e);
+          })
+          .finally(() => {
+            this.resolveNotification(path);
+          });
+      } catch (e: unknown) {
+        console.error("[file-watcher] reload button handler failed", path, e);
+        this.resolveNotification(path);
+      }
     });
     bar.appendChild(yesBtn);
 
@@ -147,7 +152,11 @@ export class FileWatcher {
     noBtn.className = "file-watcher-btn file-watcher-btn-no";
     noBtn.textContent = "No";
     noBtn.addEventListener("click", () => {
-      this.resolveNotification(path);
+      try {
+        this.resolveNotification(path);
+      } catch (e: unknown) {
+        console.error("[file-watcher] dismiss button handler failed", path, e);
+      }
     });
     bar.appendChild(noBtn);
 
