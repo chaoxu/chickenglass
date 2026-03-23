@@ -37,29 +37,35 @@ export function FileTree({
   saveScrollRef.current = controller.saveScrollPosition;
 
   // Restore scroll position on mount, save on unmount.
-  // Uses a ResizeObserver because headless-tree renders items lazily based on
-  // expanded state — at mount time the container may be too short to scroll,
-  // so the browser clamps scrollTop to 0. The observer fires when DOM content
-  // actually changes size, so we wait until scrollHeight is large enough.
+  // The file tree lives inside a Radix ScrollArea whose Viewport element
+  // (marked with [data-radix-scroll-area-viewport]) is the actual scroll
+  // container — NOT containerRef.parentElement (which is TabsContent).
+  // We use a ResizeObserver because headless-tree renders items lazily based
+  // on expanded state — at mount time the container may be too short to
+  // scroll, so the browser clamps scrollTop to 0.
   const initialScrollTop = useRef(controller.savedScrollTop);
   useEffect(() => {
-    const el = containerRef.current?.parentElement;
+    const scrollEl = containerRef.current?.closest<HTMLElement>(
+      "[data-radix-scroll-area-viewport]",
+    );
     let observer: ResizeObserver | undefined;
-    if (initialScrollTop.current > 0 && el) {
+    if (initialScrollTop.current > 0 && scrollEl) {
       observer = new ResizeObserver(() => {
-        if (el.scrollHeight >= initialScrollTop.current) {
-          el.scrollTop = initialScrollTop.current;
+        if (scrollEl.scrollHeight >= initialScrollTop.current) {
+          scrollEl.scrollTop = initialScrollTop.current;
           observer?.disconnect();
           observer = undefined;
         }
       });
-      observer.observe(el);
+      observer.observe(scrollEl);
     }
     return () => {
       observer?.disconnect();
-      const scrollEl = containerRef.current?.parentElement;
-      if (scrollEl) {
-        saveScrollRef.current(scrollEl.scrollTop);
+      const el = containerRef.current?.closest<HTMLElement>(
+        "[data-radix-scroll-area-viewport]",
+      );
+      if (el) {
+        saveScrollRef.current(el.scrollTop);
       }
     };
   }, []);
