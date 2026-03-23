@@ -15,7 +15,7 @@ import { Decoration, type DecorationSet, type EditorView, type ViewUpdate } from
 import {
   collectVisibleSearchMatches,
   getSearchControllerState,
-} from "../editor/find-replace";
+} from "../editor";
 import { createSimpleViewPlugin } from "./render-utils";
 
 const MATCH_CLASS = "cf-search-match";

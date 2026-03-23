@@ -10,7 +10,7 @@
  */
 
 import type { EditorView } from "@codemirror/view";
-import type { DebugHelpers } from "../editor/debug-helpers";
+import type { DebugHelpers } from "../editor";
 import type { SourceMap } from "../app/source-map";
 import type { EditorMode } from "../editor";
 

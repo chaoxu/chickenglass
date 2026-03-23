@@ -9,7 +9,7 @@ import {
   openFindSearch,
   searchControllerExtensions,
   setSearchControllerQuery,
-} from "../editor/find-replace";
+} from "../editor";
 import { MathWidget } from "./math-render";
 import { searchHighlightPlugin } from "./search-highlight";
 

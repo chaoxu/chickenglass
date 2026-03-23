@@ -2,7 +2,7 @@ import {
   defaultCodeFontStack,
   defaultContentFontStack,
   defaultUIFontStack,
-} from "./editor/editor-constants";
+} from "./editor";
 
 export const themeFoundationTokens = [
   "--cf-bg",

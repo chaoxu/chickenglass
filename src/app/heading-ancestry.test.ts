@@ -5,7 +5,7 @@ import {
   activeHeadingIndex,
   type HeadingEntry,
 } from "./heading-ancestry";
-import { createEditor } from "../editor/editor";
+import { createEditor } from "../editor";
 
 /** Helper: create an editor with the given markdown and extract headings. */
 function headingsFrom(doc: string): HeadingEntry[] {

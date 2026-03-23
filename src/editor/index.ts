@@ -4,6 +4,7 @@ export {
   setEditorMode,
   editorModeField,
   tabSizeExtension,
+  themeCompartment,
   wordWrapCompartment,
   lineNumbersCompartment,
   tabSizeCompartment,
@@ -17,7 +18,52 @@ export {
 } from "./frontmatter-state";
 export { editorKeybindings } from "./keybindings";
 export { listOutlinerExtension } from "./list-outliner";
-export { coflatTheme } from "./theme";
+export { coflatTheme, coflatDarkTheme } from "./theme";
+export {
+  themePresets,
+  themePresetKeys,
+  applyThemePreset,
+  clearThemePreset,
+  type HeadingStyle,
+  type ThemePreset,
+} from "./theme-config";
+export {
+  type ProjectConfig,
+  PROJECT_CONFIG_FILE,
+  projectConfigFacet,
+  parseProjectConfig,
+  mergeConfigs,
+} from "./project-config";
+export { createDebugHelpers, type DebugHelpers } from "./debug-helpers";
+export {
+  type SearchUiState,
+  type SearchControllerState,
+  type SearchMatchRange,
+  setSearchUiStateEffect,
+  searchUiStateField,
+  searchControllerExtensions,
+  countSearchMatches,
+  collectVisibleSearchMatches,
+  getSearchControllerState,
+  setSearchUiState,
+  setSearchControllerQuery,
+  openFindSearch,
+  openReplaceSearch,
+  closeSearch,
+  nextSearchMatch,
+  previousSearchMatch,
+  replaceCurrentSearchMatch,
+  replaceAllSearchMatches,
+  findReplaceExtension,
+} from "./find-replace";
+export {
+  defaultUIFontStack,
+  defaultContentFontStack,
+  defaultCodeFontStack,
+  uiFont,
+  contentFont,
+  monoFont,
+} from "./editor-constants";
 export { imagePasteExtension, fileToDataUrl, insertImageMarkdown, type ImagePasteConfig } from "./image-paste";
 export { imageDropExtension, type ImageDropConfig } from "./image-drop";
 export { insertImageFromPicker } from "./image-insert";
