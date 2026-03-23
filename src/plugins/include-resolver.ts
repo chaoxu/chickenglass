@@ -1,5 +1,11 @@
+import { parser } from "@lezer/markdown";
 import type { FileSystem } from "../lib/types";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
+import { markdownExtensions, extractDivClass } from "../parser";
+import { NODE } from "../constants/node-types";
+
+/** Lezer parser configured with the same extensions used by the editor. */
+const includeParser = parser.configure(markdownExtensions);
 
 /** A single resolved include: the file path and its content. */
 export interface ResolvedInclude {
@@ -36,86 +42,74 @@ export class IncludeNotFoundError extends Error {
   }
 }
 
+/** A located include block: its position in the document and the path it references. */
+interface IncludeMatch {
+  /** Start of the entire fenced div block. */
+  readonly from: number;
+  /** End of the entire fenced div block. */
+  readonly to: number;
+  /** The include path extracted from the block body. */
+  readonly path: string;
+  /** The full original text of the include block. */
+  readonly text: string;
+}
+
 /**
- * Pattern matching `::: {.include} <path> :::` blocks in markdown.
+ * Walk the Lezer syntax tree to find `::: {.include} ... :::` blocks.
  *
- * Captures the file path from the content between the opening and closing fence.
- * Supports both single-line and multi-line forms:
- *   - Single line: `::: {.include} chapter1.md :::`
- *   - Multi-line:
- *     ```
- *     ::: {.include}
- *     chapter1.md
- *     :::
- *     ```
+ * Returns located include matches in document order. Code blocks are
+ * naturally excluded because Lezer parses them as FencedCode, not FencedDiv.
  */
-const INCLUDE_BLOCK_RE =
-  /^:{3,}\s*\{\.include\}\s*\n?\s*(.+?)\s*\n?\s*:{3,}\s*$/gm;
+function findIncludeBlocks(content: string): readonly IncludeMatch[] {
+  const tree = includeParser.parse(content);
+  const matches: IncludeMatch[] = [];
 
-/**
- * Pattern matching fenced code blocks (triple-backtick or triple-tilde).
- * Used to exclude include directives that appear inside code blocks.
- */
-const FENCED_CODE_BLOCK_RE = /^(`{3,}|~{3,}).*\n[\s\S]*?^\1\s*$/gm;
+  tree.iterate({
+    enter(node) {
+      if (node.name !== NODE.FencedDiv) return;
 
-/**
- * Compute the character ranges covered by fenced code blocks.
- * Returns sorted, non-overlapping `[from, to)` intervals.
- */
-function fencedCodeRanges(
-  content: string,
-): readonly { from: number; to: number }[] {
-  const ranges: { from: number; to: number }[] = [];
-  const re = new RegExp(FENCED_CODE_BLOCK_RE.source, FENCED_CODE_BLOCK_RE.flags);
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(content)) !== null) {
-    ranges.push({ from: match.index, to: match.index + match[0].length });
-  }
-  return ranges;
-}
+      const attrNode = node.node.getChild(NODE.FencedDivAttributes);
+      if (!attrNode) return;
 
-/** Check whether a position falls inside any of the given ranges. */
-function insideCodeBlock(
-  pos: number,
-  ranges: readonly { from: number; to: number }[],
-): boolean {
-  for (const r of ranges) {
-    if (pos >= r.from && pos < r.to) return true;
-    // Ranges are sorted, so we can bail early once we pass the position.
-    if (r.from > pos) break;
-  }
-  return false;
-}
+      const attrs = extractDivClass(content.slice(attrNode.from, attrNode.to));
+      if (!attrs || !attrs.classes.includes("include")) return;
 
-/**
- * Run INCLUDE_BLOCK_RE against `content` and return only those matches
- * that do NOT fall inside a fenced code block.
- */
-function matchIncludesOutsideCodeBlocks(
-  content: string,
-): RegExpExecArray[] {
-  const codeRanges = fencedCodeRanges(content);
-  const re = new RegExp(INCLUDE_BLOCK_RE.source, INCLUDE_BLOCK_RE.flags);
-  const matches: RegExpExecArray[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(content)) !== null) {
-    if (!insideCodeBlock(match.index, codeRanges)) {
-      matches.push(match);
-    }
-  }
+      // Extract the body text between the opening fence line and closing fence.
+      // For multi-line: content between opening fence line and closing `:::`
+      // For single-line: title text after `{.include}` before closing `:::`
+      const titleNode = node.node.getChild("FencedDivTitle");
+      let bodyText: string;
+      if (titleNode) {
+        // Single-line form: `::: {.include} chapter1.md :::`
+        // The title node contains the path.
+        bodyText = content.slice(titleNode.from, titleNode.to);
+      } else {
+        // Multi-line form: extract text between attr end and close fence.
+        const fenceNodes = node.node.getChildren(NODE.FencedDivFence);
+        const closeFence = fenceNodes.length >= 2 ? fenceNodes[fenceNodes.length - 1] : undefined;
+        const bodyFrom = attrNode.to;
+        const bodyTo = closeFence && closeFence.from >= 0 ? closeFence.from : node.to;
+        bodyText = content.slice(bodyFrom, bodyTo);
+      }
+
+      const path = bodyText.trim();
+      if (path.length > 0) {
+        matches.push({
+          from: node.from,
+          to: node.to,
+          path,
+          text: content.slice(node.from, node.to),
+        });
+      }
+    },
+  });
+
   return matches;
 }
 
-/** Extract include paths from markdown content, ignoring code blocks. */
+/** Extract include paths from markdown content using Lezer tree walking. */
 export function extractIncludePaths(content: string): readonly string[] {
-  const paths: string[] = [];
-  for (const match of matchIncludesOutsideCodeBlocks(content)) {
-    const path = match[1].trim();
-    if (path.length > 0) {
-      paths.push(path);
-    }
-  }
-  return paths;
+  return findIncludeBlocks(content).map((m) => m.path);
 }
 
 /**
@@ -211,7 +205,7 @@ export function flattenIncludes(
   let includeIndex = 0;
   const replacements: Array<{ start: number; end: number; text: string }> = [];
 
-  for (const match of matchIncludesOutsideCodeBlocks(result)) {
+  for (const block of findIncludeBlocks(result)) {
     if (includeIndex >= includes.length) break;
 
     const include = includes[includeIndex];
@@ -219,8 +213,8 @@ export function flattenIncludes(
     const expandedContent = flattenIncludes(include.content, include.children);
 
     replacements.push({
-      start: match.index,
-      end: match.index + match[0].length,
+      start: block.from,
+      end: block.to,
       text: expandedContent,
     });
     includeIndex++;
@@ -264,18 +258,18 @@ export function flattenIncludesWithSourceMap(
     originalRef: string;
   }> = [];
 
-  for (const match of matchIncludesOutsideCodeBlocks(rootContent)) {
+  for (const block of findIncludeBlocks(rootContent)) {
     if (includeIndex >= includes.length) break;
 
     const include = includes[includeIndex];
     const expandedContent = flattenIncludes(include.content, include.children);
 
     replacements.push({
-      start: match.index,
-      end: match.index + match[0].length,
+      start: block.from,
+      end: block.to,
       text: expandedContent,
       file: include.path,
-      originalRef: match[0],
+      originalRef: block.text,
     });
     includeIndex++;
   }

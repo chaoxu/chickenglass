@@ -111,6 +111,21 @@ example.md
 \`\`\``;
     expect(extractIncludePaths(content)).toEqual([]);
   });
+
+  // Lezer tree walking: code blocks are parsed as FencedCode, not FencedDiv,
+  // so include-like syntax inside them is naturally invisible to the tree walker.
+  it("ignores include inside indented code-like content within a code block", () => {
+    const content = `\`\`\`\`
+Some explanation:
+
+\`\`\`
+::: {.include}
+nested.md
+:::
+\`\`\`
+\`\`\`\``;
+    expect(extractIncludePaths(content)).toEqual([]);
+  });
 });
 
 describe("resolveIncludePath", () => {
