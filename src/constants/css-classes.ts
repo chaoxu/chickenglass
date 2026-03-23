@@ -105,6 +105,7 @@ export const CSS = {
   hoverPreviewHeader: "cf-hover-preview-header",
   hoverPreviewUnresolved: "cf-hover-preview-unresolved",
   hoverPreviewCitation: "cf-hover-preview-citation",
+  hoverPreviewSeparator: "cf-hover-preview-separator",
 
   /** Document title from frontmatter. */
   docTitle: "cf-doc-title",

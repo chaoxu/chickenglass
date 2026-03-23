@@ -103,19 +103,16 @@ function findEquationSource(view: EditorView, id: string): string | undefined {
 }
 
 /**
- * Build the tooltip DOM for a cross-reference hover preview.
- * Accepts pre-resolved data to avoid redundant resolution.
+ * Append the preview content for a single cross-reference id to a container.
+ * Reused by both single-id and clustered tooltip builders.
  */
-function buildCrossrefTooltip(
+function appendCrossrefItem(
+  container: HTMLElement,
   view: EditorView,
-  ref: ReferenceSemantics,
+  id: string,
   resolved: ResolvedCrossref,
-): HTMLElement {
-  const macros = view.state.field(mathMacrosField);
-  const id = ref.ids[0];
-  const container = document.createElement("div");
-  container.className = "cf-hover-preview";
-
+  macros: Record<string, string>,
+): void {
   if (resolved.kind === "block") {
     container.appendChild(createHeader(resolved.label, macros));
 
@@ -144,6 +141,65 @@ function buildCrossrefTooltip(
     container.appendChild(
       createHeader(`Unresolved: ${id}`, macros, "cf-hover-preview-unresolved"),
     );
+  }
+}
+
+/**
+ * Build the tooltip DOM for a cross-reference hover preview.
+ * Accepts pre-resolved data to avoid redundant resolution.
+ */
+function buildCrossrefTooltip(
+  view: EditorView,
+  ref: ReferenceSemantics,
+  resolved: ResolvedCrossref,
+): HTMLElement {
+  const macros = view.state.field(mathMacrosField);
+  const container = document.createElement("div");
+  container.className = "cf-hover-preview";
+  appendCrossrefItem(container, view, ref.ids[0], resolved, macros);
+  return container;
+}
+
+/**
+ * Build a tooltip with per-item preview sections for a clustered reference
+ * containing one or more cross-references (and optionally citations).
+ */
+function buildClusteredTooltip(
+  view: EditorView,
+  ids: readonly string[],
+  resolutions: readonly ResolvedCrossref[],
+  store: BibStore,
+): HTMLElement {
+  const macros = view.state.field(mathMacrosField);
+  const container = document.createElement("div");
+  container.className = "cf-hover-preview";
+
+  for (let i = 0; i < ids.length; i++) {
+    if (i > 0) {
+      const sep = document.createElement("hr");
+      sep.className = "cf-hover-preview-separator";
+      container.appendChild(sep);
+    }
+
+    const id = ids[i];
+    const resolved = resolutions[i];
+
+    if (resolved.kind === "citation") {
+      // Render as citation if bib entry exists
+      const entry = store.get(id);
+      if (entry) {
+        const item = document.createElement("div");
+        item.className = "cf-hover-preview-citation";
+        item.textContent = formatBibEntry(entry);
+        container.appendChild(item);
+      } else {
+        container.appendChild(
+          createHeader(`Unknown: @${id}`, macros, "cf-hover-preview-unresolved"),
+        );
+      }
+    } else {
+      appendCrossrefItem(container, view, id, resolved, macros);
+    }
   }
 
   return container;
@@ -180,6 +236,9 @@ function buildCitationTooltip(
 
 /**
  * The hover tooltip source function for cross-references and citations.
+ *
+ * Handles single-id refs, multi-id crossref clusters, pure citation
+ * clusters, and mixed crossref+citation clusters.
  */
 function hoverSource(
   view: EditorView,
@@ -194,23 +253,40 @@ function hoverSource(
   const ref = allRefs.find((r) => pos >= r.from && pos <= r.to);
   if (!ref) return null;
 
-  // Check for cross-reference (single-id refs that resolve to block/equation)
-  if (ref.ids.length === 1) {
-    const resolved = resolveCrossref(view.state, ref.ids[0], equationLabels);
-    if (resolved.kind !== "citation") {
-      return {
-        pos: ref.from,
-        end: ref.to,
-        above: true,
-        create() {
-          const dom = buildCrossrefTooltip(view, ref, resolved);
-          return { dom };
-        },
-      };
-    }
+  // Resolve every id in the reference
+  const resolutions = ref.ids.map((id) =>
+    resolveCrossref(view.state, id, equationLabels),
+  );
+  const hasCrossref = resolutions.some((r) => r.kind !== "citation");
+
+  // Single-id crossref — use the original compact tooltip
+  if (ref.ids.length === 1 && hasCrossref) {
+    return {
+      pos: ref.from,
+      end: ref.to,
+      above: true,
+      create() {
+        const dom = buildCrossrefTooltip(view, ref, resolutions[0]);
+        return { dom };
+      },
+    };
   }
 
-  // Check for citation
+  // Multi-id cluster containing at least one crossref
+  if (ref.ids.length > 1 && hasCrossref) {
+    const { store } = view.state.field(bibDataField);
+    return {
+      pos: ref.from,
+      end: ref.to,
+      above: true,
+      create() {
+        const dom = buildClusteredTooltip(view, ref.ids, resolutions, store);
+        return { dom };
+      },
+    };
+  }
+
+  // Pure citation cluster (no crossrefs resolved)
   const { store } = view.state.field(bibDataField);
   if (store.size > 0 && ref.ids.some((id) => store.has(id))) {
     return {

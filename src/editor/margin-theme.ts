@@ -104,4 +104,9 @@ export const marginThemeStyles = {
   ".cf-hover-preview-citation:last-child": {
     marginBottom: "0",
   },
+  ".cf-hover-preview-separator": {
+    border: "none",
+    borderTop: "1px solid var(--cf-border)",
+    margin: "var(--cf-spacing-xs) 0",
+  },
 };
