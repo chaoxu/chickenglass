@@ -108,7 +108,7 @@ ${themeTokens}
       background: var(--cf-hover);
       padding: 0.15em 0.35em;
 
-      border-radius: 2px;
+      border-radius: var(--cf-border-radius);
     }
     pre code {
       background: none;
@@ -143,7 +143,7 @@ ${themeTokens}
     mark {
       background: var(--cf-mark-bg);
       padding: 0.1em 0.2em;
-      border-radius: 2px;
+      border-radius: var(--cf-border-radius);
     }
     .math-display {
       margin: 1.5rem 0;
