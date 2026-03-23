@@ -98,7 +98,12 @@ const tableDecorationField = StateField.define<DecorationSet>({
   },
 
   update(value, tr) {
-    if (tr.annotation(cellEditAnnotation)) {
+    const cellEdit = tr.annotation(cellEditAnnotation);
+
+    // Live keystrokes inside the inline cell editor: map existing
+    // decorations through the change so the widget (and its nested
+    // editor) survives. Commits trigger a full rebuild below.
+    if (cellEdit === "edit") {
       return value.map(tr.changes);
     }
 

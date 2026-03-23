@@ -13,11 +13,15 @@ import { RenderWidget } from "./render-utils";
 
 /**
  * Annotation attached to transactions dispatched by cell-edit sync.
- * When `true`, the StateField maps existing decorations through the
- * change instead of fully rebuilding — preventing the widget from
- * being destroyed mid-edit.
+ *
+ * - `"edit"`: live keystroke while the inline editor is open — the
+ *   StateField maps existing decorations through the change so the
+ *   widget (and its nested editor) is not destroyed mid-edit.
+ * - `"commit"`: the inline editor has been destroyed and the final
+ *   content synced back — the StateField does a full rebuild so the
+ *   rendered table reflects the new content.
  */
-export const cellEditAnnotation = Annotation.define<boolean>();
+export const cellEditAnnotation = Annotation.define<"edit" | "commit">();
 
 interface ActiveInlineEditor {
   view: EditorView;
@@ -163,7 +167,7 @@ export class TableWidget extends RenderWidget {
     editedRow: number,
     editedCol: number,
     editedText: string,
-    useAnnotation: boolean,
+    annotation: "edit" | "commit",
   ): void {
     const rootView = this.editorView;
     if (!rootView) return;
@@ -177,18 +181,17 @@ export class TableWidget extends RenderWidget {
     if (newText === currentText) return;
     rootView.dispatch({
       changes: { from: bestTable.from, to: bestTable.to, insert: newText },
-      ...(useAnnotation ? { annotations: cellEditAnnotation.of(true) } : {}),
+      annotations: cellEditAnnotation.of(annotation),
     });
   }
 
   private commitRenderedCell(
     cell: HTMLElement,
     content: string,
-    useAnnotation: boolean,
   ): void {
     this.restoreRenderedCell(cell, content);
     const { section, row, col } = this.getCellPosition(cell);
-    this.syncToRoot(section, row, col, content, useAnnotation);
+    this.syncToRoot(section, row, col, content, "commit");
   }
 
   /**
@@ -259,7 +262,7 @@ export class TableWidget extends RenderWidget {
         if (activeInlineEditor) {
           const destroyed = destroyActiveInlineEditor();
           if (destroyed) {
-            destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text, true);
+            destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
           }
         }
 
@@ -277,7 +280,7 @@ export class TableWidget extends RenderWidget {
           doc: rawText,
           macros: this.macros,
           onChange: (newDoc) => {
-            this.syncToRoot(section, row, col, newDoc, true);
+            this.syncToRoot(section, row, col, newDoc, "edit");
           },
           onBlur: () => {
             const blurredEditor = activeInlineEditor;
@@ -286,13 +289,9 @@ export class TableWidget extends RenderWidget {
               const destroyed = destroyActiveInlineEditor();
               if (!destroyed) return;
 
-              const widgetContainer = cell.closest(".cf-table-widget");
-              const stillInTable =
-                widgetContainer && widgetContainer.contains(document.activeElement);
               destroyed.owner.commitRenderedCell(
                 destroyed.cell,
                 destroyed.text,
-                !!stillInTable,
               );
             }, 0);
           },
@@ -301,7 +300,7 @@ export class TableWidget extends RenderWidget {
               event.preventDefault();
               const destroyed = destroyActiveInlineEditor();
               if (!destroyed) return true;
-              destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text, false);
+              destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
               this.editorView?.focus();
               return true;
             }
@@ -317,7 +316,7 @@ export class TableWidget extends RenderWidget {
               if (nextLinear >= totalRows) {
                 const destroyed = destroyActiveInlineEditor();
                 if (!destroyed) return true;
-                destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text, true);
+                destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
                 const rootView = this.editorView;
                 if (rootView) {
                   const tables = findTablesInState(rootView.state);
@@ -364,7 +363,7 @@ export class TableWidget extends RenderWidget {
               if (nextLinear >= totalRows) {
                 const destroyed = destroyActiveInlineEditor();
                 if (!destroyed) return true;
-                destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text, true);
+                destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
                 const rootView = this.editorView;
                 if (rootView) {
                   const tables = findTablesInState(rootView.state);
