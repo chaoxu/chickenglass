@@ -37,6 +37,14 @@ export interface UseThemeReturn {
   resolvedTheme: ResolvedTheme;
 }
 
+function resolveEffectiveTheme(theme: Theme, themeName?: string): ResolvedTheme {
+  const writingTheme = getThemeById(themeName ?? "default");
+  if (writingTheme.id !== "default") {
+    return writingTheme.dark ? "dark" : "light";
+  }
+  return resolveTheme(theme);
+}
+
 /**
  * Apply theme side effects based on settings state.
  *
@@ -54,7 +62,7 @@ export function useTheme(
   writingTheme?: string,
 ): UseThemeReturn {
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(
-    () => resolveTheme(theme),
+    () => resolveEffectiveTheme(theme, themeName),
   );
 
   // Track previously applied CSS variable keys so we can clear them.
@@ -62,11 +70,18 @@ export function useTheme(
 
   // Apply resolved theme to <html> and sync state whenever theme changes.
   useEffect(() => {
-    const resolved = resolveTheme(theme);
+    const writingThemeConfig = getThemeById(themeName ?? "default");
+    const resolved = resolveEffectiveTheme(theme, themeName);
     setResolvedTheme(resolved);
     applyResolvedThemeToDom(resolved);
 
-    if (theme !== "system" || typeof window.matchMedia !== "function") return;
+    if (
+      writingThemeConfig.id !== "default" ||
+      theme !== "system" ||
+      typeof window.matchMedia !== "function"
+    ) {
+      return;
+    }
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const listener = (e: MediaQueryListEvent): void => {
@@ -77,20 +92,12 @@ export function useTheme(
 
     mq.addEventListener("change", listener);
     return () => mq.removeEventListener("change", listener);
-  }, [theme]);
+  }, [theme, themeName]);
 
   // Apply writing theme CSS variable overrides whenever themeName changes.
   useEffect(() => {
     const wt = getThemeById(themeName ?? "default");
     applyWritingThemeVariables(wt, prevVariablesRef);
-
-    // If the writing theme declares itself as dark/light, override the
-    // light/dark toggle for non-default themes.
-    if (wt.id !== "default") {
-      const resolved: ResolvedTheme = wt.dark ? "dark" : "light";
-      setResolvedTheme(resolved);
-      applyResolvedThemeToDom(resolved);
-    }
 
     // Cleanup: remove overrides when unmounting or switching themes
     return () => {
