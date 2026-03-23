@@ -181,7 +181,7 @@ describe("NarrativeCitationWidget", () => {
     const el = widget.toDOM();
     expect(el.tagName).toBe("SPAN");
     expect(el.className).toContain(CSS.citation);
-    expect(el.className).toContain("cf-citation-narrative");  // CSS.citationNarrative contains both
+    expect(el.className).toBe(CSS.citationNarrative);
     expect(el.textContent).toBe("Karger (2000)");
   });
 

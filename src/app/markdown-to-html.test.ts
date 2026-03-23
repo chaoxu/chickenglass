@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { markdownToHtml, renderInline } from "./markdown-to-html";
 import type { CslJsonItem } from "../citations/bibtex-parser";
 import type { CslProcessor } from "../citations/csl-processor";
+import { CSS } from "../constants/css-classes";
 
 describe("renderInline", () => {
   it("renders plain text with HTML escaping", () => {
@@ -98,7 +99,7 @@ describe("markdownToHtml", () => {
 
   it("keeps hyphenated heading classes numbered in read mode", () => {
     const html = markdownToHtml("# Intro {.foo-bar}", { sectionNumbers: true });
-    expect(html).toContain('<h1><span class="cf-section-number">1</span> Intro</h1>');
+    expect(html).toContain(`<h1><span class="${CSS.sectionNumber}">1</span> Intro</h1>`);
   });
 
   it("renders paragraphs", () => {
@@ -254,11 +255,11 @@ describe("markdownToHtml", () => {
 
     const html = markdownToHtml("See [@karger2000].", { bibliography });
 
-    expect(html).toContain('class="cf-citation"');
-    expect(html).toContain('class="cf-bibliography"');
-    expect(html).toContain('class="cf-bibliography-heading"');
-    expect(html).toContain('class="cf-bibliography-list"');
-    expect(html).toContain('class="cf-bibliography-entry"');
+    expect(html).toContain(`class="${CSS.citation}"`);
+    expect(html).toContain(`class="${CSS.bibliography}"`);
+    expect(html).toContain(`class="${CSS.bibliographyHeading}"`);
+    expect(html).toContain(`class="${CSS.bibliographyList}"`);
+    expect(html).toContain(`class="${CSS.bibliographyEntry}"`);
     expect(html).not.toContain('class="bibliography"');
     expect(html).not.toContain('class="bib-entry"');
   });
@@ -288,8 +289,8 @@ describe("markdownToHtml", () => {
     expect(fakeCsl.registerCitations).toHaveBeenCalled();
     expect(fakeCsl.cite).toHaveBeenCalledWith(["karger2000"]);
     expect(fakeCsl.bibliography).toHaveBeenCalledWith(["karger2000"]);
-    expect(html).toContain('<span class="cf-citation">[1]</span>');
-    expect(html).toContain('<div class="cf-bibliography-entry" id="bib-karger2000"><span class="csl-entry">[1] Karger.</span></div>');
+    expect(html).toContain(`<span class="${CSS.citation}">[1]</span>`);
+    expect(html).toContain(`<div class="${CSS.bibliographyEntry}" id="bib-karger2000"><span class="csl-entry">[1] Karger.</span></div>`);
   });
 
   it("uses CSL formatting for narrative citations in read mode", () => {
@@ -314,7 +315,7 @@ describe("markdownToHtml", () => {
     });
 
     expect(fakeCsl.citeNarrative).toHaveBeenCalledWith("karger2000");
-    expect(html).toContain('<span class="cf-citation cf-citation-narrative">Karger [1]</span>');
+    expect(html).toContain(`<span class="${CSS.citationNarrative}">Karger [1]</span>`);
   });
 
   // Regression: clustered equation references like [@eq:a; @eq:b] should
@@ -379,7 +380,7 @@ describe("markdownToHtml", () => {
     // The citation part should be formatted via CSL
     expect(fakeCsl.cite).toHaveBeenCalled();
     // Both parts combined in a citation span
-    expect(html).toContain('class="cf-citation"');
+    expect(html).toContain(`class="${CSS.citation}"`);
   });
 
   it("pure citation cluster still goes through CSL without splitting", () => {
@@ -417,7 +418,7 @@ describe("markdownToHtml", () => {
     expect(fakeCsl.cite).toHaveBeenCalledWith(
       ["karger2000", "stein2001"],
     );
-    expect(html).toContain('class="cf-citation"');
+    expect(html).toContain(`class="${CSS.citation}"`);
     // Should NOT contain cross-ref anchors
     expect(html).not.toContain('class="cross-ref"');
   });
@@ -436,6 +437,6 @@ describe("markdownToHtml", () => {
     expect(html).toContain("Eq. (1)");
     expect(html).toContain("Eq. (2)");
     // Should NOT contain cf-citation class
-    expect(html).not.toContain('class="cf-citation"');
+    expect(html).not.toContain(`class="${CSS.citation}"`);
   });
 });
