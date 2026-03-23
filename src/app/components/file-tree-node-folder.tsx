@@ -116,7 +116,14 @@ export function FileTreeNodeFolder({ item }: FileTreeNodeFolderProps) {
   };
 
   const revealItem: MenuItem | null = isTauri()
-    ? { label: "Reveal in Finder", action: () => void revealInFinder(entry.path) }
+    ? {
+        label: "Reveal in Finder",
+        action: () => {
+          void revealInFinder(entry.path).catch((e: unknown) => {
+            console.error("[file-tree] revealInFinder failed:", e);
+          });
+        },
+      }
     : null;
 
   const menuItems: MenuItem[] = [
@@ -124,9 +131,23 @@ export function FileTreeNodeFolder({ item }: FileTreeNodeFolderProps) {
     { label: "New Folder", action: () => startCreate("folder") },
     { label: "-" },
     { label: "Rename", action: startRename },
-    { label: "Delete", action: () => { void onDelete(entry.path).then(restoreFocus); } },
+    {
+      label: "Delete",
+      action: () => {
+        void onDelete(entry.path).then(restoreFocus).catch((e: unknown) => {
+          console.error("[file-tree] delete failed:", e);
+        });
+      },
+    },
     { label: "-" },
-    { label: "Copy File Name", action: () => void navigator.clipboard.writeText(entry.name) },
+    {
+      label: "Copy File Name",
+      action: () => {
+        void navigator.clipboard.writeText(entry.name).catch((e: unknown) => {
+          console.error("[file-tree] clipboard write failed:", e);
+        });
+      },
+    },
   ];
 
   if (revealItem) {
@@ -158,7 +179,11 @@ export function FileTreeNodeFolder({ item }: FileTreeNodeFolderProps) {
               <RenameEditor
                 value={renameValue}
                 onChange={setRenameValue}
-                onCommit={() => void commitRename()}
+                onCommit={() => {
+                  void commitRename().catch((e: unknown) => {
+                    console.error("[file-tree] commitRename failed:", e);
+                  });
+                }}
                 onCancel={cancelRename}
               />
             ) : (
