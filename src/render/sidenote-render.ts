@@ -25,6 +25,7 @@ import {
   createDecorationsField,
   cursorInRange,
   defaultShouldRebuild,
+  pushWidgetDecoration,
   serializeMacros,
   RenderWidget,
   editorFocusField,
@@ -116,10 +117,7 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
     if (focused && cursorInRange(state, ref.from, ref.to)) continue;
 
     const num = numberMap.get(ref.id) ?? 0;
-    const widget = new FootnoteRefWidget(num, ref.id);
-    widget.sourceFrom = ref.from;
-    widget.sourceTo = ref.to;
-    items.push(Decoration.replace({ widget }).range(ref.from, ref.to));
+    pushWidgetDecoration(items, new FootnoteRefWidget(num, ref.id), ref.from, ref.to);
   }
 
   // Heading-like pattern for footnote defs: when cursor is inside the def,
@@ -133,10 +131,7 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
     if (cursorInDef) {
       // Label stays as source; body keeps inline rendering via widget.
       if (def.labelTo < def.to) {
-        const widget = new FootnoteBodyWidget(def.content, macros);
-        widget.sourceFrom = def.labelTo;
-        widget.sourceTo = def.to;
-        items.push(Decoration.replace({ widget }).range(def.labelTo, def.to));
+        pushWidgetDecoration(items, new FootnoteBodyWidget(def.content, macros), def.labelTo, def.to);
       }
       continue;
     }

@@ -11,6 +11,7 @@ import {
   cursorInRange,
   buildDecorations,
   createDecorationsField,
+  pushWidgetDecoration,
   serializeMacros,
   RenderWidget,
   editorFocusField,
@@ -159,17 +160,8 @@ function buildMathItems(
 
       const latex = stripMathDelimiters(raw, isDisplay, contentTo);
 
-      const widget = new MathWidget(latex, raw, isDisplay, macros);
-      widget.sourceFrom = node.from;
-      widget.sourceTo = node.to;
-
-      items.push(
-        Decoration.replace({
-          widget,
-          // block: true breaks CM6 height tracking for subsequent lines
-          block: false,
-        }).range(node.from, node.to),
-      );
+      // block: true breaks CM6 height tracking for subsequent lines
+      pushWidgetDecoration(items, new MathWidget(latex, raw, isDisplay, macros), node.from, node.to);
 
       return false; // don't descend into math children
     },

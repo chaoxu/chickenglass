@@ -17,7 +17,7 @@ import {
   resolveCrossref,
 } from "../index/crossref-resolver";
 import { documentAnalysisField } from "../semantics/codemirror-source";
-import { cursorInRange, RenderWidget } from "./render-utils";
+import { cursorInRange, pushWidgetDecoration, RenderWidget } from "./render-utils";
 
 /** Widget for a resolved cross-reference (block or equation). */
 export class CrossrefWidget extends RenderWidget {
@@ -144,17 +144,11 @@ export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
     // Skip citations — let the citation render plugin handle them
     if (resolved.kind === "citation") continue;
 
-    let widget: RenderWidget;
-    if (resolved.kind === "block" || resolved.kind === "equation") {
-      widget = new CrossrefWidget(resolved, raw);
-    } else {
-      widget = new UnresolvedRefWidget(raw);
-    }
-    widget.sourceFrom = ref.from;
-    widget.sourceTo = ref.to;
-    items.push(
-      Decoration.replace({ widget }).range(ref.from, ref.to),
-    );
+    const widget: RenderWidget =
+      resolved.kind === "block" || resolved.kind === "equation"
+        ? new CrossrefWidget(resolved, raw)
+        : new UnresolvedRefWidget(raw);
+    pushWidgetDecoration(items, widget, ref.from, ref.to);
   }
 
   return items;
