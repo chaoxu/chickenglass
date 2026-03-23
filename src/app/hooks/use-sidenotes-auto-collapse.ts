@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { EditorView } from "@codemirror/view";
-// Direct import: barrel would create circular dependency via citations chain
-import { sidenotesCollapsedEffect } from "../../render/sidenote-render";
+import { sidenotesCollapsedEffect } from "../../render";
 
 const AUTO_COLLAPSE_WIDTH = 700;
 

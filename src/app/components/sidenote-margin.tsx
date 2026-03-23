@@ -12,9 +12,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { EditorView } from "@codemirror/view";
-// Direct imports: barrel would create circular dependency via citations chain
-import { collectFootnotes } from "../../render/sidenote-render";
-import { mathMacrosField } from "../../render/math-macros";
+import { collectFootnotes, mathMacrosField } from "../../render";
 import { orderedFootnoteEntries } from "../../semantics/document";
 import { renderDocumentFragmentToDom } from "../../document-surfaces";
 
