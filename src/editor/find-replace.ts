@@ -420,42 +420,26 @@ function attachEventHandlers(ctx: SearchPanelContext): void {
 }
 
 // ===========================================================================
-// Custom search panel
+// Custom search panel — context builder
 // ===========================================================================
 
-function createSearchPanel(view: EditorView): Panel {
-  const dom = document.createElement("div");
-  dom.className = CSS.searchPanel;
-
-  const searchInput = document.createElement("input");
-  searchInput.type = "text";
-  searchInput.className = CSS.searchInput;
-  searchInput.placeholder = "Find";
-  searchInput.setAttribute("main-field", "true");
-  searchInput.setAttribute("aria-label", "Find");
-
-  const replaceInput = document.createElement("input");
-  replaceInput.type = "text";
-  replaceInput.className = CSS.searchInput;
-  replaceInput.placeholder = "Replace";
-  replaceInput.setAttribute("aria-label", "Replace");
-
-  const matchInfo = document.createElement("span");
-  matchInfo.className = CSS.searchMatchInfo;
-  matchInfo.textContent = "No results";
-
-  // Build context object — functions that cross-reference each other are
-  // assigned after construction so closures close over the ctx reference.
+/** Build the SearchPanelContext with all cross-referencing methods. */
+function buildSearchPanelContext(
+  view: EditorView,
+  searchInput: HTMLInputElement,
+  replaceInput: HTMLInputElement,
+  matchInfo: HTMLSpanElement,
+): SearchPanelContext {
   const ctx: SearchPanelContext = {
     view,
     searchInput,
     replaceInput,
     matchInfo,
-    // These will be assigned by createSearchInputRow:
+    // Assigned by createSearchInputRow:
     toggleCase: null as unknown as HTMLButtonElement,
     toggleRegex: null as unknown as HTMLButtonElement,
     toggleWord: null as unknown as HTMLButtonElement,
-    // These will be assigned below:
+    // Assigned by assembleSearchPanelDom:
     replaceRow: null as unknown as HTMLDivElement,
     toggleReplaceBtn: null as unknown as HTMLButtonElement,
     matchCache: null,
@@ -498,8 +482,7 @@ function createSearchPanel(view: EditorView): Panel {
       if (total === 0) {
         matchInfo.textContent = searchInput.value ? "No results" : "";
       } else {
-        matchInfo.textContent =
-          current > 0 ? `${current} of ${total}` : `${total} results`;
+        matchInfo.textContent = current > 0 ? `${current} of ${total}` : `${total} results`;
       }
     },
 
@@ -516,9 +499,51 @@ function createSearchPanel(view: EditorView): Panel {
       ctx.toggleReplaceBtn.textContent = state.replaceVisible ? "\u25be" : "\u25b8";
     },
   };
+  return ctx;
+}
+
+// ===========================================================================
+// Custom search panel — input element builder
+// ===========================================================================
+
+/** Create the search and replace inputs plus the match info span. */
+function createSearchInputElements(): {
+  searchInput: HTMLInputElement;
+  replaceInput: HTMLInputElement;
+  matchInfo: HTMLSpanElement;
+} {
+  const searchInput = document.createElement("input");
+  searchInput.type = "text";
+  searchInput.className = CSS.searchInput;
+  searchInput.placeholder = "Find";
+  searchInput.setAttribute("main-field", "true");
+  searchInput.setAttribute("aria-label", "Find");
+
+  const replaceInput = document.createElement("input");
+  replaceInput.type = "text";
+  replaceInput.className = CSS.searchInput;
+  replaceInput.placeholder = "Replace";
+  replaceInput.setAttribute("aria-label", "Replace");
+
+  const matchInfo = document.createElement("span");
+  matchInfo.className = CSS.searchMatchInfo;
+  matchInfo.textContent = "No results";
+
+  return { searchInput, replaceInput, matchInfo };
+}
+
+// ===========================================================================
+// Custom search panel — DOM assembly
+// ===========================================================================
+
+/** Create and assemble all panel DOM elements. Returns the root dom element. */
+function assembleSearchPanelDom(ctx: SearchPanelContext): HTMLDivElement {
+  const { view, replaceInput } = ctx;
+
+  const dom = document.createElement("div");
+  dom.className = CSS.searchPanel;
 
   const searchRow = createSearchInputRow(ctx);
-
   ctx.replaceRow = createReplaceRow(ctx);
 
   const toggleReplaceBtn = createAction("\u25b8", "Toggle Replace", () => {
@@ -526,31 +551,26 @@ function createSearchPanel(view: EditorView): Panel {
     const replaceVisible = !state.replaceVisible;
     setSearchUiState(view, { replaceVisible });
     ctx.syncPanelState();
-    if (replaceVisible) {
-      replaceInput.focus();
-    }
+    if (replaceVisible) replaceInput.focus();
   });
   toggleReplaceBtn.className = CSS.searchToggleReplace;
-  toggleReplaceBtn.textContent = "\u25b8";
   ctx.toggleReplaceBtn = toggleReplaceBtn;
 
   dom.append(toggleReplaceBtn, searchRow, ctx.replaceRow);
-  ctx.syncPanelState();
+  return dom;
+}
 
-  attachEventHandlers(ctx);
+// ===========================================================================
+// Custom search panel — Panel callbacks
+// ===========================================================================
 
-  // Populate from existing query if reopening
-  const existing = getSearchControllerState(view);
-  if (existing.query.valid) {
-    searchInput.value = existing.query.search;
-    replaceInput.value = existing.query.replace;
-    ctx.syncPanelState();
-  }
+/** Build the Panel mount/update callbacks for a fully assembled context. */
+function buildPanelCallbacks(
+  ctx: SearchPanelContext,
+): Pick<Panel, "mount" | "update"> {
+  const { searchInput, replaceInput } = ctx;
 
   return {
-    dom,
-    top: true,
-
     mount() {
       searchInput.focus();
       searchInput.select();
@@ -561,12 +581,9 @@ function createSearchPanel(view: EditorView): Panel {
       // React to external query changes (e.g. from select-next-occurrence)
       const state = getSearchControllerState(update.view);
       const q = state.query;
-      if (q.search !== searchInput.value) {
-        searchInput.value = q.search;
-      }
-      if (q.replace !== replaceInput.value) {
-        replaceInput.value = q.replace;
-      }
+      if (q.search !== searchInput.value) searchInput.value = q.search;
+      if (q.replace !== replaceInput.value) replaceInput.value = q.replace;
+
       const { caseSensitive, isRegexp, wholeWord } = ctx.getToggles();
       if (
         q.caseSensitive !== caseSensitive ||
@@ -580,6 +597,29 @@ function createSearchPanel(view: EditorView): Panel {
       ctx.updateMatchInfo();
     },
   };
+}
+
+// ===========================================================================
+// Custom search panel — orchestrator
+// ===========================================================================
+
+function createSearchPanel(view: EditorView): Panel {
+  const { searchInput, replaceInput, matchInfo } = createSearchInputElements();
+  const ctx = buildSearchPanelContext(view, searchInput, replaceInput, matchInfo);
+  const dom = assembleSearchPanelDom(ctx);
+
+  ctx.syncPanelState();
+  attachEventHandlers(ctx);
+
+  // Populate from existing query if reopening
+  const existing = getSearchControllerState(view);
+  if (existing.query.valid) {
+    searchInput.value = existing.query.search;
+    replaceInput.value = existing.query.replace;
+    ctx.syncPanelState();
+  }
+
+  return { dom, top: true, ...buildPanelCallbacks(ctx) };
 }
 
 // ===========================================================================
