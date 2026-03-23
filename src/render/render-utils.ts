@@ -1,4 +1,13 @@
-import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
+import {
+  Decoration,
+  type DecorationSet,
+  EditorView,
+  type PluginSpec,
+  type PluginValue,
+  type ViewUpdate,
+  ViewPlugin,
+  WidgetType,
+} from "@codemirror/view";
 import {
   type EditorState,
   type Extension,
@@ -247,3 +256,83 @@ export const focusTracker: Extension = EditorView.domEventHandlers({
     view.dispatch({ effects: focusEffect.of(false) });
   },
 });
+
+/**
+ * Push a widget replacement decoration, setting source range for click-to-edit.
+ *
+ * Common pattern: create a RenderWidget, set its sourceFrom/sourceTo, and push
+ * a Decoration.replace into an accumulator array. Consolidates the 3-step
+ * boilerplate into a single call.
+ */
+export function pushWidgetDecoration(
+  items: Range<Decoration>[],
+  widget: RenderWidget,
+  from: number,
+  to: number,
+): void {
+  widget.sourceFrom = from;
+  widget.sourceTo = to;
+  items.push(Decoration.replace({ widget }).range(from, to));
+}
+
+/**
+ * Default update predicate for render ViewPlugins.
+ *
+ * Returns true when any of the five standard conditions hold:
+ * docChanged, selectionSet, viewportChanged, focusChanged, or syntaxTree changed.
+ */
+export function defaultShouldUpdate(update: ViewUpdate): boolean {
+  return (
+    update.docChanged ||
+    update.selectionSet ||
+    update.viewportChanged ||
+    update.focusChanged ||
+    syntaxTree(update.state) !== syntaxTree(update.startState)
+  );
+}
+
+/**
+ * Factory that creates a CM6 ViewPlugin producing DecorationSet.
+ *
+ * Eliminates the repeated boilerplate of:
+ *   class Foo implements PluginValue {
+ *     decorations: DecorationSet;
+ *     constructor(view) { this.decorations = buildFn(view); }
+ *     update(u) { if (shouldUpdate(u)) this.decorations = buildFn(u.view); }
+ *   }
+ *   ViewPlugin.fromClass(Foo, { decorations: v => v.decorations })
+ *
+ * @param buildFn  Pure function that computes the DecorationSet from the view.
+ * @param options  Optional overrides:
+ *   - shouldUpdate: custom predicate (defaults to the standard 5-condition check).
+ *   - pluginSpec: additional PluginSpec fields (e.g., eventHandlers) merged with
+ *     the decorations accessor.
+ */
+export function createSimpleViewPlugin(
+  buildFn: (view: EditorView) => DecorationSet,
+  options?: {
+    shouldUpdate?: (update: ViewUpdate) => boolean;
+    pluginSpec?: Omit<PluginSpec<PluginValue>, "decorations">;
+  },
+): Extension {
+  const shouldUpdate = options?.shouldUpdate ?? defaultShouldUpdate;
+
+  class SimpleViewPlugin implements PluginValue {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildFn(view);
+    }
+
+    update(update: ViewUpdate): void {
+      if (shouldUpdate(update)) {
+        this.decorations = buildFn(update.view);
+      }
+    }
+  }
+
+  return ViewPlugin.fromClass(SimpleViewPlugin, {
+    ...options?.pluginSpec,
+    decorations: (v) => v.decorations,
+  });
+}

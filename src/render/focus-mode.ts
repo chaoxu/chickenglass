@@ -10,12 +10,10 @@ import {
   Decoration,
   type DecorationSet,
   type EditorView,
-  type PluginValue,
   type ViewUpdate,
-  ViewPlugin,
 } from "@codemirror/view";
 import { type Extension, StateEffect } from "@codemirror/state";
-import { createBooleanToggleField } from "./render-utils";
+import { createBooleanToggleField, createSimpleViewPlugin } from "./render-utils";
 
 /** Effect to toggle focus mode on/off. */
 const toggleFocusEffect = StateEffect.define<boolean>();
@@ -56,43 +54,35 @@ function findParagraphRange(
   return { from, to };
 }
 
-class FocusModePlugin implements PluginValue {
-  decorations: DecorationSet;
+/** Build focus-mode decorations that dim lines outside the current paragraph. */
+function buildFocusDecorations(view: EditorView): DecorationSet {
+  const active = view.state.field(focusModeField);
+  if (!active) return Decoration.none;
 
-  constructor(view: EditorView) {
-    this.decorations = this.build(view);
+  const doc = view.state.doc;
+  const cursorPos = view.state.selection.main.head;
+  const cursorLine = doc.lineAt(cursorPos).number;
+  const { from: paraFrom, to: paraTo } = findParagraphRange(doc, cursorLine);
+
+  const decorations: ReturnType<typeof dimmedLine.range>[] = [];
+
+  for (let i = 1; i <= doc.lines; i++) {
+    if (i >= paraFrom && i <= paraTo) continue;
+    const line = doc.line(i);
+    decorations.push(dimmedLine.range(line.from));
   }
 
-  update(update: ViewUpdate): void {
-    if (
-      update.docChanged ||
-      update.selectionSet ||
-      update.startState.field(focusModeField) !==
-        update.state.field(focusModeField)
-    ) {
-      this.decorations = this.build(update.view);
-    }
-  }
+  return Decoration.set(decorations, true);
+}
 
-  private build(view: EditorView): DecorationSet {
-    const active = view.state.field(focusModeField);
-    if (!active) return Decoration.none;
-
-    const doc = view.state.doc;
-    const cursorPos = view.state.selection.main.head;
-    const cursorLine = doc.lineAt(cursorPos).number;
-    const { from: paraFrom, to: paraTo } = findParagraphRange(doc, cursorLine);
-
-    const decorations: ReturnType<typeof dimmedLine.range>[] = [];
-
-    for (let i = 1; i <= doc.lines; i++) {
-      if (i >= paraFrom && i <= paraTo) continue;
-      const line = doc.line(i);
-      decorations.push(dimmedLine.range(line.from));
-    }
-
-    return Decoration.set(decorations, true);
-  }
+/** Custom update predicate: doc, selection, or toggle state changed. */
+function focusShouldUpdate(update: ViewUpdate): boolean {
+  return (
+    update.docChanged ||
+    update.selectionSet ||
+    update.startState.field(focusModeField) !==
+      update.state.field(focusModeField)
+  );
 }
 
 /** Command that toggles focus mode. */
@@ -105,7 +95,7 @@ export function toggleFocusMode(view: EditorView): boolean {
 /** CM6 extension providing focus mode. */
 export const focusModeExtension: Extension = [
   focusModeField,
-  ViewPlugin.fromClass(FocusModePlugin, {
-    decorations: (v) => v.decorations,
+  createSimpleViewPlugin(buildFocusDecorations, {
+    shouldUpdate: focusShouldUpdate,
   }),
 ];

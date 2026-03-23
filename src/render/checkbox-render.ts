@@ -10,13 +10,10 @@ import {
   Decoration,
   type DecorationSet,
   type EditorView,
-  type PluginValue,
-  type ViewUpdate,
-  ViewPlugin,
 } from "@codemirror/view";
 import { type Extension, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { cursorInRange, RenderWidget } from "./render-utils";
+import { cursorInRange, RenderWidget, createSimpleViewPlugin } from "./render-utils";
 
 /** Checkbox widget that toggles task marker content on click. */
 export class CheckboxWidget extends RenderWidget {
@@ -56,58 +53,36 @@ export class CheckboxWidget extends RenderWidget {
   }
 }
 
-class CheckboxRenderPlugin implements PluginValue {
-  decorations: DecorationSet;
+/** Build checkbox decorations for task list markers. */
+function buildCheckboxDecorations(view: EditorView): DecorationSet {
+  const widgets: Range<Decoration>[] = [];
 
-  constructor(view: EditorView) {
-    this.decorations = this.process(view);
+  for (const { from, to } of view.visibleRanges) {
+    syntaxTree(view.state).iterate({
+      from,
+      to,
+      enter(node) {
+        if (node.name !== "TaskMarker") return;
+
+        // Show source only when cursor touches the marker itself
+        if (cursorInRange(view, node.from, node.to)) return;
+
+        const text = view.state.sliceDoc(node.from, node.to);
+        const checked = text.includes("x") || text.includes("X");
+
+        widgets.push(
+          Decoration.replace({
+            widget: new CheckboxWidget(checked, node.from, node.to),
+          }).range(node.from, node.to),
+        );
+      },
+    });
   }
 
-  update(update: ViewUpdate): void {
-    if (
-      update.docChanged ||
-      update.viewportChanged ||
-      update.selectionSet ||
-      update.focusChanged ||
-      syntaxTree(update.state) !== syntaxTree(update.startState)
-    ) {
-      this.decorations = this.process(update.view);
-    }
-  }
-
-  private process(view: EditorView): DecorationSet {
-    const widgets: Range<Decoration>[] = [];
-
-    for (const { from, to } of view.visibleRanges) {
-      syntaxTree(view.state).iterate({
-        from,
-        to,
-        enter(node) {
-          if (node.name !== "TaskMarker") return;
-
-          // Show source only when cursor touches the marker itself
-          if (cursorInRange(view, node.from, node.to)) return;
-
-          const text = view.state.sliceDoc(node.from, node.to);
-          const checked = text.includes("x") || text.includes("X");
-
-          widgets.push(
-            Decoration.replace({
-              widget: new CheckboxWidget(checked, node.from, node.to),
-            }).range(node.from, node.to),
-          );
-        },
-      });
-    }
-
-    return Decoration.set(widgets, true);
-  }
+  return Decoration.set(widgets, true);
 }
 
 /** CM6 extension that renders task list checkboxes with toggle support. */
-export const checkboxRenderPlugin: Extension = ViewPlugin.fromClass(
-  CheckboxRenderPlugin,
-  {
-    decorations: (v) => v.decorations,
-  },
+export const checkboxRenderPlugin: Extension = createSimpleViewPlugin(
+  buildCheckboxDecorations,
 );

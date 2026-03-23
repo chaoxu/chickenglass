@@ -13,9 +13,7 @@ import {
   Decoration,
   type DecorationSet,
   type EditorView,
-  type PluginValue,
   type ViewUpdate,
-  ViewPlugin,
 } from "@codemirror/view";
 import {
   type Extension,
@@ -23,7 +21,7 @@ import {
   StateEffect,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { createBooleanToggleField } from "./render-utils";
+import { createBooleanToggleField, createSimpleViewPlugin } from "./render-utils";
 
 /** Effect to toggle the debug inspector on/off. */
 const toggleDebugEffect = StateEffect.define<boolean>();
@@ -74,46 +72,38 @@ function getOutlineDecoration(name: string): Decoration | null {
   return null;
 }
 
-class DebugInspectorPlugin implements PluginValue {
-  decorations: DecorationSet;
+/** Build debug outline decorations when inspector is active. */
+function buildDebugDecorations(view: EditorView): DecorationSet {
+  const active = view.state.field(debugActiveField);
+  if (!active) return Decoration.none;
 
-  constructor(view: EditorView) {
-    this.decorations = this.build(view);
+  const widgets: Range<Decoration>[] = [];
+
+  for (const { from, to } of view.visibleRanges) {
+    syntaxTree(view.state).iterate({
+      from,
+      to,
+      enter(node) {
+        const deco = getOutlineDecoration(node.name);
+        if (deco) {
+          widgets.push(deco.range(node.from, node.to));
+        }
+      },
+    });
   }
 
-  update(update: ViewUpdate): void {
-    if (
-      update.docChanged ||
-      update.viewportChanged ||
-      update.startState.field(debugActiveField) !==
-        update.state.field(debugActiveField) ||
-      syntaxTree(update.state) !== syntaxTree(update.startState)
-    ) {
-      this.decorations = this.build(update.view);
-    }
-  }
+  return Decoration.set(widgets, true);
+}
 
-  private build(view: EditorView): DecorationSet {
-    const active = view.state.field(debugActiveField);
-    if (!active) return Decoration.none;
-
-    const widgets: Range<Decoration>[] = [];
-
-    for (const { from, to } of view.visibleRanges) {
-      syntaxTree(view.state).iterate({
-        from,
-        to,
-        enter(node) {
-          const deco = getOutlineDecoration(node.name);
-          if (deco) {
-            widgets.push(deco.range(node.from, node.to));
-          }
-        },
-      });
-    }
-
-    return Decoration.set(widgets, true);
-  }
+/** Custom update predicate: doc, viewport, tree, or toggle state changed. */
+function debugShouldUpdate(update: ViewUpdate): boolean {
+  return (
+    update.docChanged ||
+    update.viewportChanged ||
+    update.startState.field(debugActiveField) !==
+      update.state.field(debugActiveField) ||
+    syntaxTree(update.state) !== syntaxTree(update.startState)
+  );
 }
 
 /** Command that toggles the debug inspector. */
@@ -126,7 +116,7 @@ export function toggleDebugInspector(view: EditorView): boolean {
 /** CM6 extension providing the debug inspector overlay. */
 export const debugInspectorPlugin: Extension = [
   debugActiveField,
-  ViewPlugin.fromClass(DebugInspectorPlugin, {
-    decorations: (v) => v.decorations,
+  createSimpleViewPlugin(buildDebugDecorations, {
+    shouldUpdate: debugShouldUpdate,
   }),
 ];

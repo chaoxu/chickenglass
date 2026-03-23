@@ -10,12 +10,10 @@ import {
   Decoration,
   type DecorationSet,
   EditorView,
-  type PluginValue,
   type ViewUpdate,
-  ViewPlugin,
 } from "@codemirror/view";
 import { type Extension, type Range } from "@codemirror/state";
-import { buildDecorations, RenderWidget } from "./render-utils";
+import { buildDecorations, RenderWidget, createSimpleViewPlugin } from "./render-utils";
 import { basename } from "../lib/utils";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import type { IncludeSemantics } from "../semantics/document";
@@ -35,46 +33,44 @@ class IncludeLabelWidget extends RenderWidget {
   }
 }
 
-class IncludeLabelPlugin implements PluginValue {
-  decorations: DecorationSet;
-  constructor(view: EditorView) { this.decorations = this.build(view); }
-  update(update: ViewUpdate): void {
-    if (update.docChanged || update.viewportChanged || update.selectionSet) {
-      this.decorations = this.build(update.view);
+/** Build include label decorations (line highlights + filename labels). */
+function buildIncludeDecorations(view: EditorView): DecorationSet {
+  const includes: readonly IncludeSemantics[] =
+    view.state.field(documentAnalysisField, false)?.includes ?? [];
+  if (includes.length === 0) return Decoration.none;
+
+  const items: Range<Decoration>[] = [];
+  const cursor = view.state.selection.main.head;
+  const doc = view.state.doc;
+  const lineDeco = Decoration.line({ class: "cf-include-region" });
+
+  for (const inc of includes) {
+    const from = Math.min(inc.from, doc.length);
+    const to = Math.min(inc.to, doc.length);
+    if (from >= to) continue;
+
+    // Widget label at start of include block
+    const active = cursor >= from && cursor <= to;
+    const filename = basename(inc.path);
+    const startLine = doc.lineAt(from);
+    items.push(Decoration.widget({ widget: new IncludeLabelWidget(filename, active), side: 1 }).range(startLine.from));
+
+    // Line decorations for every line in the include block
+    const endLine = doc.lineAt(to);
+    for (let ln = startLine.number; ln <= endLine.number; ln++) {
+      items.push(lineDeco.range(doc.line(ln).from));
     }
   }
-  private build(view: EditorView): DecorationSet {
-    const includes: readonly IncludeSemantics[] =
-      view.state.field(documentAnalysisField, false)?.includes ?? [];
-    if (includes.length === 0) return Decoration.none;
+  return buildDecorations(items);
+}
 
-    const items: Range<Decoration>[] = [];
-    const cursor = view.state.selection.main.head;
-    const doc = view.state.doc;
-    const lineDeco = Decoration.line({ class: "cf-include-region" });
-
-    for (const inc of includes) {
-      const from = Math.min(inc.from, doc.length);
-      const to = Math.min(inc.to, doc.length);
-      if (from >= to) continue;
-
-      // Widget label at start of include block
-      const active = cursor >= from && cursor <= to;
-      const filename = basename(inc.path);
-      const startLine = doc.lineAt(from);
-      items.push(Decoration.widget({ widget: new IncludeLabelWidget(filename, active), side: 1 }).range(startLine.from));
-
-      // Line decorations for every line in the include block
-      const endLine = doc.lineAt(to);
-      for (let ln = startLine.number; ln <= endLine.number; ln++) {
-        items.push(lineDeco.range(doc.line(ln).from));
-      }
-    }
-    return buildDecorations(items);
-  }
+/** Custom update predicate: doc, viewport, or selection changed. */
+function includeShouldUpdate(update: ViewUpdate): boolean {
+  return update.docChanged || update.viewportChanged || update.selectionSet;
 }
 
 /** CM6 extension that renders include region labels in the right margin. */
-export const includeLabelPlugin: Extension = ViewPlugin.fromClass(IncludeLabelPlugin, {
-  decorations: (v) => v.decorations,
-});
+export const includeLabelPlugin: Extension = createSimpleViewPlugin(
+  buildIncludeDecorations,
+  { shouldUpdate: includeShouldUpdate },
+);

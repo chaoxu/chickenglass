@@ -9,6 +9,9 @@ import {
   addMarkerReplacement,
   buildDecorations,
   createBooleanToggleField,
+  pushWidgetDecoration,
+  createSimpleViewPlugin,
+  defaultShouldUpdate,
   RenderWidget,
   decorationHidden,
 } from "./render-utils";
@@ -240,5 +243,122 @@ describe("createBooleanToggleField", () => {
     ]);
     // The update loop returns on the first matching effect
     expect(updated.field(field)).toBe(true);
+  });
+});
+
+describe("pushWidgetDecoration", () => {
+  it("sets sourceFrom and sourceTo on the widget", () => {
+    const items: Range<Decoration>[] = [];
+    const widget = new TestWidget("test");
+    pushWidgetDecoration(items, widget, 10, 20);
+
+    expect(widget.sourceFrom).toBe(10);
+    expect(widget.sourceTo).toBe(20);
+  });
+
+  it("pushes a Decoration.replace range into the items array", () => {
+    const items: Range<Decoration>[] = [];
+    const widget = new TestWidget("test");
+    pushWidgetDecoration(items, widget, 5, 15);
+
+    expect(items).toHaveLength(1);
+    expect(items[0].from).toBe(5);
+    expect(items[0].to).toBe(15);
+  });
+
+  it("accumulates multiple decorations", () => {
+    const items: Range<Decoration>[] = [];
+    pushWidgetDecoration(items, new TestWidget("a"), 0, 5);
+    pushWidgetDecoration(items, new TestWidget("b"), 10, 20);
+    pushWidgetDecoration(items, new TestWidget("c"), 25, 30);
+
+    expect(items).toHaveLength(3);
+    expect(items[0].from).toBe(0);
+    expect(items[1].from).toBe(10);
+    expect(items[2].from).toBe(25);
+  });
+
+  it("creates a Decoration.replace with the widget attached", () => {
+    const items: Range<Decoration>[] = [];
+    const widget = new TestWidget("w");
+    pushWidgetDecoration(items, widget, 0, 5);
+
+    expect(items[0].value.spec.widget).toBe(widget);
+  });
+});
+
+describe("createSimpleViewPlugin", () => {
+  it("returns an Extension (non-null, non-undefined)", () => {
+    const ext = createSimpleViewPlugin(() => Decoration.none);
+    expect(ext).toBeDefined();
+  });
+
+  it("can be installed in an EditorView without errors", () => {
+    const ext = createSimpleViewPlugin(() => Decoration.none);
+    const view = createTestView("hello", { extensions: [markdown(), ext] });
+    expect(view.state.doc.toString()).toBe("hello");
+    view.destroy();
+  });
+
+  it("calls buildFn on construction", () => {
+    let callCount = 0;
+    const ext = createSimpleViewPlugin(() => {
+      callCount++;
+      return Decoration.none;
+    });
+    const view = createTestView("test", { extensions: [markdown(), ext] });
+    expect(callCount).toBe(1);
+    view.destroy();
+  });
+
+  it("calls buildFn on docChanged by default", () => {
+    let callCount = 0;
+    const ext = createSimpleViewPlugin(() => {
+      callCount++;
+      return Decoration.none;
+    });
+    const view = createTestView("test", { extensions: [markdown(), ext] });
+    callCount = 0; // reset after construction
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+    expect(callCount).toBe(1);
+    view.destroy();
+  });
+
+  it("accepts a custom shouldUpdate that prevents rebuilds", () => {
+    let buildCount = 0;
+    const ext = createSimpleViewPlugin(
+      () => {
+        buildCount++;
+        return Decoration.none;
+      },
+      { shouldUpdate: () => false },
+    );
+    const view = createTestView("test", { extensions: [markdown(), ext] });
+    buildCount = 0; // reset
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+    expect(buildCount).toBe(0);
+    view.destroy();
+  });
+
+  it("accepts a custom shouldUpdate that always rebuilds", () => {
+    let buildCount = 0;
+    const ext = createSimpleViewPlugin(
+      () => {
+        buildCount++;
+        return Decoration.none;
+      },
+      { shouldUpdate: () => true },
+    );
+    const view = createTestView("test", { extensions: [markdown(), ext] });
+    buildCount = 0;
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+    expect(buildCount).toBe(1);
+    view.destroy();
+  });
+});
+
+describe("defaultShouldUpdate", () => {
+  it("is a function", () => {
+    expect(typeof defaultShouldUpdate).toBe("function");
   });
 });

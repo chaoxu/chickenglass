@@ -4,15 +4,13 @@ import type { SyntaxNode } from "@lezer/common";
 import {
   Decoration,
   type DecorationSet,
-  type PluginValue,
-  type ViewUpdate,
-  ViewPlugin,
   type EditorView,
 } from "@codemirror/view";
 import {
   cursorInRange,
   buildDecorations,
   RenderWidget,
+  createSimpleViewPlugin,
 } from "./render-utils";
 
 /** Widget that renders an inline image. */
@@ -96,30 +94,7 @@ function imageDecorations(view: EditorView): DecorationSet {
   return buildDecorations(collectImageRanges(view));
 }
 
-class ImageRenderPlugin implements PluginValue {
-  decorations: DecorationSet;
-
-  constructor(view: EditorView) {
-    this.decorations = imageDecorations(view);
-  }
-
-  update(update: ViewUpdate): void {
-    if (
-      update.docChanged ||
-      update.selectionSet ||
-      update.viewportChanged ||
-      update.focusChanged ||
-      syntaxTree(update.state) !== syntaxTree(update.startState)
-    ) {
-      this.decorations = imageDecorations(update.view);
-    }
-  }
-}
-
 /** CM6 extension that renders inline images with Typora-style click-to-edit. */
-export const imageRenderPlugin: Extension = ViewPlugin.fromClass(
-  ImageRenderPlugin,
-  {
-    decorations: (v) => v.decorations,
-  },
+export const imageRenderPlugin: Extension = createSimpleViewPlugin(
+  imageDecorations,
 );
