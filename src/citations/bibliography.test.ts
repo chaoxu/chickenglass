@@ -180,6 +180,12 @@ describe("BibliographyWidget", () => {
     const b = new BibliographyWidget([karger, stein], []);
     expect(a.eq(b)).toBe(false);
   });
+
+  it("eq returns false when CSL HTML changes with the same entries", () => {
+    const a = new BibliographyWidget([karger], ['<span class="csl-entry">[1] Old</span>']);
+    const b = new BibliographyWidget([karger], ['<span class="csl-entry">[1] New</span>']);
+    expect(a.eq(b)).toBe(false);
+  });
 });
 
 describe("buildBibliographyDecorations", () => {

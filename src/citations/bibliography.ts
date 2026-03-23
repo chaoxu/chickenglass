@@ -138,7 +138,8 @@ export class BibliographyWidget extends RenderWidget {
   eq(other: BibliographyWidget): boolean {
     if (this.entries.length !== other.entries.length) return false;
     if (this.cslHtml.length !== other.cslHtml.length) return false;
-    return this.entries.every((e, i) => e.id === other.entries[i].id);
+    return this.entries.every((e, i) => e.id === other.entries[i].id)
+      && this.cslHtml.every((html, i) => html === other.cslHtml[i]);
   }
 }
 

@@ -152,11 +152,11 @@ export class CslProcessor {
       };
       try {
         this.engine.processCitationCluster(citation, citationsPre, []);
+        citationsPre.push([`cite-${i}`, i]);
       } catch (e: unknown) {
         // best-effort: skip malformed cluster so remaining citations still render
         console.warn("[csl] cluster error for cite-" + i, e);
       }
-      citationsPre.push([`cite-${i}`, i]);
     }
   }
 
@@ -241,7 +241,6 @@ export class CslProcessor {
     try {
       const validIds = citedIds.filter((id) => this.items.has(id));
       if (validIds.length === 0) return [];
-      this.engine.updateItems(validIds);
       const [, entries] = this.engine.makeBibliography();
       return entries.map((e: string) => e.trim());
     } catch (e: unknown) {

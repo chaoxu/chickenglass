@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type CslJsonItem } from "./bibtex-parser";
 import {
   CslProcessor,
@@ -121,5 +121,63 @@ describe("CslProcessor narrative citations", () => {
       ],
       processor,
     );
+  });
+});
+
+describe("CslProcessor ordering", () => {
+  it("does not register a failed citation cluster as prior context", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const processor = CslProcessor.empty() as unknown as {
+      registerCitations: CslProcessor["registerCitations"];
+      engine: {
+        updateItems: (ids: string[]) => void;
+        processCitationCluster: ReturnType<typeof vi.fn>;
+      };
+    };
+    const processCitationCluster = vi.fn()
+      .mockImplementationOnce(() => {
+        throw new Error("bad cluster");
+      })
+      .mockReturnValueOnce(undefined);
+    processor.engine = {
+      updateItems: vi.fn(),
+      processCitationCluster,
+    };
+
+    try {
+      processor.registerCitations([
+        { ids: ["bad"] },
+        { ids: ["good"] },
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
+
+    expect(processCitationCluster.mock.calls[1][0]).toEqual(
+      expect.objectContaining({ citationID: "cite-1" }),
+    );
+    expect(processCitationCluster.mock.calls[1][1]).not.toContainEqual(["cite-0", 0]);
+  });
+
+  it("preserves registered numbering context when rendering the bibliography", () => {
+    const processor = new CslProcessor([
+      { id: "karger2000", type: "article-journal" as const },
+    ]) as unknown as {
+      bibliography: CslProcessor["bibliography"];
+      engine: {
+        updateItems: ReturnType<typeof vi.fn>;
+        makeBibliography: ReturnType<typeof vi.fn>;
+      };
+    };
+    const updateItems = vi.fn();
+    processor.engine = {
+      updateItems,
+      makeBibliography: vi.fn(() => [{}, ["  <span class=\"csl-entry\">[1] Entry</span>  "]]),
+    };
+
+    const entries = processor.bibliography(["karger2000"]);
+
+    expect(entries).toEqual(['<span class="csl-entry">[1] Entry</span>']);
+    expect(updateItems).not.toHaveBeenCalled();
   });
 });
