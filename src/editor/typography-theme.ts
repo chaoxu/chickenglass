@@ -114,6 +114,17 @@ export const typographyThemeStyles = {
     color: "var(--cf-fg)",
   },
 
+  /* Override: rendered structural markers inherit ambient typography.
+   * @lezer/markdown tags ListMark as processingInstruction, so the token
+   * span gets fontFamily: monoFont above. When the marker is rendered
+   * (cursor away), the .cf-list-* mark decoration wraps that token span,
+   * but the inner .tok-processingInstruction still wins via explicit value.
+   * These descendant selectors ensure rendered markers inherit the document
+   * font from their container (heading, blockquote, fenced div, etc.). */
+  ".cf-list-bullet .tok-processingInstruction, .cf-list-number .tok-processingInstruction": {
+    fontFamily: "inherit",
+  },
+
   /* Math source content — LaTeX between $ delimiters when editing */
   ".cf-math-source": {
     fontFamily: monoFont,
