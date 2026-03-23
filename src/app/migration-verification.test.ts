@@ -979,7 +979,8 @@ describe("#314 — document surface renderer layer", () => {
   it("routes title, tooltip, hover, and chrome surfaces through the shared surface layer", () => {
     const breadcrumbs = fileText("src/app/components/breadcrumbs.tsx");
     const outline = fileText("src/app/components/outline.tsx");
-    const editorPane = fileText("src/app/components/editor-pane.tsx");
+    // Tooltip rendering moved to use-footnote-tooltip (T27 decomposition)
+    const footnoteTooltip = fileText("src/app/hooks/use-footnote-tooltip.ts");
     const readMode = fileText("src/app/components/read-mode-view.tsx");
     const hoverPreview = fileText("src/render/hover-preview.ts");
     const pluginRender = fileText("src/plugins/plugin-render.ts");
@@ -987,7 +988,7 @@ describe("#314 — document surface renderer layer", () => {
 
     expect(breadcrumbs).toContain("../../document-surfaces");
     expect(outline).toContain("../../document-surfaces");
-    expect(editorPane).toContain("../../document-surfaces");
+    expect(footnoteTooltip).toContain("../../document-surfaces");
     expect(readMode).toContain("../../document-surfaces");
     expect(hoverPreview).toContain("../document-surfaces");
     expect(pluginRender).toContain("../document-surfaces");

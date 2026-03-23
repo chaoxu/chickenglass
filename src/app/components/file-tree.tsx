@@ -1,5 +1,6 @@
 import type { FileEntry } from "../file-manager";
 import { FileTreeNode } from "./file-tree-node";
+import { FileTreeProvider } from "../contexts/file-tree-context";
 import { useFileTreeController } from "../hooks/use-file-tree-controller";
 
 interface FileTreeProps {
@@ -34,23 +35,17 @@ export function FileTree({
   }
 
   return (
-    <div
-      {...controller.tree.getContainerProps("Files")}
-      className="py-1 outline-none"
+    <FileTreeProvider
+      value={{ activePath, onSelect, onDoubleClick, onRename, onDelete, onCreateFile, onCreateDir }}
     >
-      {controller.visibleItems.map((item) => (
-        <FileTreeNode
-          key={item.getId()}
-          item={item}
-          activePath={activePath}
-          onSelect={onSelect}
-          onDoubleClick={onDoubleClick}
-          onRename={onRename}
-          onDelete={onDelete}
-          onCreateFile={onCreateFile}
-          onCreateDir={onCreateDir}
-        />
-      ))}
-    </div>
+      <div
+        {...controller.tree.getContainerProps("Files")}
+        className="py-1 outline-none"
+      >
+        {controller.visibleItems.map((item) => (
+          <FileTreeNode key={item.getId()} item={item} />
+        ))}
+      </div>
+    </FileTreeProvider>
   );
 }
