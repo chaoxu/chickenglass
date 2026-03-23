@@ -43,7 +43,7 @@ function nextCell(view: EditorView): boolean {
       const lastLine = view.state.doc.line(targetLineNum);
       const bounds = findCellBounds(lastLine.text, lastLine.from, 0);
       if (bounds) {
-        view.dispatch({ selection: { anchor: bounds.from } });
+        view.dispatch({ selection: { anchor: bounds.from }, scrollIntoView: false });
       }
     }
     return true;
@@ -53,7 +53,7 @@ function nextCell(view: EditorView): boolean {
   const targetLine = doc.line(targetLineNum);
   const bounds = findCellBounds(targetLine.text, targetLine.from, nextColIdx);
   if (bounds) {
-    view.dispatch({ selection: { anchor: bounds.from } });
+    view.dispatch({ selection: { anchor: bounds.from }, scrollIntoView: false });
   }
   return true;
 }
@@ -87,7 +87,7 @@ function previousCell(view: EditorView): boolean {
   const targetLine = doc.line(targetLineNum);
   const bounds = findCellBounds(targetLine.text, targetLine.from, prevColIdx);
   if (bounds) {
-    view.dispatch({ selection: { anchor: bounds.from } });
+    view.dispatch({ selection: { anchor: bounds.from }, scrollIntoView: false });
   }
   return true;
 }
@@ -116,7 +116,7 @@ function nextRow(view: EditorView): boolean {
       const targetLine = view.state.doc.line(targetLineNum);
       const bounds = findCellBounds(targetLine.text, targetLine.from, colIdx);
       if (bounds) {
-        view.dispatch({ selection: { anchor: bounds.from } });
+        view.dispatch({ selection: { anchor: bounds.from }, scrollIntoView: false });
       }
     }
     return true;
@@ -126,7 +126,7 @@ function nextRow(view: EditorView): boolean {
   const targetLine = doc.line(targetLineNum);
   const bounds = findCellBounds(targetLine.text, targetLine.from, colIdx);
   if (bounds) {
-    view.dispatch({ selection: { anchor: bounds.from } });
+    view.dispatch({ selection: { anchor: bounds.from }, scrollIntoView: false });
   }
   return true;
 }
@@ -162,7 +162,7 @@ function arrowLeft(view: EditorView): boolean {
   const targetLine = doc.line(targetLineNum);
   const targetBounds = findCellBounds(targetLine.text, targetLine.from, prevColIdx);
   if (targetBounds) {
-    view.dispatch({ selection: { anchor: targetBounds.to } });
+    view.dispatch({ selection: { anchor: targetBounds.to }, scrollIntoView: false });
   }
   return true;
 }
@@ -199,7 +199,7 @@ function arrowRight(view: EditorView): boolean {
   const targetLine = doc.line(targetLineNum);
   const targetBounds = findCellBounds(targetLine.text, targetLine.from, nextColIdx);
   if (targetBounds) {
-    view.dispatch({ selection: { anchor: targetBounds.from } });
+    view.dispatch({ selection: { anchor: targetBounds.from }, scrollIntoView: false });
   }
   return true;
 }
@@ -228,7 +228,7 @@ function arrowUp(view: EditorView): boolean {
   if (targetBounds) {
     const offset = cursorPos - (findCellBounds(line.text, line.from, colIdx)?.from ?? cursorPos);
     const clamped = Math.min(targetBounds.from + offset, targetBounds.to);
-    view.dispatch({ selection: { anchor: clamped } });
+    view.dispatch({ selection: { anchor: clamped }, scrollIntoView: false });
   }
   return true;
 }
@@ -257,7 +257,7 @@ function arrowDown(view: EditorView): boolean {
   if (targetBounds) {
     const offset = cursorPos - (findCellBounds(line.text, line.from, colIdx)?.from ?? cursorPos);
     const clamped = Math.min(targetBounds.from + offset, targetBounds.to);
-    view.dispatch({ selection: { anchor: clamped } });
+    view.dispatch({ selection: { anchor: clamped }, scrollIntoView: false });
   }
   return true;
 }

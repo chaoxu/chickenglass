@@ -184,7 +184,7 @@ export abstract class RenderWidget extends WidgetType {
         // Focus first so the focus state field is updated before
         // the selection dispatch triggers decoration rebuilding.
         view.focus();
-        view.dispatch({ selection: { anchor: from } });
+        view.dispatch({ selection: { anchor: from }, scrollIntoView: false });
       });
     }
     return el;

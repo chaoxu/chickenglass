@@ -123,7 +123,7 @@ const tableContextMenuHandler: Extension = EditorView.domEventHandlers({
     if (!table) return false;
 
     event.preventDefault();
-    view.dispatch({ selection: { anchor: pos } });
+    view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
     showTableContextMenu(view, table, event.clientX, event.clientY);
     return true;
   },
