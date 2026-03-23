@@ -20,7 +20,7 @@ import { bibDataField, type BibStore } from "../citations/citation-render";
 import { formatBibEntry } from "../citations/bibliography";
 import { renderKatex } from "./math-render";
 import { mathMacrosField } from "./math-macros";
-import { renderDocumentFragmentToDom } from "../document-surfaces";
+import { renderBlockContentToDom, renderDocumentFragmentToDom } from "../document-surfaces";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { SEARCH_CONTEXT_BUFFER, HOVER_DELAY_MS } from "../constants";
 
@@ -56,21 +56,6 @@ function extractBlockContent(
     return content.slice(0, MAX_PREVIEW_LENGTH) + "\u2026";
   }
   return content;
-}
-
-/**
- * Render markdown content with full inline formatting into a DOM element.
- */
-function renderContentWithMath(
-  container: HTMLElement,
-  content: string,
-  macros: Record<string, string>,
-): void {
-  renderDocumentFragmentToDom(container, {
-    kind: "hover",
-    text: content,
-    macros,
-  });
 }
 
 /** Create a header div for the tooltip. */
@@ -123,7 +108,7 @@ function appendCrossrefItem(
       if (content) {
         const body = document.createElement("div");
         body.className = "cf-hover-preview-body";
-        renderContentWithMath(body, content, macros);
+        renderBlockContentToDom(body, content, macros);
         container.appendChild(body);
       }
     }

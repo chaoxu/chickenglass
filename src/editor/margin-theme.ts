@@ -91,7 +91,21 @@ export const marginThemeStyles = {
   },
   ".cf-hover-preview-body": {
     color: "var(--cf-muted)",
-    whiteSpace: "pre-wrap",
+  },
+  /* Block-rendered content inside hover previews needs paragraph spacing */
+  ".cf-hover-preview-body p": {
+    margin: "0.25em 0",
+  },
+  ".cf-hover-preview-body p:first-child": {
+    marginTop: "0",
+  },
+  ".cf-hover-preview-body p:last-child": {
+    marginBottom: "0",
+  },
+  /* Display math inside hover previews */
+  ".cf-hover-preview-body .math-display": {
+    margin: "0.5em 0",
+    textAlign: "center",
   },
   ".cf-hover-preview-unresolved": {
     color: "var(--cf-muted)",

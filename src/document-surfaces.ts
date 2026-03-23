@@ -1,5 +1,5 @@
 import type { InlineRenderSurface } from "./inline-surface";
-import { renderInline } from "./app/markdown-to-html";
+import { markdownToHtml, renderInline } from "./app/markdown-to-html";
 // Direct import: barrel would create circular dependency (document-surfaces → render/index → inline-render → inline-fragments → render/index)
 import { renderInlineMarkdown } from "./render/inline-render";
 
@@ -51,4 +51,23 @@ export function renderDocumentFragmentToHtml(
     fragment.macros,
     resolveSurface(fragment),
   );
+}
+
+/**
+ * Render markdown content with full block-level support into a DOM element.
+ *
+ * Unlike `renderDocumentFragmentToDom` (inline-only), this handles display
+ * math, paragraphs, lists, blockquotes, and other block structures by using
+ * the Lezer tree-walking HTML renderer from `markdown-to-html.ts`.
+ *
+ * Used by hover previews where block content (e.g. fenced div bodies
+ * containing `$$...$$`) must render correctly.
+ */
+export function renderBlockContentToDom(
+  container: HTMLElement,
+  text: string,
+  macros?: Record<string, string>,
+): void {
+  if (!text) return;
+  container.innerHTML = markdownToHtml(text, { macros });
 }
