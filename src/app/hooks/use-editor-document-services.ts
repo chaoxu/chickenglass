@@ -10,7 +10,7 @@ import {
   resolveIncludePath,
   flattenIncludesWithSourceMap,
   type ResolvedInclude,
-} from "../../plugins/include-resolver";
+} from "../../plugins";
 import type { FileSystem } from "../file-manager";
 import { SourceMap, type IncludeRegion } from "../source-map";
 import { dispatchIfConnected } from "../lib/view-dispatch";

@@ -56,21 +56,6 @@ describe("createStandardPlugin", () => {
     expect(spec.header).toBe("Remark");
   });
 
-  it("passes through defaults when provided", () => {
-    const defaults = { qedSymbol: "\u220E" } as const;
-    const plugin = createStandardPlugin({
-      name: "proof",
-      numbered: false,
-      defaults,
-    });
-    expect(plugin.defaults).toEqual({ qedSymbol: "\u220E" });
-  });
-
-  it("omits defaults when not provided", () => {
-    const plugin = createStandardPlugin({ name: "theorem" });
-    expect(plugin.defaults).toBeUndefined();
-  });
-
   it("sets name on the returned plugin", () => {
     const plugin = createStandardPlugin({ name: "conjecture" });
     expect(plugin.name).toBe("conjecture");

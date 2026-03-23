@@ -16,5 +16,4 @@ export const proofPlugin: BlockPlugin = createStandardPlugin({
   name: "proof",
   numbered: false,
   specialBehavior: "qed",
-  defaults: { qedSymbol: QED_SYMBOL },
 });

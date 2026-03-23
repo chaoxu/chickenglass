@@ -10,9 +10,9 @@
 
 import { type EditorState } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import type { BlockCounterState } from "../plugins/block-counter";
-import { blockCounterField } from "../plugins/block-counter";
-import { pluginRegistryField, getPlugin } from "../plugins/plugin-registry";
+import type { BlockCounterState } from "../plugins";
+import { blockCounterField } from "../plugins";
+import { pluginRegistryField, getPlugin } from "../plugins";
 import { analyzeDocumentSemantics } from "../semantics/document";
 import { documentAnalysisField, editorStateTextSource } from "../semantics/codemirror-source";
 

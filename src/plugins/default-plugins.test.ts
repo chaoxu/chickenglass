@@ -137,13 +137,6 @@ describe("proofPlugin", () => {
     expect(proofPlugin.counter).toBeUndefined();
   });
 
-  it("has QED symbol in defaults", () => {
-    expect(proofPlugin.defaults).toBeDefined();
-    expect((proofPlugin.defaults as Record<string, unknown>)["qedSymbol"]).toBe(
-      QED_SYMBOL,
-    );
-  });
-
   it("QED_SYMBOL is the tombstone character", () => {
     expect(QED_SYMBOL).toBe("\u220E");
   });

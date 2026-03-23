@@ -15,7 +15,7 @@ import {
   resolveCrossref,
 } from "../index/crossref-resolver";
 import type { ReferenceSemantics } from "../semantics/document";
-import { blockCounterField, type NumberedBlock } from "../plugins/block-counter";
+import { blockCounterField, type NumberedBlock } from "../plugins";
 import { bibDataField, type BibStore } from "../citations/citation-render";
 import { formatBibEntry } from "../citations/bibliography";
 import { renderKatex } from "./math-render";

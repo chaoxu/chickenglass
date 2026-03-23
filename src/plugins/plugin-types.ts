@@ -74,6 +74,4 @@ export interface BlockPlugin {
   readonly displayHeader?: boolean;
   /** Produce a decoration spec from the block's attributes. */
   readonly render: (attrs: BlockAttrs) => BlockDecorationSpec;
-  /** Default settings (e.g. QED symbol, CSS overrides). */
-  readonly defaults?: Readonly<Record<string, unknown>>;
 }

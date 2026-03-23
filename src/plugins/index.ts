@@ -65,5 +65,6 @@ export {
   resolveIncludePath,
   resolveIncludes,
   flattenIncludes,
+  flattenIncludesWithSourceMap,
   collectIncludedPaths,
 } from "./include-resolver";
