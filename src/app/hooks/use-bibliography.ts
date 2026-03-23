@@ -163,7 +163,9 @@ export function useBibliography(options: UseBibliographyOptions): UseBibliograph
           fs,
           view,
           () => loadGenerationRef.current === generation,
-        );
+        ).catch((e: unknown) => {
+          console.error("[bibliography] loadBibliography failed", e);
+        });
       }
     },
     [beginLoad, fs, docPath],
@@ -183,7 +185,9 @@ export function useBibliography(options: UseBibliographyOptions): UseBibliograph
           fs,
           view,
           () => loadGenerationRef.current === generation,
-        );
+        ).catch((e: unknown) => {
+          console.error("[bibliography] loadBibliography (initial) failed", e);
+        });
       }
     },
     [beginLoad, fs, docPath],

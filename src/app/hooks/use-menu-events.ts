@@ -115,7 +115,9 @@ export function useMenuEvents(handlers: MenuEventHandlers): void {
       cancelled = true;
       // Await the setup promise so we always call unlisten even if the effect
       // is torn down while the dynamic import is still in flight.
-      void setupPromise.then((unlisten) => unlisten?.());
+      void setupPromise.then((unlisten) => unlisten?.()).catch((e: unknown) => {
+        console.error("[menu-events] teardown unlisten failed", e);
+      });
     };
   }, []);
 }

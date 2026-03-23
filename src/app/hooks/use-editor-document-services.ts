@@ -139,6 +139,8 @@ export function useEditorDocumentServices({
         if (dispatched && regions.length > 0) {
           window.__cfSourceMap = new SourceMap(regions);
         }
+      }).catch((e: unknown) => {
+        console.error("[editor] expandIncludes failed", e);
       });
     }
   }, [bibliography, doc, docPath, fs]);
