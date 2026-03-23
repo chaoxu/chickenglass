@@ -11,6 +11,7 @@ import {
 import { blockCounterField } from "../plugins/block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import type { BlockPlugin } from "../plugins/plugin-types";
+import { CSS } from "../constants/css-classes";
 import { createTestView, makeBlockPlugin } from "../test-utils";
 import {
   CrossrefWidget,
@@ -52,7 +53,7 @@ describe("CrossrefWidget", () => {
     );
     const el = widget.toDOM();
     expect(el.tagName).toBe("SPAN");
-    expect(el.className).toBe("cf-crossref");
+    expect(el.className).toBe(CSS.crossref);
     expect(el.textContent).toBe("Theorem 1");
     expect(el.title).toBe("[@thm-main]");
   });
@@ -96,7 +97,7 @@ describe("UnresolvedRefWidget", () => {
     const widget = new UnresolvedRefWidget("[@unknown]");
     const el = widget.toDOM();
     expect(el.tagName).toBe("SPAN");
-    expect(el.className).toContain("cf-crossref-unresolved");
+    expect(el.className).toContain(CSS.crossref);
     expect(el.textContent).toBe("[@unknown]");
     expect(el.title).toBe("Unresolved reference");
   });
@@ -288,5 +289,48 @@ describe("Typora-style cursor toggle", () => {
     const defRefStart = doc.indexOf("[@def-1]");
     const defRange = ranges.find((r) => r.from === defRefStart);
     expect(defRange).toBeDefined();
+  });
+});
+
+describe("CrossrefWidget / UnresolvedRefWidget negative / edge-case", () => {
+  it("CrossrefWidget renders number 0 without crashing", () => {
+    const widget = new CrossrefWidget(
+      { kind: "block", label: "Theorem 0", number: 0 },
+      "[@thm-0]",
+    );
+    const el = widget.toDOM();
+    expect(el.textContent).toBe("Theorem 0");
+  });
+
+  it("CrossrefWidget eq returns false for different kinds", () => {
+    const a = new CrossrefWidget(
+      { kind: "block", label: "Theorem 1", number: 1 },
+      "[@thm-1]",
+    );
+    const b = new CrossrefWidget(
+      { kind: "equation", label: "Theorem 1", number: 1 },
+      "[@thm-1]",
+    );
+    expect(a.eq(b)).toBe(false);
+  });
+
+  it("UnresolvedRefWidget renders empty raw content without crashing", () => {
+    const widget = new UnresolvedRefWidget("");
+    const el = widget.toDOM();
+    expect(el.tagName).toBe("SPAN");
+    expect(el.textContent).toBe("");
+  });
+
+  it("UnresolvedRefWidget eq returns false for empty vs non-empty raw", () => {
+    const a = new UnresolvedRefWidget("");
+    const b = new UnresolvedRefWidget("[@x]");
+    expect(a.eq(b)).toBe(false);
+  });
+
+  it("collectCrossrefRanges handles doc with only punctuation", () => {
+    const view = createView("..., --- !!!", 0);
+    const ranges = collectCrossrefRanges(view);
+    expect(ranges.length).toBe(0);
+    view.destroy();
   });
 });

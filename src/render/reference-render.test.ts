@@ -12,6 +12,7 @@ import type { BlockPlugin } from "../plugins/plugin-types";
 import type { CslJsonItem } from "../citations/bibtex-parser";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CslProcessor } from "../citations/csl-processor";
+import { CSS } from "../constants/css-classes";
 import { createTestView, makeBlockPlugin, makeBibStore } from "../test-utils";
 import { collectReferenceRanges } from "./reference-render";
 
@@ -347,7 +348,7 @@ describe("collectReferenceRanges", () => {
     expect(el.textContent).toContain("Eq. (1)");
     // The combined text should be wrapped in parens with semicolon separator
     expect(el.textContent).toMatch(/^\(Eq\. \(1\); .+\)$/);
-    expect(el.className).toBe("cf-citation");
+    expect(el.className).toBe(CSS.citation);
   });
 
   it("renders mixed block-crossref+citation cluster correctly", () => {
@@ -406,5 +407,39 @@ describe("collectReferenceRanges", () => {
     if (!ref) return;
     // Should be ClusteredCrossrefWidget, not MixedClusterWidget
     expect(widgetClass(ref)).toBe("ClusteredCrossrefWidget");
+  });
+
+  describe("negative / edge-case", () => {
+    it("returns empty array for plain text with no @ characters", () => {
+      view = createView("No references here. Just text.", 0);
+      expect(collectReferenceRanges(view, store)).toHaveLength(0);
+    });
+
+    it("returns empty array for empty store and unknown id", () => {
+      const emptyStore = makeBibStore([]);
+      view = createView("See [@totally-unknown].", 0);
+      const ranges = collectReferenceRanges(view, emptyStore);
+      // Unknown id with empty store → UnresolvedRefWidget
+      const ref = ranges.find(
+        (r) => view.state.sliceDoc(r.from, r.to) === "[@totally-unknown]",
+      );
+      expect(ref).toBeDefined();
+      expect(widgetClass(ref!)).toBe("UnresolvedRefWidget");
+    });
+
+    it("skips reference when cursor is at its exact start position", () => {
+      const doc = "See [@karger2000].";
+      const refStart = doc.indexOf("[@karger2000]");
+      view = createView(doc, refStart);
+      const ranges = collectReferenceRanges(view, store);
+      // Cursor exactly at start is inside the reference
+      const ref = ranges.find((r) => r.from === refStart);
+      expect(ref).toBeUndefined();
+    });
+
+    it("handles document with only blank lines", () => {
+      view = createView("\n\n\n", 0);
+      expect(collectReferenceRanges(view, store)).toHaveLength(0);
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { focusModeExtension, toggleFocusMode } from "./focus-mode";
+import { CSS } from "../constants/css-classes";
 import { createTestView } from "../test-utils";
 
 let view: EditorView | undefined;
@@ -27,7 +28,7 @@ function getDimmedLineNumbers(v: EditorView): number[] {
     const decoSet = typeof decoSource === "function" ? decoSource(v) : decoSource;
     const iter = decoSet.iter();
     while (iter.value) {
-      if (iter.value.spec?.class === "cf-focus-dimmed") {
+      if (iter.value.spec?.class === CSS.focusDimmed) {
         lineNumbers.push(v.state.doc.lineAt(iter.from).number);
       }
       iter.next();

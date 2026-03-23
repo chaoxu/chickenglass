@@ -6,6 +6,84 @@ import type { BlockPlugin } from "./plugins/plugin-types";
 import type { CslJsonItem } from "./citations/bibtex-parser";
 import type { BibStore } from "./citations/citation-render";
 
+// ── CslJsonItem fixture factory ───────────────────────────────────────────────
+
+/**
+ * Create a minimal CslJsonItem suitable for tests.
+ * Callers supply only the fields relevant to their test; all optional fields
+ * default to sensible values so tests stay concise.
+ */
+export function createCslFixture(overrides: Partial<CslJsonItem> & { id: string }): CslJsonItem {
+  return {
+    type: "article-journal",
+    author: [{ family: "Author", given: "A." }],
+    title: "A Test Paper",
+    issued: { "date-parts": [[2020]] },
+    ...overrides,
+  };
+}
+
+/**
+ * A small, ready-to-use set of CslJsonItem fixtures for tests that need
+ * a populated bibliography store without caring about specific entries.
+ */
+export const CSL_FIXTURES = {
+  karger: createCslFixture({
+    id: "karger2000",
+    type: "article-journal",
+    author: [{ family: "Karger", given: "David R." }],
+    title: "Minimum cuts in near-linear time",
+    issued: { "date-parts": [[2000]] },
+    "container-title": "JACM",
+    volume: "47",
+    issue: "1",
+    page: "46-76",
+  }),
+  stein: createCslFixture({
+    id: "stein2001",
+    type: "book",
+    author: [{ family: "Stein", given: "Clifford" }],
+    title: "Algorithms",
+    issued: { "date-parts": [[2001]] },
+    publisher: "MIT Press",
+  }),
+} as const;
+
+// ── localStorage mock helper ──────────────────────────────────────────────────
+
+/**
+ * Install a spec-compliant in-memory localStorage shim on `globalThis`.
+ *
+ * Returns a handle with a `clear()` method that empties the backing store.
+ * Intended for use in `beforeEach` + `afterEach` pairs in tests that interact
+ * with localStorage without a real browser:
+ *
+ * ```ts
+ * const ls = installLocalStorageMock();
+ * beforeEach(() => ls.clear());
+ * ```
+ *
+ * Node 25+ exposes a native `localStorage` that lacks standard methods when
+ * `--localstorage-file` is not set. This shim replaces it unconditionally.
+ */
+export function installLocalStorageMock(): { clear: () => void } {
+  const storage = new Map<string, string>();
+  const shim: Storage = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => { storage.set(key, String(value)); },
+    removeItem: (key: string) => { storage.delete(key); },
+    clear: () => { storage.clear(); },
+    get length() { return storage.size; },
+    key: (index: number) => [...storage.keys()][index] ?? null,
+  };
+  Object.defineProperty(globalThis, "localStorage", {
+    value: shim,
+    writable: true,
+    configurable: true,
+  });
+  return { clear: () => storage.clear() };
+}
+
 export interface NodeInfo {
   readonly name: string;
   readonly from: number;

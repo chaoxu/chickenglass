@@ -69,5 +69,28 @@ describe("CheckboxWidget", () => {
       const b = new CheckboxWidget(false, 20, 23);
       expect(a.eq(b)).toBe(false);
     });
+
+    describe("negative / edge-case", () => {
+      it("returns false when compared against widget at position 0 vs non-zero", () => {
+        const a = new CheckboxWidget(false, 0, 3);
+        const b = new CheckboxWidget(false, 1, 4);
+        expect(a.eq(b)).toBe(false);
+      });
+
+      it("returns false when to is 0 vs non-zero even with same from and checked", () => {
+        const a = new CheckboxWidget(true, 5, 0);
+        const b = new CheckboxWidget(true, 5, 8);
+        expect(a.eq(b)).toBe(false);
+      });
+    });
+  });
+
+  describe("negative / edge-case (toDOM)", () => {
+    it("toDOM creates unchecked checkbox for position 0,0", () => {
+      view = createTestView("- [ ] task");
+      const widget = new CheckboxWidget(false, 0, 0);
+      const el = widget.toDOM(view) as HTMLInputElement;
+      expect(el.checked).toBe(false);
+    });
   });
 });

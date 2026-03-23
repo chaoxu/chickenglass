@@ -2,7 +2,8 @@ import { describe, expect, it, afterEach } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { type CslJsonItem } from "./bibtex-parser";
-import { createTestView as createSharedTestView, makeBibStore } from "../test-utils";
+import { CSS } from "../constants/css-classes";
+import { createTestView, makeBibStore } from "../test-utils";
 import {
   findCitations,
   CitationWidget,
@@ -121,6 +122,25 @@ describe("findCitations", () => {
     expect(matches).toHaveLength(1);
     expect(matches[0].locators).toEqual([undefined]);
   });
+
+  describe("negative / edge-case", () => {
+    it("returns empty array for empty string", () => {
+      expect(findCitations("", store)).toHaveLength(0);
+    });
+
+    it("returns empty array when store is empty", () => {
+      const emptyStore = makeBibStore([]);
+      expect(findCitations("[@karger2000]", emptyStore)).toHaveLength(0);
+    });
+
+    it("does not match bare @ without an id", () => {
+      expect(findCitations("email@example.com", store)).toHaveLength(0);
+    });
+
+    it("handles only brackets with no @ sign", () => {
+      expect(findCitations("[no citation here]", store)).toHaveLength(0);
+    });
+  });
 });
 
 describe("CitationWidget", () => {
@@ -128,7 +148,7 @@ describe("CitationWidget", () => {
     const widget = new CitationWidget("(Karger, 2000)", ["karger2000"]);
     const el = widget.toDOM();
     expect(el.tagName).toBe("SPAN");
-    expect(el.className).toBe("cf-citation");
+    expect(el.className).toBe(CSS.citation);
     expect(el.textContent).toBe("(Karger, 2000)");
     expect(el.title).toBe("karger2000");
   });
@@ -160,8 +180,8 @@ describe("NarrativeCitationWidget", () => {
     const widget = new NarrativeCitationWidget("Karger (2000)", "karger2000");
     const el = widget.toDOM();
     expect(el.tagName).toBe("SPAN");
-    expect(el.className).toContain("cf-citation");
-    expect(el.className).toContain("cf-citation-narrative");
+    expect(el.className).toContain(CSS.citation);
+    expect(el.className).toContain("cf-citation-narrative");  // CSS.citationNarrative contains both
     expect(el.textContent).toBe("Karger (2000)");
   });
 
@@ -179,38 +199,55 @@ describe("referenceRenderPlugin citation integration", () => {
     view?.destroy();
   });
 
-  function createTestView(doc: string, cursorPos?: number): EditorView {
-    const view = createSharedTestView(doc, {
+  function createRefView(doc: string, cursorPos?: number): EditorView {
+    const v = createTestView(doc, {
       cursorPos,
       extensions: [markdown(), documentSemanticsField, bibDataField, referenceRenderPlugin],
     });
-    view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein]) }) });
-    return view;
+    v.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein]) }) });
+    return v;
   }
 
   it("creates a view with the plugin without errors", () => {
-    view = createTestView("See [@karger2000] for details.");
+    view = createRefView("See [@karger2000] for details.");
     expect(view.state.doc.toString()).toBe("See [@karger2000] for details.");
   });
 
   it("handles document with no citations", () => {
-    view = createTestView("No citations here.");
+    view = createRefView("No citations here.");
     expect(view.state.doc.toString()).toBe("No citations here.");
   });
 
   it("handles empty document", () => {
-    view = createTestView("");
+    view = createRefView("");
     expect(view.state.doc.toString()).toBe("");
   });
 
   it("handles multiple citations in one document", () => {
     const doc = "See [@karger2000] and [@stein2001].";
-    view = createTestView(doc);
+    view = createRefView(doc);
     expect(view.state.doc.toString()).toBe(doc);
   });
 
   it("handles cursor at citation position", () => {
-    view = createTestView("See [@karger2000] for details.", 5);
+    view = createRefView("See [@karger2000] for details.", 5);
     expect(view.state.doc.toString()).toContain("[@karger2000]");
+  });
+
+  describe("negative / edge-case", () => {
+    it("handles citation with unknown id gracefully", () => {
+      view = createRefView("See [@unknown9999].");
+      expect(view.state.doc.toString()).toBe("See [@unknown9999].");
+    });
+
+    it("handles narrative citation at document start", () => {
+      view = createRefView("@karger2000 showed this.", 0);
+      expect(view.state.doc.toString()).toContain("@karger2000");
+    });
+
+    it("handles document with only punctuation", () => {
+      view = createRefView("..., --- !!!");
+      expect(view.state.doc.toString()).toBe("..., --- !!!");
+    });
   });
 });

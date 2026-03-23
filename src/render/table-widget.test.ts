@@ -139,4 +139,43 @@ describe("table-widget blur ownership", () => {
 
     expect(shouldCommitBlurredInlineEditor(editor, null, cell)).toBe(false);
   });
+
+  describe("negative / edge-case", () => {
+    it("skips commit when the blurred cell is different from the cell the editor was tracking", () => {
+      const cell = document.createElement("td");
+      const otherCell = document.createElement("td");
+      const editor = makeEditor(cell);
+
+      // The editor's cell is `cell` but the blur event comes from `otherCell`
+      expect(shouldCommitBlurredInlineEditor(editor, editor, otherCell)).toBe(false);
+    });
+  });
+});
+
+describe("TableWidget negative / edge-case", () => {
+  it("eq returns true for identical widget instances", () => {
+    const text = "| A |\n|---|\n| 1 |";
+    const widgetA = new TableWidget(makeTable(), text, 0, {});
+    const widgetB = new TableWidget(makeTable(), text, 0, {});
+    expect(widgetA.eq(widgetB)).toBe(true);
+  });
+
+  it("eq returns true even when tableFrom differs (position is not part of identity)", () => {
+    // eq() only checks tableText and macroSignature; tableFrom is updated lazily
+    // in toDOM() via bestTable heuristic, not used for widget identity.
+    const text = "| A |\n|---|\n| 1 |";
+    const widgetA = new TableWidget(makeTable(), text, 0, {});
+    const widgetB = new TableWidget(makeTable(), text, 10, {});
+    expect(widgetA.eq(widgetB)).toBe(true);
+  });
+
+  it("eq returns false when table text differs", () => {
+    const widgetA = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 0, {});
+    const widgetB = new TableWidget(makeTable(), "| B |\n|---|\n| 2 |", 0, {});
+    expect(widgetA.eq(widgetB)).toBe(false);
+  });
+
+  it("serializeTableWidgetMacros returns consistent string for empty macros", () => {
+    expect(serializeTableWidgetMacros({})).toBe(serializeTableWidgetMacros({}));
+  });
 });

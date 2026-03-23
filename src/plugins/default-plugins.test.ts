@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
 import { documentSemanticsField } from "../semantics/codemirror-source";
+import { CSS } from "../constants/css-classes";
+import { createEditorState } from "../test-utils";
 
 import {
   createRegistryState,
@@ -29,9 +30,8 @@ import { defaultPlugins } from "./default-plugins";
 import { BLOCK_MANIFEST, EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 
 /** Create an EditorState with fenced div parser. */
-function createState(doc: string): EditorState {
-  return EditorState.create({
-    doc,
+function createState(doc: string) {
+  return createEditorState(doc, {
     extensions: [
       markdown({ extensions: [fencedDiv] }),
       documentSemanticsField,
@@ -84,7 +84,7 @@ describe("createBlockRender", () => {
   it("returns a render function that produces correct spec", () => {
     const render = createBlockRender("Definition");
     const spec = render({ type: "definition", number: 2 });
-    expect(spec.className).toBe("cf-block cf-block-definition");
+    expect(spec.className).toBe(CSS.block("definition"));
     expect(spec.header).toBe("Definition 2");
   });
 });
@@ -154,7 +154,7 @@ describe("proofPlugin", () => {
       title: "of Theorem 1",
     });
     expect(spec.header).toBe("Proof");
-    expect(spec.className).toBe("cf-block cf-block-proof");
+    expect(spec.className).toBe(CSS.block("proof"));
   });
 
   it("renders without title", () => {
@@ -176,7 +176,7 @@ describe("definitionPlugin", () => {
       title: "Continuity",
     });
     expect(spec.header).toBe("Definition 1");
-    expect(spec.className).toBe("cf-block cf-block-definition");
+    expect(spec.className).toBe(CSS.block("definition"));
   });
 });
 
@@ -226,7 +226,7 @@ describe("algorithmPlugin", () => {
       title: "Dijkstra",
     });
     expect(spec.header).toBe("Algorithm 2");
-    expect(spec.className).toBe("cf-block cf-block-algorithm");
+    expect(spec.className).toBe(CSS.block("algorithm"));
   });
 });
 
@@ -459,7 +459,7 @@ describe("rendering", () => {
       number: 1,
       title: "Fermat's Last",
     });
-    expect(spec.className).toBe("cf-block cf-block-theorem");
+    expect(spec.className).toBe(CSS.block("theorem"));
     expect(spec.header).toBe("Theorem 1");
   });
 
@@ -490,7 +490,7 @@ describe("rendering", () => {
   it("proof renders without number", () => {
     const spec = proofPlugin.render({ type: "proof" });
     expect(spec.header).toBe("Proof");
-    expect(spec.className).toBe("cf-block cf-block-proof");
+    expect(spec.className).toBe(CSS.block("proof"));
   });
 
   it("definition renders with number", () => {
@@ -522,7 +522,33 @@ describe("rendering", () => {
         type: plugin.name,
         number: plugin.numbered ? 1 : undefined,
       });
-      expect(spec.className).toBe(`cf-block cf-block-${plugin.name}`);
+      expect(spec.className).toBe(CSS.block(plugin.name));
     }
+  });
+
+  describe("negative / edge-case", () => {
+    it("numbered plugin omits number when number is undefined", () => {
+      const spec = theoremPlugin.render({ type: "theorem" });
+      // Header should still be "Theorem" without a trailing number
+      expect(spec.header).toBe("Theorem");
+    });
+
+    it("unnumbered plugin still renders if number is explicitly passed", () => {
+      // proofPlugin.numbered === false, but the render function does not filter
+      // number from attrs — that's the caller's responsibility. The header
+      // just shows whatever number is passed.
+      const spec = proofPlugin.render({ type: "proof", number: 99 });
+      expect(spec.header).toBe("Proof 99");
+    });
+
+    it("algorithm render with number 0 does not crash", () => {
+      const spec = algorithmPlugin.render({ type: "algorithm", number: 0 });
+      expect(spec.header).toBe("Algorithm 0");
+    });
+
+    it("definition render with very large number does not crash", () => {
+      const spec = definitionPlugin.render({ type: "definition", number: 9999 });
+      expect(spec.header).toBe("Definition 9999");
+    });
   });
 });

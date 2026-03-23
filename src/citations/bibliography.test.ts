@@ -4,8 +4,9 @@ import { markdown } from "@codemirror/lang-markdown";
 import { type CslJsonItem } from "./bibtex-parser";
 import { bibDataEffect, bibDataField } from "./citation-render";
 import { CslProcessor } from "./csl-processor";
+import { CSS } from "../constants/css-classes";
 import {
-  createTestView as createSharedTestView,
+  createTestView,
   createEditorState,
   getDecorationSpecs,
   makeBibStore,
@@ -83,6 +84,21 @@ describe("collectCitedIds", () => {
   it("returns empty for no citations", () => {
     expect(collectCitedIds("No citations.", store)).toEqual([]);
   });
+
+  describe("negative / edge-case", () => {
+    it("returns empty for empty string", () => {
+      expect(collectCitedIds("", store)).toEqual([]);
+    });
+
+    it("returns empty when store is empty", () => {
+      const emptyStore = makeBibStore([]);
+      expect(collectCitedIds("See [@karger2000].", emptyStore)).toEqual([]);
+    });
+
+    it("handles malformed citation-like text without crashing", () => {
+      expect(collectCitedIds("[@]", store)).toEqual([]);
+    });
+  });
 });
 
 describe("formatBibEntry", () => {
@@ -108,6 +124,40 @@ describe("formatBibEntry", () => {
   it("handles entry with minimal fields", () => {
     const minimal: CslJsonItem = { id: "min", type: "document", issued: { "date-parts": [[2020]] } };
     expect(formatBibEntry(minimal)).toBe("2020.");
+  });
+
+  describe("negative / edge-case", () => {
+    it("handles entry with no issued date", () => {
+      const noDate: CslJsonItem = {
+        id: "nodoc",
+        type: "article-journal",
+        author: [{ family: "Test", given: "T." }],
+        title: "Some title",
+      };
+      // Should not throw; missing date yields no year fragment
+      expect(() => formatBibEntry(noDate)).not.toThrow();
+    });
+
+    it("handles entry with no author", () => {
+      const noAuthor: CslJsonItem = {
+        id: "anon",
+        type: "article-journal",
+        title: "Anonymous work",
+        issued: { "date-parts": [[2021]] },
+      };
+      expect(() => formatBibEntry(noAuthor)).not.toThrow();
+    });
+
+    it("handles entry with literal author", () => {
+      const literal: CslJsonItem = {
+        id: "org2022",
+        type: "report",
+        author: [{ literal: "IETF Working Group" }],
+        title: "RFC document",
+        issued: { "date-parts": [[2022]] },
+      };
+      expect(() => formatBibEntry(literal)).not.toThrow();
+    });
   });
 });
 
@@ -143,6 +193,16 @@ describe("sortBibEntries", () => {
     const sorted = sortBibEntries([stein, noAuthor]);
     expect(sorted[0].id).toBe("aaa");
   });
+
+  describe("negative / edge-case", () => {
+    it("returns empty array for empty input", () => {
+      expect(sortBibEntries([])).toEqual([]);
+    });
+
+    it("returns single-element array unchanged", () => {
+      expect(sortBibEntries([karger])).toEqual([karger]);
+    });
+  });
 });
 
 describe("BibliographyWidget", () => {
@@ -151,13 +211,13 @@ describe("BibliographyWidget", () => {
     const el = widget.toDOM();
 
     expect(el.tagName).toBe("DIV");
-    expect(el.className).toBe("cf-bibliography");
+    expect(el.className).toBe(CSS.bibliography);
 
     const heading = el.querySelector("h2");
     expect(heading).not.toBeNull();
     expect(heading?.textContent).toBe("References");
 
-    const items = el.querySelectorAll(".cf-bibliography-entry");
+    const items = el.querySelectorAll(`.${CSS.bibliographyEntry}`);
     expect(items).toHaveLength(2);
     expect(items[0].id).toBe("bib-karger2000");
     expect(items[1].id).toBe("bib-stein2001");
@@ -208,28 +268,40 @@ describe("bibliographyPlugin integration", () => {
     view?.destroy();
   });
 
-  function createTestView(doc: string, useStore = true): EditorView {
-    const view = createSharedTestView(doc, {
+  function createBibView(doc: string, useStore = true): EditorView {
+    const v = createTestView(doc, {
       extensions: [markdown(), bibDataField, bibliographyPlugin],
     });
     if (useStore) {
-      view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein, alpha]) }) });
+      v.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein, alpha]) }) });
     }
-    return view;
+    return v;
   }
 
   it("creates a view without errors", () => {
-    view = createTestView("See [@karger2000].");
+    view = createBibView("See [@karger2000].");
     expect(view.state.doc.toString()).toBe("See [@karger2000].");
   });
 
   it("handles document with no citations", () => {
-    view = createTestView("No citations here.");
+    view = createBibView("No citations here.");
     expect(view.state.doc.toString()).toBe("No citations here.");
   });
 
   it("handles empty bib store", () => {
-    view = createTestView("See [@karger2000].", false);
+    view = createBibView("See [@karger2000].", false);
     expect(view.state.doc.toString()).toBe("See [@karger2000].");
+  });
+
+  describe("negative / edge-case", () => {
+    it("handles empty document with store", () => {
+      view = createBibView("");
+      expect(view.state.doc.toString()).toBe("");
+    });
+
+    it("handles citation to id with no match in store", () => {
+      view = createBibView("See [@nonexistent2099].");
+      expect(view.state.doc.toString()).toBe("See [@nonexistent2099].");
+    });
   });
 });
