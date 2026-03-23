@@ -537,8 +537,10 @@ export const findReplaceExtension: Extension = [
   searchControllerExtensions,
   search({ top: true, createPanel: createSearchPanel }),
   keymap.of([
-    ...searchKeymap,
     { key: "Mod-f", run: openFindPanel, preventDefault: true },
     { key: "Mod-h", run: openFindReplacePanel, preventDefault: true },
+    ...searchKeymap.filter(
+      (b) => b.key !== "Mod-f" && b.key !== "Mod-h",
+    ),
   ]),
 ];
