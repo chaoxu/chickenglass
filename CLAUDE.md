@@ -179,3 +179,16 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
 - **Math macros cached in StateField**: `mathMacrosField` recomputes only when frontmatter changes.
 - **RenderWidget base class**: Default `ignoreEvent() { return true }`, inherited by 7+ widget types.
 - **Knuth-Plass must apply to ALL paragraphs**: Never skip math-containing paragraphs. The proper fix is a custom implementation using the Lezer syntax tree, not a DOM-walking library.
+- **Markdown structure uses Lezer everywhere**: Treat the Lezer markdown parser as the single source of truth for markdown structure, even outside CM6. Do not add new regex/text parsers for markdown blocks when the syntax tree can answer the question.
+- **Includes are markdown, not regex**: Include detection/resolution should be tree-based (Lezer), not regex-based with fence-exclusion side logic.
+- **Config/data syntax should use standard parsers**: Frontmatter and `coflat.yaml` should be parsed with a standard YAML library, not a handwritten YAML subset parser and not Lezer. Keep only the minimal frontmatter-boundary extraction logic if needed. See issue `#411`.
+- **Keep markdown semantics custom**: Lezer should provide structure, but Coflat's semantics layer (crossrefs, equation labels/numbering, theorem/block semantics, citation behavior) stays custom on top of the tree.
+- **AI features must consume structured document data**: Future document QA and AI authoring features should consume a structured document IR derived from Lezer + Coflat semantics, not raw markdown, regex extraction, editor DOM, or ad hoc CM6 view state. The IR should stay plain-data and CM6-free.
+- **Do not re-platform read/export markdown lightly**: Do not treat a full `remark`/`rehype` rewrite as a default cleanup. It is a replatforming project, not a routine library swap. Narrow hardening swaps are preferred first.
+- **Sanitization should use battle-tested libraries**: Prefer `DOMPurify` (or an equivalent maintained sanitizer) over handwritten HTML sanitizers for CSL/bibliography HTML and similar untrusted markup surfaces.
+- **URL safety should use the standard URL parser**: Prefer the standard `URL` API plus an explicit protocol allowlist over string-prefix blocking for `href`/`src` safety checks.
+- **Prefer built-in text segmentation**: For writing stats and similar generic text counting, prefer `Intl.Segmenter` over regex/split heuristics when feasible.
+- **Prefer modern File/Blob APIs**: Use `file.text()` / `file.arrayBuffer()` instead of `FileReader` where possible. Keep custom logic only for product-specific filename/path/data-URL policy.
+- **Prefer standard cross-runtime path helpers**: For generic path manipulation, prefer a maintained cross-runtime path library (for example `pathe`) over ad hoc basename/dirname/normalize code. Keep Coflat-specific project-path policy in a thin wrapper layer.
+- **If we adopt a global app-state library, use Zustand**: For a broader persisted app-state cleanup, prefer `zustand` with `persist`. Do not introduce a heavier state library unless there is a clear need for it.
+- **For watcher normalization, prefer a watcher library**: If the server-side file watcher is revisited, prefer a maintained watcher layer (for example `chokidar`) over adding more normalization logic on top of raw `fs.watch`.
