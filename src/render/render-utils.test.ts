@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Decoration } from "@codemirror/view";
+import type { Range } from "@codemirror/state";
 import { StateEffect } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import {
@@ -113,13 +114,13 @@ class TestWidget extends RenderWidget {
 
 describe("addMarkerReplacement", () => {
   it("does nothing when cursorInside is true", () => {
-    const items: ReturnType<typeof Decoration.replace>[] = [];
+    const items: Range<Decoration>[] = [];
     addMarkerReplacement(0, 5, true, new TestWidget("w"), items);
     expect(items).toHaveLength(0);
   });
 
   it("does nothing when markerFrom >= markerTo (degenerate range)", () => {
-    const items: ReturnType<typeof Decoration.replace>[] = [];
+    const items: Range<Decoration>[] = [];
     addMarkerReplacement(5, 5, false, new TestWidget("w"), items);
     expect(items).toHaveLength(0);
     addMarkerReplacement(6, 5, false, new TestWidget("w"), items);
@@ -127,7 +128,7 @@ describe("addMarkerReplacement", () => {
   });
 
   it("adds hidden mark decoration when widget is null", () => {
-    const items: ReturnType<typeof Decoration.replace>[] = [];
+    const items: Range<Decoration>[] = [];
     addMarkerReplacement(0, 3, false, null, items);
     expect(items).toHaveLength(1);
     expect(items[0].from).toBe(0);
@@ -136,7 +137,7 @@ describe("addMarkerReplacement", () => {
   });
 
   it("adds replace decoration with widget when widget is provided", () => {
-    const items: ReturnType<typeof Decoration.replace>[] = [];
+    const items: Range<Decoration>[] = [];
     const widget = new TestWidget("label");
     addMarkerReplacement(0, 5, false, widget, items);
     expect(items).toHaveLength(1);
@@ -146,7 +147,7 @@ describe("addMarkerReplacement", () => {
   });
 
   it("sets sourceFrom and sourceTo on the widget", () => {
-    const items: ReturnType<typeof Decoration.replace>[] = [];
+    const items: Range<Decoration>[] = [];
     const widget = new TestWidget("label");
     addMarkerReplacement(10, 20, false, widget, items);
     expect(widget.sourceFrom).toBe(10);
