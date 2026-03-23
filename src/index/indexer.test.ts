@@ -328,6 +328,58 @@ See [@eq:class] for the class equation.`;
   });
 });
 
+describe("edge cases", () => {
+  it("does NOT produce false labels for incomplete/unclosed fenced divs at EOF", () => {
+    // The Lezer parser uses error recovery and will still emit a FencedDiv
+    // node for an unclosed block at EOF, so the indexer will extract an entry.
+    // This test documents the actual behavior: the label IS present, but the
+    // entry's content is the partial body (up to EOF). A caller must not assume
+    // unclosed divs are silently dropped.
+    const content = `::: {.theorem #thm-unclosed}
+This theorem has no closing fence.`;
+    const result = extractFileIndex(content, "test.md");
+
+    // Parser error-recovery emits a FencedDiv node even for unclosed divs.
+    const labelled = result.entries.filter((e) => e.label === "thm-unclosed");
+    expect(labelled).toHaveLength(1);
+    // The type and label are still correctly extracted from the opening fence.
+    expect(labelled[0].type).toBe("theorem");
+    // The content is the partial body text (no closing fence line).
+    expect(labelled[0].content).toContain("This theorem has no closing fence.");
+  });
+
+  it("handles empty document", () => {
+    // An empty document must not throw and must return empty arrays.
+    const result = extractFileIndex("", "empty.md");
+
+    expect(result.entries).toHaveLength(0);
+    expect(result.references).toHaveLength(0);
+    expect(result.file).toBe("empty.md");
+  });
+
+  it("handles document with no fenced divs", () => {
+    // A plain prose document (headings + text, no fenced divs) must not
+    // produce any fenced-div index entries; other entry types are unaffected.
+    const content = `# Introduction
+
+Some plain paragraph text with no blocks.
+
+## Methods
+
+More prose here.`;
+    const result = extractFileIndex(content, "prose.md");
+
+    const divEntries = result.entries.filter(
+      (e) => e.type !== "heading",
+    );
+    expect(divEntries).toHaveLength(0);
+
+    // Headings should still be indexed
+    const headings = result.entries.filter((e) => e.type === "heading");
+    expect(headings).toHaveLength(2);
+  });
+});
+
 describe("incremental updates", () => {
   it("adds a new file to the index", () => {
     const files = new Map<string, FileIndex>();

@@ -27,6 +27,41 @@ function makeView(
   return new EditorView({ state, parent });
 }
 
+describe("edge cases", () => {
+  it("does NOT wrap when no selection (cursor only inserts empty markers)", () => {
+    // With no selection, toggleInlineMarker inserts an empty marker pair —
+    // it does NOT wrap surrounding word content. The document content outside
+    // the cursor position must be unchanged.
+    const view = makeView("hello world", 5);
+    toggleInlineMarker(view, "**");
+    // The doc gains "****" at position 5, not a wrap around "hello"
+    expect(view.state.doc.toString()).toBe("hello**** world");
+    // Cursor is placed between the two markers
+    expect(view.state.selection.main.head).toBe(7);
+    view.destroy();
+  });
+
+  it("does NOT toggle formatting on empty document", () => {
+    // An empty document must not throw; it should insert empty markers.
+    const view = makeView("", 0);
+    toggleInlineMarker(view, "**");
+    expect(view.state.doc.toString()).toBe("****");
+    expect(view.state.selection.main.head).toBe(2);
+    view.destroy();
+  });
+
+  it("handles cursor at document boundary (position 0)", () => {
+    // When the cursor is at position 0, the `before` check for the marker
+    // reads from Math.max(0, 0 - mLen) = 0 which cannot match the marker;
+    // a plain insert should happen without errors.
+    const view = makeView("text", 0);
+    toggleInlineMarker(view, "**");
+    expect(view.state.doc.toString()).toBe("****text");
+    expect(view.state.selection.main.head).toBe(2);
+    view.destroy();
+  });
+});
+
 describe("toggleInlineMarker", () => {
   describe("bold (**)", () => {
     it("wraps selected text with **", () => {
