@@ -94,6 +94,53 @@ class BlockHeaderWidget extends MacroAwareWidget {
 }
 
 /**
+ * Widget that renders an attribute-only title (title="..." in the attributes,
+ * no inline title text in the document).
+ *
+ * Unlike inline titles that stay as editable document content, attribute titles
+ * live inside the attribute string and have no document range. They are rendered
+ * as a widget with parentheses, matching how inline titles appear visually.
+ * Inline formatting (bold, math, etc.) is supported via renderDocumentFragmentToDom.
+ */
+class AttributeTitleWidget extends MacroAwareWidget {
+  constructor(
+    private readonly title: string,
+    private readonly macros: Record<string, string>,
+  ) {
+    super(macros);
+  }
+
+  createDOM(): HTMLElement {
+    const el = document.createElement("span");
+    el.className = CSS.blockAttrTitle;
+
+    const openParen = document.createElement("span");
+    openParen.className = CSS.blockTitleParen;
+    openParen.textContent = "(";
+    el.appendChild(openParen);
+
+    const titleContent = document.createElement("span");
+    renderDocumentFragmentToDom(titleContent, {
+      kind: "block-title",
+      text: this.title,
+      macros: this.macros,
+    });
+    el.appendChild(titleContent);
+
+    const closeParen = document.createElement("span");
+    closeParen.className = CSS.blockTitleParen;
+    closeParen.textContent = ")";
+    el.appendChild(closeParen);
+
+    return el;
+  }
+
+  eq(other: AttributeTitleWidget): boolean {
+    return this.title === other.title && this.macrosKey === other.macrosKey;
+  }
+}
+
+/**
  * Compute the iframe src URL for an embed block.
  *
  * Returns undefined if the URL is invalid or cannot be embedded.
@@ -420,6 +467,26 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     if (!cursorOnEitherFence && div.titleFrom !== undefined && div.titleTo !== undefined) {
       items.push(openParenWidget.range(div.titleFrom));
       items.push(closeParenWidget.range(div.titleTo));
+    }
+
+    // Attribute-only title: when titleFrom/titleTo are absent (no inline title text)
+    // but div.title is set from key-value attributes (e.g. title="**3SUM**"),
+    // render the title via a widget placed after the header widget. The title
+    // isn't editable document content, so a widget is architecturally correct.
+    // Inline titles (titleFrom/titleTo defined) take precedence — the attribute
+    // title is only used when there's no inline text.
+    if (
+      !cursorOnEitherFence &&
+      div.titleFrom === undefined &&
+      div.titleTo === undefined &&
+      div.title
+    ) {
+      items.push(
+        Decoration.widget({
+          widget: new AttributeTitleWidget(div.title, macros),
+          side: 1,
+        }).range(div.openFenceTo),
+      );
     }
 
     // --- Closing fence ---

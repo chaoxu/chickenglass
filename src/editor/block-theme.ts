@@ -59,6 +59,12 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     userSelect: "none",
   },
 
+  /* Attribute-only title widget — renders title from key-value attributes
+   * (e.g. title="**3SUM**") when no inline title text exists. */
+  ".cf-block-attr-title": {
+    userSelect: "none",
+  },
+
   /* Fenced div nesting guides — vertical lines on the left, editing only.
      Uses inset box-shadow so the guide never shifts content layout. */
   ".cf-fence-d1": {

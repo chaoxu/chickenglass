@@ -294,6 +294,64 @@ describe("blockDecorationField", () => {
       getDecoSpecs(state);
     }).not.toThrow();
   });
+
+  it("renders attribute-only title via widget when no inline title (issue #401)", () => {
+    // title="**3SUM**" in attributes, no inline title text after attributes
+    const doc = `::: {.theorem title="**3SUM**"}\nContent\n:::`;
+    const state = createTestState(doc);
+    const specs = getDecoSpecs(state);
+
+    // Should have a BlockHeaderWidget for the label
+    const headerWidgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
+    expect(headerWidgets.length).toBe(1);
+
+    // Should have an AttributeTitleWidget for the attribute-only title
+    const attrTitleWidgets = specs.filter((s) => s.widgetClass === "AttributeTitleWidget");
+    expect(attrTitleWidgets.length).toBe(1);
+
+    // No inline title paren widgets (those are only for inline titles)
+    const parenWidgets = specs.filter((s) => s.widgetClass === "SimpleTextWidget");
+    expect(parenWidgets.length).toBe(0);
+  });
+
+  it("attribute-only title widget absent when cursor is on fence (source mode)", () => {
+    const doc = `::: {.theorem title="**3SUM**"}\nContent\n:::`;
+    const state = createTestState(doc, 0, true);
+    const specs = getDecoSpecs(state);
+
+    // In source mode: no attribute title widget, no header widget
+    const attrTitleWidgets = specs.filter((s) => s.widgetClass === "AttributeTitleWidget");
+    expect(attrTitleWidgets.length).toBe(0);
+  });
+
+  it("inline title takes precedence over attribute title (issue #401)", () => {
+    // Both inline title and attribute title present — inline wins
+    const doc = `::: {.theorem title="Attr Title"} Inline Title\nContent\n:::`;
+    const state = createTestState(doc);
+    const specs = getDecoSpecs(state);
+
+    // Should have inline title paren widgets (for the inline title text)
+    const parenWidgets = specs.filter((s) => s.widgetClass === "SimpleTextWidget");
+    expect(parenWidgets.length).toBe(2);
+
+    // Should NOT have an AttributeTitleWidget (inline title takes precedence)
+    const attrTitleWidgets = specs.filter((s) => s.widgetClass === "AttributeTitleWidget");
+    expect(attrTitleWidgets.length).toBe(0);
+  });
+
+  it("no title widget when neither inline nor attribute title exists", () => {
+    const doc = `::: {.proof}\nContent\n:::`;
+    const state = createTestState(doc);
+    const specs = getDecoSpecs(state);
+
+    // No attribute title widget
+    const attrTitleWidgets = specs.filter((s) => s.widgetClass === "AttributeTitleWidget");
+    expect(attrTitleWidgets.length).toBe(0);
+
+    // No paren widgets
+    const parenWidgets = specs.filter((s) => s.widgetClass === "SimpleTextWidget");
+    expect(parenWidgets.length).toBe(0);
+  });
 });
 
 describe("disabled blocks show raw fences (issue #356)", () => {

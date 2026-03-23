@@ -23,6 +23,9 @@ export const CSS = {
   /** Title paren widgets around user-supplied title text. */
   blockTitleParen: "cf-block-title-paren",
 
+  /** Attribute-only title widget (title from key-value attrs, not inline text). */
+  blockAttrTitle: "cf-block-attr-title",
+
   /** QED tombstone marker on last content line of proof blocks. */
   blockQed: "cf-block-qed",
 
