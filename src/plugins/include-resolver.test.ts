@@ -66,6 +66,51 @@ A theorem block.
     const content = `::: {.include} chapter1.md :::`;
     expect(extractIncludePaths(content)).toEqual(["chapter1.md"]);
   });
+
+  // Regression: #357 — include syntax inside fenced code blocks must be ignored
+  it("ignores include syntax inside a fenced code block (backticks)", () => {
+    const content = `\`\`\`
+::: {.include}
+foo.md
+:::
+\`\`\``;
+    expect(extractIncludePaths(content)).toEqual([]);
+  });
+
+  it("ignores include syntax inside a fenced code block (tildes)", () => {
+    const content = `~~~
+::: {.include}
+foo.md
+:::
+~~~`;
+    expect(extractIncludePaths(content)).toEqual([]);
+  });
+
+  it("extracts includes outside code blocks while ignoring those inside", () => {
+    const content = `::: {.include}
+real.md
+:::
+
+\`\`\`
+::: {.include}
+fake.md
+:::
+\`\`\`
+
+::: {.include}
+also-real.md
+:::`;
+    expect(extractIncludePaths(content)).toEqual(["real.md", "also-real.md"]);
+  });
+
+  it("ignores include inside a code block with info string", () => {
+    const content = `\`\`\`markdown
+::: {.include}
+example.md
+:::
+\`\`\``;
+    expect(extractIncludePaths(content)).toEqual([]);
+  });
 });
 
 describe("resolveIncludePath", () => {
@@ -232,6 +277,22 @@ chapters/ch1.md
     expect(includes).toHaveLength(1);
     expect(includes[0].path).toBe("book/chapters/ch1.md");
   });
+
+  // Regression: #357 — include inside code block must not trigger file read
+  it("does not resolve includes inside fenced code blocks", async () => {
+    const fs = new MemoryFileSystem({
+      "main.md": `\`\`\`
+::: {.include}
+missing.md
+:::
+\`\`\``,
+    });
+
+    // missing.md does not exist — if the code-block guard fails,
+    // this would throw IncludeNotFoundError.
+    const includes = await resolveIncludes("main.md", fs);
+    expect(includes).toHaveLength(0);
+  });
 });
 
 describe("flattenIncludes", () => {
@@ -292,6 +353,18 @@ sec1.md
     expect(result).toContain("Chapter 1");
     expect(result).toContain("Section 1 content");
     expect(result).not.toContain("{.include}");
+  });
+
+  // Regression: #357 — code-block include patterns preserved verbatim
+  it("does not replace include syntax inside a fenced code block", () => {
+    const rootContent = `\`\`\`
+::: {.include}
+example.md
+:::
+\`\`\``;
+
+    const result = flattenIncludes(rootContent, []);
+    expect(result).toBe(rootContent);
   });
 });
 

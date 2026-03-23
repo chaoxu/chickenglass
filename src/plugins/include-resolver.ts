@@ -52,12 +52,64 @@ export class IncludeNotFoundError extends Error {
 const INCLUDE_BLOCK_RE =
   /^:{3,}\s*\{\.include\}\s*\n?\s*(.+?)\s*\n?\s*:{3,}\s*$/gm;
 
-/** Extract include paths from markdown content. */
-export function extractIncludePaths(content: string): readonly string[] {
-  const paths: string[] = [];
-  const re = new RegExp(INCLUDE_BLOCK_RE.source, INCLUDE_BLOCK_RE.flags);
+/**
+ * Pattern matching fenced code blocks (triple-backtick or triple-tilde).
+ * Used to exclude include directives that appear inside code blocks.
+ */
+const FENCED_CODE_BLOCK_RE = /^(`{3,}|~{3,}).*\n[\s\S]*?^\1\s*$/gm;
+
+/**
+ * Compute the character ranges covered by fenced code blocks.
+ * Returns sorted, non-overlapping `[from, to)` intervals.
+ */
+function fencedCodeRanges(
+  content: string,
+): readonly { from: number; to: number }[] {
+  const ranges: { from: number; to: number }[] = [];
+  const re = new RegExp(FENCED_CODE_BLOCK_RE.source, FENCED_CODE_BLOCK_RE.flags);
   let match: RegExpExecArray | null;
   while ((match = re.exec(content)) !== null) {
+    ranges.push({ from: match.index, to: match.index + match[0].length });
+  }
+  return ranges;
+}
+
+/** Check whether a position falls inside any of the given ranges. */
+function insideCodeBlock(
+  pos: number,
+  ranges: readonly { from: number; to: number }[],
+): boolean {
+  for (const r of ranges) {
+    if (pos >= r.from && pos < r.to) return true;
+    // Ranges are sorted, so we can bail early once we pass the position.
+    if (r.from > pos) break;
+  }
+  return false;
+}
+
+/**
+ * Run INCLUDE_BLOCK_RE against `content` and return only those matches
+ * that do NOT fall inside a fenced code block.
+ */
+function matchIncludesOutsideCodeBlocks(
+  content: string,
+): RegExpExecArray[] {
+  const codeRanges = fencedCodeRanges(content);
+  const re = new RegExp(INCLUDE_BLOCK_RE.source, INCLUDE_BLOCK_RE.flags);
+  const matches: RegExpExecArray[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(content)) !== null) {
+    if (!insideCodeBlock(match.index, codeRanges)) {
+      matches.push(match);
+    }
+  }
+  return matches;
+}
+
+/** Extract include paths from markdown content, ignoring code blocks. */
+export function extractIncludePaths(content: string): readonly string[] {
+  const paths: string[] = [];
+  for (const match of matchIncludesOutsideCodeBlocks(content)) {
     const path = match[1].trim();
     if (path.length > 0) {
       paths.push(path);
@@ -156,12 +208,10 @@ export function flattenIncludes(
   }
 
   let result = rootContent;
-  const re = new RegExp(INCLUDE_BLOCK_RE.source, INCLUDE_BLOCK_RE.flags);
   let includeIndex = 0;
   const replacements: Array<{ start: number; end: number; text: string }> = [];
 
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(result)) !== null) {
+  for (const match of matchIncludesOutsideCodeBlocks(result)) {
     if (includeIndex >= includes.length) break;
 
     const include = includes[includeIndex];
@@ -205,7 +255,6 @@ export function flattenIncludesWithSourceMap(
     return { text: rootContent, regions: [] };
   }
 
-  const re = new RegExp(INCLUDE_BLOCK_RE.source, INCLUDE_BLOCK_RE.flags);
   let includeIndex = 0;
   const replacements: Array<{
     start: number;
@@ -215,8 +264,7 @@ export function flattenIncludesWithSourceMap(
     originalRef: string;
   }> = [];
 
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(rootContent)) !== null) {
+  for (const match of matchIncludesOutsideCodeBlocks(rootContent)) {
     if (includeIndex >= includes.length) break;
 
     const include = includes[includeIndex];
