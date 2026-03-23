@@ -20,6 +20,9 @@ export const HOVER_DELAY_MS = 300;
 /** Poll interval (ms) used when waiting for an embed iframe to load. */
 export const IFRAME_POLL_INTERVAL_MS = 500;
 
+/** Maximum number of poll attempts when waiting for an embed iframe to load. */
+export const IFRAME_MAX_ATTEMPTS = 10;
+
 /** Duration (ms) the copy-success checkmark is shown before reverting. */
 export const COPY_RESET_MS = 1500;
 

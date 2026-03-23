@@ -7,7 +7,7 @@
  * - `key=value` or `key="value"` adds a key-value pair
  */
 
-import { isSpaceTab } from "./char-utils";
+import { isSpaceTab, isIdentChar } from "./char-utils";
 
 /** Parsed result of a fenced div attribute string. */
 export interface FencedDivAttrs {
@@ -98,20 +98,6 @@ export function extractDivClass(attrText: string): FencedDivAttrs | undefined {
     keyValues: {},
   };
 }
-
-/** Characters allowed in identifiers: letters, digits, hyphens, underscores, colons, periods. */
-function isIdentChar(ch: number): boolean {
-  return (
-    (ch >= 65 && ch <= 90) ||   // A-Z
-    (ch >= 97 && ch <= 122) ||  // a-z
-    (ch >= 48 && ch <= 57) ||   // 0-9
-    ch === 45 ||                // -
-    ch === 95 ||                // _
-    ch === 58 ||                // :
-    ch === 46                   // .
-  );
-}
-
 
 /** Read an identifier starting at `pos`. */
 function readIdentifier(str: string, pos: number): string {

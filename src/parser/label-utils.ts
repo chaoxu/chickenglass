@@ -1,11 +1,8 @@
-function isWhitespaceChar(code: number): boolean {
-  return code === 9 || code === 10 || code === 11
-    || code === 12 || code === 13 || code === 32;
-}
+import { isWhitespace } from "./char-utils";
 
 function containsWhitespace(text: string): boolean {
   for (let i = 0; i < text.length; i++) {
-    if (isWhitespaceChar(text.charCodeAt(i))) {
+    if (isWhitespace(text.charCodeAt(i))) {
       return true;
     }
   }

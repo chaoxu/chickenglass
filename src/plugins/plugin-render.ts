@@ -52,6 +52,7 @@ import {
 } from "./embed-plugin";
 import { CSS } from "../constants/css-classes";
 import { EMBED_CLASSES, EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
+import { IFRAME_MAX_ATTEMPTS, IFRAME_POLL_INTERVAL_MS } from "../constants/timing";
 
 /** Pre-created mark decoration for monospace source syntax on fence lines. */
 const blockSourceMark = Decoration.mark({ class: CSS.blockSource });
@@ -161,18 +162,16 @@ function autoResizeGistIframe(iframe: HTMLIFrameElement): void {
 
   // Content not ready yet — poll until it loads or we give up
   let attempts = 0;
-  const maxAttempts = 10;
-  const pollInterval = 500;
 
   const poll = (): void => {
     attempts++;
     const r = tryResizeIframe(iframe);
-    if (r === "unavailable" && attempts < maxAttempts) {
-      setTimeout(poll, pollInterval);
+    if (r === "unavailable" && attempts < IFRAME_MAX_ATTEMPTS) {
+      setTimeout(poll, IFRAME_POLL_INTERVAL_MS);
     }
   };
 
-  setTimeout(poll, pollInterval);
+  setTimeout(poll, IFRAME_POLL_INTERVAL_MS);
 }
 
 export function embedSandboxPermissions(embedType: string): string {

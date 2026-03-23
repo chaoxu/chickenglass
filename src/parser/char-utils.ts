@@ -12,6 +12,8 @@
 export const SPACE = 32;
 export const TAB = 9;
 export const NEWLINE = 10;
+export const VT = 11;
+export const FF = 12;
 export const CR = 13;
 export const DOLLAR = 36;
 export const OPEN_PAREN = 40;
@@ -42,6 +44,31 @@ export function skipSpaceTab(text: string, pos: number): number {
 /** Test whether a char code is a space or tab. */
 export function isSpaceTab(ch: number): boolean {
   return ch === SPACE || ch === TAB;
+}
+
+/**
+ * Test whether a char code is a Unicode whitespace character
+ * (space, tab, newline, vertical-tab, form-feed, carriage-return).
+ */
+export function isWhitespace(ch: number): boolean {
+  return ch === SPACE || ch === TAB || ch === NEWLINE
+    || ch === VT || ch === FF || ch === CR;
+}
+
+/**
+ * Test whether a char code is valid inside a Pandoc identifier
+ * (letters, digits, hyphens, underscores, colons, periods).
+ */
+export function isIdentChar(ch: number): boolean {
+  return (
+    (ch >= 65 && ch <= 90) ||   // A-Z
+    (ch >= 97 && ch <= 122) ||  // a-z
+    (ch >= 48 && ch <= 57) ||   // 0-9
+    ch === 45 ||                // -
+    ch === 95 ||                // _
+    ch === 58 ||                // :
+    ch === 46                   // .
+  );
 }
 
 // ── Brace matching ──────────────────────────────────────────────────

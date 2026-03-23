@@ -7,6 +7,16 @@
  */
 
 import { STYLED_BLOCK_NAMES } from "../constants/block-manifest";
+import {
+  ASPECT_RATIO_16_9,
+  EMBED_IFRAME_HEIGHT,
+  GIST_MIN_HEIGHT,
+  IMAGE_MAX_HEIGHT,
+  INCLUDE_LABEL_FONT_SIZE,
+  INCLUDE_LABEL_LETTER_SPACING,
+  INCLUDE_LABEL_RIGHT,
+  INCLUDE_LABEL_TOP,
+} from "../constants/layout";
 
 /** Auto-generate per-block-type accent override rules from the manifest. */
 function buildAccentRules(): Record<string, Record<string, string>> {
@@ -114,7 +124,7 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
   ".cf-image": {
     display: "block",
     maxWidth: "100%",
-    maxHeight: "400px",
+    maxHeight: IMAGE_MAX_HEIGHT,
   },
   ".cf-image-error": {
     display: "inline-block",
@@ -165,7 +175,7 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
   ".cf-embed-iframe": {
     display: "block",
     width: "100%",
-    height: "350px",
+    height: EMBED_IFRAME_HEIGHT,
     border: "var(--cf-border-width) solid var(--cf-embed-border)",
     borderRadius: "var(--cf-border-radius)",
     backgroundColor: "transparent",
@@ -174,7 +184,7 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
   ".cf-embed-youtube": {
     position: "relative",
     width: "100%",
-    paddingBottom: "56.25%",
+    paddingBottom: ASPECT_RATIO_16_9,
     height: "0",
     margin: "var(--cf-spacing-xs) 0",
   },
@@ -190,7 +200,7 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
   /* Gist embed: auto-size to content instead of fixed height */
   ".cf-embed-gist .cf-embed-iframe": {
     height: "auto",
-    minHeight: "200px",
+    minHeight: GIST_MIN_HEIGHT,
   },
 
   /* Include region: right border spans the full height, label anchors to it */
@@ -202,16 +212,16 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
   /* Include label: rotated filename inside the right padding of .cm-content */
   ".cf-include-label": {
     position: "absolute",
-    right: "-44px",
-    top: "2px",
+    right: INCLUDE_LABEL_RIGHT,
+    top: INCLUDE_LABEL_TOP,
     writingMode: "vertical-rl",
     transform: "rotate(180deg)",
     userSelect: "none",
     pointerEvents: "none",
-    fontSize: "10px",
+    fontSize: INCLUDE_LABEL_FONT_SIZE,
     color: "var(--cf-include-label-color)",
     whiteSpace: "nowrap",
-    letterSpacing: "0.3px",
+    letterSpacing: INCLUDE_LABEL_LETTER_SPACING,
     lineHeight: "1",
     zIndex: "1",
   },

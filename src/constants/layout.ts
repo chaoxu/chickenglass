@@ -31,3 +31,30 @@ export const GIST_MIN_HEIGHT = "200px";
 
 /** Padding-bottom percentage for a 16:9 aspect-ratio iframe container. */
 export const ASPECT_RATIO_16_9 = "56.25%";
+
+/** Vertical padding (top and bottom) for the editor content area. */
+export const CONTENT_PADDING_Y = "24px";
+
+/** Horizontal padding (left and right) for the editor content area. */
+export const CONTENT_PADDING_X = "48px";
+
+/** Maximum width of the hover-preview tooltip. */
+export const HOVER_PREVIEW_MAX_WIDTH = "400px";
+
+/** Maximum height of the hover-preview tooltip. */
+export const HOVER_PREVIEW_MAX_HEIGHT = "300px";
+
+/** Right margin gap on the sidenote number label. */
+export const SIDENOTE_NUMBER_MARGIN_RIGHT = "3px";
+
+/** Right offset of the include-label relative to its anchor element. */
+export const INCLUDE_LABEL_RIGHT = "-44px";
+
+/** Top offset of the include-label within its anchor element. */
+export const INCLUDE_LABEL_TOP = "2px";
+
+/** Font size for the include-label rotated filename. */
+export const INCLUDE_LABEL_FONT_SIZE = "10px";
+
+/** Letter-spacing for the include-label rotated filename. */
+export const INCLUDE_LABEL_LETTER_SPACING = "0.3px";

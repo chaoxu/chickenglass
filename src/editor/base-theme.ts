@@ -1,4 +1,11 @@
 
+import {
+  CONTENT_MAX_WIDTH,
+  CONTENT_PADDING_X,
+  CONTENT_PADDING_Y,
+  MARGIN_RIGHT_CALC,
+} from "../constants/layout";
+
 /**
  * Base editor chrome styles: container, content area, gutters, cursor,
  * selection, active line, and fold toggles.
@@ -10,10 +17,10 @@ export const baseThemeStyles = {
   },
   ".cm-content": {
     fontFamily: "var(--cf-content-font, KaTeX_Main, 'Times New Roman', serif)",
-    padding: "24px 48px 24px 48px",
-    maxWidth: "var(--cf-content-max-width, 800px)",
+    padding: `${CONTENT_PADDING_Y} ${CONTENT_PADDING_X} ${CONTENT_PADDING_Y} ${CONTENT_PADDING_X}`,
+    maxWidth: `var(--cf-content-max-width, ${CONTENT_MAX_WIDTH})`,
     marginLeft: "auto",
-    marginRight: "max(var(--cf-sidenote-width, 224px), calc((100% - var(--cf-content-max-width, 800px)) / 2))",
+    marginRight: `max(var(--cf-sidenote-width, ${MARGIN_RIGHT_CALC}), calc((100% - var(--cf-content-max-width, ${CONTENT_MAX_WIDTH})) / 2))`,
     overflow: "visible",
   },
   ".cm-gutters": {

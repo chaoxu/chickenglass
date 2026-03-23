@@ -1,4 +1,11 @@
 import { monoFont } from "./editor-constants";
+import {
+  HOVER_PREVIEW_MAX_HEIGHT,
+  HOVER_PREVIEW_MAX_WIDTH,
+  SIDENOTE_NUMBER_MARGIN_RIGHT,
+  SIDENOTE_OFFSET,
+  SIDENOTE_WIDTH,
+} from "../constants/layout";
 
 /**
  * Margin and overlay styles: sidenotes (reference, definition, number,
@@ -33,8 +40,8 @@ export const marginThemeStyles = {
   /* Sidenote definition rendered in the right margin */
   ".cf-sidenote": {
     position: "absolute",
-    right: "-280px",
-    width: "240px",
+    right: SIDENOTE_OFFSET,
+    width: SIDENOTE_WIDTH,
     fontSize: "0.8em",
     lineHeight: "1.4",
     color: "var(--cf-fg)",
@@ -49,7 +56,7 @@ export const marginThemeStyles = {
     fontWeight: "600",
     verticalAlign: "super",
     lineHeight: "0",
-    marginRight: "3px",
+    marginRight: SIDENOTE_NUMBER_MARGIN_RIGHT,
   },
 
   /* Sidenote content */
@@ -69,8 +76,8 @@ export const marginThemeStyles = {
 
   /* Hover preview tooltip for cross-references and citations */
   ".cf-hover-preview": {
-    maxWidth: "400px",
-    maxHeight: "300px",
+    maxWidth: HOVER_PREVIEW_MAX_WIDTH,
+    maxHeight: HOVER_PREVIEW_MAX_HEIGHT,
     overflow: "auto",
     padding: "var(--cf-spacing-sm) var(--cf-spacing-md)",
     fontSize: "0.9em",
