@@ -13,7 +13,7 @@
 import { type Extension } from "@codemirror/state";
 import { type EditorView, type PluginValue, type ViewUpdate, ViewPlugin } from "@codemirror/view";
 import { getSearchQuery, searchPanelOpen } from "@codemirror/search";
-import { collectVisibleSearchMatches } from "../editor/search-controller";
+import { collectVisibleSearchMatches } from "../editor/find-replace";
 
 const MATCH_CLASS = "cf-search-match";
 const SELECTED_MATCH_CLASS = "cf-search-match-selected";

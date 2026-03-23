@@ -10,7 +10,7 @@ import {
   openReplaceSearch,
   searchControllerExtensions,
   setSearchControllerQuery,
-} from "./search-controller";
+} from "./find-replace";
 
 const views: EditorView[] = [];
 

@@ -1,5 +1,5 @@
 /**
- * Coflat-native search panel for in-document find & replace.
+ * Coflat-native search subsystem: state, query helpers, panel UI, and keybindings.
  *
  * Uses CM6's `@codemirror/search` as the engine, but replaces the stock panel
  * with a custom DOM panel styled with the Coflat design system (--cf-* tokens).
@@ -14,33 +14,197 @@
  */
 
 import {
+  closeSearchPanel,
+  findNext,
+  findPrevious,
+  getSearchQuery,
+  openSearchPanel,
+  replaceAll,
+  replaceNext,
   search,
   searchKeymap,
+  searchPanelOpen,
+  SearchQuery,
+  setSearchQuery,
 } from "@codemirror/search";
-import { type Extension } from "@codemirror/state";
+import { StateEffect, StateField, type Extension } from "@codemirror/state";
 import {
   type EditorView,
   type Panel,
   type ViewUpdate,
   keymap,
 } from "@codemirror/view";
-import {
-  closeSearch,
-  getSearchControllerState,
-  nextSearchMatch,
-  openFindSearch,
-  openReplaceSearch,
-  previousSearchMatch,
-  replaceAllSearchMatches,
-  replaceCurrentSearchMatch,
-  searchControllerExtensions,
-  setSearchControllerQuery,
-  setSearchUiState,
-} from "./search-controller";
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Search controller state
+// ===========================================================================
+
+export interface SearchUiState {
+  readonly replaceVisible: boolean;
+}
+
+export interface SearchControllerState extends SearchUiState {
+  readonly panelOpen: boolean;
+  readonly query: SearchQuery;
+  readonly current: number;
+  readonly total: number;
+}
+
+export interface SearchMatchRange {
+  readonly from: number;
+  readonly to: number;
+}
+
+const DEFAULT_SEARCH_UI_STATE: SearchUiState = {
+  replaceVisible: false,
+};
+
+export const setSearchUiStateEffect = StateEffect.define<Partial<SearchUiState>>();
+
+export const searchUiStateField = StateField.define<SearchUiState>({
+  create() {
+    return DEFAULT_SEARCH_UI_STATE;
+  },
+  update(value, tr) {
+    let next = value;
+    for (const effect of tr.effects) {
+      if (effect.is(setSearchUiStateEffect)) {
+        next = { ...next, ...effect.value };
+      }
+    }
+    return next;
+  },
+});
+
+export const searchControllerExtensions: Extension = [searchUiStateField];
+
+// ===========================================================================
+// Query and match helpers
+// ===========================================================================
+
+export function countSearchMatches(
+  view: EditorView,
+): { current: number; total: number } {
+  const query = getSearchQuery(view.state);
+  if (!query.valid) return { current: 0, total: 0 };
+
+  const cursor = query.getCursor(view.state);
+  const sel = view.state.selection.main;
+  let total = 0;
+  let current = 0;
+
+  for (let result = cursor.next(); !result.done; result = cursor.next()) {
+    total++;
+    if (result.value.from === sel.from && result.value.to === sel.to) {
+      current = total;
+    }
+  }
+
+  return { current, total };
+}
+
+export function collectVisibleSearchMatches(view: EditorView): SearchMatchRange[] {
+  if (!searchPanelOpen(view.state)) return [];
+
+  const spec = getSearchQuery(view.state);
+  if (!spec.valid) return [];
+
+  const matches: SearchMatchRange[] = [];
+  for (const { from, to } of view.visibleRanges) {
+    const searchFrom = Math.max(0, from - 500);
+    const searchTo = Math.min(view.state.doc.length, to + 500);
+    const cursor = spec.getCursor(view.state.doc, searchFrom, searchTo);
+    for (let result = cursor.next(); !result.done; result = cursor.next()) {
+      matches.push({ from: result.value.from, to: result.value.to });
+    }
+  }
+  return matches;
+}
+
+export function getSearchControllerState(view: EditorView): SearchControllerState {
+  const ui = view.state.field(searchUiStateField);
+  const matches = countSearchMatches(view);
+  return {
+    ...ui,
+    panelOpen: searchPanelOpen(view.state),
+    query: getSearchQuery(view.state),
+    current: matches.current,
+    total: matches.total,
+  };
+}
+
+// ===========================================================================
+// Controller commands
+// ===========================================================================
+
+export function setSearchUiState(
+  view: EditorView,
+  next: Partial<SearchUiState>,
+): void {
+  view.dispatch({
+    effects: setSearchUiStateEffect.of(next),
+  });
+}
+
+export function setSearchControllerQuery(
+  view: EditorView,
+  next: {
+    readonly search: string;
+    readonly replace: string;
+    readonly caseSensitive: boolean;
+    readonly regexp: boolean;
+    readonly wholeWord: boolean;
+  },
+): void {
+  view.dispatch({
+    effects: setSearchQuery.of(
+      new SearchQuery({
+        search: next.search,
+        replace: next.replace,
+        caseSensitive: next.caseSensitive,
+        regexp: next.regexp,
+        wholeWord: next.wholeWord,
+      }),
+    ),
+  });
+}
+
+export function openFindSearch(view: EditorView): boolean {
+  setSearchUiState(view, { replaceVisible: false });
+  openSearchPanel(view);
+  return true;
+}
+
+export function openReplaceSearch(view: EditorView): boolean {
+  setSearchUiState(view, { replaceVisible: true });
+  openSearchPanel(view);
+  return true;
+}
+
+export function closeSearch(view: EditorView): boolean {
+  closeSearchPanel(view);
+  return true;
+}
+
+export function nextSearchMatch(view: EditorView): void {
+  findNext(view);
+}
+
+export function previousSearchMatch(view: EditorView): void {
+  findPrevious(view);
+}
+
+export function replaceCurrentSearchMatch(view: EditorView): void {
+  replaceNext(view);
+}
+
+export function replaceAllSearchMatches(view: EditorView): void {
+  replaceAll(view);
+}
+
+// ===========================================================================
 // Toggle button helper
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 function createToggle(
   label: string,
@@ -68,9 +232,9 @@ function createToggle(
   return btn;
 }
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // Action button helper
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 function createAction(
   label: string,
@@ -87,15 +251,15 @@ function createAction(
   return btn;
 }
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // Custom search panel
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 function createSearchPanel(view: EditorView): Panel {
   const dom = document.createElement("div");
   dom.className = "cf-search-panel";
 
-  // ── Search row ──────────────────────────────────────────────────────────
+  // -- Search row -----------------------------------------------------------
 
   const searchRow = document.createElement("div");
   searchRow.className = "cf-search-row";
@@ -185,7 +349,7 @@ function createSearchPanel(view: EditorView): Panel {
 
   searchRow.append(searchInputWrap, toggleGroup, navGroup, closeBtn);
 
-  // ── Replace row ─────────────────────────────────────────────────────────
+  // -- Replace row ----------------------------------------------------------
 
   const replaceRow = document.createElement("div");
   replaceRow.className = "cf-search-row cf-replace-row";
@@ -227,12 +391,12 @@ function createSearchPanel(view: EditorView): Panel {
   toggleReplaceBtn.className = "cf-search-toggle-replace";
   toggleReplaceBtn.textContent = "\u25b8";
 
-  // ── Assemble ────────────────────────────────────────────────────────────
+  // -- Assemble -------------------------------------------------------------
 
   dom.append(toggleReplaceBtn, searchRow, replaceRow);
   syncPanelState();
 
-  // ── Events ──────────────────────────────────────────────────────────────
+  // -- Events ---------------------------------------------------------------
 
   searchInput.addEventListener("input", () => {
     commitQuery();
@@ -313,9 +477,9 @@ function createSearchPanel(view: EditorView): Panel {
   };
 }
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // Helpers for syncing replace row when re-invoking Cmd+F / Cmd+H
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 /** Update the replace row and toggle button in an already-open panel. */
 function syncReplaceRow(view: EditorView): void {
@@ -330,9 +494,9 @@ function syncReplaceRow(view: EditorView): void {
   }
 }
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // Open commands
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 /** Open the search panel in find-only mode (Cmd+F). */
 function openFindPanel(view: EditorView): boolean {
@@ -357,9 +521,9 @@ function openFindReplacePanel(view: EditorView): boolean {
   return true;
 }
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // Extension
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 /**
  * CodeMirror search extension with Coflat-native panel.
