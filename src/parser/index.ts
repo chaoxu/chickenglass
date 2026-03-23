@@ -42,3 +42,24 @@ export const markdownExtensions = [
   Table,
   TaskList,
 ];
+
+/**
+ * Parser extensions for the standalone HTML renderer (markdown-to-html.ts).
+ *
+ * Same as `markdownExtensions` but WITHOUT `removeBlockquote`, so that
+ * standard `>` blockquote syntax is parsed into Blockquote nodes and
+ * rendered as `<blockquote>` HTML. The editor removes blockquotes because
+ * it uses fenced divs (`::: Blockquote`) instead, but the HTML export /
+ * hover preview path must handle standard blockquote syntax from content.
+ */
+export const htmlRenderExtensions = [
+  removeIndentedCode,
+  mathExtension,
+  fencedDiv,
+  equationLabelExtension,
+  strikethroughExtension,
+  highlightExtension,
+  footnoteExtension,
+  Table,
+  TaskList,
+];

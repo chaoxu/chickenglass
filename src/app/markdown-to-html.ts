@@ -25,7 +25,7 @@ import {
   buildInlineFragments,
   parseInlineFragments,
 } from "../inline-fragments";
-import { markdownExtensions } from "../parser";
+import { htmlRenderExtensions } from "../parser";
 import { buildKatexOptions } from "../lib/katex-options";
 import { isSafeUrl } from "../lib/url-utils";
 import { type CslJsonItem } from "../citations/bibtex-parser";
@@ -45,10 +45,13 @@ import { CSS } from "../constants/css-classes";
 // ── Standalone Lezer parser ─────────────────────────────────────────────────
 
 /**
- * Standalone Lezer markdown parser using the shared extension list
- * from src/parser — same extensions the CM6 editor uses.
+ * Standalone Lezer markdown parser for HTML export / hover preview.
+ *
+ * Uses `htmlRenderExtensions` which includes Blockquote support
+ * (the editor parser strips it via removeBlockquote since it uses
+ * fenced divs instead, but the HTML renderer must handle `>` syntax).
  */
-const mdParser = baseParser.configure(markdownExtensions);
+const mdParser = baseParser.configure(htmlRenderExtensions);
 
 // ── Shared utilities ────────────────────────────────────────────────────────
 
@@ -566,7 +569,7 @@ function parseTableAlignments(delimRow: string): string[] {
   });
 }
 
-/** Render a Blockquote node (kept for safety, though removed from parser). */
+/** Render a Blockquote node as `<blockquote>` HTML. */
 function renderBlockquote(node: SyntaxNode, ctx: WalkContext): string {
   const innerHtml = renderDocChildren(node, ctx);
   return `<blockquote>${innerHtml}</blockquote>`;

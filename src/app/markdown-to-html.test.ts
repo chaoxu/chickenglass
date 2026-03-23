@@ -138,12 +138,23 @@ describe("markdownToHtml", () => {
     expect(html).toContain("</pre>");
   });
 
-  it("renders > lines as paragraphs (blockquote parser removed)", () => {
-    // Blockquotes are removed from the parser (removeBlockquote extension).
-    // Documents use fenced div blockquotes (::: Blockquote) instead.
+  it("renders blockquotes as <blockquote> HTML", () => {
+    // Regression (#399): the HTML renderer must parse standard `>` blockquote
+    // syntax into Blockquote nodes. The editor parser strips blockquotes
+    // (removeBlockquote) since it uses fenced divs, but the HTML export /
+    // hover preview path must handle `>` syntax from content.
     const html = markdownToHtml("> This is a quote\n> Second line");
+    expect(html).toContain("<blockquote>");
+    expect(html).toContain("</blockquote>");
     expect(html).toContain("This is a quote");
     expect(html).toContain("Second line");
+  });
+
+  it("renders nested blockquotes", () => {
+    const html = markdownToHtml("> Outer\n> > Inner");
+    expect(html).toContain("<blockquote>");
+    expect(html).toContain("Outer");
+    expect(html).toContain("Inner");
   });
 
   it("renders horizontal rules", () => {
