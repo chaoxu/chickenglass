@@ -38,7 +38,7 @@ export const DISPLAY_DELIMITERS: ReadonlyArray<MathDelimiterPair> = [
   { open: "$$", close: "$$" },
 ];
 
-/** Strip math delimiters from raw source. contentTo is the exclusive end of math content (before any label). */
+/** Strip math delimiters from raw source. contentTo slices raw to the end of the closing delimiter (excluding any trailing label). */
 export function stripMathDelimiters(raw: string, isDisplay: boolean, contentTo?: number): string {
   // When a content boundary is provided (display math with EquationLabel child), slice before it
   const trimmed = contentTo !== undefined ? raw.slice(0, contentTo) : raw;
@@ -143,13 +143,14 @@ function buildMathItems(
       const raw = state.sliceDoc(node.from, node.to);
       const isDisplay = node.type.name === "DisplayMath";
 
-      // For display math, check for an EquationLabel child to determine content boundary
+      // For display math with an EquationLabel, the content boundary is the
+      // end of the closing delimiter mark, not the start of the label. There
+      // may be whitespace between the closing $$/\] and the {#eq:...} label.
       let contentTo: number | undefined;
-      if (isDisplay) {
-        const labelNode = node.node.getChild("EquationLabel");
-        if (labelNode) {
-          // Content ends where the label begins (relative to node start)
-          contentTo = labelNode.from - node.from;
+      if (isDisplay && node.node.getChild("EquationLabel")) {
+        const marks = node.node.getChildren("DisplayMathMark");
+        if (marks.length >= 2) {
+          contentTo = marks[marks.length - 1].to - node.from;
         }
       }
 

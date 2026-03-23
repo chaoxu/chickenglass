@@ -4,7 +4,7 @@ import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
-import { MathWidget, collectMathRanges } from "./math-render";
+import { MathWidget, collectMathRanges, stripMathDelimiters } from "./math-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
 
@@ -294,6 +294,36 @@ function createMathViewWithLabels(doc: string, cursorPos?: number): EditorView {
   return new EditorView({ state, parent });
 }
 
+/** Extract the MathWidget from the first widget decoration in ranges (throws if none). */
+function getFirstWidget(ranges: ReturnType<typeof collectMathRanges>): MathWidget {
+  const widgetRange = ranges.find(r => r.value.spec.widget);
+  if (!widgetRange) throw new Error("No widget decoration found");
+  return widgetRange.value.spec.widget as MathWidget;
+}
+
+describe("stripMathDelimiters with contentTo", () => {
+  it("strips $$ delimiters when contentTo slices at closing $$", () => {
+    // "$$x^2$$ {#eq:foo}" — contentTo = 7 (end of closing $$)
+    expect(stripMathDelimiters("$$x^2$$ {#eq:foo}", true, 7)).toBe("x^2");
+  });
+
+  it("strips \\[\\] delimiters when contentTo slices at closing \\]", () => {
+    // "\\[x^2\\] {#eq:foo}" — contentTo = 7 (end of closing \])
+    expect(stripMathDelimiters("\\[x^2\\] {#eq:foo}", true, 7)).toBe("x^2");
+  });
+
+  it("strips multi-line $$ delimiters with contentTo", () => {
+    const raw = "$$\nx^2\n$$ {#eq:foo}";
+    // contentTo = 9 (end of closing $$: "$$" at index 7-8, exclusive end = 9)
+    expect(stripMathDelimiters(raw, true, 9)).toBe("\nx^2\n");
+  });
+
+  it("handles plain display math without contentTo", () => {
+    expect(stripMathDelimiters("$$x^2$$", true)).toBe("x^2");
+    expect(stripMathDelimiters("\\[x^2\\]", true)).toBe("x^2");
+  });
+});
+
 describe("display math with equation labels", () => {
   let view: EditorView;
 
@@ -327,5 +357,46 @@ describe("display math with equation labels", () => {
     view = createMathViewWithLabels(doc, doc.length);
     const ranges = collectMathRanges(view);
     expect(ranges.length).toBe(1);
+  });
+
+  // Regression: labeled display math must produce a widget with the label
+  // stripped from the LaTeX content. Previously, buildMathItems used
+  // labelNode.from as contentTo, but whitespace between the closing
+  // delimiter and the label caused stripMathDelimiters to fail to match
+  // the closing delimiter (#334).
+  it("widget contains LaTeX without label for $$ ... $$ {#eq:...}", () => {
+    const doc = "$$x^2$$ {#eq:gaussian}";
+    view = createMathViewWithLabels(doc, doc.length);
+    const ranges = collectMathRanges(view);
+    // The widget's DOM should contain rendered KaTeX, not the label text
+    const el = getFirstWidget(ranges).toDOM();
+    expect(el.querySelector(".katex-display")).not.toBeNull();
+    expect(el.textContent).not.toContain("#eq:");
+  });
+
+  it("widget contains LaTeX without label for \\[...\\] {#eq:...}", () => {
+    const doc = "\\[x^2\\] {#eq:binomial}";
+    view = createMathViewWithLabels(doc, doc.length);
+    const ranges = collectMathRanges(view);
+    const el = getFirstWidget(ranges).toDOM();
+    expect(el.querySelector(".katex-display")).not.toBeNull();
+    expect(el.textContent).not.toContain("#eq:");
+  });
+
+  it("multi-line labeled $$ produces widget without label in LaTeX", () => {
+    const doc = "$$\nx^2 + y^2\n$$ {#eq:circle}";
+    view = createMathViewWithLabels(doc, doc.length);
+    const ranges = collectMathRanges(view);
+    const el = getFirstWidget(ranges).toDOM();
+    expect(el.querySelector(".katex-display")).not.toBeNull();
+    expect(el.textContent).not.toContain("#eq:");
+  });
+
+  it("unlabeled display math still renders correctly", () => {
+    const doc = "$$x^2$$";
+    view = createMathViewWithLabels(doc, doc.length);
+    const ranges = collectMathRanges(view);
+    const el = getFirstWidget(ranges).toDOM();
+    expect(el.querySelector(".katex-display")).not.toBeNull();
   });
 });
