@@ -50,10 +50,10 @@ describe("edge cases", () => {
 
     // The last body line gets cf-codeblock-last (renders with bottom border),
     // not cf-codeblock-body (used for middle lines), when the cursor is on it.
-    expect(hasLineClassAt(specs, state.doc.line(2).from, "cf-codeblock-last")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockLast)).toBe(true);
     // Neither fence enters source mode.
-    expect(hasLineClassAt(specs, state.doc.line(1).from, "cf-codeblock-source-open")).toBe(false);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, "cf-codeblock-source-close")).toBe(false);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(false);
+    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.codeblockSourceClose)).toBe(false);
   });
 
   it("handles empty code blocks (no body lines)", () => {
@@ -62,8 +62,8 @@ describe("edge cases", () => {
     const specs = getDecoSpecs(state);
 
     // Cursor is on the opening fence — both fences should be in source mode
-    expect(hasLineClassAt(specs, state.doc.line(1).from, "cf-codeblock-source-open")).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(2).from, "cf-codeblock-source-close")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockSourceClose)).toBe(true);
   });
 
   it("handles code block at end of document (no trailing newline)", () => {
@@ -75,8 +75,8 @@ describe("edge cases", () => {
     const state = createTestState(doc, bodyPos, true);
     const specs = getDecoSpecs(state);
 
-    expect(hasLineClassAt(specs, state.doc.line(1).from, "cf-codeblock-header")).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, "cf-include-fence")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.includeFence)).toBe(true);
   });
 });
 
