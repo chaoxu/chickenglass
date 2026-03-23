@@ -97,13 +97,23 @@ const styleMap: Readonly<Record<string, Decoration>> = {
  */
 function buildMarkdownDecorations(view: EditorView): DecorationSet {
   const widgets: Range<Decoration>[] = [];
+  // Track whether the current heading has cursor inside.
+  // Set by the ATXHeading handler, read by the HeaderMark handler.
+  // This allows inline formatting children to be walked normally
+  // (per-node cursor checks) while still showing # markers when editing.
+  let cursorInHeading = false;
 
   for (const { from, to } of view.visibleRanges) {
     syntaxTree(view.state).iterate({
       from,
       to,
       enter(node) {
-        // --- ATX Headings: ALWAYS apply heading style, only hide markers when cursor outside ---
+        // --- ATX Headings: ALWAYS apply heading style, walk children for inline rendering ---
+        // Follows the same marker/content split as block titles (CLAUDE.md):
+        // - Heading-level styling (mark + line decorations) always applied
+        // - # markers shown/hidden based on cursor proximity to the heading
+        // - Inline formatting (bold, italic, math, code) inside the heading
+        //   keeps its rendered state — only direct cursor contact shows source
         if (node.name.startsWith("ATXHeading")) {
           const headingMark = headingMarkByLevel[node.name];
           if (headingMark) {
@@ -116,20 +126,20 @@ function buildMarkdownDecorations(view: EditorView): DecorationSet {
             widgets.push(headingLine.range(line.from));
           }
 
-          // If cursor is inside: keep heading style but skip hiding markers
-          // The # will appear at the same heading font size = seamless WYSIWYG
-          if (cursorInRange(view, node.from, node.to)) {
-            return false; // don't walk children, so HeaderMark won't be hidden
+          cursorInHeading = cursorInRange(view, node.from, node.to);
+
+          if (!cursorInHeading) {
+            // Cursor outside: hide trailing {-} / {.unnumbered} attribute text
+            const hLine = view.state.doc.lineAt(node.from);
+            const attrMatch = findTrailingHeadingAttributes(hLine.text);
+            if (attrMatch && hasUnnumberedHeadingAttributes(hLine.text)) {
+              const attrFrom = hLine.from + attrMatch.index;
+              const attrTo = attrFrom + attrMatch.raw.length;
+              widgets.push(decorationHidden.range(attrFrom, attrTo));
+            }
           }
-          // Cursor outside: hide trailing {-} / {.unnumbered} attribute text
-          const hLine = view.state.doc.lineAt(node.from);
-          const attrMatch = findTrailingHeadingAttributes(hLine.text);
-          if (attrMatch && hasUnnumberedHeadingAttributes(hLine.text)) {
-            const attrFrom = hLine.from + attrMatch.index;
-            const attrTo = attrFrom + attrMatch.raw.length;
-            widgets.push(decorationHidden.range(attrFrom, attrTo));
-          }
-          // Walk children to find and hide HeaderMark
+          // Always walk children: HeaderMark uses cursorInHeading flag,
+          // inline formatting nodes get per-node cursor checks via ELEMENT_NODES.
           return;
         }
 
@@ -142,9 +152,9 @@ function buildMarkdownDecorations(view: EditorView): DecorationSet {
           const nextChar =
             end < docLen ? view.state.sliceDoc(end, end + 1) : "";
           const hideEnd = nextChar === " " ? end + 1 : end;
-          // cursorInside=false here because we only reach this code when cursor is
-          // OUTSIDE the heading (cursor inside returns early at line 129-131 above).
-          addMarkerReplacement(node.from, hideEnd, false, null, widgets);
+          // When cursor is on the heading line, markers stay visible (cursorInside=true).
+          // When cursor is outside, markers are hidden (cursorInside=false).
+          addMarkerReplacement(node.from, hideEnd, cursorInHeading, null, widgets);
           return;
         }
 
