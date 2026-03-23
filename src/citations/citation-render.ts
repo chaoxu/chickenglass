@@ -16,7 +16,7 @@ import { type WidgetType } from "@codemirror/view";
 import { parser as baseParser } from "@lezer/markdown";
 import { type CslJsonItem } from "./bibtex-parser";
 import { CslProcessor } from "./csl-processor";
-import { RenderWidget } from "../render/render-utils";
+import { makeTextElement, RenderWidget } from "../render/render-utils";
 import { markdownExtensions } from "../parser";
 import {
   analyzeDocumentSemantics,
@@ -64,13 +64,12 @@ export class CitationWidget extends RenderWidget {
   }
 
   createDOM(): HTMLElement {
-    const el = document.createElement("span");
-    el.className = this.narrative
-      ? "cf-citation cf-citation-narrative"
-      : "cf-citation";
-    el.textContent = this.text;
-    el.title = this.ids.join("; ");
-    return el;
+    return makeTextElement(
+      "span",
+      this.narrative ? "cf-citation cf-citation-narrative" : "cf-citation",
+      this.text,
+      this.ids.join("; "),
+    );
   }
 
   eq(other: WidgetType): boolean {

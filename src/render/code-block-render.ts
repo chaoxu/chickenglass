@@ -25,6 +25,7 @@ import {
 import { syntaxTree } from "@codemirror/language";
 import {
   RenderWidget,
+  makeTextElement,
   editorFocusField,
   focusTracker,
 } from "./render-utils";
@@ -49,10 +50,7 @@ class CodeBlockHeaderWidget extends RenderWidget {
   }
 
   createDOM(): HTMLElement {
-    const label = document.createElement("span");
-    label.className = "cf-codeblock-language";
-    label.textContent = this.language;
-    return label;
+    return makeTextElement("span", "cf-codeblock-language", this.language);
   }
 
   eq(other: CodeBlockHeaderWidget): boolean {

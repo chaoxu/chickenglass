@@ -25,9 +25,9 @@ import { blockCounterField, type BlockCounterState } from "./block-counter";
 import {
   createSimpleTextWidget,
   decorationHidden,
-  serializeMacros,
   editorFocusField,
   focusTracker,
+  MacroAwareWidget,
   RenderWidget,
   addMarkerReplacement,
 } from "../render/render-utils";
@@ -67,13 +67,12 @@ const closeParenWidget = Decoration.widget({
 });
 
 /** Widget that renders a block header string with inline math/bold/italic. */
-class BlockHeaderWidget extends RenderWidget {
+class BlockHeaderWidget extends MacroAwareWidget {
   constructor(
     private readonly header: string,
     private readonly macros: Record<string, string>,
-    private readonly macrosKey: string,
   ) {
-    super();
+    super(macros);
   }
 
   createDOM(): HTMLElement {
@@ -278,14 +277,13 @@ function addHeaderWidgetDecoration(
   header: string,
   cursorInside: boolean,
   macros: Record<string, string>,
-  macrosKey: string,
   items: Range<Decoration>[],
 ): void {
   // Replace only the fence prefix, leave title text as editable content.
   // No-title case: replaceEnd = openFenceTo (whole fence line, nothing to split).
   // With-title case: replaceEnd = titleFrom (stop before title text).
   const replaceEnd = div.titleFrom ?? div.openFenceTo;
-  const widget = new BlockHeaderWidget(header, macros, macrosKey);
+  const widget = new BlockHeaderWidget(header, macros);
   addMarkerReplacement(div.openFenceFrom, replaceEnd, cursorInside, widget, items);
 }
 
@@ -344,7 +342,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const counterState: BlockCounterState | undefined =
     state.field(blockCounterField, false) ?? undefined;
   const macros = state.field(mathMacrosField);
-  const macrosKey = serializeMacros(macros);
   const cursor = state.selection.main;
   return buildFencedBlockDecorations(state, collectFencedDivs, ({
     state,
@@ -415,7 +412,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
         items.push(blockSourceMark.range(div.openFenceFrom, syntaxEnd));
       }
     }
-    addHeaderWidgetDecoration(div, spec.header, cursorOnEitherFence, macros, macrosKey, items);
+    addHeaderWidgetDecoration(div, spec.header, cursorOnEitherFence, macros, items);
 
     // Title text: wrap in visual parentheses via widget decorations (rendered mode only).
     // Uses Decoration.widget instead of Decoration.mark with CSS ::before/::after

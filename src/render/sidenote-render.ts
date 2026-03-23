@@ -25,8 +25,10 @@ import {
   createDecorationsField,
   cursorInRange,
   defaultShouldRebuild,
+  makeTextElement,
   pushWidgetDecoration,
   serializeMacros,
+  MacroAwareWidget,
   RenderWidget,
   editorFocusField,
   focusTracker,
@@ -53,15 +55,12 @@ export function collectFootnotes(state: EditorState): FootnoteSemantics {
 }
 
 /** Widget that renders footnote body content inline (math, bold, etc.). */
-export class FootnoteBodyWidget extends RenderWidget {
-  private readonly macrosKey: string;
-
+export class FootnoteBodyWidget extends MacroAwareWidget {
   constructor(
     private readonly content: string,
     private readonly macros: Record<string, string>,
   ) {
-    super();
-    this.macrosKey = serializeMacros(macros);
+    super(macros);
   }
 
   createDOM(): HTMLElement {
@@ -90,10 +89,7 @@ class FootnoteRefWidget extends RenderWidget {
   }
 
   createDOM(): HTMLElement {
-    const sup = document.createElement("sup");
-    sup.className = "cf-sidenote-ref";
-    sup.textContent = String(this.number);
-    sup.title = `Footnote ${this.id}`;
+    const sup = makeTextElement("sup", "cf-sidenote-ref", String(this.number), `Footnote ${this.id}`);
     sup.setAttribute("data-footnote-id", this.id);
     return sup;
   }

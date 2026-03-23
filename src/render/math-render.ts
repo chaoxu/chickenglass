@@ -12,8 +12,7 @@ import {
   buildDecorations,
   createDecorationsField,
   pushWidgetDecoration,
-  serializeMacros,
-  RenderWidget,
+  MacroAwareWidget,
   editorFocusField,
   focusTracker,
 } from "./render-utils";
@@ -77,17 +76,14 @@ export function renderKatex(
 }
 
 /** Unified widget that renders both inline and display math via KaTeX. */
-export class MathWidget extends RenderWidget {
-  private readonly macrosKey: string;
-
+export class MathWidget extends MacroAwareWidget {
   constructor(
     private readonly latex: string,
     private readonly raw: string,
     private readonly isDisplay: boolean,
     private readonly macros: Record<string, string> = {},
   ) {
-    super();
-    this.macrosKey = serializeMacros(macros);
+    super(macros);
   }
 
   createDOM(): HTMLElement {

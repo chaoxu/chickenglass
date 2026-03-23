@@ -458,6 +458,55 @@ export function collectNodeRangesExcludingCursor(
 }
 
 /**
+ * Create a simple text element — shared DOM helper for RenderWidget.createDOM().
+ *
+ * Many widgets produce a single element whose only properties are tag, class,
+ * text content, and an optional title tooltip. This helper extracts that
+ * 4-line pattern into a single call so widget createDOM() bodies stay concise.
+ *
+ * Unlike createSimpleTextWidget (which produces a singleton WidgetType), this
+ * function is a plain DOM builder. The calling widget class still owns eq().
+ *
+ * @param tagName   HTML element tag (e.g. "span", "sup").
+ * @param className CSS class for the element.
+ * @param text      Text content of the element.
+ * @param title     Optional tooltip (title attribute).
+ */
+export function makeTextElement(
+  tagName: string,
+  className: string,
+  text: string,
+  title?: string,
+): HTMLElement {
+  const el = document.createElement(tagName);
+  el.className = className;
+  el.textContent = text;
+  if (title !== undefined) el.title = title;
+  return el;
+}
+
+/**
+ * Base class for widgets whose identity depends on math macro state.
+ *
+ * Three widgets (MathWidget, FootnoteBodyWidget, BlockHeaderWidget) each
+ * cache `serializeMacros(macros)` in a `macrosKey` field and include it
+ * in `eq()`. This base class captures that pattern so subclasses only
+ * need to store the `macros` object and pass it here — the key is
+ * computed once and available via `this.macrosKey`.
+ *
+ * Subclasses must still implement `createDOM()` and their own `eq()`,
+ * calling `this.macrosKey` rather than re-computing it.
+ */
+export abstract class MacroAwareWidget extends RenderWidget {
+  protected readonly macrosKey: string;
+
+  constructor(macros: Record<string, string>) {
+    super();
+    this.macrosKey = serializeMacros(macros);
+  }
+}
+
+/**
  * Factory that creates a lightweight WidgetType instance for simple text spans.
  *
  * Many render plugins need identical single-element widgets that differ only

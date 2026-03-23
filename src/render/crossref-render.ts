@@ -17,7 +17,7 @@ import {
   resolveCrossref,
 } from "../index/crossref-resolver";
 import { documentAnalysisField } from "../semantics/codemirror-source";
-import { cursorInRange, pushWidgetDecoration, RenderWidget } from "./render-utils";
+import { cursorInRange, makeTextElement, pushWidgetDecoration, RenderWidget } from "./render-utils";
 
 /** Widget for a resolved cross-reference (block or equation). */
 export class CrossrefWidget extends RenderWidget {
@@ -29,11 +29,7 @@ export class CrossrefWidget extends RenderWidget {
   }
 
   createDOM(): HTMLElement {
-    const span = document.createElement("span");
-    span.className = "cf-crossref";
-    span.textContent = this.resolved.label;
-    span.title = this.raw;
-    return span;
+    return makeTextElement("span", "cf-crossref", this.resolved.label, this.raw);
   }
 
   eq(other: CrossrefWidget): boolean {
@@ -55,11 +51,7 @@ export class ClusteredCrossrefWidget extends RenderWidget {
   }
 
   createDOM(): HTMLElement {
-    const span = document.createElement("span");
-    span.className = "cf-crossref";
-    span.textContent = this.resolvedItems.map((r) => r.label).join("; ");
-    span.title = this.raw;
-    return span;
+    return makeTextElement("span", "cf-crossref", this.resolvedItems.map((r) => r.label).join("; "), this.raw);
   }
 
   eq(other: ClusteredCrossrefWidget): boolean {
@@ -92,11 +84,7 @@ export class MixedClusterWidget extends RenderWidget {
   }
 
   createDOM(): HTMLElement {
-    const span = document.createElement("span");
-    span.className = "cf-citation";
-    span.textContent = `(${this.parts.map((p) => p.text).join("; ")})`;
-    span.title = this.raw;
-    return span;
+    return makeTextElement("span", "cf-citation", `(${this.parts.map((p) => p.text).join("; ")})`, this.raw);
   }
 
   eq(other: MixedClusterWidget): boolean {
@@ -115,11 +103,7 @@ export class UnresolvedRefWidget extends RenderWidget {
   }
 
   createDOM(): HTMLElement {
-    const span = document.createElement("span");
-    span.className = "cf-crossref cf-crossref-unresolved";
-    span.textContent = this.raw;
-    span.title = "Unresolved reference";
-    return span;
+    return makeTextElement("span", "cf-crossref cf-crossref-unresolved", this.raw, "Unresolved reference");
   }
 
   eq(other: UnresolvedRefWidget): boolean {

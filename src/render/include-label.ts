@@ -13,7 +13,7 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import { type Extension, type Range } from "@codemirror/state";
-import { buildDecorations, RenderWidget, createSimpleViewPlugin } from "./render-utils";
+import { buildDecorations, makeTextElement, RenderWidget, createSimpleViewPlugin } from "./render-utils";
 import { basename } from "../lib/utils";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import type { IncludeSemantics } from "../semantics/document";
@@ -23,10 +23,11 @@ class IncludeLabelWidget extends RenderWidget {
     super();
   }
   createDOM(): HTMLElement {
-    const span = document.createElement("span");
-    span.className = this.active ? "cf-include-label cf-include-label-active" : "cf-include-label";
-    span.textContent = this.filename;
-    return span;
+    return makeTextElement(
+      "span",
+      this.active ? "cf-include-label cf-include-label-active" : "cf-include-label",
+      this.filename,
+    );
   }
   eq(other: IncludeLabelWidget): boolean {
     return this.filename === other.filename && this.active === other.active;
