@@ -146,51 +146,6 @@ function buildCrossrefTooltip(
 }
 
 /**
- * Build a tooltip with per-item preview sections for a clustered reference
- * containing one or more cross-references (and optionally citations).
- */
-function buildClusteredTooltip(
-  view: EditorView,
-  ids: readonly string[],
-  resolutions: readonly ResolvedCrossref[],
-  store: BibStore,
-): HTMLElement {
-  const macros = view.state.field(mathMacrosField);
-  const container = document.createElement("div");
-  container.className = "cf-hover-preview";
-
-  for (let i = 0; i < ids.length; i++) {
-    if (i > 0) {
-      const sep = document.createElement("hr");
-      sep.className = "cf-hover-preview-separator";
-      container.appendChild(sep);
-    }
-
-    const id = ids[i];
-    const resolved = resolutions[i];
-
-    if (resolved.kind === "citation") {
-      // Render as citation if bib entry exists
-      const entry = store.get(id);
-      if (entry) {
-        const item = document.createElement("div");
-        item.className = "cf-hover-preview-citation";
-        item.textContent = formatBibEntry(entry);
-        container.appendChild(item);
-      } else {
-        container.appendChild(
-          createHeader(`Unknown: @${id}`, macros, "cf-hover-preview-unresolved"),
-        );
-      }
-    } else {
-      appendCrossrefItem(container, view, id, resolved, macros);
-    }
-  }
-
-  return container;
-}
-
-/**
  * Build the tooltip DOM for a citation hover preview.
  */
 function buildCitationTooltip(
@@ -220,10 +175,76 @@ function buildCitationTooltip(
 }
 
 /**
+ * Find the `data-ref-id` of the hovered sub-span inside a cluster widget.
+ *
+ * Clustered crossref and mixed cluster widgets render per-item `<span>`
+ * elements with `data-ref-id` attributes. This helper walks the DOM from
+ * the node at the hover position up to the widget container, returning
+ * the hovered item's id — or null if the mouse is on a separator text
+ * node or otherwise not on an item span.
+ */
+function findHoveredRefId(view: EditorView, pos: number): string | null {
+  let domPos: { node: Node; offset: number };
+  try {
+    domPos = view.domAtPos(pos);
+  } catch {
+    return null;
+  }
+  let node: Node | null = domPos.node;
+  // Walk up from the text node / element to find a [data-ref-id] span
+  while (node && node !== view.dom) {
+    if (
+      node instanceof HTMLElement &&
+      node.hasAttribute("data-ref-id")
+    ) {
+      return node.getAttribute("data-ref-id");
+    }
+    node = node.parentNode;
+  }
+  return null;
+}
+
+/**
+ * Build a single-item tooltip for a specific id within a cluster.
+ */
+function buildSingleItemTooltip(
+  view: EditorView,
+  id: string,
+  resolved: ResolvedCrossref,
+  store: BibStore,
+): HTMLElement {
+  const macros = view.state.field(mathMacrosField);
+  const container = document.createElement("div");
+  container.className = "cf-hover-preview";
+
+  if (resolved.kind === "citation") {
+    const entry = store.get(id);
+    if (entry) {
+      const item = document.createElement("div");
+      item.className = "cf-hover-preview-citation";
+      item.textContent = formatBibEntry(entry);
+      container.appendChild(item);
+    } else {
+      container.appendChild(
+        createHeader(`Unknown: @${id}`, macros, "cf-hover-preview-unresolved"),
+      );
+    }
+  } else {
+    appendCrossrefItem(container, view, id, resolved, macros);
+  }
+
+  return container;
+}
+
+/**
  * The hover tooltip source function for cross-references and citations.
  *
  * Handles single-id refs, multi-id crossref clusters, pure citation
  * clusters, and mixed crossref+citation clusters.
+ *
+ * For multi-id clusters, performs per-item targeting: checks which sub-span
+ * the hover position falls on and shows a tooltip for that single item.
+ * Hovering on a separator ("; ") returns null (no tooltip).
  */
 function hoverSource(
   view: EditorView,
@@ -257,15 +278,23 @@ function hoverSource(
     };
   }
 
-  // Multi-id cluster containing at least one crossref
+  // Multi-id cluster containing at least one crossref — per-item targeting
   if (ref.ids.length > 1 && hasCrossref) {
     const { store } = view.state.field(bibDataField);
+    // Find which sub-span the hover pos falls on
+    const hoveredId = findHoveredRefId(view, pos);
+    if (!hoveredId) return null; // Hovering on separator — no tooltip
+
+    const itemIndex = ref.ids.indexOf(hoveredId);
+    if (itemIndex < 0) return null;
+
+    const hoveredResolved = resolutions[itemIndex];
     return {
       pos: ref.from,
       end: ref.to,
       above: true,
       create() {
-        const dom = buildClusteredTooltip(view, ref.ids, resolutions, store);
+        const dom = buildSingleItemTooltip(view, hoveredId, hoveredResolved, store);
         return { dom };
       },
     };

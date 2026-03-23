@@ -47,18 +47,35 @@ export class CrossrefWidget extends SimpleTextRenderWidget {
   }
 }
 
-/** Widget for a clustered cross-reference (multiple resolved crossrefs in one bracket). */
-export class ClusteredCrossrefWidget extends SimpleTextRenderWidget {
+/**
+ * Widget for a clustered cross-reference (multiple resolved crossrefs in one bracket).
+ *
+ * Renders one child `<span data-ref-id="...">` per item with plain "; " text
+ * node separators, so hover-preview can target individual items (#397).
+ */
+export class ClusteredCrossrefWidget extends RenderWidget {
   constructor(
     private readonly resolvedItems: readonly ResolvedCrossref[],
+    private readonly ids: readonly string[],
     private readonly raw: string,
   ) {
-    super({
-      tagName: "span",
-      className: "cf-crossref",
-      text: resolvedItems.map((r) => r.label).join("; "),
-      title: raw,
-    });
+    super();
+  }
+
+  createDOM(): HTMLElement {
+    const container = document.createElement("span");
+    container.className = "cf-crossref";
+    container.title = this.raw;
+    for (let i = 0; i < this.resolvedItems.length; i++) {
+      if (i > 0) {
+        container.appendChild(document.createTextNode("; "));
+      }
+      const span = document.createElement("span");
+      span.setAttribute("data-ref-id", this.ids[i]);
+      span.textContent = this.resolvedItems[i].label;
+      container.appendChild(span);
+    }
+    return container;
   }
 
   eq(other: ClusteredCrossrefWidget): boolean {
@@ -78,21 +95,41 @@ export class ClusteredCrossrefWidget extends SimpleTextRenderWidget {
  */
 export interface MixedClusterPart {
   readonly kind: "crossref" | "citation";
+  readonly id: string;
   readonly text: string;
 }
 
-/** Widget for a mixed crossref+citation cluster like '[@eq:foo; @smith2020]'. */
-export class MixedClusterWidget extends SimpleTextRenderWidget {
+/**
+ * Widget for a mixed crossref+citation cluster like '[@eq:foo; @smith2020]'.
+ *
+ * Renders one child `<span data-ref-id="...">` per item with plain "; " text
+ * node separators, wrapped in outer parens, so hover-preview can target
+ * individual items (#397).
+ */
+export class MixedClusterWidget extends RenderWidget {
   constructor(
     private readonly parts: readonly MixedClusterPart[],
     private readonly raw: string,
   ) {
-    super({
-      tagName: "span",
-      className: "cf-citation",
-      text: `(${parts.map((p) => p.text).join("; ")})`,
-      title: raw,
-    });
+    super();
+  }
+
+  createDOM(): HTMLElement {
+    const container = document.createElement("span");
+    container.className = "cf-citation";
+    container.title = this.raw;
+    container.appendChild(document.createTextNode("("));
+    for (let i = 0; i < this.parts.length; i++) {
+      if (i > 0) {
+        container.appendChild(document.createTextNode("; "));
+      }
+      const span = document.createElement("span");
+      span.setAttribute("data-ref-id", this.parts[i].id);
+      span.textContent = this.parts[i].text;
+      container.appendChild(span);
+    }
+    container.appendChild(document.createTextNode(")"));
+    return container;
   }
 
   eq(other: MixedClusterWidget): boolean {

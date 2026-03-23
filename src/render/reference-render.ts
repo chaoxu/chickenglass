@@ -95,13 +95,13 @@ export function collectReferenceRanges(
             const stripped = rendered.startsWith("(") && rendered.endsWith(")")
               ? rendered.slice(1, -1)
               : rendered;
-            return { kind: "citation" as const, text: stripped };
+            return { kind: "citation" as const, id, text: stripped };
           }
           const resolved = resolveCrossref(view.state, id, equationLabels);
           const label = resolved.kind === "block" || resolved.kind === "equation"
             ? resolved.label
             : id;
-          return { kind: "crossref" as const, text: label };
+          return { kind: "crossref" as const, id, text: label };
         });
         pushWidgetDecoration(items, new MixedClusterWidget(parts, raw), ref.from, ref.to);
       } else if (ref.ids.length === 1) {
@@ -117,7 +117,7 @@ export function collectReferenceRanges(
         const raw = doc.slice(ref.from, ref.to);
         const allResolved = resolvedItems.every((r) => r.kind === "block" || r.kind === "equation");
         const widget = allResolved
-          ? new ClusteredCrossrefWidget(resolvedItems, raw)
+          ? new ClusteredCrossrefWidget(resolvedItems, ref.ids, raw)
           : new UnresolvedRefWidget(raw);
         pushWidgetDecoration(items, widget, ref.from, ref.to);
       }

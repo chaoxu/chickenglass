@@ -249,7 +249,9 @@ describe("collectReferenceRanges", () => {
     expect(widgetClass(ref)).toBe("ClusteredCrossrefWidget");
   });
 
-  it("renders clustered equation crossrefs with resolved labels", () => {
+  // Regression (#397): clustered crossrefs must render per-item spans
+  // with data-ref-id attributes, not a flat text join.
+  it("renders clustered equation crossrefs with per-item spans", () => {
     const doc = [
       "$$a^2$$ {#eq:alpha}",
       "",
@@ -270,9 +272,16 @@ describe("collectReferenceRanges", () => {
     if (!widget) return;
     const el = widget.toDOM() as HTMLElement;
     expect(el.textContent).toBe("Eq. (1); Eq. (2)");
+
+    // Per-item spans with data-ref-id
+    const spans = el.querySelectorAll("span[data-ref-id]");
+    expect(spans.length).toBe(2);
+    expect(spans[0].getAttribute("data-ref-id")).toBe("eq:alpha");
+    expect(spans[1].getAttribute("data-ref-id")).toBe("eq:beta");
   });
 
-  it("routes clustered block crossrefs to ClusteredCrossrefWidget", () => {
+  // Regression (#397): clustered block crossrefs must have per-item spans
+  it("routes clustered block crossrefs to ClusteredCrossrefWidget with per-item spans", () => {
     const doc = [
       "::: {.theorem #thm-a}",
       "A.",
@@ -298,6 +307,12 @@ describe("collectReferenceRanges", () => {
     if (!widget) return;
     const el = widget.toDOM() as HTMLElement;
     expect(el.textContent).toBe("Theorem 1; Theorem 2");
+
+    // Per-item spans with data-ref-id
+    const spans = el.querySelectorAll("span[data-ref-id]");
+    expect(spans.length).toBe(2);
+    expect(spans[0].getAttribute("data-ref-id")).toBe("thm-a");
+    expect(spans[1].getAttribute("data-ref-id")).toBe("thm-b");
   });
 
   it("routes clustered unknown crossrefs to UnresolvedRefWidget", () => {
@@ -333,7 +348,8 @@ describe("collectReferenceRanges", () => {
     expect(widgetClass(ref)).toBe("MixedClusterWidget");
   });
 
-  it("renders mixed cluster with crossref label and citation text", () => {
+  // Regression (#397): mixed cluster must have per-item spans with data-ref-id
+  it("renders mixed cluster with per-item spans and data-ref-id", () => {
     const doc = [
       "$$a^2$$ {#eq:alpha}",
       "",
@@ -356,6 +372,12 @@ describe("collectReferenceRanges", () => {
     // The combined text should be wrapped in parens with semicolon separator
     expect(el.textContent).toMatch(/^\(Eq\. \(1\); .+\)$/);
     expect(el.className).toBe(CSS.citation);
+
+    // Per-item spans with data-ref-id
+    const spans = el.querySelectorAll("span[data-ref-id]");
+    expect(spans.length).toBe(2);
+    expect(spans[0].getAttribute("data-ref-id")).toBe("eq:alpha");
+    expect(spans[1].getAttribute("data-ref-id")).toBe("karger2000");
   });
 
   it("renders mixed block-crossref+citation cluster correctly", () => {
