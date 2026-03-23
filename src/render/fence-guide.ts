@@ -59,25 +59,47 @@ function buildFenceGuides(state: EditorState): DecorationSet {
 
   if (activeDivs.length === 0) return Decoration.none;
 
-  // Compute depth per line: count how many active divs contain each line
-  const lineDepths = new Map<number, number>();
+  // Common case: single active div — all lines have the same depth.
+  // Skip the Map overhead entirely: just walk lines once.
+  if (activeDivs.length === 1) {
+    const div = activeDivs[0];
+    const startLine = state.doc.lineAt(div.from).number;
+    const endLine = state.doc.lineAt(div.to).number;
+    const items: Range<Decoration>[] = [];
+    const deco = Decoration.line({ class: "cf-fence-guide cf-fence-d1" });
+    for (let ln = startLine; ln <= endLine; ln++) {
+      items.push(deco.range(state.doc.line(ln).from));
+    }
+    return buildDecorations(items);
+  }
+
+  // Multiple nesting levels: sweep-line with depth events at boundaries.
+  // Collects +1 at div start line, -1 at div end line + 1, then walks
+  // the covered line range once. O(activeDivs + totalLines) vs the
+  // previous O(activeDivs * avgLinesPerDiv).
+  const events = new Map<number, number>();
+  let minLine = Infinity;
+  let maxLine = -Infinity;
   for (const div of activeDivs) {
     const startLine = state.doc.lineAt(div.from).number;
     const endLine = state.doc.lineAt(div.to).number;
-    for (let ln = startLine; ln <= endLine; ln++) {
-      lineDepths.set(ln, (lineDepths.get(ln) ?? 0) + 1);
-    }
+    events.set(startLine, (events.get(startLine) ?? 0) + 1);
+    events.set(endLine + 1, (events.get(endLine + 1) ?? 0) - 1);
+    if (startLine < minLine) minLine = startLine;
+    if (endLine > maxLine) maxLine = endLine;
   }
 
   const items: Range<Decoration>[] = [];
-  for (const [lineNum, depth] of lineDepths) {
+  let depth = 0;
+  for (let ln = minLine; ln <= maxLine; ln++) {
+    const delta = events.get(ln);
+    if (delta !== undefined) depth += delta;
     if (depth <= 0) continue;
-    const line = state.doc.line(lineNum);
     const d = Math.min(depth, 6);
     items.push(
       Decoration.line({
         class: `cf-fence-guide cf-fence-d${d}`,
-      }).range(line.from),
+      }).range(state.doc.line(ln).from),
     );
   }
 

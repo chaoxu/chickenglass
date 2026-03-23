@@ -466,9 +466,45 @@ function unifiedTreeWalk(doc: TextSource, tree: Tree): UnifiedWalkResult {
 }
 
 /**
+ * Binary search for the rightmost excluded range whose `from` <= target.
+ * Returns the index, or -1 if no such range exists.
+ */
+function upperBoundExcluded(
+  ranges: readonly { from: number; to: number }[],
+  target: number,
+): number {
+  let lo = 0;
+  let hi = ranges.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (ranges[mid].from <= target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo - 1;
+}
+
+/**
+ * Check whether position [from, to] falls inside any excluded range,
+ * using binary search on the sorted array. O(log n) per check.
+ */
+function isInsideExcludedRange(
+  sorted: readonly { from: number; to: number }[],
+  from: number,
+  to: number,
+): boolean {
+  // Find the last range that starts at or before `from`
+  const idx = upperBoundExcluded(sorted, from);
+  if (idx < 0) return false;
+  return from >= sorted[idx].from && to <= sorted[idx].to;
+}
+
+/**
  * Post-process narrative (non-bracketed) references via regex scan,
  * excluding ranges inside Link, InlineCode, or InlineMath nodes
  * collected during the tree walk.
+ *
+ * Uses binary search on sorted excludedRanges for O(matches * log(excludedRanges))
+ * instead of O(matches * excludedRanges).
  */
 function collectNarrativeReferences(
   doc: TextSource,
@@ -477,13 +513,17 @@ function collectNarrativeReferences(
   const refs: ReferenceSemantics[] = [];
   const fullText = doc.slice(0, doc.length);
 
+  // Sort excluded ranges by `from` for binary search. The tree walk
+  // produces them in document order, but the caller merges two arrays
+  // (linkRanges + codeMathRanges), so we sort once here.
+  const sorted = excludedRanges.slice().sort((a, b) => a.from - b.from);
+
   NARRATIVE_REFERENCE_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = NARRATIVE_REFERENCE_RE.exec(fullText)) !== null) {
     const from = match.index;
     const to = from + match[0].length;
-    const insideExcluded = excludedRanges.some((range) => from >= range.from && to <= range.to);
-    if (insideExcluded) continue;
+    if (isInsideExcludedRange(sorted, from, to)) continue;
 
     refs.push({
       from,

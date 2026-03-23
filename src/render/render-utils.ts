@@ -135,16 +135,29 @@ export function addMarkerReplacement(
   }
 }
 
+/** Check whether an array of ranges is already sorted by (from, to). */
+function isSorted(items: ReadonlyArray<Range<Decoration>>): boolean {
+  for (let i = 1; i < items.length; i++) {
+    const prev = items[i - 1];
+    const curr = items[i];
+    if (prev.from > curr.from || (prev.from === curr.from && prev.to > curr.to)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Build a DecorationSet from an array of decoration ranges.
  * Sorts by position before building (RangeSetBuilder requires sorted input).
+ * Skips the sort when items are already in order.
  */
 export function buildDecorations(
   items: ReadonlyArray<Range<Decoration>>,
 ): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
-  const sorted = [...items].sort((a, b) => a.from - b.from || a.to - b.to);
-  for (const item of sorted) {
+  const ordered = isSorted(items) ? items : [...items].sort((a, b) => a.from - b.from || a.to - b.to);
+  for (const item of ordered) {
     builder.add(item.from, item.to, item.value);
   }
   return builder.finish();

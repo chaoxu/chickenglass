@@ -22,25 +22,50 @@ const MATCH_CLASS = "cf-search-match";
 const SELECTED_MATCH_CLASS = "cf-search-match-selected";
 
 /**
- * Check whether two ranges overlap.
- * A match overlaps a widget when matchFrom < widgetTo && matchTo > widgetFrom.
+ * Find the index of the first element in a sorted array whose `to` value
+ * is greater than `target`, using binary search.
  */
-function rangesOverlap(
-  aFrom: number, aTo: number,
-  bFrom: number, bTo: number,
-): boolean {
-  return aFrom < bTo && aTo > bFrom;
+function lowerBound(
+  matches: readonly { from: number; to: number }[],
+  target: number,
+): number {
+  let lo = 0;
+  let hi = matches.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (matches[mid].to <= target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 /**
  * Walk widget elements in contentDOM and toggle highlight classes
  * based on whether any search match overlaps their source range.
+ *
+ * Uses binary search on sorted matches to find overlapping ranges
+ * in O(widgets * log(matches)) instead of O(widgets * matches).
  */
 function syncHighlights(view: EditorView, hadHighlights: boolean): boolean {
   const matches = collectVisibleSearchMatches(view);
 
-  // Fast path: no matches and nothing to clear
+  // Fast path: no matches and nothing to clear — skip DOM query entirely (#6)
   if (matches.length === 0 && !hadHighlights) return false;
+
+  // Short-circuit DOM query when no matches but we need to clear previous highlights
+  if (matches.length === 0) {
+    const widgets = view.contentDOM.querySelectorAll<HTMLElement>(
+      `.${MATCH_CLASS},.${SELECTED_MATCH_CLASS}`,
+    );
+    for (const el of widgets) {
+      el.classList.remove(MATCH_CLASS, SELECTED_MATCH_CLASS);
+    }
+    return false;
+  }
+
+  // Sort matches by `from` for binary search (collectVisibleSearchMatches
+  // already returns matches in document order, but ensure stability).
+  const sorted = matches.slice().sort((a, b) => a.from - b.from || a.to - b.to);
 
   const selection = view.state.selection.main;
   const widgets = view.contentDOM.querySelectorAll<HTMLElement>("[data-source-from]");
@@ -57,13 +82,16 @@ function syncHighlights(view: EditorView, hadHighlights: boolean): boolean {
     let hasMatch = false;
     let hasSelectedMatch = false;
 
-    for (const match of matches) {
-      if (rangesOverlap(match.from, match.to, sourceFrom, sourceTo)) {
-        hasMatch = true;
-        if (selection.from === match.from && selection.to === match.to) {
-          hasSelectedMatch = true;
-          break;
-        }
+    // Binary search: find first match whose `to` > sourceFrom,
+    // then scan forward while match.from < sourceTo.
+    const startIdx = lowerBound(sorted, sourceFrom);
+    for (let i = startIdx; i < sorted.length; i++) {
+      const match = sorted[i];
+      if (match.from >= sourceTo) break; // no more overlaps possible
+      hasMatch = true;
+      if (selection.from === match.from && selection.to === match.to) {
+        hasSelectedMatch = true;
+        break;
       }
     }
 
