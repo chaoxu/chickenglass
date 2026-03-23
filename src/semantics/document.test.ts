@@ -324,3 +324,54 @@ describe("document semantics analyzers", () => {
     expect(unified.referenceByFrom.size).toBe(indivRefs.length);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Narrative references excluded from inline code and math (#351)
+// ---------------------------------------------------------------------------
+
+describe("narrative references inside inline code/math are excluded", () => {
+  it("does NOT index @foo inside backtick code", () => {
+    const doc = "See `@foo` for details.\n";
+    const tree = parser.parse(doc);
+    const refs = analyzeReferences(stringTextSource(doc), tree);
+    expect(refs).toEqual([]);
+  });
+
+  it("does NOT index @bar inside inline math", () => {
+    const doc = "See $@bar$ for details.\n";
+    const tree = parser.parse(doc);
+    const refs = analyzeReferences(stringTextSource(doc), tree);
+    expect(refs).toEqual([]);
+  });
+
+  it("still indexes @baz in prose", () => {
+    const doc = "See @baz for details.\n";
+    const tree = parser.parse(doc);
+    const refs = analyzeReferences(stringTextSource(doc), tree);
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({
+      bracketed: false,
+      ids: ["baz"],
+    });
+  });
+
+  it("indexes prose @ref but not code @ref in same paragraph", () => {
+    const doc = "See @real and `@fake` together.\n";
+    const tree = parser.parse(doc);
+    const refs = analyzeReferences(stringTextSource(doc), tree);
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({
+      bracketed: false,
+      ids: ["real"],
+    });
+  });
+
+  it("bracketed [@id] inside code is already excluded by Link pattern", () => {
+    // Bracketed references inside code are not parsed as Link nodes,
+    // so they never appear as bracketedRefs — this is unaffected.
+    const doc = "See `[@code_ref]` in code.\n";
+    const tree = parser.parse(doc);
+    const refs = analyzeReferences(stringTextSource(doc), tree);
+    expect(refs).toEqual([]);
+  });
+});

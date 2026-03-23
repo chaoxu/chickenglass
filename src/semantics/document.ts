@@ -210,6 +210,7 @@ interface UnifiedWalkResult {
   equations: EquationSemantics[];
   bracketedRefs: ReferenceSemantics[];
   linkRanges: { from: number; to: number }[];
+  codeMathRanges: { from: number; to: number }[];
 }
 
 /**
@@ -233,6 +234,7 @@ function unifiedTreeWalk(doc: TextSource, tree: Tree): UnifiedWalkResult {
 
   const bracketedRefs: ReferenceSemantics[] = [];
   const linkRanges: { from: number; to: number }[] = [];
+  const codeMathRanges: { from: number; to: number }[] = [];
 
   tree.iterate({
     enter(node) {
@@ -425,6 +427,12 @@ function unifiedTreeWalk(doc: TextSource, tree: Tree): UnifiedWalkResult {
         return;
       }
 
+      // --- Inline code / inline math (exclude from narrative ref scan) ---
+      if (name === "InlineCode" || name === "InlineMath") {
+        codeMathRanges.push({ from: node.from, to: node.to });
+        return;
+      }
+
       // --- Links (for bracketed references) ---
       if (name === "Link") {
         const raw = doc.slice(node.from, node.to);
@@ -453,16 +461,18 @@ function unifiedTreeWalk(doc: TextSource, tree: Tree): UnifiedWalkResult {
     equations,
     bracketedRefs,
     linkRanges,
+    codeMathRanges,
   };
 }
 
 /**
  * Post-process narrative (non-bracketed) references via regex scan,
- * excluding ranges inside Link nodes collected during the tree walk.
+ * excluding ranges inside Link, InlineCode, or InlineMath nodes
+ * collected during the tree walk.
  */
 function collectNarrativeReferences(
   doc: TextSource,
-  linkRanges: readonly { from: number; to: number }[],
+  excludedRanges: readonly { from: number; to: number }[],
 ): ReferenceSemantics[] {
   const refs: ReferenceSemantics[] = [];
   const fullText = doc.slice(0, doc.length);
@@ -472,8 +482,8 @@ function collectNarrativeReferences(
   while ((match = NARRATIVE_REFERENCE_RE.exec(fullText)) !== null) {
     const from = match.index;
     const to = from + match[0].length;
-    const insideLink = linkRanges.some((range) => from >= range.from && to <= range.to);
-    if (insideLink) continue;
+    const insideExcluded = excludedRanges.some((range) => from >= range.from && to <= range.to);
+    if (insideExcluded) continue;
 
     refs.push({
       from,
@@ -549,7 +559,8 @@ export function analyzeEquations(doc: TextSource, tree: Tree): EquationSemantics
 
 export function analyzeReferences(doc: TextSource, tree: Tree): ReferenceSemantics[] {
   const w = unifiedTreeWalk(doc, tree);
-  const refs = [...w.bracketedRefs, ...collectNarrativeReferences(doc, w.linkRanges)];
+  const excludedRanges = [...w.linkRanges, ...w.codeMathRanges];
+  const refs = [...w.bracketedRefs, ...collectNarrativeReferences(doc, excludedRanges)];
   refs.sort((a, b) => a.from - b.from);
   return refs;
 }
@@ -613,7 +624,8 @@ export function analyzeDocumentSemantics(
   const fencedDivs = w.fencedDivs;
   const equations = w.equations;
 
-  const narrativeRefs = collectNarrativeReferences(doc, w.linkRanges);
+  const excludedRanges = [...w.linkRanges, ...w.codeMathRanges];
+  const narrativeRefs = collectNarrativeReferences(doc, excludedRanges);
   const references = [...w.bracketedRefs, ...narrativeRefs];
   references.sort((a, b) => a.from - b.from);
 
