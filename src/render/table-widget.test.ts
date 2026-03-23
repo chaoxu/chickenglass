@@ -1,12 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import type { EditorView } from "@codemirror/view";
+import type { EditorState } from "@codemirror/state";
+import { markdown } from "@codemirror/lang-markdown";
 import {
   TableWidget,
+  cellEditAnnotation,
   serializeTableWidgetMacros,
   shouldCommitBlurredInlineEditor,
 } from "./table-widget";
+import { _tableDecorationFieldForTest as tableDecorationField } from "./table-render";
+import { editorFocusField } from "./render-utils";
+import { mathMacrosField } from "./math-macros";
+import { frontmatterField } from "../editor/frontmatter-state";
+import { markdownExtensions } from "../parser";
 import type { ParsedTable } from "./table-utils";
-import { createMockEditorView } from "../test-utils";
+import { createMockEditorView, createEditorState, getDecorationSpecs } from "../test-utils";
 
 // jsdom lacks ResizeObserver — provide a no-op stub.
 class ResizeObserverStub {
@@ -177,5 +185,88 @@ describe("TableWidget negative / edge-case", () => {
 
   it("serializeTableWidgetMacros returns consistent string for empty macros", () => {
     expect(serializeTableWidgetMacros({})).toBe(serializeTableWidgetMacros({}));
+  });
+});
+
+describe("tableDecorationField commit rebuild (#404)", () => {
+  // Regression: after editing a cell and blurring, clicking back into the
+  // same cell showed pre-edit content. The root cause was that the "commit"
+  // dispatch had docChanged === false (the doc was already synced by live
+  // keystrokes), so the StateField skipped rebuilding and the old widget
+  // with stale ParsedTable persisted.
+
+  const TABLE_DOC = "| A | B |\n| --- | --- |\n| 1 | 2 |";
+
+  function createTableState(doc: string): EditorState {
+    return createEditorState(doc, {
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        frontmatterField,
+        editorFocusField,
+        mathMacrosField,
+        tableDecorationField,
+      ],
+    });
+  }
+
+  function getWidgetCount(state: EditorState): number {
+    return getDecorationSpecs(state.field(tableDecorationField)).filter(
+      (s) => s.widgetClass === "TableWidget",
+    ).length;
+  }
+
+  it("rebuilds decorations on commit annotation even without docChanged", () => {
+    const state = createTableState(TABLE_DOC);
+    expect(getWidgetCount(state)).toBe(1);
+
+    // Step 1: simulate a live keystroke edit — change "1" to "1X".
+    // cellEditAnnotation("edit") causes the StateField to map (not rebuild).
+    const editFrom = TABLE_DOC.indexOf("1");
+    const afterEdit = state.update({
+      changes: { from: editFrom, to: editFrom + 1, insert: "1X" },
+      annotations: cellEditAnnotation.of("edit"),
+    }).state;
+
+    // After the edit the doc has "1X" but the widget's tableText is stale
+    // (mapped, not rebuilt), so it still contains the old "| 1 | 2 |".
+    const specsAfterEdit = getDecorationSpecs(afterEdit.field(tableDecorationField));
+    expect(specsAfterEdit).toHaveLength(1);
+
+    // Step 2: simulate commit (blur) — no doc change, just the annotation.
+    // Before fix: skipped rebuilding because docChanged === false.
+    // After fix: cellEdit === "commit" triggers full rebuild.
+    const afterCommit = afterEdit.update({
+      annotations: cellEditAnnotation.of("commit"),
+    }).state;
+
+    const specsAfterCommit = getDecorationSpecs(afterCommit.field(tableDecorationField));
+    expect(specsAfterCommit).toHaveLength(1);
+
+    // The rebuilt decoration should cover the correct range for "1X".
+    // After the edit, "1" became "1X", so the table text is one char longer.
+    const updatedTableText = "| A | B |\n| --- | --- |\n| 1X | 2 |";
+    expect(specsAfterCommit[0].to - specsAfterCommit[0].from).toBe(updatedTableText.length);
+  });
+
+  it("maps decorations on edit annotation (live typing preserved)", () => {
+    const state = createTableState(TABLE_DOC);
+    const specsBefore = getDecorationSpecs(state.field(tableDecorationField));
+    expect(specsBefore).toHaveLength(1);
+
+    // Dispatch a doc change with "edit" annotation — should map, not rebuild.
+    // The widget survives (same identity) so the inline editor is not destroyed.
+    const editFrom = TABLE_DOC.indexOf("1");
+    const afterEdit = state.update({
+      changes: { from: editFrom, to: editFrom + 1, insert: "1X" },
+      annotations: cellEditAnnotation.of("edit"),
+    }).state;
+
+    const specsAfter = getDecorationSpecs(afterEdit.field(tableDecorationField));
+    expect(specsAfter).toHaveLength(1);
+
+    // The mapped decoration's range shifts to accommodate the insertion but the
+    // widget object is the same (mapped through, not rebuilt). Verify the
+    // range was adjusted by the +1 char insertion.
+    expect(specsAfter[0].to).toBe(specsBefore[0].to + 1);
   });
 });

@@ -107,7 +107,7 @@ const tableDecorationField = StateField.define<DecorationSet>({
       return value.map(tr.changes);
     }
 
-    if (tr.docChanged || syntaxTree(tr.state) !== syntaxTree(tr.startState)) {
+    if (cellEdit === "commit" || tr.docChanged || syntaxTree(tr.state) !== syntaxTree(tr.startState)) {
       return buildTableDecorationsFromState(tr.state);
     }
     return value;
@@ -133,6 +133,8 @@ const tableContextMenuHandler: Extension = EditorView.domEventHandlers({
     return true;
   },
 });
+
+export { tableDecorationField as _tableDecorationFieldForTest };
 
 /** CM6 extension for interactive table editing. */
 export const tableRenderPlugin: Extension = [
