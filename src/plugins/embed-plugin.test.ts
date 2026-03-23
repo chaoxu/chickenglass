@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { CSS } from "../constants/css-classes";
 import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { syntaxTree } from "@codemirror/language";
@@ -170,7 +171,7 @@ describe("embedPlugin", () => {
   it("renders header without number", () => {
     const spec = embedPlugin.render({ type: "embed" });
     expect(spec.header).toBe("Embed");
-    expect(spec.className).toBe("cf-block cf-block-embed");
+    expect(spec.className).toBe(CSS.block("embed"));
   });
 
   it("renders header with title", () => {
@@ -194,7 +195,7 @@ describe("iframePlugin", () => {
   it("renders correctly", () => {
     const spec = iframePlugin.render({ type: "iframe" });
     expect(spec.header).toBe("Iframe");
-    expect(spec.className).toBe("cf-block cf-block-iframe");
+    expect(spec.className).toBe(CSS.block("iframe"));
   });
 });
 
@@ -210,7 +211,7 @@ describe("youtubePlugin", () => {
   it("renders correctly", () => {
     const spec = youtubePlugin.render({ type: "youtube" });
     expect(spec.header).toBe("YouTube");
-    expect(spec.className).toBe("cf-block cf-block-youtube");
+    expect(spec.className).toBe(CSS.block("youtube"));
   });
 });
 
@@ -226,7 +227,7 @@ describe("gistPlugin", () => {
   it("renders correctly", () => {
     const spec = gistPlugin.render({ type: "gist" });
     expect(spec.header).toBe("Gist");
-    expect(spec.className).toBe("cf-block cf-block-gist");
+    expect(spec.className).toBe(CSS.block("gist"));
   });
 });
 
@@ -329,7 +330,7 @@ describe("gist embed block edge cases", () => {
   it("gist plugin renders header correctly", () => {
     const spec = gistPlugin.render({ type: "gist" });
     expect(spec.header).toBe("Gist");
-    expect(spec.className).toBe("cf-block cf-block-gist");
+    expect(spec.className).toBe(CSS.block("gist"));
   });
 
   it("gist plugin renders header with title", () => {

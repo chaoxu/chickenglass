@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { CSS } from "../constants/css-classes";
 import { ImageWidget } from "./image-render";
 
 describe("ImageWidget", () => {
@@ -7,7 +8,7 @@ describe("ImageWidget", () => {
       const widget = new ImageWidget("photo", "photo.png");
       const el = widget.createDOM();
       expect(el.tagName).toBe("SPAN");
-      expect(el.className).toBe("cf-image-wrapper");
+      expect(el.className).toBe(CSS.imageWrapper);
     });
 
     it("contains an img element with correct src and alt", () => {
@@ -24,7 +25,7 @@ describe("ImageWidget", () => {
       const widget = new ImageWidget("alt", "src.png");
       const el = widget.createDOM();
       const img = el.querySelector("img");
-      expect(img!.className).toBe("cf-image");
+      expect(img!.className).toBe(CSS.image);
     });
 
     it("handles empty alt text", () => {
@@ -70,7 +71,7 @@ describe("ImageWidget", () => {
 
       img.dispatchEvent(new Event("error"));
 
-      expect(el.className).toBe("cf-image-error");
+      expect(el.className).toBe(CSS.imageError);
       expect(el.textContent).toBe("[Image: broken]");
     });
 

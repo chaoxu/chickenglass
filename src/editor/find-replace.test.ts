@@ -2,6 +2,7 @@ import { describe, expect, it, afterEach } from "vitest";
 import { search } from "@codemirror/search";
 import { EditorView } from "@codemirror/view";
 
+import { CSS } from "../constants/css-classes";
 import { createTestView } from "../test-utils";
 import {
   collectVisibleSearchMatches,
@@ -86,14 +87,14 @@ describe("searchController", () => {
     const view = createPanelView("alpha beta alpha");
 
     openFindSearch(view);
-    expect(view.dom.querySelector(".cf-search-panel")).not.toBeNull();
-    const replaceRow = view.dom.querySelector<HTMLElement>(".cf-replace-row");
+    expect(view.dom.querySelector(`.${CSS.searchPanel}`)).not.toBeNull();
+    const replaceRow = view.dom.querySelector<HTMLElement>(`.${CSS.searchReplaceRow}`);
     expect(replaceRow).not.toBeNull();
     expect(replaceRow?.style.display).toBe("none");
 
     openReplaceSearch(view);
-    expect(view.dom.querySelector(".cf-search-panel")).not.toBeNull();
-    expect(view.dom.querySelector<HTMLElement>(".cf-replace-row")?.style.display).toBe("");
+    expect(view.dom.querySelector(`.${CSS.searchPanel}`)).not.toBeNull();
+    expect(view.dom.querySelector<HTMLElement>(`.${CSS.searchReplaceRow}`)?.style.display).toBe("");
   });
 
   // Regression: countSearchMatches was called on every ViewUpdate (O(N) per cursor

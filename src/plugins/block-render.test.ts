@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { CSS } from "../constants/css-classes";
 import { formatBlockHeader, createBlockRender } from "./block-render";
 
 describe("formatBlockHeader", () => {
@@ -30,14 +31,14 @@ describe("createBlockRender", () => {
   it("produces the default cf-block className from attrs.type", () => {
     const render = createBlockRender("Definition");
     const spec = render({ type: "definition", number: 2 });
-    expect(spec.className).toBe("cf-block cf-block-definition");
+    expect(spec.className).toBe(CSS.block("definition"));
     expect(spec.header).toBe("Definition 2");
   });
 
   it("uses a custom className when provided", () => {
-    const render = createBlockRender("Quote", "cf-block-blockquote");
+    const render = createBlockRender("Quote", CSS.blockBlockquote);
     const spec = render({ type: "blockquote" });
-    expect(spec.className).toBe("cf-block-blockquote");
+    expect(spec.className).toBe(CSS.blockBlockquote);
     expect(spec.header).toBe("Quote");
   });
 });

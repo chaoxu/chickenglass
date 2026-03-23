@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { EditorState } from "@codemirror/state";
+import { CSS } from "../constants/css-classes";
 import { markdown } from "@codemirror/lang-markdown";
 import { footnoteExtension } from "../parser/footnote";
 import { frontmatterField } from "../editor/frontmatter-state";
@@ -109,7 +110,7 @@ describe("FootnoteBodyWidget", () => {
   it("renders inline math in footnote body", () => {
     const widget = new FootnoteBodyWidget("See $x^2$ here", {});
     const el = widget.createDOM();
-    expect(el.className).toBe("cf-sidenote-body-rendered");
+    expect(el.className).toBe(CSS.sidenoteBodyRendered);
     expect(el.querySelector(".katex")).not.toBeNull();
   });
 
@@ -152,7 +153,7 @@ describe("buildSidenoteDecorations — footnote def cursor zones", () => {
     const specs = getDecorationSpecs(decos);
 
     // Should have a line class decoration on the def line
-    const lineDecos = specs.filter((s) => s.class?.includes("cf-sidenote-def-line"));
+    const lineDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefLine));
     expect(lineDecos.length).toBe(1);
   });
 
@@ -166,7 +167,7 @@ describe("buildSidenoteDecorations — footnote def cursor zones", () => {
     const specs = getDecorationSpecs(decos);
 
     // Should NOT have the line-hide class (line is visible for editing)
-    const lineDecos = specs.filter((s) => s.class?.includes("cf-sidenote-def-line"));
+    const lineDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefLine));
     expect(lineDecos.length).toBe(0);
 
     // Should have a widget replacement for the body (FootnoteBodyWidget)
@@ -182,7 +183,7 @@ describe("buildSidenoteDecorations — footnote def cursor zones", () => {
     const specs = getDecorationSpecs(decos);
 
     // Should NOT have the line-hide class (line visible for editing label)
-    const lineDecos = specs.filter((s) => s.class?.includes("cf-sidenote-def-line"));
+    const lineDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefLine));
     expect(lineDecos.length).toBe(0);
 
     // Body should be rendered via widget (inline math, bold, etc. stay rendered)
@@ -196,7 +197,7 @@ describe("buildSidenoteDecorations — footnote def cursor zones", () => {
     const specs = getDecorationSpecs(decos);
 
     // Should have the line-hide class even with cursor at 0
-    const lineDecos = specs.filter((s) => s.class?.includes("cf-sidenote-def-line"));
+    const lineDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefLine));
     expect(lineDecos.length).toBe(1);
   });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
+import { CSS } from "../constants/css-classes";
 import { fencedDiv } from "../parser/fenced-div";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { projectConfigFacet } from "../app/project-config";
@@ -134,7 +135,7 @@ describe("getPluginOrFallback", () => {
     expect(fallback).toBeDefined();
     if (!fallback) throw new Error("expected fallback plugin");
     const spec = fallback.render({ type: "hypothesis", number: 3, title: "Key" });
-    expect(spec.className).toBe("cf-block cf-block-hypothesis");
+    expect(spec.className).toBe(CSS.block("hypothesis"));
     expect(spec.header).toBe("Hypothesis 3");
   });
 
@@ -227,7 +228,7 @@ describe("pluginFromConfig", () => {
       number: 3,
       title: "Main",
     });
-    expect(spec.className).toBe("cf-block cf-block-theorem");
+    expect(spec.className).toBe(CSS.block("theorem"));
     expect(spec.header).toBe("Theorem 3");
   });
 
@@ -439,7 +440,7 @@ describe("createPluginRegistryField (CM6 integration)", () => {
     if (!claim) throw new Error("claim plugin missing");
     const spec = claim.render({ type: "claim", number: 5, title: "Main" });
     expect(spec.header).toBe("Claim 5");
-    expect(spec.className).toBe("cf-block cf-block-claim");
+    expect(spec.className).toBe(CSS.block("claim"));
   });
 
   it("rebuilds registry from defaults when frontmatter changes", () => {

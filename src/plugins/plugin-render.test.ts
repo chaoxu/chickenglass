@@ -28,6 +28,7 @@ import {
   hasMarkClassInRange,
   makeBlockPlugin,
 } from "../test-utils";
+import { CSS } from "../constants/css-classes";
 
 /** Create an EditorState with all extensions needed for block decorations. */
 function createTestState(doc: string, cursorPos = 0, focused = false) {
@@ -102,7 +103,7 @@ describe("blockDecorationField", () => {
 
     // Opening fence lines should have cf-block-header class
     const theoremLine = state.doc.line(1).from;
-    expect(hasLineClassAt(specs, theoremLine, "cf-block-header")).toBe(true);
+    expect(hasLineClassAt(specs, theoremLine, CSS.blockHeader)).toBe(true);
 
     // Should have BlockHeaderWidget replacements
     const widgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
@@ -117,15 +118,15 @@ describe("blockDecorationField", () => {
     // Opening fence: cf-block-source is a MARK decoration on syntax only, not a line class.
     // The line should NOT have cf-block-source as a line class (that made the whole line monospace).
     const theoremLine = state.doc.line(1);
-    expect(hasLineClassAt(specs, theoremLine.from, "cf-block-source")).toBe(false);
-    expect(hasLineClassAt(specs, theoremLine.from, "cf-block-header")).toBe(false);
+    expect(hasLineClassAt(specs, theoremLine.from, CSS.blockSource)).toBe(false);
+    expect(hasLineClassAt(specs, theoremLine.from, CSS.blockHeader)).toBe(false);
     // But cf-block-source mark should cover the fence syntax range
-    expect(hasMarkClassInRange(specs, theoremLine.from, theoremLine.to, "cf-block-source")).toBe(true);
+    expect(hasMarkClassInRange(specs, theoremLine.from, theoremLine.to, CSS.blockSource)).toBe(true);
 
     // No header widget for theorem (source mode)
     // But proof should still have its header widget
     const proofLine = state.doc.line(5).from;
-    expect(hasLineClassAt(specs, proofLine, "cf-block-header")).toBe(true);
+    expect(hasLineClassAt(specs, proofLine, CSS.blockHeader)).toBe(true);
   });
 
   it("hides closing fence when cursor is not on it", () => {
@@ -136,7 +137,7 @@ describe("blockDecorationField", () => {
 
     // Closing fence line (:::) should have cf-include-fence (collapsed)
     const closeFenceLine = state.doc.line(3).from;
-    expect(hasLineClassAt(specs, closeFenceLine, "cf-include-fence")).toBe(true);
+    expect(hasLineClassAt(specs, closeFenceLine, CSS.includeFence)).toBe(true);
   });
 
   it("shows closing fence source when cursor is on closing fence", () => {
@@ -146,8 +147,8 @@ describe("blockDecorationField", () => {
 
     // Closing fence should have cf-block-source (visible)
     const closeFenceLine = state.doc.line(3).from;
-    expect(hasLineClassAt(specs, closeFenceLine, "cf-block-source")).toBe(true);
-    expect(hasLineClassAt(specs, closeFenceLine, "cf-include-fence")).toBe(false);
+    expect(hasLineClassAt(specs, closeFenceLine, CSS.blockSource)).toBe(true);
+    expect(hasLineClassAt(specs, closeFenceLine, CSS.includeFence)).toBe(false);
   });
 
   it("shows both fences when cursor is on opening fence", () => {
@@ -156,13 +157,13 @@ describe("blockDecorationField", () => {
 
     // Opening: cf-block-source as mark decoration on syntax portion only
     const openLine = state.doc.line(1);
-    expect(hasMarkClassInRange(specs, openLine.from, openLine.to, "cf-block-source")).toBe(true);
-    expect(hasLineClassAt(specs, openLine.from, "cf-block-source")).toBe(false);
+    expect(hasMarkClassInRange(specs, openLine.from, openLine.to, CSS.blockSource)).toBe(true);
+    expect(hasLineClassAt(specs, openLine.from, CSS.blockSource)).toBe(false);
 
     // Closing: cf-block-source as line decoration (no title content to protect)
     const closeFenceLine = state.doc.line(3).from;
-    expect(hasLineClassAt(specs, closeFenceLine, "cf-block-source")).toBe(true);
-    expect(hasLineClassAt(specs, closeFenceLine, "cf-include-fence")).toBe(false);
+    expect(hasLineClassAt(specs, closeFenceLine, CSS.blockSource)).toBe(true);
+    expect(hasLineClassAt(specs, closeFenceLine, CSS.includeFence)).toBe(false);
   });
 
   it("other blocks unaffected when cursor is on one block's fence", () => {
@@ -172,12 +173,12 @@ describe("blockDecorationField", () => {
 
     // Proof block should be fully rendered (not in source mode)
     const proofOpenLine = state.doc.line(5).from;
-    expect(hasLineClassAt(specs, proofOpenLine, "cf-block-header")).toBe(true);
-    expect(hasLineClassAt(specs, proofOpenLine, "cf-block-source")).toBe(false);
+    expect(hasLineClassAt(specs, proofOpenLine, CSS.blockHeader)).toBe(true);
+    expect(hasLineClassAt(specs, proofOpenLine, CSS.blockSource)).toBe(false);
 
     // Proof closing fence should be hidden
     const proofCloseLine = state.doc.line(7).from;
-    expect(hasLineClassAt(specs, proofCloseLine, "cf-include-fence")).toBe(true);
+    expect(hasLineClassAt(specs, proofCloseLine, CSS.includeFence)).toBe(true);
   });
 
   it("header widget replaces only fence prefix, not title text", () => {
@@ -259,7 +260,7 @@ describe("blockDecorationField", () => {
     const titleTo = titleFrom + titleText.length;
 
     // cf-block-source mark should cover fence syntax (before title)
-    expect(hasMarkClassInRange(specs, line1.from, titleFrom, "cf-block-source")).toBe(true);
+    expect(hasMarkClassInRange(specs, line1.from, titleFrom, CSS.blockSource)).toBe(true);
 
     // cf-block-source mark must NOT cover the title text range
     const sourceMarksOnTitle = specs.filter(
@@ -267,7 +268,7 @@ describe("blockDecorationField", () => {
         s.from !== s.to && // mark decoration
         s.from < titleTo &&
         s.to > titleFrom &&
-        s.class?.includes("cf-block-source"),
+        s.class?.includes(CSS.blockSource),
     );
     expect(sourceMarksOnTitle.length).toBe(0);
   });
@@ -279,7 +280,7 @@ describe("blockDecorationField", () => {
 
     const line1 = state.doc.line(1);
     // Entire opening fence is syntax — mark should cover it
-    expect(hasMarkClassInRange(specs, line1.from, line1.to, "cf-block-source")).toBe(true);
+    expect(hasMarkClassInRange(specs, line1.from, line1.to, CSS.blockSource)).toBe(true);
   });
 
   it("does not crash on an incomplete fenced div without a closing fence", () => {
@@ -317,7 +318,7 @@ describe("disabled blocks show raw fences (issue #356)", () => {
 
     // The theorem block's opening line must NOT have cf-block-header
     const theoremLine = state.doc.line(5).from; // line 5 after 4-line frontmatter
-    expect(hasLineClassAt(specs, theoremLine, "cf-block-header")).toBe(false);
+    expect(hasLineClassAt(specs, theoremLine, CSS.blockHeader)).toBe(false);
 
     // No header widget should be emitted for a disabled block
     const widgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
@@ -351,11 +352,11 @@ describe("disabled blocks show raw fences (issue #356)", () => {
 
     // theorem line: no cf-block-header
     const theoremLine = state.doc.line(5).from;
-    expect(hasLineClassAt(specs, theoremLine, "cf-block-header")).toBe(false);
+    expect(hasLineClassAt(specs, theoremLine, CSS.blockHeader)).toBe(false);
 
     // proof line: has cf-block-header (not disabled)
     const proofLine = state.doc.line(9).from;
-    expect(hasLineClassAt(specs, proofLine, "cf-block-header")).toBe(true);
+    expect(hasLineClassAt(specs, proofLine, CSS.blockHeader)).toBe(true);
   });
 });
 

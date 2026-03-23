@@ -1,4 +1,6 @@
 import { describe, expect, it, afterEach } from "vitest";
+import { EditorState } from "@codemirror/state";
+import { CSS } from "../constants/css-classes";
 import type { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
@@ -50,7 +52,7 @@ describe("MathWidget (inline)", () => {
     const widget = new MathWidget("x^2", "$x^2$", false);
     const el = widget.toDOM();
     expect(el.tagName).toBe("SPAN");
-    expect(el.className).toBe("cf-math-inline");
+    expect(el.className).toBe(CSS.mathInline);
   });
 
   it("renders KaTeX content inside the span", () => {
@@ -97,7 +99,7 @@ describe("MathWidget (display)", () => {
     const widget = new MathWidget("x^2", "$$x^2$$", true);
     const el = widget.toDOM();
     expect(el.tagName).toBe("DIV");
-    expect(el.className).toBe("cf-math-display");
+    expect(el.className).toBe(CSS.mathDisplay);
   });
 
   it("renders KaTeX content in display mode", () => {

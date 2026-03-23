@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { Extension } from "@codemirror/state";
+import { CSS } from "../constants/css-classes";
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import { search } from "@codemirror/search";
 
@@ -64,7 +65,7 @@ describe("searchHighlightPlugin", () => {
     });
 
     const widget = view.contentDOM.querySelector(".cf-fake-search-widget");
-    expect(widget?.classList.contains("cf-search-match")).toBe(true);
+    expect(widget?.classList.contains(CSS.searchMatch)).toBe(true);
   });
 
   it("marks rendered math widgets as selected when the current match lands inside them", () => {
@@ -88,8 +89,8 @@ describe("searchHighlightPlugin", () => {
     });
     nextSearchMatch(view);
 
-    const math = view.contentDOM.querySelector(".cf-math-inline");
-    expect(math?.classList.contains("cf-search-match")).toBe(true);
-    expect(math?.classList.contains("cf-search-match-selected")).toBe(true);
+    const math = view.contentDOM.querySelector(`.${CSS.mathInline}`);
+    expect(math?.classList.contains(CSS.searchMatch)).toBe(true);
+    expect(math?.classList.contains(CSS.searchMatchSelected)).toBe(true);
   });
 });
