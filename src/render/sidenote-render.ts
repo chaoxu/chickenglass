@@ -103,6 +103,9 @@ class FootnoteRefWidget extends RenderWidget {
 
 /** Build sidenote decorations from editor state. */
 export function buildSidenoteDecorations(state: EditorState, focused: boolean): DecorationSet {
+  const collapsed = state.field(sidenotesCollapsedField, false) ?? false;
+  if (collapsed) return Decoration.none;
+
   const footnotes = collectFootnotes(state);
   const items: Range<Decoration>[] = [];
   const numberMap = numberFootnotes(footnotes);
@@ -158,11 +161,13 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
  */
 const sidenoteDecorationField = StateField.define<DecorationSet>({
   create(state) {
-    return buildSidenoteDecorations(state, false);
+    const focused = state.field(editorFocusField, false) ?? false;
+    return buildSidenoteDecorations(state, focused);
   },
 
   update(value, tr) {
     if (
+      tr.docChanged ||
       tr.selection ||
       tr.effects.some((e) => e.is(focusEffect) || e.is(sidenotesCollapsedEffect)) ||
       tr.state.field(documentSemanticsField) !== tr.startState.field(documentSemanticsField)
@@ -177,6 +182,8 @@ const sidenoteDecorationField = StateField.define<DecorationSet>({
     return EditorView.decorations.from(field);
   },
 });
+
+export { sidenoteDecorationField };
 
 /** Minimum vertical gap in pixels between stacked sidenotes. */
 const SIDENOTE_GAP = 4;
@@ -215,12 +222,15 @@ export function computeSidenoteOffsets(
 
 
 /** Widget that renders a "Footnotes" section at the bottom when sidenotes are collapsed. */
-class FootnoteSectionWidget extends RenderWidget {
+export class FootnoteSectionWidget extends RenderWidget {
+  private readonly macrosKey: string;
+
   constructor(
     private readonly entries: ReadonlyArray<{ num: number; id: string; content: string; defFrom: number }>,
     private readonly macros: Record<string, string>,
   ) {
     super();
+    this.macrosKey = serializeMacros(macros);
   }
 
   toDOM(view: EditorView): HTMLElement {
@@ -277,7 +287,8 @@ class FootnoteSectionWidget extends RenderWidget {
 
   eq(other: FootnoteSectionWidget): boolean {
     if (this.entries.length !== other.entries.length) return false;
-    return this.entries.every((e, i) => e.id === other.entries[i].id && e.content === other.entries[i].content);
+    return this.entries.every((e, i) => e.id === other.entries[i].id && e.content === other.entries[i].content)
+      && this.macrosKey === other.macrosKey;
   }
 }
 
@@ -291,6 +302,7 @@ class FootnoteSectionPlugin implements PluginValue {
 
   update(update: ViewUpdate): void {
     if (
+      update.docChanged ||
       update.transactions.some((tr) =>
         tr.effects.some((e) => e.is(sidenotesCollapsedEffect)),
       ) ||

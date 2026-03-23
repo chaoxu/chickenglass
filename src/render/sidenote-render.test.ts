@@ -10,7 +10,10 @@ import {
   computeSidenoteOffsets,
   type SidenoteMeasurement,
   FootnoteBodyWidget,
+  FootnoteSectionWidget,
   buildSidenoteDecorations,
+  sidenotesCollapsedEffect,
+  sidenotesCollapsedField,
 } from "./sidenote-render";
 import { getDecorationSpecs } from "../test-utils";
 
@@ -195,6 +198,35 @@ describe("buildSidenoteDecorations — footnote def cursor zones", () => {
     // Should have the line-hide class even with cursor at 0
     const lineDecos = specs.filter((s) => s.class?.includes("cf-sidenote-def-line"));
     expect(lineDecos.length).toBe(1);
+  });
+
+  it("returns no decorations when sidenotes are collapsed", () => {
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        markdown({ extensions: [footnoteExtension] }),
+        frontmatterField,
+        mathMacrosField,
+        documentSemanticsField,
+        sidenotesCollapsedField,
+      ],
+    });
+    const collapsedState = state.update({
+      effects: sidenotesCollapsedEffect.of(true),
+    }).state;
+    const decos = buildSidenoteDecorations(collapsedState, true);
+
+    expect(getDecorationSpecs(decos)).toEqual([]);
+  });
+});
+
+describe("FootnoteSectionWidget", () => {
+  it("eq returns false when macros change", () => {
+    const entries = [{ num: 1, id: "note-1", content: "$\\R$", defFrom: 10 }];
+    const a = new FootnoteSectionWidget(entries, { "\\R": "\\mathbb{R}" });
+    const b = new FootnoteSectionWidget(entries, { "\\R": "\\mathbf{R}" });
+
+    expect(a.eq(b)).toBe(false);
   });
 });
 
