@@ -1,7 +1,7 @@
 import { parser as baseParser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
 import { markdownExtensions } from "./parser";
-import { MARK_NODES } from "./render/inline-shared";
+import { MARK_NODES } from "./render";
 import {
   extractReferenceCluster,
   NARRATIVE_REFERENCE_RE,

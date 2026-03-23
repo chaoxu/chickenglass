@@ -1,6 +1,6 @@
 import type { InlineRenderSurface } from "./inline-surface";
 import { renderInline } from "./app/markdown-to-html";
-import { renderInlineMarkdown } from "./render/inline-render";
+import { renderInlineMarkdown } from "./render";
 
 export type DocumentSurfaceMode = InlineRenderSurface | "document-body";
 

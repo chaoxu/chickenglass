@@ -1,4 +1,5 @@
-export { MARK_NODES, isSafeUrl, buildKatexOptions } from "./inline-shared";
+export { MARK_NODES, isSafeUrl, buildKatexOptions, sanitizeCslHtml } from "./inline-shared";
+export { renderInlineMarkdown } from "./inline-render";
 export { markdownRenderPlugin } from "./markdown-render";
 export {
   cursorInRange,
@@ -12,6 +13,8 @@ export {
   makeTextElement,
   pushWidgetDecoration,
   serializeMacros,
+  decorationHidden,
+  addMarkerReplacement,
   RenderWidget,
   SimpleTextRenderWidget,
   MacroAwareWidget,
@@ -54,9 +57,27 @@ export { sectionNumberPlugin } from "./section-counter";
 export { fenceGuidePlugin } from "./fence-guide";
 export { includeLabelPlugin } from "./include-label";
 export { focusModeExtension, toggleFocusMode } from "./focus-mode";
-export { sidenoteRenderPlugin } from "./sidenote-render";
+export {
+  sidenoteRenderPlugin,
+  collectFootnotes,
+  sidenotesCollapsedEffect,
+  sidenotesCollapsedField,
+} from "./sidenote-render";
 export { hoverPreviewExtension } from "./hover-preview";
 export { searchHighlightPlugin } from "./search-highlight";
+export {
+  type FencedBlockInfo,
+  type FencedBlockRenderContext,
+  isCursorOnOpenFence,
+  isCursorOnCloseFence,
+  getFencedBlockRenderContext,
+  findFencedBlockAt,
+  getLineElement,
+  addSingleLineClosingFence,
+  addCollapsedClosingFence,
+  buildFencedBlockDecorations,
+  createFencedBlockDecorationField,
+} from "./fenced-block-core";
 export {
   parseTable,
   formatTable,

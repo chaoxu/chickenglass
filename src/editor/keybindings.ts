@@ -9,8 +9,7 @@ import { EditorSelection, type EditorState, Prec, type Extension } from "@codemi
 import { type EditorView, keymap } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { MODE_CHANGE_EVENT, OPEN_FILE_EVENT } from "../constants/events";
-import { toggleDebugInspector } from "../render/debug-inspector";
-import { toggleFocusMode } from "../render/focus-mode";
+import { toggleDebugInspector, toggleFocusMode } from "../render";
 import { editorModeField, setEditorMode, type EditorMode } from "./editor";
 
 /** Cycle to the next editor mode. */

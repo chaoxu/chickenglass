@@ -31,15 +31,13 @@ import {
   RenderWidget,
   addMarkerReplacement,
   pushWidgetDecoration,
-} from "../render/render-utils";
-import {
   addCollapsedClosingFence,
   addSingleLineClosingFence,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
   type FencedBlockInfo,
-} from "../render/fenced-block-core";
-import { mathMacrosField } from "../render/math-macros";
+  mathMacrosField,
+} from "../render";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import {
   type FencedDivSemantics,

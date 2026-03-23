@@ -16,7 +16,7 @@ import { type WidgetType } from "@codemirror/view";
 import { parser as baseParser } from "@lezer/markdown";
 import { type CslJsonItem } from "./bibtex-parser";
 import { CslProcessor } from "./csl-processor";
-import { SimpleTextRenderWidget } from "../render/render-utils";
+import { SimpleTextRenderWidget } from "../render";
 import { markdownExtensions } from "../parser";
 import {
   analyzeDocumentSemantics,

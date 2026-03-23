@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { EditorView } from "@codemirror/view";
-import { sidenotesCollapsedEffect } from "../../render/sidenote-render";
+import { sidenotesCollapsedEffect } from "../../render";
 
 const AUTO_COLLAPSE_WIDTH = 700;
 

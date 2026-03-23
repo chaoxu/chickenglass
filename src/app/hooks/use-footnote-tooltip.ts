@@ -1,7 +1,6 @@
 import { useEffect, useCallback } from "react";
 import { EditorView } from "@codemirror/view";
-import { collectFootnotes } from "../../render/sidenote-render";
-import { mathMacrosField } from "../../render/math-macros";
+import { collectFootnotes, mathMacrosField } from "../../render";
 import { renderDocumentFragmentToDom } from "../../document-surfaces";
 
 /**

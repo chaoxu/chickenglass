@@ -7,7 +7,7 @@
 
 import type { EditorView } from "@codemirror/view";
 import type { PaletteCommand } from "../lib/command-palette";
-import { insertTable } from "../render/table-render";
+import { insertTable } from "../render";
 import { extractHeadings } from "../semantics/heading-ancestry";
 import { BLOCK_MANIFEST_ENTRIES } from "../constants/block-manifest";
 

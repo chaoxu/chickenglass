@@ -22,7 +22,7 @@ import {
   focusTracker,
   RenderWidget,
   serializeMacros,
-} from "../render/render-utils";
+} from "../render";
 
 export { type FrontmatterConfig, type NumberingScheme } from "../parser/frontmatter";
 

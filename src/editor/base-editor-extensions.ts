@@ -10,8 +10,7 @@ import { markdownExtensions } from "../parser";
 import { highlightExtension } from "../parser/highlight";
 import { mathExtension } from "../parser/math-backslash";
 import { strikethroughExtension } from "../parser/strikethrough";
-import { markdownRenderPlugin } from "../render/markdown-render";
-import { mathRenderPlugin } from "../render/math-render";
+import { markdownRenderPlugin, mathRenderPlugin } from "../render";
 import { frontmatterField } from "./frontmatter-state";
 
 export const inlineMarkdownExtensions: MarkdownExtension[] = [
