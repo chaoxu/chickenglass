@@ -178,7 +178,18 @@ export class TableWidget extends RenderWidget {
     const currentText = rootView.state.sliceDoc(bestTable.from, bestTable.to);
     const updated = this.buildUpdatedTable(editedSection, editedRow, editedCol, editedText);
     const newText = formatTable(updated).join("\n");
-    if (newText === currentText) return;
+    if (newText === currentText) {
+      // The document already reflects the edit (synced by live keystrokes).
+      // On commit we still need to dispatch the annotation so the StateField
+      // rebuilds the widget with the current ParsedTable — otherwise the old
+      // widget's stale table data will be used on re-entry (#404).
+      if (annotation === "commit") {
+        rootView.dispatch({
+          annotations: cellEditAnnotation.of("commit"),
+        });
+      }
+      return;
+    }
     rootView.dispatch({
       changes: { from: bestTable.from, to: bestTable.to, insert: newText },
       annotations: cellEditAnnotation.of(annotation),

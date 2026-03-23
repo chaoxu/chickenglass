@@ -248,6 +248,43 @@ describe("tableDecorationField commit rebuild (#404)", () => {
     expect(specsAfterCommit[0].to - specsAfterCommit[0].from).toBe(updatedTableText.length);
   });
 
+  it("rebuilds on annotation-only commit when doc is already up to date (#404 reopen)", () => {
+    // This is the exact reopen scenario: live "edit" keystrokes already synced
+    // the document, so the "commit" dispatch carries NO doc change — just the
+    // annotation. The StateField must still rebuild so the new widget has a
+    // fresh ParsedTable. Without this, clicking back into the cell would show
+    // pre-edit text because the old widget's getRawCellText reads stale data.
+    const state = createTableState(TABLE_DOC);
+
+    // Step 1: live edit changes "1" to "1X" in the document.
+    const editFrom = TABLE_DOC.indexOf("1");
+    const afterEdit = state.update({
+      changes: { from: editFrom, to: editFrom + 1, insert: "1X" },
+      annotations: cellEditAnnotation.of("edit"),
+    }).state;
+
+    // Grab the stale widget reference from the mapped decoration set.
+    const staleDecoIter = afterEdit.field(tableDecorationField).iter();
+    expect(staleDecoIter.value).not.toBeNull();
+    const staleWidget = staleDecoIter.value!.spec.widget;
+
+    // Step 2: commit with NO doc change — just the annotation.
+    // This is what syncToRoot now dispatches when newText === currentText.
+    const afterCommit = afterEdit.update({
+      annotations: cellEditAnnotation.of("commit"),
+    }).state;
+
+    // The StateField must have rebuilt (not just mapped).
+    const freshDecoIter = afterCommit.field(tableDecorationField).iter();
+    expect(freshDecoIter.value).not.toBeNull();
+    const freshWidget = freshDecoIter.value!.spec.widget;
+
+    // The rebuilt widget must be a different object — CM6 calls eq() against
+    // the old one. Since tableText differs (old was mapped, new is from doc),
+    // eq() returns false, and CM6 calls toDOM() on the new widget.
+    expect(freshWidget).not.toBe(staleWidget);
+  });
+
   it("maps decorations on edit annotation (live typing preserved)", () => {
     const state = createTableState(TABLE_DOC);
     const specsBefore = getDecorationSpecs(state.field(tableDecorationField));
