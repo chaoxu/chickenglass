@@ -4,7 +4,7 @@
  * The ViewPlugin that used these has been merged into the unified
  * `referenceRenderPlugin` in `./reference-render.ts`. This module
  * still exports widget classes and `collectCrossrefRanges` for
- * tests and other consumers (e.g., hover-preview).
+ * tests and other consumers.
  */
 
 import {
@@ -14,7 +14,6 @@ import {
 import { type Range } from "@codemirror/state";
 import {
   type ResolvedCrossref,
-  findCrossrefs,
   resolveCrossref,
 } from "../index/crossref-resolver";
 import { documentAnalysisField } from "../semantics/codemirror-source";
@@ -67,15 +66,17 @@ export class UnresolvedRefWidget extends RenderWidget {
 
 /** Collect decoration ranges for cross-references outside the cursor. */
 export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
-  const refs = findCrossrefs(view.state);
+  const analysis = view.state.field(documentAnalysisField);
+  const allRefs = analysis.references;
+  const equationLabels = analysis.equationById;
   const items: Range<Decoration>[] = [];
-  const equationLabels = view.state.field(documentAnalysisField).equationById;
 
-  for (const ref of refs) {
+  for (const ref of allRefs) {
+    if (ref.ids.length !== 1) continue;
     if (cursorInRange(view, ref.from, ref.to)) continue;
 
     const raw = view.state.sliceDoc(ref.from, ref.to);
-    const resolved = resolveCrossref(view.state, ref.id, equationLabels);
+    const resolved = resolveCrossref(view.state, ref.ids[0], equationLabels);
 
     // Skip citations — let the citation render plugin handle them
     if (resolved.kind === "citation") continue;

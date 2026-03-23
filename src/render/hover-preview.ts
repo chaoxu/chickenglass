@@ -11,11 +11,10 @@
 import { type Extension } from "@codemirror/state";
 import { type EditorView, type Tooltip, hoverTooltip } from "@codemirror/view";
 import {
-  type CrossrefMatch,
   type ResolvedCrossref,
-  findCrossrefs,
   resolveCrossref,
 } from "../index/crossref-resolver";
+import type { ReferenceSemantics } from "../semantics/document";
 import { blockCounterField, type NumberedBlock } from "../plugins/block-counter";
 import { bibDataField, type BibStore } from "../citations/citation-render";
 import { formatBibEntry } from "../citations/bibliography";
@@ -108,10 +107,11 @@ function findEquationSource(view: EditorView, id: string): string | undefined {
  */
 function buildCrossrefTooltip(
   view: EditorView,
-  ref: CrossrefMatch,
+  ref: ReferenceSemantics,
   resolved: ResolvedCrossref,
 ): HTMLElement {
   const macros = view.state.field(mathMacrosField);
+  const id = ref.ids[0];
   const container = document.createElement("div");
   container.className = "cf-hover-preview";
 
@@ -119,7 +119,7 @@ function buildCrossrefTooltip(
     container.appendChild(createHeader(resolved.label, macros));
 
     const counterState = view.state.field(blockCounterField, false);
-    const block = counterState?.byId.get(ref.id);
+    const block = counterState?.byId.get(id);
     if (block) {
       const content = extractBlockContent(view, block);
       if (content) {
@@ -132,7 +132,7 @@ function buildCrossrefTooltip(
   } else if (resolved.kind === "equation") {
     container.appendChild(createHeader(resolved.label, macros));
 
-    const eqContent = findEquationSource(view, ref.id);
+    const eqContent = findEquationSource(view, id);
     if (eqContent) {
       const body = document.createElement("div");
       body.className = "cf-hover-preview-body";
@@ -141,7 +141,7 @@ function buildCrossrefTooltip(
     }
   } else {
     container.appendChild(
-      createHeader(`Unresolved: ${ref.id}`, macros, "cf-hover-preview-unresolved"),
+      createHeader(`Unresolved: ${id}`, macros, "cf-hover-preview-unresolved"),
     );
   }
 
@@ -185,44 +185,42 @@ function hoverSource(
   pos: number,
   _side: -1 | 1,
 ): Tooltip | null {
-  // Check for cross-reference at this position
-  const refs = findCrossrefs(view.state);
-  const crossref = refs.find((ref) => pos >= ref.from && pos <= ref.to);
-  if (crossref) {
-    const equationLabels = view.state.field(documentAnalysisField).equationById;
-    const resolved = resolveCrossref(view.state, crossref.id, equationLabels);
+  const analysis = view.state.field(documentAnalysisField);
+  const allRefs = analysis.references;
+  const equationLabels = analysis.equationById;
 
-    // Skip citations — they are handled below
+  // Find the reference at this position
+  const ref = allRefs.find((r) => pos >= r.from && pos <= r.to);
+  if (!ref) return null;
+
+  // Check for cross-reference (single-id refs that resolve to block/equation)
+  if (ref.ids.length === 1) {
+    const resolved = resolveCrossref(view.state, ref.ids[0], equationLabels);
     if (resolved.kind !== "citation") {
       return {
-        pos: crossref.from,
-        end: crossref.to,
+        pos: ref.from,
+        end: ref.to,
         above: true,
         create() {
-          const dom = buildCrossrefTooltip(view, crossref, resolved);
+          const dom = buildCrossrefTooltip(view, ref, resolved);
           return { dom };
         },
       };
     }
   }
 
-  // Check for citation at this position (single scan)
+  // Check for citation
   const { store } = view.state.field(bibDataField);
-  if (store.size > 0) {
-    const matches = view.state.field(documentAnalysisField).references
-      .filter((ref) => ref.ids.some((id) => store.has(id)));
-    const match = matches.find((m) => pos >= m.from && pos <= m.to);
-    if (match) {
-      return {
-        pos: match.from,
-        end: match.to,
-        above: true,
-        create() {
-          const dom = buildCitationTooltip(match.ids, store);
-          return { dom };
-        },
-      };
-    }
+  if (store.size > 0 && ref.ids.some((id) => store.has(id))) {
+    return {
+      pos: ref.from,
+      end: ref.to,
+      above: true,
+      create() {
+        const dom = buildCitationTooltip(ref.ids, store);
+        return { dom };
+      },
+    };
   }
 
   return null;
