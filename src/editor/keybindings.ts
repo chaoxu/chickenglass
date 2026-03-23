@@ -4,8 +4,10 @@ import {
   historyKeymap,
   indentWithTab,
 } from "@codemirror/commands";
-import { EditorSelection, Prec, type Extension } from "@codemirror/state";
+import { syntaxTree } from "@codemirror/language";
+import { EditorSelection, type EditorState, Prec, type Extension } from "@codemirror/state";
 import { type EditorView, keymap } from "@codemirror/view";
+import type { SyntaxNode } from "@lezer/common";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
 import { setEditorMode, type EditorMode } from "./editor";
@@ -148,54 +150,80 @@ export function toggleInlineMarker(
 }
 
 /**
+ * Walk up the Lezer syntax tree from a document position to find the
+ * innermost enclosing Link node. Returns null when no Link ancestor exists.
+ *
+ * Tries bias 1 first (looks right from `pos`) so that a cursor placed at the
+ * opening `[` — the first character of the Link node — is still resolved
+ * inside the Link rather than at the end of the preceding text node. Falls
+ * back to bias -1 for positions at the very end of a Link (e.g., the closing
+ * `)`), and finally bias 0 as a tiebreaker.
+ */
+function findLinkNodeAt(state: EditorState, pos: number): SyntaxNode | null {
+  const tree = syntaxTree(state);
+  for (const bias of [1, -1, 0] as const) {
+    let node: SyntaxNode | null = tree.resolveInner(pos, bias);
+    while (node) {
+      if (node.name === "Link") return node;
+      node = node.parent;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract the visible link text from a Link SyntaxNode.
+ *
+ * The text lives between the first two LinkMark children (`[` and `]`).
+ * Returns an empty string when no text range can be determined.
+ */
+function extractLinkText(state: EditorState, linkNode: SyntaxNode): string {
+  let child = linkNode.firstChild;
+  let openMark: { to: number } | null = null;
+  while (child) {
+    if (child.name === "LinkMark") {
+      if (!openMark) {
+        openMark = child;
+      } else {
+        // Second LinkMark is "]" — text is between open.to and child.from
+        return state.sliceDoc(openMark.to, child.from);
+      }
+    }
+    child = child.nextSibling;
+  }
+  return "";
+}
+
+/**
  * Toggle a markdown link around the selection.
  *
- * - With selection already in `[text](url)` form: unwrap to just `text`.
- * - With selection: wrap as `[selection](url)` and select "url".
- * - Without selection: insert `[](url)` and place cursor inside brackets.
+ * - Cursor/selection inside an existing Link node: unwrap to just the link
+ *   text. Link detection uses the Lezer syntax tree so it works for any URL
+ *   length and for cursors anywhere inside the link, not just after `[`.
+ * - With selection (not in a link): wrap as `[selection](url)` and select
+ *   the placeholder "url".
+ * - Without selection (not in a link): insert `[](url)` and place cursor
+ *   inside the brackets.
  */
 export function toggleLink(view: EditorView): boolean {
   const { state } = view;
   const changes = state.changeByRange((range) => {
-    const selected = state.sliceDoc(range.from, range.to);
+    // Use the Lezer tree to find an enclosing Link at the start of the range.
+    // For a selection that spans an entire link, the from position is on `[`
+    // which is also inside the Link node.
+    const linkNode = findLinkNodeAt(state, range.from);
 
-    // Check if selection is already a link: [text](url)
-    const linkRe = /^\[([^\]]*)\]\(([^)]*)\)$/;
-    const match = linkRe.exec(selected);
-    if (match) {
-      // Unwrap — keep just the link text
-      const text = match[1];
+    if (linkNode) {
+      // Unwrap: replace the full Link span with just the link text
+      const text = extractLinkText(state, linkNode);
       return {
-        changes: { from: range.from, to: range.to, insert: text },
-        range: EditorSelection.range(range.from, range.from + text.length),
-      };
-    }
-
-    // Also check if the text surrounding the selection forms a link
-    const beforeBracket = state.sliceDoc(
-      Math.max(0, range.from - 1),
-      range.from,
-    );
-    const afterPart = state.sliceDoc(range.to, Math.min(state.doc.length, range.to + 50));
-    const closingMatch = /^\]\(([^)]*)\)/.exec(afterPart);
-
-    if (beforeBracket === "[" && closingMatch) {
-      // Cursor/selection is inside a link's text portion — unwrap
-      const fullEnd = range.to + closingMatch[0].length;
-      return {
-        changes: [
-          { from: range.from - 1, to: range.from },
-          { from: range.to, to: fullEnd },
-        ],
-        range: EditorSelection.range(
-          range.from - 1,
-          range.to - 1,
-        ),
+        changes: { from: linkNode.from, to: linkNode.to, insert: text },
+        range: EditorSelection.range(linkNode.from, linkNode.from + text.length),
       };
     }
 
     if (range.from === range.to) {
-      // No selection — insert empty link template
+      // No selection and not inside a link — insert empty link template
       const insert = "[](url)";
       return {
         changes: { from: range.from, insert },
@@ -203,7 +231,8 @@ export function toggleLink(view: EditorView): boolean {
       };
     }
 
-    // Wrap selection as link text
+    // Selection not inside a link — wrap as link text
+    const selected = state.sliceDoc(range.from, range.to);
     const insert = `[${selected}](url)`;
     const urlStart = range.from + 1 + selected.length + 2; // after "[selected]("
     return {
