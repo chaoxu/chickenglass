@@ -16,7 +16,6 @@
 import { plugins, type CiteprocEngine } from "@citation-js/core";
 import "@citation-js/plugin-csl";
 import { type BibEntry, parseAuthorNames } from "./bibtex-parser";
-import { formatParenthetical, type BibStore } from "./citation-render";
 import defaultCslStyle from "./ieee.csl?raw";
 
 /** CSL-JSON item (subset of fields used by citeproc). */
@@ -139,19 +138,22 @@ const STYLE_NAME = "coflat-active";
  */
 export class CslProcessor {
   private items: Map<string, CslItem>;
-  private bibStore: BibStore;
   private engine: CiteprocEngine | null = null;
   private styleXml: string;
 
   constructor(entries: BibEntry[], styleXml?: string) {
     this.items = new Map();
-    this.bibStore = new Map(entries.map((e) => [e.id, e]));
     for (const entry of entries) {
       const csl = bibEntryToCsl(entry);
       this.items.set(csl.id, csl);
     }
     this.styleXml = styleXml ?? defaultCslStyle;
     this.initEngine();
+  }
+
+  /** Create an empty processor with no entries. */
+  static empty(): CslProcessor {
+    return new CslProcessor([]);
   }
 
   /** Reinitialize the citeproc engine with a new style. */
@@ -213,8 +215,8 @@ export class CslProcessor {
       });
       return this.engine.makeCitationCluster(items);
     } catch {
-      // Fallback: delegate to the shared formatting utility
-      return formatParenthetical(ids, this.bibStore, locators);
+      // Engine error — return raw ids as fallback
+      return `(${ids.join("; ")})`;
     }
   }
 

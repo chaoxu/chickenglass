@@ -3,6 +3,7 @@ import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { type BibEntry } from "./bibtex-parser";
 import { bibDataEffect, bibDataField } from "./citation-render";
+import { CslProcessor } from "./csl-processor";
 import {
   createTestView as createSharedTestView,
   createEditorState,
@@ -206,7 +207,7 @@ describe("bibliographyPlugin integration", () => {
       extensions: [markdown(), bibDataField, bibliographyPlugin],
     });
     if (useStore) {
-      view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: null }) });
+      view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein, alpha]) }) });
     }
     return view;
   }

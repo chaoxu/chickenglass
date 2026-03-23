@@ -25,8 +25,6 @@ import {
   type BibStore,
   bibDataEffect,
   bibDataField,
-  formatParenthetical,
-  formatNarrativeCitation,
   CitationWidget,
 } from "../citations/citation-render";
 import { type CslProcessor, registerCitationsWithProcessor } from "../citations/csl-processor";
@@ -59,22 +57,21 @@ function pushWidget(
 export function collectReferenceRanges(
   view: EditorView,
   store: BibStore,
-  cslProcessor?: CslProcessor | null,
+  cslProcessor?: CslProcessor,
 ): Range<Decoration>[] {
+  const processor = cslProcessor ?? view.state.field(bibDataField).cslProcessor;
   const doc = view.state.doc.toString();
   const analysis = view.state.field(documentAnalysisField);
   const equationLabels = analysis.equationById;
   const allRefs = analysis.references;
 
   // Register citation clusters with CSL processor (needed for numeric styles)
-  if (cslProcessor) {
-    registerCitationsWithProcessor(
-      allRefs
-        .filter((ref) => ref.bracketed && ref.ids.some((id) => store.has(id)))
-        .map((ref) => ({ parenthetical: true, ids: ref.ids, locators: ref.locators })),
-      cslProcessor,
-    );
-  }
+  registerCitationsWithProcessor(
+    allRefs
+      .filter((ref) => ref.bracketed && ref.ids.some((id) => store.has(id)))
+      .map((ref) => ({ parenthetical: true, ids: ref.ids, locators: ref.locators })),
+    processor,
+  );
 
   const items: Range<Decoration>[] = [];
 
@@ -85,9 +82,7 @@ export function collectReferenceRanges(
       const hasCitation = ref.ids.some((id) => store.has(id));
 
       if (hasCitation) {
-        const rendered = cslProcessor
-          ? cslProcessor.cite([...ref.ids], [...ref.locators])
-          : formatParenthetical(ref.ids, store, ref.locators);
+        const rendered = processor.cite([...ref.ids], [...ref.locators]);
         pushWidget(items, new CitationWidget(rendered, ref.ids), ref.from, ref.to);
       } else if (ref.ids.length === 1) {
         const resolved = resolveCrossref(view.state, ref.ids[0], equationLabels);
@@ -106,9 +101,7 @@ export function collectReferenceRanges(
       } else {
         const entry = store.get(ref.ids[0]);
         if (!entry) continue;
-        const rendered = cslProcessor
-          ? cslProcessor.citeNarrative(ref.ids[0])
-          : formatNarrativeCitation(entry);
+        const rendered = processor.citeNarrative(ref.ids[0]);
         pushWidget(items, new CitationWidget(rendered, ref.ids, true), ref.from, ref.to);
       }
     }

@@ -14,8 +14,8 @@
 import { StateEffect, StateField } from "@codemirror/state";
 import { type WidgetType } from "@codemirror/view";
 import { parser as baseParser } from "@lezer/markdown";
-import { type BibEntry, extractLastName } from "./bibtex-parser";
-import type { CslProcessor } from "./csl-processor";
+import { type BibEntry } from "./bibtex-parser";
+import { CslProcessor } from "./csl-processor";
 import { RenderWidget } from "../render/render-utils";
 import { markdownExtensions } from "../parser";
 import {
@@ -23,29 +23,13 @@ import {
   stringTextSource,
 } from "../semantics/document";
 
-/** Format a citation label: "(Author, Year)" or "(Author, Year, locator)". */
-export function formatCitation(entry: BibEntry, locator?: string): string {
-  const author = entry.author ? extractLastName(entry.author) : entry.id;
-  const year = entry.year ?? "";
-  let text = `${author}, ${year}`;
-  if (locator) text += `, ${locator}`;
-  return text;
-}
-
-/** Format a narrative citation: "Author (Year)". */
-export function formatNarrativeCitation(entry: BibEntry): string {
-  const author = entry.author ? extractLastName(entry.author) : entry.id;
-  const year = entry.year ?? "";
-  return `${author} (${year})`;
-}
-
 /** A store of bibliography entries keyed by citation id. */
 export type BibStore = ReadonlyMap<string, BibEntry>;
 
 /** Bibliography data stored in the editor state. */
 export interface BibData {
   store: BibStore;
-  cslProcessor: CslProcessor | null;
+  cslProcessor: CslProcessor;
 }
 
 /** StateEffect for updating bibliography data. */
@@ -54,7 +38,7 @@ export const bibDataEffect = StateEffect.define<BibData>();
 /** StateField that holds the current bibliography data. */
 export const bibDataField = StateField.define<BibData>({
   create() {
-    return { store: new Map(), cslProcessor: null };
+    return { store: new Map(), cslProcessor: CslProcessor.empty() };
   },
   update(value, tr) {
     for (const effect of tr.effects) {
@@ -153,19 +137,3 @@ export function findCitations(
     }));
 }
 
-/**
- * Format a parenthetical citation string from multiple ids.
- * Returns "(Author1, Year1; Author2, Year2)" or "(Author, Year, locator)" format.
- */
-export function formatParenthetical(
-  ids: readonly string[],
-  store: BibStore,
-  locators?: readonly (string | undefined)[],
-): string {
-  const parts = ids.map((id, i) => {
-    const entry = store.get(id);
-    const locator = locators?.[i];
-    return entry ? formatCitation(entry, locator) : id;
-  });
-  return `(${parts.join("; ")})`;
-}

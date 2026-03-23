@@ -34,7 +34,7 @@ export interface ReadModeViewProps {
   /** Loaded bibliography entries for citation resolution. */
   bibliography?: BibStore;
   /** CSL processor used by rich mode citation rendering. */
-  cslProcessor?: CslProcessor | null;
+  cslProcessor?: CslProcessor;
   /** Scroll position to restore when entering read mode. */
   scrollTop?: number;
   /** Callback with current scroll position for persistence. */

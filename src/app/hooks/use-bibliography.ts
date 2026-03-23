@@ -78,7 +78,7 @@ export async function loadBibliography(
       void error;
       dispatchIfConnected(
         view,
-        { effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) },
+        { effects: bibDataEffect.of({ store: new Map(), cslProcessor: CslProcessor.empty() }) },
         { context: "Bibliography dispatch error:" },
       );
     }
@@ -138,7 +138,7 @@ export function useBibliography(options: UseBibliographyOptions): UseBibliograph
       if (!bibPath) {
         dispatchIfConnected(
           view,
-          { effects: bibDataEffect.of({ store: new Map(), cslProcessor: null }) },
+          { effects: bibDataEffect.of({ store: new Map(), cslProcessor: CslProcessor.empty() }) },
           { context: "Bibliography dispatch error:" },
         );
       } else {

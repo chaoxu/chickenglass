@@ -11,7 +11,6 @@ export {
   bibDataEffect,
   bibDataField,
   findCitations,
-  formatParenthetical,
   CitationWidget,
   NarrativeCitationWidget,
 } from "./citation-render";

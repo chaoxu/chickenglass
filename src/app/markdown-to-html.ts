@@ -30,10 +30,9 @@ import { buildKatexOptions, isSafeUrl } from "../render/inline-shared";
 import { type BibEntry } from "../citations/bibtex-parser";
 import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import {
-  formatParenthetical,
   type BibStore,
 } from "../citations/citation-render";
-import { type CslProcessor, registerCitationsWithProcessor } from "../citations/csl-processor";
+import { CslProcessor, registerCitationsWithProcessor } from "../citations/csl-processor";
 import {
   analyzeDocumentSemantics,
   stringTextSource,
@@ -91,7 +90,7 @@ export interface MarkdownToHtmlOptions {
   /** Bibliography entries for citation resolution. */
   bibliography?: BibStore;
   /** CSL processor for citation/bibliography formatting. */
-  cslProcessor?: CslProcessor | null;
+  cslProcessor?: CslProcessor;
 }
 
 // ── Inline context ───────────────────────────────────────────────────────────
@@ -107,7 +106,7 @@ interface InlineContext {
   macros?: Record<string, string>;
   bibliography?: BibStore;
   citedIds?: string[];
-  cslProcessor?: CslProcessor | null;
+  cslProcessor?: CslProcessor;
   surface: HtmlInlineSurface;
 }
 
@@ -159,7 +158,7 @@ interface WalkContext {
   readonly sectionNumbers: boolean;
   readonly semantics: DocumentSemantics;
   readonly bibliography?: BibStore;
-  readonly cslProcessor?: CslProcessor | null;
+  readonly cslProcessor?: CslProcessor;
   readonly surface: "document-body";
   /** Accumulates cited entry IDs in document order for the bibliography section. */
   readonly citedIds: string[];
@@ -177,9 +176,13 @@ export function markdownToHtml(
   const tree = mdParser.parse(content);
   const semantics = analyzeDocumentSemantics(stringTextSource(content), tree);
 
-  if (options?.bibliography && options.cslProcessor) {
+  const cslProcessor = options?.cslProcessor ?? (options?.bibliography
+    ? new CslProcessor([...options.bibliography.values()])
+    : undefined);
+
+  if (options?.bibliography && cslProcessor) {
     const matches = ctxLikeCitationMatches(semantics.references, options.bibliography);
-    registerCitationsWithProcessor(matches, options.cslProcessor);
+    registerCitationsWithProcessor(matches, cslProcessor);
   }
   const ctx: WalkContext = {
     doc: content,
@@ -187,7 +190,7 @@ export function markdownToHtml(
     sectionNumbers: options?.sectionNumbers ?? false,
     semantics,
     bibliography: options?.bibliography,
-    cslProcessor: options?.cslProcessor,
+    cslProcessor,
     surface: "document-body",
     citedIds: [],
   };
@@ -700,7 +703,7 @@ function renderCitationCluster(
   ids: readonly string[],
   bibliography?: BibStore,
   citedIds?: string[],
-  cslProcessor?: CslProcessor | null,
+  cslProcessor?: CslProcessor,
   locators?: readonly (string | undefined)[],
 ): string {
   const knownCount = bibliography
@@ -718,29 +721,28 @@ function renderCitationCluster(
 
   trackCitedIds(ids, bibliography, citedIds);
 
-  if (bibliography && knownCount === ids.length) {
+  if (bibliography && knownCount === ids.length && cslProcessor) {
     const normalizedLocators =
       locators && locators.some((locator) => locator != null) ? locators : undefined;
-    const rendered = cslProcessor
-      ? normalizedLocators
-        ? cslProcessor.cite([...ids], [...normalizedLocators])
-        : cslProcessor.cite([...ids])
-      : formatParenthetical(ids, bibliography, normalizedLocators);
+    const rendered = normalizedLocators
+      ? cslProcessor.cite([...ids], [...normalizedLocators])
+      : cslProcessor.cite([...ids]);
     return `<span class="${CSS.citation}">${escapeHtml(rendered)}</span>`;
   }
 
+  // Mixed cluster: some ids are citations, some are cross-refs.
+  // Cite the known ones individually via the processor.
   const parts = ids.map((id, index) => {
-    if (bibliography?.has(id)) {
-      const rendered = formatParenthetical(
+    if (bibliography?.has(id) && cslProcessor) {
+      const rendered = cslProcessor.cite(
         [id],
-        bibliography,
         locators ? [locators[index]] : undefined,
       );
-      return escapeHtml(
-        rendered.startsWith("(") && rendered.endsWith(")")
-          ? rendered.slice(1, -1)
-          : rendered,
-      );
+      // Strip outer parentheses from single-item cite results (e.g. "(Karger, 2000)" -> "Karger, 2000")
+      const stripped = rendered.startsWith("(") && rendered.endsWith(")")
+        ? rendered.slice(1, -1)
+        : rendered;
+      return escapeHtml(stripped);
     }
     return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`;
   });
@@ -751,7 +753,7 @@ function renderCitationCluster(
 function renderBibliography(
   bib: BibStore,
   citedIds: string[],
-  cslProcessor?: CslProcessor | null,
+  cslProcessor?: CslProcessor,
 ): string {
   let cslHtml: string[] = [];
   if (cslProcessor) {

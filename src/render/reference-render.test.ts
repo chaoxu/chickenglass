@@ -11,6 +11,7 @@ import { documentSemanticsField } from "../semantics/codemirror-source";
 import type { BlockPlugin } from "../plugins/plugin-types";
 import type { BibEntry } from "../citations/bibtex-parser";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
+import { CslProcessor } from "../citations/csl-processor";
 import { createTestView, makeBlockPlugin, makeBibStore } from "../test-utils";
 import { collectReferenceRanges } from "./reference-render";
 
@@ -53,7 +54,7 @@ function createView(doc: string, cursorPos?: number): EditorView {
       bibDataField,
     ],
   });
-  view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: null }) });
+  view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein]) }) });
   return view;
 }
 

@@ -5,12 +5,12 @@ import { type BibEntry } from "./bibtex-parser";
 import { createTestView as createSharedTestView, makeBibStore } from "../test-utils";
 import {
   findCitations,
-  formatParenthetical,
   CitationWidget,
   NarrativeCitationWidget,
   bibDataEffect,
   bibDataField,
 } from "./citation-render";
+import { CslProcessor } from "./csl-processor";
 import { referenceRenderPlugin } from "../render/reference-render";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 
@@ -123,34 +123,6 @@ describe("findCitations", () => {
   });
 });
 
-describe("formatParenthetical", () => {
-  it("formats a single citation", () => {
-    expect(formatParenthetical(["karger2000"], store)).toBe("(Karger, 2000)");
-  });
-
-  it("formats multiple citations separated by semicolons", () => {
-    expect(formatParenthetical(["karger2000", "stein2001"], store)).toBe(
-      "(Karger, 2000; Stein, 2001)",
-    );
-  });
-
-  it("falls back to id for unknown entries", () => {
-    expect(formatParenthetical(["unknown2020"], store)).toBe("(unknown2020)");
-  });
-
-  it("formats a citation with a locator", () => {
-    expect(
-      formatParenthetical(["karger2000"], store, ["chap. 36"]),
-    ).toBe("(Karger, 2000, chap. 36)");
-  });
-
-  it("formats multiple citations with mixed locators", () => {
-    expect(
-      formatParenthetical(["karger2000", "stein2001"], store, [undefined, "pp. 1-10"]),
-    ).toBe("(Karger, 2000; Stein, 2001, pp. 1-10)");
-  });
-});
-
 describe("CitationWidget", () => {
   it("creates a span with citation text", () => {
     const widget = new CitationWidget("(Karger, 2000)", ["karger2000"]);
@@ -212,7 +184,7 @@ describe("referenceRenderPlugin citation integration", () => {
       cursorPos,
       extensions: [markdown(), documentSemanticsField, bibDataField, referenceRenderPlugin],
     });
-    view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: null }) });
+    view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein]) }) });
     return view;
   }
 

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBibTeX, extractLastName, cleanBibtex, type BibEntry } from "./bibtex-parser";
-import { formatCitation, formatNarrativeCitation } from "./citation-render";
+import { parseBibTeX, extractLastName, cleanBibtex } from "./bibtex-parser";
 
 describe("parseBibTeX", () => {
   it("parses a single article entry", () => {
@@ -269,73 +268,3 @@ describe("cleanBibtex", () => {
   });
 });
 
-describe("formatCitation", () => {
-  it("formats a citation with author and year", () => {
-    const entry: BibEntry = {
-      id: "karger2000",
-      type: "article",
-      author: "Karger, David R.",
-      year: "2000",
-    };
-    expect(formatCitation(entry)).toBe("Karger, 2000");
-  });
-
-  it("uses id when author is missing", () => {
-    const entry: BibEntry = {
-      id: "unknown2020",
-      type: "article",
-      year: "2020",
-    };
-    expect(formatCitation(entry)).toBe("unknown2020, 2020");
-  });
-
-  it("handles missing year", () => {
-    const entry: BibEntry = {
-      id: "noyear",
-      type: "article",
-      author: "Smith, John",
-    };
-    expect(formatCitation(entry)).toBe("Smith, ");
-  });
-
-  it("appends locator when provided", () => {
-    const entry: BibEntry = {
-      id: "karger2000",
-      type: "article",
-      author: "Karger, David R.",
-      year: "2000",
-    };
-    expect(formatCitation(entry, "chap. 36")).toBe("Karger, 2000, chap. 36");
-  });
-
-  it("does not append locator when undefined", () => {
-    const entry: BibEntry = {
-      id: "karger2000",
-      type: "article",
-      author: "Karger, David R.",
-      year: "2000",
-    };
-    expect(formatCitation(entry, undefined)).toBe("Karger, 2000");
-  });
-});
-
-describe("formatNarrativeCitation", () => {
-  it("formats a narrative citation", () => {
-    const entry: BibEntry = {
-      id: "karger2000",
-      type: "article",
-      author: "Karger, David R.",
-      year: "2000",
-    };
-    expect(formatNarrativeCitation(entry)).toBe("Karger (2000)");
-  });
-
-  it("uses id when author is missing", () => {
-    const entry: BibEntry = {
-      id: "unknown2020",
-      type: "article",
-      year: "2020",
-    };
-    expect(formatNarrativeCitation(entry)).toBe("unknown2020 (2020)");
-  });
-});
