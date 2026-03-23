@@ -103,7 +103,11 @@
       "enabled": true,
       "subagent_type": "feature-dev:code-reviewer",
       "fail_on_incomplete": true,
-      "max_retry_rounds": 2
+      "max_retry_rounds": 2,
+      "verification_commands": [
+        "grep-based checks from acceptance criteria",
+        "test execution for regression coverage criteria"
+      ]
     }
   },
   "post_merge": {
@@ -118,14 +122,16 @@
       "Run all verification commands from the project root",
       "Use conventional commit messages",
       "Do not modify files outside your task scope unless necessary",
-      "For tasks that change rendering/CSS/UI: visually verify BEFORE reporting done. Steps: (1) npm run build (2) npx vite preview --port 0 in background (3) wait for server URL (4) use Playwright chromium.launch() to open the page, navigate to affected content, take a screenshot (5) Read the screenshot file and describe what you see (6) kill the preview server. Include screenshot path in report. If the visual result is wrong, fix before reporting."
+      "For tasks that change rendering/CSS/UI: visually verify BEFORE reporting done. Steps: (1) npm run build (2) npx vite preview --port 0 in background (3) wait for server URL (4) use Playwright chromium.launch() to open the page, navigate to affected content, take a screenshot (5) Read the screenshot file and describe what you see (6) kill the preview server. Include screenshot path in report. If the visual result is wrong, fix before reporting.",
+      "Before reporting STATUS: done, verify your changes actually address the acceptance criteria by running the specific checks mentioned in the issue (e.g., grep for patterns that should be absent, run specific tests). Do not report done based on code changes alone."
     ]
   },
   "planner_rules": [
     "Each task should target a cohesive unit of functionality",
     "Parser tasks should be separate from rendering tasks",
     "Plugin system should be implemented before individual plugins",
-    "Keep tasks under 15 files each"
+    "Keep tasks under 15 files each",
+    "When an issue was previously closed and reopened, ALWAYS read the reopen comment (last comment with reopening context) \u2014 it specifies exactly what remains incomplete. The planner must address those specific gaps, not re-implement the whole issue."
   ],
   "state_dir": "state",
   "dev_servers": {}
