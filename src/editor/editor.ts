@@ -15,9 +15,9 @@ import {
   fenceGuidePlugin,
   includeLabelPlugin,
   sidenoteRenderPlugin,
-  searchHighlightPlugin,
-  referenceRenderPlugin,
 } from "../render";
+import { searchHighlightPlugin } from "../render/search-highlight";
+import { referenceRenderPlugin } from "../render/reference-render";
 import {
   createPluginRegistryField,
   blockCounterField,

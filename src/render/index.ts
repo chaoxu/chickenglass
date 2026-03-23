@@ -17,10 +17,8 @@ export {
   UnresolvedRefWidget,
   collectCrossrefRanges,
 } from "./crossref-render";
-export {
-  referenceRenderPlugin,
-  collectReferenceRanges,
-} from "./reference-render";
+// reference-render re-exports removed — imports from citations/ would create
+// a cycle through this barrel.  Import from "./reference-render" directly.
 export {
   ImageWidget,
   imageRenderPlugin,
@@ -44,8 +42,10 @@ export {
   sidenotesCollapsedEffect,
   sidenotesCollapsedField,
 } from "./sidenote-render";
-export { hoverPreviewExtension } from "./hover-preview";
-export { searchHighlightPlugin } from "./search-highlight";
+// hover-preview re-export removed — imports from plugins/ and citations/
+// would create a cycle through this barrel.  Import from "./hover-preview" directly.
+// search-highlight re-export removed — imports from editor/find-replace
+// would create a cycle through this barrel.  Import from "./search-highlight" directly.
 export {
   parseTable,
   formatTable,
