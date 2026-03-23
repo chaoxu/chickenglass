@@ -7,7 +7,7 @@
 
 import type { BlockPlugin } from "./plugin-types";
 import { createBlockRender } from "./block-render";
-import { capitalize } from "../app/lib/utils";
+import { capitalize } from "../lib/utils";
 
 /** Options for creating a standard block plugin. */
 export interface StandardPluginOptions {

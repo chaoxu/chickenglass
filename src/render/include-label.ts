@@ -16,7 +16,7 @@ import {
 } from "@codemirror/view";
 import { type Extension, type Range } from "@codemirror/state";
 import { buildDecorations, RenderWidget } from "./render-utils";
-import { basename } from "../app/lib/utils";
+import { basename } from "../lib/utils";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import type { IncludeSemantics } from "../semantics/document";
 

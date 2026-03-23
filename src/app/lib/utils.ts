@@ -10,50 +10,10 @@ export const isMac =
   typeof navigator !== "undefined" && /mac/i.test(navigator.platform);
 export const modKey = isMac ? "Cmd" : "Ctrl";
 
-/**
- * Return `s` with its first character uppercased.
- *
- * Used to derive display titles from plugin/block class names.
- */
-export function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-/**
- * Extract the last segment of a file path (the filename).
- *
- * Handles both forward-slash (Unix) and backslash (Windows) separators.
- * Returns the full input string if no separator is found.
- */
-export function basename(path: string): string {
-  return path.split("/").pop() ?? path.split("\\").pop() ?? path;
-}
-
-/**
- * Return the directory portion of a file path (everything before the last `/`).
- *
- * Returns an empty string when the path contains no separator,
- * matching the convention used throughout the codebase (relative paths
- * with forward slashes only, no Windows backslash handling needed).
- */
-export function dirname(path: string): string {
-  const idx = path.lastIndexOf("/");
-  return idx === -1 ? "" : path.slice(0, idx);
-}
-
-/**
- * Convert a Uint8Array to a base64-encoded string.
- *
- * Uses `String.fromCharCode` + `btoa` — safe for binary data
- * because each byte is mapped to a single UTF-16 code unit.
- */
-export function uint8ArrayToBase64(data: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < data.length; i++) {
-    binary += String.fromCharCode(data[i]);
-  }
-  return btoa(binary);
-}
+// ── Re-exports from canonical shared location ───────────────────────────────
+// Framework-free utils now live in `src/lib/utils.ts`. Re-exported here for
+// backward compatibility so existing `app/` imports continue to work.
+export { capitalize, basename, dirname, uint8ArrayToBase64 } from "../../lib/utils";
 
 /**
  * Read a JSON value from localStorage, returning `fallback` on any error.

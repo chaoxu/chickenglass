@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { isSafeUrl, buildKatexOptions, MARK_NODES, sanitizeCslHtml } from "./inline-shared";
+import { isSafeUrl } from "../lib/url-utils";
+import { buildKatexOptions } from "../lib/katex-options";
+import { MARK_NODES, sanitizeCslHtml } from "./inline-shared";
 
 // ── isSafeUrl ──────────────────────────────────────────────────────────────
 

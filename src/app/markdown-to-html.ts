@@ -26,7 +26,8 @@ import {
   parseInlineFragments,
 } from "../inline-fragments";
 import { markdownExtensions } from "../parser";
-import { buildKatexOptions, isSafeUrl } from "../render/inline-shared";
+import { buildKatexOptions } from "../lib/katex-options";
+import { isSafeUrl } from "../lib/url-utils";
 import { type CslJsonItem } from "../citations/bibtex-parser";
 import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import {

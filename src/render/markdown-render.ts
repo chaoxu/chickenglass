@@ -9,8 +9,8 @@ import {
 import { type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { cursorInRange, decorationHidden, addMarkerReplacement } from "./render-utils";
-import { findTrailingHeadingAttributes, hasUnnumberedHeadingAttributes } from "../app/heading-ancestry";
-import { isSafeUrl } from "./inline-shared";
+import { findTrailingHeadingAttributes, hasUnnumberedHeadingAttributes } from "../semantics/heading-ancestry";
+import { isSafeUrl } from "../lib/url-utils";
 
 /**
  * Node types whose children's markers should be hidden when

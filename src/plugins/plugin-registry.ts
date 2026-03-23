@@ -16,7 +16,7 @@ import type { BlockPlugin } from "./plugin-types";
 import type { BlockConfig } from "../parser/frontmatter";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { createBlockRender } from "./block-render";
-import { capitalize } from "../app/lib/utils";
+import { capitalize } from "../lib/utils";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 
 /**

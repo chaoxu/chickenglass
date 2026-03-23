@@ -1,4 +1,4 @@
-import type { FileSystem } from "../app/file-manager";
+import type { FileSystem } from "../lib/types";
 import { resolveProjectPathFromDocument } from "../app/lib/project-paths";
 
 /** A single resolved include: the file path and its content. */

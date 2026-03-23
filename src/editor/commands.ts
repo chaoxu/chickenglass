@@ -8,7 +8,7 @@
 import type { EditorView } from "@codemirror/view";
 import type { PaletteCommand } from "../app/command-palette";
 import { insertTable } from "../render/table-render";
-import { extractHeadings } from "../app/heading-ancestry";
+import { extractHeadings } from "../semantics/heading-ancestry";
 
 /** Insert a fenced div block at the cursor. */
 function insertBlock(view: EditorView, className: string): void {

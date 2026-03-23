@@ -11,7 +11,8 @@ import {
   type InlineFragment,
   parseInlineFragments,
 } from "../inline-fragments";
-import { buildKatexOptions, isSafeUrl } from "./inline-shared";
+import { buildKatexOptions } from "../lib/katex-options";
+import { isSafeUrl } from "../lib/url-utils";
 
 interface InlineSegment {
   isMath: boolean;

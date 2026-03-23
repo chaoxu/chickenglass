@@ -9,7 +9,7 @@
  * converted to data URLs and returned inline.
  */
 
-import type { FileSystem } from "../app/file-manager";
+import type { FileSystem } from "../lib/types";
 import {
   relativeProjectPathFromDocument,
   resolveProjectPathFromDocument,
