@@ -4,7 +4,8 @@ import type { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
-import { MathWidget, collectMathRanges, stripMathDelimiters } from "./math-render";
+import { parser as lezerParser } from "@lezer/markdown";
+import { MathWidget, collectMathRanges, stripMathDelimiters, getDisplayMathContentEnd } from "./math-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
 import { createTestView } from "../test-utils";
@@ -322,6 +323,47 @@ describe("stripMathDelimiters with contentTo", () => {
   it("handles plain display math without contentTo", () => {
     expect(stripMathDelimiters("$$x^2$$", true)).toBe("x^2");
     expect(stripMathDelimiters("\\[x^2\\]", true)).toBe("x^2");
+  });
+});
+
+describe("getDisplayMathContentEnd", () => {
+  /** Parse text directly with Lezer and find the first DisplayMath SyntaxNode. */
+  function findDisplayMathSyntaxNode(text: string) {
+    const configured = lezerParser.configure([mathExtension, equationLabelExtension]);
+    const tree = configured.parse(text);
+    let found: import("@lezer/common").SyntaxNode | undefined;
+    tree.iterate({
+      enter(node) {
+        if (node.name === "DisplayMath" && !found) {
+          found = node.node;
+          return false;
+        }
+      },
+    });
+    if (!found) throw new Error("DisplayMath node not found in parsed tree");
+    return found;
+  }
+
+  it("returns offset for labeled $$ display math", () => {
+    // "$$x^2$$ {#eq:foo}" — closing $$ ends at offset 7 from node start
+    const node = findDisplayMathSyntaxNode("$$x^2$$ {#eq:foo}");
+    expect(getDisplayMathContentEnd(node)).toBe(7);
+  });
+
+  it("returns offset for labeled \\[\\] display math", () => {
+    const node = findDisplayMathSyntaxNode("\\[x^2\\] {#eq:foo}");
+    expect(getDisplayMathContentEnd(node)).toBe(7);
+  });
+
+  it("returns undefined for unlabeled display math", () => {
+    const node = findDisplayMathSyntaxNode("$$x^2$$");
+    expect(getDisplayMathContentEnd(node)).toBeUndefined();
+  });
+
+  it("returns offset for multi-line labeled display math", () => {
+    // "$$\nx^2\n$$ {#eq:bar}" — closing $$ starts at index 7, ends at 9
+    const node = findDisplayMathSyntaxNode("$$\nx^2\n$$ {#eq:bar}");
+    expect(getDisplayMathContentEnd(node)).toBe(9);
   });
 });
 

@@ -29,6 +29,7 @@ export {
   renderKatex,
   MATH_TYPES,
   stripMathDelimiters,
+  getDisplayMathContentEnd,
 } from "./math-render";
 export { getMathMacros, mathMacrosField } from "./math-macros";
 export {

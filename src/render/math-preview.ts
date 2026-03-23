@@ -14,7 +14,7 @@ import {
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { stripMathDelimiters, MATH_TYPES, renderKatex } from "./math-render";
+import { stripMathDelimiters, MATH_TYPES, renderKatex, getDisplayMathContentEnd } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { cursorInRange } from "./render-utils";
 
@@ -22,6 +22,8 @@ interface MathNodeInfo {
   readonly from: number;
   readonly to: number;
   readonly isDisplay: boolean;
+  /** Relative offset (from node start) of the content boundary for labeled display math. */
+  readonly contentTo?: number;
 }
 
 /**
@@ -44,10 +46,12 @@ function findMathAtCursor(view: EditorView): MathNodeInfo | null {
       enter(node) {
         if (MATH_TYPES.has(node.name)) {
           if (cursorInRange(view, node.from, node.to)) {
+            const isDisplay = node.name === "DisplayMath";
             result = {
               from: node.from,
               to: node.to,
-              isDisplay: node.name === "DisplayMath",
+              isDisplay,
+              contentTo: isDisplay ? getDisplayMathContentEnd(node.node) : undefined,
             };
           }
         }
@@ -100,7 +104,7 @@ class MathPreviewPlugin implements PluginValue {
     }
 
     const raw = this.view.state.sliceDoc(info.from, info.to);
-    const latex = stripMathDelimiters(raw, info.isDisplay);
+    const latex = stripMathDelimiters(raw, info.isDisplay, info.contentTo);
 
     if (!this.panel) {
       this.createPanel();

@@ -1,5 +1,6 @@
 import { type EditorState, type Extension, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
+import type { SyntaxNode } from "@lezer/common";
 import {
   Decoration,
   type DecorationSet,
@@ -37,6 +38,24 @@ export const DISPLAY_DELIMITERS: ReadonlyArray<MathDelimiterPair> = [
   { open: "\\[", close: "\\]" },
   { open: "$$", close: "$$" },
 ];
+
+/**
+ * Compute the relative content boundary for a display math node that may
+ * contain an EquationLabel child.  Returns `undefined` when there is no label,
+ * meaning the whole node text is content.
+ *
+ * The boundary is the offset (relative to the node start) of the end of the
+ * closing delimiter mark — everything after that (whitespace + `{#eq:...}`) is
+ * the label and must be excluded from the LaTeX passed to KaTeX.
+ */
+export function getDisplayMathContentEnd(node: SyntaxNode): number | undefined {
+  if (!node.getChild("EquationLabel")) return undefined;
+  const marks = node.getChildren("DisplayMathMark");
+  if (marks.length >= 2) {
+    return marks[marks.length - 1].to - node.from;
+  }
+  return undefined;
+}
 
 /** Strip math delimiters from raw source. contentTo slices raw to the end of the closing delimiter (excluding any trailing label). */
 export function stripMathDelimiters(raw: string, isDisplay: boolean, contentTo?: number): string {
@@ -151,18 +170,7 @@ function buildMathItems(
 
       const raw = state.sliceDoc(node.from, node.to);
       const isDisplay = node.type.name === "DisplayMath";
-
-      // For display math with an EquationLabel, the content boundary is the
-      // end of the closing delimiter mark, not the start of the label. There
-      // may be whitespace between the closing $$/\] and the {#eq:...} label.
-      let contentTo: number | undefined;
-      if (isDisplay && node.node.getChild("EquationLabel")) {
-        const marks = node.node.getChildren("DisplayMathMark");
-        if (marks.length >= 2) {
-          contentTo = marks[marks.length - 1].to - node.from;
-        }
-      }
-
+      const contentTo = isDisplay ? getDisplayMathContentEnd(node.node) : undefined;
       const latex = stripMathDelimiters(raw, isDisplay, contentTo);
 
       // block: true breaks CM6 height tracking for subsequent lines
