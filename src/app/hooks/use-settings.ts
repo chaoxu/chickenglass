@@ -58,7 +58,7 @@ function loadSettings(): Settings {
       // Clean up legacy key after migration
       localStorage.removeItem(LEGACY_THEME_KEY);
     } catch {
-      // localStorage unavailable
+      // best-effort: localStorage unavailable (private browsing or test environment)
     }
   }
 

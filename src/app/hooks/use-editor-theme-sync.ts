@@ -16,7 +16,7 @@ export function useEditorThemeSync(
         effects: themeCompartment.reconfigure(isDark ? coflatDarkTheme : []),
       });
     } catch {
-      // view already destroyed
+      // best-effort: view may be destroyed during React effect teardown
     }
   }, [view, theme]);
 }

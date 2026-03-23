@@ -68,6 +68,7 @@ export function readLocalStorage<T>(key: string, fallback: T): T {
     if (raw === null) return fallback;
     return JSON.parse(raw) as T;
   } catch {
+    // best-effort: corrupt JSON or unavailable storage — return fallback
     return fallback;
   }
 }
@@ -81,6 +82,6 @@ export function writeLocalStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // localStorage unavailable — ignore silently
+    // best-effort: localStorage unavailable (quota exceeded, private browsing, tests)
   }
 }

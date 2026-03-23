@@ -68,7 +68,8 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         category: "sidebar",
       });
       setFileTree(tree);
-    } catch {
+    } catch (e: unknown) {
+      console.error("[workspace] failed to list file tree", e);
       setFileTree(null);
     }
   }, [fs]);

@@ -280,6 +280,7 @@ class CodeBlockHoverPlugin {
     try {
       pos = this.view.posAtDOM(lineEl, 0);
     } catch {
+      // best-effort: DOM node may be detached after view update — clear hover state
       this.clearHoveredHeader();
       return;
     }

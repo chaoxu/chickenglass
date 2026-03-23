@@ -195,8 +195,9 @@ export function parseBibTeX(content: string): BibEntry[] {
   try {
     const cite = new Cite(content);
     return (cite.data as CslJsonItem[]).map(cslItemToBibEntry);
-  } catch {
+  } catch (e: unknown) {
     // Malformed BibTeX content -- return empty list rather than crashing
+    console.warn("[bibtex] parse failed, returning empty list", e);
     return [];
   }
 }

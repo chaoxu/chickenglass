@@ -194,8 +194,9 @@ export class CslProcessor {
       };
       try {
         this.engine.processCitationCluster(citation, citationsPre, []);
-      } catch {
-        // ignore individual cluster errors
+      } catch (e: unknown) {
+        // best-effort: skip malformed cluster so remaining citations still render
+        console.warn("[csl] cluster error for cite-" + i, e);
       }
       citationsPre.push([`cite-${i}`, i]);
     }
@@ -214,8 +215,9 @@ export class CslProcessor {
         return { id };
       });
       return this.engine.makeCitationCluster(items);
-    } catch {
+    } catch (e: unknown) {
       // Engine error — return raw ids as fallback
+      console.warn("[csl] cite() engine error", e);
       return `(${ids.join("; ")})`;
     }
   }
@@ -237,8 +239,9 @@ export class CslProcessor {
           return `${author} (${yearMatch[1]})`;
         }
       }
-    } catch {
-      // Fall through to simple format
+    } catch (e: unknown) {
+      // best-effort: fall through to simple author (year) format
+      console.warn("[csl] citeNarrative() engine error", e);
     }
     return `${author} (${year})`;
   }
@@ -256,8 +259,9 @@ export class CslProcessor {
       this.engine.updateItems(validIds);
       const [, entries] = this.engine.makeBibliography();
       return entries.map((e: string) => e.trim());
-    } catch {
+    } catch (e: unknown) {
       // CSL engine may fail on malformed entries -- return empty bibliography
+      console.warn("[csl] bibliography() engine error", e);
       return [];
     }
   }
@@ -268,8 +272,9 @@ export class CslProcessor {
       cslConfig.templates.add(STYLE_NAME, this.styleXml);
       const data = [...this.items.values()];
       this.engine = cslConfig.engine(data, STYLE_NAME, "en-US", "html");
-    } catch {
+    } catch (e: unknown) {
       // Invalid or unsupported CSL style XML -- disable engine, fall back to simple formatting
+      console.warn("[csl] initEngine() failed, falling back to simple formatting", e);
       this.engine = null;
     }
   }

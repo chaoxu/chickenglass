@@ -271,6 +271,7 @@ export async function exportDocument(
   try {
     await checkPandoc();
   } catch {
+    // Rethrow with user-friendly message — the underlying error is opaque (command not found)
     throw new Error(
       "Pandoc is not installed or not found in PATH. " +
         "Install Pandoc from https://pandoc.org/installing.html to enable export.",
@@ -309,7 +310,7 @@ async function exportHtml(
     try {
       await fs.writeFile(outputPath, html);
     } catch {
-      // writeFile fails if the file doesn't exist yet — fall back to createFile
+      // best-effort: writeFile fails if the file doesn't exist yet — fall back to createFile
       await fs.createFile(outputPath, html);
     }
     return outputPath;

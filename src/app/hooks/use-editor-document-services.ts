@@ -33,6 +33,7 @@ async function expandIncludes(
       try {
         content = await fs.readFile(resolved);
       } catch {
+        // best-effort: included file unreadable, fall back to raw content without includes
         return { text: rawContent, regions: [] };
       }
       includes.push({ path: resolved, content, children: [] });

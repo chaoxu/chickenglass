@@ -285,6 +285,7 @@ export async function getBackendPerfSnapshot(): Promise<PerfSnapshot | null> {
   try {
     return await getPerfSnapshotCommand();
   } catch {
+    // best-effort: backend perf command may not exist in this runtime
     return null;
   }
 }
@@ -294,7 +295,7 @@ export async function clearBackendPerf(): Promise<void> {
   try {
     await clearPerfSnapshotCommand();
   } catch {
-    // Ignore when backend perf support is unavailable.
+    // best-effort: backend perf support may be unavailable
   }
 }
 

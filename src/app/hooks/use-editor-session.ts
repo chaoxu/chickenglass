@@ -184,8 +184,8 @@ export function useEditorSession({
           setEditorDoc(content);
           addRecentFile(path);
         }, { category: "open_file", detail: path });
-      } catch {
-        // Silently ignore unreadable files.
+      } catch (e: unknown) {
+        console.error("[session] failed to open file:", path, e);
       }
     }, path);
   }, [addRecentFile, commitSessionState, fs]);
@@ -223,8 +223,9 @@ export function useEditorSession({
       buffers.current.set(path, doc);
       liveDocs.current.set(path, doc);
       commitSessionState(markSessionTabDirty(sessionStateRef.current, path, false));
-    } catch {
-      // Save failed — leave dirty.
+    } catch (e: unknown) {
+      // Save failed — leave dirty so user knows data is unsaved
+      console.error("[session] save failed:", e);
     }
   }, [commitSessionState, fs]);
 
@@ -236,8 +237,8 @@ export function useEditorSession({
       });
       await refreshTree();
       await openFile(path);
-    } catch {
-      // File may already exist.
+    } catch (e: unknown) {
+      console.error("[session] create file failed:", e);
     }
   }, [fs, openFile, refreshTree]);
 
@@ -248,8 +249,8 @@ export function useEditorSession({
         detail: path,
       });
       await refreshTree();
-    } catch {
-      // Directory may already exist.
+    } catch (e: unknown) {
+      console.error("[session] create directory failed:", e);
     }
   }, [fs, refreshTree]);
 
@@ -272,8 +273,8 @@ export function useEditorSession({
       await fs.renameFile(oldPath, newPath);
       await refreshTree();
       renameBuffers(oldPath, newPath);
-    } catch {
-      // Rename failed.
+    } catch (e: unknown) {
+      console.error("[session] rename failed:", e);
     }
   }, [fs, refreshTree, renameBuffers]);
 
@@ -286,8 +287,8 @@ export function useEditorSession({
         category: "delete_file",
         detail: path,
       });
-    } catch {
-      // deleteFile may not be supported.
+    } catch (e: unknown) {
+      console.error("[session] delete failed:", e);
     }
 
     const prefix = path + "/";
@@ -339,7 +340,7 @@ export function useEditorSession({
         addRecentFile(relativePath);
         await refreshTree();
       } catch {
-        // Save dialog failed or was cancelled.
+        // best-effort: save-as dialog cancelled or failed by user action
       }
       return;
     }
