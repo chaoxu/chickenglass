@@ -24,7 +24,15 @@ interface MathNodeInfo {
   readonly isDisplay: boolean;
 }
 
-/** Find the math node containing the cursor, if any. */
+/**
+ * Find the math node containing the cursor, if any.
+ *
+ * NOTE: collectNodeRangesExcludingCursor() does not apply here.
+ * This function uses the inverse logic — it looks for nodes WHERE the cursor
+ * IS inside (to show the preview), not nodes that should be excluded because
+ * the cursor is inside them. It also returns a single data value rather than
+ * accumulating a decoration array.
+ */
 function findMathAtCursor(view: EditorView): MathNodeInfo | null {
   if (!view.hasFocus) return null;
   let result: MathNodeInfo | null = null;

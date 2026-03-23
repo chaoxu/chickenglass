@@ -82,7 +82,19 @@ const styleMap: Readonly<Record<string, Decoration>> = {
   InlineCode: inlineCodeDecoration,
 };
 
-/** Build markdown decoration set (headings, emphasis, links, etc.). */
+/**
+ * Build markdown decoration set (headings, emphasis, links, etc.).
+ *
+ * NOTE: collectNodeRangesExcludingCursor() does not apply here.
+ * This function handles many distinct node types with different logic per type:
+ * headings apply styles unconditionally then conditionally hide markers,
+ * links build Decoration.mark from child nodes, inline elements toggle cursor
+ * visibility, and hidden-marker nodes are always removed. The cursor check is
+ * not a uniform "skip this node entirely" — each branch has its own semantics
+ * (some return false, some return, some apply marks before checking). There is
+ * no single uniform widget type being pushed, so the helper's single-callback
+ * shape cannot capture this multi-branch dispatch.
+ */
 function buildMarkdownDecorations(view: EditorView): DecorationSet {
   const widgets: Range<Decoration>[] = [];
 

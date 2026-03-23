@@ -67,7 +67,15 @@ export function findPipePositions(text: string): number[] {
   return pipes;
 }
 
-/** Find all Table nodes in the visible ranges and parse them. */
+/**
+ * Find all Table nodes in the visible ranges and parse them.
+ *
+ * NOTE: collectNodeRangesExcludingCursor() does not apply here.
+ * This function collects TableRange data objects (not Decoration ranges) and
+ * has no cursor-exclusion logic — tables are collected regardless of cursor
+ * position. The caller (table-render.ts) applies cursor logic separately when
+ * deciding how to render each table.
+ */
 export function findTablesInView(view: EditorView): TableRange[] {
   const tables: TableRange[] = [];
   const seen = new Set<number>();

@@ -72,7 +72,14 @@ function getOutlineDecoration(name: string): Decoration | null {
   return null;
 }
 
-/** Build debug outline decorations when inspector is active. */
+/**
+ * Build debug outline decorations when inspector is active.
+ *
+ * NOTE: collectNodeRangesExcludingCursor() does not apply here.
+ * The inspector decorates ALL matching nodes unconditionally — there is no
+ * cursor-exclusion logic. Decorations are applied regardless of cursor
+ * position so every syntax node is outlined for inspection.
+ */
 function buildDebugDecorations(view: EditorView): DecorationSet {
   const active = view.state.field(debugActiveField);
   if (!active) return Decoration.none;
