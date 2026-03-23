@@ -117,13 +117,14 @@ export const typographyThemeStyles = {
   },
 
   /* Override: rendered list markers use the document content font.
-   * @lezer/markdown tags ListMark as processingInstruction, so the inner
-   * token span gets fontFamily: monoFont from the rule above. When the
-   * marker is rendered (cursor away), the .cf-list-* mark decoration wraps
-   * that token span. This descendant selector overrides the monospace font
-   * on the inner span with the explicit content font. Using "inherit" here
-   * would resolve through CM6's scope to the wrong font stack. */
-  ".cf-list-bullet .tok-processingInstruction, .cf-list-number .tok-processingInstruction": {
+   * @lezer/markdown tags ListMark as processingInstruction for bullet
+   * markers (- / *) and meta for ordered markers (1. 2. 3.). Both get
+   * fontFamily: monoFont from the rule above. When the marker is rendered
+   * (cursor away), the .cf-list-* mark decoration wraps the token span.
+   * This descendant selector overrides the monospace font on the inner span
+   * with the explicit content font. Using "inherit" here would resolve
+   * through CM6's scope to the wrong font stack. */
+  ".cf-list-bullet .tok-processingInstruction, .cf-list-number .tok-meta": {
     fontFamily: contentFont,
   },
 
