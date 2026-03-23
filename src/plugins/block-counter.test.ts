@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createRegistryState,
   registerPlugins,
+  unregisterPlugin,
   type PluginRegistryState,
 } from "./plugin-registry";
 import {
@@ -405,6 +406,41 @@ describe("computeBlockNumbers", () => {
     expect(result.blocks[1].number).toBe(1); // different counter group
     expect(result.blocks[2].type).toBe("observation");
     expect(result.blocks[2].number).toBe(2);
+  });
+
+  it("skips disabled blocks (blocks: false) — no numbering, no fallback (issue #356)", () => {
+    // Regression: when blocks: { theorem: false } is set, theorem blocks must be
+    // invisible to the counter system (getPluginOrFallback returns undefined).
+    // Previously they still got numbered via the fallback path because
+    // unregisterPlugin only removed from plugins map while getPluginOrFallback
+    // still returned a fallback for any unregistered name.
+    const doc = [
+      "::: {.theorem}",
+      "A theorem.",
+      ":::",
+      "",
+      "::: {.definition}",
+      "A definition.",
+      ":::",
+      "",
+      "::: {.theorem}",
+      "Another theorem.",
+      ":::",
+    ].join("\n");
+
+    const state = createState(doc);
+    // Start with definition registered, theorem explicitly disabled
+    const base = registerPlugins(createRegistryState(), [
+      makeBlockPlugin({ name: "definition" }),
+    ]);
+    const disabledRegistry = unregisterPlugin(base, "theorem");
+
+    const result = computeBlockNumbers(state, disabledRegistry);
+
+    // Only definition is counted; theorem blocks are invisible
+    expect(result.blocks).toHaveLength(1);
+    expect(result.blocks[0].type).toBe("definition");
+    expect(result.blocks[0].number).toBe(1);
   });
 
   it("fallback divs mix with registered divs correctly", () => {

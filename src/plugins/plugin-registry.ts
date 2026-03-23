@@ -25,11 +25,20 @@ import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
  */
 export interface PluginRegistryState {
   readonly plugins: ReadonlyMap<string, BlockPlugin>;
+  /**
+   * Block class names that have been explicitly disabled (blocks: { name: false }).
+   *
+   * Disabled blocks are excluded from fallback plugin generation so they render
+   * as raw ::: fences instead of numbered blocks. This is distinct from simply
+   * not being registered: a block may be unregistered but still get a fallback
+   * unless it is explicitly in this set.
+   */
+  readonly disabled: ReadonlySet<string>;
 }
 
 /** Create an empty registry state. */
 export function createRegistryState(): PluginRegistryState {
-  return { plugins: new Map() };
+  return { plugins: new Map(), disabled: new Set() };
 }
 
 /** Register a plugin, returning a new state. */
@@ -39,7 +48,10 @@ export function registerPlugin(
 ): PluginRegistryState {
   const next = new Map(state.plugins);
   next.set(plugin.name, plugin);
-  return { plugins: next };
+  // Re-enabling a previously disabled block clears it from the disabled set.
+  const nextDisabled = new Set(state.disabled);
+  nextDisabled.delete(plugin.name);
+  return { plugins: next, disabled: nextDisabled };
 }
 
 /** Register multiple plugins at once, returning a new state. */
@@ -48,21 +60,30 @@ export function registerPlugins(
   plugins: readonly BlockPlugin[],
 ): PluginRegistryState {
   const next = new Map(state.plugins);
+  const nextDisabled = new Set(state.disabled);
   for (const plugin of plugins) {
     next.set(plugin.name, plugin);
+    nextDisabled.delete(plugin.name);
   }
-  return { plugins: next };
+  return { plugins: next, disabled: nextDisabled };
 }
 
-/** Unregister a plugin by name, returning a new state. */
+/**
+ * Unregister a plugin by name and mark it as explicitly disabled.
+ *
+ * Disabled blocks are excluded from fallback generation so they render as raw
+ * ::: fences instead of auto-numbered blocks. Use `disabled: true` in the
+ * returned state to distinguish "explicitly off" from "never registered."
+ */
 export function unregisterPlugin(
   state: PluginRegistryState,
   name: string,
 ): PluginRegistryState {
-  if (!state.plugins.has(name)) return state;
   const next = new Map(state.plugins);
   next.delete(name);
-  return { plugins: next };
+  const nextDisabled = new Set(state.disabled);
+  nextDisabled.add(name);
+  return { plugins: next, disabled: nextDisabled };
 }
 
 /** Look up a plugin by fenced div class name. */
@@ -94,6 +115,10 @@ export function getPluginOrFallback(
 ): BlockPlugin | undefined {
   const registered = state.plugins.get(name);
   if (registered) return registered;
+
+  // Explicitly disabled blocks (blocks: { name: false }) must not get a fallback.
+  // This is the mechanism that causes disabled blocks to render as raw ::: fences.
+  if (state.disabled.has(name)) return undefined;
 
   if (EXCLUDED_FROM_FALLBACK.has(name)) return undefined;
 

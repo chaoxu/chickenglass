@@ -26,6 +26,7 @@ import {
   getDecorationSpecs,
   hasLineClassAt,
   hasMarkClassInRange,
+  makeBlockPlugin,
 } from "../test-utils";
 
 /** Create an EditorState with all extensions needed for block decorations. */
@@ -38,6 +39,36 @@ function createTestState(doc: string, cursorPos = 0, focused = false) {
       documentSemanticsField,
       mathMacrosField,
       createPluginRegistryField([]),
+      blockCounterField,
+      editorFocusField,
+      blockDecorationField,
+    ],
+  });
+
+  return focused ? applyStateEffects(state, focusEffect.of(true)) : state;
+}
+
+/**
+ * Create an EditorState pre-loaded with the given plugins, where frontmatter
+ * in the doc can disable specific ones via `blocks: { name: false }`.
+ *
+ * The pluginRegistryField reads frontmatter on create, so disabling via
+ * frontmatter is the canonical integration path tested here.
+ */
+function createTestStateWithPlugins(
+  doc: string,
+  plugins: ReturnType<typeof makeBlockPlugin>[],
+  cursorPos = 0,
+  focused = false,
+) {
+  const state = createEditorState(doc, {
+    cursorPos,
+    extensions: [
+      markdown({ extensions: markdownExtensions }),
+      frontmatterField,
+      documentSemanticsField,
+      mathMacrosField,
+      createPluginRegistryField(plugins),
       blockCounterField,
       editorFocusField,
       blockDecorationField,
@@ -261,6 +292,70 @@ describe("blockDecorationField", () => {
       const state = createTestState(doc, 0, true);
       getDecoSpecs(state);
     }).not.toThrow();
+  });
+});
+
+describe("disabled blocks show raw fences (issue #356)", () => {
+  it("disabled block via frontmatter shows no cf-block-header (raw fences)", () => {
+    // blocks: { theorem: false } must make the fenced div render as raw text,
+    // not as a styled block. No cf-block-header, no header widget.
+    const doc = [
+      "---",
+      "blocks:",
+      "  theorem: false",
+      "---",
+      "::: {.theorem} Main Result",
+      "Content",
+      ":::",
+    ].join("\n");
+
+    const state = createTestStateWithPlugins(
+      doc,
+      [makeBlockPlugin({ name: "theorem", title: "Theorem" })],
+    );
+    const specs = getDecoSpecs(state);
+
+    // The theorem block's opening line must NOT have cf-block-header
+    const theoremLine = state.doc.line(5).from; // line 5 after 4-line frontmatter
+    expect(hasLineClassAt(specs, theoremLine, "cf-block-header")).toBe(false);
+
+    // No header widget should be emitted for a disabled block
+    const widgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
+    expect(widgets).toHaveLength(0);
+  });
+
+  it("enabled block alongside disabled block renders correctly", () => {
+    // When theorem is disabled and proof is not, proof should still render.
+    const doc = [
+      "---",
+      "blocks:",
+      "  theorem: false",
+      "---",
+      "::: {.theorem}",
+      "A theorem.",
+      ":::",
+      "",
+      "::: {.proof}",
+      "A proof.",
+      ":::",
+    ].join("\n");
+
+    const state = createTestStateWithPlugins(
+      doc,
+      [
+        makeBlockPlugin({ name: "theorem", title: "Theorem" }),
+        makeBlockPlugin({ name: "proof", numbered: false, title: "Proof" }),
+      ],
+    );
+    const specs = getDecoSpecs(state);
+
+    // theorem line: no cf-block-header
+    const theoremLine = state.doc.line(5).from;
+    expect(hasLineClassAt(specs, theoremLine, "cf-block-header")).toBe(false);
+
+    // proof line: has cf-block-header (not disabled)
+    const proofLine = state.doc.line(9).from;
+    expect(hasLineClassAt(specs, proofLine, "cf-block-header")).toBe(true);
   });
 });
 

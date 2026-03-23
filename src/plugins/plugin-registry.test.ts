@@ -76,10 +76,12 @@ describe("unregisterPlugin", () => {
     expect(getPlugin(next, "proof")).toBeDefined();
   });
 
-  it("returns same state if plugin not found", () => {
+  it("marks the name disabled even when plugin was never registered", () => {
+    // unregisterPlugin always adds the name to the disabled set so that
+    // getPluginOrFallback won't produce a fallback for explicitly-disabled classes.
     const state = createRegistryState();
     const next = unregisterPlugin(state, "nonexistent");
-    expect(next).toBe(state);
+    expect(getPluginOrFallback(next, "nonexistent")).toBeUndefined();
   });
 
   it("does not mutate the original state", () => {
@@ -143,6 +145,34 @@ describe("getPluginOrFallback", () => {
     if (!fallback) throw new Error("expected fallback plugin");
     expect(fallback.counter).toBeUndefined();
     // counter ?? name falls back to "axiom" in the numbering logic
+  });
+
+  it("returns undefined for explicitly disabled blocks (blocks: false)", () => {
+    // Regression: blocks: { theorem: false } must suppress the fallback too,
+    // not just unregister the plugin. Otherwise disabled registered blocks still
+    // render as auto-numbered blocks via the fallback path.
+    let state = createRegistryState();
+    state = registerPlugin(state, makeBlockPlugin({ name: "theorem" }));
+    state = unregisterPlugin(state, "theorem");
+    expect(getPluginOrFallback(state, "theorem")).toBeUndefined();
+  });
+
+  it("returns undefined for disabled fallback-only blocks", () => {
+    // blocks: { observation: false } must also suppress the fallback for block
+    // classes that were never registered as built-in plugins.
+    let state = createRegistryState();
+    state = unregisterPlugin(state, "observation");
+    expect(getPluginOrFallback(state, "observation")).toBeUndefined();
+  });
+
+  it("re-registering a disabled block re-enables it", () => {
+    // blocks: { theorem: false } then blocks: { theorem: true } → plugin back
+    let state = createRegistryState();
+    const plugin = makeBlockPlugin({ name: "theorem" });
+    state = registerPlugin(state, plugin);
+    state = unregisterPlugin(state, "theorem");
+    state = registerPlugin(state, plugin);
+    expect(getPluginOrFallback(state, "theorem")).toBe(plugin);
   });
 });
 
@@ -465,6 +495,40 @@ describe("createPluginRegistryField (CM6 integration)", () => {
     });
     // Proof should be restored from builtins
     expect(getPlugin(tr.state.field(pluginRegistryField), "proof")).toBeDefined();
+  });
+
+  it("disabled block via frontmatter is suppressed by getPluginOrFallback (issue #356)", () => {
+    // Regression: blocks: { theorem: false } must prevent fallback generation.
+    // Previously unregisterPlugin removed from plugins map but getPluginOrFallback
+    // still returned a fallback, so disabled blocks rendered as numbered blocks.
+    const doc = [
+      "---",
+      "blocks:",
+      "  theorem: false",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createEditorState(doc);
+    const registry = state.field(pluginRegistryField);
+    // Explicitly disabled — must return undefined, not a fallback
+    expect(getPluginOrFallback(registry, "theorem")).toBeUndefined();
+    // Other built-ins unaffected
+    expect(getPluginOrFallback(registry, "lemma")).toBeDefined();
+    expect(getPluginOrFallback(registry, "proof")).toBeDefined();
+  });
+
+  it("disabled fallback-only class via frontmatter is suppressed (issue #356)", () => {
+    // blocks: { observation: false } must suppress fallback for unregistered classes.
+    const doc = [
+      "---",
+      "blocks:",
+      "  observation: false",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createEditorState(doc);
+    const registry = state.field(pluginRegistryField);
+    expect(getPluginOrFallback(registry, "observation")).toBeUndefined();
   });
 
   it("does not change registry when doc change is outside frontmatter", () => {
