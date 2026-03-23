@@ -921,19 +921,24 @@ describe("#317 — typed frontend Tauri client", () => {
     expect(fileExists("src/app/tauri-client/fs.ts")).toBe(true);
     expect(fileExists("src/app/tauri-client/perf.ts")).toBe(true);
     expect(fileExists("src/app/tauri-client/watch.ts")).toBe(true);
+    expect(fileExists("src/app/tauri-client/export.ts")).toBe(true);
   });
 
   it("feature code uses the tauri-client layer instead of raw invoke strings", () => {
     const tauriFs = fileText("src/app/tauri-fs.ts");
     const imageInsert = fileText("src/editor/image-insert.ts");
     const fileWatcher = fileText("src/app/file-watcher.ts");
+    const exportModule = fileText("src/app/export.ts");
 
     expect(tauriFs).toContain('./tauri-client/fs');
     expect(fileWatcher).toContain("./tauri-client/watch");
+    expect(exportModule).toContain("./tauri-client/export");
     expect(imageInsert).not.toContain('@tauri-apps/api/core');
     expect(imageInsert).not.toContain("@tauri-apps/plugin-dialog");
     expect(fileWatcher).not.toContain('invokeWithPerf("watch_directory"');
     expect(fileWatcher).not.toContain('invokeWithPerf("unwatch_directory"');
+    expect(exportModule).not.toContain('invokeWithPerf("check_pandoc"');
+    expect(exportModule).not.toContain('invokeWithPerf("export_document"');
   });
 });
 

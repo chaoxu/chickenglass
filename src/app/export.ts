@@ -8,19 +8,20 @@
  */
 
 import { isTauri } from "./tauri-fs";
-import { invokeWithPerf, measureAsync } from "./perf";
+import { measureAsync } from "./perf";
 import type { FileSystem, FileEntry } from "./file-manager";
 import { markdownToHtml, escapeHtml } from "./markdown-to-html";
 import type { ExportFormat } from "./lib/types";
 import { basename } from "./lib/utils";
 import { exportThemeTokenDefaults } from "../theme-contract";
+import { checkPandocCommand, exportDocumentCommand } from "./tauri-client/export";
 
 export type { ExportFormat };
 
 
 /** Check whether Pandoc is installed. Returns the version string on success. */
 export async function checkPandoc(): Promise<string> {
-  return invokeWithPerf<string>("check_pandoc");
+  return checkPandocCommand();
 }
 
 /**
@@ -278,13 +279,7 @@ export async function exportDocument(
 
   const outputPath = deriveOutputPath(sourcePath, format);
 
-  const result = await invokeWithPerf<string>("export_document", {
-    content,
-    format,
-    outputPath,
-  });
-
-  return result;
+  return exportDocumentCommand(content, format, outputPath);
 }
 
 /**
