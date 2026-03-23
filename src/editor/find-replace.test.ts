@@ -95,4 +95,28 @@ describe("searchController", () => {
     expect(view.dom.querySelector(".cf-search-panel")).not.toBeNull();
     expect(view.dom.querySelector<HTMLElement>(".cf-replace-row")?.style.display).toBe("");
   });
+
+  // Regression: countSearchMatches was called on every ViewUpdate (O(N) per cursor
+  // move). The panel update() function now caches counts and skips the scan when
+  // doc, selection, and query have not changed. See #346.
+  it("countSearchMatches returns consistent results across calls", () => {
+    // Use the controller directly — the caching is an internal implementation
+    // detail of the panel, but the public API must still return accurate counts.
+    const view = createView("alpha beta alpha gamma alpha");
+
+    openFindSearch(view);
+    setSearchControllerQuery(view, {
+      search: "alpha",
+      replace: "",
+      caseSensitive: false,
+      regexp: false,
+      wholeWord: false,
+    });
+
+    const state1 = getSearchControllerState(view);
+    const state2 = getSearchControllerState(view);
+    // Counts must be stable across repeated calls with the same state.
+    expect(state1.total).toBe(state2.total);
+    expect(state1.total).toBe(3);
+  });
 });

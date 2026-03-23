@@ -249,10 +249,24 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
 class CodeBlockHoverPlugin {
   private hoveredBlockOpenFence: number | null = null;
   private hoveredHeaderEl: HTMLElement | null = null;
+  /**
+   * Cached code-block list, rebuilt only when the state changes.
+   * Avoids a full syntax-tree scan on every mousemove event.
+   */
+  private cachedBlocks: CodeBlockInfo[] = [];
+  private cachedBlocksState: EditorState | null = null;
 
-  constructor(private readonly view: EditorView) {}
+  constructor(private readonly view: EditorView) {
+    this.cachedBlocks = collectCodeBlocks(view.state);
+    this.cachedBlocksState = view.state;
+  }
 
   update(update: ViewUpdate): void {
+    // Rebuild the block cache whenever something structural changes.
+    if (update.docChanged || update.viewportChanged || update.focusChanged) {
+      this.cachedBlocks = collectCodeBlocks(update.state);
+      this.cachedBlocksState = update.state;
+    }
     if (this.hoveredBlockOpenFence === null) return;
     if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged) {
       this.refreshHoveredHeader();
@@ -276,6 +290,8 @@ class CodeBlockHoverPlugin {
       return;
     }
 
+    // Fast path: if the hovered element is already a header, use it directly.
+    // Only look up the block in the cached list (no tree scan on mousemove).
     let pos: number;
     try {
       pos = this.view.posAtDOM(lineEl, 0);
@@ -285,7 +301,13 @@ class CodeBlockHoverPlugin {
       return;
     }
 
-    const block = findFencedBlockAt(collectCodeBlocks(this.view.state), pos);
+    // Ensure the cache is current (may lag one frame if update() wasn't called).
+    if (this.cachedBlocksState !== this.view.state) {
+      this.cachedBlocks = collectCodeBlocks(this.view.state);
+      this.cachedBlocksState = this.view.state;
+    }
+
+    const block = findFencedBlockAt(this.cachedBlocks, pos);
     if (!block) {
       this.clearHoveredHeader();
       return;
@@ -305,7 +327,7 @@ class CodeBlockHoverPlugin {
   private refreshHoveredHeader(): void {
     if (this.hoveredBlockOpenFence === null) return;
 
-    const block = collectCodeBlocks(this.view.state)
+    const block = this.cachedBlocks
       .find((candidate) => candidate.openFenceFrom === this.hoveredBlockOpenFence);
     if (!block) {
       this.clearHoveredHeader();

@@ -51,6 +51,21 @@ export type ImagePasteConfig = ImageSaveConfig;
  * Inserts on its own line when the target position is not already on an
  * empty line.
  */
+/**
+ * Escape a path for use inside a markdown image link `![alt](path)`.
+ *
+ * Markdown terminates the URL at the first unescaped `)`, so any literal
+ * `)` in the path must be percent-encoded. Spaces are also encoded because
+ * they would split the link in many parsers. Other characters are left as-is
+ * to keep relative paths readable.
+ */
+export function escapeMarkdownPath(path: string): string {
+  // Data URLs and absolute paths may contain characters that break the
+  // markdown link syntax. Percent-encode only the two characters that
+  // unconditionally break CommonMark image syntax: `)` and space.
+  return path.replace(/ /g, "%20").replace(/\)/g, "%29");
+}
+
 export function insertImageMarkdown(
   view: EditorView,
   path: string,
@@ -65,7 +80,8 @@ export function insertImageMarkdown(
   const insertTo = pos !== undefined ? pos : sel.to;
   const line = view.state.doc.lineAt(insertFrom);
   const prefix = line.text.trim() === "" && insertFrom === line.from ? "" : "\n";
-  const snippet = `${prefix}![${alt}](${path})\n`;
+  const safePath = escapeMarkdownPath(path);
+  const snippet = `${prefix}![${alt}](${safePath})\n`;
   view.dispatch({
     changes: { from: insertFrom, to: insertTo, insert: snippet },
     selection: { anchor: insertFrom + snippet.length },

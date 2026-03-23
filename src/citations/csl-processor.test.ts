@@ -124,6 +124,60 @@ describe("CslProcessor narrative citations", () => {
   });
 });
 
+describe("CslProcessor corporate authors", () => {
+  // Regression: citeNarrative must not produce "undefined" for corporate
+  // authors. CSL-JSON represents corporate/institutional authors with a
+  // `literal` field and no `family`/`given`. See #346.
+  it("uses literal field for corporate author narrative citation", () => {
+    const entry: CslJsonItem = {
+      id: "ieee2023",
+      type: "report",
+      author: [{ literal: "IEEE Computer Society" }],
+      title: "Some Standard",
+      issued: { "date-parts": [[2023]] },
+    };
+    const processor = new CslProcessor([entry]);
+    // Force engine to null so we hit the plain author+year fallback.
+    (processor as unknown as { engine: null }).engine = null;
+    const result = processor.citeNarrative("ieee2023");
+    expect(result).not.toContain("undefined");
+    expect(result).toContain("IEEE Computer Society");
+  });
+
+  it("falls back to item id when all author name fields are absent", () => {
+    const entry: CslJsonItem = {
+      id: "anon2020",
+      type: "article-journal",
+      // Empty author objects — no literal, family, or given.
+      author: [{} as { family?: string; given?: string; literal?: string }],
+      issued: { "date-parts": [[2020]] },
+    };
+    const processor = new CslProcessor([entry]);
+    (processor as unknown as { engine: null }).engine = null;
+    const result = processor.citeNarrative("anon2020");
+    expect(result).not.toContain("undefined");
+    expect(result).toContain("anon2020");
+  });
+
+  it("handles mixed individual and corporate authors without undefined", () => {
+    const entry: CslJsonItem = {
+      id: "mixed2021",
+      type: "report",
+      author: [
+        { family: "Smith", given: "John" },
+        { literal: "IETF" },
+      ],
+      issued: { "date-parts": [[2021]] },
+    };
+    const processor = new CslProcessor([entry]);
+    (processor as unknown as { engine: null }).engine = null;
+    const result = processor.citeNarrative("mixed2021");
+    expect(result).not.toContain("undefined");
+    expect(result).toContain("Smith");
+    expect(result).toContain("IETF");
+  });
+});
+
 describe("CslProcessor ordering", () => {
   it("does not register a failed citation cluster as prior context", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

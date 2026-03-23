@@ -544,4 +544,20 @@ describe("createPluginRegistryField (CM6 integration)", () => {
     // Registry should still have same plugins
     expect(registry2.plugins.size).toBe(registry1.plugins.size);
   });
+
+  // Regression: pluginRegistryField.update must use field(frontmatterField, false)
+  // so it does not throw when the field is absent (e.g. inline/test editors that
+  // do not include frontmatterField). See #346.
+  it("does not crash when frontmatterField is absent from the editor", () => {
+    // Build a minimal state WITHOUT frontmatterField in extensions.
+    const state = EditorState.create({
+      doc: "Hello world",
+      extensions: [createPluginRegistryField(builtinTestPlugins)],
+    });
+
+    // A doc change triggers the update path — must not throw.
+    expect(() => {
+      state.update({ changes: { from: 0, to: state.doc.length, insert: "New content" } });
+    }).not.toThrow();
+  });
 });

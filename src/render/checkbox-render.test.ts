@@ -36,10 +36,20 @@ describe("CheckboxWidget", () => {
   });
 
   describe("eq", () => {
-    it("returns true when checked and from match", () => {
+    it("returns true when checked, from, and to all match", () => {
+      const a = new CheckboxWidget(true, 10, 13);
+      const b = new CheckboxWidget(true, 10, 13);
+      expect(a.eq(b)).toBe(true);
+    });
+
+    // Regression: eq() must compare `to` so a document edit that shifts the
+    // closing marker (without changing `from`) causes the widget to re-render
+    // with the correct replacement range. Omitting `to` would leave the widget
+    // toggling the wrong character range after the edit. See #346.
+    it("returns false when to differs (same from and checked)", () => {
       const a = new CheckboxWidget(true, 10, 13);
       const b = new CheckboxWidget(true, 10, 15);
-      expect(a.eq(b)).toBe(true);
+      expect(a.eq(b)).toBe(false);
     });
 
     it("returns false when checked differs", () => {

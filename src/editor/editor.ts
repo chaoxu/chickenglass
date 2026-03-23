@@ -1,4 +1,4 @@
-import { type Extension, Compartment, EditorState, StateEffect } from "@codemirror/state";
+import { type Extension, Compartment, EditorState, StateEffect, StateField } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { LanguageDescription, indentUnit } from "@codemirror/language";
 import type { EditorPluginManager } from "./editor-plugin";
@@ -46,6 +46,28 @@ const treeViewCompartment = new Compartment();
 
 /** Editor display modes. */
 export type EditorMode = "rich" | "source" | "read";
+
+/** StateEffect used to update the tracked editor mode. */
+export const setEditorModeEffect = StateEffect.define<EditorMode>();
+
+/**
+ * CM6 StateField that tracks the current editor mode.
+ *
+ * Updated by `setEditorMode()` via `setEditorModeEffect`. Allows any
+ * code with access to the EditorView (e.g. keybindings) to read the
+ * current mode without relying on module-level mutable state.
+ */
+export const editorModeField = StateField.define<EditorMode>({
+  create() {
+    return "rich";
+  },
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setEditorModeEffect)) return effect.value;
+    }
+    return value;
+  },
+});
 
 /** Compartment for rendering extensions — reconfigured on mode switch. */
 const renderCompartment = new Compartment();
@@ -157,6 +179,9 @@ export function createEditor(config: EditorConfig): EditorView {
       // Rendering plugins (wrapped in compartment for mode switching)
       renderCompartment.of(renderingExtensions),
 
+      // Editor mode state (queryable by keybindings and other consumers)
+      editorModeField,
+
       // Editability (wrapped in compartment for preview mode)
       editableCompartment.of([]),
 
@@ -203,6 +228,9 @@ export function createEditor(config: EditorConfig): EditorView {
  */
 export function setEditorMode(view: EditorView, mode: EditorMode): void {
   const effects: StateEffect<unknown>[] = [];
+
+  // Always record the new mode in the StateField so cycleEditorMode can read it.
+  effects.push(setEditorModeEffect.of(mode));
 
   switch (mode) {
     case "rich":

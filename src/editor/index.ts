@@ -2,6 +2,7 @@ export { getEditorCommands, createHeadingCommands } from "./commands";
 export {
   createEditor,
   setEditorMode,
+  editorModeField,
   tabSizeExtension,
   wordWrapCompartment,
   lineNumbersCompartment,

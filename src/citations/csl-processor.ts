@@ -85,7 +85,14 @@ function formatNarrativeAuthor(item: CslJsonItem): string {
   const authors = item.author ?? [];
   if (authors.length === 0) return item.id;
   return authors
-    .map((author) => author.literal ?? author.family ?? author.given ?? item.id)
+    .map((author) => {
+      // Corporate authors are represented with a `literal` field only.
+      // Prefer `literal` → `family` → `given` to avoid producing "undefined"
+      // for partially-populated entries. Fall back to the item id so the
+      // output is always a non-empty, printable string.
+      const name = author.literal ?? author.family ?? author.given;
+      return name != null && name !== "" ? name : item.id;
+    })
     .join(", ");
 }
 

@@ -290,12 +290,49 @@ function createSearchPanel(view: EditorView): Panel {
     });
   }
 
+  // Cache the last match counts to avoid re-scanning the full document on
+  // every ViewUpdate (e.g. cursor moves that don't change search results).
+  // We recompute only when the doc identity, selection, or query changes.
+  interface MatchCache {
+    /** Reference-identity key: the CM6 Text object from state.doc. */
+    doc: object;
+    selFrom: number;
+    selTo: number;
+    queryKey: string;
+    current: number;
+    total: number;
+  }
+  let matchCache: MatchCache | null = null;
+
+  function serializeQuery(q: ReturnType<typeof getSearchQuery>): string {
+    if (!q.valid) return "";
+    return `${q.search}\0${String(q.caseSensitive)}\0${String(q.regexp)}\0${String(q.wholeWord)}`;
+  }
+
   function updateMatchInfo(): void {
-    const { current, total } = getSearchControllerState(view);
+    const state = view.state;
+    const q = getSearchQuery(state);
+    const sel = state.selection.main;
+    const queryKey = serializeQuery(q);
+
+    // Check cache validity — only recount when something material changed.
+    if (
+      matchCache === null ||
+      matchCache.doc !== state.doc ||
+      matchCache.selFrom !== sel.from ||
+      matchCache.selTo !== sel.to ||
+      matchCache.queryKey !== queryKey
+    ) {
+      const { current, total } = countSearchMatches(view);
+      matchCache = { doc: state.doc, selFrom: sel.from, selTo: sel.to, queryKey, current, total };
+    }
+
+    const { current, total } = matchCache;
     if (total === 0) {
       matchInfo.textContent = searchInput.value ? "No results" : "";
     } else {
-      matchInfo.textContent = current > 0 ? `${current} of ${total}` : `${total} results`;
+      matchInfo.textContent =
+        current > 0 ? `${current} of ${total}` : `${total} results`;
     }
   }
 

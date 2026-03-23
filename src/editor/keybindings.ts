@@ -10,21 +10,20 @@ import { type EditorView, keymap } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
-import { setEditorMode, type EditorMode } from "./editor";
-
-/** Current editor mode — cycles through rendered → source → preview. */
-let currentMode: EditorMode = "rich";
+import { editorModeField, setEditorMode, type EditorMode } from "./editor";
 
 /** Cycle to the next editor mode. */
 function cycleEditorMode(view: EditorView): boolean {
   const modes: EditorMode[] = ["rich", "source", "read"];
-  const idx = modes.indexOf(currentMode);
-  currentMode = modes[(idx + 1) % modes.length];
-  setEditorMode(view, currentMode);
+  // Read the current mode from the CM6 StateField so the cycle stays in sync
+  // with React state (e.g., when the app switches modes programmatically).
+  const currentMode = view.state.field(editorModeField, false) ?? "rich";
+  const nextMode = modes[(modes.indexOf(currentMode) + 1) % modes.length];
+  setEditorMode(view, nextMode);
 
   // Dispatch a DOM event so the app can update the UI indicator
   view.dom.dispatchEvent(
-    new CustomEvent("cf-mode-change", { detail: currentMode, bubbles: true }),
+    new CustomEvent("cf-mode-change", { detail: nextMode, bubbles: true }),
   );
   return true;
 }

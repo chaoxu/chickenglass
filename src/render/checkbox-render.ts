@@ -52,7 +52,7 @@ export class CheckboxWidget extends RenderWidget {
   }
 
   eq(other: CheckboxWidget): boolean {
-    return this.checked === other.checked && this.from === other.from;
+    return this.checked === other.checked && this.from === other.from && this.to === other.to;
   }
 }
 

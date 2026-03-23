@@ -253,8 +253,10 @@ export const pluginRegistryField = StateField.define<PluginRegistryState>({
   update(value, tr) {
     if (tr.docChanged) {
       const builtins = tr.state.facet(builtinPluginsFacet);
-      const fm = tr.state.field(frontmatterField);
-      return buildRegistry(builtins, fm.config.blocks);
+      // Use the `false` guard so this field can be used in editors that do
+      // not include frontmatterField (e.g. inline editors, tests).
+      const fm = tr.state.field(frontmatterField, false);
+      return buildRegistry(builtins, fm?.config.blocks);
     }
     return value;
   },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createEditor } from "./editor";
+import { createEditor, editorModeField, setEditorMode } from "./editor";
 
 describe("createEditor", () => {
   it("creates an editor view attached to the given parent", () => {
@@ -18,6 +18,51 @@ describe("createEditor", () => {
     const view = createEditor({ parent, doc });
 
     expect(view.state.doc.toString()).toBe(doc);
+
+    view.destroy();
+  });
+});
+
+describe("editorModeField", () => {
+  // Regression: cycleEditorMode used a module-level `currentMode` variable that
+  // didn't stay in sync when the app switched modes programmatically (e.g.
+  // opening a non-markdown file). The fix stores mode in a CM6 StateField so
+  // any consumer can read the authoritative current mode. See #346.
+  it("defaults to 'rich' mode", () => {
+    const parent = document.createElement("div");
+    const view = createEditor({ parent });
+    expect(view.state.field(editorModeField)).toBe("rich");
+    view.destroy();
+  });
+
+  it("updates when setEditorMode is called", () => {
+    const parent = document.createElement("div");
+    const view = createEditor({ parent });
+
+    setEditorMode(view, "source");
+    expect(view.state.field(editorModeField)).toBe("source");
+
+    setEditorMode(view, "read");
+    expect(view.state.field(editorModeField)).toBe("read");
+
+    setEditorMode(view, "rich");
+    expect(view.state.field(editorModeField)).toBe("rich");
+
+    view.destroy();
+  });
+
+  it("reflects mode set by React shell before keyboard cycle", () => {
+    // Simulate the app switching the mode to 'source' (e.g. non-markdown file),
+    // then the user pressing the cycle key. The field must return 'source' so
+    // the cycle continues from there, not from the stale module-level default.
+    const parent = document.createElement("div");
+    const view = createEditor({ parent });
+
+    // App sets mode to source
+    setEditorMode(view, "source");
+
+    // Read the field — must reflect what the app set
+    expect(view.state.field(editorModeField)).toBe("source");
 
     view.destroy();
   });
