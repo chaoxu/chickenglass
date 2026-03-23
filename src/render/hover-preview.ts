@@ -10,7 +10,6 @@
 
 import { type Extension } from "@codemirror/state";
 import { type EditorView, type Tooltip, hoverTooltip } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
 import {
   type CrossrefMatch,
   type ResolvedCrossref,
@@ -36,19 +35,15 @@ function extractBlockContent(
   view: EditorView,
   block: NumberedBlock,
 ): string {
-  const tree = syntaxTree(view.state);
+  const div = view.state.field(documentAnalysisField).fencedDivByFrom.get(block.from);
+
   let contentFrom = block.from;
   let contentTo = block.to;
 
-  const node = tree.resolve(block.from, 1);
-  if (node.type.name === "FencedDiv") {
-    const firstChild = node.firstChild;
-    if (firstChild) {
-      contentFrom = view.state.doc.lineAt(firstChild.to).to + 1;
-    }
-    const lastChild = node.lastChild;
-    if (lastChild && lastChild.type.name === "FencedDivFence") {
-      contentTo = lastChild.from;
+  if (div) {
+    contentFrom = view.state.doc.lineAt(div.openFenceTo).to + 1;
+    if (div.closeFenceFrom >= 0) {
+      contentTo = div.closeFenceFrom;
     }
   }
 
