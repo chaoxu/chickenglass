@@ -22,7 +22,6 @@ import { type EditorState, type Extension, type Range } from "@codemirror/state"
 import type { BlockAttrs } from "./plugin-types";
 import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
-// Direct imports: barrel would create circular dependency (plugins/index → plugin-render → render/index → crossref-render → index/crossref-resolver → plugins/index)
 import {
   createSimpleTextWidget,
   decorationHidden,
@@ -32,15 +31,13 @@ import {
   RenderWidget,
   addMarkerReplacement,
   pushWidgetDecoration,
-} from "../render/render-utils";
-import {
   addCollapsedClosingFence,
   addSingleLineClosingFence,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
   type FencedBlockInfo,
-} from "../render/fenced-block-core";
-import { mathMacrosField } from "../render/math-macros";
+  mathMacrosField,
+} from "../render/render-core";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import {
   type FencedDivSemantics,

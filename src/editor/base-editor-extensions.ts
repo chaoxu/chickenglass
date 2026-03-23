@@ -10,7 +10,6 @@ import { markdownExtensions } from "../parser";
 import { highlightExtension } from "../parser/highlight";
 import { mathExtension } from "../parser/math-backslash";
 import { strikethroughExtension } from "../parser/strikethrough";
-// Direct imports: barrel would create circular dependency (editor/index → base-editor-extensions → render/index → search-highlight → editor/index)
 import { markdownRenderPlugin } from "../render/markdown-render";
 import { mathRenderPlugin } from "../render/math-render";
 import { frontmatterField } from "./frontmatter-state";

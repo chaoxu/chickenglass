@@ -17,8 +17,7 @@ import {
 import { createPluginRegistryField } from "./plugin-registry";
 import { blockCounterField } from "./block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
-import { editorFocusField, focusEffect } from "../render/render-utils";
-import { mathMacrosField } from "../render/math-macros";
+import { editorFocusField, focusEffect, mathMacrosField } from "../render/render-core";
 import { frontmatterField } from "../editor/frontmatter-state";
 import {
   applyStateEffects,

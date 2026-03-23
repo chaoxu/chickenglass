@@ -25,8 +25,7 @@ import {
   foldedRanges,
   syntaxTree,
 } from "@codemirror/language";
-// Direct import: barrel would create circular dependency (editor/index → heading-fold → render/index → search-highlight → editor/index)
-import { buildDecorations, createDecorationsField, RenderWidget } from "../render/render-utils";
+import { buildDecorations, createDecorationsField, RenderWidget } from "../render/render-core";
 
 /** Extract heading level (1–6) from a node name, or 0 if not a heading. */
 function headingLevel(name: string): number {

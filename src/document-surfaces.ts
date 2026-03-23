@@ -1,6 +1,5 @@
 import type { InlineRenderSurface } from "./inline-surface";
 import { markdownToHtml, renderInline } from "./app/markdown-to-html";
-// Direct import: barrel would create circular dependency (document-surfaces → render/index → inline-render → inline-fragments → render/index)
 import { renderInlineMarkdown } from "./render/inline-render";
 
 export type DocumentSurfaceMode = InlineRenderSurface | "document-body";

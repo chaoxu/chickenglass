@@ -1,28 +1,9 @@
-export { MARK_NODES, isSafeUrl, buildKatexOptions, sanitizeCslHtml } from "./inline-shared";
+// ── Re-export everything from render-core (low-level, no editor/plugins deps) ─
+export * from "./render-core";
+
+// ── High-level render plugins ────────────────────────────────────────────────
 export { renderInlineMarkdown } from "./inline-render";
 export { markdownRenderPlugin } from "./markdown-render";
-export {
-  cursorInRange,
-  collectNodes,
-  buildDecorations,
-  createBooleanToggleField,
-  createDecorationsField,
-  createSimpleViewPlugin,
-  createSimpleTextWidget,
-  collectNodeRangesExcludingCursor,
-  makeTextElement,
-  pushWidgetDecoration,
-  serializeMacros,
-  decorationHidden,
-  addMarkerReplacement,
-  RenderWidget,
-  SimpleTextRenderWidget,
-  MacroAwareWidget,
-  editorFocusField,
-  focusEffect,
-  focusTracker,
-  type RenderableNode,
-} from "./render-utils";
 export {
   MathWidget,
   mathRenderPlugin,
@@ -31,7 +12,6 @@ export {
   stripMathDelimiters,
   getDisplayMathContentEnd,
 } from "./math-render";
-export { getMathMacros, mathMacrosField } from "./math-macros";
 export {
   CrossrefWidget,
   UnresolvedRefWidget,
@@ -67,19 +47,6 @@ export {
 export { hoverPreviewExtension } from "./hover-preview";
 export { searchHighlightPlugin } from "./search-highlight";
 export {
-  type FencedBlockInfo,
-  type FencedBlockRenderContext,
-  isCursorOnOpenFence,
-  isCursorOnCloseFence,
-  getFencedBlockRenderContext,
-  findFencedBlockAt,
-  getLineElement,
-  addSingleLineClosingFence,
-  addCollapsedClosingFence,
-  buildFencedBlockDecorations,
-  createFencedBlockDecorationField,
-} from "./fenced-block-core";
-export {
   parseTable,
   formatTable,
   serializeTable,
@@ -91,9 +58,4 @@ export {
   setAlignment,
   moveRow,
   moveColumn,
-  type Alignment,
-  type TableCell,
-  type TableRow,
-  type ParsedTable,
-  type TableParseResult,
 } from "./table-utils";

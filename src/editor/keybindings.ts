@@ -9,7 +9,6 @@ import { EditorSelection, type EditorState, Prec, type Extension } from "@codemi
 import { type EditorView, keymap } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { MODE_CHANGE_EVENT, OPEN_FILE_EVENT } from "../constants/events";
-// Direct imports: barrel would create circular dependency (editor/index → keybindings → render/index → search-highlight → editor/index)
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
 import { editorModeField, setEditorMode, type EditorMode } from "./editor";

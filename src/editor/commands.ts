@@ -7,7 +7,6 @@
 
 import type { EditorView } from "@codemirror/view";
 import type { PaletteCommand } from "../lib/command-palette";
-// Direct import: barrel would create circular dependency (editor/index → commands → render/index → search-highlight → editor/index)
 import { insertTable } from "../render/table-render";
 import { extractHeadings } from "../semantics/heading-ancestry";
 import { BLOCK_MANIFEST_ENTRIES } from "../constants/block-manifest";
