@@ -14,7 +14,7 @@ import { createTestView } from "../test-utils";
 function makeView(
   doc: string,
   from: number,
-  to?: number,
+  _to?: number,
   opts: { withMarkdown?: boolean } = {},
 ): EditorView {
   return createTestView(doc, {

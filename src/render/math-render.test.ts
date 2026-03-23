@@ -1,5 +1,4 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { EditorState } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
 import type { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
