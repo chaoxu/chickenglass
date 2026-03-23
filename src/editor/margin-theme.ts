@@ -1,4 +1,4 @@
-import { monoFont } from "../constants/editor-constants";
+import { contentFont, monoFont } from "../constants/editor-constants";
 import {
   HOVER_PREVIEW_MAX_HEIGHT,
   HOVER_PREVIEW_MAX_WIDTH,
@@ -82,7 +82,7 @@ export const marginThemeStyles = {
     padding: "var(--cf-spacing-sm) var(--cf-spacing-md)",
     fontSize: "0.9em",
     lineHeight: "1.5",
-    fontFamily: monoFont,
+    fontFamily: contentFont,
   },
   ".cf-hover-preview-header": {
     fontWeight: "700",

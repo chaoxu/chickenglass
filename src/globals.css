@@ -268,20 +268,31 @@ body {
 }
 
 /* ── Hover preview tooltip (appended to document.body) ─────────────────────
- * Used when sidenote margin is collapsed to show footnote content. */
+ * Used when sidenote margin is collapsed to show footnote content.
+ * Styled to match shadcn HoverCard visual language. */
 .cf-hover-preview-tooltip {
   position: fixed;
   z-index: 1000;
   background: var(--cf-bg);
   border: 1px solid var(--cf-border);
-  border-radius: var(--cf-border-radius);
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   pointer-events: none;
-  max-width: 320px;
-  padding: var(--cf-spacing-sm) var(--cf-spacing-md);
-  font-size: 0.8em;
+  max-width: 350px;
+  padding: var(--cf-spacing-md) var(--cf-spacing-lg);
+  font-size: 0.85em;
   line-height: 1.5;
   color: var(--cf-fg);
-  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
+  /* Enter/exit animation (respects prefers-reduced-motion via --cf-transition) */
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity var(--cf-transition), transform var(--cf-transition);
+}
+
+.cf-hover-preview-tooltip[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* ── Read mode HTML renderer ───────────────────────────────────────────────

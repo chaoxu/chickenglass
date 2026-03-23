@@ -40,6 +40,7 @@ export function useFootnoteTooltip(
       if (!tooltip) {
         tooltip = document.createElement("div");
         tooltip.className = "cf-hover-preview-tooltip";
+        tooltip.setAttribute("data-visible", "false");
         document.body.appendChild(tooltip);
       }
       tooltip.innerHTML = "";
@@ -56,6 +57,10 @@ export function useFootnoteTooltip(
         Object.assign(el.style, {
           left: `${x}px`,
           top: `${y}px`,
+        });
+        // Trigger enter animation after positioning
+        requestAnimationFrame(() => {
+          if (el.isConnected) el.setAttribute("data-visible", "true");
         });
       });
     };

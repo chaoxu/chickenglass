@@ -56,6 +56,7 @@ function showFloatingTooltip(anchor: HTMLElement, content: HTMLElement): void {
   el.innerHTML = "";
   el.appendChild(content);
   el.style.display = "";
+  el.setAttribute("data-visible", "false");
 
   void computePosition(anchor, el, {
     placement: "top",
@@ -65,12 +66,17 @@ function showFloatingTooltip(anchor: HTMLElement, content: HTMLElement): void {
       left: `${x}px`,
       top: `${y}px`,
     });
+    // Trigger enter animation after positioning
+    requestAnimationFrame(() => {
+      el.setAttribute("data-visible", "true");
+    });
   });
 }
 
 /** Hide and clear the singleton tooltip. */
 function hideFloatingTooltip(): void {
   if (tooltipEl) {
+    tooltipEl.setAttribute("data-visible", "false");
     tooltipEl.style.display = "none";
     tooltipEl.innerHTML = "";
   }
