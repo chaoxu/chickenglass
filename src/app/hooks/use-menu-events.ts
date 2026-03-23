@@ -6,7 +6,7 @@
  * payload (see src-tauri/src/menu.rs). This hook maps those IDs to the same
  * handlers used by the command palette and keyboard shortcuts.
  *
- * Format actions (bold, italic, etc.) are dispatched as `cg:format` CustomEvents
+ * Format actions (bold, italic, etc.) are dispatched as `cf:format` CustomEvents
  * on `document`, matching the pattern used by the command palette.
  *
  * In browser mode (no Tauri), the hook is a no-op.
@@ -53,7 +53,7 @@ const handlerEventMap: Record<string, keyof MenuEventHandlers> = {
 };
 
 /**
- * Map from menu-event IDs that dispatch a cg:format event for CM6.
+ * Map from menu-event IDs that dispatch a cf:format event for CM6.
  * To add a new format action, add an entry here.
  */
 const formatEventMap: Record<string, string> = {
@@ -96,7 +96,7 @@ export function useMenuEvents(handlers: MenuEventHandlers): void {
           return;
         }
 
-        // Format events dispatched as cg:format CustomEvents for CM6
+        // Format events dispatched as cf:format CustomEvents for CM6
         const formatAction = formatEventMap[id];
         if (formatAction) {
           dispatchFormatEvent(formatAction);

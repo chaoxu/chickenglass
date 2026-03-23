@@ -75,8 +75,8 @@ export interface PerfOperationHandle {
 
 const MAX_RECENT_RECORDS = 200;
 const MAX_RECENT_OPERATIONS = 50;
-const PERF_PANEL_TOGGLE_EVENT = "cg:perf-panel-toggle";
-const PERF_PANEL_REFRESH_EVENT = "cg:perf-panel-refresh";
+const PERF_PANEL_TOGGLE_EVENT = "cf:perf-panel-toggle";
+const PERF_PANEL_REFRESH_EVENT = "cf:perf-panel-refresh";
 let nextMeasureId = 0;
 
 function isTauriRuntime(): boolean {
@@ -204,9 +204,9 @@ export function measureSync<T>(
   options: PerfSpanOptions = {},
 ): T {
   const measureId = nextMeasurementId();
-  const startMark = `cg:${measureId}:start`;
-  const endMark = `cg:${measureId}:end`;
-  const measureName = `cg:${measureId}:${name}`;
+  const startMark = `cf:${measureId}:start`;
+  const endMark = `cf:${measureId}:end`;
+  const measureName = `cf:${measureId}:${name}`;
   performance.mark(startMark);
   try {
     return task();
@@ -228,9 +228,9 @@ export async function measureAsync<T>(
   options: PerfSpanOptions = {},
 ): Promise<T> {
   const measureId = nextMeasurementId();
-  const startMark = `cg:${measureId}:start`;
-  const endMark = `cg:${measureId}:end`;
-  const measureName = `cg:${measureId}:${name}`;
+  const startMark = `cf:${measureId}:start`;
+  const endMark = `cf:${measureId}:end`;
+  const measureName = `cf:${measureId}:${name}`;
   performance.mark(startMark);
   try {
     return await task();

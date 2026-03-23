@@ -60,7 +60,7 @@ export interface CommandHandlers {
 
 /** Dispatch a formatting event to the document for CM6 to handle. */
 export function dispatchFormatEvent(type: string, detail?: Record<string, unknown>): void {
-  document.dispatchEvent(new CustomEvent("cg:format", { detail: { type, ...detail } }));
+  document.dispatchEvent(new CustomEvent("cf:format", { detail: { type, ...detail } }));
 }
 
 /**
