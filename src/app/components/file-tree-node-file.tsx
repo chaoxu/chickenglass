@@ -35,7 +35,8 @@ export function FileTreeNodeFile({ item }: FileTreeNodeFileProps) {
     useFileTreeContext();
 
   const entry = item.getItemData();
-  const depth = Math.max(0, item.getItemMeta().level - 1);
+  // headless-tree levels are 0-based (root children = 0), map directly to visual depth
+  const depth = item.getItemMeta().level;
   const indent = depth * 12 + 8;
 
   const [renaming, setRenaming] = useState(false);
