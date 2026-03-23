@@ -36,6 +36,20 @@ export function isImageMime(mime: string): boolean {
   return mime in IMAGE_MIME_EXT;
 }
 
+function sanitizeImageFilename(filename: string): string | null {
+  const basename = filename.replace(/\\/g, "/").split("/").pop()?.trim() ?? "";
+  const cleaned = [...basename]
+    .filter((char) => {
+      const code = char.charCodeAt(0);
+      return code >= 0x20 && code !== 0x7f;
+    })
+    .join("");
+  if (!cleaned || cleaned === "." || cleaned === "..") {
+    return null;
+  }
+  return cleaned;
+}
+
 /** Convert a File to a base-64 data URL. */
 export function fileToDataUrl(file: File): Promise<string> {
   return new Promise<string>((resolve, reject) => {
@@ -92,8 +106,9 @@ export interface ImageSaveContext {
  * use it. Otherwise generate a timestamped name.
  */
 export function generateImageFilename(file: File, ext: string): string {
-  if (file.name && file.name !== "image.png" && file.name !== "blob") {
-    return file.name;
+  const sanitizedName = sanitizeImageFilename(file.name);
+  if (sanitizedName && sanitizedName !== "image.png" && sanitizedName !== "blob") {
+    return sanitizedName;
   }
   return `image-${Date.now()}.${ext}`;
 }
@@ -167,7 +182,7 @@ export async function planImageTarget(
       if (!dirExists) {
         await fs.createDirectory(targetDir);
       }
-    } catch (_e) {
+    } catch {
       // best-effort: directory might already exist (race condition or implicit via file creation)
     }
   }

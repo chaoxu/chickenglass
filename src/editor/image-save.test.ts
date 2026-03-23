@@ -66,6 +66,16 @@ describe("generateImageFilename", () => {
     const result = generateImageFilename(file, "jpg");
     expect(result).toMatch(/^image-\d+\.jpg$/);
   });
+
+  it("strips path traversal segments from user-controlled filenames", () => {
+    const file = new File([], "../../etc/passwd.png", { type: "image/png" });
+    expect(generateImageFilename(file, "png")).toBe("passwd.png");
+  });
+
+  it("strips Windows path traversal segments from user-controlled filenames", () => {
+    const file = new File([], "..\\..\\secrets\\diagram.png", { type: "image/png" });
+    expect(generateImageFilename(file, "png")).toBe("diagram.png");
+  });
 });
 
 describe("altTextFromFilename", () => {

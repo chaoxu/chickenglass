@@ -142,7 +142,7 @@ function tryResizeIframe(
       }
     }
     return "unavailable";
-  } catch (_e) {
+  } catch {
     // best-effort: cross-origin iframe blocks contentDocument access
     return "blocked";
   }
@@ -175,6 +175,13 @@ function autoResizeGistIframe(iframe: HTMLIFrameElement): void {
   setTimeout(poll, pollInterval);
 }
 
+export function embedSandboxPermissions(embedType: string): string {
+  if (embedType === "youtube") {
+    return "allow-scripts allow-presentation";
+  }
+  return "allow-scripts";
+}
+
 /** Widget that renders an iframe for embed blocks. */
 class EmbedWidget extends RenderWidget {
   constructor(
@@ -190,7 +197,7 @@ class EmbedWidget extends RenderWidget {
 
     const iframe = document.createElement("iframe");
     iframe.src = this.src;
-    iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
+    iframe.setAttribute("sandbox", embedSandboxPermissions(this.embedType));
     iframe.setAttribute("loading", "lazy");
     iframe.setAttribute("referrerpolicy", "no-referrer");
     iframe.setAttribute("frameborder", "0");

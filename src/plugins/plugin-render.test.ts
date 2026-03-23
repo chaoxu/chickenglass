@@ -10,7 +10,10 @@ import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
-import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-render";
+import {
+  _blockDecorationFieldForTest as blockDecorationField,
+  embedSandboxPermissions,
+} from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
 import { blockCounterField } from "./block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
@@ -258,5 +261,14 @@ describe("blockDecorationField", () => {
       const state = createTestState(doc, 0, true);
       getDecoSpecs(state);
     }).not.toThrow();
+  });
+});
+
+describe("embedSandboxPermissions", () => {
+  it("never grants allow-same-origin to embed iframes", () => {
+    expect(embedSandboxPermissions("embed")).toBe("allow-scripts");
+    expect(embedSandboxPermissions("iframe")).toBe("allow-scripts");
+    expect(embedSandboxPermissions("gist")).toBe("allow-scripts");
+    expect(embedSandboxPermissions("youtube")).toBe("allow-scripts allow-presentation");
   });
 });
