@@ -134,14 +134,14 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
     }
 
     // Cursor outside def (or collapsed mode) — collapse the definition line.
+    // Replace the entire line content (label + body) so nothing remains visible,
+    // then set height:0 via line class to collapse the empty line element.
     items.push(
       Decoration.line({ class: "cf-sidenote-def-line" }).range(def.from),
     );
-    if (def.labelTo < def.to) {
-      items.push(
-        Decoration.replace({}).range(def.labelTo, def.to),
-      );
-    }
+    items.push(
+      Decoration.replace({}).range(def.from, def.to),
+    );
   }
 
   return buildDecorations(items);

@@ -234,6 +234,82 @@ describe("buildSidenoteDecorations — footnote def cursor zones", () => {
     const bodyWidgets = specs.filter((s) => s.widgetClass === "FootnoteBodyWidget");
     expect(bodyWidgets.length).toBe(0);
   });
+
+  it("replaces entire def line content (label+body) when collapsed (#402)", () => {
+    // Regression #402: only the body was replaced, leaving [^id]: label visible.
+    // The replace decoration must cover def.from..def.to (the full line),
+    // not just def.labelTo..def.to (only the body after the label).
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        markdown({ extensions: [footnoteExtension] }),
+        frontmatterField,
+        mathMacrosField,
+        documentSemanticsField,
+        sidenotesCollapsedField,
+      ],
+    });
+    const collapsedState = state.update({
+      effects: sidenotesCollapsedEffect.of(true),
+    }).state;
+    const decos = buildSidenoteDecorations(collapsedState, true);
+    const specs = getDecorationSpecs(decos);
+
+    // The def starts at position 16 ("Text [^1] end\n\n" = 15 chars, def at 16)
+    const defStart = doc.indexOf("[^1]:");
+    const defEnd = doc.length;
+
+    // The replace decoration should span the entire def (from..to),
+    // not start at labelTo (which would leave the [^1]: label exposed)
+    const replaceDecos = specs.filter(
+      (s) => !s.class && !s.widgetClass && s.from !== s.to,
+    );
+    expect(replaceDecos.length).toBe(1);
+    expect(replaceDecos[0].from).toBe(defStart);
+    expect(replaceDecos[0].to).toBe(defEnd);
+  });
+
+  it("replaces entire def line even with multiple footnotes when collapsed (#402)", () => {
+    // Ensure all def lines are fully replaced, not just the first one.
+    const multiDoc = "A[^a] B[^b]\n\n[^a]: First note\n\n[^b]: Second note";
+    const state = EditorState.create({
+      doc: multiDoc,
+      extensions: [
+        markdown({ extensions: [footnoteExtension] }),
+        frontmatterField,
+        mathMacrosField,
+        documentSemanticsField,
+        sidenotesCollapsedField,
+      ],
+    });
+    const collapsedState = state.update({
+      effects: sidenotesCollapsedEffect.of(true),
+    }).state;
+    const decos = buildSidenoteDecorations(collapsedState, true);
+    const specs = getDecorationSpecs(decos);
+
+    // Both def lines should have the hide class
+    const lineDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefLine));
+    expect(lineDecos.length).toBe(2);
+
+    // Both defs should have replace decorations covering the full line
+    const replaceDecos = specs.filter(
+      (s) => !s.class && !s.widgetClass && s.from !== s.to,
+    );
+    expect(replaceDecos.length).toBe(2);
+
+    // First def: [^a]: First note
+    const defAStart = multiDoc.indexOf("[^a]:");
+    const defAEnd = multiDoc.indexOf("\n", defAStart);
+    expect(replaceDecos[0].from).toBe(defAStart);
+    expect(replaceDecos[0].to).toBe(defAEnd);
+
+    // Second def: [^b]: Second note
+    const defBStart = multiDoc.indexOf("[^b]:");
+    const defBEnd = multiDoc.length;
+    expect(replaceDecos[1].from).toBe(defBStart);
+    expect(replaceDecos[1].to).toBe(defBEnd);
+  });
 });
 
 describe("FootnoteSectionWidget", () => {
