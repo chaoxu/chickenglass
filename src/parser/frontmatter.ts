@@ -46,29 +46,56 @@ export interface FrontmatterResult {
  * Extract the raw YAML text between `---` delimiters at the start of a document.
  * Returns null if no frontmatter is present.
  */
+function findLineBoundary(
+  doc: string,
+  from: number,
+): { lineEnd: number; next: number } {
+  const lineFeed = doc.indexOf("\n", from);
+  if (lineFeed === -1) {
+    return { lineEnd: doc.length, next: doc.length };
+  }
+  const lineEnd = lineFeed > from && doc[lineFeed - 1] === "\r" ? lineFeed - 1 : lineFeed;
+  return { lineEnd, next: lineFeed + 1 };
+}
+
+function isStandaloneDelimiter(
+  doc: string,
+  from: number,
+  lineEnd: number,
+): boolean {
+  return doc.slice(from, from + 3) === "---" && doc.slice(from + 3, lineEnd).trim().length === 0;
+}
+
 export function extractRawFrontmatter(
   doc: string,
 ): { raw: string; end: number } | null {
   if (!doc.startsWith("---")) return null;
 
-  const firstNewline = doc.indexOf("\n");
-  if (firstNewline === -1) return null;
+  const opening = findLineBoundary(doc, 0);
+  if (opening.next === doc.length) return null;
+  if (!isStandaloneDelimiter(doc, 0, opening.lineEnd)) return null;
 
-  // Only whitespace allowed after opening ---
-  if (doc.slice(3, firstNewline).trim().length > 0) return null;
-
-  const closingIndex = doc.indexOf("\n---", firstNewline);
-  if (closingIndex === -1) return null;
-
-  const raw = doc.slice(firstNewline + 1, closingIndex);
-
-  // end points past the closing --- and its newline (if present)
-  let end = closingIndex + 4; // "\n---".length
-  if (end < doc.length && doc[end] === "\n") {
-    end += 1;
+  let lineStart = opening.next;
+  while (lineStart < doc.length) {
+    const line = findLineBoundary(doc, lineStart);
+    if (isStandaloneDelimiter(doc, lineStart, line.lineEnd)) {
+      let rawEnd = lineStart;
+      if (rawEnd > opening.next && doc[rawEnd - 1] === "\n") {
+        rawEnd -= 1;
+        if (rawEnd > opening.next && doc[rawEnd - 1] === "\r") {
+          rawEnd -= 1;
+        }
+      }
+      return {
+        raw: doc.slice(opening.next, rawEnd),
+        end: line.next,
+      };
+    }
+    if (line.next === doc.length) break;
+    lineStart = line.next;
   }
 
-  return { raw, end };
+  return null;
 }
 
 /** Remove surrounding quotes and process YAML escape sequences. */

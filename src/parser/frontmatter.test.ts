@@ -36,6 +36,21 @@ describe("extractRawFrontmatter", () => {
     expect(result?.raw).toBe("title: Hello");
     expect(result?.end).toBe(20);
   });
+
+  it("does not treat a line with trailing text as the closing delimiter", () => {
+    const doc = "---\ntitle: Hello\n--- not closing\nstill yaml-ish\n---\nBody";
+    const result = extractRawFrontmatter(doc);
+    expect(result).not.toBeNull();
+    expect(result?.raw).toBe("title: Hello\n--- not closing\nstill yaml-ish");
+    expect(doc.slice(result?.end ?? 0)).toBe("Body");
+  });
+
+  it("consumes the full CRLF closing line before the body", () => {
+    const doc = "---\r\ntitle: Hello\r\n---\r\nBody";
+    const result = extractRawFrontmatter(doc);
+    expect(result).not.toBeNull();
+    expect(doc.slice(result?.end ?? 0)).toBe("Body");
+  });
 });
 
 describe("parseFrontmatter", () => {
