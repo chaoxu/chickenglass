@@ -26,6 +26,7 @@ export async function loadBibliography(
   cslPath: string,
   fs: FileSystem,
   view: EditorView,
+  isCurrent?: () => boolean,
 ): Promise<void> {
   const readWithFallback = async (p: string): Promise<string> => {
     const candidates = projectPathCandidatesFromDocument(docPath, p);
@@ -47,6 +48,7 @@ export async function loadBibliography(
         category: "citations",
         detail: bibPath,
       });
+      if (isCurrent && !isCurrent()) return;
       const items = operation.measureSync("citations.parse_bib", () => parseBibTeX(bibText), {
         category: "citations",
         detail: bibPath,
@@ -60,6 +62,7 @@ export async function loadBibliography(
             category: "citations",
             detail: cslPath,
           });
+          if (isCurrent && !isCurrent()) return;
         } catch (_e) {
           // best-effort: CSL file not found — use default style
         }
@@ -70,6 +73,7 @@ export async function loadBibliography(
         () => new CslProcessor(items, cslXml),
         { category: "citations", detail: cslPath || bibPath },
       );
+      if (isCurrent && !isCurrent()) return;
       dispatchIfConnected(
         view,
         { effects: bibDataEffect.of({ store, cslProcessor }) },
@@ -77,6 +81,7 @@ export async function loadBibliography(
       );
     } catch (error) {
       void error;
+      if (isCurrent && !isCurrent()) return;
       dispatchIfConnected(
         view,
         { effects: bibDataEffect.of({ store: new Map(), cslProcessor: CslProcessor.empty() }) },
@@ -117,10 +122,17 @@ export function useBibliography(options: UseBibliographyOptions): UseBibliograph
   const { fs, docPath } = options;
   const lastBibPathRef = useRef("");
   const lastCslPathRef = useRef("");
+  const loadGenerationRef = useRef(0);
+
+  const beginLoad = useCallback(() => {
+    loadGenerationRef.current += 1;
+    return loadGenerationRef.current;
+  }, []);
 
   const resetTracking = useCallback(() => {
     lastBibPathRef.current = "";
     lastCslPathRef.current = "";
+    loadGenerationRef.current += 1;
   }, []);
 
   const handleBibChange = useCallback(
@@ -135,6 +147,7 @@ export function useBibliography(options: UseBibliographyOptions): UseBibliograph
 
       lastBibPathRef.current = bibPath;
       lastCslPathRef.current = cslPath;
+      const generation = beginLoad();
 
       if (!bibPath) {
         dispatchIfConnected(
@@ -143,10 +156,17 @@ export function useBibliography(options: UseBibliographyOptions): UseBibliograph
           { context: "Bibliography dispatch error:" },
         );
       } else {
-        void loadBibliography(docPath, bibPath, cslPath, fs, view);
+        void loadBibliography(
+          docPath,
+          bibPath,
+          cslPath,
+          fs,
+          view,
+          () => loadGenerationRef.current === generation,
+        );
       }
     },
-    [fs, docPath],
+    [beginLoad, fs, docPath],
   );
 
   const loadInitial = useCallback(
@@ -154,11 +174,19 @@ export function useBibliography(options: UseBibliographyOptions): UseBibliograph
       if (!fs || !docPath) return;
       lastBibPathRef.current = bibPath;
       lastCslPathRef.current = cslPath;
+      const generation = beginLoad();
       if (bibPath) {
-        void loadBibliography(docPath, bibPath, cslPath, fs, view);
+        void loadBibliography(
+          docPath,
+          bibPath,
+          cslPath,
+          fs,
+          view,
+          () => loadGenerationRef.current === generation,
+        );
       }
     },
-    [fs, docPath],
+    [beginLoad, fs, docPath],
   );
 
   return {
