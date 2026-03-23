@@ -17,6 +17,7 @@ import type { BlockConfig } from "../parser/frontmatter";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { createBlockRender } from "./block-render";
 import { capitalize } from "../app/lib/utils";
+import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 
 /**
  * Immutable snapshot of the registry state.
@@ -83,7 +84,6 @@ export function getPlugin(
  * Special class names (e.g., "include") are excluded from fallback
  * generation — those are handled separately by the renderer.
  */
-const EXCLUDED_FROM_FALLBACK = new Set(["include"]);
 
 /** Cache for fallback plugins to avoid re-creating them on every tree walk. */
 const fallbackCache = new Map<string, BlockPlugin>();

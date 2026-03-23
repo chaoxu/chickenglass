@@ -26,6 +26,7 @@ import { definitionPlugin } from "./definition-plugin";
 import { remarkPlugin, examplePlugin } from "./remark-plugin";
 import { algorithmPlugin } from "./algorithm-plugin";
 import { defaultPlugins } from "./default-plugins";
+import { BLOCK_MANIFEST, EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 
 /** Create an EditorState with fenced div parser. */
 function createState(doc: string): EditorState {
@@ -234,33 +235,31 @@ describe("algorithmPlugin", () => {
 // ---------------------------------------------------------------------------
 
 describe("defaultPlugins", () => {
-  it("contains all 16 default plugins", () => {
-    expect(defaultPlugins).toHaveLength(16);
+  it("has one plugin per manifest entry", () => {
+    expect(defaultPlugins).toHaveLength(BLOCK_MANIFEST.length);
   });
 
-  it("includes all expected plugin names", () => {
-    const names = defaultPlugins.map((p) => p.name);
-    expect(names).toContain("theorem");
-    expect(names).toContain("lemma");
-    expect(names).toContain("corollary");
-    expect(names).toContain("proposition");
-    expect(names).toContain("conjecture");
-    expect(names).toContain("definition");
-    expect(names).toContain("problem");
-    expect(names).toContain("proof");
-    expect(names).toContain("remark");
-    expect(names).toContain("example");
-    expect(names).toContain("algorithm");
-    expect(names).toContain("blockquote");
-    expect(names).toContain("embed");
-    expect(names).toContain("iframe");
-    expect(names).toContain("youtube");
-    expect(names).toContain("gist");
+  it("matches manifest order", () => {
+    const manifestNames = BLOCK_MANIFEST.map((e) => e.name);
+    const pluginNames = defaultPlugins.map((p) => p.name);
+    expect(pluginNames).toEqual(manifestNames);
   });
 
   it("has no duplicate names", () => {
     const names = defaultPlugins.map((p) => p.name);
     expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+describe("EXCLUDED_FROM_FALLBACK", () => {
+  it("contains 'include'", () => {
+    expect(EXCLUDED_FROM_FALLBACK.has("include")).toBe(true);
+  });
+
+  it("does not contain any manifest block names", () => {
+    for (const entry of BLOCK_MANIFEST) {
+      expect(EXCLUDED_FROM_FALLBACK.has(entry.name)).toBe(false);
+    }
   });
 });
 

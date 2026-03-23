@@ -1,33 +1,45 @@
 /**
  * Default block plugins for mathematical writing.
  *
- * Exports the full set of default plugins ready for registration.
- * Counter groups:
- * - "theorem": theorem, lemma, corollary, proposition, conjecture
- * - "definition": definition
- * - "algorithm": algorithm
- * - unnumbered: proof, remark, example, embed, iframe, youtube, gist
+ * Derives the plugin list from BLOCK_MANIFEST so the manifest is
+ * the single source of truth for block ordering and completeness.
  */
 
 import type { BlockPlugin } from "./plugin-types";
-import { theoremFamilyPlugins } from "./theorem-plugin";
+import { BLOCK_MANIFEST } from "../constants/block-manifest";
+import { theoremPlugin, lemmaPlugin, corollaryPlugin, propositionPlugin, conjecturePlugin } from "./theorem-plugin";
 import { definitionPlugin } from "./definition-plugin";
 import { proofPlugin } from "./proof-plugin";
 import { remarkPlugin, examplePlugin } from "./remark-plugin";
 import { algorithmPlugin } from "./algorithm-plugin";
 import { problemPlugin } from "./problem-plugin";
-import { embedFamilyPlugins } from "./embed-plugin";
 import { blockquotePlugin } from "./blockquote-plugin";
+import { embedPlugin, iframePlugin, youtubePlugin, gistPlugin } from "./embed-plugin";
 
-/** All default block plugins as a single array. */
-export const defaultPlugins: readonly BlockPlugin[] = [
-  ...theoremFamilyPlugins,
-  definitionPlugin,
-  problemPlugin,
-  proofPlugin,
-  remarkPlugin,
-  examplePlugin,
-  algorithmPlugin,
-  blockquotePlugin,
-  ...embedFamilyPlugins,
-];
+const PLUGIN_BY_NAME: ReadonlyMap<string, BlockPlugin> = new Map<string, BlockPlugin>([
+  [theoremPlugin.name, theoremPlugin],
+  [lemmaPlugin.name, lemmaPlugin],
+  [corollaryPlugin.name, corollaryPlugin],
+  [propositionPlugin.name, propositionPlugin],
+  [conjecturePlugin.name, conjecturePlugin],
+  [definitionPlugin.name, definitionPlugin],
+  [problemPlugin.name, problemPlugin],
+  [proofPlugin.name, proofPlugin],
+  [remarkPlugin.name, remarkPlugin],
+  [examplePlugin.name, examplePlugin],
+  [algorithmPlugin.name, algorithmPlugin],
+  [blockquotePlugin.name, blockquotePlugin],
+  [embedPlugin.name, embedPlugin],
+  [iframePlugin.name, iframePlugin],
+  [youtubePlugin.name, youtubePlugin],
+  [gistPlugin.name, gistPlugin],
+]);
+
+/** All default block plugins, ordered by BLOCK_MANIFEST. */
+export const defaultPlugins: readonly BlockPlugin[] = BLOCK_MANIFEST.map((entry) => {
+  const plugin = PLUGIN_BY_NAME.get(entry.name);
+  if (!plugin) {
+    throw new Error(`Missing plugin for manifest entry "${entry.name}"`);
+  }
+  return plugin;
+});
