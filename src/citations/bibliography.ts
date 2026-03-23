@@ -14,6 +14,7 @@ import { type EditorState, type Extension, StateField } from "@codemirror/state"
 import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors } from "./bibtex-parser";
 import { type BibStore, bibDataEffect, bibDataField, findCitations } from "./citation-render";
 import { RenderWidget, buildDecorations } from "../render/render-utils";
+import { sanitizeCslHtml } from "../render/inline-shared";
 
 /**
  * Collect all citation ids referenced in the document text.
@@ -116,7 +117,7 @@ export class BibliographyWidget extends RenderWidget {
       for (let i = 0; i < this.cslHtml.length; i++) {
         const div = document.createElement("div");
         div.className = "cf-bibliography-entry";
-        div.innerHTML = this.cslHtml[i];
+        div.innerHTML = sanitizeCslHtml(this.cslHtml[i]);
         list.appendChild(div);
       }
     } else {

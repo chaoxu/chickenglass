@@ -10,6 +10,7 @@ import { type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { cursorInRange, decorationHidden, addMarkerReplacement } from "./render-utils";
 import { findTrailingHeadingAttributes, hasUnnumberedHeadingAttributes } from "../app/heading-ancestry";
+import { isSafeUrl } from "./inline-shared";
 
 /**
  * Node types whose children's markers should be hidden when
@@ -282,7 +283,7 @@ export const markdownRenderPlugin: Extension = ViewPlugin.fromClass(
         const linkEl = target.closest("[data-url]");
         if (!linkEl) return false;
         const url = linkEl.getAttribute("data-url");
-        if (url) {
+        if (url && isSafeUrl(url)) {
           window.open(url, "_blank");
           event.preventDefault();
           return true;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSafeUrl, buildKatexOptions, MARK_NODES } from "./inline-shared";
+import { isSafeUrl, buildKatexOptions, MARK_NODES, sanitizeCslHtml } from "./inline-shared";
 
 // ── isSafeUrl ──────────────────────────────────────────────────────────────
 
@@ -116,6 +116,78 @@ describe("buildKatexOptions", () => {
     it("rejects unknown commands", () => {
       expect(trust({ command: "\\input", url: "https://x.com" })).toBe(false);
     });
+  });
+});
+
+// ── sanitizeCslHtml ────────────────────────────────────────────────────────
+//
+// Regression tests for XSS via CSL/citeproc HTML output (issue #343).
+// CSL engine output may embed user-supplied strings (titles, names) that
+// contain script tags or javascript: URLs if the input BibTeX was crafted
+// maliciously. sanitizeCslHtml must neutralise these before innerHTML use.
+
+describe("sanitizeCslHtml", () => {
+  it("passes through plain text unchanged", () => {
+    expect(sanitizeCslHtml("Karger, D. R. 2000.")).toBe("Karger, D. R. 2000.");
+  });
+
+  it("preserves safe CSL formatting tags", () => {
+    const input = '<span class="csl-entry"><i>Nature</i> <b>47</b>(1): 46.</span>';
+    const output = sanitizeCslHtml(input);
+    expect(output).toContain("<i>");
+    expect(output).toContain("<b>");
+    expect(output).toContain("<span");
+  });
+
+  it("strips <script> tags and their content", () => {
+    // A malicious BibTeX title containing a script tag.
+    const input = '<span class="csl-entry">Title<script>alert(1)</script></span>';
+    const output = sanitizeCslHtml(input);
+    expect(output).not.toContain("<script");
+    expect(output).not.toContain("alert(1)");
+  });
+
+  it("strips <img> tags (not in allowlist)", () => {
+    const input = '<span>text<img src="x" onerror="alert(1)">more</span>';
+    const output = sanitizeCslHtml(input);
+    expect(output).not.toContain("<img");
+    expect(output).not.toContain("onerror");
+  });
+
+  it("strips event handler attributes from allowed tags", () => {
+    const input = '<span onclick="alert(1)" class="csl-entry">text</span>';
+    const output = sanitizeCslHtml(input);
+    expect(output).not.toContain("onclick");
+    expect(output).toContain("text");
+  });
+
+  it("strips javascript: href from <a> tags", () => {
+    // The CSL engine could output a URL derived from user-supplied DOI/URL fields.
+    const input = '<a href="javascript:alert(1)">click</a>';
+    const output = sanitizeCslHtml(input);
+    expect(output).not.toContain("javascript:");
+    expect(output).toContain("click");
+  });
+
+  it("preserves safe https href on <a> tags", () => {
+    const input = '<a href="https://doi.org/10.1145/123456" class="doi">DOI</a>';
+    const output = sanitizeCslHtml(input);
+    expect(output).toContain('href="https://doi.org/10.1145/123456"');
+  });
+
+  it("strips style attributes (not in allowlist)", () => {
+    const input = '<span style="color:red">text</span>';
+    const output = sanitizeCslHtml(input);
+    expect(output).not.toContain("style=");
+  });
+
+  it("lifts children of stripped non-dangerous elements in place", () => {
+    // <article> is not in SAFE_CSL_ELEMENTS (not a dangerous element either),
+    // so its children should be lifted into the parent while the tag is removed.
+    const input = '<div class="csl-entry"><article><span>preserved</span></article></div>';
+    const output = sanitizeCslHtml(input);
+    expect(output).not.toContain("<article");
+    expect(output).toContain("preserved");
   });
 });
 
