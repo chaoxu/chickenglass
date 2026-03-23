@@ -130,6 +130,8 @@ export class TableWidget extends WidgetType {
     container.className = "cf-table-widget";
     container.dataset.tableTextHash = this.tableText;
     container.dataset.tableFrom = String(this.tableFrom);
+    container.dataset.sourceFrom = String(this.tableFrom);
+    container.dataset.sourceTo = String(this.tableFrom + this.tableText.length);
 
     const tableEl = document.createElement("table");
 
