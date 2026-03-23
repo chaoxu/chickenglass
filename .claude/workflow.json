@@ -12,10 +12,12 @@
   },
   "verification": {
     "typecheck": "npx tsc --noEmit",
+    "typecheck_server": "npm run typecheck:server",
     "lint": "npm run lint",
     "lint_fix": "npm run lint:fix",
     "build": "npm run build",
-    "test": "npm run test"
+    "test": "npm run test",
+    "cargo_check": "cargo check --manifest-path src-tauri/Cargo.toml"
   },
   "tiers": {
     "small": {
@@ -33,18 +35,22 @@
       "verify": [
         "lint",
         "build",
-        "test"
+        "test",
+        "typecheck_server",
+        "cargo_check"
       ]
     }
   },
   "tier_triggers": {
     "medium": [
       "src/**/*.ts",
-      "src/**/*.tsx"
+      "src/**/*.tsx",
+      "server/**/*.ts"
     ],
     "full": [
       "src/parser/**",
-      "src/plugins/**"
+      "src/plugins/**",
+      "src-tauri/**"
     ]
   },
   "preflight": [
