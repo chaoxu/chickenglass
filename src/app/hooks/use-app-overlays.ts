@@ -67,7 +67,9 @@ export function useAppOverlays({ fs, workspace, editor }: AppOverlayDeps): AppOv
         }
       }
       window.alert(summary.join("\n"));
-    })();
+    })().catch((e: unknown) => {
+      window.alert(`Batch export failed: ${e instanceof Error ? e.message : String(e)}`);
+    });
   }, [workspace.fileTree, fs]);
 
   const commandHandlers = useMemo(() => ({

@@ -56,7 +56,10 @@ export async function insertImageFromPicker(
           view.focus();
         },
         "insert",
-      ).then(resolve);
+      ).then(resolve).catch((e: unknown) => {
+        logImageError("insert", `saveAndInsertImage failed: ${e instanceof Error ? e.message : String(e)}`);
+        resolve();
+      });
     });
 
     // Handle cancel (user closes the dialog without selecting)

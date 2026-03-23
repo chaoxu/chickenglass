@@ -77,6 +77,8 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   useEffect(() => {
     void withPerfOperation("startup.initial_session", async () => {
       await Promise.all([refreshTree(), refreshProjectConfig()]);
+    }).catch((e: unknown) => {
+      console.error("[workspace] initial session startup failed", e);
     });
   }, [refreshProjectConfig, refreshTree]);
 

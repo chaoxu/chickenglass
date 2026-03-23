@@ -133,9 +133,13 @@ export class FileWatcher {
     yesBtn.className = "file-watcher-btn file-watcher-btn-yes";
     yesBtn.textContent = "Yes";
     yesBtn.addEventListener("click", () => {
-      void this.config.reloadFile(path).finally(() => {
-        this.resolveNotification(path);
-      });
+      void this.config.reloadFile(path)
+        .catch((e: unknown) => {
+          console.error("[file-watcher] reloadFile failed", path, e);
+        })
+        .finally(() => {
+          this.resolveNotification(path);
+        });
     });
     bar.appendChild(yesBtn);
 

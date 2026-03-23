@@ -96,26 +96,30 @@ class FoldToggleWidget extends RenderWidget {
 
     const pos = this.pos;
     span.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      // Toggle fold directly without moving the cursor.
-      // Query fold services registered on the state to get the fold range.
-      const line = view.state.doc.lineAt(pos);
-      let range: { from: number; to: number } | null = null;
-      for (const service of view.state.facet(foldService)) {
-        range = service(view.state, line.from, line.to);
-        if (range) break;
-      }
-      if (range) {
-        let alreadyFolded = false;
-        foldedRanges(view.state).between(range.from, range.from + 1, () => {
-          alreadyFolded = true;
-        });
-        if (alreadyFolded) {
-          view.dispatch({ effects: unfoldEffect.of({ from: range.from, to: range.to }) });
-        } else {
-          view.dispatch({ effects: foldEffect.of({ from: range.from, to: range.to }) });
+      try {
+        e.preventDefault();
+        e.stopPropagation();
+        // Toggle fold directly without moving the cursor.
+        // Query fold services registered on the state to get the fold range.
+        const line = view.state.doc.lineAt(pos);
+        let range: { from: number; to: number } | null = null;
+        for (const service of view.state.facet(foldService)) {
+          range = service(view.state, line.from, line.to);
+          if (range) break;
         }
+        if (range) {
+          let alreadyFolded = false;
+          foldedRanges(view.state).between(range.from, range.from + 1, () => {
+            alreadyFolded = true;
+          });
+          if (alreadyFolded) {
+            view.dispatch({ effects: unfoldEffect.of({ from: range.from, to: range.to }) });
+          } else {
+            view.dispatch({ effects: foldEffect.of({ from: range.from, to: range.to }) });
+          }
+        }
+      } catch (err: unknown) {
+        console.error("[heading-fold] mousedown handler failed", err);
       }
     });
 

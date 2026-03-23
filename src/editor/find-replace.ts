@@ -232,10 +232,14 @@ function createToggle(
     e.preventDefault(); // Prevent focus steal
   });
   btn.addEventListener("click", () => {
-    const next = btn.getAttribute("aria-pressed") !== "true";
-    btn.setAttribute("aria-pressed", String(next));
-    btn.classList.toggle(CSS.searchToggleActive, next);
-    onChange(next);
+    try {
+      const next = btn.getAttribute("aria-pressed") !== "true";
+      btn.setAttribute("aria-pressed", String(next));
+      btn.classList.toggle(CSS.searchToggleActive, next);
+      onChange(next);
+    } catch (e: unknown) {
+      console.error("[find-replace] toggle click handler failed", e);
+    }
   });
   return btn;
 }
@@ -382,39 +386,55 @@ function attachEventHandlers(ctx: SearchPanelContext): void {
   const { view, searchInput, replaceInput } = ctx;
 
   searchInput.addEventListener("input", () => {
-    ctx.commitQuery();
+    try {
+      ctx.commitQuery();
+    } catch (e: unknown) {
+      console.error("[find-replace] search input handler failed", e);
+    }
   });
 
   searchInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (e.shiftKey) {
-        previousSearchMatch(view);
-      } else {
-        nextSearchMatch(view);
+    try {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          previousSearchMatch(view);
+        } else {
+          nextSearchMatch(view);
+        }
       }
-    }
-    if (e.key === "Escape") {
-      e.preventDefault();
-      closeSearch(view);
-      view.focus();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeSearch(view);
+        view.focus();
+      }
+    } catch (err: unknown) {
+      console.error("[find-replace] search keydown handler failed", err);
     }
   });
 
   replaceInput.addEventListener("input", () => {
-    ctx.commitQuery();
+    try {
+      ctx.commitQuery();
+    } catch (e: unknown) {
+      console.error("[find-replace] replace input handler failed", e);
+    }
   });
 
   replaceInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      replaceCurrentSearchMatch(view);
-      ctx.updateMatchInfo();
-    }
-    if (e.key === "Escape") {
-      e.preventDefault();
-      closeSearch(view);
-      view.focus();
+    try {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        replaceCurrentSearchMatch(view);
+        ctx.updateMatchInfo();
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeSearch(view);
+        view.focus();
+      }
+    } catch (err: unknown) {
+      console.error("[find-replace] replace keydown handler failed", err);
     }
   });
 }

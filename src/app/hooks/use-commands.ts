@@ -15,6 +15,7 @@
 import { useMemo } from "react";
 import type { PaletteCommand } from "../components/command-palette";
 import { basename, modKey } from "../lib/utils";
+import { FORMAT_EVENT } from "../../constants/events";
 
 /** Handlers injected by the parent for commands that need side effects. */
 export interface CommandHandlers {
@@ -60,7 +61,7 @@ export interface CommandHandlers {
 
 /** Dispatch a formatting event to the document for CM6 to handle. */
 export function dispatchFormatEvent(type: string, detail?: Record<string, unknown>): void {
-  document.dispatchEvent(new CustomEvent("cf:format", { detail: { type, ...detail } }));
+  document.dispatchEvent(new CustomEvent(FORMAT_EVENT, { detail: { type, ...detail } }));
 }
 
 /**

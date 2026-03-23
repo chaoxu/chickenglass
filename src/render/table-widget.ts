@@ -245,6 +245,7 @@ export class TableWidget extends RenderWidget {
       renderInlineMarkdown(cell, content, this.macros);
 
       cell.addEventListener("mousedown", (event) => {
+        try {
         if (activeInlineEditor && activeInlineEditor.cell === cell) return;
 
         event.preventDefault();
@@ -460,6 +461,9 @@ export class TableWidget extends RenderWidget {
             const docLen = editorView.state.doc.length;
             editorView.dispatch({ selection: { anchor: docLen } });
           }
+        }
+        } catch (e: unknown) {
+          console.error("[table-widget] mousedown handler failed", e);
         }
       });
     };
