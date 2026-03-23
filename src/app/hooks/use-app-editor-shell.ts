@@ -400,13 +400,9 @@ export function useAppEditorShell({
     const files = Array.from(e.dataTransfer.files);
     for (const file of files) {
       if (file.name.endsWith(".md")) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (typeof reader.result === "string") {
-            openFileWithContent(file.name, reader.result);
-          }
-        };
-        reader.readAsText(file);
+        void file.text().then((text) => {
+          openFileWithContent(file.name, text);
+        });
       }
     }
   }, [openFileWithContent]);

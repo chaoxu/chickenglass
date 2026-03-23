@@ -51,37 +51,21 @@ function sanitizeImageFilename(filename: string): string | null {
 }
 
 /** Convert a File to a base-64 data URL. */
-export function fileToDataUrl(file: File): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result !== "string") {
-        reject(new Error("FileReader result is not a string"));
-        return;
-      }
-      resolve(result);
-    };
-    reader.onerror = () => reject(new Error("FileReader error"));
-    reader.readAsDataURL(file);
-  });
+export async function fileToDataUrl(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64 = btoa(binary);
+  return `data:${file.type || "application/octet-stream"};base64,${base64}`;
 }
 
 /** Convert a File to a Uint8Array. */
-function fileToUint8Array(file: File): Promise<Uint8Array> {
-  return new Promise<Uint8Array>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (!(result instanceof ArrayBuffer)) {
-        reject(new Error("FileReader result is not an ArrayBuffer"));
-        return;
-      }
-      resolve(new Uint8Array(result));
-    };
-    reader.onerror = () => reject(new Error("FileReader error"));
-    reader.readAsArrayBuffer(file);
-  });
+async function fileToUint8Array(file: File): Promise<Uint8Array> {
+  const buffer = await file.arrayBuffer();
+  return new Uint8Array(buffer);
 }
 
 /**
