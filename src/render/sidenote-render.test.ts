@@ -201,7 +201,10 @@ describe("buildSidenoteDecorations — footnote def cursor zones", () => {
     expect(lineDecos.length).toBe(1);
   });
 
-  it("returns no decorations when sidenotes are collapsed", () => {
+  it("still renders ref superscripts and hides defs when collapsed", () => {
+    // Regression: collapsed mode must not expose raw footnote markdown.
+    // Refs should render as superscript numbers; defs should be hidden
+    // (content is shown in the FootnoteSectionWidget at document end).
     const state = EditorState.create({
       doc,
       extensions: [
@@ -216,8 +219,20 @@ describe("buildSidenoteDecorations — footnote def cursor zones", () => {
       effects: sidenotesCollapsedEffect.of(true),
     }).state;
     const decos = buildSidenoteDecorations(collapsedState, true);
+    const specs = getDecorationSpecs(decos);
 
-    expect(getDecorationSpecs(decos)).toEqual([]);
+    // Ref should be replaced with a FootnoteRefWidget
+    const refWidgets = specs.filter((s) => s.widgetClass === "FootnoteRefWidget");
+    expect(refWidgets.length).toBe(1);
+
+    // Def line should have the hide class
+    const lineDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefLine));
+    expect(lineDecos.length).toBe(1);
+
+    // Def body should NOT have a FootnoteBodyWidget (cursor-in-def editing
+    // is disabled in collapsed mode; content is in the footnote section)
+    const bodyWidgets = specs.filter((s) => s.widgetClass === "FootnoteBodyWidget");
+    expect(bodyWidgets.length).toBe(0);
   });
 });
 

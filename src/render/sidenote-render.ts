@@ -102,13 +102,12 @@ class FootnoteRefWidget extends SimpleTextRenderWidget {
 /** Build sidenote decorations from editor state. */
 export function buildSidenoteDecorations(state: EditorState, focused: boolean): DecorationSet {
   const collapsed = state.field(sidenotesCollapsedField, false) ?? false;
-  if (collapsed) return Decoration.none;
 
   const footnotes = collectFootnotes(state);
   const items: Range<Decoration>[] = [];
   const numberMap = numberFootnotes(footnotes);
 
-  // Render refs as superscript numbers
+  // Render refs as superscript numbers (both collapsed and expanded modes)
   for (const ref of footnotes.refs) {
     if (focused && cursorInRange(state, ref.from, ref.to)) continue;
 
@@ -122,7 +121,9 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
   // gets the same treatment: label visible as source, body rendered.
   const macros = state.field(mathMacrosField);
   for (const [, def] of footnotes.defs) {
-    const cursorInDef = focused && cursorInRange(state, def.from, def.to);
+    // In collapsed mode, defs are always hidden (content shown in footnote section).
+    // In expanded mode, cursor-in-def triggers the heading-like source pattern.
+    const cursorInDef = !collapsed && focused && cursorInRange(state, def.from, def.to);
 
     if (cursorInDef) {
       // Label stays as source; body keeps inline rendering via widget.
@@ -132,7 +133,7 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
       continue;
     }
 
-    // Cursor outside def — collapse the definition line.
+    // Cursor outside def (or collapsed mode) — collapse the definition line.
     items.push(
       Decoration.line({ class: "cf-sidenote-def-line" }).range(def.from),
     );
