@@ -8,6 +8,7 @@ import {
   analyzeFootnotes,
   analyzeHeadings,
   analyzeReferences,
+  findTrailingHeadingAttributes,
   stringTextSource,
 } from "./document";
 
@@ -201,6 +202,78 @@ describe("document semantics analyzers", () => {
 
     expect(semantics.includes).toHaveLength(1);
     expect(semantics.includes[0].path).toBe("chapters/intro.md");
+  });
+
+  // --- Regression: #353 — literal braces must not be treated as Pandoc attributes ---
+  it("preserves literal brace text that is not Pandoc attribute syntax", () => {
+    // `{1,2,3}` is a set literal, not a Pandoc attribute block
+    const doc = "# Set {1,2,3}\n";
+    const tree = parser.parse(doc);
+
+    const headings = analyzeHeadings(stringTextSource(doc), tree);
+
+    expect(headings).toHaveLength(1);
+    expect(headings[0].text).toBe("Set {1,2,3}");
+    expect(headings[0].id).toBeUndefined();
+  });
+
+  it("findTrailingHeadingAttributes returns null for non-attribute braces", () => {
+    // Various content that looks like braces but is NOT Pandoc attributes
+    expect(findTrailingHeadingAttributes("Set {1,2,3}")).toBeNull();
+    expect(findTrailingHeadingAttributes("Set {a, b}")).toBeNull();
+    expect(findTrailingHeadingAttributes("Set {}")).toBeNull();
+    expect(findTrailingHeadingAttributes("Map {key: value}")).toBeNull();
+  });
+
+  it("findTrailingHeadingAttributes still strips valid Pandoc attributes", () => {
+    expect(findTrailingHeadingAttributes("Intro {#sec:intro}")).toMatchObject({
+      content: "#sec:intro",
+    });
+    expect(findTrailingHeadingAttributes("Details {-}")).toMatchObject({
+      content: "-",
+    });
+    expect(findTrailingHeadingAttributes("Title {.unnumbered}")).toMatchObject({
+      content: ".unnumbered",
+    });
+    expect(findTrailingHeadingAttributes("Title {#id .class}")).toMatchObject({
+      content: "#id .class",
+    });
+    expect(findTrailingHeadingAttributes('Title {key="value"}')).not.toBeNull();
+  });
+
+  // --- Regression: #354 — skipped heading levels produce "1.0.1" instead of "1.1" ---
+  it("skips zero-valued intermediate counters for non-sequential heading levels", () => {
+    // `# A` (level 1) then `### C` (level 3) should produce "1.1", not "1.0.1"
+    const doc = "# A\n\n### C\n";
+    const tree = parser.parse(doc);
+
+    const headings = analyzeHeadings(stringTextSource(doc), tree);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]).toMatchObject({ level: 1, text: "A", number: "1" });
+    expect(headings[1]).toMatchObject({ level: 3, text: "C", number: "1.1" });
+  });
+
+  it("handles multiple skipped levels correctly", () => {
+    // `# A` then `#### D` should produce "1.1"
+    const doc = "# A\n\n#### D\n";
+    const tree = parser.parse(doc);
+
+    const headings = analyzeHeadings(stringTextSource(doc), tree);
+
+    expect(headings[1]).toMatchObject({ level: 4, text: "D", number: "1.1" });
+  });
+
+  it("sequential heading levels still produce full numbering", () => {
+    // Normal case: `# A` → `## B` → `### C` should still produce "1.1.1"
+    const doc = "# A\n\n## B\n\n### C\n";
+    const tree = parser.parse(doc);
+
+    const headings = analyzeHeadings(stringTextSource(doc), tree);
+
+    expect(headings[0]).toMatchObject({ number: "1" });
+    expect(headings[1]).toMatchObject({ number: "1.1" });
+    expect(headings[2]).toMatchObject({ number: "1.1.1" });
   });
 
   it("unified walk matches individual analyzers on a mixed document", () => {
