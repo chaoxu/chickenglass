@@ -1,7 +1,8 @@
 import { parser as baseParser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
 import { markdownExtensions } from "./parser";
-import { MARK_NODES } from "./render";
+// Direct import: barrel would create circular dependency (inline-fragments → render/index → inline-render → inline-fragments)
+import { MARK_NODES } from "./render/inline-shared";
 import {
   extractReferenceCluster,
   NARRATIVE_REFERENCE_RE,

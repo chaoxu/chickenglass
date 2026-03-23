@@ -5,12 +5,13 @@ import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import { search } from "@codemirror/search";
 
 import { createTestView } from "../test-utils";
+// Direct import: barrel would create circular dependency (render/index → search-highlight → editor/index → ... → render/index)
 import {
   nextSearchMatch,
   openFindSearch,
   searchControllerExtensions,
   setSearchControllerQuery,
-} from "../editor";
+} from "../editor/find-replace";
 import { MathWidget } from "./math-render";
 import { searchHighlightPlugin } from "./search-highlight";
 

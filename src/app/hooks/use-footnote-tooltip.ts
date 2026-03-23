@@ -1,6 +1,8 @@
 import { useEffect, useCallback } from "react";
 import { EditorView } from "@codemirror/view";
-import { collectFootnotes, mathMacrosField } from "../../render";
+// Direct imports: barrel would create circular dependency via citations chain
+import { collectFootnotes } from "../../render/sidenote-render";
+import { mathMacrosField } from "../../render/math-macros";
 import { renderDocumentFragmentToDom } from "../../document-surfaces";
 
 /**

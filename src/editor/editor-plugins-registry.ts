@@ -1,5 +1,8 @@
 import type { EditorPlugin } from "./editor-plugin";
-import { focusModeExtension, debugInspectorPlugin, hoverPreviewExtension } from "../render";
+// Direct imports: barrel would create circular dependency (editor/index → editor-plugins-registry → render/index → search-highlight → editor/index)
+import { focusModeExtension } from "../render/focus-mode";
+import { debugInspectorPlugin } from "../render/debug-inspector";
+import { hoverPreviewExtension } from "../render/hover-preview";
 import { spellcheckExtension } from "./spellcheck";
 import { findReplaceExtension } from "./find-replace";
 

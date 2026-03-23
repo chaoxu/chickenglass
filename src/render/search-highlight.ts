@@ -12,10 +12,11 @@
 
 import { type Extension } from "@codemirror/state";
 import { Decoration, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view";
+// Direct import: barrel would create circular dependency (render/index → search-highlight → editor/index → ... → render/index)
 import {
   collectVisibleSearchMatches,
   getSearchControllerState,
-} from "../editor";
+} from "../editor/find-replace";
 import { createSimpleViewPlugin } from "./render-utils";
 
 const MATCH_CLASS = "cf-search-match";

@@ -16,7 +16,8 @@ import { type WidgetType } from "@codemirror/view";
 import { parser as baseParser } from "@lezer/markdown";
 import { type CslJsonItem } from "./bibtex-parser";
 import { CslProcessor } from "./csl-processor";
-import { SimpleTextRenderWidget } from "../render";
+// Direct import: barrel would create circular dependency (citations/citation-render → render/index → hover-preview → citations/...)
+import { SimpleTextRenderWidget } from "../render/render-utils";
 import { markdownExtensions } from "../parser";
 import {
   analyzeDocumentSemantics,

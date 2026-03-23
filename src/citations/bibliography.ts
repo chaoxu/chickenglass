@@ -12,7 +12,9 @@ import {
 import { type EditorState, type Extension } from "@codemirror/state";
 import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors } from "./bibtex-parser";
 import { type BibStore, bibDataEffect, bibDataField, findCitations } from "./citation-render";
-import { RenderWidget, buildDecorations, createDecorationsField, sanitizeCslHtml } from "../render";
+// Direct imports: barrel would create circular dependency (citations/bibliography → render/index → hover-preview → citations/...)
+import { RenderWidget, buildDecorations, createDecorationsField } from "../render/render-utils";
+import { sanitizeCslHtml } from "../render/inline-shared";
 
 /**
  * Collect all citation ids referenced in the document text.

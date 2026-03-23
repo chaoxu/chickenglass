@@ -16,13 +16,14 @@ import {
   type FrontmatterResult,
 } from "../parser/frontmatter";
 import { projectConfigFacet, mergeConfigs } from "./project-config";
+// Direct import: barrel would create circular dependency (editor/index → frontmatter-state → render/index → search-highlight → editor/index)
 import {
   createDecorationsField,
   editorFocusField,
   focusTracker,
   RenderWidget,
   serializeMacros,
-} from "../render";
+} from "../render/render-utils";
 
 export { type FrontmatterConfig, type NumberingScheme } from "../parser/frontmatter";
 
