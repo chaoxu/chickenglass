@@ -1,13 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
 import type { EditorView } from "@codemirror/view";
-import { TableWidget, shouldCommitBlurredInlineEditor } from "./table-widget";
+import {
+  TableWidget,
+  serializeTableWidgetMacros,
+  shouldCommitBlurredInlineEditor,
+} from "./table-widget";
 import type { ParsedTable } from "./table-utils";
 
 // jsdom lacks ResizeObserver — provide a no-op stub.
 class ResizeObserverStub {
+  static instances: ResizeObserverStub[] = [];
+
+  disconnect = vi.fn();
+
+  constructor() {
+    ResizeObserverStub.instances.push(this);
+  }
+
   observe() {}
   unobserve() {}
-  disconnect() {}
 }
 vi.stubGlobal("ResizeObserver", ResizeObserverStub);
 
@@ -36,6 +47,14 @@ function makeStubView(): EditorView {
 }
 
 describe("TableWidget source range attributes", () => {
+  it("treats macro order as irrelevant when computing the widget signature", () => {
+    expect(
+      serializeTableWidgetMacros({ "\\A": "1", "\\B": "2" }),
+    ).toBe(
+      serializeTableWidgetMacros({ "\\B": "2", "\\A": "1" }),
+    );
+  });
+
   it("sets data-source-from and data-source-to on the container", () => {
     const tableText = "| A | B |\n|---|---|\n| 1 | 2 |";
     const tableFrom = 42;
@@ -75,6 +94,25 @@ describe("TableWidget source range attributes", () => {
     expect(found[0].dataset.sourceFrom).toBe("0");
     expect(found[0].dataset.sourceTo).toBe(String(tableText.length));
   });
+
+  it("rebuilds when macro content changes even if the table text is unchanged", () => {
+    const widgetA = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 0, { "\\RR": "\\mathbb{R}" });
+    const widgetB = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 0, { "\\NN": "\\mathbb{N}" });
+
+    expect(widgetA.eq(widgetB)).toBe(false);
+  });
+
+  it("disconnects its ResizeObserver when the widget is destroyed", () => {
+    ResizeObserverStub.instances.length = 0;
+    const widget = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 0, {});
+    const dom = widget.toDOM(makeStubView());
+    const observer = ResizeObserverStub.instances.at(-1);
+
+    expect(observer).toBeDefined();
+    widget.destroy(dom);
+
+    expect(observer?.disconnect).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("table-widget blur ownership", () => {
@@ -82,6 +120,7 @@ describe("table-widget blur ownership", () => {
     return {
       view: {} as EditorView,
       cell,
+      owner: {} as TableWidget,
     };
   }
 

@@ -444,7 +444,7 @@ function enterInListItem(view: EditorView): boolean {
  * (right after the marker), merge the current item's content with the
  * previous item. Returns false for first items and non-list contexts.
  */
-function backspaceAtListItemStart(view: EditorView): boolean {
+export function backspaceAtListItemStart(view: EditorView): boolean {
   const listItem = findListItemAtCursor(view);
   if (!listItem) return false;
 
@@ -477,15 +477,18 @@ function backspaceAtListItemStart(view: EditorView): boolean {
   // Get the content of the current item (text after marker)
   const currentContent = lineText.slice(contentStart - line.from);
 
-  // Delete from end of previous item's first line to the end of the
-  // current item's marker, and insert the current item's content
-  // We need to remove the newline + current marker, appending content to prev line
-  const deleteFrom = prevLineEnd;
-  const deleteTo = contentStart;
+  // Remove only the current item's marker line, leaving both the
+  // previous item's nested content and the current item's nested
+  // children intact.
+  const deleteFrom = line.from;
+  const deleteTo = line.number < doc.lines ? doc.line(line.number + 1).from : line.to;
 
   view.dispatch({
-    changes: { from: deleteFrom, to: deleteTo, insert: currentContent },
-    selection: { anchor: prevLineEnd },
+    changes: [
+      { from: prevLineEnd, insert: currentContent },
+      { from: deleteFrom, to: deleteTo },
+    ],
+    selection: { anchor: prevLineEnd + currentContent.length },
   });
 
   return true;

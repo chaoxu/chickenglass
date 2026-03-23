@@ -76,6 +76,7 @@ export function useEditorSession({
   const openPathsRef = useRef<Set<string>>(new Set());
   const activeTabRef = useRef<string | null>(null);
   const sessionStateRef = useRef<EditorSessionState>(sessionState);
+  const openFileRequestRef = useRef(0);
 
   const openTabs = sessionState.tabs;
   const activeTab = sessionState.activePath;
@@ -91,12 +92,19 @@ export function useEditorSession({
     return liveDocs.current.get(path) ?? buffers.current.get(path) ?? "";
   }, []);
 
-  const commitSessionState = useCallback((nextState: EditorSessionState) => {
+  const commitSessionState = useCallback((
+    nextState: EditorSessionState,
+    options?: { syncEditorDoc?: boolean },
+  ) => {
+    const shouldSyncEditorDoc = options?.syncEditorDoc
+      ?? nextState.activePath !== sessionStateRef.current.activePath;
     sessionStateRef.current = nextState;
     openPathsRef.current = new Set(nextState.tabs.map((tab) => tab.path));
     activeTabRef.current = nextState.activePath;
     setSessionState(nextState);
-    setEditorDoc(docForPath(nextState.activePath));
+    if (shouldSyncEditorDoc) {
+      setEditorDoc(docForPath(nextState.activePath));
+    }
   }, [docForPath]);
 
   const handleDocChange = useCallback((doc: string) => {
@@ -107,7 +115,7 @@ export function useEditorSession({
     const isDirty = doc !== (buffers.current.get(path) ?? "");
     const nextState = markSessionTabDirty(sessionStateRef.current, path, isDirty);
     if (nextState !== sessionStateRef.current) {
-      commitSessionState(nextState);
+      commitSessionState(nextState, { syncEditorDoc: false });
     }
   }, [commitSessionState]);
 
@@ -143,10 +151,12 @@ export function useEditorSession({
 
   const openFile = useCallback(async (path: string, options?: { preview?: boolean }) => {
     const isPreview = options?.preview ?? false;
+    const requestId = ++openFileRequestRef.current;
 
     await withPerfOperation("open_file", async (operation) => {
       if (hasSessionPath(sessionStateRef.current, path)) {
         operation.measureSync("open_file.activate", () => {
+          if (requestId !== openFileRequestRef.current) return;
           const existing = findSessionTab(sessionStateRef.current, path);
           if (!existing) return;
           commitSessionState(openSessionTab(sessionStateRef.current, {
@@ -167,6 +177,7 @@ export function useEditorSession({
         });
 
         operation.measureSync("open_file.tab_state", () => {
+          if (requestId !== openFileRequestRef.current) return;
           const currentState = sessionStateRef.current;
           const replacedPreview = isPreview ? findPreviewTab(currentState) : undefined;
           buffers.current.set(path, content);
@@ -181,7 +192,6 @@ export function useEditorSession({
             dirty: false,
             preview: isPreview,
           }));
-          setEditorDoc(content);
           addRecentFile(path);
         }, { category: "open_file", detail: path });
       } catch (e: unknown) {
@@ -206,7 +216,6 @@ export function useEditorSession({
       dirty: true,
       preview: false,
     }));
-    setEditorDoc(content);
   }, [commitSessionState]);
 
   const saveFile = useCallback(async () => {
@@ -222,7 +231,9 @@ export function useEditorSession({
       });
       buffers.current.set(path, doc);
       liveDocs.current.set(path, doc);
-      commitSessionState(markSessionTabDirty(sessionStateRef.current, path, false));
+      commitSessionState(markSessionTabDirty(sessionStateRef.current, path, false), {
+        syncEditorDoc: false,
+      });
     } catch (e: unknown) {
       // Save failed — leave dirty so user knows data is unsaved
       console.error("[session] save failed:", e);
@@ -336,10 +347,9 @@ export function useEditorSession({
           newPath: relativePath,
           doc,
         }));
-        setEditorDoc(doc);
         addRecentFile(relativePath);
         await refreshTree();
-      } catch (_e) {
+      } catch {
         // best-effort: save-as dialog cancelled or failed by user action
       }
       return;

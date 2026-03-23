@@ -18,11 +18,20 @@ import { addRow, formatTable, type ParsedTable } from "./table-utils";
  */
 export const cellEditAnnotation = Annotation.define<boolean>();
 
-/** Module-level reference to the currently active inline cell editor. */
-let activeInlineEditor: {
+interface ActiveInlineEditor {
   view: EditorView;
   cell: HTMLElement;
-} | null = null;
+  owner: TableWidget;
+}
+
+interface DestroyedInlineEditor {
+  text: string;
+  cell: HTMLElement;
+  owner: TableWidget;
+}
+
+/** Module-level reference to the currently active inline cell editor. */
+let activeInlineEditor: ActiveInlineEditor | null = null;
 
 export function shouldCommitBlurredInlineEditor(
   snapshot: typeof activeInlineEditor,
@@ -32,19 +41,25 @@ export function shouldCommitBlurredInlineEditor(
   return snapshot !== null && current === snapshot && snapshot.cell === cell;
 }
 
+export function serializeTableWidgetMacros(macros: Record<string, string>): string {
+  return JSON.stringify(
+    Object.entries(macros).sort(([left], [right]) => left.localeCompare(right)),
+  );
+}
+
 /**
  * Destroy the currently active inline editor (if any) and return
  * the final document text from that editor.
  */
-function destroyActiveInlineEditor(): string {
-  if (!activeInlineEditor) return "";
-  const { view: inlineView, cell } = activeInlineEditor;
+function destroyActiveInlineEditor(): DestroyedInlineEditor | null {
+  if (!activeInlineEditor) return null;
+  const { view: inlineView, cell, owner } = activeInlineEditor;
   const text = inlineView.state.doc.toString();
   inlineView.destroy();
   cell.classList.remove("cf-table-cell-editing");
   cell.innerHTML = "";
   activeInlineEditor = null;
-  return text;
+  return { text, cell, owner };
 }
 
 /**
@@ -60,6 +75,8 @@ function destroyActiveInlineEditor(): string {
 export class TableWidget extends WidgetType {
   /** Reference to the EditorView, stored on first toDOM() call. */
   private editorView: EditorView | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private readonly macroSignature: string;
 
   constructor(
     private readonly table: ParsedTable,
@@ -68,6 +85,7 @@ export class TableWidget extends WidgetType {
     private readonly macros: Record<string, string>,
   ) {
     super();
+    this.macroSignature = serializeTableWidgetMacros(macros);
   }
 
   /**
@@ -75,7 +93,10 @@ export class TableWidget extends WidgetType {
    * If the table text changed, CM6 will rebuild the DOM via toDOM().
    */
   eq(other: TableWidget): boolean {
-    return this.tableText === other.tableText;
+    return (
+      this.tableText === other.tableText &&
+      this.macroSignature === other.macroSignature
+    );
   }
 
   /**
@@ -118,6 +139,55 @@ export class TableWidget extends WidgetType {
     return { ...this.table, rows };
   }
 
+  private getCellPosition(cell: HTMLElement): {
+    section: string;
+    row: number;
+    col: number;
+  } {
+    return {
+      section: cell.dataset.section ?? "body",
+      row: parseInt(cell.dataset.row ?? "0", 10),
+      col: parseInt(cell.dataset.col ?? "0", 10),
+    };
+  }
+
+  private restoreRenderedCell(cell: HTMLElement, content: string): void {
+    renderInlineMarkdown(cell, content, this.macros);
+  }
+
+  private syncToRoot(
+    editedSection: string,
+    editedRow: number,
+    editedCol: number,
+    editedText: string,
+    useAnnotation: boolean,
+  ): void {
+    const rootView = this.editorView;
+    if (!rootView) return;
+    const currentTables = findTablesInState(rootView.state);
+    const bestTable = findClosestTable(currentTables, this.tableFrom);
+    if (!bestTable) return;
+    this.tableFrom = bestTable.from;
+    const currentText = rootView.state.sliceDoc(bestTable.from, bestTable.to);
+    const updated = this.buildUpdatedTable(editedSection, editedRow, editedCol, editedText);
+    const newText = formatTable(updated).join("\n");
+    if (newText === currentText) return;
+    rootView.dispatch({
+      changes: { from: bestTable.from, to: bestTable.to, insert: newText },
+      ...(useAnnotation ? { annotations: cellEditAnnotation.of(true) } : {}),
+    });
+  }
+
+  private commitRenderedCell(
+    cell: HTMLElement,
+    content: string,
+    useAnnotation: boolean,
+  ): void {
+    this.restoreRenderedCell(cell, content);
+    const { section, row, col } = this.getCellPosition(cell);
+    this.syncToRoot(section, row, col, content, useAnnotation);
+  }
+
   /**
    * Render the parsed table as an HTML <table> with thead/tbody.
    * Each cell gets data attributes for row, column, and section,
@@ -153,29 +223,6 @@ export class TableWidget extends WidgetType {
       }
     };
 
-    const syncToRoot = (
-      editedSection: string,
-      editedRow: number,
-      editedCol: number,
-      editedText: string,
-      useAnnotation: boolean,
-    ): void => {
-      const rootView = this.editorView;
-      if (!rootView) return;
-      const currentTables = findTablesInState(rootView.state);
-      const bestTable = findClosestTable(currentTables, this.tableFrom);
-      if (!bestTable) return;
-      this.tableFrom = bestTable.from;
-      const currentText = rootView.state.sliceDoc(bestTable.from, bestTable.to);
-      const updated = this.buildUpdatedTable(editedSection, editedRow, editedCol, editedText);
-      const newText = formatTable(updated).join("\n");
-      if (newText === currentText) return;
-      rootView.dispatch({
-        changes: { from: bestTable.from, to: bestTable.to, insert: newText },
-        ...(useAnnotation ? { annotations: cellEditAnnotation.of(true) } : {}),
-      });
-    };
-
     const setupCell = (
       cell: HTMLElement,
       section: string,
@@ -206,14 +253,10 @@ export class TableWidget extends WidgetType {
         delete cell.dataset.placeAtEnd;
 
         if (activeInlineEditor) {
-          const oldText = activeInlineEditor.view.state.doc.toString();
-          const oldCell = activeInlineEditor.cell;
-          const oldSection = oldCell.dataset.section ?? "body";
-          const oldRow = parseInt(oldCell.dataset.row ?? "0", 10);
-          const oldCol = parseInt(oldCell.dataset.col ?? "0", 10);
-          destroyActiveInlineEditor();
-          renderInlineMarkdown(oldCell, oldText, this.macros);
-          syncToRoot(oldSection, oldRow, oldCol, oldText, true);
+          const destroyed = destroyActiveInlineEditor();
+          if (destroyed) {
+            destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text, true);
+          }
         }
 
         const rawText = this.getRawCellText(section, row, col);
@@ -230,27 +273,31 @@ export class TableWidget extends WidgetType {
           doc: rawText,
           macros: this.macros,
           onChange: (newDoc) => {
-            syncToRoot(section, row, col, newDoc, true);
+            this.syncToRoot(section, row, col, newDoc, true);
           },
           onBlur: () => {
             const blurredEditor = activeInlineEditor;
             setTimeout(() => {
               if (!shouldCommitBlurredInlineEditor(blurredEditor, activeInlineEditor, cell)) return;
-              const editedText = destroyActiveInlineEditor();
-              renderInlineMarkdown(cell, editedText, this.macros);
+              const destroyed = destroyActiveInlineEditor();
+              if (!destroyed) return;
 
               const widgetContainer = cell.closest(".cf-table-widget");
               const stillInTable =
                 widgetContainer && widgetContainer.contains(document.activeElement);
-              syncToRoot(section, row, col, editedText, !!stillInTable);
+              destroyed.owner.commitRenderedCell(
+                destroyed.cell,
+                destroyed.text,
+                !!stillInTable,
+              );
             }, 0);
           },
           onKeydown: (event) => {
             if (event.key === "Escape") {
               event.preventDefault();
-              const text = destroyActiveInlineEditor();
-              renderInlineMarkdown(cell, text, this.macros);
-              syncToRoot(section, row, col, text, false);
+              const destroyed = destroyActiveInlineEditor();
+              if (!destroyed) return true;
+              destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text, false);
               this.editorView?.focus();
               return true;
             }
@@ -264,9 +311,9 @@ export class TableWidget extends WidgetType {
                 nextLinear++;
               }
               if (nextLinear >= totalRows) {
-                const text = destroyActiveInlineEditor();
-                renderInlineMarkdown(cell, text, this.macros);
-                syncToRoot(section, row, col, text, true);
+                const destroyed = destroyActiveInlineEditor();
+                if (!destroyed) return true;
+                destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text, true);
                 const rootView = this.editorView;
                 if (rootView) {
                   const tables = findTablesInState(rootView.state);
@@ -311,9 +358,9 @@ export class TableWidget extends WidgetType {
               event.preventDefault();
               const nextLinear = currentLinear + 1;
               if (nextLinear >= totalRows) {
-                const text = destroyActiveInlineEditor();
-                renderInlineMarkdown(cell, text, this.macros);
-                syncToRoot(section, row, col, text, true);
+                const destroyed = destroyActiveInlineEditor();
+                if (!destroyed) return true;
+                destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text, true);
                 const rootView = this.editorView;
                 if (rootView) {
                   const tables = findTablesInState(rootView.state);
@@ -394,7 +441,7 @@ export class TableWidget extends WidgetType {
           },
         });
 
-        activeInlineEditor = { view: editorView, cell };
+        activeInlineEditor = { view: editorView, cell, owner: this };
 
         if (placeAtEnd) {
           const docLen = editorView.state.doc.length;
@@ -468,12 +515,21 @@ export class TableWidget extends WidgetType {
 
     container.appendChild(tableEl);
 
-    const observer = new ResizeObserver(() => {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = new ResizeObserver(() => {
       view.requestMeasure();
     });
-    observer.observe(container);
+    this.resizeObserver.observe(container);
 
     return container;
+  }
+
+  destroy(dom: HTMLElement): void {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    if (activeInlineEditor?.owner === this && dom.contains(activeInlineEditor.cell)) {
+      destroyActiveInlineEditor();
+    }
   }
 
   /**
