@@ -119,6 +119,11 @@ export const typographyThemeStyles = {
     fontFamily: monoFont,
   },
 
+  /* Reference source — raw [@id] token when cursor is inside */
+  ".cf-reference-source": {
+    fontFamily: monoFont,
+  },
+
   /* Header markers (# symbols) shown in muted color when editing. */
   ".cf-heading-1 .tok-heading.tok-meta, .cf-heading-2 .tok-heading.tok-meta, .cf-heading-3 .tok-heading.tok-meta, .cf-heading-4 .tok-heading.tok-meta, .cf-heading-5 .tok-heading.tok-meta, .cf-heading-6 .tok-heading.tok-meta":
     {

@@ -11,12 +11,13 @@
  */
 
 import {
+  Decoration,
   type DecorationSet,
-  type Decoration,
   type EditorView,
   type ViewUpdate,
 } from "@codemirror/view";
 import { type Extension, type Range } from "@codemirror/state";
+import { CSS } from "../constants/css-classes";
 import { resolveCrossref } from "../index/crossref-resolver";
 import {
   type BibStore,
@@ -65,10 +66,15 @@ export function collectReferenceRanges(
     processor,
   );
 
+  const sourceMarkDecoration = Decoration.mark({ class: CSS.referenceSource });
   const items: Range<Decoration>[] = [];
 
   for (const ref of allRefs) {
-    if (cursorInRange(view, ref.from, ref.to)) continue;
+    if (cursorInRange(view, ref.from, ref.to)) {
+      // Cursor inside reference — show raw token with monospace source styling
+      items.push(sourceMarkDecoration.range(ref.from, ref.to));
+      continue;
+    }
 
     if (ref.bracketed) {
       const hasCitation = ref.ids.some((id) => store.has(id));

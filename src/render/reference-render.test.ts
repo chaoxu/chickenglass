@@ -128,7 +128,7 @@ describe("collectReferenceRanges", () => {
     expect(widgetClass(ref!)).toBe("UnresolvedRefWidget");
   });
 
-  it("skips reference containing the cursor", () => {
+  it("applies source mark to reference containing the cursor", () => {
     const doc = [
       "::: {.theorem #thm-1}",
       "T1.",
@@ -141,7 +141,10 @@ describe("collectReferenceRanges", () => {
     const ranges = collectReferenceRanges(view, store);
 
     const ref = ranges.find((r) => r.from === refStart);
-    expect(ref).toBeUndefined();
+    expect(ref).toBeDefined();
+    // Should be a mark decoration (source styling), not a widget
+    expect(ref!.value.spec.widget).toBeUndefined();
+    expect(ref!.value.spec.class).toBe(CSS.referenceSource);
   });
 
   it("collects other references when cursor is inside one", () => {
@@ -162,7 +165,11 @@ describe("collectReferenceRanges", () => {
     view = createView(doc, thmStart + 2);
     const ranges = collectReferenceRanges(view, store);
 
-    expect(ranges.find((r) => r.from === thmStart)).toBeUndefined();
+    // Cursor-in ref gets a source mark (not a widget)
+    const thmRef = ranges.find((r) => r.from === thmStart);
+    expect(thmRef).toBeDefined();
+    expect(thmRef!.value.spec.class).toBe(CSS.referenceSource);
+    // The other ref still gets a widget
     expect(ranges.find((r) => r.from === defStart)).toBeDefined();
   });
 
@@ -427,14 +434,15 @@ describe("collectReferenceRanges", () => {
       expect(widgetClass(ref!)).toBe("UnresolvedRefWidget");
     });
 
-    it("skips reference when cursor is at its exact start position", () => {
+    it("applies source mark when cursor is at its exact start position", () => {
       const doc = "See [@karger2000].";
       const refStart = doc.indexOf("[@karger2000]");
       view = createView(doc, refStart);
       const ranges = collectReferenceRanges(view, store);
-      // Cursor exactly at start is inside the reference
+      // Cursor exactly at start is inside the reference — gets source mark
       const ref = ranges.find((r) => r.from === refStart);
-      expect(ref).toBeUndefined();
+      expect(ref).toBeDefined();
+      expect(ref!.value.spec.class).toBe(CSS.referenceSource);
     });
 
     it("handles document with only blank lines", () => {

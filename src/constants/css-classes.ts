@@ -149,6 +149,9 @@ export const CSS = {
   /** Math source (delimiter visible when cursor on math). */
   mathSource: "cf-math-source",
 
+  /** Reference source (raw token visible when cursor on cross-ref/citation). */
+  referenceSource: "cf-reference-source",
+
   /** Code block source fences (visible when cursor on either fence). */
   codeblockSource: "cf-codeblock-source",
   codeblockSourceOpen: "cf-codeblock-source cf-codeblock-source-open",
