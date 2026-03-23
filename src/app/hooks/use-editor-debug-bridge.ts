@@ -1,11 +1,6 @@
 import { useCallback } from "react";
 import type { EditorView } from "@codemirror/view";
-import { createDebugHelpers, type DebugHelpers } from "../../editor/debug-helpers";
-
-interface DebugWindow {
-  __cmView?: EditorView;
-  __cmDebug?: DebugHelpers;
-}
+import { createDebugHelpers } from "../../editor/debug-helpers";
 
 export interface EditorDebugBridge {
   attachDebugView: (view: EditorView) => void;
@@ -13,16 +8,14 @@ export interface EditorDebugBridge {
 }
 
 export function attachDebugView(view: EditorView): void {
-  const debugWindow = window as unknown as DebugWindow;
-  debugWindow.__cmView = view;
-  debugWindow.__cmDebug = createDebugHelpers(view);
+  window.__cmView = view;
+  window.__cmDebug = createDebugHelpers(view);
 }
 
 export function clearDebugView(view?: EditorView): void {
-  const debugWindow = window as unknown as DebugWindow;
-  if (!view || debugWindow.__cmView === view) {
-    debugWindow.__cmView = undefined;
-    debugWindow.__cmDebug = undefined;
+  if (!view || window.__cmView === view) {
+    window.__cmView = undefined;
+    window.__cmDebug = undefined;
   }
 }
 

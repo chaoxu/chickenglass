@@ -144,10 +144,12 @@ export class TableWidget extends WidgetType {
     row: number;
     col: number;
   } {
+    const rawRow = parseInt(cell.dataset.row ?? "0", 10);
+    const rawCol = parseInt(cell.dataset.col ?? "0", 10);
     return {
       section: cell.dataset.section ?? "body",
-      row: parseInt(cell.dataset.row ?? "0", 10),
-      col: parseInt(cell.dataset.col ?? "0", 10),
+      row: Number.isFinite(rawRow) ? rawRow : 0,
+      col: Number.isFinite(rawCol) ? rawCol : 0,
     };
   }
 
@@ -503,8 +505,10 @@ export class TableWidget extends WidgetType {
       event.stopPropagation();
 
       const section = target.dataset.section ?? "body";
-      const row = parseInt(target.dataset.row ?? "0", 10);
-      const col = parseInt(target.dataset.col ?? "0", 10);
+      const rawRow = parseInt(target.dataset.row ?? "0", 10);
+      const rawCol = parseInt(target.dataset.col ?? "0", 10);
+      const row = Number.isFinite(rawRow) ? rawRow : 0;
+      const col = Number.isFinite(rawCol) ? rawCol : 0;
 
       const tables = findTablesInState(view.state);
       const tableRange = tables.find((range) => range.from === this.tableFrom);

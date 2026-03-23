@@ -158,7 +158,9 @@ export function findClosestWidgetContainer(
   let closestDist = Infinity;
   for (const container of containers) {
     const element = container as HTMLElement;
-    const dist = Math.abs(parseInt(element.dataset.tableFrom ?? "0", 10) - trackedFrom);
+    const parsed = parseInt(element.dataset.tableFrom ?? "0", 10);
+    const tableFrom = Number.isFinite(parsed) ? parsed : 0;
+    const dist = Math.abs(tableFrom - trackedFrom);
     if (dist < closestDist) {
       closestDist = dist;
       closest = element;

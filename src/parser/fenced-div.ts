@@ -32,10 +32,7 @@ import { COLON, SPACE, TAB, OPEN_BRACE, findMatchingBrace, skipSpaceTab, isSpace
  *   window.__fencedDivDebug = false  // disable
  */
 function fencedDivLog(msg: string): void {
-  if (
-    typeof window !== "undefined" &&
-    (window as unknown as { __fencedDivDebug?: boolean }).__fencedDivDebug
-  ) {
+  if (typeof window !== "undefined" && window.__fencedDivDebug) {
     console.log(`[fencedDiv] ${msg}`);
   }
 }

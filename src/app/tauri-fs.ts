@@ -33,10 +33,11 @@ export function isTauri(): boolean {
  */
 export async function openFolder(): Promise<string | null> {
   const selected = await open({ directory: true, multiple: false });
-  if (!selected) return null;
-  const path = selected as string;
-  await openFolderCommand(path);
-  return path;
+  // open() returns null on cancel, or a string (single) or string[] (multiple).
+  // We pass multiple: false so an array result should not occur, but guard anyway.
+  if (!selected || Array.isArray(selected)) return null;
+  await openFolderCommand(selected);
+  return selected;
 }
 
 /**

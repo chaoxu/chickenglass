@@ -11,7 +11,6 @@ import type { SyntaxNode } from "@lezer/common";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
 import { setEditorMode, type EditorMode } from "./editor";
-import type { SourceMap } from "../app/source-map";
 
 /** Current editor mode — cycles through rendered → source → preview. */
 let currentMode: EditorMode = "rich";
@@ -35,9 +34,7 @@ function cycleEditorMode(view: EditorView): boolean {
  * Dispatches a custom DOM event that the App listens for.
  */
 function jumpToSourceFile(view: EditorView): boolean {
-  const sourceMap = (
-    window as unknown as { __cfSourceMap?: SourceMap | null }
-  ).__cfSourceMap;
+  const sourceMap = window.__cfSourceMap;
   if (!sourceMap) return false;
 
   const pos = view.state.selection.main.head;

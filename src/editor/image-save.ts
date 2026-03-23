@@ -54,7 +54,14 @@ function sanitizeImageFilename(filename: string): string | null {
 export function fileToDataUrl(file: File): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        reject(new Error("FileReader result is not a string"));
+        return;
+      }
+      resolve(result);
+    };
     reader.onerror = () => reject(new Error("FileReader error"));
     reader.readAsDataURL(file);
   });
@@ -64,7 +71,14 @@ export function fileToDataUrl(file: File): Promise<string> {
 function fileToUint8Array(file: File): Promise<Uint8Array> {
   return new Promise<Uint8Array>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+    reader.onload = () => {
+      const result = reader.result;
+      if (!(result instanceof ArrayBuffer)) {
+        reject(new Error("FileReader result is not an ArrayBuffer"));
+        return;
+      }
+      resolve(new Uint8Array(result));
+    };
     reader.onerror = () => reject(new Error("FileReader error"));
     reader.readAsArrayBuffer(file);
   });

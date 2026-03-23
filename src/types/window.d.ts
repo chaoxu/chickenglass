@@ -1,0 +1,66 @@
+/**
+ * Ambient Window augmentation for Coflat debug globals.
+ *
+ * These properties are set at runtime by various subsystems and consumed
+ * by browser console sessions, Playwright tests, and other debug tooling.
+ * Declaring them here avoids unsafe `as unknown as` double-casts throughout
+ * the codebase.
+ *
+ * See CLAUDE.md "Debug helpers" for usage documentation.
+ */
+
+import type { EditorView } from "@codemirror/view";
+import type { DebugHelpers } from "../editor/debug-helpers";
+import type { SourceMap } from "../app/source-map";
+import type { EditorMode } from "../editor";
+
+declare global {
+  interface Window {
+    /**
+     * The active CM6 EditorView instance.
+     * Set by useEditorDebugBridge; cleared on unmount.
+     */
+    __cmView?: EditorView;
+
+    /**
+     * Debug helper functions for the active editor.
+     * Set by useEditorDebugBridge; cleared on unmount.
+     */
+    __cmDebug?: DebugHelpers;
+
+    /**
+     * Source map for include expansion.
+     * Set by useEditorDocumentServices when includes are expanded.
+     */
+    __cfSourceMap?: SourceMap | null;
+
+    /**
+     * Toggle flag for fenced-div parser tracing.
+     * Set `true` in the console to enable verbose parser logging.
+     */
+    __fencedDivDebug?: boolean;
+
+    /**
+     * App-level debug helpers exposed for console and Playwright testing.
+     * Set by useAppDebug; cleared on unmount.
+     */
+    __app?: {
+      openFile: (path: string) => Promise<void>;
+      saveFile: () => Promise<void>;
+      closeFile: () => void;
+      setMode: (mode: EditorMode) => void;
+      getMode: () => EditorMode;
+    };
+
+    /**
+     * Performance debug helpers.
+     * Set by useAppDebug; cleared on unmount.
+     */
+    __cfDebug?: {
+      perfSummary: () => Promise<unknown>;
+      printPerfSummary: () => Promise<unknown>;
+      clearPerf: () => Promise<void>;
+      togglePerfPanel: () => void;
+    };
+  }
+}

@@ -12,7 +12,7 @@ import {
   type ResolvedInclude,
 } from "../../plugins/include-resolver";
 import type { FileSystem } from "../file-manager";
-import type { IncludeRegion } from "../source-map";
+import { SourceMap, type IncludeRegion } from "../source-map";
 import { dispatchIfConnected } from "../lib/view-dispatch";
 import { useBibliography } from "./use-bibliography";
 import { measureAsync } from "../perf";
@@ -137,7 +137,7 @@ export function useEditorDocumentServices({
           { context: "Include expansion dispatch error:" },
         );
         if (dispatched && regions.length > 0) {
-          (window as unknown as { __cfSourceMap?: { regions: IncludeRegion[] } }).__cfSourceMap = { regions };
+          window.__cfSourceMap = new SourceMap(regions);
         }
       });
     }

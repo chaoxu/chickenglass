@@ -21,12 +21,18 @@ export { capitalize, basename, dirname, uint8ArrayToBase64 } from "../../lib/uti
  * Wraps `getItem` + `JSON.parse` in a try/catch so callers don't need to
  * handle missing keys, corrupt JSON, or unavailable storage (private
  * browsing, test environments).
+ *
+ * JSON.parse returns `unknown`; the cast to `T` is intentional — callers
+ * are responsible for validating the shape of the returned value (e.g., by
+ * using `T = unknown` and narrowing afterwards, as is done in recent-files.ts
+ * and window-state.ts).
  */
 export function readLocalStorage<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
     if (raw === null) return fallback;
-    return JSON.parse(raw) as T;
+    const parsed: unknown = JSON.parse(raw);
+    return parsed as T;
   } catch (_e) {
     // best-effort: corrupt JSON or unavailable storage — return fallback
     return fallback;

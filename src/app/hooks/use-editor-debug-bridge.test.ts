@@ -23,11 +23,6 @@ vi.mock("../../editor/debug-helpers", () => ({
 
 import { attachDebugView, clearDebugView } from "./use-editor-debug-bridge";
 
-interface DebugWindow extends Window {
-  __cmView?: EditorView;
-  __cmDebug?: unknown;
-}
-
 describe("useEditorDebugBridge helpers", () => {
   beforeEach(() => {
     clearDebugView();
@@ -36,26 +31,24 @@ describe("useEditorDebugBridge helpers", () => {
 
   it("attaches debug globals for the active view", () => {
     const view = { id: "view-a" } as unknown as EditorView;
-    const debugWindow = window as unknown as DebugWindow;
 
     attachDebugView(view);
 
     expect(createDebugHelpersMock).toHaveBeenCalledWith(view);
-    expect(debugWindow.__cmView).toBe(view);
-    expect(debugWindow.__cmDebug).toBe(helpers);
+    expect(window.__cmView).toBe(view);
+    expect(window.__cmDebug).toBe(helpers);
   });
 
   it("only clears debug globals for the matching view", () => {
     const viewA = { id: "view-a" } as unknown as EditorView;
     const viewB = { id: "view-b" } as unknown as EditorView;
-    const debugWindow = window as unknown as DebugWindow;
 
     attachDebugView(viewA);
     clearDebugView(viewB);
-    expect(debugWindow.__cmView).toBe(viewA);
+    expect(window.__cmView).toBe(viewA);
 
     clearDebugView(viewA);
-    expect(debugWindow.__cmView).toBeUndefined();
-    expect(debugWindow.__cmDebug).toBeUndefined();
+    expect(window.__cmView).toBeUndefined();
+    expect(window.__cmDebug).toBeUndefined();
   });
 });
