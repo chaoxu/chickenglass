@@ -31,13 +31,16 @@ import {
   RenderWidget,
   addMarkerReplacement,
   pushWidgetDecoration,
+} from "../render";
+// Direct imports to avoid circular dependency: render barrel → fenced-block-core → (this file) → render barrel
+import {
   addCollapsedClosingFence,
   addSingleLineClosingFence,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
   type FencedBlockInfo,
-  mathMacrosField,
-} from "../render";
+} from "../render/fenced-block-core";
+import { mathMacrosField } from "../render/math-macros";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import {
   type FencedDivSemantics,
