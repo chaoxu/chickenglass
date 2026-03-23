@@ -6,7 +6,7 @@
  */
 
 import type { EditorView } from "@codemirror/view";
-import type { PaletteCommand } from "../app/command-palette";
+import type { PaletteCommand } from "../lib/command-palette";
 import { insertTable } from "../render/table-render";
 import { extractHeadings } from "../semantics/heading-ancestry";
 

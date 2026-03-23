@@ -16,7 +16,7 @@ import {
   type FrontmatterConfig,
   type FrontmatterResult,
 } from "../parser/frontmatter";
-import { projectConfigFacet, mergeConfigs } from "../app/project-config";
+import { projectConfigFacet, mergeConfigs } from "./project-config";
 import {
   editorFocusField,
   focusEffect,

@@ -1,6 +1,6 @@
 import type { EditorView } from "@codemirror/view";
-import { ContextMenu } from "../app/context-menu";
-import type { ContextMenuItem } from "../app/context-menu";
+import { ContextMenu } from "../lib/context-menu";
+import type { ContextMenuItem } from "../lib/context-menu";
 import {
   addColumn,
   addRow,

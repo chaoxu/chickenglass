@@ -1,5 +1,5 @@
 import type { FileSystem } from "../lib/types";
-import { resolveProjectPathFromDocument } from "../app/lib/project-paths";
+import { resolveProjectPathFromDocument } from "../lib/project-paths";
 
 /** A single resolved include: the file path and its content. */
 export interface ResolvedInclude {

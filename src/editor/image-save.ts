@@ -13,8 +13,8 @@ import type { FileSystem } from "../lib/types";
 import {
   relativeProjectPathFromDocument,
   resolveProjectPathFromDocument,
-} from "../app/lib/project-paths";
-import { isTauri } from "../app/tauri-fs";
+} from "../lib/project-paths";
+import { isTauri } from "../lib/tauri";
 
 /** Supported image MIME types and their default file extensions. */
 export const IMAGE_MIME_EXT: Record<string, string> = {

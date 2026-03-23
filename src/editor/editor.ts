@@ -26,7 +26,7 @@ import {
 } from "../plugins";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { bibliographyPlugin, bibDataField } from "../citations";
-import { type ProjectConfig } from "../app/project-config";
+import { type ProjectConfig } from "./project-config";
 import { editorKeybindings } from "./keybindings";
 import { coflatTheme, coflatDarkTheme } from "./theme";
 import { headingFold } from "./heading-fold";

@@ -22,10 +22,9 @@ import {
   writeFileCommand,
 } from "./tauri-client/fs";
 
-/** Check whether we're running inside a Tauri webview. */
-export function isTauri(): boolean {
-  return "__TAURI__" in window;
-}
+// Import for internal use and re-export so existing app/ imports continue to work.
+import { isTauri } from "../lib/tauri";
+export { isTauri } from "../lib/tauri";
 
 /**
  * Open a native folder picker dialog and set it as the project root.
