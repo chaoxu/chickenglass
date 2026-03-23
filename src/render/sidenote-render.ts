@@ -120,18 +120,14 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
 
   // Heading-like pattern for footnote defs: when cursor is inside the def,
   // the [^id]: label stays as source but the body keeps inline rendering
-  // via a widget. When cursor enters the body text, it drops to raw source.
+  // via a FootnoteBodyWidget. Cursor anywhere in the def — label or body —
+  // gets the same treatment: label visible as source, body rendered.
   const macros = state.field(mathMacrosField);
   for (const [, def] of footnotes.defs) {
     const cursorInDef = focused && cursorInRange(state, def.from, def.to);
 
     if (cursorInDef) {
-      const cursorInBody = def.labelTo < def.to && cursorInRange(state, def.labelTo, def.to);
-      if (cursorInBody) {
-        // Cursor in body text — show everything as raw source for editing.
-        continue;
-      }
-      // Cursor on the label — render body inline, keep label as source.
+      // Label stays as source; body keeps inline rendering via widget.
       if (def.labelTo < def.to) {
         const widget = new FootnoteBodyWidget(def.content, macros);
         widget.sourceFrom = def.labelTo;

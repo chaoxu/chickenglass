@@ -171,20 +171,20 @@ describe("buildSidenoteDecorations — footnote def cursor zones", () => {
     expect(bodyWidgets.length).toBe(1);
   });
 
-  it("shows raw source when cursor is in the body text", () => {
+  it("keeps body rendered via widget when cursor is in the body text", () => {
     // Place cursor inside the body text (after [^1]:)
     const bodyStart = doc.indexOf("See $x^2$");
     const state = createState(doc, bodyStart);
     const decos = buildSidenoteDecorations(state, true);
     const specs = getDecorationSpecs(decos);
 
-    // Should NOT have the line-hide class
+    // Should NOT have the line-hide class (line visible for editing label)
     const lineDecos = specs.filter((s) => s.class?.includes("cf-sidenote-def-line"));
     expect(lineDecos.length).toBe(0);
 
-    // Should NOT have a body widget — body is raw source for editing
+    // Body should be rendered via widget (inline math, bold, etc. stay rendered)
     const bodyWidgets = specs.filter((s) => s.widgetClass === "FootnoteBodyWidget");
-    expect(bodyWidgets.length).toBe(0);
+    expect(bodyWidgets.length).toBe(1);
   });
 
   it("keeps def hidden when editor is unfocused", () => {
