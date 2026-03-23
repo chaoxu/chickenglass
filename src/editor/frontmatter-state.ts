@@ -35,11 +35,7 @@ export interface FrontmatterState {
 
 /** Parse frontmatter from an EditorState's document. */
 function parseFrontmatterFromState(state: EditorState): FrontmatterResult {
-  // Read only the first portion of the document to find frontmatter.
-  // Frontmatter is at the very start, so we don't need the entire doc.
-  const maxScan = Math.min(state.doc.length, 4096);
-  const prefix = state.doc.sliceString(0, maxScan);
-  return parseFrontmatter(prefix);
+  return parseFrontmatter(state.doc.toString());
 }
 
 /**

@@ -98,6 +98,16 @@ describe("frontmatterField", () => {
     const fm = state.field(frontmatterField);
     expect(fm.config.math).toEqual({ "\\R": "\\mathbb{R}" });
   });
+
+  it("parses frontmatter when the closing delimiter falls after 4 KB", () => {
+    const longValue = "x".repeat(5000);
+    const doc = `---\ntitle: Large\nsummary: ${longValue}\n---\nContent`;
+    const state = createState(doc);
+    const fm = state.field(frontmatterField);
+
+    expect(fm.config.title).toBe("Large");
+    expect(fm.end).toBeGreaterThan(4096);
+  });
 });
 
 describe("frontmatterDecoration", () => {
