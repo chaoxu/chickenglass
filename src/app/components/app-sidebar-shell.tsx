@@ -14,6 +14,7 @@ import type {
   AppWorkspaceSessionController,
   SidebarTab,
 } from "../hooks/use-app-workspace-session";
+import { usePersistentTreeState } from "../hooks/use-file-tree-controller";
 
 interface AppSidebarShellProps {
   workspace: Pick<
@@ -27,6 +28,8 @@ interface AppSidebarShellProps {
 }
 
 export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
+  const fileTreePersistRef = usePersistentTreeState();
+
   return (
     <div data-sidebar className="flex shrink-0">
       <Sidebar>
@@ -61,6 +64,7 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
                 onDelete={editor.handleDelete}
                 onCreateFile={(path) => { void editor.createFile(path); }}
                 onCreateDir={(path) => { void editor.createDirectory(path); }}
+                persistRef={fileTreePersistRef}
               />
             </TabsContent>
             <TabsContent value="outline" className="min-h-full">

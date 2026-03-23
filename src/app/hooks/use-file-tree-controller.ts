@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   hotkeysCoreFeature,
   syncDataLoaderFeature,
@@ -273,25 +273,61 @@ export function createFileTreeHotkeys(
   };
 }
 
+/**
+ * Holds file tree UI state that must survive unmount/remount cycles
+ * (e.g. when switching sidebar tabs). Created once in a parent that
+ * does not unmount and passed into `useFileTreeController`.
+ */
+export interface PersistentTreeState {
+  readonly treeState: Partial<TreeState<FileEntry>>;
+  readonly scrollTop: number;
+}
+
+const DEFAULT_PERSISTENT_STATE: PersistentTreeState = {
+  treeState: { expandedItems: [], focusedItem: null },
+  scrollTop: 0,
+};
+
+/**
+ * Create a ref that holds persistent file tree state across
+ * unmount/remount cycles. Call once in a component that never unmounts.
+ */
+export function usePersistentTreeState(): React.MutableRefObject<PersistentTreeState> {
+  return useRef<PersistentTreeState>(DEFAULT_PERSISTENT_STATE);
+}
+
 interface UseFileTreeControllerProps {
   root: FileEntry | null;
   onSelect: (path: string) => void;
+  /** When provided, tree state survives unmount/remount (tab switches). */
+  persistRef?: React.MutableRefObject<PersistentTreeState>;
 }
 
 interface FileTreeController {
   readonly tree: TreeInstance<FileEntry>;
   readonly visibleItems: readonly ItemInstance<FileEntry>[];
+  /** Save current scroll position — call before unmount. */
+  readonly saveScrollPosition: (scrollTop: number) => void;
+  /** The scroll position to restore on mount. */
+  readonly savedScrollTop: number;
 }
 
 export function useFileTreeController({
   root,
   onSelect,
+  persistRef,
 }: UseFileTreeControllerProps): FileTreeController {
   const index = useMemo(() => buildTreeIndex(root), [root]);
-  const [state, setState] = useState<Partial<TreeState<FileEntry>>>({
-    expandedItems: [],
-    focusedItem: null,
-  });
+  const [state, setState] = useState<Partial<TreeState<FileEntry>>>(
+    () => persistRef?.current.treeState ?? { expandedItems: [], focusedItem: null },
+  );
+
+  // Sync state back to the persist ref on every change so it survives unmount.
+  useEffect(() => {
+    if (persistRef) {
+      persistRef.current = { ...persistRef.current, treeState: state };
+    }
+  }, [persistRef, state]);
 
   useEffect(() => {
     setState((prev) => ({
@@ -330,8 +366,21 @@ export function useFileTreeController({
 
   const visibleItems = tree.getItems().filter((item) => item.getId() !== ROOT_ITEM_ID);
 
+  const saveScrollPosition = useCallback(
+    (scrollTop: number) => {
+      if (persistRef) {
+        persistRef.current = { ...persistRef.current, scrollTop };
+      }
+    },
+    [persistRef],
+  );
+
+  const savedScrollTop = persistRef?.current.scrollTop ?? 0;
+
   return {
     tree,
     visibleItems,
+    saveScrollPosition,
+    savedScrollTop,
   };
 }

@@ -1,7 +1,11 @@
+import { useEffect, useRef } from "react";
 import type { FileEntry } from "../file-manager";
 import { FileTreeNode } from "./file-tree-node";
 import { FileTreeProvider } from "../contexts/file-tree-context";
-import { useFileTreeController } from "../hooks/use-file-tree-controller";
+import {
+  useFileTreeController,
+  type PersistentTreeState,
+} from "../hooks/use-file-tree-controller";
 
 interface FileTreeProps {
   root: FileEntry | null;
@@ -12,6 +16,8 @@ interface FileTreeProps {
   onDelete: (path: string) => Promise<void>;
   onCreateFile: (path: string) => void;
   onCreateDir: (path: string) => void;
+  /** When provided, tree state (expanded folders, focus, scroll) persists across unmount/remount. */
+  persistRef?: React.MutableRefObject<PersistentTreeState>;
 }
 
 export function FileTree({
@@ -23,8 +29,28 @@ export function FileTree({
   onDelete,
   onCreateFile,
   onCreateDir,
+  persistRef,
 }: FileTreeProps) {
-  const controller = useFileTreeController({ root, onSelect });
+  const controller = useFileTreeController({ root, onSelect, persistRef });
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const saveScrollRef = useRef(controller.saveScrollPosition);
+  saveScrollRef.current = controller.saveScrollPosition;
+
+  // Restore scroll position on mount, save on unmount.
+  // Uses a ref callback to capture the initial savedScrollTop value at mount time.
+  const initialScrollTop = useRef(controller.savedScrollTop);
+  useEffect(() => {
+    const el = containerRef.current?.parentElement;
+    if (el && initialScrollTop.current > 0) {
+      el.scrollTop = initialScrollTop.current;
+    }
+    return () => {
+      const scrollEl = containerRef.current?.parentElement;
+      if (scrollEl) {
+        saveScrollRef.current(scrollEl.scrollTop);
+      }
+    };
+  }, []);
 
   if (!root || controller.visibleItems.length === 0) {
     return (
@@ -39,6 +65,7 @@ export function FileTree({
       value={{ activePath, onSelect, onDoubleClick, onRename, onDelete, onCreateFile, onCreateDir }}
     >
       <div
+        ref={containerRef}
         {...controller.tree.getContainerProps("Files")}
         className="py-1 outline-none"
       >
