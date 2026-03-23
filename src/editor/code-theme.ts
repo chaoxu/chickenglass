@@ -71,7 +71,7 @@ export const codeThemeStyles = {
     borderRadius: "var(--cf-border-radius)",
     cursor: "pointer",
     opacity: "0",
-    transition: "opacity 0.15s",
+    transition: "opacity var(--cf-transition, 0.15s ease)",
   },
   ".cf-codeblock-copy svg": {
     width: "var(--cf-ui-font-size-base)",

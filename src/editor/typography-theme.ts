@@ -120,7 +120,7 @@ export const typographyThemeStyles = {
   },
 
   /* Header markers (# symbols) shown in muted color when editing. */
-  ".cf-heading-1 .tok-heading.tok-meta, .cf-heading-2 .tok-heading.tok-meta, .cf-heading-3 .tok-heading.tok-meta":
+  ".cf-heading-1 .tok-heading.tok-meta, .cf-heading-2 .tok-heading.tok-meta, .cf-heading-3 .tok-heading.tok-meta, .cf-heading-4 .tok-heading.tok-meta, .cf-heading-5 .tok-heading.tok-meta, .cf-heading-6 .tok-heading.tok-meta":
     {
       color: "var(--cf-muted)",
       fontFamily: monoFont,

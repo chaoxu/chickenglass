@@ -22,10 +22,10 @@
   /* Borders — always 1px solid, primary separator */
   --cf-border: #e4e4e7;
 
-  /* Interactive states — minimal: subtle/hover nearly invisible */
-  --cf-subtle: rgba(0, 0, 0, 0.02);
-  --cf-hover: rgba(0, 0, 0, 0.04);
-  --cf-active: rgba(0, 0, 0, 0.06);
+  /* Interactive states — visible enough for 3:1 contrast on white (#fff) */
+  --cf-subtle: rgba(0, 0, 0, 0.04);
+  --cf-hover: rgba(0, 0, 0, 0.08);
+  --cf-active: rgba(0, 0, 0, 0.12);
 
   /* Accent — black, one color */
   --cf-accent: #18181b;
@@ -33,13 +33,11 @@
 
   /* Overlay (semi-transparent background for floating bars) */
   --cf-bg-overlay: rgba(255, 255, 255, 0.82);
-  --cf-border-overlay: rgba(212, 212, 216, 0.6);
-  --cf-separator: rgba(161, 161, 170, 0.8);
+  --cf-border-overlay: rgba(228, 228, 231, 0.6);
 
   /* Theme-owned special surfaces */
   --cf-block-header-accent: var(--cf-fg);
   --cf-block-header-border-width: 0px;
-  --cf-block-header-padding: 0px;
 
   /* Per-block-type accent colors (default to shared fallback).
    * These tokens match the STYLED_BLOCK_NAMES list derived from
@@ -112,6 +110,11 @@
 
   /* Transitions */
   --cf-transition: 0.15s ease;
+
+  /* Layout */
+  --cf-content-max-width: 800px;
+  --cf-sidenote-width: 224px;
+  --cf-fence-guide-width: 3px;
 }
 
 [data-theme="dark"] {
@@ -120,14 +123,13 @@
   --cf-fg: #fafafa;
   --cf-muted: #a1a1aa;
   --cf-border: #27272a;
-  --cf-subtle: rgba(255, 255, 255, 0.03);
-  --cf-hover: rgba(255, 255, 255, 0.05);
-  --cf-active: rgba(255, 255, 255, 0.08);
+  --cf-subtle: rgba(255, 255, 255, 0.05);
+  --cf-hover: rgba(255, 255, 255, 0.10);
+  --cf-active: rgba(255, 255, 255, 0.15);
   --cf-accent: #fafafa;
   --cf-accent-fg: #09090b;
   --cf-bg-overlay: rgba(10, 10, 10, 0.82);
   --cf-border-overlay: rgba(63, 63, 70, 0.6);
-  --cf-separator: rgba(161, 161, 170, 0.6);
 }
 
 /* ── Base styles ────────────────────────────────────────────────────────────── */
@@ -183,7 +185,7 @@ body {
   position: absolute;
   top: 0;
   right: 0;
-  width: 224px;
+  width: var(--cf-sidenote-width, 224px);
   height: 0;
   overflow: visible;
   pointer-events: none;
@@ -326,11 +328,12 @@ body {
 .cf-read-mode-view h5 { font-size: var(--cf-h5-size, 1em); font-weight: var(--cf-h5-weight, 600); font-style: var(--cf-h5-style, normal); }
 .cf-read-mode-view h6 { font-size: var(--cf-h6-size, 0.95em); font-weight: var(--cf-h6-weight, 600); font-style: var(--cf-h6-style, normal); }
 
-/* Document title from frontmatter — larger but still academic */
+/* Document title from frontmatter — larger but still academic.
+ * Size matches the editor's .cf-doc-title (1.6em) for visual consistency. */
 .cf-read-mode-view .cf-read-title {
   margin-top: 0;
   margin-bottom: 1em;
-  font-size: 1.5em;
+  font-size: 1.6em;
   font-weight: bold;
   font-style: normal;
   text-align: left;
@@ -371,7 +374,7 @@ body {
 }
 
 .cf-read-mode-view mark {
-  background: rgba(255, 255, 0, 0.2);
+  background: var(--cf-mark-bg, rgba(255, 255, 0, 0.2));
   padding: 0.1em 0.2em;
   border-radius: var(--cf-border-radius);
 }
@@ -417,8 +420,8 @@ body {
 }
 
 .cf-read-mode-view .math-error {
-  color: #c00;
-  background: rgba(255, 0, 0, 0.05);
+  color: var(--cf-math-error-fg, #c00);
+  background: var(--cf-math-error-bg, rgba(255, 0, 0, 0.05));
 }
 
 .cf-read-mode-view .katex {
@@ -561,8 +564,8 @@ body {
 
 /* Math rendering error — red text on light red background */
 .cf-math-error {
-  color: #c00;
-  background: rgba(255, 0, 0, 0.05);
+  color: var(--cf-math-error-fg, #c00);
+  background: var(--cf-math-error-bg, rgba(255, 0, 0, 0.05));
   border-radius: var(--cf-border-radius);
   padding: 1px 4px;
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
@@ -773,4 +776,12 @@ body {
 .cm-panel.cm-search {
   padding: 0;
   background: none;
+}
+
+/* ── Motion preferences ──────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cf-transition: 0s;
+  }
 }

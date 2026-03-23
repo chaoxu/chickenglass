@@ -39,7 +39,7 @@ export const marginThemeStyles = {
     lineHeight: "1.4",
     color: "var(--cf-fg)",
     fontFamily: monoFont,
-    transition: "transform 0.15s ease-out",
+    transition: "transform var(--cf-transition, 0.15s ease)",
   },
 
   /* Sidenote number label */

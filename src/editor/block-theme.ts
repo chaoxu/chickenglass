@@ -52,16 +52,16 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
   /* Fenced div nesting guides — vertical lines on the left, editing only.
      Uses inset box-shadow so the guide never shifts content layout. */
   ".cf-fence-d1": {
-    boxShadow: "inset 3px 0 0 var(--cf-block-nest-1)",
+    boxShadow: "inset var(--cf-fence-guide-width, 3px) 0 0 var(--cf-block-nest-1)",
   },
   ".cf-fence-d2": {
-    boxShadow: "inset 3px 0 0 var(--cf-block-nest-2)",
+    boxShadow: "inset var(--cf-fence-guide-width, 3px) 0 0 var(--cf-block-nest-2)",
   },
   ".cf-fence-d3": {
-    boxShadow: "inset 3px 0 0 var(--cf-block-nest-3)",
+    boxShadow: "inset var(--cf-fence-guide-width, 3px) 0 0 var(--cf-block-nest-3)",
   },
   ".cf-fence-d4": {
-    boxShadow: "inset 3px 0 0 var(--cf-block-nest-4)",
+    boxShadow: "inset var(--cf-fence-guide-width, 3px) 0 0 var(--cf-block-nest-4)",
   },
 
   /* Per-block-type body font style (auto-generated from BLOCK_MANIFEST) */

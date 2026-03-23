@@ -46,7 +46,6 @@ const sepiaTheme: WritingTheme = {
     "--cf-accent-fg": "#f5f0e8",
     "--cf-bg-overlay": "rgba(245, 240, 232, 0.82)",
     "--cf-border-overlay": "rgba(212, 201, 181, 0.6)",
-    "--cf-separator": "rgba(139, 115, 85, 0.8)",
   },
   dark: false,
 };
@@ -68,7 +67,6 @@ const nordTheme: WritingTheme = {
     "--cf-accent-fg": "#2e3440",
     "--cf-bg-overlay": "rgba(46, 52, 64, 0.82)",
     "--cf-border-overlay": "rgba(76, 86, 106, 0.6)",
-    "--cf-separator": "rgba(143, 188, 187, 0.6)",
   },
   dark: true,
 };
@@ -90,7 +88,6 @@ const draculaTheme: WritingTheme = {
     "--cf-accent-fg": "#282a36",
     "--cf-bg-overlay": "rgba(40, 42, 54, 0.82)",
     "--cf-border-overlay": "rgba(68, 71, 90, 0.6)",
-    "--cf-separator": "rgba(189, 147, 249, 0.6)",
   },
   dark: true,
 };

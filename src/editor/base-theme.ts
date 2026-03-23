@@ -13,7 +13,7 @@ export const baseThemeStyles = {
     padding: "24px 48px 24px 48px",
     maxWidth: "var(--cf-content-max-width, 800px)",
     marginLeft: "auto",
-    marginRight: "max(224px, calc((100% - 800px) / 2))",
+    marginRight: "max(var(--cf-sidenote-width, 224px), calc((100% - var(--cf-content-max-width, 800px)) / 2))",
     overflow: "visible",
   },
   ".cm-gutters": {
@@ -33,7 +33,7 @@ export const baseThemeStyles = {
     userSelect: "none",
     lineHeight: "inherit",
     opacity: "0",
-    transition: "opacity 0.15s",
+    transition: "opacity var(--cf-transition, 0.15s ease)",
   },
   /* Show fold toggle when hovering the heading line */
   ".cm-line:hover .cf-fold-toggle": {
@@ -64,6 +64,6 @@ export const baseThemeStyles = {
   /* Focus mode: dim non-active paragraphs */
   ".cf-focus-dimmed": {
     opacity: "0.3",
-    transition: "opacity 0.15s",
+    transition: "opacity var(--cf-transition, 0.15s ease)",
   },
 };
