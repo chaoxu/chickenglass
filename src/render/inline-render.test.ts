@@ -309,4 +309,9 @@ describe("renderInlineMarkdown — surface policies", () => {
     const html = render("See [@thm-evt]", {}, "ui-chrome-inline");
     expect(html).toBe("See @thm-evt");
   });
+
+  it("keeps narrative references inert in document-inline without bibliography context", () => {
+    const html = render("As @karger2000 showed.", {}, "document-inline");
+    expect(html).toBe("As @karger2000 showed.");
+  });
 });

@@ -68,8 +68,8 @@ export function collectReferenceRanges(
   // Register citation clusters with CSL processor (needed for numeric styles)
   registerCitationsWithProcessor(
     allRefs
-      .filter((ref) => ref.bracketed && ref.ids.some((id) => store.has(id)))
-      .map((ref) => ({ parenthetical: true, ids: ref.ids, locators: ref.locators })),
+      .filter((ref) => ref.ids.some((id) => store.has(id)))
+      .map((ref) => ({ ids: ref.ids, locators: ref.locators })),
     processor,
   );
 

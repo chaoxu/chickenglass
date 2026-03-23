@@ -18,10 +18,25 @@ describe("parseInlineFragments", () => {
       { kind: "text", text: "See " },
       {
         kind: "reference",
+        parenthetical: true,
         rawText: "@thm-main; @eq:first, p. 2",
         ids: ["thm-main", "eq:first"],
         locators: [undefined, "p. 2"],
       },
+    ]);
+  });
+
+  it("parses narrative references inside text fragments", () => {
+    expect(parseInlineFragments("As @karger2000 showed.")).toEqual([
+      { kind: "text", text: "As " },
+      {
+        kind: "reference",
+        parenthetical: false,
+        rawText: "@karger2000",
+        ids: ["karger2000"],
+        locators: [undefined],
+      },
+      { kind: "text", text: " showed." },
     ]);
   });
 });

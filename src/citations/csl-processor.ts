@@ -67,6 +67,28 @@ export function parseLocator(raw: string): { locator: string; label?: string } {
 /** Unique template name used to register the active CSL style with citation-js. */
 const STYLE_NAME = "coflat-active";
 
+type CompositeCitationCall = (
+  citation: {
+    citationItems: Array<{ id: string }>;
+    properties: {
+      noteIndex: number;
+      mode: "composite";
+      infix: string;
+    };
+    citationID: string;
+  },
+  citationsPre: Array<[string, number]>,
+  citationsPost: Array<[string, number]>,
+) => [unknown, Array<[number, string, string]>];
+
+function formatNarrativeAuthor(item: CslJsonItem): string {
+  const authors = item.author ?? [];
+  if (authors.length === 0) return item.id;
+  return authors
+    .map((author) => author.literal ?? author.family ?? author.given ?? item.id)
+    .join(", ");
+}
+
 /**
  * CSL citation processor.
  *
@@ -158,27 +180,54 @@ export class CslProcessor {
     }
   }
 
-  /** Format a narrative citation for a single id. */
+  /**
+   * Format a narrative citation for a single id.
+   *
+   * Prefer citeproc's composite citation mode, which yields style-aware
+   * narrative output such as `Karger (2000)` for author-date styles.
+   * Numeric styles like IEEE often do not print an author-only form, so we
+   * fall back to `author + suppress-author cite` (e.g. `Karger [1]`).
+   */
   citeNarrative(id: string): string {
     const item = this.items.get(id);
     if (!item) return id;
-    // citeproc doesn't have a direct narrative mode --
-    // we extract author and year separately
-    const author = item.author?.map((a) => a.family).join(", ") ?? id;
-    const year = item.issued?.["date-parts"]?.[0]?.[0] ?? "";
+    const author = formatNarrativeAuthor(item);
     try {
       if (this.engine) {
-        const cluster = this.engine.makeCitationCluster([{ id }]);
-        // Extract year portion from the cluster result (inside parentheses)
-        const yearMatch = /\(([^)]+)\)/.exec(cluster) ?? /,\s*(.+)$/.exec(cluster);
-        if (yearMatch) {
-          return `${author} (${yearMatch[1]})`;
+        const compositeEngine = this.engine as unknown as {
+          processCitationCluster: CompositeCitationCall;
+          makeCitationCluster: (items: Array<Record<string, unknown>>) => string;
+        };
+        const composite = compositeEngine.processCitationCluster(
+          {
+            citationItems: [{ id }],
+            properties: {
+              noteIndex: 0,
+              mode: "composite",
+              infix: "",
+            },
+            citationID: `narrative-${id}`,
+          },
+          [],
+          [],
+        );
+        const rendered = composite?.[1]?.[0]?.[1]?.trim();
+        if (rendered && !rendered.includes("[NO_PRINTED_FORM]")) {
+          return rendered;
+        }
+
+        const suppressed = compositeEngine.makeCitationCluster([
+          { id, "suppress-author": true },
+        ]).trim();
+        if (suppressed) {
+          return `${author} ${suppressed}`;
         }
       }
     } catch (e: unknown) {
-      // best-effort: fall through to simple author (year) format
+      // best-effort: fall through to simple author + year format
       console.warn("[csl] citeNarrative() engine error", e);
     }
+    const year = item.issued?.["date-parts"]?.[0]?.[0] ?? "";
     return `${author} (${year})`;
   }
 
@@ -217,7 +266,7 @@ export class CslProcessor {
 }
 
 /**
- * Filter parenthetical citation matches and register them with a CSL processor.
+ * Register citation matches with a CSL processor in document order.
  *
  * Both the CM6 editor (citation-render.ts) and the HTML exporter
  * (markdown-to-html.ts) need this step so numeric styles assign numbers
@@ -225,14 +274,12 @@ export class CslProcessor {
  */
 export function registerCitationsWithProcessor(
   matches: ReadonlyArray<{
-    parenthetical: boolean;
     ids: readonly string[];
     locators?: readonly (string | undefined)[];
   }>,
   processor: CslProcessor,
 ): void {
   const clusters = matches
-    .filter((m) => m.parenthetical)
     .map((m) => ({
       ids: [...m.ids],
       locators: m.locators ? [...m.locators] : undefined,

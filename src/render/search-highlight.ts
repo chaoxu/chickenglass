@@ -12,8 +12,10 @@
 
 import { type Extension } from "@codemirror/state";
 import { type EditorView, type PluginValue, type ViewUpdate, ViewPlugin } from "@codemirror/view";
-import { getSearchQuery, searchPanelOpen } from "@codemirror/search";
-import { collectVisibleSearchMatches } from "../editor/find-replace";
+import {
+  collectVisibleSearchMatches,
+  getSearchControllerState,
+} from "../editor/find-replace";
 
 const MATCH_CLASS = "cf-search-match";
 const SELECTED_MATCH_CLASS = "cf-search-match-selected";
@@ -40,9 +42,9 @@ class SearchHighlightPlugin implements PluginValue {
   }
 
   update(update: ViewUpdate): void {
-    const panelOpen = searchPanelOpen(update.state);
-    const spec = getSearchQuery(update.state);
-    const searchStr = spec.valid ? spec.search : "";
+    const controller = getSearchControllerState(update.view);
+    const searchStr = controller.query.valid ? controller.query.search : "";
+    const panelOpen = controller.panelOpen;
 
     const searchChanged = searchStr !== this.lastSearch || panelOpen !== this.lastPanelOpen;
     if (

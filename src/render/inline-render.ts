@@ -41,6 +41,11 @@ function renderReference(
     return;
   }
 
+  if (!fragment.parenthetical) {
+    container.appendChild(document.createTextNode(fragment.rawText));
+    return;
+  }
+
   if (fragment.ids.length === 1) {
     const anchor = document.createElement("a");
     anchor.className = "cross-ref";

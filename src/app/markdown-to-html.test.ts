@@ -291,4 +291,29 @@ describe("markdownToHtml", () => {
     expect(html).toContain('<span class="cf-citation">[1]</span>');
     expect(html).toContain('<div class="cf-bibliography-entry" id="bib-karger2000"><span class="csl-entry">[1] Karger.</span></div>');
   });
+
+  it("uses CSL formatting for narrative citations in read mode", () => {
+    const entry: CslJsonItem = {
+      id: "karger2000",
+      type: "article-journal",
+      author: [{ family: "Karger", given: "David R." }],
+      title: "Minimum Cuts in Near-Linear Time",
+      issued: { "date-parts": [[2000]] },
+    };
+    const bibliography = new Map([[entry.id, entry]]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Karger [1]"),
+      bibliography: vi.fn(() => ['<span class="csl-entry">[1] Karger.</span>']),
+    } as unknown as CslProcessor;
+
+    const html = markdownToHtml("As @karger2000 showed.", {
+      bibliography,
+      cslProcessor: fakeCsl,
+    });
+
+    expect(fakeCsl.citeNarrative).toHaveBeenCalledWith("karger2000");
+    expect(html).toContain('<span class="cf-citation cf-citation-narrative">Karger [1]</span>');
+  });
 });

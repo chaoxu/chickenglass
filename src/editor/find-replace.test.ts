@@ -5,6 +5,7 @@ import { EditorView } from "@codemirror/view";
 import { createTestView } from "../test-utils";
 import {
   collectVisibleSearchMatches,
+  findReplaceExtension,
   getSearchControllerState,
   openFindSearch,
   openReplaceSearch,
@@ -17,6 +18,14 @@ const views: EditorView[] = [];
 function createView(doc: string): EditorView {
   const view = createTestView(doc, {
     extensions: [searchControllerExtensions, search({ top: true })],
+  });
+  views.push(view);
+  return view;
+}
+
+function createPanelView(doc: string): EditorView {
+  const view = createTestView(doc, {
+    extensions: [findReplaceExtension],
   });
   views.push(view);
   return view;
@@ -71,5 +80,19 @@ describe("searchController", () => {
       { from: 0, to: 5 },
       { from: 11, to: 16 },
     ]);
+  });
+
+  it("renders the Coflat-native panel and toggles the replace row", () => {
+    const view = createPanelView("alpha beta alpha");
+
+    openFindSearch(view);
+    expect(view.dom.querySelector(".cf-search-panel")).not.toBeNull();
+    const replaceRow = view.dom.querySelector<HTMLElement>(".cf-replace-row");
+    expect(replaceRow).not.toBeNull();
+    expect(replaceRow?.style.display).toBe("none");
+
+    openReplaceSearch(view);
+    expect(view.dom.querySelector(".cf-search-panel")).not.toBeNull();
+    expect(view.dom.querySelector<HTMLElement>(".cf-replace-row")?.style.display).toBe("");
   });
 });

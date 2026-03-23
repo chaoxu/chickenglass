@@ -581,6 +581,20 @@ body {
  * level via cf-fence-d1..d4 in block-theme.ts. This class exists as a common
  * hook for all depth levels (used in fence-guide.ts). */
 
+/* Widget-backed search matches — visible highlight for rendered math, block
+ * headers, citations, crossrefs, tables, and other Decoration.replace
+ * surfaces that would otherwise swallow CM6's source-range highlight. */
+.cf-search-match {
+  border-radius: var(--cf-border-radius);
+  background: color-mix(in srgb, var(--cf-accent) 12%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--cf-accent) 24%, transparent);
+}
+
+.cf-search-match-selected {
+  background: color-mix(in srgb, var(--cf-accent) 18%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cf-accent) 55%, transparent);
+}
+
 /* ── Coflat search panel (in-document find & replace) ──────────────────────
  * Custom CM6 panel replacing the stock search UI. Uses --cf-* design tokens
  * for consistent look with the rest of the app. */

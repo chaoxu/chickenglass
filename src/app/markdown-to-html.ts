@@ -627,13 +627,20 @@ function renderInlineFragment(
       if (isUiChromeSurface(ctx.surface)) {
         return escapeHtml(fragment.rawText);
       }
-      return renderCitationCluster(
-        fragment.ids,
-        ctx.bibliography,
-        ctx.citedIds,
-        ctx.cslProcessor,
-        fragment.locators,
-      );
+      return fragment.parenthetical
+        ? renderCitationCluster(
+            fragment.ids,
+            ctx.bibliography,
+            ctx.citedIds,
+            ctx.cslProcessor,
+            fragment.locators,
+          )
+        : renderNarrativeReference(
+            fragment.ids[0],
+            ctx.bibliography,
+            ctx.citedIds,
+            ctx.cslProcessor,
+          );
 
     case "image": {
       const alt = renderInlineFragments(fragment.alt, ctx);
@@ -663,16 +670,14 @@ function renderInlineFragment(
 
 function ctxLikeCitationMatches(
   refs: readonly {
-    readonly bracketed: boolean;
     readonly ids: readonly string[];
     readonly locators: readonly (string | undefined)[];
   }[],
   bibliography: BibStore,
-): { parenthetical: boolean; ids: string[]; locators: (string | undefined)[] }[] {
+): { ids: string[]; locators: (string | undefined)[] }[] {
   return refs
     .filter((ref) => ref.ids.some((id) => bibliography.has(id)))
     .map((ref) => ({
-      parenthetical: ref.bracketed,
       ids: [...ref.ids],
       locators: ref.locators.some((locator) => locator != null)
         ? [...ref.locators]
@@ -748,6 +753,23 @@ function renderCitationCluster(
     return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`;
   });
   return `<span class="${CSS.citation}">(${parts.join("; ")})</span>`;
+}
+
+function renderNarrativeReference(
+  id: string,
+  bibliography?: BibStore,
+  citedIds?: string[],
+  cslProcessor?: CslProcessor,
+): string {
+  if (bibliography?.has(id)) {
+    trackCitedIds([id], bibliography, citedIds);
+    if (cslProcessor) {
+      return `<span class="${CSS.citation} ${CSS.citation}-narrative">${escapeHtml(cslProcessor.citeNarrative(id))}</span>`;
+    }
+    return `<span class="${CSS.citation} ${CSS.citation}-narrative">${escapeHtml(id)}</span>`;
+  }
+
+  return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`;
 }
 
 /** Render the bibliography section from cited entries. */
