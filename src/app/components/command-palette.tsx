@@ -30,7 +30,7 @@
  * Evaluated 2026-03-19, issue #194.
  */
 
-import { useMemo, type ReactNode } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import {
   CommandDialog,
   CommandEmpty,
@@ -84,7 +84,7 @@ function groupByCategory(
 
 // ── Shortcut badge ─────────────────────────────────────────────────────────────
 
-function ShortcutBadge({ shortcut }: { shortcut: string }): ReactNode {
+const ShortcutBadge = memo(function ShortcutBadge({ shortcut }: { shortcut: string }): ReactNode {
   return (
     <CommandShortcut>
       {shortcut.split("+").map((key) => (
@@ -97,7 +97,7 @@ function ShortcutBadge({ shortcut }: { shortcut: string }): ReactNode {
       ))}
     </CommandShortcut>
   );
-}
+});
 
 // ── Component ─────────────────────────────────────────────────────────────────
 

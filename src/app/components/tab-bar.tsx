@@ -16,7 +16,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState } from "react";
+import { memo, useState } from "react";
 
 import type { Tab } from "../tab-bar";
 import { cn } from "../lib/utils";
@@ -146,7 +146,7 @@ interface SortableTabProps {
   onPin?: (path: string) => void;
 }
 
-function SortableTab({ tab, isActive, isDragActive, onSelect, onClose, onPin }: SortableTabProps) {
+const SortableTab = memo(function SortableTab({ tab, isActive, isDragActive, onSelect, onClose, onPin }: SortableTabProps) {
   const {
     attributes,
     listeners,
@@ -201,4 +201,4 @@ function SortableTab({ tab, isActive, isDragActive, onSelect, onClose, onPin }: 
       </button>
     </div>
   );
-}
+});

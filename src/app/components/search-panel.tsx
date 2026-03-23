@@ -6,15 +6,17 @@
  * a content preview. Cmd/Ctrl+Shift+F toggles the panel.
  */
 
+import { memo } from "react";
 import { Search } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { BackgroundIndexer } from "../../index/indexer";
-import type { IndexEntry, IndexQuery } from "../../index/query-api";
+import type { IndexEntry } from "../../index/query-api";
 import { basename } from "../lib/utils";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { useSearchIndexer } from "../hooks/use-search-indexer";
 
 /** Known block types for the filter dropdown. */
 const BLOCK_TYPES = [
@@ -62,16 +64,56 @@ function previewContent(content: string, maxLen = 80): string {
   return trimmed.length > maxLen ? trimmed.slice(0, maxLen) + "…" : trimmed;
 }
 
-/** Build an IndexQuery from raw search text and optional type filter. */
-function buildQuery(text: string, type: string | undefined): IndexQuery {
-  // Detect label search: text starting with # or containing : like eq:foo
-  const isLabel = text.startsWith("#") || /^[a-z]+-?\w*:\w/i.test(text);
-  if (isLabel) {
-    const label = text.startsWith("#") ? text.slice(1) : text;
-    return { type, label };
-  }
-  return { type, content: text || undefined };
+// ── SearchResultItem ──────────────────────────────────────────────────────────
+
+interface SearchResultItemProps {
+  entry: IndexEntry;
+  onClick: (entry: IndexEntry) => void;
 }
+
+/** Single search result row: type badge, number, title, label, and content preview. */
+export const SearchResultItem = memo(function SearchResultItem({
+  entry,
+  onClick,
+}: SearchResultItemProps) {
+  return (
+    <button
+      className="w-full text-left px-3 py-2 flex flex-col gap-0.5 hover:bg-[var(--cf-hover)] border-b border-[var(--cf-border)] last:border-b-0 transition-colors duration-[var(--cf-transition,0.15s)]"
+      onClick={() => onClick(entry)}
+    >
+      {/* Top row: type badge + number + title */}
+      <div className="flex items-center gap-1.5 min-w-0">
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1 py-0.5 rounded bg-[var(--cf-subtle)] text-[var(--cf-muted)]">
+          {entry.type}
+        </span>
+        {entry.number !== undefined && (
+          <span className="shrink-0 text-xs text-[var(--cf-muted)] font-mono">
+            {entry.number}
+          </span>
+        )}
+        {entry.title && (
+          <span className="truncate text-sm text-[var(--cf-fg)] font-medium">
+            {entry.title}
+          </span>
+        )}
+        {entry.label && (
+          <span className="ml-auto shrink-0 text-[10px] font-mono text-[var(--cf-muted)]">
+            #{entry.label}
+          </span>
+        )}
+      </div>
+
+      {/* Content preview */}
+      {entry.content && (
+        <span className="text-xs text-[var(--cf-muted)] truncate">
+          {previewContent(entry.content)}
+        </span>
+      )}
+    </button>
+  );
+});
+
+// ── SearchPanel ───────────────────────────────────────────────────────────────
 
 /**
  * Modal search panel that queries the BackgroundIndexer.
@@ -81,11 +123,9 @@ function buildQuery(text: string, type: string | undefined): IndexQuery {
 export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: SearchPanelProps) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
-  const [results, setResults] = useState<readonly IndexEntry[]>([]);
-  const [searching, setSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus input whenever panel opens.
+  // Focus input whenever panel opens; clear state on close.
   useEffect(() => {
     if (open) {
       // Defer one frame so the element is visible before focusing.
@@ -96,43 +136,10 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
     } else {
       setQuery("");
       setTypeFilter("");
-      setResults([]);
     }
   }, [open]);
 
-  // Re-run search whenever query, type filter, or indexer changes.
-  useEffect(() => {
-    if (!open || !indexer) {
-      setResults([]);
-      return;
-    }
-
-    const text = query.trim();
-    const type = typeFilter || undefined;
-    const indexQuery = buildQuery(text, type);
-
-    setSearching(true);
-    let cancelled = false;
-
-    indexer.query(indexQuery).then(
-      (entries) => {
-        if (!cancelled) {
-          setResults(entries);
-          setSearching(false);
-        }
-      },
-      () => {
-        if (!cancelled) {
-          setResults([]);
-          setSearching(false);
-        }
-      },
-    );
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, query, typeFilter, indexer]);
+  const { results, searching } = useSearchIndexer(open, query, typeFilter, indexer);
 
   const handleResultClick = useCallback(
     (entry: IndexEntry) => {
@@ -214,40 +221,7 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
 
                 {/* Entries in this file */}
                 {entries.map((entry, i) => (
-                  <button
-                    key={i}
-                    className="w-full text-left px-3 py-2 flex flex-col gap-0.5 hover:bg-[var(--cf-hover)] border-b border-[var(--cf-border)] last:border-b-0 transition-colors duration-[var(--cf-transition,0.15s)]"
-                    onClick={() => handleResultClick(entry)}
-                  >
-                    {/* Top row: type badge + number + title */}
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1 py-0.5 rounded bg-[var(--cf-subtle)] text-[var(--cf-muted)]">
-                        {entry.type}
-                      </span>
-                      {entry.number !== undefined && (
-                        <span className="shrink-0 text-xs text-[var(--cf-muted)] font-mono">
-                          {entry.number}
-                        </span>
-                      )}
-                      {entry.title && (
-                        <span className="truncate text-sm text-[var(--cf-fg)] font-medium">
-                          {entry.title}
-                        </span>
-                      )}
-                      {entry.label && (
-                        <span className="ml-auto shrink-0 text-[10px] font-mono text-[var(--cf-muted)]">
-                          #{entry.label}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Content preview */}
-                    {entry.content && (
-                      <span className="text-xs text-[var(--cf-muted)] truncate">
-                        {previewContent(entry.content)}
-                      </span>
-                    )}
-                  </button>
+                  <SearchResultItem key={i} entry={entry} onClick={handleResultClick} />
                 ))}
               </div>
             ))

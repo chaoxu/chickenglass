@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { memo, useState, useCallback } from "react";
 import type { HeadingEntry } from "../heading-ancestry";
 import { renderDocumentFragmentToHtml } from "../../document-surfaces";
 
@@ -12,7 +12,7 @@ interface OutlineProps {
  * Clicking the toggle arrow collapses/expands child headings.
  * Clicking the heading text navigates to it in the editor.
  */
-export function Outline({ headings, onSelect }: OutlineProps) {
+export const Outline = memo(function Outline({ headings, onSelect }: OutlineProps) {
   // Set of heading indices that are collapsed (their children are hidden)
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
 
@@ -101,4 +101,4 @@ export function Outline({ headings, onSelect }: OutlineProps) {
       })}
     </div>
   );
-}
+});

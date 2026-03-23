@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   File,
   FileText,
@@ -13,7 +14,7 @@ interface FileIconProps {
   className?: string;
 }
 
-export function FileIcon({ name, size, className }: FileIconProps) {
+export const FileIcon = memo(function FileIcon({ name, size, className }: FileIconProps) {
   const ext = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : "";
   switch (ext) {
     case "md":
@@ -42,4 +43,4 @@ export function FileIcon({ name, size, className }: FileIconProps) {
     default:
       return <File size={size} className={className} />;
   }
-}
+});

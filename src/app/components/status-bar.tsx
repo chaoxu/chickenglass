@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { memo, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { EditorMode } from "../../editor";
 import { computeDocStats, formatReadingTime } from "../writing-stats";
 import type { DocStats } from "../writing-stats";
@@ -41,7 +41,7 @@ interface StatsPopoverProps {
   onClose: () => void;
 }
 
-function StatsPopover({ stats, anchorRef, onClose }: StatsPopoverProps) {
+const StatsPopover = memo(function StatsPopover({ stats, anchorRef, onClose }: StatsPopoverProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   // Position the panel above the anchor element.
@@ -109,7 +109,7 @@ function StatsPopover({ stats, anchorRef, onClose }: StatsPopoverProps) {
       </div>
     </>
   );
-}
+});
 
 // ── StatusBar ──────────────────────────────────────────────────────────────────
 
