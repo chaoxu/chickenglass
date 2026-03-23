@@ -38,13 +38,24 @@ export function FileTree({
 
   // Restore scroll position on mount, save on unmount.
   // Uses a ref callback to capture the initial savedScrollTop value at mount time.
+  // Scroll restore is deferred to a requestAnimationFrame because headless-tree
+  // renders items lazily based on expanded state — at mount time the container
+  // may be too short to scroll, so the browser would clamp scrollTop to 0.
   const initialScrollTop = useRef(controller.savedScrollTop);
   useEffect(() => {
-    const el = containerRef.current?.parentElement;
-    if (el && initialScrollTop.current > 0) {
-      el.scrollTop = initialScrollTop.current;
+    let rafId: number | undefined;
+    if (initialScrollTop.current > 0) {
+      rafId = requestAnimationFrame(() => {
+        const el = containerRef.current?.parentElement;
+        if (el) {
+          el.scrollTop = initialScrollTop.current;
+        }
+      });
     }
     return () => {
+      if (rafId !== undefined) {
+        cancelAnimationFrame(rafId);
+      }
       const scrollEl = containerRef.current?.parentElement;
       if (scrollEl) {
         saveScrollRef.current(scrollEl.scrollTop);
