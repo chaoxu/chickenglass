@@ -92,6 +92,8 @@ function createLucideIcon(iconNode: IconNode): SVGSVGElement {
 
 /** Widget that renders a copy-to-clipboard button in the code block header. */
 class CopyButtonWidget extends RenderWidget {
+  private resetTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(private readonly code: string) {
     super();
   }
@@ -110,7 +112,9 @@ class CopyButtonWidget extends RenderWidget {
         btn.replaceChildren(createLucideIcon(checkIconNode));
         btn.title = "Copied";
         btn.setAttribute("aria-label", "Copied");
-        setTimeout(() => {
+        if (this.resetTimer !== null) clearTimeout(this.resetTimer);
+        this.resetTimer = setTimeout(() => {
+          this.resetTimer = null;
           btn.replaceChildren(createLucideIcon(copyIconNode));
           btn.title = "Copy code to clipboard";
           btn.setAttribute("aria-label", "Copy code to clipboard");
@@ -120,6 +124,13 @@ class CopyButtonWidget extends RenderWidget {
       });
     });
     return btn;
+  }
+
+  destroy(): void {
+    if (this.resetTimer !== null) {
+      clearTimeout(this.resetTimer);
+      this.resetTimer = null;
+    }
   }
 
   eq(other: CopyButtonWidget): boolean {

@@ -7,7 +7,7 @@
  * revealing the raw YAML when the cursor is inside the region.
  */
 import { EditorState, type Extension, StateField } from "@codemirror/state";
-import { Decoration, DecorationSet, WidgetType } from "@codemirror/view";
+import { Decoration, DecorationSet } from "@codemirror/view";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 
 import {
@@ -20,6 +20,7 @@ import {
   createDecorationsField,
   editorFocusField,
   focusTracker,
+  RenderWidget,
   serializeMacros,
 } from "../render/render-utils";
 
@@ -83,7 +84,7 @@ export const frontmatterField = StateField.define<FrontmatterState>({
 });
 
 /** Widget that renders the document title from frontmatter. */
-class TitleWidget extends WidgetType {
+class TitleWidget extends RenderWidget {
   private readonly macrosKey: string;
 
   constructor(
@@ -94,7 +95,7 @@ class TitleWidget extends WidgetType {
     this.macrosKey = serializeMacros(macros);
   }
 
-  toDOM(): HTMLElement {
+  createDOM(): HTMLElement {
     const el = document.createElement("div");
     el.className = "cf-doc-title";
     renderDocumentFragmentToDom(el, {
@@ -109,8 +110,11 @@ class TitleWidget extends WidgetType {
     return this.title === other.title && this.macrosKey === other.macrosKey;
   }
 
-  ignoreEvent(): boolean {
-    // Let CM6 handle clicks → places cursor at position 0 → reveals YAML source
+  /**
+   * Override to return false: CM6 handles click events on the title widget
+   * to place the cursor at position 0, revealing the YAML source for editing.
+   */
+  override ignoreEvent(): boolean {
     return false;
   }
 }

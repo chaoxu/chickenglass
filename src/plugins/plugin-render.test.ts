@@ -238,13 +238,13 @@ describe("blockDecorationField", () => {
     // Rendered mode (unfocused — cursor not on fence)
     const rendered = createTestState(doc);
     const renderedSpecs = getDecoSpecs(rendered);
-    const renderedParens = renderedSpecs.filter((s) => s.widgetClass === "TextWidget");
+    const renderedParens = renderedSpecs.filter((s) => s.widgetClass === "SimpleTextWidget");
     expect(renderedParens.length).toBe(2); // ( and )
 
     // Source mode (cursor on opening fence)
     const source = createTestState(doc, 0, true);
     const sourceSpecs = getDecoSpecs(source);
-    const sourceParens = sourceSpecs.filter((s) => s.widgetClass === "TextWidget");
+    const sourceParens = sourceSpecs.filter((s) => s.widgetClass === "SimpleTextWidget");
     expect(sourceParens.length).toBe(0); // no parens in source mode
   });
 

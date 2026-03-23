@@ -5,6 +5,7 @@ export {
   collectNodes,
   buildDecorations,
   createBooleanToggleField,
+  createSimpleTextWidget,
   serializeMacros,
   RenderWidget,
   editorFocusField,

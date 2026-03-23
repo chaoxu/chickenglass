@@ -456,3 +456,51 @@ export function collectNodeRangesExcludingCursor(
 
   return items;
 }
+
+/**
+ * Factory that creates a lightweight WidgetType instance for simple text spans.
+ *
+ * Many render plugins need identical single-element widgets that differ only
+ * in their tag, CSS class, and text content. This factory eliminates the
+ * repeated boilerplate of defining a class with toDOM() and eq().
+ *
+ * Each call creates a unique class capturing the parameters in its closure.
+ * Two instances produced by the same factory call are always equal (same DOM).
+ * Instances from different factory calls are never equal (different classes).
+ * This matches the typical use-case where widgets are module-level singletons.
+ *
+ * @param tagName   HTML tag for the element (e.g. "span").
+ * @param className CSS class applied to the element.
+ * @param text      Text content of the element.
+ * @param title     Optional tooltip (title attribute).
+ * @returns A WidgetType instance whose DOM matches the given parameters.
+ *
+ * @example
+ * const openParenWidget = createSimpleTextWidget("span", "cf-block-title-paren", "(");
+ */
+export function createSimpleTextWidget(
+  tagName: string,
+  className: string,
+  text: string,
+  title?: string,
+): WidgetType {
+  // Each factory call creates a unique class so cross-call eq() always returns
+  // false (instances with different parameters are never confused as equal).
+  class SimpleTextWidget extends WidgetType {
+    toDOM(): HTMLElement {
+      const el = document.createElement(tagName);
+      el.className = className;
+      el.textContent = text;
+      if (title !== undefined) el.title = title;
+      return el;
+    }
+
+    // Two instances of the same SimpleTextWidget class are always equal:
+    // the captured (tagName, className, text, title) are identical by construction.
+    eq(other: WidgetType): boolean {
+      return other instanceof SimpleTextWidget;
+    }
+  }
+
+  return new SimpleTextWidget();
+}

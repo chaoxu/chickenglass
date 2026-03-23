@@ -17,13 +17,13 @@
 import {
   type DecorationSet,
   Decoration,
-  WidgetType,
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Range } from "@codemirror/state";
 import type { BlockAttrs } from "./plugin-types";
 import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
 import {
+  createSimpleTextWidget,
   decorationHidden,
   serializeMacros,
   editorFocusField,
@@ -57,20 +57,14 @@ import { IFRAME_MAX_ATTEMPTS, IFRAME_POLL_INTERVAL_MS } from "../constants/timin
 /** Pre-created mark decoration for monospace source syntax on fence lines. */
 const blockSourceMark = Decoration.mark({ class: CSS.blockSource });
 
-/** Simple widget that renders a single text character (used for title parens). */
-class TextWidget extends WidgetType {
-  constructor(private readonly text: string) { super(); }
-  toDOM(): HTMLElement {
-    const el = document.createElement("span");
-    el.className = CSS.blockTitleParen;
-    el.textContent = this.text;
-    return el;
-  }
-  eq(other: TextWidget): boolean { return this.text === other.text; }
-}
-
-const openParenWidget = Decoration.widget({ widget: new TextWidget("("), side: -1 });
-const closeParenWidget = Decoration.widget({ widget: new TextWidget(")"), side: 1 });
+const openParenWidget = Decoration.widget({
+  widget: createSimpleTextWidget("span", CSS.blockTitleParen, "("),
+  side: -1,
+});
+const closeParenWidget = Decoration.widget({
+  widget: createSimpleTextWidget("span", CSS.blockTitleParen, ")"),
+  side: 1,
+});
 
 /** Widget that renders a block header string with inline math/bold/italic. */
 class BlockHeaderWidget extends RenderWidget {

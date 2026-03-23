@@ -1,5 +1,5 @@
 import { Annotation } from "@codemirror/state";
-import { EditorView, WidgetType } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { createInlineEditor } from "../editor/inline-editor";
 import { renderInlineMarkdown } from "./inline-render";
 import { showWidgetContextMenu, applyTableMutation } from "./table-actions";
@@ -9,6 +9,7 @@ import {
   findTablesInState,
 } from "./table-discovery";
 import { addRow, formatTable, type ParsedTable } from "./table-utils";
+import { RenderWidget } from "./render-utils";
 
 /**
  * Annotation attached to transactions dispatched by cell-edit sync.
@@ -72,7 +73,7 @@ function destroyActiveInlineEditor(): DestroyedInlineEditor | null {
  * cursor is not adjacent, and the cell has its own undo/redo stack.
  * Only one cell editor is active at a time.
  */
-export class TableWidget extends WidgetType {
+export class TableWidget extends RenderWidget {
   /** Reference to the EditorView, stored on first toDOM() call. */
   private editorView: EditorView | null = null;
   private resizeObserver: ResizeObserver | null = null;
@@ -531,18 +532,10 @@ export class TableWidget extends WidgetType {
   destroy(dom: HTMLElement): void {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    this.editorView = null;
     if (activeInlineEditor?.owner === this && dom.contains(activeInlineEditor.cell)) {
       destroyActiveInlineEditor();
     }
-  }
-
-  /**
-   * Return true so CM6 does NOT process events inside this widget.
-   * The InlineEditor cells handle their own clicks, input, and
-   * keyboard events. CM6 should not interfere.
-   */
-  ignoreEvent(): boolean {
-    return true;
   }
 
   /**
