@@ -73,6 +73,41 @@ export class ClusteredCrossrefWidget extends RenderWidget {
   }
 }
 
+/**
+ * A single part in a mixed cluster (crossref + citation).
+ * Each part is either a resolved crossref label or a formatted citation string.
+ */
+export interface MixedClusterPart {
+  readonly kind: "crossref" | "citation";
+  readonly text: string;
+}
+
+/** Widget for a mixed crossref+citation cluster like '[@eq:foo; @smith2020]'. */
+export class MixedClusterWidget extends RenderWidget {
+  constructor(
+    private readonly parts: readonly MixedClusterPart[],
+    private readonly raw: string,
+  ) {
+    super();
+  }
+
+  createDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "cf-citation";
+    span.textContent = `(${this.parts.map((p) => p.text).join("; ")})`;
+    span.title = this.raw;
+    return span;
+  }
+
+  eq(other: MixedClusterWidget): boolean {
+    if (this.parts.length !== other.parts.length) return false;
+    if (this.raw !== other.raw) return false;
+    return this.parts.every(
+      (p, i) => p.kind === other.parts[i].kind && p.text === other.parts[i].text,
+    );
+  }
+}
+
 /** Widget for an unresolved cross-reference. */
 export class UnresolvedRefWidget extends RenderWidget {
   constructor(private readonly raw: string) {

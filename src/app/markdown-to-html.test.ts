@@ -346,4 +346,96 @@ describe("markdownToHtml", () => {
     expect(html).toContain('href="#eq:energy"');
     expect(html).toContain("Eq. (1)");
   });
+
+  // Regression (#358): mixed crossref+citation clusters like [@eq:foo; @smith2020]
+  // must resolve crossref ids as labels and citation ids via CSL, not send all to CSL.
+  it("renders mixed crossref+citation cluster with both resolved", () => {
+    const entry: CslJsonItem = {
+      id: "karger2000",
+      type: "article-journal",
+      author: [{ family: "Karger", given: "David R." }],
+      title: "Minimum Cuts in Near-Linear Time",
+      issued: { "date-parts": [[2000]] },
+    };
+    const bibliography = new Map([[entry.id, entry]]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Karger [1]"),
+      bibliography: vi.fn(() => ['<span class="csl-entry">[1] Karger.</span>']),
+    } as unknown as CslProcessor;
+
+    const doc = [
+      "$$a^2$$ {#eq:alpha}",
+      "",
+      "See [@eq:alpha; @karger2000].",
+    ].join("\n");
+    const html = markdownToHtml(doc, { bibliography, cslProcessor: fakeCsl });
+
+    // The crossref part should be an anchor with resolved label
+    expect(html).toContain('class="cross-ref"');
+    expect(html).toContain('href="#eq:alpha"');
+    expect(html).toContain("Eq. (1)");
+    // The citation part should be formatted via CSL
+    expect(fakeCsl.cite).toHaveBeenCalled();
+    // Both parts combined in a citation span
+    expect(html).toContain('class="cf-citation"');
+  });
+
+  it("pure citation cluster still goes through CSL without splitting", () => {
+    const entry: CslJsonItem = {
+      id: "karger2000",
+      type: "article-journal",
+      author: [{ family: "Karger", given: "David R." }],
+      title: "Minimum Cuts in Near-Linear Time",
+      issued: { "date-parts": [[2000]] },
+    };
+    const entry2: CslJsonItem = {
+      id: "stein2001",
+      type: "book",
+      author: [{ family: "Stein", given: "Clifford" }],
+      title: "Algorithms",
+      issued: { "date-parts": [[2001]] },
+    };
+    const bibliography = new Map([
+      [entry.id, entry],
+      [entry2.id, entry2],
+    ]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1, 2]"),
+      citeNarrative: vi.fn(() => ""),
+      bibliography: vi.fn(() => []),
+    } as unknown as CslProcessor;
+
+    const html = markdownToHtml("See [@karger2000; @stein2001].", {
+      bibliography,
+      cslProcessor: fakeCsl,
+    });
+
+    // Pure citation cluster should call cite with both ids as a single cluster
+    expect(fakeCsl.cite).toHaveBeenCalledWith(
+      ["karger2000", "stein2001"],
+    );
+    expect(html).toContain('class="cf-citation"');
+    // Should NOT contain cross-ref anchors
+    expect(html).not.toContain('class="cross-ref"');
+  });
+
+  it("pure crossref cluster renders without citation formatting", () => {
+    const doc = [
+      "$$a^2$$ {#eq:alpha}",
+      "",
+      "$$b^2$$ {#eq:beta}",
+      "",
+      "See [@eq:alpha; @eq:beta].",
+    ].join("\n");
+    const html = markdownToHtml(doc);
+
+    expect(html).toContain('class="cross-ref"');
+    expect(html).toContain("Eq. (1)");
+    expect(html).toContain("Eq. (2)");
+    // Should NOT contain cf-citation class
+    expect(html).not.toContain('class="cf-citation"');
+  });
 });

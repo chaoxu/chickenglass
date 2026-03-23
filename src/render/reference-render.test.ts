@@ -304,4 +304,107 @@ describe("collectReferenceRanges", () => {
     if (!ref) return;
     expect(widgetClass(ref)).toBe("UnresolvedRefWidget");
   });
+
+  // Regression (#358): mixed crossref+citation clusters like [@eq:foo; @smith2020]
+  // must NOT send all ids to CSL. Instead, crossref ids are resolved as labels
+  // and citation ids are formatted via CslProcessor.cite().
+  it("routes mixed crossref+citation cluster to MixedClusterWidget", () => {
+    const doc = [
+      "$$a^2$$ {#eq:alpha}",
+      "",
+      "See [@eq:alpha; @karger2000].",
+    ].join("\n");
+    view = createView(doc, doc.length);
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find(
+      (r) => view.state.sliceDoc(r.from, r.to) === "[@eq:alpha; @karger2000]",
+    );
+    expect(ref).toBeDefined();
+    if (!ref) return;
+    expect(widgetClass(ref)).toBe("MixedClusterWidget");
+  });
+
+  it("renders mixed cluster with crossref label and citation text", () => {
+    const doc = [
+      "$$a^2$$ {#eq:alpha}",
+      "",
+      "See [@eq:alpha; @karger2000].",
+    ].join("\n");
+    view = createView(doc, doc.length);
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find(
+      (r) => view.state.sliceDoc(r.from, r.to) === "[@eq:alpha; @karger2000]",
+    );
+    expect(ref).toBeDefined();
+    if (!ref) return;
+    const widget = ref.value.spec.widget;
+    expect(widget).toBeDefined();
+    if (!widget) return;
+    const el = widget.toDOM() as HTMLElement;
+    // Should contain the crossref label for eq:alpha and a citation for karger2000
+    expect(el.textContent).toContain("Eq. (1)");
+    // The combined text should be wrapped in parens with semicolon separator
+    expect(el.textContent).toMatch(/^\(Eq\. \(1\); .+\)$/);
+    expect(el.className).toBe("cf-citation");
+  });
+
+  it("renders mixed block-crossref+citation cluster correctly", () => {
+    const doc = [
+      "::: {.theorem #thm-main}",
+      "Statement.",
+      ":::",
+      "",
+      "See [@thm-main; @karger2000].",
+    ].join("\n");
+    view = createView(doc, doc.length);
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find(
+      (r) => view.state.sliceDoc(r.from, r.to) === "[@thm-main; @karger2000]",
+    );
+    expect(ref).toBeDefined();
+    if (!ref) return;
+    expect(widgetClass(ref)).toBe("MixedClusterWidget");
+    const widget = ref.value.spec.widget;
+    expect(widget).toBeDefined();
+    if (!widget) return;
+    const el = widget.toDOM() as HTMLElement;
+    expect(el.textContent).toContain("Theorem 1");
+  });
+
+  it("pure citation cluster still routes to CitationWidget (not MixedClusterWidget)", () => {
+    const doc = "See [@karger2000; @stein2001].";
+    view = createView(doc, doc.length);
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find(
+      (r) => view.state.sliceDoc(r.from, r.to) === "[@karger2000; @stein2001]",
+    );
+    expect(ref).toBeDefined();
+    if (!ref) return;
+    // Should be CitationWidget, not MixedClusterWidget
+    expect(widgetClass(ref)).toBe("CitationWidget");
+  });
+
+  it("pure crossref cluster still routes to ClusteredCrossrefWidget", () => {
+    const doc = [
+      "$$a^2$$ {#eq:alpha}",
+      "",
+      "$$b^2$$ {#eq:beta}",
+      "",
+      "See [@eq:alpha; @eq:beta].",
+    ].join("\n");
+    view = createView(doc, doc.length);
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find(
+      (r) => view.state.sliceDoc(r.from, r.to) === "[@eq:alpha; @eq:beta]",
+    );
+    expect(ref).toBeDefined();
+    if (!ref) return;
+    // Should be ClusteredCrossrefWidget, not MixedClusterWidget
+    expect(widgetClass(ref)).toBe("ClusteredCrossrefWidget");
+  });
 });

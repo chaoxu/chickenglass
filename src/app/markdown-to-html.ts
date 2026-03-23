@@ -672,6 +672,11 @@ function renderInlineFragment(
 
 // ── Citation / bibliography rendering ───────────────────────────────────────
 
+/**
+ * Extract citation-only clusters for CSL registration.
+ * For mixed clusters (crossref + citation), only include bib ids so
+ * numeric styles assign numbers correctly when cite() is called per-id.
+ */
 function ctxLikeCitationMatches(
   refs: readonly {
     readonly ids: readonly string[];
@@ -681,16 +686,20 @@ function ctxLikeCitationMatches(
 ): { ids: string[]; locators: (string | undefined)[] }[] {
   return refs
     .filter((ref) => ref.ids.some((id) => bibliography.has(id)))
-    .map((ref) => ({
-      ids: [...ref.ids],
-      locators: ref.locators.some((locator) => locator != null)
-        ? [...ref.locators]
-        : [],
-    }));
+    .map((ref) => {
+      const bibIds = ref.ids.filter((id) => bibliography.has(id));
+      const bibLocators = ref.locators.filter((_, i) => bibliography.has(ref.ids[i]));
+      return {
+        ids: bibIds,
+        locators: bibLocators.some((locator) => locator != null)
+          ? bibLocators
+          : [],
+      };
+    });
 }
 
 /**
- * Resolve a crossref label from document semantics (equation labels).
+ * Resolve a crossref label from document semantics (equation/heading labels).
  *
  * Used by the HTML export path where CM6 state (block counters) is unavailable.
  * Falls back to the raw id if no semantic entry is found.
@@ -699,6 +708,10 @@ function resolveCrossrefLabel(id: string, semantics?: DocumentSemantics): string
   if (!semantics) return id;
   const eq = semantics.equationById.get(id);
   if (eq) return `Eq. (${eq.number})`;
+  // Try heading lookup by id attribute
+  for (const heading of semantics.headings) {
+    if (heading.id === id) return heading.number || heading.text;
+  }
   return id;
 }
 
