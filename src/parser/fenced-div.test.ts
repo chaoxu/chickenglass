@@ -501,5 +501,30 @@ describe("fenced div parser", () => {
       // One inside, one outside
       expect(paragraphs.length).toBe(2);
     });
+
+    /**
+     * REGRESSION GUARD: trailing colon counting in self-closing divs.
+     *
+     * The closingColonEnd variable was removed as dead code. This test
+     * ensures self-closing divs still correctly count trailing colons
+     * and produce the expected two FencedDivFence nodes.
+     */
+    it("self-closing div trailing colons still counted after closingColonEnd removal", () => {
+      const text = "::: {.theorem} EVT :::";
+      const infos = nodeInfos(text);
+      const fences = infos.filter((n) => n.name === "FencedDivFence");
+      expect(fences.length).toBe(2);
+      const title = findNode(infos, "FencedDivTitle");
+      expect(title.text).toBe("EVT");
+    });
+
+    it("self-closing div with many trailing colons still works", () => {
+      const text = "::::: {.lemma} Statement :::::";
+      const infos = nodeInfos(text);
+      const fences = infos.filter((n) => n.name === "FencedDivFence");
+      expect(fences.length).toBe(2);
+      const title = findNode(infos, "FencedDivTitle");
+      expect(title.text).toBe("Statement");
+    });
   });
 });

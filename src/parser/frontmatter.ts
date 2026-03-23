@@ -215,7 +215,17 @@ function parseBlocksSection(
     const valueRaw = line.slice(colonIndex + 1).trim();
 
     if (valueRaw !== "") {
-      blocks[blockName] = parseScalar(valueRaw) === true;
+      const parsed = parseScalar(valueRaw);
+      if (typeof parsed === "boolean") {
+        blocks[blockName] = parsed;
+      } else {
+        // Non-boolean scalar in blocks section — coerce truthy string to true
+        // and warn so authors can fix their frontmatter.
+        console.warn(
+          `[frontmatter] blocks.${blockName}: expected boolean, got "${valueRaw}". Treating as true.`,
+        );
+        blocks[blockName] = true;
+      }
       i++;
     } else {
       // Nested config: collect sub-keys with deeper indentation

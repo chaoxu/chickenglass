@@ -5,8 +5,7 @@ import type {
   MarkdownConfig,
   NodeSpec,
 } from "@lezer/markdown";
-import { tags } from "@lezer/highlight";
-import { styleTags } from "@lezer/highlight";
+import { tags, styleTags } from "@lezer/highlight";
 import { COLON, SPACE, TAB, OPEN_BRACE, findMatchingBrace, skipSpaceTab, isSpaceTab } from "./char-utils";
 
 /**
@@ -120,7 +119,6 @@ function parseOpeningFence(
   let closingFenceTo = lineEnd;
 
   // Count colons backwards from lineEnd
-  const closingColonEnd = lineEnd;
   let closingColonStart = lineEnd;
   while (
     closingColonStart > cursor &&
@@ -128,7 +126,7 @@ function parseOpeningFence(
   ) {
     closingColonStart--;
   }
-  const trailingColons = closingColonEnd - closingColonStart;
+  const trailingColons = lineEnd - closingColonStart;
 
   if (trailingColons >= 3) {
     // Verify there's whitespace (or nothing) between the title and the closing colons
@@ -141,7 +139,7 @@ function parseOpeningFence(
     if (beforeClosing > cursor || closingColonStart > cursor) {
       isSelfClosing = true;
       closingFenceFrom = closingColonStart;
-      closingFenceTo = closingColonEnd;
+      closingFenceTo = lineEnd;
     }
   }
 

@@ -110,7 +110,13 @@ const backslashDisplayMathWithLabel: BlockParser = {
     let currentLineEnd = cx.lineStart + line.text.length;
     while (cx.nextLine()) {
       const currentText = line.text;
-      if (isFencedDivClose(currentText, line.pos)) break;
+      // Stop at fenced div closing fences — update currentLineEnd BEFORE
+      // breaking so the unclosed math block ends at the previous line,
+      // not at a stale position from an earlier iteration.
+      if (isFencedDivClose(currentText, line.pos)) {
+        currentLineEnd = cx.lineStart;
+        break;
+      }
       const closeInLine = currentText.indexOf("\\]");
       if (closeInLine >= 0) {
         endPos = cx.lineStart + closeInLine + 2;
@@ -185,9 +191,13 @@ const dollarDisplayMathWithLabel: BlockParser = {
     let currentLineEnd = cx.lineStart + line.text.length;
     while (cx.nextLine()) {
       const currentText = line.text;
-      // Stop at fenced div closing fences — cx.nextLine() inside a
-      // composite block can advance past the closing fence boundary.
-      if (isFencedDivClose(currentText, line.pos)) break;
+      // Stop at fenced div closing fences — update currentLineEnd BEFORE
+      // breaking so the unclosed math block ends at the previous line,
+      // not at a stale position from an earlier iteration.
+      if (isFencedDivClose(currentText, line.pos)) {
+        currentLineEnd = cx.lineStart;
+        break;
+      }
       const trimmed = currentText.trimStart();
       if (trimmed.startsWith("$$")) {
         // $$ at start of line

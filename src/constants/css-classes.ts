@@ -119,4 +119,80 @@ export const CSS = {
 
   /** Block include. */
   blockInclude: "cf-block-include",
+
+  /** Hidden elements (markers, URLs, etc. collapsed when cursor is away). */
+  hidden: "cf-hidden",
+
+  /** Heading mark decorations (font-weight, text styling): "cf-heading-{level}". */
+  heading: (level: number) => `cf-heading-${level}`,
+
+  /** Horizontal rule. */
+  hr: "cf-hr",
+
+  /** Inline formatting marks. */
+  highlight: "cf-highlight",
+  bold: "cf-bold",
+  italic: "cf-italic",
+  strikethrough: "cf-strikethrough",
+  inlineCode: "cf-inline-code",
+
+  /** List marker decorations. */
+  listBullet: "cf-list-bullet",
+  listNumber: "cf-list-number",
+
+  /** Rendered link. */
+  linkRendered: "cf-link-rendered",
+
+  /** Math error (KaTeX rendering failure). */
+  mathError: "cf-math-error",
+
+  /** Math source (delimiter visible when cursor on math). */
+  mathSource: "cf-math-source",
+
+  /** Code block source fences (visible when cursor on either fence). */
+  codeblockSource: "cf-codeblock-source",
+  codeblockSourceOpen: "cf-codeblock-source cf-codeblock-source-open",
+  codeblockSourceClose: "cf-codeblock-source cf-codeblock-source-close",
+
+  /** Crossref unresolved state. */
+  crossrefUnresolved: "cf-crossref cf-crossref-unresolved",
+
+  /** Citation narrative variant. */
+  citationNarrative: "cf-citation cf-citation-narrative",
+
+  /** Focus mode dimmed line. */
+  focusDimmed: "cf-focus-dimmed",
+
+  /** Math preview panel. */
+  mathPreview: "cf-math-preview",
+  mathPreviewContent: "cf-math-preview-content",
+
+  /** Search/replace panel. */
+  searchPanel: "cf-search-panel",
+  searchRow: "cf-search-row",
+  searchInput: "cf-search-input",
+  searchInputWrap: "cf-search-input-wrap",
+  searchMatchInfo: "cf-search-match-info",
+  searchToggle: "cf-search-toggle",
+  searchToggleActive: "cf-search-toggle-active",
+  searchToggles: "cf-search-toggles",
+  searchAction: "cf-search-action",
+  searchNav: "cf-search-nav",
+  searchClose: "cf-search-close",
+  searchReplaceActions: "cf-search-replace-actions",
+  searchToggleReplace: "cf-search-toggle-replace",
+  searchMatch: "cf-search-match",
+  searchMatchSelected: "cf-search-match-selected",
+
+  /** Heading fold level: "cf-fold-h{level}". */
+  foldHeading: (level: number) => `cf-fold-h${level}`,
+
+  /** Sidenote body rendered in margin. */
+  sidenoteBodyRendered: "cf-sidenote-body-rendered",
+  sidenotePortal: "cf-sidenote-portal",
+  sidenoteEntry: "cf-sidenote-entry",
+  sidenoteEntryNumber: "cf-sidenote-entry-number",
+
+  /** Hover preview tooltip container. */
+  hoverPreviewTooltip: "cf-hover-preview-tooltip",
 } as const;

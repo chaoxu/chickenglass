@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parser } from "@lezer/markdown";
 import { mathExtension } from "./math-backslash";
 import { equationLabelExtension } from "./equation-label";
+import { fencedDiv } from "./fenced-div";
 
 /** Parse text with both math and equation label extensions. */
 function parseNodes(text: string): Array<{ name: string; from: number; to: number }> {
@@ -227,6 +228,63 @@ describe("\\[\\] display math with equation labels", () => {
 // ---------------------------------------------------------------------------
 // Equation label edge cases
 // ---------------------------------------------------------------------------
+
+/**
+ * REGRESSION: stale currentLineEnd on early fence break.
+ *
+ * When display math scanning hits a fenced div closing fence (:::), it
+ * breaks out of the while loop. Before the fix, `currentLineEnd` held the
+ * value from the PREVIOUS iteration, so the unclosed DisplayMath node
+ * extended past the ::: fence into the next block's territory. The fix
+ * updates `currentLineEnd` to `cx.lineStart` before breaking so the
+ * DisplayMath ends just before the fence line.
+ */
+describe("stale currentLineEnd on fence break (REGRESSION)", () => {
+  /** Parse with fenced div + math + equation label extensions. */
+  function parseFull(text: string): Array<{ name: string; from: number; to: number; text: string }> {
+    const mdParser = parser.configure([mathExtension, equationLabelExtension, fencedDiv]);
+    const tree = mdParser.parse(text);
+    const nodes: Array<{ name: string; from: number; to: number; text: string }> = [];
+    tree.iterate({
+      enter(node) {
+        nodes.push({ name: node.name, from: node.from, to: node.to, text: text.slice(node.from, node.to) });
+      },
+    });
+    return nodes;
+  }
+
+  it("unclosed \\[ before ::: does not extend past the fence", () => {
+    // Unclosed \[ inside a fenced div should end before the closing :::
+    const text = [
+      "::: {.theorem}",
+      "\\[",
+      "x^2",
+      ":::",
+    ].join("\n");
+    const nodes = parseFull(text);
+    const displayMath = nodes.filter((n) => n.name === "DisplayMath");
+    expect(displayMath.length).toBeGreaterThanOrEqual(1);
+    const dm = displayMath[0];
+    // The DisplayMath should NOT extend past the ::: line
+    const fenceLineStart = text.lastIndexOf(":::");
+    expect(dm.to).toBeLessThanOrEqual(fenceLineStart);
+  });
+
+  it("unclosed $$ before ::: does not extend past the fence", () => {
+    const text = [
+      "::: {.theorem}",
+      "$$",
+      "x^2",
+      ":::",
+    ].join("\n");
+    const nodes = parseFull(text);
+    const displayMath = nodes.filter((n) => n.name === "DisplayMath");
+    expect(displayMath.length).toBeGreaterThanOrEqual(1);
+    const dm = displayMath[0];
+    const fenceLineStart = text.lastIndexOf(":::");
+    expect(dm.to).toBeLessThanOrEqual(fenceLineStart);
+  });
+});
 
 describe("equation label edge cases", () => {
   it("does not create label for non-eq identifiers", () => {

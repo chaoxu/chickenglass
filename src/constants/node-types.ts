@@ -51,6 +51,9 @@ export const NODE = {
   LinkMark: "LinkMark",
   Image: "Image",
   Escape: "Escape",
+  Emphasis: "Emphasis",
+  StrongEmphasis: "StrongEmphasis",
+  Strikethrough: "Strikethrough",
   Highlight: "Highlight",
   Text: "Text",
 

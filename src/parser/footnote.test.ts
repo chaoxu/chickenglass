@@ -105,3 +105,38 @@ describe("footnote definition [^id]: content", () => {
     expect(nodes).toHaveLength(2);
   });
 });
+
+/**
+ * REGRESSION: footnote definitions must interrupt paragraphs.
+ *
+ * Without the endLeaf callback, a [^id]: at the start of a line after
+ * paragraph text gets swallowed into the paragraph as inline content
+ * instead of starting a new FootnoteDef block. This matches Pandoc behavior
+ * where footnote definitions always start a new block, even without a
+ * blank line separator.
+ */
+describe("footnote def paragraph interruption (REGRESSION: missing endLeaf)", () => {
+  it("footnote def interrupts a paragraph without blank line", () => {
+    const text = "Some paragraph text.\n[^1]: A footnote definition.";
+    const defs = findNodes(text, "FootnoteDef");
+    expect(defs).toHaveLength(1);
+    // The FootnoteDef should start at the [^1]: line, not be merged into the paragraph
+    expect(defs[0].from).toBe(21); // "Some paragraph text.\n" is 21 chars
+  });
+
+  it("footnote def after paragraph creates separate blocks", () => {
+    const text = "Paragraph text here.\n[^note]: Definition.";
+    const paragraphs = findNodes(text, "Paragraph");
+    const defs = findNodes(text, "FootnoteDef");
+    expect(paragraphs).toHaveLength(1);
+    expect(defs).toHaveLength(1);
+    // Paragraph should NOT include the footnote def line
+    expect(paragraphs[0].to).toBeLessThanOrEqual(defs[0].from);
+  });
+
+  it("multiple footnote defs after paragraph all parsed", () => {
+    const text = "Text.\n[^1]: First.\n[^2]: Second.";
+    const defs = findNodes(text, "FootnoteDef");
+    expect(defs).toHaveLength(2);
+  });
+});

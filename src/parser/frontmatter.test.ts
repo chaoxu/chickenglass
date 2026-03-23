@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   extractRawFrontmatter,
@@ -254,5 +254,43 @@ describe("parseFrontmatter", () => {
     const doc = '---\nimage-folder: "my assets"\n---\n';
     const { config } = parseFrontmatter(doc);
     expect(config.imageFolder).toBe("my assets");
+  });
+
+  /**
+   * REGRESSION: non-boolean block config values must not be silently dropped.
+   *
+   * Before the fix, `blocks: { theorem: "yes" }` silently coerced
+   * `parseScalar("yes") === true` to `false`, hiding the author's intent.
+   * Now it logs a warning and coerces truthy strings to `true` so the block
+   * is at least enabled, and the author is alerted to fix their frontmatter.
+   */
+  describe("non-boolean block values (REGRESSION: silent drop)", () => {
+    it("coerces non-boolean scalar to true and warns", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const doc = "---\nblocks:\n  theorem: yes\n---\n";
+      const { config } = parseFrontmatter(doc);
+      expect(config.blocks?.["theorem"]).toBe(true);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("expected boolean"),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("coerces arbitrary string to true with warning", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const doc = "---\nblocks:\n  proof: enabled\n---\n";
+      const { config } = parseFrontmatter(doc);
+      expect(config.blocks?.["proof"]).toBe(true);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it("does not warn for actual boolean values", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const doc = "---\nblocks:\n  theorem: true\n  proof: false\n---\n";
+      parseFrontmatter(doc);
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
   });
 });

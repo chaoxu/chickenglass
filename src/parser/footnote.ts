@@ -47,6 +47,28 @@ const footnoteRefParser: InlineParser = {
  */
 const footnoteDefParser: BlockParser = {
   name: "FootnoteDef",
+  // Allow footnote definitions to interrupt paragraphs, matching Pandoc
+  // behavior where [^id]: at the start of a line ends the current paragraph.
+  endLeaf(_cx: BlockContext, line: Line): boolean {
+    const text = line.text;
+    const start = line.pos;
+    if (
+      text.charCodeAt(start) !== OPEN_BRACKET ||
+      text.charCodeAt(start + 1) !== CARET
+    ) {
+      return false;
+    }
+    let i = start + 2;
+    while (i < text.length) {
+      const ch = text.charCodeAt(i);
+      if (ch === SPACE || ch === NEWLINE || ch === CR || ch === TAB) return false;
+      if (ch === CLOSE_BRACKET) {
+        return i + 1 < text.length && text.charCodeAt(i + 1) === COLON;
+      }
+      i++;
+    }
+    return false;
+  },
   parse(cx: BlockContext, line: Line) {
     const text = line.text;
     const start = line.pos;
