@@ -22,7 +22,9 @@ export function PerfDebugPanel() {
     const toggle = () => setOpen((value) => !value);
     const refresh = () => {
       if (!open) return;
-      void getCombinedPerfSnapshot().then(setSnapshot);
+      void getCombinedPerfSnapshot().then(setSnapshot).catch((e: unknown) => {
+        console.error("[perf] failed to refresh snapshot", e);
+      });
     };
 
     window.addEventListener(toggleEvent, toggle);
@@ -37,7 +39,9 @@ export function PerfDebugPanel() {
     if (!open) return;
 
     const load = () => {
-      void getCombinedPerfSnapshot().then(setSnapshot);
+      void getCombinedPerfSnapshot().then(setSnapshot).catch((e: unknown) => {
+        console.error("[perf] failed to load snapshot", e);
+      });
     };
 
     load();
@@ -63,14 +67,25 @@ export function PerfDebugPanel() {
         <div className="flex items-center gap-2 text-xs">
           <button
             type="button"
-            onClick={() => { void getCombinedPerfSnapshot().then(setSnapshot); }}
+            onClick={() => {
+              void getCombinedPerfSnapshot().then(setSnapshot).catch((e: unknown) => {
+                console.error("[perf] failed to refresh snapshot", e);
+              });
+            }}
             className="rounded border border-[var(--cf-border)] px-2 py-1 text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]"
           >
             Refresh
           </button>
           <button
             type="button"
-            onClick={() => { void clearCombinedPerf().then(() => getCombinedPerfSnapshot().then(setSnapshot)); }}
+            onClick={() => {
+              void clearCombinedPerf()
+                .then(() => getCombinedPerfSnapshot())
+                .then(setSnapshot)
+                .catch((e: unknown) => {
+                  console.error("[perf] failed to clear/refresh snapshot", e);
+                });
+            }}
             className="rounded border border-[var(--cf-border)] px-2 py-1 text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]"
           >
             Clear

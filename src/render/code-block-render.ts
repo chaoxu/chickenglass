@@ -115,6 +115,8 @@ class CopyButtonWidget extends RenderWidget {
           btn.title = "Copy code to clipboard";
           btn.setAttribute("aria-label", "Copy code to clipboard");
         }, COPY_RESET_MS);
+      }).catch((e: unknown) => {
+        console.error("[code-block] clipboard write failed", e);
       });
     });
     return btn;
@@ -296,7 +298,7 @@ class CodeBlockHoverPlugin {
     let pos: number;
     try {
       pos = this.view.posAtDOM(lineEl, 0);
-    } catch (_e) {
+    } catch {
       // best-effort: DOM node may be detached after view update — clear hover state
       this.clearHoveredHeader();
       return;

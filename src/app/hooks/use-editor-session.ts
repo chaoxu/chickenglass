@@ -246,8 +246,7 @@ export function useEditorSession({
         category: "create_file",
         detail: path,
       });
-      await refreshTree();
-      await openFile(path);
+      await Promise.all([refreshTree(), openFile(path)]);
     } catch (e: unknown) {
       console.error("[session] create file failed:", e);
     }

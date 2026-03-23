@@ -177,6 +177,8 @@ export function useAppEditorShell({
         }
         onComplete?.();
       }, 100);
+    }).catch((e: unknown) => {
+      console.error("[editor] handleSearchResult: failed to open file", file, e);
     });
   }, [openFile]);
 
@@ -224,7 +226,7 @@ export function useAppEditorShell({
     try {
       const line = view.state.doc.lineAt(cursorCharOffset);
       return { line: line.number, col: cursorCharOffset - line.from + 1 };
-    } catch (_e) {
+    } catch {
       // best-effort: cursor offset may be stale after doc change — return default position
       return { line: 1, col: 1 };
     }

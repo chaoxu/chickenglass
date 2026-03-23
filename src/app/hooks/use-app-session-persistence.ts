@@ -83,11 +83,13 @@ export function useAppSessionPersistence({
         }
 
         if (windowState.tabs.length > 0) {
-          for (const tab of windowState.tabs) {
-            await openFile(tab.path).catch(() => {
-              // File may have been deleted since last session — skip it.
-            });
-          }
+          await Promise.all(
+            windowState.tabs.map((tab) =>
+              openFile(tab.path).catch(() => {
+                // File may have been deleted since last session — skip it.
+              }),
+            ),
+          );
 
           if (windowState.activeTab) {
             const restored = openPathsRef.current.has(windowState.activeTab);

@@ -75,7 +75,7 @@ export class FileWatcher {
 
     try {
       await unwatchDirectoryCommand();
-    } catch (_e) {
+    } catch {
       // best-effort: backend may already be stopped during teardown
     }
 
@@ -95,6 +95,8 @@ export class FileWatcher {
       void measureAsync("watch.reload_clean_file", () => this.config.reloadFile(relativePath), {
         category: "watch",
         detail: relativePath,
+      }).catch((e: unknown) => {
+        console.error("[file-watcher] silent reload failed", relativePath, e);
       });
       return;
     }

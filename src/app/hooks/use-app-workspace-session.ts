@@ -87,6 +87,8 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         void refreshTree();
         void refreshProjectConfig();
       }
+    }).catch((e: unknown) => {
+      console.error("[workspace] handleOpenFolder failed", e);
     });
   }, [refreshProjectConfig, refreshTree]);
 

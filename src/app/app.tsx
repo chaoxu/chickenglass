@@ -4,6 +4,7 @@ import { SidebarProvider } from "./components/sidebar";
 import { AppMainShell } from "./components/app-main-shell";
 import { AppOverlays } from "./components/app-overlays";
 import { AppSidebarShell } from "./components/app-sidebar-shell";
+import { ErrorBoundary } from "./components/error-boundary";
 import { useAppDebug } from "./hooks/use-app-debug";
 import { useAppEditorShell } from "./hooks/use-app-editor-shell";
 import { useAppOverlays } from "./hooks/use-app-overlays";
@@ -81,8 +82,10 @@ interface AppShellProps {
 
 export function AppShell({ fs }: AppShellProps) {
   return (
-    <FileSystemProvider value={fs}>
-      <AppInner />
-    </FileSystemProvider>
+    <ErrorBoundary>
+      <FileSystemProvider value={fs}>
+        <AppInner />
+      </FileSystemProvider>
+    </ErrorBoundary>
   );
 }
