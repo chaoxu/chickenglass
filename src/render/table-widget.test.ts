@@ -6,6 +6,7 @@ import {
   shouldCommitBlurredInlineEditor,
 } from "./table-widget";
 import type { ParsedTable } from "./table-utils";
+import { createMockEditorView } from "../test-utils";
 
 // jsdom lacks ResizeObserver — provide a no-op stub.
 class ResizeObserverStub {
@@ -33,17 +34,7 @@ function makeTable(): ParsedTable {
 
 /** Stub EditorView with just enough shape for toDOM(). */
 function makeStubView(): EditorView {
-  return {
-    state: {
-      sliceDoc: () => "",
-      doc: { toString: () => "" },
-      selection: { main: { head: 0, from: 0, to: 0 } },
-    },
-    dispatch: () => {},
-    focus: () => {},
-    requestMeasure: () => {},
-    contentDOM: document.createElement("div"),
-  } as unknown as EditorView;
+  return createMockEditorView();
 }
 
 describe("TableWidget source range attributes", () => {

@@ -1,4 +1,4 @@
-import { expect } from "vitest";
+import { expect, vi } from "vitest";
 import { EditorState, type Extension, type StateEffect } from "@codemirror/state";
 import { EditorView, type DecorationSet } from "@codemirror/view";
 import type { Parser } from "@lezer/common";
@@ -148,6 +148,69 @@ export function hasMarkClassInRange(
       spec.to > from &&
       spec.class?.includes(classSubstr),
   );
+}
+
+// ── Mock EditorView helper ────────────────────────────────────────────────────
+
+/**
+ * Options for {@link createMockEditorView}. All fields are optional so callers
+ * only supply the slice relevant to their test.
+ */
+export interface MockEditorViewOptions {
+  /** Whether `view.dom.isConnected` returns true (default: true). */
+  isConnected?: boolean;
+  /** Override for `view.dispatch`. Defaults to `vi.fn()`. */
+  dispatch?: (...args: unknown[]) => void;
+  /** Provide extra `state` properties merged onto a minimal default. */
+  state?: Record<string, unknown>;
+  /** Override for `view.focus`. Defaults to `vi.fn()`. */
+  focus?: () => void;
+  /** Override for `view.requestMeasure`. Defaults to `vi.fn()`. */
+  requestMeasure?: () => void;
+  /** Override for `view.destroy`. Defaults to `vi.fn()`. */
+  destroy?: () => void;
+  /** Override for `view.posAtCoords`. Defaults to returning `null`. */
+  posAtCoords?: () => number | null;
+  /** Override for `view.contentDOM`. Defaults to a detached `<div>`. */
+  contentDOM?: HTMLElement;
+}
+
+/**
+ * Build a minimal `EditorView` mock suitable for unit tests that don't need a
+ * live DOM or CM6 state machinery.
+ *
+ * Centralises the single `as unknown as EditorView` escape hatch so individual
+ * test files stay free of double-casts and the mock shape is easy to evolve.
+ */
+export function createMockEditorView(options: MockEditorViewOptions = {}): EditorView {
+  const {
+    isConnected = true,
+    dispatch,
+    state = {},
+    focus,
+    requestMeasure,
+    destroy,
+    posAtCoords,
+    contentDOM,
+  } = options;
+
+  const mock = {
+    dom: { isConnected } as HTMLElement,
+    dispatch: dispatch ?? vi.fn(),
+    focus: focus ?? vi.fn(),
+    requestMeasure: requestMeasure ?? vi.fn(),
+    destroy: destroy ?? vi.fn(),
+    posAtCoords: posAtCoords ?? (() => null),
+    contentDOM: contentDOM ?? document.createElement("div"),
+    state: {
+      sliceDoc: () => "",
+      doc: { toString: () => "", length: 0 },
+      selection: { main: { head: 0, from: 0, to: 0 } },
+      ...state,
+    },
+  };
+
+  return mock as unknown as EditorView;
 }
 
 export function makeBlockPlugin(

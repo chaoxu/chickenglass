@@ -59,7 +59,7 @@ export function TabBar({ tabs, activeTab, onSelect, onClose, onReorder, onPin }:
   const tabIds = tabs.map((t) => t.path);
 
   function handleDragStart(event: DragStartEvent) {
-    setActiveId(event.active.id as string);
+    setActiveId(String(event.active.id));
   }
 
   function handleDragEnd(event: DragEndEvent) {

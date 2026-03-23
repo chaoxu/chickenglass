@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditorView } from "@codemirror/view";
 import type { ParsedTable } from "./table-utils";
+import { createMockEditorView } from "../test-utils";
 
 class ResizeObserverStub {
   observe() {}
@@ -52,7 +53,7 @@ function makeTable(): ParsedTable {
 }
 
 function makeRootView(tableFrom: number, tableText: string): EditorView {
-  return {
+  return createMockEditorView({
     state: {
       __tables: [{ from: tableFrom, to: tableFrom + tableText.length }],
       sliceDoc: () => tableText,
@@ -60,12 +61,11 @@ function makeRootView(tableFrom: number, tableText: string): EditorView {
     dispatch: vi.fn(),
     focus: vi.fn(),
     requestMeasure: vi.fn(),
-    contentDOM: document.createElement("div"),
-  } as unknown as EditorView;
+  });
 }
 
 function makeInlineEditor(docText: string): EditorView {
-  return {
+  return createMockEditorView({
     state: {
       doc: {
         toString: () => docText,
@@ -77,8 +77,9 @@ function makeInlineEditor(docText: string): EditorView {
     dispatch: vi.fn(),
     focus: vi.fn(),
     posAtCoords: () => null,
-  } as unknown as EditorView;
+  });
 }
+
 
 describe("TableWidget cross-widget editor ownership", () => {
   beforeEach(() => {
