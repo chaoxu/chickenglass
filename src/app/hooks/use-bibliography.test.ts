@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { EditorView } from "@codemirror/view";
 import type { FileSystem } from "../file-manager";
+import { createMockEditorView } from "../../test-utils";
 
 vi.mock("react", () => ({
   useRef: <T,>(value: T) => ({ current: value }),
@@ -20,16 +21,14 @@ function deferred<T>(): {
   return { promise, resolve };
 }
 
-function createView() {
+function createView(): { view: EditorView; dispatch: ReturnType<typeof vi.fn> } {
   const dispatch = vi.fn();
-  return {
-    dom: { isConnected: true },
-    dispatch,
-  } as unknown as EditorView & { dispatch: ReturnType<typeof vi.fn> };
+  const view = createMockEditorView({ dispatch });
+  return { view, dispatch };
 }
 
-function getDispatchedStoreIds(view: EditorView & { dispatch: ReturnType<typeof vi.fn> }): string[] {
-  const lastSpec = view.dispatch.mock.calls.at(-1)?.[0] as {
+function getDispatchedStoreIds(dispatch: ReturnType<typeof vi.fn>): string[] {
+  const lastSpec = dispatch.mock.calls.at(-1)?.[0] as {
     effects: { value: { store: ReadonlyMap<string, unknown> } };
   };
   return [...lastSpec.effects.value.store.keys()];
@@ -61,7 +60,7 @@ describe("useBibliography", () => {
         throw new Error(`unexpected path: ${path}`);
       }),
     } as unknown as FileSystem;
-    const view = createView();
+    const { view, dispatch } = createView();
     const { handleBibChange } = useBibliography({
       fs,
       docPath: "notes/doc.md",
@@ -71,16 +70,16 @@ describe("useBibliography", () => {
     handleBibChange("new.bib", "", view);
 
     await vi.waitFor(() => {
-      expect(view.dispatch).toHaveBeenCalledTimes(1);
+      expect(dispatch).toHaveBeenCalledTimes(1);
     });
-    expect(getDispatchedStoreIds(view)).toEqual(["new2001"]);
+    expect(getDispatchedStoreIds(dispatch)).toEqual(["new2001"]);
 
     oldLoad.resolve(OLD_BIB);
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(view.dispatch).toHaveBeenCalledTimes(1);
-    expect(getDispatchedStoreIds(view)).toEqual(["new2001"]);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(getDispatchedStoreIds(dispatch)).toEqual(["new2001"]);
   });
 
   it("ignores a stale initial load after frontmatter switches to a newer bibliography", async () => {
@@ -92,7 +91,7 @@ describe("useBibliography", () => {
         throw new Error(`unexpected path: ${path}`);
       }),
     } as unknown as FileSystem;
-    const view = createView();
+    const { view, dispatch } = createView();
     const { loadInitial, handleBibChange } = useBibliography({
       fs,
       docPath: "notes/doc.md",
@@ -102,15 +101,15 @@ describe("useBibliography", () => {
     handleBibChange("new.bib", "", view);
 
     await vi.waitFor(() => {
-      expect(view.dispatch).toHaveBeenCalledTimes(1);
+      expect(dispatch).toHaveBeenCalledTimes(1);
     });
-    expect(getDispatchedStoreIds(view)).toEqual(["new2001"]);
+    expect(getDispatchedStoreIds(dispatch)).toEqual(["new2001"]);
 
     oldLoad.resolve(OLD_BIB);
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(view.dispatch).toHaveBeenCalledTimes(1);
-    expect(getDispatchedStoreIds(view)).toEqual(["new2001"]);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(getDispatchedStoreIds(dispatch)).toEqual(["new2001"]);
   });
 });

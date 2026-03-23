@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { EditorView } from "@codemirror/view";
+import { createMockEditorView } from "../../test-utils";
 
 const { helpers, createDebugHelpersMock } = vi.hoisted(() => {
   const debugHelpers = {
@@ -30,7 +30,7 @@ describe("useEditorDebugBridge helpers", () => {
   });
 
   it("attaches debug globals for the active view", () => {
-    const view = { id: "view-a" } as unknown as EditorView;
+    const view = createMockEditorView();
 
     attachDebugView(view);
 
@@ -40,8 +40,8 @@ describe("useEditorDebugBridge helpers", () => {
   });
 
   it("only clears debug globals for the matching view", () => {
-    const viewA = { id: "view-a" } as unknown as EditorView;
-    const viewB = { id: "view-b" } as unknown as EditorView;
+    const viewA = createMockEditorView();
+    const viewB = createMockEditorView();
 
     attachDebugView(viewA);
     clearDebugView(viewB);
