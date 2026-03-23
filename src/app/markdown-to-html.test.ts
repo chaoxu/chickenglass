@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { markdownToHtml, renderInline } from "./markdown-to-html";
+import { markdownToHtml, renderInline, type BlockCounterEntry } from "./markdown-to-html";
 import type { CslJsonItem } from "../citations/bibtex-parser";
 import type { CslProcessor } from "../citations/csl-processor";
 import { CSS } from "../constants/css-classes";
@@ -449,5 +449,83 @@ describe("markdownToHtml", () => {
     expect(html).toContain("Eq. (2)");
     // Should NOT contain cf-citation class
     expect(html).not.toContain(`class="${CSS.citation}"`);
+  });
+
+  // Regression (#399): block counter entries must resolve crossrefs like
+  // [@thm-1] to "Theorem 1" in hover preview bodies, which call
+  // markdownToHtml with blockCounters but without CM6 state.
+  it("resolves block counter crossrefs with blockCounters option", () => {
+    const blockCounters = new Map<string, BlockCounterEntry>([
+      ["thm-1", { type: "theorem", title: "Theorem", number: 1 }],
+      ["lem-2", { type: "lemma", title: "Lemma", number: 2 }],
+    ]);
+
+    const doc = "See [@thm-1] and [@lem-2].";
+    const html = markdownToHtml(doc, { blockCounters });
+
+    expect(html).toContain('href="#thm-1"');
+    expect(html).toContain("Theorem 1");
+    expect(html).toContain('href="#lem-2"');
+    expect(html).toContain("Lemma 2");
+  });
+
+  // Regression (#399): block counter crossrefs in mixed clusters with
+  // citations must resolve the block refs as labels while citations go
+  // through CSL.
+  it("resolves mixed block-counter + citation clusters", () => {
+    const blockCounters = new Map<string, BlockCounterEntry>([
+      ["thm-main", { type: "theorem", title: "Theorem", number: 3 }],
+    ]);
+    const entry: CslJsonItem = {
+      id: "cormen2009",
+      type: "book",
+      author: [{ family: "Cormen", given: "Thomas H." }],
+      title: "Introduction to Algorithms",
+      issued: { "date-parts": [[2009]] },
+    };
+    const bibliography = new Map([[entry.id, entry]]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Cormen [1]"),
+      bibliography: vi.fn(() => []),
+    } as unknown as CslProcessor;
+
+    const doc = "See [@thm-main; @cormen2009].";
+    const html = markdownToHtml(doc, { bibliography, cslProcessor: fakeCsl, blockCounters });
+
+    // Block ref should resolve to "Theorem 3"
+    expect(html).toContain('href="#thm-main"');
+    expect(html).toContain("Theorem 3");
+    // Citation part should go through CSL
+    expect(fakeCsl.cite).toHaveBeenCalled();
+    expect(html).toContain(`class="${CSS.citation}"`);
+  });
+
+  // Regression (#399): blockCounters takes priority over equation semantics
+  // when both are present (unlikely but verifies resolution order).
+  it("block counter takes priority over equation label for same id", () => {
+    const blockCounters = new Map<string, BlockCounterEntry>([
+      ["eq:special", { type: "theorem", title: "Result", number: 7 }],
+    ]);
+
+    const doc = "See [@eq:special].";
+    const html = markdownToHtml(doc, { blockCounters });
+
+    // Should use the block counter entry, not fall through to equation resolution
+    expect(html).toContain("Result 7");
+  });
+
+  // Regression (#399): existing non-citation, non-block content renders correctly
+  // when blockCounters is provided (no interference).
+  it("non-crossref content renders normally with blockCounters option", () => {
+    const blockCounters = new Map<string, BlockCounterEntry>([
+      ["thm-1", { type: "theorem", title: "Theorem", number: 1 }],
+    ]);
+
+    const html = markdownToHtml("**Bold** and *italic* and `code`.", { blockCounters });
+    expect(html).toContain("<strong>Bold</strong>");
+    expect(html).toContain("<em>italic</em>");
+    expect(html).toContain("<code>code</code>");
   });
 });

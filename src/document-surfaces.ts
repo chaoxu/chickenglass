@@ -1,5 +1,5 @@
 import type { InlineRenderSurface } from "./inline-surface";
-import { markdownToHtml, renderInline } from "./app/markdown-to-html";
+import { markdownToHtml, renderInline, type MarkdownToHtmlOptions } from "./app/markdown-to-html";
 import { renderInlineMarkdown } from "./render/inline-render";
 
 export type DocumentSurfaceMode = InlineRenderSurface | "document-body";
@@ -53,6 +53,15 @@ export function renderDocumentFragmentToHtml(
 }
 
 /**
+ * Options for block-content rendering, extending `MarkdownToHtmlOptions`
+ * minus `sectionNumbers` (irrelevant for hover preview fragments).
+ */
+export type BlockContentOptions = Pick<
+  MarkdownToHtmlOptions,
+  "macros" | "bibliography" | "cslProcessor" | "blockCounters"
+>;
+
+/**
  * Render markdown content with full block-level support into a DOM element.
  *
  * Unlike `renderDocumentFragmentToDom` (inline-only), this handles display
@@ -65,8 +74,8 @@ export function renderDocumentFragmentToHtml(
 export function renderBlockContentToDom(
   container: HTMLElement,
   text: string,
-  macros?: Record<string, string>,
+  options?: BlockContentOptions,
 ): void {
   if (!text) return;
-  container.innerHTML = markdownToHtml(text, { macros });
+  container.innerHTML = markdownToHtml(text, options);
 }

@@ -24,7 +24,9 @@ import { bibDataField, type BibStore } from "../citations/citation-render";
 import { formatBibEntry } from "../citations/bibliography";
 import { renderKatex } from "./math-render";
 import { mathMacrosField } from "./math-macros";
-import { renderBlockContentToDom, renderDocumentFragmentToDom } from "../document-surfaces";
+import { renderBlockContentToDom, renderDocumentFragmentToDom, type BlockContentOptions } from "../document-surfaces";
+import { getPlugin, pluginRegistryField } from "../plugins";
+import type { BlockCounterEntry } from "../app/markdown-to-html";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { SEARCH_CONTEXT_BUFFER, HOVER_DELAY_MS } from "../constants";
 
@@ -139,6 +141,43 @@ function findEquationSource(view: EditorView, id: string): string | undefined {
 // ── Tooltip content builders ────────────────────────────────────────────────
 
 /**
+ * Build BlockContentOptions from the current CM6 state.
+ *
+ * Extracts bibliography, CSL processor, and block counters so that
+ * `renderBlockContentToDom` can resolve citations and cross-references
+ * inside hover preview bodies (e.g. `[@cormen2009]` or `[@thm:foo]`
+ * within a theorem body).
+ */
+function buildBlockContentOptions(view: EditorView, macros: Record<string, string>): BlockContentOptions {
+  const { store, cslProcessor } = view.state.field(bibDataField);
+  const counterState = view.state.field(blockCounterField, false);
+  const registry = view.state.field(pluginRegistryField, false);
+
+  // Build plain-data block counter map from CM6 state
+  let blockCounters: Map<string, BlockCounterEntry> | undefined;
+  if (counterState) {
+    blockCounters = new Map<string, BlockCounterEntry>();
+    for (const block of counterState.blocks) {
+      if (block.id) {
+        const plugin = registry ? getPlugin(registry, block.type) : undefined;
+        blockCounters.set(block.id, {
+          type: block.type,
+          title: plugin?.title ?? block.type,
+          number: block.number,
+        });
+      }
+    }
+  }
+
+  return {
+    macros,
+    bibliography: store.size > 0 ? store : undefined,
+    cslProcessor: store.size > 0 ? cslProcessor : undefined,
+    blockCounters,
+  };
+}
+
+/**
  * Append the preview content for a single cross-reference id to a container.
  * Reused by both single-id and clustered tooltip builders.
  */
@@ -159,7 +198,7 @@ function appendCrossrefItem(
       if (content) {
         const body = document.createElement("div");
         body.className = "cf-hover-preview-body";
-        renderBlockContentToDom(body, content, macros);
+        renderBlockContentToDom(body, content, buildBlockContentOptions(view, macros));
         container.appendChild(body);
       }
     }

@@ -86,6 +86,23 @@ function renderMath(
 
 // ── Options ─────────────────────────────────────────────────────────────────
 
+/**
+ * Plain-data block counter entry for cross-reference resolution.
+ *
+ * Mirrors `NumberedBlock` from the CM6 block-counter state field but without
+ * position data — only the fields needed for label formatting. Keeps the
+ * HTML export path CM6-free (see architecture decision: markdown-to-html.ts
+ * must not import CM6 state).
+ */
+export interface BlockCounterEntry {
+  /** The plugin class name (e.g. "theorem"). */
+  readonly type: string;
+  /** Display title for the block type (e.g. "Theorem"). */
+  readonly title: string;
+  /** The assigned number. */
+  readonly number: number;
+}
+
 /** Options for the markdown-to-HTML converter. */
 export interface MarkdownToHtmlOptions {
   /** KaTeX macros from frontmatter for math rendering. */
@@ -96,6 +113,14 @@ export interface MarkdownToHtmlOptions {
   bibliography?: BibStore;
   /** CSL processor for citation/bibliography formatting. */
   cslProcessor?: CslProcessor;
+  /**
+   * Block counter entries keyed by block id (e.g. "thm-1" -> { type: "theorem", title: "Theorem", number: 1 }).
+   *
+   * Used for resolving cross-references like `[@thm-1]` to "Theorem 1" in
+   * hover previews where CM6 state is available but the HTML renderer runs
+   * standalone.
+   */
+  blockCounters?: ReadonlyMap<string, BlockCounterEntry>;
 }
 
 // ── Inline context ───────────────────────────────────────────────────────────
@@ -112,6 +137,7 @@ interface InlineContext {
   bibliography?: BibStore;
   citedIds?: string[];
   cslProcessor?: CslProcessor;
+  blockCounters?: ReadonlyMap<string, BlockCounterEntry>;
   surface: HtmlInlineSurface;
   /** Document semantics for resolving crossref labels in HTML export. */
   semantics?: DocumentSemantics;
@@ -143,7 +169,7 @@ function renderInlineWithSurface(
   text: string,
   options: Pick<
     InlineContext,
-    "macros" | "bibliography" | "citedIds" | "cslProcessor" | "surface" | "doc" | "semantics"
+    "macros" | "bibliography" | "citedIds" | "cslProcessor" | "blockCounters" | "surface" | "doc" | "semantics"
   >,
 ): string {
   return renderInlineFragments(parseInlineFragments(text), {
@@ -152,6 +178,7 @@ function renderInlineWithSurface(
     bibliography: options.bibliography,
     citedIds: options.citedIds,
     cslProcessor: options.cslProcessor,
+    blockCounters: options.blockCounters,
     surface: options.surface,
     semantics: options.semantics,
   });
@@ -167,6 +194,7 @@ interface WalkContext {
   readonly semantics: DocumentSemantics;
   readonly bibliography?: BibStore;
   readonly cslProcessor?: CslProcessor;
+  readonly blockCounters?: ReadonlyMap<string, BlockCounterEntry>;
   readonly surface: "document-body";
   /** Accumulates cited entry IDs in document order for the bibliography section. */
   readonly citedIds: string[];
@@ -199,6 +227,7 @@ export function markdownToHtml(
     semantics,
     bibliography: options?.bibliography,
     cslProcessor,
+    blockCounters: options?.blockCounters,
     surface: "document-body",
     citedIds: [],
   };
@@ -642,6 +671,7 @@ const inlineFragmentRenderers: {
       bibliography: ctx.bibliography,
       citedIds: ctx.citedIds,
       cslProcessor: ctx.cslProcessor,
+      blockCounters: ctx.blockCounters,
       semantics: ctx.semantics,
     };
     return fragment.parenthetical
@@ -691,6 +721,7 @@ interface CitationRenderContext {
   bibliography?: BibStore;
   citedIds?: string[];
   cslProcessor?: CslProcessor;
+  blockCounters?: ReadonlyMap<string, BlockCounterEntry>;
   semantics?: DocumentSemantics;
 }
 
@@ -723,16 +754,29 @@ function ctxLikeCitationMatches(
 }
 
 /**
- * Resolve a crossref label from document semantics (equation/heading labels).
+ * Resolve a crossref label from block counters and document semantics.
  *
- * Used by the HTML export path where CM6 state (block counters) is unavailable.
- * Falls back to the raw id if no semantic entry is found.
+ * Resolution order:
+ * 1. Block counters (e.g. "Theorem 1") — from CM6 state passed as plain data
+ * 2. Equation labels (e.g. "Eq. (3)") — from document semantics
+ * 3. Heading labels — from document semantics
+ * 4. Raw id fallback
  */
-function resolveCrossrefLabel(id: string, semantics?: DocumentSemantics): string {
+function resolveCrossrefLabel(
+  id: string,
+  semantics?: DocumentSemantics,
+  blockCounters?: ReadonlyMap<string, BlockCounterEntry>,
+): string {
+  // 1. Block counter lookup (e.g. "thm-1" -> "Theorem 1")
+  if (blockCounters) {
+    const block = blockCounters.get(id);
+    if (block) return `${block.title} ${block.number}`;
+  }
   if (!semantics) return id;
+  // 2. Equation label lookup
   const eq = semantics.equationById.get(id);
   if (eq) return `Eq. (${eq.number})`;
-  // Try heading lookup by id attribute
+  // 3. Heading lookup by id attribute
   for (const heading of semantics.headings) {
     if (heading.id === id) return heading.number || heading.text;
   }
@@ -764,14 +808,14 @@ function renderCitationCluster(
   locators: readonly (string | undefined)[] | undefined,
   citCtx: CitationRenderContext,
 ): string {
-  const { bibliography, citedIds, cslProcessor, semantics } = citCtx;
+  const { bibliography, citedIds, cslProcessor, blockCounters, semantics } = citCtx;
   const knownCount = bibliography
     ? ids.filter((id) => bibliography.has(id)).length
     : 0;
 
   if (knownCount === 0) {
     const parts = ids.map((id) => {
-      const label = resolveCrossrefLabel(id, semantics);
+      const label = resolveCrossrefLabel(id, semantics, blockCounters);
       return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(label)}</a>`;
     });
     if (ids.length === 1) {
@@ -805,7 +849,7 @@ function renderCitationCluster(
         : rendered;
       return escapeHtml(stripped);
     }
-    const label = resolveCrossrefLabel(id, semantics);
+    const label = resolveCrossrefLabel(id, semantics, blockCounters);
     return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(label)}</a>`;
   });
   return `<span class="${CSS.citation}">(${parts.join("; ")})</span>`;
