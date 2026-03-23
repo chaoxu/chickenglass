@@ -8,6 +8,11 @@
  *
  * The timer resets whenever a save fires so we never double-save immediately
  * after an event-driven save.
+ *
+ * Implementation note: rather than using refs synced via separate useEffects,
+ * the effect re-registers event listeners and the timer whenever isDirty or
+ * onSave change. The savingRef guard (outside the effect) prevents concurrent
+ * overlapping saves across re-registrations.
  */
 
 import { useEffect, useRef } from "react";
@@ -23,20 +28,16 @@ export function useAutoSave(
   onSave: () => Promise<void>,
   interval = 30_000,
 ): void {
-  // Stable refs so event handlers never close over stale values.
-  const isDirtyRef = useRef(isDirty);
-  const onSaveRef = useRef(onSave);
+  // savingRef lives outside the effect so the guard persists across
+  // re-registrations that happen when isDirty or onSave change.
   const savingRef = useRef(false);
-
-  useEffect(() => { isDirtyRef.current = isDirty; }, [isDirty]);
-  useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
 
   useEffect(() => {
     /** Save if dirty; guard against concurrent overlapping saves. */
     const trySave = () => {
-      if (!isDirtyRef.current || savingRef.current) return;
+      if (!isDirty || savingRef.current) return;
       savingRef.current = true;
-      onSaveRef.current().catch(() => {
+      onSave().catch(() => {
         // Auto-save is best-effort — swallow errors silently.
       }).finally(() => {
         savingRef.current = false;
@@ -49,7 +50,7 @@ export function useAutoSave(
     window.addEventListener("blur", handleBlur);
     document.addEventListener("visibilitychange", handleVisibility);
 
-    // Periodic timer.  Disabled when interval <= 0.
+    // Periodic timer. Disabled when interval <= 0.
     let timerId: ReturnType<typeof setInterval> | null = null;
     if (interval > 0) {
       timerId = setInterval(trySave, interval);
@@ -60,5 +61,5 @@ export function useAutoSave(
       document.removeEventListener("visibilitychange", handleVisibility);
       if (timerId !== null) clearInterval(timerId);
     };
-  }, [interval]); // interval is the only stable dependency — refs handle the rest
+  }, [isDirty, onSave, interval]);
 }

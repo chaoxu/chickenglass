@@ -4,9 +4,16 @@
  * Keeps the in-memory document session (tabs, buffers, dirty state) and the
  * filesystem mutations in a single hook so editor shell consumers do not need
  * to thread a large dependency object between separate hooks.
+ *
+ * State management notes:
+ * - sessionStateRef is an eagerly-updated mirror of sessionState used by
+ *   callbacks to avoid stale closure reads. It is NOT exported; callers use
+ *   the derived React state (openTabs, activeTab) or stable callbacks instead.
+ * - openPathsRef and activeTabRef are internal implementation details;
+ *   callers use isPathOpen() instead of reaching into a ref directly.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { FileSystem } from "../file-manager";
 import type { Tab } from "../tab-bar";
 import { isTauri } from "../tauri-fs";
@@ -45,8 +52,8 @@ export interface UseEditorSessionReturn {
   setEditorDoc: React.Dispatch<React.SetStateAction<string>>;
   buffers: React.RefObject<Map<string, string>>;
   liveDocs: React.RefObject<Map<string, string>>;
-  openPathsRef: React.RefObject<Set<string>>;
-  activeTabRef: React.RefObject<string | null>;
+  /** Returns true if the given path is currently open in a tab. */
+  isPathOpen: (path: string) => boolean;
   handleDocChange: (doc: string) => void;
   switchToTab: (path: string) => void;
   reorderTabs: (tabs: Tab[]) => void;
@@ -73,19 +80,13 @@ export function useEditorSession({
 
   const buffers = useRef<Map<string, string>>(new Map());
   const liveDocs = useRef<Map<string, string>>(new Map());
-  const openPathsRef = useRef<Set<string>>(new Set());
-  const activeTabRef = useRef<string | null>(null);
+  // Eagerly-updated mirror of React state; allows callbacks to read the
+  // latest session without depending on React's asynchronous update cycle.
   const sessionStateRef = useRef<EditorSessionState>(sessionState);
   const openFileRequestRef = useRef(0);
 
   const openTabs = sessionState.tabs;
   const activeTab = sessionState.activePath;
-
-  useEffect(() => {
-    sessionStateRef.current = sessionState;
-    openPathsRef.current = new Set(sessionState.tabs.map((tab) => tab.path));
-    activeTabRef.current = sessionState.activePath;
-  }, [sessionState]);
 
   const docForPath = useCallback((path: string | null): string => {
     if (!path) return "";
@@ -98,17 +99,21 @@ export function useEditorSession({
   ) => {
     const shouldSyncEditorDoc = options?.syncEditorDoc
       ?? nextState.activePath !== sessionStateRef.current.activePath;
+    // Update the ref eagerly so subsequent synchronous reads within the same
+    // event tick see the new state before React re-renders.
     sessionStateRef.current = nextState;
-    openPathsRef.current = new Set(nextState.tabs.map((tab) => tab.path));
-    activeTabRef.current = nextState.activePath;
     setSessionState(nextState);
     if (shouldSyncEditorDoc) {
       setEditorDoc(docForPath(nextState.activePath));
     }
   }, [docForPath]);
 
+  const isPathOpen = useCallback((path: string): boolean => {
+    return hasSessionPath(sessionStateRef.current, path);
+  }, []);
+
   const handleDocChange = useCallback((doc: string) => {
-    const path = activeTabRef.current;
+    const path = sessionStateRef.current.activePath;
     if (!path) return;
     liveDocs.current.set(path, doc);
 
@@ -203,7 +208,8 @@ export function useEditorSession({
   const openFileWithContent = useCallback((name: string, content: string) => {
     let path = name;
     let suffix = 1;
-    while (openPathsRef.current.has(path)) {
+    // Derive open paths from the ref to avoid stale closure reads.
+    while (hasSessionPath(sessionStateRef.current, path)) {
       path = `${name} (${suffix++})`;
     }
 
@@ -219,7 +225,7 @@ export function useEditorSession({
   }, [commitSessionState]);
 
   const saveFile = useCallback(async () => {
-    const path = activeTabRef.current;
+    const path = sessionStateRef.current.activePath;
     if (!path) return;
 
     const doc = liveDocs.current.get(path) ?? "";
@@ -319,7 +325,7 @@ export function useEditorSession({
   }, [commitSessionState, fs, refreshTree]);
 
   const saveAs = useCallback(async () => {
-    const path = activeTabRef.current;
+    const path = sessionStateRef.current.activePath;
     if (!path) return;
     const doc = liveDocs.current.get(path) ?? "";
 
@@ -370,8 +376,7 @@ export function useEditorSession({
     setEditorDoc,
     buffers,
     liveDocs,
-    openPathsRef,
-    activeTabRef,
+    isPathOpen,
     handleDocChange,
     switchToTab,
     reorderTabs,

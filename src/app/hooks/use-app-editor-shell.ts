@@ -32,7 +32,7 @@ export interface AppEditorShellController {
   setEditorDoc: ReturnType<typeof useEditorSession>["setEditorDoc"];
   buffers: ReturnType<typeof useEditorSession>["buffers"];
   liveDocs: ReturnType<typeof useEditorSession>["liveDocs"];
-  openPathsRef: ReturnType<typeof useEditorSession>["openPathsRef"];
+  isPathOpen: ReturnType<typeof useEditorSession>["isPathOpen"];
   openFile: ReturnType<typeof useEditorSession>["openFile"];
   openFileWithContent: ReturnType<typeof useEditorSession>["openFileWithContent"];
   reorderTabs: ReturnType<typeof useEditorSession>["reorderTabs"];
@@ -89,7 +89,7 @@ export function useAppEditorShell({
     setEditorDoc,
     buffers,
     liveDocs,
-    openPathsRef,
+    isPathOpen,
     handleDocChange,
     switchToTab,
     reorderTabs,
@@ -197,25 +197,34 @@ export function useAppEditorShell({
     }
   }, [editorState?.view, editorState?.imageSaver]);
 
-  const [editorMode, setEditorModeState] = useState<EditorMode>("rich");
   const isMarkdownFile = activeTab?.endsWith(".md") ?? false;
 
-  useEffect(() => {
-    setEditorModeState(isMarkdownFile ? "rich" : "source");
-  }, [activeTab, isMarkdownFile]);
+  // editorMode is derived from (activeTab, isMarkdownFile) via useMemo rather
+  // than being stored in a separate useState that is then synced via useEffect.
+  // An optional override captures user-initiated mode changes (handleModeChange)
+  // and is keyed to the current activeTab so it is automatically discarded when
+  // the user switches to a different file.
+  const [modeOverride, setModeOverride] = useState<{ tab: string | null; mode: EditorMode } | null>(null);
 
+  const editorMode = useMemo((): EditorMode => {
+    // If the user explicitly changed mode for the current tab, honour it.
+    if (modeOverride && modeOverride.tab === activeTab) return modeOverride.mode;
+    return isMarkdownFile ? "rich" : "source";
+  }, [modeOverride, activeTab, isMarkdownFile]);
+
+  // Sync the computed mode into the CM6 view.
   useEffect(() => {
     const view = editorState?.view;
     if (!view) return;
-    setEditorMode(view, isMarkdownFile ? "rich" : "source");
-  }, [editorState?.view, isMarkdownFile]);
+    setEditorMode(view, editorMode);
+  }, [editorState?.view, editorMode]);
 
   const handleModeChange = useCallback((mode: EditorMode) => {
-    setEditorModeState(mode);
+    setModeOverride({ tab: activeTab, mode });
     const view = editorState?.view;
     if (!view) return;
     setEditorMode(view, mode);
-  }, [editorState?.view]);
+  }, [activeTab, editorState?.view]);
 
   const wordCount = editorState?.wordCount ?? 0;
   const cursorCharOffset = editorState?.cursorPos ?? 0;
@@ -233,7 +242,8 @@ export function useAppEditorShell({
   }, [editorState?.view, cursorCharOffset]);
 
   const docTextForStats = activeTab ? (liveDocs.current.get(activeTab) ?? "") : "";
-  const hasDirtyFiles = openTabs.some((tab) => tab.dirty);
+
+  const hasDirtyFiles = useMemo(() => openTabs.some((tab) => tab.dirty), [openTabs]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -264,7 +274,7 @@ export function useAppEditorShell({
     setEditorDoc,
     buffers,
     liveDocs,
-    openPathsRef,
+    isPathOpen,
     openFile,
     openFileWithContent,
     reorderTabs,

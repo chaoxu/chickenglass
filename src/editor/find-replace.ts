@@ -42,6 +42,10 @@ import { SEARCH_CONTEXT_BUFFER, CSS } from "../constants";
 
 export interface SearchUiState {
   readonly replaceVisible: boolean;
+  /** Persisted toggle state so options survive panel close/reopen. */
+  readonly caseSensitive: boolean;
+  readonly isRegexp: boolean;
+  readonly wholeWord: boolean;
 }
 
 export interface SearchControllerState extends SearchUiState {
@@ -58,6 +62,9 @@ export interface SearchMatchRange {
 
 const DEFAULT_SEARCH_UI_STATE: SearchUiState = {
   replaceVisible: false,
+  caseSensitive: false,
+  isRegexp: false,
+  wholeWord: false,
 };
 
 export const setSearchUiStateEffect = StateEffect.define<Partial<SearchUiState>>();
@@ -276,18 +283,21 @@ function createSearchPanel(view: EditorView): Panel {
   matchInfo.className = CSS.searchMatchInfo;
   matchInfo.textContent = "No results";
 
-  // Toggles
-  let caseSensitive = false;
-  let isRegexp = false;
-  let wholeWord = false;
+  // Toggle state is read from and written to searchUiStateField so it
+  // persists across panel close/reopen within the same editor session.
+  function getToggles(): { caseSensitive: boolean; isRegexp: boolean; wholeWord: boolean } {
+    const ui = view.state.field(searchUiStateField);
+    return { caseSensitive: ui.caseSensitive, isRegexp: ui.isRegexp, wholeWord: ui.wholeWord };
+  }
 
   function commitQuery(): void {
+    const toggles = getToggles();
     setSearchControllerQuery(view, {
       search: searchInput.value,
       replace: replaceInput.value,
-      caseSensitive,
-      regexp: isRegexp,
-      wholeWord,
+      caseSensitive: toggles.caseSensitive,
+      regexp: toggles.isRegexp,
+      wholeWord: toggles.wholeWord,
     });
   }
 
@@ -337,13 +347,10 @@ function createSearchPanel(view: EditorView): Panel {
     }
   }
 
-  /** Sync toggle button DOM to match the given query's options. */
+  /** Sync toggle button DOM from searchUiStateField and the CM6 query. */
   function syncPanelState(): void {
     const state = getSearchControllerState(view);
-    const q = state.query;
-    caseSensitive = q.caseSensitive;
-    isRegexp = q.regexp;
-    wholeWord = q.wholeWord;
+    const { caseSensitive, isRegexp, wholeWord } = getToggles();
     toggleCase.classList.toggle(CSS.searchToggleActive, caseSensitive);
     toggleCase.setAttribute("aria-pressed", String(caseSensitive));
     toggleRegex.classList.toggle(CSS.searchToggleActive, isRegexp);
@@ -354,16 +361,17 @@ function createSearchPanel(view: EditorView): Panel {
     toggleReplaceBtn.textContent = state.replaceVisible ? "\u25be" : "\u25b8";
   }
 
-  const toggleCase = createToggle("Aa", "Match Case", caseSensitive, (v) => {
-    caseSensitive = v;
+  const { caseSensitive: initCase, isRegexp: initRegexp, wholeWord: initWord } = getToggles();
+  const toggleCase = createToggle("Aa", "Match Case", initCase, (v) => {
+    setSearchUiState(view, { caseSensitive: v });
     commitQuery();
   });
-  const toggleRegex = createToggle(".*", "Use Regular Expression", isRegexp, (v) => {
-    isRegexp = v;
+  const toggleRegex = createToggle(".*", "Use Regular Expression", initRegexp, (v) => {
+    setSearchUiState(view, { isRegexp: v });
     commitQuery();
   });
-  const toggleWord = createToggle("\\b", "Match Whole Word", wholeWord, (v) => {
-    wholeWord = v;
+  const toggleWord = createToggle("\\b", "Match Whole Word", initWord, (v) => {
+    setSearchUiState(view, { wholeWord: v });
     commitQuery();
   });
 
@@ -501,6 +509,7 @@ function createSearchPanel(view: EditorView): Panel {
       if (q.replace !== replaceInput.value) {
         replaceInput.value = q.replace;
       }
+      const { caseSensitive, isRegexp, wholeWord } = getToggles();
       if (
         q.caseSensitive !== caseSensitive ||
         q.regexp !== isRegexp ||

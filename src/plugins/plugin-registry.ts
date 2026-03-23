@@ -34,11 +34,19 @@ export interface PluginRegistryState {
    * unless it is explicitly in this set.
    */
   readonly disabled: ReadonlySet<string>;
+  /**
+   * Per-state cache for auto-generated fallback plugins.
+   *
+   * Scoped to the state object rather than the module so it is discarded
+   * whenever the registry is rebuilt (e.g. on frontmatter change), preventing
+   * stale fallbacks from persisting across editor sessions.
+   */
+  readonly fallbackCache: Map<string, BlockPlugin>;
 }
 
 /** Create an empty registry state. */
 export function createRegistryState(): PluginRegistryState {
-  return { plugins: new Map(), disabled: new Set() };
+  return { plugins: new Map(), disabled: new Set(), fallbackCache: new Map() };
 }
 
 /** Register a plugin, returning a new state. */
@@ -51,7 +59,8 @@ export function registerPlugin(
   // Re-enabling a previously disabled block clears it from the disabled set.
   const nextDisabled = new Set(state.disabled);
   nextDisabled.delete(plugin.name);
-  return { plugins: next, disabled: nextDisabled };
+  // Fresh cache: registered plugins supersede any existing fallback for this name.
+  return { plugins: next, disabled: nextDisabled, fallbackCache: new Map() };
 }
 
 /** Register multiple plugins at once, returning a new state. */
@@ -65,7 +74,8 @@ export function registerPlugins(
     next.set(plugin.name, plugin);
     nextDisabled.delete(plugin.name);
   }
-  return { plugins: next, disabled: nextDisabled };
+  // Fresh cache: registered plugins supersede any existing fallbacks.
+  return { plugins: next, disabled: nextDisabled, fallbackCache: new Map() };
 }
 
 /**
@@ -83,7 +93,8 @@ export function unregisterPlugin(
   next.delete(name);
   const nextDisabled = new Set(state.disabled);
   nextDisabled.add(name);
-  return { plugins: next, disabled: nextDisabled };
+  // Fresh cache: unregistering a plugin invalidates any fallback entry for it.
+  return { plugins: next, disabled: nextDisabled, fallbackCache: new Map() };
 }
 
 /** Look up a plugin by fenced div class name. */
@@ -104,11 +115,13 @@ export function getPlugin(
  *
  * Special class names (e.g., "include") are excluded from fallback
  * generation — those are handled separately by the renderer.
+ *
+ * The fallback cache is stored on the PluginRegistryState object itself so
+ * it is automatically scoped to the current registry snapshot. When the
+ * registry is rebuilt (e.g. on frontmatter change), the old state is
+ * discarded along with its cache, preventing stale fallbacks from leaking
+ * across sessions.
  */
-
-/** Cache for fallback plugins to avoid re-creating them on every tree walk. */
-const fallbackCache = new Map<string, BlockPlugin>();
-
 export function getPluginOrFallback(
   state: PluginRegistryState,
   name: string,
@@ -122,7 +135,7 @@ export function getPluginOrFallback(
 
   if (EXCLUDED_FROM_FALLBACK.has(name)) return undefined;
 
-  let fallback = fallbackCache.get(name);
+  let fallback = state.fallbackCache.get(name);
   if (!fallback) {
     const title = capitalize(name);
     fallback = {
@@ -131,7 +144,7 @@ export function getPluginOrFallback(
       title,
       render: createBlockRender(title),
     };
-    fallbackCache.set(name, fallback);
+    state.fallbackCache.set(name, fallback);
   }
   return fallback;
 }

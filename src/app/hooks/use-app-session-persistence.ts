@@ -11,7 +11,7 @@ interface AppSessionPersistenceDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "openTabs" | "activeTab" | "openFile" | "switchToTab" | "liveDocs" | "buffers" | "openPathsRef"
+    "openTabs" | "activeTab" | "openFile" | "switchToTab" | "liveDocs" | "buffers" | "isPathOpen"
   >;
 }
 
@@ -53,7 +53,7 @@ export function useAppSessionPersistence({
     activeTab,
     openFile,
     switchToTab,
-    openPathsRef,
+    isPathOpen,
   } = editor;
 
   useEffect(() => {
@@ -92,8 +92,10 @@ export function useAppSessionPersistence({
           );
 
           if (windowState.activeTab) {
-            const restored = openPathsRef.current.has(windowState.activeTab);
-            if (restored) {
+            // isPathOpen reads from the eagerly-updated sessionStateRef inside
+            // useEditorSession, so it reflects the post-openFile state even
+            // though React state hasn't re-rendered yet.
+            if (isPathOpen(windowState.activeTab)) {
               switchToTab(windowState.activeTab);
             }
           }
@@ -116,7 +118,7 @@ export function useAppSessionPersistence({
   }, [
     fileTree,
     openFile,
-    openPathsRef,
+    isPathOpen,
     setSidebarCollapsed,
     setSidebarWidth,
     switchToTab,
