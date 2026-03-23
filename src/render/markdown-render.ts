@@ -249,9 +249,10 @@ function buildMarkdownDecorations(view: EditorView): DecorationSet {
           return;
         }
 
-        // --- ListMark: style bullet/number markers unless cursor touches the marker ---
+        // --- ListMark: always style bullet/number markers (no source revert) ---
+        // List markers aren't source syntax like # or $ — they should keep
+        // the content font even when the cursor is on them.
         if (node.name === "ListMark") {
-          if (cursorInRange(view, node.from, node.to)) return;
           const grandparent = node.node.parent?.parent?.name;
           const deco =
             grandparent === "BulletList"
