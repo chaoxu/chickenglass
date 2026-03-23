@@ -10,14 +10,87 @@ interface FileEntry {
   children?: FileEntry[];
 }
 
-/** Resolve a request path to an absolute filesystem path, preventing traversal. */
-function resolveSafePath(rootDir: string, requestPath: string): string | null {
-  const decoded = decodeURIComponent(requestPath);
-  const resolved = path.resolve(rootDir, decoded);
-  if (!resolved.startsWith(rootDir + path.sep) && resolved !== rootDir) {
+function isWithinRoot(rootDir: string, candidatePath: string): boolean {
+  return candidatePath === rootDir || candidatePath.startsWith(rootDir + path.sep);
+}
+
+function decodeRequestPath(requestPath: string): string | null {
+  try {
+    return decodeURIComponent(requestPath);
+  } catch {
     return null;
   }
-  return resolved;
+}
+
+async function resolveRealPathCandidate(candidatePath: string): Promise<string | null> {
+  let currentPath = candidatePath;
+  const unresolvedSegments: string[] = [];
+
+  for (;;) {
+    try {
+      const realPath = await fs.realpath(currentPath);
+      return path.resolve(realPath, ...unresolvedSegments.reverse());
+    } catch (error) {
+      const code = error instanceof Error && "code" in error ? error.code : undefined;
+      if (code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    const parentPath = path.dirname(currentPath);
+    if (parentPath === currentPath) {
+      return null;
+    }
+
+    unresolvedSegments.push(path.basename(currentPath));
+    currentPath = parentPath;
+  }
+}
+
+/** Resolve a request path to an absolute filesystem path, preventing traversal and symlink escape. */
+async function resolveSafePath(rootDir: string, requestPath: string): Promise<string | null> {
+  const decoded = decodeRequestPath(requestPath);
+  if (decoded === null) {
+    return null;
+  }
+
+  const candidatePath = path.resolve(rootDir, decoded);
+  if (!isWithinRoot(rootDir, candidatePath)) {
+    return null;
+  }
+
+  const realCandidatePath = await resolveRealPathCandidate(candidatePath);
+  if (!realCandidatePath || !isWithinRoot(rootDir, realCandidatePath)) {
+    return null;
+  }
+
+  return candidatePath;
+}
+
+export function isAllowedFileApiOrigin(
+  req: Pick<IncomingMessage, "headers">,
+  defaultProtocol = "http",
+): boolean {
+  const originHeader = req.headers.origin;
+  if (!originHeader) {
+    return true;
+  }
+
+  const host = req.headers.host;
+  if (!host) {
+    return false;
+  }
+
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const protocol =
+    (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto) ?? defaultProtocol;
+
+  try {
+    const origin = new URL(originHeader);
+    return origin.protocol === `${protocol}:` && origin.host === host;
+  } catch {
+    return false;
+  }
 }
 
 /** Read a file tree recursively. */
@@ -109,6 +182,17 @@ export async function handleFileApi(
   const decodedPath = filePath.startsWith("/") ? filePath.slice(1) : filePath;
 
   try {
+    if (!isAllowedFileApiOrigin(req)) {
+      sendError(res, 403, "Cross-origin file API access is not allowed");
+      return true;
+    }
+
+    if (method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return true;
+    }
+
     if (method === "GET" && (decodedPath === "" || decodedPath === "/")) {
       const tree = await buildTree(rootDir, rootDir);
       sendJson(res, 200, tree);
@@ -116,7 +200,7 @@ export async function handleFileApi(
     }
 
     if (method === "GET") {
-      const safePath = resolveSafePath(rootDir, decodedPath);
+      const safePath = await resolveSafePath(rootDir, decodedPath);
       if (!safePath) {
         sendError(res, 403, "Path traversal not allowed");
         return true;
@@ -132,7 +216,7 @@ export async function handleFileApi(
     }
 
     if (method === "PUT") {
-      const safePath = resolveSafePath(rootDir, decodedPath);
+      const safePath = await resolveSafePath(rootDir, decodedPath);
       if (!safePath) {
         sendError(res, 403, "Path traversal not allowed");
         return true;
@@ -154,7 +238,7 @@ export async function handleFileApi(
     }
 
     if (method === "POST") {
-      const safePath = resolveSafePath(rootDir, decodedPath);
+      const safePath = await resolveSafePath(rootDir, decodedPath);
       if (!safePath) {
         sendError(res, 403, "Path traversal not allowed");
         return true;
@@ -178,7 +262,7 @@ export async function handleFileApi(
     }
 
     if (method === "DELETE") {
-      const safePath = resolveSafePath(rootDir, decodedPath);
+      const safePath = await resolveSafePath(rootDir, decodedPath);
       if (!safePath) {
         sendError(res, 403, "Path traversal not allowed");
         return true;

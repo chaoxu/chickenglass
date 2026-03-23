@@ -1,4 +1,4 @@
-import { watch, type FSWatcher } from "node:fs";
+import { existsSync, readdirSync, watch, type FSWatcher } from "node:fs";
 import path from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { Server } from "node:http";
@@ -9,12 +9,39 @@ export interface FileChangeEvent {
   path: string;
 }
 
+export function classifyFsWatchEvent(
+  eventType: "rename" | "change",
+  relativePath: string,
+  pathExists: boolean,
+  knownPaths: ReadonlySet<string>,
+): FileChangeEvent["type"] {
+  if (eventType === "change") {
+    return "change";
+  }
+
+  if (!pathExists) {
+    return "delete";
+  }
+
+  return knownPaths.has(relativePath) ? "change" : "add";
+}
+
+export function removeKnownPathPrefix(knownPaths: Set<string>, removedPath: string): void {
+  const removedPrefix = `${removedPath}${path.sep}`;
+  for (const knownPath of knownPaths) {
+    if (knownPath === removedPath || knownPath.startsWith(removedPrefix)) {
+      knownPaths.delete(knownPath);
+    }
+  }
+}
+
 /** File watcher that notifies WebSocket clients of file changes. */
 export class FileWatcher {
   private readonly wss: WebSocketServer;
   private readonly watchers: FSWatcher[] = [];
   private readonly rootDir: string;
   private debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private readonly knownPaths = new Set<string>();
 
   constructor(server: Server, rootDir: string) {
     this.rootDir = rootDir;
@@ -27,6 +54,7 @@ export class FileWatcher {
 
   /** Start watching the root directory for file changes. */
   start(): void {
+    this.seedKnownPaths(this.rootDir);
     this.watchDirectory(this.rootDir);
   }
 
@@ -47,10 +75,20 @@ export class FileWatcher {
     try {
       const watcher = watch(dirPath, { recursive: true }, (eventType, filename) => {
         if (!filename) return;
-        if (this.shouldIgnore(filename)) return;
+        const relativePath = path.normalize(filename.toString());
+        if (this.shouldIgnore(relativePath)) return;
 
-        const relativePath = filename;
-        this.debounceNotify(relativePath, eventType === "rename" ? "add" : "change");
+        const absolutePath = path.join(this.rootDir, relativePath);
+        const pathExists = existsSync(absolutePath);
+        const type = classifyFsWatchEvent(eventType, relativePath, pathExists, this.knownPaths);
+
+        if (type === "delete") {
+          removeKnownPathPrefix(this.knownPaths, relativePath);
+        } else {
+          this.knownPaths.add(relativePath);
+        }
+
+        this.debounceNotify(relativePath, type);
       });
 
       watcher.on("error", (err) => {
@@ -68,6 +106,22 @@ export class FileWatcher {
     return parts.some(
       (part) => part.startsWith(".") || part === "node_modules" || part === "dist",
     );
+  }
+
+  private seedKnownPaths(dirPath: string): void {
+    for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
+      if (this.shouldIgnore(entry.name)) {
+        continue;
+      }
+
+      const entryPath = path.join(dirPath, entry.name);
+      const relativePath = path.relative(this.rootDir, entryPath);
+      this.knownPaths.add(relativePath);
+
+      if (entry.isDirectory()) {
+        this.seedKnownPaths(entryPath);
+      }
+    }
   }
 
   private debounceNotify(filePath: string, type: FileChangeEvent["type"]): void {

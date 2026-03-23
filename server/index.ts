@@ -87,8 +87,9 @@ function parseArgs(args: string[]): { projectDir: string; port: number } {
 /** Start the server. */
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const { projectDir, port } = parseArgs(args);
+  const { projectDir: requestedProjectDir, port } = parseArgs(args);
   const distDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "dist");
+  let projectDir = requestedProjectDir;
 
   // Verify project directory exists
   try {
@@ -97,23 +98,13 @@ async function main(): Promise<void> {
       console.error(`Error: ${projectDir} is not a directory`);
       process.exit(1);
     }
+    projectDir = await fs.realpath(projectDir);
   } catch {
     console.error(`Error: directory not found: ${projectDir}`);
     process.exit(1);
   }
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-    // CORS headers for development
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-    if (req.method === "OPTIONS") {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
-
     // Try file API first
     const handled = await handleFileApi(req, res, projectDir);
     if (handled) return;
