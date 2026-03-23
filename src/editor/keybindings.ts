@@ -8,6 +8,7 @@ import { syntaxTree } from "@codemirror/language";
 import { EditorSelection, type EditorState, Prec, type Extension } from "@codemirror/state";
 import { type EditorView, keymap } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
+import { MODE_CHANGE_EVENT, OPEN_FILE_EVENT } from "../constants/events";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
 import { editorModeField, setEditorMode, type EditorMode } from "./editor";
@@ -23,7 +24,7 @@ function cycleEditorMode(view: EditorView): boolean {
 
   // Dispatch a DOM event so the app can update the UI indicator
   view.dom.dispatchEvent(
-    new CustomEvent("cf-mode-change", { detail: nextMode, bubbles: true }),
+    new CustomEvent(MODE_CHANGE_EVENT, { detail: nextMode, bubbles: true }),
   );
   return true;
 }
@@ -41,7 +42,7 @@ function jumpToSourceFile(view: EditorView): boolean {
   if (!region) return false;
 
   view.dom.dispatchEvent(
-    new CustomEvent("cf-open-file", { detail: region.file, bubbles: true }),
+    new CustomEvent(OPEN_FILE_EVENT, { detail: region.file, bubbles: true }),
   );
   return true;
 }

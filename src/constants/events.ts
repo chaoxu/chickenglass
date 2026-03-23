@@ -3,10 +3,6 @@
  *
  * All event names follow the `cf:` namespace prefix so they are
  * distinguishable from native browser events and third-party libraries.
- *
- * Note: some legacy events use a `cf-` hyphen prefix (e.g. `cf-mode-change`)
- * for backwards compatibility with existing listeners; new events MUST use
- * the `cf:` colon-separated form.
  */
 
 /** Dispatched on `window` to toggle the performance debug panel open/closed. */
@@ -25,14 +21,12 @@ export const FORMAT_EVENT = "cf:format";
 /**
  * Dispatched on `view.dom` (bubbles) when the editor mode cycles.
  * Detail: the new `EditorMode` string ("rich" | "source" | "read").
- * Uses legacy hyphen prefix for backwards compatibility with existing listeners.
  */
-export const MODE_CHANGE_EVENT = "cf-mode-change";
+export const MODE_CHANGE_EVENT = "cf:mode-change";
 
 /**
  * Dispatched on `view.dom` (bubbles) when the user navigates into an include
  * region and triggers a jump to the source file.
  * Detail: the file path string.
- * Uses legacy hyphen prefix for backwards compatibility with existing listeners.
  */
-export const OPEN_FILE_EVENT = "cf-open-file";
+export const OPEN_FILE_EVENT = "cf:open-file";
