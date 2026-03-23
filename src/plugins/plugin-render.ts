@@ -51,7 +51,7 @@ import {
   gistEmbedUrl,
 } from "./embed-plugin";
 import { CSS } from "../constants/css-classes";
-import { EMBED_CLASSES, EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
+import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 import { IFRAME_MAX_ATTEMPTS, IFRAME_POLL_INTERVAL_MS } from "../constants/timing";
 
 /** Pre-created mark decoration for monospace source syntax on fence lines. */
@@ -362,7 +362,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
 
     if (!plugin) return;
 
-    const isEmbed = EMBED_CLASSES.has(div.className);
+    const isEmbed = plugin.specialBehavior === "embed";
 
     // Embed blocks: cursor inside → full source mode (all fences visible)
     if (isEmbed) {
@@ -396,9 +396,14 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // When in source mode, cf-block-source is a MARK decoration on the fence
     // syntax only ("::: {.class}"), NOT a line decoration. This keeps the title
     // text in its natural serif font — only syntax scaffolding gets monospace.
+    //
+    // displayHeader === false (e.g. blockquote): omit cf-block-header so the
+    // opening fence line has no rendered label. The widget still hides fence
+    // syntax; block styling is still applied via spec.className.
+    const showHeader = plugin.displayHeader !== false;
     const headerClass = cursorOnEitherFence
       ? spec.className
-      : `${spec.className} ${CSS.blockHeader}`;
+      : showHeader ? `${spec.className} ${CSS.blockHeader}` : spec.className;
     items.push(Decoration.line({ class: headerClass }).range(div.from));
     if (cursorOnEitherFence) {
       // Mark only the fence syntax portion as monospace source.

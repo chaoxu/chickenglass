@@ -33,6 +33,11 @@ export interface StandardPluginOptions {
    * the plugin in sync with the manifest.
    */
   readonly specialBehavior?: SpecialBehavior;
+  /**
+   * Whether to show a rendered header label for this block type.
+   * Mirrors BlockPlugin.displayHeader — defaults to true when omitted.
+   */
+  readonly displayHeader?: boolean;
   /** Default settings (e.g. QED symbol, CSS overrides). */
   readonly defaults?: Readonly<Record<string, unknown>>;
 }
@@ -61,6 +66,7 @@ export function createStandardPlugin(options: StandardPluginOptions): BlockPlugi
     title,
     render: createBlockRender(title),
     ...(options.specialBehavior !== undefined ? { specialBehavior: options.specialBehavior } : {}),
+    ...(options.displayHeader !== undefined ? { displayHeader: options.displayHeader } : {}),
     ...(options.defaults !== undefined ? { defaults: options.defaults } : {}),
   };
 }

@@ -11,4 +11,6 @@ import { createStandardPlugin } from "./plugin-factory";
 export const blockquotePlugin: BlockPlugin = createStandardPlugin({
   name: "blockquote",
   numbered: false,
+  specialBehavior: "blockquote",
+  displayHeader: false,
 });

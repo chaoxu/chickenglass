@@ -61,6 +61,17 @@ export interface BlockPlugin {
    * - `undefined`: standard numbered/unnumbered block
    */
   readonly specialBehavior?: SpecialBehavior;
+  /**
+   * Whether to show a rendered header label for this block type.
+   *
+   * Defaults to `true`. Set to `false` for blocks like blockquote that
+   * render as styled content without a "Blockquote" label.
+   *
+   * When `false`, the header widget is still created (to hide the fence
+   * syntax) but the label text is suppressed by omitting the `cf-block-header`
+   * CSS class from the opening fence line decoration.
+   */
+  readonly displayHeader?: boolean;
   /** Produce a decoration spec from the block's attributes. */
   readonly render: (attrs: BlockAttrs) => BlockDecorationSpec;
   /** Default settings (e.g. QED symbol, CSS overrides). */

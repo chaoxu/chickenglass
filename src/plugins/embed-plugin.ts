@@ -18,7 +18,7 @@
  */
 
 import type { BlockPlugin } from "./plugin-types";
-import { createBlockRender } from "./block-render";
+import { createStandardPlugin } from "./plugin-factory";
 
 /** Validate that a URL is safe for embedding (https only). */
 export function isValidEmbedUrl(url: string): boolean {
@@ -98,36 +98,36 @@ export function gistEmbedUrl(url: string): string {
 }
 
 /** Generic embed plugin — renders any https URL as an iframe. */
-export const embedPlugin: BlockPlugin = {
+export const embedPlugin: BlockPlugin = createStandardPlugin({
   name: "embed",
-  numbered: false,
   title: "Embed",
-  render: createBlockRender("Embed"),
-};
+  numbered: false,
+  specialBehavior: "embed",
+});
 
 /** Plain iframe plugin — renders URL as a plain iframe. */
-export const iframePlugin: BlockPlugin = {
+export const iframePlugin: BlockPlugin = createStandardPlugin({
   name: "iframe",
-  numbered: false,
   title: "Iframe",
-  render: createBlockRender("Iframe"),
-};
+  numbered: false,
+  specialBehavior: "embed",
+});
 
 /** YouTube embed plugin — extracts video ID and renders responsive 16:9. */
-export const youtubePlugin: BlockPlugin = {
+export const youtubePlugin: BlockPlugin = createStandardPlugin({
   name: "youtube",
-  numbered: false,
   title: "YouTube",
-  render: createBlockRender("YouTube"),
-};
+  numbered: false,
+  specialBehavior: "embed",
+});
 
 /** GitHub Gist embed plugin. */
-export const gistPlugin: BlockPlugin = {
+export const gistPlugin: BlockPlugin = createStandardPlugin({
   name: "gist",
-  numbered: false,
   title: "Gist",
-  render: createBlockRender("Gist"),
-};
+  numbered: false,
+  specialBehavior: "embed",
+});
 
 /** All embed-family plugins as an array. */
 export const embedFamilyPlugins: readonly BlockPlugin[] = [

@@ -847,7 +847,10 @@ describe("#299 — centralized block manifest and CSS registry", () => {
 
     expect(blockTheme).toContain("STYLED_BLOCK_NAMES");
     expect(pluginRender).toContain("CSS.blockHeaderRendered");
-    expect(pluginRender).toContain("EMBED_CLASSES");
+    // #374: embed detection is now data-driven via plugin.specialBehavior,
+    // not via the EMBED_CLASSES set — this is the correct post-migration state.
+    expect(pluginRender).toContain('specialBehavior === "embed"');
+    expect(pluginRender).not.toContain("EMBED_CLASSES");
   });
 });
 

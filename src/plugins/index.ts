@@ -56,10 +56,6 @@ export {
   youtubePlugin,
   gistPlugin,
   embedFamilyPlugins,
-  isValidEmbedUrl,
-  extractYoutubeId,
-  youtubeEmbedUrl,
-  gistEmbedUrl,
 } from "./embed-plugin";
 export {
   type ResolvedInclude,

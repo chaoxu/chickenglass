@@ -110,11 +110,6 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     fontStyle: "italic",
   },
 
-  /* Hide header widget for blockquotes — no "Blockquote" label */
-  ".cf-block-blockquote .cf-block-header-rendered": {
-    display: "none",
-  },
-
   /* Inline image preview */
   ".cf-image-wrapper": {
     display: "inline-block",
