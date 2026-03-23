@@ -218,7 +218,7 @@ export function useAppEditorShell({
     try {
       const line = view.state.doc.lineAt(cursorCharOffset);
       return { line: line.number, col: cursorCharOffset - line.from + 1 };
-    } catch {
+    } catch (_e) {
       // best-effort: cursor offset may be stale after doc change — return default position
       return { line: 1, col: 1 };
     }

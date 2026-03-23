@@ -139,7 +139,7 @@ function tryResizeIframe(
       }
     }
     return "unavailable";
-  } catch {
+  } catch (_e) {
     // best-effort: cross-origin iframe blocks contentDocument access
     return "blocked";
   }

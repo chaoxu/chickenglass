@@ -339,7 +339,7 @@ export function useEditorSession({
         setEditorDoc(doc);
         addRecentFile(relativePath);
         await refreshTree();
-      } catch {
+      } catch (_e) {
         // best-effort: save-as dialog cancelled or failed by user action
       }
       return;

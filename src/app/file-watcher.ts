@@ -75,7 +75,7 @@ export class FileWatcher {
 
     try {
       await unwatchDirectoryCommand();
-    } catch {
+    } catch (_e) {
       // best-effort: backend may already be stopped during teardown
     }
 

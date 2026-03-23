@@ -284,7 +284,7 @@ export async function getBackendPerfSnapshot(): Promise<PerfSnapshot | null> {
   if (!isTauriRuntime()) return null;
   try {
     return await getPerfSnapshotCommand();
-  } catch {
+  } catch (_e) {
     // best-effort: backend perf command may not exist in this runtime
     return null;
   }
@@ -294,7 +294,7 @@ export async function clearBackendPerf(): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
     await clearPerfSnapshotCommand();
-  } catch {
+  } catch (_e) {
     // best-effort: backend perf support may be unavailable
   }
 }

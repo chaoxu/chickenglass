@@ -32,7 +32,7 @@ async function expandIncludes(
       let content: string;
       try {
         content = await fs.readFile(resolved);
-      } catch {
+      } catch (_e) {
         // best-effort: included file unreadable, fall back to raw content without includes
         return { text: rawContent, regions: [] };
       }

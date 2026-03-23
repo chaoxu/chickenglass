@@ -115,7 +115,7 @@ function renderFragment(
       const span = document.createElement("span");
       try {
         span.innerHTML = katex.renderToString(fragment.latex, buildKatexOptions(false, macros));
-      } catch {
+      } catch (_e) {
         // best-effort: KaTeX render failed — show raw LaTeX source as fallback
         span.textContent = fragment.raw;
       }

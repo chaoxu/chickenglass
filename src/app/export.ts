@@ -270,7 +270,7 @@ export async function exportDocument(
   // Check that Pandoc is available
   try {
     await checkPandoc();
-  } catch {
+  } catch (_e) {
     // Rethrow with user-friendly message — the underlying error is opaque (command not found)
     throw new Error(
       "Pandoc is not installed or not found in PATH. " +
@@ -309,7 +309,7 @@ async function exportHtml(
     // Write to disk via Tauri filesystem
     try {
       await fs.writeFile(outputPath, html);
-    } catch {
+    } catch (_e) {
       // best-effort: writeFile fails if the file doesn't exist yet — fall back to createFile
       await fs.createFile(outputPath, html);
     }

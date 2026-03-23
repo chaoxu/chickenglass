@@ -26,7 +26,7 @@ export function isValidEmbedUrl(url: string): boolean {
   try {
     const parsed = new URL(trimmed);
     return parsed.protocol === "https:";
-  } catch {
+  } catch (_e) {
     // best-effort: malformed URL string — not a valid embed target
     return false;
   }
@@ -71,7 +71,7 @@ export function extractYoutubeId(url: string): string | undefined {
       const id = parsed.pathname.slice("/embed/".length);
       return id.length > 0 ? id : undefined;
     }
-  } catch {
+  } catch (_e) {
     // best-effort: invalid URL — fall through to return undefined
   }
   return undefined;

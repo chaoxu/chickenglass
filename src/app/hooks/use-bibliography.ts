@@ -33,7 +33,7 @@ export async function loadBibliography(
     for (const candidate of candidates) {
       try {
         return await fs.readFile(candidate);
-      } catch {
+      } catch (_e) {
         // best-effort: try next candidate path before giving up
         lastError = lastError ?? new Error(`Unable to read ${candidate}`);
       }
@@ -60,7 +60,7 @@ export async function loadBibliography(
             category: "citations",
             detail: cslPath,
           });
-        } catch {
+        } catch (_e) {
           // best-effort: CSL file not found — use default style
         }
       }

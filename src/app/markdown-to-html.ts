@@ -71,7 +71,7 @@ function renderMath(
 ): string {
   try {
     return katex.renderToString(latex, buildKatexOptions(displayMode, macros));
-  } catch {
+  } catch (_e) {
     // best-effort: KaTeX render failed — show escaped source as error indicator
     const escaped = escapeHtml(latex);
     return displayMode

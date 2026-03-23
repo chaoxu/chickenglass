@@ -167,7 +167,7 @@ export async function planImageTarget(
       if (!dirExists) {
         await fs.createDirectory(targetDir);
       }
-    } catch {
+    } catch (_e) {
       // best-effort: directory might already exist (race condition or implicit via file creation)
     }
   }
