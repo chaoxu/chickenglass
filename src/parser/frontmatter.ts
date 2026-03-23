@@ -1,9 +1,11 @@
 /**
- * Lightweight YAML frontmatter parser for Coflat documents.
+ * YAML frontmatter parser for Coflat documents.
  *
- * Parses the subset of YAML used in document frontmatter:
- * flat string keys, boolean values, and one level of nested objects.
+ * Uses the standard `yaml` npm package for parsing. Boundary detection
+ * (`extractRawFrontmatter`) is kept as a custom Lezer-independent function.
  */
+
+import { parse as parseYaml } from "yaml";
 
 export interface BlockConfig {
   counter?: string;
@@ -139,85 +141,8 @@ export function extractRawFrontmatter(
   return null;
 }
 
-/** Remove surrounding quotes and process YAML escape sequences. */
-function unquote(value: string): string {
-  if (value.length >= 2) {
-    const first = value[0];
-    const last = value[value.length - 1];
-    if (first === "'" && last === "'") {
-      return value.slice(1, -1);
-    }
-    if (first === '"' && last === '"') {
-      // Double-quoted YAML strings interpret escape sequences
-      return value.slice(1, -1).replace(/\\(.)/g, (_m, ch: string) => {
-        if (ch === "n") return "\n";
-        if (ch === "t") return "\t";
-        return ch; // \\ → \, \" → ", etc.
-      });
-    }
-  }
-  return value;
-}
-
-/** Parse a scalar YAML value into a string or boolean. */
-function parseScalar(raw: string): string | boolean {
-  const trimmed = raw.trim();
-  if (trimmed === "true") return true;
-  if (trimmed === "false") return false;
-  return unquote(trimmed);
-}
-
-/** Count leading spaces in a line. */
-function indentLevel(line: string): number {
-  let count = 0;
-  for (const ch of line) {
-    if (ch === " ") count++;
-    else break;
-  }
-  return count;
-}
-
-/** Check if a line should be skipped (blank or comment). */
-function isSkippable(line: string): boolean {
-  const trimmed = line.trim();
-  return trimmed === "" || trimmed.startsWith("#");
-}
-
-/**
- * Parse a simple subset of YAML from lines, starting at index `start`.
- *
- * Collects `key: value` pairs where indentation > `minIndent`.
- * Returns the parsed record and the index after the last consumed line.
- */
-function parseIndentedBlock(
-  lines: string[],
-  start: number,
-  minIndent: number,
-): { entries: Record<string, string | boolean>; nextIndex: number } {
-  const entries: Record<string, string | boolean> = {};
-  let i = start;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (isSkippable(line)) {
-      i++;
-      continue;
-    }
-    if (indentLevel(line) <= minIndent) break;
-    const colonIndex = line.indexOf(":");
-    if (colonIndex === -1) {
-      i++;
-      continue;
-    }
-    entries[line.slice(0, colonIndex).trim()] = parseScalar(
-      line.slice(colonIndex + 1),
-    );
-    i++;
-  }
-  return { entries, nextIndex: i };
-}
-
-/** Convert a raw record to a typed BlockConfig. */
-function toBlockConfig(raw: Record<string, string | boolean>): BlockConfig {
+/** Convert a raw record to a typed BlockConfig, picking only known fields. */
+function toBlockConfig(raw: Record<string, unknown>): BlockConfig {
   const config: BlockConfig = {};
   if (typeof raw["counter"] === "string") config.counter = raw["counter"];
   if (typeof raw["numbered"] === "boolean") config.numbered = raw["numbered"];
@@ -226,65 +151,48 @@ function toBlockConfig(raw: Record<string, string | boolean>): BlockConfig {
 }
 
 /**
- * Parse the `blocks:` section supporting both simple booleans and nested configs.
+ * Validate and convert a raw `blocks` object from YAML into typed block config.
  */
-function parseBlocksSection(
-  lines: string[],
-  start: number,
-  sectionIndent: number,
-): { blocks: Record<string, boolean | BlockConfig>; nextIndex: number } {
+function validateBlocks(
+  raw: Record<string, unknown>,
+): Record<string, boolean | BlockConfig> {
   const blocks: Record<string, boolean | BlockConfig> = {};
-  let i = start;
-
-  while (i < lines.length) {
-    const line = lines[i];
-    if (isSkippable(line)) {
-      i++;
-      continue;
-    }
-
-    const lineIndent = indentLevel(line);
-    if (lineIndent <= sectionIndent) break;
-
-    const colonIndex = line.indexOf(":");
-    if (colonIndex === -1) {
-      i++;
-      continue;
-    }
-
-    const blockName = line.slice(0, colonIndex).trim();
-    const valueRaw = line.slice(colonIndex + 1).trim();
-
-    if (valueRaw !== "") {
-      const parsed = parseScalar(valueRaw);
-      if (typeof parsed === "boolean") {
-        blocks[blockName] = parsed;
-      } else {
-        // Non-boolean scalar in blocks section — coerce truthy string to true
-        // and warn so authors can fix their frontmatter.
-        console.warn(
-          `[frontmatter] blocks.${blockName}: expected boolean, got "${valueRaw}". Treating as true.`,
-        );
-        blocks[blockName] = true;
-      }
-      i++;
+  for (const [name, value] of Object.entries(raw)) {
+    if (typeof value === "boolean") {
+      blocks[name] = value;
+    } else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      blocks[name] = toBlockConfig(value as Record<string, unknown>);
     } else {
-      // Nested config: collect sub-keys with deeper indentation
-      const { entries, nextIndex } = parseIndentedBlock(
-        lines,
-        i + 1,
-        lineIndent,
+      // Non-boolean scalar in blocks section — coerce to true
+      // and warn so authors can fix their frontmatter.
+      console.warn(
+        `[frontmatter] blocks.${name}: expected boolean, got "${String(value)}". Treating as true.`,
       );
-      blocks[blockName] = toBlockConfig(entries);
-      i = nextIndex;
+      blocks[name] = true;
     }
   }
+  return blocks;
+}
 
-  return { blocks, nextIndex: i };
+/**
+ * Validate and convert a raw `math` object from YAML into string key-value pairs.
+ */
+function validateMath(raw: Record<string, unknown>): Record<string, string> {
+  const math: Record<string, string> = {};
+  for (const [macro, expansion] of Object.entries(raw)) {
+    if (typeof expansion === "string") {
+      math[macro] = expansion;
+    }
+  }
+  return math;
 }
 
 /**
  * Parse YAML frontmatter from a document string into a typed config.
+ *
+ * Uses the standard `yaml` npm package for parsing. The `extractRawFrontmatter`
+ * function handles `---` boundary detection, then `YAML.parse()` handles the
+ * actual YAML parsing — correctly handling quoted keys, escape sequences, etc.
  *
  * Returns the parsed config and the character offset where the frontmatter
  * ends. If no frontmatter is found, returns an empty config and end = -1.
@@ -295,79 +203,51 @@ export function parseFrontmatter(doc: string): FrontmatterResult {
     return { config: {}, end: -1 };
   }
 
-  const lines = extracted.raw.split("\n");
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(extracted.raw);
+  } catch {
+    // Malformed YAML — degrade gracefully to empty config.
+    return { config: {}, end: extracted.end };
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return { config: {}, end: extracted.end };
+  }
+
+  const raw = parsed as Record<string, unknown>;
   const config: FrontmatterConfig = {};
-  let i = 0;
 
-  while (i < lines.length) {
-    const line = lines[i];
-    if (isSkippable(line)) {
-      i++;
-      continue;
+  // String fields
+  if (typeof raw["title"] === "string") config.title = raw["title"];
+  if (typeof raw["bibliography"] === "string") config.bibliography = raw["bibliography"];
+  if (typeof raw["csl"] === "string") config.csl = raw["csl"];
+
+  // Numbering enum
+  const numbering = raw["numbering"];
+  if (numbering === "global" || numbering === "grouped") {
+    config.numbering = numbering;
+  }
+
+  // Image folder (support both kebab-case and camelCase)
+  const imageFolder = raw["image-folder"] ?? raw["imageFolder"];
+  if (typeof imageFolder === "string") config.imageFolder = imageFolder;
+
+  // Blocks section
+  const blocks = raw["blocks"];
+  if (typeof blocks === "object" && blocks !== null && !Array.isArray(blocks)) {
+    const validated = validateBlocks(blocks as Record<string, unknown>);
+    if (Object.keys(validated).length > 0) {
+      config.blocks = validated;
     }
+  }
 
-    const colonIndex = line.indexOf(":");
-    if (colonIndex === -1) {
-      i++;
-      continue;
-    }
-
-    const key = line.slice(0, colonIndex).trim();
-    const valueRaw = line.slice(colonIndex + 1).trim();
-
-    if (key === "title" && valueRaw !== "") {
-      const parsed = parseScalar(valueRaw);
-      if (typeof parsed === "string") config.title = parsed;
-      i++;
-    } else if (key === "bibliography" && valueRaw !== "") {
-      const parsed = parseScalar(valueRaw);
-      if (typeof parsed === "string") config.bibliography = parsed;
-      i++;
-    } else if (key === "csl" && valueRaw !== "") {
-      const parsed = parseScalar(valueRaw);
-      if (typeof parsed === "string") config.csl = parsed;
-      i++;
-    } else if (key === "numbering" && valueRaw !== "") {
-      if (valueRaw === "global" || valueRaw === "grouped") {
-        config.numbering = valueRaw;
-      }
-      i++;
-    } else if (key === "blocks" && valueRaw === "") {
-      const result = parseBlocksSection(lines, i + 1, indentLevel(line));
-      if (Object.keys(result.blocks).length > 0) {
-        config.blocks = result.blocks;
-      }
-      i = result.nextIndex;
-    } else if ((key === "image-folder" || key === "imageFolder") && valueRaw !== "") {
-      const parsed = parseScalar(valueRaw);
-      if (typeof parsed === "string") config.imageFolder = parsed;
-      i++;
-    } else if (key === "math" && valueRaw === "") {
-      const { entries, nextIndex } = parseIndentedBlock(
-        lines,
-        i + 1,
-        indentLevel(line),
-      );
-      const math: Record<string, string> = {};
-      for (const [macro, expansion] of Object.entries(entries)) {
-        if (typeof expansion === "string") {
-          math[macro] = expansion;
-        }
-      }
-      if (Object.keys(math).length > 0) {
-        config.math = math;
-      }
-      i = nextIndex;
-    } else {
-      // Unknown key: skip, including any nested block
-      if (valueRaw === "") {
-        i++;
-        while (i < lines.length && !isSkippable(lines[i]) && indentLevel(lines[i]) > indentLevel(line)) {
-          i++;
-        }
-      } else {
-        i++;
-      }
+  // Math macros section
+  const math = raw["math"];
+  if (typeof math === "object" && math !== null && !Array.isArray(math)) {
+    const validated = validateMath(math as Record<string, unknown>);
+    if (Object.keys(validated).length > 0) {
+      config.math = validated;
     }
   }
 

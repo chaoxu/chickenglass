@@ -257,6 +257,66 @@ describe("parseFrontmatter", () => {
   });
 
   /**
+   * REGRESSION (#411): quoted math macro keys were misparsed by the custom
+   * YAML parser. `'\\F': '\\mathcal{F}'` yielded key `'\\F'` (with quotes)
+   * instead of `\\F`. Fixed by replacing the custom parser with the standard
+   * `yaml` npm package.
+   */
+  describe("quoted math macro keys (REGRESSION #411: custom parser misparsed)", () => {
+    it("parses single-quoted math macro keys", () => {
+      // In YAML single-quoted strings, backslash is literal (no escape sequences).
+      // So '\\F' in YAML means the two-char string: backslash + F → `\F`.
+      // In the JS test string, we need `\\` to represent one backslash in the output.
+      const doc = [
+        "---",
+        "math:",
+        "  '\\F': '\\mathcal{F}'",
+        "  '\\G': '\\mathcal{G}'",
+        "---",
+        "",
+      ].join("\n");
+      const { config } = parseFrontmatter(doc);
+      expect(config.math).toEqual({
+        "\\F": "\\mathcal{F}",
+        "\\G": "\\mathcal{G}",
+      });
+    });
+
+    it("parses double-quoted math macro keys", () => {
+      // In YAML double-quoted strings, `\\` is an escape for a single backslash.
+      // So "\\R" in YAML means `\R`.
+      const doc = [
+        "---",
+        "math:",
+        '  "\\\\R": "\\\\mathbb{R}"',
+        '  "\\\\N": "\\\\mathbb{N}"',
+        "---",
+        "",
+      ].join("\n");
+      const { config } = parseFrontmatter(doc);
+      expect(config.math).toEqual({
+        "\\R": "\\mathbb{R}",
+        "\\N": "\\mathbb{N}",
+      });
+    });
+
+    it("parses mixed quoted and unquoted math macro keys", () => {
+      const doc = [
+        "---",
+        "math:",
+        "  \\R: \\mathbb{R}",
+        "  '\\F': '\\mathcal{F}'",
+        "---",
+        "",
+      ].join("\n");
+      const { config } = parseFrontmatter(doc);
+      expect(config.math).toBeDefined();
+      expect(config.math?.["\\R"]).toBe("\\mathbb{R}");
+      expect(config.math?.["\\F"]).toBe("\\mathcal{F}");
+    });
+  });
+
+  /**
    * REGRESSION: non-boolean block config values must not be silently dropped.
    *
    * Before the fix, `blocks: { theorem: "yes" }` silently coerced
