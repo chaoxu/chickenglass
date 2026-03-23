@@ -1,6 +1,7 @@
 import { Annotation } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { createInlineEditor } from "../editor";
+import { bibDataField } from "../citations/citation-render";
 import { renderInlineMarkdown } from "./inline-render";
 import { showWidgetContextMenu, applyTableMutation } from "./table-actions";
 import {
@@ -286,10 +287,16 @@ export class TableWidget extends RenderWidget {
         const currentLinear = section === "header" ? 0 : row + 1;
         const totalRows = 1 + bodyRowCount;
 
+        // Read bibliography data from the parent editor for citation rendering.
+        // Uses optional chaining on field() for safety in test mocks where
+        // state may be a plain object without the CM6 StateField API.
+        const bibData = this.editorView?.state.field?.(bibDataField, false);
+
         const editorView = createInlineEditor({
           parent: cell,
           doc: rawText,
           macros: this.macros,
+          bibData: bibData ?? undefined,
           onChange: (newDoc) => {
             this.syncToRoot(section, row, col, newDoc, "edit");
           },

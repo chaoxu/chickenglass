@@ -1,8 +1,9 @@
 /**
  * Lightweight inline CM6 editor factory.
  *
- * Creates a minimal EditorView with only inline-level rendering:
- * math (KaTeX), bold/italic/code marker hiding, and highlight/strikethrough.
+ * Creates a minimal EditorView with inline-level rendering:
+ * math (KaTeX), bold/italic/code marker hiding, highlight/strikethrough,
+ * link styling, and citation/crossref rendering.
  * Used for table cell editing, sidenote editing, and other embedded contexts.
  */
 
@@ -15,6 +16,9 @@ import {
   sharedDocumentStateExtensions,
   sharedInlineRenderExtensions,
 } from "./base-editor-extensions";
+import { type BibData, bibDataEffect, bibDataField } from "../citations/citation-render";
+import { documentAnalysisField } from "../semantics/codemirror-source";
+import { referenceRenderPlugin } from "../render/reference-render";
 
 /** Options for creating a lightweight inline editor. */
 export interface InlineEditorOptions {
@@ -24,6 +28,9 @@ export interface InlineEditorOptions {
   doc: string;
   /** KaTeX math macros to make available. */
   macros: Record<string, string>;
+  /** Bibliography data for citation rendering. When provided, the inline
+   *  editor renders [@id] citations and @id cross-references. */
+  bibData?: BibData;
   /** Called whenever the document changes. */
   onChange: (newDoc: string) => void;
   /** Called when the editor loses focus. */
@@ -78,11 +85,12 @@ const inlineEditorTheme = EditorView.theme({
 });
 
 /**
- * Create a lightweight CM6 EditorView with only inline-level rendering.
+ * Create a lightweight CM6 EditorView with inline-level rendering.
  *
  * Includes math rendering (KaTeX), bold/italic/code marker hiding,
- * highlight and strikethrough support, but no block-level elements
- * (no headings, lists, code blocks, fenced divs, etc.).
+ * highlight and strikethrough support, link styling, and citation/crossref
+ * rendering. No block-level elements (no headings, lists, code blocks,
+ * fenced divs, etc.).
  */
 export function createInlineEditor(opts: InlineEditorOptions): EditorView {
   const extensions: Extension[] = [
@@ -99,6 +107,15 @@ export function createInlineEditor(opts: InlineEditorOptions): EditorView {
 
     // Frontmatter state field (reads macros from projectConfigFacet)
     ...sharedDocumentStateExtensions,
+
+    // Document semantics (reference discovery for citation/crossref rendering)
+    documentAnalysisField,
+
+    // Bibliography state (initialized empty; populated below via bibDataEffect)
+    bibDataField,
+
+    // Citation/crossref rendering (needs documentAnalysisField + bibDataField)
+    referenceRenderPlugin,
 
     // Theme: transparent, no gutters, inherit font
     inlineEditorTheme,
@@ -119,11 +136,18 @@ export function createInlineEditor(opts: InlineEditorOptions): EditorView {
     }),
   ];
 
-  return new EditorView({
+  const view = new EditorView({
     state: EditorState.create({
       doc: opts.doc,
       extensions,
     }),
     parent: opts.parent,
   });
+
+  // Populate bibliography data from the parent editor so citations render
+  if (opts.bibData) {
+    view.dispatch({ effects: bibDataEffect.of(opts.bibData) });
+  }
+
+  return view;
 }
