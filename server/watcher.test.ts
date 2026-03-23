@@ -1,39 +1,133 @@
 // @vitest-environment node
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-import { classifyFsWatchEvent, removeKnownPathPrefix } from "./watcher.js";
+// vi.hoisted lets us define values that are available inside vi.mock factories
+const { mockWatcher, MockWebSocketServer } = vi.hoisted(() => {
+  const { EventEmitter: EE } = require("node:events") as typeof import("node:events");
 
-describe("classifyFsWatchEvent", () => {
-  it("reports deletes when a rename target no longer exists", () => {
-    const type = classifyFsWatchEvent("rename", "notes/index.md", false, new Set(["notes/index.md"]));
-
-    expect(type).toBe("delete");
+  const watcher = Object.assign(new EE(), {
+    close: vi.fn().mockResolvedValue(undefined),
   });
 
-  it("reports adds when a rename introduces a new path", () => {
-    const type = classifyFsWatchEvent("rename", "notes/new.md", true, new Set(["notes/old.md"]));
+  class MockWSS extends EE {
+    clients = new Set<{ readyState: number; send: ReturnType<typeof vi.fn> }>();
+    close = vi.fn();
+  }
 
-    expect(type).toBe("add");
+  return { mockWatcher: watcher, MockWebSocketServer: MockWSS };
+});
+
+vi.mock("chokidar", () => ({
+  watch: vi.fn(() => mockWatcher),
+}));
+
+vi.mock("ws", () => ({
+  WebSocketServer: MockWebSocketServer,
+}));
+
+import { FileWatcher } from "./watcher.js";
+import { watch } from "chokidar";
+
+describe("FileWatcher with chokidar", () => {
+  let fakeServer: { on: ReturnType<typeof vi.fn> };
+  let fileWatcher: FileWatcher;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    fakeServer = { on: vi.fn() };
+    fileWatcher = new FileWatcher(fakeServer as never, "/project");
+    fileWatcher.start();
   });
 
-  it("keeps rename events for known existing paths as changes", () => {
-    const type = classifyFsWatchEvent("rename", "notes/index.md", true, new Set(["notes/index.md"]));
-
-    expect(type).toBe("change");
+  afterEach(() => {
+    fileWatcher.stop();
+    vi.useRealTimers();
+    mockWatcher.removeAllListeners();
+    vi.clearAllMocks();
   });
 
-  it("preserves explicit change events", () => {
-    const type = classifyFsWatchEvent("change", "notes/index.md", false, new Set());
-
-    expect(type).toBe("change");
+  it("creates a chokidar watcher with ignoreInitial and ignored option", () => {
+    expect(watch).toHaveBeenCalledWith("/project", {
+      ignoreInitial: true,
+      ignored: expect.any(Function),
+    });
   });
 
-  it("removes deleted directories and their descendants from the known path set", () => {
-    const knownPaths = new Set(["notes", "notes/a.md", "notes/nested/b.md", "other.md"]);
+  it("maps chokidar 'add' events to FileChangeEvent type 'add'", () => {
+    const wss = (fileWatcher as unknown as { wss: InstanceType<typeof MockWebSocketServer> }).wss;
+    const client = { readyState: 1, send: vi.fn() };
+    wss.clients.add(client);
 
-    removeKnownPathPrefix(knownPaths, "notes");
+    mockWatcher.emit("add", "/project/notes/new.md");
+    vi.advanceTimersByTime(100);
 
-    expect(knownPaths).toEqual(new Set(["other.md"]));
+    expect(client.send).toHaveBeenCalledWith(
+      JSON.stringify({ type: "add", path: "notes/new.md" }),
+    );
+  });
+
+  it("maps chokidar 'change' events to FileChangeEvent type 'change'", () => {
+    const wss = (fileWatcher as unknown as { wss: InstanceType<typeof MockWebSocketServer> }).wss;
+    const client = { readyState: 1, send: vi.fn() };
+    wss.clients.add(client);
+
+    mockWatcher.emit("change", "/project/notes/index.md");
+    vi.advanceTimersByTime(100);
+
+    expect(client.send).toHaveBeenCalledWith(
+      JSON.stringify({ type: "change", path: "notes/index.md" }),
+    );
+  });
+
+  it("maps chokidar 'unlink' events to FileChangeEvent type 'delete'", () => {
+    const wss = (fileWatcher as unknown as { wss: InstanceType<typeof MockWebSocketServer> }).wss;
+    const client = { readyState: 1, send: vi.fn() };
+    wss.clients.add(client);
+
+    mockWatcher.emit("unlink", "/project/notes/old.md");
+    vi.advanceTimersByTime(100);
+
+    expect(client.send).toHaveBeenCalledWith(
+      JSON.stringify({ type: "delete", path: "notes/old.md" }),
+    );
+  });
+
+  it("debounces rapid events on the same path", () => {
+    const wss = (fileWatcher as unknown as { wss: InstanceType<typeof MockWebSocketServer> }).wss;
+    const client = { readyState: 1, send: vi.fn() };
+    wss.clients.add(client);
+
+    mockWatcher.emit("change", "/project/notes/index.md");
+    vi.advanceTimersByTime(50);
+    mockWatcher.emit("change", "/project/notes/index.md");
+    vi.advanceTimersByTime(100);
+
+    // Only the second event should be delivered (debounced)
+    expect(client.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores dotfiles, node_modules, and dist via the ignored option", () => {
+    const watchCall = vi.mocked(watch).mock.calls[0];
+    const ignoredFn = watchCall[1]!.ignored as (path: string) => boolean;
+
+    // Root dir itself is not ignored
+    expect(ignoredFn("/project")).toBe(false);
+    // Dotfiles/dirs ignored
+    expect(ignoredFn("/project/.git")).toBe(true);
+    expect(ignoredFn("/project/.git/config")).toBe(true);
+    // node_modules ignored
+    expect(ignoredFn("/project/node_modules")).toBe(true);
+    expect(ignoredFn("/project/node_modules/foo/index.js")).toBe(true);
+    // dist ignored
+    expect(ignoredFn("/project/dist")).toBe(true);
+    // Normal files not ignored
+    expect(ignoredFn("/project/notes/index.md")).toBe(false);
+    expect(ignoredFn("/project/src/main.ts")).toBe(false);
+  });
+
+  it("closes chokidar watcher on stop", () => {
+    fileWatcher.stop();
+    expect(mockWatcher.close).toHaveBeenCalled();
   });
 });
