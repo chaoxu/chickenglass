@@ -1,0 +1,168 @@
+import { describe, expect, it } from "vitest";
+import {
+  PERF_REPORT_VERSION,
+  buildPerfRegressionReport,
+  comparePerfRegressionReports,
+} from "./perf-regression-lib.mjs";
+
+describe("perf regression reports", () => {
+  it("aggregates repeated summaries across iterations", () => {
+    const report = buildPerfRegressionReport({
+      scenario: "open-index",
+      iterations: 2,
+      warmup: 1,
+      settleMs: 400,
+      chromePort: 9322,
+      appUrl: "http://127.0.0.1:5173",
+      snapshots: [
+        {
+          frontend: {
+            summaries: [
+              {
+                source: "frontend",
+                category: "open_file",
+                name: "open_file.read",
+                count: 1,
+                avgMs: 20,
+                maxMs: 20,
+                lastMs: 20,
+              },
+            ],
+          },
+          backend: {
+            summaries: [
+              {
+                source: "backend",
+                category: "tauri",
+                name: "tauri.read_file",
+                count: 1,
+                avgMs: 10,
+                maxMs: 10,
+                lastMs: 10,
+              },
+            ],
+          },
+        },
+        {
+          frontend: {
+            summaries: [
+              {
+                source: "frontend",
+                category: "open_file",
+                name: "open_file.read",
+                count: 1,
+                avgMs: 40,
+                maxMs: 45,
+                lastMs: 45,
+              },
+            ],
+          },
+          backend: {
+            summaries: [
+              {
+                source: "backend",
+                category: "tauri",
+                name: "tauri.read_file",
+                count: 1,
+                avgMs: 11,
+                maxMs: 12,
+                lastMs: 12,
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(report.version).toBe(PERF_REPORT_VERSION);
+    expect(report.frontend[0]).toMatchObject({
+      name: "open_file.read",
+      meanAvgMs: 30,
+      worstMaxMs: 45,
+      meanLastMs: 32.5,
+      meanCount: 1,
+      samples: 2,
+    });
+    expect(report.backend[0]).toMatchObject({
+      name: "tauri.read_file",
+      meanAvgMs: 10.5,
+      worstMaxMs: 12,
+      samples: 2,
+    });
+  });
+
+  it("flags regressions only when both percent and absolute deltas are exceeded", () => {
+    const baseline = {
+      frontend: [
+        {
+          source: "frontend",
+          category: "open_file",
+          name: "open_file.read",
+          meanAvgMs: 20,
+          worstMaxMs: 30,
+        },
+      ],
+      backend: [],
+    };
+    const current = {
+      frontend: [
+        {
+          source: "frontend",
+          category: "open_file",
+          name: "open_file.read",
+          meanAvgMs: 30,
+          worstMaxMs: 50,
+        },
+      ],
+      backend: [],
+    };
+
+    const result = comparePerfRegressionReports(baseline, current, {
+      thresholdPct: 0.25,
+      minDeltaMs: 5,
+    });
+
+    expect(result.regressions).toHaveLength(1);
+    expect(result.regressions[0]).toMatchObject({
+      name: "open_file.read",
+      status: "regressed",
+      avgDeltaMs: 10,
+      maxDeltaMs: 20,
+    });
+  });
+
+  it("does not flag tiny absolute deltas even when percentages look large", () => {
+    const baseline = {
+      frontend: [
+        {
+          source: "frontend",
+          category: "open_file",
+          name: "open_file.read",
+          meanAvgMs: 2,
+          worstMaxMs: 3,
+        },
+      ],
+      backend: [],
+    };
+    const current = {
+      frontend: [
+        {
+          source: "frontend",
+          category: "open_file",
+          name: "open_file.read",
+          meanAvgMs: 3,
+          worstMaxMs: 4,
+        },
+      ],
+      backend: [],
+    };
+
+    const result = comparePerfRegressionReports(baseline, current, {
+      thresholdPct: 0.25,
+      minDeltaMs: 5,
+    });
+
+    expect(result.regressions).toHaveLength(0);
+    expect(result.frontend[0].status).toBe("ok");
+  });
+});
