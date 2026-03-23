@@ -216,9 +216,11 @@ export function useEditor(
       setView(null);
     };
     // Doc changes intentionally recreate the editor (same as switchEditor).
-    // documentServices must be included so extension wiring (image save, bib)
-    // updates when docPath or fs change between files.
-  }, [doc, containerRef, documentServices]);
+    // docPath/fs changes are handled by React remounting EditorPane via
+    // key={activeTab}, so documentServices is NOT needed here — adding it
+    // caused an infinite recreation loop (unstable object reference).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc, containerRef]);
 
   return {
     view,
