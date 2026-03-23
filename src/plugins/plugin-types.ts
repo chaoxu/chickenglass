@@ -61,8 +61,6 @@ export interface BlockPlugin {
    * - `undefined`: standard numbered/unnumbered block
    */
   readonly specialBehavior?: SpecialBehavior;
-  /** Optional custom parser for the block body content. */
-  readonly bodyParser?: (content: string) => unknown;
   /** Produce a decoration spec from the block's attributes. */
   readonly render: (attrs: BlockAttrs) => BlockDecorationSpec;
   /** Default settings (e.g. QED symbol, CSS overrides). */
