@@ -88,6 +88,8 @@
   --cf-table-header-border: var(--cf-border);
   --cf-table-edit-outline: var(--cf-active);
   --cf-table-cell-padding: 0.5em 0.75em;
+  --cf-table-font-size: 0.9em;
+  --cf-table-line-height: 1.5;
   --cf-embed-border: var(--cf-border);
 
   /* Border radius */
@@ -481,7 +483,7 @@ body {
   border-collapse: collapse;
   width: 100%;
   margin: 1.2em 0;
-  font-size: 0.9em;
+  font-size: var(--cf-table-font-size, 0.9em);
 }
 
 .cf-read-mode-view th,
@@ -489,6 +491,7 @@ body {
   border: 1px solid var(--cf-table-border);
   padding: var(--cf-table-cell-padding);
   text-align: left;
+  line-height: var(--cf-table-line-height, 1.5);
 }
 
 .cf-read-mode-view th {

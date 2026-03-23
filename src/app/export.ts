@@ -124,10 +124,12 @@ ${themeTokens}
       border-collapse: collapse;
       width: 100%;
       margin: 1.5rem 0;
+      font-size: var(--cf-table-font-size, 0.9em);
     }
     th, td {
       border: 1px solid var(--cf-table-border);
       padding: var(--cf-table-cell-padding);
+      line-height: var(--cf-table-line-height, 1.5);
       text-align: left;
     }
     th {
