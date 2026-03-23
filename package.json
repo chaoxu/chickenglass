@@ -63,6 +63,7 @@
     "hyphenopoly": "^6.1.0",
     "katex": "^0.16.38",
     "lucide-react": "^0.577.0",
+    "pathe": "^2.0.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tailwind-merge": "^3.5.0",

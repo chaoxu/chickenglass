@@ -5,6 +5,11 @@
  * framework — safe to import from plugins/, render/, semantics/, and app/.
  */
 
+import {
+  basename as patheBasename,
+  dirname as patheDirname,
+} from "pathe";
+
 /**
  * Return `s` with its first character uppercased.
  *
@@ -21,7 +26,7 @@ export function capitalize(s: string): string {
  * Returns the full input string if no separator is found.
  */
 export function basename(path: string): string {
-  return path.split("/").pop() ?? path.split("\\").pop() ?? path;
+  return patheBasename(path);
 }
 
 /**
@@ -30,10 +35,13 @@ export function basename(path: string): string {
  * Returns an empty string when the path contains no separator,
  * matching the convention used throughout the codebase (relative paths
  * with forward slashes only, no Windows backslash handling needed).
+ *
+ * Thin wrapper over pathe — maps its `"."` return to `""` to preserve
+ * the falsy-check convention callers rely on (`dir ? \`${dir}/…\` : …`).
  */
 export function dirname(path: string): string {
-  const idx = path.lastIndexOf("/");
-  return idx === -1 ? "" : path.slice(0, idx);
+  const d = patheDirname(path);
+  return d === "." ? "" : d;
 }
 
 /**

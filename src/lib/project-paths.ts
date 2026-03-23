@@ -5,6 +5,7 @@
  * editor/, render/, and app/.
  */
 
+import { normalize } from "pathe";
 import { dirname } from "./utils";
 
 function splitProjectPath(path: string): string[] {
@@ -18,21 +19,13 @@ function splitProjectPath(path: string): string[] {
  * - strips a leading slash so the result stays project-relative
  * - resolves `.` and `..`
  * - converts backslashes to forward slashes
+ *
+ * Uses pathe's `normalize` for the heavy lifting, then applies
+ * project-specific policy: strip leading slashes and map `"."` to `""`.
  */
 export function normalizeProjectPath(path: string): string {
-  const parts = path.replaceAll("\\", "/").replace(/^\/+/, "").split("/");
-  const resolved: string[] = [];
-
-  for (const part of parts) {
-    if (!part || part === ".") continue;
-    if (part === "..") {
-      resolved.pop();
-      continue;
-    }
-    resolved.push(part);
-  }
-
-  return resolved.join("/");
+  const n = normalize(path).replace(/^\/+/, "");
+  return n === "." ? "" : n;
 }
 
 /**
