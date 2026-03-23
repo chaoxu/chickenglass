@@ -17,10 +17,13 @@ import { useRef, useEffect, useState, useMemo, type RefObject } from "react";
 import { EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
 
-import { createEditor } from "../../editor/editor";
-import { EditorPluginManager } from "../../editor/editor-plugin";
-import { defaultEditorPlugins } from "../../editor/editor-plugins-registry";
-import { frontmatterField, type FrontmatterState } from "../../editor/frontmatter-state";
+import {
+  createEditor,
+  EditorPluginManager,
+  defaultEditorPlugins,
+  frontmatterField,
+  type FrontmatterState,
+} from "../../editor";
 import type { ProjectConfig } from "../project-config";
 import type { FileSystem } from "../file-manager";
 import { computeDocStats } from "../writing-stats";

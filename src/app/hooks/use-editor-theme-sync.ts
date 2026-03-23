@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import type { EditorView } from "@codemirror/view";
-import { themeCompartment } from "../../editor/editor";
-import { coflatDarkTheme } from "../../editor/theme";
+import { themeCompartment, coflatDarkTheme } from "../../editor";
 import type { ResolvedTheme } from "./use-editor";
 
 export function useEditorThemeSync(

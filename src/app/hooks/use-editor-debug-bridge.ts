@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { EditorView } from "@codemirror/view";
-import { createDebugHelpers } from "../../editor/debug-helpers";
+import { createDebugHelpers } from "../../editor";
 
 export interface EditorDebugBridge {
   attachDebugView: (view: EditorView) => void;

@@ -1,10 +1,13 @@
 import { useRef, useCallback } from "react";
 import { EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
-import type { FrontmatterState } from "../../editor/frontmatter-state";
-import { imagePasteExtension } from "../../editor/image-paste";
-import { imageDropExtension } from "../../editor/image-drop";
-import { createImageSaver, type ImageSaveContext } from "../../editor/image-save";
+import {
+  imagePasteExtension,
+  imageDropExtension,
+  createImageSaver,
+  type FrontmatterState,
+  type ImageSaveContext,
+} from "../../editor";
 import {
   extractIncludePaths,
   resolveIncludePath,

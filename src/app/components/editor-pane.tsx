@@ -9,8 +9,7 @@ import { SidenoteMargin } from "./sidenote-margin";
 import { ReadModeView } from "./read-mode-view";
 import { extractHeadings } from "../heading-ancestry";
 import { bibDataField } from "../../citations/citation-render";
-import { frontmatterField } from "../../editor/frontmatter-state";
-import type { EditorMode } from "../../editor";
+import { frontmatterField, type EditorMode } from "../../editor";
 
 export interface EditorPaneProps extends UseEditorOptions {
   sidenotesCollapsed?: boolean;

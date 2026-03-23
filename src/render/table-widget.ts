@@ -1,6 +1,6 @@
 import { Annotation } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { createInlineEditor } from "../editor/inline-editor";
+import { createInlineEditor } from "../editor";
 import { renderInlineMarkdown } from "./inline-render";
 import { showWidgetContextMenu, applyTableMutation } from "./table-actions";
 import {

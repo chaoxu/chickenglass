@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { insertImageFromPicker } from "../../editor/image-insert";
-import type { EditorMode } from "../../editor";
 import {
+  insertImageFromPicker,
   setEditorMode,
   wordWrapCompartment,
   lineNumbersCompartment,
   tabSizeCompartment,
   tabSizeExtension,
+  defaultEditorPlugins,
+  EditorPluginManager,
+  type EditorMode,
 } from "../../editor";
 import { EditorView, lineNumbers } from "@codemirror/view";
-import { defaultEditorPlugins } from "../../editor/editor-plugins-registry";
-import { EditorPluginManager } from "../../editor/editor-plugin";
 import type { UseEditorReturn } from "./use-editor";
 import { useEditorSession } from "./use-editor-session";
 import type { FileSystem } from "../file-manager";
