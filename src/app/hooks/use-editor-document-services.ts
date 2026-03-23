@@ -17,6 +17,31 @@ import { dispatchIfConnected } from "../lib/view-dispatch";
 import { useBibliography } from "./use-bibliography";
 import { measureAsync } from "../perf";
 
+/**
+ * Expand `!include` directives in a document, producing a flattened text
+ * and a source-map that tracks which regions originated from which file.
+ *
+ * Algorithm (O(n) in number of include directives):
+ * 1. `extractIncludePaths` scans `rawContent` for all `!include` lines.
+ * 2. Each path is resolved relative to `mainPath` and read from `fs`.
+ * 3. `flattenIncludesWithSourceMap` splices the included content into
+ *    `rawContent`, replacing each include directive with the file's text,
+ *    and records `IncludeRegion` entries mapping flattened offsets back
+ *    to their original files.
+ *
+ * Cycle detection: deliberately not implemented at this layer — callers
+ * are expected to avoid circular includes. The function is intentionally
+ * shallow (one level); nested includes inside included files are not
+ * re-expanded.
+ *
+ * Fallback behavior: if **any** included file cannot be read, the function
+ * returns `{ text: rawContent, regions: [] }` — i.e. the original content
+ * unchanged with no source map. This is intentional so that a missing
+ * include file does not silently corrupt the rest of the document.
+ *
+ * Performance: wrapped in `measureAsync("includes.expand", …)` so the
+ * duration appears in the frontend perf panel.
+ */
 async function expandIncludes(
   mainPath: string,
   rawContent: string,

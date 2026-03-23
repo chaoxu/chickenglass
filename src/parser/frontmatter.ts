@@ -24,7 +24,48 @@ export interface FrontmatterConfig {
    * - "grouped": separate counters per group (default, academic style)
    */
   numbering?: NumberingScheme;
+  /**
+   * Per-plugin block configuration overrides.
+   *
+   * Keys are plugin class names (e.g. `"theorem"`, `"lemma"`). Values are
+   * either:
+   * - `true` / `false` — enable or disable the plugin for this document.
+   * - A `BlockConfig` object for fine-grained control:
+   *   - `numbered?: boolean` — override the plugin's default numbered setting.
+   *   - `counter?: string` — assign a shared counter group name; plugins with
+   *     the same `counter` value increment one shared sequence.
+   *   - `title?: string` — override the default display title for the label.
+   *
+   * Example YAML:
+   * ```yaml
+   * blocks:
+   *   theorem:
+   *     numbered: true
+   *     counter: theorem
+   *   lemma:
+   *     numbered: true
+   *     counter: theorem   # shares "Theorem 1, Lemma 2, …" counter
+   *   remark: false        # disable remark blocks entirely
+   * ```
+   */
   blocks?: Record<string, boolean | BlockConfig>;
+  /**
+   * KaTeX macro definitions for this document.
+   *
+   * Keys are macro names (including the leading backslash, e.g. `"\\R"`).
+   * Values are their LaTeX expansions (e.g. `"\\mathbb{R}"`). These are
+   * merged into the KaTeX `macros` option at render time and cached in the
+   * `mathMacrosField` StateField, which recomputes only when frontmatter
+   * changes.
+   *
+   * Example YAML:
+   * ```yaml
+   * math:
+   *   \R: \mathbb{R}
+   *   \N: \mathbb{N}
+   *   \norm: \left\lVert #1 \right\rVert
+   * ```
+   */
   math?: Record<string, string>;
   /**
    * Folder for storing images relative to the document.

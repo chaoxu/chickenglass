@@ -42,11 +42,30 @@ export interface BlockCounterState {
 const GLOBAL_COUNTER = "_global";
 
 /**
- * Walk the syntax tree and assign numbers to all fenced divs
- * whose registered plugin is numbered.
+ * Walk the semantic fenced-div list and assign sequential numbers to all
+ * blocks whose registered plugin has `numbered: true`.
  *
- * @param numbering - "global" shares one counter across all types,
- *   "grouped" (default) uses per-plugin counter groups.
+ * Algorithm (O(n) in number of fenced divs):
+ * Iterates `documentSemanticsField.fencedDivs` in document order. For each
+ * div that has a `primaryClass` and a matching numbered plugin, it increments
+ * the appropriate counter and records a `NumberedBlock` entry.
+ *
+ * Counter groups:
+ * - **"grouped"** (default / academic style): each plugin contributes to
+ *   its own counter, identified by `plugin.counter ?? plugin.name`. Plugins
+ *   can share a counter group by setting the same `counter` value (e.g.
+ *   `theorem` and `lemma` both set `counter: "theorem"` to share "Theorem 1,
+ *   Lemma 2, Theorem 3, …" style numbering).
+ * - **"global"** (blog style): all numbered blocks share one counter
+ *   regardless of type, keyed by the `GLOBAL_COUNTER` sentinel `"_global"`.
+ *   Produces "Block 1, Block 2, …" across all plugin types.
+ *
+ * Output maps (`byId`, `byPosition`) are built in the same pass for O(1)
+ * lookup by callers that need to resolve `[@id]` cross-references or find
+ * the block at a given cursor position.
+ *
+ * @param numbering - Numbering scheme from frontmatter (`"global"` or
+ *   `"grouped"`). Defaults to `"grouped"`.
  */
 export function computeBlockNumbers(
   state: EditorState,

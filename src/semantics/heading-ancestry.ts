@@ -58,6 +58,19 @@ export function extractHeadings(state: EditorState): HeadingEntry[] {
  *
  * Example: given headings `# A`, `## B`, `## C`, `### D` and cursor
  * inside D's content, returns [A, C, D].
+ *
+ * Algorithm:
+ * 1. Filter `headings` to those whose position is ≤ `cursorPos` ("before").
+ * 2. Walk backwards through "before", collecting headings with strictly
+ *    decreasing level numbers into `ancestry`. The `Infinity` sentinel
+ *    initialises `currentLevel` so that the innermost heading (any level)
+ *    is always accepted on the first iteration.
+ * 3. Stop early when `currentLevel` reaches 1 — no ancestor can have a
+ *    lower level number, so further traversal is unnecessary.
+ * 4. `ancestry` is built in reverse order via `unshift`, so the result is
+ *    sorted outermost-first (h1 → h2 → … → deepest enclosing heading).
+ *
+ * Complexity: O(n) where n = headings before cursor.
  */
 export function headingAncestryAt(
   headings: ReadonlyArray<HeadingEntry>,
