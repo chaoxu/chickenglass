@@ -37,25 +37,26 @@ export function FileTree({
   saveScrollRef.current = controller.saveScrollPosition;
 
   // Restore scroll position on mount, save on unmount.
-  // Uses a ref callback to capture the initial savedScrollTop value at mount time.
-  // Scroll restore is deferred to a requestAnimationFrame because headless-tree
-  // renders items lazily based on expanded state — at mount time the container
-  // may be too short to scroll, so the browser would clamp scrollTop to 0.
+  // Uses a ResizeObserver because headless-tree renders items lazily based on
+  // expanded state — at mount time the container may be too short to scroll,
+  // so the browser clamps scrollTop to 0. The observer fires when DOM content
+  // actually changes size, so we wait until scrollHeight is large enough.
   const initialScrollTop = useRef(controller.savedScrollTop);
   useEffect(() => {
-    let rafId: number | undefined;
-    if (initialScrollTop.current > 0) {
-      rafId = requestAnimationFrame(() => {
-        const el = containerRef.current?.parentElement;
-        if (el) {
+    const el = containerRef.current?.parentElement;
+    let observer: ResizeObserver | undefined;
+    if (initialScrollTop.current > 0 && el) {
+      observer = new ResizeObserver(() => {
+        if (el.scrollHeight >= initialScrollTop.current) {
           el.scrollTop = initialScrollTop.current;
+          observer?.disconnect();
+          observer = undefined;
         }
       });
+      observer.observe(el);
     }
     return () => {
-      if (rafId !== undefined) {
-        cancelAnimationFrame(rafId);
-      }
+      observer?.disconnect();
       const scrollEl = containerRef.current?.parentElement;
       if (scrollEl) {
         saveScrollRef.current(scrollEl.scrollTop);
