@@ -28,7 +28,7 @@ import {
   CitationWidget,
 } from "../citations/citation-render";
 import { type CslProcessor, registerCitationsWithProcessor } from "../citations/csl-processor";
-import { CrossrefWidget, UnresolvedRefWidget } from "./crossref-render";
+import { CrossrefWidget, ClusteredCrossrefWidget, UnresolvedRefWidget } from "./crossref-render";
 import { buildDecorations, cursorInRange, type RenderWidget } from "./render-utils";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 
@@ -89,6 +89,15 @@ export function collectReferenceRanges(
         const raw = doc.slice(ref.from, ref.to);
         const widget = resolved.kind === "block" || resolved.kind === "equation"
           ? new CrossrefWidget(resolved, raw)
+          : new UnresolvedRefWidget(raw);
+        pushWidget(items, widget, ref.from, ref.to);
+      } else {
+        // Multi-id bracketed reference where no id is a citation — resolve each as crossref
+        const resolvedItems = ref.ids.map((id) => resolveCrossref(view.state, id, equationLabels));
+        const raw = doc.slice(ref.from, ref.to);
+        const allResolved = resolvedItems.every((r) => r.kind === "block" || r.kind === "equation");
+        const widget = allResolved
+          ? new ClusteredCrossrefWidget(resolvedItems, raw)
           : new UnresolvedRefWidget(raw);
         pushWidget(items, widget, ref.from, ref.to);
       }

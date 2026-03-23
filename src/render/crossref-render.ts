@@ -45,6 +45,34 @@ export class CrossrefWidget extends RenderWidget {
   }
 }
 
+/** Widget for a clustered cross-reference (multiple resolved crossrefs in one bracket). */
+export class ClusteredCrossrefWidget extends RenderWidget {
+  constructor(
+    private readonly resolvedItems: readonly ResolvedCrossref[],
+    private readonly raw: string,
+  ) {
+    super();
+  }
+
+  createDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "cf-crossref";
+    span.textContent = this.resolvedItems.map((r) => r.label).join("; ");
+    span.title = this.raw;
+    return span;
+  }
+
+  eq(other: ClusteredCrossrefWidget): boolean {
+    if (this.resolvedItems.length !== other.resolvedItems.length) return false;
+    if (this.raw !== other.raw) return false;
+    return this.resolvedItems.every(
+      (r, i) =>
+        r.kind === other.resolvedItems[i].kind &&
+        r.label === other.resolvedItems[i].label,
+    );
+  }
+}
+
 /** Widget for an unresolved cross-reference. */
 export class UnresolvedRefWidget extends RenderWidget {
   constructor(private readonly raw: string) {

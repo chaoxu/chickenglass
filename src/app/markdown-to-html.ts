@@ -109,6 +109,8 @@ interface InlineContext {
   citedIds?: string[];
   cslProcessor?: CslProcessor;
   surface: HtmlInlineSurface;
+  /** Document semantics for resolving crossref labels in HTML export. */
+  semantics?: DocumentSemantics;
 }
 
 type HtmlInlineSurface = InlineRenderSurface | "document-body";
@@ -137,7 +139,7 @@ function renderInlineWithSurface(
   text: string,
   options: Pick<
     InlineContext,
-    "macros" | "bibliography" | "citedIds" | "cslProcessor" | "surface" | "doc"
+    "macros" | "bibliography" | "citedIds" | "cslProcessor" | "surface" | "doc" | "semantics"
   >,
 ): string {
   return renderInlineFragments(parseInlineFragments(text), {
@@ -147,6 +149,7 @@ function renderInlineWithSurface(
     citedIds: options.citedIds,
     cslProcessor: options.cslProcessor,
     surface: options.surface,
+    semantics: options.semantics,
   });
 }
 
@@ -634,6 +637,7 @@ function renderInlineFragment(
             ctx.citedIds,
             ctx.cslProcessor,
             fragment.locators,
+            ctx.semantics,
           )
         : renderNarrativeReference(
             fragment.ids[0],
@@ -686,6 +690,19 @@ function ctxLikeCitationMatches(
 }
 
 /**
+ * Resolve a crossref label from document semantics (equation labels).
+ *
+ * Used by the HTML export path where CM6 state (block counters) is unavailable.
+ * Falls back to the raw id if no semantic entry is found.
+ */
+function resolveCrossrefLabel(id: string, semantics?: DocumentSemantics): string {
+  if (!semantics) return id;
+  const eq = semantics.equationById.get(id);
+  if (eq) return `Eq. (${eq.number})`;
+  return id;
+}
+
+/**
  * Add cited ids to the bibliography accumulator, preserving first-use order.
  */
 function trackCitedIds(
@@ -711,18 +728,21 @@ function renderCitationCluster(
   citedIds?: string[],
   cslProcessor?: CslProcessor,
   locators?: readonly (string | undefined)[],
+  semantics?: DocumentSemantics,
 ): string {
   const knownCount = bibliography
     ? ids.filter((id) => bibliography.has(id)).length
     : 0;
 
   if (knownCount === 0) {
+    const parts = ids.map((id) => {
+      const label = resolveCrossrefLabel(id, semantics);
+      return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(label)}</a>`;
+    });
     if (ids.length === 1) {
-      return `<a class="cross-ref" href="#${escapeHtml(ids[0])}">${escapeHtml(ids[0])}</a>`;
+      return parts[0];
     }
-    const parts = ids.map((id) =>
-      `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`);
-    return `<span class="${CSS.citation}">(${parts.join("; ")})</span>`;
+    return parts.join("; ");
   }
 
   trackCitedIds(ids, bibliography, citedIds);
@@ -750,7 +770,8 @@ function renderCitationCluster(
         : rendered;
       return escapeHtml(stripped);
     }
-    return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(id)}</a>`;
+    const label = resolveCrossrefLabel(id, semantics);
+    return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(label)}</a>`;
   });
   return `<span class="${CSS.citation}">(${parts.join("; ")})</span>`;
 }

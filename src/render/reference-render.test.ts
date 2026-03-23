@@ -218,4 +218,90 @@ describe("collectReferenceRanges", () => {
     expect(ref).toBeDefined();
     expect(widgetClass(ref!)).toBe("CitationWidget");
   });
+
+  // Regression: clustered equation references ([@eq:a; @eq:b]) where all ids
+  // are crossrefs (not citations) were silently dropped because the code only
+  // handled hasCitation or single-id non-citation branches. (#335)
+  it("routes clustered equation crossrefs to ClusteredCrossrefWidget", () => {
+    const doc = [
+      "$$a^2$$ {#eq:alpha}",
+      "",
+      "$$b^2$$ {#eq:beta}",
+      "",
+      "See [@eq:alpha; @eq:beta].",
+    ].join("\n");
+    view = createView(doc, doc.length);
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find(
+      (r) => view.state.sliceDoc(r.from, r.to) === "[@eq:alpha; @eq:beta]",
+    );
+    expect(ref).toBeDefined();
+    if (!ref) return;
+    expect(widgetClass(ref)).toBe("ClusteredCrossrefWidget");
+  });
+
+  it("renders clustered equation crossrefs with resolved labels", () => {
+    const doc = [
+      "$$a^2$$ {#eq:alpha}",
+      "",
+      "$$b^2$$ {#eq:beta}",
+      "",
+      "See [@eq:alpha; @eq:beta].",
+    ].join("\n");
+    view = createView(doc, doc.length);
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find(
+      (r) => view.state.sliceDoc(r.from, r.to) === "[@eq:alpha; @eq:beta]",
+    );
+    expect(ref).toBeDefined();
+    if (!ref) return;
+    const widget = ref.value.spec.widget;
+    expect(widget).toBeDefined();
+    if (!widget) return;
+    const el = widget.toDOM() as HTMLElement;
+    expect(el.textContent).toBe("Eq. (1); Eq. (2)");
+  });
+
+  it("routes clustered block crossrefs to ClusteredCrossrefWidget", () => {
+    const doc = [
+      "::: {.theorem #thm-a}",
+      "A.",
+      ":::",
+      "",
+      "::: {.theorem #thm-b}",
+      "B.",
+      ":::",
+      "",
+      "See [@thm-a; @thm-b].",
+    ].join("\n");
+    view = createView(doc, doc.length);
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find(
+      (r) => view.state.sliceDoc(r.from, r.to) === "[@thm-a; @thm-b]",
+    );
+    expect(ref).toBeDefined();
+    if (!ref) return;
+    expect(widgetClass(ref)).toBe("ClusteredCrossrefWidget");
+    const widget = ref.value.spec.widget;
+    expect(widget).toBeDefined();
+    if (!widget) return;
+    const el = widget.toDOM() as HTMLElement;
+    expect(el.textContent).toBe("Theorem 1; Theorem 2");
+  });
+
+  it("routes clustered unknown crossrefs to UnresolvedRefWidget", () => {
+    const doc = "See [@unknown-a; @unknown-b].";
+    view = createView(doc, doc.length);
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find(
+      (r) => view.state.sliceDoc(r.from, r.to) === "[@unknown-a; @unknown-b]",
+    );
+    expect(ref).toBeDefined();
+    if (!ref) return;
+    expect(widgetClass(ref)).toBe("UnresolvedRefWidget");
+  });
 });

@@ -316,4 +316,34 @@ describe("markdownToHtml", () => {
     expect(fakeCsl.citeNarrative).toHaveBeenCalledWith("karger2000");
     expect(html).toContain('<span class="cf-citation cf-citation-narrative">Karger [1]</span>');
   });
+
+  // Regression: clustered equation references like [@eq:a; @eq:b] should
+  // resolve each label (e.g. "Eq. (1)") instead of showing raw ids. (#335)
+  it("renders clustered equation crossrefs with resolved labels", () => {
+    const doc = [
+      "$$a^2$$ {#eq:gaussian}",
+      "",
+      "$$b^2$$ {#eq:binomial}",
+      "",
+      "See [@eq:gaussian; @eq:binomial].",
+    ].join("\n");
+    const html = markdownToHtml(doc);
+
+    expect(html).toContain('href="#eq:gaussian"');
+    expect(html).toContain("Eq. (1)");
+    expect(html).toContain('href="#eq:binomial"');
+    expect(html).toContain("Eq. (2)");
+  });
+
+  it("renders single equation crossref with resolved label", () => {
+    const doc = [
+      "$$a^2$$ {#eq:energy}",
+      "",
+      "See [@eq:energy].",
+    ].join("\n");
+    const html = markdownToHtml(doc);
+
+    expect(html).toContain('href="#eq:energy"');
+    expect(html).toContain("Eq. (1)");
+  });
 });
