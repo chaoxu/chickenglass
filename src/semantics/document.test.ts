@@ -135,4 +135,52 @@ describe("document semantics analyzers", () => {
     expect(semantics.equationById.get("eq:first")?.number).toBe(1);
     expect(semantics.references[0]?.ids).toEqual(["eq:first"]);
   });
+
+  it("unified walk matches individual analyzers on a mixed document", () => {
+    const doc = [
+      "# Introduction {#sec:intro}",
+      "",
+      "Some text[^fn1] with a reference [@thm-main].",
+      "",
+      "::: {.theorem #thm-main} Main Theorem",
+      "Statement here.",
+      ":::",
+      "",
+      "$$x^2 + y^2$$ {#eq:pyth}",
+      "",
+      "$$z^3$$ {#eq:cube}",
+      "",
+      "## Details {-}",
+      "",
+      "See @eq:pyth for details.",
+      "",
+      "[^fn1]: A footnote definition.",
+      "",
+    ].join("\n");
+    const tree = parser.parse(doc);
+    const src = stringTextSource(doc);
+
+    // Individual analyzers (each does its own tree walk)
+    const indivHeadings = analyzeHeadings(src, tree);
+    const indivFootnotes = analyzeFootnotes(src, tree);
+    const indivDivs = analyzeFencedDivs(src, tree);
+    const indivEquations = analyzeEquations(src, tree);
+    const indivRefs = analyzeReferences(src, tree);
+
+    // Unified walk via analyzeDocumentSemantics
+    const unified = analyzeDocumentSemantics(src, tree);
+
+    expect(unified.headings).toEqual(indivHeadings);
+    expect(unified.footnotes.refs).toEqual(indivFootnotes.refs);
+    expect(unified.footnotes.defs).toEqual(indivFootnotes.defs);
+    expect(unified.fencedDivs).toEqual(indivDivs);
+    expect(unified.equations).toEqual(indivEquations);
+    expect(unified.references).toEqual(indivRefs);
+
+    // Verify lookup maps are consistent
+    expect(unified.headingByFrom.size).toBe(indivHeadings.length);
+    expect(unified.fencedDivByFrom.size).toBe(indivDivs.length);
+    expect(unified.equationById.size).toBe(indivEquations.length);
+    expect(unified.referenceByFrom.size).toBe(indivRefs.length);
+  });
 });
