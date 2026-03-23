@@ -2,8 +2,8 @@
  * useFileOperations — filesystem mutation callbacks extracted from useEditorSession.
  *
  * Handles save, create, delete, rename, close, and save-as. All callbacks
- * are stable (useCallback) and share the sessionStateRef / buffers / liveDocs
- * refs passed in from useEditorSession.
+ * are stable (useCallback) and share the getSessionState getter / buffers /
+ * liveDocs refs passed in from useEditorSession.
  */
 
 import { useCallback } from "react";
@@ -28,7 +28,8 @@ export interface FileOperationsDeps {
   fs: FileSystem;
   refreshTree: () => Promise<void>;
   addRecentFile: (path: string) => void;
-  sessionStateRef: RefObject<EditorSessionState>;
+  /** Stable getter that always returns the latest session state. */
+  getSessionState: () => EditorSessionState;
   buffers: RefObject<Map<string, string>>;
   liveDocs: RefObject<Map<string, string>>;
   commitSessionState: (
@@ -53,7 +54,7 @@ export function useFileOperations({
   fs,
   refreshTree,
   addRecentFile,
-  sessionStateRef,
+  getSessionState,
   buffers,
   liveDocs,
   commitSessionState,
@@ -61,7 +62,7 @@ export function useFileOperations({
   renameBuffers,
 }: FileOperationsDeps): UseFileOperationsReturn {
   const saveFile = useCallback(async () => {
-    const path = sessionStateRef.current.activePath;
+    const path = getSessionState().activePath;
     if (!path) return;
 
     const doc = liveDocs.current.get(path) ?? "";
@@ -73,14 +74,14 @@ export function useFileOperations({
       });
       buffers.current.set(path, doc);
       liveDocs.current.set(path, doc);
-      commitSessionState(markSessionTabDirty(sessionStateRef.current, path, false), {
+      commitSessionState(markSessionTabDirty(getSessionState(), path, false), {
         syncEditorDoc: false,
       });
     } catch (e: unknown) {
       // Save failed — leave dirty so user knows data is unsaved
       console.error("[session] save failed:", e);
     }
-  }, [commitSessionState, fs, liveDocs, buffers, sessionStateRef]);
+  }, [commitSessionState, fs, liveDocs, buffers, getSessionState]);
 
   const createFile = useCallback(async (path: string) => {
     try {
@@ -107,7 +108,7 @@ export function useFileOperations({
   }, [fs, refreshTree]);
 
   const closeFile = useCallback(async (path: string) => {
-    const tab = findSessionTab(sessionStateRef.current, path);
+    const tab = findSessionTab(getSessionState(), path);
     if (tab?.dirty) {
       const answer = window.confirm(
         `"${tab.name}" has unsaved changes.\n\nPress OK to discard, or Cancel to keep editing.`,
@@ -115,10 +116,10 @@ export function useFileOperations({
       if (!answer) return;
     }
 
-    commitSessionState(closeSessionTab(sessionStateRef.current, path));
+    commitSessionState(closeSessionTab(getSessionState(), path));
     buffers.current.delete(path);
     liveDocs.current.delete(path);
-  }, [commitSessionState, sessionStateRef, buffers, liveDocs]);
+  }, [commitSessionState, getSessionState, buffers, liveDocs]);
 
   const handleRename = useCallback(async (oldPath: string, newPath: string) => {
     try {
@@ -147,7 +148,7 @@ export function useFileOperations({
     const isAffected = (candidate: string) => candidate === path || candidate.startsWith(prefix);
 
     const affected = new Set(
-      sessionStateRef.current.tabs
+      getSessionState().tabs
         .filter((tab) => isAffected(tab.path))
         .map((tab) => tab.path),
     );
@@ -155,13 +156,13 @@ export function useFileOperations({
       buffers.current.delete(affectedPath);
       liveDocs.current.delete(affectedPath);
     }
-    commitSessionState(closeSessionTabs(sessionStateRef.current, affected));
+    commitSessionState(closeSessionTabs(getSessionState(), affected));
 
     await refreshTree();
-  }, [commitSessionState, fs, refreshTree, sessionStateRef, buffers, liveDocs]);
+  }, [commitSessionState, fs, refreshTree, getSessionState, buffers, liveDocs]);
 
   const saveAs = useCallback(async () => {
-    const path = sessionStateRef.current.activePath;
+    const path = getSessionState().activePath;
     if (!path) return;
     const doc = liveDocs.current.get(path) ?? "";
 
@@ -181,7 +182,7 @@ export function useFileOperations({
           await fs.createFile(relativePath, doc);
         }
         commitSessionState(applySaveAsResult({
-          state: sessionStateRef.current,
+          state: getSessionState(),
           buffers: buffers.current,
           liveDocs: liveDocs.current,
           oldPath: path,
@@ -203,7 +204,7 @@ export function useFileOperations({
     anchor.download = basename(path);
     anchor.click();
     URL.revokeObjectURL(url);
-  }, [addRecentFile, commitSessionState, fs, refreshTree, sessionStateRef, buffers, liveDocs]);
+  }, [addRecentFile, commitSessionState, fs, refreshTree, getSessionState, buffers, liveDocs]);
 
   return {
     saveFile,
