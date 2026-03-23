@@ -134,6 +134,22 @@ export function hasLineClassAt(
   );
 }
 
+/** Check whether a mark decoration with the given class covers at least part of [from, to). */
+export function hasMarkClassInRange(
+  specs: readonly DecorationSpecInfo[],
+  from: number,
+  to: number,
+  classSubstr: string,
+): boolean {
+  return specs.some(
+    (spec) =>
+      spec.from !== spec.to && // mark decoration (not line)
+      spec.from < to &&
+      spec.to > from &&
+      spec.class?.includes(classSubstr),
+  );
+}
+
 export function makeBlockPlugin(
   overrides: Partial<BlockPlugin> & { name: string },
 ): BlockPlugin {

@@ -53,6 +53,9 @@ import {
 import { CSS } from "../constants/css-classes";
 import { EMBED_CLASSES, EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 
+/** Pre-created mark decoration for monospace source syntax on fence lines. */
+const blockSourceMark = Decoration.mark({ class: CSS.blockSource });
+
 /** Simple widget that renders a single text character (used for title parens). */
 class TextWidget extends WidgetType {
   constructor(private readonly text: string) { super(); }
@@ -389,10 +392,24 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // The widget replaces only the fence prefix (::: {.class}), NOT the title text.
     // Title text stays as editable content — inline plugins render math/bold/etc.
     // See CLAUDE.md "Block headers must behave like headings."
+    //
+    // When in source mode, cf-block-source is a MARK decoration on the fence
+    // syntax only ("::: {.class}"), NOT a line decoration. This keeps the title
+    // text in its natural serif font — only syntax scaffolding gets monospace.
     const headerClass = cursorOnEitherFence
-      ? `${spec.className} ${CSS.blockSource}`
+      ? spec.className
       : `${spec.className} ${CSS.blockHeader}`;
     items.push(Decoration.line({ class: headerClass }).range(div.from));
+    if (cursorOnEitherFence) {
+      // Mark only the fence syntax portion as monospace source.
+      // titleFrom marks where title text begins; if no title, openFenceTo
+      // is the end of the fence prefix. Either way, everything before that
+      // is syntax scaffolding.
+      const syntaxEnd = div.titleFrom ?? div.openFenceTo;
+      if (syntaxEnd > div.openFenceFrom) {
+        items.push(blockSourceMark.range(div.openFenceFrom, syntaxEnd));
+      }
+    }
     addHeaderWidgetDecoration(div, spec.header, cursorOnEitherFence, macros, macrosKey, items);
 
     // Title text: wrap in visual parentheses via widget decorations (rendered mode only).

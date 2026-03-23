@@ -569,7 +569,9 @@ body {
   font-size: 0.85em;
 }
 
-/* Block source fence lines — monospace font for ::: fence syntax when visible */
+/* Block source syntax — monospace font for ::: fence syntax and closing fence lines.
+ * Applied as a mark decoration on the opening fence syntax (not the title text),
+ * and as a line decoration on the closing fence (which has no title content). */
 .cf-block-source {
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   font-style: normal;

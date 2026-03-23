@@ -22,6 +22,7 @@ import {
   createEditorState,
   getDecorationSpecs,
   hasLineClassAt,
+  hasMarkClassInRange,
 } from "../test-utils";
 
 /** Create an EditorState with all extensions needed for block decorations. */
@@ -79,10 +80,13 @@ describe("blockDecorationField", () => {
     const state = createTestState(TWO_BLOCKS, theoremStart, true);
     const specs = getDecoSpecs(state);
 
-    // Opening fence should have cf-block-source, not cf-block-header
-    const theoremLine = state.doc.line(1).from;
-    expect(hasLineClassAt(specs, theoremLine, "cf-block-source")).toBe(true);
-    expect(hasLineClassAt(specs, theoremLine, "cf-block-header")).toBe(false);
+    // Opening fence: cf-block-source is a MARK decoration on syntax only, not a line class.
+    // The line should NOT have cf-block-source as a line class (that made the whole line monospace).
+    const theoremLine = state.doc.line(1);
+    expect(hasLineClassAt(specs, theoremLine.from, "cf-block-source")).toBe(false);
+    expect(hasLineClassAt(specs, theoremLine.from, "cf-block-header")).toBe(false);
+    // But cf-block-source mark should cover the fence syntax range
+    expect(hasMarkClassInRange(specs, theoremLine.from, theoremLine.to, "cf-block-source")).toBe(true);
 
     // No header widget for theorem (source mode)
     // But proof should still have its header widget
@@ -116,10 +120,12 @@ describe("blockDecorationField", () => {
     const state = createTestState(TWO_BLOCKS, 0, true);
     const specs = getDecoSpecs(state);
 
-    // Opening: source mode
-    expect(hasLineClassAt(specs, state.doc.line(1).from, "cf-block-source")).toBe(true);
+    // Opening: cf-block-source as mark decoration on syntax portion only
+    const openLine = state.doc.line(1);
+    expect(hasMarkClassInRange(specs, openLine.from, openLine.to, "cf-block-source")).toBe(true);
+    expect(hasLineClassAt(specs, openLine.from, "cf-block-source")).toBe(false);
 
-    // Closing: also source mode (show both fences)
+    // Closing: cf-block-source as line decoration (no title content to protect)
     const closeFenceLine = state.doc.line(3).from;
     expect(hasLineClassAt(specs, closeFenceLine, "cf-block-source")).toBe(true);
     expect(hasLineClassAt(specs, closeFenceLine, "cf-include-fence")).toBe(false);
@@ -206,6 +212,40 @@ describe("blockDecorationField", () => {
     const sourceSpecs = getDecoSpecs(source);
     const sourceParens = sourceSpecs.filter((s) => s.widgetClass === "TextWidget");
     expect(sourceParens.length).toBe(0); // no parens in source mode
+  });
+
+  it("cf-block-source mark covers only fence syntax, not title text (#278)", () => {
+    const doc = `::: {.theorem} Main Result\nContent\n:::`;
+    const state = createTestState(doc, 0, true);
+    const specs = getDecoSpecs(state);
+
+    const line1 = state.doc.line(1);
+    const titleText = "Main Result";
+    const titleFrom = line1.text.indexOf(titleText) + line1.from;
+    const titleTo = titleFrom + titleText.length;
+
+    // cf-block-source mark should cover fence syntax (before title)
+    expect(hasMarkClassInRange(specs, line1.from, titleFrom, "cf-block-source")).toBe(true);
+
+    // cf-block-source mark must NOT cover the title text range
+    const sourceMarksOnTitle = specs.filter(
+      (s) =>
+        s.from !== s.to && // mark decoration
+        s.from < titleTo &&
+        s.to > titleFrom &&
+        s.class?.includes("cf-block-source"),
+    );
+    expect(sourceMarksOnTitle.length).toBe(0);
+  });
+
+  it("no-title block: cf-block-source mark covers entire fence syntax (#278)", () => {
+    const doc = `::: {.proof}\nContent\n:::`;
+    const state = createTestState(doc, 0, true);
+    const specs = getDecoSpecs(state);
+
+    const line1 = state.doc.line(1);
+    // Entire opening fence is syntax — mark should cover it
+    expect(hasMarkClassInRange(specs, line1.from, line1.to, "cf-block-source")).toBe(true);
   });
 
   it("does not crash on an incomplete fenced div without a closing fence", () => {
