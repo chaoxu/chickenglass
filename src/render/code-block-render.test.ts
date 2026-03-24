@@ -51,9 +51,10 @@ describe("edge cases", () => {
     // The last body line gets cf-codeblock-last (renders with bottom border),
     // not cf-codeblock-body (used for middle lines), when the cursor is on it.
     expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockLast)).toBe(true);
-    // Neither fence enters source mode.
+    // Opening fence does not enter source mode.
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(false);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.codeblockSourceClose)).toBe(false);
+    // Closing fence is always hidden (#429) — never shows source.
+    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
   });
 
   it("handles empty code blocks (no body lines)", () => {
@@ -61,9 +62,10 @@ describe("edge cases", () => {
     const state = createTestState(emptyBlock, 0, true);
     const specs = getDecoSpecs(state);
 
-    // Cursor is on the opening fence — both fences should be in source mode
+    // Cursor is on the opening fence — opening fence in source mode
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockSourceClose)).toBe(true);
+    // Closing fence is always hidden (#429) — never shows source
+    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.blockClosingFence)).toBe(true);
   });
 
   it("handles code block at end of document (no trailing newline)", () => {
@@ -76,7 +78,8 @@ describe("edge cases", () => {
     const specs = getDecoSpecs(state);
 
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.includeFence)).toBe(true);
+    // Closing fence is always hidden (#429)
+    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
   });
 });
 
@@ -89,35 +92,40 @@ describe("codeBlockDecorationField", () => {
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(false);
     expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockLast)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.includeFence)).toBe(true);
+    // Closing fence always hidden (#429)
+    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
 
     const widgets = specs.filter((s) => s.widgetClass === "SimpleTextRenderWidget");
     expect(widgets.length).toBe(2);
   });
 
-  it("shows both fences when cursor is on the opening fence", () => {
+  it("shows opening fence as source when cursor is on it, closing fence stays hidden", () => {
     const state = createTestState(TWO_BLOCKS, 0, true);
     const specs = getDecoSpecs(state);
 
+    // Opening fence shows as source
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(false);
     expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockBody)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockLast)).toBe(false);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.codeblockSourceClose)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.includeFence)).toBe(false);
+    // Closing fence always hidden (#429) — no source mode
+    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
 
     const widgets = specs.filter((s) => s.widgetClass === "SimpleTextRenderWidget");
     expect(widgets.length).toBe(1);
   });
 
-  it("shows both fences when cursor is on the closing fence", () => {
+  it("closing fence stays hidden even when cursor is on it", () => {
+    // In practice atomicRanges prevent cursor from landing here, but
+    // the decoration must still hide it correctly.
     const closeFencePos = TWO_BLOCKS.indexOf("```\n\n```py");
     const state = createTestState(TWO_BLOCKS, closeFencePos, true);
     const specs = getDecoSpecs(state);
 
+    // Opening fence shows as source (cursorOnEitherFence is true)
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.codeblockSourceClose)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.includeFence)).toBe(false);
+    // Closing fence always hidden (#429)
+    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
   });
 
   it("other code blocks stay rendered when one block fence is active", () => {
@@ -126,6 +134,7 @@ describe("codeBlockDecorationField", () => {
 
     expect(hasLineClassAt(specs, state.doc.line(5).from, CSS.codeblockHeader)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(5).from, CSS.codeblockSourceOpen)).toBe(false);
-    expect(hasLineClassAt(specs, state.doc.line(7).from, CSS.includeFence)).toBe(true);
+    // Closing fence always hidden (#429)
+    expect(hasLineClassAt(specs, state.doc.line(7).from, CSS.blockClosingFence)).toBe(true);
   });
 });

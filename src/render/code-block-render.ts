@@ -4,8 +4,10 @@
  * For each FencedCode node in the syntax tree:
  * - When cursor is outside the fence lines: replace the opening fence with a
  *   header widget, hide the closing fence line, and style the block body.
- * - When cursor is on either fence line: keep the body rendered, but show both
- *   opening and closing fences as source.
+ * - When cursor is on the opening fence line: show the opening fence as source,
+ *   keep body rendered.
+ * - The closing ``` is ALWAYS hidden (zero height), protected from accidental
+ *   deletion by a transaction filter, and skipped by atomicRanges (#429).
  *
  * Uses a StateField (not ViewPlugin) so that Decoration.line is permitted
  * by CM6.
@@ -19,11 +21,14 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import {
-  type EditorState,
+  EditorState,
   type Extension,
+  type Range,
+  RangeSet,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
+  decorationHidden,
   RenderWidget,
   editorFocusField,
   focusTracker,
@@ -31,7 +36,6 @@ import {
   SimpleTextRenderWidget,
 } from "./render-utils";
 import {
-  addCollapsedClosingFence,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
   findFencedBlockAt,
@@ -40,6 +44,7 @@ import {
   isCursorOnCloseFence,
   isCursorOnOpenFence,
 } from "./fenced-block-core";
+import { CSS } from "../constants/css-classes";
 import { __iconNode as copyIconNode } from "lucide-react/dist/esm/icons/copy.js";
 import { __iconNode as checkIconNode } from "lucide-react/dist/esm/icons/check.js";
 import { COPY_RESET_MS } from "../constants";
@@ -183,21 +188,16 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
     closeLine,
     bodyLineCount,
   }, items) => {
+    // --- Opening fence ---
     if (cursorOnEitherFence) {
       items.push(
-        Decoration.line({ class: "cf-codeblock-source cf-codeblock-source-open" })
+        Decoration.line({ class: CSS.codeblockSourceOpen })
           .range(block.openFenceFrom),
       );
-      if (block.closeFenceFrom !== block.openFenceFrom) {
-        items.push(
-          Decoration.line({ class: "cf-codeblock-source cf-codeblock-source-close" })
-            .range(block.closeFenceFrom),
-        );
-      }
     } else {
       items.push(
         Decoration.line({
-          class: "cf-codeblock-header",
+          class: CSS.codeblockHeader,
         }).range(block.openFenceFrom),
       );
       const codeText = bodyLineCount > 0
@@ -208,7 +208,7 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
         : "";
       pushWidgetDecoration(items, new SimpleTextRenderWidget({
         tagName: "span",
-        className: "cf-codeblock-language",
+        className: CSS.codeblockLanguage,
         text: block.language,
       }), block.openFenceFrom, block.openFenceTo);
       if (bodyLineCount > 0) {
@@ -221,24 +221,32 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
       }
     }
 
+    // --- Body lines ---
     for (let ln = openLine.number + 1; ln < closeLine.number; ln++) {
       const line = state.doc.line(ln);
       const isLast = ln === closeLine.number - 1;
       items.push(
         Decoration.line({
-          class: !cursorOnEitherFence && isLast ? "cf-codeblock-last" : "cf-codeblock-body",
+          class: !cursorOnEitherFence && isLast ? CSS.codeblockLast : CSS.codeblockBody,
         }).range(line.from),
       );
     }
 
     if (bodyLineCount === 0 && !cursorOnEitherFence) {
       items.push(
-        Decoration.line({ class: "cf-codeblock-last" }).range(block.openFenceFrom),
+        Decoration.line({ class: CSS.codeblockLast }).range(block.openFenceFrom),
       );
     }
 
-    if (!cursorOnEitherFence && block.closeFenceFrom !== block.openFenceFrom) {
-      addCollapsedClosingFence(block.closeFenceFrom, block.closeFenceTo, items);
+    // --- Closing fence ---
+    // Always hidden in rich mode regardless of cursor position (#429).
+    // The closing fence is protected from accidental deletion by a
+    // transaction filter and skipped by atomicRanges (see below).
+    if (!block.singleLine && block.closeFenceFrom >= 0 && block.closeFenceTo >= block.closeFenceFrom) {
+      items.push(decorationHidden.range(block.closeFenceFrom, block.closeFenceTo));
+      items.push(
+        Decoration.line({ class: CSS.blockClosingFence }).range(block.closeFenceFrom),
+      );
     }
   });
 }
@@ -370,11 +378,85 @@ const codeBlockDecorationField = createFencedBlockDecorationField(buildCodeBlock
 /** Exported for unit testing decoration logic without a browser. */
 export { codeBlockDecorationField as _codeBlockDecorationFieldForTest };
 
+// ---------------------------------------------------------------------------
+// Closing fence protection (#429)
+// ---------------------------------------------------------------------------
+
+/** Collect closing fence line ranges for all code blocks. */
+function getCodeBlockClosingFenceRanges(state: EditorState): { from: number; to: number }[] {
+  const blocks = collectCodeBlocks(state);
+  const ranges: { from: number; to: number }[] = [];
+  for (const block of blocks) {
+    if (block.singleLine || block.closeFenceFrom < 0) continue;
+    const line = state.doc.lineAt(block.closeFenceFrom);
+    ranges.push({ from: line.from, to: line.to });
+  }
+  return ranges;
+}
+
+/**
+ * Transaction filter that protects code block closing fence lines from
+ * accidental deletion.
+ *
+ * Same pattern as fenced div closing fence protection (#428). Blocks any
+ * edit that touches only the closing fence line. Whole-block deletion
+ * (selection covering the entire code block) is still allowed.
+ */
+const closingCodeFenceProtection = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged) return tr;
+
+  const fenceRanges = getCodeBlockClosingFenceRanges(tr.startState);
+  if (fenceRanges.length === 0) return tr;
+
+  let blocked = false;
+  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    if (blocked) return;
+    for (const fence of fenceRanges) {
+      // Does this change touch the closing fence line?
+      if (fromA <= fence.to && toA >= fence.from) {
+        // Allow if the change spans well beyond the fence (whole-block deletion)
+        const extendsBeforeFence = fromA < fence.from - 1;
+        const extendsAfterFence = toA > fence.to + 1;
+        if (extendsBeforeFence && extendsAfterFence) continue;
+        // Allow if it's a replacement that includes the fence (structural edit)
+        if (inserted.length > 0 && extendsBeforeFence) continue;
+        // Block: the edit targets only the closing fence
+        blocked = true;
+        return;
+      }
+    }
+  });
+
+  return blocked ? [] : tr;
+});
+
+/**
+ * Atomic ranges for code block closing fence lines so the cursor skips
+ * over them.
+ *
+ * Same pattern as fenced div closing fence atomicRanges (#428). The cursor
+ * jumps from the last code line to the start of the next block/paragraph.
+ */
+const closingCodeFenceAtomicRanges = EditorView.atomicRanges.of((view) => {
+  const ranges: Range<Decoration>[] = [];
+  const fenceRanges = getCodeBlockClosingFenceRanges(view.state);
+  const mark = Decoration.mark({});
+  for (const fence of fenceRanges) {
+    // Include the newline before the fence to make cursor skip the whole line
+    const atomicFrom = fence.from > 0 ? fence.from - 1 : fence.from;
+    const atomicTo = fence.to < view.state.doc.length ? fence.to + 1 : fence.to;
+    ranges.push(mark.range(atomicFrom, atomicTo));
+  }
+  return RangeSet.of(ranges, true);
+});
+
 /** CM6 extension that renders fenced code blocks with language label and fence hiding. */
 export const codeBlockRenderPlugin: Extension = [
   editorFocusField,
   focusTracker,
   codeBlockDecorationField,
+  closingCodeFenceProtection,
+  closingCodeFenceAtomicRanges,
   ViewPlugin.fromClass(CodeBlockHoverPlugin, {
     eventHandlers: {
       mousemove(event) {
