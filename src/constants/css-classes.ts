@@ -29,6 +29,9 @@ export const CSS = {
   /** Collapsed header line — no visible label, zero height (e.g. blockquote). */
   blockHeaderCollapsed: "cf-block-header-collapsed",
 
+  /** Closing fence line — always hidden in rich mode (zero height). */
+  blockClosingFence: "cf-block-closing-fence",
+
   /** QED tombstone marker on last content line of proof blocks. */
   blockQed: "cf-block-qed",
 

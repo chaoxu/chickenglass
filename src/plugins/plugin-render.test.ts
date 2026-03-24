@@ -134,23 +134,24 @@ describe("blockDecorationField", () => {
     const state = createTestState(TWO_BLOCKS, contentPos, true);
     const specs = getDecoSpecs(state);
 
-    // Closing fence line (:::) should have cf-include-fence (collapsed)
+    // Closing fence line (:::) should have cf-block-closing-fence (collapsed)
     const closeFenceLine = state.doc.line(3).from;
-    expect(hasLineClassAt(specs, closeFenceLine, CSS.includeFence)).toBe(true);
+    expect(hasLineClassAt(specs, closeFenceLine, CSS.blockClosingFence)).toBe(true);
   });
 
-  it("shows closing fence source when cursor is on closing fence", () => {
+  it("closing fence always hidden even when cursor is on closing fence (#428)", () => {
+    // Closing fence is always hidden in rich mode — cursor position doesn't matter
     const closeFencePos = TWO_BLOCKS.indexOf(":::\n\n::: {.proof}");
     const state = createTestState(TWO_BLOCKS, closeFencePos, true);
     const specs = getDecoSpecs(state);
 
-    // Closing fence should have cf-block-source (visible)
+    // Closing fence should be hidden (cf-block-closing-fence), NOT source-visible
     const closeFenceLine = state.doc.line(3).from;
-    expect(hasLineClassAt(specs, closeFenceLine, CSS.blockSource)).toBe(true);
-    expect(hasLineClassAt(specs, closeFenceLine, CSS.includeFence)).toBe(false);
+    expect(hasLineClassAt(specs, closeFenceLine, CSS.blockClosingFence)).toBe(true);
+    expect(hasLineClassAt(specs, closeFenceLine, CSS.blockSource)).toBe(false);
   });
 
-  it("shows both fences when cursor is on opening fence", () => {
+  it("closing fence hidden when cursor is on opening fence (#428)", () => {
     const state = createTestState(TWO_BLOCKS, 0, true);
     const specs = getDecoSpecs(state);
 
@@ -159,10 +160,10 @@ describe("blockDecorationField", () => {
     expect(hasMarkClassInRange(specs, openLine.from, openLine.to, CSS.blockSource)).toBe(true);
     expect(hasLineClassAt(specs, openLine.from, CSS.blockSource)).toBe(false);
 
-    // Closing: cf-block-source as line decoration (no title content to protect)
+    // Closing fence is always hidden — cf-block-closing-fence, not cf-block-source
     const closeFenceLine = state.doc.line(3).from;
-    expect(hasLineClassAt(specs, closeFenceLine, CSS.blockSource)).toBe(true);
-    expect(hasLineClassAt(specs, closeFenceLine, CSS.includeFence)).toBe(false);
+    expect(hasLineClassAt(specs, closeFenceLine, CSS.blockClosingFence)).toBe(true);
+    expect(hasLineClassAt(specs, closeFenceLine, CSS.blockSource)).toBe(false);
   });
 
   it("other blocks unaffected when cursor is on one block's fence", () => {
@@ -175,9 +176,9 @@ describe("blockDecorationField", () => {
     expect(hasLineClassAt(specs, proofOpenLine, CSS.blockHeader)).toBe(true);
     expect(hasLineClassAt(specs, proofOpenLine, CSS.blockSource)).toBe(false);
 
-    // Proof closing fence should be hidden
+    // Proof closing fence should be hidden with cf-block-closing-fence
     const proofCloseLine = state.doc.line(7).from;
-    expect(hasLineClassAt(specs, proofCloseLine, CSS.includeFence)).toBe(true);
+    expect(hasLineClassAt(specs, proofCloseLine, CSS.blockClosingFence)).toBe(true);
   });
 
   it("header widget replaces only fence prefix, not title text", () => {

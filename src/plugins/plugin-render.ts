@@ -17,8 +17,9 @@
 import {
   type DecorationSet,
   Decoration,
+  EditorView,
 } from "@codemirror/view";
-import { type EditorState, type Extension, type Range } from "@codemirror/state";
+import { EditorState, type Extension, type Range, RangeSet } from "@codemirror/state";
 import type { BlockAttrs } from "./plugin-types";
 import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
@@ -31,7 +32,6 @@ import {
   RenderWidget,
   addMarkerReplacement,
   pushWidgetDecoration,
-  addCollapsedClosingFence,
   addSingleLineClosingFence,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
@@ -489,27 +489,21 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     }
 
     // --- Closing fence ---
-    if (cursorOnEitherFence) {
-      // Source mode: show raw ::: with block styling
-      if (!div.singleLine && div.closeFenceFrom >= 0) {
-        items.push(
-          Decoration.line({
-            class: `${spec.className} ${CSS.blockSource}`,
-          }).range(div.closeFenceFrom),
-        );
-      }
-    } else {
-      // Rendered mode: hide the closing fence
-      if (div.singleLine) {
-        addSingleLineClosingFence(state, div.closeFenceFrom, div.closeFenceTo, items);
-      } else {
-        addCollapsedClosingFence(div.closeFenceFrom, div.closeFenceTo, items);
+    // Always hidden in rich mode regardless of cursor position (#428).
+    // The closing fence is protected from accidental deletion by a
+    // transaction filter and skipped by atomicRanges (see below).
+    if (div.singleLine) {
+      addSingleLineClosingFence(state, div.closeFenceFrom, div.closeFenceTo, items);
+    } else if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
+      items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
+      items.push(
+        Decoration.line({ class: CSS.blockClosingFence }).range(div.closeFenceFrom),
+      );
 
-        // Embed blocks: replace body content with iframe widget
-        if (isEmbed) {
-          const openLine = state.doc.lineAt(div.openFenceFrom);
-          addEmbedWidget(state, div, openLine, items);
-        }
+      // Embed blocks: replace body content with iframe widget
+      if (isEmbed && !cursorOnEitherFence) {
+        const openLine = state.doc.lineAt(div.openFenceFrom);
+        addEmbedWidget(state, div, openLine, items);
       }
     }
 
@@ -524,8 +518,8 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       }
     }
 
-    // QED tombstone for blocks with "qed" special behavior (only when closing fence is hidden)
-    if (plugin.specialBehavior === "qed" && !cursorOnEitherFence) {
+    // QED tombstone for blocks with "qed" special behavior (closing fence is always hidden)
+    if (plugin.specialBehavior === "qed") {
       addQedDecoration(state, div, items);
     }
   });
@@ -542,10 +536,87 @@ const blockDecorationField = createFencedBlockDecorationField(buildBlockDecorati
 /** Exported for unit testing decoration logic without a browser. */
 export { blockDecorationField as _blockDecorationFieldForTest };
 
+// ---------------------------------------------------------------------------
+// Closing fence protection (#428)
+// ---------------------------------------------------------------------------
+
+/** Collect closing fence line ranges from the semantics field. */
+function getClosingFenceRanges(state: EditorState): { from: number; to: number }[] {
+  const divs = collectFencedDivs(state);
+  const ranges: { from: number; to: number }[] = [];
+  for (const div of divs) {
+    if (div.singleLine || div.closeFenceFrom < 0) continue;
+    // Exclude include blocks — they have their own handling
+    if (EXCLUDED_FROM_FALLBACK.has(div.className)) continue;
+    const registry = state.field(pluginRegistryField, false);
+    if (registry && !getPluginOrFallback(registry, div.className)) continue;
+    const line = state.doc.lineAt(div.closeFenceFrom);
+    ranges.push({ from: line.from, to: line.to });
+  }
+  return ranges;
+}
+
+/**
+ * Transaction filter that protects closing fence lines from accidental deletion.
+ *
+ * Blocks any edit that touches only the closing fence line content. Whole-block
+ * deletion (selection covering the entire fenced div) is still allowed so that
+ * Cmd+A + Delete works.
+ */
+const closingFenceProtection = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged) return tr;
+
+  const fenceRanges = getClosingFenceRanges(tr.startState);
+  if (fenceRanges.length === 0) return tr;
+
+  let blocked = false;
+  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    if (blocked) return;
+    for (const fence of fenceRanges) {
+      // Does this change touch the closing fence line?
+      if (fromA <= fence.to && toA >= fence.from) {
+        // Allow if the change spans well beyond the fence (whole-block deletion)
+        const extendsBeforeFence = fromA < fence.from - 1;
+        const extendsAfterFence = toA > fence.to + 1;
+        if (extendsBeforeFence && extendsAfterFence) continue;
+        // Allow if it's a replacement that includes the fence (structural edit)
+        if (inserted.length > 0 && extendsBeforeFence) continue;
+        // Block: the edit targets only the closing fence
+        blocked = true;
+        return;
+      }
+    }
+  });
+
+  return blocked ? [] : tr;
+});
+
+/**
+ * Atomic ranges for closing fence lines so the cursor skips over them.
+ *
+ * Uses EditorView.atomicRanges to make the hidden closing fence behave as
+ * a single atomic unit — the cursor jumps from the last content line to
+ * the start of the next block or paragraph without stopping on the fence.
+ */
+const closingFenceAtomicRanges = EditorView.atomicRanges.of((view) => {
+  const ranges: Range<Decoration>[] = [];
+  const fenceRanges = getClosingFenceRanges(view.state);
+  const mark = Decoration.mark({});
+  for (const fence of fenceRanges) {
+    // Include the newline before the fence to make cursor skip the whole line
+    const atomicFrom = fence.from > 0 ? fence.from - 1 : fence.from;
+    const atomicTo = fence.to < view.state.doc.length ? fence.to + 1 : fence.to;
+    ranges.push(mark.range(atomicFrom, atomicTo));
+  }
+  return RangeSet.of(ranges, true);
+});
+
 /** CM6 extension that renders fenced divs using the block plugin system. */
 export const blockRenderPlugin: Extension = [
   documentSemanticsField,
   editorFocusField,
   focusTracker,
   blockDecorationField,
+  closingFenceProtection,
+  closingFenceAtomicRanges,
 ];

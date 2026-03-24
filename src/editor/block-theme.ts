@@ -126,6 +126,17 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     lineHeight: "0",
   },
 
+  /* Closing fence line — always hidden in rich mode (zero height).
+   * Uses the same collapse technique as cf-include-fence, but with a
+   * bottom margin to provide visual separation between adjacent blocks. */
+  ".cf-block-closing-fence": {
+    height: "0",
+    lineHeight: "0",
+    overflow: "hidden",
+    padding: "0 !important",
+    margin: "0",
+  },
+
   /* Inline image preview */
   ".cf-image-wrapper": {
     display: "inline-block",
