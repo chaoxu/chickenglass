@@ -164,19 +164,19 @@ describe("markdownToHtml", () => {
 
   it("renders display math", () => {
     const html = markdownToHtml("$$\nx^2 + y^2 = z^2\n$$");
-    expect(html).toContain('class="math-display"');
+    expect(html).toContain(`class="${CSS.mathDisplay}"`);
     expect(html).toContain("katex");
   });
 
   it("renders display math with equation labels", () => {
     const html = markdownToHtml("$$\nx^2\n$$ {#eq:foo}");
-    expect(html).toContain('class="math-display"');
+    expect(html).toContain(`class="${CSS.mathDisplay}"`);
     expect(html).toContain("katex");
   });
 
   it("renders fenced divs with class", () => {
     const html = markdownToHtml("::: {.theorem #thm-1} Main Result\nContent here.\n:::");
-    expect(html).toContain('class="theorem"');
+    expect(html).toContain(`class="${CSS.block("theorem")}"`);
     expect(html).toContain('id="thm-1"');
     expect(html).toContain("Main Result");
     expect(html).toContain("Content here.");
@@ -184,7 +184,7 @@ describe("markdownToHtml", () => {
 
   it("renders fenced divs with short form", () => {
     const html = markdownToHtml("::: Theorem\nContent.\n:::");
-    expect(html).toContain('class="theorem"');
+    expect(html).toContain(`class="${CSS.block("theorem")}"`);
   });
 
   it("renders fenced div titles from title= attributes", () => {
@@ -194,7 +194,7 @@ describe("markdownToHtml", () => {
 
   it("renders self-closing fenced divs", () => {
     const html = markdownToHtml("::: {.remark} The converse is false. :::");
-    expect(html).toContain('class="remark"');
+    expect(html).toContain(`class="${CSS.block("remark")}"`);
     expect(html).toContain("The converse is false.");
   });
 
@@ -248,7 +248,7 @@ describe("markdownToHtml", () => {
   it("renders nested content inside fenced divs", () => {
     const md = "::: {.theorem}\n\n# Inner Heading\n\nWith a paragraph.\n\n:::";
     const html = markdownToHtml(md);
-    expect(html).toContain('class="theorem"');
+    expect(html).toContain(`class="${CSS.block("theorem")}"`);
     expect(html).toContain("<h1>Inner Heading</h1>");
     expect(html).toContain("<p>With a paragraph.</p>");
   });

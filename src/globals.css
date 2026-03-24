@@ -437,7 +437,9 @@ body {
 
 /* ── Read mode math ──────────────────────────────────────────────────────── */
 
-.cf-read-mode-view .math-display {
+/* Display math uses the shared cf-math-display class from both CM6
+ * decorations and markdownToHtml output. */
+.cf-read-mode-view .cf-math-display {
   margin: 0.5em 0;
   text-align: center;
 }
@@ -456,33 +458,41 @@ body {
   font-size: inherit;
 }
 
-/* ── Read mode fenced divs (theorem, proof, etc.) ────────────────────────── */
+/* ── Fenced div blocks (theorem, proof, etc.) — shared by rich & read mode ──
+ * These rules use cf-block-* class names produced by both CM6 decorations
+ * (rich mode) and markdownToHtml (read mode / HTML export). Unscoped so
+ * they apply in both contexts. The CM6 theme (block-theme.ts) also sets
+ * font-style per-block-type; these global rules provide the margin and
+ * proof ::after tombstone that the CM6 theme handles differently. */
 
-/* Per-block-type body font style (read mode) */
-.cf-read-mode-view .theorem { font-style: var(--cf-block-theorem-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .lemma { font-style: var(--cf-block-lemma-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .corollary { font-style: var(--cf-block-corollary-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .proposition { font-style: var(--cf-block-proposition-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .conjecture { font-style: var(--cf-block-conjecture-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .definition { font-style: var(--cf-block-definition-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .problem { font-style: var(--cf-block-problem-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .example { font-style: var(--cf-block-example-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .remark { font-style: var(--cf-block-remark-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .proof { font-style: var(--cf-block-proof-style); margin: var(--cf-block-margin); position: relative; }
+/* Per-block-type body font style + margin (read mode & HTML export).
+ * In rich mode, CM6's EditorView.theme auto-generates equivalent rules
+ * under .cm-editor scope, so these only fire outside the editor. */
+.cf-read-mode-view .cf-block-theorem { font-style: var(--cf-block-theorem-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .cf-block-lemma { font-style: var(--cf-block-lemma-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .cf-block-corollary { font-style: var(--cf-block-corollary-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .cf-block-proposition { font-style: var(--cf-block-proposition-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .cf-block-conjecture { font-style: var(--cf-block-conjecture-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .cf-block-definition { font-style: var(--cf-block-definition-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .cf-block-problem { font-style: var(--cf-block-problem-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .cf-block-example { font-style: var(--cf-block-example-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .cf-block-remark { font-style: var(--cf-block-remark-style); margin: var(--cf-block-margin); }
+.cf-read-mode-view .cf-block-proof { font-style: var(--cf-block-proof-style); margin: var(--cf-block-margin); position: relative; }
 
-/* QED tombstone at end of proof */
-.cf-read-mode-view .proof::after {
+/* QED tombstone at end of proof (read mode) — rich mode uses .cf-block-qed
+ * via CM6 line decoration on the last content line instead. */
+.cf-read-mode-view .cf-block-proof::after {
   content: var(--cf-proof-marker);
   color: var(--cf-proof-marker-color);
   font-size: var(--cf-proof-marker-size);
   float: right;
 }
 
-.cf-read-mode-view .note {
+.cf-read-mode-view .cf-block-note {
   margin: var(--cf-block-margin);
 }
 
-.cf-read-mode-view .Blockquote,
+.cf-read-mode-view .cf-block-blockquote,
 .cf-read-mode-view blockquote,
 .cf-hover-preview-body blockquote {
   border-left: 3px solid var(--cf-blockquote-border);
@@ -491,16 +501,20 @@ body {
   color: var(--cf-blockquote-color);
 }
 
-/* Div title (e.g. "Theorem 1."): bold, normal style (not italic), inline */
-.cf-read-mode-view .div-title {
+/* Block header rendered label (e.g. "Theorem 1."): bold, normal style, inline.
+ * Shared class cf-block-header-rendered is used by both CM6 widgets and
+ * markdownToHtml output. The base font-weight/color is set in block-theme.ts
+ * for CM6; these rules add display, font-style reset, and ::after separator
+ * needed only in read mode / HTML export context. */
+.cf-read-mode-view .cf-block-header-rendered {
   display: var(--cf-block-title-display);
   font-weight: var(--cf-block-title-weight);
   color: var(--cf-block-title-color);
   font-style: normal;
 }
 
-/* Period + en space after the div title (inline header separator) */
-.cf-read-mode-view .div-title::after {
+/* Period + en space after the block header label (inline header separator) */
+.cf-read-mode-view .cf-block-header-rendered::after {
   content: var(--cf-block-title-separator);
 }
 
@@ -583,7 +597,9 @@ body {
  *   Editor: cf-citation           ↔ Read: span.cf-citation (same class)
  *   Editor: cf-citation-narrative ↔ Read: (narrative cites inline in read mode)
  *   Editor: cf-math-error         ↔ Read: .math-error
- *   Editor: cf-block-header-rendered ↔ Read: strong.div-title
+ *   Editor: cf-block-header-rendered ↔ Read: strong.cf-block-header-rendered (same class)
+ *   Editor: cf-block-{type}       ↔ Read: div.cf-block-{type} (same class)
+ *   Editor: cf-math-display       ↔ Read: div.cf-math-display (same class)
  *   Editor: cf-strikethrough      ↔ Read: <del> tag
  * ──────────────────────────────────────────────────────────────────────────── */
 
@@ -892,12 +908,12 @@ body {
   }
 
   /* Avoid page breaks inside theorem/proof blocks */
-  .cf-read-mode-view .theorem,
-  .cf-read-mode-view .lemma,
-  .cf-read-mode-view .corollary,
-  .cf-read-mode-view .proposition,
-  .cf-read-mode-view .proof,
-  .cf-read-mode-view .definition {
+  .cf-read-mode-view .cf-block-theorem,
+  .cf-read-mode-view .cf-block-lemma,
+  .cf-read-mode-view .cf-block-corollary,
+  .cf-read-mode-view .cf-block-proposition,
+  .cf-read-mode-view .cf-block-proof,
+  .cf-read-mode-view .cf-block-definition {
     break-inside: avoid;
   }
 }

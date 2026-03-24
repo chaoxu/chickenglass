@@ -11,6 +11,7 @@
  */
 
 import hyphenopoly from "hyphenopoly";
+import { CSS } from "../constants/css-classes";
 
 /** Soft hyphen character inserted by Hyphenopoly */
 const SOFT_HYPHEN = "\u00AD";
@@ -19,7 +20,7 @@ const SOFT_HYPHEN = "\u00AD";
 const SKIP_TAGS = new Set(["PRE", "CODE", "SCRIPT", "STYLE", "MATH", "SVG"]);
 
 /** CSS classes whose subtree must NOT be hyphenated */
-const SKIP_CLASSES = ["katex", "katex-html", "math-display", "math-inline"];
+const SKIP_CLASSES = ["katex", "katex-html", CSS.mathDisplay, CSS.mathInline];
 
 /**
  * Singleton promise for the hyphenateText function.

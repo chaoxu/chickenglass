@@ -456,8 +456,13 @@ function renderFencedDiv(node: SyntaxNode, ctx: WalkContext): string {
     return "";
   }
 
-  const classAttr = classes.length > 0
-    ? ` class="${classes.map(escapeHtml).join(" ")}"`
+  // Use cf-block class names (matching rich mode CM6 decorations) so both
+  // modes share the same CSS rules. Emit "cf-block" once, then per-type classes.
+  const cfClassList = classes.length > 0
+    ? ["cf-block", ...classes.map((c) => `cf-block-${c}`)]
+    : [];
+  const classAttr = cfClassList.length > 0
+    ? ` class="${cfClassList.map(escapeHtml).join(" ")}"`
     : "";
   const idAttr = id ? ` id="${escapeHtml(id)}"` : "";
 
@@ -471,7 +476,7 @@ function renderFencedDiv(node: SyntaxNode, ctx: WalkContext): string {
     if (isSelfClosing) {
       output.push(`<p>${renderInline(title, ctx.macros, "document-inline")}</p>`);
     } else {
-      output.push(`<strong class="div-title">${renderInline(title, ctx.macros, "document-inline")}</strong>`);
+      output.push(`<strong class="${CSS.blockHeaderRendered}">${renderInline(title, ctx.macros, "document-inline")}</strong>`);
     }
   }
 
@@ -515,7 +520,7 @@ function renderDisplayMath(node: SyntaxNode, ctx: WalkContext): string {
     latex = ctx.doc.slice(marks[0].to, node.to).trim();
   }
 
-  return `<div class="math-display">${renderMath(latex, true, ctx.macros)}</div>`;
+  return `<div class="${CSS.mathDisplay}">${renderMath(latex, true, ctx.macros)}</div>`;
 }
 
 /** Render a FootnoteDef node. */

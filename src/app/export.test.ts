@@ -48,6 +48,7 @@ describe("buildHtmlDocument", () => {
     expect(html).toContain("--cf-bg: #ffffff;");
     expect(html).toContain("color: var(--cf-fg);");
     expect(html).toContain("background: var(--cf-hover);");
+    expect(html).toContain(".cf-block-theorem");
     expect(html).toContain("font-style: var(--cf-block-theorem-style);");
     expect(html).toContain("border-top: 1px solid var(--cf-border);");
     expect(html).not.toContain("color: #111;");

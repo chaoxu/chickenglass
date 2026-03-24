@@ -49,7 +49,7 @@ function deriveOutputPath(sourcePath: string, format: ExportFormat): string {
  * Parses the markdown and renders proper semantic HTML:
  * - Headings, paragraphs, lists (ordered, unordered, task lists)
  * - Math via KaTeX (inline and display)
- * - Fenced divs as semantic `<div class="theorem">` etc.
+ * - Fenced divs as semantic `<div class="cf-block cf-block-theorem">` etc.
  * - Code blocks, blockquotes, tables, horizontal rules
  * - Inline formatting: bold, italic, strikethrough, highlight, code
  *
@@ -166,6 +166,7 @@ ${themeTokens}
       padding: 0.1em 0.2em;
       border-radius: var(--cf-border-radius);
     }
+<<<<<<< HEAD
     .math-display {
       margin: 0.5em 0;
       text-align: center;
@@ -183,23 +184,39 @@ ${themeTokens}
     .example { font-style: var(--cf-block-example-style); margin: var(--cf-block-margin); }
     .remark, .note { font-style: var(--cf-block-remark-style); margin: var(--cf-block-margin); }
     .proof {
+=======
+    .cf-math-display {
+      margin: 1.5rem 0;
+      text-align: center;
+    }
+    .cf-block-theorem { font-style: var(--cf-block-theorem-style); margin: var(--cf-block-margin); }
+    .cf-block-lemma { font-style: var(--cf-block-lemma-style); margin: var(--cf-block-margin); }
+    .cf-block-corollary { font-style: var(--cf-block-corollary-style); margin: var(--cf-block-margin); }
+    .cf-block-proposition { font-style: var(--cf-block-proposition-style); margin: var(--cf-block-margin); }
+    .cf-block-conjecture { font-style: var(--cf-block-conjecture-style); margin: var(--cf-block-margin); }
+    .cf-block-definition { font-style: var(--cf-block-definition-style); margin: var(--cf-block-margin); }
+    .cf-block-problem { font-style: var(--cf-block-problem-style); margin: var(--cf-block-margin); }
+    .cf-block-example { font-style: var(--cf-block-example-style); margin: var(--cf-block-margin); }
+    .cf-block-remark, .cf-block-note { font-style: var(--cf-block-remark-style); margin: var(--cf-block-margin); }
+    .cf-block-proof {
+>>>>>>> worktree-agent-a0231471
       font-style: var(--cf-block-proof-style);
       margin: var(--cf-block-margin);
       position: relative;
     }
-    .proof::after {
+    .cf-block-proof::after {
       content: var(--cf-proof-marker);
       color: var(--cf-proof-marker-color);
       font-size: var(--cf-proof-marker-size);
       float: right;
     }
-    .div-title {
+    .cf-block-header-rendered {
       display: var(--cf-block-title-display);
       font-weight: var(--cf-block-title-weight);
       color: var(--cf-block-title-color);
       font-style: normal;
     }
-    .div-title::after {
+    .cf-block-header-rendered::after {
       content: var(--cf-block-title-separator);
     }
     .cross-ref {

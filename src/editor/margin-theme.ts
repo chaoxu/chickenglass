@@ -102,8 +102,8 @@ export const marginThemeStyles = {
   ".cf-hover-preview-body p:last-child": {
     marginBottom: "0",
   },
-  /* Display math inside hover previews */
-  ".cf-hover-preview-body .math-display": {
+  /* Display math inside hover previews — uses cf-math-display from markdownToHtml */
+  ".cf-hover-preview-body .cf-math-display": {
     margin: "0.5em 0",
     textAlign: "center",
   },
