@@ -507,6 +507,22 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       }
     }
 
+    // Stray closing fence for nested same-colon blocks: the parser attributes
+    // the inner's closing ::: to the outer div. The outer's actual closing :::
+    // is a stray line immediately after div.to. Hide it.
+    if (!div.singleLine && div.to < state.doc.length) {
+      const nextLineStart = div.to + 1;
+      if (nextLineStart <= state.doc.length) {
+        const nextLine = state.doc.lineAt(nextLineStart);
+        if (/^:{3,}\s*$/.test(nextLine.text)) {
+          items.push(decorationHidden.range(nextLine.from, nextLine.to));
+          items.push(
+            Decoration.line({ class: CSS.blockClosingFence }).range(nextLine.from),
+          );
+        }
+      }
+    }
+
     // Body lines: apply block-type class for per-type styling (italic, etc.)
     if (!div.singleLine) {
       const openLine = state.doc.lineAt(div.from);
@@ -544,6 +560,7 @@ export { blockDecorationField as _blockDecorationFieldForTest };
 function getClosingFenceRanges(state: EditorState): { from: number; to: number }[] {
   const divs = collectFencedDivs(state);
   const ranges: { from: number; to: number }[] = [];
+  const seen = new Set<number>(); // avoid duplicates by line start
   for (const div of divs) {
     if (div.singleLine || div.closeFenceFrom < 0) continue;
     // Exclude include blocks — they have their own handling
@@ -551,7 +568,26 @@ function getClosingFenceRanges(state: EditorState): { from: number; to: number }
     const registry = state.field(pluginRegistryField, false);
     if (registry && !getPluginOrFallback(registry, div.className)) continue;
     const line = state.doc.lineAt(div.closeFenceFrom);
-    ranges.push({ from: line.from, to: line.to });
+    if (!seen.has(line.from)) {
+      seen.add(line.from);
+      ranges.push({ from: line.from, to: line.to });
+    }
+
+    // For nested same-colon fenced divs: the parser consumes the inner's
+    // closing ::: and attributes the FencedDivFence to the outer div. The
+    // outer's actual closing ::: ends up as a stray line immediately after
+    // the div's end. Check for it and hide it too.
+    if (div.to < state.doc.length) {
+      const nextLineStart = div.to + 1;
+      if (nextLineStart <= state.doc.length) {
+        const nextLine = state.doc.lineAt(nextLineStart);
+        const trimmed = nextLine.text.trim();
+        if (/^:{3,}$/.test(trimmed) && !seen.has(nextLine.from)) {
+          seen.add(nextLine.from);
+          ranges.push({ from: nextLine.from, to: nextLine.to });
+        }
+      }
+    }
   }
   return ranges;
 }
