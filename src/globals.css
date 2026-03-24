@@ -390,7 +390,8 @@ body {
   border-bottom: 1px dashed var(--cf-muted);
 }
 
-.cf-read-mode-view mark {
+.cf-read-mode-view mark,
+.cf-table-widget mark {
   background: var(--cf-mark-bg, rgba(255, 255, 0, 0.2));
   padding: 0.1em 0.2em;
   border-radius: var(--cf-border-radius);
