@@ -28,10 +28,7 @@ import { renderBlockContentToDom, renderDocumentFragmentToDom, type BlockContent
 import { getPlugin, pluginRegistryField } from "../plugins";
 import type { BlockCounterEntry } from "../app/markdown-to-html";
 import { documentAnalysisField } from "../semantics/codemirror-source";
-import { SEARCH_CONTEXT_BUFFER, HOVER_DELAY_MS } from "../constants";
-
-/** Maximum content length shown in hover previews. */
-const MAX_PREVIEW_LENGTH = SEARCH_CONTEXT_BUFFER;
+import { HOVER_DELAY_MS } from "../constants";
 
 // ── Singleton tooltip element ───────────────────────────────────────────────
 
@@ -108,11 +105,7 @@ function extractBlockContent(
   contentTo = Math.min(contentTo, view.state.doc.length);
   if (contentFrom >= contentTo) return "";
 
-  const content = view.state.doc.sliceString(contentFrom, contentTo).trim();
-  if (content.length > MAX_PREVIEW_LENGTH) {
-    return content.slice(0, MAX_PREVIEW_LENGTH) + "\u2026";
-  }
-  return content;
+  return view.state.doc.sliceString(contentFrom, contentTo).trim();
 }
 
 /** Create a header div for the tooltip. */

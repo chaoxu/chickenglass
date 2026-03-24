@@ -94,6 +94,10 @@ ${themeTokens}
       text-decoration: none;
       border-bottom: 1px dotted var(--cf-muted);
     }
+    .katex {
+      color: inherit;
+      font-size: inherit;
+    }
     pre {
       font-family: var(--cf-code-font);
       background: var(--cf-hover);
@@ -119,6 +123,21 @@ ${themeTokens}
       padding-left: 1em;
       border-left: 3px solid var(--cf-blockquote-border);
       color: var(--cf-blockquote-color);
+    }
+    ul, ol {
+      padding-left: 1.5em;
+      margin: 0.8em 0;
+      list-style-position: outside;
+    }
+    ul {
+      list-style-type: disc;
+    }
+    ol {
+      list-style-type: decimal;
+    }
+    li {
+      display: list-item;
+      margin: 0.2em 0;
     }
     table {
       border-collapse: collapse;

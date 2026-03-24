@@ -416,8 +416,8 @@ const tableKeyBindings: KeyBinding[] = [
   { key: "ArrowDown", run: (view) => moveVertical(view, 1) },
   { key: "ArrowRight", run: (view) => moveHorizontal(view, 1) },
   { key: "ArrowLeft", run: (view) => moveHorizontal(view, -1) },
-  { key: "Backspace", run: deleteSelectedTable },
-  { key: "Delete", run: deleteSelectedTable },
+  { key: "Backspace", run: deleteSelectedTableSelection },
+  { key: "Delete", run: deleteSelectedTableSelection },
 ];
 
 // ---------------------------------------------------------------------------
@@ -499,15 +499,13 @@ function dispatchTableMutation(
 
 /** Delete the entire table from the document (including surrounding newlines). */
 function dispatchDeleteTable(view: EditorView, table: TableRange): void {
-  const doc = view.state.doc;
-  // Include the trailing newline so we don't leave a blank line
-  let to = table.to;
-  if (to < doc.length && doc.sliceString(to, to + 1) === "\n") to += 1;
-  // If the table starts at the beginning of the line, include the leading newline
-  // to avoid leaving a blank line before the next content
-  let from = table.from;
-  if (from > 0 && doc.sliceString(from - 1, from) === "\n") from -= 1;
+  const range = getTableDeleteRange(view.state, table, table.from, table.to);
+  if (!range) return;
+  dispatchDeleteRange(view, range.from, range.to);
+}
 
+/** Delete a structural table range (whole table or selected body rows). */
+function dispatchDeleteRange(view: EditorView, from: number, to: number): void {
   view.dispatch({
     changes: { from, to, insert: "" },
     annotations: tableOperationAnnotation.of(true),
@@ -675,19 +673,83 @@ const gridContextMenuHandler = EditorView.domEventHandlers({
 // ---------------------------------------------------------------------------
 
 /**
- * When the selection covers an entire table, allow Backspace/Delete to
- * remove it. This dispatches with the bypass annotation.
+ * Compute the structural delete range for a selection inside a table.
+ *
+ * Supports two cases:
+ * - full-table selection: delete the entire table
+ * - full body-row selection: delete one or more data rows
  */
-function deleteSelectedTable(view: EditorView): boolean {
+export function getTableDeleteRange(
+  state: EditorState,
+  table: TableRange,
+  from: number,
+  to: number,
+): { from: number; to: number; kind: "table" | "rows" } | null {
+  if (from === to) return null;
+  const doc = state.doc;
+  const tableLastLine = doc.line(table.startLineNumber + table.lines.length - 1);
+  const tableContentTo = tableLastLine.to;
+
+  if (from <= table.from && to >= tableContentTo) {
+    let deleteTo = table.to;
+    if (deleteTo < doc.length && doc.sliceString(deleteTo, deleteTo + 1) === "\n") {
+      deleteTo += 1;
+    }
+    let deleteFrom = table.from;
+    if (deleteFrom > 0 && doc.sliceString(deleteFrom - 1, deleteFrom) === "\n") {
+      deleteFrom -= 1;
+    }
+    return { from: deleteFrom, to: deleteTo, kind: "table" };
+  }
+
+  if (table.parsed.rows.length === 0) return null;
+
+  const firstBodyLine = doc.line(table.startLineNumber + 2);
+  const lastBodyLine = doc.line(table.startLineNumber + 1 + table.parsed.rows.length);
+  const lastBodyTo = lastBodyLine.to < doc.length ? lastBodyLine.to + 1 : lastBodyLine.to;
+
+  // Header and separator remain protected unless the whole table is selected.
+  if (from < firstBodyLine.from || to > lastBodyTo) return null;
+
+  let deleteFrom: number | null = null;
+  let deleteTo: number | null = null;
+
+  for (let rowIndex = 0; rowIndex < table.parsed.rows.length; rowIndex += 1) {
+    const line = doc.line(table.startLineNumber + 2 + rowIndex);
+    const lineDeleteTo = line.to < doc.length ? line.to + 1 : line.to;
+    const coversWholeRow = from <= line.from && to >= line.to;
+    const overlapsRow = to > line.from && from < lineDeleteTo;
+
+    if (coversWholeRow) {
+      if (deleteFrom === null) deleteFrom = line.from;
+      deleteTo = lineDeleteTo;
+      continue;
+    }
+
+    // Partial-row structural deletes are invalid.
+    if (overlapsRow) return null;
+  }
+
+  if (deleteFrom === null || deleteTo === null) return null;
+  return { from: deleteFrom, to: deleteTo, kind: "rows" };
+}
+
+/**
+ * Backspace/Delete handler for structural table selection deletes.
+ *
+ * Deletes a full table when the whole table is selected, or deletes the
+ * selected body rows when one or more complete data rows are selected.
+ */
+export function deleteSelectedTableSelection(view: EditorView): boolean {
   const { from, to } = view.state.selection.main;
-  if (from === to) return false; // no selection
+  if (from === to) return false;
 
   const tables = findTablesInState(view.state);
   for (const table of tables) {
-    if (from <= table.from && to >= table.to) {
-      dispatchDeleteTable(view, table);
-      return true;
-    }
+    const range = getTableDeleteRange(view.state, table, from, to);
+    if (!range) continue;
+    dispatchDeleteRange(view, range.from, range.to);
+    return true;
   }
   return false;
 }

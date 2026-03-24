@@ -271,6 +271,10 @@ body {
   font-size: inherit;
 }
 
+.cf-math-display .katex-display > .katex {
+  font-size: inherit;
+}
+
 /* ── Hover preview tooltip (appended to document.body) ─────────────────────
  * Used when sidenote margin is collapsed to show footnote content.
  * Styled to match shadcn HoverCard visual language. */
@@ -444,6 +448,7 @@ body {
 
 .cf-read-mode-view .katex {
   color: inherit;
+  font-size: inherit;
 }
 
 /* ── Read mode fenced divs (theorem, proof, etc.) ────────────────────────── */
@@ -473,7 +478,8 @@ body {
 }
 
 .cf-read-mode-view .Blockquote,
-.cf-read-mode-view blockquote {
+.cf-read-mode-view blockquote,
+.cf-hover-preview-body blockquote {
   border-left: 3px solid var(--cf-blockquote-border);
   padding-left: 1em;
   margin-left: 0;
@@ -519,12 +525,28 @@ body {
 /* ── Read mode lists ─────────────────────────────────────────────────────── */
 
 .cf-read-mode-view ul,
-.cf-read-mode-view ol {
+.cf-read-mode-view ol,
+.cf-hover-preview-body ul,
+.cf-hover-preview-body ol {
   padding-left: 1.5em;
   margin: 0.8em 0;
 }
 
-.cf-read-mode-view li {
+.cf-read-mode-view ul,
+.cf-hover-preview-body ul {
+  list-style-type: disc;
+  list-style-position: outside;
+}
+
+.cf-read-mode-view ol,
+.cf-hover-preview-body ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+}
+
+.cf-read-mode-view li,
+.cf-hover-preview-body li {
+  display: list-item;
   margin: 0.2em 0;
 }
 
