@@ -8,7 +8,6 @@ import {
   containerAttributesPlugin,
   imageRenderPlugin,
   codeBlockRenderPlugin,
-  tableRenderPlugin,
   checkboxRenderPlugin,
   mathPreviewPlugin,
   sectionNumberPlugin,
@@ -27,6 +26,7 @@ import {
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { bibliographyPlugin, bibDataField } from "../citations";
 import { type ProjectConfig } from "./project-config";
+import { tableGridExtension } from "../render/table-grid";
 import { editorKeybindings } from "./keybindings";
 import { coflatTheme, coflatDarkTheme } from "./theme";
 import { headingFold } from "./heading-fold";
@@ -100,7 +100,7 @@ const renderingExtensions: Extension[] = [
   codeBlockRenderPlugin,
   bibliographyPlugin,
   containerAttributesPlugin,
-  tableRenderPlugin,
+  ...tableGridExtension, // decoration-based CSS grid tables (#407)
   checkboxRenderPlugin,
   mathPreviewPlugin,
   sectionNumberPlugin,

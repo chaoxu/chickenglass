@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { chromium } from "playwright";
@@ -39,6 +39,10 @@ export function resolveChromeAppBundle(binaryPath) {
 
 export function ensureProfileDir(profileDir) {
   mkdirSync(profileDir, { recursive: true });
+  // Clear session state to prevent Chrome from restoring previous windows
+  // alongside the new --app window.
+  const sessionsDir = join(profileDir, "Default", "Sessions");
+  rmSync(sessionsDir, { recursive: true, force: true });
   return profileDir;
 }
 
@@ -95,6 +99,8 @@ export function launchChromeApp(binaryPath, { port, url, profileDir }) {
       "--no-default-browser-check",
       "--disable-infobars",
       "--hide-crash-restore-bubble",
+      "--noerrdialogs",
+      "--disable-session-crashed-bubble",
     ],
     {
       stdio: "ignore",
