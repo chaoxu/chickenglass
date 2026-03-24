@@ -642,18 +642,18 @@ const inlineFragmentRenderers: {
   text: (fragment) => escapeHtml(fragment.text),
 
   emphasis: (fragment, ctx) =>
-    `<em>${renderInlineFragments(fragment.children, ctx)}</em>`,
+    `<em class="${CSS.italic}">${renderInlineFragments(fragment.children, ctx)}</em>`,
 
   strong: (fragment, ctx) =>
-    `<strong>${renderInlineFragments(fragment.children, ctx)}</strong>`,
+    `<strong class="${CSS.bold}">${renderInlineFragments(fragment.children, ctx)}</strong>`,
 
   strikethrough: (fragment, ctx) =>
-    `<del>${renderInlineFragments(fragment.children, ctx)}</del>`,
+    `<del class="${CSS.strikethrough}">${renderInlineFragments(fragment.children, ctx)}</del>`,
 
   highlight: (fragment, ctx) =>
-    `<mark>${renderInlineFragments(fragment.children, ctx)}</mark>`,
+    `<mark class="${CSS.highlight}">${renderInlineFragments(fragment.children, ctx)}</mark>`,
 
-  code: (fragment) => `<code>${escapeHtml(fragment.text)}</code>`,
+  code: (fragment) => `<code class="${CSS.inlineCode}">${escapeHtml(fragment.text)}</code>`,
 
   math: (fragment, ctx) => renderMath(fragment.latex, false, ctx.macros),
 

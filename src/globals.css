@@ -600,7 +600,11 @@ body {
  *   Editor: cf-block-header-rendered ↔ Read: strong.cf-block-header-rendered (same class)
  *   Editor: cf-block-{type}       ↔ Read: div.cf-block-{type} (same class)
  *   Editor: cf-math-display       ↔ Read: div.cf-math-display (same class)
- *   Editor: cf-strikethrough      ↔ Read: <del> tag
+ *   Editor: cf-bold               ↔ Read: strong.cf-bold (same class)
+ *   Editor: cf-italic             ↔ Read: em.cf-italic (same class)
+ *   Editor: cf-strikethrough      ↔ Read: del.cf-strikethrough (same class)
+ *   Editor: cf-highlight          ↔ Read: mark.cf-highlight (same class)
+ *   Editor: cf-inline-code        ↔ Read: code.cf-inline-code (same class)
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /* Resolved cross-reference — subtle underline to indicate it's a link */

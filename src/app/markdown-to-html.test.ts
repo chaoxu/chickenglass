@@ -12,27 +12,27 @@ describe("renderInline", () => {
   });
 
   it("renders bold text", () => {
-    expect(renderInline("**bold**")).toBe("<strong>bold</strong>");
+    expect(renderInline("**bold**")).toBe(`<strong class="${CSS.bold}">bold</strong>`);
   });
 
   it("renders italic text", () => {
-    expect(renderInline("*italic*")).toBe("<em>italic</em>");
+    expect(renderInline("*italic*")).toBe(`<em class="${CSS.italic}">italic</em>`);
   });
 
   it("renders inline code", () => {
-    expect(renderInline("`code`")).toBe("<code>code</code>");
+    expect(renderInline("`code`")).toBe(`<code class="${CSS.inlineCode}">code</code>`);
   });
 
   it("escapes HTML inside inline code", () => {
-    expect(renderInline("`<div>`")).toBe("<code>&lt;div&gt;</code>");
+    expect(renderInline("`<div>`")).toBe(`<code class="${CSS.inlineCode}">&lt;div&gt;</code>`);
   });
 
   it("renders strikethrough", () => {
-    expect(renderInline("~~deleted~~")).toBe("<del>deleted</del>");
+    expect(renderInline("~~deleted~~")).toBe(`<del class="${CSS.strikethrough}">deleted</del>`);
   });
 
   it("renders highlights", () => {
-    expect(renderInline("==highlighted==")).toBe("<mark>highlighted</mark>");
+    expect(renderInline("==highlighted==")).toBe(`<mark class="${CSS.highlight}">highlighted</mark>`);
   });
 
   it("renders inline math with $", () => {
@@ -189,7 +189,7 @@ describe("markdownToHtml", () => {
 
   it("renders fenced div titles from title= attributes", () => {
     const html = markdownToHtml('::: {.problem title="**3SUM**"}\nBody.\n:::');
-    expect(html).toContain("<strong>3SUM</strong>");
+    expect(html).toContain(`<strong class="${CSS.bold}">3SUM</strong>`);
   });
 
   it("renders self-closing fenced divs", () => {
@@ -228,9 +228,9 @@ describe("markdownToHtml", () => {
 
   it("renders inline formatting inside blocks", () => {
     const html = markdownToHtml("# **Bold** heading\n\nA paragraph with *italic* and `code`.");
-    expect(html).toContain("<h1><strong>Bold</strong> heading</h1>");
-    expect(html).toContain("<em>italic</em>");
-    expect(html).toContain("<code>code</code>");
+    expect(html).toContain(`<h1><strong class="${CSS.bold}">Bold</strong> heading</h1>`);
+    expect(html).toContain(`<em class="${CSS.italic}">italic</em>`);
+    expect(html).toContain(`<code class="${CSS.inlineCode}">code</code>`);
   });
 
   it("renders footnotes", () => {
@@ -524,8 +524,8 @@ describe("markdownToHtml", () => {
     ]);
 
     const html = markdownToHtml("**Bold** and *italic* and `code`.", { blockCounters });
-    expect(html).toContain("<strong>Bold</strong>");
-    expect(html).toContain("<em>italic</em>");
-    expect(html).toContain("<code>code</code>");
+    expect(html).toContain(`<strong class="${CSS.bold}">Bold</strong>`);
+    expect(html).toContain(`<em class="${CSS.italic}">italic</em>`);
+    expect(html).toContain(`<code class="${CSS.inlineCode}">code</code>`);
   });
 });

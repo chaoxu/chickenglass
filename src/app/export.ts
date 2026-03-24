@@ -166,6 +166,22 @@ ${themeTokens}
       padding: 0.1em 0.2em;
       border-radius: var(--cf-border-radius);
     }
+    /* Inline formatting — cf-* classes shared with CM6 rich mode */
+    .cf-bold { font-weight: 700; }
+    .cf-italic { font-style: italic; }
+    .cf-strikethrough { text-decoration: line-through; }
+    .cf-highlight {
+      background: var(--cf-mark-bg);
+      padding: 0.1em 0.2em;
+      border-radius: var(--cf-border-radius);
+    }
+    .cf-inline-code {
+      font-family: var(--cf-code-font);
+      font-size: 0.85em;
+      background: var(--cf-hover);
+      padding: 0.15em 0.35em;
+      border-radius: var(--cf-border-radius);
+    }
     .cf-math-display {
       margin: 0.5em 0;
       text-align: center;
