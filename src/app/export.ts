@@ -166,28 +166,12 @@ ${themeTokens}
       padding: 0.1em 0.2em;
       border-radius: var(--cf-border-radius);
     }
-<<<<<<< HEAD
-    .math-display {
+    .cf-math-display {
       margin: 0.5em 0;
       text-align: center;
     }
-    .math-display .katex-display {
+    .cf-math-display .katex-display {
       margin: 0;
-    }
-    .theorem { font-style: var(--cf-block-theorem-style); margin: var(--cf-block-margin); }
-    .lemma { font-style: var(--cf-block-lemma-style); margin: var(--cf-block-margin); }
-    .corollary { font-style: var(--cf-block-corollary-style); margin: var(--cf-block-margin); }
-    .proposition { font-style: var(--cf-block-proposition-style); margin: var(--cf-block-margin); }
-    .conjecture { font-style: var(--cf-block-conjecture-style); margin: var(--cf-block-margin); }
-    .definition { font-style: var(--cf-block-definition-style); margin: var(--cf-block-margin); }
-    .problem { font-style: var(--cf-block-problem-style); margin: var(--cf-block-margin); }
-    .example { font-style: var(--cf-block-example-style); margin: var(--cf-block-margin); }
-    .remark, .note { font-style: var(--cf-block-remark-style); margin: var(--cf-block-margin); }
-    .proof {
-=======
-    .cf-math-display {
-      margin: 1.5rem 0;
-      text-align: center;
     }
     .cf-block-theorem { font-style: var(--cf-block-theorem-style); margin: var(--cf-block-margin); }
     .cf-block-lemma { font-style: var(--cf-block-lemma-style); margin: var(--cf-block-margin); }
@@ -199,7 +183,6 @@ ${themeTokens}
     .cf-block-example { font-style: var(--cf-block-example-style); margin: var(--cf-block-margin); }
     .cf-block-remark, .cf-block-note { font-style: var(--cf-block-remark-style); margin: var(--cf-block-margin); }
     .cf-block-proof {
->>>>>>> worktree-agent-a0231471
       font-style: var(--cf-block-proof-style);
       margin: var(--cf-block-margin);
       position: relative;
