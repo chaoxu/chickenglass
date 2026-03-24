@@ -1,9 +1,18 @@
 /**
  * CM6 StateField that renders footnotes as Tufte-style sidenotes.
  *
+ * Footnote body content stays in the CM6 document model as normal editable
+ * text. Only the `[^id]:` label prefix is hidden (via Decoration.replace)
+ * and the body is styled with a line decoration. This lets CM6's built-in
+ * inline extensions (math, bold, citations) render footnote content
+ * naturally — no separate re-rendering via widgets.
+ *
  * - FootnoteRef [^id] outside cursor → superscript number widget
- * - FootnoteDef [^id]: content outside cursor → margin-positioned sidenote widget
- *   with the definition line hidden (replaced by the sidenote in the margin)
+ * - FootnoteDef in expanded mode:
+ *   - [^id]: label → hidden via Decoration.replace (shown on cursor contact)
+ *   - body text → stays as normal CM6 content, styled via Decoration.line
+ * - FootnoteDef in collapsed mode:
+ *   - entire line hidden (content shown in FootnoteSectionWidget at bottom)
  *
  * Uses a StateField (not ViewPlugin) so that line decorations and
  * block-level replace decorations are permitted by CM6.
@@ -26,8 +35,8 @@ import {
   cursorInRange,
   defaultShouldRebuild,
   pushWidgetDecoration,
+  addMarkerReplacement,
   serializeMacros,
-  MacroAwareWidget,
   RenderWidget,
   SimpleTextRenderWidget,
   editorFocusField,
@@ -54,28 +63,22 @@ export function collectFootnotes(state: EditorState): FootnoteSemantics {
   return state.field(documentSemanticsField).footnotes;
 }
 
-/** Widget that renders footnote body content inline (math, bold, etc.). */
-export class FootnoteBodyWidget extends MacroAwareWidget {
+/** Widget for the [^id]: label, rendered as a small superscript number. */
+class FootnoteDefLabelWidget extends SimpleTextRenderWidget {
   constructor(
-    private readonly content: string,
-    private readonly macros: Record<string, string>,
+    private readonly number: number,
+    private readonly id: string,
   ) {
-    super(macros);
-  }
-
-  createDOM(): HTMLElement {
-    const span = document.createElement("span");
-    span.className = "cf-sidenote-body-rendered";
-    renderDocumentFragmentToDom(span, {
-      kind: "footnote",
-      text: this.content,
-      macros: this.macros,
+    super({
+      tagName: "sup",
+      className: "cf-sidenote-def-label",
+      text: String(number),
+      title: `Footnote ${id}`,
     });
-    return span;
   }
 
-  eq(other: FootnoteBodyWidget): boolean {
-    return this.content === other.content && this.macrosKey === other.macrosKey;
+  eq(other: FootnoteDefLabelWidget): boolean {
+    return this.number === other.number && this.id === other.id;
   }
 }
 
@@ -115,33 +118,32 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
     pushWidgetDecoration(items, new FootnoteRefWidget(num, ref.id), ref.from, ref.to);
   }
 
-  // Heading-like pattern for footnote defs: when cursor is inside the def,
-  // the [^id]: label stays as source but the body keeps inline rendering
-  // via a FootnoteBodyWidget. Cursor anywhere in the def — label or body —
-  // gets the same treatment: label visible as source, body rendered.
-  const macros = state.field(mathMacrosField);
   for (const [, def] of footnotes.defs) {
-    // In collapsed mode, defs are always hidden (content shown in footnote section).
-    // In expanded mode, cursor-in-def triggers the heading-like source pattern.
-    const cursorInDef = !collapsed && focused && cursorInRange(state, def.from, def.to);
-
-    if (cursorInDef) {
-      // Label stays as source; body keeps inline rendering via widget.
-      if (def.labelTo < def.to) {
-        pushWidgetDecoration(items, new FootnoteBodyWidget(def.content, macros), def.labelTo, def.to);
-      }
+    if (collapsed) {
+      // Collapsed mode: hide entire definition line (content shown in footnote section).
+      items.push(
+        Decoration.line({ class: "cf-sidenote-def-line" }).range(def.from),
+      );
+      items.push(
+        Decoration.replace({}).range(def.from, def.to),
+      );
       continue;
     }
 
-    // Cursor outside def (or collapsed mode) — collapse the definition line.
-    // Replace the entire line content (label + body) so nothing remains visible,
-    // then set height:0 via line class to collapse the empty line element.
+    // Expanded mode: body text stays in CM6 as normal editable content.
+    // Only the [^id]: label prefix is hidden/shown based on cursor position.
+    const cursorOnLabel = focused && cursorInRange(state, def.from, def.labelTo);
+
+    // Apply line styling for footnote body (smaller font, muted color).
     items.push(
-      Decoration.line({ class: "cf-sidenote-def-line" }).range(def.from),
+      Decoration.line({ class: "cf-sidenote-def-body" }).range(def.from),
     );
-    items.push(
-      Decoration.replace({}).range(def.from, def.to),
-    );
+
+    // Hide [^id]: label via Decoration.replace with a small number widget.
+    // When cursor is on the label, show it as source (heading-like pattern).
+    const num = numberMap.get(def.id) ?? 0;
+    const labelWidget = new FootnoteDefLabelWidget(num, def.id);
+    addMarkerReplacement(def.from, def.labelTo, cursorOnLabel, labelWidget, items);
   }
 
   return buildDecorations(items);

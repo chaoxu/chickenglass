@@ -95,6 +95,8 @@ export const CSS = {
   /** Sidenote margin. */
   sidenoteRef: "cf-sidenote-ref",
   sidenoteDefLine: "cf-sidenote-def-line",
+  sidenoteDefBody: "cf-sidenote-def-body",
+  sidenoteDefLabel: "cf-sidenote-def-label",
 
   /** Bibliography. */
   bibliography: "cf-bibliography",

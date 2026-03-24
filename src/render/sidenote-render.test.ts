@@ -10,7 +10,6 @@ import { renderInlineMarkdown } from "./inline-render";
 import {
   computeSidenoteOffsets,
   type SidenoteMeasurement,
-  FootnoteBodyWidget,
   FootnoteSectionWidget,
   buildSidenoteDecorations,
   sidenotesCollapsedEffect,
@@ -106,100 +105,105 @@ describe("computeSidenoteOffsets", () => {
   });
 });
 
-describe("FootnoteBodyWidget", () => {
-  it("renders inline math in footnote body", () => {
-    const widget = new FootnoteBodyWidget("See $x^2$ here", {});
-    const el = widget.createDOM();
-    expect(el.className).toBe(CSS.sidenoteBodyRendered);
-    expect(el.querySelector(".katex")).not.toBeNull();
-  });
-
-  it("renders bold in footnote body", () => {
-    const widget = new FootnoteBodyWidget("Some **bold** text", {});
-    const el = widget.createDOM();
-    expect(el.querySelector("strong")).not.toBeNull();
-    expect(el.querySelector("strong")?.textContent).toBe("bold");
-  });
-
-  it("renders plain text in footnote body", () => {
-    const widget = new FootnoteBodyWidget("plain text", {});
-    const el = widget.createDOM();
-    expect(el.textContent).toBe("plain text");
-  });
-
-  it("eq returns true for same content and macros", () => {
-    const macros = { "\\RR": "\\mathbb{R}" };
-    const a = new FootnoteBodyWidget("$\\RR$", macros);
-    const b = new FootnoteBodyWidget("$\\RR$", macros);
-    expect(a.eq(b)).toBe(true);
-  });
-
-  it("eq returns false for different content", () => {
-    const a = new FootnoteBodyWidget("$x$", {});
-    const b = new FootnoteBodyWidget("$y$", {});
-    expect(a.eq(b)).toBe(false);
-  });
-});
-
-describe("buildSidenoteDecorations — footnote def cursor zones", () => {
+describe("buildSidenoteDecorations — expanded mode (body in CM6)", () => {
   // Document: "Text [^1] end\n\n[^1]: See $x^2$ here"
   // The ref [^1] spans some range, and the def [^1]: spans the last line.
   const doc = "Text [^1] end\n\n[^1]: See $x^2$ here";
 
-  it("collapses def line when cursor is outside the def", () => {
-    // Cursor at start of document, well outside the def
+  it("keeps body as CM6 content with line styling when cursor is outside def", () => {
+    // #430: Body text stays in CM6 document model, styled via Decoration.line.
+    // Label is hidden via Decoration.replace with a small label widget.
     const state = createState(doc, 0);
     const decos = buildSidenoteDecorations(state, true);
     const specs = getDecorationSpecs(decos);
 
-    // Should have a line class decoration on the def line
+    // Should have the body line class (not the old hide class)
+    const bodyDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefBody));
+    expect(bodyDecos.length).toBe(1);
+
+    // Should NOT have the collapsed hide class
     const lineDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefLine));
-    expect(lineDecos.length).toBe(1);
+    expect(lineDecos.length).toBe(0);
+
+    // Label should be replaced with a FootnoteDefLabelWidget
+    const labelWidgets = specs.filter((s) => s.widgetClass === "FootnoteDefLabelWidget");
+    expect(labelWidgets.length).toBe(1);
+
+    // No FootnoteBodyWidget — body stays as normal CM6 text
+    const bodyWidgets = specs.filter((s) => s.widgetClass === "FootnoteBodyWidget");
+    expect(bodyWidgets.length).toBe(0);
   });
 
-  it("renders body as widget when cursor is on the label", () => {
-    // The def starts at position 15 (after "Text [^1] end\n\n")
-    // [^1]: spans 15..20 (label), body starts after that
-    // Place cursor at position 15 (start of label)
+  it("shows label as source when cursor is on the label (heading-like pattern)", () => {
+    // When cursor is on [^1]:, label should be visible as source text.
     const defStart = doc.indexOf("[^1]:");
     const state = createState(doc, defStart);
     const decos = buildSidenoteDecorations(state, true);
     const specs = getDecorationSpecs(decos);
 
-    // Should NOT have the line-hide class (line is visible for editing)
-    const lineDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefLine));
-    expect(lineDecos.length).toBe(0);
+    // Body line class should still be present
+    const bodyDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefBody));
+    expect(bodyDecos.length).toBe(1);
 
-    // Should have a widget replacement for the body (FootnoteBodyWidget)
-    const bodyWidgets = specs.filter((s) => s.widgetClass === "FootnoteBodyWidget");
-    expect(bodyWidgets.length).toBe(1);
+    // Label widget should NOT be present (label is shown as source)
+    const labelWidgets = specs.filter((s) => s.widgetClass === "FootnoteDefLabelWidget");
+    expect(labelWidgets.length).toBe(0);
   });
 
-  it("keeps body rendered via widget when cursor is in the body text", () => {
-    // Place cursor inside the body text (after [^1]:)
+  it("hides label when cursor is in the body text (not on label)", () => {
+    // #430: Cursor in body text — label is hidden, body stays as CM6 content.
     const bodyStart = doc.indexOf("See $x^2$");
     const state = createState(doc, bodyStart);
     const decos = buildSidenoteDecorations(state, true);
     const specs = getDecorationSpecs(decos);
 
-    // Should NOT have the line-hide class (line visible for editing label)
-    const lineDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefLine));
-    expect(lineDecos.length).toBe(0);
+    // Body line class present
+    const bodyDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefBody));
+    expect(bodyDecos.length).toBe(1);
 
-    // Body should be rendered via widget (inline math, bold, etc. stay rendered)
+    // Label should be replaced with widget (cursor is not on the label)
+    const labelWidgets = specs.filter((s) => s.widgetClass === "FootnoteDefLabelWidget");
+    expect(labelWidgets.length).toBe(1);
+
+    // No FootnoteBodyWidget — body stays as normal CM6 text
     const bodyWidgets = specs.filter((s) => s.widgetClass === "FootnoteBodyWidget");
-    expect(bodyWidgets.length).toBe(1);
+    expect(bodyWidgets.length).toBe(0);
   });
 
-  it("keeps def hidden when editor is unfocused", () => {
+  it("hides label with body styling when editor is unfocused", () => {
+    // #430: Unfocused editor should show body styling, not collapse line.
     const state = createState(doc, 0);
     const decos = buildSidenoteDecorations(state, false);
     const specs = getDecorationSpecs(decos);
 
-    // Should have the line-hide class even with cursor at 0
-    const lineDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefLine));
-    expect(lineDecos.length).toBe(1);
+    // Body line class present (footnote text styled)
+    const bodyDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefBody));
+    expect(bodyDecos.length).toBe(1);
+
+    // Label should be replaced with widget
+    const labelWidgets = specs.filter((s) => s.widgetClass === "FootnoteDefLabelWidget");
+    expect(labelWidgets.length).toBe(1);
   });
+
+  it("label replacement covers only the [^id]: prefix, not body text (#430)", () => {
+    // CRITICAL: Decoration.replace must NOT extend over body text.
+    // This ensures CM6 inline extensions render math/bold/etc. naturally.
+    const defStart = doc.indexOf("[^1]:");
+    const labelEnd = defStart + "[^1]:".length;
+    const state = createState(doc, 0);
+    const decos = buildSidenoteDecorations(state, true);
+    const specs = getDecorationSpecs(decos);
+
+    // The label widget replacement should cover only the label range
+    const labelWidgets = specs.filter((s) => s.widgetClass === "FootnoteDefLabelWidget");
+    expect(labelWidgets.length).toBe(1);
+    expect(labelWidgets[0].from).toBe(defStart);
+    expect(labelWidgets[0].to).toBe(labelEnd);
+  });
+});
+
+describe("buildSidenoteDecorations — collapsed mode", () => {
+  const doc = "Text [^1] end\n\n[^1]: See $x^2$ here";
 
   it("still renders ref superscripts and hides defs when collapsed", () => {
     // Regression: collapsed mode must not expose raw footnote markdown.
@@ -229,10 +233,9 @@ describe("buildSidenoteDecorations — footnote def cursor zones", () => {
     const lineDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefLine));
     expect(lineDecos.length).toBe(1);
 
-    // Def body should NOT have a FootnoteBodyWidget (cursor-in-def editing
-    // is disabled in collapsed mode; content is in the footnote section)
-    const bodyWidgets = specs.filter((s) => s.widgetClass === "FootnoteBodyWidget");
-    expect(bodyWidgets.length).toBe(0);
+    // No body-styling class in collapsed mode
+    const bodyDecos = specs.filter((s) => s.class?.includes(CSS.sidenoteDefBody));
+    expect(bodyDecos.length).toBe(0);
   });
 
   it("replaces entire def line content (label+body) when collapsed (#402)", () => {

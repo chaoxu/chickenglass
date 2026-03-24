@@ -64,7 +64,7 @@ export const marginThemeStyles = {
     display: "inline",
   },
 
-  /* The definition line when sidenote is shown in margin */
+  /* The definition line when sidenote is collapsed (hidden) */
   ".cf-sidenote-def-line": {
     position: "relative",
     height: "0",
@@ -72,6 +72,23 @@ export const marginThemeStyles = {
     overflow: "hidden",
     padding: "0 !important",
     margin: "0",
+  },
+
+  /* The definition line body in expanded mode — styled as footnote text */
+  ".cf-sidenote-def-body": {
+    fontSize: "0.85em",
+    lineHeight: "1.5",
+    color: "var(--cf-muted)",
+  },
+
+  /* The [^id]: label rendered as a small superscript number in expanded mode */
+  ".cf-sidenote-def-label": {
+    fontSize: "0.75em",
+    color: "var(--cf-fg)",
+    fontWeight: "600",
+    verticalAlign: "super",
+    lineHeight: "0",
+    marginRight: "2px",
   },
 
   /* Hover preview tooltip for cross-references and citations */

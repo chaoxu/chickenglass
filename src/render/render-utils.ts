@@ -546,7 +546,7 @@ export class SimpleTextRenderWidget extends RenderWidget {
 /**
  * Base class for widgets whose identity depends on math macro state.
  *
- * Three widgets (MathWidget, FootnoteBodyWidget, BlockHeaderWidget) each
+ * Widgets whose identity depends on math macros (MathWidget, BlockHeaderWidget)
  * cache `serializeMacros(macros)` in a `macrosKey` field and include it
  * in `eq()`. This base class captures that pattern so subclasses only
  * need to store the `macros` object and pass it here — the key is

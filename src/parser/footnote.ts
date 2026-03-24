@@ -95,7 +95,18 @@ const footnoteDefParser: BlockParser = {
           const labelTo = cx.lineStart + i + 2; // includes ]:
 
           const labelEl = cx.elt("FootnoteDefLabel", labelFrom, labelTo);
-          cx.addElement(cx.elt("FootnoteDef", absFrom, absTo, [labelEl]));
+
+          // Parse inline content (math, bold, italic, etc.) in the body text
+          // after the label, so CM6 inline render plugins handle footnote
+          // content naturally without a separate re-rendering widget (#430).
+          const bodyStart = i + 2; // position after ]:
+          const bodyText = text.slice(bodyStart);
+          const bodyAbsFrom = cx.lineStart + bodyStart;
+          const inlineChildren = bodyText.length > 0
+            ? cx.parser.parseInline(bodyText, bodyAbsFrom)
+            : [];
+
+          cx.addElement(cx.elt("FootnoteDef", absFrom, absTo, [labelEl, ...inlineChildren]));
           cx.nextLine();
           return true;
         }
