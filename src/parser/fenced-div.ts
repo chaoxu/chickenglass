@@ -289,7 +289,6 @@ const fencedDivBlockParser: BlockParser = {
     // by block parsers. We consume it here so it doesn't become a paragraph.
     const closingColons = isClosingFence(line.text, line.pos);
     if (closingColons >= 3) {
-      // Reset the nesting guard — this stray fence has been consumed.
       lastClosedFenceLine = -1;
       cx.nextLine();
       return true;

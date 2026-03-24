@@ -33,6 +33,7 @@ import {
   addMarkerReplacement,
   pushWidgetDecoration,
   addSingleLineClosingFence,
+  buildDecorations,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
   type FencedBlockInfo,
@@ -386,7 +387,26 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     state.field(blockCounterField, false) ?? undefined;
   const macros = state.field(mathMacrosField);
   const cursor = state.selection.main;
-  return buildFencedBlockDecorations(state, collectFencedDivs, ({
+
+  // For nested same-colon fenced divs, the Lezer composite API attributes
+  // the inner's closing ::: to the outer div. The outer's actual closing :::
+  // ends up as a stray line at document level after div.to. A bare ::: line
+  // (no attributes) immediately after a FencedDiv is always such a stray.
+  const orphanedFences: Range<Decoration>[] = [];
+  const strayLines = new Set<number>();
+  for (const div of collectFencedDivs(state)) {
+    if (div.singleLine || div.to >= state.doc.length) continue;
+    const nextLine = state.doc.lineAt(div.to + 1);
+    if (/^:{3,}\s*$/.test(nextLine.text) && !strayLines.has(nextLine.from)) {
+      strayLines.add(nextLine.from);
+      orphanedFences.push(decorationHidden.range(nextLine.from, nextLine.to));
+      orphanedFences.push(
+        Decoration.line({ class: CSS.blockClosingFence }).range(nextLine.from),
+      );
+    }
+  }
+
+  const baseDecos = buildFencedBlockDecorations(state, collectFencedDivs, ({
     state,
     block: div,
     focused,
@@ -507,22 +527,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       }
     }
 
-    // Stray closing fence for nested same-colon blocks: the parser attributes
-    // the inner's closing ::: to the outer div. The outer's actual closing :::
-    // is a stray line immediately after div.to. Hide it.
-    if (!div.singleLine && div.to < state.doc.length) {
-      const nextLineStart = div.to + 1;
-      if (nextLineStart <= state.doc.length) {
-        const nextLine = state.doc.lineAt(nextLineStart);
-        if (/^:{3,}\s*$/.test(nextLine.text)) {
-          items.push(decorationHidden.range(nextLine.from, nextLine.to));
-          items.push(
-            Decoration.line({ class: CSS.blockClosingFence }).range(nextLine.from),
-          );
-        }
-      }
-    }
-
     // Body lines: apply block-type class for per-type styling (italic, etc.)
     if (!div.singleLine) {
       const openLine = state.doc.lineAt(div.from);
@@ -539,6 +543,9 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       addQedDecoration(state, div, items);
     }
   });
+
+  if (orphanedFences.length === 0) return baseDecos;
+  return RangeSet.join([baseDecos, buildDecorations(orphanedFences)]);
 }
 
 /**
@@ -560,10 +567,9 @@ export { blockDecorationField as _blockDecorationFieldForTest };
 function getClosingFenceRanges(state: EditorState): { from: number; to: number }[] {
   const divs = collectFencedDivs(state);
   const ranges: { from: number; to: number }[] = [];
-  const seen = new Set<number>(); // avoid duplicates by line start
+  const seen = new Set<number>();
   for (const div of divs) {
     if (div.singleLine || div.closeFenceFrom < 0) continue;
-    // Exclude include blocks — they have their own handling
     if (EXCLUDED_FROM_FALLBACK.has(div.className)) continue;
     const registry = state.field(pluginRegistryField, false);
     if (registry && !getPluginOrFallback(registry, div.className)) continue;
@@ -572,23 +578,20 @@ function getClosingFenceRanges(state: EditorState): { from: number; to: number }
       seen.add(line.from);
       ranges.push({ from: line.from, to: line.to });
     }
+  }
 
-    // For nested same-colon fenced divs: the parser consumes the inner's
-    // closing ::: and attributes the FencedDivFence to the outer div. The
-    // outer's actual closing ::: ends up as a stray line immediately after
-    // the div's end. Check for it and hide it too.
-    if (div.to < state.doc.length) {
-      const nextLineStart = div.to + 1;
-      if (nextLineStart <= state.doc.length) {
-        const nextLine = state.doc.lineAt(nextLineStart);
-        const trimmed = nextLine.text.trim();
-        if (/^:{3,}$/.test(trimmed) && !seen.has(nextLine.from)) {
-          seen.add(nextLine.from);
-          ranges.push({ from: nextLine.from, to: nextLine.to });
-        }
-      }
+  // Stray closing fences from nested same-colon blocks: a bare ::: line
+  // immediately after a FencedDiv is the outer's closing fence that the
+  // Lezer composite API couldn't attribute properly.
+  for (const div of divs) {
+    if (div.singleLine || div.to >= state.doc.length) continue;
+    const nextLine = state.doc.lineAt(div.to + 1);
+    if (/^:{3,}\s*$/.test(nextLine.text) && !seen.has(nextLine.from)) {
+      seen.add(nextLine.from);
+      ranges.push({ from: nextLine.from, to: nextLine.to });
     }
   }
+
   return ranges;
 }
 
