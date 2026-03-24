@@ -113,7 +113,14 @@ export class CslProcessor {
       this.items.set(item.id, item);
     }
     this.styleXml = styleXml ?? defaultCslStyle;
-    this.initEngine();
+    // Skip engine initialization when there are no entries. The citeproc
+    // engine cache (`@citation-js/plugin-csl`) is keyed by style+locale,
+    // so creating an empty engine replaces the `retrieveItem` callback on
+    // any previously cached engine with the same key — corrupting engines
+    // that hold real data. All methods already guard `!this.engine`. (#422)
+    if (this.items.size > 0) {
+      this.initEngine();
+    }
   }
 
   /** Create an empty processor with no entries. */

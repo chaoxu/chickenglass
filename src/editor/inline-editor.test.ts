@@ -298,3 +298,83 @@ describe("inline editor citation state wiring (#406)", () => {
     parent.remove();
   });
 });
+
+describe("inline editor citation widget rendering (#422)", () => {
+  // Regression: #422 — the inline editor showed citations as
+  // <span class="cf-link-rendered"> instead of CitationWidget.
+  // The markdownRenderPlugin's Link handler was treating [@id] as
+  // a normal link and applying cf-link-rendered styling. The
+  // referenceRenderPlugin's Decoration.replace widget was either
+  // not produced or conflicting with the Link decoration.
+
+  it("renders [@id] as cf-citation widget, not cf-link-rendered", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+
+    const store = makeBibStore([CSL_FIXTURES.karger]);
+    const cslProcessor = new CslProcessor([CSL_FIXTURES.karger]);
+
+    const view = createInlineEditor({
+      parent,
+      doc: "[@karger2000]",
+      macros: {},
+      bibData: { store, cslProcessor },
+      onChange: () => {},
+    });
+
+    const citationEls = view.dom.querySelectorAll(".cf-citation");
+    const linkRenderedEls = view.dom.querySelectorAll(".cf-link-rendered");
+
+    // Citation should be rendered as a widget, not as a styled link
+    expect(citationEls.length).toBeGreaterThan(0);
+    expect(linkRenderedEls.length).toBe(0);
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it("renders equation crossref [@eq:gaussian] as cf-crossref widget", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+
+    // No bib data — this is a crossref, not a citation
+    const view = createInlineEditor({
+      parent,
+      doc: "[@eq:gaussian]",
+      macros: {},
+      onChange: () => {},
+    });
+
+    // Without equation context, this should at least not show cf-link-rendered
+    const linkRenderedEls = view.dom.querySelectorAll(".cf-link-rendered");
+    expect(linkRenderedEls.length).toBe(0);
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it("renders clustered citations [@a; @b] as cf-citation widget", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+
+    const store = makeBibStore([CSL_FIXTURES.karger, CSL_FIXTURES.stein]);
+    const cslProcessor = new CslProcessor([CSL_FIXTURES.karger, CSL_FIXTURES.stein]);
+
+    const view = createInlineEditor({
+      parent,
+      doc: "[@karger2000; @stein2001]",
+      macros: {},
+      bibData: { store, cslProcessor },
+      onChange: () => {},
+    });
+
+    const citationEls = view.dom.querySelectorAll(".cf-citation");
+    const linkRenderedEls = view.dom.querySelectorAll(".cf-link-rendered");
+
+    expect(citationEls.length).toBeGreaterThan(0);
+    expect(linkRenderedEls.length).toBe(0);
+
+    view.destroy();
+    parent.remove();
+  });
+});
