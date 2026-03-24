@@ -104,7 +104,7 @@ export const marginThemeStyles = {
   },
   /* Display math inside hover previews — uses cf-math-display from markdownToHtml */
   ".cf-hover-preview-body .cf-math-display": {
-    margin: "0.5em 0",
+    margin: "0",
     textAlign: "center",
   },
   ".cf-hover-preview-unresolved": {

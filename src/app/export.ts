@@ -183,7 +183,7 @@ ${themeTokens}
       border-radius: var(--cf-border-radius);
     }
     .cf-math-display {
-      margin: 0.5em 0;
+      margin: 0;
       text-align: center;
     }
     .cf-math-display .katex-display {
