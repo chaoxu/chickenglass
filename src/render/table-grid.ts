@@ -28,15 +28,41 @@ import {
   type ViewUpdate,
   keymap,
 } from "@codemirror/view";
-import { EditorSelection, EditorState, RangeSetBuilder } from "@codemirror/state";
+import { Annotation, EditorSelection, EditorState, RangeSetBuilder } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   findTablesInState,
   findTableAtCursor,
   findPipePositions,
+  getCursorColIndex,
+  getCursorRowIndex,
   type TableRange,
 } from "./table-discovery";
 import { createSimpleTextWidget } from "./render-core";
+import { ContextMenu } from "../lib/context-menu";
+import type { ContextMenuItem } from "../lib/context-menu";
+import {
+  addRow,
+  addColumn,
+  deleteRow,
+  deleteColumn,
+  setAlignment,
+  moveRow,
+  moveColumn,
+  formatTable,
+  type ParsedTable,
+} from "./table-utils";
+
+// ---------------------------------------------------------------------------
+// Bypass annotation — table operations dispatch with this so the
+// pipeProtectionFilter allows the structural change through.
+// ---------------------------------------------------------------------------
+
+/**
+ * Annotation attached to table-operation transactions so that the
+ * pipeProtectionFilter lets them through unblocked.
+ */
+export const tableOperationAnnotation = Annotation.define<boolean>();
 
 // ---------------------------------------------------------------------------
 // Decorations (module-level singletons)
@@ -390,6 +416,8 @@ const tableKeyBindings: KeyBinding[] = [
   { key: "ArrowDown", run: (view) => moveVertical(view, 1) },
   { key: "ArrowRight", run: (view) => moveHorizontal(view, 1) },
   { key: "ArrowLeft", run: (view) => moveHorizontal(view, -1) },
+  { key: "Backspace", run: deleteSelectedTable },
+  { key: "Delete", run: deleteSelectedTable },
 ];
 
 // ---------------------------------------------------------------------------
@@ -397,6 +425,9 @@ const tableKeyBindings: KeyBinding[] = [
 // ---------------------------------------------------------------------------
 
 const pipeProtectionFilter = EditorState.transactionFilter.of((tr) => {
+  // Table operations bypass all protection — they rebuild the full table text.
+  if (tr.annotation(tableOperationAnnotation)) return tr;
+
   if (tr.docChanged) {
     const state = tr.startState;
     const doc = state.doc;
@@ -447,6 +478,219 @@ const pipeProtectionFilter = EditorState.transactionFilter.of((tr) => {
 
   return tr;
 });
+
+// ---------------------------------------------------------------------------
+// Table operations — structural mutations that bypass pipe protection
+// ---------------------------------------------------------------------------
+
+/** Dispatch a table mutation (add/delete row/col) with the bypass annotation. */
+function dispatchTableMutation(
+  view: EditorView,
+  table: TableRange,
+  mutate: (parsed: ParsedTable) => ParsedTable,
+): void {
+  const newTable = mutate(table.parsed);
+  const newText = formatTable(newTable).join("\n");
+  view.dispatch({
+    changes: { from: table.from, to: table.to, insert: newText },
+    annotations: tableOperationAnnotation.of(true),
+  });
+}
+
+/** Delete the entire table from the document (including surrounding newlines). */
+function dispatchDeleteTable(view: EditorView, table: TableRange): void {
+  const doc = view.state.doc;
+  // Include the trailing newline so we don't leave a blank line
+  let to = table.to;
+  if (to < doc.length && doc.sliceString(to, to + 1) === "\n") to += 1;
+  // If the table starts at the beginning of the line, include the leading newline
+  // to avoid leaving a blank line before the next content
+  let from = table.from;
+  if (from > 0 && doc.sliceString(from - 1, from) === "\n") from -= 1;
+
+  view.dispatch({
+    changes: { from, to, insert: "" },
+    annotations: tableOperationAnnotation.of(true),
+  });
+}
+
+/**
+ * Get the cursor's row index (0-based data row, -1 for header) and column
+ * index within a table. Returns null if the cursor is not in the table.
+ */
+function getCursorPosition(
+  view: EditorView,
+  table: TableRange,
+): { rowIndex: number | null; colIndex: number | null } {
+  const rowIndex = getCursorRowIndex(view, table);
+  const colIndex = getCursorColIndex(view, table);
+  return { rowIndex, colIndex };
+}
+
+// ---------------------------------------------------------------------------
+// Context menu
+// ---------------------------------------------------------------------------
+
+function buildGridContextMenuItems(
+  view: EditorView,
+  table: TableRange,
+): ContextMenuItem[] {
+  const { rowIndex, colIndex } = getCursorPosition(view, table);
+
+  return [
+    {
+      label: "Insert Row Above",
+      disabled: rowIndex === null,
+      action: () => {
+        dispatchTableMutation(view, table, (parsed) =>
+          addRow(parsed, rowIndex ?? 0),
+        );
+      },
+    },
+    {
+      label: "Insert Row Below",
+      action: () => {
+        dispatchTableMutation(view, table, (parsed) =>
+          addRow(parsed, rowIndex !== null ? rowIndex + 1 : undefined),
+        );
+      },
+    },
+    {
+      label: "Insert Column Left",
+      action: () => {
+        dispatchTableMutation(view, table, (parsed) =>
+          addColumn(parsed, colIndex ?? 0),
+        );
+      },
+    },
+    {
+      label: "Insert Column Right",
+      action: () => {
+        dispatchTableMutation(view, table, (parsed) =>
+          addColumn(parsed, colIndex !== null ? colIndex + 1 : undefined),
+        );
+      },
+    },
+    { label: "-" },
+    {
+      label: "Delete Row",
+      disabled: rowIndex === null || table.parsed.rows.length === 0,
+      action: () => {
+        if (rowIndex === null) return;
+        dispatchTableMutation(view, table, (parsed) => deleteRow(parsed, rowIndex));
+      },
+    },
+    {
+      label: "Delete Column",
+      disabled: colIndex === null || table.parsed.header.cells.length <= 1,
+      action: () => {
+        if (colIndex === null) return;
+        dispatchTableMutation(view, table, (parsed) => deleteColumn(parsed, colIndex));
+      },
+    },
+    { label: "-" },
+    {
+      label: "Align Left",
+      disabled: colIndex === null,
+      action: () => {
+        if (colIndex === null) return;
+        dispatchTableMutation(view, table, (parsed) => setAlignment(parsed, colIndex, "left"));
+      },
+    },
+    {
+      label: "Align Center",
+      disabled: colIndex === null,
+      action: () => {
+        if (colIndex === null) return;
+        dispatchTableMutation(view, table, (parsed) => setAlignment(parsed, colIndex, "center"));
+      },
+    },
+    {
+      label: "Align Right",
+      disabled: colIndex === null,
+      action: () => {
+        if (colIndex === null) return;
+        dispatchTableMutation(view, table, (parsed) => setAlignment(parsed, colIndex, "right"));
+      },
+    },
+    { label: "-" },
+    {
+      label: "Move Row Up",
+      disabled: rowIndex === null || rowIndex <= 0,
+      action: () => {
+        if (rowIndex === null) return;
+        dispatchTableMutation(view, table, (parsed) => moveRow(parsed, rowIndex, rowIndex - 1));
+      },
+    },
+    {
+      label: "Move Row Down",
+      disabled: rowIndex === null || rowIndex >= table.parsed.rows.length - 1,
+      action: () => {
+        if (rowIndex === null) return;
+        dispatchTableMutation(view, table, (parsed) => moveRow(parsed, rowIndex, rowIndex + 1));
+      },
+    },
+    {
+      label: "Move Column Left",
+      disabled: colIndex === null || colIndex <= 0,
+      action: () => {
+        if (colIndex === null) return;
+        dispatchTableMutation(view, table, (parsed) => moveColumn(parsed, colIndex, colIndex - 1));
+      },
+    },
+    {
+      label: "Move Column Right",
+      disabled: colIndex === null || colIndex >= table.parsed.header.cells.length - 1,
+      action: () => {
+        if (colIndex === null) return;
+        dispatchTableMutation(view, table, (parsed) => moveColumn(parsed, colIndex, colIndex + 1));
+      },
+    },
+    { label: "-" },
+    {
+      label: "Delete Table",
+      action: () => dispatchDeleteTable(view, table),
+    },
+  ];
+}
+
+const gridContextMenuHandler = EditorView.domEventHandlers({
+  contextmenu(event: MouseEvent, view: EditorView) {
+    const tables = findTablesInState(view.state);
+    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+    if (pos === null) return false;
+    const table = findTableAtCursor(tables, pos);
+    if (!table) return false;
+
+    event.preventDefault();
+    // Move cursor to the right-clicked position so getCursorPosition works
+    view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
+    new ContextMenu(buildGridContextMenuItems(view, table), event.clientX, event.clientY);
+    return true;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Full-table selection + delete
+// ---------------------------------------------------------------------------
+
+/**
+ * When the selection covers an entire table, allow Backspace/Delete to
+ * remove it. This dispatches with the bypass annotation.
+ */
+function deleteSelectedTable(view: EditorView): boolean {
+  const { from, to } = view.state.selection.main;
+  if (from === to) return false; // no selection
+
+  const tables = findTablesInState(view.state);
+  for (const table of tables) {
+    if (from <= table.from && to >= table.to) {
+      dispatchDeleteTable(view, table);
+      return true;
+    }
+  }
+  return false;
+}
 
 // ---------------------------------------------------------------------------
 // Plugin and theme
@@ -515,6 +759,7 @@ export const tableGridExtension = [
   tableGridPlugin,
   tableGridTheme,
   tableClipboardHandlers,
+  gridContextMenuHandler,
   keymap.of(tableKeyBindings),
   pipeProtectionFilter,
 ];
