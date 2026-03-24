@@ -116,6 +116,16 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     fontStyle: "italic",
   },
 
+  /* Collapsed header: no visible label, zero height.
+   * The block's own styling (border, padding) still applies to this line,
+   * so the border start is visible even though content height is zero. */
+  ".cf-block-header-collapsed": {
+    height: "0",
+    overflow: "hidden",
+    padding: "0 !important",
+    lineHeight: "0",
+  },
+
   /* Inline image preview */
   ".cf-image-wrapper": {
     display: "inline-block",

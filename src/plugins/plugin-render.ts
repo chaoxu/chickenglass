@@ -443,7 +443,9 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     const showHeader = plugin.displayHeader !== false;
     const headerClass = cursorOnEitherFence
       ? spec.className
-      : showHeader ? `${spec.className} ${CSS.blockHeader}` : spec.className;
+      : showHeader
+        ? `${spec.className} ${CSS.blockHeader}`
+        : `${spec.className} ${CSS.blockHeaderCollapsed}`;
     items.push(Decoration.line({ class: headerClass }).range(div.from));
     if (cursorOnEitherFence) {
       // Mark only the fence syntax portion as monospace source.

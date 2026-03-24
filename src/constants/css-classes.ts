@@ -26,6 +26,9 @@ export const CSS = {
   /** Attribute-only title widget (title from key-value attrs, not inline text). */
   blockAttrTitle: "cf-block-attr-title",
 
+  /** Collapsed header line — no visible label, zero height (e.g. blockquote). */
+  blockHeaderCollapsed: "cf-block-header-collapsed",
+
   /** QED tombstone marker on last content line of proof blocks. */
   blockQed: "cf-block-qed",
 
