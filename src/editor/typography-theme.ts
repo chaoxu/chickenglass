@@ -21,6 +21,12 @@ export const typographyThemeStyles = {
     userSelect: "none",
   },
 
+  /* Frontmatter YAML lines — monospace when editing (structured data, not prose) */
+  ".cf-frontmatter-line": {
+    fontFamily: monoFont,
+    fontSize: "0.85em",
+  },
+
   /* Hidden markers — source text stays in DOM but invisible */
   ".cf-hidden": {
     fontSize: "0",

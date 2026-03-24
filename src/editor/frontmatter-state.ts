@@ -6,7 +6,7 @@
  * the document title (from frontmatter) in Typora-style mode,
  * revealing the raw YAML when the cursor is inside the region.
  */
-import { EditorState, type Extension, StateField } from "@codemirror/state";
+import { EditorState, type Extension, type Range, StateField } from "@codemirror/state";
 import { Decoration, DecorationSet } from "@codemirror/view";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 
@@ -143,6 +143,9 @@ export const frontmatterDecoration: Extension = [
   frontmatterDecorationField,
 ];
 
+/** Line decoration applied to each frontmatter line when editing. */
+const frontmatterLineDeco = Decoration.line({ class: "cf-frontmatter-line" });
+
 /** Build decorations for the frontmatter region. */
 function buildDecorations(state: EditorState): DecorationSet {
   const { end, config } = state.field(frontmatterField);
@@ -152,7 +155,15 @@ function buildDecorations(state: EditorState): DecorationSet {
   const focused = state.field(editorFocusField, false) ?? false;
   const cursor = state.selection.main;
   if (focused && cursor.from < end) {
-    return Decoration.none;
+    // Apply monospace line decorations to all frontmatter lines
+    const decos: Range<Decoration>[] = [];
+    const doc = state.doc;
+    for (let pos = 0; pos < end; ) {
+      const line = doc.lineAt(pos);
+      decos.push(frontmatterLineDeco.range(line.from));
+      pos = line.to + 1;
+    }
+    return Decoration.set(decos);
   }
 
   // Otherwise: replace frontmatter with title widget (or hide)
