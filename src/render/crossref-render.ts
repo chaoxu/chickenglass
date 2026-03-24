@@ -141,13 +141,35 @@ export class MixedClusterWidget extends RenderWidget {
   }
 }
 
-/** Widget for an unresolved cross-reference. */
+/**
+ * Strip bracketed reference syntax to extract a display-friendly ID.
+ * `[@cormen2009]` → `cormen2009`, `[@foo; @bar]` → `foo; bar`,
+ * `@id` → `@id` (narrative refs kept as-is).
+ */
+function stripBracketSyntax(raw: string): string {
+  if (raw.startsWith("[") && raw.endsWith("]")) {
+    // Remove outer brackets, then strip leading @ from each ;-separated id
+    return raw
+      .slice(1, -1)
+      .split(";")
+      .map((part) => part.trim().replace(/^@/, ""))
+      .join("; ");
+  }
+  return raw;
+}
+
+/** Widget for an unresolved cross-reference.
+ *
+ * Display text strips bracket syntax for visual parity with the table
+ * display path (`renderInlineMarkdown`), which renders `[@id]` as just
+ * the bare id text (#406). The full raw source is kept as the tooltip.
+ */
 export class UnresolvedRefWidget extends SimpleTextRenderWidget {
   constructor(private readonly raw: string) {
     super({
       tagName: "span",
       className: "cf-crossref cf-crossref-unresolved",
-      text: raw,
+      text: stripBracketSyntax(raw),
       title: "Unresolved reference",
     });
   }

@@ -47,9 +47,10 @@ export const typographyThemeStyles = {
     fontFamily: contentFont,
   },
 
-  /* Highlight styling (==text==) */
+  /* Highlight styling (==text==) — uses --cf-mark-bg for visual parity
+   * with read mode's <mark> element (#406). */
   ".cf-highlight": {
-    backgroundColor: "var(--cf-hover)",
+    backgroundColor: "var(--cf-mark-bg, rgba(255, 255, 0, 0.2))",
     borderRadius: "var(--cf-border-radius)",
     padding: "1px 0",
   },

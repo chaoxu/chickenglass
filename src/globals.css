@@ -27,6 +27,9 @@
   --cf-hover: rgba(0, 0, 0, 0.08);
   --cf-active: rgba(0, 0, 0, 0.12);
 
+  /* Highlight (==text==) background — shared between editor and read mode */
+  --cf-mark-bg: rgba(255, 255, 0, 0.2);
+
   /* Accent — black, one color */
   --cf-accent: #18181b;
   --cf-accent-fg: #ffffff;
@@ -128,6 +131,7 @@
   --cf-subtle: rgba(255, 255, 255, 0.05);
   --cf-hover: rgba(255, 255, 255, 0.10);
   --cf-active: rgba(255, 255, 255, 0.15);
+  --cf-mark-bg: rgba(255, 255, 0, 0.15);
   --cf-accent: #fafafa;
   --cf-accent-fg: #09090b;
   --cf-bg-overlay: rgba(10, 10, 10, 0.82);
