@@ -167,8 +167,11 @@ ${themeTokens}
       border-radius: var(--cf-border-radius);
     }
     .math-display {
-      margin: 1.5rem 0;
+      margin: 0.5em 0;
       text-align: center;
+    }
+    .math-display .katex-display {
+      margin: 0;
     }
     .theorem { font-style: var(--cf-block-theorem-style); margin: var(--cf-block-margin); }
     .lemma { font-style: var(--cf-block-lemma-style); margin: var(--cf-block-margin); }

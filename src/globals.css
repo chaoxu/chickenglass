@@ -269,6 +269,7 @@ body {
 
 .cf-math-display .katex-display {
   font-size: inherit;
+  margin: 0.5em 0;
 }
 
 .cf-math-display .katex-display > .katex {
@@ -437,8 +438,12 @@ body {
 /* ── Read mode math ──────────────────────────────────────────────────────── */
 
 .cf-read-mode-view .math-display {
-  margin: 1.2em 0;
+  margin: 0.5em 0;
   text-align: center;
+}
+
+.cf-read-mode-view .math-display .katex-display {
+  margin: 0;
 }
 
 .cf-read-mode-view .math-error {
