@@ -164,6 +164,16 @@ function buildMathItems(
               Decoration.mark({ class: "cf-math-source" }).range(contentFrom, contentTo),
             );
           }
+          // Equation label after closing delimiter (e.g. {#eq:gaussian}) — also monospace
+          if (isDisplay) {
+            const labelFrom = marks[marks.length - 1].to;
+            const labelTo = node.to;
+            if (labelTo > labelFrom) {
+              items.push(
+                Decoration.mark({ class: "cf-math-source" }).range(labelFrom, labelTo),
+              );
+            }
+          }
         }
         return false;
       }
