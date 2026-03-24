@@ -242,16 +242,13 @@ body {
 .cf-bibliography {
   font-size: 0.85rem;
   line-height: 1.4;
+  text-align: left;
+  hyphens: manual;
+  -webkit-hyphens: manual;
 }
 
 .cf-bibliography-entry + .cf-bibliography-entry {
   margin-top: 0.15em;
-}
-
-.cf-read-mode-view .cf-bibliography {
-  text-align: left;
-  hyphens: manual;
-  -webkit-hyphens: manual;
 }
 
 /* No heading math size hacks needed — font-size is on .cm-line via
@@ -267,9 +264,16 @@ body {
   font-size: inherit;
 }
 
+/* Display math: centered with vertical margin. Shared between CM6 decorations,
+ * read mode, and HTML export — unscoped so all contexts inherit. */
+.cf-math-display {
+  margin: 0.5em 0;
+  text-align: center;
+}
+
 .cf-math-display .katex-display {
   font-size: inherit;
-  margin: 0.5em 0;
+  margin: 0;
 }
 
 .cf-math-display .katex-display > .katex {
@@ -352,7 +356,7 @@ body {
 
 /* Document title from frontmatter — larger but still academic.
  * Size matches the editor's .cf-doc-title (1.6em) for visual consistency. */
-.cf-read-mode-view .cf-read-title {
+.cf-read-title {
   margin-top: 0;
   margin-bottom: 1em;
   font-size: 1.6em;
@@ -362,12 +366,12 @@ body {
 }
 
 /* Section numbers — period after number, margin matching blog */
-.cf-read-mode-view .cf-section-number {
+.cf-section-number {
   color: var(--cf-fg);
   margin-right: 0.6em;
 }
 
-.cf-read-mode-view .cf-section-number::after {
+.cf-section-number::after {
   content: '.';
 }
 
@@ -435,64 +439,56 @@ body {
   font-size: 0.85em;
 }
 
-/* ── Read mode math ──────────────────────────────────────────────────────── */
-
-/* Display math uses the shared cf-math-display class from both CM6
- * decorations and markdownToHtml output. */
-.cf-read-mode-view .cf-math-display {
-  margin: 0.5em 0;
-  text-align: center;
-}
-
-.cf-read-mode-view .math-display .katex-display {
-  margin: 0;
-}
-
-.cf-read-mode-view .math-error {
-  color: var(--cf-math-error-fg, #c00);
-  background: var(--cf-math-error-bg, rgba(255, 0, 0, 0.05));
-}
-
-.cf-read-mode-view .katex {
-  color: inherit;
-  font-size: inherit;
-}
-
 /* ── Fenced div blocks (theorem, proof, etc.) — shared by rich & read mode ──
- * These rules use cf-block-* class names produced by both CM6 decorations
- * (rich mode) and markdownToHtml (read mode / HTML export). Unscoped so
- * they apply in both contexts. The CM6 theme (block-theme.ts) also sets
- * font-style per-block-type; these global rules provide the margin and
- * proof ::after tombstone that the CM6 theme handles differently. */
+ * Unscoped cf-block-* rules produced by both CM6 decorations (rich mode)
+ * and markdownToHtml (read mode / HTML export). In rich mode, CM6's
+ * EditorView.theme auto-generates equivalent font-style rules under
+ * .cm-editor scope; these globals serve read mode and HTML export.
+ * Margin and proof ::after use :not(.cm-line) to avoid affecting CM6 lines. */
+.cf-block-theorem { font-style: var(--cf-block-theorem-style); }
+.cf-block-lemma { font-style: var(--cf-block-lemma-style); }
+.cf-block-corollary { font-style: var(--cf-block-corollary-style); }
+.cf-block-proposition { font-style: var(--cf-block-proposition-style); }
+.cf-block-conjecture { font-style: var(--cf-block-conjecture-style); }
+.cf-block-definition { font-style: var(--cf-block-definition-style); }
+.cf-block-problem { font-style: var(--cf-block-problem-style); }
+.cf-block-example { font-style: var(--cf-block-example-style); }
+.cf-block-remark, .cf-block-note { font-style: var(--cf-block-remark-style); }
+.cf-block-proof { font-style: var(--cf-block-proof-style); }
+.cf-block-algorithm { font-style: var(--cf-block-algorithm-style); }
 
-/* Per-block-type body font style + margin (read mode & HTML export).
- * In rich mode, CM6's EditorView.theme auto-generates equivalent rules
- * under .cm-editor scope, so these only fire outside the editor. */
-.cf-read-mode-view .cf-block-theorem { font-style: var(--cf-block-theorem-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .cf-block-lemma { font-style: var(--cf-block-lemma-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .cf-block-corollary { font-style: var(--cf-block-corollary-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .cf-block-proposition { font-style: var(--cf-block-proposition-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .cf-block-conjecture { font-style: var(--cf-block-conjecture-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .cf-block-definition { font-style: var(--cf-block-definition-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .cf-block-problem { font-style: var(--cf-block-problem-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .cf-block-example { font-style: var(--cf-block-example-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .cf-block-remark { font-style: var(--cf-block-remark-style); margin: var(--cf-block-margin); }
-.cf-read-mode-view .cf-block-proof { font-style: var(--cf-block-proof-style); margin: var(--cf-block-margin); position: relative; }
+/* Block margin — only on wrapper divs (read mode / HTML export), not on
+ * CM6 .cm-line elements that carry the same cf-block-* class names.
+ * All block divs carry the shared "cf-block" base class. */
+.cf-block:not(.cm-line) {
+  margin: var(--cf-block-margin);
+}
 
-/* QED tombstone at end of proof (read mode) — rich mode uses .cf-block-qed
- * via CM6 line decoration on the last content line instead. */
-.cf-read-mode-view .cf-block-proof::after {
+/* Proof needs position: relative for the ::after tombstone (outside CM6 only). */
+.cf-block-proof:not(.cm-line) {
+  position: relative;
+}
+
+/* QED tombstone at end of proof — outside CM6 only (read mode / HTML export).
+ * Rich mode uses .cf-block-qed via CM6 line decoration on the last content
+ * line instead. The :not(.cm-line) guard prevents this from firing on
+ * CM6 line elements that carry the cf-block-proof class. */
+.cf-block-proof:not(.cm-line)::after {
   content: var(--cf-proof-marker);
   color: var(--cf-proof-marker-color);
   font-size: var(--cf-proof-marker-size);
   float: right;
 }
 
-.cf-read-mode-view .cf-block-note {
-  margin: var(--cf-block-margin);
+/* Blockquote styling — cf-block-blockquote is unscoped (shared with export),
+ * bare blockquote stays scoped to read mode and hover preview. */
+.cf-block-blockquote {
+  border-left: 3px solid var(--cf-blockquote-border);
+  padding-left: 1em;
+  margin-left: 0;
+  color: var(--cf-blockquote-color);
 }
 
-.cf-read-mode-view .cf-block-blockquote,
 .cf-read-mode-view blockquote,
 .cf-hover-preview-body blockquote {
   border-left: 3px solid var(--cf-blockquote-border);
@@ -504,16 +500,17 @@ body {
 /* Block header rendered label (e.g. "Theorem 1."): bold, normal style, inline.
  * Shared class cf-block-header-rendered is used by both CM6 widgets and
  * markdownToHtml output. The base font-weight/color is set in block-theme.ts
- * for CM6; these rules add display, font-style reset, and ::after separator
- * needed only in read mode / HTML export context. */
-.cf-read-mode-view .cf-block-header-rendered {
+ * for CM6; display and font-style reset apply globally. */
+.cf-block-header-rendered {
   display: var(--cf-block-title-display);
   font-weight: var(--cf-block-title-weight);
   color: var(--cf-block-title-color);
   font-style: normal;
 }
 
-/* Period + en space after the block header label (inline header separator) */
+/* Period + en space after the block header label (inline header separator).
+ * Scoped to read mode — the CM6 editor widget does not use ::after for the
+ * separator; adding it would disrupt cursor positioning in rich mode. */
 .cf-read-mode-view .cf-block-header-rendered::after {
   content: var(--cf-block-title-separator);
 }
