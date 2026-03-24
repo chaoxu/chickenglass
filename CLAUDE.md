@@ -147,6 +147,7 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
 - **Testing**:
   - ALWAYS test before claiming fixed. Use `npm run dev` + `npm run chrome` + `__cmDebug.dump()` to verify. Never ask the user to test unless it's something you literally cannot test (e.g., native OS interactions).
   - Always open `index.md` in the browser to verify rendering. It opens by default on startup. If a feature you changed is not covered by `index.md`, add a test case to it.
+  - **Visual changes require browser verification before closing an issue.** Any change that affects CSS, rendering, decorations, themes, or layout MUST be verified in the live browser (via CDP) before closing the issue or claiming it's fixed. If browser verification is not possible, explicitly alert the user that visual verification was not done. Never close a visual issue based only on "build passes" or "tests pass."
   - Test StateFields without a browser: `EditorState.create({extensions}).update({changes}).state.field(myField)`.
   - For parser bugs, write a Vitest test with the exact document content first, then check browser for incremental parsing issues.
 - **Shell/CLI text safety**:

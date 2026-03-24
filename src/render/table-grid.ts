@@ -71,8 +71,22 @@ export const tableOperationAnnotation = Annotation.define<boolean>();
 const pipeReplace = Decoration.replace({
   widget: createSimpleTextWidget("span", "cf-grid-pipe", ""),
 });
-const cellMark = Decoration.mark({ class: "cf-grid-cell", inclusive: true });
-const headerCellMark = Decoration.mark({ class: "cf-grid-cell cf-grid-cell-header", inclusive: true });
+/** Create a cell mark for a specific column. Cached per column index. */
+const cellMarkCache = new Map<string, Decoration>();
+function cellMarkForCol(col: number, isHeader: boolean): Decoration {
+  const key = `${col}-${isHeader}`;
+  let mark = cellMarkCache.get(key);
+  if (!mark) {
+    const cls = isHeader ? "cf-grid-cell cf-grid-cell-header" : "cf-grid-cell";
+    mark = Decoration.mark({
+      class: cls,
+      inclusive: true,
+      attributes: { "data-col": String(col) },
+    });
+    cellMarkCache.set(key, mark);
+  }
+  return mark;
+}
 const separatorLine = Decoration.line({ class: "cf-grid-separator" });
 
 function gridRowLine(columns: number, isHeader: boolean, isLast: boolean): Decoration {
@@ -192,7 +206,8 @@ function clampToEditable(
 // Decoration builder
 // ---------------------------------------------------------------------------
 
-function buildTableGridDecorations(view: EditorView): DecorationSet {
+/** Build pipe replacements, line decorations, and separator hiding. */
+function buildStructuralDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const doc = view.state.doc;
 
@@ -218,16 +233,46 @@ function buildTableGridDecorations(view: EditorView): DecorationSet {
         ));
 
         const pipes = findPipePositions(line.text);
-        if (pipes.length < 2) continue;
-        const mark = ln === startLine.number ? headerCellMark : cellMark;
-
         for (let pi = 0; pi < pipes.length; pi++) {
-          const pipeDocPos = line.from + pipes[pi];
-          builder.add(pipeDocPos, pipeDocPos + 1, pipeReplace);
-          if (pi < pipes.length - 1) {
-            const cellStart = pipeDocPos + 1;
-            const cellEnd = line.from + pipes[pi + 1];
-            if (cellEnd > cellStart) builder.add(cellStart, cellEnd, mark);
+          builder.add(line.from + pipes[pi], line.from + pipes[pi] + 1, pipeReplace);
+        }
+      }
+
+      return false;
+    },
+  });
+
+  return builder.finish();
+}
+
+/** Build cell marks — provided via outerDecorations so they wrap around
+ *  search highlights and other regular decorations instead of being split. */
+function buildCellDecorations(view: EditorView): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+  const doc = view.state.doc;
+
+  syntaxTree(view.state).iterate({
+    enter(node) {
+      if (node.name !== "Table") return;
+
+      const startLine = doc.lineAt(node.from);
+      const endLine = doc.lineAt(node.to);
+      const columns = findPipePositions(startLine.text).length - 1;
+      if (columns < 1) return;
+
+      for (let ln = startLine.number; ln <= endLine.number; ln++) {
+        if (ln === startLine.number + 1) continue; // skip separator
+
+        const line = doc.line(ln);
+        const pipes = findPipePositions(line.text);
+        if (pipes.length < 2) continue;
+        const isHeader = ln === startLine.number;
+
+        for (let pi = 0; pi < pipes.length - 1; pi++) {
+          const cellStart = line.from + pipes[pi] + 1;
+          const cellEnd = line.from + pipes[pi + 1];
+          if (cellEnd > cellStart) {
+            builder.add(cellStart, cellEnd, cellMarkForCol(pi, isHeader));
           }
         }
       }
@@ -758,37 +803,49 @@ export function deleteSelectedTableSelection(view: EditorView): boolean {
 // Plugin and theme
 // ---------------------------------------------------------------------------
 
+/** Structural decorations: pipe replacements, line classes, separator hiding. */
 const tableGridPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
     constructor(view: EditorView) {
-      this.decorations = buildTableGridDecorations(view);
+      this.decorations = buildStructuralDecorations(view);
     }
     update(update: ViewUpdate) {
       if (update.docChanged || syntaxTree(update.state) !== syntaxTree(update.startState)) {
-        this.decorations = buildTableGridDecorations(update.view);
+        this.decorations = buildStructuralDecorations(update.view);
       }
     }
   },
   { decorations: (v) => v.decorations },
 );
 
+/** Cell marks provided via outerDecorations — wraps around search highlights
+ *  and other regular marks instead of being split by them. */
+const tableCellPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = buildCellDecorations(view);
+    }
+    update(update: ViewUpdate) {
+      if (update.docChanged || syntaxTree(update.state) !== syntaxTree(update.startState)) {
+        this.decorations = buildCellDecorations(update.view);
+      }
+    }
+  },
+  {
+    provide: (plugin) =>
+      EditorView.outerDecorations.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none),
+  },
+);
+
 const tableGridTheme = EditorView.baseTheme({
   ".cf-grid-pipe": { display: "none" },
   ".cf-grid-row .cm-widgetBuffer": { display: "none" },
 
-  /* Search highlights and other marks wrap around grid-cell spans, becoming
-   * unwanted grid items. display:contents makes them transparent to grid
-   * layout — their children (the actual grid cells) become the grid items.
-   * The highlight background is transferred to the inner cell span. */
-  ".cf-grid-row .cm-searchMatch": { display: "contents" },
-  ".cf-grid-row .cm-searchMatch-selected": { display: "contents" },
-  ".cf-grid-row .cm-searchMatch > .cf-grid-cell": {
-    background: "rgba(255, 224, 102, 0.4)",
-  },
-  ".cf-grid-row .cm-searchMatch-selected > .cf-grid-cell": {
-    background: "rgba(255, 150, 50, 0.4)",
-  },
+  /* Search highlights: cell marks use outerDecorations so they wrap around
+   * search marks. No special handling needed — the standard CM6 search
+   * highlight classes render inside the grid cells correctly. */
 
   ".cf-grid-row": {
     gap: "0",
@@ -832,6 +889,7 @@ const tableGridTheme = EditorView.baseTheme({
 
 export const tableGridExtension = [
   tableGridPlugin,
+  tableCellPlugin,
   tableGridTheme,
   tableClipboardHandlers,
   gridContextMenuHandler,
