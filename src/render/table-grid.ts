@@ -777,6 +777,19 @@ const tableGridTheme = EditorView.baseTheme({
   ".cf-grid-pipe": { display: "none" },
   ".cf-grid-row .cm-widgetBuffer": { display: "none" },
 
+  /* Search highlights and other marks wrap around grid-cell spans, becoming
+   * unwanted grid items. display:contents makes them transparent to grid
+   * layout — their children (the actual grid cells) become the grid items.
+   * The highlight background is transferred to the inner cell span. */
+  ".cf-grid-row .cm-searchMatch": { display: "contents" },
+  ".cf-grid-row .cm-searchMatch-selected": { display: "contents" },
+  ".cf-grid-row .cm-searchMatch > .cf-grid-cell": {
+    background: "rgba(255, 224, 102, 0.4)",
+  },
+  ".cf-grid-row .cm-searchMatch-selected > .cf-grid-cell": {
+    background: "rgba(255, 150, 50, 0.4)",
+  },
+
   ".cf-grid-row": {
     gap: "0",
     borderLeft: "1px solid var(--cf-border, #ddd)",
