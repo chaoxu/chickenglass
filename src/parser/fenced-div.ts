@@ -224,6 +224,15 @@ interface OpeningFenceInfo {
  */
 let parseGeneration = 0;
 
+/**
+ * Track the line where a closing fence was last matched. When nested
+ * fenced divs use the same colon count, Lezer re-processes the closing
+ * fence line with the parent composite after the child composite ends.
+ * Without this guard, the parent also matches the ::: and closes
+ * prematurely. The guard ensures each ::: closes only ONE composite.
+ */
+let lastClosedFenceLine = -1;
+
 /** Pack colon count + generation into the composite value. */
 function packValue(colonCount: number): number {
   return (colonCount & 0xFF) | ((parseGeneration & 0xFFFF) << 8);
@@ -252,8 +261,11 @@ function fencedDivComposite(
   const colonCount = unpackColonCount(value);
   const closingColons = isClosingFence(line.text, line.pos);
   fencedDivLog(`composite line="${line.text.slice(0, 40)}" closing=${closingColons} need=${colonCount} lineStart=${cx.lineStart}`);
-  if (closingColons >= colonCount) {
+  if (closingColons >= colonCount && lastClosedFenceLine !== cx.lineStart) {
     fencedDivLog(`CLOSING at lineStart=${cx.lineStart} depth=${cx.depth}`);
+    // Record this line so the parent composite skips it — prevents the
+    // same ::: from closing both inner and outer when colon counts match.
+    lastClosedFenceLine = cx.lineStart;
     line.addMarker(
       cx.elt(
         "FencedDivFence",
@@ -277,6 +289,8 @@ const fencedDivBlockParser: BlockParser = {
     // by block parsers. We consume it here so it doesn't become a paragraph.
     const closingColons = isClosingFence(line.text, line.pos);
     if (closingColons >= 3) {
+      // Reset the nesting guard — this stray fence has been consumed.
+      lastClosedFenceLine = -1;
       cx.nextLine();
       return true;
     }
@@ -288,6 +302,8 @@ const fencedDivBlockParser: BlockParser = {
     const fenceStart = cx.lineStart + line.pos;
     const fenceEnd = cx.lineStart + line.pos + info.colonCount;
 
+    // Reset closing-fence guard — each new block starts fresh.
+    lastClosedFenceLine = -1;
     // Increment parse generation to prevent incremental parser from
     // reusing old tree fragments inside this composite block.
     parseGeneration = (parseGeneration + 1) & 0xFFFF;
