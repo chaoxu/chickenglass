@@ -14,7 +14,7 @@
  *
  * Structural protection:
  * - Pipes, padding spaces, and row newlines are immutable
- * - Cursor is clamped to editable content zones
+ * - Cursor skips structural zones via EditorView.atomicRanges
  * - Copy strips pipes; paste flattens to single-line inline content
  * - Tab/Arrow navigation between cells
  */
@@ -28,7 +28,7 @@ import {
   type ViewUpdate,
   keymap,
 } from "@codemirror/view";
-import { Annotation, EditorSelection, EditorState, RangeSetBuilder } from "@codemirror/state";
+import { Annotation, EditorState, RangeSetBuilder, type RangeSet } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   findTablesInState,
@@ -186,22 +186,6 @@ function isStructuralAt(
   return pos < result.cell.from || pos > result.cell.to;
 }
 
-/** Clamp pos to nearest editable zone. Uses pre-computed tables. */
-function clampToEditable(
-  state: EditorState,
-  pos: number,
-  tables: readonly TableRange[],
-): number | null {
-  if (!findTableAtCursor(tables, pos)) return null;
-  const line = state.doc.lineAt(pos);
-  const pipes = findPipePositions(line.text);
-  if (pipes.length < 2) return null;
-  const result = findCellAtPos(pos, line, pipes);
-  if (!result) return null;
-  if (pos >= result.cell.from && pos <= result.cell.to) return null;
-  return pos < result.cell.from ? result.cell.from : result.cell.to;
-}
-
 // ---------------------------------------------------------------------------
 // Decoration builder
 // ---------------------------------------------------------------------------
@@ -274,6 +258,72 @@ function buildCellDecorations(view: EditorView): DecorationSet {
           if (cellEnd > cellStart) {
             builder.add(cellStart, cellEnd, cellMarkForCol(pi, isHeader));
           }
+        }
+      }
+
+      return false;
+    },
+  });
+
+  return builder.finish();
+}
+
+// ---------------------------------------------------------------------------
+// Atomic ranges — structural zones the cursor should skip
+// ---------------------------------------------------------------------------
+
+/** Sentinel decoration used solely to mark atomic (non-editable) spans.
+ *  atomicRanges accepts any RangeSet, so we reuse Decoration.mark. */
+const atomicMark = Decoration.mark({});
+
+/**
+ * Build a RangeSet covering every structural zone (pipes + padding spaces)
+ * in all tables. EditorView.atomicRanges uses this to make CM6's native
+ * cursor motion (moveByChar, moveVertically) skip over these regions.
+ */
+function buildAtomicRanges(view: EditorView): RangeSet<Decoration> {
+  const builder = new RangeSetBuilder<Decoration>();
+  const doc = view.state.doc;
+
+  syntaxTree(view.state).iterate({
+    enter(node) {
+      if (node.name !== "Table") return;
+
+      const startLine = doc.lineAt(node.from);
+      const endLine = doc.lineAt(node.to);
+      if (findPipePositions(startLine.text).length - 1 < 1) return;
+
+      for (let ln = startLine.number; ln <= endLine.number; ln++) {
+        const line = doc.line(ln);
+
+        // Separator row is entirely structural
+        if (ln === startLine.number + 1) {
+          if (line.from < line.to) {
+            builder.add(line.from, line.to, atomicMark);
+          }
+          continue;
+        }
+
+        const pipes = findPipePositions(line.text);
+        if (pipes.length < 2) continue;
+
+        const cells = getCellBounds(line, pipes);
+
+        // Walk left-to-right emitting structural gaps between editable zones.
+        // A structural gap is any span from the previous editable end (or line
+        // start) to the next editable start.
+        let cursor = 0; // offset within line.text
+        for (const cell of cells) {
+          const cellFromOff = cell.from - line.from;
+          const cellToOff = cell.to - line.from;
+          if (cellFromOff > cursor) {
+            builder.add(line.from + cursor, line.from + cellFromOff, atomicMark);
+          }
+          cursor = cellToOff;
+        }
+        // Trailing structural zone (last pipe + padding)
+        if (cursor < line.text.length) {
+          builder.add(line.from + cursor, line.to, atomicMark);
         }
       }
 
@@ -375,42 +425,6 @@ function moveVertical(view: EditorView, direction: 1 | -1): boolean {
   return true;
 }
 
-function moveHorizontal(view: EditorView, direction: 1 | -1): boolean {
-  const pos = view.state.selection.main.head;
-  const tables = findTablesInState(view.state);
-  if (!findTableAtCursor(tables, pos)) return false;
-
-  const line = view.state.doc.lineAt(pos);
-  const pipes = findPipePositions(line.text);
-  const result = findCellAtPos(pos, line, pipes);
-  if (!result) return false;
-  const { cell, cells } = result;
-
-  const atBoundary = direction === 1 ? pos >= cell.to : pos <= cell.from;
-  if (!atBoundary) return false;
-
-  // Try adjacent cell on same row
-  const adjacent = cells.find(c => c.col === cell.col + direction);
-  if (adjacent) {
-    view.dispatch({ selection: { anchor: direction === 1 ? adjacent.from : adjacent.to } });
-    return true;
-  }
-
-  // Try first/last cell on adjacent row
-  const targetLine = adjacentTableLine(view.state.doc, line.number, direction);
-  if (targetLine && findTableAtCursor(tables, targetLine.from)) {
-    const targetPipes = findPipePositions(targetLine.text);
-    const targetCells = getCellBounds(targetLine, targetPipes);
-    if (targetCells.length > 0) {
-      const tc = direction === 1 ? targetCells[0] : targetCells[targetCells.length - 1];
-      view.dispatch({ selection: { anchor: direction === 1 ? tc.from : tc.to } });
-      return true;
-    }
-  }
-
-  return true; // block moving past table boundary
-}
-
 function findNextCell(view: EditorView, forward: boolean): number | null {
   const pos = view.state.selection.main.head;
   const line = view.state.doc.lineAt(pos);
@@ -459,8 +473,6 @@ const tableKeyBindings: KeyBinding[] = [
   },
   { key: "ArrowUp", run: (view) => moveVertical(view, -1) },
   { key: "ArrowDown", run: (view) => moveVertical(view, 1) },
-  { key: "ArrowRight", run: (view) => moveHorizontal(view, 1) },
-  { key: "ArrowLeft", run: (view) => moveHorizontal(view, -1) },
   { key: "Backspace", run: deleteSelectedTableSelection },
   { key: "Delete", run: deleteSelectedTableSelection },
 ];
@@ -504,22 +516,8 @@ const pipeProtectionFilter = EditorState.transactionFilter.of((tr) => {
     if (blocked) return [];
   }
 
-  if (tr.selection) {
-    const state = tr.state;
-    const tables = findTablesInState(state);
-    if (tables.length === 0) return tr;
-
-    let needsAdjust = false;
-    const newRanges = tr.selection.ranges.map((range) => {
-      const clamped = clampToEditable(state, range.head, tables);
-      if (clamped !== null) { needsAdjust = true; return EditorSelection.cursor(clamped); }
-      return range;
-    });
-
-    if (needsAdjust) {
-      return { ...tr, selection: EditorSelection.create(newRanges, tr.selection.mainIndex) };
-    }
-  }
+  // Cursor clamping is handled by EditorView.atomicRanges — no
+  // selection adjustment needed here.
 
   return tr;
 });
@@ -803,20 +801,30 @@ export function deleteSelectedTableSelection(view: EditorView): boolean {
 // Plugin and theme
 // ---------------------------------------------------------------------------
 
-/** Structural decorations: pipe replacements, line classes, separator hiding. */
+/** Structural decorations: pipe replacements, line classes, separator hiding.
+ *  Also provides atomicRanges so CM6 cursor motion skips structural zones. */
 const tableGridPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    atomicRanges: RangeSet<Decoration>;
     constructor(view: EditorView) {
       this.decorations = buildStructuralDecorations(view);
+      this.atomicRanges = buildAtomicRanges(view);
     }
     update(update: ViewUpdate) {
       if (update.docChanged || syntaxTree(update.state) !== syntaxTree(update.startState)) {
         this.decorations = buildStructuralDecorations(update.view);
+        this.atomicRanges = buildAtomicRanges(update.view);
       }
     }
   },
-  { decorations: (v) => v.decorations },
+  {
+    decorations: (v) => v.decorations,
+    provide: (plugin) =>
+      EditorView.atomicRanges.of((view) =>
+        view.plugin(plugin)?.atomicRanges ?? Decoration.none,
+      ),
+  },
 );
 
 /** Cell marks provided via outerDecorations — wraps around search highlights
