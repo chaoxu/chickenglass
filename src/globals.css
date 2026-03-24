@@ -280,6 +280,17 @@ body {
   font-size: inherit;
 }
 
+/* Collapse the cm-line containing a display math widget so it only takes
+ * the widget's natural height. Without this, the line's lineHeight and
+ * cm-widgetBuffer elements add ~45px of empty space around the equation. */
+.cm-line:has(> .cf-math-display) {
+  line-height: 0;
+}
+
+.cm-line:has(> .cf-math-display) > .cm-widgetBuffer {
+  display: none;
+}
+
 /* ── Hover preview tooltip (appended to document.body) ─────────────────────
  * Used when sidenote margin is collapsed to show footnote content.
  * Styled to match shadcn HoverCard visual language. */
