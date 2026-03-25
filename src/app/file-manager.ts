@@ -95,7 +95,14 @@ export class MemoryFileSystem implements FileSystem {
   }
 
   async exists(path: string): Promise<boolean> {
-    return this.files.has(path);
+    if (this.files.has(path)) return true;
+    if (this.dirs.has(path)) return true;
+    // Check for implicit directories (created by file paths)
+    const prefix = path + "/";
+    for (const key of this.files.keys()) {
+      if (key.startsWith(prefix)) return true;
+    }
+    return false;
   }
 
   async renameFile(oldPath: string, newPath: string): Promise<void> {

@@ -60,6 +60,24 @@ describe("MemoryFileSystem", () => {
     expect(await fs.exists("missing.md")).toBe(false);
   });
 
+  it("exists returns true for explicitly created directories", async () => {
+    const fs = new MemoryFileSystem();
+    await fs.createDirectory("mydir");
+    expect(await fs.exists("mydir")).toBe(true);
+  });
+
+  it("exists returns true for implicit directories created by file paths", async () => {
+    const fs = new MemoryFileSystem({ "a/b/c.md": "content" });
+    expect(await fs.exists("a")).toBe(true);
+    expect(await fs.exists("a/b")).toBe(true);
+  });
+
+  it("exists returns false for nonexistent paths", async () => {
+    const fs = new MemoryFileSystem({ "test.md": "data" });
+    expect(await fs.exists("nonexistent")).toBe(false);
+    expect(await fs.exists("test.md/fake")).toBe(false);
+  });
+
   it("lists a flat file tree", async () => {
     const fs = new MemoryFileSystem({
       "a.md": "",
