@@ -7,13 +7,23 @@ export default tseslint.config(
   {
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-non-null-assertion": "warn",
       "@typescript-eslint/no-unused-vars": [
         "error",
-        { argsIgnorePattern: "^_" },
+        { argsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
       ],
     },
   },
   {
-    ignores: ["dist/", "node_modules/", "build/", "dist-server/"],
+    ignores: [
+      "dist/",
+      "node_modules/",
+      "build/",
+      "dist-server/",
+      "src-tauri/target/",
+      ".claude/worktrees/",
+      "~/.chatgpt-cli/",
+      "scripts/",
+    ],
   },
 );
