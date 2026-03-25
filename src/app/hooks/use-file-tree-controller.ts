@@ -174,8 +174,11 @@ function getFocusedItemOrNull(
  * Fix for #462: Explorer Up/Down keyboard navigation gets stuck after
  * the first file switch — the tree container lost focus to the editor.
  */
+let pendingFocusRaf = 0;
 function restoreTreeFocusAfterSelect(tree: TreeInstance<FileEntry>): void {
-  requestAnimationFrame(() => {
+  if (pendingFocusRaf) cancelAnimationFrame(pendingFocusRaf);
+  pendingFocusRaf = requestAnimationFrame(() => {
+    pendingFocusRaf = 0;
     tree.updateDomFocus();
   });
 }

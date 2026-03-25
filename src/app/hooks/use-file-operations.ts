@@ -15,9 +15,7 @@ import { useCallback } from "react";
 import type { RefObject } from "react";
 import type { FileSystem } from "../file-manager";
 import { isTauri } from "../../lib/tauri";
-import { basename, readLocalStorage } from "../lib/utils";
-import type { Settings } from "../lib/types";
-import { SETTINGS_KEY } from "../../constants";
+import { basename } from "../lib/utils";
 import { toProjectRelativePathCommand } from "../tauri-client/fs";
 import { measureAsync } from "../perf";
 import { applySaveAsResult } from "../editor-session-save";
@@ -45,6 +43,8 @@ export interface FileOperationsDeps {
   ) => void;
   openFile: (path: string, options?: { preview?: boolean }) => Promise<void>;
   renameBuffers: (oldPath: string, newPath: string) => void;
+  /** When true, skip the "unsaved changes" confirm dialog on file close. */
+  skipDirtyConfirm?: boolean;
 }
 
 export interface UseFileOperationsReturn {
@@ -170,6 +170,7 @@ function useMutationCallbacks(
   commitSessionState: (s: EditorSessionState, opts?: { syncEditorDoc?: boolean }) => void,
   openFile: (path: string) => Promise<void>,
   renameBuffers: (oldPath: string, newPath: string) => void,
+  skipDirtyConfirm?: boolean,
 ) {
   const createFile = useCallback(async (path: string) => {
     try {
@@ -192,11 +193,7 @@ function useMutationCallbacks(
   const closeFile = useCallback(async (path: string) => {
     const tab = findSessionTab(getSessionState(), path);
     if (tab?.dirty) {
-      // In dev mode, skip the confirmation dialog for faster file switching during testing.
-      // Controlled by Settings.skipDirtyConfirm (defaults to true in dev, false in production).
-      const settings = readLocalStorage<Partial<Settings>>(SETTINGS_KEY, {});
-      const skip = settings.skipDirtyConfirm ?? import.meta.env.DEV;
-      if (!skip) {
+      if (!skipDirtyConfirm) {
         const answer = window.confirm(
           `"${tab.name}" has unsaved changes.\n\nPress OK to discard, or Cancel to keep editing.`,
         );
@@ -245,6 +242,7 @@ export function useFileOperations({
   commitSessionState,
   openFile,
   renameBuffers,
+  skipDirtyConfirm,
 }: FileOperationsDeps): UseFileOperationsReturn {
   const { saveFile, saveAs } = useSaveCallbacks(
     fs, refreshTree, addRecentFile, getSessionState, buffers, liveDocs, commitSessionState,
@@ -252,7 +250,7 @@ export function useFileOperations({
   const { createFile, createDirectory, closeFile, handleRename, handleDelete } =
     useMutationCallbacks(
       fs, refreshTree, getSessionState, buffers, liveDocs, commitSessionState,
-      openFile, renameBuffers,
+      openFile, renameBuffers, skipDirtyConfirm,
     );
 
   return { saveFile, createFile, createDirectory, closeFile, handleRename, handleDelete, saveAs };

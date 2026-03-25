@@ -261,6 +261,7 @@ export function useEditorSession({
   const fileOps = useFileOperations({
     fs, refreshTree, addRecentFile, getSessionState,
     buffers, liveDocs, commitSessionState, openFile, renameBuffers,
+    skipDirtyConfirm: import.meta.env.DEV,
   });
 
   return {

@@ -47,15 +47,16 @@ export function useEditorScroll(view: EditorView | null): UseEditorScrollReturn 
 
     const scroller = view.scrollDOM;
 
+    let cancelled = false;
+
     const onScroll = () => {
-      // Cancel any pending rAF to coalesce rapid scroll events into a
-      // single React state update per animation frame.
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
       }
 
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = 0;
+        if (cancelled) return;
         const currentTop = scroller.scrollTop;
         const delta = Math.abs(currentTop - lastScrollTopRef.current);
         lastScrollTopRef.current = currentTop;
@@ -77,6 +78,7 @@ export function useEditorScroll(view: EditorView | null): UseEditorScrollReturn 
     scroller.addEventListener("scroll", onScroll, { passive: true });
 
     return () => {
+      cancelled = true;
       scroller.removeEventListener("scroll", onScroll);
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
