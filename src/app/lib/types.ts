@@ -29,4 +29,6 @@ export interface Settings {
   writingTheme: string;
   /** User-provided custom CSS injected via a <style> tag. */
   customCss: string;
+  /** Skip "unsaved changes" confirmation when switching files. Useful during dev/testing. */
+  skipDirtyConfirm: boolean;
 }

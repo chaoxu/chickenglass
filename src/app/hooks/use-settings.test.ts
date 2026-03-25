@@ -66,6 +66,7 @@ describe("useSettings", () => {
         themeName: "default",
         writingTheme: "academic",
         customCss: "",
+        skipDirtyConfirm: true,
       });
     });
 

@@ -15,7 +15,9 @@ import { useCallback } from "react";
 import type { RefObject } from "react";
 import type { FileSystem } from "../file-manager";
 import { isTauri } from "../../lib/tauri";
-import { basename } from "../lib/utils";
+import { basename, readLocalStorage } from "../lib/utils";
+import type { Settings } from "../lib/types";
+import { SETTINGS_KEY } from "../../constants";
 import { toProjectRelativePathCommand } from "../tauri-client/fs";
 import { measureAsync } from "../perf";
 import { applySaveAsResult } from "../editor-session-save";
@@ -190,10 +192,16 @@ function useMutationCallbacks(
   const closeFile = useCallback(async (path: string) => {
     const tab = findSessionTab(getSessionState(), path);
     if (tab?.dirty) {
-      const answer = window.confirm(
-        `"${tab.name}" has unsaved changes.\n\nPress OK to discard, or Cancel to keep editing.`,
-      );
-      if (!answer) return;
+      // In dev mode, skip the confirmation dialog for faster file switching during testing.
+      // Controlled by Settings.skipDirtyConfirm (defaults to true in dev, false in production).
+      const settings = readLocalStorage<Partial<Settings>>(SETTINGS_KEY, {});
+      const skip = settings.skipDirtyConfirm ?? import.meta.env.DEV;
+      if (!skip) {
+        const answer = window.confirm(
+          `"${tab.name}" has unsaved changes.\n\nPress OK to discard, or Cancel to keep editing.`,
+        );
+        if (!answer) return;
+      }
     }
     commitSessionState(closeSessionTab(getSessionState(), path));
     buffers.current.delete(path);

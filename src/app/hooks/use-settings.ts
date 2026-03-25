@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS: Settings = {
   themeName: "default",
   writingTheme: "academic",
   customCss: "",
+  skipDirtyConfirm: import.meta.env.DEV,
 };
 
 function isValidTheme(value: unknown): value is Settings["theme"] {
