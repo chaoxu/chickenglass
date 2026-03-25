@@ -99,9 +99,11 @@ describe("createDemoFileSystem", () => {
 });
 
 describe("createBlogDemoFileSystem", () => {
-  it("includes FORMAT.md from the repo root in the demo project", async () => {
+  it("loads the checked-in demo project when it is available", async () => {
     const fs = createBlogDemoFileSystem();
     expect(await fs.exists("FORMAT.md")).toBe(true);
+    expect(await fs.exists("index.md")).toBe(true);
+    expect(await fs.exists("graph-ride/main.md")).toBe(true);
   });
 });
 
@@ -111,7 +113,7 @@ describe("createBlogDemoFileSystem fallback", () => {
     vi.resetModules();
   });
 
-  it("falls back to the built-in sample project when demo/blog is absent", async () => {
+  it("falls back to the built-in sample project when the demo fixture is absent", async () => {
     vi.resetModules();
     vi.doMock("./demo-blog", () => ({
       getBlogFiles: () => ({ "FORMAT.md": "# Format" }),

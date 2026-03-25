@@ -416,7 +416,7 @@ export function createDemoFileSystem(): MemoryFileSystem {
   return new MemoryFileSystem(defaultDemoFiles);
 }
 
-/** Create a demo filesystem with the blog project. */
+/** Create a demo filesystem with the imported demo project. */
 export function createBlogDemoFileSystem(): MemoryFileSystem {
   const blogFiles = getBlogFiles();
   const hasLocalBlogProject = Object.keys(blogFiles).some((path) => path !== "FORMAT.md");

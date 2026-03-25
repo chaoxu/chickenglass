@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Import blog posts from the Hakyll source repo into Coflat demo/blog/.
+# Import blog posts from the Hakyll source repo into Coflat demo/.
 #
 # Uses Pandoc to parse and re-emit markdown, with a Lua filter that:
 #   - Converts > blockquotes to ::: Blockquote fenced divs
@@ -19,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SRC="${1:-/tmp/coflat-blog-source}"
-DEST="$REPO_ROOT/demo/blog"
+DEST="$REPO_ROOT/demo"
 FILTER="$SCRIPT_DIR/import-filter.lua"
 
 if [ ! -d "$SRC/posts" ]; then
