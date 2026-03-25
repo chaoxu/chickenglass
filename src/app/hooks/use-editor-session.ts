@@ -42,6 +42,7 @@ export interface UseEditorSessionReturn {
   liveDocs: React.RefObject<Map<string, string>>;
   isPathOpen: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
+  cancelPendingOpenFile: () => void;
   handleDocChange: (doc: string) => void;
   openFile: (path: string) => Promise<void>;
   openFileWithContent: (name: string, content: string) => Promise<void>;
@@ -192,6 +193,10 @@ export function useEditorSession({
   const isPathDirty = useCallback((path: string): boolean => {
     const currentDocument = getCurrentSessionDocument(stateRef.current);
     return currentDocument?.path === path && currentDocument.dirty;
+  }, []);
+
+  const cancelPendingOpenFile = useCallback(() => {
+    openFileRequestRef.current += 1;
   }, []);
 
   const handleDocChange = useCallback((doc: string) => {
@@ -448,8 +453,9 @@ export function useEditorSession({
         );
         addRecentFile(relativePath);
         await refreshTree();
-      } catch {
-        // best-effort: save-as dialog cancelled or failed by user action
+      } catch (e: unknown) {
+        console.error("[session] save-as failed:", e);
+        throw e;
       }
       return;
     }
@@ -476,6 +482,7 @@ export function useEditorSession({
     liveDocs,
     isPathOpen,
     isPathDirty,
+    cancelPendingOpenFile,
     handleDocChange,
     openFile,
     openFileWithContent,

@@ -22,6 +22,7 @@ export interface MenuEventHandlers {
   onSaveAs?: () => void;
   onOpenFile?: () => void;
   onCloseFile?: () => void;
+  onQuit?: () => void;
   onToggleSidebar?: () => void;
   onShowSearch?: () => void;
   onShowShortcuts?: () => void;
@@ -42,6 +43,7 @@ const handlerEventMap: Record<string, keyof MenuEventHandlers> = {
   file_close_tab: "onCloseFile",
   file_open_folder: "onOpenFolder",
   file_export: "onExport",
+  file_quit: "onQuit",
 
   // ── Edit (custom items — predefined Undo/Copy/etc. handled by OS)
   edit_find: "onShowSearch",
@@ -107,9 +109,9 @@ export function useMenuEvents(handlers: MenuEventHandlers): void {
           return;
         }
 
-        // file_new, file_open_file, file_quit, view_zoom_in, view_zoom_out,
-        // view_focus_mode, view_debug, edit_replace: not yet wired to frontend
-        // handlers. They can be added when those features are implemented.
+        // file_new, view_zoom_in, view_zoom_out, view_focus_mode, view_debug,
+        // edit_replace: not yet wired to frontend handlers. They can be added
+        // when those features are implemented.
       });
     })();
 

@@ -3,8 +3,6 @@ import type { RefObject } from "react";
 import { FileWatcher } from "../file-watcher";
 import { isTauri } from "../tauri-fs";
 
-let latestWatcherEffectId = 0;
-
 interface UseProjectFileWatcherOptions {
   projectRoot: string | null;
   containerRef: RefObject<HTMLElement | null>;
@@ -33,7 +31,6 @@ export function useProjectFileWatcher({
       container,
     });
     let cancelled = false;
-    const effectId = ++latestWatcherEffectId;
 
     const stopWatcher = () => watcher.unwatch().catch((e: unknown) => {
       console.error("[file-watcher] failed to stop watcher", e);
@@ -41,7 +38,7 @@ export function useProjectFileWatcher({
 
     void watcher.watch(projectRoot)
       .then(() => {
-        if (cancelled && latestWatcherEffectId === effectId) {
+        if (cancelled) {
           void stopWatcher();
         }
       })

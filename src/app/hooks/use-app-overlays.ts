@@ -27,6 +27,7 @@ interface AppOverlayDeps {
     "currentPath" | "liveDocs" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
   >;
   onOpenFile: () => void;
+  onQuit: () => void;
 }
 
 export interface AppOverlayController {
@@ -44,6 +45,7 @@ export function useAppOverlays({
   workspace,
   editor,
   onOpenFile,
+  onQuit,
 }: AppOverlayDeps): AppOverlayController {
   const [indexer] = useState(() => new BackgroundIndexer());
 
@@ -87,12 +89,19 @@ export function useAppOverlays({
     });
   }, [workspace.fileTree, fs]);
 
+  const handleSaveAs = useCallback(() => {
+    void editor.saveAs().catch((e: unknown) => {
+      console.error("[overlays] save-as failed", e);
+    });
+  }, [editor]);
+
   const commands: PaletteCommand[] = useMemo(() => [
     { id: "file.save", label: "Save File", category: "File", shortcut: `${modKey}+S`, action: () => { void editor.saveFile(); } },
     { id: "file.open-file", label: "Open File...", category: "File", shortcut: `${modKey}+O`, action: () => onOpenFile() },
-    { id: "file.save-as", label: "Save As...", category: "File", shortcut: `${modKey}+Shift+S`, action: () => { void editor.saveAs(); } },
+    { id: "file.save-as", label: "Save As...", category: "File", shortcut: `${modKey}+Shift+S`, action: handleSaveAs },
     { id: "file.close-file", label: "Close File", category: "File", shortcut: `${modKey}+W`, action: () => { void editor.closeCurrentFile(); } },
     { id: "file.open-folder", label: "Open Folder...", category: "File", action: () => workspace.handleOpenFolder() },
+    { id: "file.quit", label: "Quit App", category: "File", shortcut: `${modKey}+Q`, action: onQuit },
     ...(workspace.recentFiles ?? []).map((path, i) => ({
       id: `file.recent-${i}`,
       label: `Open Recent: ${basename(path)}`,
@@ -117,7 +126,7 @@ export function useAppOverlays({
     { id: "export.batch-html", label: "Export All Files to HTML", category: "Export", action: handleBatchExportHtml },
     { id: "help.shortcuts", label: "Keyboard Shortcuts", category: "Help", shortcut: `${modKey}+/`, action: () => dialogs.setShortcutsOpen(true) },
     { id: "help.about", label: "About Coflat", category: "Help", action: () => dialogs.setAboutOpen(true) },
-  ], [dialogs, editor, workspace, handleExportHtml, handleBatchExportHtml, onOpenFile]);
+  ], [dialogs, editor, workspace, handleExportHtml, handleBatchExportHtml, handleSaveAs, onOpenFile, onQuit]);
 
   useAutoSave(
     editor.hasDirtyDocument,
@@ -128,22 +137,25 @@ export function useAppOverlays({
     suspendAutoSaveVersionRef,
   );
 
-  useHotkeys([
+  const hotkeys = useMemo(() => [
     { key: "mod+s", handler: () => { void editor.saveFile(); } },
-    { key: "mod+shift+s", handler: () => { void editor.saveAs(); } },
+    { key: "mod+shift+s", handler: handleSaveAs },
     { key: "mod+shift+p", handler: () => dialogs.setPaletteOpen((value) => !value) },
     { key: "mod+shift+f", handler: () => dialogs.setSearchOpen((value) => !value) },
     { key: "mod+,", handler: () => dialogs.setSettingsOpen((value) => !value) },
     { key: "mod+/", handler: () => dialogs.setShortcutsOpen((value) => !value) },
     { key: "mod+g", handler: () => dialogs.setGotoLineOpen((value) => !value) },
     { key: "mod+b", handler: () => workspace.setSidebarCollapsed((value) => !value) },
-  ]);
+  ], [dialogs, editor, handleSaveAs, workspace]);
+
+  useHotkeys(hotkeys);
 
   useMenuEvents({
     onSave: () => { void editor.saveFile(); },
     onOpenFile: onOpenFile,
-    onSaveAs: () => { void editor.saveAs(); },
+    onSaveAs: handleSaveAs,
     onCloseFile: () => { void editor.closeCurrentFile(); },
+    onQuit: onQuit,
     onToggleSidebar: () => workspace.setSidebarCollapsed((value) => !value),
     onShowSearch: () => dialogs.setSearchOpen(true),
     onShowShortcuts: () => dialogs.setShortcutsOpen(true),

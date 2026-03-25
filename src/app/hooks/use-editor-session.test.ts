@@ -7,6 +7,19 @@ import { MemoryFileSystem } from "../file-manager";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 import type { UseEditorSessionReturn } from "./use-editor-session";
 
+const sessionMockState = vi.hoisted(() => ({
+  isTauri: false,
+  saveDialog: vi.fn(async () => null as string | null),
+  toProjectRelativePath: vi.fn(async (path: string) => path),
+  reset() {
+    this.isTauri = false;
+    this.saveDialog.mockReset();
+    this.saveDialog.mockImplementation(async () => null);
+    this.toProjectRelativePath.mockReset();
+    this.toProjectRelativePath.mockImplementation(async (path: string) => path);
+  },
+}));
+
 vi.mock("../perf", () => ({
   measureAsync: (_name: string, task: () => Promise<unknown>) => task(),
   withPerfOperation: async (
@@ -25,6 +38,18 @@ vi.mock("../perf", () => ({
     measureSync: (_spanName, spanTask) => spanTask(),
     end: () => {},
   }),
+}));
+
+vi.mock("../tauri-fs", () => ({
+  isTauri: () => sessionMockState.isTauri,
+}));
+
+vi.mock("../tauri-client/fs", () => ({
+  toProjectRelativePathCommand: sessionMockState.toProjectRelativePath,
+}));
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  save: sessionMockState.saveDialog,
 }));
 
 const { useEditorSession } = await import("./use-editor-session");
@@ -95,6 +120,7 @@ describe("useEditorSession", () => {
   let root: Root;
 
   beforeEach(() => {
+    sessionMockState.reset();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -209,5 +235,23 @@ describe("useEditorSession", () => {
     expect(ref.result.currentPath).toBe("draft.md");
     expect(ref.result.editorDoc).toBe("hello!");
     expect(ref.result.currentDocument?.dirty).toBe(true);
+  });
+
+  it("rejects real save-as failures instead of treating them like cancel", async () => {
+    sessionMockState.isTauri = true;
+    sessionMockState.saveDialog.mockResolvedValue("/tmp/renamed.md");
+    sessionMockState.toProjectRelativePath.mockRejectedValue(new Error("outside project"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fs = new MemoryFileSystem({ "draft.md": "hello" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+    });
+
+    await expect(ref.result.saveAs()).rejects.toThrow("outside project");
+    expect(consoleError).toHaveBeenCalledWith("[session] save-as failed:", expect.any(Error));
+    consoleError.mockRestore();
   });
 });

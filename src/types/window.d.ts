@@ -62,5 +62,31 @@ declare global {
       clearPerf: () => Promise<void>;
       togglePerfPanel: () => void;
     };
+
+    /**
+     * Dev-only native smoke helpers exposed in Tauri debug builds.
+     * Set by useAppDebug; cleared on unmount.
+     */
+    __tauriSmoke?: {
+      openProject: (path: string) => Promise<boolean>;
+      openFile: (path: string) => Promise<void>;
+      requestNativeClose: () => Promise<void>;
+      listWindows: () => Promise<Array<{ label: string; focused: boolean }>>;
+      getWindowState: () => Promise<{
+        projectRoot: string | null;
+        currentDocument: { path: string; name: string; dirty: boolean } | null;
+        dirty: boolean;
+        startupComplete: boolean;
+        restoredProjectRoot: string | null;
+        mode: EditorMode;
+        backendProjectRoot: string | null;
+        backendProjectGeneration: number | null;
+        watcherRoot: string | null;
+        watcherGeneration: number | null;
+        watcherActive: boolean;
+        lastFocusedWindow: string | null;
+      }>;
+      simulateExternalChange: (relativePath: string) => Promise<void>;
+    };
   }
 }

@@ -1,10 +1,18 @@
 import { act, createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FileSystem } from "../file-manager";
+import type { FileEntry, FileSystem } from "../file-manager";
+
+interface MockWindowState {
+  projectRoot: string | null;
+  currentDocument: { path: string; name: string } | null;
+  sidebarWidth: number;
+  sidebarSections: unknown[];
+  version: number;
+}
 
 const workspaceMockState = vi.hoisted(() => ({
-  openFolderAt: vi.fn(async (_path: string) => {}),
+  openFolderAt: vi.fn(async (_path: string, _generation: number) => true),
   saveWindowState: vi.fn(),
   addRecentFolder: vi.fn(),
   addRecentFile: vi.fn(),
@@ -16,10 +24,10 @@ const workspaceMockState = vi.hoisted(() => ({
     sidebarWidth: 220,
     sidebarSections: [],
     version: 2,
-  },
+  } as MockWindowState,
   reset() {
     this.openFolderAt.mockReset();
-    this.openFolderAt.mockImplementation(async (_path: string) => {});
+    this.openFolderAt.mockImplementation(async (_path: string, _generation: number) => true);
     this.saveWindowState.mockReset();
     this.addRecentFolder.mockReset();
     this.addRecentFile.mockReset();
@@ -32,7 +40,7 @@ const workspaceMockState = vi.hoisted(() => ({
       sidebarWidth: 220,
       sidebarSections: [],
       version: 2,
-    };
+    } as MockWindowState;
   },
 }));
 
@@ -89,7 +97,7 @@ vi.mock("./use-recent-files", () => ({
 
 vi.mock("../tauri-fs", () => ({
   isTauri: () => true,
-  openFolder: vi.fn(async () => null),
+  pickFolder: vi.fn(async () => null),
   openFolderAt: workspaceMockState.openFolderAt,
 }));
 
@@ -121,26 +129,66 @@ const { useAppWorkspaceSession } = await import("./use-app-workspace-session");
 
 interface HarnessRef {
   projectRoot: string | null;
+  fileTree: FileEntry | null;
+  projectConfig: Record<string, unknown>;
   startupComplete: boolean;
-  openProjectRoot: (path: string) => Promise<void>;
+  openProjectRoot: (path: string) => Promise<FileEntry | null>;
 }
 
 function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
   const ref: HarnessRef = {
     projectRoot: null,
+    fileTree: null,
+    projectConfig: {},
     startupComplete: false,
-    openProjectRoot: async () => {},
+    openProjectRoot: async () => null,
   };
 
   const Harness: FC = () => {
     const result = useAppWorkspaceSession(fs);
     ref.projectRoot = result.projectRoot;
+    ref.fileTree = result.fileTree;
+    ref.projectConfig = result.projectConfig;
     ref.startupComplete = result.startupComplete;
     ref.openProjectRoot = result.openProjectRoot;
     return null;
   };
 
   return { Harness, ref };
+}
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
+}
+
+function createQueuedFs(listTreeResults: Deferred<FileEntry>[]): FileSystem {
+  return {
+    listTree: () => {
+      const next = listTreeResults.shift();
+      if (!next) {
+        throw new Error("unexpected listTree call");
+      }
+      return next.promise;
+    },
+    readFile: async () => "",
+    writeFile: async () => {},
+    createFile: async () => {},
+    exists: async () => false,
+    renameFile: async () => {},
+    createDirectory: async () => {},
+    deleteFile: async () => {},
+    writeFileBinary: async () => {},
+    readFileBinary: async () => new Uint8Array(),
+  };
 }
 
 const fsStub: FileSystem = {
@@ -191,6 +239,10 @@ describe("useAppWorkspaceSession", () => {
   });
 
   it("clears the persisted document when switching to a different project root", async () => {
+    workspaceMockState.windowState = {
+      ...workspaceMockState.windowState,
+      projectRoot: null,
+    };
     const { Harness, ref } = createHarness(fsStub);
 
     await act(async () => {
@@ -206,9 +258,107 @@ describe("useAppWorkspaceSession", () => {
     });
 
     expect(ref.projectRoot).toBe("/tmp/next-project");
-    expect(workspaceMockState.openFolderAt).toHaveBeenLastCalledWith("/tmp/next-project");
+    expect(workspaceMockState.openFolderAt).toHaveBeenLastCalledWith(
+      "/tmp/next-project",
+      expect.any(Number),
+    );
     expect(workspaceMockState.saveWindowState).toHaveBeenCalledWith({
       projectRoot: "/tmp/next-project",
+      currentDocument: null,
+    });
+  });
+
+  it("keeps tree and config from the newest overlapping project-root load", async () => {
+    workspaceMockState.windowState = {
+      ...workspaceMockState.windowState,
+      projectRoot: null,
+    };
+    const firstTree = createDeferred<FileEntry>();
+    const secondTree = createDeferred<FileEntry>();
+    const firstConfig = createDeferred<Record<string, unknown>>();
+    const secondConfig = createDeferred<Record<string, unknown>>();
+    const fs = createQueuedFs([firstTree, secondTree]);
+    workspaceMockState.loadProjectConfig
+      .mockImplementationOnce(async () => firstConfig.promise)
+      .mockImplementationOnce(async () => secondConfig.promise);
+    const { Harness, ref } = createHarness(fs);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    let openFirst!: Promise<FileEntry | null>;
+    let openSecond!: Promise<FileEntry | null>;
+    await act(async () => {
+      openFirst = ref.openProjectRoot("/tmp/project-a");
+      await Promise.resolve();
+      openSecond = ref.openProjectRoot("/tmp/project-b");
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      secondTree.resolve({ name: "project-b", path: "", isDirectory: true, children: [] });
+      secondConfig.resolve({ bibliography: "b.bib" });
+      await openSecond;
+    });
+
+    await act(async () => {
+      firstTree.resolve({ name: "project-a", path: "", isDirectory: true, children: [] });
+      firstConfig.resolve({ bibliography: "a.bib" });
+      await openFirst;
+    });
+
+    expect(ref.projectRoot).toBe("/tmp/project-b");
+    expect(ref.fileTree?.name).toBe("project-b");
+    expect(ref.projectConfig).toEqual({ bibliography: "b.bib" });
+  });
+
+  it("does not let a stale startup restore overwrite a newer manual open", async () => {
+    const restoredOpen = createDeferred<boolean>();
+    workspaceMockState.openFolderAt
+      .mockImplementationOnce(async () => restoredOpen.promise)
+      .mockImplementationOnce(async (_path: string, _generation: number) => true);
+    const restoredTree = createDeferred<FileEntry>();
+    const manualTree = createDeferred<FileEntry>();
+    const restoredConfig = createDeferred<Record<string, unknown>>();
+    const manualConfig = createDeferred<Record<string, unknown>>();
+    const fs = createQueuedFs([manualTree, restoredTree]);
+    workspaceMockState.loadProjectConfig
+      .mockImplementationOnce(async () => manualConfig.promise)
+      .mockImplementationOnce(async () => restoredConfig.promise);
+    const { Harness, ref } = createHarness(fs);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    let manualOpen!: Promise<FileEntry | null>;
+    await act(async () => {
+      manualOpen = ref.openProjectRoot("/tmp/manual-project");
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      manualTree.resolve({ name: "manual", path: "", isDirectory: true, children: [] });
+      manualConfig.resolve({ bibliography: "manual.bib" });
+      await manualOpen;
+    });
+
+    await act(async () => {
+      restoredOpen.resolve(false);
+      restoredTree.resolve({ name: "restored", path: "", isDirectory: true, children: [] });
+      restoredConfig.resolve({ bibliography: "restored.bib" });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(ref.projectRoot).toBe("/tmp/manual-project");
+    expect(ref.fileTree?.name).toBe("manual");
+    expect(ref.projectConfig).toEqual({ bibliography: "manual.bib" });
+    expect(workspaceMockState.saveWindowState).not.toHaveBeenCalledWith({
+      projectRoot: null,
       currentDocument: null,
     });
   });
