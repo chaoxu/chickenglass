@@ -1,4 +1,4 @@
-import type { EditorState, Text } from "@codemirror/state";
+import { StateField, type EditorState, type Text } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import type { EditorView } from "@codemirror/view";
 import { parseTable, type ParsedTable } from "./table-utils";
@@ -51,6 +51,44 @@ function createTableRange(
   };
 }
 
+function collectTables(state: EditorState): readonly TableRange[] {
+  const tables: TableRange[] = [];
+  const seen = new Set<number>();
+
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (node.name !== "Table" || seen.has(node.from)) return;
+      seen.add(node.from);
+      const table = createTableRange(state.doc, node.from, node.to);
+      if (table) tables.push(table);
+    },
+  });
+
+  return tables;
+}
+
+/**
+ * Shared table discovery cache for the current document/tree.
+ *
+ * Table consumers should read this field instead of rewalking the syntax tree
+ * on selection, focus, viewport, or handler-only updates.
+ */
+export const tableDiscoveryField = StateField.define<readonly TableRange[]>({
+  create(state) {
+    return collectTables(state);
+  },
+
+  update(value, tr) {
+    if (
+      tr.docChanged ||
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+    ) {
+      return collectTables(tr.state);
+    }
+    return value;
+  },
+});
+
 /** Find the positions of all unescaped pipe characters in a string. */
 export function findPipePositions(text: string): number[] {
   const pipes: number[] = [];
@@ -76,24 +114,11 @@ export function findPipePositions(text: string): number[] {
  * position. The caller (table-render.ts) applies cursor logic separately when
  * deciding how to render each table.
  */
-export function findTablesInView(view: EditorView): TableRange[] {
-  const tables: TableRange[] = [];
-  const seen = new Set<number>();
-
-  for (const { from: vFrom, to: vTo } of view.visibleRanges) {
-    syntaxTree(view.state).iterate({
-      from: vFrom,
-      to: vTo,
-      enter(node) {
-        if (node.name !== "Table" || seen.has(node.from)) return;
-        seen.add(node.from);
-        const table = createTableRange(view.state.doc, node.from, node.to);
-        if (table) tables.push(table);
-      },
-    });
-  }
-
-  return tables;
+export function findTablesInView(view: EditorView): readonly TableRange[] {
+  const tables = findTablesInState(view.state);
+  return tables.filter((table) =>
+    view.visibleRanges.some(({ from, to }) => table.from <= to && table.to >= from),
+  );
 }
 
 /**
@@ -101,20 +126,8 @@ export function findTablesInView(view: EditorView): TableRange[] {
  * Unlike the view-based helper, this does not filter by visible ranges
  * since StateFields operate on the full document.
  */
-export function findTablesInState(state: EditorState): TableRange[] {
-  const tables: TableRange[] = [];
-  const seen = new Set<number>();
-
-  syntaxTree(state).iterate({
-    enter(node) {
-      if (node.name !== "Table" || seen.has(node.from)) return;
-      seen.add(node.from);
-      const table = createTableRange(state.doc, node.from, node.to);
-      if (table) tables.push(table);
-    },
-  });
-
-  return tables;
+export function findTablesInState(state: EditorState): readonly TableRange[] {
+  return state.field(tableDiscoveryField, false) ?? collectTables(state);
 }
 
 /** Find the table containing the given cursor position, or null. */
@@ -122,8 +135,21 @@ export function findTableAtCursor(
   tables: readonly TableRange[],
   cursorPos: number,
 ): TableRange | null {
-  for (const table of tables) {
-    if (cursorPos >= table.from && cursorPos <= table.to) return table;
+  let low = 0;
+  let high = tables.length - 1;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const table = tables[mid];
+    if (cursorPos < table.from) {
+      high = mid - 1;
+      continue;
+    }
+    if (cursorPos > table.to) {
+      low = mid + 1;
+      continue;
+    }
+    return table;
   }
   return null;
 }

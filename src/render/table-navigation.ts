@@ -5,14 +5,14 @@ import { applyTableMutation } from "./table-actions";
 import {
   findCellBounds,
   findTableAtCursor,
-  findTablesInView,
+  findTablesInState,
   getCursorColIndex,
   skipSeparator,
 } from "./table-discovery";
 
 /** Move cursor to the next cell (Tab). Returns true if handled. */
 function nextCell(view: EditorView): boolean {
-  const tables = findTablesInView(view);
+  const tables = findTablesInState(view.state);
   const cursorPos = view.state.selection.main.head;
   const doc = view.state.doc;
 
@@ -36,7 +36,7 @@ function nextCell(view: EditorView): boolean {
   const totalLines = table.lines.length;
   if (nextLineIdx >= totalLines) {
     applyTableMutation(view, table, (parsed) => addRow(parsed));
-    const newTables = findTablesInView(view);
+    const newTables = findTablesInState(view.state);
     const nextTable = findTableAtCursor(newTables, table.from);
     if (nextTable) {
       const targetLineNum = nextTable.startLineNumber + nextTable.lines.length - 1;
@@ -60,7 +60,7 @@ function nextCell(view: EditorView): boolean {
 
 /** Move cursor to the previous cell (Shift+Tab). Returns true if handled. */
 function previousCell(view: EditorView): boolean {
-  const tables = findTablesInView(view);
+  const tables = findTablesInState(view.state);
   const cursorPos = view.state.selection.main.head;
   const doc = view.state.doc;
 
@@ -94,7 +94,7 @@ function previousCell(view: EditorView): boolean {
 
 /** Move cursor to the next row (Enter). Returns true if handled. */
 function nextRow(view: EditorView): boolean {
-  const tables = findTablesInView(view);
+  const tables = findTablesInState(view.state);
   const cursorPos = view.state.selection.main.head;
   const doc = view.state.doc;
 
@@ -133,7 +133,7 @@ function nextRow(view: EditorView): boolean {
 
 /** ArrowLeft: at cell start, jump to end of previous cell. */
 function arrowLeft(view: EditorView): boolean {
-  const tables = findTablesInView(view);
+  const tables = findTablesInState(view.state);
   const cursorPos = view.state.selection.main.head;
   const doc = view.state.doc;
 
@@ -169,7 +169,7 @@ function arrowLeft(view: EditorView): boolean {
 
 /** ArrowRight: at cell end, jump to start of next cell. */
 function arrowRight(view: EditorView): boolean {
-  const tables = findTablesInView(view);
+  const tables = findTablesInState(view.state);
   const cursorPos = view.state.selection.main.head;
   const doc = view.state.doc;
 
@@ -206,7 +206,7 @@ function arrowRight(view: EditorView): boolean {
 
 /** ArrowUp: move to same column in previous row. */
 function arrowUp(view: EditorView): boolean {
-  const tables = findTablesInView(view);
+  const tables = findTablesInState(view.state);
   const cursorPos = view.state.selection.main.head;
   const doc = view.state.doc;
 
@@ -235,7 +235,7 @@ function arrowUp(view: EditorView): boolean {
 
 /** ArrowDown: move to same column in next row. */
 function arrowDown(view: EditorView): boolean {
-  const tables = findTablesInView(view);
+  const tables = findTablesInState(view.state);
   const cursorPos = view.state.selection.main.head;
   const doc = view.state.doc;
 
@@ -264,7 +264,7 @@ function arrowDown(view: EditorView): boolean {
 
 /** Backspace: prevent deleting at cell start (would destroy pipe). */
 function backspaceStop(view: EditorView): boolean {
-  const tables = findTablesInView(view);
+  const tables = findTablesInState(view.state);
   const cursorPos = view.state.selection.main.head;
 
   if (!view.state.selection.main.empty) return false;
@@ -284,7 +284,7 @@ function backspaceStop(view: EditorView): boolean {
 
 /** Delete: prevent deleting at cell end (would destroy pipe). */
 function deleteStop(view: EditorView): boolean {
-  const tables = findTablesInView(view);
+  const tables = findTablesInState(view.state);
   const cursorPos = view.state.selection.main.head;
 
   if (!view.state.selection.main.empty) return false;

@@ -7,6 +7,7 @@ import {
   analyzeFencedDivs,
   analyzeFootnotes,
   analyzeHeadings,
+  analyzeMath,
   analyzeReferences,
   findTrailingHeadingAttributes,
   stringTextSource,
@@ -103,6 +104,24 @@ describe("document semantics analyzers", () => {
     expect(equations[1]).toMatchObject({ id: "eq:second", number: 2 });
   });
 
+  it("analyzes inline and display math into shared math regions", () => {
+    const doc = "Inline $x$\n\n$$y^2$$ {#eq:test}\n";
+    const tree = parser.parse(doc);
+
+    const math = analyzeMath(stringTextSource(doc), tree);
+
+    expect(math).toHaveLength(2);
+    expect(math[0]).toMatchObject({
+      isDisplay: false,
+      latex: "x",
+    });
+    expect(math[1]).toMatchObject({
+      isDisplay: true,
+      latex: "y^2",
+    });
+    expect(math[1].labelFrom).toBeGreaterThan(math[1].contentTo);
+  });
+
   it("analyzes bracketed and narrative references once", () => {
     const doc = "See [@thm-main] and @eq:first.\n";
     const tree = parser.parse(doc);
@@ -135,6 +154,10 @@ describe("document semantics analyzers", () => {
 
     expect(semantics.equationById.get("eq:first")?.number).toBe(1);
     expect(semantics.references[0]?.ids).toEqual(["eq:first"]);
+    expect(semantics.mathRegions[0]).toMatchObject({
+      isDisplay: true,
+      latex: "x^2",
+    });
   });
 
   it("extracts includes from multi-line include blocks", () => {

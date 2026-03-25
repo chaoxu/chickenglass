@@ -105,6 +105,16 @@ export interface EquationSemantics {
   readonly latex: string;
 }
 
+export interface MathSemantics {
+  readonly from: number;
+  readonly to: number;
+  readonly isDisplay: boolean;
+  readonly contentFrom: number;
+  readonly contentTo: number;
+  readonly labelFrom?: number;
+  readonly latex: string;
+}
+
 export interface ReferenceSemantics {
   readonly from: number;
   readonly to: number;
@@ -127,6 +137,7 @@ export interface DocumentAnalysis {
   readonly fencedDivByFrom: ReadonlyMap<number, FencedDivSemantics>;
   readonly equations: readonly EquationSemantics[];
   readonly equationById: ReadonlyMap<string, EquationSemantics>;
+  readonly mathRegions: readonly MathSemantics[];
   readonly references: readonly ReferenceSemantics[];
   readonly referenceByFrom: ReadonlyMap<number, ReferenceSemantics>;
   readonly includes: readonly IncludeSemantics[];
@@ -208,6 +219,7 @@ interface UnifiedWalkResult {
   footnoteDefByFrom: Map<number, FootnoteDefinition>;
   fencedDivs: FencedDivSemantics[];
   equations: EquationSemantics[];
+  mathRegions: MathSemantics[];
   bracketedRefs: ReferenceSemantics[];
   linkRanges: { from: number; to: number }[];
   codeMathRanges: { from: number; to: number }[];
@@ -231,6 +243,7 @@ function unifiedTreeWalk(doc: TextSource, tree: Tree): UnifiedWalkResult {
 
   const equations: EquationSemantics[] = [];
   let equationCounter = 0;
+  const mathRegions: MathSemantics[] = [];
 
   const bracketedRefs: ReferenceSemantics[] = [];
   const linkRanges: { from: number; to: number }[] = [];
@@ -406,6 +419,31 @@ function unifiedTreeWalk(doc: TextSource, tree: Tree): UnifiedWalkResult {
         return;
       }
 
+      // --- Math spans (shared render metadata) ---
+      if (name === "InlineMath" || name === "DisplayMath") {
+        const isDisplay = name === "DisplayMath";
+        const markName = isDisplay ? "DisplayMathMark" : "InlineMathMark";
+        const marks = node.node.getChildren(markName);
+        const contentFrom = marks.length >= 1 ? marks[0].to : node.from;
+        const contentTo = marks.length >= 2 ? marks[marks.length - 1].from : node.to;
+        const labelFrom = isDisplay && node.node.getChild("EquationLabel") && marks.length >= 2
+          ? marks[marks.length - 1].to
+          : undefined;
+        const latex = contentFrom <= contentTo
+          ? doc.slice(contentFrom, contentTo)
+          : "";
+
+        mathRegions.push({
+          from: node.from,
+          to: node.to,
+          isDisplay,
+          contentFrom,
+          contentTo,
+          labelFrom,
+          latex,
+        });
+      }
+
       // --- Equation labels ---
       if (name === "EquationLabel") {
         const labelId = readBracedLabelId(doc.slice(node.from, node.to), 0, node.to - node.from, "eq:");
@@ -459,6 +497,7 @@ function unifiedTreeWalk(doc: TextSource, tree: Tree): UnifiedWalkResult {
     footnoteDefByFrom,
     fencedDivs,
     equations,
+    mathRegions,
     bracketedRefs,
     linkRanges,
     codeMathRanges,
@@ -597,6 +636,10 @@ export function analyzeEquations(doc: TextSource, tree: Tree): EquationSemantics
   return unifiedTreeWalk(doc, tree).equations;
 }
 
+export function analyzeMath(doc: TextSource, tree: Tree): MathSemantics[] {
+  return unifiedTreeWalk(doc, tree).mathRegions;
+}
+
 export function analyzeReferences(doc: TextSource, tree: Tree): ReferenceSemantics[] {
   const w = unifiedTreeWalk(doc, tree);
   const excludedRanges = [...w.linkRanges, ...w.codeMathRanges];
@@ -663,6 +706,7 @@ export function analyzeDocumentSemantics(
   };
   const fencedDivs = w.fencedDivs;
   const equations = w.equations;
+  const mathRegions = w.mathRegions;
 
   const excludedRanges = [...w.linkRanges, ...w.codeMathRanges];
   const narrativeRefs = collectNarrativeReferences(doc, excludedRanges);
@@ -679,6 +723,7 @@ export function analyzeDocumentSemantics(
     fencedDivByFrom: new Map(fencedDivs.map((div) => [div.from, div])),
     equations,
     equationById: new Map(equations.map((equation) => [equation.id, equation])),
+    mathRegions,
     references,
     referenceByFrom: new Map(references.map((reference) => [reference.from, reference])),
     includes,

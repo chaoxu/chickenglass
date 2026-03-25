@@ -22,10 +22,14 @@ import {
   type Range,
   StateField,
 } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
 import { buildDecorations, editorFocusField, focusTracker } from "./render-utils";
 import { mathMacrosField } from "./math-macros";
-import { findTableAtCursor, findTablesInState, findTablesInView } from "./table-discovery";
+import {
+  tableDiscoveryField,
+  findTableAtCursor,
+  findTablesInState,
+  findTablesInView,
+} from "./table-discovery";
 import { showTableContextMenu } from "./table-actions";
 import { tableKeybindings } from "./table-navigation";
 import { cellEditAnnotation, TableWidget } from "./table-widget";
@@ -107,7 +111,11 @@ const tableDecorationField = StateField.define<DecorationSet>({
       return value.map(tr.changes);
     }
 
-    if (cellEdit === "commit" || tr.docChanged || syntaxTree(tr.state) !== syntaxTree(tr.startState)) {
+    if (
+      cellEdit === "commit" ||
+      tr.docChanged ||
+      tr.state.field(tableDiscoveryField, false) !== tr.startState.field(tableDiscoveryField, false)
+    ) {
       return buildTableDecorationsFromState(tr.state);
     }
     return value;
@@ -141,6 +149,7 @@ export const tableRenderPlugin: Extension = [
   editorFocusField,
   focusTracker,
   mathMacrosField,
+  tableDiscoveryField,
   tableDecorationField,
   tableContextMenuHandler,
   tableKeybindings,

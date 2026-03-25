@@ -1,10 +1,16 @@
+import { EditorState } from "@codemirror/state";
+import { markdown } from "@codemirror/lang-markdown";
 import { describe, expect, it } from "vitest";
+import { markdownExtensions } from "../parser";
 import {
   findCellBounds,
   findClosestTable,
   findPipePositions,
   findTableAtCursor,
+  findTablesInState,
+  findTablesInView,
   skipSeparator,
+  tableDiscoveryField,
   type TableRange,
 } from "./table-discovery";
 import type { ParsedTable } from "./table-utils";
@@ -58,5 +64,56 @@ describe("table range helpers", () => {
     expect(skipSeparator(1, 1)).toBe(2);
     expect(skipSeparator(1, -1)).toBe(0);
     expect(skipSeparator(3, -1)).toBe(3);
+  });
+
+  it("reuses the cached table discovery result across selection-only updates", () => {
+    const state = EditorState.create({
+      doc: [
+        "| A | B |",
+        "| --- | --- |",
+        "| 1 | 2 |",
+      ].join("\n"),
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        tableDiscoveryField,
+      ],
+    });
+
+    const initialTables = state.field(tableDiscoveryField);
+    expect(findTablesInState(state)).toBe(initialTables);
+
+    const movedState = state.update({ selection: { anchor: 5 } }).state;
+    expect(movedState.field(tableDiscoveryField)).toBe(initialTables);
+
+    const changedState = movedState.update({
+      changes: { from: movedState.doc.length, insert: "\n| 3 | 4 |" },
+    }).state;
+    expect(changedState.field(tableDiscoveryField)).not.toBe(initialTables);
+  });
+
+  it("filters view tables from the cached state-level discovery", () => {
+    const state = EditorState.create({
+      doc: [
+        "| A | B |",
+        "| --- | --- |",
+        "| 1 | 2 |",
+        "",
+        "| C | D |",
+        "| --- | --- |",
+        "| 3 | 4 |",
+      ].join("\n"),
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        tableDiscoveryField,
+      ],
+    });
+
+    const tables = state.field(tableDiscoveryField);
+    const visibleTables = findTablesInView({
+      state,
+      visibleRanges: [{ from: tables[1].from, to: tables[1].to }],
+    } as unknown as import("@codemirror/view").EditorView);
+
+    expect(visibleTables).toEqual([tables[1]]);
   });
 });

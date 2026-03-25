@@ -33,6 +33,7 @@ vi.mock("./inline-render", () => ({
 }));
 
 vi.mock("./table-discovery", () => ({
+  tableDiscoveryField: [],
   findTablesInState: (state: { __tables?: Array<{ from: number; to: number }> }) =>
     state.__tables ?? [],
   findClosestTable: (

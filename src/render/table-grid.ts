@@ -29,8 +29,8 @@ import {
   keymap,
 } from "@codemirror/view";
 import { Annotation, EditorState, RangeSetBuilder, type RangeSet } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
 import {
+  tableDiscoveryField,
   findTablesInState,
   findTableAtCursor,
   findPipePositions,
@@ -190,148 +190,94 @@ function isStructuralAt(
 // Decoration builder
 // ---------------------------------------------------------------------------
 
-/** Build pipe replacements, line decorations, and separator hiding. */
-function buildStructuralDecorations(view: EditorView): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>();
-  const doc = view.state.doc;
-
-  syntaxTree(view.state).iterate({
-    enter(node) {
-      if (node.name !== "Table") return;
-
-      const startLine = doc.lineAt(node.from);
-      const endLine = doc.lineAt(node.to);
-      const columns = findPipePositions(startLine.text).length - 1;
-      if (columns < 1) return;
-
-      for (let ln = startLine.number; ln <= endLine.number; ln++) {
-        const line = doc.line(ln);
-
-        if (ln === startLine.number + 1) {
-          builder.add(line.from, line.from, separatorLine);
-          continue;
-        }
-
-        builder.add(line.from, line.from, gridRowLine(
-          columns, ln === startLine.number, ln === endLine.number,
-        ));
-
-        const pipes = findPipePositions(line.text);
-        for (let pi = 0; pi < pipes.length; pi++) {
-          builder.add(line.from + pipes[pi], line.from + pipes[pi] + 1, pipeReplace);
-        }
-      }
-
-      return false;
-    },
-  });
-
-  return builder.finish();
-}
-
-/** Build cell marks — provided via outerDecorations so they wrap around
- *  search highlights and other regular decorations instead of being split. */
-function buildCellDecorations(view: EditorView): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>();
-  const doc = view.state.doc;
-
-  syntaxTree(view.state).iterate({
-    enter(node) {
-      if (node.name !== "Table") return;
-
-      const startLine = doc.lineAt(node.from);
-      const endLine = doc.lineAt(node.to);
-      const columns = findPipePositions(startLine.text).length - 1;
-      if (columns < 1) return;
-
-      for (let ln = startLine.number; ln <= endLine.number; ln++) {
-        if (ln === startLine.number + 1) continue; // skip separator
-
-        const line = doc.line(ln);
-        const pipes = findPipePositions(line.text);
-        if (pipes.length < 2) continue;
-        const isHeader = ln === startLine.number;
-
-        for (let pi = 0; pi < pipes.length - 1; pi++) {
-          const cellStart = line.from + pipes[pi] + 1;
-          const cellEnd = line.from + pipes[pi + 1];
-          if (cellEnd > cellStart) {
-            builder.add(cellStart, cellEnd, cellMarkForCol(pi, isHeader));
-          }
-        }
-      }
-
-      return false;
-    },
-  });
-
-  return builder.finish();
-}
-
-// ---------------------------------------------------------------------------
-// Atomic ranges — structural zones the cursor should skip
-// ---------------------------------------------------------------------------
-
 /** Sentinel decoration used solely to mark atomic (non-editable) spans.
  *  atomicRanges accepts any RangeSet, so we reuse Decoration.mark. */
 const atomicMark = Decoration.mark({});
 
+interface TableGridArtifacts {
+  readonly structuralDecorations: DecorationSet;
+  readonly cellDecorations: DecorationSet;
+  readonly atomicRanges: RangeSet<Decoration>;
+}
+
 /**
- * Build a RangeSet covering every structural zone (pipes + padding spaces)
- * in all tables. EditorView.atomicRanges uses this to make CM6's native
- * cursor motion (moveByChar, moveVertically) skip over these regions.
+ * Build all table grid artifacts from the shared table cache in one pass.
+ *
+ * The table subsystem used to rediscover tables and rewalk the syntax tree
+ * three times here (structure, cells, atomic ranges). That multiplied the
+ * cost of every document-level table update. The shared state field already
+ * owns table discovery, so this layer now derives all view artifacts from the
+ * cached TableRange array in one linear pass.
  */
-function buildAtomicRanges(view: EditorView): RangeSet<Decoration> {
-  const builder = new RangeSetBuilder<Decoration>();
-  const doc = view.state.doc;
+function buildTableGridArtifacts(state: EditorState): TableGridArtifacts {
+  const structuralBuilder = new RangeSetBuilder<Decoration>();
+  const cellBuilder = new RangeSetBuilder<Decoration>();
+  const atomicBuilder = new RangeSetBuilder<Decoration>();
+  const doc = state.doc;
 
-  syntaxTree(view.state).iterate({
-    enter(node) {
-      if (node.name !== "Table") return;
+  for (const table of findTablesInState(state)) {
+    const columns = table.parsed.header.cells.length;
+    if (columns < 1) continue;
 
-      const startLine = doc.lineAt(node.from);
-      const endLine = doc.lineAt(node.to);
-      if (findPipePositions(startLine.text).length - 1 < 1) return;
+    for (let lineIndex = 0; lineIndex < table.lines.length; lineIndex += 1) {
+      const lineNumber = table.startLineNumber + lineIndex;
+      const line = doc.line(lineNumber);
 
-      for (let ln = startLine.number; ln <= endLine.number; ln++) {
-        const line = doc.line(ln);
-
-        // Separator row is entirely structural
-        if (ln === startLine.number + 1) {
-          if (line.from < line.to) {
-            builder.add(line.from, line.to, atomicMark);
-          }
-          continue;
+      if (lineIndex === 1) {
+        structuralBuilder.add(line.from, line.from, separatorLine);
+        if (line.from < line.to) {
+          atomicBuilder.add(line.from, line.to, atomicMark);
         }
+        continue;
+      }
 
-        const pipes = findPipePositions(line.text);
-        if (pipes.length < 2) continue;
+      const isHeader = lineIndex === 0;
+      const isLast = lineIndex === table.lines.length - 1;
+      structuralBuilder.add(line.from, line.from, gridRowLine(columns, isHeader, isLast));
 
-        const cells = getCellBounds(line, pipes);
+      const pipes = findPipePositions(line.text);
+      if (pipes.length < 2) continue;
 
-        // Walk left-to-right emitting structural gaps between editable zones.
-        // A structural gap is any span from the previous editable end (or line
-        // start) to the next editable start.
-        let cursor = 0; // offset within line.text
-        for (const cell of cells) {
-          const cellFromOff = cell.from - line.from;
-          const cellToOff = cell.to - line.from;
-          if (cellFromOff > cursor) {
-            builder.add(line.from + cursor, line.from + cellFromOff, atomicMark);
-          }
-          cursor = cellToOff;
-        }
-        // Trailing structural zone (last pipe + padding)
-        if (cursor < line.text.length) {
-          builder.add(line.from + cursor, line.to, atomicMark);
+      for (const pipeOffset of pipes) {
+        structuralBuilder.add(line.from + pipeOffset, line.from + pipeOffset + 1, pipeReplace);
+      }
+
+      for (let col = 0; col < pipes.length - 1; col += 1) {
+        const cellStart = line.from + pipes[col] + 1;
+        const cellEnd = line.from + pipes[col + 1];
+        if (cellEnd > cellStart) {
+          cellBuilder.add(cellStart, cellEnd, cellMarkForCol(col, isHeader));
         }
       }
 
-      return false;
-    },
-  });
+      const cells = getCellBounds(line, pipes);
+      let cursor = 0;
+      for (const cell of cells) {
+        const cellFromOff = cell.from - line.from;
+        const cellToOff = cell.to - line.from;
+        if (cellFromOff > cursor) {
+          atomicBuilder.add(line.from + cursor, line.from + cellFromOff, atomicMark);
+        }
+        cursor = cellToOff;
+      }
+      if (cursor < line.text.length) {
+        atomicBuilder.add(line.from + cursor, line.to, atomicMark);
+      }
+    }
+  }
 
-  return builder.finish();
+  return {
+    structuralDecorations: structuralBuilder.finish(),
+    cellDecorations: cellBuilder.finish(),
+    atomicRanges: atomicBuilder.finish(),
+  };
+}
+
+function tableDiscoveryChanged(update: ViewUpdate): boolean {
+  return (
+    update.state.field(tableDiscoveryField, false)
+    !== update.startState.field(tableDiscoveryField, false)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -806,44 +752,34 @@ export function deleteSelectedTableSelection(view: EditorView): boolean {
 const tableGridPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    outerDecorations: DecorationSet;
     atomicRanges: RangeSet<Decoration>;
     constructor(view: EditorView) {
-      this.decorations = buildStructuralDecorations(view);
-      this.atomicRanges = buildAtomicRanges(view);
+      const artifacts = buildTableGridArtifacts(view.state);
+      this.decorations = artifacts.structuralDecorations;
+      this.outerDecorations = artifacts.cellDecorations;
+      this.atomicRanges = artifacts.atomicRanges;
     }
     update(update: ViewUpdate) {
-      if (update.docChanged || syntaxTree(update.state) !== syntaxTree(update.startState)) {
-        this.decorations = buildStructuralDecorations(update.view);
-        this.atomicRanges = buildAtomicRanges(update.view);
+      if (update.docChanged || tableDiscoveryChanged(update)) {
+        const artifacts = buildTableGridArtifacts(update.state);
+        this.decorations = artifacts.structuralDecorations;
+        this.outerDecorations = artifacts.cellDecorations;
+        this.atomicRanges = artifacts.atomicRanges;
       }
     }
   },
   {
     decorations: (v) => v.decorations,
     provide: (plugin) =>
-      EditorView.atomicRanges.of((view) =>
-        view.plugin(plugin)?.atomicRanges ?? Decoration.none,
-      ),
-  },
-);
-
-/** Cell marks provided via outerDecorations — wraps around search highlights
- *  and other regular marks instead of being split by them. */
-const tableCellPlugin = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
-    constructor(view: EditorView) {
-      this.decorations = buildCellDecorations(view);
-    }
-    update(update: ViewUpdate) {
-      if (update.docChanged || syntaxTree(update.state) !== syntaxTree(update.startState)) {
-        this.decorations = buildCellDecorations(update.view);
-      }
-    }
-  },
-  {
-    provide: (plugin) =>
-      EditorView.outerDecorations.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none),
+      [
+        EditorView.outerDecorations.of((view) =>
+          view.plugin(plugin)?.outerDecorations ?? Decoration.none,
+        ),
+        EditorView.atomicRanges.of((view) =>
+          view.plugin(plugin)?.atomicRanges ?? Decoration.none,
+        ),
+      ],
   },
 );
 
@@ -896,8 +832,8 @@ const tableGridTheme = EditorView.baseTheme({
 // ---------------------------------------------------------------------------
 
 export const tableGridExtension = [
+  tableDiscoveryField,
   tableGridPlugin,
-  tableCellPlugin,
   tableGridTheme,
   tableClipboardHandlers,
   gridContextMenuHandler,

@@ -16,7 +16,7 @@ import {
   type EditorView,
   type ViewUpdate,
 } from "@codemirror/view";
-import { type Extension, type Range } from "@codemirror/state";
+import { type EditorSelection, type Extension, type Range } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
 import { resolveCrossref } from "../index/crossref-resolver";
 import {
@@ -27,8 +27,72 @@ import {
 } from "../citations/citation-render";
 import { type CslProcessor, registerCitationsWithProcessor } from "../citations/csl-processor";
 import { CrossrefWidget, ClusteredCrossrefWidget, MixedClusterWidget, UnresolvedRefWidget, type MixedClusterPart } from "./crossref-render";
-import { buildDecorations, cursorInRange, pushWidgetDecoration, defaultShouldUpdate, createSimpleViewPlugin } from "./render-utils";
+import { buildDecorations, cursorInRange, pushWidgetDecoration, createSimpleViewPlugin } from "./render-utils";
 import { documentAnalysisField } from "../semantics/codemirror-source";
+import type { DocumentAnalysis, ReferenceSemantics } from "../semantics/document";
+
+interface ReferenceRegistrationCacheEntry {
+  readonly analysis: DocumentAnalysis;
+  readonly store: BibStore;
+  readonly processorRevision: number;
+}
+
+const referenceRegistrationCache = new WeakMap<CslProcessor, ReferenceRegistrationCacheEntry>();
+
+function findActiveReference(
+  references: readonly ReferenceSemantics[],
+  selection: EditorSelection,
+): ReferenceSemantics | undefined {
+  const { from, to } = selection.main;
+  let lo = 0;
+  let hi = references.length - 1;
+  let candidate: ReferenceSemantics | undefined;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const ref = references[mid];
+    if (ref.from <= from) {
+      candidate = ref;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  return candidate && to <= candidate.to ? candidate : undefined;
+}
+
+function ensureCitationsRegistered(
+  analysis: DocumentAnalysis,
+  store: BibStore,
+  processor: CslProcessor,
+): void {
+  const cached = referenceRegistrationCache.get(processor);
+  if (
+    cached?.analysis === analysis &&
+    cached.store === store &&
+    cached.processorRevision === processor.revision
+  ) {
+    return;
+  }
+
+  registerCitationsWithProcessor(
+    analysis.references
+      .filter((ref) => ref.ids.some((id) => store.has(id)))
+      .map((ref) => {
+        const bibIds = ref.ids.filter((id) => store.has(id));
+        const bibLocators = ref.locators.filter((_, i) => store.has(ref.ids[i]));
+        return { ids: bibIds, locators: bibLocators };
+      }),
+    processor,
+  );
+
+  referenceRegistrationCache.set(processor, {
+    analysis,
+    store,
+    processorRevision: processor.revision,
+  });
+}
 
 /**
  * Collect decoration ranges for all references (crossrefs + citations).
@@ -47,24 +111,14 @@ export function collectReferenceRanges(
   cslProcessor?: CslProcessor,
 ): Range<Decoration>[] {
   const processor = cslProcessor ?? view.state.field(bibDataField).cslProcessor;
-  const doc = view.state.doc.toString();
   const analysis = view.state.field(documentAnalysisField);
   const equationLabels = analysis.equationById;
   const allRefs = analysis.references;
 
-  // Register citation clusters with CSL processor (needed for numeric styles).
-  // For mixed clusters (crossref + citation), only register the bib ids so
-  // numeric styles assign numbers correctly when cite() is called per-id.
-  registerCitationsWithProcessor(
-    allRefs
-      .filter((ref) => ref.ids.some((id) => store.has(id)))
-      .map((ref) => {
-        const bibIds = ref.ids.filter((id) => store.has(id));
-        const bibLocators = ref.locators.filter((_, i) => store.has(ref.ids[i]));
-        return { ids: bibIds, locators: bibLocators };
-      }),
-    processor,
-  );
+  // Numeric CSL registration is global to document order. Cache it at the
+  // (analysis, bibliography-store) boundary so ordinary navigation does not
+  // reset and replay every citation cluster.
+  ensureCitationsRegistered(analysis, store, processor);
 
   const sourceMarkDecoration = Decoration.mark({ class: CSS.referenceSource });
   const items: Range<Decoration>[] = [];
@@ -87,7 +141,7 @@ export function collectReferenceRanges(
         pushWidgetDecoration(items, new CitationWidget(rendered, ref.ids), ref.from, ref.to);
       } else if (hasCitation) {
         // Mixed cluster — split crossref ids from citation ids
-        const raw = doc.slice(ref.from, ref.to);
+        const raw = view.state.sliceDoc(ref.from, ref.to);
         const parts: MixedClusterPart[] = ref.ids.map((id, index) => {
           if (store.has(id)) {
             const rendered = processor.cite([id], ref.locators ? [ref.locators[index]] : undefined);
@@ -106,7 +160,7 @@ export function collectReferenceRanges(
         pushWidgetDecoration(items, new MixedClusterWidget(parts, raw), ref.from, ref.to);
       } else if (ref.ids.length === 1) {
         const resolved = resolveCrossref(view.state, ref.ids[0], equationLabels);
-        const raw = doc.slice(ref.from, ref.to);
+        const raw = view.state.sliceDoc(ref.from, ref.to);
         const widget = resolved.kind === "block" || resolved.kind === "equation"
           ? new CrossrefWidget(resolved, raw)
           : new UnresolvedRefWidget(raw);
@@ -114,7 +168,7 @@ export function collectReferenceRanges(
       } else {
         // Multi-id bracketed reference where no id is a citation — resolve each as crossref
         const resolvedItems = ref.ids.map((id) => resolveCrossref(view.state, id, equationLabels));
-        const raw = doc.slice(ref.from, ref.to);
+        const raw = view.state.sliceDoc(ref.from, ref.to);
         const allResolved = resolvedItems.every((r) => r.kind === "block" || r.kind === "equation");
         const widget = allResolved
           ? new ClusteredCrossrefWidget(resolvedItems, ref.ids, raw)
@@ -125,7 +179,7 @@ export function collectReferenceRanges(
       // Narrative @id — crossref takes priority over citation
       const resolved = resolveCrossref(view.state, ref.ids[0], equationLabels);
       if (resolved.kind === "block" || resolved.kind === "equation") {
-        const raw = doc.slice(ref.from, ref.to);
+        const raw = view.state.sliceDoc(ref.from, ref.to);
         pushWidgetDecoration(items, new CrossrefWidget(resolved, raw), ref.from, ref.to);
       } else {
         const entry = store.get(ref.ids[0]);
@@ -147,11 +201,35 @@ function buildReferenceDecorations(view: EditorView): DecorationSet {
 
 /** Custom update predicate: standard conditions + bibDataEffect. */
 function referenceShouldUpdate(update: ViewUpdate): boolean {
-  return (
-    defaultShouldUpdate(update) ||
+  if (
+    update.docChanged ||
     update.transactions.some((tr) =>
       tr.effects.some((e) => e.is(bibDataEffect)),
-    )
+    ) ||
+    update.state.field(documentAnalysisField) !== update.startState.field(documentAnalysisField)
+  ) {
+    return true;
+  }
+
+  if (!update.selectionSet && !update.focusChanged) return false;
+
+  const oldFocus = update.focusChanged ? !update.view.hasFocus : update.view.hasFocus;
+  const before = oldFocus
+    ? findActiveReference(
+        update.startState.field(documentAnalysisField).references,
+        update.startState.selection,
+      )
+    : undefined;
+  const after = update.view.hasFocus
+    ? findActiveReference(
+        update.state.field(documentAnalysisField).references,
+        update.state.selection,
+      )
+    : undefined;
+
+  return (
+    before?.from !== after?.from ||
+    before?.to !== after?.to
   );
 }
 

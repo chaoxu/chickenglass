@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach, vi } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
@@ -14,7 +14,7 @@ import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CslProcessor } from "../citations/csl-processor";
 import { CSS } from "../constants/css-classes";
 import { createTestView, makeBlockPlugin, makeBibStore } from "../test-utils";
-import { collectReferenceRanges } from "./reference-render";
+import { collectReferenceRanges, referenceRenderPlugin } from "./reference-render";
 
 const testPlugins: readonly BlockPlugin[] = [
   makeBlockPlugin({ name: "theorem", counter: "theorem", title: "Theorem" }),
@@ -53,6 +53,25 @@ function createView(doc: string, cursorPos?: number): EditorView {
       createPluginRegistryField(testPlugins),
       blockCounterField,
       bibDataField,
+    ],
+  });
+  view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein]) }) });
+  return view;
+}
+
+function createPluginView(doc: string, cursorPos?: number): EditorView {
+  const view = createTestView(doc, {
+    cursorPos,
+    extensions: [
+      markdown({
+        extensions: [fencedDiv, mathExtension, equationLabelExtension],
+      }),
+      frontmatterField,
+      documentSemanticsField,
+      createPluginRegistryField(testPlugins),
+      blockCounterField,
+      bibDataField,
+      referenceRenderPlugin,
     ],
   });
   view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein]) }) });
@@ -470,6 +489,98 @@ describe("collectReferenceRanges", () => {
     it("handles document with only blank lines", () => {
       view = createView("\n\n\n", 0);
       expect(collectReferenceRanges(view, store)).toHaveLength(0);
+    });
+  });
+
+  describe("performance invalidation", () => {
+    it("does not re-register citations on navigation outside references", () => {
+      const registerSpy = vi.spyOn(CslProcessor.prototype, "registerCitations");
+      const doc = [
+        "Intro text before citations.",
+        "",
+        "See [@karger2000].",
+        "",
+        "More plain text after citations.",
+      ].join("\n");
+
+      view = createPluginView(doc, 0);
+      registerSpy.mockClear();
+
+      view.dispatch({ selection: { anchor: doc.indexOf("More plain text") } });
+
+      expect(registerSpy).not.toHaveBeenCalled();
+      registerSpy.mockRestore();
+    });
+
+    it("re-registers citations when bibliography data changes", () => {
+      const registerSpy = vi.spyOn(CslProcessor.prototype, "registerCitations");
+      const doc = "See [@karger2000; @stein2001].";
+
+      view = createPluginView(doc, 0);
+      registerSpy.mockClear();
+
+      view.dispatch({
+        effects: bibDataEffect.of({
+          store,
+          cslProcessor: new CslProcessor([karger, stein]),
+        }),
+      });
+
+      expect(registerSpy).toHaveBeenCalledTimes(1);
+      registerSpy.mockRestore();
+    });
+
+    it("re-registers citations when the same processor is reused after setStyle()", () => {
+      const registerSpy = vi.spyOn(CslProcessor.prototype, "registerCitations");
+      const doc = "See [@karger2000; @stein2001].";
+      const processor = new CslProcessor([karger, stein]);
+
+      view = createTestView(doc, {
+        cursorPos: 0,
+        extensions: [
+          markdown({
+            extensions: [fencedDiv, mathExtension, equationLabelExtension],
+          }),
+          frontmatterField,
+          documentSemanticsField,
+          createPluginRegistryField(testPlugins),
+          blockCounterField,
+          bibDataField,
+          referenceRenderPlugin,
+        ],
+      });
+      view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: processor }) });
+      registerSpy.mockClear();
+
+      processor.setStyle("<style>invalid</style>");
+      view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: processor }) });
+
+      expect(registerSpy).toHaveBeenCalledTimes(1);
+      registerSpy.mockRestore();
+    });
+
+    it("re-registers citations when document edits change citation order", () => {
+      const registerSpy = vi.spyOn(CslProcessor.prototype, "registerCitations");
+      const doc = "See [@karger2000] then [@stein2001].";
+
+      view = createPluginView(doc, 0);
+      registerSpy.mockClear();
+
+      const first = "[@karger2000]";
+      const second = "[@stein2001]";
+      const firstStart = doc.indexOf(first);
+      const secondStart = doc.indexOf(second);
+
+      view.dispatch({
+        changes: {
+          from: firstStart,
+          to: secondStart + second.length,
+          insert: `${second} then ${first}`,
+        },
+      });
+
+      expect(registerSpy).toHaveBeenCalledTimes(1);
+      registerSpy.mockRestore();
     });
   });
 });

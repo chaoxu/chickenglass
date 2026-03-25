@@ -106,6 +106,7 @@ export class CslProcessor {
   private items: Map<string, CslJsonItem>;
   private engine: CiteprocEngine | null = null;
   private styleXml: string;
+  private engineRevision = 0;
 
   constructor(entries: CslJsonItem[], styleXml?: string) {
     this.items = new Map();
@@ -264,6 +265,10 @@ export class CslProcessor {
     }
   }
 
+  get revision(): number {
+    return this.engineRevision;
+  }
+
   private initEngine(): void {
     try {
       const cslConfig = plugins.config.get("@csl");
@@ -274,6 +279,8 @@ export class CslProcessor {
       // Invalid or unsupported CSL style XML -- disable engine, fall back to simple formatting
       console.warn("[csl] initEngine() failed, falling back to simple formatting", e);
       this.engine = null;
+    } finally {
+      this.engineRevision += 1;
     }
   }
 }

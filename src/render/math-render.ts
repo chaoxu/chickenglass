@@ -1,5 +1,4 @@
-import { type EditorState, type Extension, type Range } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
+import { type EditorState, type Extension, type Range, type SelectionRange, type Transaction } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 import {
   Decoration,
@@ -16,9 +15,12 @@ import {
   pushWidgetDecoration,
   MacroAwareWidget,
   editorFocusField,
+  focusEffect,
   focusTracker,
 } from "./render-utils";
 import { mathMacrosField } from "./math-macros";
+import { documentAnalysisField } from "../semantics/codemirror-source";
+import type { MathSemantics } from "../semantics/document";
 
 export const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
 
@@ -171,56 +173,62 @@ export class MathWidget extends MacroAwareWidget {
  * this dual-path logic cannot be expressed as a simple "exclude and push widget"
  * callback.
  */
+function findActiveMath(
+  regions: readonly MathSemantics[],
+  selection: SelectionRange,
+): MathSemantics | undefined {
+  const { from, to } = selection;
+  let lo = 0;
+  let hi = regions.length - 1;
+  let candidate: MathSemantics | undefined;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const region = regions[mid];
+    if (region.from <= from) {
+      candidate = region;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  return candidate && to <= candidate.to ? candidate : undefined;
+}
+
 function buildMathItems(
   state: EditorState,
   shouldSkip: (from: number, to: number) => boolean,
 ): Range<Decoration>[] {
   const macros = state.field(mathMacrosField);
+  const regions = state.field(documentAnalysisField).mathRegions;
   const items: Range<Decoration>[] = [];
 
-  syntaxTree(state).iterate({
-    enter(node) {
-      if (!MATH_TYPES.has(node.type.name)) return;
-
-      if (shouldSkip(node.from, node.to)) {
-        // Cursor inside math — add monospace mark on content between delimiters.
-        // The delimiters ($, $$, \(, \[) already get monospace via tok-processingInstruction.
-        const isDisplay = node.type.name === "DisplayMath";
-        const markName = isDisplay ? "DisplayMathMark" : "InlineMathMark";
-        const marks = node.node.getChildren(markName);
-        if (marks.length >= 2) {
-          const contentFrom = marks[0].to;
-          const contentTo = marks[marks.length - 1].from;
-          if (contentFrom < contentTo) {
-            items.push(
-              Decoration.mark({ class: "cf-math-source" }).range(contentFrom, contentTo),
-            );
-          }
-          // Equation label after closing delimiter (e.g. {#eq:gaussian}) — also monospace
-          if (isDisplay) {
-            const labelFrom = marks[marks.length - 1].to;
-            const labelTo = node.to;
-            if (labelTo > labelFrom) {
-              items.push(
-                Decoration.mark({ class: "cf-math-source" }).range(labelFrom, labelTo),
-              );
-            }
-          }
-        }
-        return false;
+  for (const region of regions) {
+    if (shouldSkip(region.from, region.to)) {
+      if (region.contentFrom < region.contentTo) {
+        items.push(
+          Decoration.mark({ class: "cf-math-source" }).range(region.contentFrom, region.contentTo),
+        );
       }
+      if (region.isDisplay && region.labelFrom !== undefined && region.to > region.labelFrom) {
+        items.push(
+          Decoration.mark({ class: "cf-math-source" }).range(region.labelFrom, region.to),
+        );
+      }
+      continue;
+    }
 
-      const raw = state.sliceDoc(node.from, node.to);
-      const isDisplay = node.type.name === "DisplayMath";
-      const contentTo = isDisplay ? getDisplayMathContentEnd(node.node) : undefined;
-      const latex = stripMathDelimiters(raw, isDisplay, contentTo);
+    const raw = state.sliceDoc(region.from, region.to);
 
-      // block: true breaks CM6 height tracking for subsequent lines
-      pushWidgetDecoration(items, new MathWidget(latex, raw, isDisplay, macros), node.from, node.to);
-
-      return false; // don't descend into math children
-    },
-  });
+    // block: true breaks CM6 height tracking for subsequent lines
+    pushWidgetDecoration(
+      items,
+      new MathWidget(region.latex, raw, region.isDisplay, macros),
+      region.from,
+      region.to,
+    );
+  }
 
   return items;
 }
@@ -248,6 +256,35 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
   return buildDecorations(items);
 }
 
+function mathShouldRebuild(tr: Transaction): boolean {
+  if (
+    tr.docChanged ||
+    tr.effects.some((e) => e.is(focusEffect)) ||
+    tr.state.field(documentAnalysisField) !== tr.startState.field(documentAnalysisField)
+  ) {
+    return true;
+  }
+
+  if (tr.selection === undefined) return false;
+
+  const startFocused = tr.startState.field(editorFocusField, false) ?? false;
+  const endFocused = tr.state.field(editorFocusField, false) ?? false;
+  const before = startFocused
+    ? findActiveMath(
+        tr.startState.field(documentAnalysisField).mathRegions,
+        tr.startState.selection.main,
+      )
+    : undefined;
+  const after = endFocused
+    ? findActiveMath(
+        tr.state.field(documentAnalysisField).mathRegions,
+        tr.state.selection.main,
+      )
+    : undefined;
+
+  return before?.from !== after?.from || before?.to !== after?.to;
+}
+
 /**
  * CM6 StateField that provides math rendering decorations.
  *
@@ -257,7 +294,9 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
 const mathDecorationField = createDecorationsField((state) => {
   const focused = state.field(editorFocusField, false) ?? false;
   return buildMathDecorationsFromState(state, focused);
-});
+}, mathShouldRebuild);
+
+export { mathDecorationField as _mathDecorationFieldForTest };
 
 /** CM6 extension that renders math expressions with KaTeX (Typora-style toggle). */
 export const mathRenderPlugin: Extension = [editorFocusField, focusTracker, mathMacrosField, mathDecorationField];

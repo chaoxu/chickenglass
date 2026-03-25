@@ -1,14 +1,17 @@
 import { describe, expect, it, afterEach, vi } from "vitest";
 import { CSS } from "../constants/css-classes";
+import { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { parser as lezerParser } from "@lezer/markdown";
-import { MathWidget, collectMathRanges, stripMathDelimiters, getDisplayMathContentEnd } from "./math-render";
+import { MathWidget, collectMathRanges, stripMathDelimiters, getDisplayMathContentEnd, _mathDecorationFieldForTest as mathDecorationField, mathRenderPlugin } from "./math-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
 import { createMockEditorView, createTestView } from "../test-utils";
+import { focusEffect } from "./render-utils";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 
 /** Count only widget (replace) decorations, ignoring mark decorations like cf-math-source. */
 function countWidgets(ranges: ReturnType<typeof collectMathRanges>): number {
@@ -22,6 +25,7 @@ function createMathView(doc: string, cursorPos?: number): EditorView {
     extensions: [
       markdown({ extensions: [mathExtension, equationLabelExtension] }),
       frontmatterField,
+      documentSemanticsField,
       mathMacrosField,
     ],
   });
@@ -42,6 +46,7 @@ function createMathViewWithLabels(doc: string, cursorPos?: number): EditorView {
     extensions: [
       markdown({ extensions: [mathExtension, equationLabelExtension] }),
       frontmatterField,
+      documentSemanticsField,
       mathMacrosField,
     ],
   });
@@ -249,6 +254,48 @@ describe("collectMathRanges", () => {
     view = createMathView("just plain text", 0);
     const ranges = collectMathRanges(view);
     expect(countWidgets(ranges)).toBe(0);
+  });
+});
+
+describe("math decoration invalidation", () => {
+  it("does not rebuild when selection moves outside all math regions", () => {
+    const doc = "aa $x$ bb $$y$$ cc";
+    const state = EditorState.create({
+      doc,
+      selection: { anchor: 0 },
+      extensions: [
+        markdown({ extensions: [mathExtension, equationLabelExtension] }),
+        frontmatterField,
+        documentSemanticsField,
+        mathRenderPlugin,
+      ],
+    });
+
+    const before = state.field(mathDecorationField);
+    const after = state.update({ selection: { anchor: 1 } }).state.field(mathDecorationField);
+
+    expect(after).toBe(before);
+  });
+
+  it("rebuilds when focused selection enters a math region", () => {
+    const doc = "aa $x$ bb";
+    const initial = EditorState.create({
+      doc,
+      selection: { anchor: 0 },
+      extensions: [
+        markdown({ extensions: [mathExtension, equationLabelExtension] }),
+        frontmatterField,
+        documentSemanticsField,
+        mathRenderPlugin,
+      ],
+    });
+    const focused = initial.update({ effects: focusEffect.of(true) }).state;
+    const before = focused.field(mathDecorationField);
+    const insideMath = doc.indexOf("$x$") + 1;
+
+    const after = focused.update({ selection: { anchor: insideMath } }).state.field(mathDecorationField);
+
+    expect(after).not.toBe(before);
   });
 });
 
