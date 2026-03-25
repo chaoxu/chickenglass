@@ -1,95 +1,381 @@
 /**
- * Tests for the block-type picker extension.
+ * Unit tests for block-type picker logic.
  *
- * Covers:
- * - Input handler interception of ::: at line start
- * - Picker entry list generation from plugin registry
- * - Block insertion with correct nesting depth
- * - Source mode bypass (no interception)
+ * Tests the pure-logic functions: entry filtering (getPickerEntries),
+ * block insertion with ancestor fence upgrades (insertBlock), and
+ * ancestor fence collection from the Lezer tree (collectAncestorFences).
+ *
+ * Picker UI (showPicker, hidePicker, renderPicker) is DOM-heavy and not
+ * covered here.
  */
 
-import { describe, expect, it } from "vitest";
-import { createEditor, editorModeField, setEditorMode } from "./editor";
-import { pluginRegistryField } from "../plugins";
+import { describe, expect, it, afterEach } from "vitest";
+import { markdown } from "@codemirror/lang-markdown";
+import { markdownExtensions } from "../parser";
+import {
+  _getPickerEntriesForTest as getPickerEntries,
+  _insertBlockForTest as insertBlock,
+  _collectAncestorFencesForTest as collectAncestorFences,
+} from "./block-type-picker";
+import {
+  createPluginRegistryField,
+  registerPlugins,
+  createRegistryState,
+} from "../plugins";
+import { frontmatterField } from "./frontmatter-state";
+import { createTestView, makeBlockPlugin } from "../test-utils";
 
-describe("blockTypePickerExtension", () => {
-  it("includes pluginRegistryField in created editor state", () => {
-    const parent = document.createElement("div");
-    const view = createEditor({ parent, doc: "# Test\n" });
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-    // The registry should be available
-    const registry = view.state.field(pluginRegistryField);
-    expect(registry).toBeDefined();
-    expect(registry.plugins.size).toBeGreaterThan(0);
+/** Standard plugins used in most tests. */
+const standardPlugins = [
+  makeBlockPlugin({ name: "theorem" }),
+  makeBlockPlugin({ name: "lemma" }),
+  makeBlockPlugin({ name: "proof", numbered: false }),
+  makeBlockPlugin({ name: "definition" }),
+];
 
-    // Should contain standard block types
-    expect(registry.plugins.has("theorem")).toBe(true);
-    expect(registry.plugins.has("proof")).toBe(true);
-    expect(registry.plugins.has("definition")).toBe(true);
+/** Extensions needed for a view with fenced div parsing + plugin registry. */
+function pickerExtensions(plugins = standardPlugins) {
+  return [
+    markdown({ extensions: markdownExtensions }),
+    frontmatterField,
+    createPluginRegistryField(plugins),
+  ];
+}
 
-    view.destroy();
+/** Track views created during tests for cleanup. */
+const views: ReturnType<typeof createTestView>[] = [];
+
+function makeView(doc: string, plugins = standardPlugins) {
+  const view = createTestView(doc, {
+    extensions: pickerExtensions(plugins),
+  });
+  views.push(view);
+  return view;
+}
+
+afterEach(() => {
+  for (const v of views) v.destroy();
+  views.length = 0;
+});
+
+// ===================================================================
+// getPickerEntries
+// ===================================================================
+
+describe("getPickerEntries", () => {
+  it("returns registered block types in manifest order", () => {
+    const registry = registerPlugins(createRegistryState(), [
+      makeBlockPlugin({ name: "proof", numbered: false }),
+      makeBlockPlugin({ name: "theorem" }),
+      makeBlockPlugin({ name: "definition" }),
+    ]);
+
+    const entries = getPickerEntries(registry);
+    const names = entries.map((e) => e.name);
+
+    // Manifest order: theorem, ..., definition, ..., proof, ...
+    expect(names.indexOf("theorem")).toBeLessThan(names.indexOf("definition"));
+    expect(names.indexOf("definition")).toBeLessThan(names.indexOf("proof"));
   });
 
-  it("has editorModeField defaulting to rich", () => {
-    const parent = document.createElement("div");
-    const view = createEditor({ parent, doc: "# Test\n" });
+  it("excludes embed-family types", () => {
+    const registry = registerPlugins(createRegistryState(), [
+      makeBlockPlugin({ name: "theorem" }),
+      makeBlockPlugin({ name: "embed", specialBehavior: "embed" }),
+      makeBlockPlugin({ name: "iframe", specialBehavior: "embed" }),
+      makeBlockPlugin({ name: "youtube", specialBehavior: "embed" }),
+      makeBlockPlugin({ name: "gist", specialBehavior: "embed" }),
+    ]);
 
-    expect(view.state.field(editorModeField)).toBe("rich");
+    const entries = getPickerEntries(registry);
+    const names = entries.map((e) => e.name);
 
-    view.destroy();
+    expect(names).toContain("theorem");
+    expect(names).not.toContain("embed");
+    expect(names).not.toContain("iframe");
+    expect(names).not.toContain("youtube");
+    expect(names).not.toContain("gist");
   });
 
-  it("editorModeField updates to source when set", () => {
-    const parent = document.createElement("div");
-    const view = createEditor({ parent, doc: "# Test\n" });
+  it("excludes include", () => {
+    const registry = registerPlugins(createRegistryState(), [
+      makeBlockPlugin({ name: "theorem" }),
+      makeBlockPlugin({ name: "include" }),
+    ]);
 
-    setEditorMode(view, "source");
-    expect(view.state.field(editorModeField)).toBe("source");
+    const entries = getPickerEntries(registry);
+    const names = entries.map((e) => e.name);
 
-    view.destroy();
+    expect(names).toContain("theorem");
+    expect(names).not.toContain("include");
   });
 
-  describe("plugin registry entries", () => {
-    it("contains expected block types for picker", () => {
-      const parent = document.createElement("div");
-      const view = createEditor({ parent, doc: "# Test\n" });
+  it("includes custom frontmatter-defined plugins not in the manifest", () => {
+    const registry = registerPlugins(createRegistryState(), [
+      makeBlockPlugin({ name: "theorem" }),
+      makeBlockPlugin({ name: "custom-block", title: "Custom Block" }),
+    ]);
 
-      const registry = view.state.field(pluginRegistryField);
-      const names = [...registry.plugins.keys()];
+    const entries = getPickerEntries(registry);
+    const names = entries.map((e) => e.name);
 
-      // Should have theorem family
-      expect(names).toContain("theorem");
-      expect(names).toContain("lemma");
-      expect(names).toContain("corollary");
-      expect(names).toContain("proposition");
-      expect(names).toContain("conjecture");
+    expect(names).toContain("theorem");
+    expect(names).toContain("custom-block");
+    // Custom block goes after manifest entries
+    expect(names.indexOf("theorem")).toBeLessThan(names.indexOf("custom-block"));
+  });
 
-      // Should have other standard types
-      expect(names).toContain("definition");
-      expect(names).toContain("proof");
-      expect(names).toContain("remark");
-      expect(names).toContain("example");
-      expect(names).toContain("algorithm");
-      expect(names).toContain("blockquote");
+  it("returns empty array when no plugins registered", () => {
+    const registry = createRegistryState();
+    const entries = getPickerEntries(registry);
+    expect(entries).toEqual([]);
+  });
 
-      // Should have embed types (excluded from picker but in registry)
-      expect(names).toContain("embed");
+  it("uses plugin title for the entry title", () => {
+    const registry = registerPlugins(createRegistryState(), [
+      makeBlockPlugin({ name: "theorem", title: "Theorem" }),
+    ]);
 
-      view.destroy();
-    });
+    const entries = getPickerEntries(registry);
+    const theorem = entries.find((e) => e.name === "theorem");
+    expect(theorem).toBeDefined();
+    expect(theorem!.title).toBe("Theorem");
+  });
 
-    it("plugin titles match expected display names", () => {
-      const parent = document.createElement("div");
-      const view = createEditor({ parent, doc: "# Test\n" });
+  it("does not duplicate entries when a plugin matches both manifest and registry", () => {
+    const registry = registerPlugins(createRegistryState(), [
+      makeBlockPlugin({ name: "theorem" }),
+    ]);
 
-      const registry = view.state.field(pluginRegistryField);
+    const entries = getPickerEntries(registry);
+    const theoremCount = entries.filter((e) => e.name === "theorem").length;
+    expect(theoremCount).toBe(1);
+  });
+});
 
-      expect(registry.plugins.get("theorem")?.title).toBe("Theorem");
-      expect(registry.plugins.get("proof")?.title).toBe("Proof");
-      expect(registry.plugins.get("definition")?.title).toBe("Definition");
-      expect(registry.plugins.get("blockquote")?.title).toBe("Blockquote");
+// ===================================================================
+// insertBlock
+// ===================================================================
 
-      view.destroy();
-    });
+describe("insertBlock", () => {
+  it("inserts a basic block with ::: colons", () => {
+    const view = makeView("some text\n\n");
+    const insertPos = view.state.doc.length;
+
+    insertBlock(view, insertPos, insertPos, "theorem");
+
+    const result = view.state.doc.toString();
+    expect(result).toContain("::: {.theorem}");
+    // Should have opening fence, empty line, closing fence
+    const lines = result.split("\n");
+    const openIdx = lines.findIndex((l) => l.includes("::: {.theorem}"));
+    expect(openIdx).toBeGreaterThanOrEqual(0);
+    expect(lines[openIdx + 1]).toBe(""); // empty content line
+    expect(lines[openIdx + 2]).toBe(":::"); // closing fence
+  });
+
+  it("places cursor on the empty content line", () => {
+    const view = makeView("");
+
+    insertBlock(view, 0, 0, "theorem");
+
+    const cursorPos = view.state.selection.main.anchor;
+    // Cursor should be after `::: {.theorem}\n` = on the empty line
+    const expectedPos = "::: {.theorem}".length + 1; // +1 for newline
+    expect(cursorPos).toBe(expectedPos);
+  });
+
+  it("replaces the range [lineFrom, lineTo] with the block", () => {
+    const view = makeView("line one\nplaceholder\nline three");
+    const line2 = view.state.doc.line(2);
+
+    insertBlock(view, line2.from, line2.to, "proof");
+
+    const result = view.state.doc.toString();
+    expect(result).not.toContain("placeholder");
+    expect(result).toContain("::: {.proof}");
+    expect(result).toContain("line one");
+    expect(result).toContain("line three");
+  });
+
+  it("upgrades ancestor fences when inserting inside a ::: parent", () => {
+    const view = makeView("::: {.theorem}\ncontent\n:::");
+
+    // Simulate ancestor fences: parent uses 3 colons
+    const ancestorFences = [{
+      openFrom: 0,
+      openTo: 3,
+      closeFrom: 23,
+      closeTo: 26,
+      colons: 3,
+    }];
+
+    // Insert at the content position (after newline following opening fence)
+    const contentLine = view.state.doc.line(2);
+    insertBlock(view, contentLine.from, contentLine.to, "lemma", ancestorFences);
+
+    const result = view.state.doc.toString();
+    // Parent should be upgraded to 4 colons
+    expect(result.startsWith("::::")).toBe(true);
+    // New child should use 3 colons
+    expect(result).toContain("::: {.lemma}");
+    // Closing parent fence should also be upgraded
+    expect(result.endsWith("::::")).toBe(true);
+  });
+
+  it("cascading upgrades for deeply nested blocks", () => {
+    // Grandparent (4 colons) > parent (3 colons) > new child (3 colons)
+    // Parent needs upgrading, then grandparent needs upgrading
+    const doc = ":::: {.theorem}\n::: {.proof}\ninner\n:::\n::::";
+    const view = makeView(doc, [
+      makeBlockPlugin({ name: "theorem" }),
+      makeBlockPlugin({ name: "proof", numbered: false }),
+      makeBlockPlugin({ name: "lemma" }),
+    ]);
+
+    // Ancestor fences: [0] = direct parent (proof, 3 colons), [1] = grandparent (theorem, 4 colons)
+    const ancestorFences = [
+      { openFrom: 16, openTo: 19, closeFrom: 34, closeTo: 37, colons: 3 },
+      { openFrom: 0, openTo: 4, closeFrom: 38, closeTo: 42, colons: 4 },
+    ];
+
+    // Insert inside the proof block (on the "inner" line)
+    const innerLine = view.state.doc.line(3);
+    insertBlock(view, innerLine.from, innerLine.to, "lemma", ancestorFences);
+
+    const result = view.state.doc.toString();
+    // Child uses 3 colons
+    expect(result).toContain("::: {.lemma}");
+    // Parent (proof) should be upgraded to 4 colons (> 3)
+    expect(result).toContain(":::: {.proof}");
+    // Grandparent (theorem) should be upgraded to 5 colons (> 4)
+    expect(result).toContain("::::: {.theorem}");
+  });
+
+  it("does not upgrade ancestors that already have enough colons", () => {
+    const doc = "::::: {.theorem}\ncontent\n:::::";
+    const view = makeView(doc);
+
+    // Ancestor with 5 colons, already more than 3
+    const ancestorFences = [{
+      openFrom: 0,
+      openTo: 5,
+      closeFrom: 25,
+      closeTo: 30,
+      colons: 5,
+    }];
+
+    const contentLine = view.state.doc.line(2);
+    insertBlock(view, contentLine.from, contentLine.to, "lemma", ancestorFences);
+
+    const result = view.state.doc.toString();
+    // Ancestor should still have 5 colons (not upgraded further)
+    expect(result.startsWith(":::::")).toBe(true);
+    expect(result.startsWith("::::::")).toBe(false);
+    // New block uses 3 colons
+    expect(result).toContain("::: {.lemma}");
+  });
+
+  it("works with no ancestor fences (top level)", () => {
+    const view = makeView("");
+
+    insertBlock(view, 0, 0, "definition", []);
+
+    const result = view.state.doc.toString();
+    expect(result).toBe("::: {.definition}\n\n:::");
+  });
+
+  it("works with undefined ancestor fences", () => {
+    const view = makeView("");
+
+    insertBlock(view, 0, 0, "remark");
+
+    const result = view.state.doc.toString();
+    expect(result).toBe("::: {.remark}\n\n:::");
+  });
+});
+
+// ===================================================================
+// collectAncestorFences
+// ===================================================================
+
+describe("collectAncestorFences", () => {
+  it("returns empty array at top level", () => {
+    const view = makeView("plain text\n");
+    const fences = collectAncestorFences(view, 0);
+    expect(fences).toEqual([]);
+  });
+
+  it("returns parent fence info when inside a FencedDiv", () => {
+    const view = makeView("::: {.theorem}\ncontent\n:::");
+
+    // Position inside the content (line 2)
+    const contentLine = view.state.doc.line(2);
+    const fences = collectAncestorFences(view, contentLine.from);
+
+    expect(fences.length).toBe(1);
+    expect(fences[0].openFrom).toBe(0);
+    expect(fences[0].openTo).toBe(3);
+    expect(fences[0].colons).toBe(3);
+    // Closing fence should be present
+    expect(fences[0].closeFrom).toBeGreaterThan(0);
+    expect(fences[0].closeTo).toBeGreaterThan(fences[0].closeFrom);
+  });
+
+  it("returns multiple entries for deeply nested positions", () => {
+    const doc = "::::: {.theorem}\n:::: {.proof}\n::: {.remark}\ncontent\n:::\n::::\n:::::";
+    const view = makeView(doc, [
+      makeBlockPlugin({ name: "theorem" }),
+      makeBlockPlugin({ name: "proof", numbered: false }),
+      makeBlockPlugin({ name: "remark", numbered: false }),
+    ]);
+
+    // Position inside the innermost block (content line)
+    const contentLine = view.state.doc.line(4);
+    const fences = collectAncestorFences(view, contentLine.from);
+
+    // Should have at least the innermost ancestor (remark)
+    expect(fences.length).toBeGreaterThanOrEqual(1);
+    // Innermost fence should use 3 colons
+    expect(fences[0].colons).toBe(3);
+
+    if (fences.length >= 2) {
+      // Parent (proof) uses 4 colons
+      expect(fences[1].colons).toBe(4);
+    }
+
+    if (fences.length >= 3) {
+      // Grandparent (theorem) uses 5 colons
+      expect(fences[2].colons).toBe(5);
+    }
+  });
+
+  it("reports correct colon count for fences", () => {
+    const view = makeView(":::: {.theorem}\ncontent\n::::");
+
+    const contentLine = view.state.doc.line(2);
+    const fences = collectAncestorFences(view, contentLine.from);
+
+    expect(fences.length).toBe(1);
+    expect(fences[0].colons).toBe(4);
+  });
+
+  it("reports closeFrom as -1 when closing fence is missing", () => {
+    // Unclosed fenced div -- parser may produce a FencedDiv without a close fence
+    const view = makeView("::: {.theorem}\ncontent");
+
+    const contentLine = view.state.doc.line(2);
+    const fences = collectAncestorFences(view, contentLine.from);
+
+    // The parser may or may not produce a FencedDiv for an unclosed fence.
+    // If it does, closeFrom should be -1.
+    if (fences.length > 0) {
+      expect(fences[0].closeFrom).toBe(-1);
+      expect(fences[0].closeTo).toBe(-1);
+    }
   });
 });

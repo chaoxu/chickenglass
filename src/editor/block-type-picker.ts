@@ -561,3 +561,18 @@ export const blockTypePickerExtension: Extension = [
   // Capture-phase key handler for picker navigation
   pickerKeyPlugin,
 ];
+
+// ---------------------------------------------------------------------------
+// Test-only exports
+// ---------------------------------------------------------------------------
+
+/** Exported for unit testing without a browser. */
+export {
+  getPickerEntries as _getPickerEntriesForTest,
+  insertBlock as _insertBlockForTest,
+  collectAncestorFences as _collectAncestorFencesForTest,
+};
+export type {
+  PickerEntry as _PickerEntryForTest,
+  AncestorFence as _AncestorFenceForTest,
+};
