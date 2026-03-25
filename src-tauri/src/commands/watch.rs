@@ -7,8 +7,7 @@ use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watche
 use tauri::{AppHandle, Emitter, State, WebviewWindow, command};
 
 use super::perf::measure_command;
-use super::state::FileWatcherState;
-use super::state::PerfState;
+use super::state::{FileWatcherEntry, FileWatcherState, PerfState};
 
 fn should_ignore_relative_path(relative: &str) -> bool {
     relative.starts_with('.')
@@ -37,6 +36,63 @@ fn should_emit_debounced_event(
     true
 }
 
+fn reserve_watcher_slot(
+    watchers: &mut HashMap<String, FileWatcherEntry>,
+    window_label: &str,
+    root: PathBuf,
+    generation: u64,
+) -> bool {
+    if matches!(
+        watchers.get(window_label),
+        Some(existing) if existing.generation > generation
+    ) {
+        return false;
+    }
+
+    watchers.insert(
+        window_label.to_string(),
+        FileWatcherEntry {
+            generation,
+            root,
+            watcher: None,
+        },
+    );
+    true
+}
+
+fn attach_watcher(
+    watchers: &mut HashMap<String, FileWatcherEntry>,
+    window_label: &str,
+    generation: u64,
+    watcher: RecommendedWatcher,
+) -> bool {
+    let Some(entry) = watchers.get_mut(window_label) else {
+        return false;
+    };
+    if entry.generation != generation {
+        return false;
+    }
+
+    entry.watcher = Some(watcher);
+    true
+}
+
+fn remove_watcher_generation(
+    watchers: &mut HashMap<String, FileWatcherEntry>,
+    window_label: &str,
+    generation: u64,
+) -> bool {
+    if !matches!(
+        watchers.get(window_label),
+        Some(existing) if existing.generation == generation
+    ) {
+        return false;
+    }
+
+    watchers.remove(window_label);
+    true
+}
+
 /// Start watching a directory for file changes.
 #[command]
 pub fn watch_directory(
@@ -45,7 +101,8 @@ pub fn watch_directory(
     watcher_state: State<'_, FileWatcherState>,
     perf: State<'_, PerfState>,
     path: String,
-) -> Result<(), String> {
+    generation: u64,
+) -> Result<bool, String> {
     measure_command(
         &perf,
         "tauri.watch_directory",
@@ -62,8 +119,17 @@ pub fn watch_directory(
             }
 
             let window_label = window.label().to_string();
-            let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
-            lock.remove(&window_label);
+            {
+                let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
+                if !reserve_watcher_slot(
+                    &mut lock,
+                    &window_label,
+                    watch_path.clone(),
+                    generation,
+                ) {
+                    return Ok(false);
+                }
+            }
 
             let root_for_closure = watch_path.clone();
             let app_for_closure = app.clone();
@@ -127,15 +193,26 @@ pub fn watch_directory(
                 .watch(&watch_path, RecursiveMode::Recursive)
                 .map_err(|e| format!("Failed to watch directory: {}", e))?;
 
-            lock.insert(window_label, watcher);
-            Ok(())
+            let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
+            Ok(attach_watcher(
+                &mut lock,
+                &window_label,
+                generation,
+                watcher,
+            ))
         },
     )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{should_emit_debounced_event, should_ignore_relative_path};
+    use super::{
+        remove_watcher_generation,
+        reserve_watcher_slot,
+        should_emit_debounced_event,
+        should_ignore_relative_path,
+    };
+    use crate::commands::state::FileWatcherEntry;
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
     use std::time::{Duration, Instant};
@@ -196,6 +273,48 @@ mod tests {
             debounce_window,
         ));
     }
+
+    #[test]
+    fn watcher_slots_reject_stale_generations() {
+        let mut watchers = HashMap::from([(
+            "main".to_string(),
+            FileWatcherEntry {
+                generation: 7,
+                root: PathBuf::from("/tmp/project-b"),
+                watcher: None,
+            },
+        )]);
+
+        let reserved = reserve_watcher_slot(
+            &mut watchers,
+            "main",
+            PathBuf::from("/tmp/project-a"),
+            6,
+        );
+
+        assert!(!reserved);
+        assert_eq!(
+            watchers.get("main").map(|entry| entry.root.clone()),
+            Some(PathBuf::from("/tmp/project-b")),
+        );
+    }
+
+    #[test]
+    fn watcher_slots_ignore_stale_unwatch_requests() {
+        let mut watchers = HashMap::from([(
+            "main".to_string(),
+            FileWatcherEntry {
+                generation: 9,
+                root: PathBuf::from("/tmp/project-b"),
+                watcher: None,
+            },
+        )]);
+
+        let removed = remove_watcher_generation(&mut watchers, "main", 8);
+
+        assert!(!removed);
+        assert!(watchers.contains_key("main"));
+    }
 }
 
 /// Stop watching the current directory.
@@ -204,7 +323,8 @@ pub fn unwatch_directory(
     window: WebviewWindow,
     watcher_state: State<'_, FileWatcherState>,
     perf: State<'_, PerfState>,
-) -> Result<(), String> {
+    generation: u64,
+) -> Result<bool, String> {
     measure_command(
         &perf,
         "tauri.unwatch_directory",
@@ -213,8 +333,11 @@ pub fn unwatch_directory(
         None,
         || {
             let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
-            lock.remove(window.label());
-            Ok(())
+            Ok(remove_watcher_generation(
+                &mut lock,
+                window.label(),
+                generation,
+            ))
         },
     )
 }

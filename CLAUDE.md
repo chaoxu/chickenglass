@@ -61,6 +61,9 @@ __cmDebug.toggleTreeView()   — toggle live Lezer tree panel (@overleaf/codemir
 __app.openFile("posts/x.md") — open any file by path (app's real function)
 __app.setMode("source")      — switch editor mode (rich/source/read)
 __app.saveFile()             — save current file
+__tauriSmoke.openProject("/abs/path") — dev-only Tauri helper to switch project roots deterministically
+__tauriSmoke.getWindowState()         — dev-only Tauri snapshot: project root, current doc, dirty, backend root, watcher root
+__tauriSmoke.simulateExternalChange("notes.md") — dev-only Tauri helper to emit a file-changed event
 __fencedDivDebug = true      — toggle fenced div parser tracing
 ```
 

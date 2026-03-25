@@ -1,8 +1,8 @@
 import type { FileEntry } from "../file-manager";
 import { invokeWithPerf } from "../perf";
 
-export function openFolderCommand(path: string): Promise<void> {
-  return invokeWithPerf("open_folder", { path });
+export function openFolderCommand(path: string, generation: number): Promise<boolean> {
+  return invokeWithPerf<boolean>("open_folder", { path, generation });
 }
 
 export function revealInFinderCommand(path: string): Promise<void> {

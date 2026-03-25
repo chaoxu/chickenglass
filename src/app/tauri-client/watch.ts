@@ -1,9 +1,9 @@
 import { invokeWithPerf } from "../perf";
 
-export function watchDirectoryCommand(path: string): Promise<void> {
-  return invokeWithPerf("watch_directory", { path });
+export function watchDirectoryCommand(path: string, generation: number): Promise<boolean> {
+  return invokeWithPerf<boolean>("watch_directory", { path, generation });
 }
 
-export function unwatchDirectoryCommand(): Promise<void> {
-  return invokeWithPerf("unwatch_directory");
+export function unwatchDirectoryCommand(generation: number): Promise<boolean> {
+  return invokeWithPerf<boolean>("unwatch_directory", { generation });
 }

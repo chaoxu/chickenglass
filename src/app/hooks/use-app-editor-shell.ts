@@ -90,6 +90,8 @@ export interface AppEditorShellController {
   isPathOpen: ReturnType<typeof useEditorSession>["isPathOpen"];
   /** Returns true if the given path is dirty in the current window. */
   isPathDirty: ReturnType<typeof useEditorSession>["isPathDirty"];
+  /** Invalidate any in-flight openFile request that should no longer commit. */
+  cancelPendingOpenFile: ReturnType<typeof useEditorSession>["cancelPendingOpenFile"];
   /** Open a file by path from the filesystem, replacing the current document if needed. */
   openFile: ReturnType<typeof useEditorSession>["openFile"];
   /** Open a virtual file from an in-memory string (e.g. a dragged-in `.md` file). */
@@ -237,6 +239,7 @@ export function useAppEditorShell({
     liveDocs,
     isPathOpen,
     isPathDirty,
+    cancelPendingOpenFile,
     handleDocChange,
     handleProgrammaticDocChange,
     setDocumentSourceMap,
@@ -413,6 +416,7 @@ export function useAppEditorShell({
     liveDocs,
     isPathOpen,
     isPathDirty,
+    cancelPendingOpenFile,
     openFile,
     openFileWithContent,
     reloadFile,

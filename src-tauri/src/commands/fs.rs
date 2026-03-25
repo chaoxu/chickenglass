@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use base64::Engine;
 use serde::Serialize;
@@ -7,7 +7,7 @@ use tauri::{State, WebviewWindow, command};
 
 use super::perf::measure_command;
 use super::path::{current_project_root, resolve_existing_path, resolve_project_path};
-use super::state::{PerfState, ProjectRoot};
+use super::state::{PerfState, ProjectRoot, ProjectRootEntry};
 
 /// A file or directory entry for the sidebar tree.
 #[derive(Serialize, Clone)]
@@ -19,6 +19,29 @@ pub struct FileEntry {
     pub children: Option<Vec<FileEntry>>,
 }
 
+fn install_project_root(
+    roots: &mut std::collections::HashMap<String, ProjectRootEntry>,
+    window_label: &str,
+    path: PathBuf,
+    generation: u64,
+) -> bool {
+    if matches!(
+        roots.get(window_label),
+        Some(existing) if existing.generation > generation
+    ) {
+        return false;
+    }
+
+    roots.insert(
+        window_label.to_string(),
+        ProjectRootEntry {
+            generation,
+            path,
+        },
+    );
+    true
+}
+
 /// Open a folder dialog and set it as the project root.
 #[command]
 pub fn open_folder(
@@ -26,7 +49,8 @@ pub fn open_folder(
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
-) -> Result<(), String> {
+    generation: u64,
+) -> Result<bool, String> {
     measure_command(&perf, "tauri.open_folder", "tauri.fs.open_folder", "tauri", Some(&path), || {
         let path = std::path::PathBuf::from(&path);
         if !path.is_dir() {
@@ -36,8 +60,12 @@ pub fn open_folder(
             .canonicalize()
             .map_err(|e| format!("Cannot resolve path: {}", e))?;
         let mut lock = root.0.lock().map_err(|e| e.to_string())?;
-        lock.insert(window.label().to_string(), canonical);
-        Ok(())
+        Ok(install_project_root(
+            &mut lock,
+            window.label(),
+            canonical,
+            generation,
+        ))
     })
 }
 
@@ -318,4 +346,60 @@ fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, 
         is_directory: true,
         children: Some(children),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    use super::install_project_root;
+    use crate::commands::state::ProjectRootEntry;
+
+    #[test]
+    fn rejects_stale_project_root_generations() {
+        let mut roots = HashMap::from([(
+            "main".to_string(),
+            ProjectRootEntry {
+                generation: 4,
+                path: PathBuf::from("/tmp/project-b"),
+            },
+        )]);
+
+        let installed = install_project_root(
+            &mut roots,
+            "main",
+            PathBuf::from("/tmp/project-a"),
+            3,
+        );
+
+        assert!(!installed);
+        assert_eq!(
+            roots.get("main").map(|entry| entry.path.clone()),
+            Some(PathBuf::from("/tmp/project-b")),
+        );
+    }
+
+    #[test]
+    fn replaces_project_root_with_newer_generation() {
+        let mut roots = HashMap::from([(
+            "main".to_string(),
+            ProjectRootEntry {
+                generation: 1,
+                path: PathBuf::from("/tmp/project-a"),
+            },
+        )]);
+
+        let installed = install_project_root(
+            &mut roots,
+            "main",
+            PathBuf::from("/tmp/project-b"),
+            2,
+        );
+
+        assert!(installed);
+        let entry = roots.get("main").expect("project root entry");
+        assert_eq!(entry.generation, 2);
+        assert_eq!(entry.path, PathBuf::from("/tmp/project-b"));
+    }
 }

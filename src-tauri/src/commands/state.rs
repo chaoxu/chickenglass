@@ -7,10 +7,21 @@ use notify::RecommendedWatcher;
 use serde::Serialize;
 
 /// Shared state holding the currently opened project directory.
-pub struct ProjectRoot(pub Mutex<HashMap<String, PathBuf>>);
+pub struct ProjectRootEntry {
+    pub generation: u64,
+    pub path: PathBuf,
+}
+
+pub struct ProjectRoot(pub Mutex<HashMap<String, ProjectRootEntry>>);
 
 /// Shared state holding the active file watcher (if any).
-pub struct FileWatcherState(pub Mutex<HashMap<String, RecommendedWatcher>>);
+pub struct FileWatcherEntry {
+    pub generation: u64,
+    pub root: PathBuf,
+    pub watcher: Option<RecommendedWatcher>,
+}
+
+pub struct FileWatcherState(pub Mutex<HashMap<String, FileWatcherEntry>>);
 
 /// Shared state remembering the last webview window that held native focus.
 pub struct LastFocusedWindow(pub Mutex<Option<String>>);

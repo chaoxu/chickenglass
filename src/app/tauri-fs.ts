@@ -27,6 +27,8 @@ import {
 import { isTauri } from "../lib/tauri";
 export { isTauri } from "../lib/tauri";
 
+let latestProjectRootGeneration = 0;
+
 /**
  * Open a native folder picker dialog.
  * Returns the selected path, or null if the user cancelled.
@@ -40,9 +42,11 @@ export async function pickFolder(): Promise<string | null> {
 
 /**
  * Set the current Tauri project root to an already-known absolute folder path.
+ * Returns true when this request won the backend generation race.
  */
-export async function openFolderAt(path: string): Promise<void> {
-  await openFolderCommand(path);
+export async function openFolderAt(path: string, generation: number): Promise<boolean> {
+  latestProjectRootGeneration = Math.max(latestProjectRootGeneration, generation);
+  return openFolderCommand(path, generation);
 }
 
 /**
@@ -52,7 +56,7 @@ export async function openFolderAt(path: string): Promise<void> {
 export async function openFolder(): Promise<string | null> {
   const selected = await pickFolder();
   if (!selected) return null;
-  await openFolderAt(selected);
+  await openFolderAt(selected, latestProjectRootGeneration + 1);
   return selected;
 }
 

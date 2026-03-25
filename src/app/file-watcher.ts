@@ -57,15 +57,31 @@ export class FileWatcher {
 
   /** Start watching a directory for changes. */
   async watch(directoryPath: string): Promise<void> {
+    const previousWatchToken = this.watchToken;
+    const previousUnlisten = this.unlisten;
     const watchToken = ++latestFileWatcherToken;
-    this.watchToken = watchToken;
 
-    // Stop any previous watcher
-    await this.unwatch();
     this.watchToken = watchToken;
+    this.unlisten = null;
 
-    // Tell the Rust backend to start watching
-    await watchDirectoryCommand(directoryPath);
+    previousUnlisten?.();
+    if (previousWatchToken !== null) {
+      try {
+        await unwatchDirectoryCommand(previousWatchToken);
+      } catch {
+        // best-effort: backend may already be stopped during teardown
+      }
+    }
+
+    const watchApplied = await watchDirectoryCommand(directoryPath, watchToken);
+    if (!watchApplied || this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
+      try {
+        await unwatchDirectoryCommand(watchToken);
+      } catch {
+        // best-effort: a stale backend watcher may already have been rejected
+      }
+      return;
+    }
 
     // Listen for file-changed events from the backend
     const unlisten = await listen<string>("file-changed", (event) => {
@@ -74,6 +90,11 @@ export class FileWatcher {
 
     if (this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
       unlisten();
+      try {
+        await unwatchDirectoryCommand(watchToken);
+      } catch {
+        // best-effort: backend may already be stopped during teardown
+      }
       return;
     }
 
@@ -82,16 +103,19 @@ export class FileWatcher {
 
   /** Stop watching and clean up. */
   async unwatch(): Promise<void> {
-    this.watchToken = null;
-    if (this.unlisten) {
-      this.unlisten();
-      this.unlisten = null;
-    }
+    const watchToken = this.watchToken;
+    const unlisten = this.unlisten;
 
-    try {
-      await unwatchDirectoryCommand();
-    } catch {
-      // best-effort: backend may already be stopped during teardown
+    this.watchToken = null;
+    this.unlisten = null;
+
+    unlisten?.();
+    if (watchToken !== null) {
+      try {
+        await unwatchDirectoryCommand(watchToken);
+      } catch {
+        // best-effort: backend may already be stopped during teardown
+      }
     }
 
     this.dismissNotification();

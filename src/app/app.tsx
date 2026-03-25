@@ -5,8 +5,8 @@ import { SidebarProvider } from "./components/sidebar";
 import { AppMainShell } from "./components/app-main-shell";
 import { AppSidebarShell } from "./components/app-sidebar-shell";
 import { ErrorBoundary } from "./components/error-boundary";
-import { findDefaultDocumentPath } from "./default-document-path";
 import { isProjectRootEscapeError } from "./project-root-errors";
+import { openProjectInCurrentWindow as openProjectInCurrentWindowFlow } from "./project-open";
 import { dirname, basename } from "../lib/utils";
 import { isTauri, pickFolder } from "./tauri-fs";
 import { toProjectRelativePathCommand } from "./tauri-client/fs";
@@ -28,6 +28,7 @@ const AppOverlays = lazy(() =>
 function AppInner() {
   const fs = useFileSystem();
   const appContainerRef = useRef<HTMLDivElement | null>(null);
+  const openProjectRequestRef = useRef(0);
   const dialogs = useDialogs();
   const unsavedChanges = useUnsavedChangesDialog();
   const workspace = useAppWorkspaceSession(fs);
@@ -43,20 +44,18 @@ function AppInner() {
     projectRoot: string,
     initialPath?: string,
   ): Promise<boolean> => {
-    const replacingProject = workspace.projectRoot !== projectRoot;
-    if (replacingProject) {
-      const closed = await editor.closeCurrentFile();
-      if (!closed) return false;
-    }
-
-    await workspace.openProjectRoot(projectRoot);
-    const tree = await fs.listTree().catch(() => null);
-    const targetPath = initialPath ?? (tree ? findDefaultDocumentPath(tree) : null);
-    if (targetPath) {
-      await editor.openFile(targetPath);
-    }
-    return true;
-  }, [editor, fs, workspace]);
+    return openProjectInCurrentWindowFlow({
+      projectRoot,
+      initialPath,
+      currentProjectRoot: workspace.projectRoot,
+      nextRequestId: () => ++openProjectRequestRef.current,
+      isRequestCurrent: (requestId) => requestId === openProjectRequestRef.current,
+      cancelPendingOpenFile: editor.cancelPendingOpenFile,
+      closeCurrentFile: editor.closeCurrentFile,
+      openProjectRoot: workspace.openProjectRoot,
+      openFile: editor.openFile,
+    });
+  }, [editor, workspace]);
 
   const handleOpenFolderRequest = useCallback(() => {
     if (!isTauri()) return;
@@ -109,6 +108,20 @@ function AppInner() {
     })();
   }, [editor, openProjectInCurrentWindow, workspace.projectRoot]);
 
+  const handleQuitRequest = useCallback(async (): Promise<void> => {
+    if (!isTauri()) return;
+    try {
+      const shouldClose = await editor.handleWindowCloseRequest();
+      if (!shouldClose) {
+        return;
+      }
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      await getCurrentWindow().close();
+    } catch (e: unknown) {
+      console.error("[app] quit request failed", e);
+    }
+  }, [editor]);
+
   useAppSessionPersistence({
     fileTree: workspace.fileTree,
     workspace,
@@ -135,16 +148,24 @@ function AppInner() {
     },
     editor,
     onOpenFile: handleOpenFileRequest,
+    onQuit: handleQuitRequest,
   });
 
   useAppDebug({
+    openProject: (path) => openProjectInCurrentWindow(path),
     openFile: editor.openFile,
     saveFile: editor.saveFile,
     closeFile: () => {
       void editor.closeCurrentFile();
     },
+    requestNativeClose: handleQuitRequest,
     setMode: editor.handleModeChange,
     getMode: () => editor.editorMode,
+    projectRoot: workspace.projectRoot,
+    currentDocument: editor.currentDocument,
+    hasDirtyDocument: editor.hasDirtyDocument,
+    startupComplete: workspace.startupComplete,
+    restoredProjectRoot: workspace.windowState.projectRoot,
   });
 
   useEffect(() => {

@@ -16,6 +16,25 @@ shortcuts, or the Tauri menu definition (`src-tauri/src/menu.rs`).
 3. Open the DevTools console (View > Toggle Debug or Cmd+Shift+D) to watch for
    runtime errors during testing.
 
+## DevTools Smoke Bridge
+
+In `npm run tauri:dev`, the frontend exposes a dev-only native smoke bridge on
+`window.__tauriSmoke` for actions that do not need an OS picker click:
+
+```js
+await window.__tauriSmoke.getWindowState()
+await window.__tauriSmoke.listWindows()
+await window.__tauriSmoke.openProject("/absolute/project/path")
+await window.__tauriSmoke.openFile("notes.md")
+await window.__tauriSmoke.simulateExternalChange("notes.md")
+await window.__tauriSmoke.requestNativeClose()
+```
+
+Use this bridge to verify native state transitions deterministically:
+- `getWindowState()` includes frontend state (`projectRoot`, `currentDocument`, `dirty`, `startupComplete`) and backend state (`backendProjectRoot`, `watcherRoot`, generations, last focused window).
+- `simulateExternalChange()` lets you test watcher flows without editing files outside the app.
+- Real OS dialogs (`Open File`, `Open Folder`, `Save As`) still need manual interaction.
+
 ---
 
 ## 1. Open File (menu + Cmd+O)
@@ -72,7 +91,7 @@ shortcuts, or the Tauri menu definition (`src-tauri/src/menu.rs`).
 | Step | Action | Expected Result | How to Verify |
 |------|--------|-----------------|---------------|
 | 6a | Press **Cmd+P** (or click the command icon in the status bar) | The command palette opens | A searchable command list overlay appears |
-| 6b | Verify command entries include at least: Save File, Open Folder, Export HTML, Keyboard Shortcuts, Toggle Sidebar | All listed commands appear in the palette | Scroll or search for each command |
+| 6b | Verify command entries include at least: Open File, Open Folder, Save File, Save As, Quit App, Export HTML, Keyboard Shortcuts, Toggle Sidebar | All listed commands appear in the palette | Scroll or search for each command |
 | 6c | Type "save" and select "Save File" | The active file is saved | File saved indicator updates; no console errors |
 | 6d | Type "export" and select "Export Current File to HTML" | The export flow starts (same as menu) | Export dialog or file write proceeds |
 | 6e | Type "shortcut" and select "Keyboard Shortcuts" | The shortcuts dialog opens | Dialog appears |
@@ -113,18 +132,18 @@ shortcuts, or the Tauri menu definition (`src-tauri/src/menu.rs`).
 
 This table maps native menu IDs (from `src-tauri/src/menu.rs`) to their frontend
 handler (from `src/app/hooks/use-menu-events.ts`) and command palette entry (from
-`src/app/hooks/use-commands.ts`).
+`src/app/hooks/use-app-overlays.ts`).
 
 | Menu ID | Menu Label | Menu Handler | Palette Command | Palette ID |
 |---------|-----------|-------------|----------------|------------|
 | `file_new` | New | (not yet wired) | -- | -- |
-| `file_open_file` | Open File | (not yet wired) | -- | -- |
+| `file_open_file` | Open File | `onOpenFile` | Open File... | `file.open-file` |
 | `file_open_folder` | Open Folder | `onOpenFolder` | Open Folder... | `file.open-folder` |
 | `file_save` | Save | `onSave` | Save File | `file.save` |
 | `file_save_as` | Save As | `onSaveAs` | Save As... | `file.save-as` |
 | `file_export` | Export... | `onExport` | Export Current File to HTML | `export.html` |
-| `file_close_tab` | Close Tab | `onCloseTab` | Close Tab | `file.close-tab` |
-| `file_quit` | Quit | (native Tauri) | -- | -- |
+| `file_close_tab` | Close File | `onCloseFile` | Close File | `file.close-file` |
+| `file_quit` | Quit | `onQuit` | Quit App | `file.quit` |
 | `edit_find` | Find | `onShowSearch` | Find in Files | `nav.search` |
 | `view_toggle_sidebar` | Toggle Sidebar | `onToggleSidebar` | Toggle Sidebar | `view.toggle-sidebar` |
 | `help_about` | About Coflat | `onAbout` | About Coflat | `help.about` |
@@ -142,8 +161,6 @@ These menu items are defined in Rust but have no frontend handler wired in
 `use-menu-events.ts` yet:
 
 - `file_new` -- New file creation
-- `file_open_file` -- Open File dialog (Cmd+O accelerator exists but handler is not wired through the menu event bridge)
-- `file_quit` -- Quit is handled natively by Tauri; dirty-file confirmation is handled via the `beforeunload` / Tauri close-requested event, not the menu event bridge
 - `view_zoom_in` / `view_zoom_out` -- Zoom controls
 - `view_focus_mode` -- Focus mode toggle
 - `view_debug` -- Debug inspector toggle
@@ -153,16 +170,12 @@ These menu items are defined in Rust but have no frontend handler wired in
 
 ## Automation Notes
 
-Automated native testing via Tauri's WebView CDP bridge is a future enhancement.
-The approach would be:
+Native smoke coverage is currently a hybrid:
 
 1. Launch the Tauri app in dev mode (`npm run tauri:dev`).
-2. Connect to the WebView via CDP (Tauri v2 exposes a debug port when built in dev mode).
-3. Use `page.evaluate()` to invoke `__app` and `__cmDebug` helpers for non-native actions.
-4. Native dialogs (file picker, folder picker) cannot be driven via CDP and require
-   OS-level automation (e.g., AppleScript on macOS) or must remain manual.
+2. Use the DevTools console plus `window.__tauriSmoke` for deterministic project/file/close/watcher checks.
+3. Use the manual checklist above for real OS dialogs (`Open File`, `Open Folder`, `Save As`) that still require picker interaction.
 
-A `scripts/tauri-smoke.mjs` script is not included because the native dialog
-interactions that are most critical to verify (Open File, Open Folder, Quit
-confirmation) cannot be reliably automated through CDP alone. The manual checklist
-above is the recommended verification path.
+There is still no `scripts/tauri-smoke.mjs` runner because those picker interactions
+cannot be automated reliably without OS-specific tooling. The bridge reduces the
+manual surface area, but it does not remove it.

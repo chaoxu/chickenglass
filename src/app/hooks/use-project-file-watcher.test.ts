@@ -145,7 +145,7 @@ describe("useProjectFileWatcher", () => {
       await watcherMockState.deferred.promise;
     });
 
-    expect(firstInstance.unwatch).toHaveBeenCalledTimes(1);
+    expect(firstInstance.unwatch).toHaveBeenCalledTimes(2);
     expect(secondInstance.unwatch).not.toHaveBeenCalled();
   });
 

@@ -12,7 +12,7 @@ pub fn current_project_root(
 ) -> Result<PathBuf, String> {
     let lock = root.0.lock().map_err(|e| e.to_string())?;
     lock.get(window.label())
-        .cloned()
+        .map(|entry| entry.path.clone())
         .ok_or("No project folder open".to_string())
 }
 

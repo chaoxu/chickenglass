@@ -16,13 +16,15 @@ const watcherBackendState = vi.hoisted(() => {
 
   const listenDeferred = createDeferred<() => void>();
   return {
-    watchDirectoryCommand: vi.fn(async () => {}),
-    unwatchDirectoryCommand: vi.fn(async () => {}),
+    watchDirectoryCommand: vi.fn(async () => true),
+    unwatchDirectoryCommand: vi.fn(async () => true),
     listen: vi.fn(async () => listenDeferred.promise),
     listenDeferred,
     reset() {
       this.watchDirectoryCommand.mockClear();
+      this.watchDirectoryCommand.mockImplementation(async () => true);
       this.unwatchDirectoryCommand.mockClear();
+      this.unwatchDirectoryCommand.mockImplementation(async () => true);
       this.listen.mockClear();
       this.listenDeferred = createDeferred<() => void>();
       this.listen.mockImplementation(async () => this.listenDeferred.promise);
@@ -63,16 +65,22 @@ describe("FileWatcher", () => {
 
     const watchPromise = watcher.watch("/tmp/project-a");
     await vi.waitFor(() => {
-      expect(watcherBackendState.watchDirectoryCommand).toHaveBeenCalledWith("/tmp/project-a");
+      expect(watcherBackendState.watchDirectoryCommand).toHaveBeenCalledWith(
+        "/tmp/project-a",
+        expect.any(Number),
+      );
     });
 
     await watcher.unwatch();
-    expect(watcherBackendState.unwatchDirectoryCommand).toHaveBeenCalledTimes(2);
+    expect(watcherBackendState.unwatchDirectoryCommand).toHaveBeenCalledTimes(1);
+    expect(watcherBackendState.unwatchDirectoryCommand).toHaveBeenNthCalledWith(1, expect.any(Number));
 
     watcherBackendState.listenDeferred.resolve(unlisten);
     await watchPromise;
 
     expect(unlisten).toHaveBeenCalledTimes(1);
+    expect(watcherBackendState.unwatchDirectoryCommand).toHaveBeenCalledTimes(2);
+    expect(watcherBackendState.unwatchDirectoryCommand).toHaveBeenNthCalledWith(2, expect.any(Number));
   });
 
   it("drops a stale listener when a newer watcher instance takes over", async () => {
@@ -98,8 +106,28 @@ describe("FileWatcher", () => {
     await firstWatch;
     await secondWatch;
 
-    expect(firstUnlisten).toHaveBeenCalledTimes(1);
     expect(secondUnlisten).not.toHaveBeenCalled();
+    expect(watcherBackendState.watchDirectoryCommand).toHaveBeenNthCalledWith(
+      1,
+      "/tmp/project-a",
+      expect.any(Number),
+    );
+    expect(watcherBackendState.watchDirectoryCommand).toHaveBeenNthCalledWith(
+      2,
+      "/tmp/project-a",
+      expect.any(Number),
+    );
+    const [firstCall = [] as unknown[], secondCall = [] as unknown[]] =
+      watcherBackendState.watchDirectoryCommand.mock.calls;
+    const unwatchCalls = watcherBackendState.unwatchDirectoryCommand.mock.calls as Array<unknown[]>;
+    const firstToken = firstCall[1];
+    const secondToken = secondCall[1];
+    expect(
+      unwatchCalls.some((call) => call[0] === firstToken),
+    ).toBe(true);
+    expect(
+      unwatchCalls.some((call) => call[0] === secondToken),
+    ).toBe(false);
   });
 
   it("queues dirty-file notifications instead of dropping earlier ones", () => {

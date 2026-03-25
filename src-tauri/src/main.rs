@@ -50,6 +50,9 @@ fn main() {
             commands::path::to_project_relative_path,
             commands::perf::get_perf_snapshot,
             commands::perf::clear_perf_snapshot,
+            commands::debug::debug_list_windows,
+            commands::debug::debug_get_native_state,
+            commands::debug::debug_emit_file_changed,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Coflat");
