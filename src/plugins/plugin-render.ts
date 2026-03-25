@@ -42,6 +42,7 @@ import { renderDocumentFragmentToDom } from "../document-surfaces";
 import {
   type FencedDivSemantics,
 } from "../semantics/document";
+import { countColons } from "../parser";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import {
   isValidEmbedUrl,
@@ -689,8 +690,7 @@ function getOpeningFenceColonRanges(state: EditorState): { from: number; to: num
     if (seen.has(div.openFenceFrom)) continue;
     seen.add(div.openFenceFrom);
     const text = state.sliceDoc(div.openFenceFrom, div.openFenceTo);
-    let colonLen = 0;
-    while (colonLen < text.length && text[colonLen] === ":") colonLen++;
+    const colonLen = countColons(text, 0);
     if (colonLen >= 3) {
       ranges.push({ from: div.openFenceFrom, to: div.openFenceFrom + colonLen });
     }

@@ -1,7 +1,7 @@
 export { removeIndentedCode } from "./remove-indented-code";
 export { removeBlockquote } from "./remove-blockquote";
 export { mathExtension } from "./math-backslash";
-export { fencedDiv } from "./fenced-div";
+export { fencedDiv, countColons } from "./fenced-div";
 export { parseFencedDivAttrs, extractDivClass } from "./fenced-div-attrs";
 export type { FencedDivAttrs } from "./fenced-div-attrs";
 export {

@@ -38,7 +38,7 @@ function fencedDivLog(msg: string): void {
 }
 
 /** Count consecutive colons starting at `pos` in `text`. */
-function countColons(text: string, pos: number): number {
+export function countColons(text: string, pos: number): number {
   let count = 0;
   while (pos + count < text.length && text.charCodeAt(pos + count) === COLON) {
     count++;
