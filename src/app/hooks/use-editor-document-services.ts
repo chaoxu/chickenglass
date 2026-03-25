@@ -91,6 +91,7 @@ interface UseEditorDocumentServicesOptions {
   doc: string;
   fs?: FileSystem;
   docPath?: string;
+  onSourceMapChange?: (sourceMap: SourceMap | null) => void;
 }
 
 export interface UseEditorDocumentServicesReturn {
@@ -112,10 +113,16 @@ export function useEditorDocumentServices({
   doc,
   fs,
   docPath,
+  onSourceMapChange,
 }: UseEditorDocumentServicesOptions): UseEditorDocumentServicesReturn {
   const bibliography = useBibliography({ fs, docPath });
   const imageSaverRef = useRef<((file: File) => Promise<string>) | null>(null);
   const includeExpansionGenerationRef = useRef(0);
+
+  const publishSourceMap = useCallback((sourceMap: SourceMap | null) => {
+    window.__cfSourceMap = sourceMap;
+    onSourceMapChange?.(sourceMap);
+  }, [onSourceMapChange]);
 
   const beginIncludeExpansion = useCallback(() => {
     includeExpansionGenerationRef.current += 1;
@@ -125,9 +132,9 @@ export function useEditorDocumentServices({
   const resetServices = useCallback(() => {
     bibliography.resetTracking();
     imageSaverRef.current = null;
-    window.__cfSourceMap = null;
+    publishSourceMap(null);
     includeExpansionGenerationRef.current += 1;
-  }, [bibliography]);
+  }, [bibliography, publishSourceMap]);
 
   const imageFolderRef = useRef<string | undefined>(undefined);
 
@@ -171,7 +178,7 @@ export function useEditorDocumentServices({
 
     const sourceDoc = docOverride ?? doc;
     const includeExpansionGeneration = beginIncludeExpansion();
-    window.__cfSourceMap = null;
+    publishSourceMap(null);
     if (fs && docPath) {
       void (async () => {
         try {
@@ -188,7 +195,7 @@ export function useEditorDocumentServices({
           );
           if (includeExpansionGenerationRef.current !== includeExpansionGeneration) return;
           if (dispatched && regions.length > 0) {
-            window.__cfSourceMap = new SourceMap(regions);
+            publishSourceMap(new SourceMap(regions));
           }
         } catch (e: unknown) {
           if (includeExpansionGenerationRef.current !== includeExpansionGeneration) return;
@@ -196,7 +203,7 @@ export function useEditorDocumentServices({
         }
       })();
     }
-  }, [beginIncludeExpansion, bibliography, doc, docPath, fs]);
+  }, [beginIncludeExpansion, bibliography, doc, docPath, fs, publishSourceMap]);
 
   return {
     imageSaverRef,

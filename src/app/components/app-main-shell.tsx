@@ -15,7 +15,7 @@ interface AppMainShellProps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "editorDoc" | "pluginManager" | "handleDocChange" | "handleEditorStateChange" | "editorMode" | "handleModeChange" | "docTextForStats" | "isMarkdownFile"
+    "currentPath" | "editorDoc" | "pluginManager" | "handleDocChange" | "handleProgrammaticDocChange" | "setDocumentSourceMap" | "handleEditorStateChange" | "editorMode" | "handleModeChange" | "docTextForStats" | "isMarkdownFile"
   >;
   onOpenPalette: () => void;
 }
@@ -28,12 +28,14 @@ export function AppMainShell({
   editor,
   onOpenPalette,
 }: AppMainShellProps) {
+  const currentPath = editor.currentPath;
+
   return (
     <SidebarInset>
-      {editor.currentPath ? (
+      {currentPath ? (
         <EditorPane
           doc={editor.editorDoc}
-          docPath={editor.currentPath}
+          docPath={currentPath}
           projectConfig={projectConfig}
           theme={resolvedTheme}
           fs={fs}
@@ -41,6 +43,12 @@ export function AppMainShell({
           sidenotesCollapsed={workspace.sidenotesCollapsed}
           onSidenotesCollapsedChange={workspace.setSidenotesCollapsed}
           onDocChange={editor.handleDocChange}
+          onProgrammaticDocChange={(doc) => {
+            editor.handleProgrammaticDocChange(currentPath, doc);
+          }}
+          onSourceMapChange={(sourceMap) => {
+            editor.setDocumentSourceMap(currentPath, sourceMap);
+          }}
           onStateChange={editor.handleEditorStateChange}
           editorMode={editor.editorMode}
         />

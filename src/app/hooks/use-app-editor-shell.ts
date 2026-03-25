@@ -114,6 +114,10 @@ export interface AppEditorShellController {
   handleWindowCloseRequest: ReturnType<typeof useEditorSession>["handleWindowCloseRequest"];
   /** Notify the session that the CM6 document changed (marks the current document dirty, updates liveDocs). */
   handleDocChange: ReturnType<typeof useEditorSession>["handleDocChange"];
+  /** Sync annotated CM6 document replacements without treating them as user edits. */
+  handleProgrammaticDocChange: ReturnType<typeof useEditorSession>["handleProgrammaticDocChange"];
+  /** Register or clear the include source map for the active document. */
+  setDocumentSourceMap: ReturnType<typeof useEditorSession>["setDocumentSourceMap"];
 
   // --- Editor state ---
 
@@ -234,6 +238,8 @@ export function useAppEditorShell({
     isPathOpen,
     isPathDirty,
     handleDocChange,
+    handleProgrammaticDocChange,
+    setDocumentSourceMap,
     openFile,
     openFileWithContent,
     reloadFile,
@@ -419,6 +425,8 @@ export function useAppEditorShell({
     saveAs,
     handleWindowCloseRequest,
     handleDocChange,
+    handleProgrammaticDocChange,
+    setDocumentSourceMap,
     editorState,
     headings,
     handleEditorStateChange,

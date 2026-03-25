@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileSystem } from "../file-manager";
 import { MemoryFileSystem } from "../file-manager";
+import { SourceMap } from "../source-map";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 import type { UseEditorSessionReturn } from "./use-editor-session";
 
@@ -90,6 +91,31 @@ function createAsyncFileSystem(reads: Record<string, Deferred<string>>): FileSys
   };
 }
 
+function createHybridFileSystem(
+  initialFiles: Record<string, string>,
+  reads: Record<string, Deferred<string>> = {},
+): FileSystem {
+  const memory = new MemoryFileSystem(initialFiles);
+  return {
+    listTree: () => memory.listTree(),
+    readFile: (path: string) => {
+      const deferred = reads[path];
+      if (deferred) {
+        return deferred.promise;
+      }
+      return memory.readFile(path);
+    },
+    writeFile: (path: string, content: string) => memory.writeFile(path, content),
+    createFile: (path: string, content?: string) => memory.createFile(path, content),
+    exists: (path: string) => memory.exists(path),
+    renameFile: (oldPath: string, newPath: string) => memory.renameFile(oldPath, newPath),
+    createDirectory: (path: string) => memory.createDirectory(path),
+    deleteFile: (path: string) => memory.deleteFile(path),
+    writeFileBinary: (path: string, data: Uint8Array) => memory.writeFileBinary(path, data),
+    readFileBinary: (path: string) => memory.readFileBinary(path),
+  };
+}
+
 describe("useEditorSession", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -169,6 +195,124 @@ describe("useEditorSession", () => {
       dirty: false,
     });
     expect(ref.result.editorDoc).toBe("B");
+  });
+
+  it("invalidates an in-flight openFile when opening an in-memory document", async () => {
+    const reads = {
+      "a.md": createDeferred<string>(),
+    };
+    const fs = createAsyncFileSystem(reads);
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+
+    let openA!: Promise<void>;
+    await act(async () => {
+      openA = ref.result.openFile("a.md");
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await ref.result.openFileWithContent("scratch.md", "# Scratch");
+    });
+
+    expect(ref.result.currentPath).toBe("scratch.md");
+    expect(ref.result.editorDoc).toBe("# Scratch");
+
+    await act(async () => {
+      reads["a.md"].resolve("# Persisted");
+      await openA;
+    });
+
+    expect(ref.result.currentPath).toBe("scratch.md");
+    expect(ref.result.editorDoc).toBe("# Scratch");
+    expect(ref.result.buffers.current.has("a.md")).toBe(false);
+  });
+
+  it("cleans up the actual current document after an async open when the path changed mid-flight", async () => {
+    const reads = {
+      "slow.md": createDeferred<string>(),
+    };
+    const fs = createHybridFileSystem({
+      "current.md": "Current",
+      "slow.md": "Slow",
+    }, reads);
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("current.md");
+    });
+
+    let openSlow!: Promise<void>;
+    await act(async () => {
+      openSlow = ref.result.openFile("slow.md");
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await ref.result.handleRename("current.md", "renamed.md");
+    });
+
+    expect(ref.result.currentPath).toBe("renamed.md");
+    expect(ref.result.buffers.current.has("renamed.md")).toBe(true);
+
+    await act(async () => {
+      reads["slow.md"].resolve("Slow");
+      await openSlow;
+    });
+
+    expect(ref.result.currentPath).toBe("slow.md");
+    expect(ref.result.buffers.current.has("renamed.md")).toBe(false);
+    expect(ref.result.liveDocs.current.has("renamed.md")).toBe(false);
+  });
+
+  it("saves expanded include edits back to the owning files", async () => {
+    const includeRef = [
+      "::: {.include}",
+      "chapter.md",
+      ":::",
+    ].join("\n");
+    const header = "# Main\n\n";
+    const footer = "\n\n# End";
+    const rawMain = `${header}${includeRef}${footer}`;
+    const expanded = `${header}Old chapter\n${footer}`;
+    const edited = `${header}New chapter\n${footer}`;
+    const sourceMap = new SourceMap([{
+      from: header.length,
+      to: header.length + "Old chapter\n".length,
+      file: "chapter.md",
+      originalRef: includeRef,
+      rawFrom: header.length,
+      rawTo: header.length + includeRef.length,
+    }]);
+    const fs = new MemoryFileSystem({
+      "main.md": rawMain,
+      "chapter.md": "Old chapter\n",
+    });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("main.md");
+    });
+
+    act(() => {
+      ref.result.setDocumentSourceMap("main.md", sourceMap);
+      ref.result.handleProgrammaticDocChange("main.md", expanded);
+      ref.result.handleDocChange(edited);
+    });
+
+    expect(ref.result.currentDocument?.dirty).toBe(true);
+
+    await act(async () => {
+      await ref.result.saveFile();
+    });
+
+    await expect(fs.readFile("main.md")).resolves.toBe(rawMain);
+    await expect(fs.readFile("chapter.md")).resolves.toBe("New chapter\n");
+    expect(ref.result.editorDoc).toBe(edited);
+    expect(ref.result.currentDocument?.dirty).toBe(false);
   });
 
   it("cancels file switching when the unsaved-changes prompt says cancel", async () => {

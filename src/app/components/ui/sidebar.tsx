@@ -227,12 +227,14 @@ const SidebarTrigger = React.forwardRef<
   React.ButtonHTMLAttributes<HTMLButtonElement>
 >(function SidebarTrigger({ className, onClick, title, "aria-label": ariaLabel, type = "button", ...props }, ref) {
   const { open, toggleSidebar } = useSidebar();
+  const defaultTitle = open ? "Collapse sidebar" : "Expand sidebar";
 
   return (
     <button
       ref={ref}
       type={type}
       aria-label={ariaLabel ?? (open ? "Collapse sidebar" : "Expand sidebar")}
+      title={title ?? defaultTitle}
       className={cn(
         "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--cf-muted)] transition-colors duration-[var(--cf-transition,0.15s)] hover:bg-[var(--cf-hover)] hover:text-[var(--cf-fg)]",
         className,

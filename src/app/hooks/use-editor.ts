@@ -34,6 +34,7 @@ import { useEditorDocumentServices } from "./use-editor-document-services";
 import { useEditorThemeSync } from "./use-editor-theme-sync";
 import { measureSync } from "../perf";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
+import type { SourceMap } from "../source-map";
 
 /** Resolved theme for the CM6 dark/light base extension. */
 export type ResolvedTheme = "light" | "dark";
@@ -60,10 +61,14 @@ export interface UseEditorOptions {
   docPath?: string;
   /** Called with the full document string whenever it changes. */
   onDocChange?: (doc: string) => void;
+  /** Called when an annotated document replacement updates the live editor text. */
+  onProgrammaticDocChange?: (doc: string) => void;
   /** Called with the cursor head position (char offset) whenever the selection changes. */
   onCursorChange?: (pos: number) => void;
   /** Called with the parsed frontmatter state whenever it changes. */
   onFrontmatterChange?: (fm: FrontmatterState | undefined) => void;
+  /** Called when include expansion installs or clears a source map for the active document. */
+  onSourceMapChange?: (sourceMap: SourceMap | null) => void;
   /**
    * External plugin manager. When provided, useEditor uses it instead of
    * creating its own. This allows the caller (e.g., AppInner) to share a
@@ -106,8 +111,10 @@ export function useEditor(
     fs,
     docPath,
     onDocChange,
+    onProgrammaticDocChange,
     onCursorChange,
     onFrontmatterChange,
+    onSourceMapChange,
     pluginManager: externalPluginManager,
   } = options;
 
@@ -120,7 +127,12 @@ export function useEditor(
   const pluginManager = externalPluginManager ?? fallbackManager;
 
   const [view, setView] = useState<EditorView | null>(null);
-  const documentServices = useEditorDocumentServices({ doc, fs, docPath });
+  const documentServices = useEditorDocumentServices({
+    doc,
+    fs,
+    docPath,
+    onSourceMapChange,
+  });
   const debugBridge = useEditorDebugBridge();
   const documentContextCompartmentRef = useRef(new Compartment());
   const lastLoadedDocRef = useRef(doc);
@@ -132,6 +144,7 @@ export function useEditor(
 
   // Stable refs so callbacks inside the effect don't capture stale closures.
   const onDocChangeRef = useRef(onDocChange);
+  const onProgrammaticDocChangeRef = useRef(onProgrammaticDocChange);
   const onCursorChangeRef = useRef(onCursorChange);
   const onFrontmatterChangeRef = useRef(onFrontmatterChange);
   const handleFrontmatterChangeRef = useRef(documentServices.handleFrontmatterChange);
@@ -140,6 +153,7 @@ export function useEditor(
   const resetServicesRef = useRef(documentServices.resetServices);
   useEffect(() => {
     onDocChangeRef.current = onDocChange;
+    onProgrammaticDocChangeRef.current = onProgrammaticDocChange;
     onCursorChangeRef.current = onCursorChange;
     onFrontmatterChangeRef.current = onFrontmatterChange;
     handleFrontmatterChangeRef.current = documentServices.handleFrontmatterChange;
@@ -153,6 +167,7 @@ export function useEditor(
     documentServices.resetServices,
     onCursorChange,
     onDocChange,
+    onProgrammaticDocChange,
     onFrontmatterChange,
   ]);
 
@@ -181,7 +196,10 @@ export function useEditor(
       if (update.docChanged) {
         const docStr = update.state.doc.toString();
         if (!programmaticDocChange) {
+          window.__cfSourceMap?.mapThrough(update.changes);
           onDocChangeRef.current?.(docStr);
+        } else {
+          onProgrammaticDocChangeRef.current?.(docStr);
         }
 
         // Debounced word count → Zustand store (no React setState)

@@ -16,6 +16,18 @@ export interface IncludeRegion {
   rawTo: number;
 }
 
+/** Error produced when the same included file is edited inconsistently in multiple regions. */
+export class ConflictingIncludeContentError extends Error {
+  /** The duplicated include path with conflicting content. */
+  readonly file: string;
+
+  constructor(file: string) {
+    super(`Included file has conflicting edited regions: ${file}`);
+    this.name = "ConflictingIncludeContentError";
+    this.file = file;
+  }
+}
+
 /** Tracks which parts of a composed document belong to which source files. */
 export class SourceMap {
   constructor(public regions: IncludeRegion[]) {}
@@ -61,7 +73,12 @@ export class SourceMap {
   decompose(doc: string): Map<string, string> {
     const result = new Map<string, string>();
     for (const region of this.regions) {
-      result.set(region.file, doc.substring(region.from, region.to));
+      const content = doc.substring(region.from, region.to);
+      const existing = result.get(region.file);
+      if (existing !== undefined && existing !== content) {
+        throw new ConflictingIncludeContentError(region.file);
+      }
+      result.set(region.file, content);
     }
     return result;
   }

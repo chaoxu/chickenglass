@@ -5,6 +5,7 @@ import { basename } from "../lib/utils";
 import { isTauri } from "../tauri-fs";
 import { toProjectRelativePathCommand } from "../tauri-client/fs";
 import { applySaveAsResult } from "../editor-session-save";
+import { buildProjectedWritePlan } from "../editor-session-write-plan";
 import {
   clearSessionDocument,
   markSessionDocumentDirty,
@@ -19,6 +20,7 @@ import {
   type SessionDocument,
 } from "../editor-session-model";
 import { measureAsync, withPerfOperation } from "../perf";
+import type { SourceMap } from "../source-map";
 import type {
   UnsavedChangesDecision,
   UnsavedChangesRequest,
@@ -43,6 +45,8 @@ export interface UseEditorSessionReturn {
   isPathOpen: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
   handleDocChange: (doc: string) => void;
+  handleProgrammaticDocChange: (path: string, doc: string) => void;
+  setDocumentSourceMap: (path: string, sourceMap: SourceMap | null) => void;
   openFile: (path: string) => Promise<void>;
   openFileWithContent: (name: string, content: string) => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
@@ -92,6 +96,7 @@ export function useEditorSession({
   const [editorDoc, setEditorDoc] = useState("");
   const buffers = useRef<Map<string, string>>(new Map());
   const liveDocs = useRef<Map<string, string>>(new Map());
+  const sourceMaps = useRef<Map<string, SourceMap>>(new Map());
   const stateRef = useRef<EditorSessionState>(sessionState);
   const openFileRequestRef = useRef(0);
 
@@ -117,16 +122,42 @@ export function useEditorSession({
 
   const getSessionState = useCallback((): EditorSessionState => stateRef.current, []);
 
+  const writeDocumentSnapshot = useCallback(async (
+    targetPath: string,
+    doc: string,
+    sourceMap: SourceMap | null,
+    options?: { createTargetIfMissing?: boolean },
+  ): Promise<void> => {
+    const writes = buildProjectedWritePlan(targetPath, doc, sourceMap);
+    const targetExists =
+      options?.createTargetIfMissing === true ? await fs.exists(targetPath) : true;
+
+    for (const write of writes) {
+      const shouldCreateTarget =
+        options?.createTargetIfMissing === true &&
+        write.path === targetPath &&
+        !targetExists;
+      await measureAsync(
+        "save_file.write",
+        () => (shouldCreateTarget
+          ? fs.createFile(write.path, write.content)
+          : fs.writeFile(write.path, write.content)),
+        {
+          category: "save_file",
+          detail: write.path,
+        },
+      );
+    }
+  }, [fs]);
+
   const saveCurrentDocument = useCallback(async (): Promise<boolean> => {
     const currentPath = getSessionState().currentDocument?.path;
     if (!currentPath) return true;
 
     const doc = liveDocs.current.get(currentPath) ?? "";
+    const sourceMap = sourceMaps.current.get(currentPath) ?? null;
     try {
-      await measureAsync("save_file.write", () => fs.writeFile(currentPath, doc), {
-        category: "save_file",
-        detail: currentPath,
-      });
+      await writeDocumentSnapshot(currentPath, doc, sourceMap);
       buffers.current.set(currentPath, doc);
       liveDocs.current.set(currentPath, doc);
       commitSessionState(
@@ -138,7 +169,7 @@ export function useEditorSession({
       console.error("[session] save failed:", e);
       return false;
     }
-  }, [commitSessionState, fs, getSessionState]);
+  }, [commitSessionState, getSessionState, writeDocumentSnapshot]);
 
   const saveFile = useCallback(async (): Promise<void> => {
     await saveCurrentDocument();
@@ -208,6 +239,30 @@ export function useEditorSession({
     }
   }, [commitSessionState]);
 
+  const handleProgrammaticDocChange = useCallback((path: string, doc: string) => {
+    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    if (currentDocument?.path !== path) return;
+
+    if (!currentDocument.dirty) {
+      buffers.current.set(path, doc);
+    }
+    liveDocs.current.set(path, doc);
+    commitSessionState(
+      currentDocument.dirty
+        ? stateRef.current
+        : markSessionDocumentDirty(stateRef.current, path, false),
+      { editorDoc: doc },
+    );
+  }, [commitSessionState]);
+
+  const setDocumentSourceMap = useCallback((path: string, sourceMap: SourceMap | null) => {
+    if (sourceMap) {
+      sourceMaps.current.set(path, sourceMap);
+      return;
+    }
+    sourceMaps.current.delete(path);
+  }, []);
+
   const renameBuffers = useCallback((oldPath: string, newPath: string) => {
     const buffered = buffers.current.get(oldPath);
     if (buffered !== undefined) {
@@ -219,6 +274,12 @@ export function useEditorSession({
     if (liveDoc !== undefined) {
       liveDocs.current.delete(oldPath);
       liveDocs.current.set(newPath, liveDoc);
+    }
+
+    const sourceMap = sourceMaps.current.get(oldPath);
+    if (sourceMap) {
+      sourceMaps.current.delete(oldPath);
+      sourceMaps.current.set(newPath, sourceMap);
     }
 
     commitSessionState(
@@ -258,12 +319,14 @@ export function useEditorSession({
           return;
         }
 
-        const previousPath = currentDocument?.path ?? null;
+        const previousPath = stateRef.current.currentDocument?.path ?? null;
         if (previousPath && previousPath !== path) {
           buffers.current.delete(previousPath);
           liveDocs.current.delete(previousPath);
+          sourceMaps.current.delete(previousPath);
         }
 
+        sourceMaps.current.delete(path);
         buffers.current.set(path, content);
         liveDocs.current.set(path, content);
         commitSessionState(
@@ -288,7 +351,7 @@ export function useEditorSession({
   ]);
 
   const openFileWithContent = useCallback(async (name: string, content: string) => {
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    const requestId = ++openFileRequestRef.current;
     let path = name;
     let suffix = 1;
     while (hasSessionPath(stateRef.current, path)) {
@@ -299,14 +362,16 @@ export function useEditorSession({
       name: basename(path),
       path,
     });
-    if (!canLeave) return;
+    if (!canLeave || requestId !== openFileRequestRef.current) return;
 
-    const previousPath = currentDocument?.path ?? null;
+    const previousPath = stateRef.current.currentDocument?.path ?? null;
     if (previousPath && previousPath !== path) {
       buffers.current.delete(previousPath);
       liveDocs.current.delete(previousPath);
+      sourceMaps.current.delete(previousPath);
     }
 
+    sourceMaps.current.delete(path);
     buffers.current.set(path, "");
     liveDocs.current.set(path, content);
     commitSessionState(
@@ -324,6 +389,7 @@ export function useEditorSession({
 
     try {
       const content = await fs.readFile(path);
+      sourceMaps.current.delete(path);
       buffers.current.set(path, content);
       liveDocs.current.set(path, content);
       commitSessionState(
@@ -372,6 +438,7 @@ export function useEditorSession({
 
     buffers.current.delete(currentDocument.path);
     liveDocs.current.delete(currentDocument.path);
+    sourceMaps.current.delete(currentDocument.path);
     commitSessionState(
       clearSessionDocument(stateRef.current, currentDocument.path),
       { editorDoc: "" },
@@ -408,6 +475,7 @@ export function useEditorSession({
     if (currentDocument && (currentDocument.path === path || currentDocument.path.startsWith(`${path}/`))) {
       buffers.current.delete(currentDocument.path);
       liveDocs.current.delete(currentDocument.path);
+      sourceMaps.current.delete(currentDocument.path);
       commitSessionState(
         clearSessionDocument(stateRef.current, currentDocument.path),
         { editorDoc: "" },
@@ -421,6 +489,7 @@ export function useEditorSession({
     const currentPath = getSessionState().currentDocument?.path;
     if (!currentPath) return;
     const doc = liveDocs.current.get(currentPath) ?? "";
+    const sourceMap = sourceMaps.current.get(currentPath) ?? null;
 
     if (isTauri()) {
       try {
@@ -432,8 +501,14 @@ export function useEditorSession({
         if (!savePath) return;
 
         const relativePath = await toProjectRelativePathCommand(savePath);
-        const exists = await fs.exists(relativePath);
-        await (exists ? fs.writeFile(relativePath, doc) : fs.createFile(relativePath, doc));
+        await writeDocumentSnapshot(relativePath, doc, sourceMap, {
+          createTargetIfMissing: true,
+        });
+
+        if (sourceMap && currentPath !== relativePath) {
+          sourceMaps.current.delete(currentPath);
+          sourceMaps.current.set(relativePath, sourceMap);
+        }
 
         commitSessionState(
           applySaveAsResult({
@@ -461,7 +536,7 @@ export function useEditorSession({
     anchor.download = basename(currentPath);
     anchor.click();
     URL.revokeObjectURL(url);
-  }, [addRecentFile, commitSessionState, fs, getSessionState, refreshTree]);
+  }, [addRecentFile, commitSessionState, getSessionState, refreshTree, writeDocumentSnapshot]);
 
   const handleWindowCloseRequest = useCallback(async (): Promise<boolean> => {
     return prepareCurrentDocumentForTransition("close-window");
@@ -477,6 +552,8 @@ export function useEditorSession({
     isPathOpen,
     isPathDirty,
     handleDocChange,
+    handleProgrammaticDocChange,
+    setDocumentSourceMap,
     openFile,
     openFileWithContent,
     reloadFile,
