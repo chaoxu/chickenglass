@@ -33,7 +33,6 @@ import {
   addMarkerReplacement,
   pushWidgetDecoration,
   addSingleLineClosingFence,
-  buildDecorations,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
   type FencedBlockInfo,
@@ -388,24 +387,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const macros = state.field(mathMacrosField);
   const cursor = state.selection.main;
 
-  // For nested same-colon fenced divs, the Lezer composite API attributes
-  // the inner's closing ::: to the outer div. The outer's actual closing :::
-  // ends up as a stray line at document level after div.to. A bare ::: line
-  // (no attributes) immediately after a FencedDiv is always such a stray.
-  const orphanedFences: Range<Decoration>[] = [];
-  const strayLines = new Set<number>();
-  for (const div of collectFencedDivs(state)) {
-    if (div.singleLine || div.to >= state.doc.length) continue;
-    const nextLine = state.doc.lineAt(div.to + 1);
-    if (/^:{3,}\s*$/.test(nextLine.text) && !strayLines.has(nextLine.from)) {
-      strayLines.add(nextLine.from);
-      orphanedFences.push(decorationHidden.range(nextLine.from, nextLine.to));
-      orphanedFences.push(
-        Decoration.line({ class: CSS.blockClosingFence }).range(nextLine.from),
-      );
-    }
-  }
-
   const baseDecos = buildFencedBlockDecorations(state, collectFencedDivs, ({
     state,
     block: div,
@@ -544,8 +525,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     }
   });
 
-  if (orphanedFences.length === 0) return baseDecos;
-  return RangeSet.join([baseDecos, buildDecorations(orphanedFences)]);
+  return baseDecos;
 }
 
 /**
@@ -577,18 +557,6 @@ function getClosingFenceRanges(state: EditorState): { from: number; to: number }
     if (!seen.has(line.from)) {
       seen.add(line.from);
       ranges.push({ from: line.from, to: line.to });
-    }
-  }
-
-  // Stray closing fences from nested same-colon blocks: a bare ::: line
-  // immediately after a FencedDiv is the outer's closing fence that the
-  // Lezer composite API couldn't attribute properly.
-  for (const div of divs) {
-    if (div.singleLine || div.to >= state.doc.length) continue;
-    const nextLine = state.doc.lineAt(div.to + 1);
-    if (/^:{3,}\s*$/.test(nextLine.text) && !seen.has(nextLine.from)) {
-      seen.add(nextLine.from);
-      ranges.push({ from: nextLine.from, to: nextLine.to });
     }
   }
 
