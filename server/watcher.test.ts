@@ -4,6 +4,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 // vi.hoisted lets us define values that are available inside vi.mock factories
 const { mockWatcher, MockWebSocketServer } = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- vi.hoisted requires synchronous import
   const { EventEmitter: EE } = require("node:events") as typeof import("node:events");
 
   const watcher = Object.assign(new EE(), {

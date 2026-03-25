@@ -310,11 +310,11 @@ export async function exportDocument(
   // Check that Pandoc is available
   try {
     await checkPandoc();
-  } catch (_e) {
-    // Rethrow with user-friendly message — the underlying error is opaque (command not found)
+  } catch (e) {
     throw new Error(
       "Pandoc is not installed or not found in PATH. " +
         "Install Pandoc from https://pandoc.org/installing.html to enable export.",
+      { cause: e },
     );
   }
 

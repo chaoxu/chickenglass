@@ -183,7 +183,6 @@ function useTabCallbacks(
   const isPathOpen = useCallback(
     (path: string): boolean => hasSessionPath(stateRef.current, path),
     // stateRef is a stable ref object — no reactive dep needed
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 

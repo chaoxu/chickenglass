@@ -222,7 +222,6 @@ export function useEditor(
     // docPath/fs changes are handled by React remounting EditorPane via
     // key={activeTab}, so documentServices is NOT needed here — adding it
     // caused an infinite recreation loop (unstable object reference).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc, containerRef]);
 
   return {

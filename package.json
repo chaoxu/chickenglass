@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:browser": "vite & sleep 2 && npm run chrome && wait",
     "typecheck": "tsc --noEmit",
     "typecheck:app": "tsc --noEmit -p tsconfig.app.json",
     "typecheck:server": "tsc --noEmit -p server/tsconfig.json",
@@ -19,6 +20,7 @@
     "chrome:app": "node scripts/launch-chrome.mjs --activate",
     "chrome:cdp": "node scripts/launch-chrome.mjs --no-activate",
     "chrome:test": "node scripts/test-chrome.mjs",
+    "convert:latex": "python3 scripts/latex-to-coflat.py",
     "perf:capture": "node scripts/perf-regression.mjs capture",
     "perf:compare": "node scripts/perf-regression.mjs compare"
   },
