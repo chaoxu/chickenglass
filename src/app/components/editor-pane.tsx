@@ -70,6 +70,8 @@ export function EditorPane({
           bibliography={bibData?.store}
           cslProcessor={bibData?.cslProcessor}
           scrollTop={scrollTop}
+          fs={editorOptions.fs}
+          docPath={editorOptions.docPath}
         />
       )}
       {/* Portal target — SidenoteMargin renders into the CM6 scroller via DOM portal */}

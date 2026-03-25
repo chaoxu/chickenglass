@@ -28,6 +28,8 @@ import {
 import { htmlRenderExtensions } from "../parser";
 import { buildKatexOptions } from "../lib/katex-options";
 import { isSafeUrl } from "../lib/url-utils";
+import { resolveProjectPathFromDocument } from "../lib/project-paths";
+import { isPdfTarget } from "../lib/pdf-target";
 import { type CslJsonItem } from "../citations/bibtex-parser";
 import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import {
@@ -121,6 +123,21 @@ export interface MarkdownToHtmlOptions {
    * standalone.
    */
   blockCounters?: ReadonlyMap<string, BlockCounterEntry>;
+  /**
+   * Current document path for resolving relative PDF-backed image targets.
+   *
+   * Used together with `imageUrlOverrides`, whose keys are resolved
+   * project-relative paths.
+   */
+  documentPath?: string;
+  /**
+   * Prepared image source overrides keyed by resolved project-relative path.
+   *
+   * Read mode / HTML export use this to substitute rasterized first-page
+   * previews for PDF-backed image targets while keeping the core renderer
+   * synchronous and CM6-free.
+   */
+  imageUrlOverrides?: ReadonlyMap<string, string>;
 }
 
 // ── Inline context ───────────────────────────────────────────────────────────
@@ -141,6 +158,8 @@ interface InlineContext {
   surface: HtmlInlineSurface;
   /** Document semantics for resolving crossref labels in HTML export. */
   semantics?: DocumentSemantics;
+  documentPath?: string;
+  imageUrlOverrides?: ReadonlyMap<string, string>;
 }
 
 type HtmlInlineSurface = InlineRenderSurface | "document-body";
@@ -169,7 +188,7 @@ function renderInlineWithSurface(
   text: string,
   options: Pick<
     InlineContext,
-    "macros" | "bibliography" | "citedIds" | "cslProcessor" | "blockCounters" | "surface" | "doc" | "semantics"
+    "macros" | "bibliography" | "citedIds" | "cslProcessor" | "blockCounters" | "surface" | "doc" | "semantics" | "documentPath" | "imageUrlOverrides"
   >,
 ): string {
   return renderInlineFragments(parseInlineFragments(text), {
@@ -181,6 +200,8 @@ function renderInlineWithSurface(
     blockCounters: options.blockCounters,
     surface: options.surface,
     semantics: options.semantics,
+    documentPath: options.documentPath,
+    imageUrlOverrides: options.imageUrlOverrides,
   });
 }
 
@@ -198,6 +219,8 @@ interface WalkContext {
   readonly surface: "document-body";
   /** Accumulates cited entry IDs in document order for the bibliography section. */
   readonly citedIds: string[];
+  readonly documentPath?: string;
+  readonly imageUrlOverrides?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -230,6 +253,8 @@ export function markdownToHtml(
     blockCounters: options?.blockCounters,
     surface: "document-body",
     citedIds: [],
+    documentPath: options?.documentPath,
+    imageUrlOverrides: options?.imageUrlOverrides,
   };
 
   let html = renderNode(tree.topNode, ctx);
@@ -627,6 +652,17 @@ function renderInlineFragments(
   return fragments.map((fragment) => renderInlineFragment(fragment, ctx)).join("");
 }
 
+function resolveOverriddenImageSrc(
+  src: string,
+  ctx: Pick<InlineContext, "documentPath" | "imageUrlOverrides">,
+): string {
+  if (!ctx.imageUrlOverrides || ctx.imageUrlOverrides.size === 0) return src;
+  if (!isPdfTarget(src)) return src;
+
+  const resolvedPath = resolveProjectPathFromDocument(ctx.documentPath ?? "", src);
+  return ctx.imageUrlOverrides.get(resolvedPath) ?? src;
+}
+
 type InlineFragmentRenderer = (fragment: InlineFragment, ctx: InlineContext) => string;
 
 /**
@@ -690,7 +726,8 @@ const inlineFragmentRenderers: {
     const src = fragment.src?.trim();
     if (!src) return alt;
     if (isSafeUrl(src)) {
-      return `<img src="${escapeHtml(src)}" alt="${escapeHtml(fragment.rawAlt)}">`;
+      const renderedSrc = resolveOverriddenImageSrc(src, ctx);
+      return `<img src="${escapeHtml(renderedSrc)}" alt="${escapeHtml(fragment.rawAlt)}">`;
     }
     return `<span class="unsafe-link">${alt}</span>`;
   },

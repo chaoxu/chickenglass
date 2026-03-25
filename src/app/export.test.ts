@@ -1,8 +1,24 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { FileSystem } from "./file-manager";
+
+const { resolvePdfImageOverridesMock } = vi.hoisted(() => ({
+  resolvePdfImageOverridesMock: vi.fn(),
+}));
+
+vi.mock("./pdf-image-previews", () => ({
+  resolvePdfImageOverrides: resolvePdfImageOverridesMock,
+}));
+
 import {
   _buildHtmlDocumentForTest,
+  _buildHtmlDocumentAsyncForTest,
   _resolveExportThemeTokensForTest,
 } from "./export";
+
+beforeEach(() => {
+  resolvePdfImageOverridesMock.mockReset();
+  resolvePdfImageOverridesMock.mockResolvedValue(new Map());
+});
 
 describe("resolveExportThemeTokens", () => {
   const root = document.documentElement;
@@ -54,5 +70,27 @@ describe("buildHtmlDocument", () => {
     expect(html).not.toContain("color: #111;");
     expect(html).not.toContain("background: #fff;");
     expect(html).not.toContain("border-left: 3px solid #4a9eff;");
+  });
+
+  it("feeds prepared PDF preview overrides into exported HTML", async () => {
+    const fs = {} as unknown as FileSystem;
+    resolvePdfImageOverridesMock.mockResolvedValue(new Map([
+      ["notes/fig.pdf", "data:image/png;base64,PDFPAGE1"],
+    ]));
+
+    const html = await _buildHtmlDocumentAsyncForTest(
+      "![Figure](fig.pdf)",
+      "sample",
+      fs,
+      "notes/main.md",
+    );
+
+    expect(resolvePdfImageOverridesMock).toHaveBeenCalledWith(
+      "![Figure](fig.pdf)",
+      fs,
+      "notes/main.md",
+    );
+    expect(html).toContain('<img src="data:image/png;base64,PDFPAGE1" alt="Figure">');
+    expect(html).not.toContain('<img src="fig.pdf" alt="Figure">');
   });
 });

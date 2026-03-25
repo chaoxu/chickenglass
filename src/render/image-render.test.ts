@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { CSS } from "../constants/css-classes";
-import { ImageWidget, PdfLoadingWidget, isPdfTarget } from "./image-render";
+import { ImageWidget, PdfLoadingWidget } from "./image-render";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
+import { isPdfTarget } from "../lib/pdf-target";
 
 describe("ImageWidget", () => {
   describe("createDOM", () => {

@@ -2,6 +2,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createElement, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ReadModeViewProps } from "./read-mode-view";
+import type { FileSystem } from "../file-manager";
+
+const {
+  markdownToHtmlMock,
+  renderDocumentFragmentToHtmlMock,
+  resolvePdfImageOverridesMock,
+} = vi.hoisted(() => ({
+  markdownToHtmlMock: vi.fn(),
+  renderDocumentFragmentToHtmlMock: vi.fn(),
+  resolvePdfImageOverridesMock: vi.fn(),
+}));
 
 // jsdom lacks ResizeObserver — provide a no-op stub.
 class ResizeObserverStub {
@@ -13,10 +24,10 @@ vi.stubGlobal("ResizeObserver", ResizeObserverStub);
 
 // Stub heavy dependencies so the component renders without side effects.
 vi.mock("../markdown-to-html", () => ({
-  markdownToHtml: (content: string) => `<p>${content}</p>`,
+  markdownToHtml: markdownToHtmlMock,
 }));
 vi.mock("../../document-surfaces", () => ({
-  renderDocumentFragmentToHtml: () => "",
+  renderDocumentFragmentToHtml: renderDocumentFragmentToHtmlMock,
 }));
 vi.mock("tex-linebreak2", () => ({
   texLinebreakDOM: () => Promise.resolve(),
@@ -30,15 +41,42 @@ vi.mock("../perf", () => ({
   measureAsync: (_label: string, fn: () => Promise<void>) => fn(),
   measureSync: (_label: string, fn: () => void) => fn(),
 }));
+vi.mock("../pdf-image-previews", () => ({
+  resolvePdfImageOverrides: resolvePdfImageOverridesMock,
+}));
 
 // Must import after mocks are registered.
 const { ReadModeView } = await import("./read-mode-view");
+
+function defaultMarkdownToHtml(
+  content: string,
+  options?: { documentPath?: string; imageUrlOverrides?: ReadonlyMap<string, string> },
+): string {
+  const documentPath = options?.documentPath ?? "";
+  if (content.includes("fig.pdf")) {
+    const previewSrc = options?.imageUrlOverrides?.get("notes/fig.pdf") ?? "fig.pdf";
+    return `<p data-doc-path="${documentPath}"><img src="${previewSrc}" alt="Fig"></p>`;
+  }
+  return `<p data-doc-path="${documentPath}">${content}</p>`;
+}
+
+async function flushAsyncWork(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 describe("ReadModeView scroll restoration", () => {
   let container: HTMLDivElement;
   let root: Root;
 
   beforeEach(() => {
+    markdownToHtmlMock.mockReset();
+    markdownToHtmlMock.mockImplementation(defaultMarkdownToHtml);
+    renderDocumentFragmentToHtmlMock.mockReset();
+    renderDocumentFragmentToHtmlMock.mockReturnValue("");
+    resolvePdfImageOverridesMock.mockReset();
+    resolvePdfImageOverridesMock.mockResolvedValue(new Map());
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -52,6 +90,16 @@ describe("ReadModeView scroll restoration", () => {
   function render(props: ReadModeViewProps) {
     act(() => {
       root.render(createElement(ReadModeView, props));
+    });
+    const el = container.querySelector<HTMLDivElement>(".cf-read-mode-view");
+    if (!el) throw new Error("ReadModeView container not found");
+    return el;
+  }
+
+  async function renderAsync(props: ReadModeViewProps) {
+    await act(async () => {
+      root.render(createElement(ReadModeView, props));
+      await flushAsyncWork();
     });
     const el = container.querySelector<HTMLDivElement>(".cf-read-mode-view");
     if (!el) throw new Error("ReadModeView container not found");
@@ -144,5 +192,32 @@ describe("ReadModeView scroll restoration", () => {
       scrollTop: 100,
     });
     expect(el.scrollTop).toBe(999);
+  });
+
+  it("hydrates read mode HTML with prepared PDF preview overrides", async () => {
+    const fs = {} as unknown as FileSystem;
+    resolvePdfImageOverridesMock.mockResolvedValue(new Map([
+      ["notes/fig.pdf", "data:image/png;base64,PDFPAGE1"],
+    ]));
+
+    const el = await renderAsync({
+      content: "![Fig](fig.pdf)",
+      frontmatterConfig: {},
+      fs,
+      docPath: "notes/main.md",
+    });
+
+    expect(resolvePdfImageOverridesMock).toHaveBeenCalledWith(
+      "![Fig](fig.pdf)",
+      fs,
+      "notes/main.md",
+    );
+    expect(
+      markdownToHtmlMock.mock.calls.some(([, options]) =>
+        options?.documentPath === "notes/main.md" &&
+        options?.imageUrlOverrides?.get("notes/fig.pdf") === "data:image/png;base64,PDFPAGE1"
+      ),
+    ).toBe(true);
+    expect(el.innerHTML).toContain('src="data:image/png;base64,PDFPAGE1"');
   });
 });

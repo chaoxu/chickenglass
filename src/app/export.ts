@@ -10,11 +10,16 @@
 import { isTauri } from "./tauri-fs";
 import { measureAsync } from "./perf";
 import type { FileSystem, FileEntry } from "./file-manager";
-import { markdownToHtml, escapeHtml } from "./markdown-to-html";
+import {
+  markdownToHtml,
+  escapeHtml,
+  type MarkdownToHtmlOptions,
+} from "./markdown-to-html";
 import type { ExportFormat } from "./lib/types";
 import { basename } from "./lib/utils";
 import { exportThemeTokenDefaults } from "../theme-contract";
 import { checkPandocCommand, exportDocumentCommand } from "./tauri-client/export";
+import { resolvePdfImageOverrides } from "./pdf-image-previews";
 
 export type { ExportFormat };
 
@@ -55,8 +60,12 @@ function deriveOutputPath(sourcePath: string, format: ExportFormat): string {
  *
  * Includes a minimal stylesheet and links KaTeX CSS for math rendering.
  */
-function buildHtmlDocument(content: string, title: string): string {
-  const bodyHtml = markdownToHtml(content);
+function buildHtmlDocument(
+  content: string,
+  title: string,
+  htmlOptions?: Pick<MarkdownToHtmlOptions, "documentPath" | "imageUrlOverrides">,
+): string {
+  const bodyHtml = markdownToHtml(content, htmlOptions);
   const themeTokens = serializeExportThemeTokens({
     ...resolveExportThemeTokens(),
   });
@@ -248,6 +257,19 @@ ${bodyHtml}
 </html>`;
 }
 
+async function buildHtmlDocumentWithResolvedImages(
+  content: string,
+  title: string,
+  fs?: FileSystem,
+  documentPath = "",
+): Promise<string> {
+  const imageUrlOverrides = await resolvePdfImageOverrides(content, fs, documentPath);
+  return buildHtmlDocument(content, title, {
+    documentPath,
+    imageUrlOverrides,
+  });
+}
+
 function resolveExportThemeTokens(): Record<string, string> {
   const tokens: Record<string, string> = {};
   for (const [name, fallback] of Object.entries(exportThemeTokenDefaults)) {
@@ -273,6 +295,7 @@ function serializeExportThemeTokens(tokens: Record<string, string>): string {
 }
 
 export const _buildHtmlDocumentForTest = buildHtmlDocument;
+export const _buildHtmlDocumentAsyncForTest = buildHtmlDocumentWithResolvedImages;
 export const _resolveExportThemeTokensForTest = resolveExportThemeTokens;
 
 /**
@@ -342,7 +365,7 @@ async function exportHtml(
 ): Promise<string> {
   const name = basename(sourcePath);
   const title = name.endsWith(".md") ? name.slice(0, -3) : name;
-  const html = buildHtmlDocument(content, title);
+  const html = await buildHtmlDocumentWithResolvedImages(content, title, fs, sourcePath);
   const outputPath = deriveOutputPath(sourcePath, "html");
 
   if (isTauri() && fs) {

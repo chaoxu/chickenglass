@@ -253,6 +253,19 @@ describe("markdownToHtml", () => {
     expect(html).toContain("<p>With a paragraph.</p>");
   });
 
+  it("uses prepared preview overrides for PDF-backed image targets", () => {
+    const html = markdownToHtml("![Figure](fig.pdf)\n\n![Photo](photo.png)", {
+      documentPath: "notes/main.md",
+      imageUrlOverrides: new Map([
+        ["notes/fig.pdf", "data:image/png;base64,PDFPAGE1"],
+      ]),
+    });
+
+    expect(html).toContain('<img src="data:image/png;base64,PDFPAGE1" alt="Figure">');
+    expect(html).toContain('<img src="photo.png" alt="Photo">');
+    expect(html).not.toContain('<img src="fig.pdf" alt="Figure">');
+  });
+
   it("renders bibliography with rich-mode classes", () => {
     const entry: CslJsonItem = {
       id: "karger2000",

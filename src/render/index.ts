@@ -23,8 +23,8 @@ export {
   ImageWidget,
   PdfLoadingWidget,
   imageRenderPlugin,
-  isPdfTarget,
 } from "./image-render";
+export { isPdfTarget } from "../lib/pdf-target";
 export {
   pdfPreviewField,
   pdfPreviewEffect,
