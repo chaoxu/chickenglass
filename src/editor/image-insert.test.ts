@@ -154,6 +154,10 @@ describe("image insertion parity (#330)", () => {
     });
 
     it("generated filenames produce the same alt text across all paths", async () => {
+      // Pin Date.now to avoid timestamp drift across sequential calls
+      const now = Date.now();
+      vi.spyOn(Date, "now").mockReturnValue(now);
+
       const alts: string[] = [];
 
       for (const operation of ["paste", "drop", "insert"]) {
@@ -170,6 +174,8 @@ describe("image insertion parity (#330)", () => {
 
         alts.push(insert.mock.calls[0][1] as string);
       }
+
+      vi.restoreAllMocks();
 
       // All alt texts match (all derived from the same generated filename)
       expect(alts[0]).toBe(alts[1]);

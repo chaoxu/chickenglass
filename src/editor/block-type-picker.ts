@@ -23,28 +23,8 @@ import { editorModeField } from "./editor";
 import { BLOCK_MANIFEST_ENTRIES } from "../constants/block-manifest";
 
 // ---------------------------------------------------------------------------
-// Nesting depth calculation
+// Ancestor fence collection
 // ---------------------------------------------------------------------------
-
-/**
- * Count the FencedDiv nesting depth at a given document position by walking
- * up the Lezer syntax tree.
- *
- * IMPORTANT: Must be called BEFORE the `:::` is inserted on the line.
- * Once `:::` appears, the parser treats it as a closing fence and the
- * position is no longer inside the parent FencedDiv.
- */
-function fencedDivDepth(view: EditorView, pos: number): number {
-  let depth = 0;
-  let node: SyntaxNode | null = syntaxTree(view.state).resolveInner(pos, -1);
-  while (node) {
-    if (node.name === "FencedDiv") {
-      depth++;
-    }
-    node = node.parent;
-  }
-  return depth;
-}
 
 /** Collect ancestor FencedDiv fence positions for colon upgrades. */
 function collectAncestorFences(view: EditorView, pos: number): AncestorFence[] {
@@ -88,6 +68,15 @@ interface PickerEntry {
   readonly title: string;
 }
 
+/** Ancestor fence info for colon upgrades. */
+interface AncestorFence {
+  openFrom: number;
+  openTo: number;
+  closeFrom: number;
+  closeTo: number;
+  colons: number;
+}
+
 /**
  * Build the list of block types to show in the picker.
  *
@@ -99,14 +88,6 @@ interface PickerEntry {
 function getPickerEntries(registry: PluginRegistryState): PickerEntry[] {
   const entries: PickerEntry[] = [];
   const seen = new Set<string>();
-
-  // Track embed names so the second loop can skip them too
-  const embedNames = new Set<string>();
-  for (const entry of BLOCK_MANIFEST_ENTRIES) {
-    if (entry.specialBehavior === "embed") {
-      embedNames.add(entry.name);
-    }
-  }
 
   // Add entries in manifest order for consistency
   for (const entry of BLOCK_MANIFEST_ENTRIES) {
@@ -122,7 +103,6 @@ function getPickerEntries(registry: PluginRegistryState): PickerEntry[] {
   for (const [name, plugin] of registry.plugins) {
     if (seen.has(name)) continue;
     if (name === "include") continue;
-    if (embedNames.has(name)) continue;
     if (plugin.specialBehavior === "embed") continue;
     entries.push({ name: plugin.name, title: plugin.title });
   }
@@ -132,15 +112,6 @@ function getPickerEntries(registry: PluginRegistryState): PickerEntry[] {
 
 /** Singleton picker element. */
 let pickerEl: HTMLDivElement | null = null;
-/** Currently active picker state — null when hidden. */
-/** Ancestor fence info for colon upgrades. */
-interface AncestorFence {
-  openFrom: number;
-  openTo: number;
-  closeFrom: number;
-  closeTo: number;
-  colons: number;
-}
 
 let activePicker: {
   view: EditorView;
@@ -150,7 +121,6 @@ let activePicker: {
   allEntries: PickerEntry[];
   filteredEntries: PickerEntry[];
   filter: string;
-  nestingDepth: number;
   ancestorFences: AncestorFence[];
   onDismiss: () => void;
 } | null = null;
@@ -223,7 +193,6 @@ function showPicker(
   lineFrom: number,
   lineTo: number,
   entries: PickerEntry[],
-  nestingDepth: number,
   ancestorFences: AncestorFence[] = [],
 ): void {
   if (entries.length === 0) return;
@@ -275,7 +244,7 @@ function showPicker(
     if (!target || !activePicker) return;
     const idx = Number(target.dataset.index);
     if (Number.isFinite(idx) && idx >= 0 && idx < activePicker.filteredEntries.length) {
-      insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, activePicker.filteredEntries[idx].name, activePicker.nestingDepth, activePicker.ancestorFences);
+      insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, activePicker.filteredEntries[idx].name, activePicker.ancestorFences);
       hidePicker();
     }
   };
@@ -295,7 +264,6 @@ function showPicker(
     allEntries: entries,
     filteredEntries,
     filter,
-    nestingDepth,
     ancestorFences,
     onDismiss: () => {
       el.removeEventListener("click", onClick);
@@ -333,20 +301,6 @@ export function isPickerVisible(): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Insert a fenced div block at the given line range.
- *
- * Replaces the `:::` line with a complete fenced div:
- * - Opening fence with correct colon count (3 + nesting depth)
- * - Empty content line (cursor placed here)
- * - Closing fence with matching colon count
- */
-/**
- * Insert a fenced div block. The new block always uses ::: (minimum).
- * If any ancestor FencedDiv also uses ::: , upgrade it to :::: so the
- * child's closing ::: doesn't close the parent. This maintains the
- * invariant: children use fewer colons than parents.
- */
-/**
  * Insert a fenced div block. Always uses ::: (minimum colons).
  * If inside an ancestor that also uses :::, upgrades ancestors first
  * so the child's closing ::: doesn't close the parent.
@@ -359,8 +313,7 @@ function insertBlock(
   lineFrom: number,
   lineTo: number,
   blockType: string,
-  _nestingDepth: number,
-  ancestorFences?: { openFrom: number; openTo: number; closeFrom: number; closeTo: number; colons: number }[],
+  ancestorFences?: AncestorFence[],
 ): void {
   // Step 1: Upgrade ancestors so each has MORE colons than its child.
   // ancestorFences[0] is the direct parent, [1] is grandparent, etc.
@@ -449,7 +402,7 @@ function handlePickerKey(e: KeyboardEvent): void {
       e.stopImmediatePropagation();
       if (activePicker.filteredEntries.length > 0) {
         const entry = activePicker.filteredEntries[activePicker.selectedIndex];
-        insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, entry.name, activePicker.nestingDepth, activePicker.ancestorFences);
+        insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, entry.name, activePicker.ancestorFences);
       }
       hidePicker();
       break;
@@ -536,7 +489,8 @@ const pickerKeyPlugin = ViewPlugin.define((view) => {
     destroy() {
       view.dom.removeEventListener("keydown", onKeyDown, true);
       document.removeEventListener("mousedown", onMouseDown);
-      hidePicker();
+      // Only dismiss if this view owns the picker (multi-view safety)
+      if (activePicker?.view === view) hidePicker();
     },
   };
 });
@@ -571,11 +525,10 @@ export const blockTypePickerExtension: Extension = [
     const entries = getPickerEntries(registry);
     if (entries.length === 0) return false;
 
-    // Compute nesting depth BEFORE the `:::` appears on the line.
+    // Collect ancestor fences BEFORE the `:::` appears on the line.
     // The `::` is parsed as paragraph text, so the syntax tree still shows
     // this position inside the parent FencedDiv (if any). Once `:::` forms,
     // the parser treats it as a closing fence and the nesting is lost.
-    const nestingDepth = fencedDivDepth(view, from);
     const ancestorFences = collectAncestorFences(view, from);
 
     // Remove the `::` instead of completing `:::`. This avoids the closing
@@ -600,7 +553,7 @@ export const blockTypePickerExtension: Extension = [
 
     // Show the picker at the now-empty line
     const updatedLine = view.state.doc.lineAt(removeFrom);
-    showPicker(view, updatedLine.from, updatedLine.to, entries, nestingDepth, ancestorFences);
+    showPicker(view, updatedLine.from, updatedLine.to, entries, ancestorFences);
 
     return true;
   }),
