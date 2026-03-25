@@ -106,8 +106,9 @@ let activePicker: {
   lineFrom: number;
   lineTo: number;
   selectedIndex: number;
-  entries: PickerEntry[];
-  /** Nesting depth computed before ::: was inserted (tree is still correct). */
+  allEntries: PickerEntry[];
+  filteredEntries: PickerEntry[];
+  filter: string;
   nestingDepth: number;
   onDismiss: () => void;
 } | null = null;
@@ -123,12 +124,40 @@ function getPickerEl(): HTMLDivElement {
   return pickerEl;
 }
 
-/** Render picker items into the picker element. */
-function renderPickerItems(entries: PickerEntry[], selectedIndex: number): void {
+/** Render picker with search input and filtered items. */
+function renderPicker(
+  allEntries: PickerEntry[],
+  filter: string,
+  selectedIndex: number,
+): PickerEntry[] {
   const el = getPickerEl();
-  el.innerHTML = "";
 
-  for (let i = 0; i < entries.length; i++) {
+  // Ensure search input exists
+  let input = el.querySelector(".cf-block-picker-input") as HTMLInputElement | null;
+  if (!input) {
+    el.innerHTML = "";
+    input = document.createElement("input");
+    input.className = "cf-block-picker-input";
+    input.type = "text";
+    input.placeholder = "Block type...";
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("spellcheck", "false");
+    el.appendChild(input);
+  }
+  input.value = filter;
+
+  // Filter entries
+  const lower = filter.toLowerCase();
+  const filtered = lower
+    ? allEntries.filter(e => e.name.includes(lower) || e.title.toLowerCase().includes(lower))
+    : allEntries;
+
+  // Remove old items (keep input)
+  const oldItems = el.querySelectorAll(".cf-block-picker-item");
+  for (const item of oldItems) item.remove();
+
+  // Render filtered items
+  for (let i = 0; i < filtered.length; i++) {
     const item = document.createElement("div");
     item.className = "cf-block-picker-item";
     if (i === selectedIndex) {
@@ -137,9 +166,11 @@ function renderPickerItems(entries: PickerEntry[], selectedIndex: number): void 
     }
     item.setAttribute("role", "option");
     item.dataset.index = String(i);
-    item.textContent = entries[i].title;
+    item.textContent = filtered[i].title;
     el.appendChild(item);
   }
+
+  return filtered;
 }
 
 /**
@@ -156,8 +187,9 @@ function showPicker(
 
   const el = getPickerEl();
   const selectedIndex = 0;
+  const filter = "";
 
-  renderPickerItems(entries, selectedIndex);
+  const filteredEntries = renderPicker(entries, filter, selectedIndex);
   el.style.display = "";
   el.setAttribute("data-visible", "false");
 
@@ -199,24 +231,39 @@ function showPicker(
     const target = (e.target as HTMLElement).closest(".cf-block-picker-item") as HTMLElement | null;
     if (!target || !activePicker) return;
     const idx = Number(target.dataset.index);
-    if (Number.isFinite(idx) && idx >= 0 && idx < entries.length) {
-      insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, entries[idx].name, activePicker.nestingDepth);
+    if (Number.isFinite(idx) && idx >= 0 && idx < activePicker.filteredEntries.length) {
+      insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, activePicker.filteredEntries[idx].name, activePicker.nestingDepth);
       hidePicker();
     }
   };
   el.addEventListener("click", onClick);
+
+  // Keydown handler on the picker itself (for when input has focus)
+  const onPickerKeyDown = (e: KeyboardEvent) => {
+    handlePickerKey(e);
+  };
+  el.addEventListener("keydown", onPickerKeyDown);
 
   activePicker = {
     view,
     lineFrom,
     lineTo,
     selectedIndex,
-    entries,
+    allEntries: entries,
+    filteredEntries,
+    filter,
     nestingDepth,
     onDismiss: () => {
       el.removeEventListener("click", onClick);
+      el.removeEventListener("keydown", onPickerKeyDown);
     },
   };
+
+  // Focus the input after positioning
+  requestAnimationFrame(() => {
+    const input = el.querySelector(".cf-block-picker-input") as HTMLInputElement | null;
+    input?.focus();
+  });
 }
 
 /** Hide the picker and clean up. */
@@ -249,25 +296,72 @@ export function isPickerVisible(): boolean {
  * - Empty content line (cursor placed here)
  * - Closing fence with matching colon count
  */
+/**
+ * Insert a fenced div block. The new block always uses ::: (minimum).
+ * If any ancestor FencedDiv also uses ::: , upgrade it to :::: so the
+ * child's closing ::: doesn't close the parent. This maintains the
+ * invariant: children use fewer colons than parents.
+ */
 function insertBlock(
   view: EditorView,
   lineFrom: number,
   lineTo: number,
   blockType: string,
-  nestingDepth: number,
+  _nestingDepth: number,
 ): void {
-  const colonCount = 3 + nestingDepth;
-  const colons = ":".repeat(colonCount);
+  // New block always uses minimum colons
+  const newColons = ":::";
+  const opening = `${newColons} {.${blockType}}`;
+  const closing = newColons;
+  const insertText = `${opening}\n\n${closing}`;
 
-  const opening = `${colons} {.${blockType}}`;
-  const closing = colons;
-  const insert = `${opening}\n\n${closing}`;
+  // Collect ancestor FencedDivs that need colon upgrades.
+  // Walk the syntax tree from the insertion point upward.
+  const changes: { from: number; to: number; insert: string }[] = [];
+  let node: SyntaxNode | null = syntaxTree(view.state).resolveInner(lineFrom, -1);
+  while (node) {
+    if (node.name === "FencedDiv") {
+      // Find the opening and closing FencedDivFence children
+      let openFence: SyntaxNode | null = null;
+      let closeFence: SyntaxNode | null = null;
+      let child = node.firstChild;
+      while (child) {
+        if (child.name === "FencedDivFence") {
+          if (!openFence) openFence = child;
+          else closeFence = child;
+        }
+        child = child.nextSibling;
+      }
 
-  // Place cursor on the empty line between fences
+      if (openFence) {
+        const openText = view.state.sliceDoc(openFence.from, openFence.to);
+        const parentColons = openText.length; // number of colons
+        // Parent must have MORE colons than child (:::). Upgrade if needed.
+        if (parentColons <= 3) {
+          const newParentColons = ":".repeat(parentColons + 1);
+          changes.push({ from: openFence.from, to: openFence.to, insert: newParentColons });
+          if (closeFence) {
+            changes.push({ from: closeFence.from, to: closeFence.to, insert: newParentColons });
+          }
+        }
+      }
+    }
+    node = node.parent;
+  }
+
+  // Sort changes from end to start so positions don't shift during application
+  changes.sort((a, b) => b.from - a.from);
+
+  // Add the new block insertion (adjust lineFrom for any earlier changes)
+  // Since we sorted end-to-start, the insertion point is last
+  changes.push({ from: lineFrom, to: lineTo, insert: insertText });
+
+  // Calculate cursor position after all changes
+  // The new block is at the original lineFrom, opening line + 1 for the empty content line
   const cursorPos = lineFrom + opening.length + 1;
 
   view.dispatch({
-    changes: { from: lineFrom, to: lineTo, insert },
+    changes,
     selection: { anchor: cursorPos },
   });
   view.focus();
@@ -287,48 +381,68 @@ function insertBlock(
 function handlePickerKey(e: KeyboardEvent): void {
   if (!activePicker) return;
 
-  const { entries } = activePicker;
-
   switch (e.key) {
     case "ArrowDown": {
       e.preventDefault();
       e.stopImmediatePropagation();
-      activePicker.selectedIndex = (activePicker.selectedIndex + 1) % entries.length;
-      renderPickerItems(entries, activePicker.selectedIndex);
-      scrollSelectedIntoView();
+      if (activePicker.filteredEntries.length > 0) {
+        activePicker.selectedIndex = (activePicker.selectedIndex + 1) % activePicker.filteredEntries.length;
+        renderPicker(activePicker.allEntries, activePicker.filter, activePicker.selectedIndex);
+        scrollSelectedIntoView();
+      }
       break;
     }
     case "ArrowUp": {
       e.preventDefault();
       e.stopImmediatePropagation();
-      activePicker.selectedIndex = (activePicker.selectedIndex - 1 + entries.length) % entries.length;
-      renderPickerItems(entries, activePicker.selectedIndex);
-      scrollSelectedIntoView();
+      if (activePicker.filteredEntries.length > 0) {
+        const len = activePicker.filteredEntries.length;
+        activePicker.selectedIndex = (activePicker.selectedIndex - 1 + len) % len;
+        renderPicker(activePicker.allEntries, activePicker.filter, activePicker.selectedIndex);
+        scrollSelectedIntoView();
+      }
       break;
     }
     case "Enter": {
       e.preventDefault();
       e.stopImmediatePropagation();
-      const entry = entries[activePicker.selectedIndex];
-      insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, entry.name, activePicker.nestingDepth);
+      if (activePicker.filteredEntries.length > 0) {
+        const entry = activePicker.filteredEntries[activePicker.selectedIndex];
+        insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, entry.name, activePicker.nestingDepth);
+      }
       hidePicker();
       break;
     }
     case "Escape": {
       e.preventDefault();
       e.stopImmediatePropagation();
-      // The `::` was already removed when the picker appeared.
-      // Just dismiss the picker.
       const { view: escView } = activePicker;
       hidePicker();
       escView.focus();
       break;
     }
-    default: {
-      // Any other character key dismisses the picker
-      // but let it propagate so the character is typed normally
-      if (e.key.length === 1) {
+    case "Backspace": {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (activePicker.filter.length > 0) {
+        activePicker.filter = activePicker.filter.slice(0, -1);
+        activePicker.selectedIndex = 0;
+        activePicker.filteredEntries = renderPicker(activePicker.allEntries, activePicker.filter, 0);
+      } else {
+        const { view: bsView } = activePicker;
         hidePicker();
+        bsView.focus();
+      }
+      break;
+    }
+    default: {
+      // Printable character — add to filter
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        activePicker.filter += e.key;
+        activePicker.selectedIndex = 0;
+        activePicker.filteredEntries = renderPicker(activePicker.allEntries, activePicker.filter, 0);
       }
       break;
     }

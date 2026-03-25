@@ -347,6 +347,23 @@ body {
   transform: translateY(0);
 }
 
+.cf-block-picker-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-bottom: 1px solid var(--cf-border);
+  background: transparent;
+  color: var(--cf-fg);
+  font-family: var(--cf-ui-font);
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.cf-block-picker-input::placeholder {
+  color: var(--cf-muted);
+}
+
 .cf-block-picker-item {
   padding: 6px 10px;
   border-radius: 4px;
