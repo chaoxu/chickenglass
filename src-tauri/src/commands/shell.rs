@@ -21,13 +21,10 @@ pub fn reveal_in_finder(
         "tauri",
         Some(&path),
         || {
-            let abs_path = if let Ok(project_root) = current_project_root(&root, &window) {
-                resolve_existing_path(&project_root, &path)?
-                    .to_string_lossy()
-                    .to_string()
-            } else {
-                path.clone()
-            };
+            let project_root = current_project_root(&root, &window)?;
+            let abs_path = resolve_existing_path(&project_root, &path)?
+                .to_string_lossy()
+                .to_string();
 
             #[cfg(target_os = "macos")]
             {
