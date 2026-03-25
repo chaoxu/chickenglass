@@ -14,6 +14,7 @@ Default behavior is conservative:
 - implement locally
 - review locally
 - verify locally
+- parallelize only when tasks are independent
 - summarize what is ready
 - do **not** merge, push, or close issues unless the user explicitly asked for a full integration run
 
@@ -52,7 +53,7 @@ Safety rules:
 | Condition | Tier | Behavior |
 |-----------|------|----------|
 | 1 issue, ≤3 files, obvious fix | **quick** | Implement directly or with one worker, review, verify, then stop unless full integration was explicitly requested |
-| Everything else | **batch** | Plan, dispatch workers sequentially, review each, verify each, then stop unless full integration was explicitly requested |
+| Everything else | **batch** | Plan, partition into dependency-safe waves, dispatch independent workers in parallel, review each completion, verify each completion, and merge ready work early if full integration was explicitly requested |
 
 ## 4. Planning (Batch)
 
@@ -67,19 +68,31 @@ Create a task list:
 - `task_id`, `issue_refs`, `title`, `files` (specific paths)
 - `dependencies` (which tasks must complete first)
 - `done_criteria` (concrete, verifiable — workers don't see issue bodies)
+- `write_scope` (exact files or directories the task may edit)
+- `wave` (parallel group of tasks with no dependency or write-scope overlap)
 - `merge_order` (topological sort of dependencies)
 
 **Rules:**
 - Each task ≤15 files
 - done_criteria must encode ALL acceptance criteria from the issue
 - For reopened issues, fix only the gap described in the reopen comment
+- Only run tasks in parallel when their `write_scope` is disjoint
+- Keep the top-level agent as the coordinator; workers are leaf implementers, not managers
 
 ## 5. Worker Dispatch
 
-**IMPORTANT: Workers run sequentially**, not in parallel. They share the
-filesystem and git state. Each worker runs to completion before the next starts.
+Workers may run in parallel, but only when the tasks are independent.
+The top-level agent owns coordination, review, verification, and integration.
+Workers stay bounded to one task each.
 
-For each task (in merge_order):
+Dispatch rules:
+- Use separate worktrees or isolated branches per task
+- Start all ready tasks in the current `wave` up to a reasonable cap (usually 2 to 4)
+- Do not run two workers concurrently if they may edit the same file or tightly coupled area
+- Do not wait for the entire batch before reviewing; handle each completed task immediately
+- While one task is under review or verification, other independent workers may keep running
+
+For each ready task:
 
 1. **Spawn `worker` subagent** with this prompt:
    ```
@@ -93,13 +106,15 @@ For each task (in merge_order):
    ...
    ```
 
-2. **Wait for worker to report STATUS.**
+2. **Let other ready workers run in parallel.**
 
-3. **If worker didn't commit**, inspect the branch and either:
+3. **When a worker finishes**, inspect its branch/worktree immediately.
+
+4. **If worker didn't commit**, inspect the branch and either:
    - commit the worker's changes yourself, or
    - treat the task as incomplete if the worker's result is not reviewable
 
-4. **Spawn a `default` review subagent**:
+5. **Spawn a `default` review subagent**:
    ```
    Review the changes on branch <branch> for issue #N.
    Compare against main: git diff main...<branch>
@@ -112,10 +127,14 @@ For each task (in merge_order):
    - VERDICT: approve | request-changes
    ```
 
-5. **If reviewer says `request-changes`**: spawn another worker to fix the
+6. **If reviewer says `request-changes`**: spawn another worker to fix the
    specific findings, then re-review. Max 2 fix rounds.
 
-6. **If reviewer says `approve`**: proceed to verification.
+7. **If reviewer says `approve`**: proceed to verification right away.
+
+8. **After verification passes**, mark the task `ready_to_merge`.
+   If full integration was requested and dependencies are satisfied, merge it
+   promptly instead of waiting for the entire batch to finish.
 
 ## 6. Verification
 
@@ -152,6 +171,7 @@ Repo-specific gate:
   - one read-only review subagent pass
 
 Never claim success from code changes alone. Verification output must support the claim.
+Do not let verified tasks pile up unmerged if the user requested full integration.
 
 ## 7. Integration Policy
 
@@ -163,7 +183,14 @@ Otherwise stop after reviewed, verified implementation and report:
 - verification results
 - anything blocking merge or closure
 
-If full integration was explicitly requested, use a conservative merge protocol:
+If full integration was explicitly requested, merge incrementally:
+- merge a task as soon as it is reviewed, verified, dependency-safe, and conflict-safe
+- do not wait for 5 to 10 approved tasks to accumulate
+- prefer keeping at most 1 to 3 reviewed-but-unmerged tasks pending
+- after each merge, rerun the minimum verification needed to protect `main`
+- if `main` moved materially, re-review the remaining unmerged task against updated `main`
+
+Use a conservative merge protocol:
 
 ```bash
 git checkout $MAIN
@@ -181,6 +208,8 @@ Rules:
 - never merge with failing verification
 - never merge unrelated local changes
 - if the target branch moved materially during the run, re-review before pushing
+- if two approved tasks conflict, merge the simpler or more foundational one first, then restack or rework the other before merging
+- after each incremental merge, prefer a quick repo health check (`npm run build` at minimum; add more if the changed area demands it)
 
 After all merges, rerun `npm run build`.
 
