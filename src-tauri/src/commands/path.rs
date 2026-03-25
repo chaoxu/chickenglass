@@ -252,6 +252,35 @@ mod tests {
         fs::remove_dir_all(&outside).unwrap();
     }
 
+    /// Regression test for #481: resolve_project_path must reject .. traversal
+    /// that escapes the project root, even when an ancestor directory exists.
+    #[test]
+    fn resolve_project_path_rejects_dotdot_escape() {
+        let root = create_temp_dir("traversal-test");
+        fs::create_dir_all(root.join("sub")).unwrap();
+
+        let err = resolve_project_path(&root, "sub/../../etc/passwd")
+            .expect_err("should reject traversal");
+        assert!(err.contains("escapes project root"), "got: {err}");
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// .. that stays within root should be allowed (#481 comment).
+    #[test]
+    fn resolve_project_path_allows_dotdot_within_root() {
+        let root = create_temp_dir("dotdot-within");
+        fs::create_dir_all(root.join("a/b")).unwrap();
+        let file = root.join("a/target.md");
+        fs::write(&file, "").unwrap();
+
+        let result = resolve_project_path(&root, "a/b/../target.md").unwrap();
+        assert!(result.ends_with("target.md"));
+        assert!(result.starts_with(&root));
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
     #[test]
     fn canonicalize_maybe_missing_existing_path() {
         let dir = create_temp_dir("canon-exist");
