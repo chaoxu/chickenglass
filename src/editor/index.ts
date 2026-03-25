@@ -3,6 +3,8 @@ export {
   createEditor,
   setEditorMode,
   editorModeField,
+  markdownEditorModes,
+  normalizeEditorMode,
   tabSizeExtension,
   themeCompartment,
   wordWrapCompartment,

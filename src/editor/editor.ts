@@ -48,6 +48,20 @@ const treeViewCompartment = new Compartment();
 /** Editor display modes. */
 export type EditorMode = "rich" | "source" | "read";
 
+/** Markdown editor modes currently exposed in the UI. */
+export const markdownEditorModes: readonly EditorMode[] = ["rich", "source"];
+
+/**
+ * Clamp a requested mode to one currently supported by the app shell.
+ *
+ * Read mode is intentionally disabled for now, so markdown files fall back to
+ * rich mode when a caller requests `"read"`.
+ */
+export function normalizeEditorMode(mode: EditorMode, isMarkdown: boolean): EditorMode {
+  if (!isMarkdown) return "source";
+  return mode === "read" ? "rich" : mode;
+}
+
 /** StateEffect used to update the tracked editor mode. */
 export const setEditorModeEffect = StateEffect.define<EditorMode>();
 

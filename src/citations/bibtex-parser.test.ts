@@ -162,6 +162,22 @@ describe("parseBibTeX", () => {
     expect(entries[0].DOI).toBe("10.1234/test.2020");
     expect(entries[0].URL).toBe("https://example.com/paper");
   });
+
+  it("retries after stripping malformed abstract fields", () => {
+    const bib = `@article{Frederickson93,
+  title = {A Note on the Complexity of a Simple Transportation Problem},
+  author = {Frederickson, Greg N.},
+  year = {1993},
+  journal = {SIAM Journal on Computing},
+  abstract = {Consider the problem of using a vehicle to transport k objects one at a time between stations on a circular track, where q {$<\\_$} min\\{k, \\}.},
+  doi = {10.1137/0222005}
+}`;
+    const entries = parseBibTeX(bib);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].id).toBe("Frederickson93");
+    expect(entries[0].title).toBe("A Note on the Complexity of a Simple Transportation Problem");
+    expect(entries[0].DOI).toBe("10.1137/0222005");
+  });
 });
 
 describe("extractFirstFamilyName", () => {

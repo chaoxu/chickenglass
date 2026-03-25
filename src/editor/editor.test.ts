@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createEditor, editorModeField, setEditorMode } from "./editor";
+import {
+  createEditor,
+  editorModeField,
+  markdownEditorModes,
+  normalizeEditorMode,
+  setEditorMode,
+} from "./editor";
 
 describe("createEditor", () => {
   it("creates an editor view attached to the given parent", () => {
@@ -65,5 +71,17 @@ describe("editorModeField", () => {
     expect(view.state.field(editorModeField)).toBe("source");
 
     view.destroy();
+  });
+});
+
+describe("normalizeEditorMode", () => {
+  it("disables read mode for markdown files", () => {
+    expect(normalizeEditorMode("read", true)).toBe("rich");
+    expect(markdownEditorModes).toEqual(["rich", "source"]);
+  });
+
+  it("forces non-markdown files into source mode", () => {
+    expect(normalizeEditorMode("rich", false)).toBe("source");
+    expect(normalizeEditorMode("read", false)).toBe("source");
   });
 });

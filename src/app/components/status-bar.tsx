@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect, useCallback, useMemo } from "react";
-import type { EditorMode } from "../../editor";
+import { markdownEditorModes, type EditorMode } from "../../editor";
 import { computeDocStats, formatReadingTime } from "../writing-stats";
 import type { DocStats } from "../writing-stats";
 import { cn } from "../lib/utils";
@@ -24,8 +24,6 @@ export interface StatusBarProps {
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-
-const MODE_ORDER: EditorMode[] = ["rich", "source", "read"];
 
 const MODE_LABELS: Record<EditorMode, string> = {
   rich: "Rich",
@@ -118,7 +116,7 @@ const StatsPopover = memo(function StatsPopover({ stats, anchorRef, onClose }: S
  *
  * Left:   word count + character count (clickable — opens stats popover)
  * Center: cursor position Ln/Col
- * Right:  mode indicator (clickable to cycle Rich → Source → Read)
+ * Right:  mode indicator (clickable to cycle Rich ↔ Source)
  */
 export function StatusBar({
   wordCount,
@@ -136,8 +134,8 @@ export function StatusBar({
   const stats = useMemo(() => computeDocStats(docText), [docText]);
 
   const cycleMode = useCallback(() => {
-    const idx = MODE_ORDER.indexOf(editorMode);
-    const next = MODE_ORDER[(idx + 1) % MODE_ORDER.length];
+    const idx = markdownEditorModes.indexOf(editorMode);
+    const next = markdownEditorModes[(idx + 1) % markdownEditorModes.length];
     onModeChange(next);
   }, [editorMode, onModeChange]);
 

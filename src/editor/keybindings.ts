@@ -11,15 +11,16 @@ import type { SyntaxNode } from "@lezer/common";
 import { MODE_CHANGE_EVENT, OPEN_FILE_EVENT } from "../constants/events";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
-import { editorModeField, setEditorMode, type EditorMode } from "./editor";
+import { editorModeField, markdownEditorModes, setEditorMode } from "./editor";
 
 /** Cycle to the next editor mode. */
 function cycleEditorMode(view: EditorView): boolean {
-  const modes: EditorMode[] = ["rich", "source", "read"];
   // Read the current mode from the CM6 StateField so the cycle stays in sync
   // with React state (e.g., when the app switches modes programmatically).
   const currentMode = view.state.field(editorModeField, false) ?? "rich";
-  const nextMode = modes[(modes.indexOf(currentMode) + 1) % modes.length];
+  const nextMode = markdownEditorModes[
+    (markdownEditorModes.indexOf(currentMode) + 1) % markdownEditorModes.length
+  ];
   setEditorMode(view, nextMode);
 
   // Dispatch a DOM event so the app can update the UI indicator

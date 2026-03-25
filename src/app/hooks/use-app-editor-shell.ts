@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   insertImageFromPicker,
+  normalizeEditorMode,
   setEditorMode,
   wordWrapCompartment,
   lineNumbersCompartment,
@@ -48,7 +49,7 @@ export interface AppEditorShellDeps {
  * - **Insertion** (`handleSymbolInsert`, `handleInsertImage`):
  *   Inserts content at the cursor without the caller needing a CM6 reference.
  * - **Mode** (`editorMode`, `handleModeChange`, `isMarkdownFile`):
- *   Controls the rich / source / read mode per file.
+ *   Controls the rich / source mode per file.
  * - **Stats** (`wordCount`, `cursorLineCol`, `docTextForStats`, `hasDirtyFiles`):
  *   Read-only derived values for the status bar and window-title indicator.
  * - **Drag-and-drop** (`handleDragOver`, `handleDrop`):
@@ -353,8 +354,10 @@ export function useAppEditorShell({
 
   const editorMode = useMemo((): EditorMode => {
     // If the user explicitly changed mode for the current tab, honour it.
-    if (modeOverride && modeOverride.tab === activeTab) return modeOverride.mode;
-    return isMarkdownFile ? "rich" : "source";
+    if (modeOverride && modeOverride.tab === activeTab) {
+      return normalizeEditorMode(modeOverride.mode, isMarkdownFile);
+    }
+    return normalizeEditorMode("rich", isMarkdownFile);
   }, [modeOverride, activeTab, isMarkdownFile]);
 
   // Sync the computed mode into the CM6 view.
@@ -365,11 +368,12 @@ export function useAppEditorShell({
   }, [editorState?.view, editorMode]);
 
   const handleModeChange = useCallback((mode: EditorMode) => {
-    setModeOverride({ tab: activeTab, mode });
+    const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
+    setModeOverride({ tab: activeTab, mode: normalizedMode });
     const view = editorState?.view;
     if (!view) return;
-    setEditorMode(view, mode);
-  }, [activeTab, editorState?.view]);
+    setEditorMode(view, normalizedMode);
+  }, [activeTab, editorState?.view, isMarkdownFile]);
 
   const wordCount = editorState?.wordCount ?? 0;
   const cursorCharOffset = editorState?.cursorPos ?? 0;
