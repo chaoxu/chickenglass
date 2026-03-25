@@ -139,10 +139,20 @@ export class MemoryFileSystem implements FileSystem {
 
   async readFileBinary(path: string): Promise<Uint8Array> {
     const content = this.files.get(path);
-    if (content === undefined) {
-      throw new Error(`File not found: ${path}`);
+    if (content !== undefined) {
+      return base64ToUint8Array(content);
     }
-    return base64ToUint8Array(content);
+    // Fallback: try fetching as a static asset (e.g., PDF files served by Vite
+    // from the demo/ directory that weren't loaded into the in-memory filesystem).
+    try {
+      const resp = await fetch(`/demo/${path}`);
+      if (resp.ok) {
+        return new Uint8Array(await resp.arrayBuffer());
+      }
+    } catch {
+      // fetch failed — fall through to error
+    }
+    throw new Error(`File not found: ${path}`);
   }
 
   async deleteFile(path: string): Promise<void> {

@@ -1,10 +1,8 @@
 /**
- * PDF preview cache — a CM6 StateField that stores rasterized first-page
- * previews of PDF files, plus an async loader that coordinates binary file
- * reading with PDF rasterization.
- *
- * Pattern follows citation-render.ts: StateEffect injects async results into
- * a StateField that render plugins can read synchronously.
+ * PDF preview cache — a CM6 StateField that tracks PDF preview status,
+ * plus an async loader that coordinates binary file reading with PDF
+ * rasterization. The actual canvas elements are stored in a module-level
+ * cache (not in CM6 state, since DOM elements aren't serializable).
  */
 import { StateEffect, StateField } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
@@ -13,17 +11,12 @@ import type { FileSystem } from "../lib/types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-/** Status of a single PDF preview entry. */
 export type PdfPreviewStatus = "loading" | "ready" | "error";
 
-/** A cached PDF preview entry. */
 export interface PdfPreviewEntry {
   readonly status: PdfPreviewStatus;
-  /** data:image/png URL when status is "ready"; undefined otherwise. */
-  readonly dataUrl?: string;
 }
 
-/** Payload dispatched via the state effect to update the cache. */
 export interface PdfPreviewUpdate {
   readonly path: string;
   readonly entry: PdfPreviewEntry;
@@ -31,10 +24,9 @@ export interface PdfPreviewUpdate {
 
 // ── StateEffect + StateField ─────────────────────────────────────────────────
 
-/** Effect to inject a PDF preview result (loading / ready / error). */
 export const pdfPreviewEffect = StateEffect.define<PdfPreviewUpdate>();
 
-/** StateField holding rasterized PDF preview entries keyed by relative path. */
+/** StateField tracking PDF preview status keyed by resolved path. */
 export const pdfPreviewField = StateField.define<
   ReadonlyMap<string, PdfPreviewEntry>
 >({
@@ -53,127 +45,75 @@ export const pdfPreviewField = StateField.define<
   },
 });
 
-// ── Async loader ─────────────────────────────────────────────────────────────
+// ── Canvas cache (module-level, not in CM6 state) ────────────────────────────
 
-/**
- * Module-level preview result cache shared across rich mode, read mode,
- * and HTML export. Capped to prevent unbounded memory growth in long
- * sessions — each data URL is ~100-500KB for a rasterized PDF page.
- */
-const MAX_PREVIEW_CACHE_SIZE = 64;
-const previewDataUrlCache = new Map<string, string>();
-
-/**
- * In-flight preview loads keyed by resolved project-relative path.
- * Shared across surfaces so a read-mode/export request can reuse work
- * already started by rich mode (and vice versa).
- */
-const pendingPreviewLoads = new Map<string, Promise<string | null>>();
-
-/**
- * Module-level deduplication set. Prevents concurrent requests for the same
- * path when multiple render cycles fire before the first resolves.
- */
+const MAX_CANVAS_CACHE_SIZE = 64;
+const canvasCache = new Map<string, HTMLCanvasElement>();
 const pendingPaths = new Set<string>();
 
-/** Exported for testing only — clears all module-level preview caches. */
+/** Get a cached canvas for a resolved PDF path. */
+export function getPdfCanvas(path: string): HTMLCanvasElement | undefined {
+  return canvasCache.get(path);
+}
+
+/** Exported for testing only — clears all module-level caches. */
 export function _resetPendingPaths(): void {
   pendingPaths.clear();
-  pendingPreviewLoads.clear();
-  previewDataUrlCache.clear();
+  canvasCache.clear();
 }
 
-/**
- * Load and rasterize a PDF preview, reusing module-level caches across
- * all surfaces that need the preview image.
- *
- * Returns `null` on failure so callers can gracefully degrade.
- */
-export async function loadPdfPreview(
-  path: string,
-  fs: FileSystem,
-): Promise<string | null> {
-  if (previewDataUrlCache.has(path)) {
-    return previewDataUrlCache.get(path) ?? null;
-  }
-
-  const pending = pendingPreviewLoads.get(path);
-  if (pending) return pending;
-
-  const loadPromise = (async () => {
-    try {
-      const bytes = await fs.readFileBinary(path);
-      const dataUrl = await rasterizePdfPage1(bytes);
-      if (dataUrl) {
-        // Evict oldest entry when cache is full (simple FIFO via Map insertion order)
-        if (previewDataUrlCache.size >= MAX_PREVIEW_CACHE_SIZE) {
-          const oldest = previewDataUrlCache.keys().next().value;
-          if (oldest !== undefined) previewDataUrlCache.delete(oldest);
-        }
-        previewDataUrlCache.set(path, dataUrl);
-        return dataUrl;
-      }
-      return null;
-    } catch {
-      return null;
-    } finally {
-      pendingPreviewLoads.delete(path);
-    }
-  })();
-
-  pendingPreviewLoads.set(path, loadPromise);
-  return loadPromise;
-}
+// ── Async loader ─────────────────────────────────────────────────────────────
 
 /**
  * Request a rasterized preview of page 1 of a PDF file.
  *
- * - If `path` is already in the cache (loading/ready/error), returns immediately.
- * - Otherwise dispatches a "loading" entry, reads the binary, rasterizes, and
- *   dispatches "ready" or "error".
- * - Uses `pendingPaths` to deduplicate concurrent requests.
- * - Error entries are cached permanently to avoid retry storms.
- * - Dispatches are guarded against disconnected views (editor teardown race).
+ * - If already cached, returns immediately.
+ * - Otherwise dispatches "loading", reads binary, rasterizes to canvas,
+ *   stores canvas in module cache, dispatches "ready" or "error".
+ * - Deduplicates concurrent requests via pendingPaths.
  */
 export async function requestPdfPreview(
   view: EditorView,
   path: string,
   fs: FileSystem,
 ): Promise<void> {
-  // Already cached (any status) — nothing to do.
   const existing = view.state.field(pdfPreviewField).get(path);
   if (existing) return;
 
-  // Another call is already in flight for this path.
   if (pendingPaths.has(path)) return;
   pendingPaths.add(path);
 
-  // Dispatch "loading" entry.
   safeDispatch(view, { path, entry: { status: "loading" } });
 
   try {
-    const dataUrl = await loadPdfPreview(path, fs);
+    const bytes = await fs.readFileBinary(path);
+    console.log(`[pdf-cache] read ${bytes.length} bytes for ${path}`);
+    const canvas = await rasterizePdfPage1(bytes);
+    console.log(`[pdf-cache] rasterize result:`, canvas ? `${canvas.width}x${canvas.height}` : "null");
 
-    if (dataUrl) {
-      safeDispatch(view, { path, entry: { status: "ready", dataUrl } });
+    if (canvas) {
+      // Evict oldest entry when cache is full
+      if (canvasCache.size >= MAX_CANVAS_CACHE_SIZE) {
+        const oldest = canvasCache.keys().next().value;
+        if (oldest !== undefined) canvasCache.delete(oldest);
+      }
+      canvasCache.set(path, canvas);
+      safeDispatch(view, { path, entry: { status: "ready" } });
     } else {
-      // Preview load failed (missing file, corrupt PDF, etc.)
       safeDispatch(view, { path, entry: { status: "error" } });
     }
+  } catch {
+    safeDispatch(view, { path, entry: { status: "error" } });
   } finally {
     pendingPaths.delete(path);
   }
 }
 
-/**
- * Dispatch a PDF preview effect, silently skipping if the view's DOM is no
- * longer connected (editor was unmounted while the async work was in flight).
- */
 function safeDispatch(view: EditorView, update: PdfPreviewUpdate): void {
   if (!view.dom.isConnected) return;
   try {
     view.dispatch({ effects: pdfPreviewEffect.of(update) });
   } catch {
-    // View disconnected between the guard check and dispatch — expected race.
+    // View disconnected between guard and dispatch — expected race
   }
 }

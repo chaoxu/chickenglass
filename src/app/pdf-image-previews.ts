@@ -3,7 +3,7 @@ import { htmlRenderExtensions } from "../parser";
 import { isPdfTarget } from "../lib/pdf-target";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import type { FileSystem } from "../lib/types";
-import { loadPdfPreview } from "../render/pdf-preview-cache";
+import { rasterizePdfPage1 } from "../render/pdf-rasterizer";
 
 const previewParser = baseParser.configure(htmlRenderExtensions);
 
@@ -51,8 +51,16 @@ export async function resolvePdfImageOverrides(
   if (resolvedPdfPaths.length === 0) return new Map();
 
   const results = await Promise.all(resolvedPdfPaths.map(async (path) => {
-    const dataUrl = await loadPdfPreview(path, fs);
-    return dataUrl ? ([path, dataUrl] as const) : null;
+    try {
+      const bytes = await fs.readFileBinary(path);
+      const canvas = await rasterizePdfPage1(bytes);
+      if (!canvas) return null;
+      // Read mode needs a data URL for <img src="">
+      const dataUrl = canvas.toDataURL("image/png");
+      return typeof dataUrl === "string" ? ([path, dataUrl] as const) : null;
+    } catch {
+      return null;
+    }
   }));
 
   return new Map(

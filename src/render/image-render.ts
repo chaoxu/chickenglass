@@ -13,7 +13,7 @@ import {
   RenderWidget,
   createSimpleViewPlugin,
 } from "./render-utils";
-import { pdfPreviewField, requestPdfPreview } from "./pdf-preview-cache";
+import { pdfPreviewField, requestPdfPreview, getPdfCanvas } from "./pdf-preview-cache";
 import { fileSystemFacet, documentPathFacet } from "../lib/types";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isPdfTarget } from "../lib/pdf-target";
@@ -49,6 +49,45 @@ export class ImageWidget extends RenderWidget {
 
   eq(other: ImageWidget): boolean {
     return this.alt === other.alt && this.src === other.src;
+  }
+}
+
+/** Widget that wraps a pre-rendered PDF canvas element directly. */
+export class PdfCanvasWidget extends RenderWidget {
+  constructor(
+    private readonly alt: string,
+    private readonly path: string,
+  ) {
+    super();
+  }
+
+  createDOM(): HTMLElement {
+    const wrapper = document.createElement("span");
+    wrapper.className = CSS.imageWrapper;
+
+    const canvas = getPdfCanvas(this.path);
+    if (canvas) {
+      // Clone the canvas so each widget instance owns its own DOM element
+      const clone = document.createElement("canvas");
+      clone.width = canvas.width;
+      clone.height = canvas.height;
+      clone.style.maxWidth = "100%";
+      clone.style.height = "auto";
+      clone.setAttribute("role", "img");
+      clone.setAttribute("aria-label", this.alt);
+      const ctx = clone.getContext("2d");
+      if (ctx) ctx.drawImage(canvas, 0, 0);
+      wrapper.appendChild(clone);
+    } else {
+      wrapper.textContent = `[Image: ${this.alt}]`;
+      wrapper.className = CSS.imageError;
+    }
+
+    return wrapper;
+  }
+
+  eq(other: PdfCanvasWidget): boolean {
+    return this.alt === other.alt && this.path === other.path;
   }
 }
 
@@ -113,9 +152,9 @@ function collectImageRanges(view: EditorView) {
       const cache = view.state.field(pdfPreviewField);
       const entry = cache.get(resolvedPath);
 
-      if (entry?.status === "ready" && entry.dataUrl) {
-        // Rasterized — render as a normal image with the data URL
-        pushWidgetDecoration(items, new ImageWidget(parsed.alt, entry.dataUrl), node.from, node.to);
+      if (entry?.status === "ready") {
+        // Rasterized — render the canvas directly
+        pushWidgetDecoration(items, new PdfCanvasWidget(parsed.alt, resolvedPath), node.from, node.to);
       } else if (entry?.status === "error") {
         // Error — show the existing broken-image fallback
         pushWidgetDecoration(items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to);
