@@ -90,6 +90,114 @@ export function cleanBibtex(text: string): string {
   return result;
 }
 
+const NON_CITATION_FIELD_NAMES = new Set(["abstract", "file"]);
+
+const RE_BIB_FIELD_CHAR = /[A-Za-z0-9_-]/;
+function isBibFieldChar(ch: string): boolean {
+  return RE_BIB_FIELD_CHAR.test(ch);
+}
+
+function consumeBibBracedValue(text: string, start: number): number {
+  let depth = 0;
+  let i = start;
+
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === "\\") {
+      i += 2;
+      continue;
+    }
+    if (ch === "{") {
+      depth += 1;
+    } else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return i + 1;
+    }
+    i += 1;
+  }
+
+  return text.length;
+}
+
+function consumeBibQuotedValue(text: string, start: number): number {
+  let i = start + 1;
+
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === "\\") {
+      i += 2;
+      continue;
+    }
+    if (ch === "\"") return i + 1;
+    i += 1;
+  }
+
+  return text.length;
+}
+
+/** Skip whitespace (space, tab, CR) starting at `pos`. */
+function skipWs(text: string, pos: number): number {
+  while (pos < text.length && (text[pos] === " " || text[pos] === "\t" || text[pos] === "\r")) pos++;
+  return pos;
+}
+
+/**
+ * Check if a line starts a BibTeX field we want to strip (abstract, file).
+ * Returns the position past the field value + trailing comma, or -1 if not a match.
+ */
+function tryStripField(content: string, lineStart: number): number {
+  let pos = skipWs(content, lineStart);
+
+  const nameStart = pos;
+  while (pos < content.length && isBibFieldChar(content[pos])) pos++;
+  const fieldName = content.slice(nameStart, pos).toLowerCase();
+
+  pos = skipWs(content, pos);
+  if (!NON_CITATION_FIELD_NAMES.has(fieldName) || content[pos] !== "=") return -1;
+
+  pos = skipWs(content, pos + 1);
+
+  if (content[pos] === "{") {
+    pos = consumeBibBracedValue(content, pos);
+  } else if (content[pos] === "\"") {
+    pos = consumeBibQuotedValue(content, pos);
+  } else {
+    while (pos < content.length && content[pos] !== "," && content[pos] !== "\n") pos++;
+  }
+
+  pos = skipWs(content, pos);
+  if (content[pos] === ",") pos++;
+  return pos;
+}
+
+/**
+ * Strip metadata fields that are irrelevant for citation rendering but
+ * commonly contain malformed exporter output (for example Zotero abstracts).
+ * Works line-by-line: keeps lines as slices, strips matching fields entirely.
+ */
+function stripIrrelevantBibFields(content: string): string {
+  const kept: string[] = [];
+  let i = 0;
+
+  while (i < content.length) {
+    const skipTo = tryStripField(content, i);
+    if (skipTo >= 0) {
+      i = skipTo;
+      continue;
+    }
+    // Keep this line — find the end and slice it
+    const eol = content.indexOf("\n", i);
+    if (eol < 0) {
+      kept.push(content.slice(i));
+      break;
+    }
+    kept.push(content.slice(i, eol + 1));
+    i = eol + 1;
+  }
+
+  return kept.join("");
+}
+
 /**
  * Normalize a CSL-JSON item from citation-js: use citation-key as id when present.
  */
@@ -117,6 +225,17 @@ export function parseBibTeX(content: string): CslJsonItem[] {
     const cite = new Cite(content);
     return (cite.data as CslJsonItem[]).map(normalizeCslItem);
   } catch (e: unknown) {
+    const sanitized = stripIrrelevantBibFields(content);
+    if (sanitized !== content) {
+      try {
+        const cite = new Cite(sanitized);
+        return (cite.data as CslJsonItem[]).map(normalizeCslItem);
+      } catch (retryError: unknown) {
+        console.warn("[bibtex] parse failed after stripping abstract/file fields, returning empty list", retryError);
+        return [];
+      }
+    }
+
     // Malformed BibTeX content -- return empty list rather than crashing
     console.warn("[bibtex] parse failed, returning empty list", e);
     return [];
