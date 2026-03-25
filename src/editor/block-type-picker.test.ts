@@ -338,20 +338,10 @@ describe("collectAncestorFences", () => {
     const contentLine = view.state.doc.line(4);
     const fences = collectAncestorFences(view, contentLine.from);
 
-    // Should have at least the innermost ancestor (remark)
-    expect(fences.length).toBeGreaterThanOrEqual(1);
-    // Innermost fence should use 3 colons
-    expect(fences[0].colons).toBe(3);
-
-    if (fences.length >= 2) {
-      // Parent (proof) uses 4 colons
-      expect(fences[1].colons).toBe(4);
-    }
-
-    if (fences.length >= 3) {
-      // Grandparent (theorem) uses 5 colons
-      expect(fences[2].colons).toBe(5);
-    }
+    expect(fences.length).toBe(3);
+    expect(fences[0].colons).toBe(3); // remark (innermost)
+    expect(fences[1].colons).toBe(4); // proof
+    expect(fences[2].colons).toBe(5); // theorem (outermost)
   });
 
   it("reports correct colon count for fences", () => {
