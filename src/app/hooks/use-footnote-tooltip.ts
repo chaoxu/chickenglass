@@ -81,11 +81,27 @@ export function useFootnoteTooltip(
       if (target.classList.contains("cf-sidenote-ref")) hide();
     };
 
+    // Dismiss tooltip when the window loses focus, the tab becomes hidden,
+    // or the user clicks outside the tooltip (#459).
+    const onWindowBlur = () => hide();
+    const onVisibilityChange = () => {
+      if (document.hidden) hide();
+    };
+    const onDocumentMouseDown = (e: Event) => {
+      if (tooltip && !tooltip.contains(e.target as Node)) hide();
+    };
+
     scroller.addEventListener("mouseover", onOver);
     scroller.addEventListener("mouseout", onOut);
+    window.addEventListener("blur", onWindowBlur);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    document.addEventListener("mousedown", onDocumentMouseDown);
     return () => {
       scroller.removeEventListener("mouseover", onOver);
       scroller.removeEventListener("mouseout", onOut);
+      window.removeEventListener("blur", onWindowBlur);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      document.removeEventListener("mousedown", onDocumentMouseDown);
       hide();
     };
   }, [view, sidenotesCollapsed, getFootnoteContent]);

@@ -81,11 +81,19 @@ class FootnoteDefLabelWidget extends SimpleTextRenderWidget {
   }
 }
 
-/** Widget for a footnote reference rendered as a superscript number. */
+/** Widget for a footnote reference rendered as a superscript number.
+ *
+ * When sidenotes are collapsed and a definition exists, clicking the
+ * superscript scrolls to and reveals the footnote definition (uncollapsing
+ * sidenotes and placing the cursor on the definition). Otherwise, the
+ * default source-reveal behavior places the cursor on the ref source.
+ */
 class FootnoteRefWidget extends SimpleTextRenderWidget {
   constructor(
     private readonly number: number,
     private readonly id: string,
+    /** Document offset of the footnote definition, or -1 if none exists. */
+    private readonly defFrom: number,
   ) {
     super({
       tagName: "sup",
@@ -95,8 +103,34 @@ class FootnoteRefWidget extends SimpleTextRenderWidget {
     });
   }
 
+  override toDOM(view?: EditorView): HTMLElement {
+    const el = this.createDOM();
+    this.setSourceRangeAttrs(el);
+
+    if (view && this.defFrom >= 0) {
+      // Click navigates to the footnote definition:
+      // - Uncollapse sidenotes so the definition becomes visible/editable
+      // - Place cursor at the definition and scroll into view
+      el.style.cursor = "pointer";
+      const defFrom = this.defFrom;
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        const collapsed = view.state.field(sidenotesCollapsedField, false) ?? false;
+        if (collapsed) {
+          view.dispatch({ effects: sidenotesCollapsedEffect.of(false) });
+        }
+        view.focus();
+        view.dispatch({ selection: { anchor: defFrom }, scrollIntoView: true });
+      });
+    } else if (view && this.sourceFrom >= 0) {
+      this.bindSourceReveal(el, view);
+    }
+
+    return el;
+  }
+
   eq(other: FootnoteRefWidget): boolean {
-    return this.number === other.number && this.id === other.id;
+    return this.number === other.number && this.id === other.id && this.defFrom === other.defFrom;
   }
 }
 
@@ -108,12 +142,15 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
   const items: Range<Decoration>[] = [];
   const numberMap = numberFootnotes(footnotes);
 
-  // Render refs as superscript numbers (both collapsed and expanded modes)
+  // Render refs as superscript numbers (both collapsed and expanded modes).
+  // Each ref widget receives the definition's document offset so that clicking
+  // the superscript can navigate directly to the editable definition.
   for (const ref of footnotes.refs) {
     if (focused && cursorInRange(state, ref.from, ref.to)) continue;
 
     const num = numberMap.get(ref.id) ?? 0;
-    pushWidgetDecoration(items, new FootnoteRefWidget(num, ref.id), ref.from, ref.to);
+    const def = footnotes.defs.get(ref.id);
+    pushWidgetDecoration(items, new FootnoteRefWidget(num, ref.id, def?.from ?? -1), ref.from, ref.to);
   }
 
   for (const [, def] of footnotes.defs) {
