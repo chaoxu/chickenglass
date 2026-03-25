@@ -6,7 +6,7 @@ import {
 import { type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { cursorInRange, decorationHidden, addMarkerReplacement, createSimpleViewPlugin } from "./render-utils";
-import { findTrailingHeadingAttributes, hasUnnumberedHeadingAttributes } from "../semantics/heading-ancestry";
+import { findTrailingHeadingAttributes } from "../semantics/heading-ancestry";
 import { isSafeUrl } from "../lib/url-utils";
 
 /**
@@ -129,10 +129,11 @@ function buildMarkdownDecorations(view: EditorView): DecorationSet {
           cursorInHeading = cursorInRange(view, node.from, node.to);
 
           if (!cursorInHeading) {
-            // Cursor outside: hide trailing {-} / {.unnumbered} attribute text
+            // Cursor outside: hide ALL trailing Pandoc attribute blocks
+            // ({#id}, {.class}, {-}, {.unnumbered}, {#id .class key=value}, etc.)
             const hLine = view.state.doc.lineAt(node.from);
             const attrMatch = findTrailingHeadingAttributes(hLine.text);
-            if (attrMatch && hasUnnumberedHeadingAttributes(hLine.text)) {
+            if (attrMatch) {
               const attrFrom = hLine.from + attrMatch.index;
               const attrTo = attrFrom + attrMatch.raw.length;
               widgets.push(decorationHidden.range(attrFrom, attrTo));
