@@ -4,7 +4,10 @@ import { CSS } from "../constants/css-classes";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import { editorFocusField, focusEffect } from "./render-utils";
-import { _codeBlockDecorationFieldForTest as codeBlockDecorationField } from "./code-block-render";
+import {
+  _codeBlockDecorationFieldForTest as codeBlockDecorationField,
+  _closingCodeFenceProtectionForTest as closingCodeFenceProtection,
+} from "./code-block-render";
 import {
   applyStateEffects,
   createEditorState,
@@ -136,5 +139,67 @@ describe("codeBlockDecorationField", () => {
     expect(hasLineClassAt(specs, state.doc.line(5).from, CSS.codeblockSourceOpen)).toBe(false);
     // Closing fence always hidden (#429)
     expect(hasLineClassAt(specs, state.doc.line(7).from, CSS.blockClosingFence)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Closing fence protection transaction filter (#434)
+// ---------------------------------------------------------------------------
+
+/**
+ * Create an EditorState with the closing code fence protection filter active.
+ * Includes the markdown parser so FencedCode nodes are recognized.
+ */
+function createProtectedState(doc: string) {
+  return createEditorState(doc, {
+    extensions: [
+      markdown({ extensions: markdownExtensions }),
+      closingCodeFenceProtection,
+    ],
+  });
+}
+
+describe("closingCodeFenceProtection", () => {
+  const doc = "```js\nconsole.log('x')\n```";
+
+  it("blocks deletion of closing fence line", () => {
+    const state = createProtectedState(doc);
+    const closingLine = state.doc.line(3);
+    const tr = state.update({
+      changes: { from: closingLine.from, to: closingLine.to, insert: "" },
+    });
+    // Transaction should be blocked — doc unchanged
+    expect(tr.state.doc.toString()).toBe(doc);
+  });
+
+  it("allows whole-document deletion of a single code block (#434)", () => {
+    // When the entire document is a single code block, select-all + delete
+    // must not be blocked. Before the fix, fromA === 0 was not recognized as
+    // "extends before fence" and toA === docLen was not recognized as
+    // "extends after fence", so the filter incorrectly blocked the deletion.
+    const state = createProtectedState(doc);
+    const tr = state.update({
+      changes: { from: 0, to: doc.length, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe("");
+  });
+
+  it("allows deletion from content through end of doc (boundary edge case)", () => {
+    const state = createProtectedState(doc);
+    const contentLine = state.doc.line(2);
+    // Delete from content through closing fence — exercises toA >= docLen path
+    const tr = state.update({
+      changes: { from: contentLine.from, to: doc.length, insert: "" },
+    });
+    expect(tr.state.doc.toString()).not.toBe(doc);
+  });
+
+  it("allows whole-block deletion spanning beyond fence in larger document", () => {
+    const larger = "before\n```js\nconsole.log('x')\n```\nafter";
+    const state = createProtectedState(larger);
+    const tr = state.update({
+      changes: { from: 0, to: larger.length, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe("");
   });
 });

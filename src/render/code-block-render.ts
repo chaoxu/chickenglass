@@ -408,15 +408,18 @@ const closingCodeFenceProtection = EditorState.transactionFilter.of((tr) => {
   const fenceRanges = getCodeBlockClosingFenceRanges(tr.startState);
   if (fenceRanges.length === 0) return tr;
 
+  const docLen = tr.startState.doc.length;
   let blocked = false;
   tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
     if (blocked) return;
     for (const fence of fenceRanges) {
       // Does this change touch the closing fence line?
       if (fromA <= fence.to && toA >= fence.from) {
-        // Allow if the change spans well beyond the fence (whole-block deletion)
-        const extendsBeforeFence = fromA < fence.from - 1;
-        const extendsAfterFence = toA > fence.to + 1;
+        // Allow if the change spans well beyond the fence (whole-block deletion).
+        // Account for document boundaries: start-of-doc counts as "before",
+        // end-of-doc counts as "after".
+        const extendsBeforeFence = fromA < fence.from - 1 || fromA === 0;
+        const extendsAfterFence = toA > fence.to + 1 || toA >= docLen;
         if (extendsBeforeFence && extendsAfterFence) continue;
         // Allow if it's a replacement that includes the fence (structural edit)
         if (inserted.length > 0 && extendsBeforeFence) continue;
@@ -429,6 +432,9 @@ const closingCodeFenceProtection = EditorState.transactionFilter.of((tr) => {
 
   return blocked ? [] : tr;
 });
+
+/** Exported for unit testing the transaction filter without the full plugin. */
+export { closingCodeFenceProtection as _closingCodeFenceProtectionForTest };
 
 /**
  * Atomic ranges for code block closing fence lines so the cursor skips
