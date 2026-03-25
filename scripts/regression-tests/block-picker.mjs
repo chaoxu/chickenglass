@@ -64,5 +64,12 @@ export async function run(page) {
     };
   }
 
+  if (!result.treeHasFencedDiv) {
+    return {
+      pass: false,
+      message: "Parser did not produce a FencedDiv node after ::: insertion",
+    };
+  }
+
   return { pass: true };
 }

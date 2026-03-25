@@ -443,12 +443,14 @@ describe("FORMAT.md coverage: Fenced Divs", () => {
     expect(proofs.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("parses short-form fenced div (class only, no braces)", () => {
+  it("parses short-form fenced div (class and title, no braces)", () => {
     const doc = "::: Theorem Main Result\nContent.\n:::";
     const state = createTestState(doc);
     const semantics = state.field(documentSemanticsField);
     expect(semantics.fencedDivs).toHaveLength(1);
     expect(semantics.fencedDivs[0].primaryClass).toBe("theorem");
+    // Short-form: first word is the class, rest is the title
+    expect(semantics.fencedDivs[0].title).toBe("Main Result");
   });
 });
 
@@ -463,13 +465,14 @@ describe("FORMAT.md coverage: Block Numbering", () => {
   it("shares counter between theorem and lemma (global numbering)", () => {
     const counter = masterState.field(blockCounterField);
     // With global numbering, all numbered blocks share one counter.
-    // The sequence should be: theorem 1, lemma 2, definition 3, ...
-    expect(counter.blocks.length).toBeGreaterThanOrEqual(2);
-    const numbers = counter.blocks.map((b) => b.number);
-    // Numbers should be sequential
-    for (let i = 1; i < numbers.length; i++) {
-      expect(numbers[i]).toBe(numbers[i - 1] + 1);
-    }
+    // Verify the exact (type, number) sequence — not just that numbers increase.
+    const numbered = counter.blocks.map((b) => ({ type: b.type, number: b.number }));
+    expect(numbered.length).toBeGreaterThanOrEqual(2);
+    // First two should be theorem=1, lemma=2 (from fixture order)
+    expect(numbered[0]).toEqual({ type: "theorem", number: 1 });
+    expect(numbered[1]).toEqual({ type: "lemma", number: 2 });
+    // Proof should NOT appear (unnumbered)
+    expect(numbered.find((b) => b.type === "proof")).toBeUndefined();
   });
 
   it("does not assign numbers to unnumbered blocks (proof)", () => {

@@ -71,10 +71,17 @@ async function waitForDebugBridge(page) {
   );
 }
 
-/** Ensure the editor is in rich mode and index.md is loaded (baseline state). */
+/** Ensure the editor is in rich mode with index.md loaded (baseline state). */
 async function resetEditorState(page) {
-  await page.evaluate(() => window.__app.setMode("rich"));
-  await new Promise((r) => setTimeout(r, 200));
+  await page.evaluate(() => {
+    window.__app.setMode("rich");
+    window.__app.openFile("index.md");
+  });
+  // Wait for document to be loaded and parsed
+  await page.waitForFunction(
+    () => window.__cmView?.state?.doc?.length > 100,
+    { timeout: 5000 },
+  ).catch(() => {});
 }
 
 async function main() {
@@ -150,6 +157,13 @@ async function main() {
       results.push({ name: test.name, pass: result.pass, message: result.message, elapsed });
     } catch (err) {
       const elapsed = Date.now() - startTime;
+      // Detect Chrome disconnection — abort remaining tests
+      if (err.message?.includes("Target closed") || err.message?.includes("Protocol error")) {
+        console.log(`  FAIL  ${test.name} (${elapsed}ms) — Chrome disconnected`);
+        console.error("\nChrome disconnected mid-test. Aborting remaining tests.");
+        failed++;
+        break;
+      }
       console.log(`  FAIL  ${test.name} (${elapsed}ms) — Error: ${err.message}`);
       results.push({ name: test.name, pass: false, message: `Error: ${err.message}`, elapsed });
       failed++;
