@@ -34,7 +34,7 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
     <div data-sidebar className="flex shrink-0">
       <Sidebar>
         <SidebarHeader>
-          <span className="overflow-hidden whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-[var(--cf-muted)]">
+          <span className="overflow-hidden whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-[var(--cf-muted)] pl-1">
             Explorer
           </span>
           <SidebarTrigger />

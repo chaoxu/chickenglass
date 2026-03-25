@@ -174,7 +174,7 @@ export function StatusBar({
         </div>
 
         {/* Right: command palette + mode indicator */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 pr-1">
           {onOpenPalette && (
             <button
               type="button"

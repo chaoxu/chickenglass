@@ -177,9 +177,11 @@ body {
   outline: none;
 }
 
-/* Source mode uses monospace font for all content */
+/* Source mode uses monospace font at a smaller size (~11pt) for raw editing.
+ * Rich/read mode keeps the default 16px serif via base-theme.ts. */
 .cf-source-mode .cm-content {
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: 11pt;
 }
 
 /* ── Sidenote margin (portal + items) ──────────────────────────────────────
@@ -712,6 +714,18 @@ body {
   padding: 1px 4px;
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   font-size: 0.85em;
+}
+
+/* Inline code — shared between editor (CM6 mark decoration), read mode,
+ * sidenote margin entries, hover previews, and footnote section widgets.
+ * The CM6 theme (typography-theme.ts) applies the same class inside the
+ * editor; this global rule covers all non-CM6 surfaces. */
+.cf-inline-code {
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: 0.85em;
+  background: var(--cf-subtle);
+  border-radius: var(--cf-border-radius);
+  padding: 1px 4px;
 }
 
 /* Block source syntax — monospace font for ::: fence syntax and closing fence lines.
