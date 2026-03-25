@@ -34,6 +34,8 @@ scripts/         # CDP test helpers, blog import tools
 ```bash
 npm install          # install dependencies
 npm run dev          # start dev server (Vite) — browser mode with blog demo content
+npm run dev:worktree -- perf-444 --base origin/main --fetch
+                     # create an isolated worktree under .worktrees/ from a committed base ref
 npm run build        # production build (frontend only)
 npm run lint         # ESLint
 npm run lint:fix     # ESLint autofix
@@ -98,6 +100,12 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
 ## Workspace hygiene
 
 - Temporary files go in `/tmp/coflat-*` — never in the project directory.
+- For isolated local work, prefer `npm run dev:worktree -- <name>`.
+  - It creates a new branch + worktree under `.worktrees/<sanitized-name>`.
+  - It links the repo's `node_modules` into the new worktree when available, so verification commands usually work immediately.
+  - It is dirty-tree tolerant: uncommitted changes in the current worktree are NOT copied; only committed history from the chosen base ref is used.
+  - `--base origin/main --fetch` refreshes the requested remote base ref before creating the worktree.
+  - A custom relative `--path` is resolved from the repo root, not the caller's current subdirectory.
 
 ## Development rules
 

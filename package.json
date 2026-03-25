@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:worktree": "node scripts/dev-worktree.mjs",
     "dev:browser": "vite & sleep 2 && npm run chrome && wait",
     "typecheck": "tsc --noEmit",
     "typecheck:app": "tsc --noEmit -p tsconfig.app.json",
