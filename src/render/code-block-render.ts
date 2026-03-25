@@ -9,6 +9,9 @@
  * - The closing ``` is ALWAYS hidden (zero height), protected from accidental
  *   deletion by a transaction filter, and skipped by atomicRanges (#429).
  *
+ * Closing fence protection and atomic ranges are provided by the unified
+ * fenceProtectionExtension in fence-protection.ts (#441).
+ *
  * Uses a StateField (not ViewPlugin) so that Decoration.line is permitted
  * by CM6.
  */
@@ -23,8 +26,6 @@ import {
 import {
   EditorState,
   type Extension,
-  type Range,
-  RangeSet,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
@@ -127,7 +128,7 @@ class CopyButtonWidget extends RenderWidget {
   }
 }
 
-interface CodeBlockInfo extends FencedBlockInfo {
+export interface CodeBlockInfo extends FencedBlockInfo {
   /** Start of the FencedCode node (opening fence line start). */
   readonly from: number;
   /** End of the FencedCode node (closing fence line end). */
@@ -137,7 +138,7 @@ interface CodeBlockInfo extends FencedBlockInfo {
 }
 
 /** Extract info about FencedCode nodes from the syntax tree. */
-function collectCodeBlocks(state: EditorState): CodeBlockInfo[] {
+export function collectCodeBlocks(state: EditorState): CodeBlockInfo[] {
   const results: CodeBlockInfo[] = [];
   const tree = syntaxTree(state);
 
@@ -378,91 +379,13 @@ const codeBlockDecorationField = createFencedBlockDecorationField(buildCodeBlock
 /** Exported for unit testing decoration logic without a browser. */
 export { codeBlockDecorationField as _codeBlockDecorationFieldForTest };
 
-// ---------------------------------------------------------------------------
-// Closing fence protection (#429)
-// ---------------------------------------------------------------------------
-
-/** Collect closing fence line ranges for all code blocks. */
-function getCodeBlockClosingFenceRanges(state: EditorState): { from: number; to: number }[] {
-  const blocks = collectCodeBlocks(state);
-  const ranges: { from: number; to: number }[] = [];
-  for (const block of blocks) {
-    if (block.singleLine || block.closeFenceFrom < 0) continue;
-    const line = state.doc.lineAt(block.closeFenceFrom);
-    ranges.push({ from: line.from, to: line.to });
-  }
-  return ranges;
-}
-
-/**
- * Transaction filter that protects code block closing fence lines from
- * accidental deletion.
- *
- * Same pattern as fenced div closing fence protection (#428). Blocks any
- * edit that touches only the closing fence line. Whole-block deletion
- * (selection covering the entire code block) is still allowed.
- */
-const closingCodeFenceProtection = EditorState.transactionFilter.of((tr) => {
-  if (!tr.docChanged) return tr;
-
-  const fenceRanges = getCodeBlockClosingFenceRanges(tr.startState);
-  if (fenceRanges.length === 0) return tr;
-
-  const docLen = tr.startState.doc.length;
-  let blocked = false;
-  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-    if (blocked) return;
-    for (const fence of fenceRanges) {
-      // Does this change touch the closing fence line?
-      if (fromA <= fence.to && toA >= fence.from) {
-        // Allow if the change spans well beyond the fence (whole-block deletion).
-        // Account for document boundaries: start-of-doc counts as "before",
-        // end-of-doc counts as "after".
-        const extendsBeforeFence = fromA < fence.from - 1 || fromA === 0;
-        const extendsAfterFence = toA > fence.to + 1 || toA >= docLen;
-        if (extendsBeforeFence && extendsAfterFence) continue;
-        // Allow if it's a replacement that includes the fence (structural edit)
-        if (inserted.length > 0 && extendsBeforeFence) continue;
-        // Block: the edit targets only the closing fence
-        blocked = true;
-        return;
-      }
-    }
-  });
-
-  return blocked ? [] : tr;
-});
-
-/** Exported for unit testing the transaction filter without the full plugin. */
-export { closingCodeFenceProtection as _closingCodeFenceProtectionForTest };
-
-/**
- * Atomic ranges for code block closing fence lines so the cursor skips
- * over them.
- *
- * Same pattern as fenced div closing fence atomicRanges (#428). The cursor
- * jumps from the last code line to the start of the next block/paragraph.
- */
-const closingCodeFenceAtomicRanges = EditorView.atomicRanges.of((view) => {
-  const ranges: Range<Decoration>[] = [];
-  const fenceRanges = getCodeBlockClosingFenceRanges(view.state);
-  const mark = Decoration.mark({});
-  for (const fence of fenceRanges) {
-    // Include the newline before the fence to make cursor skip the whole line
-    const atomicFrom = fence.from > 0 ? fence.from - 1 : fence.from;
-    const atomicTo = fence.to < view.state.doc.length ? fence.to + 1 : fence.to;
-    ranges.push(mark.range(atomicFrom, atomicTo));
-  }
-  return RangeSet.of(ranges, true);
-});
-
 /** CM6 extension that renders fenced code blocks with language label and fence hiding. */
 export const codeBlockRenderPlugin: Extension = [
   editorFocusField,
   focusTracker,
   codeBlockDecorationField,
-  closingCodeFenceProtection,
-  closingCodeFenceAtomicRanges,
+  // Closing fence protection and atomic ranges are provided by the unified
+  // fenceProtectionExtension in fence-protection.ts (#441).
   ViewPlugin.fromClass(CodeBlockHoverPlugin, {
     eventHandlers: {
       mousemove(event) {

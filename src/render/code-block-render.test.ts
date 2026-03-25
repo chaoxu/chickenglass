@@ -6,8 +6,8 @@ import { markdownExtensions } from "../parser";
 import { editorFocusField, focusEffect } from "./render-utils";
 import {
   _codeBlockDecorationFieldForTest as codeBlockDecorationField,
-  _closingCodeFenceProtectionForTest as closingCodeFenceProtection,
 } from "./code-block-render";
+import { closingFenceProtection } from "../plugins/fence-protection";
 import {
   applyStateEffects,
   createEditorState,
@@ -143,23 +143,24 @@ describe("codeBlockDecorationField", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Closing fence protection transaction filter (#434)
+// Closing fence protection transaction filter (#434, unified in #441)
 // ---------------------------------------------------------------------------
 
 /**
- * Create an EditorState with the closing code fence protection filter active.
+ * Create an EditorState with the unified closing fence protection filter active.
  * Includes the markdown parser so FencedCode nodes are recognized.
+ * Uses the unified closingFenceProtection from fence-protection.ts (#441).
  */
 function createProtectedState(doc: string) {
   return createEditorState(doc, {
     extensions: [
       markdown({ extensions: markdownExtensions }),
-      closingCodeFenceProtection,
+      closingFenceProtection,
     ],
   });
 }
 
-describe("closingCodeFenceProtection", () => {
+describe("closingCodeFenceProtection (unified)", () => {
   const doc = "```js\nconsole.log('x')\n```";
 
   it("blocks deletion of closing fence line", () => {

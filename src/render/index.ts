@@ -36,7 +36,11 @@ export {
   containerAttributesField,
   containerAttributesPlugin,
 } from "./container-attributes";
-export { codeBlockRenderPlugin } from "./code-block-render";
+export {
+  codeBlockRenderPlugin,
+  collectCodeBlocks,
+  type CodeBlockInfo,
+} from "./code-block-render";
 export { tableRenderPlugin, insertTable } from "./table-render";
 export { debugInspectorPlugin, toggleDebugInspector } from "./debug-inspector";
 export { checkboxRenderPlugin } from "./checkbox-render";

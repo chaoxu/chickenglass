@@ -1,16 +1,19 @@
 /**
- * Transaction filters and atomic ranges that protect fenced div fence syntax
- * from accidental edits in rich mode.
+ * Transaction filters and atomic ranges that protect fenced block fence syntax
+ * (both fenced divs and fenced code blocks) from accidental edits in rich mode.
  *
  * Extracted from plugin-render.ts so that fence protection is a standalone
  * module with clear boundaries. The blockRenderPlugin wires this extension
  * into the editor; block-type-picker uses the bypass annotation.
  *
+ * Unified in #441 to cover both `::: {.class} ... :::` fenced divs and
+ * ``` ``` ... ``` ``` fenced code blocks with a single protection stack.
+ *
  * Provides:
  * - `fenceOperationAnnotation` — bypass annotation for programmatic edits
  * - `getProtectedDivs` — collect fenced divs eligible for protection
- * - `getClosingFenceRanges` — closing fence line ranges
- * - `getOpeningFenceColonRanges` — opening fence colon-prefix ranges
+ * - `getClosingFenceRanges` — closing fence line ranges (divs + code blocks)
+ * - `getOpeningFenceColonRanges` — opening fence colon-prefix ranges (divs only)
  * - `openingFenceDeletionCleanup` — auto-remove closing fence on opening delete
  * - `closingFenceProtection` — block edits targeting only the closing fence
  * - `openingFenceColonProtection` — block edits targeting opening fence colons
@@ -32,6 +35,7 @@ import {
   type FencedDivSemantics,
 } from "../semantics/document";
 import { documentSemanticsField } from "../semantics/codemirror-source";
+import { collectCodeBlocks } from "../render/code-block-render";
 import { countColons } from "../parser";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 
@@ -44,14 +48,32 @@ export interface FencedDivInfo extends FencedBlockInfo, FencedDivSemantics {
   readonly className: string;
 }
 
-/** Extract info about FencedDiv nodes from the shared semantics field. */
+/**
+ * Extract info about FencedDiv nodes from the shared semantics field.
+ * Returns an empty array if the semantics field is not present in the state
+ * (e.g. in minimal test configurations).
+ */
 export function collectFencedDivs(state: EditorState): FencedDivInfo[] {
-  return state.field(documentSemanticsField).fencedDivs
+  const semantics = state.field(documentSemanticsField, false);
+  if (!semantics) return [];
+  return semantics.fencedDivs
     .filter((div): div is FencedDivSemantics & { primaryClass: string } => Boolean(div.primaryClass))
     .map((div) => ({
       ...div,
       className: div.primaryClass,
     }));
+}
+
+/**
+ * Collect all fenced blocks (both fenced divs and code blocks) for
+ * opening-fence deletion cleanup. Uses collectFencedDivs + collectCodeBlocks
+ * directly (not getProtectedDivs) because cleanup should apply to ALL
+ * fenced blocks, including unregistered/custom types.
+ */
+function collectAllFencedBlocks(state: EditorState): FencedBlockInfo[] {
+  const divs: FencedBlockInfo[] = collectFencedDivs(state);
+  const codeBlocks: FencedBlockInfo[] = collectCodeBlocks(state);
+  return [...divs, ...codeBlocks];
 }
 
 // ---------------------------------------------------------------------------
@@ -78,10 +100,16 @@ export function getProtectedDivs(state: EditorState): FencedDivInfo[] {
   });
 }
 
-/** Collect closing fence line ranges for protection. */
+/**
+ * Collect closing fence line ranges for protection from both fenced divs
+ * and fenced code blocks. All multi-line code blocks are protected
+ * unconditionally (they have no registry/class filtering like divs).
+ */
 export function getClosingFenceRanges(state: EditorState): { from: number; to: number }[] {
   const ranges: { from: number; to: number }[] = [];
   const seen = new Set<number>();
+
+  // Fenced div closing fences (filtered by registry/class)
   for (const div of getProtectedDivs(state)) {
     if (div.closeFenceFrom < 0) continue;
     const line = state.doc.lineAt(div.closeFenceFrom);
@@ -90,10 +118,21 @@ export function getClosingFenceRanges(state: EditorState): { from: number; to: n
       ranges.push({ from: line.from, to: line.to });
     }
   }
+
+  // Code block closing fences (all multi-line code blocks)
+  for (const block of collectCodeBlocks(state)) {
+    if (block.singleLine || block.closeFenceFrom < 0) continue;
+    const line = state.doc.lineAt(block.closeFenceFrom);
+    if (!seen.has(line.from)) {
+      seen.add(line.from);
+      ranges.push({ from: line.from, to: line.to });
+    }
+  }
+
   return ranges;
 }
 
-/** Collect opening fence colon-prefix ranges for protection. */
+/** Collect opening fence colon-prefix ranges for protection (fenced divs only). */
 export function getOpeningFenceColonRanges(state: EditorState): { from: number; to: number }[] {
   const ranges: { from: number; to: number }[] = [];
   const seen = new Set<number>();
@@ -112,11 +151,10 @@ export function getOpeningFenceColonRanges(state: EditorState): { from: number; 
 /**
  * Transaction filter that auto-removes the closing fence when an opening fence
  * line is fully deleted. Without this, deleting a block's header leaves an
- * orphaned closing `:::` in the document.
+ * orphaned closing fence (`::: ` or ``` ``` ```) in the document.
  *
- * Uses collectFencedDivs directly (not getProtectedDivs) because cleanup
- * should apply to ALL fenced divs, including unregistered/custom types.
- * Protection filters are narrower — they only guard registered blocks.
+ * Uses collectAllFencedBlocks (not getProtectedDivs) because cleanup
+ * should apply to ALL fenced blocks, including unregistered/custom types.
  *
  * The returned spec carries fenceOperationAnnotation so both protection
  * filters are bypassed for the combined structural deletion.
@@ -126,24 +164,24 @@ export const openingFenceDeletionCleanup = EditorState.transactionFilter.of((tr)
   if (tr.annotation(fenceOperationAnnotation)) return tr;
 
   const state = tr.startState;
-  const divs = collectFencedDivs(state);
-  if (divs.length === 0) return tr;
+  const blocks = collectAllFencedBlocks(state);
+  if (blocks.length === 0) return tr;
 
   const closingFencesToRemove: { from: number; to: number }[] = [];
 
   tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
     if (inserted.length > 1) return;
 
-    for (const div of divs) {
-      if (div.singleLine || div.closeFenceFrom < 0) continue;
+    for (const block of blocks) {
+      if (block.singleLine || block.closeFenceFrom < 0) continue;
 
-      const openLine = state.doc.lineAt(div.openFenceFrom);
+      const openLine = state.doc.lineAt(block.openFenceFrom);
 
       if (fromA <= openLine.from && toA >= openLine.to) {
-        if (fromA <= div.closeFenceFrom && toA >= div.closeFenceTo) continue;
+        if (fromA <= block.closeFenceFrom && toA >= block.closeFenceTo) continue;
 
         // Include the preceding newline so the line is fully removed
-        const closeLine = state.doc.lineAt(div.closeFenceFrom);
+        const closeLine = state.doc.lineAt(block.closeFenceFrom);
         const removeFrom = closeLine.from > 0 ? closeLine.from - 1 : closeLine.from;
         const removeTo = closeLine.to < state.doc.length ? closeLine.to + 1 : closeLine.to;
         closingFencesToRemove.push({ from: removeFrom, to: removeTo });
@@ -172,9 +210,9 @@ export const openingFenceDeletionCleanup = EditorState.transactionFilter.of((tr)
 /**
  * Transaction filter that protects closing fence lines from accidental deletion.
  *
- * Blocks any edit that touches only the closing fence line content. Whole-block
- * deletion (selection covering the entire fenced div) is still allowed so that
- * Cmd+A + Delete works.
+ * Covers both fenced divs and fenced code blocks. Blocks any edit that touches
+ * only the closing fence line content. Whole-block deletion (selection covering
+ * the entire fenced block) is still allowed so that Cmd+A + Delete works.
  */
 export const closingFenceProtection = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged) return tr;
@@ -214,6 +252,9 @@ export const closingFenceProtection = EditorState.transactionFilter.of((tr) => {
  * Edits that touch only the colon prefix (:::) are blocked to prevent
  * nesting invariant violations. Edits to attributes ({.theorem}) and
  * title text are unaffected. Whole-block deletion is still allowed.
+ *
+ * Applies to fenced divs only — code blocks use backtick fences which
+ * have no colon prefix.
  */
 export const openingFenceColonProtection = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged) return tr;
@@ -246,9 +287,10 @@ export const openingFenceColonProtection = EditorState.transactionFilter.of((tr)
 /**
  * Atomic ranges for closing fence lines so the cursor skips over them.
  *
- * Uses EditorView.atomicRanges to make the hidden closing fence behave as
- * a single atomic unit — the cursor jumps from the last content line to
- * the start of the next block or paragraph without stopping on the fence.
+ * Covers both fenced divs and fenced code blocks. Uses EditorView.atomicRanges
+ * to make hidden closing fences behave as a single atomic unit — the cursor
+ * jumps from the last content line to the start of the next block or paragraph
+ * without stopping on the fence.
  */
 export const closingFenceAtomicRanges = EditorView.atomicRanges.of((view) => {
   const ranges: Range<Decoration>[] = [];
@@ -265,6 +307,8 @@ export const closingFenceAtomicRanges = EditorView.atomicRanges.of((view) => {
 
 /**
  * Combined CM6 extension for all fence protection behavior.
+ *
+ * Covers both fenced divs and fenced code blocks (#441).
  *
  * CM6 runs transactionFilters in reverse registration order, so cleanup
  * (registered first) executes AFTER protections have already passed/blocked.

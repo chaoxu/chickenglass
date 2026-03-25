@@ -3,9 +3,10 @@
  *
  * Tests the closing fence protection, opening fence colon protection,
  * and opening fence deletion cleanup filters that prevent accidental
- * structural damage to fenced divs in rich mode.
+ * structural damage to fenced divs and fenced code blocks in rich mode.
  *
  * Moved from plugin-render.test.ts during fence-protection extraction (#433).
+ * Unified to cover both fenced divs and code blocks (#441).
  */
 
 import { describe, expect, it } from "vitest";
@@ -211,5 +212,118 @@ describe("openingFenceDeletionCleanup", () => {
     expect(result).toContain("content");
     expect(result).toContain("after");
     expect(result).not.toContain(":::");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Code block protection (#441) — unified with fenced div protection
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a minimal EditorState for code block protection tests.
+ * Only needs the markdown parser and protection filters — no plugin registry
+ * or semantics field required since code blocks are protected unconditionally.
+ */
+function createCodeBlockProtectedState(doc: string) {
+  return createEditorState(doc, {
+    extensions: [
+      markdown({ extensions: markdownExtensions }),
+      openingFenceDeletionCleanup,
+      closingFenceProtection,
+    ],
+  });
+}
+
+describe("closingFenceProtection (code blocks)", () => {
+  const doc = "```js\nconsole.log('x')\n```";
+
+  it("blocks deletion of code block closing fence line", () => {
+    const state = createCodeBlockProtectedState(doc);
+    const closingLine = state.doc.line(3);
+    const tr = state.update({
+      changes: { from: closingLine.from, to: closingLine.to, insert: "" },
+    });
+    // Transaction should be blocked — doc unchanged
+    expect(tr.state.doc.toString()).toBe(doc);
+  });
+
+  it("allows whole-document deletion of a single code block", () => {
+    const state = createCodeBlockProtectedState(doc);
+    const tr = state.update({
+      changes: { from: 0, to: doc.length, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe("");
+  });
+
+  it("allows deletion from content through end of doc (boundary edge case)", () => {
+    const state = createCodeBlockProtectedState(doc);
+    const contentLine = state.doc.line(2);
+    const tr = state.update({
+      changes: { from: contentLine.from, to: doc.length, insert: "" },
+    });
+    expect(tr.state.doc.toString()).not.toBe(doc);
+  });
+
+  it("allows whole-block deletion spanning beyond fence in larger document", () => {
+    const larger = "before\n```js\nconsole.log('x')\n```\nafter";
+    const state = createCodeBlockProtectedState(larger);
+    const tr = state.update({
+      changes: { from: 0, to: larger.length, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe("");
+  });
+});
+
+describe("openingFenceDeletionCleanup (code blocks)", () => {
+  const doc = "```js\nconsole.log('x')\n```";
+
+  it("auto-removes closing fence when opening fence line is deleted", () => {
+    const state = createCodeBlockProtectedState(doc);
+    const openLine = state.doc.line(1);
+    // Delete the full opening fence line (including newline)
+    const tr = state.update({
+      changes: { from: openLine.from, to: openLine.to + 1, insert: "" },
+    });
+    // Both fences removed, only content remains
+    expect(tr.state.doc.toString()).toBe("console.log('x')");
+  });
+
+  it("auto-removes closing fence when opening fence content is deleted", () => {
+    const state = createCodeBlockProtectedState(doc);
+    const openLine = state.doc.line(1);
+    // Delete just the opening fence content (not the newline)
+    const tr = state.update({
+      changes: { from: openLine.from, to: openLine.to, insert: "" },
+    });
+    // Closing fence should also be removed
+    expect(tr.state.doc.toString()).not.toContain("```");
+  });
+
+  it("does not remove closing fence for partial opening fence edits", () => {
+    const state = createCodeBlockProtectedState(doc);
+    // Edit the language identifier, not the whole line
+    // "```js" -> "```py" (replace "js" at position 3-5)
+    const tr = state.update({
+      changes: { from: 3, to: 5, insert: "py" },
+    });
+    const result = tr.state.doc.toString();
+    expect(result).toContain("```py");
+    // Closing fence still present
+    expect(result.endsWith("```")).toBe(true);
+  });
+
+  it("preserves content between fences when opening fence is deleted", () => {
+    const withContent = "before\n```js\nconsole.log('x')\n```\nafter";
+    const state = createCodeBlockProtectedState(withContent);
+    const openLine = state.doc.line(2);
+    const tr = state.update({
+      changes: { from: openLine.from, to: openLine.to + 1, insert: "" },
+    });
+    const result = tr.state.doc.toString();
+    // Both fences removed, surrounding content preserved
+    expect(result).toContain("before");
+    expect(result).toContain("console.log('x')");
+    expect(result).toContain("after");
+    expect(result).not.toContain("```");
   });
 });
