@@ -6,6 +6,7 @@ import { SettingsDialog } from "./settings-dialog";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { PerfDebugPanel } from "./perf-debug-panel";
 import type { AppEditorShellController } from "../hooks/use-app-editor-shell";
+import { useEditorTelemetry } from "../stores/editor-telemetry-store";
 import type { AppOverlayController } from "../hooks/use-app-overlays";
 import type { AppWorkspaceSessionController } from "../hooks/use-app-workspace-session";
 
@@ -16,12 +17,13 @@ interface AppOverlaysProps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "handleSearchResult" | "pluginManager" | "handleGotoLine" | "cursorLineCol"
+    "handleSearchResult" | "pluginManager" | "handleGotoLine"
   >;
   overlays: AppOverlayController;
 }
 
 export function AppOverlays({ workspace, editor, overlays }: AppOverlaysProps) {
+  const currentLine = useEditorTelemetry((s) => s.cursorLine);
   return (
     <>
       <CommandPalette
@@ -58,7 +60,7 @@ export function AppOverlays({ workspace, editor, overlays }: AppOverlaysProps) {
           editor.handleGotoLine(line, col);
           overlays.dialogs.setGotoLineOpen(false);
         }}
-        currentLine={editor.cursorLineCol.line}
+        currentLine={currentLine}
       />
       <PerfDebugPanel />
     </>

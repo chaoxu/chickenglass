@@ -2,10 +2,12 @@ import { useRef, useEffect } from "react";
 import type { UseEditorReturn } from "./use-editor";
 
 /**
- * Fires `onStateChange` when any tracked editor metric actually changes,
- * avoiding spurious calls when unrelated renders occur.
+ * Fires `onStateChange` when the editor view presence changes.
  *
- * Tracked values: wordCount, cursorPos, scrollTop, and view presence.
+ * Cursor position and word count are now tracked in the Zustand
+ * `editorTelemetryStore` and no longer flow through this hook.
+ * This hook only notifies the parent when the CM6 view is created or
+ * destroyed so it can update headings and the latestViewRef.
  */
 export function useEditorStateTracking(
   editorState: UseEditorReturn,
@@ -16,20 +18,13 @@ export function useEditorStateTracking(
     onStateChangeRef.current = onStateChange;
   }, [onStateChange]);
 
-  const { view, wordCount, cursorPos, scrollTop } = editorState;
-  const prevRef = useRef({ wordCount: -1, cursorPos: -1, scrollTop: -1, hasView: false });
+  const { view } = editorState;
+  const prevHasViewRef = useRef(false);
 
   useEffect(() => {
-    const prev = prevRef.current;
     const hasView = view !== null;
-    if (
-      prev.wordCount === wordCount &&
-      prev.cursorPos === cursorPos &&
-      prev.scrollTop === scrollTop &&
-      prev.hasView === hasView
-    )
-      return;
-    prevRef.current = { wordCount, cursorPos, scrollTop, hasView };
+    if (prevHasViewRef.current === hasView) return;
+    prevHasViewRef.current = hasView;
     onStateChangeRef.current?.(editorState);
-  }, [view, wordCount, cursorPos, scrollTop, editorState]);
+  }, [view, editorState]);
 }

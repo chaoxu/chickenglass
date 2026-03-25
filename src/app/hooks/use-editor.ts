@@ -32,6 +32,7 @@ import { useEditorDebugBridge } from "./use-editor-debug-bridge";
 import { useEditorDocumentServices } from "./use-editor-document-services";
 import { useEditorThemeSync } from "./use-editor-theme-sync";
 import { measureSync } from "../perf";
+import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 
 /** Resolved theme for the CM6 dark/light base extension. */
 export type ResolvedTheme = "light" | "dark";
@@ -74,10 +75,6 @@ export interface UseEditorOptions {
 export interface UseEditorReturn {
   /** The live CM6 EditorView, or null when not yet mounted. */
   view: EditorView | null;
-  /** Debounced word count of the current document. */
-  wordCount: number;
-  /** Current cursor head position (char offset). */
-  cursorPos: number;
   /** Current scroll top of the editor scroller (px). */
   scrollTop: number;
   /** Character offset of the first visible line in the viewport. */
@@ -122,8 +119,6 @@ export function useEditor(
   const pluginManager = externalPluginManager ?? fallbackManager;
 
   const [view, setView] = useState<EditorView | null>(null);
-  const [wordCount, setWordCount] = useState(0);
-  const [cursorPos, setCursorPos] = useState(0);
   const documentServices = useEditorDocumentServices({ doc, fs, docPath });
   const debugBridge = useEditorDebugBridge();
 
@@ -150,12 +145,14 @@ export function useEditor(
     if (!containerRef.current) return;
     const container = containerRef.current;
 
+    const telemetry = useEditorTelemetryStore.getState();
+
     // Build the updateListener that drives reactive state.
     const updateListener = EditorView.updateListener.of((update) => {
-      // Cursor changes
+      // Cursor changes → Zustand store (no React setState)
       if (update.selectionSet) {
         const pos = update.state.selection.main.head;
-        setCursorPos(pos);
+        useEditorTelemetryStore.getState().setCursorPos(pos, update.view);
         onCursorChangeRef.current?.(pos);
       }
 
@@ -163,13 +160,12 @@ export function useEditor(
         const docStr = update.state.doc.toString();
         onDocChangeRef.current?.(docStr);
 
-        // Debounced word count — reuses computeDocStats which already handles
-        // frontmatter stripping and proper tokenisation.
+        // Debounced word count → Zustand store (no React setState)
         if (wordCountTimerRef.current !== null) {
           clearTimeout(wordCountTimerRef.current);
         }
         wordCountTimerRef.current = setTimeout(() => {
-          setWordCount(computeDocStats(docStr).words);
+          useEditorTelemetryStore.getState().setWordCount(computeDocStats(docStr).words);
           wordCountTimerRef.current = null;
         }, 300);
       }
@@ -199,8 +195,10 @@ export function useEditor(
 
     debugBridge.attachDebugView(newView);
     setView(newView);
-    setWordCount(computeDocStats(doc).words);
-    setCursorPos(0);
+    // Initialize telemetry in Zustand store (not React state).
+    telemetry.setWordCount(computeDocStats(doc).words);
+    telemetry.setCursorPos(0, newView);
+    telemetry.setScroll(0, 0);
     resetScroll();
 
     // Initial frontmatter notification
@@ -213,6 +211,7 @@ export function useEditor(
         clearTimeout(wordCountTimerRef.current);
         wordCountTimerRef.current = null;
       }
+      telemetry.reset();
       documentServices.resetServices();
       debugBridge.clearDebugView(newView);
       newView.destroy();
@@ -226,8 +225,6 @@ export function useEditor(
 
   return {
     view,
-    wordCount,
-    cursorPos,
     scrollTop,
     viewportFrom,
     pluginManager,

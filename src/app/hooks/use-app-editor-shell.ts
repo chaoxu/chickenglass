@@ -179,13 +179,6 @@ export interface AppEditorShellController {
 
   // --- Stats ---
 
-  /** Word count for the active document, as reported by `useEditor`. */
-  wordCount: number;
-  /**
-   * 1-based line and column of the cursor in the active document.
-   * Derived from `editorState.cursorPos` each render; returns {1,1} on error.
-   */
-  cursorLineCol: { line: number; col: number };
   /**
    * Raw text of the active document used for word-count and reading-time
    * calculations. Reads from `liveDocs` (reflects unsaved changes) rather than
@@ -375,21 +368,6 @@ export function useAppEditorShell({
     setEditorMode(view, normalizedMode);
   }, [activeTab, editorState?.view, isMarkdownFile]);
 
-  const wordCount = editorState?.wordCount ?? 0;
-  const cursorCharOffset = editorState?.cursorPos ?? 0;
-
-  const cursorLineCol = useMemo(() => {
-    const view = editorState?.view;
-    if (!view) return { line: 1, col: 1 };
-    try {
-      const line = view.state.doc.lineAt(cursorCharOffset);
-      return { line: line.number, col: cursorCharOffset - line.from + 1 };
-    } catch {
-      // best-effort: cursor offset may be stale after doc change — return default position
-      return { line: 1, col: 1 };
-    }
-  }, [editorState?.view, cursorCharOffset]);
-
   const docTextForStats = activeTab ? (liveDocs.current.get(activeTab) ?? "") : "";
 
   const hasDirtyFiles = useMemo(() => openTabs.some((tab) => tab.dirty), [openTabs]);
@@ -444,8 +422,6 @@ export function useAppEditorShell({
     editorMode,
     handleModeChange,
     isMarkdownFile,
-    wordCount,
-    cursorLineCol,
     docTextForStats,
     hasDirtyFiles,
     handleDragOver,

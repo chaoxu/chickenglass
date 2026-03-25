@@ -16,7 +16,7 @@ interface AppMainShellProps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "openTabs" | "reorderTabs" | "activeTab" | "switchToTab" | "closeFile" | "pinTab" | "editorDoc" | "pluginManager" | "handleDocChange" | "handleEditorStateChange" | "editorMode" | "wordCount" | "cursorLineCol" | "handleModeChange" | "docTextForStats" | "isMarkdownFile"
+    "openTabs" | "reorderTabs" | "activeTab" | "switchToTab" | "closeFile" | "pinTab" | "editorDoc" | "pluginManager" | "handleDocChange" | "handleEditorStateChange" | "editorMode" | "handleModeChange" | "docTextForStats" | "isMarkdownFile"
   >;
   onOpenPalette: () => void;
 }
@@ -62,8 +62,6 @@ export function AppMainShell({
       )}
 
       <StatusBar
-        wordCount={editor.wordCount}
-        cursorPos={editor.cursorLineCol}
         editorMode={editor.editorMode}
         onModeChange={editor.handleModeChange}
         onOpenPalette={onOpenPalette}

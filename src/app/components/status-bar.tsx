@@ -3,6 +3,7 @@ import { markdownEditorModes, type EditorMode } from "../../editor";
 import { computeDocStats, formatReadingTime } from "../writing-stats";
 import type { DocStats } from "../writing-stats";
 import { cn } from "../lib/utils";
+import { useEditorTelemetry } from "../stores/editor-telemetry-store";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -12,8 +13,6 @@ export interface CursorPosition {
 }
 
 export interface StatusBarProps {
-  wordCount: number;
-  cursorPos: CursorPosition;
   editorMode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
   onOpenPalette?: () => void;
@@ -119,14 +118,15 @@ const StatsPopover = memo(function StatsPopover({ stats, anchorRef, onClose }: S
  * Right:  mode indicator (clickable to cycle Rich ↔ Source)
  */
 export function StatusBar({
-  wordCount,
-  cursorPos,
   editorMode,
   onModeChange,
   onOpenPalette,
   docText = "",
   isMarkdown = true,
 }: StatusBarProps) {
+  const wordCount = useEditorTelemetry((s) => s.wordCount);
+  const cursorLine = useEditorTelemetry((s) => s.cursorLine);
+  const cursorCol = useEditorTelemetry((s) => s.cursorCol);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const wordCountRef = useRef<HTMLButtonElement | null>(null);
 
@@ -169,7 +169,7 @@ export function StatusBar({
         {/* Center: cursor position */}
         <div className="flex-1 flex items-center justify-center">
           <span>
-            Ln {cursorPos.line}, Col {cursorPos.col}
+            Ln {cursorLine}, Col {cursorCol}
           </span>
         </div>
 
