@@ -116,7 +116,7 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
   - `If the architecture is wrong, say so and fix that instead.`
 - **Typora-style editing**:
   - Content keeps its natural font when editing (code stays monospace, prose stays serif).
-  - Show both fences when editing a block: cursor on either fence → BOTH opening and closing `:::` visible as source. Other blocks unaffected.
+  - Opening fence shows as source when cursor is on it; closing fence is always hidden (zero height, protected by transaction filter, cursor skips via atomicRanges).
   - Rich and Read mode must look the same (same CSS classes/properties).
   - Never hide source the user is editing.
   - **Block headers must behave like headings (CRITICAL — regressed 3+ times):**
