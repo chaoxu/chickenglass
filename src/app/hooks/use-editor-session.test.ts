@@ -79,6 +79,7 @@ function createAsyncFileSystem(reads: Record<string, Deferred<string>>): FileSys
     createDirectory: async () => {},
     deleteFile: async () => {},
     writeFileBinary: async () => {},
+    readFileBinary: async () => new Uint8Array(),
   };
 }
 

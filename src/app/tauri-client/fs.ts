@@ -45,6 +45,10 @@ export function writeFileBinaryCommand(path: string, dataBase64: string): Promis
   return invokeWithPerf("write_file_binary", { path, dataBase64 });
 }
 
+export function readFileBinaryCommand(path: string): Promise<string> {
+  return invokeWithPerf<string>("read_file_binary", { path });
+}
+
 export function toProjectRelativePathCommand(path: string): Promise<string> {
   return invokeWithPerf<string>("to_project_relative_path", { path });
 }

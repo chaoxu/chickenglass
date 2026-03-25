@@ -35,6 +35,7 @@ fn main() {
             commands::fs::delete_file,
             commands::shell::reveal_in_finder,
             commands::fs::write_file_binary,
+            commands::fs::read_file_binary,
             commands::path::to_project_relative_path,
             commands::perf::get_perf_snapshot,
             commands::perf::clear_perf_snapshot,

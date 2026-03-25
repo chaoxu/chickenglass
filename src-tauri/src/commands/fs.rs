@@ -233,6 +233,29 @@ pub fn write_file_binary(
     )
 }
 
+/// Read a file's content as raw bytes and return as base64-encoded string.
+#[command]
+pub fn read_file_binary(
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    path: String,
+) -> Result<String, String> {
+    measure_command(
+        &perf,
+        "tauri.read_file_binary",
+        "tauri.fs.read_file_binary",
+        "tauri",
+        Some(&path),
+        || {
+            let project_root = current_project_root(&root)?;
+            let resolved = resolve_existing_path(&project_root, &path)?;
+            let bytes = fs::read(&resolved)
+                .map_err(|e| format!("Failed to read binary file '{}': {}", path, e))?;
+            Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
+        },
+    )
+}
+
 /// Recursively build a FileEntry tree from a directory.
 fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, String> {
     let mut children = Vec::new();

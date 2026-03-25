@@ -44,4 +44,11 @@ export interface FileSystem {
    * @param data    Binary data as a Uint8Array.
    */
   writeFileBinary(path: string, data: Uint8Array): Promise<void>;
+  /**
+   * Read binary data from a file at the given path.
+   *
+   * @param path    Relative path within the project.
+   * @returns       The file contents as a Uint8Array.
+   */
+  readFileBinary(path: string): Promise<Uint8Array>;
 }

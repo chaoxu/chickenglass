@@ -7,7 +7,7 @@
 
 import { open } from "@tauri-apps/plugin-dialog";
 import type { FileEntry, FileSystem } from "./file-manager";
-import { uint8ArrayToBase64 } from "./lib/utils";
+import { base64ToUint8Array, uint8ArrayToBase64 } from "./lib/utils";
 import {
   createDirectoryCommand,
   createFileCommand,
@@ -15,6 +15,7 @@ import {
   fileExistsCommand,
   listTreeCommand,
   openFolderCommand,
+  readFileBinaryCommand,
   readFileCommand,
   renameFileCommand,
   revealInFinderCommand,
@@ -87,5 +88,10 @@ export class TauriFileSystem implements FileSystem {
   async writeFileBinary(path: string, data: Uint8Array): Promise<void> {
     const dataBase64 = uint8ArrayToBase64(data);
     await writeFileBinaryCommand(path, dataBase64);
+  }
+
+  async readFileBinary(path: string): Promise<Uint8Array> {
+    const dataBase64 = await readFileBinaryCommand(path);
+    return base64ToUint8Array(dataBase64);
   }
 }

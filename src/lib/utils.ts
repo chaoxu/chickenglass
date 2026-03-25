@@ -57,3 +57,17 @@ export function uint8ArrayToBase64(data: Uint8Array): string {
   }
   return btoa(binary);
 }
+
+/**
+ * Convert a base64-encoded string back to a Uint8Array.
+ *
+ * Inverse of `uint8ArrayToBase64` — uses `atob` + `charCodeAt`.
+ */
+export function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}

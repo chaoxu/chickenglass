@@ -127,6 +127,35 @@ describe("createBlogDemoFileSystem fallback", () => {
   });
 });
 
+describe("MemoryFileSystem.readFileBinary", () => {
+  it("round-trips binary data through write + read", async () => {
+    const fs = new MemoryFileSystem();
+    const data = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]); // PNG header
+    await fs.writeFileBinary("assets/test.png", data);
+    const result = await fs.readFileBinary("assets/test.png");
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(result).toEqual(data);
+  });
+
+  it("throws on reading a non-existent file", async () => {
+    const fs = new MemoryFileSystem();
+    await expect(fs.readFileBinary("missing.png")).rejects.toThrow(
+      "File not found",
+    );
+  });
+
+  it("preserves all 256 byte values in a round-trip", async () => {
+    const fs = new MemoryFileSystem();
+    const data = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) {
+      data[i] = i;
+    }
+    await fs.writeFileBinary("all-bytes.bin", data);
+    const result = await fs.readFileBinary("all-bytes.bin");
+    expect(result).toEqual(data);
+  });
+});
+
 describe("MemoryFileSystem.writeFileBinary", () => {
   it("writes binary data and creates parent directories", async () => {
     const fs = new MemoryFileSystem();

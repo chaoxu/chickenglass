@@ -1,4 +1,4 @@
-import { uint8ArrayToBase64 } from "./lib/utils";
+import { base64ToUint8Array, uint8ArrayToBase64 } from "./lib/utils";
 import { getBlogFiles } from "./demo-blog";
 
 // Re-export canonical types from src/lib/types.ts so that existing
@@ -135,6 +135,14 @@ export class MemoryFileSystem implements FileSystem {
       }
     }
     this.files.set(path, uint8ArrayToBase64(data));
+  }
+
+  async readFileBinary(path: string): Promise<Uint8Array> {
+    const content = this.files.get(path);
+    if (content === undefined) {
+      throw new Error(`File not found: ${path}`);
+    }
+    return base64ToUint8Array(content);
   }
 
   async deleteFile(path: string): Promise<void> {
