@@ -417,8 +417,8 @@ export function createDemoFileSystem(): MemoryFileSystem {
 }
 
 /** Create a demo filesystem with the imported demo project. */
-export function createBlogDemoFileSystem(): MemoryFileSystem {
-  const blogFiles = getBlogFiles();
+export async function createBlogDemoFileSystem(): Promise<MemoryFileSystem> {
+  const blogFiles = await getBlogFiles();
   const hasLocalBlogProject = Object.keys(blogFiles).some((path) => path !== "FORMAT.md");
 
   if (hasLocalBlogProject) {

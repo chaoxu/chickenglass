@@ -120,12 +120,10 @@ export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: Bre
               <BreadcrumbItem>
                 {i === ancestry.length - 1 ? (
                   <BreadcrumbPage
-                    title={h.text}
                     dangerouslySetInnerHTML={{ __html: renderDocumentFragmentToHtml({ kind: "chrome-label", text: h.text }) }}
                   />
                 ) : (
                   <BreadcrumbButton
-                    title={h.text}
                     onClick={() => onSelect(h.pos)}
                     dangerouslySetInnerHTML={{ __html: renderDocumentFragmentToHtml({ kind: "chrome-label", text: h.text }) }}
                   />

@@ -129,12 +129,11 @@ class TestWidget extends RenderWidget {
 }
 
 describe("SimpleTextRenderWidget", () => {
-  it("renders a text element with optional title and attrs", () => {
+  it("renders a text element with attrs", () => {
     const widget = new SimpleTextRenderWidget({
       tagName: "sup",
       className: "cf-test",
       text: "7",
-      title: "Footnote 7",
       attrs: { "data-footnote-id": "fn-7" },
     });
 
@@ -142,7 +141,6 @@ describe("SimpleTextRenderWidget", () => {
     expect(el.tagName).toBe("SUP");
     expect(el.className).toBe("cf-test");
     expect(el.textContent).toBe("7");
-    expect(el.getAttribute("title")).toBe("Footnote 7");
     expect(el.getAttribute("data-footnote-id")).toBe("fn-7");
   });
 

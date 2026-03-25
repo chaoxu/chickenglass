@@ -27,8 +27,8 @@ interface SymbolPanelProps {
 /**
  * Sidebar section that shows categorised math symbols with live search.
  *
- * Each symbol renders its Unicode preview character and a tooltip with the
- * LaTeX command. Clicking inserts the LaTeX at the CM6 cursor position
+ * Each symbol renders its Unicode preview character. Clicking inserts the
+ * LaTeX at the CM6 cursor position
  * (respecting inline-math context) via `insertSymbol`.
  */
 export function SymbolPanel({ onInsert, view }: SymbolPanelProps) {
@@ -95,7 +95,6 @@ export function SymbolPanel({ onInsert, view }: SymbolPanelProps) {
                   <button
                     key={sym.latex}
                     type="button"
-                    title={`${sym.label} (${sym.latex})`}
                     onMouseDown={(e) => {
                       // Prevent stealing focus from the editor.
                       e.preventDefault();

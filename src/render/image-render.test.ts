@@ -20,7 +20,6 @@ describe("ImageWidget", () => {
       expect(img).not.toBeNull();
       expect(img!.src).toContain("images/cat.jpg");
       expect(img!.alt).toBe("a cat");
-      expect(img!.title).toBe("a cat");
     });
 
     it("sets cf-image class on the img element", () => {
@@ -35,7 +34,6 @@ describe("ImageWidget", () => {
       const el = widget.createDOM();
       const img = el.querySelector("img");
       expect(img!.alt).toBe("");
-      expect(img!.title).toBe("");
     });
   });
 

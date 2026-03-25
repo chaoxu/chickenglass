@@ -3,7 +3,7 @@ import type { KeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import type { ItemInstance } from "@headless-tree/core";
 import type { FileEntry } from "../file-manager";
 import { dirname } from "../lib/utils";
-import { isTauri, revealInFinder } from "../tauri-fs";
+import { isTauri } from "../../lib/tauri";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -120,7 +120,9 @@ export function FileTreeNodeFolder({ item }: FileTreeNodeFolderProps) {
     ? {
         label: "Reveal in Finder",
         action: () => {
-          void revealInFinder(entry.path).catch((e: unknown) => {
+          void import("../tauri-fs").then(({ revealInFinder }) =>
+            revealInFinder(entry.path),
+          ).catch((e: unknown) => {
             console.error("[file-tree] revealInFinder failed:", e);
           });
         },

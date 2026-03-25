@@ -1,8 +1,8 @@
+import { lazy, Suspense } from "react";
 import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
 import type { FileSystem } from "./file-manager";
 import { SidebarProvider } from "./components/sidebar";
 import { AppMainShell } from "./components/app-main-shell";
-import { AppOverlays } from "./components/app-overlays";
 import { AppSidebarShell } from "./components/app-sidebar-shell";
 import { ErrorBoundary } from "./components/error-boundary";
 import { useAppDebug } from "./hooks/use-app-debug";
@@ -10,6 +10,11 @@ import { useAppEditorShell } from "./hooks/use-app-editor-shell";
 import { useAppOverlays } from "./hooks/use-app-overlays";
 import { useAppSessionPersistence } from "./hooks/use-app-session-persistence";
 import { useAppWorkspaceSession } from "./hooks/use-app-workspace-session";
+
+/** Lazy-loaded overlay dialogs — not needed until the user opens one. */
+const AppOverlays = lazy(() =>
+  import("./components/app-overlays").then((m) => ({ default: m.AppOverlays })),
+);
 
 // ── Inner app (has access to FileSystem context) ──────────────────────────────
 
@@ -68,7 +73,9 @@ function AppInner() {
           editor={editor}
           onOpenPalette={overlays.openPalette}
         />
-        <AppOverlays workspace={workspace} editor={editor} overlays={overlays} />
+        <Suspense fallback={null}>
+          <AppOverlays workspace={workspace} editor={editor} overlays={overlays} />
+        </Suspense>
       </div>
     </SidebarProvider>
   );

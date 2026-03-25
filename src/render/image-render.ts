@@ -38,7 +38,6 @@ export class ImageWidget extends RenderWidget {
     img.className = CSS.image;
     img.src = this.src;
     img.alt = this.alt;
-    img.title = this.alt;
     img.addEventListener("error", () => {
       wrapper.textContent = `[Image: ${this.alt}]`;
       wrapper.className = CSS.imageError;

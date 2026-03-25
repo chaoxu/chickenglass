@@ -92,7 +92,8 @@ class FoldToggleWidget extends RenderWidget {
     if (this.folded) classes.push("cf-fold-toggle-folded");
     span.className = classes.join(" ");
     span.textContent = this.folded ? "▶" : "▼";
-    span.title = this.folded ? "Unfold section" : "Fold section";
+    span.setAttribute("role", "button");
+    span.setAttribute("aria-label", this.folded ? "Unfold section" : "Fold section");
 
     const pos = this.pos;
     span.addEventListener("mousedown", (e) => {

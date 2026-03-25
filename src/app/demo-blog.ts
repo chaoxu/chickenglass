@@ -1,37 +1,44 @@
 /**
  * Load demo project files at build time via Vite's import.meta.glob.
- * Files live in demo/ as real .md/.yaml/.bib/.csl files.
+ *
+ * Lazy variant: modules are loaded on first call to getBlogFiles(), not at
+ * import time.  This keeps the demo corpus out of the initial bundle chunk.
  */
 
-const mdFiles = import.meta.glob("/demo/**/*.md", {
+const mdLoaders = import.meta.glob("/demo/**/*.md", {
   query: "?raw",
   import: "default",
-  eager: true,
-}) as Record<string, string>;
+}) as Record<string, () => Promise<string>>;
 
-const yamlFiles = import.meta.glob("/demo/**/*.yaml", {
+const yamlLoaders = import.meta.glob("/demo/**/*.yaml", {
   query: "?raw",
   import: "default",
-  eager: true,
-}) as Record<string, string>;
+}) as Record<string, () => Promise<string>>;
 
-const bibFiles = import.meta.glob("/demo/**/*.bib", {
+const bibLoaders = import.meta.glob("/demo/**/*.bib", {
   query: "?raw",
   import: "default",
-  eager: true,
-}) as Record<string, string>;
+}) as Record<string, () => Promise<string>>;
 
-const cslFiles = import.meta.glob("/demo/**/*.csl", {
+const cslLoaders = import.meta.glob("/demo/**/*.csl", {
   query: "?raw",
   import: "default",
-  eager: true,
-}) as Record<string, string>;
+}) as Record<string, () => Promise<string>>;
 
-const rootMarkdownFiles = import.meta.glob("/FORMAT.md", {
+const rootMarkdownLoaders = import.meta.glob("/FORMAT.md", {
   query: "?raw",
   import: "default",
-  eager: true,
-}) as Record<string, string>;
+}) as Record<string, () => Promise<string>>;
+
+/** Resolve all lazy loaders in a glob record into their string values. */
+async function resolveLoaders(
+  loaders: Record<string, () => Promise<string>>,
+): Promise<Record<string, string>> {
+  const entries = await Promise.all(
+    Object.entries(loaders).map(async ([path, load]) => [path, await load()] as const),
+  );
+  return Object.fromEntries(entries);
+}
 
 /** Strip the "/demo/" prefix so paths are relative to the demo project root. */
 function stripPrefix(files: Record<string, string>): Record<string, string> {
@@ -44,7 +51,16 @@ function stripPrefix(files: Record<string, string>): Record<string, string> {
 }
 
 /** All demo project files as a flat Record<relativePath, content>. */
-export function getBlogFiles(): Record<string, string> {
+export async function getBlogFiles(): Promise<Record<string, string>> {
+  const [mdFiles, yamlFiles, bibFiles, cslFiles, rootMarkdownFiles] =
+    await Promise.all([
+      resolveLoaders(mdLoaders),
+      resolveLoaders(yamlLoaders),
+      resolveLoaders(bibLoaders),
+      resolveLoaders(cslLoaders),
+      resolveLoaders(rootMarkdownLoaders),
+    ]);
+
   return {
     ...Object.fromEntries(
       Object.entries(rootMarkdownFiles).map(([path, content]) => [

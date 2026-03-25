@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import { isTauri } from "../tauri-fs";
+import { isTauri } from "../../lib/tauri";
 import { dispatchFormatEvent } from "../../constants/events";
 
 /** Handlers for native menu actions that require app-level state. */

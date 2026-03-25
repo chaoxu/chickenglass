@@ -73,7 +73,6 @@ class FootnoteDefLabelWidget extends SimpleTextRenderWidget {
       tagName: "sup",
       className: "cf-sidenote-def-label",
       text: String(number),
-      title: `Footnote ${id}`,
     });
   }
 

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, lazy, Suspense } from "react";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
 import { useEditorStateTracking } from "../hooks/use-editor-state-tracking";
@@ -6,10 +6,14 @@ import { useSidenotesAutoCollapse } from "../hooks/use-sidenotes-auto-collapse";
 import { useFootnoteTooltip } from "../hooks/use-footnote-tooltip";
 import { Breadcrumbs } from "./breadcrumbs";
 import { SidenoteMargin } from "./sidenote-margin";
-import { ReadModeView } from "./read-mode-view";
 import { extractHeadings } from "../heading-ancestry";
 import { bibDataField } from "../../citations/citation-render";
 import { frontmatterField, type EditorMode } from "../../editor";
+
+/** Lazy-loaded read-mode view — kept out of the startup bundle (read mode is deferred). */
+const ReadModeView = lazy(() =>
+  import("./read-mode-view").then((m) => ({ default: m.ReadModeView })),
+);
 
 export interface EditorPaneProps extends UseEditorOptions {
   sidenotesCollapsed?: boolean;
@@ -62,17 +66,19 @@ export function EditorPane({
       )}
       {/* CM6 editor — hidden (not unmounted) in read mode to preserve state */}
       <div ref={containerRef} className="h-full" style={isReadMode ? { display: "none" } : undefined} />
-      {/* Read mode HTML renderer */}
+      {/* Read mode HTML renderer (lazy-loaded — read mode is deferred) */}
       {isReadMode && (
-        <ReadModeView
-          content={readModeContent}
-          frontmatterConfig={frontmatterConfig}
-          bibliography={bibData?.store}
-          cslProcessor={bibData?.cslProcessor}
-          scrollTop={scrollTop}
-          fs={editorOptions.fs}
-          docPath={editorOptions.docPath}
-        />
+        <Suspense fallback={null}>
+          <ReadModeView
+            content={readModeContent}
+            frontmatterConfig={frontmatterConfig}
+            bibliography={bibData?.store}
+            cslProcessor={bibData?.cslProcessor}
+            scrollTop={scrollTop}
+            fs={editorOptions.fs}
+            docPath={editorOptions.docPath}
+          />
+        </Suspense>
       )}
       {/* Portal target — SidenoteMargin renders into the CM6 scroller via DOM portal */}
       {!isReadMode && !sidenotesCollapsed && <SidenoteMargin view={view} />}

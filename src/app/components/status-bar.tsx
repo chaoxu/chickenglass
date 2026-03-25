@@ -152,7 +152,6 @@ export function StatusBar({
           <button
             ref={wordCountRef}
             type="button"
-            title="Click for writing statistics"
             aria-label="Writing statistics"
             aria-expanded={popoverOpen}
             onClick={() => setPopoverOpen((v) => !v)}
@@ -179,7 +178,6 @@ export function StatusBar({
           {onOpenPalette && (
             <button
               type="button"
-              title="Command Palette (⇧⌘P)"
               aria-label="Command Palette (⇧⌘P)"
               onClick={onOpenPalette}
               className="px-1 rounded hover:bg-[var(--cf-hover)] transition-colors"
@@ -190,7 +188,6 @@ export function StatusBar({
           <button
             type="button"
             data-testid="mode-button"
-            title={isMarkdown ? "Click to cycle editor mode" : "Source mode only for non-markdown files"}
             aria-label={isMarkdown ? `Editor mode: ${MODE_LABELS[editorMode]}. Click to cycle mode` : "Source mode only for non-markdown files"}
             onClick={cycleMode}
             disabled={!isMarkdown}

@@ -472,8 +472,8 @@ export function collectNodeRangesExcludingCursor(
  * Create a simple text element — shared DOM helper for RenderWidget.createDOM().
  *
  * Many widgets produce a single element whose only properties are tag, class,
- * text content, and an optional title tooltip. This helper extracts that
- * 4-line pattern into a single call so widget createDOM() bodies stay concise.
+ * and text content. This helper extracts that 3-line pattern into a single
+ * call so widget createDOM() bodies stay concise.
  *
  * Unlike createSimpleTextWidget (which produces a singleton WidgetType), this
  * function is a plain DOM builder. The calling widget class still owns eq().
@@ -481,18 +481,15 @@ export function collectNodeRangesExcludingCursor(
  * @param tagName   HTML element tag (e.g. "span", "sup").
  * @param className CSS class for the element.
  * @param text      Text content of the element.
- * @param title     Optional tooltip (title attribute).
  */
 export function makeTextElement(
   tagName: string,
   className: string,
   text: string,
-  title?: string,
 ): HTMLElement {
   const el = document.createElement(tagName);
   el.className = className;
   el.textContent = text;
-  if (title !== undefined) el.title = title;
   return el;
 }
 
@@ -501,7 +498,6 @@ export interface SimpleTextRenderSpec {
   readonly tagName: string;
   readonly className: string;
   readonly text: string;
-  readonly title?: string;
   readonly attrs?: Readonly<Record<string, string>>;
 }
 
@@ -532,7 +528,6 @@ export class SimpleTextRenderWidget extends RenderWidget {
       this.spec.tagName,
       this.spec.className,
       this.spec.text,
-      this.spec.title,
     );
     if (this.spec.attrs) {
       for (const [name, value] of Object.entries(this.spec.attrs)) {
@@ -548,7 +543,6 @@ export class SimpleTextRenderWidget extends RenderWidget {
       this.spec.tagName === other.spec.tagName &&
       this.spec.className === other.spec.className &&
       this.spec.text === other.spec.text &&
-      this.spec.title === other.spec.title &&
       this.attrsKey === other.attrsKey
     );
   }
@@ -590,7 +584,6 @@ export abstract class MacroAwareWidget extends RenderWidget {
  * @param tagName   HTML tag for the element (e.g. "span").
  * @param className CSS class applied to the element.
  * @param text      Text content of the element.
- * @param title     Optional tooltip (title attribute).
  * @returns A WidgetType instance whose DOM matches the given parameters.
  *
  * @example
@@ -600,7 +593,6 @@ export function createSimpleTextWidget(
   tagName: string,
   className: string,
   text: string,
-  title?: string,
 ): WidgetType {
   // Each factory call creates a unique class so cross-call eq() always returns
   // false (instances with different parameters are never confused as equal).
@@ -609,7 +601,6 @@ export function createSimpleTextWidget(
       const el = document.createElement(tagName);
       el.className = className;
       el.textContent = text;
-      if (title !== undefined) el.title = title;
       return el;
     }
 

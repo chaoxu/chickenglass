@@ -100,7 +100,7 @@ describe("createDemoFileSystem", () => {
 
 describe("createBlogDemoFileSystem", () => {
   it("loads the checked-in demo project when it is available", async () => {
-    const fs = createBlogDemoFileSystem();
+    const fs = await createBlogDemoFileSystem();
     expect(await fs.exists("FORMAT.md")).toBe(true);
     expect(await fs.exists("index.md")).toBe(true);
     expect(await fs.exists("graph-ride/main.md")).toBe(true);
@@ -116,11 +116,11 @@ describe("createBlogDemoFileSystem fallback", () => {
   it("falls back to the built-in sample project when the demo fixture is absent", async () => {
     vi.resetModules();
     vi.doMock("./demo-blog", () => ({
-      getBlogFiles: () => ({ "FORMAT.md": "# Format" }),
+      getBlogFiles: async () => ({ "FORMAT.md": "# Format" }),
     }));
 
     const mod = await import("./file-manager");
-    const fs = mod.createBlogDemoFileSystem();
+    const fs = await mod.createBlogDemoFileSystem();
 
     expect(await fs.exists("FORMAT.md")).toBe(true);
     expect(await fs.exists("main.md")).toBe(true);

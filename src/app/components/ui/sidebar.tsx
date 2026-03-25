@@ -232,7 +232,6 @@ const SidebarTrigger = React.forwardRef<
     <button
       ref={ref}
       type={type}
-      title={title ?? (open ? "Collapse sidebar" : "Expand sidebar")}
       aria-label={ariaLabel ?? (open ? "Collapse sidebar" : "Expand sidebar")}
       className={cn(
         "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--cf-muted)] transition-colors duration-[var(--cf-transition,0.15s)] hover:bg-[var(--cf-hover)] hover:text-[var(--cf-fg)]",

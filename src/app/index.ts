@@ -34,7 +34,8 @@ export {
   type ExportFormat,
   type BatchExportProgress,
 } from "./export";
-export { isTauri, openFolder, revealInFinder, TauriFileSystem } from "./tauri-fs";
+export { isTauri } from "../lib/tauri";
+export { openFolder, revealInFinder, TauriFileSystem } from "./tauri-fs";
 export {
   type FileEntry,
   type FileSystem,

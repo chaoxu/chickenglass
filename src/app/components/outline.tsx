@@ -86,7 +86,6 @@ export const Outline = memo(function Outline({ headings, onSelect }: OutlineProp
             <button
               className="flex-1 text-left flex items-baseline gap-1 py-[2px] text-sm text-[var(--cf-fg)] cursor-pointer truncate min-w-0"
               onClick={() => onSelect(heading.pos)}
-              title={heading.text}
             >
               <span className="text-[10px] text-[var(--cf-muted)] shrink-0 font-mono tabular-nums">
                 {heading.number}

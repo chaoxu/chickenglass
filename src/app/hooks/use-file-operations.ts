@@ -14,7 +14,7 @@
 import { useCallback } from "react";
 import type { RefObject } from "react";
 import type { FileSystem } from "../file-manager";
-import { isTauri } from "../tauri-fs";
+import { isTauri } from "../../lib/tauri";
 import { basename } from "../lib/utils";
 import { toProjectRelativePathCommand } from "../tauri-client/fs";
 import { measureAsync } from "../perf";

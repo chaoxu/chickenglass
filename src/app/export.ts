@@ -7,7 +7,7 @@
  *   proper semantic HTML (headings, lists, math via KaTeX, fenced divs).
  */
 
-import { isTauri } from "./tauri-fs";
+import { isTauri } from "../lib/tauri";
 import { measureAsync } from "./perf";
 import type { FileSystem, FileEntry } from "./file-manager";
 import {

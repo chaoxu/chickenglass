@@ -7,7 +7,7 @@ import { useSettings } from "./use-settings";
 import { useTheme } from "./use-theme";
 import { useWindowState } from "./use-window-state";
 import { measureAsync, withPerfOperation } from "../perf";
-import { isTauri, openFolder as tauriOpenFolder } from "../tauri-fs";
+import { isTauri } from "../../lib/tauri";
 
 export type SidebarTab = "files" | "outline" | "symbols";
 
@@ -86,7 +86,8 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     if (!isTauri()) return;
     void (async () => {
       try {
-        const folderPath = await tauriOpenFolder();
+        const { openFolder } = await import("../tauri-fs");
+        const folderPath = await openFolder();
         if (folderPath) {
           await Promise.all([refreshTree(), refreshProjectConfig()]);
         }

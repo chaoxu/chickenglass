@@ -216,14 +216,14 @@ export function replaceAllSearchMatches(view: EditorView): void {
 
 function createToggle(
   label: string,
-  title: string,
+  ariaLabel: string,
   initialActive: boolean,
   onChange: (active: boolean) => void,
 ): HTMLButtonElement {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.textContent = label;
-  btn.title = title;
+  btn.setAttribute("aria-label", ariaLabel);
   btn.className = CSS.searchToggle;
   btn.setAttribute("aria-pressed", String(initialActive));
   if (initialActive) btn.classList.add(CSS.searchToggleActive);
@@ -250,13 +250,13 @@ function createToggle(
 
 function createAction(
   label: string,
-  title: string,
+  ariaLabel: string,
   onClick: () => void,
 ): HTMLButtonElement {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.textContent = label;
-  btn.title = title;
+  btn.setAttribute("aria-label", ariaLabel);
   btn.className = CSS.searchAction;
   btn.addEventListener("mousedown", (e) => e.preventDefault());
   btn.addEventListener("click", () => {

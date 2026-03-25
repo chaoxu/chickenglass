@@ -92,7 +92,6 @@ class CopyButtonWidget extends RenderWidget {
     const btn = document.createElement("button");
     btn.className = "cf-codeblock-copy";
     btn.type = "button";
-    btn.title = "Copy code to clipboard";
     btn.setAttribute("aria-label", "Copy code to clipboard");
     btn.appendChild(createLucideIcon(copyIconNode));
     btn.addEventListener("mousedown", (e) => {
@@ -100,13 +99,11 @@ class CopyButtonWidget extends RenderWidget {
       e.stopPropagation();
       void navigator.clipboard.writeText(this.code).then(() => {
         btn.replaceChildren(createLucideIcon(checkIconNode));
-        btn.title = "Copied";
         btn.setAttribute("aria-label", "Copied");
         if (this.resetTimer !== null) clearTimeout(this.resetTimer);
         this.resetTimer = setTimeout(() => {
           this.resetTimer = null;
           btn.replaceChildren(createLucideIcon(copyIconNode));
-          btn.title = "Copy code to clipboard";
           btn.setAttribute("aria-label", "Copy code to clipboard");
         }, COPY_RESET_MS);
       }).catch((e: unknown) => {
