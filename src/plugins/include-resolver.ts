@@ -1,6 +1,9 @@
 import { parser } from "@lezer/markdown";
 import type { FileSystem } from "../lib/types";
-import { resolveProjectPathFromDocument } from "../lib/project-paths";
+import {
+  normalizeProjectPath,
+  resolveProjectPathFromDocument,
+} from "../lib/project-paths";
 import { markdownExtensions, extractDivClass } from "../parser";
 import { NODE } from "../constants/node-types";
 
@@ -138,7 +141,7 @@ export async function resolveIncludes(
   rootPath: string,
   fs: FileSystem,
 ): Promise<readonly ResolvedInclude[]> {
-  return resolveIncludesRecursive(rootPath, fs, []);
+  return resolveIncludesRecursive(normalizeProjectPath(rootPath), fs, []);
 }
 
 async function resolveIncludesRecursive(

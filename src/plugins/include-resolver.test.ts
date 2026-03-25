@@ -247,6 +247,38 @@ a.md
     );
   });
 
+  it("normalizes the root path before cycle detection", async () => {
+    const reads: string[] = [];
+    const memory = new MemoryFileSystem({
+      "./a.md": `::: {.include}
+a.md
+:::`,
+      "a.md": `::: {.include}
+a.md
+:::`,
+    });
+    const fs = {
+      listTree: () => memory.listTree(),
+      readFile: async (path: string) => {
+        reads.push(path);
+        return memory.readFile(path);
+      },
+      writeFile: (path: string, content: string) => memory.writeFile(path, content),
+      createFile: (path: string, content?: string) => memory.createFile(path, content),
+      exists: (path: string) => memory.exists(path),
+      renameFile: (oldPath: string, newPath: string) => memory.renameFile(oldPath, newPath),
+      createDirectory: (path: string) => memory.createDirectory(path),
+      deleteFile: (path: string) => memory.deleteFile(path),
+      writeFileBinary: (path: string, data: Uint8Array) => memory.writeFileBinary(path, data),
+      readFileBinary: (path: string) => memory.readFileBinary(path),
+    };
+
+    await expect(resolveIncludes("./a.md", fs)).rejects.toThrow(
+      IncludeCycleError,
+    );
+    expect(reads).toEqual(["a.md"]);
+  });
+
   it("throws IncludeCycleError on indirect cycle (A -> B -> C -> A)", async () => {
     const fs = new MemoryFileSystem({
       "a.md": `::: {.include}
