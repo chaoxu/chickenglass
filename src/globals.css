@@ -319,6 +319,53 @@ body {
   transform: translateY(0);
 }
 
+/* ── Block type picker (appended to document.body) ─────────────────────────
+ * Floating popup shown when the user types ::: at line start in rich mode.
+ * Lists available block types for insertion. */
+.cf-block-picker {
+  position: fixed;
+  z-index: 1000;
+  background: var(--cf-bg);
+  border: 1px solid var(--cf-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  max-height: 240px;
+  min-width: 160px;
+  overflow-y: auto;
+  padding: 4px;
+  font-size: 14px;
+  font-family: var(--cf-ui-font);
+  color: var(--cf-fg);
+  /* Enter/exit animation */
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity var(--cf-transition), transform var(--cf-transition);
+}
+
+.cf-block-picker[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.cf-block-picker-item {
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cf-block-picker-item:hover {
+  background: var(--cf-hover);
+}
+
+.cf-block-picker-item-selected {
+  background: var(--cf-subtle);
+}
+
+.cf-block-picker-item-selected:hover {
+  background: var(--cf-hover);
+}
+
 /* ── Read mode HTML renderer ───────────────────────────────────────────────
  * Semantic HTML view replacing CM6 in read mode. Enables proper typography
  * (justify, hyphens, Knuth-Plass) that CM6's `.cm-line` divs prevent. */

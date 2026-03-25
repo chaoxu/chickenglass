@@ -29,6 +29,7 @@ import { type ProjectConfig } from "./project-config";
 import { tableGridExtension } from "../render/table-grid";
 import { editorKeybindings } from "./keybindings";
 import { coflatTheme, coflatDarkTheme } from "./theme";
+import { blockTypePickerExtension } from "./block-type-picker";
 import { headingFold } from "./heading-fold";
 import { listOutlinerExtension } from "./list-outliner";
 import { treeView } from "@overleaf/codemirror-tree-view";
@@ -200,6 +201,7 @@ export function createEditor(config: EditorConfig): EditorView {
       headingFold,
       listOutlinerExtension,
       editorKeybindings,
+      blockTypePickerExtension,
       coflatTheme,
 
       // Dark/light base theme (wrapped in compartment for live switching)

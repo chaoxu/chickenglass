@@ -17,6 +17,7 @@ export {
   type FrontmatterState,
 } from "./frontmatter-state";
 export { editorKeybindings } from "./keybindings";
+export { blockTypePickerExtension, isPickerVisible } from "./block-type-picker";
 export { listOutlinerExtension } from "./list-outliner";
 export { coflatTheme, coflatDarkTheme } from "./theme";
 export {
