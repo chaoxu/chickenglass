@@ -4,6 +4,7 @@ import type { EditorView } from "@codemirror/view";
 import {
   pdfPreviewField,
   pdfPreviewEffect,
+  loadPdfPreview,
   requestPdfPreview,
   _resetPendingPaths,
   type PdfPreviewEntry,
@@ -28,12 +29,15 @@ const PDF_MAGIC = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
  * the rest satisfy the interface type.
  */
 function createMockFs(
-  readResult: Uint8Array | Error = PDF_MAGIC,
+  readResultOrFn: Uint8Array | Error | ReturnType<typeof vi.fn> = PDF_MAGIC,
 ): { fs: FileSystem; readFileBinary: ReturnType<typeof vi.fn> } {
-  const readFileBinary = vi.fn().mockImplementation(async () => {
-    if (readResult instanceof Error) throw readResult;
-    return readResult;
-  });
+  const readFileBinary =
+    typeof readResultOrFn === "function"
+      ? readResultOrFn
+      : vi.fn().mockImplementation(async () => {
+          if (readResultOrFn instanceof Error) throw readResultOrFn;
+          return readResultOrFn;
+        });
 
   const fs = {
     listTree: vi.fn(),
@@ -203,6 +207,65 @@ describe("pdfPreviewField", () => {
     });
   });
 
+  describe("loadPdfPreview", () => {
+    beforeEach(() => {
+      _resetPendingPaths();
+      vi.clearAllMocks();
+    });
+
+    it("caches a successful rasterized preview across repeated calls", async () => {
+      const { fs, readFileBinary } = createMockFs();
+      mockRasterize.mockResolvedValueOnce("data:image/png;base64,CACHED");
+
+      const first = await loadPdfPreview("fig/cached.pdf", fs);
+      const second = await loadPdfPreview("fig/cached.pdf", fs);
+
+      expect(first).toBe("data:image/png;base64,CACHED");
+      expect(second).toBe("data:image/png;base64,CACHED");
+      expect(readFileBinary).toHaveBeenCalledTimes(1);
+      expect(mockRasterize).toHaveBeenCalledTimes(1);
+    });
+
+    it("deduplicates concurrent loads across callers", async () => {
+      let resolveRead: (value: Uint8Array) => void;
+      const customRead = vi.fn().mockImplementation(
+        () => new Promise<Uint8Array>((resolve) => {
+          resolveRead = resolve;
+        }),
+      );
+      const { fs, readFileBinary } = createMockFs(customRead);
+      mockRasterize.mockResolvedValue("data:image/png;base64,CONCURRENT");
+
+      const p1 = loadPdfPreview("fig/concurrent.pdf", fs);
+      const p2 = loadPdfPreview("fig/concurrent.pdf", fs);
+
+      expect(readFileBinary).toHaveBeenCalledTimes(1);
+
+      resolveRead!(PDF_MAGIC);
+      await expect(Promise.all([p1, p2])).resolves.toEqual([
+        "data:image/png;base64,CONCURRENT",
+        "data:image/png;base64,CONCURRENT",
+      ]);
+      expect(mockRasterize).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not cache failures, so later attempts can retry", async () => {
+      const customRead = vi.fn()
+        .mockRejectedValueOnce(new Error("missing"))
+        .mockResolvedValueOnce(PDF_MAGIC);
+      const { fs } = createMockFs(customRead);
+      mockRasterize.mockResolvedValueOnce("data:image/png;base64,RECOVERED");
+
+      const first = await loadPdfPreview("fig/missing.pdf", fs);
+      const second = await loadPdfPreview("fig/missing.pdf", fs);
+
+      expect(first).toBeNull();
+      expect(second).toBe("data:image/png;base64,RECOVERED");
+      expect(customRead).toHaveBeenCalledTimes(2);
+      expect(mockRasterize).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("requestPdfPreview", () => {
     beforeEach(() => {
       _resetPendingPaths();
@@ -300,24 +363,13 @@ describe("pdfPreviewField", () => {
       // The first adds to pendingPaths before dispatching "loading",
       // and the second is blocked by pendingPaths.
       let resolveRead: (value: Uint8Array) => void;
-      const readFileBinary = vi.fn().mockImplementation(
+      const customRead = vi.fn().mockImplementation(
         () =>
           new Promise<Uint8Array>((resolve) => {
             resolveRead = resolve;
           }),
       );
-      const fs = {
-        listTree: vi.fn(),
-        readFile: vi.fn(),
-        writeFile: vi.fn(),
-        createFile: vi.fn(),
-        exists: vi.fn(),
-        renameFile: vi.fn(),
-        createDirectory: vi.fn(),
-        deleteFile: vi.fn(),
-        writeFileBinary: vi.fn(),
-        readFileBinary,
-      } as unknown as FileSystem;
+      const { fs, readFileBinary } = createMockFs(customRead);
 
       mockRasterize.mockResolvedValue("data:concurrent");
 

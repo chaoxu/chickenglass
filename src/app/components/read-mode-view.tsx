@@ -10,7 +10,7 @@
  * justified text.
  */
 
-import { useRef, useEffect, useMemo, useCallback } from "react";
+import { useRef, useEffect, useMemo, useCallback, useState } from "react";
 import { markdownToHtml } from "../markdown-to-html";
 import type { BibStore } from "../../citations/citation-render";
 import type { FrontmatterConfig } from "../../parser/frontmatter";
@@ -22,6 +22,8 @@ import {
 import { getHyphenator, applyHyphensToContainer } from "../hyphenation";
 import { measureAsync, measureSync } from "../perf";
 import { renderDocumentFragmentToHtml } from "../../document-surfaces";
+import { resolvePdfImageOverrides } from "../pdf-image-previews";
+import type { FileSystem } from "../file-manager";
 
 /** Debounce delay (ms) for re-applying line breaking on resize. */
 const RESIZE_DEBOUNCE_MS = 200;
@@ -39,6 +41,38 @@ export interface ReadModeViewProps {
   scrollTop?: number;
   /** Callback with current scroll position for persistence. */
   onScroll?: (scrollTop: number) => void;
+  /** FileSystem used for rasterizing PDF-backed image targets. */
+  fs?: FileSystem;
+  /** Current document path for resolving relative PDF image targets. */
+  docPath?: string;
+}
+
+function buildReadModeHtml(
+  content: string,
+  frontmatterConfig: FrontmatterConfig,
+  bibliography?: BibStore,
+  cslProcessor?: CslProcessor,
+  documentPath = "",
+  imageUrlOverrides?: ReadonlyMap<string, string>,
+): string {
+  const bodyHtml = markdownToHtml(content, {
+    macros: frontmatterConfig.math,
+    sectionNumbers: true,
+    bibliography,
+    cslProcessor,
+    documentPath,
+    imageUrlOverrides,
+  });
+
+  const titleHtml = frontmatterConfig.title
+    ? `<h1 class="cf-read-title">${renderDocumentFragmentToHtml({
+      kind: "title",
+      text: frontmatterConfig.title,
+      macros: frontmatterConfig.math,
+    })}</h1>`
+    : "";
+
+  return titleHtml + bodyHtml;
 }
 
 /**
@@ -101,29 +135,51 @@ export function ReadModeView({
   cslProcessor,
   scrollTop,
   onScroll,
+  fs,
+  docPath,
 }: ReadModeViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const didRestoreScroll = useRef(false);
+  const resolvedDocPath = docPath ?? "";
 
-  // Convert markdown to HTML using the already-merged frontmatter config
-  const htmlContent = useMemo(() => {
-    const bodyHtml = markdownToHtml(content, {
-      macros: frontmatterConfig.math,
-      sectionNumbers: true,
-      bibliography,
-      cslProcessor,
+  const baseHtmlContent = useMemo(
+    () => buildReadModeHtml(content, frontmatterConfig, bibliography, cslProcessor, resolvedDocPath),
+    [content, frontmatterConfig, bibliography, cslProcessor, resolvedDocPath],
+  );
+  const [htmlContent, setHtmlContent] = useState(baseHtmlContent);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHtmlContent(baseHtmlContent);
+
+    if (!fs) return () => {
+      cancelled = true;
+    };
+
+    void measureAsync("read_mode.pdf_previews", async () => {
+      const imageUrlOverrides = await resolvePdfImageOverrides(content, fs, resolvedDocPath);
+      if (cancelled || imageUrlOverrides.size === 0) return;
+      setHtmlContent(
+        buildReadModeHtml(
+          content,
+          frontmatterConfig,
+          bibliography,
+          cslProcessor,
+          resolvedDocPath,
+          imageUrlOverrides,
+        ),
+      );
+    }, {
+      category: "read_mode",
+      detail: docPath,
+    }).catch(() => {
+      // Silently ignore preview-preparation errors — broken-image fallback remains.
     });
 
-    const titleHtml = frontmatterConfig.title
-      ? `<h1 class="cf-read-title">${renderDocumentFragmentToHtml({
-        kind: "title",
-        text: frontmatterConfig.title,
-        macros: frontmatterConfig.math,
-      })}</h1>`
-      : "";
-
-    return titleHtml + bodyHtml;
-  }, [content, frontmatterConfig, bibliography, cslProcessor]);
+    return () => {
+      cancelled = true;
+    };
+  }, [baseHtmlContent, bibliography, content, cslProcessor, docPath, frontmatterConfig, fs]);
 
   // Stable callback for applying line breaking (used by both effect and resize observer)
   const applyLineBreakingCb = useCallback(() => {
