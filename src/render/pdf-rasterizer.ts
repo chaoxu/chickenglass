@@ -24,11 +24,12 @@ let pdfjsPromise: Promise<typeof import("pdfjs-dist")> | null = null;
 
 async function getPdfjsLib(): Promise<typeof import("pdfjs-dist")> {
   if (!pdfjsPromise) {
-    pdfjsPromise = import("pdfjs-dist").then((mod) => {
+    pdfjsPromise = import("pdfjs-dist").then(async (mod) => {
       // Configure the web worker so PDF parsing runs off the main thread.
-      const workerPath = "pdfjs-dist/build/pdf.worker.min.mjs";
+      // Use Vite's ?url import to get the correct resolved path.
       try {
-        mod.GlobalWorkerOptions.workerSrc = new URL(workerPath, import.meta.url).href;
+        const workerUrl = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+        mod.GlobalWorkerOptions.workerSrc = workerUrl.default;
       } catch {
         // Worker unavailable — pdfjs falls back to main-thread parsing
       }
@@ -91,8 +92,7 @@ export async function rasterizePdfPage1(
     } finally {
       await pdf.destroy();
     }
-  } catch (e) {
-    console.warn("[pdf-rasterizer] failed:", e);
+  } catch {
     return null;
   }
 }

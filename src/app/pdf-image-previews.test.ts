@@ -39,7 +39,7 @@ describe("resolvePdfImageOverrides", () => {
 
     const content = "# Title\n\n![fig](diagram.pdf)\n";
     const fs = createMockFs();
-    const overrides = await resolvePdfImageOverrides(content, fs, "posts/math.md");
+    await resolvePdfImageOverrides(content, fs, "posts/math.md");
 
     // In jsdom, canvas.toDataURL is not implemented — the override gets
     // filtered out. Just verify the pipeline ran correctly.
@@ -55,7 +55,7 @@ describe("resolvePdfImageOverrides", () => {
 
     const content = "![a](fig.pdf)\n\n![b](fig.pdf)\n";
     const fs = createMockFs();
-    const overrides = await resolvePdfImageOverrides(content, fs, "doc.md");
+    await resolvePdfImageOverrides(content, fs, "doc.md");
 
     // Only one rasterization call despite two references (dedup by resolved path)
     expect(rasterizeMock).toHaveBeenCalledTimes(1);
@@ -64,7 +64,7 @@ describe("resolvePdfImageOverrides", () => {
   it("returns empty map when no PDF targets exist", async () => {
     const content = "![img](photo.png)\n";
     const fs = createMockFs();
-    const overrides = await resolvePdfImageOverrides(content, fs, "doc.md");
-    expect(overrides.size).toBe(0);
+    const result = await resolvePdfImageOverrides(content, fs, "doc.md");
+    expect(result.size).toBe(0);
   });
 });

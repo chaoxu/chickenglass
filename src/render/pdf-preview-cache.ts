@@ -87,9 +87,7 @@ export async function requestPdfPreview(
 
   try {
     const bytes = await fs.readFileBinary(path);
-    console.log(`[pdf-cache] read ${bytes.length} bytes for ${path}`);
     const canvas = await rasterizePdfPage1(bytes);
-    console.log(`[pdf-cache] rasterize result:`, canvas ? `${canvas.width}x${canvas.height}` : "null");
 
     if (canvas) {
       // Evict oldest entry when cache is full
