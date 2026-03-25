@@ -56,9 +56,10 @@ export const CSS = {
   /** YouTube-specific iframe class. */
   embedYoutubeIframe: "cf-embed-iframe cf-embed-youtube-iframe",
 
-  /** Image wrapper, image element, and error state. */
+  /** Image wrapper, image element, loading, and error state. */
   imageWrapper: "cf-image-wrapper",
   image: "cf-image",
+  imageLoading: "cf-image-loading",
   imageError: "cf-image-error",
 
   /** Heading fold toggle. */

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { CSS } from "../constants/css-classes";
-import { ImageWidget } from "./image-render";
+import { ImageWidget, PdfLoadingWidget, isPdfTarget } from "./image-render";
 
 describe("ImageWidget", () => {
   describe("createDOM", () => {
@@ -84,5 +84,81 @@ describe("ImageWidget", () => {
 
       expect(el.querySelector("img")).toBeNull();
     });
+  });
+});
+
+describe("PdfLoadingWidget", () => {
+  describe("createDOM", () => {
+    it("produces a span with cf-image-wrapper and cf-image-loading classes", () => {
+      const widget = new PdfLoadingWidget("diagram");
+      const el = widget.createDOM();
+      expect(el.tagName).toBe("SPAN");
+      expect(el.className).toBe(`${CSS.imageWrapper} ${CSS.imageLoading}`);
+    });
+
+    it("shows loading text with alt text", () => {
+      const widget = new PdfLoadingWidget("figure 1");
+      const el = widget.createDOM();
+      expect(el.textContent).toBe("[Loading PDF: figure 1]");
+    });
+
+    it("shows 'preview' when alt text is empty", () => {
+      const widget = new PdfLoadingWidget("");
+      const el = widget.createDOM();
+      expect(el.textContent).toBe("[Loading PDF: preview]");
+    });
+  });
+
+  describe("eq", () => {
+    it("returns true for same alt text", () => {
+      const a = new PdfLoadingWidget("fig");
+      const b = new PdfLoadingWidget("fig");
+      expect(a.eq(b)).toBe(true);
+    });
+
+    it("returns false when alt text differs", () => {
+      const a = new PdfLoadingWidget("fig1");
+      const b = new PdfLoadingWidget("fig2");
+      expect(a.eq(b)).toBe(false);
+    });
+  });
+});
+
+describe("isPdfTarget", () => {
+  it("returns true for relative .pdf paths", () => {
+    expect(isPdfTarget("figure.pdf")).toBe(true);
+    expect(isPdfTarget("figures/diagram.pdf")).toBe(true);
+    expect(isPdfTarget("./fig.pdf")).toBe(true);
+    expect(isPdfTarget("../assets/plot.pdf")).toBe(true);
+  });
+
+  it("is case-insensitive for extension", () => {
+    expect(isPdfTarget("Figure.PDF")).toBe(true);
+    expect(isPdfTarget("test.Pdf")).toBe(true);
+  });
+
+  it("returns false for non-pdf extensions", () => {
+    expect(isPdfTarget("photo.png")).toBe(false);
+    expect(isPdfTarget("image.jpg")).toBe(false);
+    expect(isPdfTarget("doc.pdf.bak")).toBe(false);
+    expect(isPdfTarget("figure.svg")).toBe(false);
+  });
+
+  it("returns false for absolute http/https URLs", () => {
+    expect(isPdfTarget("https://example.com/file.pdf")).toBe(false);
+    expect(isPdfTarget("http://example.com/doc.pdf")).toBe(false);
+    expect(isPdfTarget("HTTP://example.com/doc.pdf")).toBe(false);
+  });
+
+  it("returns false for data: URLs", () => {
+    expect(isPdfTarget("data:application/pdf;base64,ABC")).toBe(false);
+  });
+
+  it("returns false for blob: URLs", () => {
+    expect(isPdfTarget("blob:http://localhost/uuid.pdf")).toBe(false);
+  });
+
+  it("returns false for empty string", () => {
+    expect(isPdfTarget("")).toBe(false);
   });
 });

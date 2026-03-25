@@ -21,7 +21,9 @@ export {
 // a cycle through this barrel.  Import from "./reference-render" directly.
 export {
   ImageWidget,
+  PdfLoadingWidget,
   imageRenderPlugin,
+  isPdfTarget,
 } from "./image-render";
 export {
   pdfPreviewField,

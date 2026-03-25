@@ -3,14 +3,35 @@ import type { SyntaxNode } from "@lezer/common";
 import {
   type DecorationSet,
   type EditorView,
+  type ViewUpdate,
 } from "@codemirror/view";
 import {
   buildDecorations,
   collectNodeRangesExcludingCursor,
+  defaultShouldUpdate,
   pushWidgetDecoration,
   RenderWidget,
   createSimpleViewPlugin,
 } from "./render-utils";
+import { pdfPreviewField, requestPdfPreview } from "./pdf-preview-cache";
+import { fileSystemFacet } from "../lib/types";
+import { CSS } from "../constants/css-classes";
+
+// ── PDF detection ─────────────────────────────────────────────────────────────
+
+/** Protocols that indicate an absolute URL (not a relative file path). */
+const ABSOLUTE_URL_RE = /^(?:https?:|data:|blob:)/i;
+
+/**
+ * Returns true when `src` ends with `.pdf` (case-insensitive) and is a
+ * relative path — not an absolute URL (http://, https://, data:, blob:).
+ */
+export function isPdfTarget(src: string): boolean {
+  if (!src.toLowerCase().endsWith(".pdf")) return false;
+  return !ABSOLUTE_URL_RE.test(src);
+}
+
+// ── Widgets ───────────────────────────────────────────────────────────────────
 
 /** Widget that renders an inline image. */
 export class ImageWidget extends RenderWidget {
@@ -23,16 +44,16 @@ export class ImageWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const wrapper = document.createElement("span");
-    wrapper.className = "cf-image-wrapper";
+    wrapper.className = CSS.imageWrapper;
 
     const img = document.createElement("img");
-    img.className = "cf-image";
+    img.className = CSS.image;
     img.src = this.src;
     img.alt = this.alt;
     img.title = this.alt;
     img.addEventListener("error", () => {
       wrapper.textContent = `[Image: ${this.alt}]`;
-      wrapper.className = "cf-image-error";
+      wrapper.className = CSS.imageError;
     });
 
     wrapper.appendChild(img);
@@ -43,6 +64,26 @@ export class ImageWidget extends RenderWidget {
     return this.alt === other.alt && this.src === other.src;
   }
 }
+
+/** Widget that shows a loading placeholder while a PDF preview is rasterizing. */
+export class PdfLoadingWidget extends RenderWidget {
+  constructor(private readonly alt: string) {
+    super();
+  }
+
+  createDOM(): HTMLElement {
+    const wrapper = document.createElement("span");
+    wrapper.className = `${CSS.imageWrapper} ${CSS.imageLoading}`;
+    wrapper.textContent = `[Loading PDF: ${this.alt || "preview"}]`;
+    return wrapper;
+  }
+
+  eq(other: PdfLoadingWidget): boolean {
+    return this.alt === other.alt;
+  }
+}
+
+// ── Syntax helpers ────────────────────────────────────────────────────────────
 
 /** Read alt/src from an Image syntax node. */
 function readImageContent(
@@ -63,6 +104,8 @@ function readImageContent(
   return { alt, src };
 }
 
+// ── Decoration builder ────────────────────────────────────────────────────────
+
 const IMAGE_TYPES = new Set(["Image"]);
 
 /** Collect decoration ranges for images outside the cursor. */
@@ -71,7 +114,33 @@ function collectImageRanges(view: EditorView) {
     const parsed = readImageContent(view, node.node);
     if (!parsed) return;
 
-    pushWidgetDecoration(items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to);
+    if (isPdfTarget(parsed.src)) {
+      // PDF target — resolve from the preview cache
+      const cache = view.state.field(pdfPreviewField);
+      const entry = cache.get(parsed.src);
+
+      if (entry?.status === "ready" && entry.dataUrl) {
+        // Rasterized — render as a normal image with the data URL
+        pushWidgetDecoration(items, new ImageWidget(parsed.alt, entry.dataUrl), node.from, node.to);
+      } else if (entry?.status === "error") {
+        // Error — show the existing broken-image fallback
+        pushWidgetDecoration(items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to);
+      } else {
+        // Loading or not yet requested — show loading placeholder
+        pushWidgetDecoration(items, new PdfLoadingWidget(parsed.alt), node.from, node.to);
+
+        // Trigger async preview request if not yet in cache
+        if (!entry) {
+          const fs = view.state.facet(fileSystemFacet);
+          if (fs) {
+            void requestPdfPreview(view, parsed.src, fs);
+          }
+        }
+      }
+    } else {
+      // Normal image — unchanged
+      pushWidgetDecoration(items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to);
+    }
   });
 }
 
@@ -80,7 +149,21 @@ function imageDecorations(view: EditorView): DecorationSet {
   return buildDecorations(collectImageRanges(view));
 }
 
+/**
+ * Custom shouldUpdate that also triggers on pdfPreviewField changes,
+ * so the plugin re-renders when a PDF preview becomes ready.
+ */
+function imageShouldUpdate(update: ViewUpdate): boolean {
+  if (defaultShouldUpdate(update)) return true;
+
+  // Re-render when the PDF preview cache has been updated
+  const oldCache = update.startState.field(pdfPreviewField);
+  const newCache = update.state.field(pdfPreviewField);
+  return oldCache !== newCache;
+}
+
 /** CM6 extension that renders inline images with Typora-style click-to-edit. */
 export const imageRenderPlugin: Extension = createSimpleViewPlugin(
   imageDecorations,
+  { shouldUpdate: imageShouldUpdate },
 );

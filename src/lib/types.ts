@@ -6,6 +6,27 @@
  * violations.
  */
 
+import { Facet } from "@codemirror/state";
+
+/**
+ * CM6 Facet that provides a FileSystem instance to render plugins.
+ *
+ * The app layer provides `fileSystemFacet.of(fs)` when creating the editor.
+ * Render plugins (e.g., image-render for PDF preview) read it to perform
+ * binary file I/O without importing from the app layer.
+ *
+ * Pattern follows projectConfigFacet: at most one provider, last wins.
+ */
+export const fileSystemFacet = Facet.define<FileSystem | null, FileSystem | null>({
+  combine(values) {
+    // There should be at most one provider. Take the last non-null one.
+    for (let i = values.length - 1; i >= 0; i--) {
+      if (values[i] !== null) return values[i];
+    }
+    return null;
+  },
+});
+
 /** File entry representing a single file or directory in the tree. */
 export interface FileEntry {
   /** File name (without path). */
