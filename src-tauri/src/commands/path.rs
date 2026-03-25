@@ -37,8 +37,17 @@ fn ensure_within_root(root: &Path, candidate: &Path, relative: &str) -> Result<(
 
 pub fn resolve_project_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     let full = root.join(relative);
-    ensure_within_root(root, &full, relative)?;
-    Ok(full)
+    // Canonicalize to resolve .. segments before the root check (#481).
+    // Uses canonicalize_maybe_missing since the target may not exist yet.
+    let canonical = canonicalize_maybe_missing(&full)
+        .map_err(|_| format!("Path '{}' escapes project root", relative))?;
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|e| format!("Cannot canonicalize root: {}", e))?;
+    if !canonical.starts_with(&canonical_root) {
+        return Err(format!("Path '{}' escapes project root", relative));
+    }
+    Ok(canonical)
 }
 
 pub fn resolve_existing_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
