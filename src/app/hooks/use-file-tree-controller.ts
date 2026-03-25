@@ -163,6 +163,23 @@ function getFocusedItemOrNull(
     : null;
 }
 
+/**
+ * Schedule a focus restoration to the tree container after `onSelect`
+ * triggers a React re-render cycle (e.g. opening a file creates a new
+ * CM6 editor whose contentEditable div steals focus).
+ *
+ * Uses requestAnimationFrame so the restoration happens after React has
+ * finished its commit phase and the browser has applied focus changes.
+ *
+ * Fix for #462: Explorer Up/Down keyboard navigation gets stuck after
+ * the first file switch — the tree container lost focus to the editor.
+ */
+function restoreTreeFocusAfterSelect(tree: TreeInstance<FileEntry>): void {
+  requestAnimationFrame(() => {
+    tree.updateDomFocus();
+  });
+}
+
 function focusVisibleItem(
   item: ItemInstance<FileEntry> | undefined,
   onSelect: (path: string) => void,
@@ -172,6 +189,7 @@ function focusVisibleItem(
   item.getTree().updateDomFocus();
   if (!item.isFolder()) {
     onSelect(item.getId());
+    restoreTreeFocusAfterSelect(item.getTree());
   }
 }
 
@@ -194,6 +212,9 @@ export function createFileTreeHotkeys(
         const nextFocused = getFocusedItemOrNull(currentTree);
         if (nextFocused && !nextFocused.isFolder()) {
           onSelect(nextFocused.getId());
+          // Restore tree focus after onSelect triggers a React re-render
+          // that may create a new CM6 editor stealing focus (#462).
+          restoreTreeFocusAfterSelect(currentTree);
         }
       },
     },
@@ -215,6 +236,9 @@ export function createFileTreeHotkeys(
         const previousFocused = getFocusedItemOrNull(currentTree);
         if (previousFocused && !previousFocused.isFolder()) {
           onSelect(previousFocused.getId());
+          // Restore tree focus after onSelect triggers a React re-render
+          // that may create a new CM6 editor stealing focus (#462).
+          restoreTreeFocusAfterSelect(currentTree);
         }
       },
     },

@@ -1,15 +1,18 @@
 /**
- * Regression tests for document-to-document scroll restoration (#326).
+ * Regression tests for document-to-document scroll restoration (#326)
+ * and large-scroll viewport recovery (#463).
  *
  * useEditorScroll tracks scrollTop / viewportFrom of a CM6 EditorView.
  * When the user switches documents the host component passes a new view
- * (or null → new view), and resetScroll() zeroes the values.
+ * (or null -> new view), and resetScroll() zeroes the values.
  *
  * These tests verify:
  *  1. Scroll position is captured when the user scrolls in a document.
  *  2. resetScroll() zeroes both scrollTop and viewportFrom (simulating
  *     the document-switch path in useEditor).
  *  3. A fresh view starts at scroll 0.
+ *  4. Large scrolls trigger requestMeasure() for viewport recovery (#463).
+ *  5. Rapid scroll events are coalesced via rAF debouncing (#463).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -19,11 +22,13 @@ import { act } from "react";
 import { useEditorScroll, type UseEditorScrollReturn } from "./use-editor-scroll";
 
 // ── Minimal EditorView stub ─────────────────────────────────────────────────
-// We only need `scrollDOM` (a real DOM element) and `lineBlockAtHeight`.
+// We need `scrollDOM` (a real DOM element), `lineBlockAtHeight`, and
+// `requestMeasure` (added for #463 large-scroll viewport recovery).
 
 interface MockView {
   scrollDOM: HTMLDivElement;
   lineBlockAtHeight: (h: number) => { from: number };
+  requestMeasure: () => void;
 }
 
 function createMockView(): MockView {
@@ -31,7 +36,21 @@ function createMockView(): MockView {
   return {
     scrollDOM,
     lineBlockAtHeight: vi.fn((h: number) => ({ from: Math.floor(h) })),
+    requestMeasure: vi.fn(),
   };
+}
+
+/**
+ * Dispatch a scroll event and flush the rAF callback so the hook's
+ * debounced state update is applied synchronously in the test.
+ */
+function dispatchScrollAndFlush(scrollDOM: HTMLDivElement): void {
+  scrollDOM.dispatchEvent(new Event("scroll"));
+  // The hook defers state updates to requestAnimationFrame.
+  // In jsdom, rAF callbacks run asynchronously. We use vi.runAllTimers
+  // or explicitly invoke the rAF callback. Since act() handles React
+  // batching, we trigger rAF by advancing fake timers.
+  vi.advanceTimersByTime(16);
 }
 
 // ── Harness component ────────────────────────────────────────────────────────
@@ -51,7 +70,7 @@ function createHarness(): { Harness: FC; ref: HarnessRef } {
 
   const Harness: FC = () => {
     const [view, setView] = useState<MockView | null>(null);
-    // Cast is safe: the hook only accesses scrollDOM and lineBlockAtHeight.
+    // Cast is safe: the hook only accesses scrollDOM, lineBlockAtHeight, and requestMeasure.
     const hookReturn = useEditorScroll(view as unknown as import("@codemirror/view").EditorView | null);
     ref.result = hookReturn;
     ref.setView = setView;
@@ -68,6 +87,7 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
   let root: Root;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -76,6 +96,7 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    vi.useRealTimers();
   });
 
   it("captures scroll position when the user scrolls", () => {
@@ -87,7 +108,7 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
 
     mockView.scrollDOM.scrollTop = 250;
     act(() => {
-      mockView.scrollDOM.dispatchEvent(new Event("scroll"));
+      dispatchScrollAndFlush(mockView.scrollDOM);
     });
 
     expect(ref.result.scrollTop).toBe(250);
@@ -103,7 +124,7 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
 
     mockView.scrollDOM.scrollTop = 400;
     act(() => {
-      mockView.scrollDOM.dispatchEvent(new Event("scroll"));
+      dispatchScrollAndFlush(mockView.scrollDOM);
     });
     expect(ref.result.scrollTop).toBe(400);
 
@@ -123,7 +144,7 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     act(() => ref.setView(viewA));
     viewA.scrollDOM.scrollTop = 300;
     act(() => {
-      viewA.scrollDOM.dispatchEvent(new Event("scroll"));
+      dispatchScrollAndFlush(viewA.scrollDOM);
     });
     expect(ref.result.scrollTop).toBe(300);
 
@@ -144,7 +165,7 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     act(() => ref.setView(viewA));
     viewA.scrollDOM.scrollTop = 500;
     act(() => {
-      viewA.scrollDOM.dispatchEvent(new Event("scroll"));
+      dispatchScrollAndFlush(viewA.scrollDOM);
     });
     expect(ref.result.scrollTop).toBe(500);
 
@@ -152,7 +173,7 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     act(() => ref.setView(viewB));
     viewB.scrollDOM.scrollTop = 120;
     act(() => {
-      viewB.scrollDOM.dispatchEvent(new Event("scroll"));
+      dispatchScrollAndFlush(viewB.scrollDOM);
     });
     expect(ref.result.scrollTop).toBe(120);
     expect(ref.result.viewportFrom).toBe(120);
@@ -160,7 +181,7 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     // Old view's listener was cleaned up — scrolling it must be a no-op.
     viewA.scrollDOM.scrollTop = 999;
     act(() => {
-      viewA.scrollDOM.dispatchEvent(new Event("scroll"));
+      dispatchScrollAndFlush(viewA.scrollDOM);
     });
     expect(ref.result.scrollTop).toBe(120);
   });
@@ -177,12 +198,62 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     act(() => ref.setView(mockView));
     mockView.scrollDOM.scrollTop = 100;
     act(() => {
-      mockView.scrollDOM.dispatchEvent(new Event("scroll"));
+      dispatchScrollAndFlush(mockView.scrollDOM);
     });
     expect(ref.result.scrollTop).toBe(100);
 
     // Setting view to null does NOT auto-reset — useEditor calls resetScroll explicitly.
     act(() => ref.setView(null));
     expect(ref.result.scrollTop).toBe(100);
+  });
+
+  // ── #463 regression tests ─────────────────────────────────────────────────
+
+  it("calls requestMeasure after a large scroll jump (#463)", () => {
+    const { Harness, ref } = createHarness();
+    const mockView = createMockView();
+
+    act(() => root.render(createElement(Harness)));
+    act(() => ref.setView(mockView));
+
+    // Small scroll — should NOT trigger requestMeasure.
+    mockView.scrollDOM.scrollTop = 100;
+    act(() => {
+      dispatchScrollAndFlush(mockView.scrollDOM);
+    });
+    expect(mockView.requestMeasure).not.toHaveBeenCalled();
+
+    // Large scroll (delta >= 2000px) — MUST trigger requestMeasure.
+    mockView.scrollDOM.scrollTop = 3000;
+    act(() => {
+      dispatchScrollAndFlush(mockView.scrollDOM);
+    });
+    expect(mockView.requestMeasure).toHaveBeenCalledTimes(1);
+  });
+
+  it("coalesces rapid scroll events via rAF debouncing (#463)", () => {
+    const { Harness, ref } = createHarness();
+    const mockView = createMockView();
+
+    act(() => root.render(createElement(Harness)));
+    act(() => ref.setView(mockView));
+
+    act(() => {
+      // Fire multiple scroll events before the rAF callback runs.
+      mockView.scrollDOM.scrollTop = 100;
+      mockView.scrollDOM.dispatchEvent(new Event("scroll"));
+      mockView.scrollDOM.scrollTop = 200;
+      mockView.scrollDOM.dispatchEvent(new Event("scroll"));
+      mockView.scrollDOM.scrollTop = 300;
+      mockView.scrollDOM.dispatchEvent(new Event("scroll"));
+
+      // Now flush — only the last position should be captured.
+      vi.advanceTimersByTime(16);
+    });
+
+    // lineBlockAtHeight should only be called once (for the final position),
+    // not three times.
+    expect(mockView.lineBlockAtHeight).toHaveBeenCalledTimes(1);
+    expect(ref.result.scrollTop).toBe(300);
   });
 });
