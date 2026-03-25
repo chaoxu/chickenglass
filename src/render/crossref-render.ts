@@ -34,7 +34,7 @@ export class CrossrefWidget extends SimpleTextRenderWidget {
       tagName: "span",
       className: "cf-crossref",
       text: resolved.label,
-      title: raw,
+      attrs: { "aria-label": raw },
     });
   }
 
@@ -65,7 +65,7 @@ export class ClusteredCrossrefWidget extends RenderWidget {
   createDOM(): HTMLElement {
     const container = document.createElement("span");
     container.className = "cf-crossref";
-    container.title = this.raw;
+    container.setAttribute("aria-label", this.raw);
     for (let i = 0; i < this.resolvedItems.length; i++) {
       if (i > 0) {
         container.appendChild(document.createTextNode("; "));
@@ -117,7 +117,7 @@ export class MixedClusterWidget extends RenderWidget {
   createDOM(): HTMLElement {
     const container = document.createElement("span");
     container.className = "cf-citation";
-    container.title = this.raw;
+    container.setAttribute("aria-label", this.raw);
     container.appendChild(document.createTextNode("("));
     for (let i = 0; i < this.parts.length; i++) {
       if (i > 0) {
@@ -170,7 +170,7 @@ export class UnresolvedRefWidget extends SimpleTextRenderWidget {
       tagName: "span",
       className: "cf-crossref cf-crossref-unresolved",
       text: stripBracketSyntax(raw),
-      title: "Unresolved reference",
+      attrs: { "aria-label": "Unresolved reference" },
     });
   }
 

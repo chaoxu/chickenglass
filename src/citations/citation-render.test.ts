@@ -150,16 +150,16 @@ describe("CitationWidget", () => {
     expect(el.tagName).toBe("SPAN");
     expect(el.className).toBe(CSS.citation);
     expect(el.textContent).toBe("(Karger, 2000)");
-    expect(el.title).toBe("karger2000");
+    expect(el.getAttribute("aria-label")).toBe("karger2000");
   });
 
-  it("shows multiple ids in title", () => {
+  it("shows multiple ids in aria-label", () => {
     const widget = new CitationWidget("(Karger, 2000; Stein, 2001)", [
       "karger2000",
       "stein2001",
     ]);
     const el = widget.toDOM();
-    expect(el.title).toBe("karger2000; stein2001");
+    expect(el.getAttribute("aria-label")).toBe("karger2000; stein2001");
   });
 
   it("eq returns true for same text", () => {

@@ -92,8 +92,7 @@ class FootnoteRefWidget extends SimpleTextRenderWidget {
       tagName: "sup",
       className: "cf-sidenote-ref",
       text: String(number),
-      title: `Footnote ${id}`,
-      attrs: { "data-footnote-id": id },
+      attrs: { "data-footnote-id": id, "aria-label": `Footnote ${id}` },
     });
   }
 

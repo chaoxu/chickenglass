@@ -66,7 +66,7 @@ export class CitationWidget extends SimpleTextRenderWidget {
       tagName: "span",
       className: narrative ? "cf-citation cf-citation-narrative" : "cf-citation",
       text,
-      title: ids.join("; "),
+      attrs: { "aria-label": ids.join("; ") },
     });
     this.idsKey = ids.join("\0");
   }

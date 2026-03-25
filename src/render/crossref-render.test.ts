@@ -57,7 +57,7 @@ describe("CrossrefWidget", () => {
     expect(el.tagName).toBe("SPAN");
     expect(el.className).toBe(CSS.crossref);
     expect(el.textContent).toBe("Theorem 1");
-    expect(el.title).toBe("[@thm-main]");
+    expect(el.getAttribute("aria-label")).toBe("[@thm-main]");
   });
 
   it("renders equation reference", () => {
@@ -102,7 +102,7 @@ describe("UnresolvedRefWidget", () => {
     expect(el.className).toContain(CSS.crossref);
     // Display text strips brackets for visual parity with table display path
     expect(el.textContent).toBe("unknown");
-    expect(el.title).toBe("Unresolved reference");
+    expect(el.getAttribute("aria-label")).toBe("Unresolved reference");
   });
 
   it("eq returns true for same raw content", () => {
