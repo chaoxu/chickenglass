@@ -8,7 +8,7 @@ import {
   type FrontmatterState,
   type ImageSaveContext,
 } from "../../editor";
-import { fileSystemFacet } from "../../lib/types";
+import { fileSystemFacet, documentPathFacet } from "../../lib/types";
 import {
   extractIncludePaths,
   resolveIncludePath,
@@ -135,6 +135,7 @@ export function useEditorDocumentServices({
     return [
       ...baseExtensions,
       fileSystemFacet.of(fs ?? null),
+      documentPathFacet.of(docPath ?? ""),
       imagePasteExtension({ saveImage: imageSaver }),
       imageDropExtension({ saveImage: imageSaver }),
     ];

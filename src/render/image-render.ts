@@ -14,7 +14,8 @@ import {
   createSimpleViewPlugin,
 } from "./render-utils";
 import { pdfPreviewField, requestPdfPreview } from "./pdf-preview-cache";
-import { fileSystemFacet } from "../lib/types";
+import { fileSystemFacet, documentPathFacet } from "../lib/types";
+import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { CSS } from "../constants/css-classes";
 
 // ── PDF detection ─────────────────────────────────────────────────────────────
@@ -115,9 +116,16 @@ function collectImageRanges(view: EditorView) {
     if (!parsed) return;
 
     if (isPdfTarget(parsed.src)) {
+      // Resolve the raw markdown target relative to the current document,
+      // so that `![](diagram.pdf)` in `posts/math.md` resolves to
+      // `posts/diagram.pdf`. The resolved path is used as cache key to
+      // prevent collisions between same-named PDFs in different directories.
+      const docPath = view.state.facet(documentPathFacet);
+      const resolvedPath = resolveProjectPathFromDocument(docPath, parsed.src);
+
       // PDF target — resolve from the preview cache
       const cache = view.state.field(pdfPreviewField);
-      const entry = cache.get(parsed.src);
+      const entry = cache.get(resolvedPath);
 
       if (entry?.status === "ready" && entry.dataUrl) {
         // Rasterized — render as a normal image with the data URL
@@ -133,7 +141,7 @@ function collectImageRanges(view: EditorView) {
         if (!entry) {
           const fs = view.state.facet(fileSystemFacet);
           if (fs) {
-            void requestPdfPreview(view, parsed.src, fs);
+            void requestPdfPreview(view, resolvedPath, fs);
           }
         }
       }

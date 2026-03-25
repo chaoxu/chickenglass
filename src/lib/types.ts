@@ -27,6 +27,25 @@ export const fileSystemFacet = Facet.define<FileSystem | null, FileSystem | null
   },
 });
 
+/**
+ * CM6 Facet that provides the current document's project-relative path.
+ *
+ * Render plugins (e.g., image-render for PDF preview) use it to resolve
+ * relative media paths against the document's directory, so that
+ * `![](diagram.pdf)` in `posts/math.md` resolves to `posts/diagram.pdf`.
+ *
+ * Pattern follows fileSystemFacet: at most one provider, last wins.
+ * Default is "" (project root), which means relative paths resolve from root.
+ */
+export const documentPathFacet = Facet.define<string, string>({
+  combine(values) {
+    for (let i = values.length - 1; i >= 0; i--) {
+      if (values[i]) return values[i];
+    }
+    return "";
+  },
+});
+
 /** File entry representing a single file or directory in the tree. */
 export interface FileEntry {
   /** File name (without path). */

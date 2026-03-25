@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { CSS } from "../constants/css-classes";
 import { ImageWidget, PdfLoadingWidget, isPdfTarget } from "./image-render";
+import { resolveProjectPathFromDocument } from "../lib/project-paths";
 
 describe("ImageWidget", () => {
   describe("createDOM", () => {
@@ -160,5 +161,66 @@ describe("isPdfTarget", () => {
 
   it("returns false for empty string", () => {
     expect(isPdfTarget("")).toBe(false);
+  });
+});
+
+/**
+ * Tests for the document-relative PDF path resolution used in image-render.ts.
+ *
+ * The image render plugin resolves relative PDF targets against the current
+ * document path (via documentPathFacet + resolveProjectPathFromDocument) before
+ * using them as cache keys and passing them to requestPdfPreview. This prevents
+ * cache collisions when the same filename appears in different directories
+ * (e.g., `posts/diagram.pdf` vs `notes/diagram.pdf`).
+ *
+ * Issue #437 reopened: raw markdown targets were passed directly to the cache,
+ * so same-named PDFs from different directories would collide.
+ */
+describe("PDF path resolution for cache keys", () => {
+  it("resolves a relative PDF path from a nested document", () => {
+    // `![](diagram.pdf)` in `posts/math.md` should resolve to `posts/diagram.pdf`
+    const resolved = resolveProjectPathFromDocument("posts/math.md", "diagram.pdf");
+    expect(resolved).toBe("posts/diagram.pdf");
+  });
+
+  it("resolves a subdirectory-relative PDF path from a nested document", () => {
+    // `![](figures/plot.pdf)` in `posts/math.md` → `posts/figures/plot.pdf`
+    const resolved = resolveProjectPathFromDocument("posts/math.md", "figures/plot.pdf");
+    expect(resolved).toBe("posts/figures/plot.pdf");
+  });
+
+  it("resolves ../ references correctly", () => {
+    // `![](../shared/fig.pdf)` in `posts/math.md` → `shared/fig.pdf`
+    const resolved = resolveProjectPathFromDocument("posts/math.md", "../shared/fig.pdf");
+    expect(resolved).toBe("shared/fig.pdf");
+  });
+
+  it("treats leading-slash paths as project-root relative", () => {
+    // `![](/assets/plot.pdf)` in any document → `assets/plot.pdf`
+    const resolved = resolveProjectPathFromDocument("posts/math.md", "/assets/plot.pdf");
+    expect(resolved).toBe("assets/plot.pdf");
+  });
+
+  it("produces distinct cache keys for same filename in different directories", () => {
+    // This is the core regression test for the cache collision bug.
+    // Two documents referencing `diagram.pdf` from different directories
+    // must produce different resolved paths.
+    const fromPosts = resolveProjectPathFromDocument("posts/math.md", "diagram.pdf");
+    const fromNotes = resolveProjectPathFromDocument("notes/physics.md", "diagram.pdf");
+    expect(fromPosts).toBe("posts/diagram.pdf");
+    expect(fromNotes).toBe("notes/diagram.pdf");
+    expect(fromPosts).not.toBe(fromNotes);
+  });
+
+  it("resolves identically for root-level documents", () => {
+    // `![](diagram.pdf)` in `index.md` (at root) → `diagram.pdf`
+    const resolved = resolveProjectPathFromDocument("index.md", "diagram.pdf");
+    expect(resolved).toBe("diagram.pdf");
+  });
+
+  it("normalizes dot segments", () => {
+    // `![](./figures/../figures/plot.pdf)` in `posts/math.md`
+    const resolved = resolveProjectPathFromDocument("posts/math.md", "./figures/../figures/plot.pdf");
+    expect(resolved).toBe("posts/figures/plot.pdf");
   });
 });
