@@ -64,6 +64,10 @@ __fencedDivDebug = true      — toggle fenced div parser tracing
 
 Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile()`, `getTreeDivs()`, `checkFences()`, `dump()`, `setCursor()`, `scrollTo()`.
 
+## Dev mode
+
+`npm run dev` runs Vite in dev mode. Dev mode skips the dirty-file confirmation dialog when switching files, so testing is faster. Controlled by `Settings.skipDirtyConfirm`.
+
 ## Browser testing (CDP)
 
 **Only ONE dev server and ONE browser at a time.** Kill previous instances before launching. Use `page.reload()` after code changes — never open new browser instances.
