@@ -16,31 +16,12 @@ pub fn current_project_root(
         .ok_or("No project folder open".to_string())
 }
 
-fn ensure_within_root(root: &Path, candidate: &Path, relative: &str) -> Result<(), String> {
-    let mut current = Some(candidate);
-
-    while let Some(path) = current {
-        if path.exists() {
-            let canonical = path
-                .canonicalize()
-                .map_err(|e| format!("Cannot resolve path '{}': {}", relative, e))?;
-            if !canonical.starts_with(root) {
-                return Err(format!("Path '{}' escapes project root", relative));
-            }
-            return Ok(());
-        }
-        current = path.parent();
-    }
-
-    Err(format!("Path '{}' escapes project root", relative))
-}
-
 pub fn resolve_project_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     let full = root.join(relative);
     // Canonicalize to resolve .. segments before the root check (#481).
     // Uses canonicalize_maybe_missing since the target may not exist yet.
     let canonical = canonicalize_maybe_missing(&full)
-        .map_err(|_| format!("Path '{}' escapes project root", relative))?;
+        .map_err(|e| format!("Cannot resolve path '{}': {}", relative, e))?;
     let canonical_root = root
         .canonicalize()
         .map_err(|e| format!("Cannot canonicalize root: {}", e))?;
@@ -51,14 +32,13 @@ pub fn resolve_project_path(root: &Path, relative: &str) -> Result<PathBuf, Stri
 }
 
 pub fn resolve_existing_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
+    // resolve_project_path already canonicalizes and validates against root.
+    // We just need to verify the file actually exists.
     let full = resolve_project_path(root, relative)?;
-    let resolved = full
-        .canonicalize()
-        .map_err(|e| format!("Cannot resolve path '{}': {}", relative, e))?;
-    if !resolved.starts_with(root) {
-        return Err(format!("Path '{}' escapes project root", relative));
+    if !full.exists() {
+        return Err(format!("Cannot resolve path '{}': No such file or directory", relative));
     }
-    Ok(resolved)
+    Ok(full)
 }
 
 /// Canonicalize a path that may not fully exist yet.
@@ -135,7 +115,7 @@ pub fn to_project_relative_path(
         || {
             let project_root = current_project_root(&root, &window)?;
             let candidate = PathBuf::from(&path);
-            ensure_within_root(&project_root, &candidate, &path)?;
+            // project_relative_path canonicalizes and validates against root
             project_relative_path(&project_root, &candidate)
         },
     )
