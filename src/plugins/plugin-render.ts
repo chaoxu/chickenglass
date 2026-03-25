@@ -19,7 +19,7 @@ import {
   Decoration,
   EditorView,
 } from "@codemirror/view";
-import { EditorState, type Extension, type Range, RangeSet } from "@codemirror/state";
+import { Annotation, EditorState, type Extension, type Range, RangeSet } from "@codemirror/state";
 import type { BlockAttrs } from "./plugin-types";
 import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
@@ -543,6 +543,9 @@ export { blockDecorationField as _blockDecorationFieldForTest };
 // Closing fence protection (#428)
 // ---------------------------------------------------------------------------
 
+/** Annotation to bypass closing fence protection (used by block-type picker). */
+export const fenceOperationAnnotation = Annotation.define<boolean>();
+
 /** Collect closing fence line ranges from the semantics field. */
 function getClosingFenceRanges(state: EditorState): { from: number; to: number }[] {
   const divs = collectFencedDivs(state);
@@ -572,6 +575,8 @@ function getClosingFenceRanges(state: EditorState): { from: number; to: number }
  */
 const closingFenceProtection = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged) return tr;
+  // Bypass for programmatic fence operations (block-type picker, etc.)
+  if (tr.annotation(fenceOperationAnnotation)) return tr;
 
   const fenceRanges = getClosingFenceRanges(tr.startState);
   if (fenceRanges.length === 0) return tr;

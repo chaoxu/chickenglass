@@ -18,7 +18,7 @@ import { EditorView, ViewPlugin } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 import { computePosition, flip, shift, offset } from "@floating-ui/dom";
-import { pluginRegistryField, type PluginRegistryState } from "../plugins";
+import { pluginRegistryField, type PluginRegistryState, fenceOperationAnnotation } from "../plugins";
 import { editorModeField } from "./editor";
 import { BLOCK_MANIFEST_ENTRIES } from "../constants/block-manifest";
 
@@ -44,6 +44,38 @@ function fencedDivDepth(view: EditorView, pos: number): number {
     node = node.parent;
   }
   return depth;
+}
+
+/** Collect ancestor FencedDiv fence positions for colon upgrades. */
+function collectAncestorFences(view: EditorView, pos: number): AncestorFence[] {
+  const fences: AncestorFence[] = [];
+  let node: SyntaxNode | null = syntaxTree(view.state).resolveInner(pos, -1);
+  while (node) {
+    if (node.name === "FencedDiv") {
+      let openFence: SyntaxNode | null = null;
+      let closeFence: SyntaxNode | null = null;
+      let child = node.firstChild;
+      while (child) {
+        if (child.name === "FencedDivFence") {
+          if (!openFence) openFence = child;
+          else closeFence = child;
+        }
+        child = child.nextSibling;
+      }
+      if (openFence) {
+        const openText = view.state.sliceDoc(openFence.from, openFence.to);
+        fences.push({
+          openFrom: openFence.from,
+          openTo: openFence.to,
+          closeFrom: closeFence ? closeFence.from : -1,
+          closeTo: closeFence ? closeFence.to : -1,
+          colons: openText.length,
+        });
+      }
+    }
+    node = node.parent;
+  }
+  return fences;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,6 +133,15 @@ function getPickerEntries(registry: PluginRegistryState): PickerEntry[] {
 /** Singleton picker element. */
 let pickerEl: HTMLDivElement | null = null;
 /** Currently active picker state — null when hidden. */
+/** Ancestor fence info for colon upgrades. */
+interface AncestorFence {
+  openFrom: number;
+  openTo: number;
+  closeFrom: number;
+  closeTo: number;
+  colons: number;
+}
+
 let activePicker: {
   view: EditorView;
   lineFrom: number;
@@ -110,6 +151,7 @@ let activePicker: {
   filteredEntries: PickerEntry[];
   filter: string;
   nestingDepth: number;
+  ancestorFences: AncestorFence[];
   onDismiss: () => void;
 } | null = null;
 
@@ -182,6 +224,7 @@ function showPicker(
   lineTo: number,
   entries: PickerEntry[],
   nestingDepth: number,
+  ancestorFences: AncestorFence[] = [],
 ): void {
   if (entries.length === 0) return;
 
@@ -232,7 +275,7 @@ function showPicker(
     if (!target || !activePicker) return;
     const idx = Number(target.dataset.index);
     if (Number.isFinite(idx) && idx >= 0 && idx < activePicker.filteredEntries.length) {
-      insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, activePicker.filteredEntries[idx].name, activePicker.nestingDepth);
+      insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, activePicker.filteredEntries[idx].name, activePicker.nestingDepth, activePicker.ancestorFences);
       hidePicker();
     }
   };
@@ -253,6 +296,7 @@ function showPicker(
     filteredEntries,
     filter,
     nestingDepth,
+    ancestorFences,
     onDismiss: () => {
       el.removeEventListener("click", onClick);
       el.removeEventListener("keydown", onPickerKeyDown);
@@ -302,66 +346,56 @@ export function isPickerVisible(): boolean {
  * child's closing ::: doesn't close the parent. This maintains the
  * invariant: children use fewer colons than parents.
  */
+/**
+ * Insert a fenced div block. Always uses ::: (minimum colons).
+ * If inside an ancestor that also uses :::, upgrades ancestors first
+ * so the child's closing ::: doesn't close the parent.
+ *
+ * Uses ancestorFences (computed before :: removal) to know which
+ * ancestors need upgrading.
+ */
 function insertBlock(
   view: EditorView,
   lineFrom: number,
   lineTo: number,
   blockType: string,
   _nestingDepth: number,
+  ancestorFences?: { openFrom: number; openTo: number; closeFrom: number; closeTo: number; colons: number }[],
 ): void {
-  // New block always uses minimum colons
-  const newColons = ":::";
-  const opening = `${newColons} {.${blockType}}`;
-  const closing = newColons;
-  const insertText = `${opening}\n\n${closing}`;
-
-  // Collect ancestor FencedDivs that need colon upgrades.
-  // Walk the syntax tree from the insertion point upward.
-  const changes: { from: number; to: number; insert: string }[] = [];
-  let node: SyntaxNode | null = syntaxTree(view.state).resolveInner(lineFrom, -1);
-  while (node) {
-    if (node.name === "FencedDiv") {
-      // Find the opening and closing FencedDivFence children
-      let openFence: SyntaxNode | null = null;
-      let closeFence: SyntaxNode | null = null;
-      let child = node.firstChild;
-      while (child) {
-        if (child.name === "FencedDivFence") {
-          if (!openFence) openFence = child;
-          else closeFence = child;
-        }
-        child = child.nextSibling;
-      }
-
-      if (openFence) {
-        const openText = view.state.sliceDoc(openFence.from, openFence.to);
-        const parentColons = openText.length; // number of colons
-        // Parent must have MORE colons than child (:::). Upgrade if needed.
-        if (parentColons <= 3) {
-          const newParentColons = ":".repeat(parentColons + 1);
-          changes.push({ from: openFence.from, to: openFence.to, insert: newParentColons });
-          if (closeFence) {
-            changes.push({ from: closeFence.from, to: closeFence.to, insert: newParentColons });
-          }
+  // Step 1: Upgrade ancestors that use ::: to :::: (if any)
+  if (ancestorFences && ancestorFences.length > 0) {
+    const upgrades: { from: number; to: number; insert: string }[] = [];
+    for (const fence of ancestorFences) {
+      if (fence.colons <= 3) {
+        const newColons = ":".repeat(fence.colons + 1);
+        upgrades.push({ from: fence.openFrom, to: fence.openTo, insert: newColons });
+        if (fence.closeFrom >= 0) {
+          upgrades.push({ from: fence.closeFrom, to: fence.closeTo, insert: newColons });
         }
       }
     }
-    node = node.parent;
+    if (upgrades.length > 0) {
+      view.dispatch({ changes: upgrades, annotations: fenceOperationAnnotation.of(true) });
+      // Recompute lineFrom after the upgrade shifted positions
+      // Each upgrade adds 1 character per fence (: -> ::). Count upgrades before lineFrom.
+      let shift = 0;
+      for (const u of upgrades) {
+        if (u.from < lineFrom) shift += u.insert.length - (u.to - u.from);
+      }
+      lineFrom += shift;
+      lineTo += shift;
+    }
   }
 
-  // Sort changes from end to start so positions don't shift during application
-  changes.sort((a, b) => b.from - a.from);
-
-  // Add the new block insertion (adjust lineFrom for any earlier changes)
-  // Since we sorted end-to-start, the insertion point is last
-  changes.push({ from: lineFrom, to: lineTo, insert: insertText });
-
-  // Calculate cursor position after all changes
-  // The new block is at the original lineFrom, opening line + 1 for the empty content line
+  // Step 2: Insert the new block with ::: (minimum)
+  const colons = ":::";
+  const opening = `${colons} {.${blockType}}`;
+  const closing = colons;
+  const insertText = `${opening}\n\n${closing}`;
   const cursorPos = lineFrom + opening.length + 1;
 
   view.dispatch({
-    changes,
+    changes: { from: lineFrom, to: lineTo, insert: insertText },
     selection: { anchor: cursorPos },
   });
   view.focus();
@@ -408,7 +442,7 @@ function handlePickerKey(e: KeyboardEvent): void {
       e.stopImmediatePropagation();
       if (activePicker.filteredEntries.length > 0) {
         const entry = activePicker.filteredEntries[activePicker.selectedIndex];
-        insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, entry.name, activePicker.nestingDepth);
+        insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, entry.name, activePicker.nestingDepth, activePicker.ancestorFences);
       }
       hidePicker();
       break;
@@ -535,18 +569,31 @@ export const blockTypePickerExtension: Extension = [
     // this position inside the parent FencedDiv (if any). Once `:::` forms,
     // the parser treats it as a closing fence and the nesting is lost.
     const nestingDepth = fencedDivDepth(view, from);
+    const ancestorFences = collectAncestorFences(view, from);
 
     // Remove the `::` instead of completing `:::`. This avoids the closing
     // fence protection filter which would block edits on `:::` lines.
     // The picker will insert the full block at the clean line position.
+    const removeFrom = line.from;
+    const removeTo = Math.max(to, from);
+    const removeLen = removeTo - removeFrom;
     view.dispatch({
-      changes: { from: line.from, to: Math.max(to, from), insert: "" },
-      selection: { anchor: line.from },
+      changes: { from: removeFrom, to: removeTo, insert: "" },
+      selection: { anchor: removeFrom },
     });
 
+    // Adjust ancestor fence positions for the :: removal shift.
+    // Positions after the removal point shift by -removeLen.
+    for (const fence of ancestorFences) {
+      if (fence.openFrom > removeFrom) fence.openFrom -= removeLen;
+      if (fence.openTo > removeFrom) fence.openTo -= removeLen;
+      if (fence.closeFrom > removeFrom) fence.closeFrom -= removeLen;
+      if (fence.closeTo > removeFrom) fence.closeTo -= removeLen;
+    }
+
     // Show the picker at the now-empty line
-    const updatedLine = view.state.doc.lineAt(line.from);
-    showPicker(view, updatedLine.from, updatedLine.to, entries, nestingDepth);
+    const updatedLine = view.state.doc.lineAt(removeFrom);
+    showPicker(view, updatedLine.from, updatedLine.to, entries, nestingDepth, ancestorFences);
 
     return true;
   }),
