@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import process from "node:process";
@@ -39,10 +39,30 @@ export function resolveChromeAppBundle(binaryPath) {
 
 export function ensureProfileDir(profileDir) {
   mkdirSync(profileDir, { recursive: true });
-  // Clear session state to prevent Chrome from restoring previous windows
-  // alongside the new --app window.
-  const sessionsDir = join(profileDir, "Default", "Sessions");
-  rmSync(sessionsDir, { recursive: true, force: true });
+  // Disable session restore so Chrome doesn't open a second window
+  // restoring the previous session alongside the new --app window.
+  const defaultDir = join(profileDir, "Default");
+  mkdirSync(defaultDir, { recursive: true });
+  const prefsPath = join(defaultDir, "Preferences");
+  try {
+    const prefs = existsSync(prefsPath)
+      ? JSON.parse(readFileSync(prefsPath, "utf-8"))
+      : {};
+    // Prevent session restore — only --app window should open
+    if (!prefs.session) prefs.session = {};
+    prefs.session.restore_on_startup = 4; // 4 = open URL list (empty = nothing)
+    if (!prefs.session.startup_urls) prefs.session.startup_urls = [];
+    // Mark previous exit as clean so Chrome doesn't show restore prompt
+    if (!prefs.profile) prefs.profile = {};
+    prefs.profile.exited_cleanly = true;
+    prefs.profile.exit_type = "Normal";
+    writeFileSync(prefsPath, JSON.stringify(prefs));
+  } catch {
+    writeFileSync(prefsPath, JSON.stringify({
+      session: { restore_on_startup: 4, startup_urls: [] },
+      profile: { exited_cleanly: true, exit_type: "Normal" },
+    }));
+  }
   return profileDir;
 }
 
