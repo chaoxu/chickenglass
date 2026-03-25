@@ -93,9 +93,6 @@ export const typographyThemeStyles = {
   ".cf-inline-code": {
     fontFamily: monoFont,
     fontSize: "0.85em",
-    backgroundColor: "var(--cf-subtle)",
-    borderRadius: "var(--cf-border-radius)",
-    padding: "1px 4px",
   },
 
   /* Rendered link styling — shown when cursor is outside the link */

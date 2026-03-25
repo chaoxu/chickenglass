@@ -723,9 +723,6 @@ body {
 .cf-inline-code {
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   font-size: 0.85em;
-  background: var(--cf-subtle);
-  border-radius: var(--cf-border-radius);
-  padding: 1px 4px;
 }
 
 /* Block source syntax — monospace font for ::: fence syntax and closing fence lines.
