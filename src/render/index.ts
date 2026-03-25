@@ -24,6 +24,13 @@ export {
   imageRenderPlugin,
 } from "./image-render";
 export {
+  pdfPreviewField,
+  pdfPreviewEffect,
+  requestPdfPreview,
+  type PdfPreviewEntry,
+  type PdfPreviewUpdate,
+} from "./pdf-preview-cache";
+export {
   containerAttributesField,
   containerAttributesPlugin,
 } from "./container-attributes";
