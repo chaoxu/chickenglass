@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import type { EditorView } from "@codemirror/view";
 import { createDebugHelpers } from "../../editor";
 
@@ -28,5 +28,8 @@ export function useEditorDebugBridge(): EditorDebugBridge {
     clearDebugView(view);
   }, []);
 
-  return { attachDebugView: attach, clearDebugView: clear };
+  return useMemo(() => ({
+    attachDebugView: attach,
+    clearDebugView: clear,
+  }), [attach, clear]);
 }

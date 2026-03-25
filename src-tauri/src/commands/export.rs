@@ -2,7 +2,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use tauri::{State, command};
+use tauri::{State, WebviewWindow, command};
 
 use super::path::{current_project_root, project_relative_path, resolve_project_path};
 use super::perf::measure_command;
@@ -45,6 +45,7 @@ fn resolve_export_output_path(project_root: &Path, output_path: &str) -> Result<
 
 #[command]
 pub fn export_document(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     content: String,
@@ -58,7 +59,7 @@ pub fn export_document(
         "tauri",
         Some(&output_path),
         || {
-            let project_root = current_project_root(&root)?;
+            let project_root = current_project_root(&root, &window)?;
             let output_path = resolve_export_output_path(&project_root, &output_path)?;
 
             let mut args = vec![

@@ -1,7 +1,7 @@
 import { basename } from "./lib/utils";
 import {
-  markSessionTabDirty,
-  renameSessionTab,
+  markSessionDocumentDirty,
+  renameSessionDocument,
 } from "./editor-session-actions";
 import type { EditorSessionState } from "./editor-session-model";
 
@@ -38,8 +38,8 @@ export function applySaveAsResult({
     }
     liveDocs.set(newPath, doc);
 
-    return markSessionTabDirty(
-      renameSessionTab(state, oldPath, newPath, basename(newPath)),
+    return markSessionDocumentDirty(
+      renameSessionDocument(state, oldPath, newPath, basename(newPath)),
       newPath,
       false,
     );
@@ -47,5 +47,5 @@ export function applySaveAsResult({
 
   buffers.set(newPath, doc);
   liveDocs.set(newPath, doc);
-  return markSessionTabDirty(state, newPath, false);
+  return markSessionDocumentDirty(state, newPath, false);
 }

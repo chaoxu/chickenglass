@@ -82,7 +82,11 @@ export interface PerfOperationHandle {
 let nextMeasureId = 0;
 
 function isTauriRuntime(): boolean {
-  return typeof window !== "undefined" && "__TAURI__" in window;
+  const tauriWindow = window as Window & { __TAURI_INTERNALS__?: unknown };
+  return typeof window !== "undefined" && (
+    Boolean(tauriWindow.__TAURI_INTERNALS__)
+    || Boolean((globalThis as typeof globalThis & { isTauri?: boolean }).isTauri)
+  );
 }
 
 function inferCategory(name: string, fallback = "app"): string {

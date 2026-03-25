@@ -17,6 +17,7 @@ import { useEditorSession } from "./use-editor-session";
 import type { FileSystem } from "../file-manager";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import type { Settings } from "../lib/types";
+import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 
 /** Dependencies injected into the shell hook from the top-level app component. */
 export interface AppEditorShellDeps {
@@ -28,6 +29,10 @@ export interface AppEditorShellDeps {
   refreshTree: () => Promise<void>;
   /** Callback to record a newly opened path in the recent-files list. */
   addRecentFile: (path: string) => void;
+  /** Ask the user how to handle unsaved changes before replacing the current document. */
+  requestUnsavedChangesDecision: (
+    request: UnsavedChangesRequest,
+  ) => Promise<UnsavedChangesDecision>;
 }
 
 /**
@@ -36,12 +41,12 @@ export interface AppEditorShellDeps {
  * Returned by `useAppEditorShell` and consumed by the top-level `App`
  * component (and sub-components via prop-drilling or context). This
  * interface is the single source of truth for what the shell exposes —
- * everything in the app that touches tabs, files, editor state, or modes
+ * everything in the app that touches files, editor state, or modes
  * goes through here.
  *
  * Property groups:
- * - **Session / tabs** (`openTabs`, `activeTab`, `openFile`, `closeFile`, …):
- *   Delegates to `useEditorSession`; manages the tab strip and per-file buffers.
+ * - **Session / document** (`currentDocument`, `currentPath`, `openFile`, `closeCurrentFile`, …):
+ *   Delegates to `useEditorSession`; manages the current document and in-memory buffers.
  * - **Editor state** (`editorState`, `headings`, `handleEditorStateChange`):
  *   Tracks the live CM6 `EditorView` and derived heading list.
  * - **Navigation** (`handleOutlineSelect`, `handleGotoLine`, `handleSearchResult`):
@@ -50,7 +55,7 @@ export interface AppEditorShellDeps {
  *   Inserts content at the cursor without the caller needing a CM6 reference.
  * - **Mode** (`editorMode`, `handleModeChange`, `isMarkdownFile`):
  *   Controls the rich / source mode per file.
- * - **Stats** (`wordCount`, `cursorLineCol`, `docTextForStats`, `hasDirtyFiles`):
+ * - **Stats** (`docTextForStats`, `hasDirtyDocument`):
  *   Read-only derived values for the status bar and window-title indicator.
  * - **Drag-and-drop** (`handleDragOver`, `handleDrop`):
  *   Accepts `.md` files dragged onto the editor surface.
@@ -59,54 +64,55 @@ export interface AppEditorShellController {
   /** Singleton plugin manager; registers all default editor plugins on first render. */
   pluginManager: EditorPluginManager;
 
-  // --- Session / tab management (delegated to useEditorSession) ---
+  // --- Session / current document (delegated to useEditorSession) ---
 
-  /** Ordered list of currently open tabs (path, name, dirty flag, preview flag). */
-  openTabs: ReturnType<typeof useEditorSession>["openTabs"];
-  /** Path of the currently active (visible) tab, or null when no file is open. */
-  activeTab: ReturnType<typeof useEditorSession>["activeTab"];
-  /** The CM6 document text for the active tab (kept in sync with the editor). */
+  /** The single document currently open in this window, or null when empty. */
+  currentDocument: ReturnType<typeof useEditorSession>["currentDocument"];
+  /** Path of the current document, or null when no file is open. */
+  currentPath: ReturnType<typeof useEditorSession>["currentPath"];
+  /** The CM6 document text for the current document (kept in sync with the editor). */
   editorDoc: ReturnType<typeof useEditorSession>["editorDoc"];
   /** Replace the CM6 document text programmatically (e.g. after include expansion). */
   setEditorDoc: ReturnType<typeof useEditorSession>["setEditorDoc"];
   /**
    * In-memory text buffers keyed by file path.
-   * Holds the last-known content for each open file even when it is not the active tab.
+   * Holds the last-known content for the current file and any temporary
+   * replacements during document transitions.
    */
   buffers: ReturnType<typeof useEditorSession>["buffers"];
   /**
-   * Ref to a Map of live document text for all open files.
+   * Ref to a Map of live document text for the current file.
    * Unlike `buffers`, this map is updated on every keystroke so it reflects
    * unsaved changes; used for word-count stats and dirty detection.
    */
   liveDocs: ReturnType<typeof useEditorSession>["liveDocs"];
-  /** Returns true if the given path is already open in any tab. */
+  /** Returns true if the given path is the current document. */
   isPathOpen: ReturnType<typeof useEditorSession>["isPathOpen"];
-  /** Open a file by path from the filesystem, reading its content if not cached. */
+  /** Returns true if the given path is dirty in the current window. */
+  isPathDirty: ReturnType<typeof useEditorSession>["isPathDirty"];
+  /** Open a file by path from the filesystem, replacing the current document if needed. */
   openFile: ReturnType<typeof useEditorSession>["openFile"];
   /** Open a virtual file from an in-memory string (e.g. a dragged-in `.md` file). */
   openFileWithContent: ReturnType<typeof useEditorSession>["openFileWithContent"];
-  /** Reorder the tab strip after a drag-and-drop re-sort. */
-  reorderTabs: ReturnType<typeof useEditorSession>["reorderTabs"];
+  /** Reload the current document from disk. */
+  reloadFile: ReturnType<typeof useEditorSession>["reloadFile"];
   /** Persist the active file to the filesystem. */
   saveFile: ReturnType<typeof useEditorSession>["saveFile"];
   /** Create a new empty file at the given path. */
   createFile: ReturnType<typeof useEditorSession>["createFile"];
   /** Create a new directory at the given path. */
   createDirectory: ReturnType<typeof useEditorSession>["createDirectory"];
-  /** Close a tab, prompting to save if dirty. */
-  closeFile: ReturnType<typeof useEditorSession>["closeFile"];
-  /** Rename a file on disk and update all open-tab references. */
+  /** Close the current document, prompting to save if dirty. */
+  closeCurrentFile: ReturnType<typeof useEditorSession>["closeCurrentFile"];
+  /** Rename a file on disk and update the current-document reference if needed. */
   handleRename: ReturnType<typeof useEditorSession>["handleRename"];
-  /** Delete a file from disk and close its tab if open. */
+  /** Delete a file from disk and close it if it is currently open. */
   handleDelete: ReturnType<typeof useEditorSession>["handleDelete"];
   /** Save the active file to a new path chosen by the user. */
   saveAs: ReturnType<typeof useEditorSession>["saveAs"];
-  /** Promote a preview tab to a permanent tab (prevents it from being replaced). */
-  pinTab: ReturnType<typeof useEditorSession>["pinTab"];
-  /** Activate an already-open tab by path. */
-  switchToTab: ReturnType<typeof useEditorSession>["switchToTab"];
-  /** Notify the session that the CM6 document changed (marks tab dirty, updates liveDocs). */
+  /** Decide whether a native window close should proceed. */
+  handleWindowCloseRequest: ReturnType<typeof useEditorSession>["handleWindowCloseRequest"];
+  /** Notify the session that the CM6 document changed (marks the current document dirty, updates liveDocs). */
   handleDocChange: ReturnType<typeof useEditorSession>["handleDocChange"];
 
   // --- Editor state ---
@@ -141,7 +147,7 @@ export interface AppEditorShellController {
    */
   handleGotoLine: (line: number, col?: number) => void;
   /**
-   * Open `file` (if not already active) then scroll to character offset `pos`.
+   * Open `file` (if it is not already current) then scroll to character offset `pos`.
    * Uses a stable `latestViewRef` instead of the closure over `editorState`
    * so the view reference is always fresh after the async `openFile` resolves.
    * Calls `onComplete` when navigation finishes.
@@ -164,7 +170,7 @@ export interface AppEditorShellController {
   // --- Mode ---
 
   /**
-   * Current editor display mode for the active tab.
+   * Current editor display mode for the current document.
    * Derived from `isMarkdownFile` with a per-tab user override;
    * automatically resets to default when the user switches to a different file.
    */
@@ -185,8 +191,8 @@ export interface AppEditorShellController {
    * the saved buffer so stats stay current while typing.
    */
   docTextForStats: string;
-  /** True when at least one open tab has unsaved changes (used for window-close guard). */
-  hasDirtyFiles: boolean;
+  /** True when the current document has unsaved changes (used for window-close guard). */
+  hasDirtyDocument: boolean;
 
   // --- Drag-and-drop ---
 
@@ -204,6 +210,7 @@ export function useAppEditorShell({
   settings,
   refreshTree,
   addRecentFile,
+  requestUnsavedChangesDecision,
 }: AppEditorShellDeps): AppEditorShellController {
   const [pluginManager] = useState(() => {
     const manager = new EditorPluginManager();
@@ -215,28 +222,29 @@ export function useAppEditorShell({
     fs,
     refreshTree,
     addRecentFile,
+    requestUnsavedChangesDecision,
   });
   const {
-    openTabs,
-    activeTab,
+    currentDocument,
+    currentPath,
     editorDoc,
     setEditorDoc,
     buffers,
     liveDocs,
     isPathOpen,
+    isPathDirty,
     handleDocChange,
-    switchToTab,
-    reorderTabs,
     openFile,
     openFileWithContent,
+    reloadFile,
     saveFile,
     createFile,
     createDirectory,
-    closeFile,
+    closeCurrentFile,
     handleRename,
     handleDelete,
     saveAs,
-    pinTab,
+    handleWindowCloseRequest,
   } = session;
 
   const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
@@ -336,22 +344,22 @@ export function useAppEditorShell({
     }
   }, [editorState?.view, editorState?.imageSaver]);
 
-  const isMarkdownFile = activeTab?.endsWith(".md") ?? false;
+  const isMarkdownFile = currentPath?.endsWith(".md") ?? false;
 
-  // editorMode is derived from (activeTab, isMarkdownFile) via useMemo rather
+  // editorMode is derived from (currentPath, isMarkdownFile) via useMemo rather
   // than being stored in a separate useState that is then synced via useEffect.
   // An optional override captures user-initiated mode changes (handleModeChange)
-  // and is keyed to the current activeTab so it is automatically discarded when
+  // and is keyed to the current path so it is automatically discarded when
   // the user switches to a different file.
-  const [modeOverride, setModeOverride] = useState<{ tab: string | null; mode: EditorMode } | null>(null);
+  const [modeOverride, setModeOverride] = useState<{ path: string | null; mode: EditorMode } | null>(null);
 
   const editorMode = useMemo((): EditorMode => {
     // If the user explicitly changed mode for the current tab, honour it.
-    if (modeOverride && modeOverride.tab === activeTab) {
+    if (modeOverride && modeOverride.path === currentPath) {
       return normalizeEditorMode(modeOverride.mode, isMarkdownFile);
     }
     return normalizeEditorMode("rich", isMarkdownFile);
-  }, [modeOverride, activeTab, isMarkdownFile]);
+  }, [modeOverride, currentPath, isMarkdownFile]);
 
   // Sync the computed mode into the CM6 view.
   useEffect(() => {
@@ -362,15 +370,15 @@ export function useAppEditorShell({
 
   const handleModeChange = useCallback((mode: EditorMode) => {
     const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
-    setModeOverride({ tab: activeTab, mode: normalizedMode });
+    setModeOverride({ path: currentPath, mode: normalizedMode });
     const view = editorState?.view;
     if (!view) return;
     setEditorMode(view, normalizedMode);
-  }, [activeTab, editorState?.view, isMarkdownFile]);
+  }, [currentPath, editorState?.view, isMarkdownFile]);
 
-  const docTextForStats = activeTab ? (liveDocs.current.get(activeTab) ?? "") : "";
+  const docTextForStats = currentPath ? (liveDocs.current.get(currentPath) ?? "") : "";
 
-  const hasDirtyFiles = useMemo(() => openTabs.some((tab) => tab.dirty), [openTabs]);
+  const hasDirtyDocument = currentDocument?.dirty ?? false;
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -391,25 +399,25 @@ export function useAppEditorShell({
 
   return {
     pluginManager,
-    openTabs,
-    activeTab,
+    currentDocument,
+    currentPath,
     editorDoc,
     setEditorDoc,
     buffers,
     liveDocs,
     isPathOpen,
+    isPathDirty,
     openFile,
     openFileWithContent,
-    reorderTabs,
+    reloadFile,
     saveFile,
     createFile,
     createDirectory,
-    closeFile,
+    closeCurrentFile,
     handleRename,
     handleDelete,
     saveAs,
-    pinTab,
-    switchToTab,
+    handleWindowCloseRequest,
     handleDocChange,
     editorState,
     headings,
@@ -423,7 +431,7 @@ export function useAppEditorShell({
     handleModeChange,
     isMarkdownFile,
     docTextForStats,
-    hasDirtyFiles,
+    hasDirtyDocument,
     handleDragOver,
     handleDrop,
   };

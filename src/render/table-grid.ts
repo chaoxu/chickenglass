@@ -41,6 +41,7 @@ import {
 import { createSimpleTextWidget } from "./render-core";
 import { ContextMenu } from "../lib/context-menu";
 import type { ContextMenuItem } from "../lib/context-menu";
+import { programmaticDocumentChangeAnnotation } from "../editor/programmatic-document-change";
 import {
   addRow,
   addColumn,
@@ -430,6 +431,7 @@ const tableKeyBindings: KeyBinding[] = [
 const pipeProtectionFilter = EditorState.transactionFilter.of((tr) => {
   // Table operations bypass all protection — they rebuild the full table text.
   if (tr.annotation(tableOperationAnnotation)) return tr;
+  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
 
   if (tr.docChanged) {
     const state = tr.startState;

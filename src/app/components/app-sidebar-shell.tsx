@@ -23,7 +23,7 @@ interface AppSidebarShellProps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "activeTab" | "openFile" | "handleRename" | "handleDelete" | "createFile" | "createDirectory" | "headings" | "handleOutlineSelect" | "handleSymbolInsert" | "editorState"
+    "currentPath" | "openFile" | "handleRename" | "handleDelete" | "createFile" | "createDirectory" | "headings" | "handleOutlineSelect" | "handleSymbolInsert" | "editorState"
   >;
 }
 
@@ -57,9 +57,9 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
             <TabsContent value="files" className="min-h-full">
               <FileTree
                 root={workspace.fileTree}
-                activePath={editor.activeTab}
-                onSelect={(path) => { void editor.openFile(path, { preview: true }); }}
-                onDoubleClick={(path) => { void editor.openFile(path, { preview: false }); }}
+                activePath={editor.currentPath}
+                onSelect={(path) => { void editor.openFile(path); }}
+                onDoubleClick={(path) => { void editor.openFile(path); }}
                 onRename={editor.handleRename}
                 onDelete={editor.handleDelete}
                 onCreateFile={(path) => { void editor.createFile(path); }}

@@ -1,140 +1,91 @@
-/**
- * useEditorSession — unified tab/buffer lifecycle and file operations.
- *
- * Owns in-memory document session state (tabs, buffers, dirty tracking) and
- * delegates filesystem mutation callbacks to useFileOperations. Editor shell
- * consumers get a single stable object from this hook.
- *
- * State management notes:
- * - stateRef is an eagerly-updated mirror of sessionState used by callbacks
- *   to avoid stale closure reads. It is NOT exported; callers use the derived
- *   React state (openTabs, activeTab) or stable callbacks instead.
- * - getSessionState() returns the latest state synchronously from stateRef.
- *   useFileOperations receives this getter so it never needs a raw RefObject.
- *
- * Internal structure:
- * - useSessionStateCore — refs, state, commit helper
- * - useTabCallbacks — tab switching, reorder, rename buffers, pin
- * - useOpenFileCallbacks — openFile, openFileWithContent
- */
-
 import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { FileSystem } from "../file-manager";
-import type { Tab } from "../tab-bar";
 import { basename } from "../lib/utils";
-import { withPerfOperation } from "../perf";
+import { isTauri } from "../tauri-fs";
+import { toProjectRelativePathCommand } from "../tauri-client/fs";
+import { applySaveAsResult } from "../editor-session-save";
 import {
-  activateSessionTab,
-  markSessionTabDirty,
-  openSessionTab,
-  pinSessionTab,
-  renameSessionTab,
-  reorderSessionTabs,
+  clearSessionDocument,
+  markSessionDocumentDirty,
+  renameSessionDocument,
+  setCurrentSessionDocument,
 } from "../editor-session-actions";
 import {
   createEditorSessionState,
-  findPreviewTab,
-  findSessionTab,
+  getCurrentSessionDocument,
   hasSessionPath,
   type EditorSessionState,
+  type SessionDocument,
 } from "../editor-session-model";
-import { useFileOperations } from "./use-file-operations";
+import { measureAsync, withPerfOperation } from "../perf";
+import type {
+  UnsavedChangesDecision,
+  UnsavedChangesRequest,
+} from "../unsaved-changes";
 
 export interface EditorSessionDeps {
   fs: FileSystem;
   refreshTree: () => Promise<void>;
   addRecentFile: (path: string) => void;
+  requestUnsavedChangesDecision: (
+    request: UnsavedChangesRequest,
+  ) => Promise<UnsavedChangesDecision>;
 }
 
 export interface UseEditorSessionReturn {
-  openTabs: Tab[];
-  activeTab: string | null;
+  currentDocument: SessionDocument | null;
+  currentPath: string | null;
   editorDoc: string;
   setEditorDoc: React.Dispatch<React.SetStateAction<string>>;
   buffers: React.RefObject<Map<string, string>>;
   liveDocs: React.RefObject<Map<string, string>>;
-  /** Returns true if the given path is currently open in a tab. */
   isPathOpen: (path: string) => boolean;
+  isPathDirty: (path: string) => boolean;
   handleDocChange: (doc: string) => void;
-  switchToTab: (path: string) => void;
-  reorderTabs: (tabs: Tab[]) => void;
-  renameBuffers: (oldPath: string, newPath: string) => void;
-  openFile: (path: string, options?: { preview?: boolean }) => Promise<void>;
-  openFileWithContent: (name: string, content: string) => void;
+  openFile: (path: string) => Promise<void>;
+  openFileWithContent: (name: string, content: string) => Promise<void>;
+  reloadFile: (path: string) => Promise<void>;
   saveFile: () => Promise<void>;
   createFile: (path: string) => Promise<void>;
   createDirectory: (path: string) => Promise<void>;
-  closeFile: (path: string) => Promise<void>;
+  closeCurrentFile: () => Promise<boolean>;
   handleRename: (oldPath: string, newPath: string) => Promise<void>;
   handleDelete: (path: string) => Promise<void>;
   saveAs: () => Promise<void>;
-  pinTab: (path: string) => void;
+  handleWindowCloseRequest: () => Promise<boolean>;
 }
 
-// ---------------------------------------------------------------------------
-// Module-private helpers
-// ---------------------------------------------------------------------------
+function makeTransitionRequest(
+  currentDocument: SessionDocument,
+  reason: UnsavedChangesRequest["reason"],
+  target?: { path?: string; name: string },
+): UnsavedChangesRequest {
+  return {
+    reason,
+    currentDocument: {
+      path: currentDocument.path,
+      name: currentDocument.name,
+    },
+    target,
+  };
+}
 
-async function executeOpenFile(
-  path: string,
-  options: { preview?: boolean } | undefined,
-  fs: FileSystem,
-  stateRef: RefObject<EditorSessionState>,
-  buffers: RefObject<Map<string, string>>,
+function documentForPath(
+  path: string | null,
   liveDocs: RefObject<Map<string, string>>,
-  openFileRequestRef: RefObject<number>,
-  addRecentFile: (path: string) => void,
-  commitSessionState: (s: EditorSessionState, opts?: { syncEditorDoc?: boolean }) => void,
-): Promise<void> {
-  const isPreview = options?.preview ?? false;
-  const requestId = ++openFileRequestRef.current;
-
-  await withPerfOperation("open_file", async (operation) => {
-    if (hasSessionPath(stateRef.current, path)) {
-      operation.measureSync("open_file.activate", () => {
-        if (requestId !== openFileRequestRef.current) return;
-        const existing = findSessionTab(stateRef.current, path);
-        if (!existing) return;
-        commitSessionState(openSessionTab(stateRef.current, {
-          path, name: existing.name, dirty: existing.dirty, preview: isPreview,
-        }));
-        addRecentFile(path);
-      }, { category: "open_file", detail: path });
-      return;
-    }
-
-    try {
-      const content = await operation.measureAsync(
-        "open_file.read", () => fs.readFile(path), { category: "open_file", detail: path },
-      );
-      operation.measureSync("open_file.tab_state", () => {
-        if (requestId !== openFileRequestRef.current) return;
-        const currentState = stateRef.current;
-        const replacedPreview = isPreview ? findPreviewTab(currentState) : undefined;
-        buffers.current.set(path, content);
-        liveDocs.current.set(path, content);
-        if (replacedPreview && replacedPreview.path !== path) {
-          buffers.current.delete(replacedPreview.path);
-          liveDocs.current.delete(replacedPreview.path);
-        }
-        commitSessionState(openSessionTab(currentState, {
-          path, name: basename(path), dirty: false, preview: isPreview,
-        }));
-        addRecentFile(path);
-      }, { category: "open_file", detail: path });
-    } catch (e: unknown) {
-      console.error("[session] failed to open file:", path, e);
-    }
-  }, path);
+  buffers: RefObject<Map<string, string>>,
+): string {
+  if (!path) return "";
+  return liveDocs.current.get(path) ?? buffers.current.get(path) ?? "";
 }
 
-// ---------------------------------------------------------------------------
-// Internal sub-hooks (module-private)
-// ---------------------------------------------------------------------------
-
-/** Holds the reactive session state, refs, and the commit helper. */
-function useSessionStateCore() {
+export function useEditorSession({
+  fs,
+  refreshTree,
+  addRecentFile,
+  requestUnsavedChangesDecision,
+}: EditorSessionDeps): UseEditorSessionReturn {
   const [sessionState, setSessionState] = useState<EditorSessionState>(
     () => createEditorSessionState(),
   );
@@ -144,132 +95,398 @@ function useSessionStateCore() {
   const stateRef = useRef<EditorSessionState>(sessionState);
   const openFileRequestRef = useRef(0);
 
-  const docForPath = useCallback((path: string | null): string => {
-    if (!path) return "";
-    return liveDocs.current.get(path) ?? buffers.current.get(path) ?? "";
-  }, []);
-
   const commitSessionState = useCallback((
     nextState: EditorSessionState,
-    options?: { syncEditorDoc?: boolean },
+    options?: {
+      editorDoc?: string;
+      syncEditorDoc?: boolean;
+    },
   ) => {
-    const shouldSyncEditorDoc = options?.syncEditorDoc
-      ?? nextState.activePath !== stateRef.current.activePath;
-    // Update the ref eagerly so subsequent synchronous reads within the same
-    // event tick see the new state before React re-renders.
     stateRef.current = nextState;
     setSessionState(nextState);
-    if (shouldSyncEditorDoc) {
-      setEditorDoc(docForPath(nextState.activePath));
+
+    if (Object.prototype.hasOwnProperty.call(options ?? {}, "editorDoc")) {
+      setEditorDoc(options?.editorDoc ?? "");
+      return;
     }
-  }, [docForPath]);
+
+    if (options?.syncEditorDoc) {
+      setEditorDoc(documentForPath(nextState.currentDocument?.path ?? null, liveDocs, buffers));
+    }
+  }, []);
 
   const getSessionState = useCallback((): EditorSessionState => stateRef.current, []);
 
-  return {
-    sessionState, editorDoc, setEditorDoc,
-    buffers, liveDocs, stateRef, openFileRequestRef,
-    commitSessionState, getSessionState,
-  };
-}
+  const saveCurrentDocument = useCallback(async (): Promise<boolean> => {
+    const currentPath = getSessionState().currentDocument?.path;
+    if (!currentPath) return true;
 
-/** Tab-level mutation callbacks: switch, reorder, rename buffers, pin, dirty tracking. */
-function useTabCallbacks(
-  stateRef: RefObject<EditorSessionState>,
-  buffers: RefObject<Map<string, string>>,
-  liveDocs: RefObject<Map<string, string>>,
-  commitSessionState: (s: EditorSessionState, opts?: { syncEditorDoc?: boolean }) => void,
-) {
+    const doc = liveDocs.current.get(currentPath) ?? "";
+    try {
+      await measureAsync("save_file.write", () => fs.writeFile(currentPath, doc), {
+        category: "save_file",
+        detail: currentPath,
+      });
+      buffers.current.set(currentPath, doc);
+      liveDocs.current.set(currentPath, doc);
+      commitSessionState(
+        markSessionDocumentDirty(getSessionState(), currentPath, false),
+        { editorDoc: doc },
+      );
+      return true;
+    } catch (e: unknown) {
+      console.error("[session] save failed:", e);
+      return false;
+    }
+  }, [commitSessionState, fs, getSessionState]);
+
+  const saveFile = useCallback(async (): Promise<void> => {
+    await saveCurrentDocument();
+  }, [saveCurrentDocument]);
+
+  const discardDocumentChanges = useCallback((path: string) => {
+    const savedDoc = buffers.current.get(path) ?? "";
+    liveDocs.current.set(path, savedDoc);
+    commitSessionState(
+      markSessionDocumentDirty(stateRef.current, path, false),
+      stateRef.current.currentDocument?.path === path
+        ? { editorDoc: savedDoc }
+        : undefined,
+    );
+  }, [commitSessionState]);
+
+  const prepareCurrentDocumentForTransition = useCallback(async (
+    reason: UnsavedChangesRequest["reason"],
+    target?: { path?: string; name: string },
+  ): Promise<boolean> => {
+    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    if (!currentDocument || !currentDocument.dirty) {
+      return true;
+    }
+
+    const decision = await requestUnsavedChangesDecision(
+      makeTransitionRequest(currentDocument, reason, target),
+    );
+
+    if (decision === "cancel") {
+      return false;
+    }
+
+    if (decision === "save") {
+      return saveCurrentDocument();
+    }
+
+    discardDocumentChanges(currentDocument.path);
+    return true;
+  }, [
+    discardDocumentChanges,
+    requestUnsavedChangesDecision,
+    saveCurrentDocument,
+  ]);
+
   const isPathOpen = useCallback(
     (path: string): boolean => hasSessionPath(stateRef.current, path),
-    // stateRef is a stable ref object — no reactive dep needed
     [],
   );
 
+  const isPathDirty = useCallback((path: string): boolean => {
+    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    return currentDocument?.path === path && currentDocument.dirty;
+  }, []);
+
   const handleDocChange = useCallback((doc: string) => {
-    const path = stateRef.current.activePath;
-    if (!path) return;
-    liveDocs.current.set(path, doc);
-    const isDirty = doc !== (buffers.current.get(path) ?? "");
-    const nextState = markSessionTabDirty(stateRef.current, path, isDirty);
-    if (nextState !== stateRef.current) commitSessionState(nextState, { syncEditorDoc: false });
-  }, [commitSessionState, stateRef, buffers, liveDocs]);
+    const currentPath = stateRef.current.currentDocument?.path;
+    if (!currentPath) return;
 
-  const switchToTab = useCallback(
-    (path: string) => commitSessionState(activateSessionTab(stateRef.current, path)),
-    [commitSessionState, stateRef],
-  );
+    setEditorDoc(doc);
+    liveDocs.current.set(currentPath, doc);
 
-  const reorderTabs = useCallback(
-    (tabs: Tab[]) => commitSessionState(reorderSessionTabs(stateRef.current, tabs)),
-    [commitSessionState, stateRef],
-  );
+    const isDirty = doc !== (buffers.current.get(currentPath) ?? "");
+    const nextState = markSessionDocumentDirty(stateRef.current, currentPath, isDirty);
+    if (nextState !== stateRef.current) {
+      commitSessionState(nextState);
+    }
+  }, [commitSessionState]);
 
   const renameBuffers = useCallback((oldPath: string, newPath: string) => {
-    const content = buffers.current.get(oldPath);
-    if (content !== undefined) { buffers.current.delete(oldPath); buffers.current.set(newPath, content); }
+    const buffered = buffers.current.get(oldPath);
+    if (buffered !== undefined) {
+      buffers.current.delete(oldPath);
+      buffers.current.set(newPath, buffered);
+    }
+
     const liveDoc = liveDocs.current.get(oldPath);
-    if (liveDoc !== undefined) { liveDocs.current.delete(oldPath); liveDocs.current.set(newPath, liveDoc); }
-    commitSessionState(renameSessionTab(stateRef.current, oldPath, newPath, basename(newPath)));
-  }, [commitSessionState, stateRef, buffers, liveDocs]);
+    if (liveDoc !== undefined) {
+      liveDocs.current.delete(oldPath);
+      liveDocs.current.set(newPath, liveDoc);
+    }
 
-  const pinTab = useCallback(
-    (path: string) => commitSessionState(pinSessionTab(stateRef.current, path)),
-    [commitSessionState, stateRef],
-  );
-
-  return { isPathOpen, handleDocChange, switchToTab, reorderTabs, renameBuffers, pinTab };
-}
-
-// ---------------------------------------------------------------------------
-// Hook
-// ---------------------------------------------------------------------------
-
-export function useEditorSession({
-  fs,
-  refreshTree,
-  addRecentFile,
-}: EditorSessionDeps): UseEditorSessionReturn {
-  const {
-    sessionState, editorDoc, setEditorDoc,
-    buffers, liveDocs, stateRef, openFileRequestRef,
-    commitSessionState, getSessionState,
-  } = useSessionStateCore();
-
-  const {
-    isPathOpen, handleDocChange, switchToTab, reorderTabs, renameBuffers, pinTab,
-  } = useTabCallbacks(stateRef, buffers, liveDocs, commitSessionState);
-
-  const openFile = useCallback(async (path: string, options?: { preview?: boolean }) => {
-    await executeOpenFile(
-      path, options, fs, stateRef, buffers, liveDocs,
-      openFileRequestRef, addRecentFile, commitSessionState,
+    commitSessionState(
+      renameSessionDocument(stateRef.current, oldPath, newPath, basename(newPath)),
+      stateRef.current.currentDocument?.path === oldPath
+        ? { editorDoc: documentForPath(newPath, liveDocs, buffers) }
+        : undefined,
     );
-  }, [addRecentFile, commitSessionState, fs, stateRef, buffers, liveDocs, openFileRequestRef]);
+  }, [commitSessionState]);
 
-  const openFileWithContent = useCallback((name: string, content: string) => {
+  const openFile = useCallback(async (path: string) => {
+    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    if (currentDocument?.path === path) {
+      addRecentFile(path);
+      return;
+    }
+
+    const requestId = ++openFileRequestRef.current;
+    const targetName = basename(path);
+    const canLeave = await prepareCurrentDocumentForTransition("switch-file", {
+      path,
+      name: targetName,
+    });
+    if (!canLeave || requestId !== openFileRequestRef.current) {
+      return;
+    }
+
+    return withPerfOperation("open_file", async (operation) => {
+      try {
+        const content = await operation.measureAsync(
+          "open_file.read",
+          () => fs.readFile(path),
+          { category: "open_file", detail: path },
+        );
+
+        if (requestId !== openFileRequestRef.current) {
+          return;
+        }
+
+        const previousPath = currentDocument?.path ?? null;
+        if (previousPath && previousPath !== path) {
+          buffers.current.delete(previousPath);
+          liveDocs.current.delete(previousPath);
+        }
+
+        buffers.current.set(path, content);
+        liveDocs.current.set(path, content);
+        commitSessionState(
+          setCurrentSessionDocument(stateRef.current, {
+            path,
+            name: targetName,
+            dirty: false,
+          }),
+          { editorDoc: content },
+        );
+        addRecentFile(path);
+      } catch (e: unknown) {
+        console.error("[session] failed to open file:", path, e);
+        throw e;
+      }
+    }, path);
+  }, [
+    addRecentFile,
+    commitSessionState,
+    fs,
+    prepareCurrentDocumentForTransition,
+  ]);
+
+  const openFileWithContent = useCallback(async (name: string, content: string) => {
+    const currentDocument = getCurrentSessionDocument(stateRef.current);
     let path = name;
     let suffix = 1;
-    while (hasSessionPath(stateRef.current, path)) { path = `${name} (${suffix++})`; }
+    while (hasSessionPath(stateRef.current, path)) {
+      path = `${name} (${suffix++})`;
+    }
+
+    const canLeave = await prepareCurrentDocumentForTransition("switch-file", {
+      name: basename(path),
+      path,
+    });
+    if (!canLeave) return;
+
+    const previousPath = currentDocument?.path ?? null;
+    if (previousPath && previousPath !== path) {
+      buffers.current.delete(previousPath);
+      liveDocs.current.delete(previousPath);
+    }
+
     buffers.current.set(path, "");
     liveDocs.current.set(path, content);
-    commitSessionState(openSessionTab(stateRef.current, {
-      path, name: basename(path), dirty: true, preview: false,
-    }));
-  }, [commitSessionState, stateRef, buffers, liveDocs]);
+    commitSessionState(
+      setCurrentSessionDocument(stateRef.current, {
+        path,
+        name: basename(path),
+        dirty: true,
+      }),
+      { editorDoc: content },
+    );
+  }, [commitSessionState, prepareCurrentDocumentForTransition]);
 
-  const fileOps = useFileOperations({
-    fs, refreshTree, addRecentFile, getSessionState,
-    buffers, liveDocs, commitSessionState, openFile, renameBuffers,
-    skipDirtyConfirm: import.meta.env.DEV,
-  });
+  const reloadFile = useCallback(async (path: string) => {
+    if (!hasSessionPath(stateRef.current, path)) return;
+
+    try {
+      const content = await fs.readFile(path);
+      buffers.current.set(path, content);
+      liveDocs.current.set(path, content);
+      commitSessionState(
+        markSessionDocumentDirty(stateRef.current, path, false),
+        stateRef.current.currentDocument?.path === path
+          ? { editorDoc: content }
+          : undefined,
+      );
+    } catch (e: unknown) {
+      console.error("[session] reload failed:", path, e);
+      throw e;
+    }
+  }, [commitSessionState, fs]);
+
+  const createFile = useCallback(async (path: string) => {
+    try {
+      await measureAsync("create_file.write", () => fs.createFile(path, ""), {
+        category: "create_file",
+        detail: path,
+      });
+      await refreshTree();
+      await openFile(path);
+    } catch (e: unknown) {
+      console.error("[session] create file failed:", e);
+    }
+  }, [fs, openFile, refreshTree]);
+
+  const createDirectory = useCallback(async (path: string) => {
+    try {
+      await measureAsync("create_directory.write", () => fs.createDirectory(path), {
+        category: "create_directory",
+        detail: path,
+      });
+      await refreshTree();
+    } catch (e: unknown) {
+      console.error("[session] create directory failed:", e);
+    }
+  }, [fs, refreshTree]);
+
+  const closeCurrentFile = useCallback(async (): Promise<boolean> => {
+    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    if (!currentDocument) return true;
+
+    const canClose = await prepareCurrentDocumentForTransition("close-file");
+    if (!canClose) return false;
+
+    buffers.current.delete(currentDocument.path);
+    liveDocs.current.delete(currentDocument.path);
+    commitSessionState(
+      clearSessionDocument(stateRef.current, currentDocument.path),
+      { editorDoc: "" },
+    );
+    return true;
+  }, [commitSessionState, prepareCurrentDocumentForTransition]);
+
+  const handleRename = useCallback(async (oldPath: string, newPath: string) => {
+    try {
+      await fs.renameFile(oldPath, newPath);
+      await refreshTree();
+      renameBuffers(oldPath, newPath);
+      addRecentFile(newPath);
+    } catch (e: unknown) {
+      console.error("[session] rename failed:", e);
+    }
+  }, [addRecentFile, fs, refreshTree, renameBuffers]);
+
+  const handleDelete = useCallback(async (path: string) => {
+    const ok = window.confirm(`Delete "${basename(path)}"? This cannot be undone.`);
+    if (!ok) return;
+
+    try {
+      await measureAsync("delete_file.write", () => fs.deleteFile(path), {
+        category: "delete_file",
+        detail: path,
+      });
+    } catch (e: unknown) {
+      console.error("[session] delete failed:", e);
+      return;
+    }
+
+    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    if (currentDocument && (currentDocument.path === path || currentDocument.path.startsWith(`${path}/`))) {
+      buffers.current.delete(currentDocument.path);
+      liveDocs.current.delete(currentDocument.path);
+      commitSessionState(
+        clearSessionDocument(stateRef.current, currentDocument.path),
+        { editorDoc: "" },
+      );
+    }
+
+    await refreshTree();
+  }, [commitSessionState, fs, refreshTree]);
+
+  const saveAs = useCallback(async () => {
+    const currentPath = getSessionState().currentDocument?.path;
+    if (!currentPath) return;
+    const doc = liveDocs.current.get(currentPath) ?? "";
+
+    if (isTauri()) {
+      try {
+        const { save } = await import("@tauri-apps/plugin-dialog");
+        const savePath = await save({
+          defaultPath: currentPath,
+          filters: [{ name: "Markdown", extensions: ["md"] }],
+        });
+        if (!savePath) return;
+
+        const relativePath = await toProjectRelativePathCommand(savePath);
+        const exists = await fs.exists(relativePath);
+        await (exists ? fs.writeFile(relativePath, doc) : fs.createFile(relativePath, doc));
+
+        commitSessionState(
+          applySaveAsResult({
+            state: getSessionState(),
+            buffers: buffers.current,
+            liveDocs: liveDocs.current,
+            oldPath: currentPath,
+            newPath: relativePath,
+            doc,
+          }),
+          { editorDoc: doc },
+        );
+        addRecentFile(relativePath);
+        await refreshTree();
+      } catch {
+        // best-effort: save-as dialog cancelled or failed by user action
+      }
+      return;
+    }
+
+    const blob = new Blob([doc], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = basename(currentPath);
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }, [addRecentFile, commitSessionState, fs, getSessionState, refreshTree]);
+
+  const handleWindowCloseRequest = useCallback(async (): Promise<boolean> => {
+    return prepareCurrentDocumentForTransition("close-window");
+  }, [prepareCurrentDocumentForTransition]);
 
   return {
-    openTabs: sessionState.tabs,
-    activeTab: sessionState.activePath,
-    editorDoc, setEditorDoc, buffers, liveDocs,
-    isPathOpen, handleDocChange, switchToTab, reorderTabs, renameBuffers,
-    openFile, openFileWithContent, pinTab,
-    ...fileOps,
+    currentDocument: sessionState.currentDocument,
+    currentPath: sessionState.currentDocument?.path ?? null,
+    editorDoc,
+    setEditorDoc,
+    buffers,
+    liveDocs,
+    isPathOpen,
+    isPathDirty,
+    handleDocChange,
+    openFile,
+    openFileWithContent,
+    reloadFile,
+    saveFile,
+    createFile,
+    createDirectory,
+    closeCurrentFile,
+    handleRename,
+    handleDelete,
+    saveAs,
+    handleWindowCloseRequest,
   };
 }

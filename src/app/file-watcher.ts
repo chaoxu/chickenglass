@@ -10,6 +10,8 @@ import { basename } from "./lib/utils";
 import { measureAsync } from "./perf";
 import { watchDirectoryCommand, unwatchDirectoryCommand } from "./tauri-client/watch";
 
+let latestFileWatcherToken = 0;
+
 /** Callback to check whether a file is open in a tab. */
 export type IsFileOpenFn = (path: string) => boolean;
 
@@ -42,6 +44,7 @@ export interface FileWatcherConfig {
 export class FileWatcher {
   private readonly config: FileWatcherConfig;
   private unlisten: UnlistenFn | null = null;
+  private watchToken: number | null = null;
   private notificationBar: HTMLElement | null = null;
   /** Tracks dirty files waiting for user action. */
   private readonly pendingNotifications: string[] = [];
@@ -54,20 +57,32 @@ export class FileWatcher {
 
   /** Start watching a directory for changes. */
   async watch(directoryPath: string): Promise<void> {
+    const watchToken = ++latestFileWatcherToken;
+    this.watchToken = watchToken;
+
     // Stop any previous watcher
     await this.unwatch();
+    this.watchToken = watchToken;
 
     // Tell the Rust backend to start watching
     await watchDirectoryCommand(directoryPath);
 
     // Listen for file-changed events from the backend
-    this.unlisten = await listen<string>("file-changed", (event) => {
+    const unlisten = await listen<string>("file-changed", (event) => {
       this.handleFileChanged(event.payload);
     });
+
+    if (this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
+      unlisten();
+      return;
+    }
+
+    this.unlisten = unlisten;
   }
 
   /** Stop watching and clean up. */
   async unwatch(): Promise<void> {
+    this.watchToken = null;
     if (this.unlisten) {
       this.unlisten();
       this.unlisten = null;

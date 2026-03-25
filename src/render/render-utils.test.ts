@@ -239,6 +239,19 @@ describe("buildDecorations", () => {
     expect(specs[0].from).toBe(0);
     expect(specs[1].from).toBe(10);
   });
+
+  it("sorts same-position decorations by startSide", () => {
+    const line = Decoration.line({ class: "cf-line" }).range(5);
+    const widget = Decoration.widget({
+      widget: new TestWidget("include"),
+    }).range(5);
+
+    expect(() => buildDecorations([widget, line])).not.toThrow();
+    const specs = getDecorationSpecs(buildDecorations([widget, line]));
+    expect(specs).toHaveLength(2);
+    expect(specs[0].from).toBe(5);
+    expect(specs[1].from).toBe(5);
+  });
 });
 
 describe("createBooleanToggleField", () => {

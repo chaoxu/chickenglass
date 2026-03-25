@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use tauri::{AppHandle, Emitter, State, command};
+use tauri::{AppHandle, Emitter, State, WebviewWindow, command};
 
 use super::perf::measure_command;
 use super::state::FileWatcherState;
@@ -41,6 +41,7 @@ fn should_emit_debounced_event(
 #[command]
 pub fn watch_directory(
     app: AppHandle,
+    window: WebviewWindow,
     watcher_state: State<'_, FileWatcherState>,
     perf: State<'_, PerfState>,
     path: String,
@@ -60,10 +61,13 @@ pub fn watch_directory(
                 return Err(format!("Not a directory: {}", watch_path.display()));
             }
 
+            let window_label = window.label().to_string();
             let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
-            *lock = None;
+            lock.remove(&window_label);
 
             let root_for_closure = watch_path.clone();
+            let app_for_closure = app.clone();
+            let window_label_for_closure = window_label.clone();
             let debounce_ms = Duration::from_millis(500);
             let last_events: std::sync::Arc<Mutex<HashMap<PathBuf, Instant>>> =
                 std::sync::Arc::new(Mutex::new(HashMap::new()));
@@ -108,7 +112,11 @@ pub fn watch_directory(
                             }
                         }
 
-                        let _ = app.emit("file-changed", &relative);
+                        let _ = app_for_closure.emit_to(
+                            window_label_for_closure.as_str(),
+                            "file-changed",
+                            &relative,
+                        );
                     }
                 },
                 Config::default(),
@@ -119,7 +127,7 @@ pub fn watch_directory(
                 .watch(&watch_path, RecursiveMode::Recursive)
                 .map_err(|e| format!("Failed to watch directory: {}", e))?;
 
-            *lock = Some(watcher);
+            lock.insert(window_label, watcher);
             Ok(())
         },
     )
@@ -193,6 +201,7 @@ mod tests {
 /// Stop watching the current directory.
 #[command]
 pub fn unwatch_directory(
+    window: WebviewWindow,
     watcher_state: State<'_, FileWatcherState>,
     perf: State<'_, PerfState>,
 ) -> Result<(), String> {
@@ -204,7 +213,7 @@ pub fn unwatch_directory(
         None,
         || {
             let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
-            *lock = None;
+            lock.remove(window.label());
             Ok(())
         },
     )

@@ -1,15 +1,19 @@
 use std::path::{Path, PathBuf};
 
-use tauri::command;
-use tauri::State;
+use tauri::{State, WebviewWindow, command};
 
 use super::perf::measure_command;
 use super::state::PerfState;
 use super::state::ProjectRoot;
 
-pub fn current_project_root(root: &State<'_, ProjectRoot>) -> Result<PathBuf, String> {
+pub fn current_project_root(
+    root: &State<'_, ProjectRoot>,
+    window: &WebviewWindow,
+) -> Result<PathBuf, String> {
     let lock = root.0.lock().map_err(|e| e.to_string())?;
-    lock.clone().ok_or("No project folder open".to_string())
+    lock.get(window.label())
+        .cloned()
+        .ok_or("No project folder open".to_string())
 }
 
 fn ensure_within_root(root: &Path, candidate: &Path, relative: &str) -> Result<(), String> {
@@ -60,6 +64,7 @@ pub fn project_relative_path(root: &Path, candidate: &Path) -> Result<String, St
 
 #[command]
 pub fn to_project_relative_path(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
@@ -71,7 +76,7 @@ pub fn to_project_relative_path(
         "tauri",
         Some(&path),
         || {
-            let project_root = current_project_root(&root)?;
+            let project_root = current_project_root(&root, &window)?;
             let candidate = PathBuf::from(&path);
             ensure_within_root(&project_root, &candidate, &path)?;
             project_relative_path(&project_root, &candidate)

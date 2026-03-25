@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { FileEntry } from "../file-manager";
+import { findDefaultDocumentPath } from "../default-document-path";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 
@@ -7,30 +8,12 @@ interface AppSessionPersistenceDeps {
   fileTree: FileEntry | null;
   workspace: Pick<
     AppWorkspaceSessionController,
-    "windowState" | "saveWindowState" | "sidebarCollapsed" | "sidebarWidth" | "setSidebarCollapsed" | "setSidebarWidth"
+    "windowState" | "saveWindowState" | "sidebarCollapsed" | "sidebarWidth" | "setSidebarCollapsed" | "setSidebarWidth" | "startupComplete"
   >;
   editor: Pick<
     AppEditorShellController,
-    "openTabs" | "activeTab" | "openFile" | "switchToTab" | "liveDocs" | "buffers" | "isPathOpen"
+    "currentDocument" | "currentPath" | "openFile"
   >;
-}
-
-function findDefaultPath(fileTree: FileEntry): string | null {
-  const rootFiles = (fileTree.children ?? []).filter((entry) => !entry.isDirectory);
-  const preferred = rootFiles.find((entry) => entry.path === "main.md")
-    ?? rootFiles.find((entry) => entry.path === "index.md")
-    ?? rootFiles.find((entry) => entry.path.endsWith(".md"));
-
-  const findFirst = (entry: FileEntry): string | null => {
-    if (!entry.isDirectory) return entry.path;
-    for (const child of entry.children ?? []) {
-      const found = findFirst(child);
-      if (found) return found;
-    }
-    return null;
-  };
-
-  return preferred?.path ?? findFirst(fileTree);
 }
 
 export function useAppSessionPersistence({
@@ -47,22 +30,22 @@ export function useAppSessionPersistence({
     sidebarWidth,
     setSidebarCollapsed,
     setSidebarWidth,
+    startupComplete,
   } = workspace;
   const {
-    openTabs,
-    activeTab,
+    currentDocument,
+    currentPath,
     openFile,
-    switchToTab,
-    isPathOpen,
   } = editor;
 
   useEffect(() => {
     if (!didInitRef.current) return;
     saveWindowState({
-      tabs: openTabs.map((tab) => ({ path: tab.path, name: tab.name })),
-      activeTab,
+      currentDocument: currentDocument
+        ? { path: currentDocument.path, name: currentDocument.name }
+        : null,
     });
-  }, [activeTab, openTabs, saveWindowState]);
+  }, [currentDocument, currentPath, saveWindowState]);
 
   useEffect(() => {
     if (!didInitRef.current) return;
@@ -72,7 +55,7 @@ export function useAppSessionPersistence({
   }, [saveWindowState, sidebarCollapsed, sidebarWidth]);
 
   useEffect(() => {
-    if (didInitRef.current || restorePromiseRef.current || !fileTree) return;
+    if (didInitRef.current || restorePromiseRef.current || !startupComplete) return;
 
     const restore = async () => {
       try {
@@ -82,30 +65,24 @@ export function useAppSessionPersistence({
           setSidebarWidth(windowState.sidebarWidth);
         }
 
-        if (windowState.tabs.length > 0) {
-          await Promise.all(
-            windowState.tabs.map((tab) =>
-              openFile(tab.path).catch(() => {
-                // File may have been deleted since last session — skip it.
-              }),
-            ),
-          );
+        if (!fileTree) {
+          return;
+        }
 
-          if (windowState.activeTab) {
-            // isPathOpen reads from the eagerly-updated sessionStateRef inside
-            // useEditorSession, so it reflects the post-openFile state even
-            // though React state hasn't re-rendered yet.
-            if (isPathOpen(windowState.activeTab)) {
-              switchToTab(windowState.activeTab);
-            }
+        if (windowState.currentDocument) {
+          try {
+            await openFile(windowState.currentDocument.path);
+            return;
+          } catch {
+            // File may have been deleted or may not exist under the restored root.
           }
-        } else {
-          const first = findDefaultPath(fileTree);
-          if (first) {
-            await openFile(first).catch(() => {
-              // Default file may have disappeared between tree load and open.
-            });
-          }
+        }
+
+        const first = findDefaultDocumentPath(fileTree);
+        if (first) {
+          await openFile(first).catch(() => {
+            // Default file may have disappeared between tree load and open.
+          });
         }
       } finally {
         didInitRef.current = true;
@@ -118,12 +95,10 @@ export function useAppSessionPersistence({
   }, [
     fileTree,
     openFile,
-    isPathOpen,
     setSidebarCollapsed,
     setSidebarWidth,
-    switchToTab,
-    windowState.activeTab,
+    startupComplete,
+    windowState.currentDocument,
     windowState.sidebarWidth,
-    windowState.tabs,
   ]);
 }

@@ -932,11 +932,13 @@ describe("#376 — shared text widget primitives", () => {
 describe("#386 — async cleanup and parallelization", () => {
   it("parallelizes the open-folder refresh path and keeps save/create flows on the shared hooks", () => {
     const workspace = fileText("src/app/hooks/use-app-workspace-session.ts");
-    const fileOps = fileText("src/app/hooks/use-file-operations.ts");
+    const session = fileText("src/app/hooks/use-editor-session.ts");
 
-    expect(workspace).toContain("await Promise.all([refreshTree(), refreshProjectConfig()])");
-    expect(fileOps).toContain("await Promise.all([refreshTree(), openFile(path)])");
-    expect(fileOps).toContain("await (exists ? fs.writeFile(relativePath, doc) : fs.createFile(relativePath, doc))");
+    expect(workspace).toContain("const [tree, nextProjectConfig] = await Promise.all([");
+    expect(workspace).toContain("await loadWorkspaceContents()");
+    expect(session).toContain("await refreshTree()");
+    expect(session).toContain("await openFile(path)");
+    expect(session).toContain("await (exists ? fs.writeFile(relativePath, doc) : fs.createFile(relativePath, doc))");
   });
 });
 
@@ -1012,6 +1014,29 @@ describe("#317 — typed frontend Tauri client", () => {
     expect(fileWatcher).not.toContain('invokeWithPerf("unwatch_directory"');
     expect(exportModule).not.toContain('invokeWithPerf("check_pandoc"');
     expect(exportModule).not.toContain('invokeWithPerf("export_document"');
+  });
+});
+
+describe("#454 — native out-of-project opens use a new window", () => {
+  it("grants the spawned document windows the Tauri capabilities they need", () => {
+    const capabilities = fileText("src-tauri/capabilities/default.json");
+
+    expect(capabilities).toContain('"document-*"');
+    expect(capabilities).toContain('"core:window:allow-create"');
+    expect(capabilities).toContain('"core:window:allow-set-focus"');
+    expect(capabilities).toContain('"core:webview:allow-create-webview-window"');
+  });
+
+  it("targets native menu events at the focused or last-focused window without broadcasting", () => {
+    const menu = fileText("src-tauri/src/menu.rs");
+    const main = fileText("src-tauri/src/main.rs");
+
+    expect(menu).toContain("webview_windows()");
+    expect(menu).toContain("LastFocusedWindow");
+    expect(menu).toContain('emit_to(label.as_str(), "menu-event", id)');
+    expect(menu).not.toContain('app_handle.emit("menu-event", id)');
+    expect(main).toContain("LastFocusedWindow");
+    expect(main).toContain("WindowEvent::Focused(true)");
   });
 });
 
@@ -1093,10 +1118,13 @@ describe("#315 — editor session subsystem", () => {
     const sessionHook = fileText("src/app/hooks/use-editor-session.ts");
     const persistence = fileText("src/app/hooks/use-app-session-persistence.ts");
 
-    expect(appMainShell).toContain("reorderTabs");
+    expect(appMainShell).toContain("currentPath");
+    expect(appMainShell).not.toContain("TabBar");
     expect(appMainShell).not.toContain("setOpenTabs");
     expect(sessionHook).toContain("../editor-session-actions");
-    expect(persistence).toContain("switchToTab");
+    expect(sessionHook).toContain("setCurrentSessionDocument");
+    expect(persistence).toContain("currentDocument");
+    expect(persistence).not.toContain("switchToTab");
     expect(persistence).not.toContain("setActiveTab");
   });
 });

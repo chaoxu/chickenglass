@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileSystem } from "../file-manager";
 import { MemoryFileSystem } from "../file-manager";
+import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 import type { UseEditorSessionReturn } from "./use-editor-session";
 
 vi.mock("../perf", () => ({
@@ -32,7 +33,12 @@ interface HarnessRef {
   result: UseEditorSessionReturn;
 }
 
-function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
+function createHarness(
+  fs: FileSystem,
+  requestUnsavedChangesDecision: (
+    request: UnsavedChangesRequest,
+  ) => Promise<UnsavedChangesDecision> = async () => "discard",
+): { Harness: FC; ref: HarnessRef } {
   const ref: HarnessRef = {
     result: null as unknown as UseEditorSessionReturn,
   };
@@ -42,6 +48,7 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
       fs,
       refreshTree: async () => {},
       addRecentFile: () => {},
+      requestUnsavedChangesDecision,
     });
     return null;
   };
@@ -98,7 +105,7 @@ describe("useEditorSession", () => {
     container.remove();
   });
 
-  it("does not replace editorDoc on the first clean-to-dirty transition", async () => {
+  it("keeps editorDoc and dirty state in sync while typing", async () => {
     const fs = new MemoryFileSystem({ "draft.md": "hello" });
     const { Harness, ref } = createHarness(fs);
 
@@ -108,14 +115,14 @@ describe("useEditorSession", () => {
     });
 
     expect(ref.result.editorDoc).toBe("hello");
-    expect(ref.result.openTabs[0]?.dirty).toBe(false);
+    expect(ref.result.currentDocument?.dirty).toBe(false);
 
     act(() => {
       ref.result.handleDocChange("hello!");
     });
 
-    expect(ref.result.editorDoc).toBe("hello");
-    expect(ref.result.openTabs[0]?.dirty).toBe(true);
+    expect(ref.result.editorDoc).toBe("hello!");
+    expect(ref.result.currentDocument?.dirty).toBe(true);
     expect(ref.result.liveDocs.current.get("draft.md")).toBe("hello!");
   });
 
@@ -132,8 +139,8 @@ describe("useEditorSession", () => {
     let openA!: Promise<void>;
     let openB!: Promise<void>;
     await act(async () => {
-      openA = ref.result.openFile("a.md", { preview: true });
-      openB = ref.result.openFile("b.md", { preview: true });
+      openA = ref.result.openFile("a.md");
+      openB = ref.result.openFile("b.md");
       await Promise.resolve();
     });
 
@@ -142,8 +149,12 @@ describe("useEditorSession", () => {
       await openB;
     });
 
-    expect(ref.result.activeTab).toBe("b.md");
-    expect(ref.result.openTabs.map((tab) => tab.path)).toEqual(["b.md"]);
+    expect(ref.result.currentPath).toBe("b.md");
+    expect(ref.result.currentDocument).toEqual({
+      path: "b.md",
+      name: "b.md",
+      dirty: false,
+    });
     expect(ref.result.editorDoc).toBe("B");
 
     await act(async () => {
@@ -151,8 +162,52 @@ describe("useEditorSession", () => {
       await openA;
     });
 
-    expect(ref.result.activeTab).toBe("b.md");
-    expect(ref.result.openTabs.map((tab) => tab.path)).toEqual(["b.md"]);
+    expect(ref.result.currentPath).toBe("b.md");
+    expect(ref.result.currentDocument).toEqual({
+      path: "b.md",
+      name: "b.md",
+      dirty: false,
+    });
     expect(ref.result.editorDoc).toBe("B");
+  });
+
+  it("cancels file switching when the unsaved-changes prompt says cancel", async () => {
+    const fs = new MemoryFileSystem({
+      "draft.md": "hello",
+      "other.md": "world",
+    });
+    const requestUnsavedChangesDecision = vi.fn<
+      (request: UnsavedChangesRequest) => Promise<UnsavedChangesDecision>
+    >(async () => "cancel");
+    const { Harness, ref } = createHarness(fs, requestUnsavedChangesDecision);
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange("hello!");
+    });
+
+    await act(async () => {
+      await ref.result.openFile("other.md");
+    });
+
+    expect(requestUnsavedChangesDecision).toHaveBeenCalledWith({
+      reason: "switch-file",
+      currentDocument: {
+        path: "draft.md",
+        name: "draft.md",
+      },
+      target: {
+        path: "other.md",
+        name: "other.md",
+      },
+    });
+    expect(ref.result.currentPath).toBe("draft.md");
+    expect(ref.result.editorDoc).toBe("hello!");
+    expect(ref.result.currentDocument?.dirty).toBe(true);
   });
 });

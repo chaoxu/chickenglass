@@ -4,11 +4,14 @@ import { GotoLineDialog } from "./goto-line-dialog";
 import { SearchPanel } from "./search-panel";
 import { SettingsDialog } from "./settings-dialog";
 import { ShortcutsDialog } from "./shortcuts-dialog";
+import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 import { PerfDebugPanel } from "./perf-debug-panel";
+import type { UseDialogsReturn } from "../hooks/use-dialogs";
 import type { AppEditorShellController } from "../hooks/use-app-editor-shell";
 import { useEditorTelemetry } from "../stores/editor-telemetry-store";
 import type { AppOverlayController } from "../hooks/use-app-overlays";
 import type { AppWorkspaceSessionController } from "../hooks/use-app-workspace-session";
+import type { UseUnsavedChangesDialogReturn } from "../hooks/use-unsaved-changes-dialog";
 
 interface AppOverlaysProps {
   workspace: Pick<
@@ -19,48 +22,61 @@ interface AppOverlaysProps {
     AppEditorShellController,
     "handleSearchResult" | "pluginManager" | "handleGotoLine"
   >;
+  dialogs: UseDialogsReturn;
   overlays: AppOverlayController;
+  unsavedChanges: UseUnsavedChangesDialogReturn;
 }
 
-export function AppOverlays({ workspace, editor, overlays }: AppOverlaysProps) {
+export function AppOverlays({
+  workspace,
+  editor,
+  dialogs,
+  overlays,
+  unsavedChanges,
+}: AppOverlaysProps) {
   const currentLine = useEditorTelemetry((s) => s.cursorLine);
+
   return (
     <>
       <CommandPalette
-        open={overlays.dialogs.paletteOpen}
-        onOpenChange={overlays.dialogs.setPaletteOpen}
+        open={dialogs.paletteOpen}
+        onOpenChange={dialogs.setPaletteOpen}
         commands={overlays.commands}
       />
       <SearchPanel
-        open={overlays.dialogs.searchOpen}
-        onOpenChange={overlays.dialogs.setSearchOpen}
+        open={dialogs.searchOpen}
+        onOpenChange={dialogs.setSearchOpen}
         onResultSelect={(file, pos) => {
-          editor.handleSearchResult(file, pos, () => overlays.dialogs.setSearchOpen(false));
+          editor.handleSearchResult(file, pos, () => dialogs.setSearchOpen(false));
         }}
         indexer={overlays.indexer}
       />
       <SettingsDialog
-        open={overlays.dialogs.settingsOpen}
-        onOpenChange={overlays.dialogs.setSettingsOpen}
+        open={dialogs.settingsOpen}
+        onOpenChange={dialogs.setSettingsOpen}
         settings={workspace.settings}
         onUpdateSetting={workspace.updateSetting}
         theme={workspace.theme}
         onSetTheme={workspace.setTheme}
         plugins={editor.pluginManager.getPlugins()}
       />
-      <AboutDialog open={overlays.dialogs.aboutOpen} onClose={overlays.dialogs.closeAbout} />
+      <AboutDialog open={dialogs.aboutOpen} onClose={dialogs.closeAbout} />
       <ShortcutsDialog
-        open={overlays.dialogs.shortcutsOpen}
-        onClose={overlays.dialogs.closeShortcuts}
+        open={dialogs.shortcutsOpen}
+        onClose={dialogs.closeShortcuts}
       />
       <GotoLineDialog
-        open={overlays.dialogs.gotoLineOpen}
-        onOpenChange={overlays.dialogs.setGotoLineOpen}
+        open={dialogs.gotoLineOpen}
+        onOpenChange={dialogs.setGotoLineOpen}
         onGoto={(line, col) => {
           editor.handleGotoLine(line, col);
-          overlays.dialogs.setGotoLineOpen(false);
+          dialogs.setGotoLineOpen(false);
         }}
         currentLine={currentLine}
+      />
+      <UnsavedChangesDialog
+        request={unsavedChanges.request}
+        onDecision={unsavedChanges.resolveDecision}
       />
       <PerfDebugPanel />
     </>

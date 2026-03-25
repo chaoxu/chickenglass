@@ -4,15 +4,26 @@
 mod commands;
 mod menu;
 
-use commands::state::{FileWatcherState, PerfState, ProjectRoot};
+use commands::state::{FileWatcherState, LastFocusedWindow, PerfState, ProjectRoot};
+use std::collections::HashMap;
 use std::sync::Mutex;
+use tauri::{Manager, WindowEvent};
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(ProjectRoot(Mutex::new(None)))
-        .manage(FileWatcherState(Mutex::new(None)))
+        .manage(ProjectRoot(Mutex::new(HashMap::new())))
+        .manage(FileWatcherState(Mutex::new(HashMap::new())))
+        .manage(LastFocusedWindow(Mutex::new(None)))
         .manage(PerfState::new())
+        .on_window_event(|window, event| {
+            if let WindowEvent::Focused(true) = event {
+                let last_focused = window.state::<LastFocusedWindow>();
+                if let Ok(mut label) = last_focused.0.lock() {
+                    *label = Some(window.label().to_string());
+                }
+            }
+        })
         .setup(|app| {
             let menu = menu::build_menu(app)?;
             app.set_menu(menu)?;

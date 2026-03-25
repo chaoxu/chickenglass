@@ -28,15 +28,31 @@ import { isTauri } from "../lib/tauri";
 export { isTauri } from "../lib/tauri";
 
 /**
+ * Open a native folder picker dialog.
+ * Returns the selected path, or null if the user cancelled.
+ */
+export async function pickFolder(): Promise<string | null> {
+  const selected = await open({ directory: true, multiple: false });
+  // open() returns null on cancel, or a string (single) or string[] (multiple).
+  // We pass multiple: false so an array result should not occur, but guard anyway.
+  return !selected || Array.isArray(selected) ? null : selected;
+}
+
+/**
+ * Set the current Tauri project root to an already-known absolute folder path.
+ */
+export async function openFolderAt(path: string): Promise<void> {
+  await openFolderCommand(path);
+}
+
+/**
  * Open a native folder picker dialog and set it as the project root.
  * Returns the selected path, or null if the user cancelled.
  */
 export async function openFolder(): Promise<string | null> {
-  const selected = await open({ directory: true, multiple: false });
-  // open() returns null on cancel, or a string (single) or string[] (multiple).
-  // We pass multiple: false so an array result should not occur, but guard anyway.
-  if (!selected || Array.isArray(selected)) return null;
-  await openFolderCommand(selected);
+  const selected = await pickFolder();
+  if (!selected) return null;
+  await openFolderAt(selected);
   return selected;
 }
 

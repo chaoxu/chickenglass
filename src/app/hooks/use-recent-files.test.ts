@@ -40,10 +40,12 @@ vi.mock("../lib/utils", async (importOriginal) => {
 });
 
 import {
+  getRecentFileEntries,
   getRecentFiles,
   getRecentFolders,
   recordRecentFile,
   recordRecentFolder,
+  removeRecentFile,
   removeRecentEntry,
   clearRecentFiles,
   clearRecentFolders,
@@ -83,6 +85,19 @@ describe("addRecentFile (recordRecentFile)", () => {
     expect(files).toHaveLength(10);
     expect(files[0]).toBe("/file-11.md");
     expect(files[9]).toBe("/file-2.md");
+  });
+
+  it("scopes recent files by project root", () => {
+    recordRecentFile("/projects/a/index.md", "/projects/a");
+    recordRecentFile("/projects/b/index.md", "/projects/b");
+    recordRecentFile("/projects/a/notes.md", "/projects/a");
+
+    expect(getRecentFiles("/projects/a")).toEqual([
+      "/projects/a/notes.md",
+      "/projects/a/index.md",
+    ]);
+    expect(getRecentFiles("/projects/b")).toEqual(["/projects/b/index.md"]);
+    expect(getRecentFileEntries()).toHaveLength(3);
   });
 });
 
@@ -148,6 +163,16 @@ describe("removeRecent (removeRecentEntry)", () => {
     recordRecentFile("/a.md");
     removeRecentEntry("/nonexistent");
     expect(getRecentFiles()).toEqual(["/a.md"]);
+  });
+
+  it("removes only the current project's recent file entry", () => {
+    recordRecentFile("/shared.md", "/projects/a");
+    recordRecentFile("/shared.md", "/projects/b");
+
+    removeRecentFile("/shared.md", "/projects/a");
+
+    expect(getRecentFiles("/projects/a")).toEqual([]);
+    expect(getRecentFiles("/projects/b")).toEqual(["/shared.md"]);
   });
 });
 

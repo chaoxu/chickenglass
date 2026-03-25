@@ -15,7 +15,7 @@ import {
   saveWindowState,
   buildWindowState,
   type WindowState,
-  type TabState,
+  type CurrentDocumentState,
   type SidebarSectionState,
 } from "../window-state";
 
@@ -26,8 +26,8 @@ export interface UseWindowStateReturn {
    * Persist a partial update.  Merges with current state before writing.
    */
   saveState: (patch: Partial<{
-    tabs: TabState[];
-    activeTab: string | null;
+    currentDocument: CurrentDocumentState | null;
+    projectRoot: string | null;
     sidebarWidth: number;
     sidebarSections: SidebarSectionState[];
   }>) => void;
@@ -40,15 +40,15 @@ export function useWindowState(): UseWindowStateReturn {
 
   const saveState = useCallback(
     (patch: Partial<{
-      tabs: TabState[];
-      activeTab: string | null;
+      currentDocument: CurrentDocumentState | null;
+      projectRoot: string | null;
       sidebarWidth: number;
       sidebarSections: SidebarSectionState[];
     }>) => {
       setWindowState((prev) => {
         const next = buildWindowState({
-          tabs: patch.tabs ?? prev.tabs,
-          activeTab: patch.activeTab !== undefined ? patch.activeTab : prev.activeTab,
+          currentDocument: patch.currentDocument !== undefined ? patch.currentDocument : prev.currentDocument,
+          projectRoot: patch.projectRoot !== undefined ? patch.projectRoot : prev.projectRoot,
           sidebarWidth: patch.sidebarWidth ?? prev.sidebarWidth,
           sidebarSections: patch.sidebarSections ?? prev.sidebarSections,
         });

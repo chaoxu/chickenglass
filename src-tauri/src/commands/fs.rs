@@ -3,7 +3,7 @@ use std::path::Path;
 
 use base64::Engine;
 use serde::Serialize;
-use tauri::{State, command};
+use tauri::{State, WebviewWindow, command};
 
 use super::perf::measure_command;
 use super::path::{current_project_root, resolve_existing_path, resolve_project_path};
@@ -22,6 +22,7 @@ pub struct FileEntry {
 /// Open a folder dialog and set it as the project root.
 #[command]
 pub fn open_folder(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
@@ -35,7 +36,7 @@ pub fn open_folder(
             .canonicalize()
             .map_err(|e| format!("Cannot resolve path: {}", e))?;
         let mut lock = root.0.lock().map_err(|e| e.to_string())?;
-        *lock = Some(canonical);
+        lock.insert(window.label().to_string(), canonical);
         Ok(())
     })
 }
@@ -43,12 +44,13 @@ pub fn open_folder(
 /// Read a file's content as UTF-8 text.
 #[command]
 pub fn read_file(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
 ) -> Result<String, String> {
     measure_command(&perf, "tauri.read_file", "tauri.fs.read_file", "tauri", Some(&path), || {
-        let project_root = current_project_root(&root)?;
+        let project_root = current_project_root(&root, &window)?;
         let resolved = resolve_existing_path(&project_root, &path)?;
         fs::read_to_string(&resolved).map_err(|e| format!("Failed to read '{}': {}", path, e))
     })
@@ -57,13 +59,14 @@ pub fn read_file(
 /// Write content to a file (must already exist).
 #[command]
 pub fn write_file(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
     content: String,
 ) -> Result<(), String> {
     measure_command(&perf, "tauri.write_file", "tauri.fs.write_file", "tauri", Some(&path), || {
-        let project_root = current_project_root(&root)?;
+        let project_root = current_project_root(&root, &window)?;
         let resolved = resolve_existing_path(&project_root, &path)?;
         if !resolved.exists() {
             return Err(format!("File not found: {}", path));
@@ -75,13 +78,14 @@ pub fn write_file(
 /// Create a new file with optional content.
 #[command]
 pub fn create_file(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
     content: Option<String>,
 ) -> Result<(), String> {
     measure_command(&perf, "tauri.create_file", "tauri.fs.create_file", "tauri", Some(&path), || {
-        let project_root = current_project_root(&root)?;
+        let project_root = current_project_root(&root, &window)?;
         let full = resolve_project_path(&project_root, &path)?;
 
         if full.exists() {
@@ -98,6 +102,7 @@ pub fn create_file(
 /// Create a new directory (and any missing ancestors) within the project root.
 #[command]
 pub fn create_directory(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
@@ -109,7 +114,7 @@ pub fn create_directory(
         "tauri",
         Some(&path),
         || {
-            let project_root = current_project_root(&root)?;
+            let project_root = current_project_root(&root, &window)?;
             let full = resolve_project_path(&project_root, &path)?;
 
             if full.exists() {
@@ -124,12 +129,13 @@ pub fn create_directory(
 /// Check whether a file exists.
 #[command]
 pub fn file_exists(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
 ) -> Result<bool, String> {
     measure_command(&perf, "tauri.file_exists", "tauri.fs.file_exists", "tauri", Some(&path), || {
-        let project_root = current_project_root(&root)?;
+        let project_root = current_project_root(&root, &window)?;
         let full = resolve_project_path(&project_root, &path)?;
         Ok(full.exists())
     })
@@ -138,6 +144,7 @@ pub fn file_exists(
 /// Rename (move) a file within the project root.
 #[command]
 pub fn rename_file(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     old_path: String,
@@ -150,7 +157,7 @@ pub fn rename_file(
         "tauri",
         Some(&old_path),
         || {
-            let project_root = current_project_root(&root)?;
+            let project_root = current_project_root(&root, &window)?;
             let old_resolved = resolve_existing_path(&project_root, &old_path)?;
             let new_full = resolve_project_path(&project_root, &new_path)?;
 
@@ -166,11 +173,12 @@ pub fn rename_file(
 /// List the file tree starting from the project root.
 #[command]
 pub fn list_tree(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
 ) -> Result<FileEntry, String> {
     measure_command(&perf, "tauri.list_tree", "tauri.fs.list_tree", "tauri", None, || {
-        let project_root = current_project_root(&root)?;
+        let project_root = current_project_root(&root, &window)?;
         let name = project_root
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -182,12 +190,13 @@ pub fn list_tree(
 /// Delete a file within the project root.
 #[command]
 pub fn delete_file(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
 ) -> Result<(), String> {
     measure_command(&perf, "tauri.delete_file", "tauri.fs.delete_file", "tauri", Some(&path), || {
-        let project_root = current_project_root(&root)?;
+        let project_root = current_project_root(&root, &window)?;
         let resolved = resolve_existing_path(&project_root, &path)?;
         if resolved.is_dir() {
             fs::remove_dir_all(&resolved)
@@ -201,6 +210,7 @@ pub fn delete_file(
 /// Write binary data (received as base64) to a file within the project root.
 #[command]
 pub fn write_file_binary(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
@@ -213,7 +223,7 @@ pub fn write_file_binary(
         "tauri",
         Some(&path),
         || {
-            let project_root = current_project_root(&root)?;
+            let project_root = current_project_root(&root, &window)?;
             let full = resolve_project_path(&project_root, &path)?;
 
             if let Some(parent) = full.parent() {
@@ -236,6 +246,7 @@ pub fn write_file_binary(
 /// Read a file's content as raw bytes and return as base64-encoded string.
 #[command]
 pub fn read_file_binary(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
@@ -247,7 +258,7 @@ pub fn read_file_binary(
         "tauri",
         Some(&path),
         || {
-            let project_root = current_project_root(&root)?;
+            let project_root = current_project_root(&root, &window)?;
             let resolved = resolve_existing_path(&project_root, &path)?;
             let bytes = fs::read(&resolved)
                 .map_err(|e| format!("Failed to read binary file '{}': {}", path, e))?;

@@ -1,7 +1,6 @@
 import { EditorPane } from "./editor-pane";
 import { StatusBar } from "./status-bar";
 import { SidebarInset } from "./sidebar";
-import { TabBar } from "./tab-bar";
 import type { AppEditorShellController } from "../hooks/use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "../hooks/use-app-workspace-session";
 import type { FileSystem } from "../file-manager";
@@ -16,7 +15,7 @@ interface AppMainShellProps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "openTabs" | "reorderTabs" | "activeTab" | "switchToTab" | "closeFile" | "pinTab" | "editorDoc" | "pluginManager" | "handleDocChange" | "handleEditorStateChange" | "editorMode" | "handleModeChange" | "docTextForStats" | "isMarkdownFile"
+    "currentPath" | "editorDoc" | "pluginManager" | "handleDocChange" | "handleEditorStateChange" | "editorMode" | "handleModeChange" | "docTextForStats" | "isMarkdownFile"
   >;
   onOpenPalette: () => void;
 }
@@ -31,20 +30,10 @@ export function AppMainShell({
 }: AppMainShellProps) {
   return (
     <SidebarInset>
-      <TabBar
-        tabs={editor.openTabs}
-        activeTab={editor.activeTab}
-        onSelect={editor.switchToTab}
-        onClose={editor.closeFile}
-        onReorder={editor.reorderTabs}
-        onPin={editor.pinTab}
-      />
-
-      {editor.activeTab ? (
+      {editor.currentPath ? (
         <EditorPane
-          key={editor.activeTab}
           doc={editor.editorDoc}
-          docPath={editor.activeTab}
+          docPath={editor.currentPath}
           projectConfig={projectConfig}
           theme={resolvedTheme}
           fs={fs}

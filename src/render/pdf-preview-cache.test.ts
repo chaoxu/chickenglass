@@ -376,7 +376,7 @@ describe("pdfPreviewField", () => {
       // Use a view where dispatch does NOT update state synchronously,
       // simulating the window before the "loading" effect is visible.
       const state = createState();
-      let currentState = state;
+      const currentState = state;
       const view = {
         get state() {
           return currentState;

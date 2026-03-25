@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use tauri::{State, command};
+use tauri::{State, WebviewWindow, command};
 
 use super::perf::measure_command;
 use super::path::{current_project_root, resolve_existing_path};
@@ -9,6 +9,7 @@ use super::state::{PerfState, ProjectRoot};
 /// Reveal a file or directory in the OS file explorer.
 #[command]
 pub fn reveal_in_finder(
+    window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
@@ -20,7 +21,7 @@ pub fn reveal_in_finder(
         "tauri",
         Some(&path),
         || {
-            let abs_path = if let Ok(project_root) = current_project_root(&root) {
+            let abs_path = if let Ok(project_root) = current_project_root(&root, &window) {
                 resolve_existing_path(&project_root, &path)?
                     .to_string_lossy()
                     .to_string()

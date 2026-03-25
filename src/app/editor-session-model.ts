@@ -1,33 +1,26 @@
 import type { Tab } from "./tab-bar";
 
+export type SessionDocument = Pick<Tab, "path" | "name" | "dirty">;
+
 export interface EditorSessionState {
-  tabs: Tab[];
-  activePath: string | null;
+  currentDocument: SessionDocument | null;
 }
 
 export function createEditorSessionState(
-  tabs: Tab[] = [],
-  activePath: string | null = null,
+  currentDocument: SessionDocument | null = null,
 ): EditorSessionState {
-  return { tabs, activePath };
+  return { currentDocument };
 }
 
-export function findSessionTab(
+export function getCurrentSessionDocument(
   state: EditorSessionState,
-  path: string,
-): Tab | undefined {
-  return state.tabs.find((tab) => tab.path === path);
-}
-
-export function findPreviewTab(
-  state: EditorSessionState,
-): Tab | undefined {
-  return state.tabs.find((tab) => tab.preview);
+): SessionDocument | null {
+  return state.currentDocument;
 }
 
 export function hasSessionPath(
   state: EditorSessionState,
   path: string,
 ): boolean {
-  return state.tabs.some((tab) => tab.path === path);
+  return state.currentDocument?.path === path;
 }

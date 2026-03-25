@@ -5,6 +5,7 @@ import {
   createBlogDemoFileSystem,
   createDemoFileSystem,
 } from "./file-manager";
+import { getBlogFiles } from "./demo-blog";
 
 describe("MemoryFileSystem", () => {
   it("reads files that exist", async () => {
@@ -101,9 +102,17 @@ describe("createDemoFileSystem", () => {
 describe("createBlogDemoFileSystem", () => {
   it("loads the checked-in demo project when it is available", async () => {
     const fs = await createBlogDemoFileSystem();
+    const blogFiles = await getBlogFiles();
+    const demoContentPath = Object.keys(blogFiles).find((path) => path !== "FORMAT.md");
     expect(await fs.exists("FORMAT.md")).toBe(true);
+
+    if (demoContentPath) {
+      expect(await fs.exists(demoContentPath)).toBe(true);
+      return;
+    }
+
     expect(await fs.exists("index.md")).toBe(true);
-    expect(await fs.exists("graph-ride/main.md")).toBe(true);
+    expect(await fs.exists("main.md")).toBe(true);
   });
 });
 

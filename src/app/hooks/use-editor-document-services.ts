@@ -20,6 +20,7 @@ import { SourceMap, type IncludeRegion } from "../source-map";
 import { dispatchIfConnected } from "../lib/view-dispatch";
 import { useBibliography } from "./use-bibliography";
 import { measureAsync } from "../perf";
+import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
 
 /**
  * Expand `!include` directives in a document, producing a flattened text
@@ -95,7 +96,7 @@ interface UseEditorDocumentServicesOptions {
 export interface UseEditorDocumentServicesReturn {
   imageSaverRef: React.RefObject<((file: File) => Promise<string>) | null>;
   resetServices: () => void;
-  createExtensions: (baseExtensions: readonly Extension[]) => Extension[];
+  createDocumentContextExtensions: () => Extension[];
   handleFrontmatterChange: (
     frontmatter: FrontmatterState | undefined,
     view: EditorView,
@@ -103,6 +104,7 @@ export interface UseEditorDocumentServicesReturn {
   initializeView: (
     view: EditorView,
     frontmatter: FrontmatterState | undefined,
+    docOverride?: string,
   ) => void;
 }
 
@@ -113,15 +115,23 @@ export function useEditorDocumentServices({
 }: UseEditorDocumentServicesOptions): UseEditorDocumentServicesReturn {
   const bibliography = useBibliography({ fs, docPath });
   const imageSaverRef = useRef<((file: File) => Promise<string>) | null>(null);
+  const includeExpansionGenerationRef = useRef(0);
+
+  const beginIncludeExpansion = useCallback(() => {
+    includeExpansionGenerationRef.current += 1;
+    return includeExpansionGenerationRef.current;
+  }, []);
 
   const resetServices = useCallback(() => {
     bibliography.resetTracking();
     imageSaverRef.current = null;
+    window.__cfSourceMap = null;
+    includeExpansionGenerationRef.current += 1;
   }, [bibliography]);
 
   const imageFolderRef = useRef<string | undefined>(undefined);
 
-  const createExtensions = useCallback((baseExtensions: readonly Extension[]) => {
+  const createDocumentContextExtensions = useCallback(() => {
     const imageSaveCtx: ImageSaveContext = {
       fs,
       docPath,
@@ -133,7 +143,6 @@ export function useEditorDocumentServices({
     imageSaverRef.current = imageSaver;
 
     return [
-      ...baseExtensions,
       fileSystemFacet.of(fs ?? null),
       documentPathFacet.of(docPath ?? ""),
       imagePasteExtension({ saveImage: imageSaver }),
@@ -154,35 +163,45 @@ export function useEditorDocumentServices({
   const initializeView = useCallback((
     view: EditorView,
     frontmatter: FrontmatterState | undefined,
+    docOverride?: string,
   ) => {
     const bibliographyPath = frontmatter?.config.bibliography ?? "";
     const cslPath = frontmatter?.config.csl ?? "";
     bibliography.loadInitial(bibliographyPath, cslPath, view);
 
+    const sourceDoc = docOverride ?? doc;
+    const includeExpansionGeneration = beginIncludeExpansion();
+    window.__cfSourceMap = null;
     if (fs && docPath) {
       void (async () => {
         try {
-          const { text: expanded, regions } = await expandIncludes(docPath, doc, fs);
-          if (expanded === doc) return;
+          const { text: expanded, regions } = await expandIncludes(docPath, sourceDoc, fs);
+          if (includeExpansionGenerationRef.current !== includeExpansionGeneration) return;
+          if (expanded === sourceDoc) return;
           const dispatched = dispatchIfConnected(
             view,
-            { changes: { from: 0, to: view.state.doc.length, insert: expanded } },
+            {
+              changes: { from: 0, to: view.state.doc.length, insert: expanded },
+              annotations: programmaticDocumentChangeAnnotation.of(true),
+            },
             { context: "Include expansion dispatch error:" },
           );
+          if (includeExpansionGenerationRef.current !== includeExpansionGeneration) return;
           if (dispatched && regions.length > 0) {
             window.__cfSourceMap = new SourceMap(regions);
           }
         } catch (e: unknown) {
+          if (includeExpansionGenerationRef.current !== includeExpansionGeneration) return;
           console.error("[editor] expandIncludes failed", e);
         }
       })();
     }
-  }, [bibliography, doc, docPath, fs]);
+  }, [beginIncludeExpansion, bibliography, doc, docPath, fs]);
 
   return {
     imageSaverRef,
     resetServices,
-    createExtensions,
+    createDocumentContextExtensions,
     handleFrontmatterChange,
     initializeView,
   };

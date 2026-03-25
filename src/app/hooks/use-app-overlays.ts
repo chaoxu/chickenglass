@@ -6,7 +6,7 @@ import type { FileSystem } from "../file-manager";
 import { basename, modKey } from "../lib/utils";
 import type { PaletteCommand } from "../components/command-palette";
 import { useAutoSave } from "./use-auto-save";
-import { useDialogs, type UseDialogsReturn } from "./use-dialogs";
+import type { UseDialogsReturn } from "./use-dialogs";
 import { useHotkeys } from "./use-hotkeys";
 import { useMenuEvents } from "./use-menu-events";
 import type { AppEditorShellController } from "./use-app-editor-shell";
@@ -14,25 +14,37 @@ import type { AppWorkspaceSessionController } from "./use-app-workspace-session"
 
 interface AppOverlayDeps {
   fs: FileSystem;
+  dialogs: UseDialogsReturn;
+  suspendAutoSave: boolean;
+  suspendAutoSaveRef: { current: boolean };
+  suspendAutoSaveVersionRef: { current: number };
   workspace: Pick<
     AppWorkspaceSessionController,
     "settings" | "theme" | "setTheme" | "resolvedTheme" | "recentFiles" | "fileTree" | "setSidebarCollapsed" | "setSidebarTab" | "setSidenotesCollapsed" | "handleOpenFolder"
   >;
   editor: Pick<
     AppEditorShellController,
-    "activeTab" | "liveDocs" | "openFile" | "saveFile" | "saveAs" | "closeFile" | "hasDirtyFiles" | "pluginManager" | "handleInsertImage"
+    "currentPath" | "liveDocs" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
   >;
+  onOpenFile: () => void;
 }
 
 export interface AppOverlayController {
-  dialogs: UseDialogsReturn;
   commands: PaletteCommand[];
   indexer: BackgroundIndexer;
   openPalette: () => void;
 }
 
-export function useAppOverlays({ fs, workspace, editor }: AppOverlayDeps): AppOverlayController {
-  const dialogs = useDialogs();
+export function useAppOverlays({
+  fs,
+  dialogs,
+  suspendAutoSave,
+  suspendAutoSaveRef,
+  suspendAutoSaveVersionRef,
+  workspace,
+  editor,
+  onOpenFile,
+}: AppOverlayDeps): AppOverlayController {
   const [indexer] = useState(() => new BackgroundIndexer());
 
   useEffect(() => {
@@ -42,19 +54,18 @@ export function useAppOverlays({ fs, workspace, editor }: AppOverlayDeps): AppOv
   }, [indexer]);
 
   const handleExportHtml = useCallback(() => {
-    const activeTab = editor.activeTab;
-    if (!activeTab) return;
-    const activeTabPath = activeTab;
-    const doc = editor.liveDocs.current.get(activeTabPath) ?? "";
+    const currentPath = editor.currentPath;
+    if (!currentPath) return;
+    const doc = editor.liveDocs.current.get(currentPath) ?? "";
     void (async () => {
       try {
-        const outputPath = await exportDocument(doc, "html", activeTabPath, fs);
+        const outputPath = await exportDocument(doc, "html", currentPath, fs);
         window.alert(`Exported to ${outputPath}`);
       } catch (err: unknown) {
         window.alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     })();
-  }, [editor.activeTab, editor.liveDocs, fs]);
+  }, [editor.currentPath, editor.liveDocs, fs]);
 
   const handleBatchExportHtml = useCallback(() => {
     const fileTree = workspace.fileTree;
@@ -76,55 +87,46 @@ export function useAppOverlays({ fs, workspace, editor }: AppOverlayDeps): AppOv
     });
   }, [workspace.fileTree, fs]);
 
-  // ── Palette commands ────────────────────────────────────────────────────────
-  // Built directly from app deps — single source of truth for command palette.
   const commands: PaletteCommand[] = useMemo(() => [
-    // ── File ──────────────────────────────────────────────────────────────────
     { id: "file.save", label: "Save File", category: "File", shortcut: `${modKey}+S`, action: () => { void editor.saveFile(); } },
+    { id: "file.open-file", label: "Open File...", category: "File", shortcut: `${modKey}+O`, action: () => onOpenFile() },
     { id: "file.save-as", label: "Save As...", category: "File", shortcut: `${modKey}+Shift+S`, action: () => { void editor.saveAs(); } },
-    { id: "file.close-tab", label: "Close Tab", category: "File", shortcut: `${modKey}+W`, action: () => { if (editor.activeTab) void editor.closeFile(editor.activeTab); } },
+    { id: "file.close-file", label: "Close File", category: "File", shortcut: `${modKey}+W`, action: () => { void editor.closeCurrentFile(); } },
     { id: "file.open-folder", label: "Open Folder...", category: "File", action: () => workspace.handleOpenFolder() },
-
-    // ── Recent files (dynamic) ────────────────────────────────────────────────
     ...(workspace.recentFiles ?? []).map((path, i) => ({
       id: `file.recent-${i}`,
       label: `Open Recent: ${basename(path)}`,
       category: "File",
       action: () => { void editor.openFile(path); },
     })),
-
-    // ── Format ────────────────────────────────────────────────────────────────
     { id: "format.bold", label: "Toggle Bold", category: "Format", shortcut: `${modKey}+B`, action: () => dispatchFormatEvent("bold") },
     { id: "format.italic", label: "Toggle Italic", category: "Format", shortcut: `${modKey}+I`, action: () => dispatchFormatEvent("italic") },
     { id: "format.heading1", label: "Heading 1", category: "Format", action: () => dispatchFormatEvent("heading", { level: 1 }) },
     { id: "format.heading2", label: "Heading 2", category: "Format", action: () => dispatchFormatEvent("heading", { level: 2 }) },
     { id: "format.heading3", label: "Heading 3", category: "Format", action: () => dispatchFormatEvent("heading", { level: 3 }) },
-
-    // ── Navigation ────────────────────────────────────────────────────────────
     { id: "nav.go-to-line", label: "Go to Line", category: "Navigation", shortcut: `${modKey}+G`, action: () => dialogs.setGotoLineOpen(true) },
     { id: "nav.show-files", label: "Show Files Panel", category: "Navigation", action: () => { workspace.setSidebarCollapsed(false); workspace.setSidebarTab("files"); } },
     { id: "nav.show-outline", label: "Show Outline Panel", category: "Navigation", action: () => { workspace.setSidebarCollapsed(false); workspace.setSidebarTab("outline"); } },
     { id: "nav.search", label: "Find in Files", category: "Navigation", shortcut: `${modKey}+Shift+F`, action: () => dialogs.setSearchOpen(true) },
     { id: "nav.settings", label: "Settings", category: "Navigation", shortcut: `${modKey}+,`, action: () => dialogs.setSettingsOpen(true) },
-
-    // ── View ──────────────────────────────────────────────────────────────────
     { id: "view.toggle-sidebar", label: "Toggle Sidebar", category: "View", shortcut: `${modKey}+\\`, action: () => workspace.setSidebarCollapsed((value) => !value) },
     { id: "view.toggle-sidenotes", label: "Toggle Sidenote Margin", category: "View", action: () => workspace.setSidenotesCollapsed((value) => !value) },
     { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => workspace.setTheme(workspace.resolvedTheme === "dark" ? "light" : "dark") },
-
-    // ── Insert ────────────────────────────────────────────────────────────────
     { id: "insert.image", label: "Insert Image", category: "Insert", action: () => editor.handleInsertImage() },
-
-    // ── Export ────────────────────────────────────────────────────────────────
     { id: "export.html", label: "Export Current File to HTML", category: "Export", action: handleExportHtml },
     { id: "export.batch-html", label: "Export All Files to HTML", category: "Export", action: handleBatchExportHtml },
-
-    // ── Help ──────────────────────────────────────────────────────────────────
     { id: "help.shortcuts", label: "Keyboard Shortcuts", category: "Help", shortcut: `${modKey}+/`, action: () => dialogs.setShortcutsOpen(true) },
     { id: "help.about", label: "About Coflat", category: "Help", action: () => dialogs.setAboutOpen(true) },
-  ], [dialogs, editor, workspace, handleExportHtml, handleBatchExportHtml]);
+  ], [dialogs, editor, workspace, handleExportHtml, handleBatchExportHtml, onOpenFile]);
 
-  useAutoSave(editor.hasDirtyFiles, editor.saveFile, workspace.settings.autoSaveInterval);
+  useAutoSave(
+    editor.hasDirtyDocument,
+    editor.saveFile,
+    workspace.settings.autoSaveInterval,
+    suspendAutoSave,
+    suspendAutoSaveRef,
+    suspendAutoSaveVersionRef,
+  );
 
   useHotkeys([
     { key: "mod+s", handler: () => { void editor.saveFile(); } },
@@ -139,17 +141,18 @@ export function useAppOverlays({ fs, workspace, editor }: AppOverlayDeps): AppOv
 
   useMenuEvents({
     onSave: () => { void editor.saveFile(); },
+    onOpenFile: onOpenFile,
     onSaveAs: () => { void editor.saveAs(); },
-    onCloseTab: () => { if (editor.activeTab) void editor.closeFile(editor.activeTab); },
+    onCloseFile: () => { void editor.closeCurrentFile(); },
     onToggleSidebar: () => workspace.setSidebarCollapsed((value) => !value),
     onShowSearch: () => dialogs.setSearchOpen(true),
     onShowShortcuts: () => dialogs.setShortcutsOpen(true),
     onAbout: () => dialogs.setAboutOpen(true),
     onOpenFolder: workspace.handleOpenFolder,
+    onExport: handleExportHtml,
   });
 
   return {
-    dialogs,
     commands,
     indexer,
     openPalette: () => dialogs.setPaletteOpen(true),

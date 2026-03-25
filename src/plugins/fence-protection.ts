@@ -38,6 +38,7 @@ import { documentSemanticsField } from "../semantics/codemirror-source";
 import { collectCodeBlocks } from "../render/code-block-render";
 import { countColons } from "../parser";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
+import { programmaticDocumentChangeAnnotation } from "../editor/programmatic-document-change";
 
 // ---------------------------------------------------------------------------
 // Shared types and helpers
@@ -162,6 +163,7 @@ export function getOpeningFenceColonRanges(state: EditorState): { from: number; 
 export const openingFenceDeletionCleanup = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged) return tr;
   if (tr.annotation(fenceOperationAnnotation)) return tr;
+  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
 
   const state = tr.startState;
   const blocks = collectAllFencedBlocks(state);
@@ -218,6 +220,7 @@ export const closingFenceProtection = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged) return tr;
   // Bypass for programmatic fence operations (block-type picker, etc.)
   if (tr.annotation(fenceOperationAnnotation)) return tr;
+  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
 
   const fenceRanges = getClosingFenceRanges(tr.startState);
   if (fenceRanges.length === 0) return tr;
@@ -259,6 +262,7 @@ export const closingFenceProtection = EditorState.transactionFilter.of((tr) => {
 export const openingFenceColonProtection = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged) return tr;
   if (tr.annotation(fenceOperationAnnotation)) return tr;
+  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
 
   const colonRanges = getOpeningFenceColonRanges(tr.startState);
   if (colonRanges.length === 0) return tr;

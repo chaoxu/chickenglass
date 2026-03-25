@@ -16,6 +16,9 @@
  */
 
 import { useEffect, useRef } from "react";
+import { isTauri } from "../../lib/tauri";
+
+const TAURI_EVENT_SAVE_DELAY_MS = 250;
 
 /**
  * @param isDirty  - True when there are unsaved changes to persist.
@@ -27,14 +30,34 @@ export function useAutoSave(
   isDirty: boolean,
   onSave: () => Promise<void>,
   interval = 30_000,
+  suspended = false,
+  suspendedRef?: { current: boolean },
+  suspendedVersionRef?: { current: number },
 ): void {
   // savingRef lives outside the effect so the guard persists across
   // re-registrations that happen when isDirty or onSave change.
   const savingRef = useRef(false);
+  const pendingEventSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    const isSuspended = () => suspended || suspendedRef?.current === true;
+
+    const clearPendingEventSave = () => {
+      if (pendingEventSaveRef.current !== null) {
+        clearTimeout(pendingEventSaveRef.current);
+        pendingEventSaveRef.current = null;
+      }
+    };
+
+    if (isSuspended()) {
+      clearPendingEventSave();
+      return clearPendingEventSave;
+    }
+
     /** Save if dirty; guard against concurrent overlapping saves. */
     const trySave = () => {
+      clearPendingEventSave();
+      if (isSuspended()) return;
       if (!isDirty || savingRef.current) return;
       savingRef.current = true;
       onSave().catch(() => {
@@ -44,10 +67,37 @@ export function useAutoSave(
       });
     };
 
-    const handleBlur = () => trySave();
-    const handleVisibility = () => { if (document.hidden) trySave(); };
+    const scheduleEventSave = (reason: "blur" | "hidden") => {
+      if (!isTauri()) {
+        trySave();
+        return;
+      }
+
+      clearPendingEventSave();
+      const suspendedVersionAtSchedule = suspendedVersionRef?.current ?? 0;
+      pendingEventSaveRef.current = setTimeout(() => {
+        pendingEventSaveRef.current = null;
+        if ((suspendedVersionRef?.current ?? 0) !== suspendedVersionAtSchedule) return;
+        if (isSuspended()) return;
+        if (reason === "blur" && document.hasFocus()) return;
+        if (reason === "hidden" && !document.hidden) return;
+        trySave();
+      }, TAURI_EVENT_SAVE_DELAY_MS);
+    };
+
+    const handleBlur = () => scheduleEventSave("blur");
+    const handleFocus = () => clearPendingEventSave();
+    const handleVisibility = () => {
+      if (document.hidden) {
+        scheduleEventSave("hidden");
+        return;
+      }
+
+      clearPendingEventSave();
+    };
 
     window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
 
     // Periodic timer. Disabled when interval <= 0.
@@ -58,8 +108,10 @@ export function useAutoSave(
 
     return () => {
       window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
+      clearPendingEventSave();
       if (timerId !== null) clearInterval(timerId);
     };
-  }, [isDirty, onSave, interval]);
+  }, [interval, isDirty, onSave, suspended, suspendedRef, suspendedVersionRef]);
 }

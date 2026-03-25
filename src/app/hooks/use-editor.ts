@@ -10,12 +10,12 @@
  * - Debounce word-count computation (300 ms)
  * - Delegate theme sync, debug wiring, and document services to internal hooks
  * - Delegate scroll tracking to useEditorScroll
- * - Destroy the old view and create a new one when the `doc` prop changes
+ * - Keep a single EditorView alive while synchronising external document switches
  */
 
 import { useRef, useEffect, useState, useMemo, type RefObject } from "react";
 import { EditorView } from "@codemirror/view";
-import type { Extension } from "@codemirror/state";
+import { Compartment, type Extension } from "@codemirror/state";
 
 import {
   createEditor,
@@ -24,6 +24,7 @@ import {
   frontmatterField,
   type FrontmatterState,
 } from "../../editor";
+import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
 import type { ProjectConfig } from "../project-config";
 import type { FileSystem } from "../file-manager";
 import { computeDocStats } from "../writing-stats";
@@ -39,7 +40,7 @@ export type ResolvedTheme = "light" | "dark";
 
 /** Options accepted by useEditor. */
 export interface UseEditorOptions {
-  /** Initial document content. When this changes the editor is recreated. */
+  /** Initial/current document content. External replacements are synced into the existing view. */
   doc: string;
   /** Project-level config forwarded to createEditor. */
   projectConfig?: ProjectConfig;
@@ -90,8 +91,8 @@ export interface UseEditorReturn {
 /**
  * Mount a CM6 editor into `containerRef` and expose reactive state.
  *
- * The editor is destroyed and recreated whenever the `doc` string changes
- * (same pattern as `switchEditor` in app.ts).
+ * The editor is mounted once and external document changes are synced into the
+ * existing view instead of forcing a cold restart.
  */
 export function useEditor(
   containerRef: RefObject<HTMLElement | null>,
@@ -121,6 +122,9 @@ export function useEditor(
   const [view, setView] = useState<EditorView | null>(null);
   const documentServices = useEditorDocumentServices({ doc, fs, docPath });
   const debugBridge = useEditorDebugBridge();
+  const documentContextCompartmentRef = useRef(new Compartment());
+  const lastLoadedDocRef = useRef(doc);
+  const lastLoadedPathRef = useRef(docPath);
 
   // Delegate scroll tracking to useEditorScroll hook.
   const { scrollTop, viewportFrom, resetScroll } = useEditorScroll(view);
@@ -131,16 +135,30 @@ export function useEditor(
   const onCursorChangeRef = useRef(onCursorChange);
   const onFrontmatterChangeRef = useRef(onFrontmatterChange);
   const handleFrontmatterChangeRef = useRef(documentServices.handleFrontmatterChange);
+  const createDocumentContextExtensionsRef = useRef(documentServices.createDocumentContextExtensions);
+  const initializeViewRef = useRef(documentServices.initializeView);
+  const resetServicesRef = useRef(documentServices.resetServices);
   useEffect(() => {
     onDocChangeRef.current = onDocChange;
     onCursorChangeRef.current = onCursorChange;
     onFrontmatterChangeRef.current = onFrontmatterChange;
     handleFrontmatterChangeRef.current = documentServices.handleFrontmatterChange;
-  }, [onDocChange, onCursorChange, onFrontmatterChange, documentServices.handleFrontmatterChange]);
+    createDocumentContextExtensionsRef.current = documentServices.createDocumentContextExtensions;
+    initializeViewRef.current = documentServices.initializeView;
+    resetServicesRef.current = documentServices.resetServices;
+  }, [
+    documentServices.createDocumentContextExtensions,
+    documentServices.handleFrontmatterChange,
+    documentServices.initializeView,
+    documentServices.resetServices,
+    onCursorChange,
+    onDocChange,
+    onFrontmatterChange,
+  ]);
 
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Create / destroy editor when doc or container changes ─────────────────
+  // ── Create / destroy editor once per mount ────────────────────────────────
   useEffect(() => {
     if (!containerRef.current) return;
     const container = containerRef.current;
@@ -149,7 +167,11 @@ export function useEditor(
 
     // Build the updateListener that drives reactive state.
     const updateListener = EditorView.updateListener.of((update) => {
-      // Cursor changes → Zustand store (no React setState)
+      const programmaticDocChange = update.transactions.some((tr) =>
+        tr.annotation(programmaticDocumentChangeAnnotation),
+      );
+
+      // Cursor changes
       if (update.selectionSet) {
         const pos = update.state.selection.main.head;
         useEditorTelemetryStore.getState().setCursorPos(pos, update.view);
@@ -158,7 +180,9 @@ export function useEditor(
 
       if (update.docChanged) {
         const docStr = update.state.doc.toString();
-        onDocChangeRef.current?.(docStr);
+        if (!programmaticDocChange) {
+          onDocChangeRef.current?.(docStr);
+        }
 
         // Debounced word count → Zustand store (no React setState)
         if (wordCountTimerRef.current !== null) {
@@ -180,10 +204,13 @@ export function useEditor(
         handleFrontmatterChangeRef.current(fm, update.view);
       }
     });
-    const extraExtensions = documentServices.createExtensions([
+    const extraExtensions = [
       updateListener,
+      documentContextCompartmentRef.current.of(
+        createDocumentContextExtensionsRef.current(),
+      ),
       ...(extensions ?? []),
-    ]);
+    ];
 
     const newView = measureSync("editor.create", () => createEditor({
       parent: container,
@@ -204,7 +231,9 @@ export function useEditor(
     // Initial frontmatter notification
     const initialFm = newView.state.field(frontmatterField, false);
     onFrontmatterChangeRef.current?.(initialFm);
-    documentServices.initializeView(newView, initialFm);
+    initializeViewRef.current(newView, initialFm, doc);
+    lastLoadedDocRef.current = doc;
+    lastLoadedPathRef.current = docPath;
 
     return () => {
       if (wordCountTimerRef.current !== null) {
@@ -212,16 +241,59 @@ export function useEditor(
         wordCountTimerRef.current = null;
       }
       telemetry.reset();
-      documentServices.resetServices();
+      resetServicesRef.current();
       debugBridge.clearDebugView(newView);
       newView.destroy();
       setView(null);
     };
-    // Doc changes intentionally recreate the editor (same as switchEditor).
-    // docPath/fs changes are handled by React remounting EditorPane via
-    // key={activeTab}, so documentServices is NOT needed here — adding it
-    // caused an infinite recreation loop (unstable object reference).
-  }, [doc, containerRef]);
+  }, [containerRef, debugBridge, extensions, pluginManager, projectConfig, resetScroll]);
+
+  useEffect(() => {
+    if (!view) return;
+    view.dispatch({
+      effects: documentContextCompartmentRef.current.reconfigure(
+        createDocumentContextExtensionsRef.current(),
+      ),
+    });
+  }, [documentServices.createDocumentContextExtensions, view]);
+
+  useEffect(() => {
+    if (!view) return;
+
+    const pathChanged = docPath !== lastLoadedPathRef.current;
+    const docChangedExternally = doc !== view.state.doc.toString();
+    if (!pathChanged && !docChangedExternally) {
+      return;
+    }
+
+    resetServicesRef.current();
+
+    if (docChangedExternally) {
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: doc,
+        },
+        selection: { anchor: 0 },
+        annotations: programmaticDocumentChangeAnnotation.of(true),
+      });
+    } else if (pathChanged) {
+      view.dispatch({ selection: { anchor: 0 } });
+    }
+
+    view.scrollDOM.scrollTop = 0;
+    resetScroll();
+    const telemetry = useEditorTelemetryStore.getState();
+    telemetry.setWordCount(computeDocStats(doc).words);
+    telemetry.setCursorPos(0, view);
+
+    const currentFrontmatter = view.state.field(frontmatterField, false);
+    onFrontmatterChangeRef.current?.(currentFrontmatter);
+    initializeViewRef.current(view, currentFrontmatter, doc);
+    lastLoadedDocRef.current = doc;
+    lastLoadedPathRef.current = docPath;
+  }, [doc, docPath, documentServices.initializeView, documentServices.resetServices, resetScroll, view]);
 
   return {
     view,

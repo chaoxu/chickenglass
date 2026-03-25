@@ -7,9 +7,11 @@ describe("applySaveAsResult", () => {
   it("renames the active session path and clears dirty state", () => {
     const buffers = new Map([["draft.md", "new content"]]);
     const liveDocs = new Map([["draft.md", "new content"]]);
-    const state = createEditorSessionState([
-      { path: "draft.md", name: "draft.md", dirty: true },
-    ], "draft.md");
+    const state = createEditorSessionState({
+      path: "draft.md",
+      name: "draft.md",
+      dirty: true,
+    });
 
     const next = applySaveAsResult({
       state,
@@ -20,10 +22,11 @@ describe("applySaveAsResult", () => {
       doc: "new content",
     });
 
-    expect(next.activePath).toBe("notes/final.md");
-    expect(next.tabs).toEqual([
-      { path: "notes/final.md", name: "final.md", dirty: false },
-    ]);
+    expect(next.currentDocument).toEqual({
+      path: "notes/final.md",
+      name: "final.md",
+      dirty: false,
+    });
     expect(buffers.has("draft.md")).toBe(false);
     expect(liveDocs.has("draft.md")).toBe(false);
     expect(buffers.get("notes/final.md")).toBe("new content");
@@ -33,9 +36,11 @@ describe("applySaveAsResult", () => {
   it("clears dirty state when saving in place", () => {
     const buffers = new Map([["notes/final.md", "new content"]]);
     const liveDocs = new Map([["notes/final.md", "new content"]]);
-    const state = createEditorSessionState([
-      { path: "notes/final.md", name: "final.md", dirty: true },
-    ], "notes/final.md");
+    const state = createEditorSessionState({
+      path: "notes/final.md",
+      name: "final.md",
+      dirty: true,
+    });
 
     const next = applySaveAsResult({
       state,
@@ -46,7 +51,7 @@ describe("applySaveAsResult", () => {
       doc: "new content",
     });
 
-    expect(next.tabs[0]?.dirty).toBe(false);
+    expect(next.currentDocument?.dirty).toBe(false);
     expect(buffers.get("notes/final.md")).toBe("new content");
     expect(liveDocs.get("notes/final.md")).toBe("new content");
   });

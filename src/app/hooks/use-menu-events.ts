@@ -20,7 +20,8 @@ import { dispatchFormatEvent } from "../../constants/events";
 export interface MenuEventHandlers {
   onSave?: () => void;
   onSaveAs?: () => void;
-  onCloseTab?: () => void;
+  onOpenFile?: () => void;
+  onCloseFile?: () => void;
   onToggleSidebar?: () => void;
   onShowSearch?: () => void;
   onShowShortcuts?: () => void;
@@ -37,7 +38,8 @@ const handlerEventMap: Record<string, keyof MenuEventHandlers> = {
   // ── File ────────────────────────────────────────────────────────
   file_save: "onSave",
   file_save_as: "onSaveAs",
-  file_close_tab: "onCloseTab",
+  file_open_file: "onOpenFile",
+  file_close_tab: "onCloseFile",
   file_open_folder: "onOpenFolder",
   file_export: "onExport",
 

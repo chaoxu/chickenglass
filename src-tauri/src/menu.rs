@@ -1,5 +1,6 @@
+use crate::commands::state::LastFocusedWindow;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
-use tauri::{App, Emitter, Wry};
+use tauri::{App, AppHandle, Emitter, Manager, Wry};
 
 /// Build the application menu bar with File, Edit, View, Format, and Help menus.
 pub fn build_menu(app: &App<Wry>) -> Result<tauri::menu::Menu<Wry>, tauri::Error> {
@@ -39,7 +40,7 @@ pub fn build_menu(app: &App<Wry>) -> Result<tauri::menu::Menu<Wry>, tauri::Error
         )
         .separator()
         .item(
-            &MenuItemBuilder::with_id("file_close_tab", "Close Tab")
+            &MenuItemBuilder::with_id("file_close_tab", "Close File")
                 .accelerator("CmdOrCtrl+W")
                 .build(app)?,
         )
@@ -158,8 +159,33 @@ pub fn setup_menu_events(app: &App<Wry>) {
         // handled natively by the OS and don't fire on_menu_event, so we only
         // need to handle custom menu items here.
 
-        // Emit a "menu-event" with the menu item ID as payload.
-        // The frontend listens for this and dispatches the appropriate action.
-        let _ = app_handle.emit("menu-event", id);
+        // Route app-menu events to the focused webview window when possible so
+        // multiple editor windows don't all execute the same command.
+        if let Some(label) = focused_webview_label(app_handle)
+            .or_else(|| last_focused_webview_label(app_handle))
+        {
+            let _ = app_handle.emit_to(label.as_str(), "menu-event", id);
+            return;
+        }
+
+        eprintln!("[menu] dropped menu event '{}' because no target window was available", id);
     });
+}
+
+fn focused_webview_label(app_handle: &AppHandle<Wry>) -> Option<String> {
+    app_handle.webview_windows().into_iter().find_map(|(label, window)| {
+        match window.is_focused() {
+            Ok(true) => Some(label),
+            _ => None,
+        }
+    })
+}
+
+fn last_focused_webview_label(app_handle: &AppHandle<Wry>) -> Option<String> {
+    let label = {
+        let state = app_handle.state::<LastFocusedWindow>();
+        state.0.lock().ok()?.clone()?
+    };
+
+    app_handle.get_webview_window(&label).map(|_| label)
 }
