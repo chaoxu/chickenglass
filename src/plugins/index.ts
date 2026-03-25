@@ -26,8 +26,10 @@ export {
 } from "./block-counter";
 export {
   blockRenderPlugin,
-  fenceOperationAnnotation,
 } from "./plugin-render";
+export {
+  fenceOperationAnnotation,
+} from "./fence-protection";
 export {
   formatBlockHeader,
   createBlockRender,
