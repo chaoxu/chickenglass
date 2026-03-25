@@ -362,16 +362,23 @@ function insertBlock(
   _nestingDepth: number,
   ancestorFences?: { openFrom: number; openTo: number; closeFrom: number; closeTo: number; colons: number }[],
 ): void {
-  // Step 1: Upgrade ancestors that use ::: to :::: (if any)
+  // Step 1: Upgrade ancestors so each has MORE colons than its child.
+  // ancestorFences[0] is the direct parent, [1] is grandparent, etc.
+  // New block uses 3 colons. Parent needs > 3, grandparent needs > parent, etc.
   if (ancestorFences && ancestorFences.length > 0) {
     const upgrades: { from: number; to: number; insert: string }[] = [];
+    let requiredMin = 3; // child's colon count
     for (const fence of ancestorFences) {
-      if (fence.colons <= 3) {
-        const newColons = ":".repeat(fence.colons + 1);
+      if (fence.colons <= requiredMin) {
+        const newCount = requiredMin + 1;
+        const newColons = ":".repeat(newCount);
         upgrades.push({ from: fence.openFrom, to: fence.openTo, insert: newColons });
         if (fence.closeFrom >= 0) {
           upgrades.push({ from: fence.closeFrom, to: fence.closeTo, insert: newColons });
         }
+        requiredMin = newCount; // next ancestor must have even more
+      } else {
+        break; // this ancestor and all above already have enough colons
       }
     }
     if (upgrades.length > 0) {
