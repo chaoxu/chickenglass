@@ -8,13 +8,13 @@ max_depth = 1
 job_max_runtime_seconds = 1800
 
 [agents.worker]
-config_file = ".codex/agents/worker.toml"
+config_file = "agents/worker.toml"
 description = "Implementation agent with temp-clone isolation for the run skill."
 
 [agents.reviewer]
-config_file = ".codex/agents/reviewer.toml"
+config_file = "agents/reviewer.toml"
 description = "Read-only code review agent for the run skill."
 
 [agents.explorer]
-config_file = ".codex/agents/explorer.toml"
+config_file = "agents/explorer.toml"
 description = "Read-only codebase search agent for the run skill."

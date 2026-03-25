@@ -8,6 +8,7 @@ import {
 } from "@codemirror/view";
 import katex from "katex";
 import "katex/dist/katex.min.css";
+import { CSS } from "../constants/css-classes";
 import {
   cursorInRange,
   buildDecorations,
@@ -107,10 +108,41 @@ export class MathWidget extends MacroAwareWidget {
 
   createDOM(): HTMLElement {
     const el = document.createElement(this.isDisplay ? "div" : "span");
-    el.className = this.isDisplay ? "cf-math-display" : "cf-math-inline";
+    el.className = this.isDisplay ? CSS.mathDisplay : CSS.mathInline;
     el.setAttribute("role", "img");
     el.setAttribute("aria-label", this.latex);
+    if (this.isDisplay) {
+      const content = document.createElement("div");
+      renderKatex(content, this.latex, this.isDisplay, this.macros);
+      // Shrink-wrap the rendered equation so only visible math is clickable.
+      content.classList.add(CSS.mathDisplayContent);
+      el.appendChild(content);
+      return el;
+    }
     renderKatex(el, this.latex, this.isDisplay, this.macros);
+    return el;
+  }
+
+  override toDOM(view?: EditorView): HTMLElement {
+    if (!this.isDisplay) return super.toDOM(view);
+
+    const el = this.createDOM();
+    this.setSourceRangeAttrs(el);
+
+    if (this.sourceFrom >= 0 && view) {
+      const content = el.querySelector<HTMLElement>(`.${CSS.mathDisplayContent}`);
+      if (content) {
+        this.bindSourceReveal(content, view);
+        el.addEventListener("mousedown", (event) => {
+          if (event.target instanceof Node && content.contains(event.target)) return;
+          event.preventDefault();
+          view.focus();
+        });
+      } else {
+        this.bindSourceReveal(el, view);
+      }
+    }
+
     return el;
   }
 

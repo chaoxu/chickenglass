@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach, vi } from "vitest";
 import { CSS } from "../constants/css-classes";
 import type { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
@@ -8,7 +8,7 @@ import { parser as lezerParser } from "@lezer/markdown";
 import { MathWidget, collectMathRanges, stripMathDelimiters, getDisplayMathContentEnd } from "./math-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
-import { createTestView } from "../test-utils";
+import { createMockEditorView, createTestView } from "../test-utils";
 
 /** Count only widget (replace) decorations, ignoring mark decorations like cf-math-source. */
 function countWidgets(ranges: ReturnType<typeof collectMathRanges>): number {
@@ -108,6 +108,14 @@ describe("MathWidget (display)", () => {
     expect(el.querySelector(".katex-display")).not.toBeNull();
   });
 
+  it("wraps rendered display math in a shrink-wrapped content box", () => {
+    const widget = new MathWidget("x^2", "$$x^2$$", true);
+    const el = widget.toDOM();
+    const content = el.querySelector(`.${CSS.mathDisplayContent}`);
+    expect(content).not.toBeNull();
+    expect((content as HTMLElement).classList.contains(CSS.mathDisplayContent)).toBe(true);
+  });
+
   it("shows error for invalid LaTeX", () => {
     const widget = new MathWidget("\\bad{", "$$\\bad{$$", true);
     const el = widget.toDOM();
@@ -124,6 +132,42 @@ describe("MathWidget (display)", () => {
     const a = new MathWidget("x", "$$x$$", true);
     const b = new MathWidget("y", "$$y$$", true);
     expect(a.eq(b)).toBe(false);
+  });
+
+  it("only reveals source when clicking the rendered display math content", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new MathWidget("x^2", "$$x^2$$", true);
+    widget.sourceFrom = 8;
+    widget.sourceTo = 15;
+
+    const el = widget.toDOM(view);
+    const content = el.querySelector<HTMLElement>(`.${CSS.mathDisplayContent}`);
+    expect(content).not.toBeNull();
+
+    content?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      selection: { anchor: 8 },
+      scrollIntoView: false,
+    });
+  });
+
+  it("does not reveal source when clicking display-math row whitespace", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new MathWidget("x^2", "$$x^2$$", true);
+    widget.sourceFrom = 8;
+    widget.sourceTo = 15;
+
+    const el = widget.toDOM(view);
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });
 

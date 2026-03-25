@@ -271,6 +271,10 @@ body {
   text-align: center;
 }
 
+.cf-math-display-content {
+  display: inline-block;
+}
+
 .cf-math-display .katex-display {
   font-size: inherit;
   margin: 0;

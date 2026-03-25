@@ -191,25 +191,36 @@ export abstract class RenderWidget extends WidgetType {
     return document.createElement("span");
   }
 
-  toDOM(view?: EditorView): HTMLElement {
-    const el = this.createDOM();
-    // Store source range as data attributes for search-highlight plugin
+  protected setSourceRangeAttrs(el: HTMLElement): void {
     if (this.sourceFrom >= 0) {
       el.dataset.sourceFrom = String(this.sourceFrom);
     }
     if (this.sourceTo >= 0) {
       el.dataset.sourceTo = String(this.sourceTo);
     }
+  }
+
+  protected bindSourceReveal(
+    el: HTMLElement,
+    view: EditorView,
+    from = this.sourceFrom,
+  ): void {
+    el.style.cursor = "pointer";
+    el.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      // Focus first so the focus state field is updated before
+      // the selection dispatch triggers decoration rebuilding.
+      view.focus();
+      view.dispatch({ selection: { anchor: from }, scrollIntoView: false });
+    });
+  }
+
+  toDOM(view?: EditorView): HTMLElement {
+    const el = this.createDOM();
+    // Store source range as data attributes for search-highlight plugin
+    this.setSourceRangeAttrs(el);
     if (this.sourceFrom >= 0 && view) {
-      el.style.cursor = "pointer";
-      const from = this.sourceFrom;
-      el.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        // Focus first so the focus state field is updated before
-        // the selection dispatch triggers decoration rebuilding.
-        view.focus();
-        view.dispatch({ selection: { anchor: from }, scrollIntoView: false });
-      });
+      this.bindSourceReveal(el, view);
     }
     return el;
   }
