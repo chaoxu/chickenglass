@@ -41,11 +41,13 @@ Project-level config in `coflat.yaml` uses the same keys. File frontmatter overr
 |--------|-----------|
 | `**bold**` | **bold** |
 | `*italic*` | *italic* |
-| `` `code` `` | `code` |
+| `` `code` `` | `code` (monospace) |
 | `~~strikethrough~~` | ~~strikethrough~~ |
 | `==highlight==` | highlighted text |
 | `[text](url)` | hyperlink |
 | `![alt](src)` | image |
+
+Backtick-quoted text (`` `...` ``) renders as plain monospace — no background or badge. In mathematical writing this corresponds to `\texttt{}` in LaTeX: a font switch, not a code block. The same syntax can mean either "inline code" or "monospace emphasis" depending on context; Coflat does not distinguish between them.
 
 ## Headings
 
