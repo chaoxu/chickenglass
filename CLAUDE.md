@@ -172,6 +172,7 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
 ## Key architecture decisions
 
 - **Pandoc-free editing loop**: Pandoc is only for export. The editor uses Lezer + CM6 + KaTeX directly.
+- **Read mode is hidden and deferred**: Read mode is currently disabled in the UI. Do not implement, fix, or test read-mode features until rich mode is complete. Focus all rendering work on rich mode.
 - **Read mode = HTML export**: `markdown-to-html.ts` is a standalone Lezer tree walker with no CM6 dependency. Keep it CM6-free — pass data as plain objects (e.g., `BibStore`), not CM6 state fields.
 - **Every block is a plugin**: Plugins register via `createStandardPlugin()` factory. Core knows nothing about "theorem."
 - **Fenced divs are composite blocks**: Content inside `::: ... :::` is parsed as full markdown by re-entering the parser.
