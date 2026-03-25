@@ -18,6 +18,11 @@ export const PERF_PANEL_REFRESH_EVENT = "cf:perf-panel-refresh";
  */
 export const FORMAT_EVENT = "cf:format";
 
+/** Dispatch a formatting event to the document for CM6 to handle. */
+export function dispatchFormatEvent(type: string, detail?: Record<string, unknown>): void {
+  document.dispatchEvent(new CustomEvent(FORMAT_EVENT, { detail: { type, ...detail } }));
+}
+
 /**
  * Dispatched on `view.dom` (bubbles) when the editor mode cycles.
  * Detail: the new `EditorMode` string ("rich" | "source" | "read").

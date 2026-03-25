@@ -14,7 +14,7 @@
 
 import { useEffect, useRef } from "react";
 import { isTauri } from "../tauri-fs";
-import { dispatchFormatEvent } from "./use-commands";
+import { dispatchFormatEvent } from "../../constants/events";
 
 /** Handlers for native menu actions that require app-level state. */
 export interface MenuEventHandlers {

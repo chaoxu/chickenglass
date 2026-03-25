@@ -23,7 +23,6 @@ export { useAutoSave } from "./hooks/use-auto-save";
 export { useWindowState } from "./hooks/use-window-state";
 export { useRecentFiles } from "./hooks/use-recent-files";
 export { useEditor } from "./hooks/use-editor";
-export { useCommands } from "./hooks/use-commands";
 export { useSettings } from "./hooks/use-settings";
 export { useHotkeys } from "./hooks/use-hotkeys";
 

@@ -409,11 +409,6 @@ describe("React migration — #137 CommandPalette", () => {
     const mod = await import("./components/command-palette");
     expect(mod.CommandPalette).toBeDefined();
   });
-
-  it("useCommands hook exists", async () => {
-    const mod = await import("./hooks/use-commands");
-    expect(mod.useCommands).toBeDefined();
-  });
 });
 
 describe("React migration — #138 SearchPanel", () => {

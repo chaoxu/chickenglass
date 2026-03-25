@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { BackgroundIndexer } from "../../index";
+import { dispatchFormatEvent } from "../../constants/events";
 import { batchExport, exportDocument } from "../export";
 import type { FileSystem } from "../file-manager";
+import { basename, modKey } from "../lib/utils";
+import type { PaletteCommand } from "../components/command-palette";
 import { useAutoSave } from "./use-auto-save";
-import { useCommands } from "./use-commands";
 import { useDialogs, type UseDialogsReturn } from "./use-dialogs";
 import { useHotkeys } from "./use-hotkeys";
 import { useMenuEvents } from "./use-menu-events";
@@ -24,7 +26,7 @@ interface AppOverlayDeps {
 
 export interface AppOverlayController {
   dialogs: UseDialogsReturn;
-  commands: ReturnType<typeof useCommands>;
+  commands: PaletteCommand[];
   indexer: BackgroundIndexer;
   openPalette: () => void;
 }
@@ -74,29 +76,53 @@ export function useAppOverlays({ fs, workspace, editor }: AppOverlayDeps): AppOv
     });
   }, [workspace.fileTree, fs]);
 
-  const commandHandlers = useMemo(() => ({
-    onSave: () => { void editor.saveFile(); },
-    onSaveAs: () => { void editor.saveAs(); },
-    onCloseTab: () => { if (editor.activeTab) void editor.closeFile(editor.activeTab); },
-    onToggleSidebar: () => workspace.setSidebarCollapsed((value) => !value),
-    onToggleSidenotes: () => workspace.setSidenotesCollapsed((value) => !value),
-    onInsertImage: editor.handleInsertImage,
-    onShowFiles: () => { workspace.setSidebarCollapsed(false); workspace.setSidebarTab("files"); },
-    onShowOutline: () => { workspace.setSidebarCollapsed(false); workspace.setSidebarTab("outline"); },
-    onToggleTheme: () => workspace.setTheme(workspace.resolvedTheme === "dark" ? "light" : "dark"),
-    onGoToLine: () => dialogs.setGotoLineOpen(true),
-    onAbout: () => dialogs.setAboutOpen(true),
-    onShowShortcuts: () => dialogs.setShortcutsOpen(true),
-    onShowSettings: () => dialogs.setSettingsOpen(true),
-    onShowSearch: () => dialogs.setSearchOpen(true),
-    onOpenFolder: workspace.handleOpenFolder,
-    onOpenRecentFile: (path: string) => { void editor.openFile(path); },
-    recentFiles: workspace.recentFiles,
-    onExportHtml: handleExportHtml,
-    onBatchExportHtml: handleBatchExportHtml,
-  }), [dialogs, editor, workspace, handleExportHtml, handleBatchExportHtml]);
+  // ── Palette commands ────────────────────────────────────────────────────────
+  // Built directly from app deps — single source of truth for command palette.
+  const commands: PaletteCommand[] = useMemo(() => [
+    // ── File ──────────────────────────────────────────────────────────────────
+    { id: "file.save", label: "Save File", category: "File", shortcut: `${modKey}+S`, action: () => { void editor.saveFile(); } },
+    { id: "file.save-as", label: "Save As...", category: "File", shortcut: `${modKey}+Shift+S`, action: () => { void editor.saveAs(); } },
+    { id: "file.close-tab", label: "Close Tab", category: "File", shortcut: `${modKey}+W`, action: () => { if (editor.activeTab) void editor.closeFile(editor.activeTab); } },
+    { id: "file.open-folder", label: "Open Folder...", category: "File", action: () => workspace.handleOpenFolder() },
 
-  const commands = useCommands(commandHandlers);
+    // ── Recent files (dynamic) ────────────────────────────────────────────────
+    ...(workspace.recentFiles ?? []).map((path, i) => ({
+      id: `file.recent-${i}`,
+      label: `Open Recent: ${basename(path)}`,
+      category: "File",
+      action: () => { void editor.openFile(path); },
+    })),
+
+    // ── Format ────────────────────────────────────────────────────────────────
+    { id: "format.bold", label: "Toggle Bold", category: "Format", shortcut: `${modKey}+B`, action: () => dispatchFormatEvent("bold") },
+    { id: "format.italic", label: "Toggle Italic", category: "Format", shortcut: `${modKey}+I`, action: () => dispatchFormatEvent("italic") },
+    { id: "format.heading1", label: "Heading 1", category: "Format", action: () => dispatchFormatEvent("heading", { level: 1 }) },
+    { id: "format.heading2", label: "Heading 2", category: "Format", action: () => dispatchFormatEvent("heading", { level: 2 }) },
+    { id: "format.heading3", label: "Heading 3", category: "Format", action: () => dispatchFormatEvent("heading", { level: 3 }) },
+
+    // ── Navigation ────────────────────────────────────────────────────────────
+    { id: "nav.go-to-line", label: "Go to Line", category: "Navigation", shortcut: `${modKey}+G`, action: () => dialogs.setGotoLineOpen(true) },
+    { id: "nav.show-files", label: "Show Files Panel", category: "Navigation", action: () => { workspace.setSidebarCollapsed(false); workspace.setSidebarTab("files"); } },
+    { id: "nav.show-outline", label: "Show Outline Panel", category: "Navigation", action: () => { workspace.setSidebarCollapsed(false); workspace.setSidebarTab("outline"); } },
+    { id: "nav.search", label: "Find in Files", category: "Navigation", shortcut: `${modKey}+Shift+F`, action: () => dialogs.setSearchOpen(true) },
+    { id: "nav.settings", label: "Settings", category: "Navigation", shortcut: `${modKey}+,`, action: () => dialogs.setSettingsOpen(true) },
+
+    // ── View ──────────────────────────────────────────────────────────────────
+    { id: "view.toggle-sidebar", label: "Toggle Sidebar", category: "View", shortcut: `${modKey}+\\`, action: () => workspace.setSidebarCollapsed((value) => !value) },
+    { id: "view.toggle-sidenotes", label: "Toggle Sidenote Margin", category: "View", action: () => workspace.setSidenotesCollapsed((value) => !value) },
+    { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => workspace.setTheme(workspace.resolvedTheme === "dark" ? "light" : "dark") },
+
+    // ── Insert ────────────────────────────────────────────────────────────────
+    { id: "insert.image", label: "Insert Image", category: "Insert", action: () => editor.handleInsertImage() },
+
+    // ── Export ────────────────────────────────────────────────────────────────
+    { id: "export.html", label: "Export Current File to HTML", category: "Export", action: handleExportHtml },
+    { id: "export.batch-html", label: "Export All Files to HTML", category: "Export", action: handleBatchExportHtml },
+
+    // ── Help ──────────────────────────────────────────────────────────────────
+    { id: "help.shortcuts", label: "Keyboard Shortcuts", category: "Help", shortcut: `${modKey}+/`, action: () => dialogs.setShortcutsOpen(true) },
+    { id: "help.about", label: "About Coflat", category: "Help", action: () => dialogs.setAboutOpen(true) },
+  ], [dialogs, editor, workspace, handleExportHtml, handleBatchExportHtml]);
 
   useAutoSave(editor.hasDirtyFiles, editor.saveFile, workspace.settings.autoSaveInterval);
 
