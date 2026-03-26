@@ -4,11 +4,13 @@
     "worktree_root": ".worktrees"
   },
   "forge": {
-    "type": "github",
-    "base_url": "https://api.github.com",
+    "type": "gitea",
+    "base_url": "http://localhost:3001",
     "repo": "chaoxu/coflat",
     "deferred_label": "deferred",
-    "auth": {}
+    "auth": {
+      "claude": { "user": "chaoxu", "password": "123123aA" }
+    }
   },
   "verification": {
     "typecheck": "npx tsc --noEmit",
