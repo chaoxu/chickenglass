@@ -10,6 +10,7 @@ import {
   type EditorState,
   type Extension,
   type Range,
+  StateField,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -25,12 +26,30 @@ import {
   foldedRanges,
   syntaxTree,
 } from "@codemirror/language";
-import { buildDecorations, createDecorationsField, RenderWidget } from "../render/render-core";
+import { buildDecorations, RenderWidget } from "../render/render-core";
 
 /** Extract heading level (1–6) from a node name, or 0 if not a heading. */
 function headingLevel(name: string): number {
   const m = /^ATXHeading(\d)$/.exec(name);
   return m ? Number(m[1]) : 0;
+}
+
+/**
+ * Cheap fingerprint of heading structure: "level@line,level@line,...".
+ * Changes only when headings are added, removed, or change level.
+ * Used to skip the expensive nested tree walk in buildFoldToggles (#514).
+ */
+function headingFingerprint(state: EditorState): string {
+  const parts: string[] = [];
+  syntaxTree(state).iterate({
+    enter(node) {
+      const level = headingLevel(node.name);
+      if (level > 0) {
+        parts.push(`${level}@${state.doc.lineAt(node.from).number}`);
+      }
+    },
+  });
+  return parts.join(",");
 }
 
 /**
@@ -182,13 +201,41 @@ function buildFoldToggles(state: EditorState): DecorationSet {
   return buildDecorations(items);
 }
 
-const foldToggleField = createDecorationsField(
-  buildFoldToggles,
-  (tr) =>
-    tr.docChanged ||
-    tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)) ||
-    syntaxTree(tr.state) !== syntaxTree(tr.startState),
-);
+// Cache fold toggles: most edits don't add/remove headings, so we can
+// map positions instead of rebuilding the nested tree walk (~1.7ms).
+let _foldHeadingKey = "";
+let _foldDecos: DecorationSet = Decoration.none;
+
+const foldToggleField = StateField.define<DecorationSet>({
+  create(state) {
+    _foldDecos = buildFoldToggles(state);
+    _foldHeadingKey = headingFingerprint(state);
+    return _foldDecos;
+  },
+  update(value, tr) {
+    // Fold/unfold effects always need a full rebuild (fold state changed)
+    if (tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect))) {
+      _foldDecos = buildFoldToggles(tr.state);
+      _foldHeadingKey = headingFingerprint(tr.state);
+      return _foldDecos;
+    }
+    if (tr.docChanged) {
+      const key = headingFingerprint(tr.state);
+      if (key === _foldHeadingKey) {
+        // Heading structure unchanged — just shift positions
+        _foldDecos = _foldDecos.map(tr.changes);
+        return _foldDecos;
+      }
+      _foldHeadingKey = key;
+      _foldDecos = buildFoldToggles(tr.state);
+      return _foldDecos;
+    }
+    return value;
+  },
+  provide(field) {
+    return EditorView.decorations.from(field);
+  },
+});
 
 /** CM6 extension for heading-based folding with inline toggles. */
 export const headingFold: Extension = [
