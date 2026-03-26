@@ -73,19 +73,21 @@ describe("CslProcessor narrative citations", () => {
     expect(callCount).toBe(2); // author-only + suppress-author, no processCitationCluster
   });
 
-  it("falls back to author plus suppress-author cite when author-only form is unavailable", () => {
+  it("falls back to author plus suppress-author cite when author-only form is unavailable", async () => {
     const processor = new CslProcessor([entry]);
+    await processor.ensureReady();
     // registerCitations is required before citeNarrative in real usage —
     // it tells the engine which items exist so makeCitationCluster works.
     processor.registerCitations([{ ids: ["karger2000"] }]);
     expect(processor.citeNarrative("karger2000")).toBe("Karger [1]");
   });
 
-  it("produces author plus bracketed number for default IEEE numeric style", () => {
+  it("produces author plus bracketed number for default IEEE numeric style", async () => {
     // Regression: numeric styles like IEEE must use suppress-author fallback
     // (e.g. "Karger [1]"), not the author-year format "Karger (2000)".
     // See #359.
     const processor = new CslProcessor([entry]);
+    await processor.ensureReady();
     processor.registerCitations([{ ids: ["karger2000"] }]);
     const result = processor.citeNarrative("karger2000");
     expect(result).toBe("Karger [1]");
@@ -132,7 +134,7 @@ describe("CslProcessor narrative citations", () => {
     );
   });
 
-  it("does not corrupt numbering for subsequent cite() calls (#498)", () => {
+  it("does not corrupt numbering for subsequent cite() calls (#498)", async () => {
     // Regression: the old processCitationCluster-based citeNarrative
     // registered a phantom citation in the engine, causing subsequent
     // cite() calls to return wrong numbers. makeCitationCluster is stateless
@@ -150,6 +152,7 @@ describe("CslProcessor narrative citations", () => {
       issued: { "date-parts": [[2021]] },
     };
     const processor = new CslProcessor([entryA, entryB]);
+    await processor.ensureReady();
     processor.registerCitations([
       { ids: ["alpha2020"] },
       { ids: ["beta2021"] },

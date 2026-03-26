@@ -236,6 +236,10 @@ export function markdownToHtml(
   const tree = mdParser.parse(content);
   const semantics = analyzeDocumentSemantics(stringTextSource(content), tree);
 
+  // Prefer a pre-built cslProcessor (already awaited via CslProcessor.create).
+  // The inline fallback creates a processor whose async engine init has not
+  // completed, so citations render in degraded plain-text mode.  Callers that
+  // need full CSL formatting should pass `cslProcessor` explicitly.
   const cslProcessor = options?.cslProcessor ?? (options?.bibliography
     ? new CslProcessor([...options.bibliography.values()])
     : undefined);

@@ -7,16 +7,45 @@
  * (via citation-js), and returns formatted HTML strings.
  *
  * Usage:
- *   const processor = new CslProcessor(items);
- *   processor.setStyle(cslXml);       // optional: custom CSL style
+ *   const processor = await CslProcessor.create(items);
+ *   await processor.setStyle(cslXml);  // optional: custom CSL style
  *   const cite = processor.cite(["karger2000"]);
  *   const bib = processor.bibliography(["karger2000"]);
  */
 
-import { plugins, type CiteprocEngine } from "@citation-js/core";
-import "@citation-js/plugin-csl";
 import { type CslJsonItem } from "./bibtex-parser";
 import defaultCslStyle from "./ieee.csl?raw";
+
+/**
+ * Lazily-loaded citation-js modules.
+ *
+ * `@citation-js/core` (~60 KB) and `@citation-js/plugin-csl` (~435 KB via
+ * citeproc) are only needed when a document actually has citations.  By
+ * dynamic-importing them here and caching the result we keep them out of
+ * the main startup chunk entirely.  (#446)
+ */
+interface CitationJsModules {
+  plugins: typeof import("@citation-js/core").plugins;
+}
+
+let citationJsPromise: Promise<CitationJsModules> | null = null;
+
+function loadCitationJs(): Promise<CitationJsModules> {
+  if (!citationJsPromise) {
+    citationJsPromise = (async () => {
+      const [core] = await Promise.all([
+        import("@citation-js/core"),
+        // Side-effect import: registers the CSL plugin with citation-js
+        import("@citation-js/plugin-csl"),
+      ]);
+      return { plugins: core.plugins };
+    })();
+  }
+  return citationJsPromise;
+}
+
+/** CiteprocEngine type from @citation-js/core (replicated to avoid static import). */
+type CiteprocEngine = import("@citation-js/core").CiteprocEngine;
 
 /** Pandoc-style locator label terms mapped to CSL locator labels. */
 const LOCATOR_TERMS: ReadonlyMap<string, string> = new Map([
@@ -93,6 +122,7 @@ export class CslProcessor {
   private engine: CiteprocEngine | null = null;
   private styleXml: string;
   private engineRevision = 0;
+  private initPromise: Promise<void> | null = null;
 
   constructor(entries: CslJsonItem[], styleXml?: string) {
     this.items = new Map();
@@ -106,19 +136,41 @@ export class CslProcessor {
     // any previously cached engine with the same key — corrupting engines
     // that hold real data. All methods already guard `!this.engine`. (#422)
     if (this.items.size > 0) {
-      this.initEngine();
+      this.initPromise = this.initEngine();
     }
   }
 
-  /** Create an empty processor with no entries. */
+  /** Create an empty processor with no entries (never loads citeproc). */
   static empty(): CslProcessor {
     return new CslProcessor([]);
   }
 
+  /**
+   * Async factory: creates a processor and waits for citeproc to load.
+   * Use this in async contexts so the engine is ready before first use.
+   */
+  static async create(entries: CslJsonItem[], styleXml?: string): Promise<CslProcessor> {
+    const p = new CslProcessor(entries, styleXml);
+    await p.ensureReady();
+    return p;
+  }
+
+  /**
+   * Wait until the citeproc engine has finished loading (no-op for empty
+   * processors). Callers in async contexts should await this before
+   * dispatching the processor into synchronous render paths.
+   */
+  async ensureReady(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+  }
+
   /** Reinitialize the citeproc engine with a new style. */
-  setStyle(styleXml: string): void {
+  async setStyle(styleXml: string): Promise<void> {
     this.styleXml = styleXml;
-    this.initEngine();
+    this.initPromise = this.initEngine();
+    await this.initPromise;
   }
 
   /**
@@ -266,8 +318,9 @@ export class CslProcessor {
     return this.engineRevision;
   }
 
-  private initEngine(): void {
+  private async initEngine(): Promise<void> {
     try {
+      const { plugins } = await loadCitationJs();
       const cslConfig = plugins.config.get("@csl");
       cslConfig.templates.add(STYLE_NAME, this.styleXml);
       const data = [...this.items.values()];

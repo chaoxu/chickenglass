@@ -68,9 +68,9 @@ export async function loadBibliography(
         }
       }
 
-      const cslProcessor = operation.measureSync(
+      const cslProcessor = await operation.measureAsync(
         "citations.create_processor",
-        () => new CslProcessor(items, cslXml),
+        () => CslProcessor.create(items, cslXml),
         { category: "citations", detail: cslPath || bibPath },
       );
       if (isCurrent && !isCurrent()) return;

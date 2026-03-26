@@ -95,6 +95,10 @@ vi.mock("./use-recent-files", () => ({
   }),
 }));
 
+vi.mock("../../lib/tauri", () => ({
+  isTauri: () => true,
+}));
+
 vi.mock("../tauri-fs", () => ({
   isTauri: () => true,
   pickFolder: vi.fn(async () => null),

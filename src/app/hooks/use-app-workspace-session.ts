@@ -8,7 +8,11 @@ import { useTheme } from "./use-theme";
 import { useWindowState } from "./use-window-state";
 import { measureAsync, withPerfOperation } from "../perf";
 import { isTauri } from "../../lib/tauri";
-import { openFolderAt, pickFolder } from "../tauri-fs";
+
+// Lazy-loaded to keep tauri-fs out of the browser startup chunk (#446).
+// Other modules already dynamically import tauri-fs; this static import
+// was the only thing preventing Vite from code-splitting it.
+const tauriFs = () => import("../tauri-fs");
 
 export type SidebarTab = "files" | "outline" | "symbols";
 
@@ -125,6 +129,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   const openProjectRoot = useCallback(async (path: string): Promise<FileEntry | null> => {
     if (!isTauri()) return null;
     const requestId = ++workspaceRequestRef.current;
+    const { openFolderAt } = await tauriFs();
     const opened = await openFolderAt(path, requestId);
     if (!opened || requestId !== workspaceRequestRef.current) {
       return null;
@@ -144,6 +149,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
           if (windowState.projectRoot) {
             const requestId = ++workspaceRequestRef.current;
             try {
+              const { openFolderAt } = await tauriFs();
               const opened = await openFolderAt(windowState.projectRoot, requestId);
               if (!opened || requestId !== workspaceRequestRef.current) {
                 return;
@@ -178,6 +184,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     if (!isTauri()) return;
     void (async () => {
       try {
+        const { pickFolder } = await tauriFs();
         const folderPath = await pickFolder();
         if (folderPath) {
           const tree = await openProjectRoot(folderPath);
