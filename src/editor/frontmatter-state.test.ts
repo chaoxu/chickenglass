@@ -99,6 +99,63 @@ describe("frontmatterField", () => {
     });
   });
 
+  // Regression: inserting closing --- after an opening --- must be detected.
+  // Issue #494 — when end===-1 and doc starts with ---, edits after position 0
+  // were skipped because the old check only tested fromA === 0.
+  it("detects closing delimiter insertion when doc starts with --- (issue #494)", () => {
+    // Start with an unclosed frontmatter block
+    const doc = "---\ntitle: Hello\n";
+    const state = createState(doc);
+    expect(state.field(frontmatterField).end).toBe(-1);
+
+    // Insert closing --- at the end (position > 0)
+    const tr = state.update({
+      changes: { from: doc.length, insert: "---\nContent" },
+    });
+    const fm = tr.state.field(frontmatterField);
+    expect(fm.config.title).toBe("Hello");
+    expect(fm.end).toBeGreaterThan(0);
+  });
+
+  it("detects closing delimiter typed character by character (issue #494)", () => {
+    // Simulate typing the closing --- one character at a time.
+    // Note: `---` at EOF (no trailing newline) IS a valid closing delimiter
+    // per extractRawFrontmatter, so frontmatter is detected after the third `-`.
+    let state = createState("---\ntitle: Test\n");
+    expect(state.field(frontmatterField).end).toBe(-1);
+
+    // Type '-'
+    state = state.update({
+      changes: { from: state.doc.length, insert: "-" },
+    }).state;
+    expect(state.field(frontmatterField).end).toBe(-1);
+
+    // Type '-'
+    state = state.update({
+      changes: { from: state.doc.length, insert: "-" },
+    }).state;
+    expect(state.field(frontmatterField).end).toBe(-1);
+
+    // Type '-' — now doc is "---\ntitle: Test\n---" which is valid frontmatter
+    state = state.update({
+      changes: { from: state.doc.length, insert: "-" },
+    }).state;
+    const fm = state.field(frontmatterField);
+    expect(fm.config.title).toBe("Test");
+    expect(fm.end).toBeGreaterThan(0);
+  });
+
+  it("does not false-positive re-parse when doc does not start with ---", () => {
+    const state = createState("No frontmatter here\nSecond line");
+    expect(state.field(frontmatterField).end).toBe(-1);
+
+    // Append text after --- somewhere — should not trigger false positive
+    const tr = state.update({
+      changes: { from: state.doc.length, insert: "\n---" },
+    });
+    expect(tr.state.field(frontmatterField).end).toBe(-1);
+  });
+
   it("parses math macros", () => {
     const doc = "---\nmath:\n  \\R: \\mathbb{R}\n---\nContent";
     const state = createState(doc);

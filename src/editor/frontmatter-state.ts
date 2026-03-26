@@ -64,9 +64,15 @@ export const frontmatterField = StateField.define<FrontmatterState>({
     let affectsFrontmatter = false;
 
     if (value.end === -1) {
-      // No frontmatter currently: only re-parse if the change is at the start
+      // No frontmatter currently: re-parse if the change is at the start,
+      // or if the doc already starts with --- and any edit could complete
+      // the closing delimiter. Without this check, typing a closing ---
+      // after an opening --- is missed because the edit position > 0.
+      // See issue #494.
+      const startsWithDelimiter = tr.state.doc.length >= 3
+        && tr.state.doc.sliceString(0, 3) === "---";
       tr.changes.iterChangedRanges((fromA) => {
-        if (fromA === 0) affectsFrontmatter = true;
+        if (fromA === 0 || startsWithDelimiter) affectsFrontmatter = true;
       });
     } else {
       tr.changes.iterChangedRanges((fromA) => {

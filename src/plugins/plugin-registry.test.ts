@@ -246,6 +246,47 @@ describe("pluginFromConfig", () => {
     const spec = plugin.render({ type: "theorem", number: 1 });
     expect(spec.header).toBe("Theorem 1");
   });
+
+  // Regression: partial override (only title) must inherit counter from existing.
+  // Issue #493 — pluginFromConfig lost inherited counter group.
+  it("inherits counter from existing plugin when config.counter is undefined", () => {
+    const existing = makeBlockPlugin({ name: "lemma", counter: "theorem" });
+    const plugin = pluginFromConfig("lemma", { title: "Hilfssatz" }, existing);
+    expect(plugin.title).toBe("Hilfssatz");
+    expect(plugin.counter).toBe("theorem");
+  });
+
+  it("inherits numbered from existing plugin when config.numbered is undefined", () => {
+    const existing = makeBlockPlugin({ name: "proof", numbered: false });
+    const plugin = pluginFromConfig("proof", { title: "Beweis" }, existing);
+    expect(plugin.numbered).toBe(false);
+  });
+
+  it("inherits title from existing plugin when config.title is undefined", () => {
+    const existing = makeBlockPlugin({ name: "theorem", title: "Theorem", counter: "theorem" });
+    const plugin = pluginFromConfig("theorem", { numbered: false }, existing);
+    expect(plugin.title).toBe("Theorem");
+  });
+
+  // Issue #493 design decision: counter: null means "explicitly remove group"
+  it("removes counter group when config.counter is null", () => {
+    const existing = makeBlockPlugin({ name: "lemma", counter: "theorem" });
+    const plugin = pluginFromConfig("lemma", { counter: null }, existing);
+    expect(plugin.counter).toBeUndefined();
+  });
+
+  it("sets counter group when config.counter is a string, even with existing", () => {
+    const existing = makeBlockPlugin({ name: "lemma", counter: "theorem" });
+    const plugin = pluginFromConfig("lemma", { counter: "lemma" }, existing);
+    expect(plugin.counter).toBe("lemma");
+  });
+
+  it("works without an existing plugin (new custom block)", () => {
+    const plugin = pluginFromConfig("conjecture", { title: "Conjecture" });
+    expect(plugin.counter).toBeUndefined();
+    expect(plugin.title).toBe("Conjecture");
+    expect(plugin.numbered).toBe(true);
+  });
 });
 
 describe("applyFrontmatterBlocks", () => {
@@ -377,6 +418,60 @@ describe("createPluginRegistryField (CM6 integration)", () => {
     const registry = state.field(pluginRegistryField);
     const theorem = getPlugin(registry, "theorem");
     expect(theorem?.title).toBe("Satz");
+  });
+
+  // Regression: partial frontmatter override (only title) must inherit counter
+  // from built-in plugin, not lose it. Issue #493.
+  it("partial frontmatter override inherits counter from built-in (issue #493)", () => {
+    const doc = [
+      "---",
+      "blocks:",
+      "  theorem:",
+      "    title: Satz",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createEditorState(doc);
+    const registry = state.field(pluginRegistryField);
+    const theorem = getPlugin(registry, "theorem");
+    expect(theorem?.title).toBe("Satz");
+    // counter must be inherited from built-in, not lost
+    expect(theorem?.counter).toBe("theorem");
+  });
+
+  it("partial frontmatter override inherits numbered from built-in (issue #493)", () => {
+    const doc = [
+      "---",
+      "blocks:",
+      "  proof:",
+      "    title: Beweis",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createEditorState(doc);
+    const registry = state.field(pluginRegistryField);
+    const proof = getPlugin(registry, "proof");
+    expect(proof?.title).toBe("Beweis");
+    // numbered must be inherited from built-in (false for proof)
+    expect(proof?.numbered).toBe(false);
+  });
+
+  it("frontmatter counter: null explicitly removes counter group (issue #493)", () => {
+    const doc = [
+      "---",
+      "blocks:",
+      "  lemma:",
+      "    counter: null",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createEditorState(doc);
+    const registry = state.field(pluginRegistryField);
+    const lemma = getPlugin(registry, "lemma");
+    // counter: null means explicitly remove the group
+    expect(lemma?.counter).toBeUndefined();
+    // Other properties inherited from built-in
+    expect(lemma?.title).toBe("Lemma");
   });
 
   it("applies project-level block definitions", () => {

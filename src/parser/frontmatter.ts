@@ -8,7 +8,13 @@
 import { parse as parseYaml } from "yaml";
 
 export interface BlockConfig {
-  counter?: string;
+  /**
+   * Counter group name. Semantics:
+   * - `string` — use this counter group (e.g. `"theorem"`)
+   * - `null` — explicitly remove counter group (own counter)
+   * - `undefined` — not specified; inherit from existing/built-in plugin
+   */
+  counter?: string | null;
   numbered?: boolean;
   title?: string;
 }
@@ -144,7 +150,10 @@ export function extractRawFrontmatter(
 /** Convert a raw record to a typed BlockConfig, picking only known fields. */
 function toBlockConfig(raw: Record<string, unknown>): BlockConfig {
   const config: BlockConfig = {};
+  // counter: string → use that group; null → explicitly remove group;
+  // absent/undefined → inherit from built-in (not set on config).
   if (typeof raw["counter"] === "string") config.counter = raw["counter"];
+  else if (raw["counter"] === null) config.counter = null;
   if (typeof raw["numbered"] === "boolean") config.numbered = raw["numbered"];
   if (typeof raw["title"] === "string") config.title = raw["title"];
   return config;

@@ -159,6 +159,16 @@ export function getRegisteredNames(
 /**
  * Create a BlockPlugin from a frontmatter BlockConfig entry.
  *
+ * When `existing` is provided (i.e. the name matches a built-in plugin),
+ * unspecified config fields inherit from the existing plugin. This prevents
+ * a partial override (e.g. only `title`) from losing the built-in's counter
+ * group. See issue #493.
+ *
+ * Counter semantics:
+ * - `config.counter === undefined` → inherit from `existing` (or undefined)
+ * - `config.counter === null` → explicitly remove counter group
+ * - `config.counter === "group"` → use that counter group
+ *
  * Frontmatter can define custom block types:
  * ```yaml
  * blocks:
@@ -171,12 +181,27 @@ export function getRegisteredNames(
 export function pluginFromConfig(
   name: string,
   config: BlockConfig,
+  existing?: BlockPlugin,
 ): BlockPlugin {
-  const title = config.title ?? capitalize(name);
-  const numbered = config.numbered ?? true;
+  const title = config.title ?? existing?.title ?? capitalize(name);
+  const numbered = config.numbered ?? existing?.numbered ?? true;
+
+  // Distinguish undefined (inherit) from null (remove group).
+  // config.counter === undefined → inherit from existing plugin.
+  // config.counter === null → explicitly no counter group.
+  // config.counter === "string" → use that counter group.
+  let counter: string | undefined;
+  if (config.counter === undefined) {
+    counter = existing?.counter;
+  } else if (config.counter === null) {
+    counter = undefined;
+  } else {
+    counter = config.counter;
+  }
+
   return {
     name,
-    counter: config.counter,
+    counter,
     numbered,
     title,
     render: createBlockRender(title),
@@ -189,6 +214,10 @@ export function pluginFromConfig(
  * Entries with `true` are skipped (they just enable an already-registered
  * plugin). Entries with `false` unregister the plugin. Entries with a
  * BlockConfig object create or replace a plugin.
+ *
+ * When a BlockConfig partially overrides an existing plugin (e.g. only
+ * changes `title`), unspecified fields are inherited from the existing
+ * plugin. See issue #493.
  */
 export function applyFrontmatterBlocks(
   state: PluginRegistryState,
@@ -201,7 +230,9 @@ export function applyFrontmatterBlocks(
     } else if (value === false) {
       result = unregisterPlugin(result, name);
     } else {
-      result = registerPlugin(result, pluginFromConfig(name, value));
+      // Pass existing plugin so partial overrides inherit unspecified fields.
+      const existing = result.plugins.get(name);
+      result = registerPlugin(result, pluginFromConfig(name, value, existing));
     }
   }
   return result;
