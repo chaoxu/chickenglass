@@ -81,7 +81,8 @@ Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile(
 1. Start: `npm run dev`, then `npm run chrome` (CDP on port 9322)
 2. Connect: `chromium.connectOverCDP("http://localhost:9322")`
 3. Use `page.evaluate()` + `__cmView`/`__cmDebug`/`__app`. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout(10000)`.
-4. Kill: `kill $(lsof -ti:5173 -ti:5174 -ti:5175) 2>/dev/null; pkill -f "launch-chrome" 2>/dev/null`
+4. Screenshots: use the `screenshot()` helper from `scripts/test-helpers.mjs`, or `node scripts/screenshot.mjs [file] --output path.png`. **Do not call `page.screenshot()` directly** — Chrome 145's CDP has a headed-mode bug where it hangs indefinitely.
+5. Kill: `kill $(lsof -ti:5173 -ti:5174 -ti:5175) 2>/dev/null; pkill -f "launch-chrome" 2>/dev/null`
 
 When launching `Google Chrome for Testing` directly in app mode (for example `open -na ... --args --app=URL`), always pass `--disable-infobars` so the Chrome for Testing warning banner does not cover the app UI.
 

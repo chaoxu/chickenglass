@@ -44,7 +44,9 @@ async function main() {
     }
     case "screenshot": {
       const path = args[0] || "/tmp/cg-screenshot.png";
-      await page.screenshot({ path });
+      // Chrome 145 headed-mode CDP bug: page.screenshot() may hang.
+      // Use headless mode or increase timeout as needed.
+      await page.screenshot({ path, timeout: 10000 });
       console.log(`Saved: ${path}`);
       break;
     }

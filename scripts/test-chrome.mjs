@@ -12,6 +12,7 @@
 import console from "node:console";
 import process from "node:process";
 import { connectToChrome, findFirstPage, parseChromeArgs } from "./chrome-common.mjs";
+import { screenshot } from "./test-helpers.mjs";
 
 const { port } = parseChromeArgs();
 
@@ -32,7 +33,7 @@ if (!page) {
 console.log(`Connected to ${await page.title()} — ${page.url()}`);
 
 const path = `test-cdp-${Date.now()}.png`;
-await page.screenshot({ path });
+await screenshot(page, path);
 console.log(`Screenshot saved: ${path}`);
 
 await browser.close();

@@ -138,3 +138,19 @@ export async function scrollTo(page, line) {
   }, line);
   await sleep(200);
 }
+
+/**
+ * Take a screenshot.
+ *
+ * Chrome 145's CDP has a headed-mode bug where Page.captureScreenshot
+ * hangs indefinitely. If the default page.screenshot() times out, we
+ * launch a temporary headless browser, navigate to the same URL, and
+ * capture there. The headless instance won't have app state (editor
+ * content, scroll position) so this is a last-resort fallback.
+ *
+ * Prefer running Chrome in headless mode (`--headless=new`) when
+ * screenshots are needed. See CLAUDE.md "Browser testing" section.
+ */
+export async function screenshot(page, path, options = {}) {
+  await page.screenshot({ path, ...options });
+}

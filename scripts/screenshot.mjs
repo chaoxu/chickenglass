@@ -9,7 +9,7 @@
  */
 
 import process from "node:process";
-import { connectEditor, openFile } from "./test-helpers.mjs";
+import { connectEditor, openFile, screenshot } from "./test-helpers.mjs";
 
 const args = process.argv.slice(2);
 const outputIdx = args.indexOf("--output");
@@ -30,5 +30,5 @@ try {
 }
 
 await openFile(page, file);
-await page.screenshot({ path: output, fullPage: true });
+await screenshot(page, output, { fullPage: true });
 console.log(output);
