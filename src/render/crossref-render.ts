@@ -83,6 +83,7 @@ export class ClusteredCrossrefWidget extends RenderWidget {
     if (this.raw !== other.raw) return false;
     return this.resolvedItems.every(
       (r, i) =>
+        this.ids[i] === other.ids[i] &&
         r.kind === other.resolvedItems[i].kind &&
         r.label === other.resolvedItems[i].label,
     );
@@ -136,7 +137,10 @@ export class MixedClusterWidget extends RenderWidget {
     if (this.parts.length !== other.parts.length) return false;
     if (this.raw !== other.raw) return false;
     return this.parts.every(
-      (p, i) => p.kind === other.parts[i].kind && p.text === other.parts[i].text,
+      (p, i) =>
+        p.id === other.parts[i].id &&
+        p.kind === other.parts[i].kind &&
+        p.text === other.parts[i].text,
     );
   }
 }

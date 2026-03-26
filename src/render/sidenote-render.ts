@@ -290,6 +290,7 @@ export class FootnoteSectionWidget extends RenderWidget {
         e.preventDefault();
         view.focus();
         view.dispatch({
+          effects: sidenotesCollapsedEffect.of(false),
           selection: { anchor: defFrom },
           scrollIntoView: true,
         });
@@ -304,8 +305,13 @@ export class FootnoteSectionWidget extends RenderWidget {
 
   eq(other: FootnoteSectionWidget): boolean {
     if (this.entries.length !== other.entries.length) return false;
-    return this.entries.every((e, i) => e.id === other.entries[i].id && e.content === other.entries[i].content)
-      && this.macrosKey === other.macrosKey;
+    return this.entries.every(
+      (e, i) =>
+        e.id === other.entries[i].id &&
+        e.content === other.entries[i].content &&
+        e.num === other.entries[i].num &&
+        e.defFrom === other.entries[i].defFrom,
+    ) && this.macrosKey === other.macrosKey;
   }
 }
 
