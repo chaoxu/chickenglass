@@ -438,23 +438,21 @@ export function cursorSensitiveShouldRebuild(tr: Transaction): boolean {
 /**
  * Factory that creates a CM6 StateField providing DecorationSet.
  *
- * Eliminates the repeated boilerplate of:
- *   StateField.define<DecorationSet>({
- *     create(state) { return builder(state); },
- *     update(value, tr) {
- *       if (shouldRebuild(tr)) return builder(tr.state);
- *       return value;
- *     },
- *     provide: f => EditorView.decorations.from(f),
- *   })
- *
  * @param builder         Pure function that computes the DecorationSet from state.
- * @param shouldRebuild   Predicate that decides when to rebuild (defaults to
- *                        docChanged || selection || focusEffect || tree changed).
+ * @param shouldRebuild   Predicate that decides when to rebuild. Defaults to
+ *                        docChanged || syntaxTree changed.
+ *                        When `mapOnDocChanged` is true, this predicate should
+ *                        NOT include `docChanged` — the factory handles it via map.
+ * @param mapOnDocChanged When true, text edits use `value.map(tr.changes)` instead
+ *                        of full rebuild. This preserves RangeSet chunk identity,
+ *                        which makes CM6's DOM reconciliation ~10x cheaper (shared
+ *                        chunk shortcut in RangeSet.compare). Only safe for fields
+ *                        whose decorations depend on tree structure, not text content.
  */
 export function createDecorationsField(
   builder: (state: EditorState) => DecorationSet,
   shouldRebuild?: (tr: Transaction) => boolean,
+  mapOnDocChanged?: boolean,
 ): StateField<DecorationSet> {
   const predicate = shouldRebuild ?? defaultShouldRebuild;
 
@@ -466,6 +464,9 @@ export function createDecorationsField(
     update(value, tr) {
       if (predicate(tr)) {
         return builder(tr.state);
+      }
+      if (mapOnDocChanged && tr.docChanged) {
+        return value.map(tr.changes);
       }
       return value;
     },

@@ -131,7 +131,11 @@ class TitleWidget extends RenderWidget {
  * - Otherwise: replace with a document title widget (if title present)
  *   or hide entirely (if no title)
  */
-const frontmatterDecorationField = createDecorationsField(buildDecorations);
+const frontmatterDecorationField = createDecorationsField(
+  buildDecorations,
+  undefined, // default predicate
+  true, // map on docChanged — frontmatter decorations depend on structure, not text
+);
 
 /**
  * The StateField for tests and direct field access.

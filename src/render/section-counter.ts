@@ -38,8 +38,8 @@ export function buildSectionDecorations(state: EditorState): DecorationSet {
 const sectionNumberField = createDecorationsField(
   buildSectionDecorations,
   (tr) =>
-    tr.docChanged ||
     tr.state.field(documentSemanticsField) !== tr.startState.field(documentSemanticsField),
+  true, // map on docChanged — section numbers depend on heading structure, not text
 );
 
 /** CM6 extension that adds hierarchical section numbers to headings. */
