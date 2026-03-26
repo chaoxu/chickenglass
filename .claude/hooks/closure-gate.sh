@@ -1,10 +1,10 @@
 #!/bin/bash
-# Closure gate hook: blocks `gh issue close` unless a completeness review
-# agent has written a verified marker with valid JSON content.
+# Closure gate hook: blocks `tea issue close` (or `gh issue close`) unless a
+# completeness review agent has written a verified marker with valid JSON.
 #
 # Flow:
 #   1. Completeness review agent passes → writes JSON marker via Write tool
-#   2. `gh issue close N` triggers this hook
+#   2. `tea issue close N` triggers this hook
 #   3. Hook validates marker content → allows if valid (deletes marker), blocks if invalid/absent
 #
 # Two-pass design: validate ALL markers first, then delete ALL.
@@ -19,23 +19,23 @@ STATE_DIR="$REPO_ROOT/.claude/state"
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 
-# Only intercept `gh issue close` commands
-if ! echo "$COMMAND" | grep -qE 'gh\s+issue\s+close\s+'; then
+# Intercept both `tea issue close` and `gh issue close`
+if echo "$COMMAND" | grep -qE 'tea\s+issue\s+close\s+'; then
+  CLOSE_ARGS=$(echo "$COMMAND" | sed -E 's/.*tea[[:space:]]+issue[[:space:]]+close[[:space:]]+//')
+elif echo "$COMMAND" | grep -qE 'gh\s+issue\s+close\s+'; then
+  CLOSE_ARGS=$(echo "$COMMAND" | sed -E 's/.*gh[[:space:]]+issue[[:space:]]+close[[:space:]]+//')
+else
   exit 0
 fi
 
-# Extract issue number(s) — all bare digits following `gh issue close`
-# Handles: gh issue close 42, gh issue close 42 43, gh issue close 42 --comment "..."
-CLOSE_ARGS=$(echo "$COMMAND" | sed -E 's/.*gh[[:space:]]+issue[[:space:]]+close[[:space:]]+//')
+# Extract issue number(s) — all bare digits
 ISSUE_NUMBERS=$(echo "$CLOSE_ARGS" | grep -oE '^([0-9]+([[:space:]]+[0-9]+)*)' | grep -oE '[0-9]+' || true)
 
-# If we detected `gh issue close` but couldn't extract a number,
-# the number is likely in a variable or command substitution — block it.
 if [ -z "$ISSUE_NUMBERS" ]; then
   echo "BLOCKED: Could not extract issue number from: $COMMAND"
   echo ""
-  echo "Issue numbers must be literal digits (not variables or command substitutions)."
-  echo "Use: gh issue close 42 --comment '...'"
+  echo "Issue numbers must be literal digits."
+  echo "Use: tea issue close 42"
   exit 2
 fi
 
