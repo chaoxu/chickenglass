@@ -81,10 +81,6 @@ export interface UseEditorOptions {
 export interface UseEditorReturn {
   /** The live CM6 EditorView, or null when not yet mounted. */
   view: EditorView | null;
-  /** Current scroll top of the editor scroller (px). */
-  scrollTop: number;
-  /** Character offset of the first visible line in the viewport. */
-  viewportFrom: number;
   /** Plugin manager for toggling editor features at runtime. */
   pluginManager: EditorPluginManager;
   /** Image saver callback bound to the current document context. */
@@ -139,7 +135,7 @@ export function useEditor(
   const lastLoadedPathRef = useRef(docPath);
 
   // Delegate scroll tracking to useEditorScroll hook.
-  const { scrollTop, viewportFrom, resetScroll } = useEditorScroll(view);
+  const { resetScroll } = useEditorScroll(view);
   useEditorThemeSync(view, theme);
 
   // Stable refs so callbacks inside the effect don't capture stale closures.
@@ -315,8 +311,6 @@ export function useEditor(
 
   return {
     view,
-    scrollTop,
-    viewportFrom,
     pluginManager,
     imageSaver: documentServices.imageSaverRef.current,
   };

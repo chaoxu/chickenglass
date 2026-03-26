@@ -34,7 +34,7 @@ export function EditorPane({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorState = useEditor(containerRef, editorOptions);
 
-  const { view, scrollTop, viewportFrom } = editorState;
+  const { view } = editorState;
 
   useEditorStateTracking(editorState, onStateChange);
   useSidenotesAutoCollapse(view, sidenotesCollapsed, onSidenotesCollapsedChange);
@@ -60,8 +60,6 @@ export function EditorPane({
               view.focus();
             }
           }}
-          scrollTop={scrollTop}
-          viewportFrom={viewportFrom}
         />
       )}
       {/* CM6 editor — hidden (not unmounted) in read mode to preserve state */}
@@ -74,7 +72,6 @@ export function EditorPane({
             frontmatterConfig={frontmatterConfig}
             bibliography={bibData?.store}
             cslProcessor={bibData?.cslProcessor}
-            scrollTop={scrollTop}
             fs={editorOptions.fs}
             docPath={editorOptions.docPath}
           />

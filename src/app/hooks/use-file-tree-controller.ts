@@ -165,11 +165,12 @@ function getFocusedItemOrNull(
 
 /**
  * Schedule a focus restoration to the tree container after `onSelect`
- * triggers a React re-render cycle (e.g. opening a file creates a new
- * CM6 editor whose contentEditable div steals focus).
+ * triggers a React re-render cycle (e.g. opening a file changes the doc
+ * prop which triggers a CM6 dispatch and potentially steals focus).
  *
- * Uses requestAnimationFrame so the restoration happens after React has
- * finished its commit phase and the browser has applied focus changes.
+ * Uses a double-rAF so the restoration happens after:
+ *  1. React's commit phase (first rAF)
+ *  2. Any browser layout/focus side effects (second rAF)
  *
  * Fix for #462: Explorer Up/Down keyboard navigation gets stuck after
  * the first file switch — the tree container lost focus to the editor.
@@ -178,8 +179,12 @@ let pendingFocusRaf = 0;
 function restoreTreeFocusAfterSelect(tree: TreeInstance<FileEntry>): void {
   if (pendingFocusRaf) cancelAnimationFrame(pendingFocusRaf);
   pendingFocusRaf = requestAnimationFrame(() => {
-    pendingFocusRaf = 0;
-    tree.updateDomFocus();
+    // Second rAF: run after the browser has processed any focus side
+    // effects from the first frame (React commit + CM6 dispatch).
+    pendingFocusRaf = requestAnimationFrame(() => {
+      pendingFocusRaf = 0;
+      tree.updateDomFocus();
+    });
   });
 }
 

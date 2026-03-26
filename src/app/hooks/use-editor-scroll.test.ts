@@ -1,16 +1,12 @@
 /**
- * Regression tests for document-to-document scroll restoration (#326)
- * and large-scroll viewport recovery (#463).
+ * Regression tests for document-to-document scroll restoration (#326),
+ * large-scroll viewport recovery (#463), and Zustand migration (#465).
  *
- * useEditorScroll tracks scrollTop / viewportFrom of a CM6 EditorView.
- * When the user switches documents the host component passes a new view
- * (or null -> new view), and resetScroll() zeroes the values.
- *
- * These tests verify:
- *  1. Scroll position is captured when the user scrolls in a document.
- *  2. resetScroll() zeroes both scrollTop and viewportFrom (simulating
- *     the document-switch path in useEditor).
- *  3. A fresh view starts at scroll 0.
+ * useEditorScroll writes scrollTop / viewportFrom to the Zustand
+ * editorTelemetryStore — no React useState. These tests verify:
+ *  1. Scroll position is written to the Zustand store when the user scrolls.
+ *  2. resetScroll() zeroes both scrollTop and viewportFrom in the store.
+ *  3. A fresh view starts at scroll 0 in the store.
  *  4. Large scrolls trigger requestMeasure() for viewport recovery (#463).
  *  5. Rapid scroll events are coalesced via rAF debouncing (#463).
  */
@@ -20,6 +16,7 @@ import { createElement, useState, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import { useEditorScroll, type UseEditorScrollReturn } from "./use-editor-scroll";
+import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 
 // ── Minimal EditorView stub ─────────────────────────────────────────────────
 // We need `scrollDOM` (a real DOM element), `lineBlockAtHeight`, and
@@ -40,16 +37,21 @@ function createMockView(): MockView {
   };
 }
 
+/** Read current scroll telemetry from the Zustand store. */
+function getStoredScroll() {
+  const state = useEditorTelemetryStore.getState();
+  return { scrollTop: state.scrollTop, viewportFrom: state.viewportFrom };
+}
+
 /**
  * Dispatch a scroll event and flush the rAF callback so the hook's
- * debounced state update is applied synchronously in the test.
+ * debounced store update is applied synchronously in the test.
  */
 function dispatchScrollAndFlush(scrollDOM: HTMLDivElement): void {
   scrollDOM.dispatchEvent(new Event("scroll"));
-  // The hook defers state updates to requestAnimationFrame.
-  // In jsdom, rAF callbacks run asynchronously. We use vi.runAllTimers
-  // or explicitly invoke the rAF callback. Since act() handles React
-  // batching, we trigger rAF by advancing fake timers.
+  // The hook defers updates to requestAnimationFrame.
+  // In jsdom, rAF callbacks run asynchronously. We advance fake timers
+  // to flush the rAF callback.
   vi.advanceTimersByTime(16);
 }
 
@@ -64,7 +66,7 @@ interface HarnessRef {
 
 function createHarness(): { Harness: FC; ref: HarnessRef } {
   const ref: HarnessRef = {
-    result: { scrollTop: 0, viewportFrom: 0, resetScroll: () => {} },
+    result: { resetScroll: () => {} },
     setView: () => {},
   };
 
@@ -88,6 +90,7 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    useEditorTelemetryStore.getState().reset();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -99,7 +102,7 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     vi.useRealTimers();
   });
 
-  it("captures scroll position when the user scrolls", () => {
+  it("writes scroll position to Zustand store when the user scrolls", () => {
     const { Harness, ref } = createHarness();
     const mockView = createMockView();
 
@@ -111,8 +114,8 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
       dispatchScrollAndFlush(mockView.scrollDOM);
     });
 
-    expect(ref.result.scrollTop).toBe(250);
-    expect(ref.result.viewportFrom).toBe(250);
+    expect(getStoredScroll().scrollTop).toBe(250);
+    expect(getStoredScroll().viewportFrom).toBe(250);
   });
 
   it("resets to 0 when switching documents via resetScroll", () => {
@@ -126,12 +129,12 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     act(() => {
       dispatchScrollAndFlush(mockView.scrollDOM);
     });
-    expect(ref.result.scrollTop).toBe(400);
+    expect(getStoredScroll().scrollTop).toBe(400);
 
     act(() => ref.result.resetScroll());
 
-    expect(ref.result.scrollTop).toBe(0);
-    expect(ref.result.viewportFrom).toBe(0);
+    expect(getStoredScroll().scrollTop).toBe(0);
+    expect(getStoredScroll().viewportFrom).toBe(0);
   });
 
   it("switching to a new view starts at scroll 0", () => {
@@ -146,13 +149,13 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     act(() => {
       dispatchScrollAndFlush(viewA.scrollDOM);
     });
-    expect(ref.result.scrollTop).toBe(300);
+    expect(getStoredScroll().scrollTop).toBe(300);
 
     // Reset + swap view, mirroring useEditor's document-switch path.
     act(() => ref.result.resetScroll());
     act(() => ref.setView(viewB));
-    expect(ref.result.scrollTop).toBe(0);
-    expect(ref.result.viewportFrom).toBe(0);
+    expect(getStoredScroll().scrollTop).toBe(0);
+    expect(getStoredScroll().viewportFrom).toBe(0);
   });
 
   it("tracks scroll independently after switching views", () => {
@@ -167,7 +170,7 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     act(() => {
       dispatchScrollAndFlush(viewA.scrollDOM);
     });
-    expect(ref.result.scrollTop).toBe(500);
+    expect(getStoredScroll().scrollTop).toBe(500);
 
     act(() => ref.result.resetScroll());
     act(() => ref.setView(viewB));
@@ -175,15 +178,15 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     act(() => {
       dispatchScrollAndFlush(viewB.scrollDOM);
     });
-    expect(ref.result.scrollTop).toBe(120);
-    expect(ref.result.viewportFrom).toBe(120);
+    expect(getStoredScroll().scrollTop).toBe(120);
+    expect(getStoredScroll().viewportFrom).toBe(120);
 
     // Old view's listener was cleaned up — scrolling it must be a no-op.
     viewA.scrollDOM.scrollTop = 999;
     act(() => {
       dispatchScrollAndFlush(viewA.scrollDOM);
     });
-    expect(ref.result.scrollTop).toBe(120);
+    expect(getStoredScroll().scrollTop).toBe(120);
   });
 
   it("handles null view without errors", () => {
@@ -191,8 +194,8 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
 
     act(() => root.render(createElement(Harness)));
 
-    expect(ref.result.scrollTop).toBe(0);
-    expect(ref.result.viewportFrom).toBe(0);
+    expect(getStoredScroll().scrollTop).toBe(0);
+    expect(getStoredScroll().viewportFrom).toBe(0);
 
     const mockView = createMockView();
     act(() => ref.setView(mockView));
@@ -200,11 +203,11 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     act(() => {
       dispatchScrollAndFlush(mockView.scrollDOM);
     });
-    expect(ref.result.scrollTop).toBe(100);
+    expect(getStoredScroll().scrollTop).toBe(100);
 
     // Setting view to null does NOT auto-reset — useEditor calls resetScroll explicitly.
     act(() => ref.setView(null));
-    expect(ref.result.scrollTop).toBe(100);
+    expect(getStoredScroll().scrollTop).toBe(100);
   });
 
   // ── #463 regression tests ─────────────────────────────────────────────────
@@ -254,6 +257,6 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     // lineBlockAtHeight should only be called once (for the final position),
     // not three times.
     expect(mockView.lineBlockAtHeight).toHaveBeenCalledTimes(1);
-    expect(ref.result.scrollTop).toBe(300);
+    expect(getStoredScroll().scrollTop).toBe(300);
   });
 });

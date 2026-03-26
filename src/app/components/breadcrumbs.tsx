@@ -10,6 +10,7 @@ import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "rea
 import { cn } from "../lib/utils";
 import { headingAncestryAt, type HeadingEntry } from "../heading-ancestry";
 import { renderDocumentFragmentToHtml } from "../../document-surfaces";
+import { useEditorTelemetry } from "../stores/editor-telemetry-store";
 import {
   Breadcrumb,
   BreadcrumbButton,
@@ -24,19 +25,14 @@ interface BreadcrumbsProps {
   headings: HeadingEntry[];
   /** Called when the user clicks a breadcrumb segment. */
   onSelect: (from: number) => void;
-  /** Current scroll offset of the editor scroller (pixels from top). */
-  scrollTop: number;
-  /**
-   * Document position at the top of the visible viewport.
-   * Used to compute ancestry; updated by the parent on scroll.
-   */
-  viewportFrom: number;
 }
 
 /** Milliseconds to wait after last scroll before fading out. */
 const FADE_DELAY_MS = 2000;
 
-export function Breadcrumbs({ headings, onSelect, scrollTop, viewportFrom }: BreadcrumbsProps) {
+export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
+  const scrollTop = useEditorTelemetry((s) => s.scrollTop);
+  const viewportFrom = useEditorTelemetry((s) => s.viewportFrom);
   const ancestry = useMemo(() => headingAncestryAt(headings, viewportFrom), [headings, viewportFrom]);
 
   const [visible, setVisible] = useState(false);
