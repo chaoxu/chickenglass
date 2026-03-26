@@ -62,7 +62,16 @@ function findActiveReference(
   return candidate && to <= candidate.to ? candidate : undefined;
 }
 
-function ensureCitationsRegistered(
+/**
+ * Ensure citations from the current document analysis are registered with the
+ * CSL processor. Caches per (analysis, store, revision) triple to avoid
+ * redundant re-registration.
+ *
+ * Exported so the bibliography plugin can call it before requesting formatted
+ * bibliography entries — otherwise `bibliography()` returns [] when it runs
+ * before the reference render plugin has registered citations. (#466)
+ */
+export function ensureCitationsRegistered(
   analysis: DocumentAnalysis,
   store: BibStore,
   processor: CslProcessor,

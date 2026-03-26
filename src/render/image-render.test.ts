@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { CSS } from "../constants/css-classes";
 import { ImageWidget, PdfLoadingWidget } from "./image-render";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
-import { isPdfTarget } from "../lib/pdf-target";
+import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
 
 describe("ImageWidget", () => {
   describe("createDOM", () => {
@@ -160,6 +160,74 @@ describe("isPdfTarget", () => {
 
   it("returns false for empty string", () => {
     expect(isPdfTarget("")).toBe(false);
+  });
+});
+
+/**
+ * Regression test for #471: isRelativeFilePath must correctly distinguish
+ * relative file paths (which need document-relative resolution) from
+ * absolute URLs (which should be used as-is).
+ */
+describe("isRelativeFilePath", () => {
+  it("returns true for relative file paths", () => {
+    expect(isRelativeFilePath("photo.png")).toBe(true);
+    expect(isRelativeFilePath("images/cat.jpg")).toBe(true);
+    expect(isRelativeFilePath("./fig.svg")).toBe(true);
+    expect(isRelativeFilePath("../assets/plot.png")).toBe(true);
+  });
+
+  it("returns false for http/https URLs", () => {
+    expect(isRelativeFilePath("https://example.com/img.png")).toBe(false);
+    expect(isRelativeFilePath("http://example.com/img.jpg")).toBe(false);
+    expect(isRelativeFilePath("HTTP://example.com/img.jpg")).toBe(false);
+  });
+
+  it("returns false for data: URLs", () => {
+    expect(isRelativeFilePath("data:image/png;base64,ABC")).toBe(false);
+  });
+
+  it("returns false for blob: URLs", () => {
+    expect(isRelativeFilePath("blob:http://localhost/uuid")).toBe(false);
+  });
+
+  it("returns true for empty string", () => {
+    // Empty string is not an absolute URL protocol
+    expect(isRelativeFilePath("")).toBe(true);
+  });
+});
+
+/**
+ * Regression test for #471: non-PDF images must also use document-relative
+ * path resolution, just like PDFs do. Before the fix, only PDF paths were
+ * resolved via resolveProjectPathFromDocument; non-PDF images used the raw
+ * markdown target, causing them to resolve relative to the app URL instead
+ * of the document's directory.
+ */
+describe("Non-PDF image path resolution (#471)", () => {
+  it("resolves a relative PNG path from a nested document", () => {
+    // `![](diagram.png)` in `posts/math.md` should resolve to `posts/diagram.png`
+    const resolved = resolveProjectPathFromDocument("posts/math.md", "diagram.png");
+    expect(resolved).toBe("posts/diagram.png");
+  });
+
+  it("resolves a subdirectory-relative image from a nested document", () => {
+    // `![](images/cat.jpg)` in `posts/math.md` → `posts/images/cat.jpg`
+    const resolved = resolveProjectPathFromDocument("posts/math.md", "images/cat.jpg");
+    expect(resolved).toBe("posts/images/cat.jpg");
+  });
+
+  it("produces distinct paths for same filename in different directories", () => {
+    const fromPosts = resolveProjectPathFromDocument("posts/math.md", "diagram.png");
+    const fromNotes = resolveProjectPathFromDocument("notes/physics.md", "diagram.png");
+    expect(fromPosts).toBe("posts/diagram.png");
+    expect(fromNotes).toBe("notes/diagram.png");
+    expect(fromPosts).not.toBe(fromNotes);
+  });
+
+  it("does not resolve absolute URLs", () => {
+    // Absolute URLs should be used as-is — isRelativeFilePath returns false
+    expect(isRelativeFilePath("https://example.com/img.png")).toBe(false);
+    // The image render plugin skips resolution for absolute URLs
   });
 });
 

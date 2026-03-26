@@ -13,7 +13,7 @@
 
 import { type Extension } from "@codemirror/state";
 import { type EditorView, ViewPlugin } from "@codemirror/view";
-import { computePosition, flip, shift, offset } from "@floating-ui/dom";
+import { autoUpdate, computePosition, flip, shift, offset } from "@floating-ui/dom";
 import {
   type ResolvedCrossref,
   resolveCrossref,
@@ -45,33 +45,77 @@ function getTooltipEl(): HTMLDivElement {
 }
 
 /**
+ * Cleanup function returned by `autoUpdate` — stops the scroll/resize
+ * listeners that keep the tooltip anchored. Stored so `hideFloatingTooltip`
+ * can tear it down.
+ */
+let cleanupAutoUpdate: (() => void) | null = null;
+
+/**
+ * Monotonic generation counter. Incremented on every `showFloatingTooltip`
+ * call so that a late-resolving `computePosition` promise from an older
+ * show cycle is silently discarded. (#474)
+ */
+let showGeneration = 0;
+
+/**
  * Position and show the singleton tooltip near an anchor element using
  * @floating-ui/dom's `computePosition` with flip+shift middleware.
+ *
+ * Uses `autoUpdate` so the tooltip tracks the anchor on scroll, resize,
+ * and layout shift — preventing the drift reported in #474.
  */
 function showFloatingTooltip(anchor: HTMLElement, content: HTMLElement): void {
+  // Tear down any previous auto-update listener before starting a new one.
+  if (cleanupAutoUpdate) {
+    cleanupAutoUpdate();
+    cleanupAutoUpdate = null;
+  }
+
   const el = getTooltipEl();
   el.innerHTML = "";
   el.appendChild(content);
   el.style.display = "";
   el.setAttribute("data-visible", "false");
 
-  void computePosition(anchor, el, {
-    placement: "top",
-    middleware: [offset(6), flip(), shift({ padding: 5 })],
-  }).then(({ x, y }) => {
-    Object.assign(el.style, {
-      left: `${x}px`,
-      top: `${y}px`,
+  const gen = ++showGeneration;
+
+  const updatePosition = () => {
+    void computePosition(anchor, el, {
+      placement: "top",
+      middleware: [offset(6), flip(), shift({ padding: 5 })],
+    }).then(({ x, y }) => {
+      // Stale guard: if a newer show cycle started before this promise
+      // resolved, discard the result so we don't overwrite the new
+      // tooltip's position with coordinates for the old anchor. (#474)
+      if (gen !== showGeneration) return;
+
+      Object.assign(el.style, {
+        left: `${x}px`,
+        top: `${y}px`,
+      });
+      // Trigger enter animation after initial positioning
+      if (el.getAttribute("data-visible") !== "true") {
+        requestAnimationFrame(() => {
+          if (gen === showGeneration) {
+            el.setAttribute("data-visible", "true");
+          }
+        });
+      }
     });
-    // Trigger enter animation after positioning
-    requestAnimationFrame(() => {
-      el.setAttribute("data-visible", "true");
-    });
-  });
+  };
+
+  // `autoUpdate` calls `updatePosition` immediately, then again whenever
+  // the anchor or floating element moves (scroll, resize, layout shift).
+  cleanupAutoUpdate = autoUpdate(anchor, el, updatePosition);
 }
 
 /** Hide and clear the singleton tooltip. */
 function hideFloatingTooltip(): void {
+  if (cleanupAutoUpdate) {
+    cleanupAutoUpdate();
+    cleanupAutoUpdate = null;
+  }
   if (tooltipEl) {
     tooltipEl.setAttribute("data-visible", "false");
     tooltipEl.style.display = "none";

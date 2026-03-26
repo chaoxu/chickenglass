@@ -13,6 +13,8 @@ import { type EditorState, type Extension } from "@codemirror/state";
 import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors } from "./bibtex-parser";
 import { type BibStore, bibDataEffect, bibDataField, findCitations } from "./citation-render";
 import { RenderWidget, buildDecorations, createDecorationsField, sanitizeCslHtml } from "../render/render-core";
+import { ensureCitationsRegistered } from "../render/reference-render";
+import { documentAnalysisField } from "../semantics/codemirror-source";
 
 /**
  * Collect all citation ids referenced in the document text.
@@ -163,6 +165,12 @@ function buildBibliographyDecorationsFromState(state: EditorState): DecorationSe
 
   let cslHtml: string[] = [];
   if (cslProcessor) {
+    // Ensure citations are registered with the CSL processor before requesting
+    // the bibliography. Without this, bibliography() returns [] when the
+    // bibliography plugin evaluates before the reference render plugin has
+    // registered citations, causing a plain-text fallback. (#466)
+    const analysis = state.field(documentAnalysisField);
+    ensureCitationsRegistered(analysis, store, cslProcessor);
     cslHtml = cslProcessor.bibliography(citedIds);
   }
 
@@ -180,5 +188,8 @@ export const bibliographyPlugin: Extension = createDecorationsField(
   buildBibliographyDecorationsFromState,
   (tr) =>
     tr.docChanged ||
-    tr.effects.some((effect) => effect.is(bibDataEffect)),
+    tr.effects.some((effect) => effect.is(bibDataEffect)) ||
+    // Rebuild when document analysis changes so citation registration
+    // can pick up new/moved references for correct bibliography output. (#466)
+    tr.state.field(documentAnalysisField) !== tr.startState.field(documentAnalysisField),
 );
