@@ -21,6 +21,7 @@ import {
 import { mathMacrosField } from "./math-macros";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import type { MathSemantics } from "../semantics/document";
+import { buildKatexOptions } from "../lib/katex-options";
 
 export const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
 
@@ -85,10 +86,8 @@ export function renderKatex(
 ): void {
   try {
     katex.render(latex, element, {
-      displayMode: isDisplay,
-      throwOnError: false,
+      ...buildKatexOptions(isDisplay, macros),
       output: "htmlAndMathml",
-      macros: { ...macros },
     });
   } catch (err: unknown) {
     element.className = "cf-math-error";

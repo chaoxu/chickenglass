@@ -67,20 +67,6 @@ export function parseLocator(raw: string): { locator: string; label?: string } {
 /** Unique template name used to register the active CSL style with citation-js. */
 const STYLE_NAME = "coflat-active";
 
-type CompositeCitationCall = (
-  citation: {
-    citationItems: Array<{ id: string }>;
-    properties: {
-      noteIndex: number;
-      mode: "composite";
-      infix: string;
-    };
-    citationID: string;
-  },
-  citationsPre: Array<[string, number]>,
-  citationsPost: Array<[string, number]>,
-) => [unknown, Array<[number, string, string]>];
-
 function formatNarrativeAuthor(item: CslJsonItem): string {
   const authors = item.author ?? [];
   if (authors.length === 0) return item.id;
@@ -198,50 +184,61 @@ export class CslProcessor {
   /**
    * Format a narrative citation for a single id.
    *
-   * Prefer citeproc's composite citation mode, which yields style-aware
-   * narrative output such as `Karger (2000)` for author-date styles.
-   * Numeric styles like IEEE often do not print an author-only form, so we
-   * fall back to `author + suppress-author cite` (e.g. `Karger [1]`).
+   * Uses only `makeCitationCluster` (stateless) to avoid mutating the engine's
+   * citation registry. The old `processCitationCluster` approach registered a
+   * phantom citation that corrupted numbering for subsequent `cite()` calls.
+   * See #498.
+   *
+   * Strategy: try `author-only` mode first (works for author-date styles like
+   * APA). For numeric styles like IEEE, `author-only` often returns empty or
+   * `[NO_PRINTED_FORM]`, so fall back to `author + suppress-author cite`
+   * (e.g. `Karger [1]`).
    */
   citeNarrative(id: string): string {
     const item = this.items.get(id);
     if (!item) return id;
     const author = formatNarrativeAuthor(item);
-    try {
-      if (this.engine) {
-        const compositeEngine = this.engine as unknown as {
-          processCitationCluster: CompositeCitationCall;
-          makeCitationCluster: (items: Array<Record<string, unknown>>) => string;
-        };
-        const composite = compositeEngine.processCitationCluster(
-          {
-            citationItems: [{ id }],
-            properties: {
-              noteIndex: 0,
-              mode: "composite",
-              infix: "",
-            },
-            citationID: `narrative-${id}`,
-          },
-          [],
-          [],
-        );
-        const rendered = composite?.[1]?.[0]?.[1]?.trim();
-        if (rendered && !rendered.includes("[NO_PRINTED_FORM]")) {
-          return rendered;
-        }
+    if (!this.engine) {
+      const year = item.issued?.["date-parts"]?.[0]?.[0] ?? "";
+      return `${author} (${year})`;
+    }
 
-        const suppressed = compositeEngine.makeCitationCluster([
-          { id, "suppress-author": true },
-        ]).trim();
-        if (suppressed) {
-          return `${author} ${suppressed}`;
+    // All calls use makeCitationCluster (stateless) to avoid mutating the
+    // engine's citation registry.  The old processCitationCluster approach
+    // registered a phantom citation that corrupted numbering.  See #498.
+
+    // Try author-only first (works for author-date styles like APA).
+    // Numeric styles (e.g. IEEE) may throw or return [NO_PRINTED_FORM].
+    try {
+      const authorOnly = this.engine.makeCitationCluster([
+        { id, "author-only": true } as Record<string, unknown>,
+      ] as unknown as Array<{ id: string }>).trim();
+
+      if (authorOnly && !authorOnly.includes("[NO_PRINTED_FORM]")) {
+        const yearPart = this.engine.makeCitationCluster([
+          { id, "suppress-author": true } as Record<string, unknown>,
+        ] as unknown as Array<{ id: string }>).trim();
+        if (yearPart) {
+          return `${authorOnly} ${yearPart}`;
         }
+        return authorOnly;
+      }
+    } catch {
+      // author-only not supported by this style — fall through to suppress-author
+    }
+
+    // Numeric style fallback: author name + suppress-author cite (e.g. "Karger [1]").
+    try {
+      const suppressed = this.engine.makeCitationCluster([
+        { id, "suppress-author": true } as Record<string, unknown>,
+      ] as unknown as Array<{ id: string }>).trim();
+      if (suppressed) {
+        return `${author} ${suppressed}`;
       }
     } catch (e: unknown) {
-      // best-effort: fall through to simple author + year format
       console.warn("[csl] citeNarrative() engine error", e);
     }
+
     const year = item.issued?.["date-parts"]?.[0]?.[0] ?? "";
     return `${author} (${year})`;
   }
