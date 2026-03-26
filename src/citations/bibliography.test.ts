@@ -19,6 +19,7 @@ import {
   buildBibliographyDecorations,
   bibliographyPlugin,
 } from "./bibliography";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 
 const karger: CslJsonItem = {
   id: "karger2000",
@@ -270,7 +271,7 @@ describe("bibliographyPlugin integration", () => {
 
   function createBibView(doc: string, useStore = true): EditorView {
     const v = createTestView(doc, {
-      extensions: [markdown(), bibDataField, bibliographyPlugin],
+      extensions: [markdown(), documentSemanticsField, bibDataField, bibliographyPlugin],
     });
     if (useStore) {
       v.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein, alpha]) }) });

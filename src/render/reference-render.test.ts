@@ -368,13 +368,16 @@ describe("collectReferenceRanges", () => {
   });
 
   // Regression (#397): mixed cluster must have per-item spans with data-ref-id
-  it("renders mixed cluster with per-item spans and data-ref-id", () => {
+  it("renders mixed cluster with per-item spans and data-ref-id", async () => {
     const doc = [
       "$$a^2$$ {#eq:alpha}",
       "",
       "See [@eq:alpha; @karger2000].",
     ].join("\n");
+    // Needs an initialized CSL engine so cite() returns formatted text
+    const processor = await CslProcessor.create([karger, stein]);
     view = createView(doc, doc.length);
+    view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: processor }) });
     const ranges = collectReferenceRanges(view, store);
 
     const ref = ranges.find(
@@ -530,10 +533,10 @@ describe("collectReferenceRanges", () => {
       registerSpy.mockRestore();
     });
 
-    it("re-registers citations when the same processor is reused after setStyle()", () => {
+    it("re-registers citations when the same processor is reused after setStyle()", async () => {
       const registerSpy = vi.spyOn(CslProcessor.prototype, "registerCitations");
       const doc = "See [@karger2000; @stein2001].";
-      const processor = new CslProcessor([karger, stein]);
+      const processor = await CslProcessor.create([karger, stein]);
 
       view = createTestView(doc, {
         cursorPos: 0,
@@ -552,7 +555,7 @@ describe("collectReferenceRanges", () => {
       view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: processor }) });
       registerSpy.mockClear();
 
-      processor.setStyle("<style>invalid</style>");
+      await processor.setStyle("<style>invalid</style>");
       view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: processor }) });
 
       expect(registerSpy).toHaveBeenCalledTimes(1);

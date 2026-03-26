@@ -292,21 +292,24 @@ describe("useAppWorkspaceSession", () => {
       await Promise.resolve();
     });
 
+    // Separate act() blocks: the dynamic import `await tauriFs()` in
+    // production adds microtask ticks, so each load needs its own flush.
     let openFirst!: Promise<FileEntry | null>;
     let openSecond!: Promise<FileEntry | null>;
+
     await act(async () => {
       openFirst = ref.openProjectRoot("/tmp/project-a");
-      await Promise.resolve();
+    });
+    await act(async () => {
       openSecond = ref.openProjectRoot("/tmp/project-b");
-      await Promise.resolve();
     });
 
+    // Resolve newer load first, then stale — stale should be discarded
     await act(async () => {
       secondTree.resolve({ name: "project-b", path: "", isDirectory: true, children: [] });
       secondConfig.resolve({ bibliography: "b.bib" });
       await openSecond;
     });
-
     await act(async () => {
       firstTree.resolve({ name: "project-a", path: "", isDirectory: true, children: [] });
       firstConfig.resolve({ bibliography: "a.bib" });

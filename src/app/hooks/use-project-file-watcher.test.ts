@@ -50,7 +50,7 @@ vi.mock("../file-watcher", () => ({
   },
 }));
 
-vi.mock("../tauri-fs", () => ({
+vi.mock("../../lib/tauri", () => ({
   isTauri: () => true,
 }));
 

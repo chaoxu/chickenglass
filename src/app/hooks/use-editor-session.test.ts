@@ -41,7 +41,7 @@ vi.mock("../perf", () => ({
   }),
 }));
 
-vi.mock("../tauri-fs", () => ({
+vi.mock("../../lib/tauri", () => ({
   isTauri: () => sessionMockState.isTauri,
 }));
 

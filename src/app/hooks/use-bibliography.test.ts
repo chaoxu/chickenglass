@@ -3,10 +3,14 @@ import type { EditorView } from "@codemirror/view";
 import type { FileSystem } from "../file-manager";
 import { createMockEditorView } from "../../test-utils";
 
-vi.mock("react", () => ({
-  useRef: <T,>(value: T) => ({ current: value }),
-  useCallback: <T,>(fn: T) => fn,
-}));
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  return {
+    ...actual,
+    useRef: <T,>(value: T) => ({ current: value }),
+    useCallback: <T,>(fn: T) => fn,
+  };
+});
 
 import { useBibliography } from "./use-bibliography";
 

@@ -1,12 +1,15 @@
 /**
  * Render-core barrel: low-level utilities consumed by editor/, plugins/, and citations/.
  *
- * This barrel re-exports ONLY modules with no imports from src/editor/ or
- * src/plugins/ (math-macros.ts imports editor/frontmatter-state but does not
- * create a cycle because frontmatter-state only imports render-utils directly).
- *
  * High-level render plugins (which may import from editor/ or plugins/) stay in
  * the main render barrel (index.ts).
+ *
+ * ORDERING NOTE: fenced-block-core MUST precede math-macros.  math-macros
+ * triggers a transitive import chain (frontmatter-state → document-surfaces →
+ * bibliography → reference-render → crossref-resolver → plugins →
+ * plugin-render) that cycles back to this barrel.  fenced-block-core must be
+ * fully loaded first so createFencedBlockDecorationField is available when
+ * plugin-render.ts evaluates its module-level call.
  */
 
 // ── render-utils.ts (all exports) ────────────────────────────────────────────
@@ -41,9 +44,6 @@ export {
 // ── inline-shared.ts ─────────────────────────────────────────────────────────
 export { MARK_NODES, isSafeUrl, buildKatexOptions, sanitizeCslHtml } from "./inline-shared";
 
-// ── math-macros.ts ───────────────────────────────────────────────────────────
-export { getMathMacros, mathMacrosField } from "./math-macros";
-
 // ── fenced-block-core.ts (all exports) ───────────────────────────────────────
 export {
   type FencedBlockInfo,
@@ -58,6 +58,9 @@ export {
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
 } from "./fenced-block-core";
+
+// ── math-macros.ts ───────────────────────────────────────────────────────────
+export { getMathMacros, mathMacrosField } from "./math-macros";
 
 // ── math-render.ts (type exports) ────────────────────────────────────────────
 export type { MathWidget } from "./math-render";
