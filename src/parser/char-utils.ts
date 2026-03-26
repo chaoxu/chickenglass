@@ -15,6 +15,7 @@ export const NEWLINE = 10;
 export const VT = 11;
 export const FF = 12;
 export const CR = 13;
+export const DOUBLE_QUOTE = 34;
 export const DOLLAR = 36;
 export const OPEN_PAREN = 40;
 export const CLOSE_PAREN = 41;
@@ -75,8 +76,10 @@ export function isIdentChar(ch: number): boolean {
 
 /**
  * Find the end of a brace-delimited block `{...}` starting at `pos`.
- * Handles nested braces. Returns the position **after** the closing `}`
- * or -1 if the block is unterminated.
+ * Handles nested braces and skips characters inside double-quoted strings,
+ * so `{key="val}ue"}` correctly matches the outer closing brace.
+ * Returns the position **after** the closing `}` or -1 if the block is
+ * unterminated.
  *
  * The character at `pos` must be `{`.
  */
@@ -86,8 +89,16 @@ export function findMatchingBrace(text: string, pos: number): number {
   let i = pos + 1;
   while (i < text.length && depth > 0) {
     const ch = text.charCodeAt(i);
-    if (ch === OPEN_BRACE) depth++;
-    else if (ch === CLOSE_BRACE) depth--;
+    if (ch === DOUBLE_QUOTE) {
+      // Skip everything until the matching closing quote
+      i++;
+      while (i < text.length && text.charCodeAt(i) !== DOUBLE_QUOTE) i++;
+      // Move past the closing quote (or stay at end if unterminated)
+    } else if (ch === OPEN_BRACE) {
+      depth++;
+    } else if (ch === CLOSE_BRACE) {
+      depth--;
+    }
     i++;
   }
   return depth === 0 ? i : -1;

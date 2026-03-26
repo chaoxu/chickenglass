@@ -319,3 +319,42 @@ describe("equation label edge cases", () => {
     expect(nodeText(text, nodes[0])).toBe("\\(x^2\\)");
   });
 });
+
+// ---------------------------------------------------------------------------
+// REGRESSION: multi-line $$ closing with equation label not detected (#484)
+//
+// When $$ appears mid-line (e.g. \end{aligned}$$), the old startsWith/endsWith
+// approach missed cases where $$ was followed by an equation label on the same
+// line. The fix uses indexOf("$$") — same pattern as the \] parser.
+// ---------------------------------------------------------------------------
+
+describe("multi-line $$ closing with equation label (#484 REGRESSION)", () => {
+  it("detects \\end{aligned}$$ {#eq:foo} as closing with label", () => {
+    const text = "$$\n\\begin{aligned}\na &= b\n\\end{aligned}$$ {#eq:foo}";
+    const labels = findNodes(text, "EquationLabel");
+    expect(labels).toHaveLength(1);
+    expect(nodeText(text, labels[0])).toBe("{#eq:foo}");
+
+    const display = findNodes(text, "DisplayMath");
+    expect(display).toHaveLength(1);
+    expect(display[0].to).toBe(text.length);
+  });
+
+  it("detects \\end{aligned}$$ without label", () => {
+    const text = "$$\n\\begin{aligned}\na &= b\n\\end{aligned}$$";
+    const display = findNodes(text, "DisplayMath");
+    expect(display).toHaveLength(1);
+    expect(display[0].from).toBe(0);
+    expect(display[0].to).toBe(text.length);
+
+    const marks = findNodes(text, "DisplayMathMark");
+    expect(marks).toHaveLength(2);
+  });
+
+  it("detects mid-line $$ with label after content", () => {
+    const text = "$$\nsome content$$ {#eq:bar}";
+    const labels = findNodes(text, "EquationLabel");
+    expect(labels).toHaveLength(1);
+    expect(nodeText(text, labels[0])).toBe("{#eq:bar}");
+  });
+});

@@ -183,8 +183,8 @@ const dollarDisplayMathWithLabel: BlockParser = {
     }
 
     // Multi-line: scan subsequent lines for closing $$
-    // The closing $$ can be at the start of a line (standalone $$)
-    // or at the end of a line (e.g., \end{aligned}$$)
+    // Use indexOf to find $$ anywhere on the line (same approach as the \]
+    // parser), so patterns like \end{aligned}$$ {#eq:foo} are detected.
     let endPos = -1;
     let closingLineText = "";
     let closingLineStart = -1;
@@ -198,19 +198,9 @@ const dollarDisplayMathWithLabel: BlockParser = {
         currentLineEnd = cx.lineStart;
         break;
       }
-      const trimmed = currentText.trimStart();
-      if (trimmed.startsWith("$$")) {
-        // $$ at start of line
-        const leadingSpaces = currentText.length - trimmed.length;
-        endPos = cx.lineStart + leadingSpaces + 2;
-        closingLineText = currentText;
-        closingLineStart = cx.lineStart;
-        break;
-      }
-      const trimmedEnd = currentText.trimEnd();
-      if (trimmedEnd.endsWith("$$")) {
-        // $$ at end of line (e.g., \end{aligned}$$)
-        endPos = cx.lineStart + trimmedEnd.length;
+      const closeInLine = currentText.indexOf("$$");
+      if (closeInLine >= 0) {
+        endPos = cx.lineStart + closeInLine + 2;
         closingLineText = currentText;
         closingLineStart = cx.lineStart;
         break;
