@@ -34,7 +34,10 @@ export function useSearchIndexer(
 
   useEffect(() => {
     if (!open || !indexer) {
+      // Reset both results AND searching state on teardown to prevent
+      // the panel from staying stuck in a loading state. (#478)
       setResults([]);
+      setSearching(false);
       return;
     }
 
@@ -64,6 +67,9 @@ export function useSearchIndexer(
 
     return () => {
       cancelled = true;
+      // Eagerly reset searching on cleanup so the UI never stays stuck
+      // in a loading state when the effect is re-fired or torn down. (#478)
+      setSearching(false);
     };
   }, [open, query, typeFilter, indexer]);
 

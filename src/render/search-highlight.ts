@@ -10,13 +10,11 @@
  * data-source-to attributes (math, citations, crossrefs, block headers, etc.).
  */
 
+import { getSearchQuery, searchPanelOpen } from "@codemirror/search";
 import { type Extension } from "@codemirror/state";
 import { Decoration, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view";
 // Direct import: barrel would create circular dependency (render/index → search-highlight → editor/index → ... → render/index)
-import {
-  collectVisibleSearchMatches,
-  getSearchControllerState,
-} from "../editor/find-replace";
+import { collectVisibleSearchMatches } from "../editor/find-replace";
 import { createSimpleViewPlugin } from "./render-utils";
 
 const MATCH_CLASS = "cf-search-match";
@@ -119,9 +117,11 @@ function createSearchHighlight(): Extension {
   }
 
   function shouldUpdate(update: ViewUpdate): boolean {
-    const controller = getSearchControllerState(update.view);
-    const searchStr = controller.query.valid ? controller.query.search : "";
-    const panelOpen = controller.panelOpen;
+    // Read query and panel state directly via O(1) state field lookups
+    // instead of getSearchControllerState which calls countSearchMatches (O(N)).
+    const query = getSearchQuery(update.state);
+    const searchStr = query.valid ? query.search : "";
+    const panelOpen = searchPanelOpen(update.state);
 
     const searchChanged = searchStr !== lastSearch || panelOpen !== lastPanelOpen;
     if (

@@ -513,7 +513,9 @@ function buildSearchPanelContext(
     },
 
     syncPanelState() {
-      const state = getSearchControllerState(view);
+      // Read UI state directly via O(1) state field lookup instead of
+      // getSearchControllerState which calls countSearchMatches (O(N)).
+      const ui = view.state.field(searchUiStateField);
       const { caseSensitive, isRegexp, wholeWord } = ctx.getToggles();
       ctx.toggleCase.classList.toggle(CSS.searchToggleActive, caseSensitive);
       ctx.toggleCase.setAttribute("aria-pressed", String(caseSensitive));
@@ -521,8 +523,8 @@ function buildSearchPanelContext(
       ctx.toggleRegex.setAttribute("aria-pressed", String(isRegexp));
       ctx.toggleWord.classList.toggle(CSS.searchToggleActive, wholeWord);
       ctx.toggleWord.setAttribute("aria-pressed", String(wholeWord));
-      ctx.replaceRow.style.display = state.replaceVisible ? "" : "none";
-      ctx.toggleReplaceBtn.textContent = state.replaceVisible ? "\u25be" : "\u25b8";
+      ctx.replaceRow.style.display = ui.replaceVisible ? "" : "none";
+      ctx.toggleReplaceBtn.textContent = ui.replaceVisible ? "\u25be" : "\u25b8";
     },
   };
   return ctx;
@@ -573,8 +575,10 @@ function assembleSearchPanelDom(ctx: SearchPanelContext): HTMLDivElement {
   ctx.replaceRow = createReplaceRow(ctx);
 
   const toggleReplaceBtn = createAction("\u25b8", "Toggle Replace", () => {
-    const state = getSearchControllerState(view);
-    const replaceVisible = !state.replaceVisible;
+    // Read UI state directly via O(1) state field lookup instead of
+    // getSearchControllerState which calls countSearchMatches (O(N)).
+    const ui = view.state.field(searchUiStateField);
+    const replaceVisible = !ui.replaceVisible;
     setSearchUiState(view, { replaceVisible });
     ctx.syncPanelState();
     if (replaceVisible) replaceInput.focus();
@@ -604,18 +608,19 @@ function buildPanelCallbacks(
     },
 
     update(update: ViewUpdate) {
-      // React to external query changes (e.g. from select-next-occurrence)
-      const state = getSearchControllerState(update.view);
-      const q = state.query;
+      // Read query and UI state directly via O(1) state field lookups
+      // instead of getSearchControllerState which calls countSearchMatches (O(N)).
+      const q = getSearchQuery(update.state);
       if (q.search !== searchInput.value) searchInput.value = q.search;
       if (q.replace !== replaceInput.value) replaceInput.value = q.replace;
 
+      const ui = update.state.field(searchUiStateField);
       const { caseSensitive, isRegexp, wholeWord } = ctx.getToggles();
       if (
         q.caseSensitive !== caseSensitive ||
         q.regexp !== isRegexp ||
         q.wholeWord !== wholeWord ||
-        state.replaceVisible !== (ctx.replaceRow.style.display !== "none")
+        ui.replaceVisible !== (ctx.replaceRow.style.display !== "none")
       ) {
         ctx.syncPanelState();
       }
@@ -637,11 +642,13 @@ function createSearchPanel(view: EditorView): Panel {
   ctx.syncPanelState();
   attachEventHandlers(ctx);
 
-  // Populate from existing query if reopening
-  const existing = getSearchControllerState(view);
-  if (existing.query.valid) {
-    searchInput.value = existing.query.search;
-    replaceInput.value = existing.query.replace;
+  // Populate from existing query if reopening.
+  // Read query directly via O(1) state field lookup instead of
+  // getSearchControllerState which calls countSearchMatches (O(N)).
+  const existingQuery = getSearchQuery(view.state);
+  if (existingQuery.valid) {
+    searchInput.value = existingQuery.search;
+    replaceInput.value = existingQuery.replace;
     ctx.syncPanelState();
   }
 
@@ -656,12 +663,14 @@ function createSearchPanel(view: EditorView): Panel {
 function syncReplaceRow(view: EditorView): void {
   const replaceRow = view.dom.querySelector<HTMLElement>(`.${CSS.searchReplaceRow}`);
   const toggleBtn = view.dom.querySelector<HTMLElement>(`.${CSS.searchToggleReplace}`);
-  const state = getSearchControllerState(view);
+  // Read UI state directly via O(1) state field lookup instead of
+  // getSearchControllerState which calls countSearchMatches (O(N)).
+  const ui = view.state.field(searchUiStateField);
   if (replaceRow) {
-    replaceRow.style.display = state.replaceVisible ? "" : "none";
+    replaceRow.style.display = ui.replaceVisible ? "" : "none";
   }
   if (toggleBtn) {
-    toggleBtn.textContent = state.replaceVisible ? "\u25be" : "\u25b8";
+    toggleBtn.textContent = ui.replaceVisible ? "\u25be" : "\u25b8";
   }
 }
 
