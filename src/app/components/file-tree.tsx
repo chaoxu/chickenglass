@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { FileEntry } from "../file-manager";
 import { FileTreeNode } from "./file-tree-node";
 import { FileTreeProvider } from "../contexts/file-tree-context";
@@ -70,6 +70,19 @@ export function FileTree({
     };
   }, []);
 
+  // Merge local containerRef with headless-tree's container ref so both
+  // the scroll-position logic and updateDomFocus() work correctly (#462).
+  const containerProps = controller.tree.getContainerProps("Files");
+  const mergedContainerRef = useMemo(() => {
+    const htRef = containerProps.ref;
+    return (el: HTMLDivElement | null) => {
+      containerRef.current = el;
+      if (typeof htRef === "function") htRef(el);
+      else if (htRef && typeof htRef === "object")
+        (htRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    };
+  }, [containerProps.ref]);
+
   if (!root || controller.visibleItems.length === 0) {
     return (
       <div className="px-3 py-2 text-xs text-[var(--cf-muted)] italic">
@@ -83,8 +96,8 @@ export function FileTree({
       value={{ activePath, onSelect, onDoubleClick, onRename, onDelete, onCreateFile, onCreateDir }}
     >
       <div
-        ref={containerRef}
-        {...controller.tree.getContainerProps("Files")}
+        {...containerProps}
+        ref={mergedContainerRef}
         className="py-1 outline-none"
       >
         {controller.visibleItems.map((item) => (

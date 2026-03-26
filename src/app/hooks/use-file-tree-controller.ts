@@ -163,31 +163,6 @@ function getFocusedItemOrNull(
     : null;
 }
 
-/**
- * Schedule a focus restoration to the tree container after `onSelect`
- * triggers a React re-render cycle (e.g. opening a file changes the doc
- * prop which triggers a CM6 dispatch and potentially steals focus).
- *
- * Uses a double-rAF so the restoration happens after:
- *  1. React's commit phase (first rAF)
- *  2. Any browser layout/focus side effects (second rAF)
- *
- * Fix for #462: Explorer Up/Down keyboard navigation gets stuck after
- * the first file switch — the tree container lost focus to the editor.
- */
-let pendingFocusRaf = 0;
-function restoreTreeFocusAfterSelect(tree: TreeInstance<FileEntry>): void {
-  if (pendingFocusRaf) cancelAnimationFrame(pendingFocusRaf);
-  pendingFocusRaf = requestAnimationFrame(() => {
-    // Second rAF: run after the browser has processed any focus side
-    // effects from the first frame (React commit + CM6 dispatch).
-    pendingFocusRaf = requestAnimationFrame(() => {
-      pendingFocusRaf = 0;
-      tree.updateDomFocus();
-    });
-  });
-}
-
 function focusVisibleItem(
   item: ItemInstance<FileEntry> | undefined,
   onSelect: (path: string) => void,
@@ -197,7 +172,6 @@ function focusVisibleItem(
   item.getTree().updateDomFocus();
   if (!item.isFolder()) {
     onSelect(item.getId());
-    restoreTreeFocusAfterSelect(item.getTree());
   }
 }
 
@@ -220,9 +194,6 @@ export function createFileTreeHotkeys(
         const nextFocused = getFocusedItemOrNull(currentTree);
         if (nextFocused && !nextFocused.isFolder()) {
           onSelect(nextFocused.getId());
-          // Restore tree focus after onSelect triggers a React re-render
-          // that may create a new CM6 editor stealing focus (#462).
-          restoreTreeFocusAfterSelect(currentTree);
         }
       },
     },
@@ -244,9 +215,6 @@ export function createFileTreeHotkeys(
         const previousFocused = getFocusedItemOrNull(currentTree);
         if (previousFocused && !previousFocused.isFolder()) {
           onSelect(previousFocused.getId());
-          // Restore tree focus after onSelect triggers a React re-render
-          // that may create a new CM6 editor stealing focus (#462).
-          restoreTreeFocusAfterSelect(currentTree);
         }
       },
     },

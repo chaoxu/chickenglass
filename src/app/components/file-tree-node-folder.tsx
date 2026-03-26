@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import type { KeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import type { ItemInstance } from "@headless-tree/core";
 import type { FileEntry } from "../file-manager";
@@ -86,6 +86,19 @@ export function FileTreeNodeFolder({ item }: FileTreeNodeFolderProps) {
 
   const rowProps = item.getProps();
 
+  // Merge local rowRef with headless-tree's ref (item.registerElement) so
+  // that updateDomFocus() can find DOM elements. Without this, the JSX
+  // `ref={rowRef}` would silently override rowProps.ref (#462).
+  const mergedRef = useMemo(() => {
+    const htRef = rowProps.ref;
+    return (el: HTMLDivElement | null) => {
+      rowRef.current = el;
+      if (typeof htRef === "function") htRef(el);
+      else if (htRef && typeof htRef === "object")
+        (htRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    };
+  }, [rowProps.ref]);
+
   const handleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
     event.currentTarget.focus();
     rowProps.onClick?.(event.nativeEvent);
@@ -163,7 +176,7 @@ export function FileTreeNodeFolder({ item }: FileTreeNodeFolderProps) {
         <ContextMenuTrigger asChild>
           <div
             {...rowProps}
-            ref={rowRef}
+            ref={mergedRef}
             className={[
               "flex items-center gap-1 px-2 py-[2px] cursor-pointer text-sm text-[var(--cf-fg)] select-none whitespace-nowrap",
               isActive || isFocused ? "bg-[var(--cf-active)]" : "hover:bg-[var(--cf-hover)]",
