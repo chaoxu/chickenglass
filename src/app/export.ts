@@ -288,9 +288,22 @@ function resolveExportCssValue(variableName: string, fallback: string): string {
   return value || fallback;
 }
 
+/**
+ * Sanitize a CSS value for safe interpolation inside a `<style>` block.
+ *
+ * Strips any `</style...>` sequence (case-insensitive) to prevent an attacker
+ * from closing the style element and injecting arbitrary HTML. The regex
+ * matches the full closing tag: `</style` + optional whitespace/attributes + `>`.
+ */
+export function sanitizeCssValue(value: string): string {
+  // Remove </style> closing tags (case-insensitive) that could close the style block.
+  // Matches </style followed by optional whitespace/attributes and the closing >.
+  return value.replace(/<\/style\s*[^>]*>/gi, "");
+}
+
 function serializeExportThemeTokens(tokens: Record<string, string>): string {
   return Object.entries(tokens)
-    .map(([name, value]) => `      ${name}: ${value};`)
+    .map(([name, value]) => `      ${name}: ${sanitizeCssValue(value)};`)
     .join("\n");
 }
 

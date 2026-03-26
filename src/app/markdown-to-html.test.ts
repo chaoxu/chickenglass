@@ -317,6 +317,37 @@ describe("markdownToHtml", () => {
     expect(html).toContain(`<div class="${CSS.bibliographyEntry}" id="bib-karger2000"><span class="csl-entry">[1] Karger.</span></div>`);
   });
 
+  // Regression (#482): CSL bibliography HTML must be sanitized before
+  // interpolation into the HTML export. A malicious BibTeX entry could
+  // inject <script> or event handlers via CSL output.
+  it("sanitizes malicious CSL bibliography HTML in export output", () => {
+    const entry: CslJsonItem = {
+      id: "evil2024",
+      type: "article-journal",
+      author: [{ family: "Evil", given: "Author" }],
+      title: "XSS Attack",
+      issued: { "date-parts": [[2024]] },
+    };
+    const bibliography = new Map([[entry.id, entry]]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Evil [1]"),
+      bibliography: vi.fn(() => [
+        '<span class="csl-entry">[1] Evil.<script>alert("xss")</script></span>',
+      ]),
+    } as unknown as CslProcessor;
+
+    const html = markdownToHtml("See [@evil2024].", {
+      bibliography,
+      cslProcessor: fakeCsl,
+    });
+
+    expect(html).not.toContain("<script>");
+    expect(html).not.toContain('alert("xss")');
+    expect(html).toContain(`class="${CSS.bibliographyEntry}"`);
+  });
+
   it("uses CSL formatting for narrative citations in read mode", () => {
     const entry: CslJsonItem = {
       id: "karger2000",

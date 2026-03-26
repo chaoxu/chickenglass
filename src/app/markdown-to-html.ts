@@ -28,6 +28,7 @@ import {
 import { htmlRenderExtensions } from "../parser";
 import { buildKatexOptions } from "../lib/katex-options";
 import { isSafeUrl } from "../lib/url-utils";
+import { sanitizeCslHtml } from "../render/inline-shared";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isPdfTarget } from "../lib/pdf-target";
 import { type CslJsonItem } from "../citations/bibtex-parser";
@@ -933,7 +934,7 @@ function renderBibliography(
 
   const items = cslHtml.length > 0
     ? entries.map((entry, i) =>
-        `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${cslHtml[i] ?? ""}</div>`)
+        `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${sanitizeCslHtml(cslHtml[i] ?? "")}</div>`)
     : entries.map((entry) =>
         `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${escapeHtml(formatBibEntry(entry))}</div>`);
 
