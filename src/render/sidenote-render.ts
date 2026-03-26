@@ -14,6 +14,10 @@
  * - FootnoteDef in collapsed mode:
  *   - entire line hidden (content shown in FootnoteSectionWidget at bottom)
  *
+ * Inline expansion (#458): clicking a footnote ref when sidenotes are
+ * collapsed expands the definition content inline below the ref, so the
+ * user can read and navigate to the definition without scrolling away.
+ *
  * Uses a StateField (not ViewPlugin) so that line decorations and
  * block-level replace decorations are permitted by CM6.
  */
@@ -22,11 +26,12 @@ import {
   type DecorationSet,
   Decoration,
   EditorView,
+  WidgetType,
   type PluginValue,
   type ViewUpdate,
   ViewPlugin,
 } from "@codemirror/view";
-import { type EditorState, type Extension, type Range, StateEffect } from "@codemirror/state";
+import { type EditorState, type Extension, type Range, StateEffect, StateField } from "@codemirror/state";
 
 import {
   buildDecorations,
@@ -57,6 +62,41 @@ export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
 /** StateField tracking whether the sidenote margin is collapsed. */
 export const sidenotesCollapsedField = createBooleanToggleField(sidenotesCollapsedEffect);
 
+// ---------------------------------------------------------------------------
+// Inline footnote expansion (#458)
+// ---------------------------------------------------------------------------
+
+/** StateEffect to toggle inline expansion of a footnote ref. */
+export const footnoteInlineToggleEffect = StateEffect.define<{ id: string; expanded: boolean }>();
+
+/**
+ * StateField tracking which footnote IDs are currently expanded inline.
+ *
+ * When a user clicks a footnote ref in collapsed-sidenotes mode, the
+ * definition content appears inline below the ref line instead of scrolling
+ * to the definition. This keeps the user in reading context.
+ */
+export const footnoteInlineExpandedField = StateField.define<ReadonlySet<string>>({
+  create() {
+    return new Set<string>();
+  },
+  update(value, tr) {
+    let changed = false;
+    let next: Set<string> | undefined;
+    for (const effect of tr.effects) {
+      if (effect.is(footnoteInlineToggleEffect)) {
+        if (!next) next = new Set(value);
+        if (effect.value.expanded) {
+          next.add(effect.value.id);
+        } else {
+          next.delete(effect.value.id);
+        }
+        changed = true;
+      }
+    }
+    return changed && next ? next : value;
+  },
+});
 
 /** Collect footnote references and definitions from the shared semantics field. */
 export function collectFootnotes(state: EditorState): FootnoteSemantics {
@@ -84,9 +124,10 @@ class FootnoteDefLabelWidget extends SimpleTextRenderWidget {
 /** Widget for a footnote reference rendered as a superscript number.
  *
  * When sidenotes are collapsed and a definition exists, clicking the
- * superscript scrolls to and reveals the footnote definition (uncollapsing
- * sidenotes and placing the cursor on the definition). Otherwise, the
- * default source-reveal behavior places the cursor on the ref source.
+ * superscript toggles inline expansion of the footnote definition below
+ * the ref (#458). When sidenotes are expanded (margin visible), clicking
+ * navigates to the definition. Otherwise, the default source-reveal
+ * behavior places the cursor on the ref source.
  */
 class FootnoteRefWidget extends SimpleTextRenderWidget {
   constructor(
@@ -94,6 +135,8 @@ class FootnoteRefWidget extends SimpleTextRenderWidget {
     private readonly id: string,
     /** Document offset of the footnote definition, or -1 if none exists. */
     private readonly defFrom: number,
+    /** Whether this ref's footnote is currently expanded inline. */
+    private readonly inlineExpanded: boolean,
   ) {
     super({
       tagName: "sup",
@@ -107,20 +150,28 @@ class FootnoteRefWidget extends SimpleTextRenderWidget {
     const el = this.createDOM();
     this.setSourceRangeAttrs(el);
 
+    if (this.inlineExpanded) {
+      el.classList.add("cf-sidenote-ref-expanded");
+    }
+
     if (view && this.defFrom >= 0) {
-      // Click navigates to the footnote definition:
-      // - Uncollapse sidenotes so the definition becomes visible/editable
-      // - Place cursor at the definition and scroll into view
       el.style.cursor = "pointer";
+      const id = this.id;
       const defFrom = this.defFrom;
+      const inlineExpanded = this.inlineExpanded;
       el.addEventListener("mousedown", (e) => {
         e.preventDefault();
         const collapsed = view.state.field(sidenotesCollapsedField, false) ?? false;
         if (collapsed) {
-          view.dispatch({ effects: sidenotesCollapsedEffect.of(false) });
+          // Collapsed mode: toggle inline expansion (#458)
+          view.dispatch({
+            effects: footnoteInlineToggleEffect.of({ id, expanded: !inlineExpanded }),
+          });
+        } else {
+          // Expanded mode (margin visible): navigate to definition
+          view.focus();
+          view.dispatch({ selection: { anchor: defFrom }, scrollIntoView: true });
         }
-        view.focus();
-        view.dispatch({ selection: { anchor: defFrom }, scrollIntoView: true });
       });
     } else if (view && this.sourceFrom >= 0) {
       this.bindSourceReveal(el, view);
@@ -130,27 +181,138 @@ class FootnoteRefWidget extends SimpleTextRenderWidget {
   }
 
   eq(other: FootnoteRefWidget): boolean {
-    return this.number === other.number && this.id === other.id && this.defFrom === other.defFrom;
+    return (
+      this.number === other.number &&
+      this.id === other.id &&
+      this.defFrom === other.defFrom &&
+      this.inlineExpanded === other.inlineExpanded
+    );
+  }
+}
+
+/**
+ * Widget that renders an inline footnote expansion below the ref line (#458).
+ *
+ * Shows a bordered box with the footnote number, rendered content, and an
+ * "edit" link that navigates to the actual definition for editing. Clicking
+ * the superscript ref again collapses this widget.
+ *
+ * Uses a plain WidgetType (not RenderWidget) because it is placed via
+ * Decoration.widget with block:true, not Decoration.replace.
+ */
+export class FootnoteInlineWidget extends WidgetType {
+  private readonly macrosKey: string;
+
+  constructor(
+    private readonly number: number,
+    private readonly id: string,
+    private readonly content: string,
+    private readonly macros: Record<string, string>,
+    private readonly defFrom: number,
+  ) {
+    super();
+    this.macrosKey = serializeMacros(macros);
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const wrapper = document.createElement("div");
+    wrapper.className = "cf-footnote-inline";
+    wrapper.setAttribute("aria-label", `Footnote ${this.id} content`);
+
+    const header = document.createElement("div");
+    header.className = "cf-footnote-inline-header";
+
+    const num = document.createElement("sup");
+    num.className = "cf-footnote-inline-number";
+    num.textContent = String(this.number);
+    header.appendChild(num);
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "cf-footnote-inline-edit";
+    editBtn.textContent = "Edit";
+    editBtn.title = "Navigate to footnote definition";
+    const defFrom = this.defFrom;
+    const id = this.id;
+    editBtn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Uncollapse sidenotes and navigate to definition
+      view.dispatch({
+        effects: [
+          sidenotesCollapsedEffect.of(false),
+          footnoteInlineToggleEffect.of({ id, expanded: false }),
+        ],
+        selection: { anchor: defFrom },
+        scrollIntoView: true,
+      });
+      view.focus();
+    });
+    header.appendChild(editBtn);
+    wrapper.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "cf-footnote-inline-body";
+    renderDocumentFragmentToDom(body, {
+      kind: "footnote",
+      text: this.content,
+      macros: this.macros,
+    });
+    wrapper.appendChild(body);
+
+    return wrapper;
+  }
+
+  eq(other: FootnoteInlineWidget): boolean {
+    return (
+      this.number === other.number &&
+      this.id === other.id &&
+      this.content === other.content &&
+      this.defFrom === other.defFrom &&
+      this.macrosKey === other.macrosKey
+    );
+  }
+
+  /** Block this widget from CM6 event handling — we handle clicks ourselves. */
+  ignoreEvent(): boolean {
+    return true;
   }
 }
 
 /** Build sidenote decorations from editor state. */
 export function buildSidenoteDecorations(state: EditorState, focused: boolean): DecorationSet {
   const collapsed = state.field(sidenotesCollapsedField, false) ?? false;
+  const inlineExpanded = state.field(footnoteInlineExpandedField, false) ?? new Set<string>();
 
   const footnotes = collectFootnotes(state);
   const items: Range<Decoration>[] = [];
   const numberMap = numberFootnotes(footnotes);
+  const macros = state.field(mathMacrosField, false) ?? {};
 
   // Render refs as superscript numbers (both collapsed and expanded modes).
   // Each ref widget receives the definition's document offset so that clicking
   // the superscript can navigate directly to the editable definition.
+  // In collapsed mode, expanded refs also get an inline widget below the line.
   for (const ref of footnotes.refs) {
     if (focused && cursorInRange(state, ref.from, ref.to)) continue;
 
     const num = numberMap.get(ref.id) ?? 0;
     const def = footnotes.defs.get(ref.id);
-    pushWidgetDecoration(items, new FootnoteRefWidget(num, ref.id, def?.from ?? -1), ref.from, ref.to);
+    const isExpanded = inlineExpanded.has(ref.id);
+    pushWidgetDecoration(
+      items,
+      new FootnoteRefWidget(num, ref.id, def?.from ?? -1, isExpanded),
+      ref.from,
+      ref.to,
+    );
+
+    // Inline expansion: show footnote content below the ref line (#458)
+    if (collapsed && isExpanded && def) {
+      const refLine = state.doc.lineAt(ref.from);
+      const widget = new FootnoteInlineWidget(num, ref.id, def.content, macros, def.from);
+      items.push(
+        Decoration.widget({ widget, block: true, side: 1 }).range(refLine.to),
+      );
+    }
   }
 
   for (const [, def] of footnotes.defs) {
@@ -196,7 +358,7 @@ const sidenoteDecorationField = createDecorationsField(
   },
   (tr) =>
     defaultShouldRebuild(tr) ||
-    tr.effects.some((e) => e.is(sidenotesCollapsedEffect)) ||
+    tr.effects.some((e) => e.is(sidenotesCollapsedEffect) || e.is(footnoteInlineToggleEffect)) ||
     tr.state.field(documentSemanticsField) !== tr.startState.field(documentSemanticsField),
 );
 
@@ -369,6 +531,7 @@ export const sidenoteRenderPlugin: Extension = [
   editorFocusField,
   focusTracker,
   sidenotesCollapsedField,
+  footnoteInlineExpandedField,
   sidenoteDecorationField,
   footnoteSectionPlugin,
 ];

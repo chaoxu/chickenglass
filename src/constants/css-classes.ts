@@ -211,6 +211,14 @@ export const CSS = {
   sidenoteEntry: "cf-sidenote-entry",
   sidenoteEntryNumber: "cf-sidenote-entry-number",
 
+  /** Inline footnote expansion (#458). */
+  sidenoteRefExpanded: "cf-sidenote-ref-expanded",
+  footnoteInline: "cf-footnote-inline",
+  footnoteInlineHeader: "cf-footnote-inline-header",
+  footnoteInlineNumber: "cf-footnote-inline-number",
+  footnoteInlineEdit: "cf-footnote-inline-edit",
+  footnoteInlineBody: "cf-footnote-inline-body",
+
   /** Hover preview tooltip container. */
   hoverPreviewTooltip: "cf-hover-preview-tooltip",
 } as const;

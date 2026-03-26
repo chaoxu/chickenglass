@@ -11,9 +11,12 @@ import {
   computeSidenoteOffsets,
   type SidenoteMeasurement,
   FootnoteSectionWidget,
+  FootnoteInlineWidget,
   buildSidenoteDecorations,
   sidenotesCollapsedEffect,
   sidenotesCollapsedField,
+  footnoteInlineToggleEffect,
+  footnoteInlineExpandedField,
 } from "./sidenote-render";
 import { getDecorationSpecs } from "../test-utils";
 
@@ -27,6 +30,22 @@ function createState(doc: string, cursorPos?: number): EditorState {
       frontmatterField,
       mathMacrosField,
       documentSemanticsField,
+    ],
+  });
+}
+
+/** Create an EditorState with all fields including collapsed + inline expansion. */
+function createFullState(doc: string, cursorPos?: number): EditorState {
+  return EditorState.create({
+    doc,
+    selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
+    extensions: [
+      markdown({ extensions: [footnoteExtension] }),
+      frontmatterField,
+      mathMacrosField,
+      documentSemanticsField,
+      sidenotesCollapsedField,
+      footnoteInlineExpandedField,
     ],
   });
 }
@@ -346,5 +365,171 @@ describe("tooltip inline rendering", () => {
     const macros = { "\\RR": "\\mathbb{R}" };
     renderInlineMarkdown(container, "$\\RR$", macros, "document-body");
     expect(container.querySelector(".katex")).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Inline footnote expansion (#458)
+// ---------------------------------------------------------------------------
+
+describe("footnoteInlineExpandedField", () => {
+  it("starts empty", () => {
+    const state = createFullState("Hello [^1]\n\n[^1]: Note");
+    const expanded = state.field(footnoteInlineExpandedField);
+    expect(expanded.size).toBe(0);
+  });
+
+  it("adds an id when expand effect is dispatched", () => {
+    const state = createFullState("Hello [^1]\n\n[^1]: Note");
+    const next = state.update({
+      effects: footnoteInlineToggleEffect.of({ id: "1", expanded: true }),
+    }).state;
+    const expanded = next.field(footnoteInlineExpandedField);
+    expect(expanded.has("1")).toBe(true);
+    expect(expanded.size).toBe(1);
+  });
+
+  it("removes an id when collapse effect is dispatched", () => {
+    const state = createFullState("Hello [^1]\n\n[^1]: Note");
+    const expanded = state.update({
+      effects: footnoteInlineToggleEffect.of({ id: "1", expanded: true }),
+    }).state;
+    const collapsed = expanded.update({
+      effects: footnoteInlineToggleEffect.of({ id: "1", expanded: false }),
+    }).state;
+    expect(collapsed.field(footnoteInlineExpandedField).has("1")).toBe(false);
+    expect(collapsed.field(footnoteInlineExpandedField).size).toBe(0);
+  });
+
+  it("tracks multiple expanded footnotes independently", () => {
+    const doc = "A[^a] B[^b]\n\n[^a]: First\n\n[^b]: Second";
+    let state = createFullState(doc);
+    state = state.update({
+      effects: footnoteInlineToggleEffect.of({ id: "a", expanded: true }),
+    }).state;
+    state = state.update({
+      effects: footnoteInlineToggleEffect.of({ id: "b", expanded: true }),
+    }).state;
+    const expanded = state.field(footnoteInlineExpandedField);
+    expect(expanded.has("a")).toBe(true);
+    expect(expanded.has("b")).toBe(true);
+    expect(expanded.size).toBe(2);
+
+    // Collapse only "a"
+    state = state.update({
+      effects: footnoteInlineToggleEffect.of({ id: "a", expanded: false }),
+    }).state;
+    const afterCollapse = state.field(footnoteInlineExpandedField);
+    expect(afterCollapse.has("a")).toBe(false);
+    expect(afterCollapse.has("b")).toBe(true);
+    expect(afterCollapse.size).toBe(1);
+  });
+});
+
+describe("buildSidenoteDecorations — inline expansion (#458)", () => {
+  const doc = "Text [^1] end\n\n[^1]: See $x^2$ here";
+
+  it("shows inline widget when collapsed + footnote expanded", () => {
+    // #458: Clicking a footnote ref in collapsed mode should show the
+    // definition inline below the ref line, not scroll away.
+    let state = createFullState(doc, 0);
+    state = state.update({
+      effects: [
+        sidenotesCollapsedEffect.of(true),
+        footnoteInlineToggleEffect.of({ id: "1", expanded: true }),
+      ],
+    }).state;
+    const decos = buildSidenoteDecorations(state, true);
+    const specs = getDecorationSpecs(decos);
+
+    // Should have a FootnoteInlineWidget
+    const inlineWidgets = specs.filter(
+      (s) => s.widgetClass === "FootnoteInlineWidget",
+    );
+    expect(inlineWidgets.length).toBe(1);
+
+    // The inline widget should be placed at the end of the ref's line
+    const refLineEnd = doc.indexOf("\n");
+    expect(inlineWidgets[0].from).toBe(refLineEnd);
+  });
+
+  it("does not show inline widget when not collapsed", () => {
+    // Inline expansion only applies in collapsed-sidenotes mode.
+    let state = createFullState(doc, 0);
+    state = state.update({
+      effects: footnoteInlineToggleEffect.of({ id: "1", expanded: true }),
+    }).state;
+    const decos = buildSidenoteDecorations(state, true);
+    const specs = getDecorationSpecs(decos);
+
+    const inlineWidgets = specs.filter(
+      (s) => s.widgetClass === "FootnoteInlineWidget",
+    );
+    expect(inlineWidgets.length).toBe(0);
+  });
+
+  it("does not show inline widget when collapsed but footnote not expanded", () => {
+    let state = createFullState(doc, 0);
+    state = state.update({
+      effects: sidenotesCollapsedEffect.of(true),
+    }).state;
+    const decos = buildSidenoteDecorations(state, true);
+    const specs = getDecorationSpecs(decos);
+
+    const inlineWidgets = specs.filter(
+      (s) => s.widgetClass === "FootnoteInlineWidget",
+    );
+    expect(inlineWidgets.length).toBe(0);
+  });
+
+  it("shows multiple inline widgets for multiple expanded footnotes", () => {
+    const multiDoc = "A[^a] B[^b]\n\n[^a]: First note\n\n[^b]: Second note";
+    let state = createFullState(multiDoc, 0);
+    state = state.update({
+      effects: [
+        sidenotesCollapsedEffect.of(true),
+        footnoteInlineToggleEffect.of({ id: "a", expanded: true }),
+        footnoteInlineToggleEffect.of({ id: "b", expanded: true }),
+      ],
+    }).state;
+    const decos = buildSidenoteDecorations(state, true);
+    const specs = getDecorationSpecs(decos);
+
+    const inlineWidgets = specs.filter(
+      (s) => s.widgetClass === "FootnoteInlineWidget",
+    );
+    expect(inlineWidgets.length).toBe(2);
+  });
+});
+
+describe("FootnoteInlineWidget", () => {
+  it("eq returns true for identical widgets", () => {
+    const a = new FootnoteInlineWidget(1, "note", "Content", {}, 10);
+    const b = new FootnoteInlineWidget(1, "note", "Content", {}, 10);
+    expect(a.eq(b)).toBe(true);
+  });
+
+  it("eq returns false when content differs", () => {
+    const a = new FootnoteInlineWidget(1, "note", "Content A", {}, 10);
+    const b = new FootnoteInlineWidget(1, "note", "Content B", {}, 10);
+    expect(a.eq(b)).toBe(false);
+  });
+
+  it("eq returns false when macros differ", () => {
+    const a = new FootnoteInlineWidget(1, "note", "$\\R$", { "\\R": "\\mathbb{R}" }, 10);
+    const b = new FootnoteInlineWidget(1, "note", "$\\R$", { "\\R": "\\mathbf{R}" }, 10);
+    expect(a.eq(b)).toBe(false);
+  });
+
+  it("eq returns false when number differs", () => {
+    const a = new FootnoteInlineWidget(1, "note", "Content", {}, 10);
+    const b = new FootnoteInlineWidget(2, "note", "Content", {}, 10);
+    expect(a.eq(b)).toBe(false);
+  });
+
+  it("eq returns false when defFrom differs", () => {
+    const a = new FootnoteInlineWidget(1, "note", "Content", {}, 10);
+    const b = new FootnoteInlineWidget(1, "note", "Content", {}, 20);
+    expect(a.eq(b)).toBe(false);
   });
 });

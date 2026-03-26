@@ -56,6 +56,8 @@ export {
   collectFootnotes,
   sidenotesCollapsedEffect,
   sidenotesCollapsedField,
+  footnoteInlineToggleEffect,
+  footnoteInlineExpandedField,
 } from "./sidenote-render";
 // hover-preview re-export removed — imports from plugins/ and citations/
 // would create a cycle through this barrel.  Import from "./hover-preview" directly.
