@@ -3,6 +3,7 @@ reviewers = ["codex-reviewer"]
 retries = 2
 
 verify = [
+  "npm ci",
   "npx tsc --noEmit",
   "npm run lint",
   "npm test",
