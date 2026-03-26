@@ -28,7 +28,9 @@ export { isPdfTarget } from "../lib/pdf-target";
 export {
   pdfPreviewField,
   pdfPreviewEffect,
+  pdfPreviewRemoveEffect,
   requestPdfPreview,
+  ERROR_COOLDOWN_MS,
   type PdfPreviewEntry,
   type PdfPreviewUpdate,
 } from "./pdf-preview-cache";

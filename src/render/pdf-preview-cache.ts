@@ -15,6 +15,9 @@ export type PdfPreviewStatus = "loading" | "ready" | "error";
 
 export interface PdfPreviewEntry {
   readonly status: PdfPreviewStatus;
+  /** For error entries: timestamp (ms) when the error was recorded.
+   *  Allows retry after ERROR_COOLDOWN_MS elapses. */
+  readonly errorTime?: number;
 }
 
 export interface PdfPreviewUpdate {
@@ -22,9 +25,15 @@ export interface PdfPreviewUpdate {
   readonly entry: PdfPreviewEntry;
 }
 
+/** Minimum time (ms) before an errored PDF preview can be retried. */
+export const ERROR_COOLDOWN_MS = 10_000;
+
 // ── StateEffect + StateField ─────────────────────────────────────────────────
 
 export const pdfPreviewEffect = StateEffect.define<PdfPreviewUpdate>();
+
+/** Effect to remove a path from the StateField (used on canvas eviction). */
+export const pdfPreviewRemoveEffect = StateEffect.define<string>();
 
 /** StateField tracking PDF preview status keyed by resolved path. */
 export const pdfPreviewField = StateField.define<
@@ -39,6 +48,11 @@ export const pdfPreviewField = StateField.define<
       if (effect.is(pdfPreviewEffect)) {
         if (!updated) updated = new Map(value);
         updated.set(effect.value.path, effect.value.entry);
+      } else if (effect.is(pdfPreviewRemoveEffect)) {
+        if (value.has(effect.value)) {
+          if (!updated) updated = new Map(value);
+          updated.delete(effect.value);
+        }
       }
     }
     return updated ?? value;
@@ -67,7 +81,8 @@ export function _resetPendingPaths(): void {
 /**
  * Request a rasterized preview of page 1 of a PDF file.
  *
- * - If already cached, returns immediately.
+ * - If already cached and canvas is present, returns immediately.
+ * - Error entries are retried after ERROR_COOLDOWN_MS elapses.
  * - Otherwise dispatches "loading", reads binary, rasterizes to canvas,
  *   stores canvas in module cache, dispatches "ready" or "error".
  * - Deduplicates concurrent requests via pendingPaths.
@@ -78,7 +93,21 @@ export async function requestPdfPreview(
   fs: FileSystem,
 ): Promise<void> {
   const existing = view.state.field(pdfPreviewField).get(path);
-  if (existing) return;
+
+  if (existing) {
+    // #486/#473: "ready" with canvas still in cache — nothing to do
+    if (existing.status === "ready" && canvasCache.has(path)) return;
+
+    // #472: error entries can be retried after cooldown
+    if (existing.status === "error") {
+      const elapsed = Date.now() - (existing.errorTime ?? 0);
+      if (elapsed < ERROR_COOLDOWN_MS) return;
+      // Cooldown expired — fall through to retry
+    }
+
+    // "loading" — already in progress
+    if (existing.status === "loading") return;
+  }
 
   if (pendingPaths.has(path)) return;
   pendingPaths.add(path);
@@ -90,18 +119,23 @@ export async function requestPdfPreview(
     const canvas = await rasterizePdfPage1(bytes);
 
     if (canvas) {
-      // Evict oldest entry when cache is full
+      // Evict oldest entry when cache is full.
+      // #486: also reset the StateField entry for the evicted path so the
+      // next decoration pass sees a cache miss and re-requests.
       if (canvasCache.size >= MAX_CANVAS_CACHE_SIZE) {
         const oldest = canvasCache.keys().next().value;
-        if (oldest !== undefined) canvasCache.delete(oldest);
+        if (oldest !== undefined) {
+          canvasCache.delete(oldest);
+          safeRemove(view, oldest);
+        }
       }
       canvasCache.set(path, canvas);
       safeDispatch(view, { path, entry: { status: "ready" } });
     } else {
-      safeDispatch(view, { path, entry: { status: "error" } });
+      safeDispatch(view, { path, entry: { status: "error", errorTime: Date.now() } });
     }
   } catch {
-    safeDispatch(view, { path, entry: { status: "error" } });
+    safeDispatch(view, { path, entry: { status: "error", errorTime: Date.now() } });
   } finally {
     pendingPaths.delete(path);
   }
@@ -111,6 +145,15 @@ function safeDispatch(view: EditorView, update: PdfPreviewUpdate): void {
   if (!view.dom.isConnected) return;
   try {
     view.dispatch({ effects: pdfPreviewEffect.of(update) });
+  } catch {
+    // View disconnected between guard and dispatch — expected race
+  }
+}
+
+function safeRemove(view: EditorView, path: string): void {
+  if (!view.dom.isConnected) return;
+  try {
+    view.dispatch({ effects: pdfPreviewRemoveEffect.of(path) });
   } catch {
     // View disconnected between guard and dispatch — expected race
   }

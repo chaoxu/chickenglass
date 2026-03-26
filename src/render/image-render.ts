@@ -152,18 +152,29 @@ function collectImageRanges(view: EditorView) {
       const cache = view.state.field(pdfPreviewField);
       const entry = cache.get(resolvedPath);
 
-      if (entry?.status === "ready") {
+      // #473: "ready" with no canvas means the canvas was evicted from the
+      // module-level cache — treat as a cache miss and re-request.
+      const canvasPresent = entry?.status === "ready" && getPdfCanvas(resolvedPath) !== undefined;
+
+      if (canvasPresent) {
         // Rasterized — render the canvas directly
         pushWidgetDecoration(items, new PdfCanvasWidget(parsed.alt, resolvedPath), node.from, node.to);
       } else if (entry?.status === "error") {
         // Error — show the existing broken-image fallback
         pushWidgetDecoration(items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to);
+
+        // #472: re-request so the retry cooldown logic in requestPdfPreview
+        // can decide whether to retry.
+        const fs = view.state.facet(fileSystemFacet);
+        if (fs) {
+          void requestPdfPreview(view, resolvedPath, fs);
+        }
       } else {
-        // Loading or not yet requested — show loading placeholder
+        // Loading, not yet requested, or "ready" with evicted canvas — show loading placeholder
         pushWidgetDecoration(items, new PdfLoadingWidget(parsed.alt), node.from, node.to);
 
-        // Trigger async preview request if not yet in cache
-        if (!entry) {
+        // Trigger async preview request if not yet in cache or needs re-request
+        if (!entry || entry.status !== "loading") {
           const fs = view.state.facet(fileSystemFacet);
           if (fs) {
             void requestPdfPreview(view, resolvedPath, fs);
