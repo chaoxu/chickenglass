@@ -327,6 +327,7 @@ export function pushWidgetDecoration(
 export function defaultShouldUpdate(update: ViewUpdate): boolean {
   return (
     update.docChanged ||
+    update.viewportChanged ||
     syntaxTree(update.state) !== syntaxTree(update.startState)
   );
 }
@@ -338,15 +339,19 @@ export function defaultShouldUpdate(update: ViewUpdate): boolean {
  * changes. Use this for plugins that show/hide source based on cursor
  * proximity (e.g., markdown-render, checkbox-render, image-render).
  *
- * Does NOT include viewportChanged — viewport scrolling alone should not
- * trigger full decoration rebuilds for ViewPlugins that already restrict
- * their tree walks to visible ranges.
+ * Includes viewportChanged because plugins that iterate visibleRanges
+ * must rebuild when the viewport changes — otherwise content scrolled
+ * into view stays as raw markdown (#437).
+ *
+ * TODO (#443): implement differential viewport update (only walk newly-
+ * visible ranges) so viewport rebuilds are incremental, not full.
  */
 export function cursorSensitiveShouldUpdate(update: ViewUpdate): boolean {
   return (
     update.docChanged ||
     update.selectionSet ||
     update.focusChanged ||
+    update.viewportChanged ||
     syntaxTree(update.state) !== syntaxTree(update.startState)
   );
 }
