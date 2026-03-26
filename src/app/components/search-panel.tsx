@@ -220,8 +220,8 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
                 </div>
 
                 {/* Entries in this file */}
-                {entries.map((entry, i) => (
-                  <SearchResultItem key={i} entry={entry} onClick={handleResultClick} />
+                {entries.map((entry) => (
+                  <SearchResultItem key={`${entry.file}:${entry.position.from}`} entry={entry} onClick={handleResultClick} />
                 ))}
               </div>
             ))

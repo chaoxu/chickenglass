@@ -107,6 +107,27 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
     };
   }, [view]);
 
+  // Track document version so we re-extract sidenotes on every edit,
+  // including same-length replacements that doc.length would miss.
+  // CM6 Text objects are immutable — identity comparison catches all changes.
+  const [docVersion, setDocVersion] = useState(0);
+  useEffect(() => {
+    if (!view) return;
+    let prevDoc = view.state.doc;
+    let rafId: number | null = null;
+    const check = () => {
+      if (view.state.doc !== prevDoc) {
+        prevDoc = view.state.doc;
+        setDocVersion((v) => v + 1);
+      }
+      rafId = requestAnimationFrame(check);
+    };
+    rafId = requestAnimationFrame(check);
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [view]);
+
   // Extract sidenotes whenever doc changes
   useEffect(() => {
     if (!view) {
@@ -114,7 +135,7 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
       return;
     }
     setEntries(extractSidenotes(view));
-  }, [view, view?.state.doc.length]);
+  }, [view, docVersion]);
 
   // Re-extract on scroll (positions may change due to folding/viewport)
   // Uses rAF-based throttling to limit extractSidenotes() to once per frame
@@ -141,7 +162,10 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
   const macros = useMemo(() => {
     if (!view) return {};
     return view.state.field(mathMacrosField, false) ?? {};
-  }, [view, view?.state.doc.length]);
+    // docVersion ensures macros recompute when frontmatter changes,
+    // even if the edit doesn't change doc.length.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, docVersion]);
 
   const setItemRef = useCallback((id: string, el: HTMLDivElement | null) => {
     if (el) {

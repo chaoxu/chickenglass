@@ -145,7 +145,7 @@ export function useAppOverlays({
     { key: "mod+,", handler: () => dialogs.setSettingsOpen((value) => !value) },
     { key: "mod+/", handler: () => dialogs.setShortcutsOpen((value) => !value) },
     { key: "mod+g", handler: () => dialogs.setGotoLineOpen((value) => !value) },
-    { key: "mod+b", handler: () => workspace.setSidebarCollapsed((value) => !value) },
+    { key: "mod+\\", handler: () => workspace.setSidebarCollapsed((value) => !value) },
   ], [dialogs, editor, handleSaveAs, workspace]);
 
   useHotkeys(hotkeys);
