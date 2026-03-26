@@ -10,6 +10,7 @@ import {
   collectMathRanges,
 } from "./math-render";
 import { createTestView } from "../test-utils";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 
 /** Create an EditorView with frontmatter and math parser extensions. */
 function createView(
@@ -23,6 +24,7 @@ function createView(
       markdown({ extensions: [mathExtension] }),
       ...(projectConfig ? [projectConfigFacet.of({ math: projectConfig })] : []),
       frontmatterField,
+      documentSemanticsField,
       mathMacrosField,
     ],
   });

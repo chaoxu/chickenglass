@@ -29,7 +29,7 @@ describe("openProjectInCurrentWindow", () => {
     let latestProjectRequest = 0;
     let latestOpenFileToken = 0;
     const committedPaths: string[] = [];
-    const firstOpen = createDeferred<void>();
+    const firstOpen = createDeferred<undefined>();
     const emptyTree: FileEntry = { name: "project", path: "", isDirectory: true, children: [] };
     const openProjectRoot = vi.fn(async (path: string) => (
       path === "/tmp/project-a" ? createFileTree("a.md") : emptyTree
@@ -71,7 +71,7 @@ describe("openProjectInCurrentWindow", () => {
       openFile,
     });
 
-    firstOpen.resolve();
+    firstOpen.resolve(undefined);
 
     await expect(firstRequest).resolves.toBe(false);
     await expect(secondRequest).resolves.toBe(true);
@@ -82,8 +82,8 @@ describe("openProjectInCurrentWindow", () => {
     let latestProjectRequest = 0;
     let latestOpenFileToken = 0;
     const committedPaths: string[] = [];
-    const firstOpen = createDeferred<void>();
-    const secondOpen = createDeferred<void>();
+    const firstOpen = createDeferred<undefined>();
+    const secondOpen = createDeferred<undefined>();
     const openProjectRoot = vi.fn(async (path: string) => (
       path === "/tmp/project-a" ? createFileTree("a.md") : createFileTree("b.md")
     ));
@@ -130,8 +130,8 @@ describe("openProjectInCurrentWindow", () => {
       openFile,
     });
 
-    firstOpen.resolve();
-    secondOpen.resolve();
+    firstOpen.resolve(undefined);
+    secondOpen.resolve(undefined);
 
     await expect(firstRequest).resolves.toBe(false);
     await expect(secondRequest).resolves.toBe(true);

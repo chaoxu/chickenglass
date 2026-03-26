@@ -935,10 +935,11 @@ describe("#386 — async cleanup and parallelization", () => {
     const session = fileText("src/app/hooks/use-editor-session.ts");
 
     expect(workspace).toContain("const [tree, nextProjectConfig] = await Promise.all([");
-    expect(workspace).toContain("await loadWorkspaceContents()");
+    expect(workspace).toContain("return loadWorkspaceContents(requestId)");
     expect(session).toContain("await refreshTree()");
     expect(session).toContain("await openFile(path)");
-    expect(session).toContain("await (exists ? fs.writeFile(relativePath, doc) : fs.createFile(relativePath, doc))");
+    expect(session).toContain("await writeDocumentSnapshot(relativePath, doc, sourceMap, {");
+    expect(session).toContain("createTargetIfMissing: true,");
   });
 });
 
