@@ -197,6 +197,10 @@ function showPicker(
 ): void {
   if (entries.length === 0) return;
 
+  // Clean up any prior picker state so event listeners don't leak
+  // when showPicker is called without a preceding hidePicker (#500).
+  hidePicker();
+
   const el = getPickerEl();
   const selectedIndex = 0;
   const filter = "";

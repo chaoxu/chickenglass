@@ -200,11 +200,24 @@ export const openingFenceDeletionCleanup = EditorState.transactionFilter.of((tr)
   for (const c of closingFencesToRemove) {
     changes.push({ from: c.from, to: c.to, insert: "" });
   }
-  // CM6 requires changes sorted by position and non-overlapping
-  changes.sort((a, b) => a.from - b.from);
+  // CM6 requires changes sorted by position and non-overlapping.
+  // Nested block deletion can produce overlapping closing-fence ranges
+  // (e.g. a parent and child both schedule removal of adjacent/overlapping
+  // fence lines). Merge them so CM6 doesn't crash on overlapping changes.
+  changes.sort((a, b) => a.from - b.from || a.to - b.to);
+  const merged: typeof changes = [];
+  for (const c of changes) {
+    const prev = merged.length > 0 ? merged[merged.length - 1] : null;
+    if (prev && prev.insert === "" && c.insert === "" && c.from <= prev.to) {
+      // Overlapping or adjacent deletion ranges — merge into one
+      prev.to = Math.max(prev.to, c.to);
+    } else {
+      merged.push({ ...c });
+    }
+  }
 
   return {
-    changes,
+    changes: merged,
     annotations: fenceOperationAnnotation.of(true),
   };
 });
