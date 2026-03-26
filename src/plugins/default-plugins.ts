@@ -13,6 +13,8 @@ import { proofPlugin } from "./proof-plugin";
 import { remarkPlugin, examplePlugin } from "./remark-plugin";
 import { algorithmPlugin } from "./algorithm-plugin";
 import { problemPlugin } from "./problem-plugin";
+import { figurePlugin } from "./figure-plugin";
+import { tableBlockPlugin } from "./table-plugin";
 import { blockquotePlugin } from "./blockquote-plugin";
 import { embedPlugin, iframePlugin, youtubePlugin, gistPlugin } from "./embed-plugin";
 
@@ -28,6 +30,8 @@ const PLUGIN_BY_NAME: ReadonlyMap<string, BlockPlugin> = new Map<string, BlockPl
   [remarkPlugin.name, remarkPlugin],
   [examplePlugin.name, examplePlugin],
   [algorithmPlugin.name, algorithmPlugin],
+  [figurePlugin.name, figurePlugin],
+  [tableBlockPlugin.name, tableBlockPlugin],
   [blockquotePlugin.name, blockquotePlugin],
   [embedPlugin.name, embedPlugin],
   [iframePlugin.name, iframePlugin],

@@ -6,7 +6,7 @@
  */
 
 import type { BlockPlugin } from "./plugin-types";
-import type { SpecialBehavior } from "../constants/block-manifest";
+import type { CaptionPosition, SpecialBehavior } from "../constants/block-manifest";
 import { createBlockRender } from "./block-render";
 import { capitalize } from "../lib/utils";
 
@@ -38,6 +38,11 @@ export interface StandardPluginOptions {
    * Mirrors BlockPlugin.displayHeader — defaults to true when omitted.
    */
   readonly displayHeader?: boolean;
+  /**
+   * Where to place the caption/header. Defaults to "above".
+   * Set to "below" for figure/table blocks where the caption goes after content.
+   */
+  readonly captionPosition?: CaptionPosition;
 }
 
 /**
@@ -65,5 +70,6 @@ export function createStandardPlugin(options: StandardPluginOptions): BlockPlugi
     render: createBlockRender(title),
     ...(options.specialBehavior !== undefined ? { specialBehavior: options.specialBehavior } : {}),
     ...(options.displayHeader !== undefined ? { displayHeader: options.displayHeader } : {}),
+    ...(options.captionPosition !== undefined ? { captionPosition: options.captionPosition } : {}),
   };
 }

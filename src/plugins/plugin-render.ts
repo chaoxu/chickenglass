@@ -409,6 +409,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       number: numberEntry?.number,
     };
     const spec = plugin.render(labelAttrs);
+    const captionBelow = plugin.captionPosition === "below";
 
     // --- Opening fence ---
     // Heading-like pattern: ALWAYS apply block styling, toggle marker visibility.
@@ -423,7 +424,12 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // displayHeader === false (e.g. blockquote): omit cf-block-header so the
     // opening fence line has no rendered label. The widget still hides fence
     // syntax; block styling is still applied via spec.className.
-    const showHeader = plugin.displayHeader !== false;
+    //
+    // captionPosition === "below" (figure, table): the header label goes on
+    // the last body line instead of the opening fence. The opening fence gets
+    // collapsed (no label) and the title text becomes the caption, displayed
+    // on the opening line without the "Figure 1." prefix.
+    const showHeader = plugin.displayHeader !== false && !captionBelow;
     const headerClass = cursorOnEitherFence
       ? spec.className
       : showHeader
@@ -431,34 +437,32 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
         : `${spec.className} ${CSS.blockHeaderCollapsed}`;
     items.push(Decoration.line({ class: headerClass }).range(div.from));
     if (cursorOnEitherFence) {
-      // Mark only the fence syntax portion as monospace source.
-      // titleFrom marks where title text begins; if no title, openFenceTo
-      // is the end of the fence prefix. Either way, everything before that
-      // is syntax scaffolding.
       const syntaxEnd = div.titleFrom ?? div.openFenceTo;
       if (syntaxEnd > div.openFenceFrom) {
         items.push(blockSourceMark.range(div.openFenceFrom, syntaxEnd));
       }
     }
-    addHeaderWidgetDecoration(div, spec.header, cursorOnEitherFence, macros, items);
+    if (captionBelow) {
+      // For below-caption blocks: hide fence prefix but show no label on opening line.
+      // The label widget goes on the last body line (added below after body lines).
+      addHeaderWidgetDecoration(div, "", cursorOnEitherFence, macros, items);
+    } else {
+      addHeaderWidgetDecoration(div, spec.header, cursorOnEitherFence, macros, items);
+    }
 
     // Title text: wrap in visual parentheses via widget decorations (rendered mode only).
-    // Uses Decoration.widget instead of Decoration.mark with CSS ::before/::after
-    // because marks get split around Decoration.replace (math widgets), causing
-    // ") $x^2$" instead of "$x^2$)".
-    if (!cursorOnEitherFence && div.titleFrom !== undefined && div.titleTo !== undefined) {
+    // Uses Decoration.widget (not Decoration.mark with CSS ::before/::after) because
+    // marks get split around Decoration.replace (math widgets), causing ") $x^2$".
+    // For below-caption blocks, title text is the caption — no parens needed.
+    if (!cursorOnEitherFence && !captionBelow && div.titleFrom !== undefined && div.titleTo !== undefined) {
       items.push(openParenWidget.range(div.titleFrom));
       items.push(closeParenWidget.range(div.titleTo));
     }
 
-    // Attribute-only title: when titleFrom/titleTo are absent (no inline title text)
-    // but div.title is set from key-value attributes (e.g. title="**3SUM**"),
-    // render the title via a widget placed after the header widget. The title
-    // isn't editable document content, so a widget is architecturally correct.
-    // Inline titles (titleFrom/titleTo defined) take precedence — the attribute
-    // title is only used when there's no inline text.
+    // Attribute-only title (not used for below-caption blocks — their title is the caption).
     if (
       !cursorOnEitherFence &&
+      !captionBelow &&
       div.titleFrom === undefined &&
       div.titleTo === undefined &&
       div.title
@@ -498,6 +502,20 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       for (let lineNum = openLine.number + 1; lineNum < closeLine.number; lineNum++) {
         const line = state.doc.line(lineNum);
         items.push(Decoration.line({ class: spec.className }).range(line.from));
+      }
+
+      // Below-caption label: "Figure 1." widget on the last body line
+      if (captionBelow && !cursorOnEitherFence && closeLine.number > openLine.number + 1) {
+        const lastBodyLine = state.doc.line(closeLine.number - 1);
+        items.push(
+          Decoration.line({ class: `${spec.className} ${CSS.blockHeader}` }).range(lastBodyLine.from),
+        );
+        items.push(
+          Decoration.widget({
+            widget: new BlockHeaderWidget(spec.header, macros),
+            side: -1,
+          }).range(lastBodyLine.from),
+        );
       }
     }
 

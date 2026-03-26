@@ -12,6 +12,9 @@ export type BodyStyle = "italic" | "normal";
 /** Special rendering behaviors a block type can have. */
 export type SpecialBehavior = "qed" | "embed" | "blockquote";
 
+/** Where the caption/header label is placed relative to block content. */
+export type CaptionPosition = "above" | "below";
+
 /** Manifest entry describing a single block type. */
 export interface BlockManifestEntry {
   /** Block class name (e.g. "theorem"). */
@@ -24,6 +27,8 @@ export interface BlockManifestEntry {
   readonly bodyStyle: BodyStyle;
   /** Special rendering behavior, if any. */
   readonly specialBehavior?: SpecialBehavior;
+  /** Where caption is placed. Defaults to "above". */
+  readonly captionPosition?: CaptionPosition;
 }
 
 /**
@@ -57,6 +62,12 @@ export const BLOCK_MANIFEST = [
 
   // Algorithm — own counter, normal body
   { name: "algorithm",   counterGroup: "algorithm",  numbered: true,  bodyStyle: "normal" },
+
+  // Figure — own counter, caption below content
+  { name: "figure",      counterGroup: "figure",     numbered: true,  bodyStyle: "normal", captionPosition: "below" },
+
+  // Table — own counter, caption below content
+  { name: "table",       counterGroup: "table",      numbered: true,  bodyStyle: "normal", captionPosition: "below" },
 
   // Blockquote — unnumbered, special rendering
   { name: "blockquote",  counterGroup: undefined,    numbered: false, bodyStyle: "normal", specialBehavior: "blockquote" },
@@ -130,3 +141,9 @@ export const DEFINITION_COUNTER = "definition";
 
 /** Counter group name for algorithm blocks. */
 export const ALGORITHM_COUNTER = "algorithm";
+
+/** Counter group name for figure blocks. */
+export const FIGURE_COUNTER = "figure";
+
+/** Counter group name for table blocks. */
+export const TABLE_COUNTER = "table";

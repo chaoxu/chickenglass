@@ -6,7 +6,7 @@
  * looks up the registry to decide how to display each fenced div.
  */
 
-import type { SpecialBehavior } from "../constants/block-manifest";
+import type { CaptionPosition, SpecialBehavior } from "../constants/block-manifest";
 
 /** Attributes extracted from a fenced div and enriched with numbering info. */
 export interface BlockAttrs {
@@ -72,6 +72,13 @@ export interface BlockPlugin {
    * CSS class from the opening fence line decoration.
    */
   readonly displayHeader?: boolean;
+  /**
+   * Where to place the rendered caption/header label.
+   *
+   * - `"above"` (default): header on the opening fence line (theorem, definition, etc.)
+   * - `"below"`: header on the last body line before the closing fence (figure, table)
+   */
+  readonly captionPosition?: CaptionPosition;
   /** Produce a decoration spec from the block's attributes. */
   readonly render: (attrs: BlockAttrs) => BlockDecorationSpec;
 }

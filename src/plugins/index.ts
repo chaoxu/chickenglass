@@ -52,6 +52,8 @@ export { remarkPlugin, examplePlugin } from "./remark-plugin";
 export { blockquotePlugin } from "./blockquote-plugin";
 export { algorithmPlugin } from "./algorithm-plugin";
 export { problemPlugin } from "./problem-plugin";
+export { figurePlugin } from "./figure-plugin";
+export { tableBlockPlugin } from "./table-plugin";
 export { defaultPlugins } from "./default-plugins";
 export {
   embedPlugin,

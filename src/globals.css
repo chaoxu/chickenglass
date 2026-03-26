@@ -58,6 +58,8 @@
   --cf-block-remark-accent: var(--cf-block-header-accent);
   --cf-block-proof-accent: var(--cf-block-header-accent);
   --cf-block-algorithm-accent: var(--cf-block-header-accent);
+  --cf-block-figure-accent: var(--cf-block-header-accent);
+  --cf-block-table-accent: var(--cf-block-header-accent);
   --cf-block-title-color: var(--cf-fg);
   --cf-block-title-weight: 700;
   /* Per-block-type body font style — must match BLOCK_MANIFEST bodyStyle values */
@@ -72,6 +74,8 @@
   --cf-block-remark-style: normal;
   --cf-block-proof-style: normal;
   --cf-block-algorithm-style: normal;
+  --cf-block-figure-style: normal;
+  --cf-block-table-style: normal;
   --cf-block-nest-1: var(--cf-border);
   --cf-block-nest-2: var(--cf-active);
   --cf-block-nest-3: var(--cf-muted);
@@ -537,6 +541,8 @@ body {
 .cf-block-remark, .cf-block-note { font-style: var(--cf-block-remark-style); }
 .cf-block-proof { font-style: var(--cf-block-proof-style); }
 .cf-block-algorithm { font-style: var(--cf-block-algorithm-style); }
+.cf-block-figure { font-style: var(--cf-block-figure-style); }
+.cf-block-table { font-style: var(--cf-block-table-style); }
 
 /* Block margin — only on wrapper divs (read mode / HTML export), not on
  * CM6 .cm-line elements that carry the same cf-block-* class names.
