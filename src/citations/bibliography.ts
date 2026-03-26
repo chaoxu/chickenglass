@@ -155,23 +155,42 @@ export function buildBibliographyDecorations(
   ]);
 }
 
+// Cache: skip citeproc when cited IDs haven't changed.
+let _prevCitedKey = "";
+let _prevCslHtml: string[] = [];
+
 function buildBibliographyDecorationsFromState(state: EditorState): DecorationSet {
   const { store, cslProcessor } = state.field(bibDataField);
   if (store.size === 0) return Decoration.none;
 
-  const text = state.doc.toString();
-  const citedIds = collectCitedIds(text, store);
+  // Use the incrementally-maintained document analysis instead of
+  // re-parsing the entire document from scratch (#514).
+  const analysis = state.field(documentAnalysisField);
+  const seen = new Set<string>();
+  const citedIds: string[] = [];
+  for (const ref of analysis.references) {
+    for (const id of ref.ids) {
+      if (!seen.has(id) && store.has(id)) {
+        seen.add(id);
+        citedIds.push(id);
+      }
+    }
+  }
   if (citedIds.length === 0) return Decoration.none;
 
   let cslHtml: string[] = [];
   if (cslProcessor) {
-    // Ensure citations are registered with the CSL processor before requesting
-    // the bibliography. Without this, bibliography() returns [] when the
-    // bibliography plugin evaluates before the reference render plugin has
-    // registered citations, causing a plain-text fallback. (#466)
-    const analysis = state.field(documentAnalysisField);
-    ensureCitationsRegistered(analysis, store, cslProcessor);
-    cslHtml = cslProcessor.bibliography(citedIds);
+    // Only re-run citeproc when citation IDs or their order changed.
+    // citeproc is ~30ms per call — too expensive for every keystroke.
+    const citedKey = citedIds.join("\0") + "\0" + cslProcessor.revision;
+    if (citedKey !== _prevCitedKey) {
+      ensureCitationsRegistered(analysis, store, cslProcessor);
+      cslHtml = cslProcessor.bibliography(citedIds);
+      _prevCitedKey = citedKey;
+      _prevCslHtml = cslHtml;
+    } else {
+      cslHtml = _prevCslHtml;
+    }
   }
 
   const entries = cslHtml.length > 0
