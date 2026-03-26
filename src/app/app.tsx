@@ -8,8 +8,7 @@ import { ErrorBoundary } from "./components/error-boundary";
 import { isProjectRootEscapeError } from "./project-root-errors";
 import { openProjectInCurrentWindow as openProjectInCurrentWindowFlow } from "./project-open";
 import { dirname, basename } from "../lib/utils";
-import { isTauri, pickFolder } from "./tauri-fs";
-import { toProjectRelativePathCommand } from "./tauri-client/fs";
+import { isTauri } from "../lib/tauri";
 import { openDocumentInNewWindow } from "./window-launch";
 import { useAppDebug } from "./hooks/use-app-debug";
 import { useAppEditorShell } from "./hooks/use-app-editor-shell";
@@ -61,6 +60,7 @@ function AppInner() {
     if (!isTauri()) return;
     void (async () => {
       try {
+        const { pickFolder } = await import("./tauri-fs");
         const folderPath = await pickFolder();
         if (!folderPath || folderPath === workspace.projectRoot) {
           return;
@@ -92,6 +92,7 @@ function AppInner() {
 
         let relativePath: string;
         try {
+          const { toProjectRelativePathCommand } = await import("./tauri-client/fs");
           relativePath = await toProjectRelativePathCommand(selected);
         } catch (error: unknown) {
           if (!isProjectRootEscapeError(error)) {

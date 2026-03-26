@@ -11,7 +11,6 @@
  * `cf-window-state`.
  */
 
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { basename, readLocalStorage, writeLocalStorage } from "./lib/utils";
 import { WINDOW_STATE_KEY } from "../constants";
 import { isTauri } from "../lib/tauri";
@@ -76,10 +75,18 @@ const DEFAULT_STATE: WindowState = {
   version: STATE_VERSION,
 };
 
+/**
+ * Read the Tauri window label directly from TAURI_INTERNALS.
+ *
+ * This avoids a static import of `@tauri-apps/api/window` which would pull
+ * the entire Tauri window module into the browser startup bundle (#446).
+ * The label is a synchronous read from the global Tauri metadata object.
+ */
 function getCurrentWindowLabel(): string | null {
   if (!isTauri()) return null;
   try {
-    return getCurrentWindow().label;
+    const internals = (window as Window & { __TAURI_INTERNALS__?: { metadata?: { currentWindow?: { label?: string } } } }).__TAURI_INTERNALS__;
+    return internals?.metadata?.currentWindow?.label ?? null;
   } catch {
     return null;
   }

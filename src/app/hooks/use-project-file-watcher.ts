@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { RefObject } from "react";
 import { FileWatcher } from "../file-watcher";
-import { isTauri } from "../tauri-fs";
+import { isTauri } from "../../lib/tauri";
 
 interface UseProjectFileWatcherOptions {
   projectRoot: string | null;

@@ -60,9 +60,15 @@ function buildIncludeDecorations(view: EditorView): DecorationSet {
   return buildDecorations(items);
 }
 
-/** Custom update predicate: doc, viewport, or selection changed. */
+/** Custom update predicate: doc, selection, or tree changed.
+ * Viewport changes alone don't require a rebuild — the tree walk
+ * already covers the full document (include blocks may span offscreen). */
 function includeShouldUpdate(update: ViewUpdate): boolean {
-  return update.docChanged || update.viewportChanged || update.selectionSet;
+  return (
+    update.docChanged ||
+    update.selectionSet ||
+    update.state.field(documentAnalysisField) !== update.startState.field(documentAnalysisField)
+  );
 }
 
 /** CM6 extension that renders include region labels in the right margin. */

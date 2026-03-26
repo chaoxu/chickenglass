@@ -1,5 +1,5 @@
-import { clearPerfSnapshotCommand, getPerfSnapshotCommand } from "./tauri-client/perf";
-import { invokeTauriCommandRaw } from "./tauri-client/core";
+// Tauri client modules lazy-imported at call sites to keep them out of
+// the browser startup bundle (#446).
 import {
   MAX_PERF_RECORDS,
   MAX_PERF_OPERATIONS,
@@ -289,6 +289,7 @@ export function clearFrontendPerf(): void {
 export async function getBackendPerfSnapshot(): Promise<PerfSnapshot | null> {
   if (!isTauriRuntime()) return null;
   try {
+    const { getPerfSnapshotCommand } = await import("./tauri-client/perf");
     return await getPerfSnapshotCommand();
   } catch (_e) {
     // best-effort: backend perf command may not exist in this runtime
@@ -299,6 +300,7 @@ export async function getBackendPerfSnapshot(): Promise<PerfSnapshot | null> {
 export async function clearBackendPerf(): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
+    const { clearPerfSnapshotCommand } = await import("./tauri-client/perf");
     await clearPerfSnapshotCommand();
   } catch (_e) {
     // best-effort: backend perf support may be unavailable
@@ -334,7 +336,10 @@ export async function invokeWithPerf<T>(
   command: string,
   args?: Record<string, unknown>,
 ): Promise<T> {
-  return measureAsync(`tauri.invoke.${command}`, () => invokeTauriCommandRaw<T>(command, args), {
+  return measureAsync(`tauri.invoke.${command}`, async () => {
+    const { invokeTauriCommandRaw } = await import("./tauri-client/core");
+    return invokeTauriCommandRaw<T>(command, args);
+  }, {
     category: "tauri",
     detail: command,
   });

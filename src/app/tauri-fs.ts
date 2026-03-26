@@ -5,7 +5,8 @@
  * Requires a project folder to be opened first via openFolder().
  */
 
-import { open } from "@tauri-apps/plugin-dialog";
+// @tauri-apps/plugin-dialog lazy-imported at call sites to keep it out
+// of the browser startup bundle (#446).
 import type { FileEntry, FileSystem } from "./file-manager";
 import { base64ToUint8Array, uint8ArrayToBase64 } from "./lib/utils";
 import {
@@ -34,6 +35,7 @@ let latestProjectRootGeneration = 0;
  * Returns the selected path, or null if the user cancelled.
  */
 export async function pickFolder(): Promise<string | null> {
+  const { open } = await import("@tauri-apps/plugin-dialog");
   const selected = await open({ directory: true, multiple: false });
   // open() returns null on cancel, or a string (single) or string[] (multiple).
   // We pass multiple: false so an array result should not occur, but guard anyway.

@@ -316,14 +316,36 @@ export function pushWidgetDecoration(
 /**
  * Default update predicate for render ViewPlugins.
  *
- * Returns true when any of the five standard conditions hold:
- * docChanged, selectionSet, viewportChanged, focusChanged, or syntaxTree changed.
+ * Returns true only for structural changes: docChanged or syntaxTree changed.
+ * Plugins that need cursor-sensitivity should use `cursorSensitiveShouldUpdate`
+ * or provide a custom predicate that checks whether the active node changed.
+ *
+ * Previously this also included selectionSet, focusChanged, and
+ * viewportChanged — but those caused multiplicative cursor-move and scroll
+ * cost across the rendering stack (#443).
  */
 export function defaultShouldUpdate(update: ViewUpdate): boolean {
   return (
     update.docChanged ||
+    syntaxTree(update.state) !== syntaxTree(update.startState)
+  );
+}
+
+/**
+ * Cursor-sensitive update predicate for render ViewPlugins.
+ *
+ * Returns true for structural changes (doc/tree), plus selection and focus
+ * changes. Use this for plugins that show/hide source based on cursor
+ * proximity (e.g., markdown-render, checkbox-render, image-render).
+ *
+ * Does NOT include viewportChanged — viewport scrolling alone should not
+ * trigger full decoration rebuilds for ViewPlugins that already restrict
+ * their tree walks to visible ranges.
+ */
+export function cursorSensitiveShouldUpdate(update: ViewUpdate): boolean {
+  return (
+    update.docChanged ||
     update.selectionSet ||
-    update.viewportChanged ||
     update.focusChanged ||
     syntaxTree(update.state) !== syntaxTree(update.startState)
   );
@@ -378,13 +400,28 @@ export function createSimpleViewPlugin(
 /**
  * Default rebuild predicate for StateField-based decoration providers.
  *
- * Returns true when any of the four standard conditions hold:
- * docChanged, selection changed, focusEffect dispatched, or syntaxTree changed.
+ * Returns true only for structural changes: docChanged or syntaxTree changed.
+ * Fields that need cursor-sensitivity should use `cursorSensitiveShouldRebuild`
+ * or provide a custom predicate.
  *
- * This mirrors the most common pattern across fence-guide, math-render,
- * frontmatter-state, and sidenote-render fields.
+ * Previously this also included selection and focusEffect — but those caused
+ * multiplicative cursor-move cost across the rendering stack (#443).
  */
 export function defaultShouldRebuild(tr: Transaction): boolean {
+  return (
+    tr.docChanged ||
+    syntaxTree(tr.state) !== syntaxTree(tr.startState)
+  );
+}
+
+/**
+ * Cursor-sensitive rebuild predicate for StateField-based decoration providers.
+ *
+ * Returns true for structural changes (doc/tree), plus selection changes and
+ * focusEffect. Use this for fields that show/hide source based on cursor
+ * proximity (e.g., math-render, sidenote-render, fence-guide, fenced-block-core).
+ */
+export function cursorSensitiveShouldRebuild(tr: Transaction): boolean {
   return (
     tr.docChanged ||
     tr.selection !== undefined ||

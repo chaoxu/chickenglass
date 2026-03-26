@@ -2,8 +2,8 @@ import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { FileSystem } from "../file-manager";
 import { basename } from "../lib/utils";
-import { isTauri } from "../tauri-fs";
-import { toProjectRelativePathCommand } from "../tauri-client/fs";
+import { isTauri } from "../../lib/tauri";
+// Lazy-imported at call site to keep tauri-client out of browser bundle (#446).
 import { applySaveAsResult } from "../editor-session-save";
 import { buildProjectedWritePlan } from "../editor-session-write-plan";
 import {
@@ -505,6 +505,7 @@ export function useEditorSession({
         });
         if (!savePath) return;
 
+        const { toProjectRelativePathCommand } = await import("../tauri-client/fs");
         const relativePath = await toProjectRelativePathCommand(savePath);
         await writeDocumentSnapshot(relativePath, doc, sourceMap, {
           createTargetIfMissing: true,

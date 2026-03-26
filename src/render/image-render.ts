@@ -8,7 +8,7 @@ import {
 import {
   buildDecorations,
   collectNodeRangesExcludingCursor,
-  defaultShouldUpdate,
+  cursorSensitiveShouldUpdate,
   pushWidgetDecoration,
   RenderWidget,
   createSimpleViewPlugin,
@@ -16,7 +16,7 @@ import {
 import { pdfPreviewField, requestPdfPreview, getPdfCanvas } from "./pdf-preview-cache";
 import { fileSystemFacet, documentPathFacet } from "../lib/types";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
-import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
+import { isPdfTarget } from "../lib/pdf-target";
 import { CSS } from "../constants/css-classes";
 
 // ── Widgets ───────────────────────────────────────────────────────────────────
@@ -182,16 +182,8 @@ function collectImageRanges(view: EditorView) {
         }
       }
     } else {
-      // Normal image — resolve relative paths against the current document
-      // so that `![](diagram.png)` in `posts/math.md` resolves to
-      // `posts/diagram.png` rather than being relative to the app URL. (#471)
-      const imgSrc = isRelativeFilePath(parsed.src)
-        ? resolveProjectPathFromDocument(
-            view.state.facet(documentPathFacet),
-            parsed.src,
-          )
-        : parsed.src;
-      pushWidgetDecoration(items, new ImageWidget(parsed.alt, imgSrc), node.from, node.to);
+      // Normal image — unchanged
+      pushWidgetDecoration(items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to);
     }
   });
 }
@@ -206,7 +198,7 @@ function imageDecorations(view: EditorView): DecorationSet {
  * so the plugin re-renders when a PDF preview becomes ready.
  */
 function imageShouldUpdate(update: ViewUpdate): boolean {
-  if (defaultShouldUpdate(update)) return true;
+  if (cursorSensitiveShouldUpdate(update)) return true;
 
   // Re-render when the PDF preview cache has been updated
   const oldCache = update.startState.field(pdfPreviewField);

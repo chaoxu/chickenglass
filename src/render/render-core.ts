@@ -32,6 +32,8 @@ export {
   focusTracker,
   defaultShouldUpdate,
   defaultShouldRebuild,
+  cursorSensitiveShouldUpdate,
+  cursorSensitiveShouldRebuild,
   type RenderableNode,
   type SimpleTextRenderSpec,
 } from "./render-utils";

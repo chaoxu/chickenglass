@@ -22,6 +22,7 @@ import { syntaxTree } from "@codemirror/language";
 import {
   buildDecorations,
   createDecorationsField,
+  cursorSensitiveShouldRebuild,
   editorFocusField,
   focusTracker,
 } from "./render-utils";
@@ -106,7 +107,7 @@ function buildFenceGuides(state: EditorState): DecorationSet {
   return buildDecorations(items);
 }
 
-const fenceGuideField = createDecorationsField(buildFenceGuides);
+const fenceGuideField = createDecorationsField(buildFenceGuides, cursorSensitiveShouldRebuild);
 
 /** CM6 extension that draws vertical nesting guides for fenced divs (editing only). */
 export const fenceGuidePlugin: Extension = [

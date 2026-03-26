@@ -5,7 +5,7 @@
  * silently reloads clean files or shows a notification bar for dirty files.
  */
 
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import { basename } from "./lib/utils";
 import { measureAsync } from "./perf";
 import { watchDirectoryCommand, unwatchDirectoryCommand } from "./tauri-client/watch";
@@ -83,7 +83,9 @@ export class FileWatcher {
       return;
     }
 
-    // Listen for file-changed events from the backend
+    // Listen for file-changed events from the backend.
+    // Lazy-import to keep @tauri-apps/api/event out of the browser bundle (#446).
+    const { listen } = await import("@tauri-apps/api/event");
     const unlisten = await listen<string>("file-changed", (event) => {
       this.handleFileChanged(event.payload);
     });

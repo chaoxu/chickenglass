@@ -5,7 +5,7 @@ import {
 } from "@codemirror/view";
 import { type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { cursorInRange, decorationHidden, addMarkerReplacement, createSimpleViewPlugin } from "./render-utils";
+import { cursorInRange, decorationHidden, addMarkerReplacement, createSimpleViewPlugin, cursorSensitiveShouldUpdate } from "./render-utils";
 import { findTrailingHeadingAttributes } from "../semantics/heading-ancestry";
 import { isSafeUrl } from "../lib/url-utils";
 
@@ -274,6 +274,7 @@ function buildMarkdownDecorations(view: EditorView): DecorationSet {
 export const markdownRenderPlugin: Extension = createSimpleViewPlugin(
   buildMarkdownDecorations,
   {
+    shouldUpdate: cursorSensitiveShouldUpdate,
     pluginSpec: {
       eventHandlers: {
         click(event: MouseEvent, _view: EditorView) {

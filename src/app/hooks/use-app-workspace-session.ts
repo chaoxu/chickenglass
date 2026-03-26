@@ -7,11 +7,8 @@ import { useSettings } from "./use-settings";
 import { useTheme } from "./use-theme";
 import { useWindowState } from "./use-window-state";
 import { measureAsync, withPerfOperation } from "../perf";
-import {
-  isTauri,
-  openFolderAt,
-  pickFolder,
-} from "../tauri-fs";
+import { isTauri } from "../../lib/tauri";
+import { openFolderAt, pickFolder } from "../tauri-fs";
 
 export type SidebarTab = "files" | "outline" | "symbols";
 

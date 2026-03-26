@@ -15,6 +15,7 @@ import {
   buildDecorations,
   collectNodeRangesExcludingCursor,
   createSimpleViewPlugin,
+  cursorSensitiveShouldUpdate,
   pushWidgetDecoration,
   RenderWidget,
 } from "./render-utils";
@@ -75,4 +76,5 @@ function buildCheckboxDecorations(view: EditorView): DecorationSet {
 /** CM6 extension that renders task list checkboxes with toggle support. */
 export const checkboxRenderPlugin: Extension = createSimpleViewPlugin(
   buildCheckboxDecorations,
+  { shouldUpdate: cursorSensitiveShouldUpdate },
 );

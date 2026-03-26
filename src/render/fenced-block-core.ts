@@ -3,6 +3,7 @@ import { type DecorationSet, Decoration, EditorView } from "@codemirror/view";
 import {
   buildDecorations,
   createDecorationsField,
+  cursorSensitiveShouldRebuild,
   decorationHidden,
   editorFocusField,
 } from "./render-utils";
@@ -157,9 +158,11 @@ export function buildFencedBlockDecorations<T extends FencedBlockInfo>(
   return buildDecorations(items);
 }
 
-/** Shared StateField wrapper for fenced-block renderers. */
+/** Shared StateField wrapper for fenced-block renderers.
+ * Uses cursor-sensitive rebuild because fenced blocks show/hide fences
+ * based on cursor proximity. */
 export function createFencedBlockDecorationField(
   build: (state: EditorState) => DecorationSet,
 ): StateField<DecorationSet> {
-  return createDecorationsField(build);
+  return createDecorationsField(build, cursorSensitiveShouldRebuild);
 }

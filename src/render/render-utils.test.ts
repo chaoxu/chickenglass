@@ -13,9 +13,11 @@ import {
   createDecorationsField,
   collectNodeRangesExcludingCursor,
   defaultShouldRebuild,
+  cursorSensitiveShouldRebuild,
   pushWidgetDecoration,
   createSimpleViewPlugin,
   defaultShouldUpdate,
+  cursorSensitiveShouldUpdate,
   focusEffect,
   editorFocusField,
   RenderWidget,
@@ -429,6 +431,12 @@ describe("defaultShouldUpdate", () => {
   });
 });
 
+describe("cursorSensitiveShouldUpdate", () => {
+  it("is a function", () => {
+    expect(typeof cursorSensitiveShouldUpdate).toBe("function");
+  });
+});
+
 describe("createDecorationsField", () => {
   let view: EditorView | undefined;
 
@@ -463,7 +471,9 @@ describe("createDecorationsField", () => {
     expect(updated.field(field)).toBe(Decoration.none);
   });
 
-  it("rebuilds when selection changes (default predicate)", () => {
+  // After #443: default predicate is structural-only (doc + tree).
+  // Selection and focus no longer trigger rebuilds by default.
+  it("does NOT rebuild when selection changes (structural-only default, #443)", () => {
     let callCount = 0;
     const field = createDecorationsField(() => {
       callCount++;
@@ -473,12 +483,11 @@ describe("createDecorationsField", () => {
       extensions: [markdown(), editorFocusField, field],
     });
     callCount = 0;
-    const updated = state.update({ selection: { anchor: 5 } }).state;
-    expect(callCount).toBe(1);
-    expect(updated.field(field)).toBe(Decoration.none);
+    void state.update({ selection: { anchor: 5 } });
+    expect(callCount).toBe(0);
   });
 
-  it("rebuilds when focusEffect is dispatched (default predicate)", () => {
+  it("does NOT rebuild when focusEffect is dispatched (structural-only default, #443)", () => {
     let callCount = 0;
     const field = createDecorationsField(() => {
       callCount++;
@@ -488,9 +497,8 @@ describe("createDecorationsField", () => {
       extensions: [markdown(), editorFocusField, field],
     });
     callCount = 0;
-    const updated = state.update({ effects: focusEffect.of(true) }).state;
-    expect(callCount).toBe(1);
-    expect(updated.field(field)).toBe(Decoration.none);
+    void state.update({ effects: focusEffect.of(true) });
+    expect(callCount).toBe(0);
   });
 
   it("does not rebuild on unrelated effect (default predicate)", () => {
@@ -553,18 +561,20 @@ describe("defaultShouldRebuild", () => {
     expect(defaultShouldRebuild(tr)).toBe(true);
   });
 
-  it("returns true on selection change", () => {
+  // After #443: defaultShouldRebuild is structural-only (doc + tree).
+  // Selection and focus changes no longer trigger structural rebuilds.
+  it("returns false on selection change (structural-only, #443)", () => {
     const field = editorFocusField;
     const state = createEditorState("hello world", { extensions: [markdown(), field] });
     const tr = state.update({ selection: { anchor: 5 } });
-    expect(defaultShouldRebuild(tr)).toBe(true);
+    expect(defaultShouldRebuild(tr)).toBe(false);
   });
 
-  it("returns true on focusEffect", () => {
+  it("returns false on focusEffect (structural-only, #443)", () => {
     const field = editorFocusField;
     const state = createEditorState("hello", { extensions: [markdown(), field] });
     const tr = state.update({ effects: focusEffect.of(true) });
-    expect(defaultShouldRebuild(tr)).toBe(true);
+    expect(defaultShouldRebuild(tr)).toBe(false);
   });
 
   it("returns false on unrelated transaction", () => {
@@ -573,6 +583,37 @@ describe("defaultShouldRebuild", () => {
     const state = createEditorState("hello", { extensions: [markdown(), field] });
     const tr = state.update({ effects: otherEffect.of(true) });
     expect(defaultShouldRebuild(tr)).toBe(false);
+  });
+});
+
+describe("cursorSensitiveShouldRebuild", () => {
+  it("returns true on docChanged", () => {
+    const field = editorFocusField;
+    const state = createEditorState("hello", { extensions: [markdown(), field] });
+    const tr = state.update({ changes: { from: 0, insert: "x" } });
+    expect(cursorSensitiveShouldRebuild(tr)).toBe(true);
+  });
+
+  it("returns true on selection change", () => {
+    const field = editorFocusField;
+    const state = createEditorState("hello world", { extensions: [markdown(), field] });
+    const tr = state.update({ selection: { anchor: 5 } });
+    expect(cursorSensitiveShouldRebuild(tr)).toBe(true);
+  });
+
+  it("returns true on focusEffect", () => {
+    const field = editorFocusField;
+    const state = createEditorState("hello", { extensions: [markdown(), field] });
+    const tr = state.update({ effects: focusEffect.of(true) });
+    expect(cursorSensitiveShouldRebuild(tr)).toBe(true);
+  });
+
+  it("returns false on unrelated transaction", () => {
+    const otherEffect = StateEffect.define<boolean>();
+    const field = editorFocusField;
+    const state = createEditorState("hello", { extensions: [markdown(), field] });
+    const tr = state.update({ effects: otherEffect.of(true) });
+    expect(cursorSensitiveShouldRebuild(tr)).toBe(false);
   });
 });
 

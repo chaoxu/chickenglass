@@ -1,4 +1,3 @@
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { basename } from "../lib/utils";
 import {
   buildWindowState,
@@ -14,6 +13,9 @@ export async function openDocumentInNewWindow(
   projectRoot: string,
   path: string,
 ): Promise<void> {
+  // Lazy-import to keep @tauri-apps/api out of the browser bundle (#446).
+  const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+
   const label = createWindowLabel();
   const nextUrl = new URL(window.location.href);
   nextUrl.searchParams.set("projectRoot", projectRoot);
