@@ -99,6 +99,48 @@ describe("frontmatterField", () => {
     });
   });
 
+  it("keeps blocksRevision stable when unrelated frontmatter keys change", () => {
+    const originalDoc = [
+      "---",
+      "title: Hello",
+      "blocks:",
+      "  theorem: true",
+      "---",
+      "Content",
+    ].join("\n");
+    const nextDoc = originalDoc.replace("Hello", "World");
+    const state = createState(originalDoc);
+    const fm1 = state.field(frontmatterField);
+
+    const tr = state.update({
+      changes: { from: 0, to: originalDoc.length, insert: nextDoc },
+    });
+    const fm2 = tr.state.field(frontmatterField);
+
+    expect(fm2.blocksRevision).toBe(fm1.blocksRevision);
+  });
+
+  it("increments blocksRevision when blocks config changes", () => {
+    const originalDoc = [
+      "---",
+      "title: Hello",
+      "blocks:",
+      "  theorem: true",
+      "---",
+      "Content",
+    ].join("\n");
+    const nextDoc = originalDoc.replace("theorem: true", "theorem: false");
+    const state = createState(originalDoc);
+    const fm1 = state.field(frontmatterField);
+
+    const tr = state.update({
+      changes: { from: 0, to: originalDoc.length, insert: nextDoc },
+    });
+    const fm2 = tr.state.field(frontmatterField);
+
+    expect(fm2.blocksRevision).toBe(fm1.blocksRevision + 1);
+  });
+
   // Regression: inserting closing --- after an opening --- must be detected.
   // Issue #494 — when end===-1 and doc starts with ---, edits after position 0
   // were skipped because the old check only tested fromA === 0.

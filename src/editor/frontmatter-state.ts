@@ -11,6 +11,7 @@ import { Decoration, DecorationSet } from "@codemirror/view";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 
 import {
+  type BlockConfig,
   parseFrontmatter,
   type FrontmatterConfig,
   type FrontmatterResult,
@@ -33,11 +34,54 @@ export interface FrontmatterState {
   config: FrontmatterConfig;
   /** Character offset where the frontmatter ends (-1 if none). */
   end: number;
+  /** Increments only when the merged `blocks` config changes semantically. */
+  blocksRevision: number;
+}
+
+interface FrontmatterStateInternal extends FrontmatterState {
+  readonly blocksKey: string;
 }
 
 /** Parse frontmatter from an EditorState's document. */
 function parseFrontmatterFromState(state: EditorState): FrontmatterResult {
   return parseFrontmatter(state.doc.toString());
+}
+
+function normalizeBlockConfig(config: BlockConfig): BlockConfig {
+  const normalized: BlockConfig = {};
+  if (config.counter !== undefined) normalized.counter = config.counter;
+  if (config.numbered !== undefined) normalized.numbered = config.numbered;
+  if (config.title !== undefined) normalized.title = config.title;
+  return normalized;
+}
+
+function serializeBlocksConfig(
+  blocks: FrontmatterConfig["blocks"],
+): string {
+  if (!blocks) return "";
+  const names = Object.keys(blocks).sort();
+  if (names.length === 0) return "";
+  return JSON.stringify(names.map((name) => {
+    const value = blocks[name];
+    return [
+      name,
+      typeof value === "boolean" ? value : normalizeBlockConfig(value),
+    ];
+  }));
+}
+
+function buildFrontmatterState(
+  state: EditorState,
+  previous?: FrontmatterStateInternal,
+): FrontmatterStateInternal {
+  const result = parseFrontmatterFromState(state);
+  const project = state.facet(projectConfigFacet);
+  const config = mergeConfigs(project, result.config);
+  const blocksKey = serializeBlocksConfig(config.blocks);
+  const blocksRevision = previous && previous.blocksKey !== blocksKey
+    ? previous.blocksRevision + 1
+    : previous?.blocksRevision ?? 0;
+  return { config, end: result.end, blocksRevision, blocksKey };
 }
 
 /**
@@ -48,12 +92,9 @@ function parseFrontmatterFromState(state: EditorState): FrontmatterResult {
  * const config = state.field(frontmatterField).config;
  * ```
  */
-export const frontmatterField = StateField.define<FrontmatterState>({
+export const frontmatterField = StateField.define<FrontmatterStateInternal>({
   create(state) {
-    const result = parseFrontmatterFromState(state);
-    const project = state.facet(projectConfigFacet);
-    const config = mergeConfigs(project, result.config);
-    return { config, end: result.end };
+    return buildFrontmatterState(state);
   },
 
   update(value, tr) {
@@ -83,10 +124,7 @@ export const frontmatterField = StateField.define<FrontmatterState>({
 
     if (!affectsFrontmatter) return value;
 
-    const result = parseFrontmatterFromState(tr.state);
-    const project = tr.state.facet(projectConfigFacet);
-    const config = mergeConfigs(project, result.config);
-    return { config, end: result.end };
+    return buildFrontmatterState(tr.state, value);
   },
 });
 

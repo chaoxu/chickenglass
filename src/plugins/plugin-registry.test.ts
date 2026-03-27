@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { CSS } from "../constants/css-classes";
 import { fencedDiv } from "../parser/fenced-div";
@@ -564,6 +564,7 @@ describe("createPluginRegistryField (CM6 integration)", () => {
       changes: { from: 0, to: state.doc.length, insert: newDoc },
     });
     const registry2 = tr.state.field(pluginRegistryField);
+    expect(registry2).not.toBe(registry1);
     // Custom block should be gone since frontmatter no longer defines it
     expect(getPlugin(registry2, "custom")).toBeUndefined();
     // Built-in plugins should still be present
@@ -637,8 +638,50 @@ describe("createPluginRegistryField (CM6 integration)", () => {
       changes: { from: state.doc.length, insert: " more text" },
     });
     const registry2 = tr.state.field(pluginRegistryField);
-    // Registry should still have same plugins
-    expect(registry2.plugins.size).toBe(registry1.plugins.size);
+    expect(registry2).toBe(registry1);
+  });
+
+  it("does not rebuild when unrelated frontmatter keys change", () => {
+    const originalDoc = [
+      "---",
+      "title: Test",
+      "blocks:",
+      "  proof: false",
+      "---",
+      "Content",
+    ].join("\n");
+    const nextDoc = originalDoc.replace("title: Test", "title: Updated");
+    const state = createEditorState(originalDoc);
+    const registry1 = state.field(pluginRegistryField);
+
+    const tr = state.update({
+      changes: { from: 0, to: originalDoc.length, insert: nextDoc },
+    });
+    const registry2 = tr.state.field(pluginRegistryField);
+
+    expect(registry2).toBe(registry1);
+  });
+
+  it("rebuilds when frontmatter block config changes", () => {
+    const originalDoc = [
+      "---",
+      "title: Test",
+      "blocks:",
+      "  proof: false",
+      "---",
+      "Content",
+    ].join("\n");
+    const nextDoc = originalDoc.replace("proof: false", "proof: true");
+    const state = createEditorState(originalDoc);
+    const registry1 = state.field(pluginRegistryField);
+
+    const tr = state.update({
+      changes: { from: 0, to: originalDoc.length, insert: nextDoc },
+    });
+    const registry2 = tr.state.field(pluginRegistryField);
+
+    expect(registry2).not.toBe(registry1);
+    expect(getPlugin(registry2, "proof")).toBeDefined();
   });
 
   // Regression: pluginRegistryField.update must use field(frontmatterField, false)
@@ -655,5 +698,32 @@ describe("createPluginRegistryField (CM6 integration)", () => {
     expect(() => {
       state.update({ changes: { from: 0, to: state.doc.length, insert: "New content" } });
     }).not.toThrow();
+  });
+
+  it("rebuilds when the built-in plugin facet changes", () => {
+    const builtinCompartment = new Compartment();
+    const state = EditorState.create({
+      doc: "Hello world",
+      extensions: [
+        markdown({ extensions: [fencedDiv] }),
+        frontmatterField,
+        builtinCompartment.of(createPluginRegistryField(builtinTestPlugins)),
+      ],
+    });
+    const registry1 = state.field(pluginRegistryField);
+    const extendedBuiltins = [
+      ...builtinTestPlugins,
+      makeBlockPlugin({ name: "claim", counter: "theorem", title: "Claim" }),
+    ];
+
+    const tr = state.update({
+      effects: builtinCompartment.reconfigure(
+        createPluginRegistryField(extendedBuiltins),
+      ),
+    });
+    const registry2 = tr.state.field(pluginRegistryField);
+
+    expect(registry2).not.toBe(registry1);
+    expect(getPlugin(registry2, "claim")).toBeDefined();
   });
 });
