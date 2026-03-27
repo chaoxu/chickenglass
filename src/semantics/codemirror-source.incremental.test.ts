@@ -214,6 +214,30 @@ describe("documentAnalysisField incremental contract", () => {
     expect(after.includes).toEqual([]);
   });
 
+  it("keeps nested outer divs in sync when deleting the outer closing fence", () => {
+    const doc = [
+      ":::: {.proof}",
+      "alpha",
+      "::: {.include}",
+      "new.md",
+      ":::",
+      "omega",
+      "::::::",
+      "",
+    ].join("\n");
+
+    const beforeState = createSemanticsState(doc);
+    const from = doc.lastIndexOf("::::::");
+    const afterState = beforeState.update({
+      changes: { from, to: from + 6, insert: "" },
+    }).state;
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after.fencedDivs[0]?.primaryClass).toBe("proof");
+    expect(after.fencedDivs[0]?.closeFenceFrom).toBe(-1);
+    expect(after.fencedDivs[0]?.closeFenceTo).toBe(-1);
+  });
+
   it("keeps narrative references correct around link, code, and math exclusion boundaries", () => {
     const doc = [
       "Lead @lead.",

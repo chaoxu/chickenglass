@@ -1,9 +1,7 @@
 import type { Tree } from "@lezer/common";
 import type { FencedDivSemantics } from "../../document";
 import {
-  firstOverlapIndex,
   rangesOverlap,
-  replaceOverlappingRanges,
   type PositionMapper,
 } from "../merge-utils";
 import type { DirtyWindow } from "../types";
@@ -97,54 +95,54 @@ export function mapFencedDivSemantics(
   };
 }
 
-function findOverlappingOldSpan(
-  previous: readonly FencedDivSemantics[],
-  window: DirtyWindow,
-): OverlapSpan | null {
-  const oldWindow = { from: window.fromOld, to: window.toOld };
-  const start = firstOverlapIndex(previous, oldWindow);
-  if (start === -1) return null;
-
-  let end = start;
-  while (end < previous.length && rangesOverlap(previous[end], oldWindow)) {
-    end++;
+function spanRange(
+  values: readonly FencedDivSemantics[],
+  span: OverlapSpan,
+): { from: number; to: number } {
+  let to = values[span.start].to;
+  for (let i = span.start + 1; i < span.end; i++) {
+    to = Math.max(to, values[i].to);
   }
-
-  return { start, end };
+  return { from: values[span.start].from, to };
 }
 
-function findOverlapSpan(
+function findAffectedSpan(
   values: readonly FencedDivSemantics[],
   window: { from: number; to: number },
+  includeTouchingStart: boolean,
 ): OverlapSpan | null {
-  const start = firstOverlapIndex(values, window);
-  if (start === -1) return null;
-
-  let end = start;
-  while (end < values.length && rangesOverlap(values[end], window)) {
-    end++;
+  let start = -1;
+  for (let i = 0; i < values.length; i++) {
+    if (
+      rangesOverlap(values[i], window)
+      || (includeTouchingStart && values[i].from === window.to)
+    ) {
+      start = i;
+      break;
+    }
+    if (values[i].from > window.to) break;
   }
 
-  return { start, end };
-}
-
-function findTouchingStartSpan(
-  values: readonly FencedDivSemantics[],
-  pos: number,
-): OverlapSpan | null {
-  let lo = 0;
-  let hi = values.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (values[mid].from < pos) lo = mid + 1;
-    else hi = mid;
-  }
-
-  if (lo >= values.length || values[lo].from !== pos) {
+  if (start === -1) {
     return null;
   }
 
-  return { start: lo, end: lo + 1 };
+  let end = start + 1;
+  let maxTo = values[start].to;
+  while (end < values.length) {
+    const value = values[end];
+    if (
+      !(value.from < maxTo
+        || rangesOverlap(value, window)
+        || (includeTouchingStart && value.from === window.to))
+    ) {
+      break;
+    }
+    maxTo = Math.max(maxTo, value.to);
+    end++;
+  }
+
+  return { start, end };
 }
 
 function expandRange(
@@ -169,42 +167,31 @@ export function extractDirtyFencedDivWindows(
 
   return dirtyWindows.map((window) => {
     let range = { from: window.fromNew, to: window.toNew };
-    const oldSpan = findOverlappingOldSpan(previous, window);
+    const oldSpan = findAffectedSpan(
+      previous,
+      { from: window.fromOld, to: window.toOld },
+      false,
+    );
     if (oldSpan) {
-      range = expandRange(
-        range,
-        mappedPrevious[oldSpan.start].from,
-        mappedPrevious[oldSpan.end - 1].to,
-      );
+      const oldRange = spanRange(mappedPrevious, oldSpan);
+      range = expandRange(range, oldRange.from, oldRange.to);
     }
 
     let structural = extractStructuralWindow(doc, tree, range);
     while (true) {
       let nextRange = range;
       if (structural.fencedDivs.length > 0) {
-        nextRange = expandRange(
-          nextRange,
-          structural.fencedDivs[0].from,
-          structural.fencedDivs[structural.fencedDivs.length - 1].to,
-        );
+        const structuralSpan = spanRange(structural.fencedDivs, {
+          start: 0,
+          end: structural.fencedDivs.length,
+        });
+        nextRange = expandRange(nextRange, structuralSpan.from, structuralSpan.to);
       }
 
-      const mappedSpan = findOverlapSpan(mappedPrevious, nextRange);
+      const mappedSpan = findAffectedSpan(mappedPrevious, nextRange, true);
       if (mappedSpan) {
-        nextRange = expandRange(
-          nextRange,
-          mappedPrevious[mappedSpan.start].from,
-          mappedPrevious[mappedSpan.end - 1].to,
-        );
-      } else {
-        const touchingStartSpan = findTouchingStartSpan(mappedPrevious, nextRange.to);
-        if (touchingStartSpan) {
-          nextRange = expandRange(
-            nextRange,
-            mappedPrevious[touchingStartSpan.start].from,
-            mappedPrevious[touchingStartSpan.end - 1].to,
-          );
-        }
+        const mappedRange = spanRange(mappedPrevious, mappedSpan);
+        nextRange = expandRange(nextRange, mappedRange.from, mappedRange.to);
       }
 
       if (nextRange.from === range.from && nextRange.to === range.to) {
@@ -231,11 +218,28 @@ export function mergeFencedDivSlice(
 
   for (let i = extractedDirtyWindows.length - 1; i >= 0; i--) {
     const { range, structural } = extractedDirtyWindows[i];
-    merged = replaceOverlappingRanges(
-      merged,
-      range,
-      structural.fencedDivs,
-    );
+    const span = findAffectedSpan(merged, range, false);
+    if (!span) {
+      let insertAt = merged.length;
+      for (let j = 0; j < merged.length; j++) {
+        if (merged[j].from >= range.from) {
+          insertAt = j;
+          break;
+        }
+      }
+      merged = [
+        ...merged.slice(0, insertAt),
+        ...structural.fencedDivs,
+        ...merged.slice(insertAt),
+      ];
+      continue;
+    }
+
+    merged = [
+      ...merged.slice(0, span.start),
+      ...structural.fencedDivs,
+      ...merged.slice(span.end),
+    ];
   }
 
   return merged;
