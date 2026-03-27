@@ -582,6 +582,39 @@ describe("collectReferenceRanges", () => {
       expect(referenceRenderDependenciesChanged(beforeState, view.state)).toBe(true);
     });
 
+    it("tracks block label changes from same-length frontmatter title edits", () => {
+      const doc = [
+        "---",
+        "blocks:",
+        "  theorem:",
+        "    title: Result",
+        "---",
+        "",
+        "::: {.theorem #thm-main}",
+        "Statement.",
+        ":::",
+        "",
+        "See [@thm-main].",
+      ].join("\n");
+
+      view = createPluginView(doc, 0);
+      expect(view.dom.querySelector(`.${CSS.crossref}`)?.textContent).toBe("Result 1");
+
+      const beforeState = view.state;
+      const labelStart = doc.indexOf("Result");
+
+      view.dispatch({
+        changes: {
+          from: labelStart,
+          to: labelStart + "Result".length,
+          insert: "Remark",
+        },
+      });
+
+      expect(referenceRenderDependenciesChanged(beforeState, view.state)).toBe(true);
+      expect(view.dom.querySelector(`.${CSS.crossref}`)?.textContent).toBe("Remark 1");
+    });
+
     it("ignores equation body edits that preserve crossref numbering", () => {
       const doc = [
         "See [@eq:alpha].",

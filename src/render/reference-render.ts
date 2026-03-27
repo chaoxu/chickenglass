@@ -28,7 +28,7 @@ import {
 import { type CslProcessor, registerCitationsWithProcessor } from "../citations/csl-processor";
 import { CrossrefWidget, ClusteredCrossrefWidget, MixedClusterWidget, UnresolvedRefWidget, type MixedClusterPart } from "./crossref-render";
 import { buildDecorations, cursorInRange, pushWidgetDecoration, createSimpleViewPlugin } from "./render-utils";
-import { blockCounterField } from "../plugins";
+import { blockCounterField, pluginRegistryField } from "../plugins";
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
@@ -143,6 +143,16 @@ function bibliographyInputsChanged(
   );
 }
 
+function blockLabelConfigChanged(
+  beforeState: EditorState,
+  afterState: EditorState,
+): boolean {
+  return (
+    beforeState.field(pluginRegistryField, false)
+      !== afterState.field(pluginRegistryField, false)
+  );
+}
+
 export function referenceRenderDependenciesChanged(
   beforeState: EditorState,
   afterState: EditorState,
@@ -152,6 +162,7 @@ export function referenceRenderDependenciesChanged(
 
   return (
     bibliographyInputsChanged(beforeState, afterState) ||
+    blockLabelConfigChanged(beforeState, afterState) ||
     referenceSliceChanged(beforeAnalysis, afterAnalysis) ||
     crossrefNumberingChanged(beforeState, afterState)
   );
