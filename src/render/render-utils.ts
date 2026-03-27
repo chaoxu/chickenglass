@@ -377,15 +377,17 @@ export function pushWidgetDecoration(
  * Returns true only for structural changes: docChanged or syntaxTree changed.
  * Plugins that need cursor-sensitivity should use `cursorSensitiveShouldUpdate`
  * or provide a custom predicate that checks whether the active node changed.
+ * Plugins that need viewport-triggered rebuilds (e.g., those iterating
+ * visibleRanges) should opt in via `cursorSensitiveShouldUpdate` or a
+ * per-plugin predicate that checks `update.viewportChanged`.
  *
  * Previously this also included selectionSet, focusChanged, and
  * viewportChanged — but those caused multiplicative cursor-move and scroll
- * cost across the rendering stack (#443).
+ * cost across the rendering stack (#443, #577).
  */
 export function defaultShouldUpdate(update: ViewUpdate): boolean {
   return (
     update.docChanged ||
-    update.viewportChanged ||
     syntaxTree(update.state) !== syntaxTree(update.startState)
   );
 }

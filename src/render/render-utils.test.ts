@@ -1,9 +1,9 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { Decoration } from "@codemirror/view";
-import type { Range } from "@codemirror/state";
+import type { Range, EditorState } from "@codemirror/state";
 import { StateEffect } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
-import type { EditorView } from "@codemirror/view";
+import type { EditorView, ViewUpdate } from "@codemirror/view";
 import {
   serializeMacros,
   collectNodes,
@@ -486,15 +486,85 @@ describe("createSimpleViewPlugin", () => {
   });
 });
 
+/**
+ * Build a minimal ViewUpdate stub for testing shouldUpdate predicates.
+ *
+ * When `state` and `startState` are the same reference, syntaxTree identity
+ * comparison returns true (no tree change). Pass different EditorState
+ * instances to simulate a tree change.
+ */
+function mockViewUpdate(overrides: Partial<{
+  docChanged: boolean;
+  selectionSet: boolean;
+  focusChanged: boolean;
+  viewportChanged: boolean;
+  state: EditorState;
+  startState: EditorState;
+}> = {}): ViewUpdate {
+  const state = overrides.state ?? createEditorState("test", { extensions: [markdown()] });
+  return {
+    docChanged: overrides.docChanged ?? false,
+    selectionSet: overrides.selectionSet ?? false,
+    focusChanged: overrides.focusChanged ?? false,
+    viewportChanged: overrides.viewportChanged ?? false,
+    state: overrides.state ?? state,
+    startState: overrides.startState ?? state,
+  } as unknown as ViewUpdate;
+}
+
 describe("defaultShouldUpdate", () => {
-  it("is a function", () => {
-    expect(typeof defaultShouldUpdate).toBe("function");
+  it("returns true when docChanged", () => {
+    expect(defaultShouldUpdate(mockViewUpdate({ docChanged: true }))).toBe(true);
+  });
+
+  it("returns true when syntax tree changed", () => {
+    const state1 = createEditorState("hello", { extensions: [markdown()] });
+    const state2 = createEditorState("hello world", { extensions: [markdown()] });
+    expect(defaultShouldUpdate(mockViewUpdate({ state: state2, startState: state1 }))).toBe(true);
+  });
+
+  it("returns false when only viewportChanged (#577)", () => {
+    expect(defaultShouldUpdate(mockViewUpdate({ viewportChanged: true }))).toBe(false);
+  });
+
+  it("returns false when only selectionSet", () => {
+    expect(defaultShouldUpdate(mockViewUpdate({ selectionSet: true }))).toBe(false);
+  });
+
+  it("returns false when only focusChanged", () => {
+    expect(defaultShouldUpdate(mockViewUpdate({ focusChanged: true }))).toBe(false);
+  });
+
+  it("returns false when nothing changed", () => {
+    expect(defaultShouldUpdate(mockViewUpdate())).toBe(false);
   });
 });
 
 describe("cursorSensitiveShouldUpdate", () => {
-  it("is a function", () => {
-    expect(typeof cursorSensitiveShouldUpdate).toBe("function");
+  it("returns true when docChanged", () => {
+    expect(cursorSensitiveShouldUpdate(mockViewUpdate({ docChanged: true }))).toBe(true);
+  });
+
+  it("returns true when selectionSet", () => {
+    expect(cursorSensitiveShouldUpdate(mockViewUpdate({ selectionSet: true }))).toBe(true);
+  });
+
+  it("returns true when focusChanged", () => {
+    expect(cursorSensitiveShouldUpdate(mockViewUpdate({ focusChanged: true }))).toBe(true);
+  });
+
+  it("returns true when viewportChanged (opt-in for visibleRanges plugins)", () => {
+    expect(cursorSensitiveShouldUpdate(mockViewUpdate({ viewportChanged: true }))).toBe(true);
+  });
+
+  it("returns true when syntax tree changed", () => {
+    const state1 = createEditorState("hello", { extensions: [markdown()] });
+    const state2 = createEditorState("hello world", { extensions: [markdown()] });
+    expect(cursorSensitiveShouldUpdate(mockViewUpdate({ state: state2, startState: state1 }))).toBe(true);
+  });
+
+  it("returns false when nothing changed", () => {
+    expect(cursorSensitiveShouldUpdate(mockViewUpdate())).toBe(false);
   });
 });
 
