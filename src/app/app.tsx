@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef } from "react";
+import { lazy, Suspense, useCallback, useRef, useState } from "react";
 import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
 import type { FileSystem } from "./file-manager";
 import { SidebarProvider } from "./components/sidebar";
@@ -15,6 +15,7 @@ import { useAppEditorShell } from "./hooks/use-app-editor-shell";
 import { useAppOverlays } from "./hooks/use-app-overlays";
 import { useAppSessionPersistence } from "./hooks/use-app-session-persistence";
 import { useDialogs } from "./hooks/use-dialogs";
+import { useGitBranch } from "./hooks/use-git-branch";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
 import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
 import { useAppWorkspaceSession } from "./hooks/use-app-workspace-session";
@@ -23,6 +24,9 @@ import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
 /** Lazy-loaded overlay dialogs — not needed until the user opens one. */
 const AppOverlays = lazy(() =>
   import("./components/app-overlays").then((m) => ({ default: m.AppOverlays })),
+);
+const BranchSwitcher = lazy(() =>
+  import("./components/branch-switcher").then((m) => ({ default: m.BranchSwitcher })),
 );
 
 function AppInner() {
@@ -38,6 +42,14 @@ function AppInner() {
     refreshTree: workspace.refreshTree,
     addRecentFile: workspace.addRecentFile,
     requestUnsavedChangesDecision: unsavedChanges.requestDecision,
+  });
+
+  const [branchSwitcherOpen, setBranchSwitcherOpen] = useState(false);
+  const gitBranch = useGitBranch({
+    projectRoot: workspace.projectRoot,
+    refreshTree: workspace.refreshTree,
+    reloadFile: editor.reloadFile,
+    currentPath: editor.currentPath,
   });
 
   const openProjectInCurrentWindow = useCallback(async (
@@ -192,6 +204,8 @@ function AppInner() {
           workspace={workspace}
           editor={editor}
           onOpenPalette={overlays.openPalette}
+          branchName={gitBranch.currentBranch}
+          onBranchClick={() => setBranchSwitcherOpen(true)}
         />
         <Suspense fallback={null}>
           <AppOverlays
@@ -200,6 +214,12 @@ function AppInner() {
             dialogs={dialogs}
             overlays={overlays}
             unsavedChanges={unsavedChanges}
+          />
+          <BranchSwitcher
+            open={branchSwitcherOpen}
+            onOpenChange={setBranchSwitcherOpen}
+            onSwitch={gitBranch.switchBranch}
+            onCreate={gitBranch.createBranch}
           />
         </Suspense>
       </div>

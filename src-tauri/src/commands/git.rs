@@ -4,9 +4,11 @@ use std::process::Command;
 use serde::Serialize;
 use tauri::{State, WebviewWindow, command};
 
-use super::perf::measure_command;
 use super::path::current_project_root;
+use super::perf::measure_command;
 use super::state::{PerfState, ProjectRoot};
+
+// ── Existing branch-info types (used by get_git_branch) ──────────────────────
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -86,6 +88,189 @@ pub fn get_git_branch(
             }
 
             Ok(resolve_branch(&project_root))
+        },
+    )
+}
+
+// ── Branch-switch workflow ────────────────────────────────────────────────────
+
+/// Prefix for dirty-worktree errors that the frontend can match on to
+/// offer a confirmation dialog before retrying with `force = true`.
+const DIRTY_WORKTREE_PREFIX: &str = "DIRTY_WORKTREE: ";
+
+/// A local branch entry returned by `git_list_branches`.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranchEntry {
+    pub name: String,
+    pub is_current: bool,
+}
+
+/// Run a git command in the project root directory and return its stdout.
+fn run_git(root: &Path, args: &[&str]) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .map_err(|e| format!("Failed to run git: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            format!("git {} failed with exit code {}", args.join(" "), output.status)
+        } else {
+            stderr
+        });
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Parse `git branch --list` output into structured entries.
+///
+/// Each line looks like `  main` or `* feature-x`.
+fn parse_branch_list(output: &str) -> Vec<GitBranchEntry> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            let is_current = trimmed.starts_with("* ");
+            let name = if is_current {
+                trimmed.strip_prefix("* ").unwrap_or(trimmed)
+            } else {
+                trimmed
+            };
+            // Skip detached HEAD indicators like `* (HEAD detached at abc1234)`.
+            if name.starts_with('(') {
+                return None;
+            }
+            Some(GitBranchEntry {
+                name: name.to_string(),
+                is_current,
+            })
+        })
+        .collect()
+}
+
+/// Check whether the worktree has uncommitted changes.
+fn has_dirty_worktree(root: &Path) -> Result<bool, String> {
+    let output = run_git(root, &["status", "--porcelain"])?;
+    Ok(!output.trim().is_empty())
+}
+
+/// If the worktree is dirty and `force` is false, return a prefixed error
+/// that the frontend can detect to offer a confirmation retry.
+fn guard_dirty(root: &Path, force: bool) -> Result<(), String> {
+    if !force && has_dirty_worktree(root)? {
+        return Err(format!(
+            "{}You have uncommitted changes. Switching branches may overwrite them.",
+            DIRTY_WORKTREE_PREFIX,
+        ));
+    }
+    Ok(())
+}
+
+/// Return the name of the current branch, or `null` if the project is not
+/// a git repository (or git is not installed).
+#[command]
+pub fn git_current_branch(
+    window: WebviewWindow,
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+) -> Result<Option<String>, String> {
+    measure_command(
+        &perf,
+        "tauri.git_current_branch",
+        "tauri.git.current_branch",
+        "tauri",
+        None,
+        || {
+            let project_root = current_project_root(&root, &window)?;
+            match run_git(&project_root, &["rev-parse", "--abbrev-ref", "HEAD"]) {
+                Ok(branch) => Ok(Some(branch.trim().to_string())),
+                // Not a git repo or git not installed — not an error, just no branch.
+                Err(_) => Ok(None),
+            }
+        },
+    )
+}
+
+/// List all local branches.
+#[command]
+pub fn git_list_branches(
+    window: WebviewWindow,
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+) -> Result<Vec<GitBranchEntry>, String> {
+    measure_command(
+        &perf,
+        "tauri.git_list_branches",
+        "tauri.git.list_branches",
+        "tauri",
+        None,
+        || {
+            let project_root = current_project_root(&root, &window)?;
+            let output = run_git(&project_root, &["branch", "--list"])?;
+            Ok(parse_branch_list(&output))
+        },
+    )
+}
+
+/// Switch to an existing local branch.
+///
+/// When `force` is false and the worktree is dirty, returns a
+/// `DIRTY_WORKTREE:` prefixed error so the frontend can prompt for
+/// confirmation and retry with `force = true`.
+#[command]
+pub fn git_switch_branch(
+    window: WebviewWindow,
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    name: String,
+    force: bool,
+) -> Result<(), String> {
+    measure_command(
+        &perf,
+        "tauri.git_switch_branch",
+        "tauri.git.switch_branch",
+        "tauri",
+        Some(&name),
+        || {
+            let project_root = current_project_root(&root, &window)?;
+            guard_dirty(&project_root, force)?;
+            run_git(&project_root, &["checkout", &name])?;
+            Ok(())
+        },
+    )
+}
+
+/// Create a new local branch and switch to it.
+///
+/// When `force` is false and the worktree is dirty, returns a
+/// `DIRTY_WORKTREE:` prefixed error so the frontend can prompt for
+/// confirmation and retry with `force = true`.
+#[command]
+pub fn git_create_branch(
+    window: WebviewWindow,
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    name: String,
+    force: bool,
+) -> Result<(), String> {
+    measure_command(
+        &perf,
+        "tauri.git_create_branch",
+        "tauri.git.create_branch",
+        "tauri",
+        Some(&name),
+        || {
+            let project_root = current_project_root(&root, &window)?;
+            guard_dirty(&project_root, force)?;
+            run_git(&project_root, &["checkout", "-b", &name])?;
+            Ok(())
         },
     )
 }
@@ -211,5 +396,58 @@ mod tests {
         assert!(!info.branch.is_empty(), "branch should not be empty for unborn repo");
         assert!(!info.is_detached, "unborn branch should not be detached");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn parse_branch_list_basic() {
+        let output = "  develop\n* main\n  feature-x\n";
+        let branches = parse_branch_list(output);
+        assert_eq!(branches.len(), 3);
+        assert_eq!(branches[0].name, "develop");
+        assert!(!branches[0].is_current);
+        assert_eq!(branches[1].name, "main");
+        assert!(branches[1].is_current);
+        assert_eq!(branches[2].name, "feature-x");
+        assert!(!branches[2].is_current);
+    }
+
+    #[test]
+    fn parse_branch_list_empty() {
+        let branches = parse_branch_list("");
+        assert!(branches.is_empty());
+    }
+
+    #[test]
+    fn parse_branch_list_skips_detached_head() {
+        let output = "* (HEAD detached at abc1234)\n  main\n";
+        let branches = parse_branch_list(output);
+        assert_eq!(branches.len(), 1);
+        assert_eq!(branches[0].name, "main");
+    }
+
+    #[test]
+    fn parse_branch_list_single_current() {
+        let output = "* main\n";
+        let branches = parse_branch_list(output);
+        assert_eq!(branches.len(), 1);
+        assert_eq!(branches[0].name, "main");
+        assert!(branches[0].is_current);
+    }
+
+    #[test]
+    fn parse_branch_list_whitespace_lines() {
+        let output = "\n  develop\n\n* main\n\n";
+        let branches = parse_branch_list(output);
+        assert_eq!(branches.len(), 2);
+        assert_eq!(branches[0].name, "develop");
+        assert_eq!(branches[1].name, "main");
+    }
+
+    #[test]
+    fn dirty_worktree_prefix_is_detectable() {
+        // The frontend matches on this prefix to distinguish dirty-worktree
+        // errors from hard failures.
+        let err = format!("{}message", DIRTY_WORKTREE_PREFIX);
+        assert!(err.starts_with("DIRTY_WORKTREE: "));
     }
 }
