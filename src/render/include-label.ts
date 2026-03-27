@@ -2,9 +2,9 @@
  * Right-margin filename decoration for include blocks.
  * Single ViewPlugin computes both line decorations and widget labels in one pass.
  *
- * Prefers include regions tracked in editor state for expanded documents,
- * and falls back to raw include-block semantics when the document has not
- * been expanded.
+ * Prefers include regions tracked in always-on editor state for expanded
+ * documents, and falls back to raw include-block semantics when the
+ * document has not been expanded.
  */
 
 import {
@@ -20,10 +20,7 @@ import {
   SimpleTextRenderWidget,
 } from "./render-utils";
 import { basename } from "../lib/utils";
-import {
-  includeRegionsField,
-  type IncludeRegionState,
-} from "../lib/include-regions";
+import { includeRegionsField, type IncludeRegionState } from "../lib/include-regions";
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
@@ -168,7 +165,4 @@ const includeLabelViewPlugin = createSimpleViewPlugin(
 export { includeLabelViewPlugin as _includeLabelViewPluginForTest };
 
 /** CM6 extension that renders include region labels in the right margin. */
-export const includeLabelPlugin: Extension = [
-  includeRegionsField,
-  includeLabelViewPlugin,
-];
+export const includeLabelPlugin: Extension = includeLabelViewPlugin;

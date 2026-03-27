@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { markdown } from "@codemirror/lang-markdown";
+import { Compartment } from "@codemirror/state";
 import {
   type DecorationSet,
   EditorView,
@@ -11,6 +12,7 @@ import {
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
 import {
+  includeRegionsField,
   setIncludeRegionsEffect,
   type IncludeRegionState,
 } from "../lib/include-regions";
@@ -41,6 +43,7 @@ function createView(
     extensions: [
       markdown({ extensions: markdownExtensions }),
       documentAnalysisField,
+      includeRegionsField,
       includeLabelPlugin,
     ],
   });
@@ -186,6 +189,58 @@ describe("includeLabelPlugin", () => {
       },
     });
 
+    expect(getActiveLabelTexts(v)).toEqual(["included.md"]);
+  });
+
+  it("restores include labels after the render compartment is removed and re-added", () => {
+    const renderCompartment = new Compartment();
+    const doc = [
+      "Preface",
+      "",
+      "# Included",
+      "",
+      "Body paragraph.",
+      "",
+      "Coda",
+    ].join("\n");
+    const includeStart = doc.indexOf("# Included");
+    const includeEnd = doc.indexOf("\n\nCoda");
+    view = createTestView(doc, {
+      cursorPos: includeStart,
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        documentAnalysisField,
+        includeRegionsField,
+        renderCompartment.of(includeLabelPlugin),
+      ],
+    });
+    const v = view;
+
+    v.dispatch({
+      effects: setIncludeRegionsEffect.of([{
+        from: includeStart,
+        to: includeEnd,
+        file: "chapters/included.md",
+      }]),
+    });
+
+    expect(getActiveLabelTexts(v)).toEqual(["included.md"]);
+
+    v.dispatch({ effects: renderCompartment.reconfigure([]) });
+    expect(v.state.field(includeRegionsField)).toEqual([{
+      from: includeStart,
+      to: includeEnd,
+      file: "chapters/included.md",
+    }]);
+    expect(getActiveLabelTexts(v)).toEqual([]);
+
+    v.dispatch({ effects: renderCompartment.reconfigure(includeLabelPlugin) });
+
+    expect(v.state.field(includeRegionsField)).toEqual([{
+      from: includeStart,
+      to: includeEnd,
+      file: "chapters/included.md",
+    }]);
     expect(getActiveLabelTexts(v)).toEqual(["included.md"]);
   });
 });
