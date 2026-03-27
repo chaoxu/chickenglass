@@ -264,14 +264,34 @@ export function useAppEditorShell({
   // handleSearchResult) never capture a stale closure after openFile resolves.
   const latestViewRef = useRef<UseEditorReturn["view"]>(null);
   const latestReadyPathRef = useRef<string | null>(null);
-  const readyPathWaitersRef = useRef<Map<string, Set<() => void>>>(new Map());
+  const readyPathWaitersRef = useRef<Map<string, Set<(ready: boolean) => void>>>(new Map());
   const searchRequestRef = useRef(0);
+
+  const resolveReadyWaiters = useCallback((path: string, ready: boolean) => {
+    const waiters = readyPathWaitersRef.current.get(path);
+    if (!waiters) {
+      return;
+    }
+    readyPathWaitersRef.current.delete(path);
+    waiters.forEach((resolve) => resolve(ready));
+  }, []);
+
+  const abortReadyWaitersExcept = useCallback((activePath: string | null) => {
+    for (const [path, waiters] of readyPathWaitersRef.current) {
+      if (path === activePath) {
+        continue;
+      }
+      readyPathWaitersRef.current.delete(path);
+      waiters.forEach((resolve) => resolve(false));
+    }
+  }, []);
 
   const handleEditorStateChange = useCallback((state: UseEditorReturn) => {
     setEditorState(state);
     latestViewRef.current = state.view;
     if (!state.view) {
       latestReadyPathRef.current = null;
+      abortReadyWaitersExcept(null);
     }
 
     if (state.view) {
@@ -279,18 +299,21 @@ export function useAppEditorShell({
     } else {
       setHeadings([]);
     }
-  }, []);
+  }, [abortReadyWaitersExcept]);
 
-  const waitForEditorDocumentReady = useCallback((path: string): Promise<void> => {
+  const waitForEditorDocumentReady = useCallback((path: string): Promise<boolean> => {
     if (latestReadyPathRef.current === path && latestViewRef.current) {
-      return Promise.resolve();
+      return Promise.resolve(true);
     }
-    return new Promise<void>((resolve) => {
-      const waiters = readyPathWaitersRef.current.get(path) ?? new Set<() => void>();
+    if (!isPathOpen(path)) {
+      return Promise.resolve(false);
+    }
+    return new Promise<boolean>((resolve) => {
+      const waiters = readyPathWaitersRef.current.get(path) ?? new Set<(ready: boolean) => void>();
       waiters.add(resolve);
       readyPathWaitersRef.current.set(path, waiters);
     });
-  }, []);
+  }, [isPathOpen]);
 
   const handleEditorDocumentReady = useCallback((view: EditorView, docPath: string | undefined) => {
     latestViewRef.current = view;
@@ -298,13 +321,13 @@ export function useAppEditorShell({
       return;
     }
     latestReadyPathRef.current = docPath;
-    const waiters = readyPathWaitersRef.current.get(docPath);
-    if (!waiters) {
-      return;
-    }
-    readyPathWaitersRef.current.delete(docPath);
-    waiters.forEach((resolve) => resolve());
-  }, []);
+    abortReadyWaitersExcept(docPath);
+    resolveReadyWaiters(docPath, true);
+  }, [abortReadyWaitersExcept, resolveReadyWaiters]);
+
+  useEffect(() => {
+    abortReadyWaitersExcept(currentPath);
+  }, [abortReadyWaitersExcept, currentPath]);
 
   useEffect(() => {
     const view = editorState?.view ?? null;
@@ -359,7 +382,11 @@ export function useAppEditorShell({
           return;
         }
 
-        await waitForEditorDocumentReady(file);
+        const didBecomeReady = await waitForEditorDocumentReady(file);
+        if (!didBecomeReady) {
+          onComplete?.();
+          return;
+        }
 
         if (requestId !== searchRequestRef.current || !isPathOpen(file)) {
           onComplete?.();

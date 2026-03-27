@@ -220,4 +220,54 @@ describe("useAppEditorShell", () => {
     expect(staleView.focus).not.toHaveBeenCalled();
     expect(onCompleteA).toHaveBeenCalledOnce();
   });
+
+  it("aborts a pending search-result wait when a non-search openFile supersedes it", async () => {
+    const reads = {
+      "a.md": createDeferred<string>(),
+      "b.md": createDeferred<string>(),
+    };
+    const fs = createAsyncFileSystem(reads);
+    const { Harness, ref } = createHarness(fs);
+    const onComplete = vi.fn();
+    const staleView = createFakeView();
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      ref.result.handleSearchResult("a.md", 1, onComplete);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      reads["a.md"].resolve("# A");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(ref.result.currentPath).toBe("a.md");
+    expect(onComplete).not.toHaveBeenCalled();
+
+    let openB!: Promise<void>;
+    await act(async () => {
+      openB = ref.result.openFile("b.md");
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      reads["b.md"].resolve("# B");
+      await openB;
+      await Promise.resolve();
+    });
+
+    expect(ref.result.currentPath).toBe("b.md");
+    expect(onComplete).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      ref.result.handleEditorDocumentReady(staleView.view, "a.md");
+      await Promise.resolve();
+    });
+
+    expect(staleView.dispatch).not.toHaveBeenCalled();
+    expect(staleView.focus).not.toHaveBeenCalled();
+  });
 });
