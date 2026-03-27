@@ -5,6 +5,10 @@ import type { TextSource, DocumentAnalysis } from "./document";
 import { analyzeDocumentSemantics } from "./document";
 import { buildSemanticDelta } from "./incremental/semantic-delta";
 import {
+  createEquationSlice,
+  mergeEquationSlice,
+} from "./incremental/slices/equation-slice";
+import {
   extractDirtyFencedDivWindows,
   mergeFencedDivSlice,
 } from "./incremental/slices/fenced-div-slice";
@@ -49,6 +53,11 @@ function mergeLocalStructuralSlices(
     tr.changes,
     extractedDirtyWindows,
   );
+  const equationSlice = mergeEquationSlice(
+    createEquationSlice(previous.equations),
+    next.equations,
+    tr.changes,
+  );
   const includes = deriveIncludeSlice(
     doc,
     fencedDivs,
@@ -60,6 +69,8 @@ function mergeLocalStructuralSlices(
     ...next,
     fencedDivs,
     fencedDivByFrom: new Map(fencedDivs.map((div) => [div.from, div])),
+    equations: equationSlice.equations,
+    equationById: equationSlice.equationById,
     includes,
     includeByFrom: new Map(includes.map((include) => [include.from, include])),
   };

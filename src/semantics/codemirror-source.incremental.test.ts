@@ -1,8 +1,10 @@
 import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
+import { syntaxTree } from "@codemirror/language";
 import { describe, expect, it } from "vitest";
 import { markdownExtensions } from "../parser";
-import { documentAnalysisField } from "./codemirror-source";
+import { analyzeDocumentSemantics } from "./document";
+import { documentAnalysisField, editorStateTextSource } from "./codemirror-source";
 
 // Future incremental-engine contract tests. The identity cases stay marked as
 // expected failures until documentAnalysisField stops rebuilding whole slices.
@@ -35,6 +37,23 @@ function insertBefore(state: EditorState, target: string, insert: string): Edito
   return state.update({
     changes: { from, insert },
   }).state;
+}
+
+function expectEquationStateMatchesRebuild(state: EditorState): void {
+  const analysis = state.field(documentAnalysisField);
+  const rebuilt = analyzeDocumentSemantics(
+    editorStateTextSource(state),
+    syntaxTree(state),
+  );
+
+  expect(analysis.equations).toEqual(rebuilt.equations);
+  expect(Array.from(analysis.equationById.keys())).toEqual(
+    rebuilt.equations.map((equation) => equation.id),
+  );
+
+  for (const equation of analysis.equations) {
+    expect(analysis.equationById.get(equation.id)).toBe(equation);
+  }
 }
 
 describe("documentAnalysisField incremental contract", () => {
@@ -89,6 +108,223 @@ describe("documentAnalysisField incremental contract", () => {
     expect(after.headings[0]).toBe(stablePrefix);
     expect(after.headings[2]).not.toBe(renumberedTail);
   });
+
+  it("preserves unaffected equation prefix identity while renumbering the tail", () => {
+    const doc = [
+      "$$x$$ {#eq:first}",
+      "",
+      "$$y$$ {#eq:second}",
+      "",
+      "Tail paragraph.",
+    ].join("\n");
+
+    const beforeState = createSemanticsState(doc);
+    const before = beforeState.field(documentAnalysisField);
+    const stablePrefix = before.equations[0];
+    const renumberedTail = before.equations[1];
+
+    const afterState = insertBefore(
+      beforeState,
+      "$$y$$",
+      "$$w$$ {#eq:middle}\n\n",
+    );
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after.equations.map(({ id, number }) => ({ id, number }))).toEqual([
+      { id: "eq:first", number: 1 },
+      { id: "eq:middle", number: 2 },
+      { id: "eq:second", number: 3 },
+    ]);
+    expect(after.equations[0]).toBe(stablePrefix);
+    expect(after.equations[2]).not.toBe(renumberedTail);
+    expectEquationStateMatchesRebuild(afterState);
+  });
+
+  it("preserves an unaffected equation suffix when editing one equation body", () => {
+    const doc = [
+      "$$x$$ {#eq:first}",
+      "",
+      "$$y$$ {#eq:second}",
+      "",
+      "$$z$$ {#eq:third}",
+    ].join("\n");
+
+    const beforeState = createSemanticsState(doc);
+    const before = beforeState.field(documentAnalysisField);
+    const stableFirst = before.equations[0];
+    const updatedSecond = before.equations[1];
+    const stableThird = before.equations[2];
+    const from = doc.indexOf("$$y$$") + 2;
+    const afterState = beforeState.update({
+      changes: {
+        from,
+        to: from + 1,
+        insert: "w",
+      },
+    }).state;
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after.equations[0]).toBe(stableFirst);
+    expect(after.equations[1]).not.toBe(updatedSecond);
+    expect(after.equations[1]?.latex).toBe("w");
+    expect(after.equations[2]).toBe(stableThird);
+    expectEquationStateMatchesRebuild(afterState);
+  });
+
+  const equationBoundaryScenarios: Array<{
+    readonly title: string;
+    readonly doc: string;
+    readonly update: (state: EditorState) => EditorState;
+    readonly expected: Array<{ readonly id: string; readonly number: number }>;
+  }> = [
+    {
+      title: "deleting only an equation label",
+      doc: [
+        "$$x$$ {#eq:first}",
+        "",
+        "$$y$$ {#eq:second}",
+        "",
+        "$$z$$ {#eq:third}",
+      ].join("\n"),
+      update(state) {
+        const doc = state.doc.toString();
+        const label = " {#eq:second}";
+        return state.update({
+          changes: {
+            from: doc.indexOf(label),
+            to: doc.indexOf(label) + label.length,
+          },
+        }).state;
+      },
+      expected: [
+        { id: "eq:first", number: 1 },
+        { id: "eq:third", number: 2 },
+      ],
+    },
+    {
+      title: "replacing a range that removes an earlier label and rewrites a later equation",
+      doc: [
+        "$$x$$ {#eq:first}",
+        "",
+        "$$y$$ {#eq:second}",
+        "",
+        "$$z$$ {#eq:third}",
+      ].join("\n"),
+      update(state) {
+        const doc = state.doc.toString();
+        const start = doc.indexOf(" {#eq:first}");
+        const end = doc.indexOf("$$z$$");
+        return state.update({
+          changes: {
+            from: start,
+            to: end,
+            insert: "\n\n$$y2$$ {#eq:second}\n\n",
+          },
+        }).state;
+      },
+      expected: [
+        { id: "eq:second", number: 1 },
+        { id: "eq:third", number: 2 },
+      ],
+    },
+    {
+      title: "deleting an equation opener",
+      doc: [
+        "Intro.",
+        "",
+        "$$x$$ {#eq:first}",
+      ].join("\n"),
+      update(state) {
+        const doc = state.doc.toString();
+        const from = doc.indexOf("$$x$$");
+        return state.update({
+          changes: {
+            from,
+            to: from + 2,
+          },
+        }).state;
+      },
+      expected: [],
+    },
+    {
+      title: "inserting text immediately before an equation opener",
+      doc: [
+        "$$x$$ {#eq:first}",
+        "",
+        "$$y$$ {#eq:second}",
+        "",
+        "$$z$$ {#eq:third}",
+      ].join("\n"),
+      update(state) {
+        return state.update({
+          changes: {
+            from: 0,
+            insert: "X",
+          },
+        }).state;
+      },
+      expected: [
+        { id: "eq:second", number: 1 },
+        { id: "eq:third", number: 2 },
+      ],
+    },
+    {
+      title: "editing text immediately before an equation opener",
+      doc: [
+        "[@cite]",
+        "",
+        "$$y$$ {#eq:second}",
+      ].join("\n"),
+      update(state) {
+        const doc = state.doc.toString();
+        const from = doc.indexOf("\n\n$$y$$");
+        return state.update({
+          changes: {
+            from,
+            to: from + 2,
+            insert: "\n {#eq:edit}",
+          },
+        }).state;
+      },
+      expected: [],
+    },
+    {
+      title: "deleting a middle equation closer so it absorbs the later block",
+      doc: [
+        "$$x$$ {#eq:first}",
+        "",
+        "$$y$$ {#eq:second}",
+        "",
+        "$$z$$ {#eq:third}",
+      ].join("\n"),
+      update(state) {
+        const doc = state.doc.toString();
+        const from = doc.indexOf("$$y$$ {#eq:second}") + "$$y".length;
+        return state.update({
+          changes: {
+            from,
+            to: from + 2,
+          },
+        }).state;
+      },
+      expected: [
+        { id: "eq:first", number: 1 },
+      ],
+    },
+  ];
+
+  for (const scenario of equationBoundaryScenarios) {
+    it(`keeps equations aligned with a full rebuild when ${scenario.title}`, () => {
+      const baseState = createSemanticsState(scenario.doc);
+      const afterState = scenario.update(baseState);
+      const after = afterState.field(documentAnalysisField);
+
+      expect(after.equations.map(({ id, number }) => ({ id, number }))).toEqual(
+        scenario.expected,
+      );
+      expectEquationStateMatchesRebuild(afterState);
+    });
+  }
 
   it("keeps unrelated fenced div objects when editing another div body", () => {
     const doc = [

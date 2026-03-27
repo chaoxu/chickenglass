@@ -1,13 +1,11 @@
 import type { Tree } from "@lezer/common";
-import {
-  extractStructuralWindow,
-  type EquationStructure,
-} from "./incremental/window-extractor";
+import { extractStructuralWindow } from "./incremental/window-extractor";
 import { buildHeadingSlice } from "./incremental/slices/heading-slice";
 import {
   buildFootnoteSlice,
   type FootnoteSlice,
 } from "./incremental/slices/footnote-slice";
+import { buildEquationSlice } from "./incremental/slices/equation-slice";
 import { buildMathSlice } from "./incremental/slices/math-slice";
 import { deriveIncludeSlice } from "./incremental/slices/include-slice";
 import { buildReferenceSlice } from "./incremental/slices/reference-slice";
@@ -200,16 +198,6 @@ function isFootnoteSlice(value: FootnoteSemantics): value is FootnoteSlice {
   return "numberById" in value && "orderedEntries" in value;
 }
 
-function finalizeEquations(
-  equations: readonly EquationStructure[],
-): EquationSemantics[] {
-  let equationCounter = 0;
-  return equations.map((equation) => ({
-    ...equation,
-    number: ++equationCounter,
-  }));
-}
-
 // ---------------------------------------------------------------------------
 // Public per-category analyzers (thin wrappers for backward compatibility)
 // ---------------------------------------------------------------------------
@@ -270,7 +258,7 @@ export function analyzeFencedDivs(doc: TextSource, tree: Tree): FencedDivSemanti
 }
 
 export function analyzeEquations(doc: TextSource, tree: Tree): EquationSemantics[] {
-  return finalizeEquations(extractStructuralWindow(doc, tree).equations);
+  return [...buildEquationSlice(extractStructuralWindow(doc, tree)).equations];
 }
 
 export function analyzeMath(doc: TextSource, tree: Tree): MathSemantics[] {
@@ -294,7 +282,8 @@ export function analyzeDocumentSemantics(
   const headingSlice = buildHeadingSlice(structural);
   const footnotes = buildFootnoteSlice(structural);
   const fencedDivs = structural.fencedDivs;
-  const equations = finalizeEquations(structural.equations);
+  const equationSlice = buildEquationSlice(structural);
+  const equations = equationSlice.equations;
   const mathRegions = buildMathSlice(structural).mathRegions;
   const referenceSlice = buildReferenceSlice(doc, structural);
   const references = referenceSlice.references;
@@ -308,7 +297,7 @@ export function analyzeDocumentSemantics(
     fencedDivs,
     fencedDivByFrom: new Map(fencedDivs.map((div) => [div.from, div])),
     equations,
-    equationById: new Map(equations.map((equation) => [equation.id, equation])),
+    equationById: equationSlice.equationById,
     mathRegions,
     references,
     referenceByFrom: referenceSlice.referenceByFrom,
