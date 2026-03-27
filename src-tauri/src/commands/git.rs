@@ -8,86 +8,173 @@ use super::path::current_project_root;
 use super::perf::measure_command;
 use super::state::{PerfState, ProjectRoot};
 
-// ── Existing branch-info types (used by get_git_branch) ──────────────────────
-
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranchInfo {
-    /// Branch name, or short SHA when HEAD is detached.
-    pub branch: String,
-    /// `true` when HEAD is detached (not on any branch).
-    pub is_detached: bool,
+    pub branch: Option<String>,
+    pub has_upstream: bool,
+    pub ahead: u32,
+    pub behind: u32,
 }
 
-/// Run a git command in `dir`, returning its trimmed stdout on success.
-fn git_stdout(dir: &Path, args: &[&str]) -> Option<String> {
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+fn get_branch_name(root: &Path) -> Option<String> {
     let output = Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(root)
         .output()
         .ok()?;
+
     if !output.status.success() {
         return None;
     }
-    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if text.is_empty() { None } else { Some(text) }
+
+    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if branch.is_empty() || branch == "HEAD" {
+        None
+    } else {
+        Some(branch)
+    }
 }
 
-/// Resolve the current branch or detached SHA for a git work tree.
-///
-/// Handles three HEAD states:
-///   1. Normal branch — `rev-parse --abbrev-ref HEAD` returns the name.
-///   2. Detached HEAD — `rev-parse --abbrev-ref HEAD` returns "HEAD";
-///      we resolve a short SHA via `rev-parse --short HEAD`.
-///   3. Unborn branch (freshly `git init`, no commits) —
-///      `rev-parse --abbrev-ref HEAD` fails (exit 128); we fall back to
-///      `symbolic-ref --short HEAD` which returns the default branch name.
-pub fn resolve_branch(dir: &Path) -> Option<GitBranchInfo> {
-    // Try the fast path: works for normal branches and detached HEAD.
-    if let Some(name) = git_stdout(dir, &["rev-parse", "--abbrev-ref", "HEAD"]) {
-        if name == "HEAD" {
-            // Detached HEAD — resolve to a short SHA.
-            let sha = git_stdout(dir, &["rev-parse", "--short", "HEAD"])
-                .unwrap_or_else(|| "HEAD".to_string());
-            return Some(GitBranchInfo { branch: sha, is_detached: true });
+fn check_upstream(root: &Path) -> bool {
+    Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "@{upstream}"])
+        .current_dir(root)
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn get_ahead_behind(root: &Path) -> (u32, u32) {
+    let output = Command::new("git")
+        .args(["rev-list", "--count", "--left-right", "HEAD...@{upstream}"])
+        .current_dir(root)
+        .stderr(std::process::Stdio::null())
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => {
+            let text = String::from_utf8_lossy(&o.stdout);
+            let parts: Vec<&str> = text.trim().split('\t').collect();
+            if parts.len() == 2 {
+                let ahead = parts[0].parse().unwrap_or(0);
+                let behind = parts[1].parse().unwrap_or(0);
+                (ahead, behind)
+            } else {
+                (0, 0)
+            }
         }
-        return Some(GitBranchInfo { branch: name, is_detached: false });
+        _ => (0, 0),
     }
-
-    // Unborn branch: HEAD exists as a symbolic ref but points to a ref that
-    // doesn't exist yet.  `symbolic-ref --short HEAD` still returns the name.
-    if let Some(name) = git_stdout(dir, &["symbolic-ref", "--short", "HEAD"]) {
-        return Some(GitBranchInfo { branch: name, is_detached: false });
-    }
-
-    None
 }
 
-/// Return the current git branch for the open project, or `null` when the
-/// project directory is not inside a git repository.
+pub fn build_branch_info(root: &Path) -> GitBranchInfo {
+    let branch = get_branch_name(root);
+    let has_upstream = check_upstream(root);
+    let (ahead, behind) = if has_upstream {
+        get_ahead_behind(root)
+    } else {
+        (0, 0)
+    };
+    GitBranchInfo {
+        branch,
+        has_upstream,
+        ahead,
+        behind,
+    }
+}
+
+pub fn run_pull(root: &Path) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(["pull", "--ff-only"])
+        .current_dir(root)
+        .output()
+        .map_err(|e| format!("Failed to run git pull: {}", e))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(stderr)
+    }
+}
+
+pub fn run_push(root: &Path) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(["push"])
+        .current_dir(root)
+        .output()
+        .map_err(|e| format!("Failed to run git push: {}", e))?;
+
+    if output.status.success() {
+        // git push writes progress to stderr even on success
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Ok(if stdout.is_empty() { stderr } else { stdout })
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(stderr)
+    }
+}
+
+// ── Tauri commands ────────────────────────────────────────────────────────────
+
 #[command]
-pub fn get_git_branch(
+pub fn git_branch_info(
     window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
-) -> Result<Option<GitBranchInfo>, String> {
+) -> Result<GitBranchInfo, String> {
     measure_command(
         &perf,
-        "tauri.get_git_branch",
-        "tauri.git.get_git_branch",
+        "tauri.git_branch_info",
+        "tauri.git.branch_info",
         "tauri",
         None,
         || {
             let project_root = current_project_root(&root, &window)?;
+            Ok(build_branch_info(&project_root))
+        },
+    )
+}
 
-            // Quick check: is this directory inside a git work tree?
-            if git_stdout(&project_root, &["rev-parse", "--is-inside-work-tree"]).is_none() {
-                return Ok(None);
-            }
+#[command]
+pub fn git_pull(
+    window: WebviewWindow,
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+) -> Result<String, String> {
+    measure_command(
+        &perf,
+        "tauri.git_pull",
+        "tauri.git.pull",
+        "tauri",
+        None,
+        || {
+            let project_root = current_project_root(&root, &window)?;
+            run_pull(&project_root)
+        },
+    )
+}
 
-            Ok(resolve_branch(&project_root))
+#[command]
+pub fn git_push(
+    window: WebviewWindow,
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+) -> Result<String, String> {
+    measure_command(
+        &perf,
+        "tauri.git_push",
+        "tauri.git.push",
+        "tauri",
+        None,
+        || {
+            let project_root = current_project_root(&root, &window)?;
+            run_push(&project_root)
         },
     )
 }
@@ -295,123 +382,75 @@ pub fn git_create_branch(
 mod tests {
     use super::*;
     use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
-    #[test]
-    fn git_branch_info_serializes_as_camel_case() {
-        let info = GitBranchInfo {
-            branch: "main".to_string(),
-            is_detached: false,
-        };
-        let json = serde_json::to_value(&info).unwrap();
-        assert_eq!(json["branch"], "main");
-        assert_eq!(json["isDetached"], false);
+    fn temp_dir(prefix: &str) -> std::path::PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("coflat-{prefix}-{unique}"));
+        fs::create_dir_all(&path).unwrap();
+        path.canonicalize().unwrap()
+    }
+
+    fn init_git_repo(path: &Path) {
+        Command::new("git").args(["init"]).current_dir(path).output().unwrap();
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(path)
+            .output()
+            .unwrap();
+        fs::write(path.join("init.txt"), "init").unwrap();
+        Command::new("git").args(["add", "."]).current_dir(path).output().unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(path)
+            .output()
+            .unwrap();
     }
 
     #[test]
-    fn git_branch_info_serializes_detached() {
-        let info = GitBranchInfo {
-            branch: "abc1234".to_string(),
-            is_detached: true,
-        };
-        let json = serde_json::to_value(&info).unwrap();
-        assert_eq!(json["branch"], "abc1234");
-        assert_eq!(json["isDetached"], true);
+    fn branch_info_in_git_repo() {
+        let repo = temp_dir("git-info");
+        init_git_repo(&repo);
+
+        let info = build_branch_info(&repo);
+        assert!(info.branch.is_some());
+        assert!(!info.has_upstream);
+        assert_eq!(info.ahead, 0);
+        assert_eq!(info.behind, 0);
+
+        fs::remove_dir_all(&repo).unwrap();
     }
 
     #[test]
-    fn resolve_branch_returns_none_for_non_git_dir() {
-        let dir = std::env::temp_dir().join("coflat-test-nongit");
-        let _ = fs::create_dir_all(&dir);
-        assert!(resolve_branch(&dir).is_none());
-        let _ = fs::remove_dir_all(&dir);
+    fn branch_info_in_non_git_dir() {
+        let dir = temp_dir("non-git");
+        let info = build_branch_info(&dir);
+        assert!(info.branch.is_none());
+        assert!(!info.has_upstream);
+
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
-    fn resolve_branch_normal_repo() {
-        let dir = std::env::temp_dir().join("coflat-test-normal");
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        Command::new("git").args(["init"]).current_dir(&dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status().unwrap();
-        // Set a local identity so the commit succeeds on machines without
-        // a global git user.name / user.email.
-        Command::new("git").args(["config", "user.name", "test"])
-            .current_dir(&dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status().unwrap();
-        Command::new("git").args(["config", "user.email", "test@test"])
-            .current_dir(&dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status().unwrap();
-        let commit_ok = Command::new("git").args(["commit", "--allow-empty", "-m", "init"])
-            .current_dir(&dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status().unwrap();
-        assert!(commit_ok.success(), "initial commit must succeed for this test to be meaningful");
-
-        let info = resolve_branch(&dir).expect("should resolve in a normal repo");
-        assert!(!info.branch.is_empty());
-        assert!(!info.is_detached);
-        let _ = fs::remove_dir_all(&dir);
+    fn pull_in_non_git_dir_fails() {
+        let dir = temp_dir("pull-fail");
+        assert!(run_pull(&dir).is_err());
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
-    fn resolve_branch_detached_head() {
-        let dir = std::env::temp_dir().join("coflat-test-detached");
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        Command::new("git").args(["init"]).current_dir(&dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status().unwrap();
-        Command::new("git").args(["config", "user.name", "test"])
-            .current_dir(&dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status().unwrap();
-        Command::new("git").args(["config", "user.email", "test@test"])
-            .current_dir(&dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status().unwrap();
-        Command::new("git").args(["commit", "--allow-empty", "-m", "init"])
-            .current_dir(&dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status().unwrap();
-        Command::new("git").args(["checkout", "--detach", "HEAD"])
-            .current_dir(&dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status().unwrap();
-
-        let info = resolve_branch(&dir).expect("should resolve in a detached HEAD repo");
-        assert!(!info.branch.is_empty(), "detached branch label should not be empty");
-        assert!(info.is_detached, "should be marked as detached");
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn resolve_branch_unborn_repo() {
-        let dir = std::env::temp_dir().join("coflat-test-unborn");
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        Command::new("git").args(["init"]).current_dir(&dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status().unwrap();
-
-        let info = resolve_branch(&dir).expect("should resolve in an unborn repo");
-        // Default branch name is configured per-system (main/master/etc.),
-        // but it must be non-empty and not detached.
-        assert!(!info.branch.is_empty(), "branch should not be empty for unborn repo");
-        assert!(!info.is_detached, "unborn branch should not be detached");
-        let _ = fs::remove_dir_all(&dir);
+    fn push_in_non_git_dir_fails() {
+        let dir = temp_dir("push-fail");
+        assert!(run_push(&dir).is_err());
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

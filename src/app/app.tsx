@@ -19,6 +19,7 @@ import { useGitBranch } from "./hooks/use-git-branch";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
 import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
 import { useAppWorkspaceSession } from "./hooks/use-app-workspace-session";
+import { useGitStatus } from "./hooks/use-git-status";
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
 
 /** Lazy-loaded overlay dialogs — not needed until the user opens one. */
@@ -70,6 +71,8 @@ function AppInner() {
       openFile: editor.openFile,
     });
   }, [editor, workspace]);
+
+  const git = useGitStatus(workspace.projectRoot, workspace.refreshTree);
 
   const handleOpenFolderRequest = useCallback(() => {
     if (!isTauri()) return;
@@ -164,6 +167,7 @@ function AppInner() {
       handleOpenFolder: handleOpenFolderRequest,
     },
     editor,
+    git,
     onOpenFile: handleOpenFileRequest,
     onQuit: handleQuitRequest,
   });
@@ -205,6 +209,7 @@ function AppInner() {
           resolvedTheme={workspace.resolvedTheme}
           workspace={workspace}
           editor={editor}
+          git={git}
           onOpenPalette={overlays.openPalette}
           branchName={gitBranch.currentBranch}
           onBranchClick={() => setBranchSwitcherOpen(true)}

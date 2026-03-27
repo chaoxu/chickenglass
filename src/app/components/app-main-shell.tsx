@@ -3,6 +3,7 @@ import { StatusBar } from "./status-bar";
 import { SidebarInset } from "./sidebar";
 import type { AppEditorShellController } from "../hooks/use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "../hooks/use-app-workspace-session";
+import type { GitStatus } from "../hooks/use-git-status";
 import type { FileSystem } from "../file-manager";
 
 interface AppMainShellProps {
@@ -11,12 +12,13 @@ interface AppMainShellProps {
   resolvedTheme: AppWorkspaceSessionController["resolvedTheme"];
   workspace: Pick<
     AppWorkspaceSessionController,
-    "sidenotesCollapsed" | "setSidenotesCollapsed" | "gitBranch"
+    "sidenotesCollapsed" | "setSidenotesCollapsed"
   >;
   editor: Pick<
     AppEditorShellController,
     "currentPath" | "editorDoc" | "pluginManager" | "handleDocChange" | "handleProgrammaticDocChange" | "setDocumentSourceMap" | "handleEditorStateChange" | "handleEditorDocumentReady" | "editorMode" | "handleModeChange" | "docTextForStats" | "isMarkdownFile"
   >;
+  git: Pick<GitStatus, "branch" | "ahead" | "behind" | "isPulling" | "isPushing">;
   onOpenPalette: () => void;
   branchName?: string | null;
   onBranchClick?: () => void;
@@ -28,6 +30,7 @@ export function AppMainShell({
   resolvedTheme,
   workspace,
   editor,
+  git,
   onOpenPalette,
   branchName,
   onBranchClick,
@@ -71,6 +74,9 @@ export function AppMainShell({
         isMarkdown={editor.isMarkdownFile}
         branchName={branchName}
         onBranchClick={onBranchClick}
+        gitAhead={git.ahead}
+        gitBehind={git.behind}
+        gitIsBusy={git.isPulling || git.isPushing}
       />
     </SidebarInset>
   );

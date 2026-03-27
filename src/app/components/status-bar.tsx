@@ -24,6 +24,12 @@ export interface StatusBarProps {
   branchName?: string | null;
   /** Callback when the branch indicator is clicked (opens branch switcher). */
   onBranchClick?: () => void;
+  /** Commits ahead of upstream. */
+  gitAhead?: number;
+  /** Commits behind upstream. */
+  gitBehind?: number;
+  /** Whether a git operation (pull/push) is running. */
+  gitIsBusy?: boolean;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -129,6 +135,9 @@ export function StatusBar({
   isMarkdown = true,
   branchName,
   onBranchClick,
+  gitAhead = 0,
+  gitBehind = 0,
+  gitIsBusy = false,
 }: StatusBarProps) {
   const wordCount = useEditorTelemetry((s) => s.wordCount);
   const cursorLine = useEditorTelemetry((s) => s.cursorLine);
@@ -160,7 +169,7 @@ export function StatusBar({
               type="button"
               aria-label={`Git branch: ${branchName}. Click to switch branch`}
               onClick={onBranchClick}
-              className="px-1 rounded hover:bg-[var(--cf-hover)] transition-colors flex items-center gap-1"
+              className={cn("px-1 rounded hover:bg-[var(--cf-hover)] transition-colors flex items-center gap-1", gitIsBusy && "opacity-50")}
             >
               <svg
                 width="12"
@@ -179,6 +188,8 @@ export function StatusBar({
                 <path d="M18 9a9 9 0 0 1-9 9" />
               </svg>
               <span className="max-w-[120px] truncate">{branchName}</span>
+              {gitAhead > 0 && <span>{"\u2191"}{gitAhead}</span>}
+              {gitBehind > 0 && <span>{"\u2193"}{gitBehind}</span>}
             </button>
           )}
           {branchName && <span className="opacity-50">·</span>}

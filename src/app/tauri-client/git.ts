@@ -1,12 +1,22 @@
 import { invokeWithPerf } from "../perf";
 
 export interface GitBranchInfo {
-  readonly branch: string;
-  readonly isDetached: boolean;
+  branch: string | null;
+  hasUpstream: boolean;
+  ahead: number;
+  behind: number;
 }
 
-export function getGitBranchCommand(): Promise<GitBranchInfo | null> {
-  return invokeWithPerf<GitBranchInfo | null>("get_git_branch");
+export function gitBranchInfoCommand(): Promise<GitBranchInfo> {
+  return invokeWithPerf<GitBranchInfo>("git_branch_info");
+}
+
+export function gitPullCommand(): Promise<string> {
+  return invokeWithPerf<string>("git_pull");
+}
+
+export function gitPushCommand(): Promise<string> {
+  return invokeWithPerf<string>("git_push");
 }
 
 export interface GitBranchEntry {
