@@ -32,17 +32,27 @@ export interface BibData {
   cslProcessor: CslProcessor;
 }
 
+interface BibDataState extends BibData {
+  readonly processorRevision: number;
+}
+
 /** StateEffect for updating bibliography data. */
 export const bibDataEffect = StateEffect.define<BibData>();
 
 /** StateField that holds the current bibliography data. */
-export const bibDataField = StateField.define<BibData>({
+export const bibDataField = StateField.define<BibDataState>({
   create() {
-    return { store: new Map(), cslProcessor: CslProcessor.empty() };
+    const cslProcessor = CslProcessor.empty();
+    return { store: new Map(), cslProcessor, processorRevision: cslProcessor.revision };
   },
   update(value, tr) {
     for (const effect of tr.effects) {
-      if (effect.is(bibDataEffect)) return effect.value;
+      if (effect.is(bibDataEffect)) {
+        return {
+          ...effect.value,
+          processorRevision: effect.value.cslProcessor.revision,
+        };
+      }
     }
     return value;
   },

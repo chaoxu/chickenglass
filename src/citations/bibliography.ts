@@ -9,12 +9,17 @@ import {
   Decoration,
   type DecorationSet,
 } from "@codemirror/view";
-import { type EditorState, type Extension } from "@codemirror/state";
+import { type EditorState, type Extension, type Transaction } from "@codemirror/state";
 import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors } from "./bibtex-parser";
 import { type BibStore, bibDataEffect, bibDataField, findCitations } from "./citation-render";
+import type { CslProcessor } from "./csl-processor";
 import { RenderWidget, buildDecorations, createDecorationsField, sanitizeCslHtml } from "../render/render-core";
 import { ensureCitationsRegistered } from "../render/reference-render";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import {
+  documentAnalysisField,
+  getDocumentAnalysisSliceRevision,
+} from "../semantics/codemirror-source";
+import type { DocumentAnalysis } from "../semantics/document";
 
 /**
  * Collect all citation ids referenced in the document text.
@@ -155,19 +160,22 @@ export function buildBibliographyDecorations(
   ]);
 }
 
-// Cache: skip citeproc when cited IDs haven't changed.
-let _prevCitedKey = "";
-let _prevCslHtml: string[] = [];
+interface BibliographyCacheEntry {
+  readonly citedKey: string;
+  readonly cslHtml: readonly string[];
+  readonly processorRevision: number;
+  readonly store: BibStore;
+}
 
-function buildBibliographyDecorationsFromState(state: EditorState): DecorationSet {
-  const { store, cslProcessor } = state.field(bibDataField);
-  if (store.size === 0) return Decoration.none;
+const bibliographyCache = new WeakMap<CslProcessor, BibliographyCacheEntry>();
 
-  // Use the incrementally-maintained document analysis instead of
-  // re-parsing the entire document from scratch (#514).
-  const analysis = state.field(documentAnalysisField);
+function collectCitedIdsFromAnalysis(
+  analysis: DocumentAnalysis,
+  store: BibStore,
+): string[] {
   const seen = new Set<string>();
   const citedIds: string[] = [];
+
   for (const ref of analysis.references) {
     for (const id of ref.ids) {
       if (!seen.has(id) && store.has(id)) {
@@ -176,20 +184,81 @@ function buildBibliographyDecorationsFromState(state: EditorState): DecorationSe
       }
     }
   }
+
+  return citedIds;
+}
+
+function getCitedIdsKey(citedIds: readonly string[]): string {
+  return citedIds.join("\0");
+}
+
+export function bibliographyDependenciesChanged(
+  beforeState: EditorState,
+  afterState: EditorState,
+): boolean {
+  const beforeBib = beforeState.field(bibDataField);
+  const afterBib = afterState.field(bibDataField);
+  if (
+    beforeBib.store !== afterBib.store ||
+    beforeBib.cslProcessor !== afterBib.cslProcessor ||
+    beforeBib.processorRevision !== afterBib.processorRevision
+  ) {
+    return true;
+  }
+
+  const beforeAnalysis = beforeState.field(documentAnalysisField);
+  const afterAnalysis = afterState.field(documentAnalysisField);
+  const referenceSliceUnchanged =
+    beforeAnalysis.references === afterAnalysis.references &&
+    beforeAnalysis.referenceByFrom === afterAnalysis.referenceByFrom &&
+    getDocumentAnalysisSliceRevision(beforeAnalysis, "references")
+      === getDocumentAnalysisSliceRevision(afterAnalysis, "references");
+
+  if (referenceSliceUnchanged) {
+    return false;
+  }
+
+  return getCitedIdsKey(collectCitedIdsFromAnalysis(beforeAnalysis, beforeBib.store))
+    !== getCitedIdsKey(collectCitedIdsFromAnalysis(afterAnalysis, afterBib.store));
+}
+
+function bibliographyShouldRebuild(tr: Transaction): boolean {
+  return (
+    tr.effects.some((effect) => effect.is(bibDataEffect)) ||
+    bibliographyDependenciesChanged(tr.startState, tr.state)
+  );
+}
+
+function buildBibliographyDecorationsFromState(state: EditorState): DecorationSet {
+  const { store, cslProcessor, processorRevision } = state.field(bibDataField);
+  if (store.size === 0) return Decoration.none;
+
+  // Use the incrementally-maintained document analysis instead of
+  // re-parsing the entire document from scratch (#514).
+  const analysis = state.field(documentAnalysisField);
+  const citedIds = collectCitedIdsFromAnalysis(analysis, store);
   if (citedIds.length === 0) return Decoration.none;
 
-  let cslHtml: string[] = [];
+  let cslHtml: readonly string[] = [];
   if (cslProcessor) {
-    // Only re-run citeproc when citation IDs or their order changed.
-    // citeproc is ~30ms per call — too expensive for every keystroke.
-    const citedKey = citedIds.join("\0") + "\0" + cslProcessor.revision;
-    if (citedKey !== _prevCitedKey) {
+    const citedKey = getCitedIdsKey(citedIds);
+    const cached = bibliographyCache.get(cslProcessor);
+    if (
+      !cached ||
+      cached.citedKey !== citedKey ||
+      cached.processorRevision !== processorRevision ||
+      cached.store !== store
+    ) {
       ensureCitationsRegistered(analysis, store, cslProcessor);
       cslHtml = cslProcessor.bibliography(citedIds);
-      _prevCitedKey = citedKey;
-      _prevCslHtml = cslHtml;
+      bibliographyCache.set(cslProcessor, {
+        citedKey,
+        cslHtml,
+        processorRevision,
+        store,
+      });
     } else {
-      cslHtml = _prevCslHtml;
+      cslHtml = cached.cslHtml;
     }
   }
 
@@ -205,10 +274,6 @@ function buildBibliographyDecorationsFromState(state: EditorState): DecorationSe
 /** CM6 extension that renders a bibliography section at the end of the document. */
 export const bibliographyPlugin: Extension = createDecorationsField(
   buildBibliographyDecorationsFromState,
-  (tr) =>
-    tr.docChanged ||
-    tr.effects.some((effect) => effect.is(bibDataEffect)) ||
-    // Rebuild when document analysis changes so citation registration
-    // can pick up new/moved references for correct bibliography output. (#466)
-    tr.state.field(documentAnalysisField) !== tr.startState.field(documentAnalysisField),
+  bibliographyShouldRebuild,
+  true,
 );

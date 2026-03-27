@@ -14,7 +14,11 @@ import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CslProcessor } from "../citations/csl-processor";
 import { CSS } from "../constants/css-classes";
 import { createTestView, makeBlockPlugin, makeBibStore } from "../test-utils";
-import { collectReferenceRanges, referenceRenderPlugin } from "./reference-render";
+import {
+  collectReferenceRanges,
+  referenceRenderDependenciesChanged,
+  referenceRenderPlugin,
+} from "./reference-render";
 
 const testPlugins: readonly BlockPlugin[] = [
   makeBlockPlugin({ name: "theorem", counter: "theorem", title: "Theorem" }),
@@ -496,6 +500,145 @@ describe("collectReferenceRanges", () => {
   });
 
   describe("performance invalidation", () => {
+    it("ignores unrelated semantic edits after all references", () => {
+      const doc = [
+        "::: {.theorem #thm-main}",
+        "Statement.",
+        ":::",
+        "",
+        "See [@thm-main] and [@karger2000].",
+        "",
+        "# Tail heading",
+      ].join("\n");
+
+      view = createPluginView(doc, 0);
+      const beforeState = view.state;
+
+      view.dispatch({
+        changes: {
+          from: doc.indexOf("Tail"),
+          to: doc.indexOf("Tail") + "Tail".length,
+          insert: "Late",
+        },
+      });
+
+      expect(referenceRenderDependenciesChanged(beforeState, view.state)).toBe(false);
+    });
+
+    it("tracks equation renumbering even when references stay in place", () => {
+      const doc = [
+        "See [@eq:beta].",
+        "",
+        "$$a^2$$ {#eq:alpha}",
+        "",
+        "$$b^2$$ {#eq:beta}",
+      ].join("\n");
+
+      view = createPluginView(doc, 0);
+      const beforeState = view.state;
+      const insert = "$$c^2$$ {#eq:middle}\n\n";
+      const beforeSecondEquation = doc.indexOf("$$b^2$$");
+
+      view.dispatch({
+        changes: {
+          from: beforeSecondEquation,
+          insert,
+        },
+      });
+
+      expect(referenceRenderDependenciesChanged(beforeState, view.state)).toBe(true);
+    });
+
+    it("tracks block renumbering even when references stay in place", () => {
+      const doc = [
+        "See [@thm-b].",
+        "",
+        "::: {.theorem #thm-a}",
+        "A.",
+        ":::",
+        "",
+        "::: {.theorem #thm-b}",
+        "B.",
+        ":::",
+      ].join("\n");
+
+      view = createPluginView(doc, 0);
+      const beforeState = view.state;
+      const insert = [
+        "::: {.theorem #thm-middle}",
+        "Middle.",
+        ":::",
+        "",
+      ].join("\n");
+      const beforeSecondBlock = doc.indexOf("::: {.theorem #thm-b}");
+
+      view.dispatch({
+        changes: {
+          from: beforeSecondBlock,
+          insert,
+        },
+      });
+
+      expect(referenceRenderDependenciesChanged(beforeState, view.state)).toBe(true);
+    });
+
+    it("tracks block label changes from same-length frontmatter title edits", () => {
+      const doc = [
+        "---",
+        "blocks:",
+        "  theorem:",
+        "    title: Result",
+        "---",
+        "",
+        "::: {.theorem #thm-main}",
+        "Statement.",
+        ":::",
+        "",
+        "See [@thm-main].",
+      ].join("\n");
+
+      view = createPluginView(doc, 0);
+      expect(view.dom.querySelector(`.${CSS.crossref}`)?.textContent).toBe("Result 1");
+
+      const beforeState = view.state;
+      const labelStart = doc.indexOf("Result");
+
+      view.dispatch({
+        changes: {
+          from: labelStart,
+          to: labelStart + "Result".length,
+          insert: "Remark",
+        },
+      });
+
+      expect(referenceRenderDependenciesChanged(beforeState, view.state)).toBe(true);
+      expect(view.dom.querySelector(`.${CSS.crossref}`)?.textContent).toBe("Remark 1");
+    });
+
+    it("ignores equation body edits that preserve crossref numbering", () => {
+      const doc = [
+        "See [@eq:alpha].",
+        "",
+        "$$a^2$$ {#eq:alpha}",
+        "",
+        "Tail paragraph.",
+      ].join("\n");
+
+      view = createPluginView(doc, 0);
+      const beforeState = view.state;
+      const equationBodyStart = doc.indexOf("a^2");
+
+      view.dispatch({
+        changes: {
+          from: equationBodyStart,
+          to: equationBodyStart + "a^2".length,
+          insert: "a^3",
+        },
+      });
+
+      expect(referenceRenderDependenciesChanged(beforeState, view.state)).toBe(false);
+    });
+
     it("does not re-register citations on navigation outside references", () => {
       const registerSpy = vi.spyOn(CslProcessor.prototype, "registerCitations");
       const doc = [
@@ -510,6 +653,29 @@ describe("collectReferenceRanges", () => {
       registerSpy.mockClear();
 
       view.dispatch({ selection: { anchor: doc.indexOf("More plain text") } });
+
+      expect(registerSpy).not.toHaveBeenCalled();
+      registerSpy.mockRestore();
+    });
+
+    it("does not re-register citations after unrelated semantic edits", () => {
+      const registerSpy = vi.spyOn(CslProcessor.prototype, "registerCitations");
+      const doc = [
+        "See [@karger2000].",
+        "",
+        "# Tail heading",
+      ].join("\n");
+
+      view = createPluginView(doc, 0);
+      registerSpy.mockClear();
+
+      view.dispatch({
+        changes: {
+          from: doc.indexOf("Tail"),
+          to: doc.indexOf("Tail") + "Tail".length,
+          insert: "Late",
+        },
+      });
 
       expect(registerSpy).not.toHaveBeenCalled();
       registerSpy.mockRestore();

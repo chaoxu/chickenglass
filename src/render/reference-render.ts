@@ -16,7 +16,7 @@ import {
   type EditorView,
   type ViewUpdate,
 } from "@codemirror/view";
-import { type EditorSelection, type Extension, type Range } from "@codemirror/state";
+import { type EditorSelection, type EditorState, type Extension, type Range } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
 import { resolveCrossref } from "../index/crossref-resolver";
 import {
@@ -28,16 +28,145 @@ import {
 import { type CslProcessor, registerCitationsWithProcessor } from "../citations/csl-processor";
 import { CrossrefWidget, ClusteredCrossrefWidget, MixedClusterWidget, UnresolvedRefWidget, type MixedClusterPart } from "./crossref-render";
 import { buildDecorations, cursorInRange, pushWidgetDecoration, createSimpleViewPlugin } from "./render-utils";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { blockCounterField, pluginRegistryField } from "../plugins";
+import {
+  documentAnalysisField,
+  getDocumentAnalysisSliceRevision,
+} from "../semantics/codemirror-source";
 import type { DocumentAnalysis, ReferenceSemantics } from "../semantics/document";
 
 interface ReferenceRegistrationCacheEntry {
-  readonly analysis: DocumentAnalysis;
+  readonly registrationKey: string;
   readonly store: BibStore;
   readonly processorRevision: number;
 }
 
 const referenceRegistrationCache = new WeakMap<CslProcessor, ReferenceRegistrationCacheEntry>();
+
+interface CitationRegistrationMatch {
+  readonly ids: readonly string[];
+  readonly locators: readonly (string | undefined)[];
+}
+
+function serializeKeyPart(value: string | undefined): string {
+  return value ?? "";
+}
+
+function getCitationRegistrationMatches(
+  references: readonly ReferenceSemantics[],
+  store: BibStore,
+): CitationRegistrationMatch[] {
+  return references
+    .filter((ref) => ref.ids.some((id) => store.has(id)))
+    .map((ref) => {
+      const ids: string[] = [];
+      const locators: Array<string | undefined> = [];
+      ref.ids.forEach((id, index) => {
+        if (!store.has(id)) return;
+        ids.push(id);
+        locators.push(ref.locators[index]);
+      });
+      return { ids, locators };
+    });
+}
+
+function getCitationRegistrationKey(
+  matches: readonly CitationRegistrationMatch[],
+): string {
+  return matches
+    .map((match) => match.ids.map((id, index) =>
+      `${id}\0${serializeKeyPart(match.locators[index])}`).join("\u0001"))
+    .join("\u0002");
+}
+
+function getEquationNumberingKey(analysis: DocumentAnalysis): string {
+  return analysis.equations
+    .map((equation) => `${equation.id}\0${equation.number}`)
+    .join("\u0001");
+}
+
+function getBlockNumberingKey(state: EditorState): string {
+  const counters = state.field(blockCounterField, false);
+  if (!counters) return "";
+
+  return counters.blocks
+    .map((block) => `${block.type}\0${serializeKeyPart(block.id)}\0${block.number}`)
+    .join("\u0001");
+}
+
+function referenceSliceChanged(
+  before: DocumentAnalysis,
+  after: DocumentAnalysis,
+): boolean {
+  return (
+    before.references !== after.references ||
+    before.referenceByFrom !== after.referenceByFrom ||
+    getDocumentAnalysisSliceRevision(before, "references")
+      !== getDocumentAnalysisSliceRevision(after, "references")
+  );
+}
+
+function crossrefNumberingChanged(
+  beforeState: EditorState,
+  afterState: EditorState,
+): boolean {
+  const beforeAnalysis = beforeState.field(documentAnalysisField);
+  const afterAnalysis = afterState.field(documentAnalysisField);
+
+  const equationSliceChanged =
+    beforeAnalysis.equations !== afterAnalysis.equations ||
+    beforeAnalysis.equationById !== afterAnalysis.equationById ||
+    getDocumentAnalysisSliceRevision(beforeAnalysis, "equations")
+      !== getDocumentAnalysisSliceRevision(afterAnalysis, "equations");
+  if (equationSliceChanged && getEquationNumberingKey(beforeAnalysis) !== getEquationNumberingKey(afterAnalysis)) {
+    return true;
+  }
+
+  const blockSliceChanged =
+    beforeAnalysis.fencedDivs !== afterAnalysis.fencedDivs ||
+    getDocumentAnalysisSliceRevision(beforeAnalysis, "fencedDivs")
+      !== getDocumentAnalysisSliceRevision(afterAnalysis, "fencedDivs");
+  return blockSliceChanged && getBlockNumberingKey(beforeState) !== getBlockNumberingKey(afterState);
+}
+
+function bibliographyInputsChanged(
+  beforeState: EditorState,
+  afterState: EditorState,
+): boolean {
+  const beforeBib = beforeState.field(bibDataField);
+  const afterBib = afterState.field(bibDataField);
+
+  return (
+    beforeBib.store !== afterBib.store ||
+    beforeBib.cslProcessor !== afterBib.cslProcessor ||
+    beforeBib.processorRevision !== afterBib.processorRevision
+  );
+}
+
+function blockLabelConfigChanged(
+  beforeState: EditorState,
+  afterState: EditorState,
+): boolean {
+  return (
+    beforeState.field(pluginRegistryField, false)
+      !== afterState.field(pluginRegistryField, false)
+  );
+}
+
+export function referenceRenderDependenciesChanged(
+  beforeState: EditorState,
+  afterState: EditorState,
+): boolean {
+  const beforeAnalysis = beforeState.field(documentAnalysisField);
+  const afterAnalysis = afterState.field(documentAnalysisField);
+
+  return (
+    bibliographyInputsChanged(beforeState, afterState) ||
+    blockLabelConfigChanged(beforeState, afterState) ||
+    referenceSliceChanged(beforeAnalysis, afterAnalysis) ||
+    crossrefNumberingChanged(beforeState, afterState)
+  );
+}
 
 function findActiveReference(
   references: readonly ReferenceSemantics[],
@@ -76,28 +205,21 @@ export function ensureCitationsRegistered(
   store: BibStore,
   processor: CslProcessor,
 ): void {
+  const matches = getCitationRegistrationMatches(analysis.references, store);
+  const registrationKey = getCitationRegistrationKey(matches);
   const cached = referenceRegistrationCache.get(processor);
   if (
-    cached?.analysis === analysis &&
+    cached?.registrationKey === registrationKey &&
     cached.store === store &&
     cached.processorRevision === processor.revision
   ) {
     return;
   }
 
-  registerCitationsWithProcessor(
-    analysis.references
-      .filter((ref) => ref.ids.some((id) => store.has(id)))
-      .map((ref) => {
-        const bibIds = ref.ids.filter((id) => store.has(id));
-        const bibLocators = ref.locators.filter((_, i) => store.has(ref.ids[i]));
-        return { ids: bibIds, locators: bibLocators };
-      }),
-    processor,
-  );
+  registerCitationsWithProcessor(matches, processor);
 
   referenceRegistrationCache.set(processor, {
-    analysis,
+    registrationKey,
     store,
     processorRevision: processor.revision,
   });
@@ -211,11 +333,10 @@ function buildReferenceDecorations(view: EditorView): DecorationSet {
 /** Custom update predicate: standard conditions + bibDataEffect. */
 function referenceShouldUpdate(update: ViewUpdate): boolean {
   if (
-    update.docChanged ||
     update.transactions.some((tr) =>
       tr.effects.some((e) => e.is(bibDataEffect)),
     ) ||
-    update.state.field(documentAnalysisField) !== update.startState.field(documentAnalysisField)
+    referenceRenderDependenciesChanged(update.startState, update.state)
   ) {
     return true;
   }
