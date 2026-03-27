@@ -29,6 +29,8 @@ export interface FileWatcherConfig {
   isFileDirty: IsFileDirtyFn;
   /** Reload a file from disk into the editor. */
   reloadFile: ReloadFileFn;
+  /** Invalidate any caches tied to a changed project-relative path. */
+  onExternalChange?: (path: string) => void;
   /** Container element for the notification bar. */
   container: HTMLElement;
 }
@@ -127,6 +129,8 @@ export class FileWatcher {
 
   /** Handle a file-changed event from the backend. */
   private handleFileChanged(relativePath: string): void {
+    this.config.onExternalChange?.(relativePath);
+
     if (!this.config.isFileOpen(relativePath)) {
       return;
     }

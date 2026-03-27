@@ -20,6 +20,7 @@ const watcherMockState = vi.hoisted(() => {
     instances: [] as Array<{
       watch: ReturnType<typeof vi.fn>;
       unwatch: ReturnType<typeof vi.fn>;
+      onExternalChange?: (path: string) => void;
     }>,
     pendingWatch: false,
     deferred: createDeferred(),
@@ -41,10 +42,11 @@ vi.mock("../file-watcher", () => ({
 
     unwatch = vi.fn(async () => {});
 
-    constructor() {
+    constructor(config: { onExternalChange?: (path: string) => void }) {
       watcherMockState.instances.push({
         watch: this.watch,
         unwatch: this.unwatch,
+        onExternalChange: config.onExternalChange,
       });
     }
   },
@@ -58,13 +60,14 @@ const { useProjectFileWatcher } = await import("./use-project-file-watcher");
 
 interface HarnessProps {
   projectRoot: string | null;
+  onExternalChange?: (path: string) => void;
 }
 
 const isPathOpen = () => true;
 const isPathDirty = () => false;
 const reloadFile = async () => {};
 
-const Harness: FC<HarnessProps> = ({ projectRoot }) => {
+const Harness: FC<HarnessProps> = ({ projectRoot, onExternalChange }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   useProjectFileWatcher({
     projectRoot,
@@ -72,6 +75,7 @@ const Harness: FC<HarnessProps> = ({ projectRoot }) => {
     isPathOpen,
     isPathDirty,
     reloadFile,
+    onExternalChange,
   });
   return createElement("div", { ref: containerRef });
 };
@@ -164,5 +168,19 @@ describe("useProjectFileWatcher", () => {
     expect(firstInstance.unwatch).toHaveBeenCalledTimes(1);
     expect(watcherMockState.instances).toHaveLength(2);
     expect(watcherMockState.instances[1].watch).toHaveBeenCalledWith("/tmp/project-b");
+  });
+
+  it("passes onExternalChange through to the file watcher", async () => {
+    const onExternalChange = vi.fn();
+
+    await act(async () => {
+      root.render(createElement(Harness, {
+        projectRoot: "/tmp/project-a",
+        onExternalChange,
+      }));
+    });
+
+    expect(watcherMockState.instances).toHaveLength(1);
+    expect(watcherMockState.instances[0].onExternalChange).toBe(onExternalChange);
   });
 });

@@ -397,6 +397,13 @@ chapters/background.md
 2. @cormen2009 — Chapter 26 on maximum flow
 3. [@knuth1997] — Volume 1, fundamental algorithms
 `,
+    "posts/math.md": `# Relative Image Example
+
+This nested document keeps its image path relative to its own directory:
+
+![Nested diagram](diagram.png)
+`,
+    "posts/diagram.png": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGAAAAAEAAGjCh0AAAAASUVORK5CYII=",
     "chapters/introduction.md": `# Introduction
 
 This document demonstrates the features of Coflat, a semantic editor for mathematical writing. The editor provides:

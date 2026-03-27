@@ -9,6 +9,7 @@ import {
   type ImageSaveContext,
 } from "../../editor";
 import { fileSystemFacet, documentPathFacet } from "../../lib/types";
+import { resetImageUrlState } from "../../render/image-url-cache";
 import {
   extractIncludePaths,
   resolveIncludePath,
@@ -96,7 +97,7 @@ interface UseEditorDocumentServicesOptions {
 
 export interface UseEditorDocumentServicesReturn {
   imageSaverRef: React.RefObject<((file: File) => Promise<string>) | null>;
-  resetServices: () => void;
+  resetServices: (view?: EditorView | null) => void;
   createDocumentContextExtensions: () => Extension[];
   handleFrontmatterChange: (
     frontmatter: FrontmatterState | undefined,
@@ -129,9 +130,10 @@ export function useEditorDocumentServices({
     return includeExpansionGenerationRef.current;
   }, []);
 
-  const resetServices = useCallback(() => {
+  const resetServices = useCallback((view?: EditorView | null) => {
     bibliography.resetTracking();
     imageSaverRef.current = null;
+    resetImageUrlState(view ?? null);
     publishSourceMap(null);
     includeExpansionGenerationRef.current += 1;
   }, [bibliography, publishSourceMap]);

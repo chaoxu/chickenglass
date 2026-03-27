@@ -1,8 +1,112 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { EditorState } from "@codemirror/state";
+import { markdown } from "@codemirror/lang-markdown";
+import { EditorView } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
-import { ImageWidget, PdfLoadingWidget } from "./image-render";
+import { documentPathFacet, fileSystemFacet, type FileSystem } from "../lib/types";
+import { createTestView } from "../test-utils";
+import { pdfPreviewField } from "./pdf-preview-cache";
+import {
+  imageUrlField,
+  getImageUrl,
+  clearImageUrl,
+  resetImageUrlState,
+  invalidateImagePath,
+  requestImageUrl,
+  _resetImageUrlCache,
+} from "./image-url-cache";
+import { ImageWidget, PdfLoadingWidget, imageRenderPlugin } from "./image-render";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
+
+function createMockFs(): FileSystem {
+  return {
+    listTree: vi.fn(),
+    readFile: vi.fn(),
+    writeFile: vi.fn(),
+    createFile: vi.fn(),
+    exists: vi.fn(),
+    renameFile: vi.fn(),
+    createDirectory: vi.fn(),
+    deleteFile: vi.fn(),
+    writeFileBinary: vi.fn(),
+    readFileBinary: vi.fn().mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47])),
+  };
+}
+
+function createMockView() {
+  let state = EditorState.create({
+    doc: "",
+    extensions: [imageUrlField],
+  });
+
+  const view = {
+    get state() {
+      return state;
+    },
+    dispatch(tr: { effects?: unknown }) {
+      state = state.update(tr as Parameters<EditorState["update"]>[0]).state;
+    },
+    dom: { isConnected: true },
+  };
+
+  return view as unknown as import("@codemirror/view").EditorView;
+}
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
+}
+
+function setVisibleRange(view: EditorView): void {
+  Object.defineProperty(view, "visibleRanges", {
+    configurable: true,
+    value: [{ from: 0, to: view.state.doc.length }],
+  });
+}
+
+const createObjectUrlMock = vi.fn();
+const revokeObjectUrlMock = vi.fn();
+const originalCreateObjectUrl = URL.createObjectURL;
+const originalRevokeObjectUrl = URL.revokeObjectURL;
+
+beforeEach(() => {
+  createObjectUrlMock.mockReset();
+  createObjectUrlMock.mockReturnValue("blob:coflat-image");
+  revokeObjectUrlMock.mockReset();
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    writable: true,
+    value: createObjectUrlMock,
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    writable: true,
+    value: revokeObjectUrlMock,
+  });
+});
+
+afterEach(() => {
+  _resetImageUrlCache();
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    writable: true,
+    value: originalCreateObjectUrl,
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    writable: true,
+    value: originalRevokeObjectUrl,
+  });
+});
 
 describe("ImageWidget", () => {
   describe("createDOM", () => {
@@ -231,6 +335,88 @@ describe("Non-PDF image path resolution (#471)", () => {
   });
 });
 
+describe("image URL cache invalidation", () => {
+  it("removes the current path from editor state when invalidated", async () => {
+    const fs = createMockFs();
+    const view = createMockView();
+
+    await requestImageUrl(view, "posts/diagram.png", fs);
+
+    expect(getImageUrl("posts/diagram.png")).toBe("blob:coflat-image");
+    expect(view.state.field(imageUrlField).get("posts/diagram.png")?.status).toBe("ready");
+
+    invalidateImagePath(view, "posts/diagram.png");
+
+    expect(getImageUrl("posts/diagram.png")).toBeUndefined();
+    expect(view.state.field(imageUrlField).has("posts/diagram.png")).toBe(false);
+    expect(revokeObjectUrlMock).toHaveBeenCalledWith("blob:coflat-image");
+  });
+
+  it("clears pending requests when the cache resets", async () => {
+    const firstRead = createDeferred<Uint8Array>();
+    const secondRead = createDeferred<Uint8Array>();
+    const fs = createMockFs();
+    fs.readFileBinary = vi.fn()
+      .mockImplementationOnce(() => firstRead.promise)
+      .mockImplementationOnce(() => secondRead.promise);
+    const firstView = createMockView();
+    const secondView = createMockView();
+
+    const firstRequest = requestImageUrl(firstView, "posts/diagram.png", fs);
+    await vi.waitFor(() => {
+      expect(fs.readFileBinary).toHaveBeenCalledTimes(1);
+    });
+
+    resetImageUrlState(firstView);
+    expect(firstView.state.field(imageUrlField).has("posts/diagram.png")).toBe(false);
+
+    const secondRequest = requestImageUrl(secondView, "posts/diagram.png", fs);
+    await vi.waitFor(() => {
+      expect(fs.readFileBinary).toHaveBeenCalledTimes(2);
+    });
+
+    firstRead.resolve(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    secondRead.resolve(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    await firstRequest;
+    await secondRequest;
+  });
+
+  it("drops stale in-flight requests after invalidation", async () => {
+    const staleRead = createDeferred<Uint8Array>();
+    const freshRead = createDeferred<Uint8Array>();
+    const fs = createMockFs();
+    fs.readFileBinary = vi.fn()
+      .mockImplementationOnce(() => staleRead.promise)
+      .mockImplementationOnce(() => freshRead.promise);
+    createObjectUrlMock
+      .mockReset()
+      .mockReturnValueOnce("blob:fresh-image")
+      .mockReturnValueOnce("blob:stale-image");
+    const view = createMockView();
+
+    const staleRequest = requestImageUrl(view, "posts/diagram.png", fs);
+    await vi.waitFor(() => {
+      expect(fs.readFileBinary).toHaveBeenCalledTimes(1);
+    });
+
+    invalidateImagePath(view, "posts/diagram.png");
+    const freshRequest = requestImageUrl(view, "posts/diagram.png", fs);
+    await vi.waitFor(() => {
+      expect(fs.readFileBinary).toHaveBeenCalledTimes(2);
+    });
+
+    freshRead.resolve(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    await freshRequest;
+    expect(getImageUrl("posts/diagram.png")).toBe("blob:fresh-image");
+
+    staleRead.resolve(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    await staleRequest;
+
+    expect(getImageUrl("posts/diagram.png")).toBe("blob:fresh-image");
+    expect(revokeObjectUrlMock).toHaveBeenCalledWith("blob:stale-image");
+  });
+});
+
 /**
  * Tests for the document-relative PDF path resolution used in image-render.ts.
  *
@@ -289,5 +475,63 @@ describe("PDF path resolution for cache keys", () => {
     // `![](./figures/../figures/plot.pdf)` in `posts/math.md`
     const resolved = resolveProjectPathFromDocument("posts/math.md", "./figures/../figures/plot.pdf");
     expect(resolved).toBe("posts/figures/plot.pdf");
+  });
+});
+
+describe("requestImageUrl (#471)", () => {
+  it("loads relative non-PDF images into the cache using the resolved document path", async () => {
+    const fs = createMockFs();
+    const view = createMockView();
+    const resolvedPath = resolveProjectPathFromDocument("posts/math.md", "diagram.png");
+
+    await requestImageUrl(view, resolvedPath, fs);
+
+    expect((fs.readFileBinary as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith("posts/diagram.png");
+    expect(view.state.field(imageUrlField).get("posts/diagram.png")?.status).toBe("ready");
+    expect(getImageUrl("posts/diagram.png")).toBe("blob:coflat-image");
+    expect(createObjectUrlMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("can invalidate a cached image path so it will be re-read later", async () => {
+    const fs = createMockFs();
+    const view = createMockView();
+
+    await requestImageUrl(view, "posts/diagram.png", fs);
+    expect(getImageUrl("posts/diagram.png")).toBe("blob:coflat-image");
+
+    clearImageUrl("posts/diagram.png");
+
+    expect(getImageUrl("posts/diagram.png")).toBeUndefined();
+    expect(revokeObjectUrlMock).toHaveBeenCalledWith("blob:coflat-image");
+  });
+});
+
+describe("imageRenderPlugin (#471)", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+  });
+
+  it("resolves document-relative image paths and preserves src suffixes", async () => {
+    const fs = createMockFs();
+    view = createTestView("Intro\n\n![Diagram](diagram.png#fragment)\n", {
+      cursorPos: 0,
+      extensions: [
+        markdown(),
+        pdfPreviewField,
+        imageUrlField,
+        imageRenderPlugin,
+        fileSystemFacet.of(fs),
+        documentPathFacet.of("posts/math.md"),
+      ],
+    });
+    setVisibleRange(view);
+    view.dispatch({ selection: { anchor: 1 } });
+
+    await vi.waitFor(() => {
+      expect((fs.readFileBinary as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith("posts/diagram.png");
+      expect(view?.state.field(imageUrlField).get("posts/diagram.png")?.status).toBe("ready");
+    });
   });
 });

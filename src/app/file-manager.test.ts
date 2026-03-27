@@ -114,6 +114,8 @@ describe("createDemoFileSystem", () => {
     expect(await fs.exists("main.md")).toBe(true);
     expect(await fs.exists("notes.md")).toBe(true);
     expect(await fs.exists("chapters/introduction.md")).toBe(true);
+    expect(await fs.exists("posts/math.md")).toBe(true);
+    expect(await fs.exists("posts/diagram.png")).toBe(true);
   });
 });
 

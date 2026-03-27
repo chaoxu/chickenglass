@@ -135,6 +135,7 @@ function AppInner() {
     isPathOpen: editor.isPathOpen,
     isPathDirty: editor.isPathDirty,
     reloadFile: editor.reloadFile,
+    onExternalChange: editor.invalidateImagePath,
   });
 
   const overlays = useAppOverlays({

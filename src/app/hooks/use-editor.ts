@@ -255,7 +255,7 @@ export function useEditor(
         wordCountTimerRef.current = null;
       }
       telemetry.reset();
-      resetServicesRef.current();
+      resetServicesRef.current(newView);
       debugBridge.clearDebugView(newView);
       newView.destroy();
       setView(null);
@@ -280,7 +280,7 @@ export function useEditor(
       return;
     }
 
-    resetServicesRef.current();
+    resetServicesRef.current(view);
 
     if (docChangedExternally) {
       view.dispatch({

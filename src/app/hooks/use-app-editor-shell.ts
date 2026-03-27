@@ -18,6 +18,7 @@ import type { FileSystem } from "../file-manager";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import type { Settings } from "../lib/types";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
+import { invalidateImagePath as invalidateRenderedImagePath } from "../../render/image-url-cache";
 
 /** Dependencies injected into the shell hook from the top-level app component. */
 export interface AppEditorShellDeps {
@@ -139,6 +140,8 @@ export interface AppEditorShellController {
    * or updated. Updates `editorState`, `latestViewRef`, and `headings`.
    */
   handleEditorStateChange: (state: UseEditorReturn) => void;
+  /** Invalidate a rendered image asset after an external file change. */
+  invalidateImagePath: (path: string) => void;
 
   // --- Navigation ---
 
@@ -271,6 +274,10 @@ export function useAppEditorShell({
     } else {
       setHeadings([]);
     }
+  }, []);
+
+  const invalidateImagePath = useCallback((path: string) => {
+    invalidateRenderedImagePath(latestViewRef.current, path);
   }, []);
 
   useEffect(() => {
@@ -434,6 +441,7 @@ export function useAppEditorShell({
     editorState,
     headings,
     handleEditorStateChange,
+    invalidateImagePath,
     handleOutlineSelect,
     handleGotoLine,
     handleSearchResult,

@@ -14,9 +14,10 @@ import {
   createSimpleViewPlugin,
 } from "./render-utils";
 import { pdfPreviewField, requestPdfPreview, getPdfCanvas } from "./pdf-preview-cache";
+import { imageUrlField, requestImageUrl, getImageUrl } from "./image-url-cache";
 import { fileSystemFacet, documentPathFacet } from "../lib/types";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
-import { isPdfTarget } from "../lib/pdf-target";
+import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
 import { CSS } from "../constants/css-classes";
 
 // ── Widgets ───────────────────────────────────────────────────────────────────
@@ -109,6 +110,42 @@ export class PdfLoadingWidget extends RenderWidget {
   }
 }
 
+/** Widget that shows a loading placeholder while an image is loading. */
+class ImageLoadingWidget extends RenderWidget {
+  constructor(private readonly alt: string) {
+    super();
+  }
+
+  createDOM(): HTMLElement {
+    const wrapper = document.createElement("span");
+    wrapper.className = `${CSS.imageWrapper} ${CSS.imageLoading}`;
+    wrapper.textContent = `[Loading image: ${this.alt || "preview"}]`;
+    return wrapper;
+  }
+
+  eq(other: ImageLoadingWidget): boolean {
+    return this.alt === other.alt;
+  }
+}
+
+/** Widget that shows the existing broken-image fallback text directly. */
+class ImageErrorWidget extends RenderWidget {
+  constructor(private readonly alt: string) {
+    super();
+  }
+
+  createDOM(): HTMLElement {
+    const wrapper = document.createElement("span");
+    wrapper.className = CSS.imageError;
+    wrapper.textContent = `[Image: ${this.alt}]`;
+    return wrapper;
+  }
+
+  eq(other: ImageErrorWidget): boolean {
+    return this.alt === other.alt;
+  }
+}
+
 // ── Syntax helpers ────────────────────────────────────────────────────────────
 
 /** Read alt/src from an Image syntax node. */
@@ -128,6 +165,20 @@ function readImageContent(
     : "";
 
   return { alt, src };
+}
+
+function splitImageTarget(src: string): { path: string; suffix: string } {
+  const queryIndex = src.indexOf("?");
+  const hashIndex = src.indexOf("#");
+  const cut = queryIndex >= 0 && hashIndex >= 0
+    ? Math.min(queryIndex, hashIndex)
+    : Math.max(queryIndex, hashIndex);
+
+  if (cut < 0) return { path: src, suffix: "" };
+  return {
+    path: src.slice(0, cut),
+    suffix: src.slice(cut),
+  };
 }
 
 // ── Decoration builder ────────────────────────────────────────────────────────
@@ -181,8 +232,40 @@ function collectImageRanges(view: EditorView) {
           }
         }
       }
+    } else if (isRelativeFilePath(parsed.src)) {
+      const target = splitImageTarget(parsed.src);
+      if (!target.path) {
+        pushWidgetDecoration(items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to);
+        return;
+      }
+
+      const docPath = view.state.facet(documentPathFacet);
+      const resolvedPath = resolveProjectPathFromDocument(docPath, target.path);
+      const cache = view.state.field(imageUrlField);
+      const entry = cache.get(resolvedPath);
+      const baseImageUrl = entry?.status === "ready" ? getImageUrl(resolvedPath) : undefined;
+      const imageUrl = baseImageUrl ? `${baseImageUrl}${target.suffix}` : undefined;
+
+      if (imageUrl) {
+        pushWidgetDecoration(items, new ImageWidget(parsed.alt, imageUrl), node.from, node.to);
+      } else if (entry?.status === "error") {
+        pushWidgetDecoration(items, new ImageErrorWidget(parsed.alt), node.from, node.to);
+
+        const fs = view.state.facet(fileSystemFacet);
+        if (fs) {
+          void requestImageUrl(view, resolvedPath, fs);
+        }
+      } else {
+        pushWidgetDecoration(items, new ImageLoadingWidget(parsed.alt), node.from, node.to);
+
+        if (!entry || entry.status !== "loading") {
+          const fs = view.state.facet(fileSystemFacet);
+          if (fs) {
+            void requestImageUrl(view, resolvedPath, fs);
+          }
+        }
+      }
     } else {
-      // Normal image — unchanged
       pushWidgetDecoration(items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to);
     }
   });
@@ -200,10 +283,13 @@ function imageDecorations(view: EditorView): DecorationSet {
 function imageShouldUpdate(update: ViewUpdate): boolean {
   if (cursorSensitiveShouldUpdate(update)) return true;
 
-  // Re-render when the PDF preview cache has been updated
   const oldCache = update.startState.field(pdfPreviewField);
   const newCache = update.state.field(pdfPreviewField);
-  return oldCache !== newCache;
+  if (oldCache !== newCache) return true;
+
+  const oldImageCache = update.startState.field(imageUrlField);
+  const newImageCache = update.state.field(imageUrlField);
+  return oldImageCache !== newImageCache;
 }
 
 /** CM6 extension that renders inline images with Typora-style click-to-edit. */

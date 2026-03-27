@@ -44,13 +44,25 @@ vi.mock("./tauri-client/watch", () => ({
 import { FileWatcher } from "./file-watcher";
 
 function createWatcher(
-  reloadFile: ((path: string) => Promise<void>) = vi.fn(async (_path: string) => {}),
+  options: {
+    isFileOpen?: (path: string) => boolean;
+    isFileDirty?: (path: string) => boolean;
+    reloadFile?: (path: string) => Promise<void>;
+    onExternalChange?: (path: string) => void;
+  } = {},
 ) {
   const container = document.createElement("div");
+  const {
+    isFileOpen = () => true,
+    isFileDirty = () => true,
+    reloadFile = vi.fn(async (_path: string) => {}),
+    onExternalChange,
+  } = options;
   const watcher = new FileWatcher({
-    isFileOpen: () => true,
-    isFileDirty: () => true,
+    isFileOpen,
+    isFileDirty,
     reloadFile,
+    onExternalChange,
     container,
   });
 
@@ -163,7 +175,7 @@ describe("FileWatcher", () => {
 
   it("reloads the current file and advances to the next pending notification", async () => {
     const reloadFile = vi.fn(async () => {});
-    const { container, watcher } = createWatcher(reloadFile);
+    const { container, watcher } = createWatcher({ reloadFile });
     const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => void })
       .handleFileChanged
       .bind(watcher as unknown as { handleFileChanged: (path: string) => void });
@@ -186,7 +198,7 @@ describe("FileWatcher", () => {
     const reloadFile = vi.fn<(_: string) => Promise<void>>(() => {
       throw new Error("boom");
     });
-    const { container, watcher } = createWatcher(reloadFile);
+    const { container, watcher } = createWatcher({ reloadFile });
     const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => void })
       .handleFileChanged
       .bind(watcher as unknown as { handleFileChanged: (path: string) => void });
@@ -206,5 +218,21 @@ describe("FileWatcher", () => {
     );
     expect(container.textContent).toContain("\"b.md\" changed externally. Reload?");
     consoleError.mockRestore();
+  });
+
+  it("invalidates cached assets even when the changed path is not an open document", () => {
+    const onExternalChange = vi.fn();
+    const { container, watcher } = createWatcher({
+      isFileOpen: () => false,
+      onExternalChange,
+    });
+    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => void })
+      .handleFileChanged
+      .bind(watcher as unknown as { handleFileChanged: (path: string) => void });
+
+    handleFileChanged("assets/diagram.png");
+
+    expect(onExternalChange).toHaveBeenCalledWith("assets/diagram.png");
+    expect(container.textContent).toBe("");
   });
 });
