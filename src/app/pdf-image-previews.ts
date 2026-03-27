@@ -33,11 +33,10 @@ function collectImageTargets(content: string): string[] {
 /**
  * Resolve local file-backed image targets in a document.
  *
- * Historical name retained to keep the read-mode/export call sites stable.
  * Returns a map keyed by the resolved project-relative image path so callers
  * can feed browser-safe data URLs back into the HTML renderer.
  */
-export async function resolvePdfImageOverrides(
+export async function resolveLocalImageOverrides(
   content: string,
   fs: FileSystem | undefined,
   docPath = "",

@@ -22,7 +22,7 @@ import {
 import { getHyphenator, applyHyphensToContainer } from "../hyphenation";
 import { measureAsync, measureSync } from "../perf";
 import { renderDocumentFragmentToHtml } from "../../document-surfaces";
-import { resolvePdfImageOverrides } from "../pdf-image-previews";
+import { resolveLocalImageOverrides } from "../pdf-image-previews";
 import type { FileSystem } from "../file-manager";
 
 /** Debounce delay (ms) for re-applying line breaking on resize. */
@@ -157,7 +157,7 @@ export function ReadModeView({
     };
 
     void measureAsync("read_mode.pdf_previews", async () => {
-      const imageUrlOverrides = await resolvePdfImageOverrides(content, fs, resolvedDocPath);
+      const imageUrlOverrides = await resolveLocalImageOverrides(content, fs, resolvedDocPath);
       if (cancelled || imageUrlOverrides.size === 0) return;
       setHtmlContent(
         buildReadModeHtml(
