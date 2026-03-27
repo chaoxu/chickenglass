@@ -26,6 +26,7 @@ import {
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { bibliographyPlugin, bibDataField } from "../citations";
 import { pdfPreviewField } from "../render/pdf-preview-cache";
+import { imageUrlField } from "../render/image-url-cache";
 import { type ProjectConfig } from "./project-config";
 import { tableGridExtension } from "../render/table-grid";
 import { editorKeybindings } from "./keybindings";
@@ -194,6 +195,7 @@ export function createEditor(config: EditorConfig): EditorView {
 
       // PDF preview cache (must come before image render plugin reads it)
       pdfPreviewField,
+      imageUrlField,
 
       // Rendering plugins (wrapped in compartment for mode switching)
       renderCompartment.of(renderingExtensions),

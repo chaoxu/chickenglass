@@ -240,6 +240,10 @@ chapters/introduction.md
 
 The Euler identity $e^{i\\pi} + 1 = 0$ unites five fundamental constants. Custom macros work too: $\\R$, $\\N$, $\\Z$.
 
+# Images
+
+![Tiny demo image](chapters/diagram.png)
+
 Display math with equation labels:
 
 $$
@@ -383,6 +387,13 @@ chapters/background.md
   volume = {1}
 }
 `,
+    "posts/math.md": `# Relative Image Fixture
+
+This file exercises document-relative image resolution from a nested path.
+
+![Tiny nested image](diagram.png)
+`,
+    "posts/diagram.png": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0ioAAAAASUVORK5CYII=",
     "notes.md": `# Research Notes
 
 ## Open Problems
@@ -408,6 +419,7 @@ This document demonstrates the features of Coflat, a semantic editor for mathema
 - **CSL citations**: formatted bibliography from BibTeX files
 - **File includes**: compose documents from multiple files seamlessly
 `,
+    "chapters/diagram.png": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0ioAAAAASUVORK5CYII=",
     "chapters/background.md": `# Background
 
 ## Compactness

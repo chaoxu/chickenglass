@@ -9,7 +9,7 @@ vi.mock("../render/pdf-rasterizer", () => ({
   rasterizePdfPage1: rasterizeMock,
 }));
 
-import { resolvePdfImageOverrides } from "./pdf-image-previews";
+import { resolveLocalImageOverrides } from "./pdf-image-previews";
 
 function createMockFs(): FileSystem {
   return {
@@ -26,7 +26,7 @@ function createMockFs(): FileSystem {
   };
 }
 
-describe("resolvePdfImageOverrides", () => {
+describe("resolveLocalImageOverrides", () => {
   beforeEach(() => {
     rasterizeMock.mockReset();
   });
@@ -39,7 +39,7 @@ describe("resolvePdfImageOverrides", () => {
 
     const content = "# Title\n\n![fig](diagram.pdf)\n";
     const fs = createMockFs();
-    await resolvePdfImageOverrides(content, fs, "posts/math.md");
+    await resolveLocalImageOverrides(content, fs, "posts/math.md");
 
     // In jsdom, canvas.toDataURL is not implemented — the override gets
     // filtered out. Just verify the pipeline ran correctly.
@@ -55,16 +55,28 @@ describe("resolvePdfImageOverrides", () => {
 
     const content = "![a](fig.pdf)\n\n![b](fig.pdf)\n";
     const fs = createMockFs();
-    await resolvePdfImageOverrides(content, fs, "doc.md");
+    await resolveLocalImageOverrides(content, fs, "doc.md");
 
     // Only one rasterization call despite two references (dedup by resolved path)
     expect(rasterizeMock).toHaveBeenCalledTimes(1);
   });
 
-  it("returns empty map when no PDF targets exist", async () => {
+  it("loads non-PDF images as browser-safe data URLs", async () => {
     const content = "![img](photo.png)\n";
     const fs = createMockFs();
-    const result = await resolvePdfImageOverrides(content, fs, "doc.md");
-    expect(result.size).toBe(0);
+    const result = await resolveLocalImageOverrides(content, fs, "doc.md");
+    expect(result.get("photo.png")).toBe("data:image/png;base64,JVBERg==");
+    expect(rasterizeMock).not.toHaveBeenCalled();
+    expect((fs.readFileBinary as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith("photo.png");
+  });
+
+  it("deduplicates repeated references to the same resolved non-PDF path", async () => {
+    const content = "![a](diagram.png)\n\n![b](diagram.png)\n";
+    const fs = createMockFs();
+    await resolveLocalImageOverrides(content, fs, "posts/math.md");
+
+    expect(rasterizeMock).not.toHaveBeenCalled();
+    expect((fs.readFileBinary as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    expect((fs.readFileBinary as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith("posts/diagram.png");
   });
 });

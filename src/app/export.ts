@@ -19,7 +19,7 @@ import type { ExportFormat } from "./lib/types";
 import { basename } from "./lib/utils";
 import { exportThemeTokenDefaults } from "../theme-contract";
 import { checkPandocCommand, exportDocumentCommand } from "./tauri-client/export";
-import { resolvePdfImageOverrides } from "./pdf-image-previews";
+import { resolveLocalImageOverrides } from "./pdf-image-previews";
 
 export type { ExportFormat };
 
@@ -263,7 +263,7 @@ async function buildHtmlDocumentWithResolvedImages(
   fs?: FileSystem,
   documentPath = "",
 ): Promise<string> {
-  const imageUrlOverrides = await resolvePdfImageOverrides(content, fs, documentPath);
+  const imageUrlOverrides = await resolveLocalImageOverrides(content, fs, documentPath);
   return buildHtmlDocument(content, title, {
     documentPath,
     imageUrlOverrides,

@@ -30,7 +30,7 @@ import { buildKatexOptions } from "../lib/katex-options";
 import { isSafeUrl } from "../lib/url-utils";
 import { sanitizeCslHtml } from "../render/inline-shared";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
-import { isPdfTarget } from "../lib/pdf-target";
+import { isRelativeFilePath } from "../lib/pdf-target";
 import { type CslJsonItem } from "../citations/bibtex-parser";
 import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import {
@@ -125,7 +125,7 @@ export interface MarkdownToHtmlOptions {
    */
   blockCounters?: ReadonlyMap<string, BlockCounterEntry>;
   /**
-   * Current document path for resolving relative PDF-backed image targets.
+   * Current document path for resolving relative file-backed image targets.
    *
    * Used together with `imageUrlOverrides`, whose keys are resolved
    * project-relative paths.
@@ -134,8 +134,8 @@ export interface MarkdownToHtmlOptions {
   /**
    * Prepared image source overrides keyed by resolved project-relative path.
    *
-   * Read mode / HTML export use this to substitute rasterized first-page
-   * previews for PDF-backed image targets while keeping the core renderer
+   * Read mode / HTML export use this to substitute browser-safe data URLs for
+   * local file-backed image targets while keeping the core renderer
    * synchronous and CM6-free.
    */
   imageUrlOverrides?: ReadonlyMap<string, string>;
@@ -662,7 +662,7 @@ function resolveOverriddenImageSrc(
   ctx: Pick<InlineContext, "documentPath" | "imageUrlOverrides">,
 ): string {
   if (!ctx.imageUrlOverrides || ctx.imageUrlOverrides.size === 0) return src;
-  if (!isPdfTarget(src)) return src;
+  if (!isRelativeFilePath(src)) return src;
 
   const resolvedPath = resolveProjectPathFromDocument(ctx.documentPath ?? "", src);
   return ctx.imageUrlOverrides.get(resolvedPath) ?? src;

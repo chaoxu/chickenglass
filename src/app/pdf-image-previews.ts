@@ -1,6 +1,7 @@
 import { parser as baseParser } from "@lezer/markdown";
 import { htmlRenderExtensions } from "../parser";
-import { isPdfTarget } from "../lib/pdf-target";
+import { readImageFileAsDataUrl } from "../lib/image-data-url";
+import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import type { FileSystem } from "../lib/types";
 import { rasterizePdfPage1 } from "../render/pdf-rasterizer";
@@ -30,34 +31,39 @@ function collectImageTargets(content: string): string[] {
 }
 
 /**
- * Resolve and rasterize PDF-backed image targets in a document.
+ * Resolve local file-backed image targets in a document.
  *
- * Returns a map keyed by the resolved project-relative PDF path so callers can
- * feed the prepared preview image back into the HTML renderer.
+ * Returns a map keyed by the resolved project-relative image path so callers
+ * can feed browser-safe data URLs back into the HTML renderer.
  */
-export async function resolvePdfImageOverrides(
+export async function resolveLocalImageOverrides(
   content: string,
   fs: FileSystem | undefined,
   docPath = "",
 ): Promise<ReadonlyMap<string, string>> {
   if (!fs) return new Map();
 
-  const resolvedPdfPaths = [...new Set(
+  const resolvedImagePaths = [...new Set(
     collectImageTargets(content)
-      .filter(isPdfTarget)
+      .filter(isRelativeFilePath)
       .map((src) => resolveProjectPathFromDocument(docPath, src)),
   )];
 
-  if (resolvedPdfPaths.length === 0) return new Map();
+  if (resolvedImagePaths.length === 0) return new Map();
 
-  const results = await Promise.all(resolvedPdfPaths.map(async (path) => {
+  const results = await Promise.all(resolvedImagePaths.map(async (path) => {
     try {
-      const bytes = await fs.readFileBinary(path);
-      const canvas = await rasterizePdfPage1(bytes);
-      if (!canvas) return null;
-      // Read mode needs a data URL for <img src="">
-      const dataUrl = canvas.toDataURL("image/png");
-      return typeof dataUrl === "string" ? ([path, dataUrl] as const) : null;
+      if (isPdfTarget(path)) {
+        const bytes = await fs.readFileBinary(path);
+        const canvas = await rasterizePdfPage1(bytes);
+        if (!canvas) return null;
+        // Read mode needs a data URL for <img src="">
+        const dataUrl = canvas.toDataURL("image/png");
+        return typeof dataUrl === "string" ? ([path, dataUrl] as const) : null;
+      }
+
+      const dataUrl = await readImageFileAsDataUrl(path, fs);
+      return dataUrl ? ([path, dataUrl] as const) : null;
     } catch {
       return null;
     }

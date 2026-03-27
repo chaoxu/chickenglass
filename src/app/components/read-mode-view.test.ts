@@ -7,11 +7,11 @@ import type { FileSystem } from "../file-manager";
 const {
   markdownToHtmlMock,
   renderDocumentFragmentToHtmlMock,
-  resolvePdfImageOverridesMock,
+  resolveLocalImageOverridesMock,
 } = vi.hoisted(() => ({
   markdownToHtmlMock: vi.fn(),
   renderDocumentFragmentToHtmlMock: vi.fn(),
-  resolvePdfImageOverridesMock: vi.fn(),
+  resolveLocalImageOverridesMock: vi.fn(),
 }));
 
 // jsdom lacks ResizeObserver — provide a no-op stub.
@@ -42,7 +42,7 @@ vi.mock("../perf", () => ({
   measureSync: (_label: string, fn: () => void) => fn(),
 }));
 vi.mock("../pdf-image-previews", () => ({
-  resolvePdfImageOverrides: resolvePdfImageOverridesMock,
+  resolveLocalImageOverrides: resolveLocalImageOverridesMock,
 }));
 
 // Must import after mocks are registered.
@@ -75,8 +75,8 @@ describe("ReadModeView scroll restoration", () => {
     markdownToHtmlMock.mockImplementation(defaultMarkdownToHtml);
     renderDocumentFragmentToHtmlMock.mockReset();
     renderDocumentFragmentToHtmlMock.mockReturnValue("");
-    resolvePdfImageOverridesMock.mockReset();
-    resolvePdfImageOverridesMock.mockResolvedValue(new Map());
+    resolveLocalImageOverridesMock.mockReset();
+    resolveLocalImageOverridesMock.mockResolvedValue(new Map());
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -196,7 +196,7 @@ describe("ReadModeView scroll restoration", () => {
 
   it("hydrates read mode HTML with prepared PDF preview overrides", async () => {
     const fs = {} as unknown as FileSystem;
-    resolvePdfImageOverridesMock.mockResolvedValue(new Map([
+    resolveLocalImageOverridesMock.mockResolvedValue(new Map([
       ["notes/fig.pdf", "data:image/png;base64,PDFPAGE1"],
     ]));
 
@@ -207,7 +207,7 @@ describe("ReadModeView scroll restoration", () => {
       docPath: "notes/main.md",
     });
 
-    expect(resolvePdfImageOverridesMock).toHaveBeenCalledWith(
+    expect(resolveLocalImageOverridesMock).toHaveBeenCalledWith(
       "![Fig](fig.pdf)",
       fs,
       "notes/main.md",

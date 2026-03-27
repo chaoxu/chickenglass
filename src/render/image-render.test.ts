@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { CSS } from "../constants/css-classes";
-import { ImageWidget, PdfLoadingWidget } from "./image-render";
+import { ImageLoadingWidget, ImageWidget, PdfLoadingWidget } from "./image-render";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
 
@@ -119,6 +119,43 @@ describe("PdfLoadingWidget", () => {
     it("returns false when alt text differs", () => {
       const a = new PdfLoadingWidget("fig1");
       const b = new PdfLoadingWidget("fig2");
+      expect(a.eq(b)).toBe(false);
+    });
+  });
+});
+
+describe("ImageLoadingWidget", () => {
+  describe("createDOM", () => {
+    it("produces a span with cf-image-wrapper and cf-image-loading classes", () => {
+      const widget = new ImageLoadingWidget("diagram");
+      const el = widget.createDOM();
+      expect(el.tagName).toBe("SPAN");
+      expect(el.className).toBe(`${CSS.imageWrapper} ${CSS.imageLoading}`);
+    });
+
+    it("shows loading text with alt text", () => {
+      const widget = new ImageLoadingWidget("figure 1");
+      const el = widget.createDOM();
+      expect(el.textContent).toBe("[Loading image: figure 1]");
+    });
+
+    it("shows 'preview' when alt text is empty", () => {
+      const widget = new ImageLoadingWidget("");
+      const el = widget.createDOM();
+      expect(el.textContent).toBe("[Loading image: preview]");
+    });
+  });
+
+  describe("eq", () => {
+    it("returns true for same alt text", () => {
+      const a = new ImageLoadingWidget("fig");
+      const b = new ImageLoadingWidget("fig");
+      expect(a.eq(b)).toBe(true);
+    });
+
+    it("returns false when alt text differs", () => {
+      const a = new ImageLoadingWidget("fig1");
+      const b = new ImageLoadingWidget("fig2");
       expect(a.eq(b)).toBe(false);
     });
   });

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileSystem } from "./file-manager";
 
-const { resolvePdfImageOverridesMock } = vi.hoisted(() => ({
-  resolvePdfImageOverridesMock: vi.fn(),
+const { resolveLocalImageOverridesMock } = vi.hoisted(() => ({
+  resolveLocalImageOverridesMock: vi.fn(),
 }));
 
 vi.mock("./pdf-image-previews", () => ({
-  resolvePdfImageOverrides: resolvePdfImageOverridesMock,
+  resolveLocalImageOverrides: resolveLocalImageOverridesMock,
 }));
 
 import {
@@ -17,8 +17,8 @@ import {
 } from "./export";
 
 beforeEach(() => {
-  resolvePdfImageOverridesMock.mockReset();
-  resolvePdfImageOverridesMock.mockResolvedValue(new Map());
+  resolveLocalImageOverridesMock.mockReset();
+  resolveLocalImageOverridesMock.mockResolvedValue(new Map());
 });
 
 describe("resolveExportThemeTokens", () => {
@@ -75,7 +75,7 @@ describe("buildHtmlDocument", () => {
 
   it("feeds prepared PDF preview overrides into exported HTML", async () => {
     const fs = {} as unknown as FileSystem;
-    resolvePdfImageOverridesMock.mockResolvedValue(new Map([
+    resolveLocalImageOverridesMock.mockResolvedValue(new Map([
       ["notes/fig.pdf", "data:image/png;base64,PDFPAGE1"],
     ]));
 
@@ -86,7 +86,7 @@ describe("buildHtmlDocument", () => {
       "notes/main.md",
     );
 
-    expect(resolvePdfImageOverridesMock).toHaveBeenCalledWith(
+    expect(resolveLocalImageOverridesMock).toHaveBeenCalledWith(
       "![Figure](fig.pdf)",
       fs,
       "notes/main.md",
