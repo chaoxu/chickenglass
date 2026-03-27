@@ -7,6 +7,8 @@
 
 /* global window */
 
+import { scrollToText } from "../test-helpers.mjs";
+
 export const name = "cross-references";
 
 export async function run(page) {
@@ -16,6 +18,8 @@ export async function run(page) {
   // Ensure rich mode for rendered widgets
   await page.evaluate(() => window.__app.setMode("rich"));
   await new Promise((r) => setTimeout(r, 300));
+
+  await scrollToText(page, "# Cross-References");
 
   // Check for crossref widgets in DOM
   const crossrefCount = await page.evaluate(() => {
@@ -51,8 +55,22 @@ export async function run(page) {
     };
   }
 
+  await scrollToText(page, "# Citations");
+
+  const citationCount = await page.evaluate(() => {
+    const editor = window.__cmView.dom;
+    return editor.querySelectorAll(".cf-citation").length;
+  });
+
+  if (citationCount === 0) {
+    return {
+      pass: false,
+      message: "Document contains citation syntax but no .cf-citation elements are visible",
+    };
+  }
+
   return {
     pass: true,
-    message: `${crossrefCount} crossrefs rendered (${unresolvedCount} unresolved)`,
+    message: `${crossrefCount} crossrefs rendered (${unresolvedCount} unresolved), ${citationCount} citations visible`,
   };
 }

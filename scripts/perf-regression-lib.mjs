@@ -1,4 +1,4 @@
-export const PERF_REPORT_VERSION = 1;
+export const PERF_REPORT_VERSION = 2;
 
 function roundMs(value) {
   return Number(value.toFixed(3));
@@ -42,21 +42,54 @@ function aggregateSnapshotEntries(entries) {
     .sort((left, right) => right.meanAvgMs - left.meanAvgMs);
 }
 
+function aggregateMetricEntries(entries) {
+  const grouped = new Map();
+
+  for (const entry of entries) {
+    const key = `${entry.name}:${entry.unit ?? "count"}`;
+    const group = grouped.get(key) ?? {
+      name: entry.name,
+      unit: entry.unit ?? "count",
+      samples: 0,
+      totalValue: 0,
+      maxValue: 0,
+    };
+
+    group.samples += 1;
+    group.totalValue += entry.value;
+    group.maxValue = Math.max(group.maxValue, entry.value);
+    grouped.set(key, group);
+  }
+
+  return Array.from(grouped.values())
+    .map((group) => ({
+      name: group.name,
+      unit: group.unit,
+      samples: group.samples,
+      meanValue: roundMs(group.totalValue / group.samples),
+      maxValue: roundMs(group.maxValue),
+    }))
+    .sort((left, right) => right.meanValue - left.meanValue);
+}
+
 export function buildPerfRegressionReport({
   scenario,
   iterations,
   warmup,
   settleMs,
   snapshots,
+  metrics = [],
   chromePort,
   appUrl,
 }) {
   const frontendEntries = [];
   const backendEntries = [];
+  const metricEntries = [];
 
   for (const snapshot of snapshots) {
     frontendEntries.push(...(snapshot.frontend?.summaries ?? []));
     backendEntries.push(...(snapshot.backend?.summaries ?? []));
+    metricEntries.push(...(snapshot.metrics ?? []));
   }
 
   return {
@@ -70,6 +103,7 @@ export function buildPerfRegressionReport({
     appUrl,
     frontend: aggregateSnapshotEntries(frontendEntries),
     backend: aggregateSnapshotEntries(backendEntries),
+    metrics: aggregateMetricEntries([...metricEntries, ...metrics]),
   };
 }
 
@@ -124,6 +158,55 @@ function compareEntrySets(baselineEntries, currentEntries, thresholdPct, minDelt
   return comparisons;
 }
 
+function compareMetricSets(baselineEntries, currentEntries, thresholdPct, minDeltaValue) {
+  const currentByKey = new Map(
+    currentEntries.map((entry) => [`${entry.name}:${entry.unit ?? "count"}`, entry]),
+  );
+  const comparisons = [];
+
+  for (const baseline of baselineEntries) {
+    const key = `${baseline.name}:${baseline.unit ?? "count"}`;
+    const current = currentByKey.get(key);
+    if (!current) {
+      comparisons.push({
+        key,
+        name: baseline.name,
+        unit: baseline.unit ?? "count",
+        status: "missing",
+        baseline,
+        current: null,
+      });
+      continue;
+    }
+
+    const meanDelta = roundMs(current.meanValue - baseline.meanValue);
+    const maxDelta = roundMs(current.maxValue - baseline.maxValue);
+    const meanPct = baseline.meanValue > 0
+      ? (current.meanValue - baseline.meanValue) / baseline.meanValue
+      : (meanDelta > 0 ? 1 : 0);
+    const maxPct = baseline.maxValue > 0
+      ? (current.maxValue - baseline.maxValue) / baseline.maxValue
+      : (maxDelta > 0 ? 1 : 0);
+    const meanRegressed = meanDelta > minDeltaValue && meanPct > thresholdPct;
+    const maxRegressed = maxDelta > minDeltaValue && maxPct > thresholdPct;
+
+    comparisons.push({
+      key,
+      name: baseline.name,
+      unit: baseline.unit ?? "count",
+      status: meanRegressed || maxRegressed ? "regressed" : "ok",
+      meanDelta,
+      maxDelta,
+      meanPct: roundMs(meanPct * 100),
+      maxPct: roundMs(maxPct * 100),
+      baseline,
+      current,
+    });
+  }
+
+  return comparisons;
+}
+
 export function comparePerfRegressionReports(
   baselineReport,
   currentReport,
@@ -143,13 +226,20 @@ export function comparePerfRegressionReports(
     thresholdPct,
     minDeltaMs,
   );
-  const regressions = [...frontend, ...backend].filter((entry) => entry.status === "regressed");
+  const metrics = compareMetricSets(
+    baselineReport.metrics ?? [],
+    currentReport.metrics ?? [],
+    thresholdPct,
+    0,
+  );
+  const regressions = [...frontend, ...backend, ...metrics].filter((entry) => entry.status === "regressed");
 
   return {
     thresholdPct,
     minDeltaMs,
     frontend,
     backend,
+    metrics,
     regressions,
   };
 }

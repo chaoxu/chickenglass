@@ -7,6 +7,8 @@
 
 /* global window */
 
+import { scrollToText } from "../test-helpers.mjs";
+
 export const name = "footnotes";
 
 export async function run(page) {
@@ -16,6 +18,8 @@ export async function run(page) {
   // Ensure rich mode
   await page.evaluate(() => window.__app.setMode("rich"));
   await new Promise((r) => setTimeout(r, 300));
+
+  await scrollToText(page, "# Sidenotes");
 
   // Check if document contains footnote syntax
   const hasFootnoteSyntax = await page.evaluate(() => {

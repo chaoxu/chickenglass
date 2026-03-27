@@ -35,6 +35,7 @@ import { blockTypePickerExtension } from "./block-type-picker";
 import { headingFold } from "./heading-fold";
 import { listOutlinerExtension } from "./list-outliner";
 import { treeView } from "@overleaf/codemirror-tree-view";
+import { includeRegionsField } from "../lib/include-regions";
 import {
   createMarkdownLanguageExtensions,
   createProjectConfigExtensions,
@@ -182,6 +183,9 @@ export function createEditor(config: EditorConfig): EditorView {
 
       // Frontmatter state (always needed — other extensions read it)
       ...sharedDocumentStateExtensions,
+
+      // Include expansion metadata must survive Rich/Source mode switches.
+      includeRegionsField,
 
       // Shared document semantics (headings, fenced divs, footnotes)
       documentSemanticsField,

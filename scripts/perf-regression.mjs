@@ -55,6 +55,10 @@ async function getPerfSnapshot(page) {
   return page.evaluate(async () => window.__cfDebug.perfSummary());
 }
 
+async function getSemanticRevisionInfo(page) {
+  return page.evaluate(() => window.__cmDebug.semantics());
+}
+
 const scenarios = {
   "open-index": {
     description: "Reload the app and open demo/index.md in Rich mode.",
@@ -81,6 +85,78 @@ const scenarios = {
       await switchToMode(page, "source");
       await switchToMode(page, "read");
       await switchToMode(page, "rich");
+    },
+  },
+  "local-edit-index": {
+    description: "Reload the app, open demo/index.md, then apply a local inline-math edit.",
+    defaultSettleMs: 300,
+    run: async (page) => {
+      await page.evaluate(() => window.__app.setMode("rich"));
+      await openFile(page, "index.md");
+      await page.waitForTimeout(800);
+      const before = await getSemanticRevisionInfo(page);
+      const after = await page.evaluate((previous) => {
+        const view = window.__cmView;
+        const docText = view.state.doc.toString();
+        const inlineMath = /\$([^$\n]+)\$/.exec(docText);
+        const body = inlineMath?.[1] ?? "";
+        const matchIndex = inlineMath?.index ?? -1;
+        const bodyOffset = body.search(/[A-Za-z0-9]/);
+        const changeFrom = matchIndex >= 0
+          ? matchIndex + 1 + (bodyOffset >= 0 ? bodyOffset : 0)
+          : -1;
+
+        if (changeFrom < 0) {
+          throw new Error("Failed to locate an inline math fixture in index.md");
+        }
+
+        view.dispatch({
+          changes: {
+            from: changeFrom,
+            to: changeFrom + 1,
+            insert: "z",
+          },
+          selection: { anchor: changeFrom + 1 },
+        });
+
+        const next = window.__cmDebug.semantics();
+        const changedSlices = Object.entries(next.slices)
+          .filter(([name, value]) => value !== previous.slices[name])
+          .map(([name]) => name);
+
+        return {
+          revisionDelta: next.revision - previous.revision,
+          changedSlices,
+        };
+      }, before);
+
+      return {
+        metrics: [
+          {
+            name: "semantic.revision_delta",
+            unit: "count",
+            value: after.revisionDelta,
+          },
+          {
+            name: "semantic.changed_slice_count",
+            unit: "count",
+            value: after.changedSlices.length,
+          },
+          ...[
+            "headings",
+            "footnotes",
+            "fencedDivs",
+            "equations",
+            "mathRegions",
+            "references",
+            "includes",
+          ].map((sliceName) => ({
+            name: `semantic.slice.${sliceName}`,
+            unit: "count",
+            value: after.changedSlices.includes(sliceName) ? 1 : 0,
+          })),
+        ],
+      };
     },
   },
 };
@@ -117,11 +193,14 @@ async function runScenarioSamples(page, scenarioName, iterations, warmup, settle
     await page.goto(chromeArgs.url, { waitUntil: "domcontentloaded" });
     await waitForDebugBridge(page);
     await clearPerf(page);
-    await scenario.run(page);
+    const scenarioResult = await scenario.run(page);
     await sleep(settleMs);
     const snapshot = await getPerfSnapshot(page);
     if (runIndex >= warmup) {
-      snapshots.push(snapshot);
+      snapshots.push({
+        ...snapshot,
+        metrics: scenarioResult?.metrics ?? [],
+      });
     }
   }
 
@@ -153,25 +232,55 @@ function printReportSummary(report) {
     console.log("\nBackend spans");
     console.table(topBackend);
   }
+  if ((report.metrics ?? []).length > 0) {
+    console.log("\nScenario metrics");
+    console.table(report.metrics.slice(0, 12).map((entry) => ({
+      name: entry.name,
+      unit: entry.unit,
+      mean: entry.meanValue,
+      max: entry.maxValue,
+      samples: entry.samples,
+    })));
+  }
 }
 
 function printComparison(result) {
-  const regressions = result.regressions.map((entry) => ({
+  const spanRegressions = [...result.frontend, ...result.backend]
+    .filter((entry) => entry.status === "regressed")
+    .map((entry) => ({
     source: entry.source,
     name: entry.name,
     avgDeltaMs: entry.avgDeltaMs,
     avgPct: `${entry.avgPct}%`,
     maxDeltaMs: entry.maxDeltaMs,
     maxPct: `${entry.maxPct}%`,
-  }));
+    }));
 
-  if (regressions.length === 0) {
+  if (spanRegressions.length === 0) {
     console.log("No perf regressions detected.");
+    const metricRegressions = result.metrics?.filter((entry) => entry.status === "regressed") ?? [];
+    if (metricRegressions.length === 0) {
+      return;
+    }
+  }
+
+  const metricRegressions = (result.metrics ?? [])
+    .filter((entry) => entry.status === "regressed")
+    .map((entry) => ({
+      source: "metric",
+      name: entry.name,
+      avgDeltaMs: entry.meanDelta,
+      avgPct: `${entry.meanPct}%`,
+      maxDeltaMs: entry.maxDelta,
+      maxPct: `${entry.maxPct}%`,
+    }));
+
+  if (spanRegressions.length === 0 && metricRegressions.length === 0) {
     return;
   }
 
   console.log("Perf regressions detected:");
-  console.table(regressions);
+  console.table([...spanRegressions, ...metricRegressions]);
 }
 
 async function main() {

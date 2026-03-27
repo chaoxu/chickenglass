@@ -25,6 +25,7 @@ import {
   type FrontmatterState,
 } from "../../editor";
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
+import { setIncludeRegionsEffect } from "../../lib/include-regions";
 import type { ProjectConfig } from "../project-config";
 import type { FileSystem } from "../file-manager";
 import { computeDocStats } from "../writing-stats";
@@ -290,6 +291,7 @@ export function useEditor(
           insert: doc,
         },
         selection: { anchor: 0 },
+        effects: setIncludeRegionsEffect.of([]),
         annotations: programmaticDocumentChangeAnnotation.of(true),
       });
     } else if (pathChanged) {
