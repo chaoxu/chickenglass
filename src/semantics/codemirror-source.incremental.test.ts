@@ -90,7 +90,7 @@ describe("documentAnalysisField incremental contract", () => {
     expect(after.headings[2]).not.toBe(renumberedTail);
   });
 
-  it.fails("keeps unrelated fenced div objects when editing another div body", () => {
+  it("keeps unrelated fenced div objects when editing another div body", () => {
     const doc = [
       "::: {.theorem #thm:first} First",
       "alpha",
@@ -113,6 +113,129 @@ describe("documentAnalysisField incremental contract", () => {
     expect(after.fencedDivs[0].title).toBe("First");
     expect(after.fencedDivs[1].title).toBe("Second");
     expect(after.fencedDivs[1]).toBe(stableSecondDiv);
+  });
+
+  it("updates only the affected include entry", () => {
+    const doc = [
+      "::: {.include}",
+      "chapter1.md",
+      ":::",
+      "",
+      "::: {.include}",
+      "chapter2.md",
+      ":::",
+      "",
+    ].join("\n");
+
+    const beforeState = createSemanticsState(doc);
+    const before = beforeState.field(documentAnalysisField);
+    const stableSecondInclude = before.includes[1];
+
+    const afterState = replaceOnce(beforeState, "chapter1.md", "chapterA.md");
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after.includes).toHaveLength(2);
+    expect(after.includes[0]?.path).toBe("chapterA.md");
+    expect(after.includes[1]?.path).toBe("chapter2.md");
+    expect(after.includes[1]).toBe(stableSecondInclude);
+  });
+
+  it("does not duplicate trailing includes when inserting at another include boundary", () => {
+    const doc = [
+      "::: {.include}",
+      "chapter1.md",
+      ":::",
+      "",
+      "::: {.include}",
+      "chapter2.md",
+      ":::",
+      "",
+    ].join("\n");
+
+    const beforeState = createSemanticsState(doc);
+    const secondStart = doc.indexOf("::: {.include}", 1);
+    const afterState = beforeState.update({
+      changes: { from: secondStart, insert: "::: {.include}\nchapter0.md\n:::\n\n" },
+    }).state;
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after.includes.map((include) => include.path)).toEqual([
+      "chapter1.md",
+      "chapter0.md",
+      "chapter2.md",
+    ]);
+    expect(after.fencedDivs).toHaveLength(3);
+  });
+
+  it("updates adjacent div positions when a boundary edit changes the next block", () => {
+    const doc = [
+      "::: {.theorem} First",
+      "alpha",
+      ":::",
+      "",
+      "::: {.proof} Second",
+      "beta",
+      ":::",
+      "",
+    ].join("\n");
+
+    const beforeState = createSemanticsState(doc);
+    const closeFenceFrom = doc.indexOf("\n:::\n") + 1;
+    const afterState = beforeState.update({
+      changes: { from: closeFenceFrom, to: closeFenceFrom + 3, insert: "" },
+    }).state;
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after.fencedDivs).toHaveLength(2);
+    expect(after.fencedDivs[0]?.to).toBe(57);
+    expect(after.fencedDivs[1]?.from).toBe(29);
+    expect(after.fencedDivs[1]?.to).toBe(53);
+    expect(after.fencedDivs[1]?.closeFenceFrom).toBe(54);
+  });
+
+  it("drops disappearing div/include state after a touching-start boundary edit", () => {
+    const doc = [
+      "para1",
+      "",
+      "::: {.include}",
+      "chapter1.md",
+      ":::",
+      "",
+    ].join("\n");
+
+    const beforeState = createSemanticsState(doc);
+    const from = doc.indexOf("1\n\n:::");
+    const afterState = beforeState.update({
+      changes: { from, to: from + 3, insert: ".include" },
+    }).state;
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after.fencedDivs).toEqual([]);
+    expect(after.includes).toEqual([]);
+  });
+
+  it("keeps nested outer divs in sync when deleting the outer closing fence", () => {
+    const doc = [
+      ":::: {.proof}",
+      "alpha",
+      "::: {.include}",
+      "new.md",
+      ":::",
+      "omega",
+      "::::::",
+      "",
+    ].join("\n");
+
+    const beforeState = createSemanticsState(doc);
+    const from = doc.lastIndexOf("::::::");
+    const afterState = beforeState.update({
+      changes: { from, to: from + 6, insert: "" },
+    }).state;
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after.fencedDivs[0]?.primaryClass).toBe("proof");
+    expect(after.fencedDivs[0]?.closeFenceFrom).toBe(-1);
+    expect(after.fencedDivs[0]?.closeFenceTo).toBe(-1);
   });
 
   it("keeps narrative references correct around link, code, and math exclusion boundaries", () => {

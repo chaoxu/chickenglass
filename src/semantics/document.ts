@@ -5,6 +5,7 @@ import {
   type HeadingStructure,
 } from "./incremental/window-extractor";
 import { buildMathSlice } from "./incremental/slices/math-slice";
+import { deriveIncludeSlice } from "./incremental/slices/include-slice";
 import { NARRATIVE_REFERENCE_RE } from "./reference-parts";
 
 // Equation label extraction now lives in the shared window extractor, which
@@ -390,45 +391,6 @@ export function analyzeReferences(doc: TextSource, tree: Tree): ReferenceSemanti
 }
 
 // ---------------------------------------------------------------------------
-// Include extraction from fenced divs
-// ---------------------------------------------------------------------------
-
-/**
- * Derive include entries from fenced divs with class "include".
- *
- * For single-line form (`::: {.include} chapter1.md :::`), the path is in the
- * title field. For multi-line form, the path is the trimmed content between
- * the opening fence line and the closing fence line.
- */
-function extractIncludesFromDivs(
-  doc: TextSource,
-  divs: readonly FencedDivSemantics[],
-): IncludeSemantics[] {
-  const includes: IncludeSemantics[] = [];
-  for (const div of divs) {
-    if (div.primaryClass !== "include") continue;
-
-    // Single-line: `::: {.include} chapter1.md :::`  — path lives in the title
-    if (div.title) {
-      const path = div.title.trim();
-      if (path.length > 0) {
-        includes.push({ from: div.from, to: div.to, path });
-        continue;
-      }
-    }
-
-    // Multi-line: path is the body between the opening and closing fences
-    if (div.closeFenceFrom >= 0 && div.openFenceTo < div.closeFenceFrom) {
-      const path = doc.slice(div.openFenceTo, div.closeFenceFrom).trim();
-      if (path.length > 0) {
-        includes.push({ from: div.from, to: div.to, path });
-      }
-    }
-  }
-  return includes;
-}
-
-// ---------------------------------------------------------------------------
 // Canonical full-document analysis (single walk + assembly)
 // ---------------------------------------------------------------------------
 
@@ -451,7 +413,7 @@ export function analyzeDocumentSemantics(
   const references = [...structural.bracketedRefs, ...narrativeRefs];
   references.sort((a, b) => a.from - b.from);
 
-  const includes = extractIncludesFromDivs(doc, fencedDivs);
+  const includes = deriveIncludeSlice(doc, fencedDivs);
 
   return {
     headings,
