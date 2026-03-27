@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach, vi } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { type CslJsonItem } from "./bibtex-parser";
@@ -16,6 +16,7 @@ import {
   formatBibEntry,
   sortBibEntries,
   BibliographyWidget,
+  bibliographyDependenciesChanged,
   buildBibliographyDecorations,
   bibliographyPlugin,
 } from "./bibliography";
@@ -303,6 +304,70 @@ describe("bibliographyPlugin integration", () => {
     it("handles citation to id with no match in store", () => {
       view = createBibView("See [@nonexistent2099].");
       expect(view.state.doc.toString()).toBe("See [@nonexistent2099].");
+    });
+  });
+
+  describe("invalidation", () => {
+    it("ignores unrelated semantic edits after citations", () => {
+      const doc = [
+        "See [@karger2000].",
+        "",
+        "# Tail heading",
+      ].join("\n");
+
+      view = createBibView(doc);
+      const beforeState = view.state;
+
+      view.dispatch({
+        changes: {
+          from: doc.indexOf("Tail"),
+          to: doc.indexOf("Tail") + "Tail".length,
+          insert: "Late",
+        },
+      });
+
+      expect(bibliographyDependenciesChanged(beforeState, view.state)).toBe(false);
+    });
+
+    it("tracks cited-id order changes", () => {
+      const doc = "See [@karger2000] then [@stein2001].";
+
+      view = createBibView(doc);
+      const beforeState = view.state;
+      const first = "[@karger2000]";
+      const second = "[@stein2001]";
+      const firstStart = doc.indexOf(first);
+      const secondStart = doc.indexOf(second);
+
+      view.dispatch({
+        changes: {
+          from: firstStart,
+          to: secondStart + second.length,
+          insert: `${second} then ${first}`,
+        },
+      });
+
+      expect(bibliographyDependenciesChanged(beforeState, view.state)).toBe(true);
+    });
+
+    it("does not reuse cached CSL HTML across different processors", () => {
+      const firstProcessor = new CslProcessor([karger, stein, alpha]);
+      const secondProcessor = new CslProcessor([karger, stein, alpha]);
+      const firstSpy = vi.spyOn(firstProcessor, "bibliography").mockReturnValue([
+        '<span class="csl-entry">First processor</span>',
+      ]);
+      const secondSpy = vi.spyOn(secondProcessor, "bibliography").mockReturnValue([
+        '<span class="csl-entry">Second processor</span>',
+      ]);
+
+      view = createBibView("See [@karger2000].", false);
+      view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: firstProcessor }) });
+      expect(firstSpy).toHaveBeenCalledTimes(1);
+
+      view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: secondProcessor }) });
+
+      expect(secondSpy).toHaveBeenCalledTimes(1);
+      expect(view.dom.querySelector(`.${CSS.bibliographyEntry}`)?.textContent).toContain("Second processor");
     });
   });
 });
