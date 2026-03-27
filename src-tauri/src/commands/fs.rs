@@ -11,6 +11,7 @@ use super::state::{PerfState, ProjectRoot, ProjectRootEntry};
 
 /// A file or directory entry for the sidebar tree.
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct FileEntry {
     pub name: String,
     pub path: String,

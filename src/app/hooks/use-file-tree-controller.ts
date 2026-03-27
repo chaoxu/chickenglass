@@ -106,7 +106,7 @@ export function resolveFileTreeKey(
   return { handled: false };
 }
 
-function buildTreeIndex(root: FileEntry | null): {
+export function buildTreeIndex(root: FileEntry | null): {
   readonly entriesById: Map<string, FileEntry>;
   readonly childrenById: Map<string, string[]>;
 } {
