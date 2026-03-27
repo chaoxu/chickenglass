@@ -296,6 +296,93 @@ pub fn read_file_binary(
     )
 }
 
+/// List the direct children of a single directory (non-recursive).
+///
+/// Directory children are returned with `children: None` so the frontend
+/// knows they can be expanded but haven't been loaded yet.
+#[command]
+pub fn list_children(
+    window: WebviewWindow,
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    path: String,
+) -> Result<Vec<FileEntry>, String> {
+    measure_command(
+        &perf,
+        "tauri.list_children",
+        "tauri.fs.list_children",
+        "tauri",
+        Some(&path),
+        || {
+            let project_root = current_project_root(&root, &window)?;
+            let dir = if path.is_empty() {
+                project_root.clone()
+            } else {
+                resolve_existing_path(&project_root, &path)?
+            };
+            read_directory_children(&dir, &path)
+        },
+    )
+}
+
+/// Read one directory's children without recursing.
+///
+/// Applies the same filtering and sorting as `build_tree`:
+/// hidden entries, `node_modules`, and `target` are excluded;
+/// directories sort before files, then alphabetically by name.
+fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEntry>, String> {
+    let entries = fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read directory '{}': {}", dir.display(), e))?;
+
+    let mut children = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let file_name = entry.file_name().to_string_lossy().to_string();
+
+        if is_hidden_entry(&file_name) {
+            continue;
+        }
+
+        let child_path = if relative_path.is_empty() {
+            file_name.clone()
+        } else {
+            format!("{}/{}", relative_path, file_name)
+        };
+
+        let file_type = entry.file_type().map_err(|e| e.to_string())?;
+        children.push(FileEntry {
+            name: file_name,
+            path: child_path,
+            is_directory: file_type.is_dir(),
+            // Directories get None (not-yet-loaded); files also get None.
+            children: None,
+        });
+    }
+
+    sort_entries(&mut children);
+    Ok(children)
+}
+
+/// Whether a directory entry should be excluded from listings.
+fn is_hidden_entry(name: &str) -> bool {
+    name.starts_with('.') || name == "node_modules" || name == "target"
+}
+
+/// Sort entries: directories first, then alphabetically by name.
+fn sort_entries(entries: &mut [FileEntry]) {
+    entries.sort_by(|a, b| {
+        if a.is_directory != b.is_directory {
+            if a.is_directory {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Greater
+            }
+        } else {
+            a.name.cmp(&b.name)
+        }
+    });
+}
+
 /// Recursively build a FileEntry tree from a directory.
 fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, String> {
     let mut children = Vec::new();
@@ -306,7 +393,7 @@ fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, 
         let entry = entry.map_err(|e| e.to_string())?;
         let file_name = entry.file_name().to_string_lossy().to_string();
 
-        if file_name.starts_with('.') || file_name == "node_modules" || file_name == "target" {
+        if is_hidden_entry(&file_name) {
             continue;
         }
 
@@ -329,17 +416,7 @@ fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, 
         }
     }
 
-    children.sort_by(|a, b| {
-        if a.is_directory != b.is_directory {
-            if a.is_directory {
-                std::cmp::Ordering::Less
-            } else {
-                std::cmp::Ordering::Greater
-            }
-        } else {
-            a.name.cmp(&b.name)
-        }
-    });
+    sort_entries(&mut children);
 
     Ok(FileEntry {
         name: name.to_string(),
@@ -424,5 +501,62 @@ mod tests {
         assert_eq!(json["children"][0]["isDirectory"], false);
         // snake_case field must NOT appear
         assert!(json.get("is_directory").is_none());
+    }
+
+    /// `read_directory_children` returns sorted, non-recursive entries with
+    /// the same filtering as `build_tree` (#575).
+    #[test]
+    fn read_directory_children_returns_shallow_sorted_entries() {
+        use std::fs;
+
+        let tmp = std::env::temp_dir().join("coflat-test-list-children");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(tmp.join("alpha")).unwrap();
+        fs::create_dir_all(tmp.join("beta")).unwrap();
+        fs::create_dir_all(tmp.join(".hidden")).unwrap();
+        fs::create_dir_all(tmp.join("node_modules")).unwrap();
+        fs::write(tmp.join("readme.md"), "hi").unwrap();
+        fs::write(tmp.join("alpha/nested.md"), "nested").unwrap();
+
+        let result = super::read_directory_children(&tmp, "").unwrap();
+
+        // Hidden dirs, node_modules filtered out
+        let names: Vec<&str> = result.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["alpha", "beta", "readme.md"]);
+
+        // Directories first, then files
+        assert!(result[0].is_directory);
+        assert!(result[1].is_directory);
+        assert!(!result[2].is_directory);
+
+        // Children are NOT populated (lazy)
+        assert!(result[0].children.is_none(), "directory children should be None for lazy loading");
+        assert!(result[1].children.is_none());
+
+        // Paths are project-relative
+        assert_eq!(result[0].path, "alpha");
+        assert_eq!(result[2].path, "readme.md");
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// `read_directory_children` builds correct relative paths for subdirs (#575).
+    #[test]
+    fn read_directory_children_builds_relative_paths_for_subdirs() {
+        use std::fs;
+
+        let tmp = std::env::temp_dir().join("coflat-test-list-children-sub");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(tmp.join("deep")).unwrap();
+        fs::write(tmp.join("note.md"), "n").unwrap();
+
+        let result = super::read_directory_children(&tmp, "docs").unwrap();
+
+        assert_eq!(result[0].name, "deep");
+        assert_eq!(result[0].path, "docs/deep");
+        assert_eq!(result[1].name, "note.md");
+        assert_eq!(result[1].path, "docs/note.md");
+
+        let _ = fs::remove_dir_all(&tmp);
     }
 }

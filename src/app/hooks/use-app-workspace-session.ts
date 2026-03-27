@@ -14,6 +14,26 @@ import { isTauri } from "../../lib/tauri";
 // was the only thing preventing Vite from code-splitting it.
 const tauriFs = () => import("../tauri-fs");
 
+/** Immutably merge loaded children into a tree at `dirPath`. */
+export function mergeChildrenIntoTree(
+  tree: FileEntry,
+  dirPath: string,
+  children: FileEntry[],
+): FileEntry {
+  if (tree.path === dirPath) {
+    return { ...tree, children };
+  }
+  if (!tree.children) return tree;
+  return {
+    ...tree,
+    children: tree.children.map((child) =>
+      child.isDirectory && (child.path === dirPath || dirPath.startsWith(child.path + "/"))
+        ? mergeChildrenIntoTree(child, dirPath, children)
+        : child,
+    ),
+  };
+}
+
 export type SidebarTab = "files" | "outline" | "symbols";
 
 export interface AppWorkspaceSessionController {
@@ -32,6 +52,8 @@ export interface AppWorkspaceSessionController {
   saveWindowState: ReturnType<typeof useWindowState>["saveState"];
   fileTree: FileEntry | null;
   refreshTree: () => Promise<void>;
+  /** Load children for a single directory and merge into the tree. */
+  loadChildren: (dirPath: string) => Promise<void>;
   projectConfig: ProjectConfig;
   sidebarCollapsed: boolean;
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
@@ -84,9 +106,18 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     });
   }, [saveWindowState]);
 
+  /** Load the initial tree — shallow when `listChildren` is available. */
+  const loadInitialTree = useCallback(async (): Promise<FileEntry> => {
+    if (fs.listChildren) {
+      const children = await fs.listChildren("");
+      return { name: "project", path: "", isDirectory: true, children };
+    }
+    return fs.listTree();
+  }, [fs]);
+
   const loadWorkspaceContents = useCallback(async (requestId: number): Promise<FileEntry | null> => {
     const [tree, nextProjectConfig] = await Promise.all([
-      measureAsync("sidebar.file_tree", () => fs.listTree(), {
+      measureAsync("sidebar.file_tree", () => loadInitialTree(), {
         category: "sidebar",
       }),
       measureAsync(
@@ -101,7 +132,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     setFileTree(tree);
     setProjectConfig(nextProjectConfig);
     return tree;
-  }, [fs]);
+  }, [fs, loadInitialTree]);
 
   const refreshTree = useCallback(async () => {
     const requestId = workspaceRequestRef.current;
@@ -110,7 +141,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       return;
     }
     try {
-      const tree = await measureAsync("sidebar.file_tree", () => fs.listTree(), {
+      const tree = await measureAsync("sidebar.file_tree", () => loadInitialTree(), {
         category: "sidebar",
       });
       if (requestId !== workspaceRequestRef.current) {
@@ -124,7 +155,17 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       console.error("[workspace] failed to list file tree", e);
       setFileTree(null);
     }
-  }, [fs, projectRoot]);
+  }, [loadInitialTree, projectRoot]);
+
+  const loadChildren = useCallback(async (dirPath: string) => {
+    if (!fs.listChildren) return;
+    try {
+      const children = await fs.listChildren(dirPath);
+      setFileTree((prev) => prev ? mergeChildrenIntoTree(prev, dirPath, children) : prev);
+    } catch (e: unknown) {
+      console.error("[workspace] failed to load children for", dirPath, e);
+    }
+  }, [fs]);
 
   const openProjectRoot = useCallback(async (path: string): Promise<FileEntry | null> => {
     if (!isTauri()) return null;
@@ -216,6 +257,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     saveWindowState,
     fileTree,
     refreshTree,
+    loadChildren,
     projectConfig,
     sidebarCollapsed,
     setSidebarCollapsed,

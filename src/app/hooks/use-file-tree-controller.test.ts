@@ -6,6 +6,7 @@ import {
   flattenVisibleEntries,
   resolveFileTreeKey,
 } from "./use-file-tree-controller";
+import { mergeChildrenIntoTree } from "./use-app-workspace-session";
 
 function file(
   path: string,
@@ -244,5 +245,102 @@ describe("buildTreeIndex", () => {
     const { entriesById, childrenById } = buildTreeIndex(null);
     expect(childrenById.get("__cf-file-tree-root__")).toEqual([]);
     expect(entriesById.size).toBe(1);
+  });
+
+  it("indexes shallow tree with unloaded directory children (#575)", () => {
+    const root: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "docs", path: "docs", isDirectory: true },
+        { name: "index.md", path: "index.md", isDirectory: false },
+      ],
+    };
+
+    const { entriesById, childrenById } = buildTreeIndex(root);
+
+    expect(entriesById.has("docs")).toBe(true);
+    expect(entriesById.get("docs")?.children).toBeUndefined();
+    // Unloaded directory still reports empty children in the index
+    expect(childrenById.get("docs")).toEqual([]);
+    expect(childrenById.get("index.md")).toEqual([]);
+  });
+});
+
+describe("mergeChildrenIntoTree", () => {
+  it("merges children into a top-level directory", () => {
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "docs", path: "docs", isDirectory: true },
+        { name: "index.md", path: "index.md", isDirectory: false },
+      ],
+    };
+
+    const children: FileEntry[] = [
+      { name: "notes.md", path: "docs/notes.md", isDirectory: false },
+    ];
+
+    const result = mergeChildrenIntoTree(tree, "docs", children);
+    expect(result.children![0].children).toEqual(children);
+    // Other children unchanged
+    expect(result.children![1]).toBe(tree.children![1]);
+  });
+
+  it("merges children into a nested directory", () => {
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        {
+          name: "docs",
+          path: "docs",
+          isDirectory: true,
+          children: [
+            { name: "deep", path: "docs/deep", isDirectory: true },
+          ],
+        },
+      ],
+    };
+
+    const children: FileEntry[] = [
+      { name: "proof.md", path: "docs/deep/proof.md", isDirectory: false },
+    ];
+
+    const result = mergeChildrenIntoTree(tree, "docs/deep", children);
+    expect(result.children![0].children![0].children).toEqual(children);
+  });
+
+  it("replaces children at the root level", () => {
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+    };
+
+    const children: FileEntry[] = [
+      { name: "readme.md", path: "readme.md", isDirectory: false },
+    ];
+
+    const result = mergeChildrenIntoTree(tree, "", children);
+    expect(result.children).toEqual(children);
+  });
+
+  it("returns tree unchanged when target not found", () => {
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "index.md", path: "index.md", isDirectory: false },
+      ],
+    };
+
+    const result = mergeChildrenIntoTree(tree, "nonexistent", []);
+    expect(result.children).toEqual(tree.children);
   });
 });

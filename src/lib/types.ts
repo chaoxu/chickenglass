@@ -62,6 +62,13 @@ export interface FileEntry {
 export interface FileSystem {
   /** List all files/directories as a tree starting from root. */
   listTree(): Promise<FileEntry>;
+  /**
+   * List the direct children of a single directory (non-recursive).
+   *
+   * Directory entries are returned with `children` undefined (not yet loaded).
+   * When absent, callers should fall back to `listTree()`.
+   */
+  listChildren?(path: string): Promise<FileEntry[]>;
   /** Read the content of a file at the given path. */
   readFile(path: string): Promise<string>;
   /** Write content to a file at the given path. */

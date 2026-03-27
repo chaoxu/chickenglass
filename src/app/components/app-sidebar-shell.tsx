@@ -19,7 +19,7 @@ import { usePersistentTreeState } from "../hooks/use-file-tree-controller";
 interface AppSidebarShellProps {
   workspace: Pick<
     AppWorkspaceSessionController,
-    "sidebarTab" | "setSidebarTab" | "fileTree"
+    "sidebarTab" | "setSidebarTab" | "fileTree" | "loadChildren"
   >;
   editor: Pick<
     AppEditorShellController,
@@ -65,6 +65,7 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
                 onCreateFile={(path) => { void editor.createFile(path); }}
                 onCreateDir={(path) => { void editor.createDirectory(path); }}
                 persistRef={fileTreePersistRef}
+                onLoadChildren={(dirPath) => { void workspace.loadChildren(dirPath); }}
               />
             </TabsContent>
             <TabsContent value="outline" className="min-h-full">

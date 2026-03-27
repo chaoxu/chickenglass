@@ -13,6 +13,10 @@ export function listTreeCommand(): Promise<FileEntry> {
   return invokeWithPerf<FileEntry>("list_tree");
 }
 
+export function listChildrenCommand(path: string): Promise<FileEntry[]> {
+  return invokeWithPerf<FileEntry[]>("list_children", { path });
+}
+
 export function readFileCommand(path: string): Promise<string> {
   return invokeWithPerf<string>("read_file", { path });
 }
