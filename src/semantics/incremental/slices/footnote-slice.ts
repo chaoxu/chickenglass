@@ -6,7 +6,8 @@ import type {
 } from "../../document";
 import {
   mapRangeObject,
-  replaceOverlappingRanges,
+  rangesOverlap,
+  type RangeLike,
   type PositionMapper,
 } from "../merge-utils";
 import type { DirtyWindow, SemanticDelta } from "../types";
@@ -85,6 +86,117 @@ function mapFootnoteDefinitions(
     return next;
   });
   return changed ? mapped : values;
+}
+
+function sameFootnoteReference(
+  left: FootnoteReference,
+  right: FootnoteReference,
+): boolean {
+  return left.id === right.id && left.from === right.from && left.to === right.to;
+}
+
+function sameFootnoteDefinition(
+  left: FootnoteDefinition,
+  right: FootnoteDefinition,
+): boolean {
+  return (
+    left.id === right.id
+    && left.from === right.from
+    && left.to === right.to
+    && left.content === right.content
+    && left.labelFrom === right.labelFrom
+    && left.labelTo === right.labelTo
+  );
+}
+
+function replacementWindow<T extends RangeLike>(
+  window: RangeLike,
+  replacements: readonly T[],
+): RangeLike {
+  if (replacements.length === 0) return window;
+  return {
+    from: Math.min(window.from, replacements[0].from),
+    to: Math.max(window.to, replacements[replacements.length - 1].to),
+  };
+}
+
+function reuseEquivalentReplacements<T>(
+  existing: readonly T[],
+  replacements: readonly T[],
+  isEquivalent: (left: T, right: T) => boolean,
+): readonly T[] {
+  if (existing.length === 0 || replacements.length === 0) {
+    return replacements;
+  }
+
+  const reused = new Set<number>();
+  let changed = false;
+  const normalized = replacements.map((replacement) => {
+    const matchIndex = existing.findIndex((value, index) => (
+      !reused.has(index) && isEquivalent(value, replacement)
+    ));
+    if (matchIndex === -1) {
+      return replacement;
+    }
+
+    reused.add(matchIndex);
+    changed = true;
+    return existing[matchIndex];
+  });
+
+  return changed ? normalized : replacements;
+}
+
+function replaceFootnoteRanges<T extends RangeLike>(
+  values: readonly T[],
+  window: RangeLike,
+  replacements: readonly T[],
+  isEquivalent: (left: T, right: T) => boolean,
+): readonly T[] {
+  const targetWindow = replacementWindow(window, replacements);
+
+  let start = values.length;
+  for (let index = 0; index < values.length; index++) {
+    if (
+      rangesOverlap(values[index], targetWindow)
+      || values[index].from >= targetWindow.from
+    ) {
+      start = index;
+      break;
+    }
+  }
+
+  if (start === values.length) {
+    return replacements.length === 0 ? values : [...values, ...replacements];
+  }
+
+  let end = start;
+  while (end < values.length && rangesOverlap(values[end], targetWindow)) {
+    end++;
+  }
+
+  const nextReplacements = reuseEquivalentReplacements(
+    values.slice(start, end),
+    replacements,
+    isEquivalent,
+  );
+
+  if (start === end && nextReplacements.length === 0) {
+    return values;
+  }
+
+  if (
+    end - start === nextReplacements.length
+    && nextReplacements.every((value, index) => value === values[start + index])
+  ) {
+    return values;
+  }
+
+  return [
+    ...values.slice(0, start),
+    ...nextReplacements,
+    ...values.slice(end),
+  ];
 }
 
 function findFirstReferenceChangeIndex(
@@ -242,15 +354,17 @@ export function mergeFootnoteSlice(
   let definitions = mapFootnoteDefinitions(previous.definitions, deltaMapper(delta));
 
   for (const { window, structural } of dirtyExtractions) {
-    refs = replaceOverlappingRanges(
+    refs = replaceFootnoteRanges(
       refs,
       { from: window.fromNew, to: window.toNew },
       structural.footnoteRefs,
+      sameFootnoteReference,
     );
-    definitions = replaceOverlappingRanges(
+    definitions = replaceFootnoteRanges(
       definitions,
       { from: window.fromNew, to: window.toNew },
       structural.footnoteDefs,
+      sameFootnoteDefinition,
     );
   }
 

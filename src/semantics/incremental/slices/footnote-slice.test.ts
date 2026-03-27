@@ -1,6 +1,6 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { syntaxTree } from "@codemirror/language";
-import { EditorState } from "@codemirror/state";
+import { EditorState, type ChangeSpec } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 
 import { markdownExtensions } from "../../../parser";
@@ -84,6 +84,22 @@ function insertBeforeAndMerge(
     delta,
     extractDirtyFootnoteWindows(tr.state, delta),
   );
+}
+
+function mergeAndRebuild(
+  state: EditorState,
+  changes: ChangeSpec,
+): { before: FootnoteSlice; after: FootnoteSlice; rebuilt: FootnoteSlice } {
+  const before = analyzeFootnoteSlice(state);
+  const tr = state.update({ changes });
+  const delta = buildSemanticDelta(tr);
+  const after = mergeFootnoteSlice(
+    before,
+    delta,
+    extractDirtyFootnoteWindows(tr.state, delta),
+  );
+  const rebuilt = analyzeFootnoteSlice(tr.state);
+  return { before, after, rebuilt };
 }
 
 describe("footnote slice", () => {
@@ -196,5 +212,71 @@ describe("footnote slice", () => {
       expect(after.defs.get(def.id)).toBe(def);
       expect(after.defByFrom.get(def.from)).toBe(def);
     }
+  });
+
+  it("matches a fresh rebuild when appending a trailing newline after the final definition", () => {
+    const doc = [
+      "Alpha[^a].",
+      "Beta[^b].",
+      "Gamma[^c].",
+      "",
+      "[^a]: first",
+      "[^b]: second",
+      "[^c]: third",
+    ].join("\n");
+    const state = createState(doc);
+    const { after, rebuilt } = mergeAndRebuild(state, {
+      from: state.doc.length,
+      insert: "\n",
+    });
+
+    expect(after.definitions).toHaveLength(3);
+    expect(after).toEqual(rebuilt);
+  });
+
+  it("matches a fresh rebuild when deleting a middle definition", () => {
+    const doc = [
+      "Alpha[^a].",
+      "Beta[^b].",
+      "Gamma[^c].",
+      "",
+      "[^a]: first",
+      "[^b]: second",
+      "[^c]: third",
+      "",
+    ].join("\n");
+    const state = createState(doc);
+    const target = "[^b]: second\n";
+    const from = doc.indexOf(target);
+    const { after, rebuilt } = mergeAndRebuild(state, {
+      from,
+      to: from + target.length,
+      insert: "",
+    });
+
+    expect(after.definitions).toHaveLength(2);
+    expect(after.definitions.map((def) => def.id)).toEqual(["a", "c"]);
+    expect(after).toEqual(rebuilt);
+  });
+
+  it("matches a fresh rebuild when inserting a ref immediately before an existing ref", () => {
+    const doc = [
+      "Alpha[^a].",
+      "Beta[^b].",
+      "",
+      "[^a]: first",
+      "[^b]: second",
+      "[^c]: third",
+    ].join("\n");
+    const state = createState(doc);
+    const boundary = doc.indexOf("[^b]");
+    const { after, rebuilt } = mergeAndRebuild(state, {
+      from: boundary,
+      insert: "[^c]",
+    });
+
+    expect(after.refs).toHaveLength(3);
+    expect(after.refs.map((ref) => ref.id)).toEqual(["a", "c", "b"]);
+    expect(after).toEqual(rebuilt);
   });
 });
