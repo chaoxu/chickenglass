@@ -6,7 +6,7 @@ import {
 } from "./incremental/window-extractor";
 import { buildMathSlice } from "./incremental/slices/math-slice";
 import { deriveIncludeSlice } from "./incremental/slices/include-slice";
-import { NARRATIVE_REFERENCE_RE } from "./reference-parts";
+import { buildReferenceSlice } from "./incremental/slices/reference-slice";
 
 // Equation label extraction now lives in the shared window extractor, which
 // still uses readBracedLabelId from src/parser/label-utils.ts.
@@ -249,78 +249,6 @@ function finalizeEquations(
   }));
 }
 
-/**
- * Binary search for the rightmost excluded range whose `from` <= target.
- * Returns the index, or -1 if no such range exists.
- */
-function upperBoundExcluded(
-  ranges: readonly { from: number; to: number }[],
-  target: number,
-): number {
-  let lo = 0;
-  let hi = ranges.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (ranges[mid].from <= target) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo - 1;
-}
-
-/**
- * Check whether position [from, to] falls inside any excluded range,
- * using binary search on the sorted array. O(log n) per check.
- */
-function isInsideExcludedRange(
-  sorted: readonly { from: number; to: number }[],
-  from: number,
-  to: number,
-): boolean {
-  // Find the last range that starts at or before `from`
-  const idx = upperBoundExcluded(sorted, from);
-  if (idx < 0) return false;
-  return from >= sorted[idx].from && to <= sorted[idx].to;
-}
-
-/**
- * Post-process narrative (non-bracketed) references via regex scan,
- * excluding ranges inside Link, InlineCode, or InlineMath nodes
- * collected during the tree walk.
- *
- * Uses binary search on sorted excludedRanges for O(matches * log(excludedRanges))
- * instead of O(matches * excludedRanges).
- */
-function collectNarrativeReferences(
-  doc: TextSource,
-  excludedRanges: readonly { from: number; to: number }[],
-): ReferenceSemantics[] {
-  const refs: ReferenceSemantics[] = [];
-  const fullText = doc.slice(0, doc.length);
-
-  // Sort excluded ranges by `from` for binary search. The shared structural
-  // extractor already emits them in document order, but we sort defensively
-  // here to keep the fallback independent from extractor internals.
-  const sorted = excludedRanges.slice().sort((a, b) => a.from - b.from);
-
-  NARRATIVE_REFERENCE_RE.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = NARRATIVE_REFERENCE_RE.exec(fullText)) !== null) {
-    const from = match.index;
-    const to = from + match[0].length;
-    if (isInsideExcludedRange(sorted, from, to)) continue;
-
-    refs.push({
-      from,
-      to,
-      bracketed: false,
-      ids: [match[1]],
-      locators: [undefined],
-    });
-  }
-
-  return refs;
-}
-
 // ---------------------------------------------------------------------------
 // Public per-category analyzers (thin wrappers for backward compatibility)
 // ---------------------------------------------------------------------------
@@ -381,13 +309,7 @@ export function analyzeMath(doc: TextSource, tree: Tree): MathSemantics[] {
 }
 
 export function analyzeReferences(doc: TextSource, tree: Tree): ReferenceSemantics[] {
-  const structural = extractStructuralWindow(doc, tree);
-  const refs = [
-    ...structural.bracketedRefs,
-    ...collectNarrativeReferences(doc, structural.excludedRanges),
-  ];
-  refs.sort((a, b) => a.from - b.from);
-  return refs;
+  return [...buildReferenceSlice(doc, extractStructuralWindow(doc, tree)).references];
 }
 
 // ---------------------------------------------------------------------------
@@ -408,10 +330,8 @@ export function analyzeDocumentSemantics(
   const fencedDivs = structural.fencedDivs;
   const equations = finalizeEquations(structural.equations);
   const mathRegions = buildMathSlice(structural).mathRegions;
-
-  const narrativeRefs = collectNarrativeReferences(doc, structural.excludedRanges);
-  const references = [...structural.bracketedRefs, ...narrativeRefs];
-  references.sort((a, b) => a.from - b.from);
+  const referenceSlice = buildReferenceSlice(doc, structural);
+  const references = referenceSlice.references;
 
   const includes = deriveIncludeSlice(doc, fencedDivs);
 
@@ -425,7 +345,7 @@ export function analyzeDocumentSemantics(
     equationById: new Map(equations.map((equation) => [equation.id, equation])),
     mathRegions,
     references,
-    referenceByFrom: new Map(references.map((reference) => [reference.from, reference])),
+    referenceByFrom: referenceSlice.referenceByFrom,
     includes,
     includeByFrom: new Map(includes.map((inc) => [inc.from, inc])),
   };
