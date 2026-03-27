@@ -1,4 +1,4 @@
-solver = "codex"
+solver = "claude"
 reviewers = ["codex"]
 retries = 5
 
@@ -11,25 +11,9 @@ verify = [
 
 accept = """
 If the change affects rendering, CSS, decorations, themes, or layout:
-  1. Pick random ports to avoid collisions with other agents:
-       DEV_PORT=$((RANDOM % 10000 + 20000))
-       CDP_PORT=$((RANDOM % 10000 + 30000))
-  2. Start the dev server: npx vite --port $DEV_PORT &
-  3. Wait for it: sleep 3
-  4. Launch Chrome for Testing: npm run chrome -- --port $CDP_PORT --url http://localhost:$DEV_PORT &
-  5. Wait for Chrome: sleep 2
-  6. Write and run a Playwright script (node --input-type=module) that does:
-       import { chromium } from "playwright";
-       const browser = await chromium.connectOverCDP(`http://localhost:${CDP_PORT}`);
-       const page = browser.contexts()[0]?.pages()[0];
-       await page.waitForFunction(() => window.__cmDebug);
-       await page.evaluate(() => __app.openFile("index.md"));
-       await new Promise(r => setTimeout(r, 1000));
-       const state = await page.evaluate(() => __cmDebug.dump());
-       console.log(JSON.stringify(state, null, 2));
-       // Check state.tree for correct block structure
-       // Check state.fences for proper fence visibility
-       await browser.close();
-  7. Clean up: kill $(lsof -ti:$DEV_PORT) 2>/dev/null; kill $(lsof -ti:$CDP_PORT) 2>/dev/null
+  1. Launch the dev server and Chrome/CDP on random ports to avoid collisions with other agents.
+  2. Use the repo's browser helper tools and scripts for CDP verification instead of ad-hoc Playwright setup.
+  3. Verify the live browser state against `index.md` (or the relevant file) using the existing debug bridge and helper workflow.
+  4. Clean up any background dev-server / Chrome processes you started.
 Otherwise the verify commands (typecheck, lint, test) are sufficient.
 """
