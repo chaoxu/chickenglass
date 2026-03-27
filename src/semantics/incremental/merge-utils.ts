@@ -41,15 +41,12 @@ export function rangesOverlap(value: RangeLike, window: RangeLike): boolean {
 function lowerBoundByTo<T extends RangeLike>(
   values: readonly T[],
   target: number,
-  inclusive: boolean,
 ): number {
   let lo = 0;
   let hi = values.length;
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
-    if (inclusive ? values[mid].to < target : values[mid].to <= target) {
-      lo = mid + 1;
-    }
+    if (values[mid].to < target) lo = mid + 1;
     else hi = mid;
   }
   return lo;
@@ -77,7 +74,7 @@ export function firstOverlapIndex<T extends RangeLike>(
   values: readonly T[],
   window: RangeLike,
 ): number {
-  const index = lowerBoundByTo(values, window.from, window.from === window.to);
+  const index = lowerBoundByTo(values, window.from);
   for (let current = index; current < values.length; current++) {
     if (values[current].from > window.to) return -1;
     if (rangesOverlap(values[current], window)) return current;

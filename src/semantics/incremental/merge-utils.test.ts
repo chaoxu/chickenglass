@@ -102,6 +102,16 @@ describe("firstOverlapIndex", () => {
 
     expect(firstOverlapIndex(withPoint, { from: 5, to: 5 })).toBe(1);
   });
+
+  it("finds a collapsed point on the dirty window's start boundary", () => {
+    const stale = mapRangeObject(
+      range("stale", 5, 6),
+      makeChanges("0123456789", [{ from: 5, to: 8, insert: "XY" }]),
+    );
+
+    expect(stale).toEqual(range("stale", 5, 5));
+    expect(firstOverlapIndex([stale], { from: 5, to: 7 })).toBe(0);
+  });
 });
 
 describe("replaceOverlappingRanges", () => {
