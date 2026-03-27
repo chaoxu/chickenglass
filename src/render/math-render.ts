@@ -112,20 +112,22 @@ export class MathWidget extends MacroAwareWidget {
   }
 
   createDOM(): HTMLElement {
-    const el = document.createElement(this.isDisplay ? "div" : "span");
-    el.className = this.isDisplay ? CSS.mathDisplay : CSS.mathInline;
-    el.setAttribute("role", "img");
-    el.setAttribute("aria-label", this.latex);
-    if (this.isDisplay) {
-      const content = document.createElement("div");
-      renderKatex(content, this.latex, this.isDisplay, this.macros);
-      // Shrink-wrap the rendered equation so only visible math is clickable.
-      content.classList.add(CSS.mathDisplayContent);
-      el.appendChild(content);
+    return this.createCachedDOM(() => {
+      const el = document.createElement(this.isDisplay ? "div" : "span");
+      el.className = this.isDisplay ? CSS.mathDisplay : CSS.mathInline;
+      el.setAttribute("role", "img");
+      el.setAttribute("aria-label", this.latex);
+      if (this.isDisplay) {
+        const content = document.createElement("div");
+        renderKatex(content, this.latex, this.isDisplay, this.macros);
+        // Shrink-wrap the rendered equation so only visible math is clickable.
+        content.classList.add(CSS.mathDisplayContent);
+        el.appendChild(content);
+        return el;
+      }
+      renderKatex(el, this.latex, this.isDisplay, this.macros);
       return el;
-    }
-    renderKatex(el, this.latex, this.isDisplay, this.macros);
-    return el;
+    });
   }
 
   override toDOM(view?: EditorView): HTMLElement {

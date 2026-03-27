@@ -192,6 +192,9 @@ export abstract class RenderWidget extends WidgetType {
   /** Document offset of the end of the source range this widget replaces. */
   sourceTo = -1;
 
+  /** Pristine DOM snapshot used to avoid rebuilding expensive widgets on scroll. */
+  private cachedDOM: HTMLElement | null = null;
+
   /**
    * Subclasses build their DOM element here.
    *
@@ -201,6 +204,23 @@ export abstract class RenderWidget extends WidgetType {
    */
   createDOM(): HTMLElement {
     return document.createElement("span");
+  }
+
+  /**
+   * Build the widget DOM once, then clone that pristine snapshot on later calls.
+   *
+   * Use this only for widgets whose structure is fully determined by their
+   * constructor state. Event listeners that depend on the live EditorView should
+   * still be attached in `toDOM()` after the clone is returned.
+   */
+  protected createCachedDOM(build: () => HTMLElement): HTMLElement {
+    if (this.cachedDOM) {
+      return cloneRenderedHTMLElement(this.cachedDOM);
+    }
+
+    const el = build();
+    this.cachedDOM = cloneRenderedHTMLElement(el);
+    return el;
   }
 
   protected setSourceRangeAttrs(el: HTMLElement): void {
@@ -246,6 +266,44 @@ export abstract class RenderWidget extends WidgetType {
   ignoreEvent(): boolean {
     return true;
   }
+}
+
+function collectCanvasNodes(root: HTMLElement): HTMLCanvasElement[] {
+  const canvases = [...root.querySelectorAll("canvas")];
+  return root instanceof HTMLCanvasElement ? [root, ...canvases] : canvases;
+}
+
+function copyCanvasBitmap(
+  source: HTMLCanvasElement,
+  target: HTMLCanvasElement,
+): void {
+  target.width = source.width;
+  target.height = source.height;
+
+  const ctx = target.getContext("2d");
+  if (!ctx) return;
+  ctx.drawImage(source, 0, 0);
+}
+
+/**
+ * Deep-clone rendered DOM, preserving canvas bitmap contents.
+ *
+ * `cloneNode(true)` copies element structure but not canvas pixels, so widgets
+ * that embed canvases need an explicit bitmap copy on the cloned nodes.
+ */
+export function cloneRenderedHTMLElement<T extends HTMLElement>(source: T): T {
+  const clone = source.cloneNode(true) as T;
+  const sourceCanvases = collectCanvasNodes(source);
+  if (sourceCanvases.length === 0) {
+    return clone;
+  }
+
+  const cloneCanvases = collectCanvasNodes(clone);
+  const count = Math.min(sourceCanvases.length, cloneCanvases.length);
+  for (let i = 0; i < count; i++) {
+    copyCanvasBitmap(sourceCanvases[i], cloneCanvases[i]);
+  }
+  return clone;
 }
 
 /** StateEffect dispatched when the editor gains or loses focus. */

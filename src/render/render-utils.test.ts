@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { Decoration } from "@codemirror/view";
 import type { Range } from "@codemirror/state";
 import { StateEffect } from "@codemirror/state";
@@ -22,6 +22,7 @@ import {
   editorFocusField,
   RenderWidget,
   SimpleTextRenderWidget,
+  cloneRenderedHTMLElement,
   decorationHidden,
 } from "./render-utils";
 import {
@@ -130,6 +131,27 @@ class TestWidget extends RenderWidget {
   }
 }
 
+class CachedTestWidget extends RenderWidget {
+  buildCount = 0;
+
+  constructor(readonly label: string) {
+    super();
+  }
+
+  createDOM(): HTMLElement {
+    return this.createCachedDOM(() => {
+      this.buildCount += 1;
+      const span = document.createElement("span");
+      span.textContent = this.label;
+      return span;
+    });
+  }
+
+  eq(other: CachedTestWidget): boolean {
+    return this.label === other.label;
+  }
+}
+
 describe("SimpleTextRenderWidget", () => {
   it("renders a text element with attrs", () => {
     const widget = new SimpleTextRenderWidget({
@@ -165,6 +187,45 @@ describe("SimpleTextRenderWidget", () => {
 
     expect(left.eq(right)).toBe(true);
     expect(left.eq(different)).toBe(false);
+  });
+});
+
+describe("RenderWidget DOM cache", () => {
+  it("reuses a pristine cached DOM snapshot across repeated renders", () => {
+    const widget = new CachedTestWidget("cached");
+
+    const first = widget.toDOM();
+    first.textContent = "mutated";
+    const second = widget.toDOM();
+
+    expect(widget.buildCount).toBe(1);
+    expect(second).not.toBe(first);
+    expect(second.textContent).toBe("cached");
+  });
+});
+
+describe("cloneRenderedHTMLElement", () => {
+  it("copies nested canvas bitmaps onto the cloned tree", () => {
+    const drawImage = vi.fn();
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+      { drawImage } as unknown as CanvasRenderingContext2D,
+    );
+
+    const wrapper = document.createElement("div");
+    const canvas = document.createElement("canvas");
+    canvas.width = 32;
+    canvas.height = 18;
+    wrapper.appendChild(canvas);
+
+    const clone = cloneRenderedHTMLElement(wrapper);
+    const clonedCanvas = clone.querySelector("canvas");
+
+    expect(clonedCanvas).not.toBeNull();
+    expect(clonedCanvas?.width).toBe(32);
+    expect(clonedCanvas?.height).toBe(18);
+    expect(drawImage).toHaveBeenCalledWith(canvas, 0, 0);
+
+    getContext.mockRestore();
   });
 });
 

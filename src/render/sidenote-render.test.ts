@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
 import { markdown } from "@codemirror/lang-markdown";
@@ -18,7 +18,7 @@ import {
   footnoteInlineToggleEffect,
   footnoteInlineExpandedField,
 } from "./sidenote-render";
-import { getDecorationSpecs } from "../test-utils";
+import { createMockEditorView, getDecorationSpecs } from "../test-utils";
 
 /** Create an EditorState with footnote parsing and all fields needed by sidenote decorations. */
 function createState(doc: string, cursorPos?: number): EditorState {
@@ -342,6 +342,28 @@ describe("FootnoteSectionWidget", () => {
 
     expect(a.eq(b)).toBe(false);
   });
+
+  it("re-attaches entry click handlers when cloned from cache", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new FootnoteSectionWidget(
+      [{ num: 1, id: "note-1", content: "Body", defFrom: 24 }],
+      {},
+    );
+
+    widget.toDOM(view);
+    const cloned = widget.toDOM(view);
+    const entry = cloned.querySelector<HTMLElement>(".cf-bibliography-entry");
+    entry?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      effects: sidenotesCollapsedEffect.of(false),
+      selection: { anchor: 24 },
+      scrollIntoView: true,
+    });
+  });
 });
 
 describe("tooltip inline rendering", () => {
@@ -531,5 +553,27 @@ describe("FootnoteInlineWidget", () => {
     const a = new FootnoteInlineWidget(1, "note", "Content", {}, 10);
     const b = new FootnoteInlineWidget(1, "note", "Content", {}, 20);
     expect(a.eq(b)).toBe(false);
+  });
+
+  it("re-attaches the edit button handler when cloned from cache", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new FootnoteInlineWidget(1, "note", "Content", {}, 10);
+
+    widget.toDOM(view);
+    const cloned = widget.toDOM(view);
+    const editBtn = cloned.querySelector<HTMLButtonElement>(".cf-footnote-inline-edit");
+    editBtn?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(dispatch).toHaveBeenCalledWith({
+      effects: [
+        sidenotesCollapsedEffect.of(false),
+        footnoteInlineToggleEffect.of({ id: "note", expanded: false }),
+      ],
+      selection: { anchor: 10 },
+      scrollIntoView: true,
+    });
+    expect(focus).toHaveBeenCalledTimes(1);
   });
 });

@@ -176,6 +176,27 @@ describe("MathWidget (display)", () => {
     expect(focus).toHaveBeenCalledTimes(1);
     expect(dispatch).not.toHaveBeenCalled();
   });
+
+  it("re-attaches display-math click handlers when the DOM is cloned from cache", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new MathWidget("x^2", "$$x^2$$", true);
+    widget.sourceFrom = 8;
+    widget.sourceTo = 15;
+
+    widget.toDOM(view);
+    const cloned = widget.toDOM(view);
+    const content = cloned.querySelector<HTMLElement>(`.${CSS.mathDisplayContent}`);
+
+    content?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      selection: { anchor: 8 },
+      scrollIntoView: false,
+    });
+  });
 });
 
 describe("collectMathRanges", () => {

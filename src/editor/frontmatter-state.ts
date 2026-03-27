@@ -141,14 +141,16 @@ class TitleWidget extends RenderWidget {
   }
 
   createDOM(): HTMLElement {
-    const el = document.createElement("div");
-    el.className = "cf-doc-title";
-    renderDocumentFragmentToDom(el, {
-      kind: "title",
-      text: this.title,
-      macros: this.macros,
+    return this.createCachedDOM(() => {
+      const el = document.createElement("div");
+      el.className = "cf-doc-title";
+      renderDocumentFragmentToDom(el, {
+        kind: "title",
+        text: this.title,
+        macros: this.macros,
+      });
+      return el;
     });
-    return el;
   }
 
   eq(other: TitleWidget): boolean {
