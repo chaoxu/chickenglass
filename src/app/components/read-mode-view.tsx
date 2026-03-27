@@ -24,6 +24,7 @@ import { measureAsync, measureSync } from "../perf";
 import { renderDocumentFragmentToHtml } from "../../document-surfaces";
 import { resolveLocalImageOverrides } from "../pdf-image-previews";
 import type { FileSystem } from "../file-manager";
+import { handleExternalLinkClick } from "../../lib/open-link";
 
 /** Debounce delay (ms) for re-applying line breaking on resize. */
 const RESIZE_DEBOUNCE_MS = 200;
@@ -281,6 +282,19 @@ export function ReadModeView({
     el.addEventListener("scroll", handler, { passive: true });
     return () => el.removeEventListener("scroll", handler);
   }, [onScroll]);
+
+  // Intercept external link clicks so the Tauri webview never navigates away.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handler = (e: MouseEvent) => {
+      handleExternalLinkClick(e);
+    };
+
+    el.addEventListener("click", handler);
+    return () => el.removeEventListener("click", handler);
+  }, []);
 
   return (
     <div

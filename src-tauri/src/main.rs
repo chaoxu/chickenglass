@@ -45,6 +45,7 @@ fn main() {
             commands::watch::unwatch_directory,
             commands::fs::delete_file,
             commands::shell::reveal_in_finder,
+            commands::shell::open_url,
             commands::fs::write_file_binary,
             commands::fs::read_file_binary,
             commands::path::to_project_relative_path,

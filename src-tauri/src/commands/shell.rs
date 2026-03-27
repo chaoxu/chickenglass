@@ -6,6 +6,56 @@ use super::perf::measure_command;
 use super::path::{current_project_root, resolve_existing_path};
 use super::state::{PerfState, ProjectRoot};
 
+/// Open a URL in the OS default browser.
+///
+/// Only `http:` and `https:` URLs are allowed — all other schemes are rejected.
+#[command]
+pub fn open_url(
+    perf: State<'_, PerfState>,
+    url: String,
+) -> Result<(), String> {
+    measure_command(
+        &perf,
+        "tauri.open_url",
+        "tauri.shell.open_url",
+        "tauri",
+        Some(&url),
+        || {
+            // Validate scheme before spawning a process.
+            let lower = url.to_ascii_lowercase();
+            if !lower.starts_with("http://") && !lower.starts_with("https://") {
+                return Err(format!("Blocked non-http(s) URL: {}", url));
+            }
+
+            #[cfg(target_os = "macos")]
+            {
+                Command::new("open")
+                    .arg(&url)
+                    .spawn()
+                    .map_err(|e| format!("Failed to open URL: {}", e))?;
+            }
+
+            #[cfg(target_os = "windows")]
+            {
+                Command::new("cmd")
+                    .args(["/C", "start", "", &url])
+                    .spawn()
+                    .map_err(|e| format!("Failed to open URL: {}", e))?;
+            }
+
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            {
+                Command::new("xdg-open")
+                    .arg(&url)
+                    .spawn()
+                    .map_err(|e| format!("Failed to open URL: {}", e))?;
+            }
+
+            Ok(())
+        },
+    )
+}
+
 /// Reveal a file or directory in the OS file explorer.
 #[command]
 pub fn reveal_in_finder(
