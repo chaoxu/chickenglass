@@ -1,8 +1,14 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { openExternalUrl, handleExternalLinkClick } from "./open-link";
+import { isTauri } from "./tauri";
 
 // Mock isTauri — default to false (browser mode)
 vi.mock("./tauri", () => ({ isTauri: vi.fn(() => false) }));
+
+// Mock the perf module so the Tauri path can be exercised without a real backend.
+vi.mock("../app/perf", () => ({
+  invokeWithPerf: vi.fn(() => Promise.resolve()),
+}));
 
 describe("openExternalUrl", () => {
   let windowOpenSpy: ReturnType<typeof vi.spyOn>;
@@ -53,6 +59,36 @@ describe("openExternalUrl", () => {
 
   it("rejects fragment-only URL", async () => {
     expect(await openExternalUrl("#section")).toBe(false);
+    expect(windowOpenSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("openExternalUrl (Tauri mode)", () => {
+  let windowOpenSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    windowOpenSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+  });
+
+  afterEach(() => {
+    vi.mocked(isTauri).mockReturnValue(false);
+    windowOpenSpy.mockRestore();
+  });
+
+  it("calls invokeWithPerf('open_url') instead of window.open", async () => {
+    const { invokeWithPerf } = await import("../app/perf");
+    const result = await openExternalUrl("https://example.com");
+    expect(result).toBe(true);
+    expect(invokeWithPerf).toHaveBeenCalledWith("open_url", { url: "https://example.com" });
+    expect(windowOpenSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns false and does not throw when invokeWithPerf rejects", async () => {
+    const { invokeWithPerf } = await import("../app/perf");
+    vi.mocked(invokeWithPerf).mockRejectedValueOnce(new Error("backend down"));
+    const result = await openExternalUrl("https://example.com");
+    expect(result).toBe(false);
     expect(windowOpenSpy).not.toHaveBeenCalled();
   });
 });
