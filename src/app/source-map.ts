@@ -14,6 +14,8 @@ export interface IncludeRegion {
   rawFrom: number;
   /** End position of the include reference in the raw file */
   rawTo: number;
+  /** Nested include regions within this region (for recursive includes). */
+  children: IncludeRegion[];
 }
 
 /** Error produced when the same included file is edited inconsistently in multiple regions. */
@@ -28,19 +30,76 @@ export class ConflictingIncludeContentError extends Error {
   }
 }
 
+/** Binary search for the most specific region containing `pos`. */
+function searchRegion(regions: IncludeRegion[], pos: number): IncludeRegion | null {
+  let lo = 0;
+  let hi = regions.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const region = regions[mid];
+    if (pos < region.from) {
+      hi = mid - 1;
+    } else if (pos >= region.to) {
+      lo = mid + 1;
+    } else {
+      // Found a match — check children for a deeper (more specific) match
+      const child = searchRegion(region.children, pos);
+      return child ?? region;
+    }
+  }
+  return null;
+}
+
+/** Recursively update region positions through a CM6 ChangeSet. */
+function mapRegionsThrough(regions: IncludeRegion[], changes: ChangeSet): void {
+  for (const region of regions) {
+    const newFrom = changes.mapPos(region.from, -1);
+    const newTo = changes.mapPos(region.to, 1);
+    region.from = newFrom;
+    region.to = Math.max(newFrom, newTo);
+    mapRegionsThrough(region.children, changes);
+  }
+}
+
+/**
+ * Recursively extract each included file's content from the composed document.
+ *
+ * For regions with children, the file's content is reconstructed by replacing
+ * child spans with their original include directives.
+ */
+function decomposeRegions(
+  doc: string,
+  regions: IncludeRegion[],
+  result: Map<string, string>,
+): void {
+  for (const region of regions) {
+    decomposeRegions(doc, region.children, result);
+
+    // Reconstruct this file's content: replace child spans with their originalRefs
+    let content = "";
+    let cursor = region.from;
+    for (const child of region.children) {
+      content += doc.substring(cursor, child.from);
+      content += child.originalRef;
+      cursor = child.to;
+    }
+    content += doc.substring(cursor, region.to);
+
+    const existing = result.get(region.file);
+    if (existing !== undefined && existing !== content) {
+      throw new ConflictingIncludeContentError(region.file);
+    }
+    result.set(region.file, content);
+  }
+}
+
 /** Tracks which parts of a composed document belong to which source files. */
 export class SourceMap {
   constructor(public regions: IncludeRegion[]) {}
 
   /** Update all region positions through a CM6 ChangeSet. */
   mapThrough(changes: ChangeSet): void {
-    for (const region of this.regions) {
-      const newFrom = changes.mapPos(region.from, -1);
-      const newTo = changes.mapPos(region.to, 1);
-      region.from = newFrom;
-      // If the region was fully deleted, keep it as an empty region
-      region.to = Math.max(newFrom, newTo);
-    }
+    mapRegionsThrough(this.regions, changes);
   }
 
   /** Find which file owns a given position (null = main file). */
@@ -49,37 +108,15 @@ export class SourceMap {
     return region ? region.file : null;
   }
 
-  /** Get the region containing a position (null = main file). */
+  /** Get the most specific region containing a position (null = main file). */
   regionAt(pos: number): IncludeRegion | null {
-    // Binary search through sorted regions
-    let lo = 0;
-    let hi = this.regions.length - 1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      const region = this.regions[mid];
-      if (pos < region.from) {
-        hi = mid - 1;
-      } else if (pos >= region.to) {
-        lo = mid + 1;
-      } else {
-        // pos >= region.from && pos < region.to
-        return region;
-      }
-    }
-    return null;
+    return searchRegion(this.regions, pos);
   }
 
   /** Extract each included file's content from the composed document. */
   decompose(doc: string): Map<string, string> {
     const result = new Map<string, string>();
-    for (const region of this.regions) {
-      const content = doc.substring(region.from, region.to);
-      const existing = result.get(region.file);
-      if (existing !== undefined && existing !== content) {
-        throw new ConflictingIncludeContentError(region.file);
-      }
-      result.set(region.file, content);
-    }
+    decomposeRegions(doc, this.regions, result);
     return result;
   }
 
@@ -88,13 +125,10 @@ export class SourceMap {
     const parts: string[] = [];
     let cursor = 0;
     for (const region of this.regions) {
-      // Text before this region belongs to the main file
       parts.push(doc.substring(cursor, region.from));
-      // Replace the region content with the original include reference
       parts.push(region.originalRef);
       cursor = region.to;
     }
-    // Text after the last region belongs to the main file
     parts.push(doc.substring(cursor));
     return parts.join("");
   }

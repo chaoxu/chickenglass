@@ -318,6 +318,7 @@ describe("useEditorSession", () => {
       originalRef: includeRef,
       rawFrom: header.length,
       rawTo: header.length + includeRef.length,
+      children: [],
     }]);
     const fs = new MemoryFileSystem({
       "main.md": rawMain,

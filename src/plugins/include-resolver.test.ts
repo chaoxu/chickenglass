@@ -5,7 +5,9 @@ import {
   extractIncludePaths,
   resolveIncludePath,
   resolveIncludes,
+  resolveIncludesFromContent,
   flattenIncludes,
+  flattenIncludesWithSourceMap,
   collectIncludedPaths,
   IncludeCycleError,
   IncludeNotFoundError,
@@ -339,6 +341,132 @@ missing.md
     // this would throw IncludeNotFoundError.
     const includes = await resolveIncludes("main.md", fs);
     expect(includes).toHaveLength(0);
+  });
+});
+
+describe("resolveIncludesFromContent", () => {
+  it("resolves includes from provided content without reading root from disk", async () => {
+    const fs = new MemoryFileSystem({
+      "root.md": "disk content (should not be used)",
+      "chapter1.md": "# Chapter 1",
+    });
+    const inMemoryContent = `::: {.include}
+chapter1.md
+:::`;
+    const includes = await resolveIncludesFromContent("root.md", inMemoryContent, fs);
+    expect(includes).toHaveLength(1);
+    expect(includes[0].path).toBe("chapter1.md");
+    expect(includes[0].content).toBe("# Chapter 1");
+  });
+
+  it("recursively resolves nested includes from disk", async () => {
+    const fs = new MemoryFileSystem({
+      "chapter1.md": `# Chapter 1
+
+::: {.include}
+section1.md
+:::`,
+      "section1.md": "## Section 1\n\nNested content.",
+    });
+    const rootContent = `::: {.include}
+chapter1.md
+:::`;
+    const includes = await resolveIncludesFromContent("main.md", rootContent, fs);
+    expect(includes[0].children).toHaveLength(1);
+    expect(includes[0].children[0].path).toBe("section1.md");
+    expect(includes[0].children[0].content).toBe("## Section 1\n\nNested content.");
+  });
+
+  it("detects cycles between in-memory content and disk files", async () => {
+    const fs = new MemoryFileSystem({
+      "b.md": `::: {.include}\na.md\n:::`,
+      "a.md": "should not matter",
+    });
+    const rootContent = `::: {.include}\nb.md\n:::`;
+    await expect(resolveIncludesFromContent("a.md", rootContent, fs)).rejects.toThrow(IncludeCycleError);
+  });
+
+  it("throws IncludeNotFoundError for missing nested file", async () => {
+    const fs = new MemoryFileSystem({
+      "chapter1.md": `::: {.include}\nmissing.md\n:::`,
+    });
+    const rootContent = `::: {.include}\nchapter1.md\n:::`;
+    await expect(resolveIncludesFromContent("main.md", rootContent, fs)).rejects.toThrow(IncludeNotFoundError);
+  });
+
+  it("resolves three-level deep nesting", async () => {
+    const fs = new MemoryFileSystem({
+      "a.md": `::: {.include}\nb.md\n:::`,
+      "b.md": `::: {.include}\nc.md\n:::`,
+      "c.md": "leaf content",
+    });
+    const includes = await resolveIncludesFromContent("root.md", `::: {.include}\na.md\n:::`, fs);
+    expect(includes[0].children[0].children[0].path).toBe("c.md");
+    expect(includes[0].children[0].children[0].content).toBe("leaf content");
+  });
+
+  it("returns empty array when content has no includes", async () => {
+    const fs = new MemoryFileSystem({});
+    const includes = await resolveIncludesFromContent("main.md", "# Just text", fs);
+    expect(includes).toEqual([]);
+  });
+});
+
+describe("flattenIncludesWithSourceMap", () => {
+  it("produces nested child regions for recursive includes", () => {
+    const sectionInclude = `::: {.include}
+sec.md
+:::`;
+    const chapterContent = `Chapter text\n${sectionInclude}\nMore chapter`;
+    const rootContent = `::: {.include}
+ch.md
+:::`;
+
+    const includes = [{
+      path: "ch.md",
+      content: chapterContent,
+      children: [{ path: "sec.md", content: "Section text", children: [] }],
+    }];
+
+    const result = flattenIncludesWithSourceMap(rootContent, includes);
+
+    // One top-level region for ch.md with one child for sec.md
+    expect(result.regions).toHaveLength(1);
+    const chRegion = result.regions[0];
+    expect(chRegion.file).toBe("ch.md");
+    expect(chRegion.children).toHaveLength(1);
+
+    const secRegion = chRegion.children[0];
+    expect(secRegion.file).toBe("sec.md");
+    expect(result.text.substring(secRegion.from, secRegion.to)).toBe("Section text");
+
+    // Full expanded text contains all content, no include directives
+    expect(result.text).toContain("Chapter text");
+    expect(result.text).toContain("Section text");
+    expect(result.text).toContain("More chapter");
+    expect(result.text).not.toContain("{.include}");
+  });
+
+  it("nested regions have rawFrom/rawTo relative to parent content", () => {
+    const sectionInclude = `::: {.include}
+sec.md
+:::`;
+    const chapterContent = `Prefix\n${sectionInclude}\nSuffix`;
+
+    const includes = [{
+      path: "ch.md",
+      content: chapterContent,
+      children: [{ path: "sec.md", content: "Nested", children: [] }],
+    }];
+
+    const result = flattenIncludesWithSourceMap(`::: {.include}\nch.md\n:::`, includes);
+    const secRegion = result.regions[0].children[0];
+
+    // rawFrom/rawTo relative to parent file's content (chapterContent)
+    const expectedRawFrom = chapterContent.indexOf(sectionInclude);
+    const expectedRawTo = expectedRawFrom + sectionInclude.length;
+    expect(secRegion.rawFrom).toBe(expectedRawFrom);
+    expect(secRegion.rawTo).toBe(expectedRawTo);
   });
 });
 

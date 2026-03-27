@@ -182,6 +182,7 @@ describe("useEditorSessionPersistence", () => {
       originalRef: includeRef,
       rawFrom: header.length,
       rawTo: header.length + includeRef.length,
+      children: [],
     }]);
     const fs = new MemoryFileSystem({
       "main.md": rawMain,
@@ -313,6 +314,7 @@ describe("useEditorSessionPersistence", () => {
       originalRef: includeRef,
       rawFrom: header.length,
       rawTo: header.length + includeRef.length,
+      children: [],
     }]);
     const fs = new MemoryFileSystem({
       "main.md": rawMain,

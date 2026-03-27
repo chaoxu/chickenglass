@@ -64,11 +64,13 @@ export {
 } from "./embed-plugin";
 export {
   type ResolvedInclude,
+  type FlattenRegion,
   IncludeCycleError,
   IncludeNotFoundError,
   extractIncludePaths,
   resolveIncludePath,
   resolveIncludes,
+  resolveIncludesFromContent,
   flattenIncludes,
   flattenIncludesWithSourceMap,
   collectIncludedPaths,

@@ -141,11 +141,36 @@ export async function resolveIncludes(
   rootPath: string,
   fs: FileSystem,
 ): Promise<readonly ResolvedInclude[]> {
-  return resolveIncludesRecursive(normalizeProjectPath(rootPath), fs, []);
+  const normalized = normalizeProjectPath(rootPath);
+  const content = await readFileChecked(normalized, fs);
+  return resolveIncludesCore(normalized, content, fs, []);
 }
 
-async function resolveIncludesRecursive(
+/**
+ * Recursively resolve all includes found in the given content.
+ *
+ * Unlike {@link resolveIncludes}, this variant accepts already-loaded content
+ * for the root file — useful when the caller has in-memory content that may
+ * differ from what is on disk (e.g. the current editor buffer).
+ *
+ * @param filePath - The path of the document (used for relative-path resolution and cycle detection).
+ * @param content - The markdown content to scan for include directives.
+ * @param fs - The filesystem to read included files from.
+ * @returns The resolved include tree.
+ * @throws {IncludeCycleError} If a cycle is detected in the include chain.
+ * @throws {IncludeNotFoundError} If an included file does not exist.
+ */
+export async function resolveIncludesFromContent(
   filePath: string,
+  content: string,
+  fs: FileSystem,
+): Promise<readonly ResolvedInclude[]> {
+  return resolveIncludesCore(normalizeProjectPath(filePath), content, fs, []);
+}
+
+async function resolveIncludesCore(
+  filePath: string,
+  content: string,
   fs: FileSystem,
   ancestorChain: readonly string[],
 ): Promise<readonly ResolvedInclude[]> {
@@ -153,7 +178,6 @@ async function resolveIncludesRecursive(
   // are detected immediately without reading the file a second time.
   const selfChain = [...ancestorChain, filePath];
 
-  const content = await readFileChecked(filePath, fs);
   const includePaths = extractIncludePaths(content);
 
   const results: ResolvedInclude[] = [];
@@ -169,7 +193,7 @@ async function resolveIncludesRecursive(
 
     // Recursively resolve nested includes, passing selfChain so the current
     // file is part of the ancestry for all descendants.
-    const children = await resolveIncludesRecursive(resolved, fs, selfChain);
+    const children = await resolveIncludesCore(resolved, childContent, fs, selfChain);
 
     results.push({
       path: resolved,
@@ -232,17 +256,41 @@ export function flattenIncludes(
   return result;
 }
 
+/** A source-map region within a flattened document, potentially with nested children. */
+export interface FlattenRegion {
+  from: number;
+  to: number;
+  file: string;
+  originalRef: string;
+  rawFrom: number;
+  rawTo: number;
+  children: FlattenRegion[];
+}
+
 /** Result of flattening includes with source-map tracking. */
 export interface FlattenResult {
   /** The fully expanded document text. */
   text: string;
   /** Regions mapping positions in the expanded text to source files. */
-  regions: Array<{ from: number; to: number; file: string; originalRef: string; rawFrom: number; rawTo: number }>;
+  regions: FlattenRegion[];
+}
+
+/** Recursively shift all region positions by a base offset. */
+function offsetRegions(regions: FlattenRegion[], base: number): FlattenRegion[] {
+  return regions.map((r) => ({
+    ...r,
+    from: r.from + base,
+    to: r.to + base,
+    children: offsetRegions(r.children, base),
+  }));
 }
 
 /**
  * Flatten includes like `flattenIncludes`, but also track where each
  * included file's content ends up in the expanded document.
+ *
+ * Nested includes produce child regions so that each file's content
+ * is correctly attributed in the source map.
  */
 export function flattenIncludesWithSourceMap(
   rootContent: string,
@@ -259,26 +307,29 @@ export function flattenIncludesWithSourceMap(
     text: string;
     file: string;
     originalRef: string;
+    nestedRegions: FlattenRegion[];
   }> = [];
 
   for (const block of findIncludeBlocks(rootContent)) {
     if (includeIndex >= includes.length) break;
 
     const include = includes[includeIndex];
-    const expandedContent = flattenIncludes(include.content, include.children);
+    // Recursively flatten child content and build nested source-map regions
+    const nested = flattenIncludesWithSourceMap(include.content, include.children);
 
     replacements.push({
       start: block.from,
       end: block.to,
-      text: expandedContent,
+      text: nested.text,
       file: include.path,
       originalRef: block.text,
+      nestedRegions: nested.regions,
     });
     includeIndex++;
   }
 
   // Build result and regions by applying replacements forward
-  const regions: FlattenResult["regions"] = [];
+  const regions: FlattenRegion[] = [];
   let result = "";
   let cursor = 0;
   let offset = 0; // cumulative shift from replacements
@@ -290,6 +341,9 @@ export function flattenIncludesWithSourceMap(
     result += r.text;
     const newTo = newFrom + r.text.length;
 
+    // Adjust nested region positions by the start of this replacement in output
+    const children = offsetRegions(r.nestedRegions, newFrom);
+
     regions.push({
       from: newFrom,
       to: newTo,
@@ -297,6 +351,7 @@ export function flattenIncludesWithSourceMap(
       originalRef: r.originalRef,
       rawFrom: r.start,
       rawTo: r.end,
+      children,
     });
 
     offset += r.text.length - (r.end - r.start);
