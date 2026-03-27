@@ -164,7 +164,6 @@ export function SidenoteMargin({ view }: SidenoteMarginProps) {
     return view.state.field(mathMacrosField, false) ?? {};
     // docVersion ensures macros recompute when frontmatter changes,
     // even if the edit doesn't change doc.length.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, docVersion]);
 
   const setItemRef = useCallback((id: string, el: HTMLDivElement | null) => {
