@@ -41,6 +41,7 @@ import {
   defaultShouldRebuild,
   pushWidgetDecoration,
   addMarkerReplacement,
+  cloneRenderedHTMLElement,
   serializeMacros,
   RenderWidget,
   SimpleTextRenderWidget,
@@ -202,6 +203,7 @@ class FootnoteRefWidget extends SimpleTextRenderWidget {
  */
 export class FootnoteInlineWidget extends WidgetType {
   private readonly macrosKey: string;
+  private cachedDOM: HTMLElement | null = null;
 
   constructor(
     private readonly number: number,
@@ -214,7 +216,11 @@ export class FootnoteInlineWidget extends WidgetType {
     this.macrosKey = serializeMacros(macros);
   }
 
-  toDOM(view: EditorView): HTMLElement {
+  private createCachedDOM(): HTMLElement {
+    if (this.cachedDOM) {
+      return cloneRenderedHTMLElement(this.cachedDOM);
+    }
+
     const wrapper = document.createElement("div");
     wrapper.className = "cf-footnote-inline";
     wrapper.setAttribute("aria-label", `Footnote ${this.id} content`);
@@ -231,6 +237,27 @@ export class FootnoteInlineWidget extends WidgetType {
     editBtn.className = "cf-footnote-inline-edit";
     editBtn.textContent = "Edit";
     editBtn.title = "Navigate to footnote definition";
+    header.appendChild(editBtn);
+    wrapper.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "cf-footnote-inline-body";
+    renderDocumentFragmentToDom(body, {
+      kind: "footnote",
+      text: this.content,
+      macros: this.macros,
+    });
+    wrapper.appendChild(body);
+
+    this.cachedDOM = cloneRenderedHTMLElement(wrapper);
+    return wrapper;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const wrapper = this.createCachedDOM();
+    const editBtn = wrapper.querySelector<HTMLButtonElement>(".cf-footnote-inline-edit");
+    if (!editBtn) return wrapper;
+
     const defFrom = this.defFrom;
     const id = this.id;
     editBtn.addEventListener("mousedown", (e) => {
@@ -247,18 +274,6 @@ export class FootnoteInlineWidget extends WidgetType {
       });
       view.focus();
     });
-    header.appendChild(editBtn);
-    wrapper.appendChild(header);
-
-    const body = document.createElement("div");
-    body.className = "cf-footnote-inline-body";
-    renderDocumentFragmentToDom(body, {
-      kind: "footnote",
-      text: this.content,
-      macros: this.macros,
-    });
-    wrapper.appendChild(body);
-
     return wrapper;
   }
 
@@ -412,42 +427,55 @@ export class FootnoteSectionWidget extends RenderWidget {
     this.macrosKey = serializeMacros(macros);
   }
 
+  createDOM(): HTMLElement {
+    return this.createCachedDOM(() => {
+      const section = document.createElement("div");
+      section.className = "cf-bibliography";
+      section.style.marginTop = "2em";
+
+      const heading = document.createElement("h2");
+      heading.className = "cf-bibliography-heading";
+      heading.textContent = "Footnotes";
+      section.appendChild(heading);
+
+      const list = document.createElement("div");
+      list.className = "cf-bibliography-list";
+
+      for (const entry of this.entries) {
+        const div = document.createElement("div");
+        div.className = "cf-bibliography-entry";
+        div.dataset.defFrom = String(entry.defFrom);
+        div.style.cursor = "pointer";
+        div.style.fontSize = "0.85em";
+        div.style.lineHeight = "1.6";
+        div.style.marginBottom = "4px";
+
+        const num = document.createElement("sup");
+        num.style.fontWeight = "600";
+        num.style.marginRight = "4px";
+        num.textContent = String(entry.num);
+        div.appendChild(num);
+
+        const content = document.createElement("span");
+        renderDocumentFragmentToDom(content, {
+          kind: "footnote",
+          text: entry.content,
+          macros: this.macros,
+        });
+        div.appendChild(content);
+
+        list.appendChild(div);
+      }
+
+      section.appendChild(list);
+      return section;
+    });
+  }
+
   toDOM(view: EditorView): HTMLElement {
-    const section = document.createElement("div");
-    section.className = "cf-bibliography";
-    section.style.marginTop = "2em";
-
-    const heading = document.createElement("h2");
-    heading.className = "cf-bibliography-heading";
-    heading.textContent = "Footnotes";
-    section.appendChild(heading);
-
-    const list = document.createElement("div");
-    list.className = "cf-bibliography-list";
-
-    for (const entry of this.entries) {
-      const div = document.createElement("div");
-      div.className = "cf-bibliography-entry";
-      div.style.cursor = "pointer";
-      div.style.fontSize = "0.85em";
-      div.style.lineHeight = "1.6";
-      div.style.marginBottom = "4px";
-
-      const num = document.createElement("sup");
-      num.style.fontWeight = "600";
-      num.style.marginRight = "4px";
-      num.textContent = String(entry.num);
-      div.appendChild(num);
-
-      const content = document.createElement("span");
-      renderDocumentFragmentToDom(content, {
-        kind: "footnote",
-        text: entry.content,
-        macros: this.macros,
-      });
-      div.appendChild(content);
-
-      const defFrom = entry.defFrom;
+    const section = this.createDOM();
+    for (const div of section.querySelectorAll<HTMLElement>(".cf-bibliography-entry")) {
+      const defFrom = Number(div.dataset.defFrom ?? "-1");
       div.addEventListener("mousedown", (e) => {
         e.preventDefault();
         view.focus();
@@ -457,11 +485,7 @@ export class FootnoteSectionWidget extends RenderWidget {
           scrollIntoView: true,
         });
       });
-
-      list.appendChild(div);
     }
-
-    section.appendChild(list);
     return section;
   }
 

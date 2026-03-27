@@ -71,14 +71,16 @@ class BlockHeaderWidget extends MacroAwareWidget {
   }
 
   createDOM(): HTMLElement {
-    const el = document.createElement("span");
-    el.className = CSS.blockHeaderRendered;
-    renderDocumentFragmentToDom(el, {
-      kind: "block-title",
-      text: this.header,
-      macros: this.macros,
+    return this.createCachedDOM(() => {
+      const el = document.createElement("span");
+      el.className = CSS.blockHeaderRendered;
+      renderDocumentFragmentToDom(el, {
+        kind: "block-title",
+        text: this.header,
+        macros: this.macros,
+      });
+      return el;
     });
-    return el;
   }
 
   eq(other: BlockHeaderWidget): boolean {
@@ -104,28 +106,30 @@ class AttributeTitleWidget extends MacroAwareWidget {
   }
 
   createDOM(): HTMLElement {
-    const el = document.createElement("span");
-    el.className = CSS.blockAttrTitle;
+    return this.createCachedDOM(() => {
+      const el = document.createElement("span");
+      el.className = CSS.blockAttrTitle;
 
-    const openParen = document.createElement("span");
-    openParen.className = CSS.blockTitleParen;
-    openParen.textContent = "(";
-    el.appendChild(openParen);
+      const openParen = document.createElement("span");
+      openParen.className = CSS.blockTitleParen;
+      openParen.textContent = "(";
+      el.appendChild(openParen);
 
-    const titleContent = document.createElement("span");
-    renderDocumentFragmentToDom(titleContent, {
-      kind: "block-title",
-      text: this.title,
-      macros: this.macros,
+      const titleContent = document.createElement("span");
+      renderDocumentFragmentToDom(titleContent, {
+        kind: "block-title",
+        text: this.title,
+        macros: this.macros,
+      });
+      el.appendChild(titleContent);
+
+      const closeParen = document.createElement("span");
+      closeParen.className = CSS.blockTitleParen;
+      closeParen.textContent = ")";
+      el.appendChild(closeParen);
+
+      return el;
     });
-    el.appendChild(titleContent);
-
-    const closeParen = document.createElement("span");
-    closeParen.className = CSS.blockTitleParen;
-    closeParen.textContent = ")";
-    el.appendChild(closeParen);
-
-    return el;
   }
 
   eq(other: AttributeTitleWidget): boolean {
