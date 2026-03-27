@@ -4,6 +4,7 @@ import {
   type EquationStructure,
   type HeadingStructure,
 } from "./incremental/window-extractor";
+import { buildMathSlice } from "./incremental/slices/math-slice";
 import { NARRATIVE_REFERENCE_RE } from "./reference-parts";
 
 // Equation label extraction now lives in the shared window extractor, which
@@ -375,7 +376,7 @@ export function analyzeEquations(doc: TextSource, tree: Tree): EquationSemantics
 }
 
 export function analyzeMath(doc: TextSource, tree: Tree): MathSemantics[] {
-  return extractStructuralWindow(doc, tree).mathRegions;
+  return [...buildMathSlice(extractStructuralWindow(doc, tree)).mathRegions];
 }
 
 export function analyzeReferences(doc: TextSource, tree: Tree): ReferenceSemantics[] {
@@ -444,7 +445,7 @@ export function analyzeDocumentSemantics(
   );
   const fencedDivs = structural.fencedDivs;
   const equations = finalizeEquations(structural.equations);
-  const mathRegions = structural.mathRegions;
+  const mathRegions = buildMathSlice(structural).mathRegions;
 
   const narrativeRefs = collectNarrativeReferences(doc, structural.excludedRanges);
   const references = [...structural.bracketedRefs, ...narrativeRefs];
