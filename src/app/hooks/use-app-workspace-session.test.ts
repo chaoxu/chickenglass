@@ -18,6 +18,7 @@ const workspaceMockState = vi.hoisted(() => ({
   addRecentFile: vi.fn(),
   removeRecentFile: vi.fn(),
   loadProjectConfig: vi.fn(async () => ({})),
+  getGitBranch: vi.fn(async (): Promise<{ branch: string; isDetached: boolean } | null> => ({ branch: "main", isDetached: false })),
   windowState: {
     projectRoot: "/tmp/restored-project",
     currentDocument: { path: "draft.md", name: "draft.md" },
@@ -34,6 +35,8 @@ const workspaceMockState = vi.hoisted(() => ({
     this.removeRecentFile.mockReset();
     this.loadProjectConfig.mockReset();
     this.loadProjectConfig.mockImplementation(async () => ({}));
+    this.getGitBranch.mockReset();
+    this.getGitBranch.mockImplementation(async (): Promise<{ branch: string; isDetached: boolean } | null> => ({ branch: "main", isDetached: false }));
     this.windowState = {
       projectRoot: "/tmp/restored-project",
       currentDocument: { path: "draft.md", name: "draft.md" },
@@ -109,6 +112,10 @@ vi.mock("../project-config", () => ({
   loadProjectConfig: workspaceMockState.loadProjectConfig,
 }));
 
+vi.mock("../tauri-client/git", () => ({
+  getGitBranchCommand: () => workspaceMockState.getGitBranch(),
+}));
+
 vi.mock("../perf", () => ({
   measureAsync: (_name: string, task: () => Promise<unknown>) => task(),
   withPerfOperation: async (
@@ -135,6 +142,7 @@ interface HarnessRef {
   projectRoot: string | null;
   fileTree: FileEntry | null;
   projectConfig: Record<string, unknown>;
+  gitBranch: { branch: string; isDetached: boolean } | null;
   startupComplete: boolean;
   openProjectRoot: (path: string) => Promise<FileEntry | null>;
 }
@@ -144,6 +152,7 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
     projectRoot: null,
     fileTree: null,
     projectConfig: {},
+    gitBranch: null,
     startupComplete: false,
     openProjectRoot: async () => null,
   };
@@ -153,6 +162,7 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
     ref.projectRoot = result.projectRoot;
     ref.fileTree = result.fileTree;
     ref.projectConfig = result.projectConfig;
+    ref.gitBranch = result.gitBranch;
     ref.startupComplete = result.startupComplete;
     ref.openProjectRoot = result.openProjectRoot;
     return null;
@@ -319,6 +329,55 @@ describe("useAppWorkspaceSession", () => {
     expect(ref.projectRoot).toBe("/tmp/project-b");
     expect(ref.fileTree?.name).toBe("project-b");
     expect(ref.projectConfig).toEqual({ bibliography: "b.bib" });
+  });
+
+  it("loads git branch on startup when a project root is restored", async () => {
+    const { Harness, ref } = createHarness(fsStub);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(ref.startupComplete).toBe(true);
+    expect(ref.gitBranch).toEqual({ branch: "main", isDetached: false });
+  });
+
+  it("sets gitBranch to null for non-git folders", async () => {
+    workspaceMockState.getGitBranch.mockResolvedValueOnce(null);
+    const { Harness, ref } = createHarness(fsStub);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(ref.startupComplete).toBe(true);
+    expect(ref.gitBranch).toBeNull();
+  });
+
+  it("refreshes git branch when opening a new project root", async () => {
+    workspaceMockState.windowState = {
+      ...workspaceMockState.windowState,
+      projectRoot: null,
+    };
+    const { Harness, ref } = createHarness(fsStub);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    workspaceMockState.getGitBranch.mockResolvedValueOnce({ branch: "feature-x", isDetached: false });
+
+    await act(async () => {
+      await ref.openProjectRoot("/tmp/new-project");
+    });
+
+    expect(ref.gitBranch).toEqual({ branch: "feature-x", isDetached: false });
   });
 
   it("does not let a stale startup restore overwrite a newer manual open", async () => {

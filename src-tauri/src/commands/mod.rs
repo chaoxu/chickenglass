@@ -1,6 +1,7 @@
 pub mod debug;
 pub mod export;
 pub mod fs;
+pub mod git;
 pub mod perf;
 pub mod path;
 pub mod shell;

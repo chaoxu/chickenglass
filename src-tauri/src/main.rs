@@ -54,6 +54,7 @@ fn main() {
             commands::debug::debug_list_windows,
             commands::debug::debug_get_native_state,
             commands::debug::debug_emit_file_changed,
+            commands::git::get_git_branch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Coflat");
