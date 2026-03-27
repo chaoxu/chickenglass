@@ -98,4 +98,21 @@ describe("extractStructuralWindow", () => {
       },
     ]);
   });
+
+  it("emits labeled equations when a window only touches the display-math body", () => {
+    const doc = "$$x^2 + y^2$$ {#eq:pyth}\n";
+    const tree = parser.parse(doc);
+    const src = stringTextSource(doc);
+    const equations = analyzeEquations(src, tree);
+
+    const structural = extractStructuralWindow(src, tree, {
+      from: doc.indexOf("x^2"),
+      to: doc.indexOf("y^2") + 3,
+    });
+
+    expect(structural.mathRegions).toHaveLength(1);
+    expect(structural.equations).toEqual(
+      equations.map(({ number: _number, ...equation }) => equation),
+    );
+  });
 });

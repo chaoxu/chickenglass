@@ -246,10 +246,11 @@ export function collectStructuralWindow(
         const isDisplay = name === "DisplayMath";
         const markName = isDisplay ? "DisplayMathMark" : "InlineMathMark";
         const marks = node.node.getChildren(markName);
+        const equationLabel = isDisplay ? node.node.getChild("EquationLabel") : null;
         const contentFrom = marks.length >= 1 ? marks[0].to : node.from;
         const contentTo = marks.length >= 2 ? marks[marks.length - 1].from : node.to;
         const labelFrom =
-          isDisplay && node.node.getChild("EquationLabel") && marks.length >= 2
+          equationLabel && marks.length >= 2
             ? marks[marks.length - 1].to
             : undefined;
         const latex = contentFrom <= contentTo
@@ -265,29 +266,25 @@ export function collectStructuralWindow(
           labelFrom,
           latex,
         });
-      }
 
-      if (name === "EquationLabel") {
-        const labelId = readBracedLabelId(
-          doc.slice(node.from, node.to),
-          0,
-          node.to - node.from,
-          "eq:",
-        );
-        if (!labelId) return;
-
-        const parent = node.node.parent;
-        if (!parent || parent.type.name !== "DisplayMath") return;
-
-        result.equations.push({
-          id: labelId,
-          from: parent.from,
-          to: parent.to,
-          labelFrom: node.from,
-          labelTo: node.to,
-          latex: extractDisplayMathLatex(doc.slice(parent.from, node.from)),
-        });
-        return;
+        if (equationLabel) {
+          const labelId = readBracedLabelId(
+            doc.slice(equationLabel.from, equationLabel.to),
+            0,
+            equationLabel.to - equationLabel.from,
+            "eq:",
+          );
+          if (labelId) {
+            result.equations.push({
+              id: labelId,
+              from: node.from,
+              to: node.to,
+              labelFrom: equationLabel.from,
+              labelTo: equationLabel.to,
+              latex: extractDisplayMathLatex(doc.slice(node.from, equationLabel.from)),
+            });
+          }
+        }
       }
 
       if (name === "InlineCode" || name === "InlineMath") {
