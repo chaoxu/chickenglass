@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FileEntry } from "../file-manager";
 import {
+  buildTreeIndex,
   createFileTreeHotkeys,
   flattenVisibleEntries,
   resolveFileTreeKey,
@@ -191,5 +192,57 @@ describe("createFileTreeHotkeys", () => {
     handler(undefined as never, tree as never);
 
     expect(onSelect).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildTreeIndex", () => {
+  it("indexes nested directory entries (#570)", () => {
+    const root: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        {
+          name: "docs",
+          path: "docs",
+          isDirectory: true,
+          children: [
+            {
+              name: "deep",
+              path: "docs/deep",
+              isDirectory: true,
+              children: [
+                { name: "proof.md", path: "docs/deep/proof.md", isDirectory: false },
+              ],
+            },
+            { name: "notes.md", path: "docs/notes.md", isDirectory: false },
+          ],
+        },
+        { name: "index.md", path: "index.md", isDirectory: false },
+      ],
+    };
+
+    const { entriesById, childrenById } = buildTreeIndex(root);
+
+    // All entries are indexed
+    expect(entriesById.has("docs")).toBe(true);
+    expect(entriesById.has("docs/deep")).toBe(true);
+    expect(entriesById.has("docs/deep/proof.md")).toBe(true);
+    expect(entriesById.has("docs/notes.md")).toBe(true);
+    expect(entriesById.has("index.md")).toBe(true);
+
+    // Directory children are populated
+    expect(childrenById.get("docs")).toEqual(["docs/deep", "docs/notes.md"]);
+    expect(childrenById.get("docs/deep")).toEqual(["docs/deep/proof.md"]);
+
+    // Files have empty children
+    expect(childrenById.get("index.md")).toEqual([]);
+    expect(childrenById.get("docs/deep/proof.md")).toEqual([]);
+  });
+
+  it("handles null root", () => {
+    const { entriesById, childrenById } = buildTreeIndex(null);
+    expect(childrenById.get("__cf-file-tree-root__")).toEqual([]);
+    expect(entriesById.size).toBe(1);
   });
 });
