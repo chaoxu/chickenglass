@@ -7,12 +7,15 @@
  * increment a single shared counter.
  */
 
-import { type EditorState, StateField } from "@codemirror/state";
+import { type EditorState, StateField, type Transaction } from "@codemirror/state";
 import type { NumberingScheme } from "../parser/frontmatter";
 import type { PluginRegistryState } from "./plugin-registry";
 import { getPluginOrFallback, pluginRegistryField } from "./plugin-registry";
 import { frontmatterField } from "../editor/frontmatter-state";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import {
+  documentSemanticsField,
+  getDocumentAnalysisSliceRevision,
+} from "../semantics/codemirror-source";
 
 /** A numbered block entry mapping a fenced div to its assigned number. */
 export interface NumberedBlock {
@@ -40,6 +43,31 @@ export interface BlockCounterState {
 
 /** Sentinel counter group used when numbering is "global". */
 const GLOBAL_COUNTER = "_global";
+
+function getEffectiveNumbering(state: EditorState): NumberingScheme {
+  return state.field(frontmatterField).config.numbering ?? "grouped";
+}
+
+function shouldRecomputeBlockNumbers(tr: Transaction): boolean {
+  if (!tr.docChanged && !tr.reconfigured) {
+    return false;
+  }
+
+  const startSemantics = tr.startState.field(documentSemanticsField);
+  const nextSemantics = tr.state.field(documentSemanticsField);
+  if (
+    getDocumentAnalysisSliceRevision(startSemantics, "fencedDivs")
+    !== getDocumentAnalysisSliceRevision(nextSemantics, "fencedDivs")
+  ) {
+    return true;
+  }
+
+  if (tr.startState.field(pluginRegistryField) !== tr.state.field(pluginRegistryField)) {
+    return true;
+  }
+
+  return getEffectiveNumbering(tr.startState) !== getEffectiveNumbering(tr.state);
+}
 
 /**
  * Walk the semantic fenced-div list and assign sequential numbers to all
@@ -127,16 +155,20 @@ export function emptyCounterState(): BlockCounterState {
  */
 export const blockCounterField = StateField.define<BlockCounterState>({
   create(state) {
-    const numbering = state.field(frontmatterField).config.numbering;
-    return computeBlockNumbers(state, state.field(pluginRegistryField), numbering);
+    return computeBlockNumbers(
+      state,
+      state.field(pluginRegistryField),
+      getEffectiveNumbering(state),
+    );
   },
 
   update(value, tr) {
-    if (
-      tr.state.field(documentSemanticsField) !== tr.startState.field(documentSemanticsField)
-    ) {
-      const numbering = tr.state.field(frontmatterField).config.numbering;
-      return computeBlockNumbers(tr.state, tr.state.field(pluginRegistryField), numbering);
+    if (shouldRecomputeBlockNumbers(tr)) {
+      return computeBlockNumbers(
+        tr.state,
+        tr.state.field(pluginRegistryField),
+        getEffectiveNumbering(tr.state),
+      );
     }
     return value;
   },
