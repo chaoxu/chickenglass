@@ -1,11 +1,19 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
+import {
+  type DecorationSet,
+  EditorView,
+  type ViewPlugin,
+} from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
 import { markdown } from "@codemirror/lang-markdown";
 import { footnoteExtension } from "../parser/footnote";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import {
+  documentSemanticsField,
+  getDocumentAnalysisSliceRevision,
+} from "../semantics/codemirror-source";
 import { renderInlineMarkdown } from "./inline-render";
 import {
   computeSidenoteOffsets,
@@ -13,12 +21,15 @@ import {
   FootnoteSectionWidget,
   FootnoteInlineWidget,
   buildSidenoteDecorations,
+  footnoteSectionPlugin,
+  sidenoteDecorationField,
   sidenotesCollapsedEffect,
   sidenotesCollapsedField,
   footnoteInlineToggleEffect,
   footnoteInlineExpandedField,
 } from "./sidenote-render";
-import { createMockEditorView, getDecorationSpecs } from "../test-utils";
+import { editorFocusField, focusEffect } from "./render-utils";
+import { createMockEditorView, createTestView, getDecorationSpecs } from "../test-utils";
 
 /** Create an EditorState with footnote parsing and all fields needed by sidenote decorations. */
 function createState(doc: string, cursorPos?: number): EditorState {
@@ -48,6 +59,64 @@ function createFullState(doc: string, cursorPos?: number): EditorState {
       footnoteInlineExpandedField,
     ],
   });
+}
+
+function createDecoratedState(doc: string, cursorPos = 0): EditorState {
+  return EditorState.create({
+    doc,
+    selection: { anchor: cursorPos },
+    extensions: [
+      markdown({ extensions: [footnoteExtension] }),
+      frontmatterField,
+      mathMacrosField,
+      documentSemanticsField,
+      editorFocusField,
+      sidenotesCollapsedField,
+      footnoteInlineExpandedField,
+      sidenoteDecorationField,
+    ],
+  });
+}
+
+function focusState(state: EditorState): EditorState {
+  return state.update({ effects: focusEffect.of(true) }).state;
+}
+
+interface FootnoteSectionPluginValue {
+  decorations: DecorationSet;
+}
+
+let pluginView: EditorView | undefined;
+
+afterEach(() => {
+  pluginView?.destroy();
+  pluginView = undefined;
+});
+
+function createFootnoteSectionView(doc: string): EditorView {
+  pluginView = createTestView(doc, {
+    focus: false,
+    extensions: [
+      markdown({ extensions: [footnoteExtension] }),
+      frontmatterField,
+      mathMacrosField,
+      documentSemanticsField,
+      sidenotesCollapsedField,
+      footnoteSectionPlugin,
+    ],
+  });
+  return pluginView;
+}
+
+function getFootnoteSectionPlugin(v: EditorView): FootnoteSectionPluginValue {
+  const plugin = v.plugin(
+    footnoteSectionPlugin as unknown as ViewPlugin<FootnoteSectionPluginValue>,
+  );
+  expect(plugin).toBeDefined();
+  if (!plugin) {
+    throw new Error("footnoteSectionPlugin is not installed");
+  }
+  return plugin;
 }
 
 describe("computeSidenoteOffsets", () => {
@@ -331,6 +400,221 @@ describe("buildSidenoteDecorations — collapsed mode", () => {
     const defBEnd = multiDoc.length;
     expect(replaceDecos[1].from).toBe(defBStart);
     expect(replaceDecos[1].to).toBe(defBEnd);
+  });
+});
+
+describe("sidenote decoration invalidation", () => {
+  it("does not rebuild on unrelated semantic slice changes", () => {
+    const doc = [
+      "Text [^1] end",
+      "",
+      "[^1]: Note",
+      "",
+      "# Old heading",
+    ].join("\n");
+    const state = createDecoratedState(doc);
+    const beforeAnalysis = state.field(documentSemanticsField);
+    const beforeDecorations = state.field(sidenoteDecorationField);
+    const headingText = doc.indexOf("Old");
+
+    const next = state.update({
+      changes: {
+        from: headingText,
+        to: headingText + "Old".length,
+        insert: "New",
+      },
+    }).state;
+
+    const afterAnalysis = next.field(documentSemanticsField);
+    expect(afterAnalysis).not.toBe(beforeAnalysis);
+    expect(getDocumentAnalysisSliceRevision(afterAnalysis, "footnotes")).toBe(
+      getDocumentAnalysisSliceRevision(beforeAnalysis, "footnotes"),
+    );
+    expect(next.field(sidenoteDecorationField)).toBe(beforeDecorations);
+  });
+
+  it("rebuilds when the footnote slice changes", () => {
+    const doc = "Text [^1] end\n\n[^1]: Note";
+    const state = createDecoratedState(doc);
+    const beforeDecorations = state.field(sidenoteDecorationField);
+    const noteText = doc.indexOf("Note");
+
+    const next = state.update({
+      changes: {
+        from: noteText,
+        to: noteText + "Note".length,
+        insert: "Remark",
+      },
+    }).state;
+
+    expect(next.field(sidenoteDecorationField)).not.toBe(beforeDecorations);
+  });
+
+  it("ignores selection changes outside active ref and label ranges", () => {
+    const doc = "Lead paragraph.\n\nText [^1] end\n\n[^1]: Note";
+    const state = focusState(createDecoratedState(doc, 0));
+    const beforeDecorations = state.field(sidenoteDecorationField);
+    const paragraphPos = doc.indexOf("Text");
+
+    const next = state.update({
+      selection: { anchor: paragraphPos },
+    }).state;
+
+    expect(next.field(sidenoteDecorationField)).toBe(beforeDecorations);
+  });
+
+  it("rebuilds only when selection crosses an active ref or label", () => {
+    const doc = "Text [^1] end\n\n[^1]: Note";
+    let state = focusState(createDecoratedState(doc, 0));
+    const refStart = doc.indexOf("[^1]");
+    const refInside = refStart + 2;
+    const labelStart = doc.lastIndexOf("[^1]:");
+
+    const beforeDecorations = state.field(sidenoteDecorationField);
+    state = state.update({ selection: { anchor: refStart } }).state;
+    const refDecorations = state.field(sidenoteDecorationField);
+    expect(refDecorations).not.toBe(beforeDecorations);
+
+    state = state.update({ selection: { anchor: refInside } }).state;
+    expect(state.field(sidenoteDecorationField)).toBe(refDecorations);
+
+    state = state.update({ selection: { anchor: labelStart } }).state;
+    expect(state.field(sidenoteDecorationField)).not.toBe(refDecorations);
+  });
+
+  it("does not rebuild when frontmatter changes but math macros stay the same", () => {
+    const doc = [
+      "---",
+      "title: Old",
+      "math:",
+      "  \\R: alpha",
+      "---",
+      "",
+      "Text [^1]",
+      "",
+      "[^1]: Note",
+    ].join("\n");
+    const state = createDecoratedState(doc);
+    const beforeDecorations = state.field(sidenoteDecorationField);
+    const titleText = doc.indexOf("Old");
+
+    const next = state.update({
+      changes: {
+        from: titleText,
+        to: titleText + "Old".length,
+        insert: "New",
+      },
+    }).state;
+
+    expect(next.field(sidenoteDecorationField)).toBe(beforeDecorations);
+  });
+
+  it("rebuilds when inline footnote macros change", () => {
+    const doc = [
+      "---",
+      "math:",
+      "  \\R: alpha",
+      "---",
+      "",
+      "Text [^1]",
+      "",
+      "[^1]: See $\\R$",
+    ].join("\n");
+    let state = createDecoratedState(doc);
+    state = state.update({
+      effects: [
+        sidenotesCollapsedEffect.of(true),
+        footnoteInlineToggleEffect.of({ id: "1", expanded: true }),
+      ],
+    }).state;
+    const beforeDecorations = state.field(sidenoteDecorationField);
+    const macroText = doc.indexOf("alpha");
+
+    const next = state.update({
+      changes: {
+        from: macroText,
+        to: macroText + "alpha".length,
+        insert: "beta",
+      },
+    }).state;
+
+    expect(next.field(sidenoteDecorationField)).not.toBe(beforeDecorations);
+  });
+});
+
+describe("footnote section invalidation", () => {
+  it("does not rebuild on unrelated semantic changes while collapsed", () => {
+    const doc = [
+      "Text [^1] end",
+      "",
+      "[^1]: Note",
+      "",
+      "# Old heading",
+    ].join("\n");
+    const v = createFootnoteSectionView(doc);
+    v.dispatch({ effects: sidenotesCollapsedEffect.of(true) });
+    const beforeAnalysis = v.state.field(documentSemanticsField);
+    const beforeDecorations = getFootnoteSectionPlugin(v).decorations;
+    const headingText = doc.indexOf("Old");
+
+    v.dispatch({
+      changes: {
+        from: headingText,
+        to: headingText + "Old".length,
+        insert: "New",
+      },
+    });
+
+    const afterAnalysis = v.state.field(documentSemanticsField);
+    expect(getDocumentAnalysisSliceRevision(afterAnalysis, "footnotes")).toBe(
+      getDocumentAnalysisSliceRevision(beforeAnalysis, "footnotes"),
+    );
+    expect(getFootnoteSectionPlugin(v).decorations).toBe(beforeDecorations);
+  });
+
+  it("rebuilds when the footnote slice changes while collapsed", () => {
+    const doc = "Text [^1] end\n\n[^1]: Note";
+    const v = createFootnoteSectionView(doc);
+    v.dispatch({ effects: sidenotesCollapsedEffect.of(true) });
+    const beforeDecorations = getFootnoteSectionPlugin(v).decorations;
+    const noteText = doc.indexOf("Note");
+
+    v.dispatch({
+      changes: {
+        from: noteText,
+        to: noteText + "Note".length,
+        insert: "Remark",
+      },
+    });
+
+    expect(getFootnoteSectionPlugin(v).decorations).not.toBe(beforeDecorations);
+  });
+
+  it("rebuilds when footnote macros change while collapsed", () => {
+    const doc = [
+      "---",
+      "math:",
+      "  \\R: alpha",
+      "---",
+      "",
+      "Text [^1]",
+      "",
+      "[^1]: See $\\R$",
+    ].join("\n");
+    const v = createFootnoteSectionView(doc);
+    v.dispatch({ effects: sidenotesCollapsedEffect.of(true) });
+    const beforeDecorations = getFootnoteSectionPlugin(v).decorations;
+    const macroText = doc.indexOf("alpha");
+
+    v.dispatch({
+      changes: {
+        from: macroText,
+        to: macroText + "alpha".length,
+        insert: "beta",
+      },
+    });
+
+    expect(getFootnoteSectionPlugin(v).decorations).not.toBe(beforeDecorations);
   });
 });
 
