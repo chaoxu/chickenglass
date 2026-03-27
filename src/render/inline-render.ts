@@ -5,14 +5,13 @@
  * This file is intentionally only the DOM render adapter.
  */
 
-import katex from "katex";
 import type { InlineRenderSurface } from "../inline-surface";
 import {
   type InlineFragment,
   parseInlineFragments,
 } from "../inline-fragments";
-import { buildKatexOptions } from "../lib/katex-options";
 import { isSafeUrl } from "../lib/url-utils";
+import { renderKatexToHtml } from "./inline-shared";
 
 interface InlineSegment {
   isMath: boolean;
@@ -121,7 +120,7 @@ function renderFragment(
     case "math": {
       const span = document.createElement("span");
       try {
-        span.innerHTML = katex.renderToString(fragment.latex, buildKatexOptions(false, macros));
+        span.innerHTML = renderKatexToHtml(fragment.latex, false, macros);
       } catch (_e) {
         // best-effort: KaTeX render failed — show raw LaTeX source as fallback
         span.textContent = fragment.raw;

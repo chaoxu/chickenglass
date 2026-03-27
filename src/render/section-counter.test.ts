@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { EditorState } from "@codemirror/state";
+import { EditorState, type StateField } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
-import type { Decoration } from "@codemirror/view";
-import { buildSectionDecorations } from "./section-counter";
+import type { Decoration, DecorationSet } from "@codemirror/view";
+import { buildSectionDecorations, sectionNumberPlugin } from "./section-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 
 /** Create an EditorState with the markdown parser and a given document. */
@@ -27,6 +27,9 @@ function extractNumbers(state: EditorState): string[] {
   }
   return numbers;
 }
+
+const sectionNumberField =
+  (sectionNumberPlugin as unknown as readonly [unknown, StateField<DecorationSet>])[1];
 
 describe("buildSectionDecorations", () => {
   it("numbers sequential top-level headings", () => {
@@ -168,5 +171,29 @@ describe("buildSectionDecorations", () => {
     expect(extractNumbers(createState(doc))).toEqual([
       "1", "1.1", "1.2", "2",
     ]);
+  });
+});
+
+describe("sectionNumberPlugin", () => {
+  it("maps heading decorations through non-heading edits instead of rebuilding them", () => {
+    const doc = [
+      "# One",
+      "",
+      "Paragraph",
+    ].join("\n");
+    const state = EditorState.create({
+      doc,
+      extensions: [markdown(), sectionNumberPlugin],
+    });
+    const oldIter = state.field(sectionNumberField).iter();
+    expect(oldIter.value).not.toBeNull();
+
+    const tr = state.update({
+      changes: { from: doc.length, insert: " extended" },
+    });
+    const newIter = tr.state.field(sectionNumberField).iter();
+    expect(newIter.value).not.toBeNull();
+
+    expect(newIter.value).toBe(oldIter.value);
   });
 });

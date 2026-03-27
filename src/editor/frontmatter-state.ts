@@ -6,7 +6,7 @@
  * the document title (from frontmatter) in Typora-style mode,
  * revealing the raw YAML when the cursor is inside the region.
  */
-import { EditorState, type Extension, type Range, StateField } from "@codemirror/state";
+import { EditorState, type Extension, type Range, StateField, type Transaction } from "@codemirror/state";
 import { Decoration, DecorationSet } from "@codemirror/view";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 
@@ -20,6 +20,7 @@ import {
   createDecorationsField,
   editorFocusField,
   focusTracker,
+  focusEffect,
   RenderWidget,
   serializeMacros,
 } from "../render/render-core";
@@ -133,7 +134,7 @@ class TitleWidget extends RenderWidget {
  */
 const frontmatterDecorationField = createDecorationsField(
   buildDecorations,
-  undefined, // default predicate
+  frontmatterShouldRebuild,
   true, // map on docChanged — frontmatter decorations depend on structure, not text
 );
 
@@ -156,15 +157,31 @@ export const frontmatterDecoration: Extension = [
 /** Line decoration applied to each frontmatter line when editing. */
 const frontmatterLineDeco = Decoration.line({ class: "cf-frontmatter-line" });
 
+function shouldShowFrontmatterSource(state: EditorState): boolean {
+  const { end } = state.field(frontmatterField);
+  if (end <= 0) return false;
+  const focused = state.field(editorFocusField, false) ?? false;
+  return focused && state.selection.main.from < end;
+}
+
+function frontmatterShouldRebuild(tr: Transaction): boolean {
+  if (tr.effects.some((effect) => effect.is(focusEffect))) {
+    return true;
+  }
+  if (tr.state.field(frontmatterField) !== tr.startState.field(frontmatterField)) {
+    return true;
+  }
+  if (tr.selection === undefined) return false;
+  return shouldShowFrontmatterSource(tr.state) !== shouldShowFrontmatterSource(tr.startState);
+}
+
 /** Build decorations for the frontmatter region. */
 function buildDecorations(state: EditorState): DecorationSet {
   const { end, config } = state.field(frontmatterField);
   if (end <= 0) return Decoration.none;
 
   // Only reveal raw YAML when the editor is focused and cursor is inside
-  const focused = state.field(editorFocusField, false) ?? false;
-  const cursor = state.selection.main;
-  if (focused && cursor.from < end) {
+  if (shouldShowFrontmatterSource(state)) {
     // Apply monospace line decorations to all frontmatter lines
     const decos: Range<Decoration>[] = [];
     const doc = state.doc;

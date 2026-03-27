@@ -8,6 +8,8 @@
  */
 
 import DOMPurify from "dompurify";
+import katex from "katex";
+import { buildKatexOptions } from "../lib/katex-options";
 
 // Re-export from canonical shared locations
 export { buildKatexOptions } from "../lib/katex-options";
@@ -31,6 +33,48 @@ export const MARK_NODES: ReadonlySet<string> = new Set([
   "TaskMarker",
   "TableDelimiter",
 ]);
+
+// ── Shared KaTeX HTML cache ────────────────────────────────────────────────
+
+const katexHtmlCache = new Map<string, string>();
+
+function serializeKatexMacros(macros: Record<string, string>): string {
+  const keys = Object.keys(macros);
+  if (keys.length === 0) return "";
+  keys.sort();
+  return keys.map((key) => `${key}=${macros[key]}`).join("\0");
+}
+
+function katexCacheKey(
+  latex: string,
+  isDisplay: boolean,
+  macros: Record<string, string>,
+): string {
+  return serializeKatexMacros(macros) + "\0" + (isDisplay ? "D" : "I") + "\0" + latex;
+}
+
+export function clearKatexHtmlCache(): void {
+  katexHtmlCache.clear();
+}
+
+export function renderKatexToHtml(
+  latex: string,
+  isDisplay: boolean,
+  macros: Record<string, string>,
+): string {
+  const key = katexCacheKey(latex, isDisplay, macros);
+  const cached = katexHtmlCache.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const html = katex.renderToString(latex, {
+    ...buildKatexOptions(isDisplay, macros),
+    output: "htmlAndMathml",
+  });
+  katexHtmlCache.set(key, html);
+  return html;
+}
 
 // ── CSL HTML sanitizer ──────────────────────────────────────────────────────
 

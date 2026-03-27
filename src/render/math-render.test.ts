@@ -1,4 +1,5 @@
 import { describe, expect, it, afterEach, vi } from "vitest";
+import katex from "katex";
 import { CSS } from "../constants/css-classes";
 import { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
@@ -6,12 +7,13 @@ import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { parser as lezerParser } from "@lezer/markdown";
-import { MathWidget, collectMathRanges, stripMathDelimiters, getDisplayMathContentEnd, _mathDecorationFieldForTest as mathDecorationField, mathRenderPlugin } from "./math-render";
+import { MathWidget, collectMathRanges, stripMathDelimiters, getDisplayMathContentEnd, _mathDecorationFieldForTest as mathDecorationField, mathRenderPlugin, clearKatexCache, renderKatex, renderKatexToHtml } from "./math-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
 import { createMockEditorView, createTestView } from "../test-utils";
 import { focusEffect } from "./render-utils";
 import { documentSemanticsField } from "../semantics/codemirror-source";
+import { renderInlineMarkdown } from "./inline-render";
 
 /** Count only widget (replace) decorations, ignoring mark decorations like cf-math-source. */
 function countWidgets(ranges: ReturnType<typeof collectMathRanges>): number {
@@ -384,6 +386,29 @@ describe("performance", () => {
     view = createMathView(blocks, blocks.length);
     const ranges = collectMathRanges(view);
     expect(ranges.length).toBe(50);
+  });
+});
+
+describe("shared KaTeX HTML cache", () => {
+  afterEach(() => {
+    clearKatexCache();
+    vi.restoreAllMocks();
+  });
+
+  it("reuses cached KaTeX HTML across widget and inline renderers", () => {
+    renderKatexToHtml("x^2", false, {});
+    vi.spyOn(katex, "renderToString").mockImplementation(() => {
+      throw new Error("cache miss");
+    });
+
+    const widgetContainer = document.createElement("div");
+    renderKatex(widgetContainer, "x^2", false, {});
+
+    const inlineContainer = document.createElement("div");
+    renderInlineMarkdown(inlineContainer, "$x^2$");
+
+    expect(widgetContainer.querySelector(".katex")).not.toBeNull();
+    expect(inlineContainer.querySelector(".katex")).not.toBeNull();
   });
 });
 

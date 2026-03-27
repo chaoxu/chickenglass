@@ -213,4 +213,17 @@ describe("frontmatterDecoration", () => {
 
     expect(oldWidget.eq(newWidget)).toBe(false);
   });
+
+  it("maps the title widget through edits after frontmatter instead of rebuilding it", () => {
+    const doc = "---\ntitle: Hello\n---\nContent";
+    const state = createState(doc);
+    const oldWidget = getTitleWidget(state);
+
+    const tr = state.update({
+      changes: { from: doc.length, insert: " more" },
+    });
+    const newWidget = getTitleWidget(tr.state);
+
+    expect(newWidget).toBe(oldWidget);
+  });
 });

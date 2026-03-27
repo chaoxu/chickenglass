@@ -16,6 +16,7 @@ import {
   type EditorState,
   type Extension,
   type Range,
+  type Transaction,
 } from "@codemirror/state";
 import { buildDecorations, createDecorationsField } from "./render-utils";
 import { documentSemanticsField } from "../semantics/codemirror-source";
@@ -35,10 +36,19 @@ export function buildSectionDecorations(state: EditorState): DecorationSet {
   return buildDecorations(items);
 }
 
+function sectionHeadingFingerprint(state: EditorState): string {
+  return state.field(documentSemanticsField).headings
+    .map((heading) => `${heading.level}:${heading.unnumbered ? "u" : "n"}`)
+    .join(",");
+}
+
+function sectionShouldRebuild(tr: Transaction): boolean {
+  return sectionHeadingFingerprint(tr.state) !== sectionHeadingFingerprint(tr.startState);
+}
+
 const sectionNumberField = createDecorationsField(
   buildSectionDecorations,
-  (tr) =>
-    tr.state.field(documentSemanticsField) !== tr.startState.field(documentSemanticsField),
+  sectionShouldRebuild,
   true, // map on docChanged — section numbers depend on heading structure, not text
 );
 

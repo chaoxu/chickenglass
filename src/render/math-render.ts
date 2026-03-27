@@ -5,7 +5,6 @@ import {
   type DecorationSet,
   EditorView,
 } from "@codemirror/view";
-import katex from "katex";
 import "katex/dist/katex.min.css";
 import { CSS } from "../constants/css-classes";
 import {
@@ -21,7 +20,9 @@ import {
 import { mathMacrosField } from "./math-macros";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import type { MathSemantics } from "../semantics/document";
-import { buildKatexOptions } from "../lib/katex-options";
+import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
+
+export { renderKatexToHtml } from "./inline-shared";
 
 export const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
 
@@ -74,23 +75,9 @@ export function stripMathDelimiters(raw: string, isDisplay: boolean, contentTo?:
   return trimmed;
 }
 
-/**
- * KaTeX HTML string cache.
- *
- * KaTeX output is pure (same input → same HTML), so we cache by
- * `latex + "\0" + displayMode`. Cleared when macros change (rare).
- * Saves ~0.1-0.3ms per equation on scroll when widgets are recreated. (#514)
- */
-const _katexCache = new Map<string, string>();
-let _katexCacheMacrosKey = "";
-
-function katexCacheKey(latex: string, isDisplay: boolean): string {
-  return latex + "\0" + (isDisplay ? "D" : "I");
-}
-
 /** Clear the KaTeX cache. Called when math macros change. */
 export function clearKatexCache(): void {
-  _katexCache.clear();
+  clearKatexHtmlCache();
 }
 
 /**
@@ -104,26 +91,8 @@ export function renderKatex(
   isDisplay: boolean,
   macros: Record<string, string>,
 ): void {
-  // Invalidate cache when macros change
-  const macrosKey = JSON.stringify(macros);
-  if (macrosKey !== _katexCacheMacrosKey) {
-    _katexCache.clear();
-    _katexCacheMacrosKey = macrosKey;
-  }
-
-  const key = katexCacheKey(latex, isDisplay);
-  const cached = _katexCache.get(key);
-  if (cached !== undefined) {
-    element.innerHTML = cached;
-    return;
-  }
-
   try {
-    katex.render(latex, element, {
-      ...buildKatexOptions(isDisplay, macros),
-      output: "htmlAndMathml",
-    });
-    _katexCache.set(key, element.innerHTML);
+    element.innerHTML = renderKatexToHtml(latex, isDisplay, macros);
   } catch (err: unknown) {
     element.className = "cf-math-error";
     element.setAttribute("role", "alert");
