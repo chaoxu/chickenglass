@@ -21,11 +21,21 @@ export function mapRangeObject<T extends RangeLike>(
   } as T;
 }
 
-export function rangesOverlap(a: RangeLike, b: RangeLike): boolean {
-  if (a.from === a.to && b.from === b.to) {
-    return a.from === b.from;
+/**
+ * Treat zero-length ranges as mapped artifacts from removed semantic values.
+ * Those points should be removed when they land on a dirty-window boundary.
+ */
+export function rangesOverlap(value: RangeLike, window: RangeLike): boolean {
+  if (value.from === value.to) {
+    if (window.from === window.to) return value.from === window.from;
+    return value.from >= window.from && value.from <= window.to;
   }
-  return a.from < b.to && b.from < a.to;
+
+  if (window.from === window.to) {
+    return value.from < window.from && window.from < value.to;
+  }
+
+  return value.from < window.to && window.from < value.to;
 }
 
 function lowerBoundByTo<T extends RangeLike>(
@@ -68,8 +78,11 @@ export function firstOverlapIndex<T extends RangeLike>(
   window: RangeLike,
 ): number {
   const index = lowerBoundByTo(values, window.from, window.from === window.to);
-  if (index >= values.length) return -1;
-  return rangesOverlap(values[index], window) ? index : -1;
+  for (let current = index; current < values.length; current++) {
+    if (values[current].from > window.to) return -1;
+    if (rangesOverlap(values[current], window)) return current;
+  }
+  return -1;
 }
 
 /**

@@ -71,6 +71,11 @@ describe("rangesOverlap", () => {
     expect(rangesOverlap(range("a", 5, 5), range("b", 5, 5))).toBe(true);
     expect(rangesOverlap(range("a", 5, 5), range("b", 6, 6))).toBe(false);
   });
+
+  it("treats collapsed points as overlapping a dirty-window boundary", () => {
+    expect(rangesOverlap(range("a", 7, 7), { from: 5, to: 7 })).toBe(true);
+    expect(rangesOverlap(range("a", 0, 5), { from: 5, to: 5 })).toBe(false);
+  });
 });
 
 describe("firstOverlapIndex", () => {
@@ -86,6 +91,16 @@ describe("firstOverlapIndex", () => {
 
   it("returns -1 when the window falls in a gap", () => {
     expect(firstOverlapIndex(values, { from: 5, to: 10 })).toBe(-1);
+  });
+
+  it("finds a same-point zero-length range after a touching predecessor", () => {
+    const withPoint = [
+      range("a", 0, 5),
+      range("b", 5, 5),
+      range("c", 8, 12),
+    ];
+
+    expect(firstOverlapIndex(withPoint, { from: 5, to: 5 })).toBe(1);
   });
 });
 
@@ -151,5 +166,17 @@ describe("replaceOverlappingRanges", () => {
     expect(result).toEqual([prefix, suffix]);
     expect(result[0]).toBe(prefix);
     expect(result[1]).toBe(suffix);
+  });
+
+  it("drops a collapsed range after a replacement that inserts new text", () => {
+    const stale = mapRangeObject(
+      range("stale", 6, 7),
+      makeChanges("0123456789", [{ from: 5, to: 8, insert: "XY" }]),
+    );
+
+    const result = replaceOverlappingRanges([stale], { from: 5, to: 7 }, []);
+
+    expect(stale).toEqual(range("stale", 7, 7));
+    expect(result).toEqual([]);
   });
 });
