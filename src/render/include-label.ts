@@ -19,7 +19,10 @@ import {
   SimpleTextRenderWidget,
 } from "./render-utils";
 import { basename } from "../lib/utils";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import {
+  documentAnalysisField,
+  getDocumentAnalysisSliceRevision,
+} from "../semantics/codemirror-source";
 import type { IncludeSemantics } from "../semantics/document";
 
 /** Build include label decorations (line highlights + filename labels). */
@@ -60,15 +63,57 @@ function buildIncludeDecorations(view: EditorView): DecorationSet {
   return buildDecorations(items);
 }
 
-/** Custom update predicate: doc, selection, or tree changed.
+function findActiveInclude(
+  includes: readonly IncludeSemantics[],
+  cursor: number,
+): IncludeSemantics | undefined {
+  let lo = 0;
+  let hi = includes.length - 1;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const include = includes[mid];
+    if (cursor < include.from) {
+      hi = mid - 1;
+      continue;
+    }
+    if (cursor > include.to) {
+      lo = mid + 1;
+      continue;
+    }
+    return include;
+  }
+
+  return undefined;
+}
+
+/** Custom update predicate: include-slice or active-label changes.
  * Viewport changes alone don't require a rebuild — the tree walk
  * already covers the full document (include blocks may span offscreen). */
 function includeShouldUpdate(update: ViewUpdate): boolean {
-  return (
-    update.docChanged ||
-    update.selectionSet ||
-    update.state.field(documentAnalysisField) !== update.startState.field(documentAnalysisField)
+  const before = update.startState.field(documentAnalysisField);
+  const after = update.state.field(documentAnalysisField);
+  if (
+    after.includes !== before.includes
+    || getDocumentAnalysisSliceRevision(after, "includes")
+      !== getDocumentAnalysisSliceRevision(before, "includes")
+  ) {
+    return true;
+  }
+
+  if (!update.selectionSet) return false;
+
+  const beforeActive = findActiveInclude(
+    before.includes,
+    update.startState.selection.main.head,
   );
+  const afterActive = findActiveInclude(
+    after.includes,
+    update.state.selection.main.head,
+  );
+
+  return beforeActive?.from !== afterActive?.from
+    || beforeActive?.to !== afterActive?.to;
 }
 
 /** CM6 extension that renders include region labels in the right margin. */
