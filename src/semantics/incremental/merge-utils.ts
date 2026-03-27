@@ -11,6 +11,8 @@ export function mapRangeObject<T extends RangeLike>(
   value: T,
   changes: PositionMapper,
 ): T {
+  // Only the outer `from`/`to` shell is remapped here. Richer semantic objects
+  // with additional absolute offsets should wrap this helper instead.
   const from = changes.mapPos(value.from, 1);
   const to = Math.max(from, changes.mapPos(value.to, -1));
   if (from === value.from && to === value.to) return value;
@@ -24,6 +26,7 @@ export function mapRangeObject<T extends RangeLike>(
 /**
  * Treat zero-length ranges as mapped artifacts from removed semantic values.
  * Those points should be removed when they land on a dirty-window boundary.
+ * Live zero-length semantic objects are not a supported steady-state input.
  */
 export function rangesOverlap(value: RangeLike, window: RangeLike): boolean {
   if (value.from === value.to) {
