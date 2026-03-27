@@ -109,6 +109,64 @@ describe("heading slice", () => {
     expect(after.headingByFrom.get(after.headings[2].from)).toBe(after.headings[2]);
   });
 
+  it("evicts a stale mapped heading when an edit starts at heading.from", () => {
+    const doc = [
+      "# A",
+      "",
+      "# B",
+      "",
+    ].join("\n");
+    const beforeState = createState(doc);
+    const before = analyzeHeadingSlice(beforeState);
+    const tr = beforeState.update({
+      changes: { from: 0, insert: "#" },
+    });
+    const delta = buildSemanticDelta(tr);
+    const after = mergeHeadingSlice(
+      before,
+      delta,
+      extractDirtyHeadingWindows(tr.state, delta),
+    );
+
+    expect(after.headings.map((heading) => ({
+      level: heading.level,
+      text: heading.text,
+      number: heading.number,
+    }))).toEqual([
+      { level: 2, text: "A", number: "1" },
+      { level: 1, text: "B", number: "1" },
+    ]);
+  });
+
+  it("evicts a stale mapped heading when deleting at heading.from", () => {
+    const doc = [
+      "## A",
+      "",
+      "# B",
+      "",
+    ].join("\n");
+    const beforeState = createState(doc);
+    const before = analyzeHeadingSlice(beforeState);
+    const tr = beforeState.update({
+      changes: { from: 0, to: 1 },
+    });
+    const delta = buildSemanticDelta(tr);
+    const after = mergeHeadingSlice(
+      before,
+      delta,
+      extractDirtyHeadingWindows(tr.state, delta),
+    );
+
+    expect(after.headings.map((heading) => ({
+      level: heading.level,
+      text: heading.text,
+      number: heading.number,
+    }))).toEqual([
+      { level: 1, text: "A", number: "1" },
+      { level: 1, text: "B", number: "2" },
+    ]);
+  });
+
   it("returns the prior slice when edits land after the heading tail", () => {
     const doc = [
       "# Intro",

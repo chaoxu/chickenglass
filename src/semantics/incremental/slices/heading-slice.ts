@@ -108,6 +108,35 @@ function mapHeadings(
   return changed ? mapped : headings;
 }
 
+function headingTouchesDirtyWindow(
+  heading: HeadingStructure,
+  window: RangeLike,
+): boolean {
+  if (rangesOverlap(heading, window)) {
+    return true;
+  }
+
+  if (window.from !== window.to) {
+    return false;
+  }
+
+  return heading.from <= window.from && window.from <= heading.to;
+}
+
+function expandMergeWindow(
+  window: RangeLike,
+  replacements: readonly HeadingStructure[],
+): RangeLike {
+  if (replacements.length === 0) {
+    return window;
+  }
+
+  return {
+    from: Math.min(window.from, replacements[0].from),
+    to: Math.max(window.to, replacements[replacements.length - 1].to),
+  };
+}
+
 function finalizeHeadingTail(
   headings: readonly HeadingStructure[],
   startIndex: number,
@@ -176,11 +205,12 @@ export function mergeHeadingSlice(
   let earliestAffectedIndex = Number.POSITIVE_INFINITY;
 
   for (const { window, structural } of dirtyExtractions) {
-    const mergeWindow = { from: window.fromNew, to: window.toNew };
-    const startIndex = replacementStartIndex(headings, mergeWindow);
+    const rawMergeWindow = { from: window.fromNew, to: window.toNew };
     const replacementHeadings = structural.headings.filter((heading) =>
-      rangesOverlap(heading, mergeWindow)
+      headingTouchesDirtyWindow(heading, rawMergeWindow)
     );
+    const mergeWindow = expandMergeWindow(rawMergeWindow, replacementHeadings);
+    const startIndex = replacementStartIndex(headings, mergeWindow);
     const nextHeadings = replaceOverlappingRanges(
       headings,
       mergeWindow,
