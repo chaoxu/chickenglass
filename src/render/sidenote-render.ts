@@ -31,14 +31,21 @@ import {
   type ViewUpdate,
   ViewPlugin,
 } from "@codemirror/view";
-import { type EditorState, type Extension, type Range, StateEffect, StateField } from "@codemirror/state";
+import {
+  type EditorState,
+  type Extension,
+  type Range,
+  type SelectionRange,
+  StateEffect,
+  StateField,
+  type Transaction,
+} from "@codemirror/state";
 
 import {
   buildDecorations,
   createBooleanToggleField,
   createDecorationsField,
   cursorInRange,
-  defaultShouldRebuild,
   pushWidgetDecoration,
   addMarkerReplacement,
   cloneRenderedHTMLElement,
@@ -50,11 +57,16 @@ import {
 } from "./render-utils";
 import { mathMacrosField } from "./math-macros";
 import {
+  type FootnoteDefinition,
+  type FootnoteReference,
   type FootnoteSemantics,
   numberFootnotes,
   orderedFootnoteEntries,
 } from "../semantics/document";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import {
+  documentSemanticsField,
+  getDocumentAnalysisSliceRevision,
+} from "../semantics/codemirror-source";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 
 /** StateEffect to toggle sidenote margin visibility. */
@@ -102,6 +114,193 @@ export const footnoteInlineExpandedField = StateField.define<ReadonlySet<string>
 /** Collect footnote references and definitions from the shared semantics field. */
 export function collectFootnotes(state: EditorState): FootnoteSemantics {
   return state.field(documentSemanticsField).footnotes;
+}
+
+function footnoteSliceChanged(
+  beforeState: EditorState,
+  afterState: EditorState,
+): boolean {
+  const before = beforeState.field(documentSemanticsField);
+  const after = afterState.field(documentSemanticsField);
+
+  return (
+    before.footnotes !== after.footnotes
+    || getDocumentAnalysisSliceRevision(before, "footnotes")
+      !== getDocumentAnalysisSliceRevision(after, "footnotes")
+  );
+}
+
+function mathMacrosChanged(
+  beforeState: EditorState,
+  afterState: EditorState,
+): boolean {
+  const before = beforeState.field(mathMacrosField, false) ?? {};
+  const after = afterState.field(mathMacrosField, false) ?? {};
+
+  return before !== after && serializeMacros(before) !== serializeMacros(after);
+}
+
+function hasFootnoteDefinitions(
+  footnotes: FootnoteSemantics,
+): footnotes is FootnoteSemantics & { readonly definitions: readonly FootnoteDefinition[] } {
+  return "definitions" in footnotes;
+}
+
+function getFootnoteDefinitions(
+  footnotes: FootnoteSemantics,
+): readonly FootnoteDefinition[] {
+  return hasFootnoteDefinitions(footnotes)
+    ? footnotes.definitions
+    : [...footnotes.defs.values()].sort((left, right) => left.from - right.from);
+}
+
+function findActiveFootnoteRef(
+  footnotes: FootnoteSemantics,
+  selection: SelectionRange,
+): FootnoteReference | undefined {
+  const { from, to } = selection;
+  let lo = 0;
+  let hi = footnotes.refs.length - 1;
+  let candidate: FootnoteReference | undefined;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const ref = footnotes.refs[mid];
+    if (ref.from <= from) {
+      candidate = ref;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  return candidate && to <= candidate.to ? candidate : undefined;
+}
+
+function findActiveFootnoteLabel(
+  footnotes: FootnoteSemantics,
+  selection: SelectionRange,
+): FootnoteDefinition | undefined {
+  const { from, to } = selection;
+  const definitions = getFootnoteDefinitions(footnotes);
+  let lo = 0;
+  let hi = definitions.length - 1;
+  let candidate: FootnoteDefinition | undefined;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const def = definitions[mid];
+    if (def.from <= from) {
+      candidate = def;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  return candidate && to <= candidate.labelTo ? candidate : undefined;
+}
+
+interface ActiveSidenoteCursorTarget {
+  readonly kind: "ref" | "label";
+  readonly id: string;
+  readonly from: number;
+  readonly to: number;
+}
+
+function getActiveSidenoteCursorTarget(
+  state: EditorState,
+): ActiveSidenoteCursorTarget | null {
+  const focused = state.field(editorFocusField, false) ?? false;
+  if (!focused) return null;
+
+  const footnotes = collectFootnotes(state);
+  const activeRef = findActiveFootnoteRef(footnotes, state.selection.main);
+  if (activeRef) {
+    return {
+      kind: "ref",
+      id: activeRef.id,
+      from: activeRef.from,
+      to: activeRef.to,
+    };
+  }
+
+  const collapsed = state.field(sidenotesCollapsedField, false) ?? false;
+  if (collapsed) return null;
+
+  const activeLabel = findActiveFootnoteLabel(footnotes, state.selection.main);
+  return activeLabel
+    ? {
+        kind: "label",
+        id: activeLabel.id,
+        from: activeLabel.from,
+        to: activeLabel.labelTo,
+      }
+    : null;
+}
+
+function sameCursorTarget(
+  left: ActiveSidenoteCursorTarget | null,
+  right: ActiveSidenoteCursorTarget | null,
+): boolean {
+  if (left === right) return true;
+  if (!left || !right) return false;
+  return (
+    left.kind === right.kind
+    && left.id === right.id
+    && left.from === right.from
+    && left.to === right.to
+  );
+}
+
+function inlineFootnoteMacrosMatter(state: EditorState): boolean {
+  const collapsed = state.field(sidenotesCollapsedField, false) ?? false;
+  if (!collapsed) return false;
+
+  const expanded = state.field(footnoteInlineExpandedField, false);
+  return (expanded?.size ?? 0) > 0;
+}
+
+function sidenoteDecorationShouldRebuild(tr: Transaction): boolean {
+  if (tr.effects.some((effect) =>
+    effect.is(sidenotesCollapsedEffect) || effect.is(footnoteInlineToggleEffect)
+  )) {
+    return true;
+  }
+
+  if (footnoteSliceChanged(tr.startState, tr.state)) {
+    return true;
+  }
+
+  if (
+    (inlineFootnoteMacrosMatter(tr.startState) || inlineFootnoteMacrosMatter(tr.state))
+    && mathMacrosChanged(tr.startState, tr.state)
+  ) {
+    return true;
+  }
+
+  return !sameCursorTarget(
+    getActiveSidenoteCursorTarget(tr.startState),
+    getActiveSidenoteCursorTarget(tr.state),
+  );
+}
+
+function footnoteSectionShouldUpdate(update: ViewUpdate): boolean {
+  const beforeCollapsed = update.startState.field(sidenotesCollapsedField, false) ?? false;
+  const afterCollapsed = update.state.field(sidenotesCollapsedField, false) ?? false;
+
+  if (beforeCollapsed !== afterCollapsed) {
+    return true;
+  }
+
+  if (!afterCollapsed) {
+    return false;
+  }
+
+  return (
+    footnoteSliceChanged(update.startState, update.state)
+    || mathMacrosChanged(update.startState, update.state)
+  );
 }
 
 /** Widget for the [^id]: label, rendered as a small superscript number. */
@@ -371,10 +570,7 @@ const sidenoteDecorationField = createDecorationsField(
     const focused = state.field(editorFocusField, false) ?? false;
     return buildSidenoteDecorations(state, focused);
   },
-  (tr) =>
-    defaultShouldRebuild(tr) ||
-    tr.effects.some((e) => e.is(sidenotesCollapsedEffect) || e.is(footnoteInlineToggleEffect)) ||
-    tr.state.field(documentSemanticsField) !== tr.startState.field(documentSemanticsField),
+  sidenoteDecorationShouldRebuild,
 );
 
 export { sidenoteDecorationField };
@@ -510,13 +706,7 @@ class FootnoteSectionPlugin implements PluginValue {
   }
 
   update(update: ViewUpdate): void {
-    if (
-      update.docChanged ||
-      update.transactions.some((tr) =>
-        tr.effects.some((e) => e.is(sidenotesCollapsedEffect)),
-      ) ||
-      update.state.field(documentSemanticsField) !== update.startState.field(documentSemanticsField)
-    ) {
+    if (footnoteSectionShouldUpdate(update)) {
       this.decorations = this.build(update.view);
     }
   }
@@ -559,3 +749,5 @@ export const sidenoteRenderPlugin: Extension = [
   sidenoteDecorationField,
   footnoteSectionPlugin,
 ];
+
+export { footnoteSectionPlugin };
