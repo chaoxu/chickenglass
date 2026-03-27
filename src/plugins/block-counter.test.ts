@@ -1,17 +1,25 @@
+import { Compartment, EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import {
   createRegistryState,
+  createPluginRegistryField,
+  pluginRegistryField,
   registerPlugins,
   unregisterPlugin,
   type PluginRegistryState,
 } from "./plugin-registry";
 import {
+  blockCounterField,
   computeBlockNumbers,
   emptyCounterState,
 } from "./block-counter";
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { frontmatterField } from "../editor/frontmatter-state";
+import {
+  documentSemanticsField,
+  getDocumentAnalysisSliceRevision,
+} from "../semantics/codemirror-source";
 import { createEditorState, makeBlockPlugin } from "../test-utils";
 
 /** Create an EditorState with the fenced div parser and a given document. */
@@ -499,5 +507,121 @@ describe("computeBlockNumbers", () => {
     expect(result.blocks[1].number).toBe(2); // Lemma 2
     expect(result.blocks[2].number).toBe(3); // Definition 3
     expect(result.blocks[3].number).toBe(4); // Theorem 4
+  });
+});
+
+describe("blockCounterField", () => {
+  it("does not recompute when unrelated semantic slices change", () => {
+    const doc = [
+      "# One",
+      "",
+      "::: {.theorem}",
+      "Statement.",
+      ":::",
+    ].join("\n");
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        markdown({ extensions: [fencedDiv] }),
+        frontmatterField,
+        documentSemanticsField,
+        createPluginRegistryField([makeBlockPlugin({ name: "theorem" })]),
+        blockCounterField,
+      ],
+    });
+    const counter1 = state.field(blockCounterField);
+    const semantics1 = state.field(documentSemanticsField);
+
+    const headingStart = doc.indexOf("One");
+    const tr = state.update({
+      changes: { from: headingStart, to: headingStart + 3, insert: "Two" },
+    });
+    const counter2 = tr.state.field(blockCounterField);
+    const semantics2 = tr.state.field(documentSemanticsField);
+
+    expect(semantics2).not.toBe(semantics1);
+    expect(getDocumentAnalysisSliceRevision(semantics2, "fencedDivs")).toBe(
+      getDocumentAnalysisSliceRevision(semantics1, "fencedDivs"),
+    );
+    expect(counter2).toBe(counter1);
+  });
+
+  it("recomputes when the plugin registry changes without fenced-div churn", () => {
+    const doc = [
+      "::: {.theorem}",
+      "Statement.",
+      ":::",
+    ].join("\n");
+    const builtinCompartment = new Compartment();
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        markdown({ extensions: [fencedDiv] }),
+        frontmatterField,
+        documentSemanticsField,
+        builtinCompartment.of(
+          createPluginRegistryField([makeBlockPlugin({ name: "theorem" })]),
+        ),
+        blockCounterField,
+      ],
+    });
+    const counter1 = state.field(blockCounterField);
+    const semantics1 = state.field(documentSemanticsField);
+    const registry1 = state.field(pluginRegistryField);
+
+    const tr = state.update({
+      effects: builtinCompartment.reconfigure(
+        createPluginRegistryField([
+          makeBlockPlugin({ name: "theorem", numbered: false }),
+        ]),
+      ),
+    });
+    const counter2 = tr.state.field(blockCounterField);
+
+    expect(counter1.blocks).toHaveLength(1);
+    expect(tr.state.field(documentSemanticsField)).toBe(semantics1);
+    expect(tr.state.field(pluginRegistryField)).not.toBe(registry1);
+    expect(counter2).not.toBe(counter1);
+    expect(counter2.blocks).toHaveLength(0);
+  });
+
+  it("recomputes when the effective numbering scheme changes", () => {
+    const originalDoc = [
+      "---",
+      "title: AB",
+      "numbering: global",
+      "---",
+      "::: {.theorem}",
+      "Statement.",
+      ":::",
+      "",
+      "::: {.definition}",
+      "Definition.",
+      ":::",
+    ].join("\n");
+    const nextDoc = originalDoc
+      .replace("title: AB", "title: A")
+      .replace("numbering: global", "numbering: grouped");
+    const state = EditorState.create({
+      doc: originalDoc,
+      extensions: [
+        markdown({ extensions: [fencedDiv] }),
+        frontmatterField,
+        documentSemanticsField,
+        createPluginRegistryField([
+          makeBlockPlugin({ name: "theorem", counter: "theorem" }),
+          makeBlockPlugin({ name: "definition" }),
+        ]),
+        blockCounterField,
+      ],
+    });
+    const counter1 = state.field(blockCounterField);
+    const tr = state.update({
+      changes: { from: 0, to: originalDoc.length, insert: nextDoc },
+    });
+    const counter2 = tr.state.field(blockCounterField);
+    expect(counter1.blocks.map((block) => block.number)).toEqual([1, 2]);
+    expect(counter2).not.toBe(counter1);
+    expect(counter2.blocks.map((block) => block.number)).toEqual([1, 1]);
   });
 });
