@@ -1,4 +1,5 @@
 import type { Tree } from "@lezer/common";
+import { createDocumentAnalysis } from "./incremental/engine";
 import { extractStructuralWindow } from "./incremental/window-extractor";
 import { buildHeadingSlice } from "./incremental/slices/heading-slice";
 import {
@@ -7,7 +8,6 @@ import {
 } from "./incremental/slices/footnote-slice";
 import { buildEquationSlice } from "./incremental/slices/equation-slice";
 import { buildMathSlice } from "./incremental/slices/math-slice";
-import { deriveIncludeSlice } from "./incremental/slices/include-slice";
 import { buildReferenceSlice } from "./incremental/slices/reference-slice";
 
 // Equation label extraction now lives in the shared window extractor, which
@@ -277,31 +277,5 @@ export function analyzeDocumentSemantics(
   doc: TextSource,
   tree: Tree,
 ): DocumentSemantics {
-  const structural = extractStructuralWindow(doc, tree);
-
-  const headingSlice = buildHeadingSlice(structural);
-  const footnotes = buildFootnoteSlice(structural);
-  const fencedDivs = structural.fencedDivs;
-  const equationSlice = buildEquationSlice(structural);
-  const equations = equationSlice.equations;
-  const mathRegions = buildMathSlice(structural).mathRegions;
-  const referenceSlice = buildReferenceSlice(doc, structural);
-  const references = referenceSlice.references;
-
-  const includes = deriveIncludeSlice(doc, fencedDivs);
-
-  return {
-    headings: headingSlice.headings,
-    headingByFrom: headingSlice.headingByFrom,
-    footnotes,
-    fencedDivs,
-    fencedDivByFrom: new Map(fencedDivs.map((div) => [div.from, div])),
-    equations,
-    equationById: equationSlice.equationById,
-    mathRegions,
-    references,
-    referenceByFrom: referenceSlice.referenceByFrom,
-    includes,
-    includeByFrom: new Map(includes.map((inc) => [inc.from, inc])),
-  };
+  return createDocumentAnalysis(doc, tree);
 }

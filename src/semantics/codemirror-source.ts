@@ -1,19 +1,18 @@
-import type { EditorState, Transaction } from "@codemirror/state";
+import type { EditorState } from "@codemirror/state";
 import { StateField } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import type { TextSource, DocumentAnalysis } from "./document";
-import { analyzeDocumentSemantics } from "./document";
+import {
+  createDocumentAnalysis,
+  getDocumentAnalysisRevision,
+  getDocumentAnalysisRevisionInfo,
+  getDocumentAnalysisSliceRevision,
+  updateDocumentAnalysis,
+  type DocumentAnalysisRevisionInfo,
+  type DocumentAnalysisSliceName,
+  type DocumentAnalysisSliceRevisions,
+} from "./incremental/engine";
 import { buildSemanticDelta } from "./incremental/semantic-delta";
-import {
-  createEquationSlice,
-  mergeEquationSlice,
-} from "./incremental/slices/equation-slice";
-import {
-  extractDirtyFencedDivWindows,
-  mergeFencedDivSlice,
-} from "./incremental/slices/fenced-div-slice";
-import { deriveIncludeSlice } from "./incremental/slices/include-slice";
-import type { DirtyWindow } from "./incremental/types";
 
 export function editorStateTextSource(state: EditorState): TextSource {
   const doc = state.doc;
@@ -33,49 +32,6 @@ export function editorStateTextSource(state: EditorState): TextSource {
   };
 }
 
-function mergeLocalStructuralSlices(
-  previous: DocumentAnalysis,
-  next: DocumentAnalysis,
-  state: EditorState,
-  tr: Transaction,
-  dirtyWindows: readonly DirtyWindow[],
-): DocumentAnalysis {
-  const doc = editorStateTextSource(state);
-  const extractedDirtyWindows = extractDirtyFencedDivWindows(
-    previous.fencedDivs,
-    doc,
-    syntaxTree(state),
-    tr.changes,
-    dirtyWindows,
-  );
-  const fencedDivs = mergeFencedDivSlice(
-    previous.fencedDivs,
-    tr.changes,
-    extractedDirtyWindows,
-  );
-  const equationSlice = mergeEquationSlice(
-    createEquationSlice(previous.equations),
-    next.equations,
-    tr.changes,
-  );
-  const includes = deriveIncludeSlice(
-    doc,
-    fencedDivs,
-    previous.includes,
-    tr.changes,
-  );
-
-  return {
-    ...next,
-    fencedDivs,
-    fencedDivByFrom: new Map(fencedDivs.map((div) => [div.from, div])),
-    equations: equationSlice.equations,
-    equationById: equationSlice.equationById,
-    includes,
-    includeByFrom: new Map(includes.map((include) => [include.from, include])),
-  };
-}
-
 /**
  * Shared CM6 StateField that computes document semantics once per
  * document/tree change. All CM6 renderers (section numbers, sidenotes,
@@ -87,37 +43,31 @@ function mergeLocalStructuralSlices(
  */
 export const documentAnalysisField = StateField.define<DocumentAnalysis>({
   create(state) {
-    return analyzeDocumentSemantics(editorStateTextSource(state), syntaxTree(state));
+    return createDocumentAnalysis(editorStateTextSource(state), syntaxTree(state));
   },
 
   update(value, tr) {
-    if (
-      tr.docChanged ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
-    ) {
-      const next = analyzeDocumentSemantics(
-        editorStateTextSource(tr.state),
-        syntaxTree(tr.state),
-      );
-      if (!tr.docChanged) {
-        return next;
-      }
-
-      const delta = buildSemanticDelta(tr);
-      if (delta.globalInvalidation || delta.dirtyWindows.length === 0) {
-        return next;
-      }
-
-      return mergeLocalStructuralSlices(
-        value,
-        next,
-        tr.state,
-        tr,
-        delta.dirtyWindows,
-      );
+    const delta = buildSemanticDelta(tr);
+    if (!delta.docChanged && !delta.syntaxTreeChanged && !delta.globalInvalidation) {
+      return value;
     }
-    return value;
+
+    return updateDocumentAnalysis(
+      value,
+      editorStateTextSource(tr.state),
+      syntaxTree(tr.state),
+      delta,
+    );
   },
 });
 
 export const documentSemanticsField = documentAnalysisField;
+
+export {
+  getDocumentAnalysisRevision,
+  getDocumentAnalysisRevisionInfo,
+  getDocumentAnalysisSliceRevision,
+  type DocumentAnalysisRevisionInfo,
+  type DocumentAnalysisSliceName,
+  type DocumentAnalysisSliceRevisions,
+};

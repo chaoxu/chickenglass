@@ -4,10 +4,12 @@ import { syntaxTree } from "@codemirror/language";
 import { describe, expect, it } from "vitest";
 import { markdownExtensions } from "../parser";
 import { analyzeDocumentSemantics } from "./document";
-import { documentAnalysisField, editorStateTextSource } from "./codemirror-source";
-
-// Future incremental-engine contract tests. The identity cases stay marked as
-// expected failures until documentAnalysisField stops rebuilding whole slices.
+import {
+  documentAnalysisField,
+  editorStateTextSource,
+  getDocumentAnalysisRevision,
+  getDocumentAnalysisSliceRevision,
+} from "./codemirror-source";
 
 function createSemanticsState(doc: string): EditorState {
   return EditorState.create({
@@ -57,7 +59,7 @@ function expectEquationStateMatchesRebuild(state: EditorState): void {
 }
 
 describe("documentAnalysisField incremental contract", () => {
-  it.fails("reuses unchanged math region objects across unrelated edits", () => {
+  it("reuses unchanged math region objects across unrelated edits", () => {
     const doc = [
       "Alpha $x$.",
       "",
@@ -78,7 +80,7 @@ describe("documentAnalysisField incremental contract", () => {
     expect(after.mathRegions.map((region) => region.latex)).toEqual(["x", "y"]);
   });
 
-  it.fails("preserves unaffected heading prefix identity while renumbering the tail", () => {
+  it("preserves unaffected heading prefix identity while renumbering the tail", () => {
     const doc = [
       "# Intro",
       "",
@@ -107,6 +109,63 @@ describe("documentAnalysisField incremental contract", () => {
     ]);
     expect(after.headings[0]).toBe(stablePrefix);
     expect(after.headings[2]).not.toBe(renumberedTail);
+  });
+
+  it("reuses the prior analysis object on no-op transactions", () => {
+    const state = createSemanticsState("Alpha $x$.");
+    const before = state.field(documentAnalysisField);
+    const afterState = state.update({}).state;
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after).toBe(before);
+    expect(getDocumentAnalysisRevision(after)).toBe(
+      getDocumentAnalysisRevision(before),
+    );
+  });
+
+  it("bumps only the affected slice revision on a local math edit", () => {
+    const beforeState = createSemanticsState([
+      "# Intro",
+      "",
+      "Alpha $x$.",
+      "",
+      "Tail paragraph.",
+    ].join("\n"));
+    const before = beforeState.field(documentAnalysisField);
+    const from = beforeState.doc.toString().indexOf("$x$") + 1;
+    const afterState = beforeState.update({
+      changes: {
+        from,
+        to: from + 1,
+        insert: "y",
+      },
+    }).state;
+    const after = afterState.field(documentAnalysisField);
+
+    expect(getDocumentAnalysisRevision(after)).toBe(
+      getDocumentAnalysisRevision(before) + 1,
+    );
+    expect(getDocumentAnalysisSliceRevision(after, "mathRegions")).toBe(
+      getDocumentAnalysisSliceRevision(before, "mathRegions") + 1,
+    );
+    expect(getDocumentAnalysisSliceRevision(after, "headings")).toBe(
+      getDocumentAnalysisSliceRevision(before, "headings"),
+    );
+    expect(getDocumentAnalysisSliceRevision(after, "footnotes")).toBe(
+      getDocumentAnalysisSliceRevision(before, "footnotes"),
+    );
+    expect(getDocumentAnalysisSliceRevision(after, "fencedDivs")).toBe(
+      getDocumentAnalysisSliceRevision(before, "fencedDivs"),
+    );
+    expect(getDocumentAnalysisSliceRevision(after, "equations")).toBe(
+      getDocumentAnalysisSliceRevision(before, "equations"),
+    );
+    expect(getDocumentAnalysisSliceRevision(after, "references")).toBe(
+      getDocumentAnalysisSliceRevision(before, "references"),
+    );
+    expect(getDocumentAnalysisSliceRevision(after, "includes")).toBe(
+      getDocumentAnalysisSliceRevision(before, "includes"),
+    );
   });
 
   it("preserves unaffected equation prefix identity while renumbering the tail", () => {
