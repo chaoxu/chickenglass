@@ -1,5 +1,5 @@
-solver = "claude-solver"
-reviewers = ["codex-reviewer"]
+solver = "codex-solver"
+reviewers = ["codex-reviewer", "gemini-reviewer"]
 retries = 5
 
 verify = [
