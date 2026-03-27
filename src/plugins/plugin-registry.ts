@@ -260,6 +260,17 @@ const builtinPluginsFacet = Facet.define<
   },
 });
 
+function sameBuiltinPlugins(
+  previous: readonly BlockPlugin[],
+  next: readonly BlockPlugin[],
+): boolean {
+  if (previous.length !== next.length) return false;
+  for (let index = 0; index < previous.length; index += 1) {
+    if (previous[index] !== next[index]) return false;
+  }
+  return true;
+}
+
 /**
  * Build a fresh registry from built-in plugins + frontmatter blocks.
  *
@@ -295,14 +306,24 @@ export const pluginRegistryField = StateField.define<PluginRegistryState>({
   },
 
   update(value, tr) {
-    if (tr.docChanged) {
-      const builtins = tr.state.facet(builtinPluginsFacet);
-      // Use the `false` guard so this field can be used in editors that do
-      // not include frontmatterField (e.g. inline editors, tests).
-      const fm = tr.state.field(frontmatterField, false);
-      return buildRegistry(builtins, fm?.config.blocks);
+    if (!tr.docChanged && !tr.reconfigured) return value;
+
+    const previousBuiltins = tr.startState.facet(builtinPluginsFacet);
+    const nextBuiltins = tr.state.facet(builtinPluginsFacet);
+    const previousBlocksRevision = tr.startState.field(frontmatterField, false)?.blocksRevision ?? -1;
+    const nextBlocksRevision = tr.state.field(frontmatterField, false)?.blocksRevision ?? -1;
+
+    if (
+      sameBuiltinPlugins(previousBuiltins, nextBuiltins)
+      && previousBlocksRevision === nextBlocksRevision
+    ) {
+      return value;
     }
-    return value;
+
+    // Use the `false` guard so this field can be used in editors that do
+    // not include frontmatterField (e.g. inline editors, tests).
+    const fm = tr.state.field(frontmatterField, false);
+    return buildRegistry(nextBuiltins, fm?.config.blocks);
   },
 });
 
