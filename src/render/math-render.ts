@@ -16,6 +16,7 @@ import {
   editorFocusField,
   focusEffect,
   focusTracker,
+  serializeMacros,
 } from "./render-utils";
 import { mathMacrosField } from "./math-macros";
 import { documentAnalysisField } from "../semantics/codemirror-source";
@@ -201,6 +202,19 @@ function findActiveMath(
   return candidate && to <= candidate.to ? candidate : undefined;
 }
 
+function mathMacrosChanged(tr: Transaction): boolean {
+  const before = tr.startState.field(mathMacrosField, false) ?? {};
+  const after = tr.state.field(mathMacrosField, false) ?? {};
+  return before !== after && serializeMacros(before) !== serializeMacros(after);
+}
+
+function findFocusedActiveMath(state: EditorState): MathSemantics | undefined {
+  const focused = state.field(editorFocusField, false) ?? false;
+  return focused
+    ? findActiveMath(state.field(documentAnalysisField).mathRegions, state.selection.main)
+    : undefined;
+}
+
 function buildMathItems(
   state: EditorState,
   shouldSkip: (from: number, to: number) => boolean,
@@ -262,30 +276,19 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
 }
 
 function mathShouldRebuild(tr: Transaction): boolean {
-  if (
-    tr.docChanged ||
-    tr.effects.some((e) => e.is(focusEffect)) ||
-    tr.state.field(documentAnalysisField) !== tr.startState.field(documentAnalysisField)
-  ) {
+  if (tr.state.field(documentAnalysisField).mathRegions !== tr.startState.field(documentAnalysisField).mathRegions) {
     return true;
   }
 
-  if (tr.selection === undefined) return false;
+  if (mathMacrosChanged(tr)) {
+    return true;
+  }
 
-  const startFocused = tr.startState.field(editorFocusField, false) ?? false;
-  const endFocused = tr.state.field(editorFocusField, false) ?? false;
-  const before = startFocused
-    ? findActiveMath(
-        tr.startState.field(documentAnalysisField).mathRegions,
-        tr.startState.selection.main,
-      )
-    : undefined;
-  const after = endFocused
-    ? findActiveMath(
-        tr.state.field(documentAnalysisField).mathRegions,
-        tr.state.selection.main,
-      )
-    : undefined;
+  const focusChanged = tr.effects.some((e) => e.is(focusEffect));
+  if (tr.selection === undefined && !focusChanged) return false;
+
+  const before = findFocusedActiveMath(tr.startState);
+  const after = findFocusedActiveMath(tr.state);
 
   return before?.from !== after?.from || before?.to !== after?.to;
 }

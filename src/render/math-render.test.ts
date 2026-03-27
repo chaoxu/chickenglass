@@ -54,6 +54,19 @@ function createMathViewWithLabels(doc: string, cursorPos?: number): EditorView {
   });
 }
 
+function createMathRenderState(doc: string, cursorPos = 0): EditorState {
+  return EditorState.create({
+    doc,
+    selection: { anchor: cursorPos },
+    extensions: [
+      markdown({ extensions: [mathExtension, equationLabelExtension] }),
+      frontmatterField,
+      documentSemanticsField,
+      mathRenderPlugin,
+    ],
+  });
+}
+
 describe("MathWidget (inline)", () => {
   it("creates a span with cf-math-inline class", () => {
     const widget = new MathWidget("x^2", "$x^2$", false);
@@ -281,18 +294,93 @@ describe("collectMathRanges", () => {
 });
 
 describe("math decoration invalidation", () => {
+  it("does not rebuild when unrelated semantics change outside the math slice", () => {
+    const doc = "$x$\n\n# Old";
+    const state = createMathRenderState(doc);
+    const before = state.field(mathDecorationField);
+    const headingText = doc.indexOf("Old");
+
+    const after = state.update({
+      changes: {
+        from: headingText,
+        to: headingText + 3,
+        insert: "New",
+      },
+    }).state.field(mathDecorationField);
+
+    expect(after).toBe(before);
+  });
+
+  it("does not rebuild when frontmatter changes but math macros stay the same", () => {
+    const doc = [
+      "---",
+      "title: Old",
+      "math:",
+      "  \\R: alpha",
+      "---",
+      "",
+      "$\\R$",
+    ].join("\n");
+    const state = createMathRenderState(doc);
+    const before = state.field(mathDecorationField);
+    const titleText = doc.indexOf("Old");
+
+    const after = state.update({
+      changes: {
+        from: titleText,
+        to: titleText + 3,
+        insert: "New",
+      },
+    }).state.field(mathDecorationField);
+
+    expect(after).toBe(before);
+  });
+
+  it("rebuilds when math content changes", () => {
+    const doc = "aa $x$ bb";
+    const state = createMathRenderState(doc);
+    const before = state.field(mathDecorationField);
+    const mathText = doc.indexOf("x");
+
+    const after = state.update({
+      changes: {
+        from: mathText,
+        to: mathText + 1,
+        insert: "y",
+      },
+    }).state.field(mathDecorationField);
+
+    expect(after).not.toBe(before);
+  });
+
+  it("rebuilds when math macros change", () => {
+    const doc = [
+      "---",
+      "title: Old",
+      "math:",
+      "  \\R: alpha",
+      "---",
+      "",
+      "$\\R$",
+    ].join("\n");
+    const state = createMathRenderState(doc);
+    const before = state.field(mathDecorationField);
+    const macroValue = doc.indexOf("alpha");
+
+    const after = state.update({
+      changes: {
+        from: macroValue,
+        to: macroValue + 5,
+        insert: "omega",
+      },
+    }).state.field(mathDecorationField);
+
+    expect(after).not.toBe(before);
+  });
+
   it("does not rebuild when selection moves outside all math regions", () => {
     const doc = "aa $x$ bb $$y$$ cc";
-    const state = EditorState.create({
-      doc,
-      selection: { anchor: 0 },
-      extensions: [
-        markdown({ extensions: [mathExtension, equationLabelExtension] }),
-        frontmatterField,
-        documentSemanticsField,
-        mathRenderPlugin,
-      ],
-    });
+    const state = createMathRenderState(doc);
 
     const before = state.field(mathDecorationField);
     const after = state.update({ selection: { anchor: 1 } }).state.field(mathDecorationField);
@@ -302,21 +390,33 @@ describe("math decoration invalidation", () => {
 
   it("rebuilds when focused selection enters a math region", () => {
     const doc = "aa $x$ bb";
-    const initial = EditorState.create({
-      doc,
-      selection: { anchor: 0 },
-      extensions: [
-        markdown({ extensions: [mathExtension, equationLabelExtension] }),
-        frontmatterField,
-        documentSemanticsField,
-        mathRenderPlugin,
-      ],
-    });
+    const initial = createMathRenderState(doc);
     const focused = initial.update({ effects: focusEffect.of(true) }).state;
     const before = focused.field(mathDecorationField);
     const insideMath = doc.indexOf("$x$") + 1;
 
     const after = focused.update({ selection: { anchor: insideMath } }).state.field(mathDecorationField);
+
+    expect(after).not.toBe(before);
+  });
+
+  it("does not rebuild on focus gain when the cursor stays outside math", () => {
+    const doc = "aa $x$ bb";
+    const state = createMathRenderState(doc);
+    const before = state.field(mathDecorationField);
+
+    const after = state.update({ effects: focusEffect.of(true) }).state.field(mathDecorationField);
+
+    expect(after).toBe(before);
+  });
+
+  it("rebuilds on focus gain when the cursor is already inside math", () => {
+    const doc = "aa $x$ bb";
+    const insideMath = doc.indexOf("$x$") + 1;
+    const state = createMathRenderState(doc, insideMath);
+    const before = state.field(mathDecorationField);
+
+    const after = state.update({ effects: focusEffect.of(true) }).state.field(mathDecorationField);
 
     expect(after).not.toBe(before);
   });
