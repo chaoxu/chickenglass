@@ -137,7 +137,8 @@ export interface AppEditorShellController {
   headings: HeadingEntry[];
   /**
    * Called by the `<Editor>` component each time the CM6 view is (re-)mounted
-   * or updated. Updates `editorState`, `latestViewRef`, and `headings`.
+   * or updated. Updates `editorState` and `headings`, and forwards the view
+   * to `useEditorNavigation` via `syncView`.
    */
   handleEditorStateChange: (state: UseEditorReturn) => void;
   /** Called after `useEditor` has applied the current document/path to the live CM6 view. */
@@ -157,8 +158,9 @@ export interface AppEditorShellController {
   handleGotoLine: (line: number, col?: number) => void;
   /**
    * Open `file` (if it is not already current) then scroll to character offset `pos`.
-   * Uses a stable `latestViewRef` instead of the closure over `editorState`
-   * so the view reference is always fresh after the async `openFile` resolves.
+   * Uses a stable view ref (inside `useEditorNavigation`) instead of the
+   * closure over `editorState` so the view reference is always fresh after
+   * the async `openFile` resolves.
    * Calls `onComplete` when navigation finishes.
    */
   handleSearchResult: (file: string, pos: number, onComplete?: () => void) => void;
