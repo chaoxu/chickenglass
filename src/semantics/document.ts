@@ -2,8 +2,8 @@ import type { Tree } from "@lezer/common";
 import {
   extractStructuralWindow,
   type EquationStructure,
-  type HeadingStructure,
 } from "./incremental/window-extractor";
+import { buildHeadingSlice } from "./incremental/slices/heading-slice";
 import { buildMathSlice } from "./incremental/slices/math-slice";
 import { deriveIncludeSlice } from "./incremental/slices/include-slice";
 import { buildReferenceSlice } from "./incremental/slices/reference-slice";
@@ -192,28 +192,6 @@ export function hasUnnumberedHeadingAttributes(text: string): boolean {
   return attrs !== null && /(?:^|\s)(?:-|\.unnumbered)(?=\s|$)/.test(attrs.content);
 }
 
-function finalizeHeadings(headings: readonly HeadingStructure[]): HeadingSemantics[] {
-  const headingCounters = [0, 0, 0, 0, 0, 0, 0];
-
-  return headings.map((heading) => {
-    let number = "";
-    if (!heading.unnumbered) {
-      headingCounters[heading.level]++;
-      for (let i = heading.level + 1; i <= 6; i++) headingCounters[i] = 0;
-      const parts: number[] = [];
-      for (let i = 1; i <= heading.level; i++) {
-        if (headingCounters[i] !== 0) parts.push(headingCounters[i]);
-      }
-      number = parts.join(".");
-    }
-
-    return {
-      ...heading,
-      number,
-    };
-  });
-}
-
 function buildFootnoteSemantics(
   refs: readonly FootnoteReference[],
   defs: readonly FootnoteDefinition[],
@@ -254,7 +232,7 @@ function finalizeEquations(
 // ---------------------------------------------------------------------------
 
 export function analyzeHeadings(doc: TextSource, tree: Tree): HeadingSemantics[] {
-  return finalizeHeadings(extractStructuralWindow(doc, tree).headings);
+  return [...buildHeadingSlice(extractStructuralWindow(doc, tree)).headings];
 }
 
 export function analyzeFootnotes(doc: TextSource, tree: Tree): FootnoteSemantics {
@@ -322,7 +300,7 @@ export function analyzeDocumentSemantics(
 ): DocumentSemantics {
   const structural = extractStructuralWindow(doc, tree);
 
-  const headings = finalizeHeadings(structural.headings);
+  const headingSlice = buildHeadingSlice(structural);
   const footnotes = buildFootnoteSemantics(
     structural.footnoteRefs,
     structural.footnoteDefs,
@@ -336,8 +314,8 @@ export function analyzeDocumentSemantics(
   const includes = deriveIncludeSlice(doc, fencedDivs);
 
   return {
-    headings,
-    headingByFrom: new Map(headings.map((heading) => [heading.from, heading])),
+    headings: headingSlice.headings,
+    headingByFrom: headingSlice.headingByFrom,
     footnotes,
     fencedDivs,
     fencedDivByFrom: new Map(fencedDivs.map((div) => [div.from, div])),
