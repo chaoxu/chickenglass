@@ -403,4 +403,26 @@ mod tests {
         assert_eq!(entry.generation, 2);
         assert_eq!(entry.path, PathBuf::from("/tmp/project-b"));
     }
+
+    /// Guard the cross-language field-name contract: Rust `is_directory`
+    /// must serialize as camelCase `isDirectory` for the TypeScript frontend (#570).
+    #[test]
+    fn file_entry_serializes_as_camel_case() {
+        let entry = super::FileEntry {
+            name: "docs".to_string(),
+            path: "docs".to_string(),
+            is_directory: true,
+            children: Some(vec![super::FileEntry {
+                name: "note.md".to_string(),
+                path: "docs/note.md".to_string(),
+                is_directory: false,
+                children: None,
+            }]),
+        };
+        let json = serde_json::to_value(&entry).expect("serialize FileEntry");
+        assert_eq!(json["isDirectory"], true);
+        assert_eq!(json["children"][0]["isDirectory"], false);
+        // snake_case field must NOT appear
+        assert!(json.get("is_directory").is_none());
+    }
 }
