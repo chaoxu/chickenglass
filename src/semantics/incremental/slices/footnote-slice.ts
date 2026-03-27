@@ -6,6 +6,7 @@ import type {
 } from "../../document";
 import {
   mapRangeObject,
+  replaceOverlappingRanges,
   rangesOverlap,
   type RangeLike,
   type PositionMapper,
@@ -20,7 +21,7 @@ export interface FootnoteSlice extends FootnoteSemantics {
 }
 
 export interface DirtyFootnoteWindowExtraction {
-  readonly window: Pick<DirtyWindow, "fromNew" | "toNew">;
+  readonly window: DirtyWindow;
   readonly structural: Pick<StructuralWindowExtraction, "footnoteRefs" | "footnoteDefs">;
 }
 
@@ -199,6 +200,21 @@ function replaceFootnoteRanges<T extends RangeLike>(
   ];
 }
 
+function removeDirtyOldRanges<T extends RangeLike>(
+  values: readonly T[],
+  dirtyWindows: readonly Pick<DirtyWindow, "fromOld" | "toOld">[],
+): readonly T[] {
+  let next = values;
+  for (const window of dirtyWindows) {
+    next = replaceOverlappingRanges(
+      next,
+      { from: window.fromOld, to: window.toOld },
+      [],
+    );
+  }
+  return next;
+}
+
 function findFirstReferenceChangeIndex(
   previous: readonly FootnoteReference[],
   next: readonly FootnoteReference[],
@@ -350,8 +366,15 @@ export function mergeFootnoteSlice(
   delta: Pick<SemanticDelta, "mapOldToNew">,
   dirtyExtractions: readonly DirtyFootnoteWindowExtraction[],
 ): FootnoteSlice {
-  let refs = mapFootnoteReferences(previous.refs, deltaMapper(delta));
-  let definitions = mapFootnoteDefinitions(previous.definitions, deltaMapper(delta));
+  const dirtyWindows = dirtyExtractions.map(({ window }) => window);
+  let refs = mapFootnoteReferences(
+    removeDirtyOldRanges(previous.refs, dirtyWindows),
+    deltaMapper(delta),
+  );
+  let definitions = mapFootnoteDefinitions(
+    removeDirtyOldRanges(previous.definitions, dirtyWindows),
+    deltaMapper(delta),
+  );
 
   for (const { window, structural } of dirtyExtractions) {
     refs = replaceFootnoteRanges(

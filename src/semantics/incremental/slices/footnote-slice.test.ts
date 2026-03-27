@@ -88,7 +88,7 @@ function insertBeforeAndMerge(
 
 function mergeAndRebuild(
   state: EditorState,
-  changes: ChangeSpec,
+  changes: ChangeSpec | readonly ChangeSpec[],
 ): { before: FootnoteSlice; after: FootnoteSlice; rebuilt: FootnoteSlice } {
   const before = analyzeFootnoteSlice(state);
   const tr = state.update({ changes });
@@ -277,6 +277,19 @@ describe("footnote slice", () => {
 
     expect(after.refs).toHaveLength(3);
     expect(after.refs.map((ref) => ref.id)).toEqual(["a", "c", "b"]);
+    expect(after).toEqual(rebuilt);
+  });
+
+  it("matches a fresh rebuild for multi-range edits that shift and delete a boundary definition", () => {
+    const doc = "alpha [^c].\n\n[^c]: delta\n[^a]: omega";
+    const state = createState(doc);
+    const { after, rebuilt } = mergeAndRebuild(state, [
+      { from: 0, insert: "x" },
+      { from: 10, to: 14, insert: "" },
+    ]);
+
+    expect(after.definitions.map((def) => def.id)).toEqual(["a"]);
+    expect(after.orderedEntries).toEqual(rebuilt.orderedEntries);
     expect(after).toEqual(rebuilt);
   });
 });
