@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useRef } from "react";
 import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
 import type { FileSystem } from "./file-manager";
 import { SidebarProvider } from "./components/sidebar";
@@ -16,6 +16,7 @@ import { useAppOverlays } from "./hooks/use-app-overlays";
 import { useAppSessionPersistence } from "./hooks/use-app-session-persistence";
 import { useDialogs } from "./hooks/use-dialogs";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
+import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
 import { useAppWorkspaceSession } from "./hooks/use-app-workspace-session";
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
 
@@ -112,16 +113,17 @@ function AppInner() {
   const handleQuitRequest = useCallback(async (): Promise<void> => {
     if (!isTauri()) return;
     try {
-      const shouldClose = await editor.handleWindowCloseRequest();
-      if (!shouldClose) {
-        return;
-      }
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       await getCurrentWindow().close();
     } catch (e: unknown) {
       console.error("[app] quit request failed", e);
     }
-  }, [editor]);
+  }, []);
+
+  useWindowCloseGuard({
+    hasDirtyDocument: editor.hasDirtyDocument,
+    handleWindowCloseRequest: editor.handleWindowCloseRequest,
+  });
 
   useAppSessionPersistence({
     fileTree: workspace.fileTree,
@@ -168,30 +170,6 @@ function AppInner() {
     startupComplete: workspace.startupComplete,
     restoredProjectRoot: workspace.windowState.projectRoot,
   });
-
-  useEffect(() => {
-    if (!isTauri()) return;
-
-    let cancelled = false;
-    let unlisten: (() => void) | null = null;
-
-    void (async () => {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      if (cancelled) return;
-      const currentWindow = getCurrentWindow();
-      unlisten = await currentWindow.onCloseRequested(async (event) => {
-        const shouldClose = await editor.handleWindowCloseRequest();
-        if (!shouldClose) {
-          event.preventDefault();
-        }
-      });
-    })();
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [editor]);
 
   return (
     <SidebarProvider

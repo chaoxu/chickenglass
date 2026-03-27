@@ -25,6 +25,7 @@ import type {
   UnsavedChangesDecision,
   UnsavedChangesRequest,
 } from "../unsaved-changes";
+import { confirmAction } from "../confirm-action";
 
 export interface EditorSessionDeps {
   fs: FileSystem;
@@ -463,7 +464,9 @@ export function useEditorSession({
   }, [addRecentFile, fs, refreshTree, renameBuffers]);
 
   const handleDelete = useCallback(async (path: string) => {
-    const ok = window.confirm(`Delete "${basename(path)}"? This cannot be undone.`);
+    const ok = await confirmAction(`Delete "${basename(path)}"? This cannot be undone.`, {
+      kind: "warning",
+    });
     if (!ok) return;
 
     try {

@@ -12,12 +12,15 @@ const sessionMockState = vi.hoisted(() => ({
   isTauri: false,
   saveDialog: vi.fn(async () => null as string | null),
   toProjectRelativePath: vi.fn(async (path: string) => path),
+  confirmAction: vi.fn(async () => true),
   reset() {
     this.isTauri = false;
     this.saveDialog.mockReset();
     this.saveDialog.mockImplementation(async () => null);
     this.toProjectRelativePath.mockReset();
     this.toProjectRelativePath.mockImplementation(async (path: string) => path);
+    this.confirmAction.mockReset();
+    this.confirmAction.mockImplementation(async () => true);
   },
 }));
 
@@ -47,6 +50,10 @@ vi.mock("../../lib/tauri", () => ({
 
 vi.mock("../tauri-client/fs", () => ({
   toProjectRelativePathCommand: sessionMockState.toProjectRelativePath,
+}));
+
+vi.mock("../confirm-action", () => ({
+  confirmAction: sessionMockState.confirmAction,
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -397,5 +404,46 @@ describe("useEditorSession", () => {
     await expect(ref.result.saveAs()).rejects.toThrow("outside project");
     expect(consoleError).toHaveBeenCalledWith("[session] save-as failed:", expect.any(Error));
     consoleError.mockRestore();
+  });
+
+  it("confirms before deleting the current file", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "hello" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+    });
+
+    await act(async () => {
+      await ref.result.handleDelete("draft.md");
+    });
+
+    expect(sessionMockState.confirmAction).toHaveBeenCalledWith(
+      "Delete \"draft.md\"? This cannot be undone.",
+      { kind: "warning" },
+    );
+    await expect(fs.exists("draft.md")).resolves.toBe(false);
+    expect(ref.result.currentDocument).toBeNull();
+    expect(ref.result.editorDoc).toBe("");
+  });
+
+  it("keeps the file when deletion is cancelled", async () => {
+    sessionMockState.confirmAction.mockResolvedValue(false);
+    const fs = new MemoryFileSystem({ "draft.md": "hello" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+    });
+
+    await act(async () => {
+      await ref.result.handleDelete("draft.md");
+    });
+
+    await expect(fs.exists("draft.md")).resolves.toBe(true);
+    expect(ref.result.currentPath).toBe("draft.md");
+    expect(ref.result.editorDoc).toBe("hello");
   });
 });
