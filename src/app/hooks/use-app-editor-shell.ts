@@ -139,6 +139,8 @@ export interface AppEditorShellController {
    * or updated. Updates `editorState`, `latestViewRef`, and `headings`.
    */
   handleEditorStateChange: (state: UseEditorReturn) => void;
+  /** Called after `useEditor` has applied the current document/path to the live CM6 view. */
+  handleEditorDocumentReady: (view: EditorView, docPath: string | undefined) => void;
 
   // --- Navigation ---
 
@@ -261,17 +263,71 @@ export function useAppEditorShell({
   // Stable ref always pointing at the latest view, so async callbacks (e.g.
   // handleSearchResult) never capture a stale closure after openFile resolves.
   const latestViewRef = useRef<UseEditorReturn["view"]>(null);
+  const latestReadyPathRef = useRef<string | null>(null);
+  const readyPathWaitersRef = useRef<Map<string, Set<(ready: boolean) => void>>>(new Map());
+  const searchRequestRef = useRef(0);
+
+  const resolveReadyWaiters = useCallback((path: string, ready: boolean) => {
+    const waiters = readyPathWaitersRef.current.get(path);
+    if (!waiters) {
+      return;
+    }
+    readyPathWaitersRef.current.delete(path);
+    waiters.forEach((resolve) => resolve(ready));
+  }, []);
+
+  const abortReadyWaitersExcept = useCallback((activePath: string | null) => {
+    for (const [path, waiters] of readyPathWaitersRef.current) {
+      if (path === activePath) {
+        continue;
+      }
+      readyPathWaitersRef.current.delete(path);
+      waiters.forEach((resolve) => resolve(false));
+    }
+  }, []);
 
   const handleEditorStateChange = useCallback((state: UseEditorReturn) => {
     setEditorState(state);
     latestViewRef.current = state.view;
+    if (!state.view) {
+      latestReadyPathRef.current = null;
+      abortReadyWaitersExcept(null);
+    }
 
     if (state.view) {
       setHeadings(extractHeadings(state.view.state));
     } else {
       setHeadings([]);
     }
-  }, []);
+  }, [abortReadyWaitersExcept]);
+
+  const waitForEditorDocumentReady = useCallback((path: string): Promise<boolean> => {
+    if (latestReadyPathRef.current === path && latestViewRef.current) {
+      return Promise.resolve(true);
+    }
+    if (!isPathOpen(path)) {
+      return Promise.resolve(false);
+    }
+    return new Promise<boolean>((resolve) => {
+      const waiters = readyPathWaitersRef.current.get(path) ?? new Set<(ready: boolean) => void>();
+      waiters.add(resolve);
+      readyPathWaitersRef.current.set(path, waiters);
+    });
+  }, [isPathOpen]);
+
+  const handleEditorDocumentReady = useCallback((view: EditorView, docPath: string | undefined) => {
+    latestViewRef.current = view;
+    if (!docPath) {
+      return;
+    }
+    latestReadyPathRef.current = docPath;
+    abortReadyWaitersExcept(docPath);
+    resolveReadyWaiters(docPath, true);
+  }, [abortReadyWaitersExcept, resolveReadyWaiters]);
+
+  useEffect(() => {
+    abortReadyWaitersExcept(currentPath);
+  }, [abortReadyWaitersExcept, currentPath]);
 
   useEffect(() => {
     const view = editorState?.view ?? null;
@@ -317,24 +373,37 @@ export function useAppEditorShell({
   }, [editorState?.view]);
 
   const handleSearchResult = useCallback((file: string, pos: number, onComplete?: () => void) => {
+    const requestId = ++searchRequestRef.current;
     void (async () => {
       try {
         await openFile(file);
-        setTimeout(() => {
-          // Use latestViewRef so we get the view after openFile has updated
-          // editorState — the closure over editorState?.view would be stale.
-          const view = latestViewRef.current;
-          if (view) {
-            view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
-            view.focus();
-          }
+        if (requestId !== searchRequestRef.current || !isPathOpen(file)) {
           onComplete?.();
-        }, 100);
+          return;
+        }
+
+        const didBecomeReady = await waitForEditorDocumentReady(file);
+        if (!didBecomeReady) {
+          onComplete?.();
+          return;
+        }
+
+        if (requestId !== searchRequestRef.current || !isPathOpen(file)) {
+          onComplete?.();
+          return;
+        }
+
+        const view = latestViewRef.current;
+        if (view && latestReadyPathRef.current === file) {
+          view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+          view.focus();
+        }
+        onComplete?.();
       } catch (e: unknown) {
         console.error("[editor] handleSearchResult: failed to open file", file, e);
       }
     })();
-  }, [openFile]);
+  }, [isPathOpen, openFile, waitForEditorDocumentReady]);
 
   const handleSymbolInsert = useCallback((latex: string) => {
     const view = editorState?.view;
@@ -434,6 +503,7 @@ export function useAppEditorShell({
     editorState,
     headings,
     handleEditorStateChange,
+    handleEditorDocumentReady,
     handleOutlineSelect,
     handleGotoLine,
     handleSearchResult,

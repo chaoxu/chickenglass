@@ -1,4 +1,5 @@
 import { useRef, lazy, Suspense } from "react";
+import { EditorView } from "@codemirror/view";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
 import { useEditorStateTracking } from "../hooks/use-editor-state-tracking";
@@ -19,12 +20,14 @@ export interface EditorPaneProps extends UseEditorOptions {
   sidenotesCollapsed?: boolean;
   onSidenotesCollapsedChange?: (collapsed: boolean) => void;
   onStateChange?: (state: UseEditorReturn) => void;
+  onDocumentReady?: (view: EditorView, docPath: string | undefined) => void;
   /** Current editor mode — "read" shows the HTML renderer instead of CM6. */
   editorMode?: EditorMode;
 }
 
 export function EditorPane({
   onStateChange,
+  onDocumentReady,
   sidenotesCollapsed,
   onSidenotesCollapsedChange,
   editorMode,
@@ -32,7 +35,10 @@ export function EditorPane({
 }: EditorPaneProps) {
   const isReadMode = editorMode === "read";
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const editorState = useEditor(containerRef, editorOptions);
+  const editorState = useEditor(containerRef, {
+    ...editorOptions,
+    onDocumentReady,
+  });
 
   const { view } = editorState;
 

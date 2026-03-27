@@ -70,6 +70,8 @@ export interface UseEditorOptions {
   onFrontmatterChange?: (fm: FrontmatterState | undefined) => void;
   /** Called when include expansion installs or clears a source map for the active document. */
   onSourceMapChange?: (sourceMap: SourceMap | null) => void;
+  /** Called after the current `doc`/`docPath` has been applied to the live EditorView. */
+  onDocumentReady?: (view: EditorView, docPath: string | undefined) => void;
   /**
    * External plugin manager. When provided, useEditor uses it instead of
    * creating its own. This allows the caller (e.g., AppInner) to share a
@@ -112,6 +114,7 @@ export function useEditor(
     onCursorChange,
     onFrontmatterChange,
     onSourceMapChange,
+    onDocumentReady,
     pluginManager: externalPluginManager,
   } = options;
 
@@ -144,6 +147,7 @@ export function useEditor(
   const onProgrammaticDocChangeRef = useRef(onProgrammaticDocChange);
   const onCursorChangeRef = useRef(onCursorChange);
   const onFrontmatterChangeRef = useRef(onFrontmatterChange);
+  const onDocumentReadyRef = useRef(onDocumentReady);
   const handleFrontmatterChangeRef = useRef(documentServices.handleFrontmatterChange);
   const createDocumentContextExtensionsRef = useRef(documentServices.createDocumentContextExtensions);
   const initializeViewRef = useRef(documentServices.initializeView);
@@ -153,6 +157,7 @@ export function useEditor(
     onProgrammaticDocChangeRef.current = onProgrammaticDocChange;
     onCursorChangeRef.current = onCursorChange;
     onFrontmatterChangeRef.current = onFrontmatterChange;
+    onDocumentReadyRef.current = onDocumentReady;
     handleFrontmatterChangeRef.current = documentServices.handleFrontmatterChange;
     createDocumentContextExtensionsRef.current = documentServices.createDocumentContextExtensions;
     initializeViewRef.current = documentServices.initializeView;
@@ -164,6 +169,7 @@ export function useEditor(
     documentServices.resetServices,
     onCursorChange,
     onDocChange,
+    onDocumentReady,
     onProgrammaticDocChange,
     onFrontmatterChange,
   ]);
@@ -249,6 +255,7 @@ export function useEditor(
     initializeViewRef.current(newView, initialFm, doc);
     lastLoadedDocRef.current = doc;
     lastLoadedPathRef.current = docPath;
+    onDocumentReadyRef.current?.(newView, docPath);
 
     return () => {
       if (wordCountTimerRef.current !== null) {
@@ -309,6 +316,7 @@ export function useEditor(
     initializeViewRef.current(view, currentFrontmatter, doc);
     lastLoadedDocRef.current = doc;
     lastLoadedPathRef.current = docPath;
+    onDocumentReadyRef.current?.(view, docPath);
   }, [doc, docPath, documentServices.initializeView, documentServices.resetServices, resetScroll, view]);
 
   return {
