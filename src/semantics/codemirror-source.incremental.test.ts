@@ -140,6 +140,59 @@ describe("documentAnalysisField incremental contract", () => {
     expect(after.includes[1]).toBe(stableSecondInclude);
   });
 
+  it("does not duplicate trailing includes when inserting at another include boundary", () => {
+    const doc = [
+      "::: {.include}",
+      "chapter1.md",
+      ":::",
+      "",
+      "::: {.include}",
+      "chapter2.md",
+      ":::",
+      "",
+    ].join("\n");
+
+    const beforeState = createSemanticsState(doc);
+    const secondStart = doc.indexOf("::: {.include}", 1);
+    const afterState = beforeState.update({
+      changes: { from: secondStart, insert: "::: {.include}\nchapter0.md\n:::\n\n" },
+    }).state;
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after.includes.map((include) => include.path)).toEqual([
+      "chapter1.md",
+      "chapter0.md",
+      "chapter2.md",
+    ]);
+    expect(after.fencedDivs).toHaveLength(3);
+  });
+
+  it("updates adjacent div positions when a boundary edit changes the next block", () => {
+    const doc = [
+      "::: {.theorem} First",
+      "alpha",
+      ":::",
+      "",
+      "::: {.proof} Second",
+      "beta",
+      ":::",
+      "",
+    ].join("\n");
+
+    const beforeState = createSemanticsState(doc);
+    const closeFenceFrom = doc.indexOf("\n:::\n") + 1;
+    const afterState = beforeState.update({
+      changes: { from: closeFenceFrom, to: closeFenceFrom + 3, insert: "" },
+    }).state;
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after.fencedDivs).toHaveLength(2);
+    expect(after.fencedDivs[0]?.to).toBe(57);
+    expect(after.fencedDivs[1]?.from).toBe(29);
+    expect(after.fencedDivs[1]?.to).toBe(53);
+    expect(after.fencedDivs[1]?.closeFenceFrom).toBe(54);
+  });
+
   it("keeps narrative references correct around link, code, and math exclusion boundaries", () => {
     const doc = [
       "Lead @lead.",

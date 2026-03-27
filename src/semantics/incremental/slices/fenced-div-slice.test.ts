@@ -94,4 +94,45 @@ describe("mergeFencedDivSlice", () => {
     expect(afterDivs[0]?.closeFenceFrom).toBe(-1);
     expect(afterDivs[0]?.closeFenceTo).toBe(-1);
   });
+
+  it("re-extracts adjacent divs when a boundary edit changes the next block", () => {
+    const doc = [
+      "::: {.theorem} First",
+      "alpha",
+      ":::",
+      "",
+      "::: {.proof} Second",
+      "beta",
+      ":::",
+      "",
+    ].join("\n");
+    const beforeState = createState(doc);
+    const beforeDoc = editorStateTextSource(beforeState);
+    const beforeDivs = analyzeFencedDivs(beforeDoc, syntaxTree(beforeState));
+
+    const closeFenceFrom = doc.indexOf("\n:::\n") + 1;
+    const tr = beforeState.update({
+      changes: { from: closeFenceFrom, to: closeFenceFrom + 3, insert: "" },
+    });
+    const afterDoc = editorStateTextSource(tr.state);
+    const delta = buildSemanticDelta(tr);
+    const extractedDirtyWindows = extractDirtyFencedDivWindows(
+      beforeDivs,
+      afterDoc,
+      syntaxTree(tr.state),
+      tr.changes,
+      delta.dirtyWindows,
+    );
+
+    const afterDivs = mergeFencedDivSlice(
+      beforeDivs,
+      tr.changes,
+      extractedDirtyWindows,
+    );
+
+    expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, syntaxTree(tr.state)));
+    expect(afterDivs).toHaveLength(2);
+    expect(afterDivs[1]?.to).toBe(53);
+    expect(afterDivs[1]?.closeFenceFrom).toBe(54);
+  });
 });

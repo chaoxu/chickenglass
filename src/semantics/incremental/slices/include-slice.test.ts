@@ -112,4 +112,55 @@ describe("deriveIncludeSlice", () => {
     expect(afterIncludes).toHaveLength(1);
     expect(afterIncludes[0]?.path).toBe("chapter1.md");
   });
+
+  it("does not duplicate trailing includes when inserting at another include boundary", () => {
+    const doc = [
+      "::: {.include}",
+      "chapter1.md",
+      ":::",
+      "",
+      "::: {.include}",
+      "chapter2.md",
+      ":::",
+      "",
+    ].join("\n");
+    const beforeState = createState(doc);
+    const beforeDoc = editorStateTextSource(beforeState);
+    const before = analyzeDocumentSemantics(beforeDoc, syntaxTree(beforeState));
+
+    const secondStart = doc.indexOf("::: {.include}", 1);
+    const tr = beforeState.update({
+      changes: { from: secondStart, insert: "::: {.include}\nchapter0.md\n:::\n\n" },
+    });
+    const afterDoc = editorStateTextSource(tr.state);
+    const delta = buildSemanticDelta(tr);
+    const extractedDirtyWindows = extractDirtyFencedDivWindows(
+      before.fencedDivs,
+      afterDoc,
+      syntaxTree(tr.state),
+      tr.changes,
+      delta.dirtyWindows,
+    );
+    const afterFencedDivs = mergeFencedDivSlice(
+      before.fencedDivs,
+      tr.changes,
+      extractedDirtyWindows,
+    );
+
+    const afterIncludes = deriveIncludeSlice(
+      afterDoc,
+      afterFencedDivs,
+      before.includes,
+      tr.changes,
+    );
+
+    expect(afterIncludes).toEqual(
+      analyzeDocumentSemantics(afterDoc, syntaxTree(tr.state)).includes,
+    );
+    expect(afterIncludes.map((include) => include.path)).toEqual([
+      "chapter1.md",
+      "chapter0.md",
+      "chapter2.md",
+    ]);
+  });
 });
