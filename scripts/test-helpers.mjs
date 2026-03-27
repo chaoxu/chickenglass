@@ -58,6 +58,21 @@ export async function openFile(page, path) {
 }
 
 /**
+ * Find the first line number whose raw text contains `needle`.
+ */
+export async function findLine(page, needle) {
+  return page.evaluate((text) => {
+    const doc = window.__cmView.state.doc;
+    for (let line = 1; line <= doc.lines; line += 1) {
+      if (doc.line(line).text.includes(text)) {
+        return line;
+      }
+    }
+    return -1;
+  }, needle);
+}
+
+/**
  * Cycle the editor mode button until the requested mode is active.
  *
  * @param {import("playwright").Page} page
@@ -133,10 +148,25 @@ export async function setCursor(page, line, col = 0) {
 export async function scrollTo(page, line) {
   await page.evaluate((ln) => {
     const view = window.__cmView;
-    const lb = view.lineBlockAt(view.state.doc.line(ln).from);
-    view.scrollDOM.scrollTop = lb.top - 50;
+    const lineObj = view.state.doc.line(ln);
+    view.dispatch({
+      selection: { anchor: lineObj.from },
+      scrollIntoView: true,
+    });
   }, line);
-  await sleep(200);
+  await sleep(400);
+}
+
+/**
+ * Scroll the editor so the first line containing `needle` is visible.
+ */
+export async function scrollToText(page, needle) {
+  const line = await findLine(page, needle);
+  if (line < 0) {
+    throw new Error(`Missing line containing "${needle}"`);
+  }
+  await scrollTo(page, line);
+  return line;
 }
 
 /**

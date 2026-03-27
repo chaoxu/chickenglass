@@ -6,6 +6,8 @@
 
 /* global window */
 
+import { scrollToText } from "../test-helpers.mjs";
+
 export const name = "headings";
 
 export async function run(page) {
@@ -21,15 +23,32 @@ export async function run(page) {
     return { pass: false, message: "No ATXHeading1 or ATXHeading2 found in syntax tree" };
   }
 
+  await scrollToText(page, "# Math");
+
   // Verify heading decorations exist in the DOM (line decorations with heading classes)
   const headingCount = await page.evaluate(() => {
     const editor = window.__cmView.dom;
-    return editor.querySelectorAll(".cm-heading1, .cm-heading2, .cm-heading3").length;
+    return editor.querySelectorAll(
+      '.cf-heading-line-1, .cf-heading-line-2, .cf-heading-line-3, [data-section-number]',
+    ).length;
   });
 
   if (headingCount === 0) {
-    return { pass: false, message: "Heading nodes exist in tree but no heading CSS classes in DOM" };
+    return {
+      pass: false,
+      message: "Heading nodes exist in tree but no heading line decorations or section numbers are visible",
+    };
   }
 
-  return { pass: true };
+  const sectionNumbers = await page.evaluate(() => {
+    const editor = window.__cmView.dom;
+    return Array.from(editor.querySelectorAll("[data-section-number]"))
+      .map((el) => el.getAttribute("data-section-number"))
+      .filter(Boolean);
+  });
+
+  return {
+    pass: true,
+    message: `${headingCount} visible heading decorations (${sectionNumbers.join(", ")})`,
+  };
 }

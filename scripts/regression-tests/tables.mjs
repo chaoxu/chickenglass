@@ -7,6 +7,8 @@
 
 /* global window */
 
+import { scrollToText } from "../test-helpers.mjs";
+
 export const name = "tables";
 
 export async function run(page) {
@@ -20,6 +22,8 @@ export async function run(page) {
   if (!hasTable) {
     return { pass: false, message: "No Table node found in syntax tree" };
   }
+
+  await scrollToText(page, "# Tables");
 
   // Check for rendered grid cells
   const cellCount = await page.evaluate(() => {

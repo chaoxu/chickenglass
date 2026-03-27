@@ -42,6 +42,13 @@ describe("perf regression reports", () => {
               },
             ],
           },
+          metrics: [
+            {
+              name: "semantic.changed_slice_count",
+              unit: "count",
+              value: 1,
+            },
+          ],
         },
         {
           frontend: {
@@ -70,6 +77,13 @@ describe("perf regression reports", () => {
               },
             ],
           },
+          metrics: [
+            {
+              name: "semantic.changed_slice_count",
+              unit: "count",
+              value: 2,
+            },
+          ],
         },
       ],
     });
@@ -89,6 +103,13 @@ describe("perf regression reports", () => {
       worstMaxMs: 12,
       samples: 2,
     });
+    expect(report.metrics[0]).toMatchObject({
+      name: "semantic.changed_slice_count",
+      unit: "count",
+      meanValue: 1.5,
+      maxValue: 2,
+      samples: 2,
+    });
   });
 
   it("flags regressions only when both percent and absolute deltas are exceeded", () => {
@@ -103,6 +124,14 @@ describe("perf regression reports", () => {
         },
       ],
       backend: [],
+      metrics: [
+        {
+          name: "semantic.changed_slice_count",
+          unit: "count",
+          meanValue: 1,
+          maxValue: 1,
+        },
+      ],
     };
     const current = {
       frontend: [
@@ -115,6 +144,14 @@ describe("perf regression reports", () => {
         },
       ],
       backend: [],
+      metrics: [
+        {
+          name: "semantic.changed_slice_count",
+          unit: "count",
+          meanValue: 2,
+          maxValue: 3,
+        },
+      ],
     };
 
     const result = comparePerfRegressionReports(baseline, current, {
@@ -122,12 +159,18 @@ describe("perf regression reports", () => {
       minDeltaMs: 5,
     });
 
-    expect(result.regressions).toHaveLength(1);
+    expect(result.regressions).toHaveLength(2);
     expect(result.regressions[0]).toMatchObject({
       name: "open_file.read",
       status: "regressed",
       avgDeltaMs: 10,
       maxDeltaMs: 20,
+    });
+    expect(result.regressions[1]).toMatchObject({
+      name: "semantic.changed_slice_count",
+      status: "regressed",
+      meanDelta: 1,
+      maxDelta: 2,
     });
   });
 

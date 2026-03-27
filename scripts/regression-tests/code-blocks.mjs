@@ -7,6 +7,8 @@
 
 /* global window */
 
+import { scrollToText } from "../test-helpers.mjs";
+
 export const name = "code-blocks";
 
 export async function run(page) {
@@ -20,6 +22,8 @@ export async function run(page) {
   if (!hasFencedCode) {
     return { pass: false, message: "No FencedCode node found in syntax tree" };
   }
+
+  await scrollToText(page, "function isPrime");
 
   // Check for codeblock header decorations
   const headerCount = await page.evaluate(() => {

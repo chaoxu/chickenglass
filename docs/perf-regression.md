@@ -52,6 +52,8 @@ If the current run exceeds the configured thresholds, the command exits non-zero
   Reload app, open `posts/2020-07-11-yotta-savings-and-covering-designs.md`.
 - `mode-cycle-index`
   Reload app, open `index.md`, then cycle `Source -> Read -> Rich`.
+- `local-edit-index`
+  Reload app, open `index.md`, then apply a local inline-math edit and report semantic revision churn.
 
 ## Thresholds
 
@@ -69,6 +71,10 @@ npm run perf:compare -- \
   --threshold-pct 15 \
   --min-delta-ms 8
 ```
+
+For `local-edit-index`, the report also prints "Scenario metrics" with semantic
+revision deltas and per-slice churn counts. That is the verification path for
+edit-locality after the incremental semantics rollout.
 
 ## Notes
 

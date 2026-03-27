@@ -21,6 +21,7 @@ import { dispatchIfConnected } from "../lib/view-dispatch";
 import { useBibliography } from "./use-bibliography";
 import { measureAsync } from "../perf";
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
+import { setIncludeRegionsEffect } from "../../lib/include-regions";
 
 /**
  * Expand `!include` directives in a document, producing a flattened text
@@ -189,6 +190,9 @@ export function useEditorDocumentServices({
             view,
             {
               changes: { from: 0, to: view.state.doc.length, insert: expanded },
+              effects: setIncludeRegionsEffect.of(
+                regions.map(({ from, to, file }) => ({ from, to, file })),
+              ),
               annotations: programmaticDocumentChangeAnnotation.of(true),
             },
             { context: "Include expansion dispatch error:" },

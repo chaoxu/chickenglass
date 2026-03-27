@@ -7,6 +7,8 @@
 
 /* global window */
 
+import { scrollToText } from "../test-helpers.mjs";
+
 export const name = "fenced-divs";
 
 export async function run(page) {
@@ -19,6 +21,8 @@ export async function run(page) {
   if (!Array.isArray(treeDivs) || treeDivs.length === 0) {
     return { pass: false, message: "No FencedDiv nodes found in syntax tree" };
   }
+
+  await scrollToText(page, "Extreme Value Theorem");
 
   // Check DOM for rendered block header widgets
   const headerCount = await page.evaluate(() => {
@@ -48,5 +52,19 @@ export async function run(page) {
     };
   }
 
-  return { pass: true };
+  const numberedHeaders = await page.evaluate(() => {
+    const editor = window.__cmView.dom;
+    return Array.from(editor.querySelectorAll(".cf-block-header"))
+      .map((el) => el.textContent?.trim() ?? "")
+      .filter((text) => /(?:Theorem|Lemma|Definition|Corollary|Problem)\s+\d+/.test(text));
+  });
+
+  if (numberedHeaders.length === 0) {
+    return {
+      pass: false,
+      message: "Block headers are visible but none show counter text like 'Theorem 1'",
+    };
+  }
+
+  return { pass: true, message: numberedHeaders.slice(0, 4).join("; ") };
 }

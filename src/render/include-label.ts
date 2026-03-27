@@ -2,8 +2,9 @@
  * Right-margin filename decoration for include blocks.
  * Single ViewPlugin computes both line decorations and widget labels in one pass.
  *
- * Reads include block positions and paths from the shared
- * `documentAnalysisField` rather than the global `__cfSourceMap`.
+ * Prefers include regions tracked in editor state for expanded documents,
+ * and falls back to raw include-block semantics when the document has not
+ * been expanded.
  */
 
 import {
@@ -20,15 +21,45 @@ import {
 } from "./render-utils";
 import { basename } from "../lib/utils";
 import {
+  includeRegionsField,
+  type IncludeRegionState,
+} from "../lib/include-regions";
+import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
-import type { IncludeSemantics } from "../semantics/document";
+
+interface IncludeLabelRegion {
+  readonly from: number;
+  readonly to: number;
+  readonly path: string;
+}
+
+function getIncludeLabelRegions(view: EditorView): readonly IncludeLabelRegion[] {
+  const regions = view.state.field(includeRegionsField, false) ?? [];
+  if (regions.length > 0) {
+    return mapIncludeRegions(regions);
+  }
+
+  return view.state.field(documentAnalysisField, false)?.includes ?? [];
+}
+
+function mapIncludeRegions(
+  regions: readonly IncludeRegionState[],
+): readonly IncludeLabelRegion[] {
+  if (regions.length > 0) {
+    return regions.map((region: IncludeRegionState) => ({
+      from: region.from,
+      to: region.to,
+      path: region.file,
+    }));
+  }
+  return [];
+}
 
 /** Build include label decorations (line highlights + filename labels). */
 function buildIncludeDecorations(view: EditorView): DecorationSet {
-  const includes: readonly IncludeSemantics[] =
-    view.state.field(documentAnalysisField, false)?.includes ?? [];
+  const includes = getIncludeLabelRegions(view);
   if (includes.length === 0) return Decoration.none;
 
   const items: Range<Decoration>[] = [];
@@ -64,9 +95,9 @@ function buildIncludeDecorations(view: EditorView): DecorationSet {
 }
 
 function findActiveInclude(
-  includes: readonly IncludeSemantics[],
+  includes: readonly IncludeLabelRegion[],
   cursor: number,
-): IncludeSemantics | undefined {
+): IncludeLabelRegion | undefined {
   let lo = 0;
   let hi = includes.length - 1;
 
@@ -91,6 +122,12 @@ function findActiveInclude(
  * Viewport changes alone don't require a rebuild — the tree walk
  * already covers the full document (include blocks may span offscreen). */
 function includeShouldUpdate(update: ViewUpdate): boolean {
+  const beforeRegions = update.startState.field(includeRegionsField, false) ?? [];
+  const afterRegions = update.state.field(includeRegionsField, false) ?? [];
+  if (beforeRegions !== afterRegions) {
+    return true;
+  }
+
   const before = update.startState.field(documentAnalysisField);
   const after = update.state.field(documentAnalysisField);
   if (
@@ -103,12 +140,19 @@ function includeShouldUpdate(update: ViewUpdate): boolean {
 
   if (!update.selectionSet) return false;
 
+  const beforeActiveSource = beforeRegions.length > 0
+    ? mapIncludeRegions(beforeRegions)
+    : before.includes;
+  const afterActiveSource = afterRegions.length > 0
+    ? mapIncludeRegions(afterRegions)
+    : after.includes;
+
   const beforeActive = findActiveInclude(
-    before.includes,
+    beforeActiveSource,
     update.startState.selection.main.head,
   );
   const afterActive = findActiveInclude(
-    after.includes,
+    afterActiveSource,
     update.state.selection.main.head,
   );
 
@@ -116,8 +160,15 @@ function includeShouldUpdate(update: ViewUpdate): boolean {
     || beforeActive?.to !== afterActive?.to;
 }
 
-/** CM6 extension that renders include region labels in the right margin. */
-export const includeLabelPlugin: Extension = createSimpleViewPlugin(
+const includeLabelViewPlugin = createSimpleViewPlugin(
   buildIncludeDecorations,
   { shouldUpdate: includeShouldUpdate },
 );
+
+export { includeLabelViewPlugin as _includeLabelViewPluginForTest };
+
+/** CM6 extension that renders include region labels in the right margin. */
+export const includeLabelPlugin: Extension = [
+  includeRegionsField,
+  includeLabelViewPlugin,
+];

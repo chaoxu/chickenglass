@@ -10,8 +10,15 @@ import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
+import {
+  setIncludeRegionsEffect,
+  type IncludeRegionState,
+} from "../lib/include-regions";
 import { createTestView } from "../test-utils";
-import { includeLabelPlugin } from "./include-label";
+import {
+  _includeLabelViewPluginForTest,
+  includeLabelPlugin,
+} from "./include-label";
 
 interface IncludeLabelPluginValue {
   decorations: DecorationSet;
@@ -24,7 +31,11 @@ afterEach(() => {
   view = undefined;
 });
 
-function createView(doc: string, cursorPos = 0): EditorView {
+function createView(
+  doc: string,
+  cursorPos = 0,
+  includeRegions: readonly IncludeRegionState[] = [],
+): EditorView {
   view = createTestView(doc, {
     cursorPos,
     extensions: [
@@ -33,12 +44,15 @@ function createView(doc: string, cursorPos = 0): EditorView {
       includeLabelPlugin,
     ],
   });
+  if (includeRegions.length > 0) {
+    view.dispatch({ effects: setIncludeRegionsEffect.of(includeRegions) });
+  }
   return view;
 }
 
 function getIncludePlugin(v: EditorView): IncludeLabelPluginValue {
   const plugin = v.plugin(
-    includeLabelPlugin as unknown as ViewPlugin<IncludeLabelPluginValue>,
+    _includeLabelViewPluginForTest as unknown as ViewPlugin<IncludeLabelPluginValue>,
   );
   expect(plugin).toBeDefined();
   if (!plugin) {
@@ -143,5 +157,35 @@ describe("includeLabelPlugin", () => {
     v.dispatch({ selection: { anchor: doc.indexOf("Tail paragraph.") } });
     expect(getIncludePlugin(v).decorations).not.toBe(secondDecorations);
     expect(getActiveLabelTexts(v)).toEqual([]);
+  });
+
+  it("uses expanded-document include regions when source blocks are no longer present", () => {
+    const doc = [
+      "Preface",
+      "",
+      "# Included",
+      "",
+      "Body paragraph.",
+      "",
+      "Coda",
+    ].join("\n");
+    const includeStart = doc.indexOf("# Included");
+    const includeEnd = doc.indexOf("\n\nCoda");
+    const v = createView(doc, includeStart, [{
+      from: includeStart,
+      to: includeEnd,
+      file: "chapters/included.md",
+    }]);
+
+    expect(getActiveLabelTexts(v)).toEqual(["included.md"]);
+
+    v.dispatch({
+      changes: {
+        from: 0,
+        insert: "Intro\n",
+      },
+    });
+
+    expect(getActiveLabelTexts(v)).toEqual(["included.md"]);
   });
 });

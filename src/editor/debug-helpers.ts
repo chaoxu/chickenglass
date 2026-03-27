@@ -13,6 +13,10 @@
 import { type EditorView } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { toggleTreeView } from "./editor";
+import {
+  documentAnalysisField,
+  getDocumentAnalysisRevisionInfo,
+} from "../semantics/codemirror-source";
 
 interface DivInfo {
   readonly from: number;
@@ -35,6 +39,20 @@ interface DebugSnapshot {
   readonly fences: FenceStatus[];
   readonly cursorLine: number;
   readonly focused: boolean;
+  readonly semantics: SemanticDebugInfo;
+}
+
+interface SemanticDebugInfo {
+  readonly revision: number;
+  readonly slices: {
+    readonly headings: number;
+    readonly footnotes: number;
+    readonly fencedDivs: number;
+    readonly equations: number;
+    readonly mathRegions: number;
+    readonly references: number;
+    readonly includes: number;
+  };
 }
 
 export interface DebugHelpers {
@@ -46,6 +64,8 @@ export interface DebugHelpers {
   fences: () => FenceStatus[];
   /** Return DOM state (classes, height, hidden) for a specific line number. */
   line: (lineNum: number) => LineInfo | null;
+  /** Return current document-analysis revision info for perf/debug checks. */
+  semantics: () => SemanticDebugInfo;
   /** Return a combined snapshot of tree + fences + cursor state. */
   dump: () => DebugSnapshot;
   /** Toggle the live Lezer tree-view debug panel. Returns new on/off state. */
@@ -124,6 +144,12 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
       return inspectLine(view, lineNum);
     },
 
+    semantics() {
+      return getDocumentAnalysisRevisionInfo(
+        view.state.field(documentAnalysisField),
+      );
+    },
+
     dump() {
       const cursor = view.state.selection.main;
       const cursorLine = view.state.doc.lineAt(cursor.from).number;
@@ -132,6 +158,7 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
         fences: this.fences(),
         cursorLine,
         focused: view.hasFocus,
+        semantics: this.semantics(),
       };
     },
 
