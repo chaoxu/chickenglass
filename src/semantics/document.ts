@@ -4,6 +4,10 @@ import {
   type EquationStructure,
 } from "./incremental/window-extractor";
 import { buildHeadingSlice } from "./incremental/slices/heading-slice";
+import {
+  buildFootnoteSlice,
+  type FootnoteSlice,
+} from "./incremental/slices/footnote-slice";
 import { buildMathSlice } from "./incremental/slices/math-slice";
 import { deriveIncludeSlice } from "./incremental/slices/include-slice";
 import { buildReferenceSlice } from "./incremental/slices/reference-slice";
@@ -192,29 +196,8 @@ export function hasUnnumberedHeadingAttributes(text: string): boolean {
   return attrs !== null && /(?:^|\s)(?:-|\.unnumbered)(?=\s|$)/.test(attrs.content);
 }
 
-function buildFootnoteSemantics(
-  refs: readonly FootnoteReference[],
-  defs: readonly FootnoteDefinition[],
-): FootnoteSemantics {
-  const footnoteDefs = new Map<string, FootnoteDefinition>();
-  const footnoteRefByFrom = new Map<number, FootnoteReference>();
-  const footnoteDefByFrom = new Map<number, FootnoteDefinition>();
-
-  for (const ref of refs) {
-    footnoteRefByFrom.set(ref.from, ref);
-  }
-
-  for (const def of defs) {
-    footnoteDefs.set(def.id, def);
-    footnoteDefByFrom.set(def.from, def);
-  }
-
-  return {
-    refs,
-    defs: footnoteDefs,
-    refByFrom: footnoteRefByFrom,
-    defByFrom: footnoteDefByFrom,
-  };
+function isFootnoteSlice(value: FootnoteSemantics): value is FootnoteSlice {
+  return "numberById" in value && "orderedEntries" in value;
 }
 
 function finalizeEquations(
@@ -237,12 +220,16 @@ export function analyzeHeadings(doc: TextSource, tree: Tree): HeadingSemantics[]
 
 export function analyzeFootnotes(doc: TextSource, tree: Tree): FootnoteSemantics {
   const structural = extractStructuralWindow(doc, tree);
-  return buildFootnoteSemantics(structural.footnoteRefs, structural.footnoteDefs);
+  return buildFootnoteSlice(structural);
 }
 
 export function numberFootnotes(
   footnotes: FootnoteSemantics,
 ): ReadonlyMap<string, number> {
+  if (isFootnoteSlice(footnotes)) {
+    return footnotes.numberById;
+  }
+
   const numbers = new Map<string, number>();
   let nextNumber = 1;
   for (const ref of footnotes.refs) {
@@ -256,6 +243,10 @@ export function numberFootnotes(
 export function orderedFootnoteEntries(
   footnotes: FootnoteSemantics,
 ): OrderedFootnoteEntry[] {
+  if (isFootnoteSlice(footnotes)) {
+    return [...footnotes.orderedEntries];
+  }
+
   const numbers = numberFootnotes(footnotes);
   const seen = new Set<string>();
   const entries: OrderedFootnoteEntry[] = [];
@@ -301,10 +292,7 @@ export function analyzeDocumentSemantics(
   const structural = extractStructuralWindow(doc, tree);
 
   const headingSlice = buildHeadingSlice(structural);
-  const footnotes = buildFootnoteSemantics(
-    structural.footnoteRefs,
-    structural.footnoteDefs,
-  );
+  const footnotes = buildFootnoteSlice(structural);
   const fencedDivs = structural.fencedDivs;
   const equations = finalizeEquations(structural.equations);
   const mathRegions = buildMathSlice(structural).mathRegions;
