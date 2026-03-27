@@ -90,7 +90,7 @@ describe("documentAnalysisField incremental contract", () => {
     expect(after.headings[2]).not.toBe(renumberedTail);
   });
 
-  it.fails("keeps unrelated fenced div objects when editing another div body", () => {
+  it("keeps unrelated fenced div objects when editing another div body", () => {
     const doc = [
       "::: {.theorem #thm:first} First",
       "alpha",
@@ -113,6 +113,31 @@ describe("documentAnalysisField incremental contract", () => {
     expect(after.fencedDivs[0].title).toBe("First");
     expect(after.fencedDivs[1].title).toBe("Second");
     expect(after.fencedDivs[1]).toBe(stableSecondDiv);
+  });
+
+  it("updates only the affected include entry", () => {
+    const doc = [
+      "::: {.include}",
+      "chapter1.md",
+      ":::",
+      "",
+      "::: {.include}",
+      "chapter2.md",
+      ":::",
+      "",
+    ].join("\n");
+
+    const beforeState = createSemanticsState(doc);
+    const before = beforeState.field(documentAnalysisField);
+    const stableSecondInclude = before.includes[1];
+
+    const afterState = replaceOnce(beforeState, "chapter1.md", "chapterA.md");
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after.includes).toHaveLength(2);
+    expect(after.includes[0]?.path).toBe("chapterA.md");
+    expect(after.includes[1]?.path).toBe("chapter2.md");
+    expect(after.includes[1]).toBe(stableSecondInclude);
   });
 
   it("keeps narrative references correct around link, code, and math exclusion boundaries", () => {
