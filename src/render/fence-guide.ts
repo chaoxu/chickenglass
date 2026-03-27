@@ -7,23 +7,29 @@
  * making it easy to see where blocks start and end.
  *
  * Uses a StateField with Decoration.line to add per-line depth classes.
+ *
+ * Performance: tracks the "active fenced-div path" (the set of FencedDiv
+ * ancestors containing the cursor). When the cursor moves within the same
+ * stack, the decorations are identical and the full rebuild is skipped.
+ * Only crossing a fenced-div boundary or changing focus triggers a rebuild.
  */
 
 import {
   type DecorationSet,
   Decoration,
+  EditorView,
 } from "@codemirror/view";
 import {
   type EditorState,
   type Extension,
   type Range,
+  StateField,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   buildDecorations,
-  createDecorationsField,
-  cursorSensitiveShouldRebuild,
   editorFocusField,
+  focusEffect,
   focusTracker,
 } from "./render-utils";
 
@@ -43,6 +49,38 @@ function collectFencedDivRanges(state: EditorState): FencedDivRange[] {
     },
   });
   return ranges;
+}
+
+/**
+ * Compute a fingerprint of the fenced-div stack containing the cursor.
+ *
+ * Walks up the syntax tree from the cursor position to find all FencedDiv
+ * ancestors. O(tree depth) instead of O(tree size). Returns an empty string
+ * when unfocused or the cursor is outside any fenced div.
+ */
+function computeActivePath(state: EditorState): string {
+  const focused = state.field(editorFocusField, false) ?? false;
+  if (!focused) return "";
+
+  const cursor = state.selection.main;
+  const tree = syntaxTree(state);
+  const parts: string[] = [];
+
+  let node = tree.resolveInner(cursor.from);
+  for (;;) {
+    if (
+      node.name === "FencedDiv" &&
+      cursor.from >= node.from &&
+      cursor.to <= node.to
+    ) {
+      parts.push(`${node.from}:${node.to}`);
+    }
+    const parent = node.parent;
+    if (!parent) break;
+    node = parent;
+  }
+
+  return parts.join(",");
 }
 
 /** Build fence guide decorations — only for divs containing the cursor. */
@@ -107,7 +145,55 @@ function buildFenceGuides(state: EditorState): DecorationSet {
   return buildDecorations(items);
 }
 
-const fenceGuideField = createDecorationsField(buildFenceGuides, cursorSensitiveShouldRebuild);
+// ── StateField with active-path caching ────────────────────────────────────
+
+interface FenceGuideState {
+  decorations: DecorationSet;
+  /** Fingerprint of the active fenced-div stack for cheap equality check. */
+  activePath: string;
+}
+
+function createFenceGuideState(state: EditorState): FenceGuideState {
+  return {
+    decorations: buildFenceGuides(state),
+    activePath: computeActivePath(state),
+  };
+}
+
+const fenceGuideField = StateField.define<FenceGuideState>({
+  create: createFenceGuideState,
+
+  update({ decorations, activePath }, tr) {
+    // Structural changes: always rebuild (positions shifted, tree may differ)
+    if (
+      tr.docChanged ||
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+    ) {
+      return createFenceGuideState(tr.state);
+    }
+
+    // Focus change: always rebuild (toggle visibility)
+    if (tr.effects.some((e) => e.is(focusEffect))) {
+      return createFenceGuideState(tr.state);
+    }
+
+    // Selection change: only rebuild if the active fenced-div path changed
+    if (tr.selection !== undefined) {
+      const newPath = computeActivePath(tr.state);
+      if (newPath === activePath) {
+        return { decorations, activePath };
+      }
+      return createFenceGuideState(tr.state);
+    }
+
+    // No relevant change
+    return { decorations, activePath };
+  },
+
+  provide(field) {
+    return EditorView.decorations.from(field, (s) => s.decorations);
+  },
+});
 
 /** CM6 extension that draws vertical nesting guides for fenced divs (editing only). */
 export const fenceGuidePlugin: Extension = [
@@ -115,3 +201,9 @@ export const fenceGuidePlugin: Extension = [
   focusTracker,
   fenceGuideField,
 ];
+
+// ── Test exports ───────────────────────────────────────────────────────────
+
+export { computeActivePath as _computeActivePath_forTest };
+export { buildFenceGuides as _buildFenceGuides_forTest };
+export { fenceGuideField as _fenceGuideField_forTest };
