@@ -26,27 +26,38 @@ function range(id: string, from: number, to: number): TestRange {
 }
 
 describe("mapRangeObject", () => {
-  it("maps range positions through document changes", () => {
+  it("shifts a range when text is inserted at its start boundary", () => {
     const original = range("math", 6, 11);
 
     const mapped = mapRangeObject(
       original,
-      makeChanges("alpha beta gamma", [{ from: 0, insert: "new " }]),
+      makeChanges("alpha beta gamma", [{ from: 6, insert: "new " }]),
     );
 
     expect(mapped).toEqual(range("math", 10, 15));
     expect(mapped).not.toBe(original);
   });
 
-  it("reuses identity when mapped positions are unchanged", () => {
-    const original = range("math", 0, 5);
+  it("reuses identity when text is inserted at its end boundary", () => {
+    const original = range("math", 6, 11);
 
     const mapped = mapRangeObject(
       original,
-      makeChanges("alpha beta", [{ from: 10, insert: "!" }]),
+      makeChanges("alpha beta gamma", [{ from: 11, insert: "!" }]),
     );
 
     expect(mapped).toBe(original);
+  });
+
+  it("collapses a fully deleted range to a point", () => {
+    const original = range("math", 5, 8);
+
+    const mapped = mapRangeObject(
+      original,
+      makeChanges("0123456789", [{ from: 5, to: 8 }]),
+    );
+
+    expect(mapped).toEqual(range("math", 5, 5));
   });
 });
 
@@ -54,6 +65,11 @@ describe("rangesOverlap", () => {
   it("treats touching boundaries as non-overlapping", () => {
     expect(rangesOverlap(range("a", 0, 5), range("b", 5, 10))).toBe(false);
     expect(rangesOverlap(range("a", 0, 5), range("b", 4, 10))).toBe(true);
+  });
+
+  it("treats matching zero-length ranges as overlapping", () => {
+    expect(rangesOverlap(range("a", 5, 5), range("b", 5, 5))).toBe(true);
+    expect(rangesOverlap(range("a", 5, 5), range("b", 6, 6))).toBe(false);
   });
 });
 
@@ -74,6 +90,20 @@ describe("firstOverlapIndex", () => {
 });
 
 describe("replaceOverlappingRanges", () => {
+  it("keeps a range untouched when an insert happens at its end boundary", () => {
+    const original = range("math", 5, 8);
+    const mapped = mapRangeObject(
+      original,
+      makeChanges("0123456789", [{ from: 8, insert: "XY" }]),
+    );
+    const values = [mapped];
+
+    const result = replaceOverlappingRanges(values, { from: 8, to: 10 }, []);
+
+    expect(mapped).toBe(original);
+    expect(result).toBe(values);
+  });
+
   it("replaces all overlapping ranges and preserves untouched identity", () => {
     const a = range("a", 0, 5);
     const b = range("b", 10, 15);
@@ -110,11 +140,16 @@ describe("replaceOverlappingRanges", () => {
     expect(result[3]).toBe(c);
   });
 
-  it("returns the original array when there is nothing to replace", () => {
-    const values = [range("a", 0, 5), range("b", 20, 25)];
+  it("drops a fully deleted range that collapses to the dirty-window point", () => {
+    const prefix = range("prefix", 0, 5);
+    const deleted = range("deleted", 5, 5);
+    const suffix = range("suffix", 8, 12);
+    const values = [prefix, deleted, suffix];
 
-    const result = replaceOverlappingRanges(values, { from: 8, to: 12 }, []);
+    const result = replaceOverlappingRanges(values, { from: 5, to: 5 }, []);
 
-    expect(result).toBe(values);
+    expect(result).toEqual([prefix, suffix]);
+    expect(result[0]).toBe(prefix);
+    expect(result[1]).toBe(suffix);
   });
 });
