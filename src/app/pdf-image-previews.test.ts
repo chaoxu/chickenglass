@@ -61,10 +61,22 @@ describe("resolvePdfImageOverrides", () => {
     expect(rasterizeMock).toHaveBeenCalledTimes(1);
   });
 
-  it("returns empty map when no PDF targets exist", async () => {
+  it("loads non-PDF images as browser-safe data URLs", async () => {
     const content = "![img](photo.png)\n";
     const fs = createMockFs();
     const result = await resolvePdfImageOverrides(content, fs, "doc.md");
-    expect(result.size).toBe(0);
+    expect(result.get("photo.png")).toBe("data:image/png;base64,JVBERg==");
+    expect(rasterizeMock).not.toHaveBeenCalled();
+    expect((fs.readFileBinary as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith("photo.png");
+  });
+
+  it("deduplicates repeated references to the same resolved non-PDF path", async () => {
+    const content = "![a](diagram.png)\n\n![b](diagram.png)\n";
+    const fs = createMockFs();
+    await resolvePdfImageOverrides(content, fs, "posts/math.md");
+
+    expect(rasterizeMock).not.toHaveBeenCalled();
+    expect((fs.readFileBinary as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    expect((fs.readFileBinary as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith("posts/diagram.png");
   });
 });

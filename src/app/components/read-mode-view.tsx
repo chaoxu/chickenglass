@@ -41,9 +41,9 @@ export interface ReadModeViewProps {
   scrollTop?: number;
   /** Callback with current scroll position for persistence. */
   onScroll?: (scrollTop: number) => void;
-  /** FileSystem used for rasterizing PDF-backed image targets. */
+  /** FileSystem used for preparing local image URLs for read mode. */
   fs?: FileSystem;
-  /** Current document path for resolving relative PDF image targets. */
+  /** Current document path for resolving relative image targets. */
   docPath?: string;
 }
 
