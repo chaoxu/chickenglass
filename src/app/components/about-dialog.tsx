@@ -5,6 +5,7 @@
  * Uses the shared app dialog primitives for escape, focus trap, and overlay.
  */
 
+import type { MouseEvent as ReactMouseEvent } from "react";
 import {
   Dialog,
   DialogBody,
@@ -15,8 +16,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
+import { openExternalUrl } from "../../lib/open-link";
 
 const GITHUB_URL = "https://github.com/chaoxu/coflat";
+
+function handleLinkClick(e: ReactMouseEvent<HTMLAnchorElement>, url: string) {
+  e.preventDefault();
+  void openExternalUrl(url);
+}
 
 interface Credit {
   name: string;
@@ -69,8 +76,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
                 <li key={c.name}>
                   <a
                     href={c.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    onClick={(e) => handleLinkClick(e, c.url)}
                     className="text-sm text-[var(--cf-fg)] underline transition-opacity duration-[var(--cf-transition,0.15s)] hover:opacity-60"
                   >
                     {c.name}
@@ -84,8 +90,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
         <DialogFooter className="justify-start px-10">
           <a
             href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
+            onClick={(e) => handleLinkClick(e, GITHUB_URL)}
             className="text-sm text-[var(--cf-fg)] underline transition-opacity duration-[var(--cf-transition,0.15s)] hover:opacity-60"
           >
             View on GitHub

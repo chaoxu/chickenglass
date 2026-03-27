@@ -8,6 +8,7 @@ import { syntaxTree } from "@codemirror/language";
 import { cursorInRange, decorationHidden, addMarkerReplacement, createSimpleViewPlugin, cursorSensitiveShouldUpdate } from "./render-utils";
 import { findTrailingHeadingAttributes } from "../semantics/heading-ancestry";
 import { isSafeUrl } from "../lib/url-utils";
+import { openExternalUrl } from "../lib/open-link";
 
 /**
  * Node types whose children's markers should be hidden when
@@ -287,7 +288,7 @@ export const markdownRenderPlugin: Extension = createSimpleViewPlugin(
           if (!linkEl) return false;
           const url = linkEl.getAttribute("data-url");
           if (url && isSafeUrl(url)) {
-            window.open(url, "_blank");
+            void openExternalUrl(url);
             event.preventDefault();
             return true;
           }
