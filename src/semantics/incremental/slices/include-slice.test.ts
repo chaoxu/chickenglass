@@ -163,4 +163,52 @@ describe("deriveIncludeSlice", () => {
       "chapter2.md",
     ]);
   });
+
+  it("drops includes when an edit touching their start stops the div parsing", () => {
+    const doc = [
+      "para1",
+      "",
+      "::: {.include}",
+      "chapter1.md",
+      ":::",
+      "",
+    ].join("\n");
+    const beforeState = createState(doc);
+    const beforeDoc = editorStateTextSource(beforeState);
+    const before = analyzeDocumentSemantics(beforeDoc, syntaxTree(beforeState));
+
+    const from = doc.indexOf("1\n\n:::");
+    const tr = beforeState.update({
+      changes: { from, to: from + 3, insert: ".include" },
+    });
+    const afterDoc = editorStateTextSource(tr.state);
+    const delta = buildSemanticDelta(tr);
+    const extractedDirtyWindows = extractDirtyFencedDivWindows(
+      before.fencedDivs,
+      afterDoc,
+      syntaxTree(tr.state),
+      tr.changes,
+      delta.dirtyWindows,
+    );
+    const afterFencedDivs = mergeFencedDivSlice(
+      before.fencedDivs,
+      tr.changes,
+      extractedDirtyWindows,
+    );
+
+    const afterIncludes = deriveIncludeSlice(
+      afterDoc,
+      afterFencedDivs,
+      before.includes,
+      tr.changes,
+    );
+
+    expect(afterFencedDivs).toEqual(
+      analyzeDocumentSemantics(afterDoc, syntaxTree(tr.state)).fencedDivs,
+    );
+    expect(afterIncludes).toEqual(
+      analyzeDocumentSemantics(afterDoc, syntaxTree(tr.state)).includes,
+    );
+    expect(afterIncludes).toEqual([]);
+  });
 });

@@ -193,6 +193,27 @@ describe("documentAnalysisField incremental contract", () => {
     expect(after.fencedDivs[1]?.closeFenceFrom).toBe(54);
   });
 
+  it("drops disappearing div/include state after a touching-start boundary edit", () => {
+    const doc = [
+      "para1",
+      "",
+      "::: {.include}",
+      "chapter1.md",
+      ":::",
+      "",
+    ].join("\n");
+
+    const beforeState = createSemanticsState(doc);
+    const from = doc.indexOf("1\n\n:::");
+    const afterState = beforeState.update({
+      changes: { from, to: from + 3, insert: ".include" },
+    }).state;
+    const after = afterState.field(documentAnalysisField);
+
+    expect(after.fencedDivs).toEqual([]);
+    expect(after.includes).toEqual([]);
+  });
+
   it("keeps narrative references correct around link, code, and math exclusion boundaries", () => {
     const doc = [
       "Lead @lead.",

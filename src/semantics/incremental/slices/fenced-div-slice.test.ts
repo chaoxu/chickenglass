@@ -135,4 +135,41 @@ describe("mergeFencedDivSlice", () => {
     expect(afterDivs[1]?.to).toBe(53);
     expect(afterDivs[1]?.closeFenceFrom).toBe(54);
   });
+
+  it("drops a div when an edit touching its start stops it parsing", () => {
+    const doc = [
+      "para1",
+      "",
+      "::: {.proof}",
+      "beta",
+      ":::",
+      "",
+    ].join("\n");
+    const beforeState = createState(doc);
+    const beforeDoc = editorStateTextSource(beforeState);
+    const beforeDivs = analyzeFencedDivs(beforeDoc, syntaxTree(beforeState));
+
+    const from = doc.indexOf("1\n\n:::");
+    const tr = beforeState.update({
+      changes: { from, to: from + 3, insert: ".proof" },
+    });
+    const afterDoc = editorStateTextSource(tr.state);
+    const delta = buildSemanticDelta(tr);
+    const extractedDirtyWindows = extractDirtyFencedDivWindows(
+      beforeDivs,
+      afterDoc,
+      syntaxTree(tr.state),
+      tr.changes,
+      delta.dirtyWindows,
+    );
+
+    const afterDivs = mergeFencedDivSlice(
+      beforeDivs,
+      tr.changes,
+      extractedDirtyWindows,
+    );
+
+    expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, syntaxTree(tr.state)));
+    expect(afterDivs).toEqual([]);
+  });
 });

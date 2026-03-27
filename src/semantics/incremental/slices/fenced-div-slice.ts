@@ -128,6 +128,25 @@ function findOverlapSpan(
   return { start, end };
 }
 
+function findTouchingStartSpan(
+  values: readonly FencedDivSemantics[],
+  pos: number,
+): OverlapSpan | null {
+  let lo = 0;
+  let hi = values.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (values[mid].from < pos) lo = mid + 1;
+    else hi = mid;
+  }
+
+  if (lo >= values.length || values[lo].from !== pos) {
+    return null;
+  }
+
+  return { start: lo, end: lo + 1 };
+}
+
 function expandRange(
   range: { from: number; to: number },
   from: number,
@@ -177,6 +196,15 @@ export function extractDirtyFencedDivWindows(
           mappedPrevious[mappedSpan.start].from,
           mappedPrevious[mappedSpan.end - 1].to,
         );
+      } else {
+        const touchingStartSpan = findTouchingStartSpan(mappedPrevious, nextRange.to);
+        if (touchingStartSpan) {
+          nextRange = expandRange(
+            nextRange,
+            mappedPrevious[touchingStartSpan.start].from,
+            mappedPrevious[touchingStartSpan.end - 1].to,
+          );
+        }
       }
 
       if (nextRange.from === range.from && nextRange.to === range.to) {
