@@ -1,10 +1,13 @@
 import type { Tree } from "@lezer/common";
-import { extractDivClass } from "../parser/fenced-div-attrs";
-import { readBracedLabelId } from "../parser/label-utils";
 import {
-  matchBracketedReference,
-  NARRATIVE_REFERENCE_RE,
-} from "./reference-parts";
+  extractStructuralWindow,
+  type EquationStructure,
+  type HeadingStructure,
+} from "./incremental/window-extractor";
+import { NARRATIVE_REFERENCE_RE } from "./reference-parts";
+
+// Equation label extraction now lives in the shared window extractor, which
+// still uses readBracedLabelId from src/parser/label-utils.ts.
 
 export interface TextSourceLine {
   readonly from: number;
@@ -187,321 +190,61 @@ export function hasUnnumberedHeadingAttributes(text: string): boolean {
   return attrs !== null && /(?:^|\s)(?:-|\.unnumbered)(?=\s|$)/.test(attrs.content);
 }
 
-function extractHeadingId(text: string): string | undefined {
-  const attrs = findTrailingHeadingAttributes(text);
-  if (!attrs) return undefined;
-  const match = /(?:^|\s)#([^\s}]+)/.exec(attrs.content);
-  return match?.[1];
-}
-
-const ATX_HEADING_RE = /^ATXHeading(\d)$/;
-
-function extractDisplayMathLatex(raw: string): string {
-  const text = raw.trim();
-  if (text.startsWith("$$") && text.endsWith("$$")) {
-    return text.slice(2, -2).trim();
-  }
-  if (text.startsWith("\\[") && text.endsWith("\\]")) {
-    return text.slice(2, -2).trim();
-  }
-  return text;
-}
-
-// ---------------------------------------------------------------------------
-// Unified single-pass tree walk
-// ---------------------------------------------------------------------------
-
-interface UnifiedWalkResult {
-  headings: HeadingSemantics[];
-  footnoteRefs: FootnoteReference[];
-  footnoteDefs: Map<string, FootnoteDefinition>;
-  footnoteRefByFrom: Map<number, FootnoteReference>;
-  footnoteDefByFrom: Map<number, FootnoteDefinition>;
-  fencedDivs: FencedDivSemantics[];
-  equations: EquationSemantics[];
-  mathRegions: MathSemantics[];
-  bracketedRefs: ReferenceSemantics[];
-  linkRanges: { from: number; to: number }[];
-  codeMathRanges: { from: number; to: number }[];
-}
-
-/**
- * Single tree.iterate() pass that collects headings, footnotes, fenced divs,
- * equations, and link/reference data. All node-type dispatch happens here so
- * the tree is walked exactly once.
- */
-function unifiedTreeWalk(doc: TextSource, tree: Tree): UnifiedWalkResult {
-  const headings: HeadingSemantics[] = [];
+function finalizeHeadings(headings: readonly HeadingStructure[]): HeadingSemantics[] {
   const headingCounters = [0, 0, 0, 0, 0, 0, 0];
 
-  const footnoteRefs: FootnoteReference[] = [];
+  return headings.map((heading) => {
+    let number = "";
+    if (!heading.unnumbered) {
+      headingCounters[heading.level]++;
+      for (let i = heading.level + 1; i <= 6; i++) headingCounters[i] = 0;
+      const parts: number[] = [];
+      for (let i = 1; i <= heading.level; i++) {
+        if (headingCounters[i] !== 0) parts.push(headingCounters[i]);
+      }
+      number = parts.join(".");
+    }
+
+    return {
+      ...heading,
+      number,
+    };
+  });
+}
+
+function buildFootnoteSemantics(
+  refs: readonly FootnoteReference[],
+  defs: readonly FootnoteDefinition[],
+): FootnoteSemantics {
   const footnoteDefs = new Map<string, FootnoteDefinition>();
   const footnoteRefByFrom = new Map<number, FootnoteReference>();
   const footnoteDefByFrom = new Map<number, FootnoteDefinition>();
 
-  const fencedDivs: FencedDivSemantics[] = [];
+  for (const ref of refs) {
+    footnoteRefByFrom.set(ref.from, ref);
+  }
 
-  const equations: EquationSemantics[] = [];
-  let equationCounter = 0;
-  const mathRegions: MathSemantics[] = [];
-
-  const bracketedRefs: ReferenceSemantics[] = [];
-  const linkRanges: { from: number; to: number }[] = [];
-  const codeMathRanges: { from: number; to: number }[] = [];
-
-  tree.iterate({
-    enter(node) {
-      const name = node.type.name;
-
-      // --- Headings (ATXHeading1 … ATXHeading6) ---
-      const headingMatch = ATX_HEADING_RE.exec(name);
-      if (headingMatch) {
-        const level = Number(headingMatch[1]);
-        const rawText = doc.slice(node.from, node.to);
-        const unnumbered = hasUnnumberedHeadingAttributes(rawText);
-
-        let number = "";
-        if (!unnumbered) {
-          headingCounters[level]++;
-          for (let i = level + 1; i <= 6; i++) headingCounters[i] = 0;
-          // Skip intermediate levels with counter=0 (e.g. `# A` then `### C` → "1.1" not "1.0.1")
-          const parts: number[] = [];
-          for (let i = 1; i <= level; i++) {
-            if (headingCounters[i] !== 0) parts.push(headingCounters[i]);
-          }
-          number = parts.join(".");
-        }
-
-        const headerMark = node.node.getChild("HeaderMark");
-        const textFrom = headerMark ? headerMark.to : node.from;
-        const rawHeadingText = doc.slice(textFrom, node.to).trim();
-        const attrs = findTrailingHeadingAttributes(rawHeadingText);
-        const text = attrs
-          ? rawHeadingText.slice(0, attrs.index).trim()
-          : rawHeadingText;
-
-        headings.push({
-          from: node.from,
-          to: node.to,
-          level,
-          text,
-          id: extractHeadingId(rawHeadingText),
-          number,
-          unnumbered,
-        });
-        return;
-      }
-
-      // --- Footnote references ---
-      if (name === "FootnoteRef") {
-        const id = doc.slice(node.from + 2, node.to - 1);
-        const ref = { id, from: node.from, to: node.to };
-        footnoteRefs.push(ref);
-        footnoteRefByFrom.set(node.from, ref);
-        return;
-      }
-
-      // --- Footnote definitions ---
-      if (name === "FootnoteDef") {
-        const labelNode = node.node.getChild("FootnoteDefLabel");
-        if (!labelNode) return;
-
-        const id = doc.slice(labelNode.from + 2, labelNode.to - 2);
-        const def: FootnoteDefinition = {
-          id,
-          from: node.from,
-          to: node.to,
-          content: doc.slice(labelNode.to, node.to).trim(),
-          labelFrom: labelNode.from,
-          labelTo: labelNode.to,
-        };
-        footnoteDefs.set(id, def);
-        footnoteDefByFrom.set(node.from, def);
-        return;
-      }
-
-      // --- Fenced divs ---
-      if (name === "FencedDiv") {
-        const divNode = node.node;
-        let classes: readonly string[] = [];
-        let primaryClass: string | undefined;
-        let id: string | undefined;
-        let title: string | undefined;
-        let openFenceFrom = node.from;
-        let openFenceTo = node.from;
-        let attrFrom: number | undefined;
-        let attrTo: number | undefined;
-        let titleFrom: number | undefined;
-        let titleTo: number | undefined;
-        let closeFenceFrom = -1;
-        let closeFenceTo = -1;
-
-        const fences = divNode.getChildren("FencedDivFence");
-        if (fences.length > 0) {
-          openFenceFrom = fences[0].from;
-          openFenceTo = fences[0].to;
-        }
-
-        let closeFenceNode = fences.length > 1 ? fences[1] : undefined;
-        if (!closeFenceNode) {
-          const next = divNode.nextSibling;
-          if (next?.type.name === "FencedDivFence") {
-            closeFenceNode = next;
-          }
-        }
-
-        let singleLine = false;
-        if (
-          closeFenceNode &&
-          closeFenceNode.from >= 0 &&
-          closeFenceNode.from <= doc.length
-        ) {
-          const closePos = closeFenceNode.from;
-          const openLine = doc.lineAt(openFenceFrom);
-          const closeLine = doc.lineAt(closePos);
-          singleLine = openLine.from === closeLine.from;
-          if (singleLine) {
-            closeFenceFrom = closePos;
-            closeFenceTo = closeFenceNode.to;
-          } else {
-            closeFenceFrom = closeLine.from;
-            closeFenceTo = closeLine.to;
-          }
-        }
-
-        let keyValueTitle: string | undefined;
-        const attrNode = divNode.getChild("FencedDivAttributes");
-        if (attrNode) {
-          const attrs = extractDivClass(doc.slice(attrNode.from, attrNode.to));
-          if (attrs) {
-            classes = [...attrs.classes];
-            primaryClass = attrs.classes[0];
-            id = attrs.id;
-            keyValueTitle = attrs.keyValues.title;
-          }
-          attrFrom = attrNode.from;
-          attrTo = attrNode.to;
-          openFenceTo = Math.max(openFenceTo, attrNode.to);
-        }
-
-        const titleNode = divNode.getChild("FencedDivTitle");
-        if (titleNode) {
-          title = doc.slice(titleNode.from, titleNode.to).trim();
-          titleFrom = titleNode.from;
-          titleTo = titleNode.to;
-          openFenceTo = Math.max(openFenceTo, titleNode.to);
-        } else if (keyValueTitle) {
-          title = keyValueTitle;
-        }
-
-        const isSelfClosing =
-          closeFenceFrom >= 0 &&
-          !doc.slice(openFenceFrom, closeFenceTo).includes("\n");
-
-        fencedDivs.push({
-          from: node.from,
-          to: node.to,
-          openFenceFrom,
-          openFenceTo,
-          attrFrom,
-          attrTo,
-          titleFrom,
-          titleTo,
-          closeFenceFrom,
-          closeFenceTo,
-          singleLine,
-          isSelfClosing,
-          classes,
-          primaryClass,
-          id,
-          title,
-        });
-        return;
-      }
-
-      // --- Math spans (shared render metadata) ---
-      if (name === "InlineMath" || name === "DisplayMath") {
-        const isDisplay = name === "DisplayMath";
-        const markName = isDisplay ? "DisplayMathMark" : "InlineMathMark";
-        const marks = node.node.getChildren(markName);
-        const contentFrom = marks.length >= 1 ? marks[0].to : node.from;
-        const contentTo = marks.length >= 2 ? marks[marks.length - 1].from : node.to;
-        const labelFrom = isDisplay && node.node.getChild("EquationLabel") && marks.length >= 2
-          ? marks[marks.length - 1].to
-          : undefined;
-        const latex = contentFrom <= contentTo
-          ? doc.slice(contentFrom, contentTo)
-          : "";
-
-        mathRegions.push({
-          from: node.from,
-          to: node.to,
-          isDisplay,
-          contentFrom,
-          contentTo,
-          labelFrom,
-          latex,
-        });
-      }
-
-      // --- Equation labels ---
-      if (name === "EquationLabel") {
-        const labelId = readBracedLabelId(doc.slice(node.from, node.to), 0, node.to - node.from, "eq:");
-        if (!labelId) return;
-
-        const parent = node.node.parent;
-        if (!parent || parent.type.name !== "DisplayMath") return;
-
-        equationCounter++;
-        equations.push({
-          id: labelId,
-          from: parent.from,
-          to: parent.to,
-          labelFrom: node.from,
-          labelTo: node.to,
-          number: equationCounter,
-          latex: extractDisplayMathLatex(doc.slice(parent.from, node.from)),
-        });
-        return;
-      }
-
-      // --- Inline code / inline math (exclude from narrative ref scan) ---
-      if (name === "InlineCode" || name === "InlineMath") {
-        codeMathRanges.push({ from: node.from, to: node.to });
-        return;
-      }
-
-      // --- Links (for bracketed references) ---
-      if (name === "Link") {
-        const raw = doc.slice(node.from, node.to);
-        const refMatch = matchBracketedReference(raw);
-        if (refMatch) {
-          bracketedRefs.push({
-            from: node.from,
-            to: node.to,
-            bracketed: true,
-            ids: [...refMatch.ids],
-            locators: [...refMatch.locators],
-          });
-        }
-        linkRanges.push({ from: node.from, to: node.to });
-      }
-    },
-  });
+  for (const def of defs) {
+    footnoteDefs.set(def.id, def);
+    footnoteDefByFrom.set(def.from, def);
+  }
 
   return {
-    headings,
-    footnoteRefs,
-    footnoteDefs,
-    footnoteRefByFrom,
-    footnoteDefByFrom,
-    fencedDivs,
-    equations,
-    mathRegions,
-    bracketedRefs,
-    linkRanges,
-    codeMathRanges,
+    refs,
+    defs: footnoteDefs,
+    refByFrom: footnoteRefByFrom,
+    defByFrom: footnoteDefByFrom,
   };
+}
+
+function finalizeEquations(
+  equations: readonly EquationStructure[],
+): EquationSemantics[] {
+  let equationCounter = 0;
+  return equations.map((equation) => ({
+    ...equation,
+    number: ++equationCounter,
+  }));
 }
 
 /**
@@ -552,9 +295,9 @@ function collectNarrativeReferences(
   const refs: ReferenceSemantics[] = [];
   const fullText = doc.slice(0, doc.length);
 
-  // Sort excluded ranges by `from` for binary search. The tree walk
-  // produces them in document order, but the caller merges two arrays
-  // (linkRanges + codeMathRanges), so we sort once here.
+  // Sort excluded ranges by `from` for binary search. The shared structural
+  // extractor already emits them in document order, but we sort defensively
+  // here to keep the fallback independent from extractor internals.
   const sorted = excludedRanges.slice().sort((a, b) => a.from - b.from);
 
   NARRATIVE_REFERENCE_RE.lastIndex = 0;
@@ -581,17 +324,12 @@ function collectNarrativeReferences(
 // ---------------------------------------------------------------------------
 
 export function analyzeHeadings(doc: TextSource, tree: Tree): HeadingSemantics[] {
-  return unifiedTreeWalk(doc, tree).headings;
+  return finalizeHeadings(extractStructuralWindow(doc, tree).headings);
 }
 
 export function analyzeFootnotes(doc: TextSource, tree: Tree): FootnoteSemantics {
-  const w = unifiedTreeWalk(doc, tree);
-  return {
-    refs: w.footnoteRefs,
-    defs: w.footnoteDefs,
-    refByFrom: w.footnoteRefByFrom,
-    defByFrom: w.footnoteDefByFrom,
-  };
+  const structural = extractStructuralWindow(doc, tree);
+  return buildFootnoteSemantics(structural.footnoteRefs, structural.footnoteDefs);
 }
 
 export function numberFootnotes(
@@ -629,21 +367,23 @@ export function orderedFootnoteEntries(
 }
 
 export function analyzeFencedDivs(doc: TextSource, tree: Tree): FencedDivSemantics[] {
-  return unifiedTreeWalk(doc, tree).fencedDivs;
+  return extractStructuralWindow(doc, tree).fencedDivs;
 }
 
 export function analyzeEquations(doc: TextSource, tree: Tree): EquationSemantics[] {
-  return unifiedTreeWalk(doc, tree).equations;
+  return finalizeEquations(extractStructuralWindow(doc, tree).equations);
 }
 
 export function analyzeMath(doc: TextSource, tree: Tree): MathSemantics[] {
-  return unifiedTreeWalk(doc, tree).mathRegions;
+  return extractStructuralWindow(doc, tree).mathRegions;
 }
 
 export function analyzeReferences(doc: TextSource, tree: Tree): ReferenceSemantics[] {
-  const w = unifiedTreeWalk(doc, tree);
-  const excludedRanges = [...w.linkRanges, ...w.codeMathRanges];
-  const refs = [...w.bracketedRefs, ...collectNarrativeReferences(doc, excludedRanges)];
+  const structural = extractStructuralWindow(doc, tree);
+  const refs = [
+    ...structural.bracketedRefs,
+    ...collectNarrativeReferences(doc, structural.excludedRanges),
+  ];
   refs.sort((a, b) => a.from - b.from);
   return refs;
 }
@@ -695,22 +435,19 @@ export function analyzeDocumentSemantics(
   doc: TextSource,
   tree: Tree,
 ): DocumentSemantics {
-  const w = unifiedTreeWalk(doc, tree);
+  const structural = extractStructuralWindow(doc, tree);
 
-  const headings = w.headings;
-  const footnotes: FootnoteSemantics = {
-    refs: w.footnoteRefs,
-    defs: w.footnoteDefs,
-    refByFrom: w.footnoteRefByFrom,
-    defByFrom: w.footnoteDefByFrom,
-  };
-  const fencedDivs = w.fencedDivs;
-  const equations = w.equations;
-  const mathRegions = w.mathRegions;
+  const headings = finalizeHeadings(structural.headings);
+  const footnotes = buildFootnoteSemantics(
+    structural.footnoteRefs,
+    structural.footnoteDefs,
+  );
+  const fencedDivs = structural.fencedDivs;
+  const equations = finalizeEquations(structural.equations);
+  const mathRegions = structural.mathRegions;
 
-  const excludedRanges = [...w.linkRanges, ...w.codeMathRanges];
-  const narrativeRefs = collectNarrativeReferences(doc, excludedRanges);
-  const references = [...w.bracketedRefs, ...narrativeRefs];
+  const narrativeRefs = collectNarrativeReferences(doc, structural.excludedRanges);
+  const references = [...structural.bracketedRefs, ...narrativeRefs];
   references.sort((a, b) => a.from - b.from);
 
   const includes = extractIncludesFromDivs(doc, fencedDivs);
