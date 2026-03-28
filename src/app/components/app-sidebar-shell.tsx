@@ -19,7 +19,7 @@ import { usePersistentTreeState } from "../hooks/use-file-tree-controller";
 interface AppSidebarShellProps {
   workspace: Pick<
     AppWorkspaceSessionController,
-    "sidebarTab" | "setSidebarTab" | "fileTree" | "loadChildren"
+    "sidebarTab" | "setSidebarTab" | "fileTree" | "loadChildren" | "gitStatus"
   >;
   editor: Pick<
     AppEditorShellController,
@@ -57,6 +57,7 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
             <TabsContent value="files" className="min-h-full">
               <FileTree
                 root={workspace.fileTree}
+                gitStatus={workspace.gitStatus}
                 activePath={editor.currentPath}
                 onSelect={(path) => { void editor.openFile(path); }}
                 onDoubleClick={(path) => { void editor.openFile(path); }}

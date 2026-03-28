@@ -13,6 +13,7 @@ import {
 } from "./ui/context-menu";
 import { useFileTreeContext } from "../contexts/file-tree-context";
 import { FileIcon } from "./file-icon";
+import { GitStatusBadge } from "./git-status-badge";
 import { InlineCreateInput } from "./inline-create-input";
 import { RenameEditor } from "./rename-editor";
 
@@ -31,7 +32,7 @@ interface FileTreeNodeFileProps {
 }
 
 export function FileTreeNodeFile({ item }: FileTreeNodeFileProps) {
-  const { activePath, onSelect, onDoubleClick, onRename, onDelete, onCreateFile, onCreateDir } =
+  const { activePath, gitStatus, onSelect, onDoubleClick, onRename, onDelete, onCreateFile, onCreateDir } =
     useFileTreeContext();
 
   const entry = item.getItemData();
@@ -202,6 +203,7 @@ export function FileTreeNodeFile({ item }: FileTreeNodeFileProps) {
             ) : (
               <span className="cf-ui-font truncate">{entry.name}</span>
             )}
+            {gitStatus[entry.path] && <GitStatusBadge status={gitStatus[entry.path]} />}
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="min-w-[160px]">

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { FileEntry, FileSystem } from "../file-manager";
+import type { GitStatusMap } from "../tauri-client/git";
 import { loadProjectConfig } from "../project-config";
 import type { ProjectConfig } from "../project-config";
 import { useRecentFiles } from "./use-recent-files";
@@ -65,6 +66,8 @@ export interface AppWorkspaceSessionController {
   refreshTree: () => Promise<void>;
   /** Load children for a single directory and merge into the tree. */
   loadChildren: (dirPath: string) => Promise<void>;
+  gitStatus: GitStatusMap;
+  refreshGitStatus: () => Promise<void>;
   projectConfig: ProjectConfig;
   sidebarCollapsed: boolean;
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
@@ -101,6 +104,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   } = useRecentFiles(projectRoot);
 
   const [fileTree, setFileTree] = useState<FileEntry | null>(null);
+  const [gitStatus, setGitStatus] = useState<GitStatusMap>({});
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(224);
@@ -108,16 +112,44 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   const [sidenotesCollapsed, setSidenotesCollapsed] = useState(true);
   const [startupComplete, setStartupComplete] = useState(false);
   const workspaceRequestRef = useRef(0);
+  const gitStatusRequestRef = useRef(0);
 
   const clearRestoredProjectState = useCallback(() => {
     setProjectRoot(null);
     setFileTree(null);
+    ++gitStatusRequestRef.current;
+    setGitStatus({});
     setProjectConfig({});
     saveWindowState({
       projectRoot: null,
       currentDocument: null,
     });
   }, [saveWindowState]);
+
+  /** Fetch git working-tree status (Tauri only; no-op in browser mode).
+   *  Uses its own monotonic counter so overlapping refreshes within the
+   *  same workspace are correctly ordered (only the newest wins). */
+  const loadGitStatus = useCallback(async () => {
+    if (!isTauri()) return;
+    const id = ++gitStatusRequestRef.current;
+    try {
+      const { gitStatusCommand } = await import("../tauri-client/git");
+      const status = await measureAsync("sidebar.git_status", () => gitStatusCommand(), {
+        category: "sidebar",
+      });
+      if (id !== gitStatusRequestRef.current) return;
+      setGitStatus(status);
+    } catch (e: unknown) {
+      if (id !== gitStatusRequestRef.current) return;
+      console.error("[workspace] failed to load git status", e);
+      setGitStatus({});
+    }
+  }, []);
+
+  /** Fire-and-forget git status refresh. */
+  const refreshGitStatus = useCallback(async () => {
+    void loadGitStatus();
+  }, [loadGitStatus]);
 
   const loadWorkspaceContents = useCallback(async (requestId: number): Promise<FileEntry | null> => {
     if (fs.listChildren) {
@@ -139,6 +171,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       const tree: FileEntry = { name: "project", path: "", isDirectory: true, children: shallowChildren };
       setFileTree(tree);
       setProjectConfig(nextProjectConfig);
+      void loadGitStatus();
       return tree;
     }
 
@@ -156,13 +189,16 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     if (requestId !== workspaceRequestRef.current) return null;
     setFileTree(tree);
     setProjectConfig(nextProjectConfig);
+    void loadGitStatus();
     return tree;
-  }, [fs]);
+  }, [fs, loadGitStatus]);
 
   const refreshTree = useCallback(async () => {
     const requestId = workspaceRequestRef.current;
     if (isTauri() && !projectRoot) {
       setFileTree(null);
+      ++gitStatusRequestRef.current;
+      setGitStatus({});
       return;
     }
     try {
@@ -175,6 +211,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         return;
       }
       setFileTree(tree);
+      void loadGitStatus();
     } catch (e: unknown) {
       if (requestId !== workspaceRequestRef.current) {
         return;
@@ -182,7 +219,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       console.error("[workspace] failed to list file tree", e);
       setFileTree(null);
     }
-  }, [fs, projectRoot]);
+  }, [fs, projectRoot, loadGitStatus]);
 
   const loadChildren = useCallback(async (dirPath: string) => {
     if (!fs.listChildren) return;
@@ -206,6 +243,8 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       return null;
     }
     setProjectRoot(path);
+    ++gitStatusRequestRef.current;
+    setGitStatus({});
     saveWindowState({
       projectRoot: path,
       currentDocument: null,
@@ -288,6 +327,8 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     fileTree,
     refreshTree,
     loadChildren,
+    gitStatus,
+    refreshGitStatus,
     projectConfig,
     sidebarCollapsed,
     setSidebarCollapsed,

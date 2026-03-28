@@ -46,3 +46,13 @@ export function gitSwitchBranchCommand(name: string, force = false): Promise<voi
 export function gitCreateBranchCommand(name: string, force = false): Promise<void> {
   return invokeWithPerf("git_create_branch", { name, force });
 }
+
+/** Git working-tree status for a single file. */
+export type GitFileStatus = "modified" | "added" | "untracked";
+
+/** Map from project-relative path to its git status. */
+export type GitStatusMap = Record<string, GitFileStatus>;
+
+export function gitStatusCommand(): Promise<GitStatusMap> {
+  return invokeWithPerf<GitStatusMap>("git_status");
+}

@@ -100,6 +100,11 @@
   --cf-table-line-height: 1.5;
   --cf-embed-border: var(--cf-border);
 
+  /* Git status indicators */
+  --cf-git-modified: #c4a000;
+  --cf-git-added: #4e9a06;
+  --cf-git-untracked: #75868c;
+
   /* Border radius */
   --cf-border-radius: 2px;
   --cf-border-radius-lg: 4px;
@@ -142,6 +147,9 @@
   --cf-bg-overlay: rgba(10, 10, 10, 0.82);
   --cf-border-overlay: rgba(63, 63, 70, 0.6);
   --cf-logo-display-filter: invert(1);
+  --cf-git-modified: #e2c08d;
+  --cf-git-added: #73c991;
+  --cf-git-untracked: #8db0b8;
 }
 
 /* ── Base styles ────────────────────────────────────────────────────────────── */

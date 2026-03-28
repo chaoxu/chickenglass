@@ -28,6 +28,8 @@ export interface AppEditorShellDeps {
   settings: Settings;
   /** Callback to refresh the file-tree sidebar after file-system mutations. */
   refreshTree: () => Promise<void>;
+  /** Callback to refresh git working-tree badges after saves. */
+  refreshGitStatus: () => Promise<void>;
   /** Callback to record a newly opened path in the recent-files list. */
   addRecentFile: (path: string) => void;
   /** Ask the user how to handle unsaved changes before replacing the current document. */
@@ -220,6 +222,7 @@ export function useAppEditorShell({
   fs,
   settings,
   refreshTree,
+  refreshGitStatus,
   addRecentFile,
   requestUnsavedChangesDecision,
 }: AppEditorShellDeps): AppEditorShellController {
@@ -232,6 +235,7 @@ export function useAppEditorShell({
   const session = useEditorSession({
     fs,
     refreshTree,
+    refreshGitStatus,
     addRecentFile,
     requestUnsavedChangesDecision,
   });
@@ -251,7 +255,7 @@ export function useAppEditorShell({
     openFile,
     openFileWithContent,
     reloadFile,
-    saveFile,
+    saveFile: sessionSaveFile,
     createFile,
     createDirectory,
     closeCurrentFile,
@@ -260,6 +264,11 @@ export function useAppEditorShell({
     saveAs,
     handleWindowCloseRequest,
   } = session;
+
+  const saveFile = useCallback(async () => {
+    await sessionSaveFile();
+    void refreshGitStatus();
+  }, [sessionSaveFile, refreshGitStatus]);
 
   const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
