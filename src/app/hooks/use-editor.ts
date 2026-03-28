@@ -90,6 +90,13 @@ export interface UseEditorReturn {
   imageSaver: ((file: File) => Promise<string>) | null;
 }
 
+/** Keep a ref always pointing to the latest value of `value`. */
+function useLatest<T>(value: T) {
+  const ref = useRef(value);
+  ref.current = value;
+  return ref;
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -142,37 +149,37 @@ export function useEditor(
   const { resetScroll } = useEditorScroll(view);
   useEditorThemeSync(view, theme);
 
-  // Stable refs so callbacks inside the effect don't capture stale closures.
-  const onDocChangeRef = useRef(onDocChange);
-  const onProgrammaticDocChangeRef = useRef(onProgrammaticDocChange);
-  const onCursorChangeRef = useRef(onCursorChange);
-  const onFrontmatterChangeRef = useRef(onFrontmatterChange);
-  const onDocumentReadyRef = useRef(onDocumentReady);
-  const handleFrontmatterChangeRef = useRef(documentServices.handleFrontmatterChange);
-  const createDocumentContextExtensionsRef = useRef(documentServices.createDocumentContextExtensions);
-  const initializeViewRef = useRef(documentServices.initializeView);
-  const resetServicesRef = useRef(documentServices.resetServices);
-  useEffect(() => {
-    onDocChangeRef.current = onDocChange;
-    onProgrammaticDocChangeRef.current = onProgrammaticDocChange;
-    onCursorChangeRef.current = onCursorChange;
-    onFrontmatterChangeRef.current = onFrontmatterChange;
-    onDocumentReadyRef.current = onDocumentReady;
-    handleFrontmatterChangeRef.current = documentServices.handleFrontmatterChange;
-    createDocumentContextExtensionsRef.current = documentServices.createDocumentContextExtensions;
-    initializeViewRef.current = documentServices.initializeView;
-    resetServicesRef.current = documentServices.resetServices;
-  }, [
-    documentServices.createDocumentContextExtensions,
-    documentServices.handleFrontmatterChange,
-    documentServices.initializeView,
-    documentServices.resetServices,
-    onCursorChange,
-    onDocChange,
-    onDocumentReady,
-    onProgrammaticDocChange,
-    onFrontmatterChange,
-  ]);
+  // Keep refs pointing to the latest value so callbacks inside
+  // the mount effect never capture stale closures.
+  const onDocChangeRef = useLatest(onDocChange);
+  const onProgrammaticDocChangeRef = useLatest(onProgrammaticDocChange);
+  const onCursorChangeRef = useLatest(onCursorChange);
+  const onFrontmatterChangeRef = useLatest(onFrontmatterChange);
+  const onDocumentReadyRef = useLatest(onDocumentReady);
+  const handleFrontmatterChangeRef = useLatest(documentServices.handleFrontmatterChange);
+  const createDocumentContextExtensionsRef = useLatest(documentServices.createDocumentContextExtensions);
+  const initializeViewRef = useLatest(documentServices.initializeView);
+  const resetServicesRef = useLatest(documentServices.resetServices);
+
+  /**
+   * Shared "document became current" lifecycle used by both initial mount
+   * and external document switches. Resets scroll/telemetry, fires frontmatter
+   * and readiness callbacks, and records the loaded doc identity.
+   */
+  function applyDocumentReady(targetView: EditorView, newDoc: string, newPath: string | undefined) {
+    targetView.scrollDOM.scrollTop = 0;
+    resetScroll();
+    const telemetry = useEditorTelemetryStore.getState();
+    const counts = computeLiveStats(newDoc);
+    telemetry.setLiveCounts(counts.words, counts.chars);
+    telemetry.setCursorPos(0, targetView);
+    const fm = targetView.state.field(frontmatterField, false);
+    onFrontmatterChangeRef.current?.(fm);
+    initializeViewRef.current(targetView, fm, newDoc);
+    lastLoadedDocRef.current = newDoc;
+    lastLoadedPathRef.current = newPath;
+    onDocumentReadyRef.current?.(targetView, newPath);
+  }
 
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -244,20 +251,7 @@ export function useEditor(
 
     debugBridge.attachDebugView(newView);
     setView(newView);
-    // Initialize telemetry in Zustand store (not React state).
-    const initCounts = computeLiveStats(doc);
-    telemetry.setLiveCounts(initCounts.words, initCounts.chars);
-    telemetry.setCursorPos(0, newView);
-    telemetry.setScroll(0, 0);
-    resetScroll();
-
-    // Initial frontmatter notification
-    const initialFm = newView.state.field(frontmatterField, false);
-    onFrontmatterChangeRef.current?.(initialFm);
-    initializeViewRef.current(newView, initialFm, doc);
-    lastLoadedDocRef.current = doc;
-    lastLoadedPathRef.current = docPath;
-    onDocumentReadyRef.current?.(newView, docPath);
+    applyDocumentReady(newView, doc, docPath);
 
     return () => {
       if (wordCountTimerRef.current !== null) {
@@ -307,20 +301,8 @@ export function useEditor(
       view.dispatch({ selection: { anchor: 0 } });
     }
 
-    view.scrollDOM.scrollTop = 0;
-    resetScroll();
-    const telemetry = useEditorTelemetryStore.getState();
-    const replaceCounts = computeLiveStats(doc);
-    telemetry.setLiveCounts(replaceCounts.words, replaceCounts.chars);
-    telemetry.setCursorPos(0, view);
-
-    const currentFrontmatter = view.state.field(frontmatterField, false);
-    onFrontmatterChangeRef.current?.(currentFrontmatter);
-    initializeViewRef.current(view, currentFrontmatter, doc);
-    lastLoadedDocRef.current = doc;
-    lastLoadedPathRef.current = docPath;
-    onDocumentReadyRef.current?.(view, docPath);
-  }, [doc, docPath, documentServices.initializeView, documentServices.resetServices, resetScroll, view]);
+    applyDocumentReady(view, doc, docPath);
+  }, [doc, docPath, resetScroll, view]);
 
   return {
     view,
