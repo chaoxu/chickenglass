@@ -72,163 +72,110 @@ function appendLabelIfPresent(
   return labelTo;
 }
 
+/** Result of scanning subsequent lines for a closing display-math delimiter. */
+interface MultilineScanResult {
+  found: boolean;
+  endPos: number;
+  closingLineText: string;
+  closingLineStart: number;
+}
+
 /**
- * Block parser for \[...\] display math with optional equation labels.
- * Detects \[ at line start, scans for \] (potentially multi-line),
- * then checks for a trailing {#eq:...} label.
+ * Scan subsequent lines for a closing display-math delimiter (`$$` or `\]`).
+ * Stops at fenced div closing fences to avoid crossing composite boundaries.
  */
-const backslashDisplayMathWithLabel: BlockParser = {
-  name: "BackslashDisplayMath",
-  endLeaf(_cx: BlockContext, line: Line): boolean {
-    return line.text.slice(line.pos).startsWith("\\[");
-  },
-  parse(cx: BlockContext, line: Line) {
-    const textAfterIndent = line.text.slice(line.pos);
-    if (!textAfterIndent.startsWith("\\[")) return false;
+function scanMultilineClose(
+  cx: BlockContext,
+  line: Line,
+  closeDelimiter: string,
+): MultilineScanResult {
+  const closeLen = closeDelimiter.length;
+  let currentLineEnd = cx.lineStart + line.text.length;
+  while (cx.nextLine()) {
+    const currentText = line.text;
+    // Stop at fenced div closing fences — update currentLineEnd BEFORE
+    // breaking so the unclosed math block ends at the previous line,
+    // not at a stale position from an earlier iteration.
+    if (isFencedDivClose(currentText, line.pos)) {
+      currentLineEnd = cx.lineStart;
+      break;
+    }
+    const closeInLine = currentText.indexOf(closeDelimiter);
+    if (closeInLine >= 0) {
+      return {
+        found: true,
+        endPos: cx.lineStart + closeInLine + closeLen,
+        closingLineText: currentText,
+        closingLineStart: cx.lineStart,
+      };
+    }
+    currentLineEnd = cx.lineStart + currentText.length;
+  }
+  return { found: false, endPos: currentLineEnd, closingLineText: "", closingLineStart: -1 };
+}
 
-    const start = cx.lineStart + line.pos;
+/**
+ * Create a block parser for display math with optional equation labels.
+ * Detects the open delimiter at line start, scans for the close delimiter
+ * (potentially multi-line), then checks for a trailing {#eq:...} label.
+ */
+function makeDisplayMathParser(
+  name: string,
+  openDelimiter: string,
+  closeDelimiter: string,
+): BlockParser {
+  const openLen = openDelimiter.length;
+  const closeLen = closeDelimiter.length;
 
-    // Single-line: \[...\] possibly followed by {#eq:...}
-    const closeIdx = textAfterIndent.indexOf("\\]", 2);
-    if (closeIdx >= 0) {
-      const end = start + closeIdx + 2;
-      const openMark = cx.elt("DisplayMathMark", start, start + 2);
-      const closeMark = cx.elt("DisplayMathMark", end - 2, end);
-      const children = [openMark, closeMark];
-      const blockEnd = appendLabelIfPresent(
-        cx, children, textAfterIndent, start, closeIdx + 2, end,
-      );
+  return {
+    name,
+    endLeaf(_cx: BlockContext, line: Line): boolean {
+      return line.text.slice(line.pos).startsWith(openDelimiter);
+    },
+    parse(cx: BlockContext, line: Line) {
+      const textAfterIndent = line.text.slice(line.pos);
+      if (!textAfterIndent.startsWith(openDelimiter)) return false;
+
+      const start = cx.lineStart + line.pos;
+
+      // Single-line: open...close possibly followed by {#eq:...}
+      const closeIdx = textAfterIndent.indexOf(closeDelimiter, openLen);
+      if (closeIdx >= 0) {
+        const closeEnd = closeIdx + closeLen;
+        const end = start + closeEnd;
+        const openMark = cx.elt("DisplayMathMark", start, start + openLen);
+        const closeMark = cx.elt("DisplayMathMark", end - closeLen, end);
+        const children = [openMark, closeMark];
+        const blockEnd = appendLabelIfPresent(
+          cx, children, textAfterIndent, start, closeEnd, end,
+        );
+        cx.addElement(cx.elt("DisplayMath", start, blockEnd, children));
+        cx.nextLine();
+        return true;
+      }
+
+      // Multi-line: scan subsequent lines for closing delimiter
+      const scan = scanMultilineClose(cx, line, closeDelimiter);
+
+      const openMark = cx.elt("DisplayMathMark", start, start + openLen);
+      const children = scan.found
+        ? [openMark, cx.elt("DisplayMathMark", scan.endPos - closeLen, scan.endPos)]
+        : [openMark];
+
+      const blockEnd = scan.found
+        ? appendLabelIfPresent(
+            cx, children, scan.closingLineText, scan.closingLineStart,
+            scan.endPos - scan.closingLineStart, scan.endPos,
+          )
+        : scan.endPos;
+
       cx.addElement(cx.elt("DisplayMath", start, blockEnd, children));
       cx.nextLine();
       return true;
-    }
-
-    // Multi-line: scan subsequent lines for \]
-    let endPos = -1;
-    let closingLineText = "";
-    let closingLineStart = -1;
-    let currentLineEnd = cx.lineStart + line.text.length;
-    while (cx.nextLine()) {
-      const currentText = line.text;
-      // Stop at fenced div closing fences — update currentLineEnd BEFORE
-      // breaking so the unclosed math block ends at the previous line,
-      // not at a stale position from an earlier iteration.
-      if (isFencedDivClose(currentText, line.pos)) {
-        currentLineEnd = cx.lineStart;
-        break;
-      }
-      const closeInLine = currentText.indexOf("\\]");
-      if (closeInLine >= 0) {
-        endPos = cx.lineStart + closeInLine + 2;
-        closingLineText = currentText;
-        closingLineStart = cx.lineStart;
-        break;
-      }
-      currentLineEnd = cx.lineStart + currentText.length;
-    }
-
-    const foundClose = endPos >= 0;
-    if (!foundClose) endPos = currentLineEnd;
-
-    const openMark = cx.elt("DisplayMathMark", start, start + 2);
-    const children = foundClose
-      ? [openMark, cx.elt("DisplayMathMark", endPos - 2, endPos)]
-      : [openMark];
-
-    const blockEnd = foundClose
-      ? appendLabelIfPresent(
-          cx, children, closingLineText, closingLineStart,
-          endPos - closingLineStart, endPos,
-        )
-      : endPos;
-
-    cx.addElement(cx.elt("DisplayMath", start, blockEnd, children));
-    cx.nextLine();
-    return true;
-  },
-  before: "HorizontalRule",
-};
-
-/**
- * Block parser for $$...$$ display math with optional equation labels.
- * Detects $$ at line start, scans for closing $$ (potentially multi-line),
- * then checks for a trailing {#eq:...} label.
- */
-const dollarDisplayMathWithLabel: BlockParser = {
-  name: "DollarDisplayMath",
-  endLeaf(_cx: BlockContext, line: Line): boolean {
-    return line.text.slice(line.pos).startsWith("$$");
-  },
-  parse(cx: BlockContext, line: Line) {
-    const textAfterIndent = line.text.slice(line.pos);
-    if (!textAfterIndent.startsWith("$$")) return false;
-
-    const start = cx.lineStart + line.pos;
-
-    // Single-line: $$...$$ possibly followed by {#eq:...}
-    const rest = textAfterIndent.slice(2);
-    const closeIdx = rest.indexOf("$$");
-    if (closeIdx >= 0) {
-      const closeEnd = 2 + closeIdx + 2;
-      const end = start + closeEnd;
-      const openMark = cx.elt("DisplayMathMark", start, start + 2);
-      const closeMark = cx.elt("DisplayMathMark", end - 2, end);
-      const children = [openMark, closeMark];
-      const blockEnd = appendLabelIfPresent(
-        cx, children, textAfterIndent, start, closeEnd, end,
-      );
-      cx.addElement(cx.elt("DisplayMath", start, blockEnd, children));
-      cx.nextLine();
-      return true;
-    }
-
-    // Multi-line: scan subsequent lines for closing $$
-    // Use indexOf to find $$ anywhere on the line (same approach as the \]
-    // parser), so patterns like \end{aligned}$$ {#eq:foo} are detected.
-    let endPos = -1;
-    let closingLineText = "";
-    let closingLineStart = -1;
-    let currentLineEnd = cx.lineStart + line.text.length;
-    while (cx.nextLine()) {
-      const currentText = line.text;
-      // Stop at fenced div closing fences — update currentLineEnd BEFORE
-      // breaking so the unclosed math block ends at the previous line,
-      // not at a stale position from an earlier iteration.
-      if (isFencedDivClose(currentText, line.pos)) {
-        currentLineEnd = cx.lineStart;
-        break;
-      }
-      const closeInLine = currentText.indexOf("$$");
-      if (closeInLine >= 0) {
-        endPos = cx.lineStart + closeInLine + 2;
-        closingLineText = currentText;
-        closingLineStart = cx.lineStart;
-        break;
-      }
-      currentLineEnd = cx.lineStart + currentText.length;
-    }
-
-    const foundClose = endPos >= 0;
-    if (!foundClose) endPos = currentLineEnd;
-
-    const openMark = cx.elt("DisplayMathMark", start, start + 2);
-    const children = foundClose
-      ? [openMark, cx.elt("DisplayMathMark", endPos - 2, endPos)]
-      : [openMark];
-
-    const blockEnd = foundClose
-      ? appendLabelIfPresent(
-          cx, children, closingLineText, closingLineStart,
-          endPos - closingLineStart, endPos,
-        )
-      : endPos;
-
-    cx.addElement(cx.elt("DisplayMath", start, blockEnd, children));
-    cx.nextLine();
-    return true;
-  },
-  before: "HorizontalRule",
-};
+    },
+    before: "HorizontalRule",
+  };
+}
 
 /**
  * Canonical block parsers for ALL display math (`$$...$$` and `\[...\]`).
@@ -253,5 +200,8 @@ export const equationLabelExtension: MarkdownConfig = {
       style: tags.labelName,
     },
   ],
-  parseBlock: [backslashDisplayMathWithLabel, dollarDisplayMathWithLabel],
+  parseBlock: [
+    makeDisplayMathParser("BackslashDisplayMath", "\\[", "\\]"),
+    makeDisplayMathParser("DollarDisplayMath", "$$", "$$"),
+  ],
 };
