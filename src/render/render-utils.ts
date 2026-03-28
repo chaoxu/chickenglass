@@ -83,12 +83,26 @@ export function collectNodes(
 /**
  * Serialize macros to a stable string for use in widget equality checks.
  * Returns an empty string when there are no macros.
+ *
+ * Results are cached per macro object identity via WeakMap so that
+ * repeated calls within the same update cycle (widgets, change-detection)
+ * pay the sort+join cost only once.
  */
+const macroKeyCache = new WeakMap<Record<string, string>, string>();
+
 export function serializeMacros(macros: Record<string, string>): string {
+  const cached = macroKeyCache.get(macros);
+  if (cached !== undefined) return cached;
+
   const keys = Object.keys(macros);
-  if (keys.length === 0) return "";
+  if (keys.length === 0) {
+    macroKeyCache.set(macros, "");
+    return "";
+  }
   keys.sort();
-  return keys.map((k) => `${k}=${macros[k]}`).join("\0");
+  const result = keys.map((k) => `${k}=${macros[k]}`).join("\0");
+  macroKeyCache.set(macros, result);
+  return result;
 }
 
 /** Shared Decoration.mark that visually hides source markers via CSS while keeping them in the DOM. */
