@@ -4,20 +4,19 @@
  * Uses fast-check to generate random sequences of editing operations
  * (insertions, deletions, cursor moves, mode switches) and verifies
  * invariants hold after every step: no crashes, valid cursor, consistent
- * parser state, valid mode.
+ * parser state, valid mode, coherent semantics.
  *
- * Dispatch errors (e.g. decoration build failures) are tolerated because
- * CM6 dispatch is transactional — a failed dispatch does not corrupt editor
- * state. The harness tracks these as `dispatchErrors` for diagnostics but
- * only fails on invariant violations in the resulting state.
+ * Every dispatch and mode-switch must succeed without throwing. Any
+ * exception is a real test failure, not a tolerated side-effect.
  *
  * @see https://github.com/chaoxu/coflat/issues/439
  */
-import { describe, it, afterEach, expect } from "vitest";
+import { describe, it, afterEach } from "vitest";
 import fc from "fast-check";
 import { syntaxTree } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
 import { createEditor, editorModeField, setEditorMode, type EditorMode } from "./editor";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 
 // ── Seed documents ───────────────────────────────────────────────────────────
 
@@ -190,46 +189,36 @@ const arbSeedIndex: fc.Arbitrary<number> = fc.nat({ max: SEED_DOCUMENTS.length -
 
 // ── Apply + invariant checking ───────────────────────────────────────────────
 
-/**
- * Try to apply an operation. Returns true if dispatch succeeded, false if
- * CM6 threw (e.g. decoration build error). Failed dispatches don't change
- * editor state so the view remains consistent.
- */
-function tryApplyOp(view: EditorView, op: EditOp): boolean {
+/** Apply an operation. Throws on dispatch failure — no exceptions are swallowed. */
+function applyOp(view: EditorView, op: EditOp): void {
   const docLen = view.state.doc.length;
   const head = view.state.selection.main.head;
 
-  try {
-    switch (op.type) {
-      case "insert":
-        view.dispatch({ changes: { from: head, insert: op.text } });
-        break;
-      case "delete": {
-        const from = Math.max(0, head - op.count);
-        if (from < head) {
-          view.dispatch({ changes: { from, to: head } });
-        }
-        break;
+  switch (op.type) {
+    case "insert":
+      view.dispatch({ changes: { from: head, insert: op.text } });
+      break;
+    case "delete": {
+      const from = Math.max(0, head - op.count);
+      if (from < head) {
+        view.dispatch({ changes: { from, to: head } });
       }
-      case "move": {
-        const pos = Math.min(op.pos, docLen);
-        view.dispatch({ selection: { anchor: pos } });
-        break;
-      }
-      case "newline":
-        view.dispatch({ changes: { from: head, insert: "\n" } });
-        break;
-      case "mode":
-        setEditorMode(view, op.mode);
-        break;
-      case "snippet":
-        view.dispatch({ changes: { from: head, insert: op.snippet } });
-        break;
+      break;
     }
-    return true;
-  } catch {
-    // CM6 dispatch is transactional — state is unchanged on throw.
-    return false;
+    case "move": {
+      const pos = Math.min(op.pos, docLen);
+      view.dispatch({ selection: { anchor: pos } });
+      break;
+    }
+    case "newline":
+      view.dispatch({ changes: { from: head, insert: "\n" } });
+      break;
+    case "mode":
+      setEditorMode(view, op.mode);
+      break;
+    case "snippet":
+      view.dispatch({ changes: { from: head, insert: op.snippet } });
+      break;
   }
 }
 
@@ -266,16 +255,28 @@ function checkInvariants(view: EditorView, stepIndex: number, op: EditOp): void 
     },
   });
 
+  // Semantics field is accessible and internally consistent
+  const semantics = state.field(documentSemanticsField);
+  for (const heading of semantics.headings) {
+    if (heading.from < 0 || heading.from > docLen) {
+      throw new Error(
+        `Step ${stepIndex} (${op.type}): heading.from ${heading.from} outside [0, ${docLen}]`,
+      );
+    }
+  }
+  for (const eq of semantics.equations) {
+    if (eq.from < 0 || eq.from > docLen) {
+      throw new Error(
+        `Step ${stepIndex} (${op.type}): equation.from ${eq.from} outside [0, ${docLen}]`,
+      );
+    }
+  }
+
   // Document text is retrievable
   state.doc.toString();
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-interface StressRunResult {
-  dispatchErrors: number;
-  successfulOps: number;
-}
 
 function createMountedEditor(doc: string): { view: EditorView; parent: HTMLElement } {
   const parent = document.createElement("div");
@@ -287,22 +288,6 @@ function createMountedEditor(doc: string): { view: EditorView; parent: HTMLEleme
 function cleanupEditor(view: EditorView, parent: HTMLElement): void {
   view.destroy();
   parent.remove();
-}
-
-function runOpSequence(view: EditorView, ops: EditOp[]): StressRunResult {
-  let dispatchErrors = 0;
-  let successfulOps = 0;
-
-  for (let i = 0; i < ops.length; i++) {
-    if (tryApplyOp(view, ops[i])) {
-      successfulOps++;
-    } else {
-      dispatchErrors++;
-    }
-    checkInvariants(view, i, ops[i]);
-  }
-
-  return { dispatchErrors, successfulOps };
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -326,14 +311,16 @@ describe("rich-mode stress", () => {
         activeView = view;
         activeParent = parent;
 
-        const result = runOpSequence(view, ops);
-        expect(result.successfulOps + result.dispatchErrors).toBe(ops.length);
+        for (let i = 0; i < ops.length; i++) {
+          applyOp(view, ops[i]);
+          checkInvariants(view, i, ops[i]);
+        }
 
         cleanupEditor(view, parent);
         activeView = undefined;
         activeParent = undefined;
       }),
-      { numRuns: 50 },
+      { numRuns: 50, endOnFailure: true },
     );
   });
 
@@ -346,22 +333,23 @@ describe("rich-mode stress", () => {
 
         const modes: EditorMode[] = ["rich", "source"];
         for (let i = 0; i < ops.length; i++) {
-          // Mode switch can also fail if rendering extensions throw during
-          // reconfiguration — tolerate the same way as other dispatches.
-          try { setEditorMode(view, modes[i % 2]); } catch { /* transactional */ }
-          tryApplyOp(view, ops[i]);
+          setEditorMode(view, modes[i % 2]);
+          applyOp(view, ops[i]);
           checkInvariants(view, i, ops[i]);
         }
 
-        // End in rich mode and verify
-        try { setEditorMode(view, "rich"); } catch { /* tolerate */ }
-        checkInvariants(view, ops.length, { type: "mode", mode: "rich" });
+        // End in rich mode and verify mode actually changed
+        setEditorMode(view, "rich");
+        const finalMode = view.state.field(editorModeField);
+        if (finalMode !== "rich") {
+          throw new Error(`Expected final mode "rich", got "${finalMode}"`);
+        }
 
         cleanupEditor(view, parent);
         activeView = undefined;
         activeParent = undefined;
       }),
-      { numRuns: 30 },
+      { numRuns: 30, endOnFailure: true },
     );
   });
 
@@ -379,8 +367,8 @@ describe("rich-mode stress", () => {
           for (let i = 0; i < snippets.length; i++) {
             const docLen = view.state.doc.length;
             const pos = atEnd[i % atEnd.length] ? docLen : 0;
-            tryApplyOp(view, { type: "move", pos });
-            tryApplyOp(view, { type: "snippet", snippet: snippets[i] });
+            applyOp(view, { type: "move", pos });
+            applyOp(view, { type: "snippet", snippet: snippets[i] });
             checkInvariants(view, i, { type: "snippet", snippet: snippets[i] });
           }
 
@@ -389,7 +377,7 @@ describe("rich-mode stress", () => {
           activeParent = undefined;
         },
       ),
-      { numRuns: 30 },
+      { numRuns: 30, endOnFailure: true },
     );
   });
 
@@ -410,14 +398,11 @@ describe("rich-mode stress", () => {
             const pos = Math.min(Math.floor(posFrac * docLen), docLen - 1);
             const deleteLen = Math.min(1 + Math.floor(lenFrac * 5), docLen - pos);
             if (deleteLen > 0) {
-              const op: EditOp = { type: "delete", count: deleteLen };
-              try {
-                view.dispatch({
-                  changes: { from: pos, to: pos + deleteLen },
-                  selection: { anchor: Math.min(pos, docLen - deleteLen) },
-                });
-              } catch { /* transactional */ }
-              checkInvariants(view, iterations, op);
+              view.dispatch({
+                changes: { from: pos, to: pos + deleteLen },
+                selection: { anchor: Math.min(pos, docLen - deleteLen) },
+              });
+              checkInvariants(view, iterations, { type: "delete", count: deleteLen });
             }
             iterations++;
           }
@@ -427,7 +412,7 @@ describe("rich-mode stress", () => {
           activeParent = undefined;
         },
       ),
-      { numRuns: 20 },
+      { numRuns: 20, endOnFailure: true },
     );
   });
 });

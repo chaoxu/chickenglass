@@ -259,6 +259,14 @@ describe("addSingleLineClosingFence", () => {
     addSingleLineClosingFence(state, 21, 20, items);
     expect(items).toHaveLength(0);
   });
+
+  it("does nothing when closeFenceTo === closeFenceFrom (empty range)", () => {
+    const doc = "::: {.theorem} Title :::";
+    const state = createEditorState(doc);
+    const items: Range<Decoration>[] = [];
+    addSingleLineClosingFence(state, 21, 21, items);
+    expect(items).toHaveLength(0);
+  });
 });
 
 // ── addCollapsedClosingFence ─────────────────────────────────────────
@@ -288,6 +296,12 @@ describe("addCollapsedClosingFence", () => {
   it("does nothing when closeFenceTo < closeFenceFrom", () => {
     const items: Range<Decoration>[] = [];
     addCollapsedClosingFence(13, 10, items);
+    expect(items).toHaveLength(0);
+  });
+
+  it("does nothing when closeFenceTo === closeFenceFrom (empty range)", () => {
+    const items: Range<Decoration>[] = [];
+    addCollapsedClosingFence(10, 10, items);
     expect(items).toHaveLength(0);
   });
 });
