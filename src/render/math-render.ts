@@ -4,6 +4,8 @@ import {
   Decoration,
   type DecorationSet,
   EditorView,
+  ViewPlugin,
+  type ViewUpdate,
 } from "@codemirror/view";
 import katexStyles from "katex/dist/katex.min.css?inline";
 import { CSS } from "../constants/css-classes";
@@ -320,5 +322,112 @@ const mathDecorationField = createDecorationsField((state) => {
 
 export { mathDecorationField as _mathDecorationFieldForTest };
 
+// ── Idle KaTeX prewarm (#625) ──────────────────────────────────────────────
+
+/**
+ * Schedule a callback during browser idle time.
+ * Falls back to setTimeout in environments without requestIdleCallback.
+ */
+function scheduleIdle(callback: (deadline?: IdleDeadline) => void): void {
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(callback);
+  } else {
+    setTimeout(() => callback(undefined), 1);
+  }
+}
+
+/** Maximum time (ms) to spend prewarming per idle chunk when no deadline is available. */
+const PREWARM_BUDGET_MS = 2;
+
+/**
+ * ViewPlugin that pre-populates the KaTeX HTML string cache during idle time.
+ *
+ * After document open or when math regions / macros change, this plugin
+ * clears the shared `katexHtmlCache` (evicting stale entries from previous
+ * state) and schedules idle callbacks to call `renderKatexToHtml()` for
+ * every math region in the document.  Because the result is stored in the
+ * shared cache, subsequent `MathWidget.createDOM()` calls hit the cache
+ * instead of invoking KaTeX — eliminating the cold-path cost when math
+ * first scrolls into view (#625).
+ *
+ * Eviction strategy:
+ * - On region or macro change → clear + re-prewarm (schedulePrewarm)
+ * - Safety-net size cap in renderKatexToHtml (MAX_KATEX_CACHE_ENTRIES)
+ * Visible widgets are unaffected by clears because they retain their
+ * DOM via `createCachedDOM` (render-utils.ts).
+ */
+const mathPrewarmPlugin = ViewPlugin.fromClass(
+  class {
+    private generation = 0;
+    private lastRegions: readonly MathSemantics[] | null = null;
+    private lastMacrosKey = "";
+
+    constructor(view: EditorView) {
+      this.schedulePrewarm(view.state);
+    }
+
+    update(update: ViewUpdate) {
+      const regions = update.state.field(documentAnalysisField).mathRegions;
+      const macros = update.state.field(mathMacrosField);
+      const macrosKey = serializeMacros(macros);
+
+      if (regions !== this.lastRegions || macrosKey !== this.lastMacrosKey) {
+        this.schedulePrewarm(update.state);
+      }
+    }
+
+    destroy() {
+      this.generation++;
+    }
+
+    private schedulePrewarm(state: EditorState) {
+      this.generation++;
+      const gen = this.generation;
+
+      const regions = state.field(documentAnalysisField).mathRegions;
+      const macros = state.field(mathMacrosField);
+
+      this.lastRegions = regions;
+      this.lastMacrosKey = serializeMacros(macros);
+
+      // Evict entries from previous document / macro state.  Visible widgets
+      // retain their DOM via createCachedDOM and do not re-query this cache
+      // until their content or macros actually change.
+      clearKatexHtmlCache();
+
+      if (regions.length === 0) return;
+
+      let index = 0;
+
+      const processChunk = (deadline?: IdleDeadline) => {
+        if (this.generation !== gen) return;
+
+        const start = performance.now();
+        while (index < regions.length) {
+          if (
+            deadline
+              ? deadline.timeRemaining() < 1
+              : performance.now() - start > PREWARM_BUDGET_MS
+          ) {
+            break;
+          }
+          const region = regions[index++];
+          try {
+            renderKatexToHtml(region.latex, region.isDisplay, macros);
+          } catch {
+            // KaTeX parse error — skip; the widget will show the error on render.
+          }
+        }
+
+        if (index < regions.length && this.generation === gen) {
+          scheduleIdle(processChunk);
+        }
+      };
+
+      scheduleIdle(processChunk);
+    }
+  },
+);
+
 /** CM6 extension that renders math expressions with KaTeX (Typora-style toggle). */
-export const mathRenderPlugin: Extension = [editorFocusField, focusTracker, mathMacrosField, mathDecorationField];
+export const mathRenderPlugin: Extension = [editorFocusField, focusTracker, mathMacrosField, mathDecorationField, mathPrewarmPlugin];
