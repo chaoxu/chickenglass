@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { FileEntry } from "../file-manager";
-import { findDefaultDocumentPath, findDefaultDocumentPathLazy } from "../default-document-path";
+import { findDefaultDocumentPath } from "../default-document-path";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 
@@ -91,9 +91,7 @@ export function useAppSessionPersistence({
           }
         }
 
-        const first = listChildren
-          ? await findDefaultDocumentPathLazy(fileTree, listChildren)
-          : findDefaultDocumentPath(fileTree);
+        const first = await findDefaultDocumentPath(fileTree, listChildren);
         // Abort if the project changed during the lazy search — the
         // returned path may belong to the new project's namespace.
         if (workspaceRequestRef.current !== gen) return;

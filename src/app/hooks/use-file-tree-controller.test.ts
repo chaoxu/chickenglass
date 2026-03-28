@@ -7,7 +7,7 @@ import {
   resolveFileTreeKey,
 } from "./use-file-tree-controller";
 import { mergeChildrenIntoTree } from "./use-app-workspace-session";
-import { findDefaultDocumentPath, findDefaultDocumentPathLazy } from "../default-document-path";
+import { findDefaultDocumentPath } from "../default-document-path";
 import { collectMdPaths } from "../export";
 
 function file(
@@ -390,7 +390,7 @@ describe("mergeChildrenIntoTree", () => {
 });
 
 describe("partial-tree regression (#575)", () => {
-  it("findDefaultDocumentPath finds a nested .md when none exist at root", () => {
+  it("findDefaultDocumentPath finds a nested .md when none exist at root", async () => {
     const tree: FileEntry = {
       name: "project",
       path: "",
@@ -406,10 +406,10 @@ describe("partial-tree regression (#575)", () => {
         },
       ],
     };
-    expect(findDefaultDocumentPath(tree)).toBe("chapters/intro.md");
+    expect(await findDefaultDocumentPath(tree)).toBe("chapters/intro.md");
   });
 
-  it("findDefaultDocumentPath returns null on a shallow tree with only unloaded dirs", () => {
+  it("findDefaultDocumentPath returns null on a shallow tree with only unloaded dirs", async () => {
     // This is the scenario the two-phase load prevents: a shallow tree
     // where directories have children: undefined.
     const shallowTree: FileEntry = {
@@ -421,7 +421,7 @@ describe("partial-tree regression (#575)", () => {
       ],
     };
     // On a shallow tree, findDefaultDocumentPath can't see nested docs.
-    expect(findDefaultDocumentPath(shallowTree)).toBeNull();
+    expect(await findDefaultDocumentPath(shallowTree)).toBeNull();
   });
 
   it("collectMdPaths collects nested markdown files from a full tree", () => {
@@ -472,7 +472,7 @@ describe("partial-tree regression (#575)", () => {
   });
 });
 
-describe("findDefaultDocumentPathLazy (#575)", () => {
+describe("findDefaultDocumentPath with lazy listChildren (#575)", () => {
   it("finds a nested .md by lazily loading children", async () => {
     const shallowTree: FileEntry = {
       name: "project",
@@ -490,7 +490,7 @@ describe("findDefaultDocumentPathLazy (#575)", () => {
       return [];
     });
 
-    const result = await findDefaultDocumentPathLazy(shallowTree, listChildren);
+    const result = await findDefaultDocumentPath(shallowTree, listChildren);
     expect(result).toBe("chapters/intro.md");
     expect(listChildren).toHaveBeenCalledWith("chapters");
   });
@@ -508,7 +508,7 @@ describe("findDefaultDocumentPathLazy (#575)", () => {
 
     const listChildren = vi.fn(async () => []);
 
-    const result = await findDefaultDocumentPathLazy(tree, listChildren);
+    const result = await findDefaultDocumentPath(tree, listChildren);
     expect(result).toBe("main.md");
     expect(listChildren).not.toHaveBeenCalled();
   });
@@ -526,7 +526,7 @@ describe("findDefaultDocumentPathLazy (#575)", () => {
 
     const listChildren = vi.fn(async () => []);
 
-    const result = await findDefaultDocumentPathLazy(tree, listChildren);
+    const result = await findDefaultDocumentPath(tree, listChildren);
     expect(result).toBe("index.md");
     expect(listChildren).not.toHaveBeenCalled();
   });
@@ -551,7 +551,7 @@ describe("findDefaultDocumentPathLazy (#575)", () => {
       return [];
     });
 
-    const result = await findDefaultDocumentPathLazy(shallowTree, listChildren);
+    const result = await findDefaultDocumentPath(shallowTree, listChildren);
     expect(result).toBe("src/deep/proof.md");
     expect(listChildren).toHaveBeenCalledWith("src");
     expect(listChildren).toHaveBeenCalledWith("src/deep");
@@ -569,7 +569,7 @@ describe("findDefaultDocumentPathLazy (#575)", () => {
 
     const listChildren = vi.fn(async () => []);
 
-    const result = await findDefaultDocumentPathLazy(tree, listChildren);
+    const result = await findDefaultDocumentPath(tree, listChildren);
     expect(result).toBeNull();
   });
 
@@ -592,7 +592,7 @@ describe("findDefaultDocumentPathLazy (#575)", () => {
 
     const listChildren = vi.fn(async () => []);
 
-    const result = await findDefaultDocumentPathLazy(tree, listChildren);
+    const result = await findDefaultDocumentPath(tree, listChildren);
     expect(result).toBe("docs/guide.md");
     expect(listChildren).not.toHaveBeenCalled();
   });
