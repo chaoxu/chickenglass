@@ -4,13 +4,18 @@
  * Transparent overlay that shows the heading ancestry for the topmost
  * visible heading. Fades in/out based on scrollTop changes.
  * Auto-hides 2 s after the last scroll, re-appears on hover.
+ *
+ * Performance: ancestry is derived from viewportFrom via a Zustand
+ * subscription and only triggers React re-renders when the heading
+ * chain actually changes. Fade/show timing runs off the React render
+ * path via direct DOM updates, so ordinary scroll ticks produce no
+ * React work.
  */
 
-import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { cn } from "../lib/utils";
+import { Fragment, useState, useEffect, useRef, useCallback } from "react";
 import { headingAncestryAt, type HeadingEntry } from "../heading-ancestry";
 import { renderDocumentFragmentToHtml } from "../../document-surfaces";
-import { useEditorTelemetry } from "../stores/editor-telemetry-store";
+import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 import {
   Breadcrumb,
   BreadcrumbButton,
@@ -30,16 +35,42 @@ interface BreadcrumbsProps {
 /** Milliseconds to wait after last scroll before fading out. */
 const FADE_DELAY_MS = 2000;
 
-export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
-  const scrollTop = useEditorTelemetry((s) => s.scrollTop);
-  const viewportFrom = useEditorTelemetry((s) => s.viewportFrom);
-  const ancestry = useMemo(() => headingAncestryAt(headings, viewportFrom), [headings, viewportFrom]);
+/** Compare ancestry arrays by all heading fields (pos, level, text, number). */
+export function ancestryEqual(a: HeadingEntry[], b: HeadingEntry[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (
+      a[i].pos !== b[i].pos ||
+      a[i].level !== b[i].level ||
+      a[i].text !== b[i].text ||
+      a[i].number !== b[i].number
+    ) return false;
+  }
+  return true;
+}
 
-  const [visible, setVisible] = useState(false);
-  const [instant, setInstant] = useState(true);
+/** Apply visibility styles directly to the container element (no React). */
+function applyVisibility(el: HTMLDivElement, visible: boolean, instant: boolean): void {
+  el.style.transition = instant ? "none" : "opacity var(--cf-transition, 0.15s)";
+  el.style.opacity = visible ? "1" : "0";
+  el.style.pointerEvents = visible ? "auto" : "";
+  el.style.height = visible ? "" : "4px";
+  el.style.overflow = visible ? "" : "hidden";
+}
+
+export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
+  // Ancestry: only causes React re-renders when the heading chain changes.
+  const [ancestry, setAncestry] = useState<HeadingEntry[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevScrollTopRef = useRef(scrollTop);
   const hoveredRef = useRef(false);
+  // Ref mirrors for use in non-React callbacks.
+  const ancestryLenRef = useRef(0);
+  ancestryLenRef.current = ancestry.length;
+  const visibleRef = useRef(false);
+  // Flag: a scroll event fired but containerRef was null (component was
+  // returning null). The mount-recovery effect picks this up.
+  const pendingShowRef = useRef(false);
 
   const clearTimer = useCallback(() => {
     if (hideTimerRef.current !== null) {
@@ -52,58 +83,113 @@ export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
     clearTimer();
     hideTimerRef.current = setTimeout(() => {
       hideTimerRef.current = null;
-      if (!hoveredRef.current) setVisible(false);
+      const el = containerRef.current;
+      if (el && !hoveredRef.current) {
+        visibleRef.current = false;
+        applyVisibility(el, false, false);
+      }
     }, FADE_DELAY_MS);
   }, [clearTimer]);
 
+  // Ancestry subscription: recompute only when viewportFrom changes,
+  // and only update React state when the heading chain differs.
   useEffect(() => {
-    if (ancestry.length === 0) {
-      clearTimer();
-      setInstant(true);
-      setVisible(false);
-      return clearTimer;
-    }
+    const computeAndSet = (viewportFrom: number) => {
+      const next = headingAncestryAt(headings, viewportFrom);
+      setAncestry((prev) => (ancestryEqual(prev, next) ? prev : next));
+    };
 
-    const didScroll = scrollTop !== prevScrollTopRef.current;
-    prevScrollTopRef.current = scrollTop;
+    computeAndSet(useEditorTelemetryStore.getState().viewportFrom);
 
-    if (didScroll) {
-      setInstant(false);
-      setVisible(true);
+    const unsub = useEditorTelemetryStore.subscribe((state, prev) => {
+      if (state.viewportFrom !== prev.viewportFrom) {
+        computeAndSet(state.viewportFrom);
+      }
+    });
+
+    return unsub;
+  }, [headings]);
+
+  // Scroll visibility: respond to scrollTop changes via direct DOM
+  // updates — no React state, no re-renders.
+  useEffect(() => {
+    const unsub = useEditorTelemetryStore.subscribe((state, prev) => {
+      if (state.scrollTop === prev.scrollTop) return;
+
+      const el = containerRef.current;
+      if (!el) {
+        // Container not mounted — ancestry may be transitioning from
+        // empty to non-empty. Flag so the mount-recovery effect can
+        // show the breadcrumb after React commits the new ancestry.
+        pendingShowRef.current = true;
+        return;
+      }
+
+      pendingShowRef.current = false;
+
+      if (ancestryLenRef.current === 0) {
+        clearTimer();
+        visibleRef.current = false;
+        applyVisibility(el, false, true);
+        return;
+      }
+
+      visibleRef.current = true;
+      applyVisibility(el, true, false);
       if (!hoveredRef.current) scheduleHide();
-    }
+    });
 
-    return clearTimer;
-  }, [scrollTop, ancestry.length, scheduleHide, clearTimer]);
+    return () => {
+      unsub();
+      clearTimer();
+    };
+  }, [clearTimer, scheduleHide]);
 
-  const handleMouseEnter = () => {
+  // Mount recovery: when ancestry transitions from empty to non-empty,
+  // the scroll subscriber that caused it found containerRef null and
+  // set pendingShowRef. Now that React has committed the container,
+  // make it visible.
+  useEffect(() => {
+    if (ancestry.length === 0 || !pendingShowRef.current) return;
+    pendingShowRef.current = false;
+    const el = containerRef.current;
+    if (!el) return;
+    visibleRef.current = true;
+    applyVisibility(el, true, false);
+    if (!hoveredRef.current) scheduleHide();
+  }, [ancestry, scheduleHide]);
+
+  const handleMouseEnter = useCallback(() => {
     hoveredRef.current = true;
     clearTimer();
-    if (ancestry.length > 0) {
-      setInstant(false);
-      setVisible(true);
+    const el = containerRef.current;
+    if (el && ancestryLenRef.current > 0) {
+      visibleRef.current = true;
+      applyVisibility(el, true, false);
     }
-  };
+  }, [clearTimer]);
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = useCallback(() => {
     hoveredRef.current = false;
     scheduleHide();
-  };
+  }, [scheduleHide]);
 
-  // Don't render anything when there's no heading ancestry
-  if (ancestry.length === 0) return null;
+  // Reset visibility when ancestry empties (component is about to return null).
+  if (ancestry.length === 0) {
+    visibleRef.current = false;
+    return null;
+  }
 
   return (
     <div
-      className={cn(
-        "absolute top-0 left-0 z-[100]",
-        !instant && "transition-opacity duration-[var(--cf-transition,0.15s)]",
-        visible ? "opacity-100" : "opacity-0",
-      )}
+      ref={containerRef}
+      className="absolute top-0 left-0 z-[100]"
       style={{
-        pointerEvents: visible ? "auto" : undefined,
-        height: visible ? undefined : "4px",
-        overflow: visible ? undefined : "hidden",
+        opacity: visibleRef.current ? 1 : 0,
+        pointerEvents: visibleRef.current ? "auto" : undefined,
+        height: visibleRef.current ? undefined : "4px",
+        overflow: visibleRef.current ? undefined : "hidden",
+        transition: "opacity var(--cf-transition, 0.15s)",
       }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
