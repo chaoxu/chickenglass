@@ -15,15 +15,12 @@ import {
   pushWidgetDecoration,
   RenderWidget,
 } from "./render-utils";
+import { imageUrlField } from "./image-url-cache";
+import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 import {
-  getImageDataUrl,
-  imageUrlField,
-  requestImageDataUrl,
-} from "./image-url-cache";
-import { pdfPreviewField, requestPdfPreview, getPdfCanvas } from "./pdf-preview-cache";
-import { fileSystemFacet, documentPathFacet } from "../lib/types";
-import { resolveProjectPathFromDocument } from "../lib/project-paths";
-import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
+  resolveLocalMediaPreview,
+  type MediaPreviewResult,
+} from "./media-preview";
 import { CSS } from "../constants/css-classes";
 
 // ── Widgets ───────────────────────────────────────────────────────────────────
@@ -216,6 +213,25 @@ interface ImageBuildResult {
   readonly trackedPaths: ReadonlySet<string>;
 }
 
+/** Map a media preview resolution to the appropriate widget. */
+function mediaPreviewWidget(
+  alt: string,
+  result: MediaPreviewResult,
+): RenderWidget {
+  switch (result.kind) {
+    case "image":
+      return new ImageWidget(alt, result.dataUrl);
+    case "pdf-canvas":
+      return new PdfCanvasWidget(alt, result.resolvedPath);
+    case "loading":
+      return result.isPdf
+        ? new PdfLoadingWidget(alt)
+        : new ImageLoadingWidget(alt);
+    case "error":
+      return new ImageWidget(alt, result.fallbackSrc);
+  }
+}
+
 /** Collect decoration ranges for images outside the cursor, plus tracking metadata. */
 function collectImageRangesTracked(view: EditorView): ImageBuildResult {
   const items: Range<Decoration>[] = [];
@@ -237,84 +253,22 @@ function collectImageRangesTracked(view: EditorView): ImageBuildResult {
         const parsed = readImageContent(view, node.node);
         if (!parsed) return;
 
-        if (isPdfTarget(parsed.src)) {
-          // Resolve the raw markdown target relative to the current document,
-          // so that `![](diagram.pdf)` in `posts/math.md` resolves to
-          // `posts/diagram.pdf`. The resolved path is used as cache key to
-          // prevent collisions between same-named PDFs in different directories.
-          const docPath = view.state.facet(documentPathFacet);
-          const resolvedPath = resolveProjectPathFromDocument(docPath, parsed.src);
-          trackedPaths.add(resolvedPath);
-
-          // PDF target — resolve from the preview cache
-          const cache = view.state.field(pdfPreviewField);
-          const entry = cache.get(resolvedPath);
-
-          // #473: "ready" with no canvas means the canvas was evicted from the
-          // module-level cache — treat as a cache miss and re-request.
-          const canvasPresent =
-            entry?.status === "ready" && getPdfCanvas(resolvedPath) !== undefined;
-
-          if (canvasPresent) {
-            pushWidgetDecoration(
-              items, new PdfCanvasWidget(parsed.alt, resolvedPath), node.from, node.to,
-            );
-          } else if (entry?.status === "error") {
-            pushWidgetDecoration(
-              items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to,
-            );
-
-            // #472: re-request so the retry cooldown logic in requestPdfPreview
-            // can decide whether to retry.
-            const fs = view.state.facet(fileSystemFacet);
-            if (fs) {
-              void requestPdfPreview(view, resolvedPath, fs);
-            }
-          } else {
-            pushWidgetDecoration(
-              items, new PdfLoadingWidget(parsed.alt), node.from, node.to,
-            );
-
-            if (!entry || entry.status !== "loading") {
-              const fs = view.state.facet(fileSystemFacet);
-              if (fs) {
-                void requestPdfPreview(view, resolvedPath, fs);
-              }
-            }
-          }
-        } else if (isRelativeFilePath(parsed.src)) {
-          const docPath = view.state.facet(documentPathFacet);
-          const resolvedPath = resolveProjectPathFromDocument(docPath, parsed.src);
-          trackedPaths.add(resolvedPath);
-
-          const cache = view.state.field(imageUrlField);
-          const entry = cache.get(resolvedPath);
-          const dataUrl =
-            entry?.status === "ready" ? getImageDataUrl(resolvedPath) : undefined;
-
-          if (dataUrl) {
-            pushWidgetDecoration(
-              items, new ImageWidget(parsed.alt, dataUrl), node.from, node.to,
-            );
-          } else if (entry?.status === "error") {
-            pushWidgetDecoration(
-              items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to,
-            );
-          } else {
-            pushWidgetDecoration(
-              items, new ImageLoadingWidget(parsed.alt), node.from, node.to,
-            );
-
-            if (!entry || entry.status !== "loading") {
-              const fs = view.state.facet(fileSystemFacet);
-              if (fs) {
-                void requestImageDataUrl(view, resolvedPath, fs);
-              }
-            }
-          }
-        } else {
+        const preview = resolveLocalMediaPreview(view, parsed.src);
+        if (preview) {
+          trackedPaths.add(preview.resolvedPath);
           pushWidgetDecoration(
-            items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to,
+            items,
+            mediaPreviewWidget(parsed.alt, preview),
+            node.from,
+            node.to,
+          );
+        } else {
+          // Non-local source (absolute URL, data URI, etc.) — render as-is
+          pushWidgetDecoration(
+            items,
+            new ImageWidget(parsed.alt, parsed.src),
+            node.from,
+            node.to,
           );
         }
       },
