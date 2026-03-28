@@ -376,6 +376,50 @@ describe("useAppWorkspaceSession", () => {
     expect(ref.gitStatus).toEqual({});
   });
 
+  it("discards stale git status from overlapping refreshes in the same workspace", async () => {
+    // Scenario: save tracked file (request A → M), immediately revert and
+    // save again (request B → clean). If A resolves after B, the stale M
+    // must be discarded.
+    const statusA = createDeferred<Record<string, string>>();
+    const statusB = createDeferred<Record<string, string>>();
+    workspaceMockState.getGitStatus
+      .mockImplementationOnce(async () => statusA.promise)
+      .mockImplementationOnce(async () => statusB.promise);
+    const { Harness, ref } = createHarness(fsStub);
+
+    // Boot with the saved project root.
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(ref.startupComplete).toBe(true);
+
+    // Two rapid refreshGitStatus() calls (simulating two saves).
+    await act(async () => {
+      void ref.refreshGitStatus();
+    });
+    await act(async () => {
+      void ref.refreshGitStatus();
+    });
+
+    // Resolve the NEWER request first (clean state).
+    await act(async () => {
+      statusB.resolve({});
+      await Promise.resolve();
+    });
+
+    expect(ref.gitStatus).toEqual({});
+
+    // Resolve the OLDER request last — must be discarded.
+    await act(async () => {
+      statusA.resolve({ "file.md": "modified" });
+      await Promise.resolve();
+    });
+
+    expect(ref.gitStatus).toEqual({});
+  });
+
   it("clears git status immediately when opening a new project root", async () => {
     // Scenario: repo A has dirty files. User opens repo B which shares
     // overlapping relative paths (e.g. README.md). The badge map must be

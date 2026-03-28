@@ -112,6 +112,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   const [sidenotesCollapsed, setSidenotesCollapsed] = useState(true);
   const [startupComplete, setStartupComplete] = useState(false);
   const workspaceRequestRef = useRef(0);
+  const gitStatusRequestRef = useRef(0);
 
   const clearRestoredProjectState = useCallback(() => {
     setProjectRoot(null);
@@ -125,28 +126,29 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     });
   }, [saveWindowState]);
 
-  const gitStatusRequestRef = useRef(0);
-
-  /** Fetch git working-tree status (Tauri only; no-op in browser mode). */
-  const loadGitStatus = useCallback(async (requestId: number) => {
+  /** Fetch git working-tree status (Tauri only; no-op in browser mode).
+   *  Uses its own monotonic counter so overlapping refreshes within the
+   *  same workspace are correctly ordered (only the newest wins). */
+  const loadGitStatus = useCallback(async () => {
     if (!isTauri()) return;
+    const id = ++gitStatusRequestRef.current;
     try {
       const { gitStatusCommand } = await import("../tauri-client/git");
       const status = await measureAsync("sidebar.git_status", () => gitStatusCommand(), {
         category: "sidebar",
       });
-      if (requestId !== gitStatusRequestRef.current) return;
+      if (id !== gitStatusRequestRef.current) return;
       setGitStatus(status);
     } catch (e: unknown) {
-      if (requestId !== gitStatusRequestRef.current) return;
+      if (id !== gitStatusRequestRef.current) return;
       console.error("[workspace] failed to load git status", e);
       setGitStatus({});
     }
   }, []);
 
-  /** Fire-and-forget git status refresh using the current workspace generation. */
+  /** Fire-and-forget git status refresh. */
   const refreshGitStatus = useCallback(async () => {
-    void loadGitStatus(gitStatusRequestRef.current);
+    void loadGitStatus();
   }, [loadGitStatus]);
 
   const loadWorkspaceContents = useCallback(async (requestId: number): Promise<FileEntry | null> => {
@@ -169,7 +171,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       const tree: FileEntry = { name: "project", path: "", isDirectory: true, children: shallowChildren };
       setFileTree(tree);
       setProjectConfig(nextProjectConfig);
-      void loadGitStatus(gitStatusRequestRef.current);
+      void loadGitStatus();
       return tree;
     }
 
@@ -187,7 +189,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     if (requestId !== workspaceRequestRef.current) return null;
     setFileTree(tree);
     setProjectConfig(nextProjectConfig);
-    void loadGitStatus(gitStatusRequestRef.current);
+    void loadGitStatus();
     return tree;
   }, [fs, loadGitStatus]);
 
@@ -209,7 +211,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         return;
       }
       setFileTree(tree);
-      void loadGitStatus(gitStatusRequestRef.current);
+      void loadGitStatus();
     } catch (e: unknown) {
       if (requestId !== workspaceRequestRef.current) {
         return;
@@ -241,6 +243,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       return null;
     }
     setProjectRoot(path);
+    ++gitStatusRequestRef.current;
     setGitStatus({});
     saveWindowState({
       projectRoot: path,
