@@ -36,7 +36,7 @@ import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import {
   type BibStore,
 } from "../citations/citation-render";
-import { CslProcessor, registerCitationsWithProcessor } from "../citations/csl-processor";
+import { CslProcessor, collectCitationMatches, registerCitationsWithProcessor } from "../citations/csl-processor";
 import {
   analyzeDocumentSemantics,
   stringTextSource,
@@ -234,7 +234,7 @@ export function markdownToHtml(
     : undefined);
 
   if (options?.bibliography && cslProcessor) {
-    const matches = ctxLikeCitationMatches(semantics.references, options.bibliography);
+    const matches = collectCitationMatches(semantics.references, options.bibliography);
     registerCitationsWithProcessor(matches, cslProcessor);
   }
   const ctx: WalkContext = {
@@ -762,32 +762,6 @@ interface CitationRenderContext {
 }
 
 // ── Citation / bibliography rendering ───────────────────────────────────────
-
-/**
- * Extract citation-only clusters for CSL registration.
- * For mixed clusters (crossref + citation), only include bib ids so
- * numeric styles assign numbers correctly when cite() is called per-id.
- */
-function ctxLikeCitationMatches(
-  refs: readonly {
-    readonly ids: readonly string[];
-    readonly locators: readonly (string | undefined)[];
-  }[],
-  bibliography: BibStore,
-): { ids: string[]; locators: (string | undefined)[] }[] {
-  return refs
-    .filter((ref) => ref.ids.some((id) => bibliography.has(id)))
-    .map((ref) => {
-      const bibIds = ref.ids.filter((id) => bibliography.has(id));
-      const bibLocators = ref.locators.filter((_, i) => bibliography.has(ref.ids[i]));
-      return {
-        ids: bibIds,
-        locators: bibLocators.some((locator) => locator != null)
-          ? bibLocators
-          : [],
-      };
-    });
-}
 
 /**
  * Resolve a crossref label from block counters and document semantics.

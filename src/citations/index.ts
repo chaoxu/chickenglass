@@ -19,6 +19,8 @@ export {
 export {
   CslProcessor,
   parseLocator,
+  collectCitationMatches,
+  collectCitedIdsFromReferences,
 } from "./csl-processor";
 
 export {

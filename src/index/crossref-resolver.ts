@@ -13,8 +13,19 @@ import { syntaxTree } from "@codemirror/language";
 import type { BlockCounterState } from "../plugins";
 import { blockCounterField } from "../plugins";
 import { pluginRegistryField, getPlugin } from "../plugins";
-import { analyzeDocumentSemantics } from "../semantics/document";
+import { analyzeDocumentSemantics, type DocumentAnalysis } from "../semantics/document";
 import { documentAnalysisField, editorStateTextSource } from "../semantics/codemirror-source";
+
+/**
+ * Return the cached document analysis from the CM6 field when available,
+ * falling back to a full recompute from the syntax tree.
+ */
+function getAnalysisOrRecompute(state: EditorState): DocumentAnalysis {
+  return (
+    state.field(documentAnalysisField, false) ??
+    analyzeDocumentSemantics(editorStateTextSource(state), syntaxTree(state))
+  );
+}
 
 /** The kind of target a cross-reference resolves to. */
 export type CrossrefKind = "block" | "equation" | "citation" | "unresolved";
@@ -40,10 +51,7 @@ export interface EquationEntry {
 export function collectEquationLabels(
   state: EditorState,
 ): ReadonlyMap<string, EquationEntry> {
-  const equations = (
-    state.field(documentAnalysisField, false)?.equationById ??
-    analyzeDocumentSemantics(editorStateTextSource(state), syntaxTree(state)).equationById
-  );
+  const equations = getAnalysisOrRecompute(state).equationById;
   return new Map(
     [...equations.entries()].map(([id, equation]) => [
       id,
@@ -86,8 +94,7 @@ export function resolveCrossref(
   // 2. Check equation labels
   const eqLabels =
     equationLabels ??
-    state.field(documentAnalysisField, false)?.equationById ??
-    collectEquationLabels(state);
+    getAnalysisOrRecompute(state).equationById;
   const eqEntry = eqLabels.get(id);
   if (eqEntry) {
     return {
@@ -120,9 +127,7 @@ export interface CrossrefMatch {
 }
 
 export function findCrossrefs(state: EditorState): CrossrefMatch[] {
-  const references =
-    state.field(documentAnalysisField, false)?.references ??
-    analyzeDocumentSemantics(editorStateTextSource(state), syntaxTree(state)).references;
+  const references = getAnalysisOrRecompute(state).references;
 
   return references
     .filter((ref) => ref.ids.length === 1)

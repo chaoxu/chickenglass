@@ -93,6 +93,27 @@ export function parseLocator(raw: string): { locator: string; label?: string } {
   return { locator: text };
 }
 
+/**
+ * Build CitationItem objects from parallel id/locator arrays.
+ *
+ * Both `registerCitations` and `cite` need to convert raw locator strings
+ * into citeproc CitationItem objects with parsed label/locator fields.
+ * Centralised here to avoid duplicating the parseLocator dispatch.
+ */
+function buildCitationItems(
+  ids: readonly string[],
+  locators?: readonly (string | undefined)[],
+): Array<{ id: string; locator?: string; label?: string }> {
+  return ids.map((id, i) => {
+    const raw = locators?.[i];
+    if (raw) {
+      const parsed = parseLocator(raw);
+      return { id, locator: parsed.locator, label: parsed.label };
+    }
+    return { id };
+  });
+}
+
 /** Unique template name used to register the active CSL style with citation-js. */
 const STYLE_NAME = "coflat-active";
 
@@ -190,14 +211,7 @@ export class CslProcessor {
     const citationsPre: Array<[string, number]> = [];
     for (let i = 0; i < clusters.length; i++) {
       const cluster = clusters[i];
-      const citationItems = cluster.ids.map((id, j) => {
-        const raw = cluster.locators?.[j];
-        if (raw) {
-          const parsed = parseLocator(raw);
-          return { id, locator: parsed.locator, label: parsed.label };
-        }
-        return { id };
-      });
+      const citationItems = buildCitationItems(cluster.ids, cluster.locators);
       const citation = {
         citationItems,
         properties: { noteIndex: 0 },
@@ -217,14 +231,7 @@ export class CslProcessor {
   cite(ids: string[], locators?: (string | undefined)[]): string {
     if (!this.engine || ids.length === 0) return "";
     try {
-      const items = ids.map((id, i) => {
-        const raw = locators?.[i];
-        if (raw) {
-          const parsed = parseLocator(raw);
-          return { id, locator: parsed.locator, label: parsed.label };
-        }
-        return { id };
-      });
+      const items = buildCitationItems(ids, locators);
       return this.engine.makeCitationCluster(items);
     } catch (e: unknown) {
       // Engine error — return raw ids as fallback
@@ -333,6 +340,67 @@ export class CslProcessor {
       this.engineRevision += 1;
     }
   }
+}
+
+/** Shape of a reference with parallel id/locator arrays (matches ReferenceSemantics). */
+interface RefWithIds {
+  readonly ids: readonly string[];
+  readonly locators: readonly (string | undefined)[];
+}
+
+/** Minimal interface for a store that can check whether a citation id exists. */
+interface IdLookup {
+  has(id: string): boolean;
+}
+
+/**
+ * Filter references against a bibliography store, returning only the
+ * citation-relevant ids and locators from each reference that has at least
+ * one known bib entry.
+ *
+ * Used by both the CM6 editor (reference-render.ts) and the HTML exporter
+ * (markdown-to-html.ts) before CSL registration, and by the bibliography
+ * plugin to collect cited ids.
+ */
+export function collectCitationMatches(
+  references: readonly RefWithIds[],
+  store: IdLookup,
+): Array<{ ids: string[]; locators: (string | undefined)[] }> {
+  return references
+    .filter((ref) => ref.ids.some((id) => store.has(id)))
+    .map((ref) => {
+      const ids: string[] = [];
+      const locators: Array<string | undefined> = [];
+      ref.ids.forEach((id, index) => {
+        if (!store.has(id)) return;
+        ids.push(id);
+        locators.push(ref.locators[index]);
+      });
+      return { ids, locators };
+    });
+}
+
+/**
+ * Collect all unique cited ids from references in document order.
+ *
+ * Convenience wrapper over `collectCitationMatches` for callers that
+ * only need a flat deduplicated id list (e.g. the bibliography plugin).
+ */
+export function collectCitedIdsFromReferences(
+  references: readonly RefWithIds[],
+  store: IdLookup,
+): string[] {
+  const seen = new Set<string>();
+  const citedIds: string[] = [];
+  for (const match of collectCitationMatches(references, store)) {
+    for (const id of match.ids) {
+      if (!seen.has(id)) {
+        seen.add(id);
+        citedIds.push(id);
+      }
+    }
+  }
+  return citedIds;
 }
 
 /**
