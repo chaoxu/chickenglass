@@ -3,6 +3,15 @@
   "version": "2.0.0",
   "description": "Semantic document editor for mathematical writing",
   "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./editor": {
+      "types": "./dist/editor.d.ts",
+      "import": "./dist/editor.mjs"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "dev:worktree": "node scripts/dev-worktree.mjs",
@@ -10,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:app": "tsc --noEmit -p tsconfig.app.json",
     "typecheck:server": "tsc --noEmit -p server/tsconfig.json",
-    "build": "npm run typecheck && vite build",
+    "build": "npm run typecheck && vite build && npm run build:editor",
+    "build:editor": "tsc -p tsconfig.editor.json && vite build --config vite.editor.config.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
@@ -24,7 +34,9 @@
     "convert:latex": "python3 scripts/latex-to-coflat.py",
     "test:browser": "node scripts/test-regression.mjs",
     "perf:capture": "node scripts/perf-regression.mjs capture",
-    "perf:compare": "node scripts/perf-regression.mjs compare"
+    "perf:compare": "node scripts/perf-regression.mjs compare",
+    "smoke:editor-package": "node scripts/smoke-editor-package.mjs",
+    "prepack": "npm run build:editor"
   },
   "license": "MIT",
   "dependencies": {

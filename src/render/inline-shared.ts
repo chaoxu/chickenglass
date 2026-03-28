@@ -7,7 +7,7 @@
  * backward compatibility.
  */
 
-import DOMPurify from "dompurify";
+import createDOMPurify from "dompurify";
 import katex from "katex";
 import { buildKatexOptions } from "../lib/katex-options";
 
@@ -122,17 +122,28 @@ const SAFE_CSL_ATTRIBUTES: readonly string[] = [
  * Uses a dedicated instance (not the global singleton) so hooks and config
  * do not leak into other call sites.
  */
-const cslPurify = DOMPurify();
+let cslPurify: ReturnType<typeof createDOMPurify> | null = null;
 
-// Validate href values through isSafeUrl after DOMPurify's own sanitization.
-cslPurify.addHook("afterSanitizeAttributes", (node) => {
-  if (node.hasAttribute("href")) {
-    const href = node.getAttribute("href") ?? "";
-    if (!isSafeUrl(href)) {
-      node.removeAttribute("href");
-    }
+function getCslPurify(): ReturnType<typeof createDOMPurify> {
+  if (cslPurify) {
+    return cslPurify;
   }
-});
+  if (typeof window === "undefined") {
+    throw new Error("sanitizeCslHtml requires a browser-like window");
+  }
+
+  const purify = createDOMPurify(window);
+  purify.addHook("afterSanitizeAttributes", (node) => {
+    if (node.hasAttribute("href")) {
+      const href = node.getAttribute("href") ?? "";
+      if (!isSafeUrl(href)) {
+        node.removeAttribute("href");
+      }
+    }
+  });
+  cslPurify = purify;
+  return purify;
+}
 
 /**
  * Sanitize HTML output from the CSL/citeproc engine for safe insertion via
@@ -150,7 +161,7 @@ cslPurify.addHook("afterSanitizeAttributes", (node) => {
  * Returns a sanitised HTML string.
  */
 export function sanitizeCslHtml(raw: string): string {
-  return cslPurify.sanitize(raw, {
+  return getCslPurify().sanitize(raw, {
     ALLOWED_TAGS: [...SAFE_CSL_ELEMENTS],
     ALLOWED_ATTR: [...SAFE_CSL_ATTRIBUTES],
     FORBID_CONTENTS: [...DANGEROUS_CSL_ELEMENTS],
