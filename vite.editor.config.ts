@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
+import { copyFileSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 
 interface PackageManifest {
@@ -12,7 +13,17 @@ const packageJson = JSON.parse(
 
 const dependencyNames = Object.keys(packageJson.dependencies ?? {});
 
+function copyEditorCss(): Plugin {
+  return {
+    name: "copy-editor-css",
+    closeBundle() {
+      copyFileSync("src/editor-theme.css", "dist/editor.css");
+    },
+  };
+}
+
 export default defineConfig({
+  plugins: [copyEditorCss()],
   build: {
     target: "es2022",
     outDir: "dist",

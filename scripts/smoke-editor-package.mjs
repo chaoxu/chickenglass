@@ -38,10 +38,21 @@ try {
   }
 
   const packedFiles = new Set(dryRunInfo.files.map((file) => file.path));
-  for (const requiredFile of ["dist/editor.mjs", "dist/editor.d.ts"]) {
+  for (const requiredFile of ["dist/editor.mjs", "dist/editor.d.ts", "dist/editor.css"]) {
     if (!packedFiles.has(requiredFile)) {
       throw new Error(`Packed tarball is missing ${requiredFile}`);
     }
+  }
+
+  const builtCss = readFileSync(join(repoRoot, "dist", "editor.css"), "utf8");
+  if (!builtCss.includes("--cf-bg")) {
+    throw new Error("dist/editor.css is missing theme token definitions");
+  }
+  if (!builtCss.includes(".cm-editor")) {
+    throw new Error("dist/editor.css is missing CodeMirror overrides");
+  }
+  if (builtCss.includes("@import")) {
+    throw new Error("dist/editor.css still contains @import directives");
   }
 
   const builtModule = readFileSync(join(repoRoot, "dist", "editor.mjs"), "utf8");

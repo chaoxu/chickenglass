@@ -723,13 +723,18 @@ describe("#273 — theme-driven typography", () => {
 });
 
 describe("#277 — first-class theme surface tokens", () => {
-  it("globals.css defines block and special-surface theme tokens", () => {
-    const css = fileText("src/globals.css");
+  it("editor-theme.css defines block and special-surface theme tokens", () => {
+    const css = fileText("src/editor-theme.css");
     expect(css).toContain("--cf-block-header-accent");
     expect(css).toContain("--cf-proof-marker");
     expect(css).toContain("--cf-blockquote-border");
     expect(css).toContain("--cf-table-border");
     expect(css).toContain("--cf-embed-border");
+  });
+
+  it("globals.css imports editor-theme.css", () => {
+    const css = fileText("src/globals.css");
+    expect(css).toContain('@import "./editor-theme.css"');
   });
 
   it("rich and read block styling consume the shared theme tokens", () => {

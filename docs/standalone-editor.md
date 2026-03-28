@@ -5,7 +5,38 @@
 ## Import
 
 ```ts
+import "coflat/editor/style.css";
 import { mountEditor } from "coflat/editor";
+```
+
+The CSS import is required. It provides:
+
+- `--cf-*` design token defaults (light theme) and `[data-theme="dark"]` overrides
+- CodeMirror 6 base overrides
+- Shared component classes (math rendering, fenced div blocks, search panel, tooltips)
+- `prefers-reduced-motion` and `prefers-contrast` media queries
+
+It does **not** include Tailwind, app-shell layout, or print styles.
+
+### Dark mode
+
+Set `data-theme="dark"` on `document.documentElement` (or any ancestor of the
+editor mount point) to activate the dark token overrides:
+
+```ts
+document.documentElement.setAttribute("data-theme", "dark");
+```
+
+### Custom theme tokens
+
+Override any `--cf-*` variable on the editor's parent element:
+
+```css
+.my-editor-wrapper {
+  --cf-bg: #1e1e2e;
+  --cf-fg: #cdd6f4;
+  --cf-content-font: "EB Garamond", serif;
+}
 ```
 
 ## Mount Options
