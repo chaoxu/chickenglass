@@ -147,6 +147,11 @@ export function extractRawFrontmatter(
   return null;
 }
 
+/** Type guard for plain non-array objects from parsed YAML. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** Convert a raw record to a typed BlockConfig, picking only known fields. */
 function toBlockConfig(raw: Record<string, unknown>): BlockConfig {
   const config: BlockConfig = {};
@@ -169,8 +174,8 @@ function validateBlocks(
   for (const [name, value] of Object.entries(raw)) {
     if (typeof value === "boolean") {
       blocks[name] = value;
-    } else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-      blocks[name] = toBlockConfig(value as Record<string, unknown>);
+    } else if (isRecord(value)) {
+      blocks[name] = toBlockConfig(value);
     } else {
       // Non-boolean scalar in blocks section — coerce to true
       // and warn so authors can fix their frontmatter.
@@ -220,17 +225,17 @@ export function parseFrontmatter(doc: string): FrontmatterResult {
     return { config: {}, end: extracted.end };
   }
 
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+  if (!isRecord(parsed)) {
     return { config: {}, end: extracted.end };
   }
 
-  const raw = parsed as Record<string, unknown>;
+  const raw = parsed;
   const config: FrontmatterConfig = {};
 
   // String fields
-  if (typeof raw["title"] === "string") config.title = raw["title"];
-  if (typeof raw["bibliography"] === "string") config.bibliography = raw["bibliography"];
-  if (typeof raw["csl"] === "string") config.csl = raw["csl"];
+  for (const key of ["title", "bibliography", "csl"] as const) {
+    if (typeof raw[key] === "string") config[key] = raw[key] as string;
+  }
 
   // Numbering enum
   const numbering = raw["numbering"];
@@ -244,8 +249,8 @@ export function parseFrontmatter(doc: string): FrontmatterResult {
 
   // Blocks section
   const blocks = raw["blocks"];
-  if (typeof blocks === "object" && blocks !== null && !Array.isArray(blocks)) {
-    const validated = validateBlocks(blocks as Record<string, unknown>);
+  if (isRecord(blocks)) {
+    const validated = validateBlocks(blocks);
     if (Object.keys(validated).length > 0) {
       config.blocks = validated;
     }
@@ -253,8 +258,8 @@ export function parseFrontmatter(doc: string): FrontmatterResult {
 
   // Math macros section
   const math = raw["math"];
-  if (typeof math === "object" && math !== null && !Array.isArray(math)) {
-    const validated = validateMath(math as Record<string, unknown>);
+  if (isRecord(math)) {
+    const validated = validateMath(math);
     if (Object.keys(validated).length > 0) {
       config.math = validated;
     }
