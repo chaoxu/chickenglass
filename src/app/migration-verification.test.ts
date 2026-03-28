@@ -886,7 +886,7 @@ describe("#370 — shared decoration/widget factories", () => {
 
     expect(checkbox).toContain("collectNodeRangesExcludingCursor");
     expect(checkbox).toContain("pushWidgetDecoration");
-    expect(image).toContain("createSimpleViewPlugin");
+    expect(image).toContain("pushWidgetDecoration");
     expect(reference).toContain("createSimpleViewPlugin");
     expect(pluginRender).toContain("pushWidgetDecoration");
   });

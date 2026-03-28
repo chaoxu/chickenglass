@@ -7,15 +7,13 @@
  */
 
 import {
-  type DecorationSet,
   type EditorView,
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
 import {
-  buildDecorations,
+  type VisibleRange,
   collectNodeRangesExcludingCursor,
-  createSimpleViewPlugin,
-  cursorSensitiveShouldUpdate,
+  createCursorSensitiveViewPlugin,
   pushWidgetDecoration,
   RenderWidget,
 } from "./render-utils";
@@ -61,20 +59,21 @@ export class CheckboxWidget extends RenderWidget {
 
 const TASK_MARKER_TYPES = new Set(["TaskMarker"]);
 
-/** Build checkbox decorations for task list markers. */
-function buildCheckboxDecorations(view: EditorView): DecorationSet {
-  const widgets = collectNodeRangesExcludingCursor(view, TASK_MARKER_TYPES, (node, items) => {
+/** Collect checkbox decoration ranges for task list markers. */
+function collectCheckboxItems(
+  view: EditorView,
+  ranges: readonly VisibleRange[],
+  skip: (nodeFrom: number) => boolean,
+) {
+  return collectNodeRangesExcludingCursor(view, TASK_MARKER_TYPES, (node, items) => {
     const text = view.state.sliceDoc(node.from, node.to);
     const checked = text.includes("x") || text.includes("X");
 
     pushWidgetDecoration(items, new CheckboxWidget(checked, node.from, node.to), node.from, node.to);
-  });
-
-  return buildDecorations(widgets);
+  }, { ranges, skip });
 }
 
 /** CM6 extension that renders task list checkboxes with toggle support. */
-export const checkboxRenderPlugin: Extension = createSimpleViewPlugin(
-  buildCheckboxDecorations,
-  { shouldUpdate: cursorSensitiveShouldUpdate },
+export const checkboxRenderPlugin: Extension = createCursorSensitiveViewPlugin(
+  collectCheckboxItems,
 );

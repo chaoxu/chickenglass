@@ -1,12 +1,11 @@
 import {
   Decoration,
-  type DecorationSet,
   type EditorView,
   type ViewUpdate,
 } from "@codemirror/view";
 import { type EditorState, type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { cursorInRange, decorationHidden, addMarkerReplacement, createSimpleViewPlugin } from "./render-utils";
+import { type VisibleRange, cursorInRange, decorationHidden, addMarkerReplacement, createCursorSensitiveViewPlugin } from "./render-utils";
 import { findTrailingHeadingAttributes } from "../semantics/heading-ancestry";
 import { isSafeUrl } from "../lib/url-utils";
 import { openExternalUrl } from "../lib/open-link";
@@ -152,7 +151,7 @@ const styleMap: Readonly<Record<string, Decoration>> = {
 };
 
 /**
- * Build markdown decoration set (headings, emphasis, links, etc.).
+ * Collect markdown decoration ranges (headings, emphasis, links, etc.).
  *
  * NOTE: collectNodeRangesExcludingCursor() does not apply here.
  * This function handles many distinct node types with different logic per type:
@@ -163,8 +162,16 @@ const styleMap: Readonly<Record<string, Decoration>> = {
  * (some return false, some return, some apply marks before checking). There is
  * no single uniform widget type being pushed, so the helper's single-callback
  * shape cannot capture this multi-branch dispatch.
+ *
+ * The `_skip` parameter is accepted for CursorSensitiveCollectFn conformance
+ * but intentionally unused: markdown decorations are marks / lines / hidden-
+ * marks, so duplicates from boundary-straddling nodes are visually harmless.
  */
-function buildMarkdownDecorations(view: EditorView): DecorationSet {
+function collectMarkdownItems(
+  view: EditorView,
+  ranges: readonly VisibleRange[],
+  _skip: (nodeFrom: number) => boolean,
+): Range<Decoration>[] {
   const widgets: Range<Decoration>[] = [];
   // Track whether the current heading has cursor inside.
   // Set by the ATXHeading handler, read by the HeaderMark handler.
@@ -172,7 +179,7 @@ function buildMarkdownDecorations(view: EditorView): DecorationSet {
   // (per-node cursor checks) while still showing # markers when editing.
   let cursorInHeading = false;
 
-  for (const { from, to } of view.visibleRanges) {
+  for (const { from, to } of ranges) {
     syntaxTree(view.state).iterate({
       from,
       to,
@@ -336,14 +343,17 @@ function buildMarkdownDecorations(view: EditorView): DecorationSet {
     });
   }
 
-  return Decoration.set(widgets, true);
+  return widgets;
 }
 
 /** CM6 extension that provides Typora-style rendering for standard markdown. */
-export const markdownRenderPlugin: Extension = createSimpleViewPlugin(
-  buildMarkdownDecorations,
+export const markdownRenderPlugin: Extension = createCursorSensitiveViewPlugin(
+  collectMarkdownItems,
   {
-    shouldUpdate: markdownShouldUpdate,
+    selectionCheck: (update) => {
+      if (!update.selectionSet) return false;
+      return cursorContextKey(update.state) !== cursorContextKey(update.startState);
+    },
     pluginSpec: {
       eventHandlers: {
         click(event: MouseEvent, _view: EditorView) {

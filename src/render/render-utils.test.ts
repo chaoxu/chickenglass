@@ -16,6 +16,8 @@ import {
   cursorSensitiveShouldRebuild,
   pushWidgetDecoration,
   createSimpleViewPlugin,
+  createCursorSensitiveViewPlugin,
+  diffVisibleRanges,
   defaultShouldUpdate,
   cursorSensitiveShouldUpdate,
   focusEffect,
@@ -849,5 +851,173 @@ describe("collectNodeRangesExcludingCursor", () => {
 
     // Should only get ATXHeading1, not HeaderMark (which is a child)
     expect(collected).toEqual(["ATXHeading1"]);
+  });
+
+  it("respects custom ranges parameter", () => {
+    const nodeTypes = new Set(["ATXHeading1"]);
+    // "# A" at 0-3, "# B" at 5-8  (newline at 3-4, newline at 8-9)
+    view = createTestView("# A\n# B\nend", {
+      extensions: markdown(),
+      cursorPos: 10, // cursor at "end"
+    });
+
+    // Only iterate range covering the second heading
+    const collected: number[] = [];
+    collectNodeRangesExcludingCursor(view, nodeTypes, (node) => {
+      collected.push(node.from);
+    }, { ranges: [{ from: 4, to: 8 }] });
+
+    expect(collected).toEqual([4]);
+  });
+
+  it("respects skip predicate", () => {
+    const nodeTypes = new Set(["ATXHeading1"]);
+    view = createTestView("# A\n# B\nend", {
+      extensions: markdown(),
+      cursorPos: 10,
+    });
+
+    // Skip nodes that start before position 4
+    const collected: number[] = [];
+    collectNodeRangesExcludingCursor(view, nodeTypes, (node) => {
+      collected.push(node.from);
+    }, { skip: (pos) => pos < 4 });
+
+    expect(collected).toEqual([4]);
+  });
+});
+
+describe("diffVisibleRanges", () => {
+  it("returns empty when new ranges are a subset of old", () => {
+    expect(diffVisibleRanges([{ from: 0, to: 2000 }], [{ from: 500, to: 1500 }]))
+      .toEqual([]);
+  });
+
+  it("returns empty when ranges are identical", () => {
+    expect(diffVisibleRanges([{ from: 0, to: 1000 }], [{ from: 0, to: 1000 }]))
+      .toEqual([]);
+  });
+
+  it("returns the newly-visible tail on scroll down", () => {
+    expect(diffVisibleRanges(
+      [{ from: 0, to: 1000 }],
+      [{ from: 500, to: 2000 }],
+    )).toEqual([{ from: 1000, to: 2000 }]);
+  });
+
+  it("returns the newly-visible head on scroll up", () => {
+    expect(diffVisibleRanges(
+      [{ from: 500, to: 1500 }],
+      [{ from: 0, to: 1000 }],
+    )).toEqual([{ from: 0, to: 500 }]);
+  });
+
+  it("returns full new range when there is no overlap", () => {
+    expect(diffVisibleRanges(
+      [{ from: 0, to: 100 }],
+      [{ from: 200, to: 300 }],
+    )).toEqual([{ from: 200, to: 300 }]);
+  });
+
+  it("returns all new ranges when old is empty", () => {
+    expect(diffVisibleRanges([], [{ from: 0, to: 100 }]))
+      .toEqual([{ from: 0, to: 100 }]);
+  });
+
+  it("returns empty when both are empty", () => {
+    expect(diffVisibleRanges([], [])).toEqual([]);
+  });
+
+  it("handles multiple old ranges with a gap filled by new", () => {
+    expect(diffVisibleRanges(
+      [{ from: 0, to: 50 }, { from: 100, to: 150 }],
+      [{ from: 40, to: 60 }, { from: 90, to: 160 }],
+    )).toEqual([
+      { from: 50, to: 60 },
+      { from: 90, to: 100 },
+      { from: 150, to: 160 },
+    ]);
+  });
+
+  it("handles viewport expanding in both directions", () => {
+    expect(diffVisibleRanges(
+      [{ from: 200, to: 800 }],
+      [{ from: 100, to: 1000 }],
+    )).toEqual([
+      { from: 100, to: 200 },
+      { from: 800, to: 1000 },
+    ]);
+  });
+});
+
+describe("createCursorSensitiveViewPlugin", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
+  it("returns a valid Extension", () => {
+    const ext = createCursorSensitiveViewPlugin(() => []);
+    expect(ext).toBeDefined();
+  });
+
+  it("calls collectFn on construction with visibleRanges", () => {
+    let receivedRanges: readonly { from: number; to: number }[] = [];
+    const ext = createCursorSensitiveViewPlugin((_v, ranges) => {
+      receivedRanges = ranges;
+      return [];
+    });
+    view = createTestView("hello world", { extensions: [markdown(), ext] });
+    expect(receivedRanges.length).toBeGreaterThan(0);
+  });
+
+  it("calls collectFn on doc change (full rebuild)", () => {
+    let callCount = 0;
+    const ext = createCursorSensitiveViewPlugin(() => {
+      callCount++;
+      return [];
+    });
+    view = createTestView("hello", { extensions: [markdown(), ext] });
+    callCount = 0;
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+    expect(callCount).toBe(1);
+  });
+
+  it("calls collectFn on selection change (full rebuild)", () => {
+    let callCount = 0;
+    const ext = createCursorSensitiveViewPlugin(() => {
+      callCount++;
+      return [];
+    });
+    view = createTestView("hello world", { extensions: [markdown(), ext] });
+    callCount = 0;
+    view.dispatch({ selection: { anchor: 5 } });
+    expect(callCount).toBe(1);
+  });
+
+  it("triggers full rebuild when extraRebuildCheck fires", () => {
+    let callCount = 0;
+    const ext = createCursorSensitiveViewPlugin(
+      () => { callCount++; return []; },
+      { extraRebuildCheck: () => true },
+    );
+    view = createTestView("hello", { extensions: [markdown(), ext] });
+    callCount = 0;
+    // Dispatch a no-op transaction — extraRebuildCheck returns true
+    view.dispatch({});
+    expect(callCount).toBe(1);
+  });
+
+  it("passes skip=NO_SKIP on full rebuild", () => {
+    let skipResult: boolean | undefined;
+    const ext = createCursorSensitiveViewPlugin((_v, _r, skip) => {
+      skipResult = skip(42);
+      return [];
+    });
+    view = createTestView("hello", { extensions: [markdown(), ext] });
+    // Full rebuild on construction — skip should always return false
+    expect(skipResult).toBe(false);
   });
 });
