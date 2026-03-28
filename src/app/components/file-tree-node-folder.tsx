@@ -1,9 +1,5 @@
-import { useState, useCallback, useRef, useMemo } from "react";
-import type { KeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import type { ItemInstance } from "@headless-tree/core";
 import type { FileEntry } from "../file-manager";
-import { dirname } from "../lib/utils";
-import { isTauri } from "../../lib/tauri";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -12,159 +8,41 @@ import {
   ContextMenuTrigger,
 } from "./ui/context-menu";
 import { FolderClosed, FolderOpen } from "lucide-react";
-import { useFileTreeContext } from "../contexts/file-tree-context";
 import { GitStatusBadge } from "./git-status-badge";
 import { InlineCreateInput } from "./inline-create-input";
 import { RenameEditor } from "./rename-editor";
-
-type CreateKind = "file" | "folder";
-
-interface MenuItem {
-  label: string;
-  action?: () => void;
-}
-
-const ICON_SIZE = 14;
-const ICON_CLASS = "shrink-0 text-[var(--cf-muted)]";
+import { useTreeNodeRow, ICON_SIZE, ICON_CLASS, type MenuItem } from "../hooks/use-tree-node-row";
 
 interface FileTreeNodeFolderProps {
   item: ItemInstance<FileEntry>;
 }
 
 export function FileTreeNodeFolder({ item }: FileTreeNodeFolderProps) {
-  const { activePath, gitStatus, onRename, onDelete, onCreateFile, onCreateDir } = useFileTreeContext();
-
-  const entry = item.getItemData();
-  // headless-tree levels are 0-based (root children = 0), map directly to visual depth
-  const depth = item.getItemMeta().level;
-  const indent = depth * 12 + 8;
-
-  const [renaming, setRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState("");
-  const [creating, setCreating] = useState<CreateKind | null>(null);
-
-  const isActive = entry.path === activePath;
-  const isFocused = item.isFocused();
   const open = item.isExpanded();
-  const rowRef = useRef<HTMLDivElement | null>(null);
 
-  const restoreFocus = useCallback(() => {
-    rowRef.current?.focus();
-  }, []);
-
-  const startRename = useCallback(() => {
-    setRenameValue(entry.name);
-    setRenaming(true);
-  }, [entry.name]);
-
-  const commitRename = useCallback(async () => {
-    const newName = renameValue.trim();
-    setRenaming(false);
-    if (!newName || newName === entry.name) {
-      restoreFocus();
-      return;
-    }
-    const dir = dirname(entry.path);
-    await onRename(entry.path, dir ? `${dir}/${newName}` : newName);
-    restoreFocus();
-  }, [entry.name, entry.path, onRename, renameValue, restoreFocus]);
-
-  const cancelRename = useCallback(() => {
-    setRenaming(false);
-  }, []);
-
-  const startCreate = useCallback(
-    (kind: CreateKind) => {
-      setCreating(kind);
-      item.expand();
-    },
-    [item],
-  );
-
-  const cancelCreate = useCallback(() => {
-    setCreating(null);
-  }, []);
-
-  const rowProps = item.getProps();
-
-  // Merge local rowRef with headless-tree's ref (item.registerElement) so
-  // that updateDomFocus() can find DOM elements. Without this, the JSX
-  // `ref={rowRef}` would silently override rowProps.ref (#462).
-  const mergedRef = useMemo(() => {
-    const htRef = rowProps.ref;
-    return (el: HTMLDivElement | null) => {
-      rowRef.current = el;
-      if (typeof htRef === "function") htRef(el);
-      else if (htRef && typeof htRef === "object")
-        (htRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
-    };
-  }, [rowProps.ref]);
-
-  const handleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
-    event.currentTarget.focus();
-    rowProps.onClick?.(event.nativeEvent);
-  };
-
-  const handleContextSelection = (event: ReactMouseEvent<HTMLDivElement>) => {
-    event.currentTarget.focus();
-    item.setFocused();
-  };
-
-  const handleRowKey = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === "F2") {
-        event.preventDefault();
-        startRename();
-      }
-    },
-    [startRename],
-  );
-
-  const handleCreateConfirm = (name: string) => {
-    const fullPath = `${entry.path}/${name}`;
-    if (creating === "folder") {
-      onCreateDir(fullPath);
-    } else {
-      onCreateFile(fullPath);
-    }
-    setCreating(null);
-  };
-
-  const revealItem: MenuItem | null = isTauri()
-    ? {
-        label: "Reveal in Finder",
-        action: () => {
-          void import("../tauri-fs").then(({ revealInFinder }) =>
-            revealInFinder(entry.path),
-          ).catch((e: unknown) => {
-            console.error("[file-tree] revealInFinder failed:", e);
-          });
-        },
-      }
-    : null;
+  const {
+    entry, depth, indent,
+    renaming, renameValue, setRenameValue, creating,
+    isActive, isFocused,
+    mergedRef, rowProps, gitStatus,
+    startRename, commitRename, cancelRename,
+    startCreate, cancelCreate, handleCreateConfirm,
+    handleClick, handleContextSelection, handleRowKey,
+    revealItem, deleteAction, copyNameAction,
+  } = useTreeNodeRow({
+    item,
+    createParentPath: item.getItemData().path,
+    onBeforeCreate: () => item.expand(),
+  });
 
   const menuItems: MenuItem[] = [
     { label: "New File", action: () => startCreate("file") },
     { label: "New Folder", action: () => startCreate("folder") },
     { label: "-" },
     { label: "Rename", action: startRename },
-    {
-      label: "Delete",
-      action: () => {
-        void onDelete(entry.path).then(restoreFocus).catch((e: unknown) => {
-          console.error("[file-tree] delete failed:", e);
-        });
-      },
-    },
+    { label: "Delete", action: deleteAction },
     { label: "-" },
-    {
-      label: "Copy File Name",
-      action: () => {
-        void navigator.clipboard.writeText(entry.name).catch((e: unknown) => {
-          console.error("[file-tree] clipboard write failed:", e);
-        });
-      },
-    },
+    { label: "Copy File Name", action: copyNameAction },
   ];
 
   if (revealItem) {
