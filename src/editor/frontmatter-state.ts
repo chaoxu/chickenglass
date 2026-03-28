@@ -2,13 +2,12 @@
  * CM6 StateField that parses and caches frontmatter configuration.
  *
  * Provides `FrontmatterConfig` to other extensions via
- * `state.field(frontmatterField)` and a decoration that renders
- * the document title (from frontmatter) in Typora-style mode,
- * revealing the raw YAML when the cursor is inside the region.
+ * `state.field(frontmatterField)`.
+ *
+ * Rendering (Typora-style title widget / YAML reveal) lives in
+ * `./frontmatter-render.ts`.
  */
-import { EditorState, type Extension, type Range, StateField, type Transaction } from "@codemirror/state";
-import { Decoration, DecorationSet } from "@codemirror/view";
-import { renderDocumentFragmentToDom } from "../document-surfaces";
+import { EditorState, StateField } from "@codemirror/state";
 
 import {
   type BlockConfig,
@@ -17,14 +16,6 @@ import {
   type FrontmatterResult,
 } from "../parser/frontmatter";
 import { projectConfigFacet, mergeConfigs } from "./project-config";
-import {
-  createDecorationsField,
-  editorFocusField,
-  focusTracker,
-  focusEffect,
-  RenderWidget,
-  serializeMacros,
-} from "../render/render-core";
 
 export { type FrontmatterConfig, type NumberingScheme } from "../parser/frontmatter";
 
@@ -128,121 +119,3 @@ export const frontmatterField = StateField.define<FrontmatterStateInternal>({
   },
 });
 
-/** Widget that renders the document title from frontmatter. */
-class TitleWidget extends RenderWidget {
-  private readonly macrosKey: string;
-
-  constructor(
-    private readonly title: string,
-    private readonly macros: Record<string, string>,
-  ) {
-    super();
-    this.macrosKey = serializeMacros(macros);
-  }
-
-  createDOM(): HTMLElement {
-    return this.createCachedDOM(() => {
-      const el = document.createElement("div");
-      el.className = "cf-doc-title";
-      renderDocumentFragmentToDom(el, {
-        kind: "title",
-        text: this.title,
-        macros: this.macros,
-      });
-      return el;
-    });
-  }
-
-  eq(other: TitleWidget): boolean {
-    return this.title === other.title && this.macrosKey === other.macrosKey;
-  }
-
-  /**
-   * Override to return false: CM6 handles click events on the title widget
-   * to place the cursor at position 0, revealing the YAML source for editing.
-   */
-  override ignoreEvent(): boolean {
-    return false;
-  }
-}
-
-/**
- * CM6 StateField that renders frontmatter in Typora style:
- * - Editor focused + cursor inside frontmatter: show raw YAML for editing
- * - Otherwise: replace with a document title widget (if title present)
- *   or hide entirely (if no title)
- */
-const frontmatterDecorationField = createDecorationsField(
-  buildDecorations,
-  frontmatterShouldRebuild,
-  true, // map on docChanged — frontmatter decorations depend on structure, not text
-);
-
-/**
- * The StateField for tests and direct field access.
- * Use `frontmatterDecoration` (the full extension) in the editor.
- */
-export { frontmatterDecorationField };
-
-/**
- * CM6 extension that hides frontmatter and renders a document title widget.
- * Includes the focus tracker so focus/blur toggling works correctly.
- */
-export const frontmatterDecoration: Extension = [
-  editorFocusField,
-  focusTracker,
-  frontmatterDecorationField,
-];
-
-/** Line decoration applied to each frontmatter line when editing. */
-const frontmatterLineDeco = Decoration.line({ class: "cf-frontmatter-line" });
-
-function shouldShowFrontmatterSource(state: EditorState): boolean {
-  const { end } = state.field(frontmatterField);
-  if (end <= 0) return false;
-  const focused = state.field(editorFocusField, false) ?? false;
-  return focused && state.selection.main.from < end;
-}
-
-function frontmatterShouldRebuild(tr: Transaction): boolean {
-  if (tr.effects.some((effect) => effect.is(focusEffect))) {
-    return true;
-  }
-  if (tr.state.field(frontmatterField) !== tr.startState.field(frontmatterField)) {
-    return true;
-  }
-  if (tr.selection === undefined) return false;
-  return shouldShowFrontmatterSource(tr.state) !== shouldShowFrontmatterSource(tr.startState);
-}
-
-/** Build decorations for the frontmatter region. */
-function buildDecorations(state: EditorState): DecorationSet {
-  const { end, config } = state.field(frontmatterField);
-  if (end <= 0) return Decoration.none;
-
-  // Only reveal raw YAML when the editor is focused and cursor is inside
-  if (shouldShowFrontmatterSource(state)) {
-    // Apply monospace line decorations to all frontmatter lines
-    const decos: Range<Decoration>[] = [];
-    const doc = state.doc;
-    for (let pos = 0; pos < end; ) {
-      const line = doc.lineAt(pos);
-      decos.push(frontmatterLineDeco.range(line.from));
-      pos = line.to + 1;
-    }
-    return Decoration.set(decos);
-  }
-
-  // Otherwise: replace frontmatter with title widget (or hide)
-  if (config.title) {
-    const macros = config.math ?? {};
-    return Decoration.set([
-      Decoration.replace({
-        widget: new TitleWidget(config.title, macros),
-        block: true,
-      }).range(0, end),
-    ]);
-  }
-
-  return Decoration.set([Decoration.replace({}).range(0, end)]);
-}

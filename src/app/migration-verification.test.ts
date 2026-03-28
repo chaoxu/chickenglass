@@ -1102,7 +1102,7 @@ describe("#314 — document surface renderer layer", () => {
     const readMode = fileText("src/app/components/read-mode-view.tsx");
     const hoverPreview = fileText("src/render/hover-preview.ts");
     const pluginRender = fileText("src/plugins/plugin-render.ts");
-    const frontmatter = fileText("src/editor/frontmatter-state.ts");
+    const frontmatterRender = fileText("src/editor/frontmatter-render.ts");
 
     expect(breadcrumbs).toContain("../../document-surfaces");
     expect(outline).toContain("../../document-surfaces");
@@ -1110,7 +1110,7 @@ describe("#314 — document surface renderer layer", () => {
     expect(readMode).toContain("../../document-surfaces");
     expect(hoverPreview).toContain("../document-surfaces");
     expect(pluginRender).toContain("../document-surfaces");
-    expect(frontmatter).toContain("../document-surfaces");
+    expect(frontmatterRender).toContain("../document-surfaces");
   });
 });
 

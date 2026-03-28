@@ -14,10 +14,12 @@ export {
   type EditorMode,
 } from "./editor";
 export {
-  frontmatterDecoration,
   frontmatterField,
   type FrontmatterState,
 } from "./frontmatter-state";
+export {
+  frontmatterDecoration,
+} from "./frontmatter-render";
 export { editorKeybindings } from "./keybindings";
 export { blockTypePickerExtension, isPickerVisible } from "./block-type-picker";
 export { listOutlinerExtension } from "./list-outliner";
