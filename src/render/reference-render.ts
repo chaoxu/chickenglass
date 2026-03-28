@@ -18,7 +18,7 @@ import {
 } from "@codemirror/view";
 import { type EditorSelection, type EditorState, type Extension, type Range } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
-import { resolveCrossref } from "../index/crossref-resolver";
+import { type ResolvedCrossref, resolveCrossref } from "../index/crossref-resolver";
 import {
   type BibStore,
   bibDataEffect,
@@ -202,58 +202,62 @@ export function ensureCitationsRegistered(
   });
 }
 
+// ── Render-plan types ──────────────────────────────────────────────
+
+/** A planned reference rendering before widget emission. */
+export type ReferenceRenderItem =
+  | { readonly kind: "source-mark"; readonly from: number; readonly to: number }
+  | { readonly kind: "citation"; readonly from: number; readonly to: number; readonly rendered: string; readonly ids: readonly string[]; readonly narrative: boolean }
+  | { readonly kind: "mixed-cluster"; readonly from: number; readonly to: number; readonly parts: readonly MixedClusterPart[]; readonly raw: string }
+  | { readonly kind: "crossref"; readonly from: number; readonly to: number; readonly resolved: ResolvedCrossref; readonly raw: string }
+  | { readonly kind: "clustered-crossref"; readonly from: number; readonly to: number; readonly resolvedItems: readonly ResolvedCrossref[]; readonly ids: readonly string[]; readonly raw: string }
+  | { readonly kind: "unresolved"; readonly from: number; readonly to: number; readonly raw: string };
+
+// ── Plan: pure routing without widget creation ─────────────────────
+
 /**
- * Collect decoration ranges for all references (crossrefs + citations).
+ * Classify each reference into a render-plan item.
  *
- * Routing per match:
- * - Bracketed all-bib cluster → CitationWidget (full CSL formatting)
- * - Bracketed mixed cluster (some bib, some crossref) → MixedClusterWidget
- * - Bracketed single id, block/equation → CrossrefWidget
- * - Bracketed single id, unknown → UnresolvedRefWidget
- * - Narrative, block/equation → CrossrefWidget
- * - Narrative, bib id → CitationWidget (narrative style)
+ * Routing per reference:
+ * - Cursor inside → source-mark
+ * - Bracketed all-bib cluster → citation (parenthetical)
+ * - Bracketed mixed cluster (some bib, some crossref) → mixed-cluster
+ * - Bracketed single/multi id, all block/equation → crossref / clustered-crossref
+ * - Bracketed single/multi id, any unknown → unresolved
+ * - Narrative, block/equation → crossref
+ * - Narrative, bib id → citation (narrative)
+ *
+ * Citations must be registered with the processor before calling this
+ * function (see {@link ensureCitationsRegistered}).
  */
-export function collectReferenceRanges(
+export function planReferenceRendering(
   view: EditorView,
   store: BibStore,
-  cslProcessor?: CslProcessor,
-): Range<Decoration>[] {
-  const processor = cslProcessor ?? view.state.field(bibDataField).cslProcessor;
+  processor: CslProcessor,
+): ReferenceRenderItem[] {
   const analysis = view.state.field(documentAnalysisField);
   const equationLabels = analysis.equationById;
   const allRefs = analysis.references;
-
-  // Numeric CSL registration is global to document order. Cache it at the
-  // (analysis, bibliography-store) boundary so ordinary navigation does not
-  // reset and replay every citation cluster.
-  ensureCitationsRegistered(analysis, store, processor);
-
-  const sourceMarkDecoration = Decoration.mark({ class: CSS.referenceSource });
-  const items: Range<Decoration>[] = [];
+  const items: ReferenceRenderItem[] = [];
 
   for (const ref of allRefs) {
     if (cursorInRange(view, ref.from, ref.to)) {
-      // Cursor inside reference — show raw token with monospace source styling
-      items.push(sourceMarkDecoration.range(ref.from, ref.to));
+      items.push({ kind: "source-mark", from: ref.from, to: ref.to });
       continue;
     }
 
     if (ref.bracketed) {
       const hasCitation = ref.ids.some((id) => store.has(id));
-
       const allCitations = hasCitation && ref.ids.every((id) => store.has(id));
 
       if (allCitations) {
-        // Pure citation cluster — send all ids to CSL
         const rendered = processor.cite([...ref.ids], [...ref.locators]);
-        pushWidgetDecoration(items, new CitationWidget(rendered, ref.ids), ref.from, ref.to);
+        items.push({ kind: "citation", from: ref.from, to: ref.to, rendered, ids: ref.ids, narrative: false });
       } else if (hasCitation) {
-        // Mixed cluster — split crossref ids from citation ids
         const raw = view.state.sliceDoc(ref.from, ref.to);
         const parts: MixedClusterPart[] = ref.ids.map((id, index) => {
           if (store.has(id)) {
             const rendered = processor.cite([id], ref.locators ? [ref.locators[index]] : undefined);
-            // Strip outer parens from single-item cite (e.g. "(Smith, 2020)" -> "Smith, 2020")
             const stripped = rendered.startsWith("(") && rendered.endsWith(")")
               ? rendered.slice(1, -1)
               : rendered;
@@ -265,40 +269,94 @@ export function collectReferenceRanges(
             : id;
           return { kind: "crossref" as const, id, text: label };
         });
-        pushWidgetDecoration(items, new MixedClusterWidget(parts, raw), ref.from, ref.to);
+        items.push({ kind: "mixed-cluster", from: ref.from, to: ref.to, parts, raw });
       } else if (ref.ids.length === 1) {
         const resolved = resolveCrossref(view.state, ref.ids[0], equationLabels);
         const raw = view.state.sliceDoc(ref.from, ref.to);
-        const widget = resolved.kind === "block" || resolved.kind === "equation"
-          ? new CrossrefWidget(resolved, raw)
-          : new UnresolvedRefWidget(raw);
-        pushWidgetDecoration(items, widget, ref.from, ref.to);
+        if (resolved.kind === "block" || resolved.kind === "equation") {
+          items.push({ kind: "crossref", from: ref.from, to: ref.to, resolved, raw });
+        } else {
+          items.push({ kind: "unresolved", from: ref.from, to: ref.to, raw });
+        }
       } else {
-        // Multi-id bracketed reference where no id is a citation — resolve each as crossref
         const resolvedItems = ref.ids.map((id) => resolveCrossref(view.state, id, equationLabels));
         const raw = view.state.sliceDoc(ref.from, ref.to);
         const allResolved = resolvedItems.every((r) => r.kind === "block" || r.kind === "equation");
-        const widget = allResolved
-          ? new ClusteredCrossrefWidget(resolvedItems, ref.ids, raw)
-          : new UnresolvedRefWidget(raw);
-        pushWidgetDecoration(items, widget, ref.from, ref.to);
+        if (allResolved) {
+          items.push({ kind: "clustered-crossref", from: ref.from, to: ref.to, resolvedItems, ids: ref.ids, raw });
+        } else {
+          items.push({ kind: "unresolved", from: ref.from, to: ref.to, raw });
+        }
       }
     } else {
-      // Narrative @id — crossref takes priority over citation
       const resolved = resolveCrossref(view.state, ref.ids[0], equationLabels);
       if (resolved.kind === "block" || resolved.kind === "equation") {
         const raw = view.state.sliceDoc(ref.from, ref.to);
-        pushWidgetDecoration(items, new CrossrefWidget(resolved, raw), ref.from, ref.to);
-      } else {
-        const entry = store.get(ref.ids[0]);
-        if (!entry) continue;
+        items.push({ kind: "crossref", from: ref.from, to: ref.to, resolved, raw });
+      } else if (store.has(ref.ids[0])) {
         const rendered = processor.citeNarrative(ref.ids[0]);
-        pushWidgetDecoration(items, new CitationWidget(rendered, ref.ids, true), ref.from, ref.to);
+        items.push({ kind: "citation", from: ref.from, to: ref.to, rendered, ids: ref.ids, narrative: true });
       }
     }
   }
 
   return items;
+}
+
+// ── Emit: map plan items to CM6 decorations ────────────────────────
+
+function emitReferenceDecorations(plan: readonly ReferenceRenderItem[]): Range<Decoration>[] {
+  const sourceMarkDecoration = Decoration.mark({ class: CSS.referenceSource });
+  const ranges: Range<Decoration>[] = [];
+
+  for (const item of plan) {
+    switch (item.kind) {
+      case "source-mark":
+        ranges.push(sourceMarkDecoration.range(item.from, item.to));
+        break;
+      case "citation":
+        pushWidgetDecoration(ranges, new CitationWidget(item.rendered, item.ids, item.narrative), item.from, item.to);
+        break;
+      case "mixed-cluster":
+        pushWidgetDecoration(ranges, new MixedClusterWidget(item.parts, item.raw), item.from, item.to);
+        break;
+      case "crossref":
+        pushWidgetDecoration(ranges, new CrossrefWidget(item.resolved, item.raw), item.from, item.to);
+        break;
+      case "clustered-crossref":
+        pushWidgetDecoration(ranges, new ClusteredCrossrefWidget(item.resolvedItems, item.ids, item.raw), item.from, item.to);
+        break;
+      case "unresolved":
+        pushWidgetDecoration(ranges, new UnresolvedRefWidget(item.raw), item.from, item.to);
+        break;
+    }
+  }
+
+  return ranges;
+}
+
+// ── Public entry point (composes plan + emit) ──────────────────────
+
+/**
+ * Collect decoration ranges for all references (crossrefs + citations).
+ *
+ * Ensures citations are registered, builds a render plan, then emits
+ * CM6 decorations from that plan.
+ */
+export function collectReferenceRanges(
+  view: EditorView,
+  store: BibStore,
+  cslProcessor?: CslProcessor,
+): Range<Decoration>[] {
+  const processor = cslProcessor ?? view.state.field(bibDataField).cslProcessor;
+  const analysis = view.state.field(documentAnalysisField);
+
+  // Numeric CSL registration is global to document order. Cache it at the
+  // (analysis, bibliography-store) boundary so ordinary navigation does not
+  // reset and replay every citation cluster.
+  ensureCitationsRegistered(analysis, store, processor);
+
+  return emitReferenceDecorations(planReferenceRendering(view, store, processor));
 }
 
 /** Build reference decorations from the view state. */
