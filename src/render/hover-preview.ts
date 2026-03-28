@@ -26,7 +26,7 @@ import { renderKatex } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { renderBlockContentToDom, renderDocumentFragmentToDom, type BlockContentOptions } from "../document-surfaces";
 import { getPlugin, pluginRegistryField } from "../plugins";
-import type { BlockCounterEntry } from "../app/markdown-to-html";
+import type { BlockCounterEntry } from "../lib/types";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { HOVER_DELAY_MS } from "../constants";
 

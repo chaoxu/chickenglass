@@ -89,22 +89,11 @@ function renderMath(
 
 // ── Options ─────────────────────────────────────────────────────────────────
 
-/**
- * Plain-data block counter entry for cross-reference resolution.
- *
- * Mirrors `NumberedBlock` from the CM6 block-counter state field but without
- * position data — only the fields needed for label formatting. Keeps the
- * HTML export path CM6-free (see architecture decision: markdown-to-html.ts
- * must not import CM6 state).
- */
-export interface BlockCounterEntry {
-  /** The plugin class name (e.g. "theorem"). */
-  readonly type: string;
-  /** Display title for the block type (e.g. "Theorem"). */
-  readonly title: string;
-  /** The assigned number. */
-  readonly number: number;
-}
+// BlockCounterEntry lives in shared types so both the CM6-free HTML export
+// path and the editor render layer can use it without crossing src/app/.
+// Re-exported here for backward compatibility with existing callers.
+import type { BlockCounterEntry } from "../lib/types";
+export type { BlockCounterEntry };
 
 /** Options for the markdown-to-HTML converter. */
 export interface MarkdownToHtmlOptions {
