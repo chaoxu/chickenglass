@@ -343,11 +343,18 @@ const PREWARM_BUDGET_MS = 2;
  * ViewPlugin that pre-populates the KaTeX HTML string cache during idle time.
  *
  * After document open or when math regions / macros change, this plugin
- * schedules idle callbacks to call `renderKatexToHtml()` for every math
- * region in the document.  Because the result is stored in the shared
- * `katexHtmlCache` (inline-shared.ts), subsequent `MathWidget.createDOM()`
- * calls hit the cache instead of invoking KaTeX — eliminating the cold-path
- * cost when math first scrolls into view (#625).
+ * clears the shared `katexHtmlCache` (evicting stale entries from previous
+ * state) and schedules idle callbacks to call `renderKatexToHtml()` for
+ * every math region in the document.  Because the result is stored in the
+ * shared cache, subsequent `MathWidget.createDOM()` calls hit the cache
+ * instead of invoking KaTeX — eliminating the cold-path cost when math
+ * first scrolls into view (#625).
+ *
+ * Eviction strategy:
+ * - On region or macro change → clear + re-prewarm (schedulePrewarm)
+ * - Safety-net size cap in renderKatexToHtml (MAX_KATEX_CACHE_ENTRIES)
+ * Visible widgets are unaffected by clears because they retain their
+ * DOM via `createCachedDOM` (render-utils.ts).
  */
 const mathPrewarmPlugin = ViewPlugin.fromClass(
   class {
@@ -382,6 +389,11 @@ const mathPrewarmPlugin = ViewPlugin.fromClass(
 
       this.lastRegions = regions;
       this.lastMacrosKey = serializeMacros(macros);
+
+      // Evict entries from previous document / macro state.  Visible widgets
+      // retain their DOM via createCachedDOM and do not re-query this cache
+      // until their content or macros actually change.
+      clearKatexHtmlCache();
 
       if (regions.length === 0) return;
 

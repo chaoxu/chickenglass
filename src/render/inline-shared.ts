@@ -38,6 +38,18 @@ export const MARK_NODES: ReadonlySet<string> = new Set([
 
 const katexHtmlCache = new Map<string, string>();
 
+/**
+ * Maximum number of entries the KaTeX HTML cache may hold.
+ *
+ * Each entry is a (cacheKey → HTML string) pair.  Typical KaTeX output is
+ * 1–5 KB, so 2 000 entries ≈ 2–10 MB.  This cap is a safety net — the
+ * primary eviction path is the prewarm plugin clearing the cache when the
+ * document state changes.  If the cache still overflows (e.g. very large
+ * document with >2 000 unique expressions), the oldest entries are evicted
+ * in bulk.
+ */
+const MAX_KATEX_CACHE_ENTRIES = 2000;
+
 function serializeKatexMacros(macros: Record<string, string>): string {
   const keys = Object.keys(macros);
   if (keys.length === 0) return "";
@@ -72,6 +84,9 @@ export function renderKatexToHtml(
     ...buildKatexOptions(isDisplay, macros),
     output: "htmlAndMathml",
   });
+  if (katexHtmlCache.size >= MAX_KATEX_CACHE_ENTRIES) {
+    katexHtmlCache.clear();
+  }
   katexHtmlCache.set(key, html);
   return html;
 }
