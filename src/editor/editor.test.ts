@@ -11,6 +11,8 @@ import { documentSemanticsField } from "../semantics/codemirror-source";
 import { blockCounterField } from "../plugins/block-counter";
 import { bibDataField } from "../citations/citation-render";
 import { includeRegionsField } from "../lib/include-regions";
+import { pdfPreviewField } from "../render/pdf-preview-cache";
+import { imageUrlField } from "../render/image-url-cache";
 
 describe("createEditor", () => {
   it("creates an editor view attached to the given parent", () => {
@@ -90,6 +92,8 @@ describe("extension bundle composition", () => {
     expect(view.state.field(documentSemanticsField)).toBeDefined();
     expect(view.state.field(blockCounterField)).toBeDefined();
     expect(view.state.field(bibDataField)).toBeDefined();
+    expect(view.state.field(pdfPreviewField)).toBeDefined();
+    expect(view.state.field(imageUrlField)).toBeDefined();
 
     view.destroy();
   });
