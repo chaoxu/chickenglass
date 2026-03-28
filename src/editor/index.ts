@@ -69,17 +69,22 @@ export {
   contentFont,
   monoFont,
 } from "../constants/editor-constants";
-export { imagePasteExtension, fileToDataUrl, insertImageMarkdown, type ImagePasteConfig } from "./image-paste";
+export { imagePasteExtension, fileToDataUrl, type ImagePasteConfig } from "./image-paste";
 export { imageDropExtension, type ImageDropConfig } from "./image-drop";
 export { insertImageFromPicker } from "./image-insert";
 export {
   createImageSaver,
   saveImage,
-  saveAndInsertImage,
+  handleImageInsert,
+  createImageHandler,
+  insertImageMarkdown,
+  escapeMarkdownPath,
   isImageMime,
   IMAGE_MIME_EXT,
   IMAGE_EXTENSIONS,
   type ImageSaveContext,
+  type ImageSaveConfig,
+  type HandleImageInsertOptions,
 } from "./image-save";
 export { type EditorPlugin, EditorPluginManager } from "./editor-plugin";
 export { defaultEditorPlugins } from "./editor-plugins-registry";

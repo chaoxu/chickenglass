@@ -9,6 +9,7 @@
  * converted to data URLs and returned inline.
  */
 
+import { EditorView } from "@codemirror/view";
 import type { FileSystem } from "../lib/types";
 import {
   relativeProjectPathFromDocument,
@@ -133,6 +134,18 @@ export function logImageError(operation: string, err: unknown): void {
 }
 
 /**
+ * Escape a path for use inside a markdown image link `![alt](path)`.
+ *
+ * Markdown terminates the URL at the first unescaped `)`, so any literal
+ * `)` in the path must be percent-encoded. Spaces are also encoded because
+ * they would split the link in many parsers. Other characters are left as-is
+ * to keep relative paths readable.
+ */
+export function escapeMarkdownPath(path: string): string {
+  return path.replace(/ /g, "%20").replace(/\)/g, "%29");
+}
+
+/**
  * Deduplicate a filename by appending a numeric suffix if needed.
  *
  * Checks `<folder>/<name>` against the filesystem and returns a name
@@ -247,33 +260,87 @@ export function createImageSaver(
 }
 
 /**
- * Shared save-and-insert pipeline for image files.
+ * Insert an image markdown snippet at the given position.
  *
- * All insertion paths (paste, drop, file picker) go through this function
- * so that filename generation, alt-text derivation, save callback invocation,
- * and markdown insertion happen in exactly one place.
+ * Inserts on its own line when the target position is not already on an
+ * empty line.
  *
- * @param file       The image File to process.
- * @param save       Callback that persists the image and returns a path/URL.
- * @param insert     Callback that inserts the markdown snippet into the editor.
- * @param operation  Label used in error logging (e.g. "paste", "drop", "insert").
- * @returns          A promise that resolves after insert (or after logging an error).
+ * @param view  The editor view.
+ * @param path  The image path or data URL.
+ * @param alt   The alt text.
+ * @param pos   The document position to insert at. Defaults to the current
+ *              cursor position. Pass an explicit value when the insertion
+ *              happens asynchronously (e.g. after a drag-and-drop save)
+ *              to avoid using a stale cursor position.
  */
-export function saveAndInsertImage(
+export function insertImageMarkdown(
+  view: EditorView,
+  path: string,
+  alt: string,
+  pos?: number,
+): void {
+  const sel = view.state.selection.main;
+  const insertFrom = pos ?? sel.from;
+  const insertTo = pos !== undefined ? pos : sel.to;
+  const line = view.state.doc.lineAt(insertFrom);
+  const prefix = line.text.trim() === "" && insertFrom === line.from ? "" : "\n";
+  const safePath = escapeMarkdownPath(path);
+  const snippet = `${prefix}![${alt}](${safePath})\n`;
+  view.dispatch({
+    changes: { from: insertFrom, to: insertTo, insert: snippet },
+    selection: { anchor: insertFrom + snippet.length },
+  });
+  view.focus();
+}
+
+/**
+ * Options for {@link handleImageInsert}.
+ */
+export interface HandleImageInsertOptions {
+  /** Callback that persists the image and returns a path/URL. Defaults to data URL. */
+  save?: (file: File) => Promise<string>;
+  /** Explicit insert position. When omitted, the current cursor position is used. */
+  pos?: number;
+  /** Label for error logging (e.g. "paste", "drop", "insert"). */
+  operation: string;
+}
+
+/**
+ * Unified image-insert handler for all entry points (paste, drop, picker).
+ *
+ * Handles filename generation, alt-text derivation, save-callback invocation,
+ * markdown insertion, and error logging in one place. All three image entry
+ * points delegate to this function so the pipeline is defined exactly once.
+ */
+export function handleImageInsert(
+  view: EditorView,
   file: File,
-  save: (file: File) => Promise<string>,
-  insert: (path: string, alt: string) => void,
-  operation: string,
+  options: HandleImageInsertOptions,
 ): Promise<void> {
+  const save = options.save ?? fileToDataUrl;
   const ext = IMAGE_MIME_EXT[file.type] ?? "png";
   const baseName = generateImageFilename(file, ext);
   const alt = altTextFromFilename(baseName);
 
   return save(file)
     .then((path) => {
-      insert(path, alt);
+      insertImageMarkdown(view, path, alt, options.pos);
     })
     .catch((err: unknown) => {
-      logImageError(operation, err);
+      logImageError(options.operation, err);
     });
+}
+
+/**
+ * Create an image handler bound to a save configuration.
+ *
+ * Use this factory when constructing CM6 extensions so the save callback
+ * is resolved once at extension-creation time rather than per event.
+ */
+export function createImageHandler(
+  config: ImageSaveConfig = {},
+): (view: EditorView, file: File, operation: string, pos?: number) => Promise<void> {
+  const save = config.saveImage ?? fileToDataUrl;
+  return (view, file, operation, pos) =>
+    handleImageInsert(view, file, { save, pos, operation });
 }

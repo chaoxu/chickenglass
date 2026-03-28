@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   IMAGE_MIME_EXT,
   IMAGE_EXTENSIONS,
@@ -6,8 +6,25 @@ import {
   generateImageFilename,
   altTextFromFilename,
   logImageError,
-  saveAndInsertImage,
+  handleImageInsert,
+  insertImageMarkdown,
 } from "./image-save";
+import { createTestView } from "../test-utils";
+import type { EditorView } from "@codemirror/view";
+
+const views: EditorView[] = [];
+
+function makeView(doc = ""): EditorView {
+  const view = createTestView(doc, { focus: false });
+  views.push(view);
+  return view;
+}
+
+afterEach(() => {
+  while (views.length > 0) {
+    views.pop()?.destroy();
+  }
+});
 
 describe("IMAGE_MIME_EXT", () => {
   it("maps common image MIME types to extensions", () => {
@@ -123,27 +140,45 @@ describe("IMAGE_EXTENSIONS", () => {
   });
 });
 
-describe("saveAndInsertImage", () => {
-  it("calls save then insert with correct path and alt text", async () => {
+describe("insertImageMarkdown", () => {
+  it("produces correct markdown on an empty doc", () => {
+    const view = makeView();
+    insertImageMarkdown(view, "assets/fig.png", "fig");
+    expect(view.state.doc.toString()).toBe("![fig](assets/fig.png)\n");
+  });
+
+  it("adds a newline prefix on a non-empty line", () => {
+    const view = makeView("some text");
+    view.dispatch({ selection: { anchor: 9 } });
+    insertImageMarkdown(view, "assets/fig.png", "fig");
+    expect(view.state.doc.toString()).toBe(
+      "some text\n![fig](assets/fig.png)\n",
+    );
+  });
+});
+
+describe("handleImageInsert", () => {
+  it("saves then inserts correct markdown into the editor", async () => {
+    const view = makeView();
     const file = new File(["data"], "chart.png", { type: "image/png" });
     const save = vi.fn().mockResolvedValue("assets/chart.png");
-    const insert = vi.fn();
 
-    await saveAndInsertImage(file, save, insert, "test");
+    await handleImageInsert(view, file, { save, operation: "test" });
 
     expect(save).toHaveBeenCalledWith(file);
-    expect(insert).toHaveBeenCalledWith("assets/chart.png", "chart");
+    expect(view.state.doc.toString()).toBe("![chart](assets/chart.png)\n");
   });
 
   it("logs errors from save without throwing", async () => {
+    const view = makeView();
     const file = new File(["data"], "bad.png", { type: "image/png" });
     const save = vi.fn().mockRejectedValue(new Error("disk full"));
-    const insert = vi.fn();
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await saveAndInsertImage(file, save, insert, "test");
+    await handleImageInsert(view, file, { save, operation: "test" });
 
-    expect(insert).not.toHaveBeenCalled();
+    // Document unchanged on error
+    expect(view.state.doc.toString()).toBe("");
     expect(consoleSpy).toHaveBeenCalledWith(
       "[coflat] image test failed:",
       expect.any(Error),
@@ -153,43 +188,46 @@ describe("saveAndInsertImage", () => {
   });
 
   it("derives alt text from generated filename for unnamed files", async () => {
+    const view = makeView();
     const file = new File(["data"], "image.png", { type: "image/png" });
     const save = vi.fn().mockResolvedValue("assets/image-12345.png");
-    const insert = vi.fn();
 
-    await saveAndInsertImage(file, save, insert, "test");
+    await handleImageInsert(view, file, { save, operation: "test" });
 
     // Alt text comes from the generated filename, not the saved path
-    const alt = insert.mock.calls[0][1] as string;
-    expect(alt).toMatch(/^image-\d+$/);
+    expect(view.state.doc.toString()).toMatch(/!\[image-\d+\]/);
   });
 
-  it("produces identical results regardless of insertion path", async () => {
-    // Simulate the same file going through paste, drop, and picker —
-    // all three should produce the same save call and alt text.
+  it("inserts at explicit position when pos is given", async () => {
+    const view = makeView("line one\nline two");
+    const file = new File(["data"], "fig.png", { type: "image/png" });
+    const save = vi.fn().mockResolvedValue("assets/fig.png");
+
+    await handleImageInsert(view, file, { save, pos: 9, operation: "test" });
+
+    expect(view.state.doc.toString()).toBe(
+      "line one\n\n![fig](assets/fig.png)\nline two",
+    );
+  });
+
+  it("produces identical results regardless of operation label", async () => {
     const fileData = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     const makeFile = () =>
       new File([fileData], "screenshot.png", { type: "image/png" });
 
-    const savePath = "assets/screenshot.png";
-    const results: Array<{ path: string; alt: string }> = [];
+    const results: string[] = [];
 
     for (const operation of ["paste", "drop", "insert"]) {
-      const save = vi.fn().mockResolvedValue(savePath);
-      const insert = vi.fn();
+      const view = makeView();
+      const save = vi.fn().mockResolvedValue("assets/screenshot.png");
 
-      await saveAndInsertImage(makeFile(), save, insert, operation);
+      await handleImageInsert(view, makeFile(), { save, operation });
 
-      results.push({
-        path: insert.mock.calls[0][0] as string,
-        alt: insert.mock.calls[0][1] as string,
-      });
+      results.push(view.state.doc.toString());
     }
 
-    // All three paths produce identical path and alt text
-    expect(results[0]).toEqual(results[1]);
-    expect(results[1]).toEqual(results[2]);
-    expect(results[0].path).toBe(savePath);
-    expect(results[0].alt).toBe("screenshot");
+    expect(results[0]).toBe(results[1]);
+    expect(results[1]).toBe(results[2]);
+    expect(results[0]).toContain("![screenshot](assets/screenshot.png)");
   });
 });
