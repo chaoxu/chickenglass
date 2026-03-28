@@ -27,6 +27,7 @@ import {
   decorationHidden,
   editorFocusField,
   focusTracker,
+  hideMultiLineClosingFence,
   MacroAwareWidget,
   RenderWidget,
   addMarkerReplacement,
@@ -485,11 +486,8 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // transaction filter and skipped by atomicRanges (see below).
     if (div.singleLine) {
       addSingleLineClosingFence(state, div.closeFenceFrom, div.closeFenceTo, items);
-    } else if (div.closeFenceFrom >= 0 && div.closeFenceTo > div.closeFenceFrom) {
-      items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
-      items.push(
-        Decoration.line({ class: CSS.blockClosingFence }).range(div.closeFenceFrom),
-      );
+    } else {
+      hideMultiLineClosingFence(div.closeFenceFrom, div.closeFenceTo, items);
 
       // Embed blocks: replace body content with iframe widget
       if (isEmbed && !cursorOnEitherFence) {

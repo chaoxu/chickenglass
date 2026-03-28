@@ -8,6 +8,7 @@ import {
   findFencedBlockAt,
   addSingleLineClosingFence,
   addCollapsedClosingFence,
+  hideMultiLineClosingFence,
   type FencedBlockInfo,
 } from "./fenced-block-core";
 import type { Range } from "@codemirror/state";
@@ -265,6 +266,43 @@ describe("addSingleLineClosingFence", () => {
     const state = createEditorState(doc);
     const items: Range<Decoration>[] = [];
     addSingleLineClosingFence(state, 21, 21, items);
+    expect(items).toHaveLength(0);
+  });
+});
+
+// ── hideMultiLineClosingFence ────────────────────────────────────────
+
+describe("hideMultiLineClosingFence", () => {
+  it("adds a hidden decoration and a closing-fence line class", () => {
+    const items: Range<Decoration>[] = [];
+    hideMultiLineClosingFence(10, 13, items);
+    expect(items).toHaveLength(2);
+
+    // First item: hidden mark
+    expect(items[0].from).toBe(10);
+    expect(items[0].to).toBe(13);
+
+    // Second item: line decoration with closing-fence class
+    expect(items[1].from).toBe(10);
+    expect(items[1].to).toBe(10);
+    expect(items[1].value.spec.class).toBe(CSS.blockClosingFence);
+  });
+
+  it("does nothing when closeFenceFrom is -1", () => {
+    const items: Range<Decoration>[] = [];
+    hideMultiLineClosingFence(-1, -1, items);
+    expect(items).toHaveLength(0);
+  });
+
+  it("does nothing when closeFenceTo < closeFenceFrom", () => {
+    const items: Range<Decoration>[] = [];
+    hideMultiLineClosingFence(13, 10, items);
+    expect(items).toHaveLength(0);
+  });
+
+  it("does nothing when closeFenceTo === closeFenceFrom (empty range)", () => {
+    const items: Range<Decoration>[] = [];
+    hideMultiLineClosingFence(10, 10, items);
     expect(items).toHaveLength(0);
   });
 });

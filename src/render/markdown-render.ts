@@ -5,33 +5,11 @@ import {
 } from "@codemirror/view";
 import { type EditorState, type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
+import type { SyntaxNodeRef } from "@lezer/common";
 import { type VisibleRange, cursorInRange, decorationHidden, addMarkerReplacement, createCursorSensitiveViewPlugin } from "./render-utils";
 import { findTrailingHeadingAttributes } from "../semantics/heading-ancestry";
 import { isSafeUrl } from "../lib/url-utils";
 import { openExternalUrl } from "../lib/open-link";
-
-/**
- * Node types whose children's markers should be hidden when
- * the cursor is NOT inside them.
- */
-const ELEMENT_NODES = new Set([
-  "Emphasis",
-  "StrongEmphasis",
-  "InlineCode",
-  "Image",
-  "Strikethrough",
-]);
-
-/** Node types whose text content should be hidden (markers, URLs, etc.). */
-const HIDDEN_NODES = new Set([
-  "EmphasisMark",
-  "CodeMark",
-  "LinkMark",
-  "URL",
-  "HardBreak",
-  "StrikethroughMark",
-  "HighlightMark",
-]);
 
 /** Heading mark decorations (font-weight, text styling on spans). */
 const headingMarkByLevel: Record<string, Decoration> = {
@@ -75,16 +53,227 @@ const bulletListDecoration = Decoration.mark({ class: "cf-list-bullet" });
 /** Decoration to style ordered list markers. */
 const numberListDecoration = Decoration.mark({ class: "cf-list-number" });
 
+/** Map from element node names to their content style decorations. */
+const styleMap: Readonly<Record<string, Decoration>> = {
+  StrongEmphasis: boldDecoration,
+  Emphasis: italicDecoration,
+  Strikethrough: strikethroughDecoration,
+  InlineCode: inlineCodeDecoration,
+};
+
+// ── Markdown node handler registry ─────────────────────────────────────
+
+/** Shared mutable context passed to handlers during tree iteration. */
+interface MarkdownHandlerContext {
+  readonly view: EditorView;
+  readonly items: Range<Decoration>[];
+  /** Set by ATXHeading handler, read by HeaderMark handler. */
+  cursorInHeading: boolean;
+}
+
+/** Entry in the markdown node handler registry. */
+interface MarkdownNodeHandler {
+  /** Whether this node toggles rendering based on cursor proximity. */
+  readonly cursorSensitive: boolean;
+  /**
+   * Handle a matching node. Return value follows Lezer enter() semantics:
+   * undefined = walk children, false = skip children.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+  readonly handle: (node: SyntaxNodeRef, ctx: MarkdownHandlerContext) => false | void;
+}
+
+// ── Handler functions ──────────────────────────────────────────────────
+
+/**
+ * ATX Headings: ALWAYS apply heading style, walk children for inline rendering.
+ * Follows the same marker/content split as block titles (CLAUDE.md):
+ * - Heading-level styling (mark + line decorations) always applied
+ * - # markers shown/hidden based on cursor proximity to the heading
+ * - Inline formatting (bold, italic, math, code) inside the heading
+ *   keeps its rendered state — only direct cursor contact shows source
+ */
+function handleHeading(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
+  const { view, items } = ctx;
+  const headingMark = headingMarkByLevel[node.name];
+  if (headingMark) {
+    items.push(headingMark.range(node.from, node.to));
+  }
+  const headingLine = headingLineByLevel[node.name];
+  if (headingLine) {
+    const line = view.state.doc.lineAt(node.from);
+    items.push(headingLine.range(line.from));
+  }
+
+  ctx.cursorInHeading = cursorInRange(view, node.from, node.to);
+
+  if (!ctx.cursorInHeading) {
+    // Cursor outside: hide ALL trailing Pandoc attribute blocks
+    // ({#id}, {.class}, {-}, {.unnumbered}, {#id .class key=value}, etc.)
+    const hLine = view.state.doc.lineAt(node.from);
+    const attrMatch = findTrailingHeadingAttributes(hLine.text);
+    if (attrMatch) {
+      const attrFrom = hLine.from + attrMatch.index;
+      const attrTo = attrFrom + attrMatch.raw.length;
+      items.push(decorationHidden.range(attrFrom, attrTo));
+    }
+  }
+  // Always walk children: HeaderMark uses cursorInHeading flag,
+  // inline formatting nodes get per-node cursor checks via element handler.
+}
+
+/**
+ * HeaderMark (the # symbols + trailing space).
+ * Uses the same marker replacement pattern as fenced div headers.
+ * See addMarkerReplacement() and CLAUDE.md "Block headers must behave like headings."
+ */
+function handleHeaderMark(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
+  const { view, items } = ctx;
+  const end = node.to;
+  const docLen = view.state.doc.length;
+  const nextChar = end < docLen ? view.state.sliceDoc(end, end + 1) : "";
+  const hideEnd = nextChar === " " ? end + 1 : end;
+  // When cursor is on the heading line, markers stay visible (cursorInside=true).
+  // When cursor is outside, markers are hidden (cursorInside=false).
+  addMarkerReplacement(node.from, hideEnd, ctx.cursorInHeading, null, items);
+}
+
+/** Highlight: ALWAYS apply highlight decoration, hide markers when cursor outside. */
+function handleHighlight(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
+  ctx.items.push(highlightDecoration.range(node.from, node.to));
+  if (cursorInRange(ctx.view, node.from, node.to)) {
+    return false as const; // keep highlight style, show markers
+  }
+  // Walk children to hide HighlightMark
+}
+
+/** Link: style as clickable link when cursor is outside. */
+function handleLink(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
+  const { view, items } = ctx;
+  if (cursorInRange(view, node.from, node.to)) {
+    return false as const; // cursor inside: show full source for editing
+  }
+  // Extract URL from the URL child node
+  let url = "";
+  const linkNode = node.node;
+  const urlChild = linkNode.getChild("URL");
+  if (urlChild) {
+    url = view.state.sliceDoc(urlChild.from, urlChild.to);
+  }
+  // Find the link text range: between first [ and ]
+  // The text is between the first LinkMark end and second LinkMark start
+  const marks: { from: number; to: number }[] = [];
+  let cursor = linkNode.firstChild;
+  while (cursor) {
+    if (cursor.name === "LinkMark") {
+      marks.push({ from: cursor.from, to: cursor.to });
+    }
+    cursor = cursor.nextSibling;
+  }
+  // marks[0] = "[", marks[1] = "]", marks[2] = "("
+  if (marks.length >= 2) {
+    const textFrom = marks[0].to;
+    const textTo = marks[1].from;
+    if (textFrom < textTo) {
+      const linkDeco = Decoration.mark({
+        class: "cf-link-rendered",
+        attributes: { "data-url": url },
+      });
+      items.push(linkDeco.range(textFrom, textTo));
+    }
+  }
+  // Walk children to hide markers (LinkMark, URL) via hidden handler
+}
+
+/** Inline elements: ALWAYS apply content styling, toggle marker visibility. */
+function handleElement(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
+  const { view, items } = ctx;
+  // Always apply content styling for seamless WYSIWYG
+  const styleDeco = styleMap[node.name];
+  if (styleDeco) {
+    items.push(styleDeco.range(node.from, node.to));
+  }
+
+  // If cursor is inside: skip hiding markers (show source) but keep style
+  if (cursorInRange(view, node.from, node.to)) {
+    return false as const;
+  }
+  // Cursor outside: walk children to hide markers
+}
+
+/** FencedCode: handled entirely by code-block-render plugin. */
+function handleFencedCode() {
+  return false as const; // don't walk children — avoids hiding CodeMark fence markers
+}
+
+/** Hidden marker nodes: always hidden (markers, URLs, etc.). */
+function handleHidden(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
+  ctx.items.push(decorationHidden.range(node.from, node.to));
+}
+
+/** HorizontalRule: style if cursor is not inside. */
+function handleHorizontalRule(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
+  if (cursorInRange(ctx.view, node.from, node.to)) {
+    return false as const;
+  }
+  ctx.items.push(hrDecoration.range(node.from, node.to));
+}
+
+/** Escape: hide the backslash (\$ → $, \* → *) unless cursor is on it. */
+function handleEscape(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
+  if (cursorInRange(ctx.view, node.from, node.to)) return;
+  // Hide just the backslash (first character)
+  ctx.items.push(Decoration.replace({}).range(node.from, node.from + 1));
+}
+
+/** ListMark: always style bullet/number markers (no source revert).
+ * List markers aren't source syntax like # or $ — they should keep
+ * the content font even when the cursor is on them. */
+function handleListMark(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
+  const grandparent = node.node.parent?.parent?.name;
+  const deco =
+    grandparent === "BulletList"
+      ? bulletListDecoration
+      : numberListDecoration;
+  ctx.items.push(deco.range(node.from, node.to));
+}
+
+// ── Registry population ────────────────────────────────────────────────
+
+/**
+ * Unified markdown node handler registry.
+ *
+ * Each entry maps a Lezer node type name to its rendering handler and
+ * declares whether the node toggles visibility based on cursor proximity.
+ * CURSOR_SENSITIVE_NODES is derived from this registry — there is no
+ * separate manually-maintained list.
+ */
+const MARKDOWN_HANDLERS = new Map<string, MarkdownNodeHandler>();
+
+for (const name of Object.keys(headingMarkByLevel)) {
+  MARKDOWN_HANDLERS.set(name, { cursorSensitive: true, handle: handleHeading });
+}
+MARKDOWN_HANDLERS.set("HeaderMark", { cursorSensitive: false, handle: handleHeaderMark });
+MARKDOWN_HANDLERS.set("Highlight", { cursorSensitive: true, handle: handleHighlight });
+MARKDOWN_HANDLERS.set("Link", { cursorSensitive: true, handle: handleLink });
+for (const name of ["Emphasis", "StrongEmphasis", "InlineCode", "Image", "Strikethrough"]) {
+  MARKDOWN_HANDLERS.set(name, { cursorSensitive: true, handle: handleElement });
+}
+MARKDOWN_HANDLERS.set("FencedCode", { cursorSensitive: false, handle: handleFencedCode });
+for (const name of ["EmphasisMark", "CodeMark", "LinkMark", "URL", "HardBreak", "StrikethroughMark", "HighlightMark"]) {
+  MARKDOWN_HANDLERS.set(name, { cursorSensitive: false, handle: handleHidden });
+}
+MARKDOWN_HANDLERS.set("HorizontalRule", { cursorSensitive: true, handle: handleHorizontalRule });
+MARKDOWN_HANDLERS.set("Escape", { cursorSensitive: true, handle: handleEscape });
+MARKDOWN_HANDLERS.set("ListMark", { cursorSensitive: false, handle: handleListMark });
+
 /**
  * All node types whose marker visibility depends on cursor proximity.
- * Must stay in sync with the cursorInRange checks in buildMarkdownDecorations.
+ * Derived from the handler registry — no separate list to maintain.
  */
-const CURSOR_SENSITIVE_NODES = new Set([
-  ...ELEMENT_NODES,
-  "ATXHeading1", "ATXHeading2", "ATXHeading3",
-  "ATXHeading4", "ATXHeading5", "ATXHeading6",
-  "Highlight", "Link", "HorizontalRule", "Escape",
-]);
+const CURSOR_SENSITIVE_NODES = new Set(
+  [...MARKDOWN_HANDLERS].filter(([, h]) => h.cursorSensitive).map(([name]) => name),
+);
 
 /**
  * Return a key identifying all cursor-sensitive nodes that contain the
@@ -142,26 +331,12 @@ export function markdownShouldUpdate(update: ViewUpdate): boolean {
   return false;
 }
 
-/** Map from element node names to their content style decorations. */
-const styleMap: Readonly<Record<string, Decoration>> = {
-  StrongEmphasis: boldDecoration,
-  Emphasis: italicDecoration,
-  Strikethrough: strikethroughDecoration,
-  InlineCode: inlineCodeDecoration,
-};
-
 /**
  * Collect markdown decoration ranges (headings, emphasis, links, etc.).
  *
- * NOTE: collectNodeRangesExcludingCursor() does not apply here.
- * This function handles many distinct node types with different logic per type:
- * headings apply styles unconditionally then conditionally hide markers,
- * links build Decoration.mark from child nodes, inline elements toggle cursor
- * visibility, and hidden-marker nodes are always removed. The cursor check is
- * not a uniform "skip this node entirely" — each branch has its own semantics
- * (some return false, some return, some apply marks before checking). There is
- * no single uniform widget type being pushed, so the helper's single-callback
- * shape cannot capture this multi-branch dispatch.
+ * Dispatches each node to its registered handler via MARKDOWN_HANDLERS.
+ * Each handler has per-type semantics: some always apply styles, some
+ * toggle marker visibility, some skip children entirely.
  *
  * The `_skip` parameter is accepted for CursorSensitiveCollectFn conformance
  * but intentionally unused: markdown decorations are marks / lines / hidden-
@@ -172,178 +347,20 @@ function collectMarkdownItems(
   ranges: readonly VisibleRange[],
   _skip: (nodeFrom: number) => boolean,
 ): Range<Decoration>[] {
-  const widgets: Range<Decoration>[] = [];
-  // Track whether the current heading has cursor inside.
-  // Set by the ATXHeading handler, read by the HeaderMark handler.
-  // This allows inline formatting children to be walked normally
-  // (per-node cursor checks) while still showing # markers when editing.
-  let cursorInHeading = false;
+  const ctx: MarkdownHandlerContext = { view, items: [], cursorInHeading: false };
 
   for (const { from, to } of ranges) {
     syntaxTree(view.state).iterate({
       from,
       to,
       enter(node) {
-        // --- ATX Headings: ALWAYS apply heading style, walk children for inline rendering ---
-        // Follows the same marker/content split as block titles (CLAUDE.md):
-        // - Heading-level styling (mark + line decorations) always applied
-        // - # markers shown/hidden based on cursor proximity to the heading
-        // - Inline formatting (bold, italic, math, code) inside the heading
-        //   keeps its rendered state — only direct cursor contact shows source
-        if (node.name.startsWith("ATXHeading")) {
-          const headingMark = headingMarkByLevel[node.name];
-          if (headingMark) {
-            widgets.push(headingMark.range(node.from, node.to));
-          }
-          // Line decoration puts font-size on .cm-line so math widgets inherit it
-          const headingLine = headingLineByLevel[node.name];
-          if (headingLine) {
-            const line = view.state.doc.lineAt(node.from);
-            widgets.push(headingLine.range(line.from));
-          }
-
-          cursorInHeading = cursorInRange(view, node.from, node.to);
-
-          if (!cursorInHeading) {
-            // Cursor outside: hide ALL trailing Pandoc attribute blocks
-            // ({#id}, {.class}, {-}, {.unnumbered}, {#id .class key=value}, etc.)
-            const hLine = view.state.doc.lineAt(node.from);
-            const attrMatch = findTrailingHeadingAttributes(hLine.text);
-            if (attrMatch) {
-              const attrFrom = hLine.from + attrMatch.index;
-              const attrTo = attrFrom + attrMatch.raw.length;
-              widgets.push(decorationHidden.range(attrFrom, attrTo));
-            }
-          }
-          // Always walk children: HeaderMark uses cursorInHeading flag,
-          // inline formatting nodes get per-node cursor checks via ELEMENT_NODES.
-          return;
-        }
-
-        // --- HeaderMark (the # symbols + trailing space) ---
-        // Uses the same marker replacement pattern as fenced div headers.
-        // See addMarkerReplacement() and CLAUDE.md "Block headers must behave like headings."
-        if (node.name === "HeaderMark") {
-          const end = node.to;
-          const docLen = view.state.doc.length;
-          const nextChar =
-            end < docLen ? view.state.sliceDoc(end, end + 1) : "";
-          const hideEnd = nextChar === " " ? end + 1 : end;
-          // When cursor is on the heading line, markers stay visible (cursorInside=true).
-          // When cursor is outside, markers are hidden (cursorInside=false).
-          addMarkerReplacement(node.from, hideEnd, cursorInHeading, null, widgets);
-          return;
-        }
-
-        // --- Highlight: ALWAYS apply highlight decoration, hide markers when cursor outside ---
-        if (node.name === "Highlight") {
-          widgets.push(highlightDecoration.range(node.from, node.to));
-          if (cursorInRange(view, node.from, node.to)) {
-            return false; // keep highlight style, show markers
-          }
-          return; // walk children to hide HighlightMark
-        }
-
-        // --- Link: style as clickable link when cursor is outside ---
-        if (node.name === "Link") {
-          if (cursorInRange(view, node.from, node.to)) {
-            return false; // cursor inside: show full source for editing
-          }
-          // Extract URL from the URL child node
-          let url = "";
-          const linkNode = node.node;
-          const urlChild = linkNode.getChild("URL");
-          if (urlChild) {
-            url = view.state.sliceDoc(urlChild.from, urlChild.to);
-          }
-          // Find the link text range: between first [ and ]
-          // The text is between the first LinkMark end and second LinkMark start
-          const marks: { from: number; to: number }[] = [];
-          let cursor = linkNode.firstChild;
-          while (cursor) {
-            if (cursor.name === "LinkMark") {
-              marks.push({ from: cursor.from, to: cursor.to });
-            }
-            cursor = cursor.nextSibling;
-          }
-          // marks[0] = "[", marks[1] = "]", marks[2] = "("
-          if (marks.length >= 2) {
-            const textFrom = marks[0].to;
-            const textTo = marks[1].from;
-            if (textFrom < textTo) {
-              const linkDeco = Decoration.mark({
-                class: "cf-link-rendered",
-                attributes: { "data-url": url },
-              });
-              widgets.push(linkDeco.range(textFrom, textTo));
-            }
-          }
-          // Walk children to hide markers (LinkMark, URL) via HIDDEN_NODES
-          return;
-        }
-
-        // --- Inline elements: ALWAYS apply content styling, toggle marker visibility ---
-        if (ELEMENT_NODES.has(node.name)) {
-          // Always apply content styling for seamless WYSIWYG
-          const styleDeco = styleMap[node.name];
-          if (styleDeco) {
-            widgets.push(styleDeco.range(node.from, node.to));
-          }
-
-          // If cursor is inside: skip hiding markers (show source) but keep style
-          if (cursorInRange(view, node.from, node.to)) {
-            return false;
-          }
-          // Cursor outside: walk children to hide markers
-          return;
-        }
-
-        // --- FencedCode: handled entirely by code-block-render plugin ---
-        if (node.name === "FencedCode") {
-          return false; // don't walk children — avoids hiding CodeMark fence markers
-        }
-
-        // --- Hidden marker nodes ---
-        if (HIDDEN_NODES.has(node.name)) {
-          widgets.push(decorationHidden.range(node.from, node.to));
-          return;
-        }
-
-        // --- HorizontalRule: style if cursor is not inside ---
-        if (node.name === "HorizontalRule") {
-          if (cursorInRange(view, node.from, node.to)) {
-            return false;
-          }
-          widgets.push(hrDecoration.range(node.from, node.to));
-          return;
-        }
-
-        // --- Escape: hide the backslash (\$ → $, \* → *) unless cursor is on it ---
-        if (node.name === "Escape") {
-          if (cursorInRange(view, node.from, node.to)) return;
-          // Hide just the backslash (first character)
-          widgets.push(Decoration.replace({}).range(node.from, node.from + 1));
-          return;
-        }
-
-        // --- ListMark: always style bullet/number markers (no source revert) ---
-        // List markers aren't source syntax like # or $ — they should keep
-        // the content font even when the cursor is on them.
-        if (node.name === "ListMark") {
-          const grandparent = node.node.parent?.parent?.name;
-          const deco =
-            grandparent === "BulletList"
-              ? bulletListDecoration
-              : numberListDecoration;
-          widgets.push(deco.range(node.from, node.to));
-          return;
-        }
-
+        const handler = MARKDOWN_HANDLERS.get(node.name);
+        if (handler) return handler.handle(node, ctx);
       },
     });
   }
 
-  return widgets;
+  return ctx.items;
 }
 
 /** CM6 extension that provides Typora-style rendering for standard markdown. */
