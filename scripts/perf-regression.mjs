@@ -59,6 +59,43 @@ async function getSemanticRevisionInfo(page) {
   return page.evaluate(() => window.__cmDebug.semantics());
 }
 
+const SCROLL_STEP_SIZE = 30;
+const SCROLL_FIXTURE = "cogirth/main2.md";
+
+async function runSteppedScroll(page) {
+  return page.evaluate(async (stepSize) => {
+    const waitFrame = () =>
+      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const view = window.__cmView;
+    const totalLines = view.state.doc.lines;
+    const steps = [];
+    for (let line = 1 + stepSize; line <= totalLines; line += stepSize) {
+      const target = Math.min(line, totalLines);
+      const lineObj = view.state.doc.line(target);
+      const t0 = performance.now();
+      view.dispatch({ selection: { anchor: lineObj.from }, scrollIntoView: true });
+      await waitFrame();
+      steps.push(performance.now() - t0);
+    }
+    const total = steps.reduce((a, b) => a + b, 0);
+    return {
+      stepCount: steps.length,
+      meanStepMs: total / (steps.length || 1),
+      maxStepMs: Math.max(...steps, 0),
+      totalMs: total,
+    };
+  }, SCROLL_STEP_SIZE);
+}
+
+function steppedScrollMetrics(result) {
+  return [
+    { name: "scroll.step_count", unit: "count", value: result.stepCount },
+    { name: "scroll.mean_step_ms", unit: "ms", value: result.meanStepMs },
+    { name: "scroll.max_step_ms", unit: "ms", value: result.maxStepMs },
+    { name: "scroll.total_ms", unit: "ms", value: result.totalMs },
+  ];
+}
+
 const scenarios = {
   "open-index": {
     description: "Reload the app and open demo/index.md in Rich mode.",
@@ -157,6 +194,80 @@ const scenarios = {
           })),
         ],
       };
+    },
+  },
+  "scroll-step-rich": {
+    description: `Open ${SCROLL_FIXTURE} in Rich mode, scroll step-by-step (${SCROLL_STEP_SIZE} lines/step).`,
+    defaultSettleMs: 400,
+    run: async (page) => {
+      await page.evaluate(() => window.__app.setMode("rich"));
+      await openFile(page, SCROLL_FIXTURE);
+      await sleep(800);
+      const result = await runSteppedScroll(page);
+      return { metrics: steppedScrollMetrics(result) };
+    },
+  },
+  "scroll-jump-rich": {
+    description: `Open ${SCROLL_FIXTURE} in Rich mode, perform cold and warm jump scrolls.`,
+    defaultSettleMs: 400,
+    run: async (page) => {
+      await page.evaluate(() => window.__app.setMode("rich"));
+      await openFile(page, SCROLL_FIXTURE);
+      await sleep(800);
+
+      const jumpResult = await page.evaluate(async () => {
+        const waitFrame = () =>
+          new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const view = window.__cmView;
+        const totalLines = view.state.doc.lines;
+        const nearBottom = Math.max(1, totalLines - 10);
+
+        // Cold jump: top to near-bottom
+        const lb = view.state.doc.line(nearBottom);
+        const t0 = performance.now();
+        view.dispatch({ selection: { anchor: lb.from }, scrollIntoView: true });
+        await waitFrame();
+        const coldMs = performance.now() - t0;
+
+        await new Promise((r) => setTimeout(r, 200));
+
+        // Warm jump: back to top
+        const lt = view.state.doc.line(1);
+        const t1 = performance.now();
+        view.dispatch({ selection: { anchor: lt.from }, scrollIntoView: true });
+        await waitFrame();
+        const warmBackMs = performance.now() - t1;
+
+        await new Promise((r) => setTimeout(r, 200));
+
+        // Warm jump: forward again
+        const lb2 = view.state.doc.line(nearBottom);
+        const t2 = performance.now();
+        view.dispatch({ selection: { anchor: lb2.from }, scrollIntoView: true });
+        await waitFrame();
+        const warmForwardMs = performance.now() - t2;
+
+        return { coldMs, warmBackMs, warmForwardMs };
+      });
+
+      return {
+        metrics: [
+          { name: "scroll.cold_jump_ms", unit: "ms", value: jumpResult.coldMs },
+          { name: "scroll.warm_back_ms", unit: "ms", value: jumpResult.warmBackMs },
+          { name: "scroll.warm_forward_ms", unit: "ms", value: jumpResult.warmForwardMs },
+        ],
+      };
+    },
+  },
+  "scroll-step-source": {
+    description: `Open ${SCROLL_FIXTURE} in Source mode, scroll step-by-step (baseline comparison).`,
+    defaultSettleMs: 400,
+    run: async (page) => {
+      await page.evaluate(() => window.__app.setMode("source"));
+      await openFile(page, SCROLL_FIXTURE);
+      await sleep(800);
+      const result = await runSteppedScroll(page);
+      return { metrics: steppedScrollMetrics(result) };
     },
   },
 };

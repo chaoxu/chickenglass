@@ -54,6 +54,12 @@ If the current run exceeds the configured thresholds, the command exits non-zero
   Reload app, open `index.md`, then cycle `Source -> Read -> Rich`.
 - `local-edit-index`
   Reload app, open `index.md`, then apply a local inline-math edit and report semantic revision churn.
+- `scroll-step-rich`
+  Reload app, open `cogirth/main2.md` in Rich mode, then scroll step-by-step (30 lines per step). Reports per-step timing metrics (`scroll.mean_step_ms`, `scroll.max_step_ms`).
+- `scroll-jump-rich`
+  Reload app, open `cogirth/main2.md` in Rich mode, then perform cold and warm jump scrolls (top-to-bottom, back-to-top, forward again). Reports `scroll.cold_jump_ms`, `scroll.warm_back_ms`, `scroll.warm_forward_ms`.
+- `scroll-step-source`
+  Same as `scroll-step-rich` but in Source mode. Useful as a baseline comparison for isolating Rich-mode rendering overhead.
 
 ## Thresholds
 
@@ -75,6 +81,41 @@ npm run perf:compare -- \
 For `local-edit-index`, the report also prints "Scenario metrics" with semantic
 revision deltas and per-slice churn counts. That is the verification path for
 edit-locality after the incremental semantics rollout.
+
+## Scroll Scenarios
+
+The `scroll-step-rich`, `scroll-jump-rich`, and `scroll-step-source` scenarios measure scroll performance on a heavy mathematical document (`demo/cogirth/main2.md`). This fixture is committed to the repo and loaded via Vite's `import.meta.glob`.
+
+### Example: compare Rich vs Source stepped scroll
+
+```bash
+npm run perf:capture -- --scenario scroll-step-rich \
+  --output output/perf/scroll-step-rich.json
+
+npm run perf:capture -- --scenario scroll-step-source \
+  --output output/perf/scroll-step-source.json
+```
+
+### Example: detect scroll regression
+
+```bash
+# Capture baseline on the current build
+npm run perf:capture -- --scenario scroll-step-rich \
+  --iterations 5 --warmup 2 \
+  --output output/perf/scroll-step-rich-baseline.json
+
+# After changes, compare
+npm run perf:compare -- --scenario scroll-step-rich \
+  --iterations 5 --warmup 2 \
+  --baseline output/perf/scroll-step-rich-baseline.json
+```
+
+The scroll scenarios report custom metrics alongside the usual frontend/backend span summaries:
+
+- **Stepped scroll** (`scroll-step-rich`, `scroll-step-source`): `scroll.step_count`, `scroll.mean_step_ms`, `scroll.max_step_ms`, `scroll.total_ms`
+- **Jump scroll** (`scroll-jump-rich`): `scroll.cold_jump_ms`, `scroll.warm_back_ms`, `scroll.warm_forward_ms`
+
+Per-step timing uses `performance.now()` around each scroll dispatch plus a double-`requestAnimationFrame` wait, so values measure actual rendering work without a fixed settle delay. Comparing Rich vs Source isolates rendering overhead.
 
 ## Notes
 
