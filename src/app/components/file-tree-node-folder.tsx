@@ -13,6 +13,7 @@ import {
 } from "./ui/context-menu";
 import { FolderClosed, FolderOpen } from "lucide-react";
 import { useFileTreeContext } from "../contexts/file-tree-context";
+import { GitStatusBadge } from "./git-status-badge";
 import { InlineCreateInput } from "./inline-create-input";
 import { RenameEditor } from "./rename-editor";
 
@@ -31,7 +32,7 @@ interface FileTreeNodeFolderProps {
 }
 
 export function FileTreeNodeFolder({ item }: FileTreeNodeFolderProps) {
-  const { activePath, onRename, onDelete, onCreateFile, onCreateDir } = useFileTreeContext();
+  const { activePath, gitStatus, onRename, onDelete, onCreateFile, onCreateDir } = useFileTreeContext();
 
   const entry = item.getItemData();
   // headless-tree levels are 0-based (root children = 0), map directly to visual depth
@@ -205,6 +206,7 @@ export function FileTreeNodeFolder({ item }: FileTreeNodeFolderProps) {
             ) : (
               <span className="cf-ui-font truncate">{entry.name}</span>
             )}
+            {gitStatus[entry.path] && <GitStatusBadge status={gitStatus[entry.path]} />}
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="min-w-[160px]">

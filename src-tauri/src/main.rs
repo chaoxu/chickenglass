@@ -62,6 +62,7 @@ fn main() {
             commands::git::git_list_branches,
             commands::git::git_switch_branch,
             commands::git::git_create_branch,
+            commands::git::git_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Coflat");

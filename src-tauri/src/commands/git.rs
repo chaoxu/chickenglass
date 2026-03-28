@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 
@@ -408,11 +409,146 @@ pub fn git_create_branch(
     )
 }
 
+/// Query git working-tree status for the current project root.
+///
+/// Returns a map of project-relative paths to status strings:
+/// - `"modified"`  — tracked file with uncommitted changes
+/// - `"added"`     — new file staged in the index
+/// - `"untracked"` — file not tracked by git
+///
+/// Returns an empty map when the project root is not inside a git
+/// repository, so non-git folders never break the file tree.
+#[command]
+pub fn git_status(
+    window: WebviewWindow,
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+) -> Result<HashMap<String, String>, String> {
+    measure_command(
+        &perf,
+        "tauri.git_status",
+        "tauri.git.git_status",
+        "tauri",
+        None,
+        || {
+            let project_root = current_project_root(&root, &window)?;
+            git_file_statuses(&project_root)
+        },
+    )
+}
+
+/// Collect per-file git statuses, mapped to project-relative paths.
+///
+/// Uses `git status --porcelain=v1 -z --no-renames` for reliable,
+/// NUL-separated output that handles paths with special characters.
+pub fn git_file_statuses(project_root: &Path) -> Result<HashMap<String, String>, String> {
+    // 1. Discover the repo root (fails gracefully for non-git dirs).
+    let toplevel_output = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(project_root)
+        .output();
+
+    let repo_root_str = match toplevel_output {
+        Ok(output) if output.status.success() => {
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        }
+        _ => return Ok(HashMap::new()),
+    };
+
+    // 2. Compute the prefix to strip from repo-relative paths.
+    //    When the project root is a subdirectory of the repo, porcelain
+    //    paths start with that subdirectory prefix.
+    let repo_root = Path::new(&repo_root_str);
+    let prefix = project_root
+        .canonicalize()
+        .and_then(|pr| {
+            repo_root.canonicalize().map(|rr| {
+                pr.strip_prefix(&rr)
+                    .map(|p| {
+                        let s = p.to_string_lossy().replace('\\', "/");
+                        if s.is_empty() { s } else { format!("{s}/") }
+                    })
+                    .unwrap_or_default()
+            })
+        })
+        .unwrap_or_default();
+
+    // 3. Run porcelain status.
+    let output = Command::new("git")
+        .args(["status", "--porcelain=v1", "-z", "--no-renames", "-uall"])
+        .current_dir(project_root)
+        .output()
+        .map_err(|e| format!("Failed to run git status: {e}"))?;
+
+    if !output.status.success() {
+        return Ok(HashMap::new());
+    }
+
+    // 4. Parse NUL-separated entries.
+    let raw = String::from_utf8_lossy(&output.stdout);
+    let mut statuses = HashMap::new();
+
+    for entry in raw.split('\0') {
+        if entry.len() < 4 {
+            continue; // need "XY PATH" (at least 4 chars)
+        }
+        let index_char = entry.as_bytes()[0];
+        let worktree_char = entry.as_bytes()[1];
+        let path = &entry[3..];
+
+        let project_path = if prefix.is_empty() {
+            path.to_string()
+        } else if let Some(relative) = path.strip_prefix(&prefix) {
+            relative.to_string()
+        } else {
+            continue; // outside project root
+        };
+
+        let status = match (index_char, worktree_char) {
+            (b'?', b'?') => "untracked",
+            (b'A', _) => "added",
+            _ => "modified",
+        };
+
+        statuses.insert(project_path, status.to_string());
+    }
+
+    Ok(statuses)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn create_temp_dir(prefix: &str) -> std::path::PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("coflat-git-{prefix}-{unique}"));
+        fs::create_dir_all(&path).expect("create temp dir");
+        path.canonicalize().expect("canonicalize temp dir")
+    }
+
+    fn git_init(dir: &Path) {
+        Command::new("git")
+            .args(["init"])
+            .current_dir(dir)
+            .output()
+            .expect("git init");
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(dir)
+            .output()
+            .expect("git config email");
+        Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(dir)
+            .output()
+            .expect("git config name");
+    }
 
     fn temp_dir(prefix: &str) -> std::path::PathBuf {
         let unique = SystemTime::now()
@@ -677,5 +813,106 @@ mod tests {
 
         fs::remove_dir_all(&remote).unwrap();
         fs::remove_dir_all(&clone).unwrap();
+    }
+
+    #[test]
+    fn non_git_folder_returns_empty_map() {
+        let dir = create_temp_dir("no-git");
+        let result = git_file_statuses(&dir).unwrap();
+        assert!(result.is_empty());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn detects_untracked_file() {
+        let dir = create_temp_dir("untracked");
+        git_init(&dir);
+        fs::write(dir.join("new.md"), "hello").unwrap();
+
+        let result = git_file_statuses(&dir).unwrap();
+        assert_eq!(result.get("new.md").map(String::as_str), Some("untracked"));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn detects_added_file() {
+        let dir = create_temp_dir("added");
+        git_init(&dir);
+        fs::write(dir.join("staged.md"), "hello").unwrap();
+        Command::new("git")
+            .args(["add", "staged.md"])
+            .current_dir(&dir)
+            .output()
+            .expect("git add");
+
+        let result = git_file_statuses(&dir).unwrap();
+        assert_eq!(result.get("staged.md").map(String::as_str), Some("added"));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn detects_modified_file() {
+        let dir = create_temp_dir("modified");
+        git_init(&dir);
+        fs::write(dir.join("tracked.md"), "v1").unwrap();
+        Command::new("git")
+            .args(["add", "tracked.md"])
+            .current_dir(&dir)
+            .output()
+            .expect("git add");
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(&dir)
+            .output()
+            .expect("git commit");
+        fs::write(dir.join("tracked.md"), "v2").unwrap();
+
+        let result = git_file_statuses(&dir).unwrap();
+        assert_eq!(
+            result.get("tracked.md").map(String::as_str),
+            Some("modified"),
+        );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn clean_repo_returns_empty_map() {
+        let dir = create_temp_dir("clean");
+        git_init(&dir);
+        fs::write(dir.join("a.md"), "ok").unwrap();
+        Command::new("git")
+            .args(["add", "a.md"])
+            .current_dir(&dir)
+            .output()
+            .expect("git add");
+        Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(&dir)
+            .output()
+            .expect("git commit");
+
+        let result = git_file_statuses(&dir).unwrap();
+        assert!(result.is_empty());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// When the project root is a subdirectory of the git repo, paths
+    /// must be relative to the project root, not the repo root.
+    #[test]
+    fn subdirectory_project_root_strips_prefix() {
+        let repo = create_temp_dir("subrepo");
+        git_init(&repo);
+        let sub = repo.join("docs");
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(sub.join("note.md"), "hello").unwrap();
+
+        let result = git_file_statuses(&sub).unwrap();
+        assert_eq!(
+            result.get("note.md").map(String::as_str),
+            Some("untracked"),
+        );
+        // The full repo-relative path should NOT appear
+        assert!(result.get("docs/note.md").is_none());
+        fs::remove_dir_all(&repo).unwrap();
     }
 }

@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { FileEntry } from "../file-manager";
+import type { GitFileStatus, GitStatusMap } from "../tauri-client/git";
 import { FileTreeNode } from "./file-tree-node";
 import { FileTreeProvider } from "../contexts/file-tree-context";
 import {
   useFileTreeController,
   type PersistentTreeState,
 } from "../hooks/use-file-tree-controller";
+import { dirname } from "../lib/utils";
 
 interface FileTreeProps {
   root: FileEntry | null;
+  gitStatus: GitStatusMap;
   activePath: string | null;
   onSelect: (path: string) => void;
   onDoubleClick?: (path: string) => void;
@@ -22,8 +25,31 @@ interface FileTreeProps {
   onLoadChildren?: (dirPath: string) => void;
 }
 
+/**
+ * Propagate file-level git statuses to their ancestor folders.
+ * Each folder inherits the "worst" status among its descendants
+ * (modified > added > untracked).
+ */
+export function computeEffectiveGitStatus(fileStatuses: GitStatusMap): GitStatusMap {
+  const priority: Record<GitFileStatus, number> = { modified: 2, added: 1, untracked: 0 };
+  const result: GitStatusMap = { ...fileStatuses };
+
+  for (const [filePath, status] of Object.entries(fileStatuses)) {
+    let dir = dirname(filePath);
+    while (dir) {
+      const existing = result[dir];
+      if (existing && priority[existing] >= priority[status]) break;
+      result[dir] = status;
+      dir = dirname(dir);
+    }
+  }
+
+  return result;
+}
+
 export function FileTree({
   root,
+  gitStatus,
   activePath,
   onSelect,
   onDoubleClick,
@@ -35,6 +61,7 @@ export function FileTree({
   onLoadChildren,
 }: FileTreeProps) {
   const controller = useFileTreeController({ root, onSelect, persistRef, onLoadChildren });
+  const effectiveGitStatus = useMemo(() => computeEffectiveGitStatus(gitStatus), [gitStatus]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const saveScrollRef = useRef(controller.saveScrollPosition);
   saveScrollRef.current = controller.saveScrollPosition;
@@ -96,7 +123,7 @@ export function FileTree({
 
   return (
     <FileTreeProvider
-      value={{ activePath, onSelect, onDoubleClick, onRename, onDelete, onCreateFile, onCreateDir }}
+      value={{ activePath, gitStatus: effectiveGitStatus, onSelect, onDoubleClick, onRename, onDelete, onCreateFile, onCreateDir }}
     >
       <div
         {...containerProps}

@@ -41,6 +41,7 @@ function AppInner() {
     fs,
     settings: workspace.settings,
     refreshTree: workspace.refreshTree,
+    refreshGitStatus: workspace.refreshGitStatus,
     addRecentFile: workspace.addRecentFile,
     requestUnsavedChangesDecision: unsavedChanges.requestDecision,
   });

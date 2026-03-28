@@ -62,6 +62,7 @@ function createHarness(): { Harness: FC; ref: HarnessRef } {
       fs,
       settings,
       refreshTree: async () => {},
+      refreshGitStatus: async () => {},
       addRecentFile: () => {},
       requestUnsavedChangesDecision: async () => "discard",
     });

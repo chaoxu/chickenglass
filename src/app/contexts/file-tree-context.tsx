@@ -1,7 +1,9 @@
 import { createContext, useContext } from "react";
+import type { GitStatusMap } from "../tauri-client/git";
 
 export interface FileTreeContextValue {
   activePath: string | null;
+  gitStatus: GitStatusMap;
   onSelect: (path: string) => void;
   onDoubleClick?: (path: string) => void;
   onRename: (oldPath: string, newPath: string) => Promise<void>;
