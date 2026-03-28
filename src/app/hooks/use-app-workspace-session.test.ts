@@ -482,6 +482,67 @@ describe("useAppWorkspaceSession", () => {
     expect(ref.gitStatus).toEqual({ "README.md": "untracked" });
   });
 
+  it("discards stale git status that resolves while the new workspace tree is still loading", async () => {
+    // Exact interleaving from reviewer: open repo A, keep A's git_status
+    // pending, start opening repo B, resolve A's git_status while B's
+    // listTree is still pending. A's badges must NOT leak into B's tree.
+    workspaceMockState.windowState = {
+      ...workspaceMockState.windowState,
+      projectRoot: null,
+    };
+    const treeA = createDeferred<FileEntry>();
+    const treeB = createDeferred<FileEntry>();
+    const gitStatusA = createDeferred<Record<string, string>>();
+    const gitStatusB = createDeferred<Record<string, string>>();
+    const fs = createQueuedFs([treeA, treeB]);
+    workspaceMockState.getGitStatus
+      .mockImplementationOnce(async () => gitStatusA.promise)
+      .mockImplementationOnce(async () => gitStatusB.promise);
+    const { Harness, ref } = createHarness(fs);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    // Open repo A — resolve its tree but keep its git_status pending.
+    let openA!: Promise<FileEntry | null>;
+    await act(async () => {
+      openA = ref.openProjectRoot("/tmp/repo-a");
+    });
+    await act(async () => {
+      treeA.resolve({ name: "repo-a", path: "", isDirectory: true, children: [] });
+      await Promise.resolve();
+    });
+
+    // Start opening repo B — B's tree is pending.
+    await act(async () => {
+      void ref.openProjectRoot("/tmp/repo-b");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Now resolve A's stale git_status while B's tree is still loading.
+    // This must NOT overwrite B's cleared badge state.
+    await act(async () => {
+      gitStatusA.resolve({ "README.md": "modified" });
+      await openA;
+      await Promise.resolve();
+    });
+
+    expect(ref.gitStatus).toEqual({});
+
+    // B's tree and status arrive — B's badges should show up.
+    await act(async () => {
+      treeB.resolve({ name: "repo-b", path: "", isDirectory: true, children: [] });
+      gitStatusB.resolve({ "README.md": "untracked" });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(ref.gitStatus).toEqual({ "README.md": "untracked" });
+  });
+
   it("does not let a stale startup restore overwrite a newer manual open", async () => {
     const restoredOpen = createDeferred<boolean>();
     workspaceMockState.openFolderAt
