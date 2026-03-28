@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { FileSystem } from "../file-manager";
 import { basename } from "../lib/utils";
@@ -15,6 +15,7 @@ import {
   type SessionDocument,
 } from "../editor-session-model";
 import { measureAsync, withPerfOperation } from "../perf";
+import { SavePipeline } from "../save-pipeline";
 import type { SourceMap } from "../source-map";
 import type {
   UnsavedChangesDecision,
@@ -39,6 +40,7 @@ export interface UseEditorSessionReturn {
   setEditorDoc: React.Dispatch<React.SetStateAction<string>>;
   buffers: React.RefObject<Map<string, string>>;
   liveDocs: React.RefObject<Map<string, string>>;
+  pipeline: SavePipeline;
   isPathOpen: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
   cancelPendingOpenFile: () => void;
@@ -98,6 +100,13 @@ export function useEditorSession({
   const sourceMaps = useRef<Map<string, SourceMap>>(new Map());
   const stateRef = useRef<EditorSessionState>(sessionState);
   const openFileRequestRef = useRef(0);
+  const writeDocumentSnapshotRef = useRef<
+    (path: string, content: string, sourceMap: unknown) => Promise<string>
+  >(async () => "");
+
+  const pipeline = useMemo(() => new SavePipeline(
+    (path, content, sourceMap) => writeDocumentSnapshotRef.current(path, content, sourceMap),
+  ), []);
 
   const commitSessionState = useCallback((
     nextState: EditorSessionState,
@@ -126,8 +135,10 @@ export function useEditorSession({
     handleRename,
     handleDelete,
     saveAs,
+    writeDocumentSnapshot,
   } = useEditorSessionPersistence({
     fs,
+    pipeline,
     refreshTree,
     addRecentFile,
     buffers,
@@ -137,6 +148,9 @@ export function useEditorSession({
     commitSessionState,
     getSessionState,
   });
+
+  writeDocumentSnapshotRef.current = (path, content, sourceMap) =>
+    writeDocumentSnapshot(path, content, sourceMap as SourceMap | null);
 
   const discardDocumentChanges = useCallback((path: string) => {
     const savedDoc = buffers.current.get(path) ?? "";
@@ -201,13 +215,14 @@ export function useEditorSession({
 
     setEditorDoc(doc);
     liveDocs.current.set(currentPath, doc);
+    pipeline.bumpRevision(currentPath);
 
     const isDirty = doc !== (buffers.current.get(currentPath) ?? "");
     const nextState = markSessionDocumentDirty(stateRef.current, currentPath, isDirty);
     if (nextState !== stateRef.current) {
       commitSessionState(nextState);
     }
-  }, [commitSessionState]);
+  }, [commitSessionState, pipeline]);
 
   const handleProgrammaticDocChange = useCallback((path: string, doc: string) => {
     const currentDocument = getCurrentSessionDocument(stateRef.current);
@@ -264,6 +279,7 @@ export function useEditorSession({
 
         const previousPath = stateRef.current.currentDocument?.path ?? null;
         if (previousPath && previousPath !== path) {
+          pipeline.clear(previousPath);
           buffers.current.delete(previousPath);
           liveDocs.current.delete(previousPath);
           sourceMaps.current.delete(previousPath);
@@ -272,6 +288,7 @@ export function useEditorSession({
         sourceMaps.current.delete(path);
         buffers.current.set(path, content);
         liveDocs.current.set(path, content);
+        pipeline.initPath(path, content);
         commitSessionState(
           setCurrentSessionDocument(stateRef.current, {
             path,
@@ -290,6 +307,7 @@ export function useEditorSession({
     addRecentFile,
     commitSessionState,
     fs,
+    pipeline,
     prepareCurrentDocumentForTransition,
   ]);
 
@@ -309,6 +327,7 @@ export function useEditorSession({
 
     const previousPath = stateRef.current.currentDocument?.path ?? null;
     if (previousPath && previousPath !== path) {
+      pipeline.clear(previousPath);
       buffers.current.delete(previousPath);
       liveDocs.current.delete(previousPath);
       sourceMaps.current.delete(previousPath);
@@ -325,7 +344,7 @@ export function useEditorSession({
       }),
       { editorDoc: content },
     );
-  }, [commitSessionState, prepareCurrentDocumentForTransition]);
+  }, [commitSessionState, pipeline, prepareCurrentDocumentForTransition]);
 
   const reloadFile = useCallback(async (path: string) => {
     if (!hasSessionPath(stateRef.current, path)) return;
@@ -335,6 +354,7 @@ export function useEditorSession({
       sourceMaps.current.delete(path);
       buffers.current.set(path, content);
       liveDocs.current.set(path, content);
+      pipeline.initPath(path, content);
       commitSessionState(
         markSessionDocumentDirty(stateRef.current, path, false),
         stateRef.current.currentDocument?.path === path
@@ -345,7 +365,7 @@ export function useEditorSession({
       console.error("[session] reload failed:", path, e);
       throw e;
     }
-  }, [commitSessionState, fs]);
+  }, [commitSessionState, fs, pipeline]);
 
   const createFile = useCallback(async (path: string) => {
     try {
@@ -383,6 +403,7 @@ export function useEditorSession({
       if (!canClose) return false;
     }
 
+    pipeline.clear(currentDocument.path);
     buffers.current.delete(currentDocument.path);
     liveDocs.current.delete(currentDocument.path);
     sourceMaps.current.delete(currentDocument.path);
@@ -391,7 +412,7 @@ export function useEditorSession({
       { editorDoc: "" },
     );
     return true;
-  }, [commitSessionState, prepareCurrentDocumentForTransition]);
+  }, [commitSessionState, pipeline, prepareCurrentDocumentForTransition]);
 
   const handleWindowCloseRequest = useCallback(async (): Promise<boolean> => {
     return prepareCurrentDocumentForTransition("close-window");
@@ -404,6 +425,7 @@ export function useEditorSession({
     setEditorDoc,
     buffers,
     liveDocs,
+    pipeline,
     isPathOpen,
     isPathDirty,
     cancelPendingOpenFile,

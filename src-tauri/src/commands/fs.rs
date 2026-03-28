@@ -86,6 +86,10 @@ pub fn read_file(
 }
 
 /// Write content to a file (must already exist).
+///
+/// Uses atomic tmp + rename: writes to `.{name}.coflat-tmp` in the same
+/// directory, then renames over the target. Falls back to direct write if
+/// the rename fails (e.g. cross-device or permission issues).
 #[command]
 pub fn write_file(
     window: WebviewWindow,
@@ -100,7 +104,28 @@ pub fn write_file(
         if !resolved.exists() {
             return Err(format!("File not found: {}", path));
         }
-        fs::write(&resolved, &content).map_err(|e| format!("Failed to write '{}': {}", path, e))
+
+        // Atomic write: tmp file in the same directory, then rename.
+        let file_name = resolved
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "file".to_string());
+        let tmp_name = format!(".{}.coflat-tmp", file_name);
+        let tmp_path = resolved.with_file_name(&tmp_name);
+
+        if let Err(e) = fs::write(&tmp_path, &content) {
+            return Err(format!("Failed to write tmp file '{}': {}", tmp_name, e));
+        }
+
+        match fs::rename(&tmp_path, &resolved) {
+            Ok(()) => Ok(()),
+            Err(_rename_err) => {
+                // Fallback: direct write (e.g. cross-device edge case).
+                let _ = fs::remove_file(&tmp_path);
+                fs::write(&resolved, &content)
+                    .map_err(|e| format!("Failed to write '{}': {}", path, e))
+            }
+        }
     })
 }
 

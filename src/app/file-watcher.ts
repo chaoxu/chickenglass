@@ -21,6 +21,13 @@ export type IsFileDirtyFn = (path: string) => boolean;
 /** Callback to reload a file's content from disk. */
 export type ReloadFileFn = (path: string) => Promise<void>;
 
+/**
+ * Callback to check whether a file-changed event was caused by the app's
+ * own save. Receives the path and returns a promise that resolves to true
+ * if the change should be suppressed.
+ */
+export type IsSelfChangeFn = (path: string) => Promise<boolean>;
+
 /** Configuration for the FileWatcher. */
 export interface FileWatcherConfig {
   /** Check whether a file is currently open in a tab. */
@@ -29,6 +36,8 @@ export interface FileWatcherConfig {
   isFileDirty: IsFileDirtyFn;
   /** Reload a file from disk into the editor. */
   reloadFile: ReloadFileFn;
+  /** Check whether a change event was caused by the app's own save. */
+  isSelfChange?: IsSelfChangeFn;
   /** Container element for the notification bar. */
   container: HTMLElement;
 }
@@ -126,9 +135,20 @@ export class FileWatcher {
   }
 
   /** Handle a file-changed event from the backend. */
-  private handleFileChanged(relativePath: string): void {
+  private async handleFileChanged(relativePath: string): Promise<void> {
     if (!this.config.isFileOpen(relativePath)) {
       return;
+    }
+
+    // Suppress events caused by the app's own save.
+    if (this.config.isSelfChange) {
+      try {
+        if (await this.config.isSelfChange(relativePath)) {
+          return;
+        }
+      } catch {
+        // If the check fails, fall through to normal handling.
+      }
     }
 
     if (!this.config.isFileDirty(relativePath)) {

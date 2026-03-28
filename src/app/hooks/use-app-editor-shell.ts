@@ -18,6 +18,7 @@ import { useEditorNavigation } from "./use-editor-navigation";
 import type { FileSystem } from "../file-manager";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import type { Settings } from "../lib/types";
+import type { SavePipeline } from "../save-pipeline";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 
 /** Dependencies injected into the shell hook from the top-level app component. */
@@ -66,6 +67,9 @@ export interface AppEditorShellDeps {
 export interface AppEditorShellController {
   /** Singleton plugin manager; registers all default editor plugins on first render. */
   pluginManager: EditorPluginManager;
+
+  /** Save pipeline for coordinating writes, revision tracking, and self-change suppression. */
+  pipeline: SavePipeline;
 
   // --- Session / current document (delegated to useEditorSession) ---
 
@@ -246,6 +250,7 @@ export function useAppEditorShell({
     setEditorDoc,
     buffers,
     liveDocs,
+    pipeline,
     isPathOpen,
     isPathDirty,
     cancelPendingOpenFile,
@@ -392,6 +397,7 @@ export function useAppEditorShell({
 
   return {
     pluginManager,
+    pipeline,
     currentDocument,
     currentPath,
     editorDoc,
