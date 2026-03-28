@@ -105,6 +105,67 @@ describe("incremental document analysis engine", () => {
     expect(after.mathRegions[0]).not.toBe(before.mathRegions[0]);
   });
 
+  it("does not crash when an exclusion-only edit is followed by a second edit", () => {
+    // Repro: delete the opening backtick of an inline code span that hides a
+    // reference, then insert elsewhere.  If the engine caches stale
+    // excludedRanges the second mapExcludedRanges call hits a RangeError.
+    const state = createState("`@x`\n");
+    const before = analyze(state);
+
+    // Step 1: delete positions 0..2 → "x`\n"
+    const tr1 = state.update({ changes: { from: 0, to: 2 } });
+    const mid = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr1.state),
+      syntaxTree(tr1.state),
+      buildSemanticDelta(tr1),
+    );
+
+    // Step 2: insert "@" at position 0 → "@x`\n"
+    const tr2 = tr1.state.update({ changes: { from: 0, insert: "@" } });
+    expect(() =>
+      updateDocumentAnalysis(
+        mid,
+        editorStateTextSource(tr2.state),
+        syntaxTree(tr2.state),
+        buildSemanticDelta(tr2),
+      ),
+    ).not.toThrow();
+  });
+
+  it("updates narrative references when only exclusion metadata changes", () => {
+    // Repro: widen an inline code span so that a previously-visible @ref
+    // becomes hidden, then narrow it again.  The engine must track the
+    // exclusion change even when no slice reference-identity changes.
+    const state = createState("`@x`\n");
+    const before = analyze(state);
+
+    // Step 1: insert "x" at position 2 → "`@xx`\n"
+    const tr1 = state.update({ changes: { from: 2, insert: "x" } });
+    const mid = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr1.state),
+      syntaxTree(tr1.state),
+      buildSemanticDelta(tr1),
+    );
+
+    // Step 2: insert "`" at position 0 → "``@xx`\n"
+    const tr2 = tr1.state.update({ changes: { from: 0, insert: "`" } });
+    const after = updateDocumentAnalysis(
+      mid,
+      editorStateTextSource(tr2.state),
+      syntaxTree(tr2.state),
+      buildSemanticDelta(tr2),
+    );
+
+    // A fresh rebuild from the final state is the correctness oracle.
+    const rebuilt = analyze(tr2.state);
+    expect(after.references.length).toBe(rebuilt.references.length);
+    for (let i = 0; i < rebuilt.references.length; i++) {
+      expect(after.references[i]).toEqual(rebuilt.references[i]);
+    }
+  });
+
   it("keeps revisions off the public enumerable DocumentAnalysis shape", () => {
     const analysis = analyze(createState("Alpha $x$."));
 

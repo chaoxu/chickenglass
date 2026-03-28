@@ -248,7 +248,11 @@ function finalizeDocumentAnalysis(
   excludedRanges: readonly ExcludedRange[],
 ): DocumentAnalysis {
   const previousState = previous ? getInternalState(previous) : undefined;
-  if (previous && previousState && sameSlices(previousState, slices)) {
+  if (
+    previous && previousState
+    && sameSlices(previousState, slices)
+    && previousState.excludedRanges === excludedRanges
+  ) {
     return previous;
   }
 
@@ -296,24 +300,28 @@ function mapExcludedRanges(
   return changed ? mapped : values;
 }
 
-function expandDirtyWindowsForEquations(
+function expandDirtyWindows(
   dirtyWindows: readonly DirtyWindow[],
-  previousEquations: readonly { readonly from: number; readonly to: number }[],
+  previousRanges: readonly { readonly from: number; readonly to: number }[],
   mapOldToNew: (pos: number, assoc?: number) => number,
+  touchingInclusive: boolean,
 ): readonly DirtyWindow[] {
-  if (previousEquations.length === 0) return dirtyWindows;
+  if (previousRanges.length === 0) return dirtyWindows;
 
   let anyExpanded = false;
   const result = dirtyWindows.map((window) => {
     let { fromOld, toOld, fromNew, toNew } = window;
     let expanded = false;
 
-    for (const eq of previousEquations) {
-      if (eq.from <= toOld && fromOld < eq.to) {
-        const mappedFrom = mapOldToNew(eq.from, 1);
-        const mappedTo = Math.max(mappedFrom, mapOldToNew(eq.to, -1));
-        fromOld = Math.min(fromOld, eq.from);
-        toOld = Math.max(toOld, eq.to);
+    for (const range of previousRanges) {
+      const overlaps = touchingInclusive
+        ? range.from <= toOld && fromOld <= range.to
+        : range.from <= toOld && fromOld < range.to;
+      if (overlaps) {
+        const mappedFrom = mapOldToNew(range.from, -1);
+        const mappedTo = Math.max(mappedFrom, mapOldToNew(range.to, 1));
+        fromOld = Math.min(fromOld, range.from);
+        toOld = Math.max(toOld, range.to);
         fromNew = Math.min(fromNew, mappedFrom);
         toNew = Math.max(toNew, mappedTo);
         expanded = true;
@@ -373,10 +381,17 @@ export function updateDocumentAnalysis(
   }
 
   const changes = createPositionMapper(delta);
-  const expandedDirtyWindows = expandDirtyWindowsForEquations(
+  const expandedForEquations = expandDirtyWindows(
     delta.dirtyWindows,
     previousState.equationSlice.equations,
     delta.mapOldToNew,
+    false,
+  );
+  const expandedDirtyWindows = expandDirtyWindows(
+    expandedForEquations,
+    previousState.excludedRanges,
+    delta.mapOldToNew,
+    true,
   );
   const extractedDirtyWindows = extractDirtyFencedDivWindows(
     previousState.fencedDivSlice.fencedDivs,
