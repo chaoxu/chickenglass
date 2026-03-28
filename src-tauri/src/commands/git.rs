@@ -38,14 +38,35 @@ fn get_branch_name(root: &Path) -> Option<String> {
     }
 }
 
-fn check_upstream(root: &Path) -> bool {
-    Command::new("git")
-        .args(["rev-parse", "--abbrev-ref", "@{upstream}"])
+/// Resolve the current branch's configured upstream as `(remote, merge_ref)`.
+///
+/// Returns e.g. `("origin", "refs/heads/main")`.  Both `run_pull` and
+/// `run_push` use this so they never rely on ambient `push.default` /
+/// `pull.default` settings.
+fn resolve_upstream(root: &Path) -> Result<(String, String), String> {
+    let branch = get_branch_name(root)
+        .ok_or("Not on a branch (detached HEAD)")?;
+
+    let remote = git_config(root, &format!("branch.{branch}.remote"))
+        .ok_or("No upstream remote configured for the current branch")?;
+    let merge_ref = git_config(root, &format!("branch.{branch}.merge"))
+        .ok_or("No upstream merge ref configured for the current branch")?;
+
+    Ok((remote, merge_ref))
+}
+
+fn git_config(root: &Path, key: &str) -> Option<String> {
+    let output = Command::new("git")
+        .args(["config", key])
         .current_dir(root)
         .stderr(std::process::Stdio::null())
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if value.is_empty() { None } else { Some(value) }
 }
 
 fn get_ahead_behind(root: &Path) -> (u32, u32) {
@@ -73,7 +94,7 @@ fn get_ahead_behind(root: &Path) -> (u32, u32) {
 
 pub fn build_branch_info(root: &Path) -> GitBranchInfo {
     let branch = get_branch_name(root);
-    let has_upstream = check_upstream(root);
+    let has_upstream = resolve_upstream(root).is_ok();
     let (ahead, behind) = if has_upstream {
         get_ahead_behind(root)
     } else {
@@ -88,8 +109,13 @@ pub fn build_branch_info(root: &Path) -> GitBranchInfo {
 }
 
 pub fn run_pull(root: &Path) -> Result<String, String> {
+    let (remote, merge_ref) = resolve_upstream(root)?;
+    let branch = merge_ref
+        .strip_prefix("refs/heads/")
+        .unwrap_or(&merge_ref);
+
     let output = Command::new("git")
-        .args(["pull", "--ff-only"])
+        .args(["pull", "--ff-only", &remote, branch])
         .current_dir(root)
         .output()
         .map_err(|e| format!("Failed to run git pull: {}", e))?;
@@ -103,8 +129,12 @@ pub fn run_pull(root: &Path) -> Result<String, String> {
 }
 
 pub fn run_push(root: &Path) -> Result<String, String> {
+    let (remote, merge_ref) = resolve_upstream(root)?;
+
+    // Push only HEAD to the exact upstream ref, ignoring push.default.
+    let refspec = format!("HEAD:{merge_ref}");
     let output = Command::new("git")
-        .args(["push"])
+        .args(["push", &remote, &refspec])
         .current_dir(root)
         .output()
         .map_err(|e| format!("Failed to run git push: {}", e))?;
@@ -394,25 +424,22 @@ mod tests {
         path.canonicalize().unwrap()
     }
 
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
     fn init_git_repo(path: &Path) {
-        Command::new("git").args(["init"]).current_dir(path).output().unwrap();
-        Command::new("git")
-            .args(["config", "user.email", "test@test.com"])
-            .current_dir(path)
-            .output()
-            .unwrap();
-        Command::new("git")
-            .args(["config", "user.name", "Test"])
-            .current_dir(path)
-            .output()
-            .unwrap();
+        git(path, &["init", "-b", "main"]);
+        git(path, &["config", "user.email", "test@test.com"]);
+        git(path, &["config", "user.name", "Test"]);
         fs::write(path.join("init.txt"), "init").unwrap();
-        Command::new("git").args(["add", "."]).current_dir(path).output().unwrap();
-        Command::new("git")
-            .args(["commit", "-m", "init"])
-            .current_dir(path)
-            .output()
-            .unwrap();
+        git(path, &["add", "."]);
+        git(path, &["commit", "-m", "init"]);
     }
 
     #[test]
@@ -575,5 +602,80 @@ mod tests {
         let _ = std::fs::create_dir_all(&dir);
         assert!(resolve_branch_name(&dir).is_none());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// With push.default=matching a plain `git push` would push ALL branches
+    /// that have a matching name on the remote.  run_push must push only
+    /// HEAD to the current branch's configured upstream ref.
+    #[test]
+    fn push_with_matching_default_only_pushes_current_branch() {
+        // Set up a bare "remote" inside an existing temp dir.
+        let remote = temp_dir("push-match-remote");
+        git(&remote, &["init", "--bare"]);
+
+        // Clone it into a sibling directory.
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let clone = std::env::temp_dir().join(format!("coflat-push-match-clone-{unique}"));
+        Command::new("git")
+            .args(["clone"])
+            .arg(&remote)
+            .arg(&clone)
+            .output()
+            .unwrap();
+        let clone = clone.canonicalize().unwrap();
+        git(&clone, &["config", "user.email", "test@test.com"]);
+        git(&clone, &["config", "user.name", "Test"]);
+
+        // Initial commit + push to establish a main branch.
+        fs::write(clone.join("init.txt"), "init").unwrap();
+        git(&clone, &["add", "."]);
+        git(&clone, &["commit", "-m", "init"]);
+        let main_branch = git(&clone, &["rev-parse", "--abbrev-ref", "HEAD"]);
+        git(&clone, &["push", "-u", "origin", &main_branch]);
+
+        // Create a feature branch with its own upstream.
+        git(&clone, &["checkout", "-b", "feature"]);
+        fs::write(clone.join("feature.txt"), "feat").unwrap();
+        git(&clone, &["add", "."]);
+        git(&clone, &["commit", "-m", "feature base"]);
+        git(&clone, &["push", "-u", "origin", "feature"]);
+
+        // Go back to main and add a commit that should NOT be pushed.
+        git(&clone, &["checkout", &main_branch]);
+        fs::write(clone.join("main-extra.txt"), "extra").unwrap();
+        git(&clone, &["add", "."]);
+        git(&clone, &["commit", "-m", "main-only commit"]);
+
+        // Set the dangerous config.
+        git(&clone, &["config", "push.default", "matching"]);
+
+        // Switch to feature, add a commit, and push via run_push.
+        git(&clone, &["checkout", "feature"]);
+        fs::write(clone.join("feature2.txt"), "feat2").unwrap();
+        git(&clone, &["add", "."]);
+        git(&clone, &["commit", "-m", "feature commit 2"]);
+
+        let main_ref = format!("refs/heads/{main_branch}");
+        let main_before = git(&remote, &["rev-parse", &main_ref]);
+        let result = run_push(&clone);
+        assert!(result.is_ok(), "push should succeed: {:?}", result);
+        let main_after = git(&remote, &["rev-parse", &main_ref]);
+
+        // main on the remote must be untouched.
+        assert_eq!(
+            main_before, main_after,
+            "push must not move remote {main_branch} when checked out on feature"
+        );
+
+        // feature on the remote must match local HEAD.
+        let remote_feature = git(&remote, &["rev-parse", "refs/heads/feature"]);
+        let local_head = git(&clone, &["rev-parse", "HEAD"]);
+        assert_eq!(remote_feature, local_head);
+
+        fs::remove_dir_all(&remote).unwrap();
+        fs::remove_dir_all(&clone).unwrap();
     }
 }
