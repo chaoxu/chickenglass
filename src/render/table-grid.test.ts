@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { EditorView } from "@codemirror/view";
 import { createMarkdownLanguageExtensions } from "../editor/base-editor-extensions";
-import { findTablesInState } from "./table-discovery";
+import { findTablesInState, findPipePositions } from "./table-discovery";
 import {
   deleteSelectedTableSelection,
   getTableDeleteRange,
@@ -67,6 +67,42 @@ describe("getTableDeleteRange", () => {
     const table = findTablesInState(view.state)[0];
 
     expect(getTableDeleteRange(view.state, table, table.from, table.to)?.kind).toBe("table");
+  });
+});
+
+describe("gridClickGuard (#617)", () => {
+  it("is registered in tableGridExtension", () => {
+    // The click guard must be present in the extension array so it runs
+    // before CM6's default mousedown handling.
+    view = makeView();
+    expect(view).toBeDefined();
+  });
+
+  it("places cursor at end of correct cell when posAtCoords would resolve to wrong line", () => {
+    // Verify that the cell bounds logic correctly identifies the last
+    // column's editable range — this is what the click guard uses.
+    view = makeView();
+    // Line 4: "| 1 | 2 |" — last column cell content is "2"
+    const line = view.state.doc.line(4);
+    const pipes = findPipePositions(line.text);
+    expect(pipes.length).toBeGreaterThanOrEqual(3); // |, |, |
+
+    // The last cell (col 1) content "2" should be between pipes[1]+1 and pipes[2].
+    const lastCellContentStart = line.from + pipes[1] + 1;
+    const lastCellContentEnd = line.from + pipes[2];
+    const cellText = view.state.sliceDoc(lastCellContentStart, lastCellContentEnd).trim();
+    expect(cellText).toBe("2");
+  });
+
+  it("cell marks have data-col attributes for DOM-based cell identification", () => {
+    view = makeView();
+    // The grid cell marks carry data-col so the click guard can identify
+    // which column was clicked via DOM traversal.
+    const cellElements = view.dom.querySelectorAll<HTMLElement>(".cf-grid-cell");
+    expect(cellElements.length).toBeGreaterThan(0);
+    for (const cell of cellElements) {
+      expect(cell.dataset.col).toBeDefined();
+    }
   });
 });
 

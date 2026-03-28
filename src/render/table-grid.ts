@@ -643,6 +643,55 @@ function buildGridContextMenuItems(
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Click guard — prevent posAtCoords cross-row misresolution (#617)
+//
+// In CSS grid table rows the browser's caretPositionFromPoint can resolve
+// whitespace clicks in the last column to a position on the *next* row.
+// We detect this by comparing the line of the DOM-based cell element with
+// the line posAtCoords returned. When they disagree we place the cursor at
+// the end of the correct cell.
+// ---------------------------------------------------------------------------
+
+const gridClickGuard = EditorView.domEventHandlers({
+  mousedown(event: MouseEvent, view: EditorView) {
+    if (event.button !== 0 || event.detail > 1 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
+    const target = event.target;
+    if (!(target instanceof HTMLElement || target instanceof Text)) return false;
+    const el = target instanceof HTMLElement ? target : target.parentElement;
+    if (!el) return false;
+    const gridCell = el.closest(".cf-grid-cell");
+    if (!gridCell) return false;
+
+    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+    if (pos === null) return false;
+
+    // Determine the line the clicked DOM cell belongs to.
+    const cellPos = view.posAtDOM(gridCell, 0);
+    const cellLine = view.state.doc.lineAt(cellPos);
+    const posLine = view.state.doc.lineAt(pos);
+
+    // If posAtCoords resolved to the same line, CM6 handles it correctly.
+    if (posLine.number === cellLine.number) return false;
+
+    // Wrong line — compute the correct position within the clicked cell.
+    const col = parseInt((gridCell as HTMLElement).getAttribute("data-col") ?? "0", 10);
+    const pipes = findPipePositions(cellLine.text);
+    if (pipes.length < 2) return false;
+    const cells = getCellBounds(cellLine, pipes);
+    const cell = cells.find(c => c.col === col);
+    if (!cell) return false;
+
+    event.preventDefault();
+    view.dispatch({
+      selection: { anchor: cell.to },
+      scrollIntoView: false,
+    });
+    view.focus();
+    return true;
+  },
+});
+
 const gridContextMenuHandler = EditorView.domEventHandlers({
   contextmenu(event: MouseEvent, view: EditorView) {
     const tables = findTablesInState(view.state);
@@ -838,6 +887,7 @@ export const tableGridExtension = [
   tableGridPlugin,
   tableGridTheme,
   tableClipboardHandlers,
+  gridClickGuard,
   gridContextMenuHandler,
   keymap.of(tableKeyBindings),
   pipeProtectionFilter,
