@@ -13,6 +13,7 @@ import {
   extractIncludePaths,
   resolveIncludesFromContent,
   flattenIncludesWithSourceMap,
+  IncludeExpansionCache,
 } from "../../plugins";
 import type { FileSystem } from "../file-manager";
 import { SourceMap, type IncludeRegion } from "../source-map";
@@ -21,6 +22,9 @@ import { useBibliography } from "./use-bibliography";
 import { measureAsync } from "../perf";
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
 import { setIncludeRegionsEffect } from "../../lib/include-regions";
+
+/** Module-level cache shared across repeated document opens. */
+const includeCache = new IncludeExpansionCache();
 
 /**
  * Expand include directives in a document, producing a flattened text
@@ -32,6 +36,10 @@ import { setIncludeRegionsEffect } from "../../lib/include-regions";
  * Fallback behavior: if any included file cannot be read or a cycle is
  * detected, the function returns `{ text: rawContent, regions: [] }` —
  * the original content unchanged with no source map.
+ *
+ * Results are cached per root path. A cache hit validates that the root
+ * content and all transitively included files are unchanged, skipping all
+ * Lezer parsing work.
  */
 async function expandIncludes(
   mainPath: string,
@@ -39,6 +47,25 @@ async function expandIncludes(
   fs: FileSystem,
 ): Promise<{ text: string; regions: IncludeRegion[] }> {
   return measureAsync("includes.expand", async () => {
+    // Check cache first — avoids all Lezer parsing on a hit.
+    const cached = await includeCache.get(mainPath, rawContent, fs);
+    if (cached) {
+      return {
+        text: cached.text,
+        regions: cached.regions.map(function toRegion(r): IncludeRegion {
+          return {
+            from: r.from,
+            to: r.to,
+            file: r.file,
+            originalRef: r.originalRef,
+            rawFrom: r.rawFrom,
+            rawTo: r.rawTo,
+            children: r.children.map(toRegion),
+          };
+        }),
+      };
+    }
+
     const paths = extractIncludePaths(rawContent);
     if (paths.length === 0) return { text: rawContent, regions: [] };
 
@@ -52,6 +79,7 @@ async function expandIncludes(
     }
 
     const result = flattenIncludesWithSourceMap(rawContent, includes);
+    includeCache.set(mainPath, rawContent, includes, result);
     return {
       text: result.text,
       regions: result.regions.map(function toRegion(r): IncludeRegion {
@@ -119,6 +147,7 @@ export function useEditorDocumentServices({
     imageSaverRef.current = null;
     publishSourceMap(null);
     includeExpansionGenerationRef.current += 1;
+    includeCache.clear();
   }, [bibliography, publishSourceMap]);
 
   const imageFolderRef = useRef<string | undefined>(undefined);
