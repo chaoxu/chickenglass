@@ -210,10 +210,27 @@ function normalizeCslItem(item: CslJsonItem): CslJsonItem {
 }
 
 /**
+ * Content-keyed cache for parsed BibTeX results.
+ * Bounded to avoid unbounded memory growth from many distinct inputs.
+ */
+const bibParseCache = new Map<string, CslJsonItem[]>();
+const BIB_PARSE_CACHE_MAX = 4;
+
+function cacheBibParseResult(content: string, result: CslJsonItem[]): void {
+  if (bibParseCache.size >= BIB_PARSE_CACHE_MAX) {
+    const oldest = bibParseCache.keys().next().value;
+    if (oldest !== undefined) bibParseCache.delete(oldest);
+  }
+  bibParseCache.set(content, result);
+}
+
+/**
  * Parse BibTeX content into an array of CSL-JSON items.
  *
  * Uses citation-js for BibTeX parsing (BibTeX -> CSL-JSON).
  * The citation-key is promoted to id when present.
+ * Results are cached by content string so repeated calls with
+ * identical input skip the expensive parse.
  *
  * @param content - The full text content of a .bib file
  * @returns Array of parsed CslJsonItem objects
@@ -221,15 +238,22 @@ function normalizeCslItem(item: CslJsonItem): CslJsonItem {
 export function parseBibTeX(content: string): CslJsonItem[] {
   if (!content.trim()) return [];
 
+  const cached = bibParseCache.get(content);
+  if (cached) return cached;
+
   try {
     const cite = new Cite(content);
-    return (cite.data as CslJsonItem[]).map(normalizeCslItem);
+    const result = (cite.data as CslJsonItem[]).map(normalizeCslItem);
+    cacheBibParseResult(content, result);
+    return result;
   } catch (e: unknown) {
     const sanitized = stripIrrelevantBibFields(content);
     if (sanitized !== content) {
       try {
         const cite = new Cite(sanitized);
-        return (cite.data as CslJsonItem[]).map(normalizeCslItem);
+        const result = (cite.data as CslJsonItem[]).map(normalizeCslItem);
+        cacheBibParseResult(content, result);
+        return result;
       } catch (retryError: unknown) {
         console.warn("[bibtex] parse failed after stripping abstract/file fields, returning empty list", retryError);
         return [];
@@ -240,6 +264,11 @@ export function parseBibTeX(content: string): CslJsonItem[] {
     console.warn("[bibtex] parse failed, returning empty list", e);
     return [];
   }
+}
+
+/** Clear the parse cache (exposed for testing). */
+export function clearBibParseCache(): void {
+  bibParseCache.clear();
 }
 
 /**

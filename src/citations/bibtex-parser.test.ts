@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import {
   parseBibTeX,
   extractFirstFamilyName,
   extractYear,
   formatCslAuthors,
   cleanBibtex,
+  clearBibParseCache,
 } from "./bibtex-parser";
 
 describe("parseBibTeX", () => {
@@ -177,6 +178,28 @@ describe("parseBibTeX", () => {
     expect(entries[0].id).toBe("Frederickson93");
     expect(entries[0].title).toBe("A Note on the Complexity of a Simple Transportation Problem");
     expect(entries[0].DOI).toBe("10.1137/0222005");
+  });
+
+  describe("caching", () => {
+    beforeEach(() => {
+      clearBibParseCache();
+    });
+
+    it("returns same reference for identical content", () => {
+      const bib = `@article{a2020, author = {A, B}, year = {2020}}`;
+      const first = parseBibTeX(bib);
+      const second = parseBibTeX(bib);
+      expect(second).toBe(first);
+    });
+
+    it("returns different results for different content", () => {
+      const bib1 = `@article{a2020, author = {A, B}, year = {2020}}`;
+      const bib2 = `@article{b2021, author = {C, D}, year = {2021}}`;
+      const first = parseBibTeX(bib1);
+      const second = parseBibTeX(bib2);
+      expect(second).not.toBe(first);
+      expect(second[0].id).toBe("b2021");
+    });
   });
 });
 
