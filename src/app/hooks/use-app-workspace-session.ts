@@ -241,6 +241,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       return null;
     }
     setProjectRoot(path);
+    setGitStatus({});
     saveWindowState({
       projectRoot: path,
       currentDocument: null,

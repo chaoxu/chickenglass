@@ -376,6 +376,68 @@ describe("useAppWorkspaceSession", () => {
     expect(ref.gitStatus).toEqual({});
   });
 
+  it("clears git status immediately when opening a new project root", async () => {
+    // Scenario: repo A has dirty files. User opens repo B which shares
+    // overlapping relative paths (e.g. README.md). The badge map must be
+    // cleared before the new tree renders, not after the new git status
+    // resolves — otherwise the intermediate render shows A's badges on B's tree.
+    workspaceMockState.windowState = {
+      ...workspaceMockState.windowState,
+      projectRoot: null,
+    };
+    const treeA = createDeferred<FileEntry>();
+    const treeB = createDeferred<FileEntry>();
+    const gitStatusA = createDeferred<Record<string, string>>();
+    const gitStatusB = createDeferred<Record<string, string>>();
+    const fs = createQueuedFs([treeA, treeB]);
+    workspaceMockState.getGitStatus
+      .mockImplementationOnce(async () => gitStatusA.promise)
+      .mockImplementationOnce(async () => gitStatusB.promise);
+    const { Harness, ref } = createHarness(fs);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    // Open repo A and let everything resolve, including git status.
+    let openA!: Promise<FileEntry | null>;
+    await act(async () => {
+      openA = ref.openProjectRoot("/tmp/repo-a");
+    });
+    await act(async () => {
+      treeA.resolve({ name: "repo-a", path: "", isDirectory: true, children: [] });
+      gitStatusA.resolve({ "README.md": "modified", "src/main.ts": "added" });
+      await openA;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(ref.projectRoot).toBe("/tmp/repo-a");
+    expect(ref.gitStatus).toEqual({ "README.md": "modified", "src/main.ts": "added" });
+
+    // Open repo B — git status is still pending.
+    await act(async () => {
+      void ref.openProjectRoot("/tmp/repo-b");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Intermediate state: badges must already be cleared even though
+    // the new git status hasn't resolved yet.
+    expect(ref.gitStatus).toEqual({});
+
+    // New git status arrives for repo B.
+    await act(async () => {
+      treeB.resolve({ name: "repo-b", path: "", isDirectory: true, children: [] });
+      gitStatusB.resolve({ "README.md": "untracked" });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(ref.gitStatus).toEqual({ "README.md": "untracked" });
+  });
+
   it("does not let a stale startup restore overwrite a newer manual open", async () => {
     const restoredOpen = createDeferred<boolean>();
     workspaceMockState.openFolderAt
