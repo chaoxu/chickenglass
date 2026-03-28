@@ -21,25 +21,27 @@ export function useGitStatus(
   const [branchInfo, setBranchInfo] = useState<GitBranchInfo | null>(null);
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
-  const mountedRef = useRef(true);
+  const requestRef = useRef(0);
 
   const fetchBranchInfo = useCallback(() => {
-    if (!isTauri() || !projectRoot) return;
+    const requestId = ++requestRef.current;
+    if (!isTauri() || !projectRoot) {
+      setBranchInfo(null);
+      return;
+    }
     void (async () => {
       try {
         const { gitBranchInfoCommand } = await import("../tauri-client/git");
         const info = await gitBranchInfoCommand();
-        if (mountedRef.current) setBranchInfo(info);
+        if (requestId === requestRef.current) setBranchInfo(info);
       } catch {
-        if (mountedRef.current) setBranchInfo(null);
+        if (requestId === requestRef.current) setBranchInfo(null);
       }
     })();
   }, [projectRoot]);
 
   useEffect(() => {
-    mountedRef.current = true;
     fetchBranchInfo();
-    return () => { mountedRef.current = false; };
   }, [fetchBranchInfo]);
 
   const pull = useCallback(() => {

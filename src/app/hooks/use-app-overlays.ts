@@ -27,7 +27,7 @@ interface AppOverlayDeps {
     AppEditorShellController,
     "currentPath" | "liveDocs" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
   >;
-  git: Pick<GitStatus, "branch" | "isPulling" | "isPushing" | "pull" | "push">;
+  git: Pick<GitStatus, "branch" | "hasUpstream" | "isPulling" | "isPushing" | "pull" | "push">;
   onOpenFile: () => void;
   onQuit: () => void;
 }
@@ -127,7 +127,7 @@ export function useAppOverlays({
     { id: "insert.image", label: "Insert Image", category: "Insert", action: () => editor.handleInsertImage() },
     { id: "export.html", label: "Export Current File to HTML", category: "Export", action: handleExportHtml },
     { id: "export.batch-html", label: "Export All Files to HTML", category: "Export", action: handleBatchExportHtml },
-    ...(git.branch ? [
+    ...(git.branch && git.hasUpstream ? [
       { id: "git.pull", label: git.isPulling ? "Pulling..." : "Pull", category: "Git", action: () => { if (!git.isPulling) git.pull(); } },
       { id: "git.push", label: git.isPushing ? "Pushing..." : "Push", category: "Git", action: () => { if (!git.isPushing) git.push(); } },
     ] : []),
