@@ -10,7 +10,7 @@ const mockState = vi.hoisted(() => ({
   createCalls: [] as Array<{ name: string; force: boolean }>,
   reloadFileCalls: [] as string[],
   reloadShouldThrow: false,
-  closeFileCalls: 0,
+  closeFileCalls: [] as Array<{ discard?: boolean }>,
   refreshTreeCalls: 0,
   dirtyWorktreeOnFirstAttempt: false,
   switchShouldThrow: null as string | null,
@@ -22,7 +22,7 @@ const mockState = vi.hoisted(() => ({
     this.createCalls = [];
     this.reloadFileCalls = [];
     this.reloadShouldThrow = false;
-    this.closeFileCalls = 0;
+    this.closeFileCalls = [];
     this.refreshTreeCalls = 0;
     this.dirtyWorktreeOnFirstAttempt = false;
     this.switchShouldThrow = null;
@@ -76,7 +76,7 @@ function defaultProps(overrides?: Partial<UseGitBranchOptions>) {
       if (mockState.reloadShouldThrow) throw new Error("file not found");
       mockState.reloadFileCalls.push(path);
     },
-    closeCurrentFile: async () => { mockState.closeFileCalls++; return true; },
+    closeCurrentFile: async (options?: { discard?: boolean }) => { mockState.closeFileCalls.push(options ?? {}); return true; },
     currentPath: "index.md",
     hasDirtyDocument: false,
     ...overrides,
@@ -239,6 +239,24 @@ describe("useGitBranch", () => {
 
     expect(mockState.switchCalls).toEqual([{ name: "other-branch", force: false }]);
     expect(mockState.refreshTreeCalls).toBe(1);
-    expect(mockState.closeFileCalls).toBe(1);
+    expect(mockState.closeFileCalls).toEqual([{ discard: true }]);
+  });
+
+  it("force-closes without re-prompting when dirty editor + missing file on target branch", async () => {
+    mockState.reloadShouldThrow = true;
+
+    await act(async () => {
+      root.render(createElement(Harness, defaultProps({ hasDirtyDocument: true })));
+    });
+
+    // User confirms the dirty-editor warning, switch succeeds, file missing → discard close.
+    await act(async () => {
+      await capturedController!.switchBranch("other-branch");
+    });
+
+    expect(mockState.switchCalls).toEqual([{ name: "other-branch", force: false }]);
+    expect(mockState.refreshTreeCalls).toBe(1);
+    // Must use discard: true so the editor does not prompt a second time.
+    expect(mockState.closeFileCalls).toEqual([{ discard: true }]);
   });
 });
