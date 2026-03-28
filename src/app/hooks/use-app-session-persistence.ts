@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import type { FileEntry } from "../file-manager";
-import { findDefaultDocumentPath } from "../default-document-path";
+import { findDefaultDocumentPath, findDefaultDocumentPathLazy } from "../default-document-path";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 
 interface AppSessionPersistenceDeps {
   fileTree: FileEntry | null;
+  /** When provided, default-doc search loads subdirectories lazily. */
+  listChildren?: (path: string) => Promise<FileEntry[]>;
   workspace: Pick<
     AppWorkspaceSessionController,
     "windowState" | "saveWindowState" | "sidebarCollapsed" | "sidebarWidth" | "setSidebarCollapsed" | "setSidebarWidth" | "startupComplete"
@@ -18,6 +20,7 @@ interface AppSessionPersistenceDeps {
 
 export function useAppSessionPersistence({
   fileTree,
+  listChildren,
   workspace,
   editor,
 }: AppSessionPersistenceDeps): void {
@@ -78,7 +81,9 @@ export function useAppSessionPersistence({
           }
         }
 
-        const first = findDefaultDocumentPath(fileTree);
+        const first = listChildren
+          ? await findDefaultDocumentPathLazy(fileTree, listChildren)
+          : findDefaultDocumentPath(fileTree);
         if (first) {
           await openFile(first).catch(() => {
             // Default file may have disappeared between tree load and open.
@@ -94,6 +99,7 @@ export function useAppSessionPersistence({
     });
   }, [
     fileTree,
+    listChildren,
     openFile,
     setSidebarCollapsed,
     setSidebarWidth,

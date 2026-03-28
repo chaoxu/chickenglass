@@ -73,10 +73,12 @@ export function useAppOverlays({
   }, [editor.currentPath, editor.liveDocs, fs]);
 
   const handleBatchExportHtml = useCallback(() => {
-    const fileTree = workspace.fileTree;
-    if (!fileTree) return;
+    if (!workspace.fileTree) return;
     void (async () => {
-      const results = await batchExport(fileTree, "html", fs);
+      // Fetch the full recursive tree at export time so that all nested
+      // markdown files are included, even when the sidebar tree is shallow.
+      const tree = await fs.listTree();
+      const results = await batchExport(tree, "html", fs);
       const succeeded = results.filter((result) => result.outputPath);
       const failed = results.filter((result) => result.error);
       const summary = [`Batch export complete: ${succeeded.length} succeeded`];

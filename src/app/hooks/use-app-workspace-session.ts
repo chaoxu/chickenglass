@@ -119,7 +119,10 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
 
   const loadWorkspaceContents = useCallback(async (requestId: number): Promise<FileEntry | null> => {
     if (fs.listChildren) {
-      // Phase 1: shallow tree + config in parallel — sidebar renders immediately.
+      // Shallow load: root children + config in parallel — sidebar renders
+      // immediately.  Sub-directory children are loaded on demand when the
+      // user expands them.  Consumers that need full depth (export) call
+      // listTree() directly; default-doc search uses listChildren lazily.
       const [shallowChildren, nextProjectConfig] = await Promise.all([
         measureAsync("sidebar.file_tree_shallow", () => fs.listChildren!(""), {
           category: "sidebar",
@@ -131,16 +134,10 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         ),
       ]);
       if (requestId !== workspaceRequestRef.current) return null;
-      setFileTree({ name: "project", path: "", isDirectory: true, children: shallowChildren });
+      const tree: FileEntry = { name: "project", path: "", isDirectory: true, children: shallowChildren };
+      setFileTree(tree);
       setProjectConfig(nextProjectConfig);
-
-      // Phase 2: full tree — consumers (default-doc, export) need complete depth.
-      const fullTree = await measureAsync("sidebar.file_tree_full", () => fs.listTree(), {
-        category: "sidebar",
-      });
-      if (requestId !== workspaceRequestRef.current) return null;
-      setFileTree(fullTree);
-      return fullTree;
+      return tree;
     }
 
     // Browser / demo mode: load the complete tree in one shot.

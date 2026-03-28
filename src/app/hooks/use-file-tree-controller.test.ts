@@ -7,7 +7,7 @@ import {
   resolveFileTreeKey,
 } from "./use-file-tree-controller";
 import { mergeChildrenIntoTree } from "./use-app-workspace-session";
-import { findDefaultDocumentPath } from "../default-document-path";
+import { findDefaultDocumentPath, findDefaultDocumentPathLazy } from "../default-document-path";
 import { collectMdPaths } from "../export";
 
 function file(
@@ -469,5 +469,131 @@ describe("partial-tree regression (#575)", () => {
       ],
     };
     expect(collectMdPaths(shallowTree)).toEqual(["readme.md"]);
+  });
+});
+
+describe("findDefaultDocumentPathLazy (#575)", () => {
+  it("finds a nested .md by lazily loading children", async () => {
+    const shallowTree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "chapters", path: "chapters", isDirectory: true },
+      ],
+    };
+
+    const listChildren = vi.fn(async (path: string) => {
+      if (path === "chapters") {
+        return [{ name: "intro.md", path: "chapters/intro.md", isDirectory: false }];
+      }
+      return [];
+    });
+
+    const result = await findDefaultDocumentPathLazy(shallowTree, listChildren);
+    expect(result).toBe("chapters/intro.md");
+    expect(listChildren).toHaveBeenCalledWith("chapters");
+  });
+
+  it("prefers root-level main.md without lazy loading", async () => {
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "main.md", path: "main.md", isDirectory: false },
+        { name: "docs", path: "docs", isDirectory: true },
+      ],
+    };
+
+    const listChildren = vi.fn(async () => []);
+
+    const result = await findDefaultDocumentPathLazy(tree, listChildren);
+    expect(result).toBe("main.md");
+    expect(listChildren).not.toHaveBeenCalled();
+  });
+
+  it("prefers index.md over other .md files at root", async () => {
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "notes.md", path: "notes.md", isDirectory: false },
+        { name: "index.md", path: "index.md", isDirectory: false },
+      ],
+    };
+
+    const listChildren = vi.fn(async () => []);
+
+    const result = await findDefaultDocumentPathLazy(tree, listChildren);
+    expect(result).toBe("index.md");
+    expect(listChildren).not.toHaveBeenCalled();
+  });
+
+  it("traverses multiple directory levels lazily", async () => {
+    const shallowTree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "src", path: "src", isDirectory: true },
+      ],
+    };
+
+    const listChildren = vi.fn(async (path: string) => {
+      if (path === "src") {
+        return [{ name: "deep", path: "src/deep", isDirectory: true }];
+      }
+      if (path === "src/deep") {
+        return [{ name: "proof.md", path: "src/deep/proof.md", isDirectory: false }];
+      }
+      return [];
+    });
+
+    const result = await findDefaultDocumentPathLazy(shallowTree, listChildren);
+    expect(result).toBe("src/deep/proof.md");
+    expect(listChildren).toHaveBeenCalledWith("src");
+    expect(listChildren).toHaveBeenCalledWith("src/deep");
+  });
+
+  it("returns null when no files exist anywhere", async () => {
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "empty", path: "empty", isDirectory: true },
+      ],
+    };
+
+    const listChildren = vi.fn(async () => []);
+
+    const result = await findDefaultDocumentPathLazy(tree, listChildren);
+    expect(result).toBeNull();
+  });
+
+  it("skips listChildren for directories with children already loaded", async () => {
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        {
+          name: "docs",
+          path: "docs",
+          isDirectory: true,
+          children: [
+            { name: "guide.md", path: "docs/guide.md", isDirectory: false },
+          ],
+        },
+      ],
+    };
+
+    const listChildren = vi.fn(async () => []);
+
+    const result = await findDefaultDocumentPathLazy(tree, listChildren);
+    expect(result).toBe("docs/guide.md");
+    expect(listChildren).not.toHaveBeenCalled();
   });
 });

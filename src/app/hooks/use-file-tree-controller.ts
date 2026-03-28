@@ -344,20 +344,16 @@ export function useFileTreeController({
   }, [index]);
 
   // Trigger lazy loading when a directory is expanded but has no children loaded.
-  const prevExpandedRef = useRef<ReadonlySet<string>>(new Set());
+  // Checks ALL expanded items (not just newly expanded ones) so that a tree
+  // refresh that resets children to undefined triggers a reload.
   useEffect(() => {
     if (!onLoadChildren) return;
-    const current = new Set(state.expandedItems ?? []);
-    const prev = prevExpandedRef.current;
-    for (const id of current) {
-      if (!prev.has(id)) {
-        const entry = index.entriesById.get(id);
-        if (entry?.isDirectory && entry.children === undefined) {
-          onLoadChildren(id);
-        }
+    for (const id of state.expandedItems ?? []) {
+      const entry = index.entriesById.get(id);
+      if (entry?.isDirectory && entry.children === undefined) {
+        onLoadChildren(id);
       }
     }
-    prevExpandedRef.current = current;
   }, [state.expandedItems, index, onLoadChildren]);
 
   const tree = useTree<FileEntry>({
