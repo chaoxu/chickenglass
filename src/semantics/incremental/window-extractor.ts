@@ -1,4 +1,4 @@
-import type { Tree } from "@lezer/common";
+import type { SyntaxNodeRef, Tree } from "@lezer/common";
 import { extractDivClass } from "../../parser/fenced-div-attrs";
 import { readBracedLabelId } from "../../parser/label-utils";
 import type {
@@ -83,6 +83,234 @@ function extractDisplayMathLatex(raw: string): string {
   return text;
 }
 
+function collectHeading(
+  doc: TextSource,
+  node: SyntaxNodeRef,
+  result: StructuralWindowExtraction,
+  level: number,
+): void {
+  const rawText = doc.slice(node.from, node.to);
+  const headerMark = node.node.getChild("HeaderMark");
+  const textFrom = headerMark ? headerMark.to : node.from;
+  const rawHeadingText = doc.slice(textFrom, node.to).trim();
+  const attrs = findTrailingHeadingAttributes(rawHeadingText);
+  const text = attrs
+    ? rawHeadingText.slice(0, attrs.index).trim()
+    : rawHeadingText;
+
+  result.headings.push({
+    from: node.from,
+    to: node.to,
+    level,
+    text,
+    id: extractHeadingId(rawHeadingText),
+    unnumbered: hasUnnumberedHeadingAttributes(rawText),
+  });
+}
+
+function collectFootnoteRef(
+  doc: TextSource,
+  node: SyntaxNodeRef,
+  result: StructuralWindowExtraction,
+): void {
+  result.footnoteRefs.push({
+    id: doc.slice(node.from + 2, node.to - 1),
+    from: node.from,
+    to: node.to,
+  });
+}
+
+function collectFootnoteDef(
+  doc: TextSource,
+  node: SyntaxNodeRef,
+  result: StructuralWindowExtraction,
+): void {
+  const labelNode = node.node.getChild("FootnoteDefLabel");
+  if (!labelNode) return;
+
+  result.footnoteDefs.push({
+    id: doc.slice(labelNode.from + 2, labelNode.to - 2),
+    from: node.from,
+    to: node.to,
+    content: doc.slice(labelNode.to, node.to).trim(),
+    labelFrom: labelNode.from,
+    labelTo: labelNode.to,
+  });
+}
+
+function collectFencedDiv(
+  doc: TextSource,
+  node: SyntaxNodeRef,
+  result: StructuralWindowExtraction,
+): void {
+  const divNode = node.node;
+  let classes: readonly string[] = [];
+  let primaryClass: string | undefined;
+  let id: string | undefined;
+  let title: string | undefined;
+  let openFenceFrom = node.from;
+  let openFenceTo = node.from;
+  let attrFrom: number | undefined;
+  let attrTo: number | undefined;
+  let titleFrom: number | undefined;
+  let titleTo: number | undefined;
+  let closeFenceFrom = -1;
+  let closeFenceTo = -1;
+
+  const fences = divNode.getChildren("FencedDivFence");
+  if (fences.length > 0) {
+    openFenceFrom = fences[0].from;
+    openFenceTo = fences[0].to;
+  }
+
+  let closeFenceNode = fences.length > 1 ? fences[1] : undefined;
+  if (!closeFenceNode) {
+    const next = divNode.nextSibling;
+    if (next?.type.name === "FencedDivFence") {
+      closeFenceNode = next;
+    }
+  }
+
+  let singleLine = false;
+  if (
+    closeFenceNode &&
+    closeFenceNode.from >= 0 &&
+    closeFenceNode.from <= doc.length
+  ) {
+    const closePos = closeFenceNode.from;
+    const openLine = doc.lineAt(openFenceFrom);
+    const closeLine = doc.lineAt(closePos);
+    singleLine = openLine.from === closeLine.from;
+    if (singleLine) {
+      closeFenceFrom = closePos;
+      closeFenceTo = closeFenceNode.to;
+    } else {
+      closeFenceFrom = closeLine.from;
+      closeFenceTo = closeLine.to;
+    }
+  }
+
+  let keyValueTitle: string | undefined;
+  const attrNode = divNode.getChild("FencedDivAttributes");
+  if (attrNode) {
+    const attrs = extractDivClass(doc.slice(attrNode.from, attrNode.to));
+    if (attrs) {
+      classes = [...attrs.classes];
+      primaryClass = attrs.classes[0];
+      id = attrs.id;
+      keyValueTitle = attrs.keyValues.title;
+    }
+    attrFrom = attrNode.from;
+    attrTo = attrNode.to;
+    openFenceTo = Math.max(openFenceTo, attrNode.to);
+  }
+
+  const titleNode = divNode.getChild("FencedDivTitle");
+  if (titleNode) {
+    title = doc.slice(titleNode.from, titleNode.to).trim();
+    titleFrom = titleNode.from;
+    titleTo = titleNode.to;
+    openFenceTo = Math.max(openFenceTo, titleNode.to);
+  } else if (keyValueTitle) {
+    title = keyValueTitle;
+  }
+
+  const isSelfClosing =
+    closeFenceFrom >= 0 &&
+    !doc.slice(openFenceFrom, closeFenceTo).includes("\n");
+
+  result.fencedDivs.push({
+    from: node.from,
+    to: node.to,
+    openFenceFrom,
+    openFenceTo,
+    attrFrom,
+    attrTo,
+    titleFrom,
+    titleTo,
+    closeFenceFrom,
+    closeFenceTo,
+    singleLine,
+    isSelfClosing,
+    classes,
+    primaryClass,
+    id,
+    title,
+  });
+}
+
+function collectMath(
+  doc: TextSource,
+  node: SyntaxNodeRef,
+  result: StructuralWindowExtraction,
+): void {
+  const isDisplay = node.type.name === "DisplayMath";
+  const markName = isDisplay ? "DisplayMathMark" : "InlineMathMark";
+  const marks = node.node.getChildren(markName);
+  const equationLabel = isDisplay ? node.node.getChild("EquationLabel") : null;
+  const contentFrom = marks.length >= 1 ? marks[0].to : node.from;
+  const contentTo = marks.length >= 2 ? marks[marks.length - 1].from : node.to;
+  const labelFrom =
+    equationLabel && marks.length >= 2
+      ? marks[marks.length - 1].to
+      : undefined;
+  const latex = contentFrom <= contentTo
+    ? doc.slice(contentFrom, contentTo)
+    : "";
+
+  result.mathRegions.push({
+    from: node.from,
+    to: node.to,
+    isDisplay,
+    contentFrom,
+    contentTo,
+    labelFrom,
+    latex,
+  });
+
+  if (equationLabel) {
+    const labelId = readBracedLabelId(
+      doc.slice(equationLabel.from, equationLabel.to),
+      0,
+      equationLabel.to - equationLabel.from,
+      "eq:",
+    );
+    if (labelId) {
+      result.equations.push({
+        id: labelId,
+        from: node.from,
+        to: node.to,
+        labelFrom: equationLabel.from,
+        labelTo: equationLabel.to,
+        latex: extractDisplayMathLatex(doc.slice(node.from, equationLabel.from)),
+      });
+    }
+  }
+
+  if (!isDisplay) {
+    result.excludedRanges.push({ from: node.from, to: node.to });
+  }
+}
+
+function collectLink(
+  doc: TextSource,
+  node: SyntaxNodeRef,
+  result: StructuralWindowExtraction,
+): void {
+  const raw = doc.slice(node.from, node.to);
+  const refMatch = matchBracketedReference(raw);
+  if (refMatch) {
+    result.bracketedRefs.push({
+      from: node.from,
+      to: node.to,
+      bracketed: true,
+      ids: [...refMatch.ids],
+      locators: [...refMatch.locators],
+    });
+  }
+  result.excludedRanges.push({ from: node.from, to: node.to });
+}
+
 export function collectStructuralWindow(
   doc: TextSource,
   tree: Tree,
@@ -99,212 +327,30 @@ export function collectStructuralWindow(
 
       const headingMatch = ATX_HEADING_RE.exec(name);
       if (headingMatch) {
-        const level = Number(headingMatch[1]);
-        const rawText = doc.slice(node.from, node.to);
-        const headerMark = node.node.getChild("HeaderMark");
-        const textFrom = headerMark ? headerMark.to : node.from;
-        const rawHeadingText = doc.slice(textFrom, node.to).trim();
-        const attrs = findTrailingHeadingAttributes(rawHeadingText);
-        const text = attrs
-          ? rawHeadingText.slice(0, attrs.index).trim()
-          : rawHeadingText;
-
-        result.headings.push({
-          from: node.from,
-          to: node.to,
-          level,
-          text,
-          id: extractHeadingId(rawHeadingText),
-          unnumbered: hasUnnumberedHeadingAttributes(rawText),
-        });
+        collectHeading(doc, node, result, Number(headingMatch[1]));
         return;
       }
 
-      if (name === "FootnoteRef") {
-        result.footnoteRefs.push({
-          id: doc.slice(node.from + 2, node.to - 1),
-          from: node.from,
-          to: node.to,
-        });
-        return;
-      }
-
-      if (name === "FootnoteDef") {
-        const labelNode = node.node.getChild("FootnoteDefLabel");
-        if (!labelNode) return;
-
-        result.footnoteDefs.push({
-          id: doc.slice(labelNode.from + 2, labelNode.to - 2),
-          from: node.from,
-          to: node.to,
-          content: doc.slice(labelNode.to, node.to).trim(),
-          labelFrom: labelNode.from,
-          labelTo: labelNode.to,
-        });
-        return;
-      }
-
-      if (name === "FencedDiv") {
-        const divNode = node.node;
-        let classes: readonly string[] = [];
-        let primaryClass: string | undefined;
-        let id: string | undefined;
-        let title: string | undefined;
-        let openFenceFrom = node.from;
-        let openFenceTo = node.from;
-        let attrFrom: number | undefined;
-        let attrTo: number | undefined;
-        let titleFrom: number | undefined;
-        let titleTo: number | undefined;
-        let closeFenceFrom = -1;
-        let closeFenceTo = -1;
-
-        const fences = divNode.getChildren("FencedDivFence");
-        if (fences.length > 0) {
-          openFenceFrom = fences[0].from;
-          openFenceTo = fences[0].to;
-        }
-
-        let closeFenceNode = fences.length > 1 ? fences[1] : undefined;
-        if (!closeFenceNode) {
-          const next = divNode.nextSibling;
-          if (next?.type.name === "FencedDivFence") {
-            closeFenceNode = next;
-          }
-        }
-
-        let singleLine = false;
-        if (
-          closeFenceNode &&
-          closeFenceNode.from >= 0 &&
-          closeFenceNode.from <= doc.length
-        ) {
-          const closePos = closeFenceNode.from;
-          const openLine = doc.lineAt(openFenceFrom);
-          const closeLine = doc.lineAt(closePos);
-          singleLine = openLine.from === closeLine.from;
-          if (singleLine) {
-            closeFenceFrom = closePos;
-            closeFenceTo = closeFenceNode.to;
-          } else {
-            closeFenceFrom = closeLine.from;
-            closeFenceTo = closeLine.to;
-          }
-        }
-
-        let keyValueTitle: string | undefined;
-        const attrNode = divNode.getChild("FencedDivAttributes");
-        if (attrNode) {
-          const attrs = extractDivClass(doc.slice(attrNode.from, attrNode.to));
-          if (attrs) {
-            classes = [...attrs.classes];
-            primaryClass = attrs.classes[0];
-            id = attrs.id;
-            keyValueTitle = attrs.keyValues.title;
-          }
-          attrFrom = attrNode.from;
-          attrTo = attrNode.to;
-          openFenceTo = Math.max(openFenceTo, attrNode.to);
-        }
-
-        const titleNode = divNode.getChild("FencedDivTitle");
-        if (titleNode) {
-          title = doc.slice(titleNode.from, titleNode.to).trim();
-          titleFrom = titleNode.from;
-          titleTo = titleNode.to;
-          openFenceTo = Math.max(openFenceTo, titleNode.to);
-        } else if (keyValueTitle) {
-          title = keyValueTitle;
-        }
-
-        const isSelfClosing =
-          closeFenceFrom >= 0 &&
-          !doc.slice(openFenceFrom, closeFenceTo).includes("\n");
-
-        result.fencedDivs.push({
-          from: node.from,
-          to: node.to,
-          openFenceFrom,
-          openFenceTo,
-          attrFrom,
-          attrTo,
-          titleFrom,
-          titleTo,
-          closeFenceFrom,
-          closeFenceTo,
-          singleLine,
-          isSelfClosing,
-          classes,
-          primaryClass,
-          id,
-          title,
-        });
-        return;
-      }
-
-      if (name === "InlineMath" || name === "DisplayMath") {
-        const isDisplay = name === "DisplayMath";
-        const markName = isDisplay ? "DisplayMathMark" : "InlineMathMark";
-        const marks = node.node.getChildren(markName);
-        const equationLabel = isDisplay ? node.node.getChild("EquationLabel") : null;
-        const contentFrom = marks.length >= 1 ? marks[0].to : node.from;
-        const contentTo = marks.length >= 2 ? marks[marks.length - 1].from : node.to;
-        const labelFrom =
-          equationLabel && marks.length >= 2
-            ? marks[marks.length - 1].to
-            : undefined;
-        const latex = contentFrom <= contentTo
-          ? doc.slice(contentFrom, contentTo)
-          : "";
-
-        result.mathRegions.push({
-          from: node.from,
-          to: node.to,
-          isDisplay,
-          contentFrom,
-          contentTo,
-          labelFrom,
-          latex,
-        });
-
-        if (equationLabel) {
-          const labelId = readBracedLabelId(
-            doc.slice(equationLabel.from, equationLabel.to),
-            0,
-            equationLabel.to - equationLabel.from,
-            "eq:",
-          );
-          if (labelId) {
-            result.equations.push({
-              id: labelId,
-              from: node.from,
-              to: node.to,
-              labelFrom: equationLabel.from,
-              labelTo: equationLabel.to,
-              latex: extractDisplayMathLatex(doc.slice(node.from, equationLabel.from)),
-            });
-          }
-        }
-      }
-
-      if (name === "InlineCode" || name === "InlineMath") {
-        result.excludedRanges.push({ from: node.from, to: node.to });
-        return;
-      }
-
-      if (name === "Link") {
-        const raw = doc.slice(node.from, node.to);
-        const refMatch = matchBracketedReference(raw);
-        if (refMatch) {
-          result.bracketedRefs.push({
-            from: node.from,
-            to: node.to,
-            bracketed: true,
-            ids: [...refMatch.ids],
-            locators: [...refMatch.locators],
-          });
-        }
-        result.excludedRanges.push({ from: node.from, to: node.to });
+      switch (name) {
+        case "FootnoteRef":
+          collectFootnoteRef(doc, node, result);
+          return;
+        case "FootnoteDef":
+          collectFootnoteDef(doc, node, result);
+          return;
+        case "FencedDiv":
+          collectFencedDiv(doc, node, result);
+          return;
+        case "InlineMath":
+        case "DisplayMath":
+          collectMath(doc, node, result);
+          return;
+        case "InlineCode":
+          result.excludedRanges.push({ from: node.from, to: node.to });
+          return;
+        case "Link":
+          collectLink(doc, node, result);
+          return;
       }
     },
   });
