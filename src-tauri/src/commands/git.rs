@@ -128,21 +128,23 @@ fn run_git(root: &Path, args: &[&str]) -> Result<String, String> {
 
 /// Parse `git branch --list` output into structured entries.
 ///
-/// Each line looks like `  main` or `* feature-x`.
+/// Each line is prefixed with a two-character marker:
+///   `* ` = current branch
+///   `+ ` = checked out in a linked worktree
+///   `  ` = neither
 fn parse_branch_list(output: &str) -> Vec<GitBranchEntry> {
     output
         .lines()
         .filter_map(|line| {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
+            if line.len() < 2 {
                 return None;
             }
-            let is_current = trimmed.starts_with("* ");
-            let name = if is_current {
-                trimmed.strip_prefix("* ").unwrap_or(trimmed)
-            } else {
-                trimmed
-            };
+            let marker = &line[..2];
+            let is_current = marker == "* ";
+            let name = line[2..].trim();
+            if name.is_empty() {
+                return None;
+            }
             // Skip detached HEAD indicators like `* (HEAD detached at abc1234)`.
             if name.starts_with('(') {
                 return None;
@@ -458,6 +460,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_branch_list_linked_worktree() {
+        // `+ ` marks branches checked out in linked worktrees.
+        let output = "* feature\n+ main\n+ orc/issue-575\n  develop\n";
+        let branches = parse_branch_list(output);
+        assert_eq!(branches.len(), 4);
+        assert_eq!(branches[0].name, "feature");
+        assert!(branches[0].is_current);
+        assert_eq!(branches[1].name, "main");
+        assert!(!branches[1].is_current);
+        assert_eq!(branches[2].name, "orc/issue-575");
+        assert!(!branches[2].is_current);
+        assert_eq!(branches[3].name, "develop");
+        assert!(!branches[3].is_current);
+    }
+
+    #[test]
     fn dirty_worktree_prefix_is_detectable() {
         // The frontend matches on this prefix to distinguish dirty-worktree
         // errors from hard failures.
@@ -467,7 +485,7 @@ mod tests {
 
     #[test]
     fn resolve_branch_name_unborn_repo() {
-        let dir = std::env::temp_dir().join("coflat-test-unborn");
+        let dir = std::env::temp_dir().join("coflat-test-rbn-unborn");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         Command::new("git")
@@ -514,7 +532,7 @@ mod tests {
 
     #[test]
     fn resolve_branch_name_non_git_dir() {
-        let dir = std::env::temp_dir().join("coflat-test-nongit");
+        let dir = std::env::temp_dir().join("coflat-test-rbn-nongit");
         let _ = std::fs::create_dir_all(&dir);
         assert!(resolve_branch_name(&dir).is_none());
         let _ = std::fs::remove_dir_all(&dir);
