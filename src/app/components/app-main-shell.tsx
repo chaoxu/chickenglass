@@ -11,7 +11,7 @@ interface AppMainShellProps {
   resolvedTheme: AppWorkspaceSessionController["resolvedTheme"];
   workspace: Pick<
     AppWorkspaceSessionController,
-    "sidenotesCollapsed" | "setSidenotesCollapsed"
+    "sidenotesCollapsed" | "setSidenotesCollapsed" | "gitBranch"
   >;
   editor: Pick<
     AppEditorShellController,
@@ -65,6 +65,7 @@ export function AppMainShell({
         onOpenPalette={onOpenPalette}
         docText={editor.docTextForStats}
         isMarkdown={editor.isMarkdownFile}
+        gitBranch={workspace.gitBranch}
       />
     </SidebarInset>
   );

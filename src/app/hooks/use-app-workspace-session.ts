@@ -8,6 +8,7 @@ import { useTheme } from "./use-theme";
 import { useWindowState } from "./use-window-state";
 import { measureAsync, withPerfOperation } from "../perf";
 import { isTauri } from "../../lib/tauri";
+import type { GitBranchInfo } from "../tauri-client/git";
 
 // Lazy-loaded to keep tauri-fs out of the browser startup chunk (#446).
 // Other modules already dynamically import tauri-fs; this static import
@@ -41,6 +42,7 @@ export interface AppWorkspaceSessionController {
   setSidebarTab: React.Dispatch<React.SetStateAction<SidebarTab>>;
   sidenotesCollapsed: boolean;
   setSidenotesCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
+  gitBranch: GitBranchInfo | null;
   startupComplete: boolean;
   openProjectRoot: (path: string) => Promise<FileEntry | null>;
   handleOpenFolder: () => void;
@@ -71,6 +73,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   const [sidebarWidth, setSidebarWidth] = useState(224);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [sidenotesCollapsed, setSidenotesCollapsed] = useState(true);
+  const [gitBranch, setGitBranch] = useState<GitBranchInfo | null>(null);
   const [startupComplete, setStartupComplete] = useState(false);
   const workspaceRequestRef = useRef(0);
 
@@ -78,11 +81,31 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     setProjectRoot(null);
     setFileTree(null);
     setProjectConfig({});
+    setGitBranch(null);
     saveWindowState({
       projectRoot: null,
       currentDocument: null,
     });
   }, [saveWindowState]);
+
+  const loadGitBranch = useCallback(async (requestId: number) => {
+    if (!isTauri()) {
+      setGitBranch(null);
+      return;
+    }
+    try {
+      const { getGitBranchCommand } = await import("../tauri-client/git");
+      const info = await measureAsync("startup.git_branch", () => getGitBranchCommand(), {
+        category: "startup",
+      });
+      if (requestId !== workspaceRequestRef.current) return;
+      setGitBranch(info);
+    } catch (e: unknown) {
+      if (requestId !== workspaceRequestRef.current) return;
+      console.error("[workspace] failed to detect git branch", e);
+      setGitBranch(null);
+    }
+  }, []);
 
   const loadWorkspaceContents = useCallback(async (requestId: number): Promise<FileEntry | null> => {
     const [tree, nextProjectConfig] = await Promise.all([
@@ -139,8 +162,9 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       projectRoot: path,
       currentDocument: null,
     });
-    return loadWorkspaceContents(requestId);
-  }, [loadWorkspaceContents, saveWindowState]);
+    const [tree] = await Promise.all([loadWorkspaceContents(requestId), loadGitBranch(requestId)]);
+    return tree;
+  }, [loadWorkspaceContents, loadGitBranch, saveWindowState]);
 
   useEffect(() => {
     void withPerfOperation("startup.initial_session", async () => {
@@ -155,7 +179,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
                 return;
               }
               setProjectRoot(windowState.projectRoot);
-              await loadWorkspaceContents(requestId);
+              await Promise.all([loadWorkspaceContents(requestId), loadGitBranch(requestId)]);
             } catch (e: unknown) {
               if (requestId !== workspaceRequestRef.current) {
                 return;
@@ -178,7 +202,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       console.error("[workspace] initial session startup failed", e);
       setStartupComplete(true);
     });
-  }, [clearRestoredProjectState, loadWorkspaceContents, windowState.projectRoot]);
+  }, [clearRestoredProjectState, loadGitBranch, loadWorkspaceContents, windowState.projectRoot]);
 
   const handleOpenFolder = useCallback(() => {
     if (!isTauri()) return;
@@ -224,6 +248,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     setSidebarTab,
     sidenotesCollapsed,
     setSidenotesCollapsed,
+    gitBranch,
     startupComplete,
     openProjectRoot,
     handleOpenFolder,

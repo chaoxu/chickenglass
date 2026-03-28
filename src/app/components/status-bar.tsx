@@ -12,6 +12,11 @@ export interface CursorPosition {
   col: number;
 }
 
+export interface GitBranchDisplay {
+  readonly branch: string;
+  readonly isDetached: boolean;
+}
+
 export interface StatusBarProps {
   editorMode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
@@ -20,6 +25,8 @@ export interface StatusBarProps {
   docText?: string;
   /** Whether the active file is markdown (non-md files are Source-only). */
   isMarkdown?: boolean;
+  /** Current git branch info — null when not in a git repo or in browser mode. */
+  gitBranch?: GitBranchDisplay | null;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -123,6 +130,7 @@ export function StatusBar({
   onOpenPalette,
   docText = "",
   isMarkdown = true,
+  gitBranch,
 }: StatusBarProps) {
   const wordCount = useEditorTelemetry((s) => s.wordCount);
   const cursorLine = useEditorTelemetry((s) => s.cursorLine);
@@ -173,8 +181,17 @@ export function StatusBar({
           </span>
         </div>
 
-        {/* Right: command palette + mode indicator */}
+        {/* Right: git branch + command palette + mode indicator */}
         <div className="flex items-center gap-1 pr-1">
+          {gitBranch && (
+            <span
+              data-testid="git-branch"
+              className="px-1 text-[var(--cf-muted)]"
+              title={gitBranch.isDetached ? `Detached HEAD at ${gitBranch.branch}` : `Branch: ${gitBranch.branch}`}
+            >
+              {gitBranch.isDetached ? `(${gitBranch.branch})` : gitBranch.branch}
+            </span>
+          )}
           {onOpenPalette && (
             <button
               type="button"
