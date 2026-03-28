@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { FileEntry, FileSystem } from "../file-manager";
 import type { GitStatusMap } from "../tauri-client/git";
+import { gitClient } from "../git-command";
 import { loadProjectConfig } from "../project-config";
 import type { ProjectConfig } from "../project-config";
 import { useRecentFiles } from "./use-recent-files";
@@ -133,7 +134,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     if (!isTauri()) return;
     const id = ++gitStatusRequestRef.current;
     try {
-      const { gitStatusCommand } = await import("../tauri-client/git");
+      const { gitStatusCommand } = await gitClient();
       const result = await measureAsync("sidebar.git_status", () => gitStatusCommand(), {
         category: "sidebar",
       });

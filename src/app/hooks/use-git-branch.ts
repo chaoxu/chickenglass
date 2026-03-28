@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
-import { isTauri } from "../../lib/tauri";
+import { gitClient, isTauriGitAvailable } from "../git-command";
 
-// Lazy-loaded to keep tauri git client out of browser startup chunk.
-const gitClient = () => import("../tauri-client/git");
+// Lazy-loaded to keep confirm-action out of browser startup chunk.
 const confirmModule = () => import("../confirm-action");
 
 export interface GitBranchController {
@@ -38,7 +37,7 @@ export function useGitBranch({
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
 
   const refreshBranch = useCallback(async () => {
-    if (!isTauri() || !projectRoot) {
+    if (!isTauriGitAvailable(projectRoot)) {
       setCurrentBranch(null);
       return;
     }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { isTauri } from "../../lib/tauri";
+import { gitClient, runFreshGitQuery } from "../git-command";
 import type { GitBranchInfo } from "../tauri-client/git";
 
 export interface GitStatus {
@@ -27,20 +27,14 @@ export function useGitStatus(
   const busyRef = useRef(false);
 
   const fetchBranchInfo = useCallback(() => {
-    const requestId = ++requestRef.current;
-    if (!isTauri() || !projectRoot) {
-      setBranchInfo(null);
-      return;
-    }
-    void (async () => {
-      try {
-        const { gitBranchInfoCommand } = await import("../tauri-client/git");
-        const info = await gitBranchInfoCommand();
-        if (requestId === requestRef.current) setBranchInfo(info);
-      } catch {
-        if (requestId === requestRef.current) setBranchInfo(null);
-      }
-    })();
+    runFreshGitQuery({
+      projectRoot,
+      requestRef,
+      command: (c) => c.gitBranchInfoCommand(),
+      onGated: () => setBranchInfo(null),
+      onResult: (info) => setBranchInfo(info),
+      onError: () => setBranchInfo(null),
+    });
   }, [projectRoot]);
 
   useEffect(() => {
@@ -53,7 +47,7 @@ export function useGitStatus(
     void (async () => {
       setIsPulling(true);
       try {
-        const { gitPullCommand } = await import("../tauri-client/git");
+        const { gitPullCommand } = await gitClient();
         const result = await gitPullCommand();
         window.alert(result || "Pull successful");
         await refreshTree();
@@ -73,7 +67,7 @@ export function useGitStatus(
     void (async () => {
       setIsPushing(true);
       try {
-        const { gitPushCommand } = await import("../tauri-client/git");
+        const { gitPushCommand } = await gitClient();
         const result = await gitPushCommand();
         window.alert(result || "Push successful");
       } catch (err: unknown) {

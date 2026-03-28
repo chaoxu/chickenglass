@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { isTauri } from "../../lib/tauri";
+import { gitClient, runFreshGitQuery } from "../git-command";
 import type { GitStatusResult } from "../tauri-client/git";
 
 export interface GitController {
@@ -19,25 +19,14 @@ export function useGit(projectRoot: string | null): GitController {
   const requestRef = useRef(0);
 
   const fetchStatus = useCallback(() => {
-    const requestId = ++requestRef.current;
-    if (!isTauri() || !projectRoot) {
-      setStatus(null);
-      return;
-    }
-    void (async () => {
-      try {
-        const { gitStatusCommand } = await import("../tauri-client/git");
-        const result = await gitStatusCommand();
-        if (requestId === requestRef.current) {
-          setStatus(result);
-          setError(null);
-        }
-      } catch (e: unknown) {
-        if (requestId === requestRef.current) {
-          setError(String(e));
-        }
-      }
-    })();
+    runFreshGitQuery({
+      projectRoot,
+      requestRef,
+      command: (c) => c.gitStatusCommand(),
+      onGated: () => setStatus(null),
+      onResult: (result) => { setStatus(result); setError(null); },
+      onError: (e) => setError(String(e)),
+    });
   }, [projectRoot]);
 
   useEffect(() => {
@@ -46,7 +35,7 @@ export function useGit(projectRoot: string | null): GitController {
 
   const stage = useCallback(async (paths: string[]) => {
     try {
-      const { gitStageCommand } = await import("../tauri-client/git");
+      const { gitStageCommand } = await gitClient();
       await gitStageCommand(paths);
       fetchStatus();
     } catch (e: unknown) {
@@ -56,7 +45,7 @@ export function useGit(projectRoot: string | null): GitController {
 
   const unstage = useCallback(async (paths: string[]) => {
     try {
-      const { gitUnstageCommand } = await import("../tauri-client/git");
+      const { gitUnstageCommand } = await gitClient();
       await gitUnstageCommand(paths);
       fetchStatus();
     } catch (e: unknown) {
@@ -69,7 +58,7 @@ export function useGit(projectRoot: string | null): GitController {
     setLoading(true);
     setError(null);
     try {
-      const { gitCommitCommand } = await import("../tauri-client/git");
+      const { gitCommitCommand } = await gitClient();
       const result = await gitCommitCommand(message);
       fetchStatus();
       return result.oid;
