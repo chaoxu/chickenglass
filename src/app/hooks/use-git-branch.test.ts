@@ -9,6 +9,8 @@ const mockState = vi.hoisted(() => ({
   switchCalls: [] as Array<{ name: string; force: boolean }>,
   createCalls: [] as Array<{ name: string; force: boolean }>,
   reloadFileCalls: [] as string[],
+  reloadShouldThrow: false,
+  closeFileCalls: 0,
   refreshTreeCalls: 0,
   dirtyWorktreeOnFirstAttempt: false,
   switchShouldThrow: null as string | null,
@@ -19,6 +21,8 @@ const mockState = vi.hoisted(() => ({
     this.switchCalls = [];
     this.createCalls = [];
     this.reloadFileCalls = [];
+    this.reloadShouldThrow = false;
+    this.closeFileCalls = 0;
     this.refreshTreeCalls = 0;
     this.dirtyWorktreeOnFirstAttempt = false;
     this.switchShouldThrow = null;
@@ -64,11 +68,15 @@ function Harness(props: UseGitBranchOptions): null {
   return null;
 }
 
-function defaultProps(overrides?: Partial<UseGitBranchOptions>): UseGitBranchOptions {
+function defaultProps(overrides?: Partial<UseGitBranchOptions>) {
   return {
     projectRoot: "/tmp/test-project",
     refreshTree: async () => { mockState.refreshTreeCalls++; },
-    reloadFile: async (path: string) => { mockState.reloadFileCalls.push(path); },
+    reloadFile: async (path: string) => {
+      if (mockState.reloadShouldThrow) throw new Error("file not found");
+      mockState.reloadFileCalls.push(path);
+    },
+    closeCurrentFile: async () => { mockState.closeFileCalls++; return true; },
     currentPath: "index.md",
     hasDirtyDocument: false,
     ...overrides,
@@ -216,5 +224,21 @@ describe("useGitBranch", () => {
 
     expect(mockState.refreshTreeCalls).toBe(0);
     expect(mockState.reloadFileCalls).toEqual([]);
+  });
+
+  it("closes document when file does not exist on target branch", async () => {
+    mockState.reloadShouldThrow = true;
+
+    await act(async () => {
+      root.render(createElement(Harness, defaultProps()));
+    });
+
+    await act(async () => {
+      await capturedController!.switchBranch("other-branch");
+    });
+
+    expect(mockState.switchCalls).toEqual([{ name: "other-branch", force: false }]);
+    expect(mockState.refreshTreeCalls).toBe(1);
+    expect(mockState.closeFileCalls).toBe(1);
   });
 });

@@ -49,6 +49,7 @@ function AppInner() {
     projectRoot: workspace.projectRoot,
     refreshTree: workspace.refreshTree,
     reloadFile: editor.reloadFile,
+    closeCurrentFile: editor.closeCurrentFile,
     currentPath: editor.currentPath,
     hasDirtyDocument: editor.hasDirtyDocument,
   });

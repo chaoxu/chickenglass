@@ -20,6 +20,8 @@ export interface UseGitBranchOptions {
   projectRoot: string | null;
   refreshTree: () => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
+  /** Close the active document (used when the file no longer exists after a branch switch). */
+  closeCurrentFile: () => Promise<boolean>;
   currentPath: string | null;
   /** Whether the editor has unsaved in-memory changes. */
   hasDirtyDocument: boolean;
@@ -29,6 +31,7 @@ export function useGitBranch({
   projectRoot,
   refreshTree,
   reloadFile,
+  closeCurrentFile,
   currentPath,
   hasDirtyDocument,
 }: UseGitBranchOptions): GitBranchController {
@@ -60,10 +63,12 @@ export function useGitBranch({
       try {
         await reloadFile(currentPath);
       } catch {
-        // File may not exist on the new branch — that's OK.
+        // File does not exist on the target branch — close it so the
+        // editor does not show stale content from the previous branch.
+        await closeCurrentFile();
       }
     }
-  }, [refreshBranch, refreshTree, reloadFile, currentPath]);
+  }, [refreshBranch, refreshTree, reloadFile, closeCurrentFile, currentPath]);
 
   /**
    * Guard: if the editor has unsaved in-memory changes, prompt the user
