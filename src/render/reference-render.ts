@@ -25,7 +25,7 @@ import {
   bibDataField,
   CitationWidget,
 } from "../citations/citation-render";
-import { type CslProcessor, registerCitationsWithProcessor } from "../citations/csl-processor";
+import { type CslProcessor, collectCitationMatches, registerCitationsWithProcessor } from "../citations/csl-processor";
 import { CrossrefWidget, ClusteredCrossrefWidget, MixedClusterWidget, UnresolvedRefWidget, type MixedClusterPart } from "./crossref-render";
 import { buildDecorations, cursorInRange, pushWidgetDecoration, createSimpleViewPlugin } from "./render-utils";
 import { blockCounterField, pluginRegistryField } from "../plugins";
@@ -43,35 +43,12 @@ interface ReferenceRegistrationCacheEntry {
 
 const referenceRegistrationCache = new WeakMap<CslProcessor, ReferenceRegistrationCacheEntry>();
 
-interface CitationRegistrationMatch {
-  readonly ids: readonly string[];
-  readonly locators: readonly (string | undefined)[];
-}
-
 function serializeKeyPart(value: string | undefined): string {
   return value ?? "";
 }
 
-function getCitationRegistrationMatches(
-  references: readonly ReferenceSemantics[],
-  store: BibStore,
-): CitationRegistrationMatch[] {
-  return references
-    .filter((ref) => ref.ids.some((id) => store.has(id)))
-    .map((ref) => {
-      const ids: string[] = [];
-      const locators: Array<string | undefined> = [];
-      ref.ids.forEach((id, index) => {
-        if (!store.has(id)) return;
-        ids.push(id);
-        locators.push(ref.locators[index]);
-      });
-      return { ids, locators };
-    });
-}
-
 function getCitationRegistrationKey(
-  matches: readonly CitationRegistrationMatch[],
+  matches: readonly { ids: string[]; locators: (string | undefined)[] }[],
 ): string {
   return matches
     .map((match) => match.ids.map((id, index) =>
@@ -205,7 +182,7 @@ export function ensureCitationsRegistered(
   store: BibStore,
   processor: CslProcessor,
 ): void {
-  const matches = getCitationRegistrationMatches(analysis.references, store);
+  const matches = collectCitationMatches(analysis.references, store);
   const registrationKey = getCitationRegistrationKey(matches);
   const cached = referenceRegistrationCache.get(processor);
   if (

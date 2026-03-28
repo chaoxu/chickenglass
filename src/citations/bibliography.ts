@@ -12,14 +12,13 @@ import {
 import { type EditorState, type Extension, type Transaction } from "@codemirror/state";
 import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors } from "./bibtex-parser";
 import { type BibStore, bibDataEffect, bibDataField, findCitations } from "./citation-render";
-import type { CslProcessor } from "./csl-processor";
+import { type CslProcessor, collectCitedIdsFromReferences } from "./csl-processor";
 import { RenderWidget, buildDecorations, createDecorationsField, sanitizeCslHtml } from "../render/render-core";
 import { ensureCitationsRegistered } from "../render/reference-render";
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
-import type { DocumentAnalysis } from "../semantics/document";
 
 /**
  * Collect all citation ids referenced in the document text.
@@ -169,25 +168,6 @@ interface BibliographyCacheEntry {
 
 const bibliographyCache = new WeakMap<CslProcessor, BibliographyCacheEntry>();
 
-function collectCitedIdsFromAnalysis(
-  analysis: DocumentAnalysis,
-  store: BibStore,
-): string[] {
-  const seen = new Set<string>();
-  const citedIds: string[] = [];
-
-  for (const ref of analysis.references) {
-    for (const id of ref.ids) {
-      if (!seen.has(id) && store.has(id)) {
-        seen.add(id);
-        citedIds.push(id);
-      }
-    }
-  }
-
-  return citedIds;
-}
-
 function getCitedIdsKey(citedIds: readonly string[]): string {
   return citedIds.join("\0");
 }
@@ -218,8 +198,8 @@ export function bibliographyDependenciesChanged(
     return false;
   }
 
-  return getCitedIdsKey(collectCitedIdsFromAnalysis(beforeAnalysis, beforeBib.store))
-    !== getCitedIdsKey(collectCitedIdsFromAnalysis(afterAnalysis, afterBib.store));
+  return getCitedIdsKey(collectCitedIdsFromReferences(beforeAnalysis.references, beforeBib.store))
+    !== getCitedIdsKey(collectCitedIdsFromReferences(afterAnalysis.references, afterBib.store));
 }
 
 function bibliographyShouldRebuild(tr: Transaction): boolean {
@@ -236,7 +216,7 @@ function buildBibliographyDecorationsFromState(state: EditorState): DecorationSe
   // Use the incrementally-maintained document analysis instead of
   // re-parsing the entire document from scratch (#514).
   const analysis = state.field(documentAnalysisField);
-  const citedIds = collectCitedIdsFromAnalysis(analysis, store);
+  const citedIds = collectCitedIdsFromReferences(analysis.references, store);
   if (citedIds.length === 0) return Decoration.none;
 
   let cslHtml: readonly string[] = [];
