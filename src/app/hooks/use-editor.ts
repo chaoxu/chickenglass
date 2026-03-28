@@ -28,7 +28,7 @@ import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-
 import { setIncludeRegionsEffect } from "../../lib/include-regions";
 import type { ProjectConfig } from "../project-config";
 import type { FileSystem } from "../file-manager";
-import { computeDocStats } from "../writing-stats";
+import { computeLiveStats } from "../writing-stats";
 import { useEditorScroll } from "./use-editor-scroll";
 import { useEditorDebugBridge } from "./use-editor-debug-bridge";
 import { useEditorDocumentServices } from "./use-editor-document-services";
@@ -210,7 +210,8 @@ export function useEditor(
           clearTimeout(wordCountTimerRef.current);
         }
         wordCountTimerRef.current = setTimeout(() => {
-          useEditorTelemetryStore.getState().setWordCount(computeDocStats(docStr).words);
+          const { words, chars } = computeLiveStats(docStr);
+          useEditorTelemetryStore.getState().setLiveCounts(words, chars);
           wordCountTimerRef.current = null;
         }, 300);
       }
@@ -244,7 +245,8 @@ export function useEditor(
     debugBridge.attachDebugView(newView);
     setView(newView);
     // Initialize telemetry in Zustand store (not React state).
-    telemetry.setWordCount(computeDocStats(doc).words);
+    const initCounts = computeLiveStats(doc);
+    telemetry.setLiveCounts(initCounts.words, initCounts.chars);
     telemetry.setCursorPos(0, newView);
     telemetry.setScroll(0, 0);
     resetScroll();
@@ -308,7 +310,8 @@ export function useEditor(
     view.scrollDOM.scrollTop = 0;
     resetScroll();
     const telemetry = useEditorTelemetryStore.getState();
-    telemetry.setWordCount(computeDocStats(doc).words);
+    const replaceCounts = computeLiveStats(doc);
+    telemetry.setLiveCounts(replaceCounts.words, replaceCounts.chars);
     telemetry.setCursorPos(0, view);
 
     const currentFrontmatter = view.state.field(frontmatterField, false);

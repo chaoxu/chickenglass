@@ -28,6 +28,8 @@ export interface EditorTelemetryState {
   viewportFrom: number;
   /** Word count of the active document (debounced). */
   wordCount: number;
+  /** Character count of the document body (debounced, excludes frontmatter). */
+  charCount: number;
 }
 
 interface EditorTelemetryActions {
@@ -35,8 +37,8 @@ interface EditorTelemetryActions {
   setCursorPos: (pos: number, view: EditorView) => void;
   /** Update scroll metrics. */
   setScroll: (top: number, from: number) => void;
-  /** Update word count. */
-  setWordCount: (count: number) => void;
+  /** Update word and character counts together. */
+  setLiveCounts: (words: number, chars: number) => void;
   /** Reset all telemetry (e.g. when the editor is destroyed / tab switches). */
   reset: () => void;
 }
@@ -52,6 +54,7 @@ const initialState: EditorTelemetryState = {
   scrollTop: 0,
   viewportFrom: 0,
   wordCount: 0,
+  charCount: 0,
 };
 
 // ── Store ───────────────────────────────────────────────────────────────────
@@ -78,8 +81,8 @@ export const useEditorTelemetryStore = create<EditorTelemetryStore>()(
       set({ scrollTop: top, viewportFrom: from });
     },
 
-    setWordCount: (count: number) => {
-      set({ wordCount: count });
+    setLiveCounts: (words: number, chars: number) => {
+      set({ wordCount: words, charCount: chars });
     },
 
     reset: () => {

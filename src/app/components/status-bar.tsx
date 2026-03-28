@@ -1,7 +1,6 @@
 import { memo, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { markdownEditorModes, type EditorMode } from "../../editor";
-import { computeDocStats, formatReadingTime } from "../writing-stats";
-import type { DocStats } from "../writing-stats";
+import { computeDocStats, formatReadingTime, type DocStats } from "../writing-stats";
 import { cn } from "../lib/utils";
 import { useEditorTelemetry } from "../stores/editor-telemetry-store";
 
@@ -140,13 +139,17 @@ export function StatusBar({
   gitIsBusy = false,
 }: StatusBarProps) {
   const wordCount = useEditorTelemetry((s) => s.wordCount);
+  const charCount = useEditorTelemetry((s) => s.charCount);
   const cursorLine = useEditorTelemetry((s) => s.cursorLine);
   const cursorCol = useEditorTelemetry((s) => s.cursorCol);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const wordCountRef = useRef<HTMLButtonElement | null>(null);
 
-  // Compute stats only when docText changes — shared by the word-count badge and the popover.
-  const stats = useMemo(() => computeDocStats(docText), [docText]);
+  // Full stats only when the popover is open — keeps sentence segmentation off the edit hot path.
+  const stats = useMemo<DocStats | null>(
+    () => (popoverOpen ? computeDocStats(docText) : null),
+    [popoverOpen, docText],
+  );
 
   const cycleMode = useCallback(() => {
     const idx = markdownEditorModes.indexOf(editorMode);
@@ -157,7 +160,7 @@ export function StatusBar({
   const closePopover = useCallback(() => setPopoverOpen(false), []);
 
   const wordLabel = wordCount === 1 ? "1 word" : `${wordCount} words`;
-  const charLabel = `${stats.chars} chars`;
+  const charLabel = `${charCount} chars`;
 
   return (
     <>
@@ -243,7 +246,7 @@ export function StatusBar({
       </div>
 
       {/* Stats popover — rendered in the same stacking context, positioned fixed */}
-      {popoverOpen && (
+      {popoverOpen && stats && (
         <StatsPopover
           stats={stats}
           anchorRef={wordCountRef}
