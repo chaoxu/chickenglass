@@ -2,6 +2,37 @@
 
 `coflat/editor` exposes the editor core without the Coflat app shell.
 
+## Install
+
+```bash
+npm install coflat
+```
+
+## Quick Start
+
+```js
+import "coflat/editor/style.css";
+import { mountEditor } from "coflat/editor";
+
+const editor = mountEditor({
+  parent: document.getElementById("editor"),
+  doc: "# Hello\n\nEdit me.",
+  mode: "rich",
+});
+
+// Read back the document
+console.log(editor.getDoc());
+
+// Switch to source mode
+editor.setMode("source");
+
+// Tear down when done
+editor.unmount();
+```
+
+A runnable demo is in [`demo/embed/`](../demo/embed/) — start the dev server
+(`npm run dev`) and open `/demo/embed/`.
+
 ## Import
 
 ```ts
@@ -72,6 +103,48 @@ Supported options:
 - `setMode(mode)` switches between `"rich"` and `"source"`.
 - `focus()` focuses the mounted editor.
 - `unmount()` destroys the CodeMirror view.
+
+## Examples
+
+### Callback-driven autosave
+
+Wire `onChange` to persist the document after each edit:
+
+```js
+import "coflat/editor/style.css";
+import { mountEditor } from "coflat/editor";
+
+let saveTimer;
+
+const editor = mountEditor({
+  parent: document.getElementById("editor"),
+  doc: loadDraft(),
+  mode: "rich",
+  onChange(doc) {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveDraft(doc), 500);
+  },
+  onModeChange(mode) {
+    console.log("mode:", mode);
+  },
+});
+```
+
+### Mode toggle
+
+Build a toolbar that switches between rich and source editing:
+
+```js
+const editor = mountEditor({ parent, doc: "# Title" });
+
+document.getElementById("rich-btn").addEventListener("click", () => {
+  editor.setMode("rich");
+});
+
+document.getElementById("source-btn").addEventListener("click", () => {
+  editor.setMode("source");
+});
+```
 
 ## Behavior Notes
 

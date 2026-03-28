@@ -13,5 +13,6 @@ src-tauri/gen/schemas/
 ~/
 .claude/worktrees/
 .playwright-cli/
-demo/
+demo/*
+!demo/embed/
 __pycache__/
