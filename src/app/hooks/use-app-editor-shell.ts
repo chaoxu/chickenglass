@@ -235,6 +235,7 @@ export function useAppEditorShell({
   const session = useEditorSession({
     fs,
     refreshTree,
+    refreshGitStatus,
     addRecentFile,
     requestUnsavedChangesDecision,
   });

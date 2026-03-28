@@ -25,6 +25,7 @@ import { useEditorSessionPersistence } from "./use-editor-session-persistence";
 export interface EditorSessionDeps {
   fs: FileSystem;
   refreshTree: () => Promise<void>;
+  refreshGitStatus: () => Promise<void>;
   addRecentFile: (path: string) => void;
   requestUnsavedChangesDecision: (
     request: UnsavedChangesRequest,
@@ -84,6 +85,7 @@ function documentForPath(
 export function useEditorSession({
   fs,
   refreshTree,
+  refreshGitStatus,
   addRecentFile,
   requestUnsavedChangesDecision,
 }: EditorSessionDeps): UseEditorSessionReturn {
@@ -165,13 +167,16 @@ export function useEditorSession({
     }
 
     if (decision === "save") {
-      return saveCurrentDocument();
+      const saved = await saveCurrentDocument();
+      if (saved) void refreshGitStatus();
+      return saved;
     }
 
     discardDocumentChanges(currentDocument.path);
     return true;
   }, [
     discardDocumentChanges,
+    refreshGitStatus,
     requestUnsavedChangesDecision,
     saveCurrentDocument,
   ]);
