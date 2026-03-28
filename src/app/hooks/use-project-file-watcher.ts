@@ -9,6 +9,7 @@ interface UseProjectFileWatcherOptions {
   isPathOpen: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
   reloadFile: (path: string) => Promise<void>;
+  isSelfChange?: (path: string) => Promise<boolean>;
 }
 
 export function useProjectFileWatcher({
@@ -17,6 +18,7 @@ export function useProjectFileWatcher({
   isPathOpen,
   isPathDirty,
   reloadFile,
+  isSelfChange,
 }: UseProjectFileWatcherOptions): void {
   useEffect(() => {
     const container = containerRef.current;
@@ -28,6 +30,7 @@ export function useProjectFileWatcher({
       isFileOpen: isPathOpen,
       isFileDirty: isPathDirty,
       reloadFile,
+      isSelfChange,
       container,
     });
     let cancelled = false;
@@ -52,5 +55,5 @@ export function useProjectFileWatcher({
       cancelled = true;
       void stopWatcher();
     };
-  }, [containerRef, isPathDirty, isPathOpen, projectRoot, reloadFile]);
+  }, [containerRef, isPathDirty, isPathOpen, isSelfChange, projectRoot, reloadFile]);
 }

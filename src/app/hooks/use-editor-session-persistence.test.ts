@@ -44,6 +44,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   save: sessionMockState.saveDialog,
 }));
 
+const { SavePipeline } = await import("../save-pipeline");
 const { useEditorSessionPersistence } = await import("./use-editor-session-persistence");
 
 interface HarnessRef {
@@ -126,8 +127,16 @@ function createHarness({
 
     const getSessionState = React.useCallback(() => stateRef.current, []);
 
-    ref.result = useEditorSessionPersistence({
+    const writeRef = React.useRef<
+      (path: string, content: string, sourceMap: unknown) => Promise<string>
+    >(async () => "");
+    const pipeline = React.useMemo(() => new SavePipeline(
+      (path, content, sourceMap) => writeRef.current(path, content, sourceMap),
+    ), []);
+
+    const hookResult = useEditorSessionPersistence({
       fs,
+      pipeline,
       refreshTree,
       addRecentFile,
       buffers,
@@ -137,6 +146,11 @@ function createHarness({
       commitSessionState,
       getSessionState,
     });
+    writeRef.current = (path, content, sourceMap) =>
+      hookResult.writeDocumentSnapshot(
+        path, content, sourceMap as SourceMap | null,
+      );
+    ref.result = hookResult;
     ref.sessionState = sessionState;
     ref.editorDoc = currentEditorDoc;
     ref.buffers = buffers;

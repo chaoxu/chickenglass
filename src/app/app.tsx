@@ -159,12 +159,22 @@ function AppInner() {
     editor,
   });
 
+  const isSelfChange = useCallback(async (path: string): Promise<boolean> => {
+    try {
+      const diskContent = await fs.readFile(path);
+      return editor.pipeline.isSelfChange(path, diskContent);
+    } catch {
+      return false;
+    }
+  }, [editor.pipeline, fs]);
+
   useProjectFileWatcher({
     projectRoot: workspace.projectRoot,
     containerRef: appContainerRef,
     isPathOpen: editor.isPathOpen,
     isPathDirty: editor.isPathDirty,
     reloadFile: editor.reloadFile,
+    isSelfChange,
   });
 
   const overlays = useAppOverlays({

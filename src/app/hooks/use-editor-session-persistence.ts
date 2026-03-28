@@ -15,6 +15,7 @@ import { buildProjectedWritePlan } from "../editor-session-write-plan";
 import type { FileSystem } from "../file-manager";
 import { basename } from "../lib/utils";
 import { measureAsync } from "../perf";
+import type { SavePipeline } from "../save-pipeline";
 import type { SourceMap } from "../source-map";
 import { confirmAction } from "../confirm-action";
 
@@ -30,6 +31,7 @@ type CommitSessionState = (
 
 interface UseEditorSessionPersistenceOptions {
   fs: FileSystem;
+  pipeline: SavePipeline;
   refreshTree: () => Promise<void>;
   addRecentFile: (path: string) => void;
   buffers: RefObject<Map<string, string>>;
@@ -43,6 +45,12 @@ interface UseEditorSessionPersistenceOptions {
 export interface UseEditorSessionPersistenceReturn {
   saveCurrentDocument: () => Promise<boolean>;
   saveFile: () => Promise<void>;
+  writeDocumentSnapshot: (
+    targetPath: string,
+    doc: string,
+    sourceMap: SourceMap | null,
+    options?: { createTargetIfMissing?: boolean },
+  ) => Promise<string>;
   handleRename: (oldPath: string, newPath: string) => Promise<void>;
   handleDelete: (path: string) => Promise<void>;
   saveAs: () => Promise<void>;
@@ -59,6 +67,7 @@ function documentForPath(
 
 export function useEditorSessionPersistence({
   fs,
+  pipeline,
   refreshTree,
   addRecentFile,
   buffers,
@@ -73,11 +82,12 @@ export function useEditorSessionPersistence({
     doc: string,
     sourceMap: SourceMap | null,
     options?: { createTargetIfMissing?: boolean },
-  ): Promise<void> => {
+  ): Promise<string> => {
     const writes = buildProjectedWritePlan(targetPath, doc, sourceMap);
     const targetExists =
       options?.createTargetIfMissing === true ? await fs.exists(targetPath) : true;
 
+    let mainDiskContent = doc;
     for (const write of writes) {
       const shouldCreateTarget =
         options?.createTargetIfMissing === true
@@ -93,35 +103,40 @@ export function useEditorSessionPersistence({
           detail: write.path,
         },
       );
+      if (write.path === targetPath) {
+        mainDiskContent = write.content;
+      }
     }
+    return mainDiskContent;
   }, [fs]);
 
   const saveCurrentDocument = useCallback(async (): Promise<boolean> => {
     const currentPath = getSessionState().currentDocument?.path;
     if (!currentPath) return true;
 
-    const doc = liveDocs.current.get(currentPath) ?? "";
-    const sourceMap = sourceMaps.current.get(currentPath) ?? null;
-    try {
-      await writeDocumentSnapshot(currentPath, doc, sourceMap);
+    const result = await pipeline.save(currentPath, () => {
+      const doc = liveDocs.current.get(currentPath) ?? "";
+      const sourceMap = sourceMaps.current.get(currentPath) ?? null;
+      return { content: doc, sourceMap };
+    });
+
+    if (result.saved) {
+      const doc = liveDocs.current.get(currentPath) ?? "";
       buffers.current.set(currentPath, doc);
       liveDocs.current.set(currentPath, doc);
       commitSessionState(
         markSessionDocumentDirty(getSessionState(), currentPath, false),
         { editorDoc: doc },
       );
-      return true;
-    } catch (e: unknown) {
-      console.error("[session] save failed:", e);
-      return false;
     }
+    return result.saved;
   }, [
     buffers,
     commitSessionState,
     getSessionState,
     liveDocs,
+    pipeline,
     sourceMaps,
-    writeDocumentSnapshot,
   ]);
 
   const saveFile = useCallback(async (): Promise<void> => {
@@ -147,13 +162,16 @@ export function useEditorSessionPersistence({
       sourceMaps.current.set(newPath, sourceMap);
     }
 
+    pipeline.clear(oldPath);
+    pipeline.initPath(newPath, liveDoc ?? buffered ?? "");
+
     commitSessionState(
       renameSessionDocument(stateRef.current, oldPath, newPath, basename(newPath)),
       stateRef.current.currentDocument?.path === oldPath
         ? { editorDoc: documentForPath(newPath, liveDocs, buffers) }
         : undefined,
     );
-  }, [buffers, commitSessionState, liveDocs, sourceMaps, stateRef]);
+  }, [buffers, commitSessionState, liveDocs, pipeline, sourceMaps, stateRef]);
 
   const handleRename = useCallback(async (oldPath: string, newPath: string) => {
     try {
@@ -225,6 +243,9 @@ export function useEditorSessionPersistence({
           sourceMaps.current.set(relativePath, sourceMap);
         }
 
+        pipeline.clear(currentPath);
+        pipeline.initPath(relativePath, doc);
+
         commitSessionState(
           applySaveAsResult({
             state: getSessionState(),
@@ -258,6 +279,7 @@ export function useEditorSessionPersistence({
     commitSessionState,
     getSessionState,
     liveDocs,
+    pipeline,
     refreshTree,
     sourceMaps,
     writeDocumentSnapshot,
@@ -266,6 +288,7 @@ export function useEditorSessionPersistence({
   return {
     saveCurrentDocument,
     saveFile,
+    writeDocumentSnapshot,
     handleRename,
     handleDelete,
     saveAs,
