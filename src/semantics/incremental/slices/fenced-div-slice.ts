@@ -188,6 +188,12 @@ export function extractDirtyFencedDivWindows(
         nextRange = expandRange(nextRange, structuralSpan.from, structuralSpan.to);
       }
 
+      for (const math of structural.mathRegions) {
+        if (math.isDisplay && math.from < nextRange.to && nextRange.from < math.to) {
+          nextRange = expandRange(nextRange, math.from, math.to);
+        }
+      }
+
       const mappedSpan = findAffectedSpan(mappedPrevious, nextRange, true);
       if (mappedSpan) {
         const mappedRange = spanRange(mappedPrevious, mappedSpan);

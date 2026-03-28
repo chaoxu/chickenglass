@@ -6,7 +6,10 @@ import {
   type PositionMapper,
 } from "../merge-utils";
 import type { DirtyWindow, SemanticDelta } from "../types";
-import type { ExcludedRange, StructuralWindowExtraction } from "../window-extractor";
+import type {
+  ExcludedRange,
+  StructuralWindowExtraction,
+} from "../window-extractor";
 
 export interface ReferenceSlice {
   readonly bracketedReferences: readonly ReferenceSemantics[];
@@ -185,7 +188,7 @@ export function mergeReferenceSlice(
   doc: TextSource,
   delta: Pick<SemanticDelta, "mapOldToNew">,
   dirtyExtractions: readonly DirtyReferenceWindowExtraction[],
-  structural: Pick<StructuralWindowExtraction, "excludedRanges">,
+  excludedRanges: readonly ExcludedRange[],
 ): ReferenceSlice {
   let bracketedReferences = mapBracketedReferences(
     previous.bracketedReferences,
@@ -200,7 +203,7 @@ export function mergeReferenceSlice(
     );
   }
 
-  const nextNarrativeReferences = collectNarrativeReferences(doc, structural.excludedRanges);
+  const nextNarrativeReferences = collectNarrativeReferences(doc, excludedRanges);
   const narrativeReferences = sameReferenceArray(
     previous.narrativeReferences,
     nextNarrativeReferences,

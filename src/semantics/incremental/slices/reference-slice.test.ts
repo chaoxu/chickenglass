@@ -92,7 +92,7 @@ describe("reference slice", () => {
       editorStateTextSource(tr.state),
       delta,
       extractDirtyReferenceWindows(tr.state, delta),
-      extractStructuralWindow(editorStateTextSource(tr.state), syntaxTree(tr.state)),
+      extractStructuralWindow(editorStateTextSource(tr.state), syntaxTree(tr.state)).excludedRanges,
     );
 
     expect(after.bracketedReferences).toHaveLength(3);
@@ -132,7 +132,7 @@ describe("reference slice", () => {
         editorStateTextSource(tr.state),
         delta,
         extractDirtyReferenceWindows(tr.state, delta),
-        extractStructuralWindow(editorStateTextSource(tr.state), syntaxTree(tr.state)),
+        extractStructuralWindow(editorStateTextSource(tr.state), syntaxTree(tr.state)).excludedRanges,
       );
       state = tr.state;
     }
