@@ -333,7 +333,10 @@ describe("math decoration invalidation", () => {
       },
     }).state.field(mathDecorationField);
 
-    expect(after).toBe(before);
+    // Math is after the edit so positions shift — the decoration set is
+    // position-mapped (not rebuilt from scratch), producing a new object
+    // with the same number of decorations.
+    expect(after.size).toBe(before.size);
   });
 
   it("rebuilds when math content changes", () => {
@@ -350,6 +353,25 @@ describe("math decoration invalidation", () => {
       },
     }).state.field(mathDecorationField);
 
+    expect(after).not.toBe(before);
+  });
+
+  it("rebuilds when editing first math also shifts later math positions", () => {
+    const doc = "$x$ and $y$";
+    const state = createMathRenderState(doc);
+    const before = state.field(mathDecorationField);
+    const mathText = doc.indexOf("x");
+
+    const after = state.update({
+      changes: {
+        from: mathText,
+        to: mathText + 1,
+        insert: "ab",
+      },
+    }).state.field(mathDecorationField);
+
+    // Full rebuild because first math region's content changed,
+    // even though the second only had a position shift.
     expect(after).not.toBe(before);
   });
 
@@ -419,6 +441,22 @@ describe("math decoration invalidation", () => {
     const after = state.update({ effects: focusEffect.of(true) }).state.field(mathDecorationField);
 
     expect(after).not.toBe(before);
+  });
+
+  it("maps decorations instead of rebuilding when prose before math is edited", () => {
+    const doc = "hello $x$ end";
+    const state = createMathRenderState(doc, 0);
+    const before = state.field(mathDecorationField);
+
+    // Insert text before the math expression — only positions shift
+    const after = state.update({
+      changes: { from: 0, to: 0, insert: "a" },
+    }).state.field(mathDecorationField);
+
+    // Mapped (not identity-preserved) since positions shifted,
+    // but same number of decorations (not rebuilt from scratch).
+    expect(after).not.toBe(before);
+    expect(after.size).toBe(before.size);
   });
 });
 
