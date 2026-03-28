@@ -50,6 +50,7 @@ function AppInner() {
     refreshTree: workspace.refreshTree,
     reloadFile: editor.reloadFile,
     currentPath: editor.currentPath,
+    hasDirtyDocument: editor.hasDirtyDocument,
   });
 
   const openProjectInCurrentWindow = useCallback(async (
