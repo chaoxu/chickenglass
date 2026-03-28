@@ -8,6 +8,7 @@ export {
   MathWidget,
   mathRenderPlugin,
   renderKatex,
+  findActiveMath,
   MATH_TYPES,
   stripMathDelimiters,
   getDisplayMathContentEnd,
