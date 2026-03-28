@@ -79,6 +79,8 @@ export interface PerfOperationHandle {
   end: () => void;
 }
 
+type MeasurementFinalizer = () => void;
+
 let nextMeasureId = 0;
 
 function isTauriRuntime(): boolean {
@@ -204,27 +206,38 @@ class FrontendPerfStore {
 
 const frontendPerfStore = new FrontendPerfStore();
 
+function beginMeasurement(
+  name: string,
+  options: PerfSpanOptions,
+): MeasurementFinalizer {
+  const measureId = nextMeasurementId();
+  const startMark = `cf:${measureId}:start`;
+  const endMark = `cf:${measureId}:end`;
+  const measureLabel = `cf:${measureId}:${name}`;
+  performance.mark(startMark);
+
+  return () => {
+    performance.mark(endMark);
+    performance.measure(measureLabel, startMark, endMark);
+    const entries = performance.getEntriesByName(measureLabel);
+    const durationMs = entries.at(-1)?.duration ?? 0;
+    frontendPerfStore.recordSpan(name, durationMs, options);
+    performance.clearMarks(startMark);
+    performance.clearMarks(endMark);
+    performance.clearMeasures(measureLabel);
+  };
+}
+
 export function measureSync<T>(
   name: string,
   task: () => T,
   options: PerfSpanOptions = {},
 ): T {
-  const measureId = nextMeasurementId();
-  const startMark = `cf:${measureId}:start`;
-  const endMark = `cf:${measureId}:end`;
-  const measureName = `cf:${measureId}:${name}`;
-  performance.mark(startMark);
+  const finalize = beginMeasurement(name, options);
   try {
     return task();
   } finally {
-    performance.mark(endMark);
-    performance.measure(measureName, startMark, endMark);
-    const entries = performance.getEntriesByName(measureName);
-    const durationMs = entries.at(-1)?.duration ?? 0;
-    frontendPerfStore.recordSpan(name, durationMs, options);
-    performance.clearMarks(startMark);
-    performance.clearMarks(endMark);
-    performance.clearMeasures(measureName);
+    finalize();
   }
 }
 
@@ -233,22 +246,11 @@ export async function measureAsync<T>(
   task: () => Promise<T>,
   options: PerfSpanOptions = {},
 ): Promise<T> {
-  const measureId = nextMeasurementId();
-  const startMark = `cf:${measureId}:start`;
-  const endMark = `cf:${measureId}:end`;
-  const measureName = `cf:${measureId}:${name}`;
-  performance.mark(startMark);
+  const finalize = beginMeasurement(name, options);
   try {
     return await task();
   } finally {
-    performance.mark(endMark);
-    performance.measure(measureName, startMark, endMark);
-    const entries = performance.getEntriesByName(measureName);
-    const durationMs = entries.at(-1)?.duration ?? 0;
-    frontendPerfStore.recordSpan(name, durationMs, options);
-    performance.clearMarks(startMark);
-    performance.clearMarks(endMark);
-    performance.clearMeasures(measureName);
+    finalize();
   }
 }
 
