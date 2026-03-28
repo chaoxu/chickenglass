@@ -52,9 +52,9 @@ describe("useGitStatus", () => {
   let root: Root;
 
   beforeEach(() => {
-    gitBranchInfoCommand.mockClear();
-    gitPullCommand.mockClear();
-    gitPushCommand.mockClear();
+    gitBranchInfoCommand.mockReset().mockImplementation(async () => branchInfoResult);
+    gitPullCommand.mockReset().mockImplementation(async () => "Already up to date.");
+    gitPushCommand.mockReset().mockImplementation(async () => "Everything up-to-date");
     refreshTree.mockClear();
     branchInfoResult = {
       branch: "main",
@@ -133,5 +133,42 @@ describe("useGitStatus", () => {
     expect(lastStatus.branch).toBe("main");
     expect(lastStatus.hasUpstream).toBe(true);
     expect(lastStatus.ahead).toBe(0);
+  });
+
+  it("refreshes branch info after a failed pull", async () => {
+    // Mount with default branch info (ahead: 0).
+    await act(async () => {
+      root.render(createElement(Harness));
+      await flushMicrotasks();
+    });
+    expect(lastStatus.ahead).toBe(0);
+
+    // Simulate a failed ff-only pull that still updated the remote ref,
+    // changing the ahead/behind counts.
+    gitPullCommand.mockRejectedValueOnce("fatal: Not possible to fast-forward");
+    branchInfoResult = {
+      branch: "main",
+      hasUpstream: true,
+      ahead: 1,
+      behind: 1,
+    };
+
+    // Stub window.alert so it doesn't throw in jsdom.
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+
+    // Trigger the pull and wait inside a single act() so React flushes
+    // all state updates — including the fire-and-forget fetchBranchInfo()
+    // that runs in the finally block.
+    await act(async () => {
+      lastStatus.pull();
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    // Branch info must have been refreshed even though pull failed.
+    expect(gitBranchInfoCommand).toHaveBeenCalledTimes(2); // initial + post-pull
+    expect(lastStatus.ahead).toBe(1);
+    expect(lastStatus.behind).toBe(1);
+
+    alertSpy.mockRestore();
   });
 });

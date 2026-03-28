@@ -128,8 +128,8 @@ export function useAppOverlays({
     { id: "export.html", label: "Export Current File to HTML", category: "Export", action: handleExportHtml },
     { id: "export.batch-html", label: "Export All Files to HTML", category: "Export", action: handleBatchExportHtml },
     ...(git.branch && git.hasUpstream ? [
-      { id: "git.pull", label: git.isPulling ? "Pulling..." : "Pull", category: "Git", action: () => { if (!git.isPulling) git.pull(); } },
-      { id: "git.push", label: git.isPushing ? "Pushing..." : "Push", category: "Git", action: () => { if (!git.isPushing) git.push(); } },
+      { id: "git.pull", label: git.isPulling ? "Pulling..." : "Pull", category: "Git", action: () => { git.pull(); } },
+      { id: "git.push", label: git.isPushing ? "Pushing..." : "Push", category: "Git", action: () => { git.push(); } },
     ] : []),
     { id: "help.shortcuts", label: "Keyboard Shortcuts", category: "Help", shortcut: `${modKey}+/`, action: () => dialogs.setShortcutsOpen(true) },
     { id: "help.about", label: "About Coflat", category: "Help", action: () => dialogs.setAboutOpen(true) },

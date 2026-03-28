@@ -22,6 +22,9 @@ export function useGitStatus(
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const requestRef = useRef(0);
+  // Ref-based guard: state values go stale inside callbacks, but a ref
+  // is always current, so concurrent pull+push is reliably prevented.
+  const busyRef = useRef(false);
 
   const fetchBranchInfo = useCallback(() => {
     const requestId = ++requestRef.current;
@@ -45,34 +48,40 @@ export function useGitStatus(
   }, [fetchBranchInfo]);
 
   const pull = useCallback(() => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     void (async () => {
       setIsPulling(true);
       try {
         const { gitPullCommand } = await import("../tauri-client/git");
         const result = await gitPullCommand();
         window.alert(result || "Pull successful");
-        fetchBranchInfo();
         await refreshTree();
       } catch (err: unknown) {
         window.alert(`Pull failed: ${String(err)}`);
       } finally {
+        fetchBranchInfo();
         setIsPulling(false);
+        busyRef.current = false;
       }
     })();
   }, [fetchBranchInfo, refreshTree]);
 
   const push = useCallback(() => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     void (async () => {
       setIsPushing(true);
       try {
         const { gitPushCommand } = await import("../tauri-client/git");
         const result = await gitPushCommand();
         window.alert(result || "Push successful");
-        fetchBranchInfo();
       } catch (err: unknown) {
         window.alert(`Push failed: ${String(err)}`);
       } finally {
+        fetchBranchInfo();
         setIsPushing(false);
+        busyRef.current = false;
       }
     })();
   }, [fetchBranchInfo]);
