@@ -14,8 +14,8 @@
 
 import { Fragment, useState, useEffect, useRef, useCallback } from "react";
 import { headingAncestryAt, type HeadingEntry } from "../heading-ancestry";
-import { renderDocumentFragmentToHtml } from "../../document-surfaces";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
+import { HeadingLabel } from "./heading-chrome";
 import {
   Breadcrumb,
   BreadcrumbButton,
@@ -201,14 +201,13 @@ export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
               {i > 0 && <BreadcrumbSeparator />}
               <BreadcrumbItem>
                 {i === ancestry.length - 1 ? (
-                  <BreadcrumbPage
-                    dangerouslySetInnerHTML={{ __html: renderDocumentFragmentToHtml({ kind: "chrome-label", text: h.text }) }}
-                  />
+                  <BreadcrumbPage>
+                    <HeadingLabel text={h.text} />
+                  </BreadcrumbPage>
                 ) : (
-                  <BreadcrumbButton
-                    onClick={() => onSelect(h.pos)}
-                    dangerouslySetInnerHTML={{ __html: renderDocumentFragmentToHtml({ kind: "chrome-label", text: h.text }) }}
-                  />
+                  <BreadcrumbButton onClick={() => onSelect(h.pos)}>
+                    <HeadingLabel text={h.text} />
+                  </BreadcrumbButton>
                 )}
               </BreadcrumbItem>
             </Fragment>
