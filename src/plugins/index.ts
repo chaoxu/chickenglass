@@ -36,32 +36,15 @@ export {
 } from "./block-render";
 export {
   createStandardPlugin,
+  pluginFromManifest,
   type StandardPluginOptions,
 } from "./plugin-factory";
+export { QED_SYMBOL } from "./proof-plugin";
 export {
-  theoremPlugin,
-  lemmaPlugin,
-  corollaryPlugin,
-  propositionPlugin,
-  conjecturePlugin,
+  defaultPlugins,
   theoremFamilyPlugins,
-} from "./theorem-plugin";
-export { proofPlugin, QED_SYMBOL } from "./proof-plugin";
-export { definitionPlugin } from "./definition-plugin";
-export { remarkPlugin, examplePlugin } from "./remark-plugin";
-export { blockquotePlugin } from "./blockquote-plugin";
-export { algorithmPlugin } from "./algorithm-plugin";
-export { problemPlugin } from "./problem-plugin";
-export { figurePlugin } from "./figure-plugin";
-export { tableBlockPlugin } from "./table-plugin";
-export { defaultPlugins } from "./default-plugins";
-export {
-  embedPlugin,
-  iframePlugin,
-  youtubePlugin,
-  gistPlugin,
   embedFamilyPlugins,
-} from "./embed-plugin";
+} from "./default-plugins";
 export {
   type ResolvedInclude,
   type FlattenRegion,

@@ -16,16 +16,17 @@ import { computeBlockNumbers } from "./block-counter";
 import { defaultPlugins } from "./default-plugins";
 
 import {
-  embedPlugin,
-  iframePlugin,
-  youtubePlugin,
-  gistPlugin,
-  embedFamilyPlugins,
   isValidEmbedUrl,
   extractYoutubeId,
   youtubeEmbedUrl,
   gistEmbedUrl,
 } from "./embed-plugin";
+import { embedFamilyPlugins } from "./default-plugins";
+
+const embedPlugin = defaultPlugins.find((p) => p.name === "embed")!;
+const iframePlugin = defaultPlugins.find((p) => p.name === "iframe")!;
+const youtubePlugin = defaultPlugins.find((p) => p.name === "youtube")!;
+const gistPlugin = defaultPlugins.find((p) => p.name === "gist")!;
 
 /** Create an EditorState with fenced div parser. */
 function createState(doc: string): EditorState {

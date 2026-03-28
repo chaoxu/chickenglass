@@ -1,5 +1,9 @@
 /**
- * Embed block plugins for custom content blocks.
+ * Embed URL helpers for custom content blocks.
+ *
+ * The embed plugins themselves are generated from BLOCK_MANIFEST in
+ * default-plugins.ts. This file only exports the URL validation and
+ * transformation functions used by the renderer.
  *
  * Supports embedding external content via iframes:
  * - `.embed` — generic embed (renders URL as iframe)
@@ -16,9 +20,6 @@
  *
  * Security: Only https:// URLs are allowed. Iframes use sandbox attributes.
  */
-
-import type { BlockPlugin } from "./plugin-types";
-import { createStandardPlugin } from "./plugin-factory";
 
 /** Validate that a URL is safe for embedding (https only). */
 export function isValidEmbedUrl(url: string): boolean {
@@ -96,43 +97,3 @@ export function gistEmbedUrl(url: string): string {
   if (trimmed.endsWith(".pibb")) return trimmed;
   return trimmed.endsWith("/") ? `${trimmed.slice(0, -1)}.pibb` : `${trimmed}.pibb`;
 }
-
-/** Generic embed plugin — renders any https URL as an iframe. */
-export const embedPlugin: BlockPlugin = createStandardPlugin({
-  name: "embed",
-  title: "Embed",
-  numbered: false,
-  specialBehavior: "embed",
-});
-
-/** Plain iframe plugin — renders URL as a plain iframe. */
-export const iframePlugin: BlockPlugin = createStandardPlugin({
-  name: "iframe",
-  title: "Iframe",
-  numbered: false,
-  specialBehavior: "embed",
-});
-
-/** YouTube embed plugin — extracts video ID and renders responsive 16:9. */
-export const youtubePlugin: BlockPlugin = createStandardPlugin({
-  name: "youtube",
-  title: "YouTube",
-  numbered: false,
-  specialBehavior: "embed",
-});
-
-/** GitHub Gist embed plugin. */
-export const gistPlugin: BlockPlugin = createStandardPlugin({
-  name: "gist",
-  title: "Gist",
-  numbered: false,
-  specialBehavior: "embed",
-});
-
-/** All embed-family plugins as an array. */
-export const embedFamilyPlugins: readonly BlockPlugin[] = [
-  embedPlugin,
-  iframePlugin,
-  youtubePlugin,
-  gistPlugin,
-];

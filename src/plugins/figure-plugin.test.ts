@@ -6,12 +6,13 @@ import { documentSemanticsField } from "../semantics/codemirror-source";
 import { createPluginRegistryField } from "./plugin-registry";
 import { blockCounterField } from "./block-counter";
 import { blockRenderPlugin } from "./plugin-render";
-import { figurePlugin } from "./figure-plugin";
-import { tableBlockPlugin } from "./table-plugin";
+import { defaultPlugins } from "./default-plugins";
 import { mathMacrosField } from "../render/render-core";
 import { _blockDecorationFieldForTest } from "./plugin-render";
 import { createTestView, getDecorationSpecs } from "../test-utils";
 
+const figurePlugin = defaultPlugins.find((p) => p.name === "figure")!;
+const tableBlockPlugin = defaultPlugins.find((p) => p.name === "table")!;
 const testPlugins = [figurePlugin, tableBlockPlugin];
 
 function createView(doc: string, cursorPos?: number) {
