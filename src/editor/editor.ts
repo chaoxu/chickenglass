@@ -3,7 +3,7 @@ import { EditorView } from "@codemirror/view";
 import { LanguageDescription, indentUnit } from "@codemirror/language";
 import type { EditorPluginManager } from "./editor-plugin";
 
-import { frontmatterDecoration } from "./frontmatter-state";
+import { frontmatterDecoration } from "./frontmatter-render";
 import {
   containerAttributesPlugin,
   imageRenderPlugin,
