@@ -58,6 +58,24 @@ export interface FileEntry {
   children?: FileEntry[];
 }
 
+/**
+ * Plain-data block counter entry for cross-reference resolution.
+ *
+ * Mirrors `NumberedBlock` from the CM6 block-counter state field but without
+ * position data — only the fields needed for label formatting. Lives here so
+ * that both the CM6-free HTML export path (`markdown-to-html.ts`) and the
+ * editor render layer can share the type without crossing the `src/app/`
+ * boundary.
+ */
+export interface BlockCounterEntry {
+  /** The plugin class name (e.g. "theorem"). */
+  readonly type: string;
+  /** Display title for the block type (e.g. "Theorem"). */
+  readonly title: string;
+  /** The assigned number. */
+  readonly number: number;
+}
+
 /** Abstract filesystem interface for different backends. */
 export interface FileSystem {
   /** List all files/directories as a tree starting from root. */

@@ -1,14 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { openExternalUrl, handleExternalLinkClick } from "./open-link";
-import { isTauri } from "./tauri";
-
-// Mock isTauri — default to false (browser mode)
-vi.mock("./tauri", () => ({ isTauri: vi.fn(() => false) }));
-
-// Mock the perf module so the Tauri path can be exercised without a real backend.
-vi.mock("../app/perf", () => ({
-  invokeWithPerf: vi.fn(() => Promise.resolve()),
-}));
+import { openExternalUrl, handleExternalLinkClick, configureExternalUrlOpener } from "./open-link";
 
 describe("openExternalUrl", () => {
   let windowOpenSpy: ReturnType<typeof vi.spyOn>;
@@ -19,6 +10,7 @@ describe("openExternalUrl", () => {
 
   afterEach(() => {
     windowOpenSpy.mockRestore();
+    configureExternalUrlOpener(null);
   });
 
   it("opens http URL via window.open in browser mode", async () => {
@@ -63,33 +55,43 @@ describe("openExternalUrl", () => {
   });
 });
 
-describe("openExternalUrl (Tauri mode)", () => {
+describe("openExternalUrl (custom opener)", () => {
   let windowOpenSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    vi.mocked(isTauri).mockReturnValue(true);
     windowOpenSpy = vi.spyOn(window, "open").mockImplementation(() => null);
   });
 
   afterEach(() => {
-    vi.mocked(isTauri).mockReturnValue(false);
     windowOpenSpy.mockRestore();
+    configureExternalUrlOpener(null);
   });
 
-  it("calls invokeWithPerf('open_url') instead of window.open", async () => {
-    const { invokeWithPerf } = await import("../app/perf");
+  it("delegates to custom opener when configured", async () => {
+    const opener = vi.fn(() => Promise.resolve(true));
+    configureExternalUrlOpener(opener);
     const result = await openExternalUrl("https://example.com");
     expect(result).toBe(true);
-    expect(invokeWithPerf).toHaveBeenCalledWith("open_url", { url: "https://example.com" });
+    expect(opener).toHaveBeenCalledWith("https://example.com");
     expect(windowOpenSpy).not.toHaveBeenCalled();
   });
 
-  it("returns false and does not throw when invokeWithPerf rejects", async () => {
-    const { invokeWithPerf } = await import("../app/perf");
-    vi.mocked(invokeWithPerf).mockRejectedValueOnce(new Error("backend down"));
+  it("returns false and does not throw when custom opener rejects", async () => {
+    const opener = vi.fn(() => Promise.reject(new Error("backend down")));
+    configureExternalUrlOpener(opener);
     const result = await openExternalUrl("https://example.com");
     expect(result).toBe(false);
     expect(windowOpenSpy).not.toHaveBeenCalled();
+  });
+
+  it("restores window.open after clearing custom opener", async () => {
+    const opener = vi.fn(() => Promise.resolve(true));
+    configureExternalUrlOpener(opener);
+    configureExternalUrlOpener(null);
+    const result = await openExternalUrl("https://example.com");
+    expect(result).toBe(true);
+    expect(opener).not.toHaveBeenCalled();
+    expect(windowOpenSpy).toHaveBeenCalled();
   });
 });
 

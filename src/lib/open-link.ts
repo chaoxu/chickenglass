@@ -1,12 +1,27 @@
 /**
  * Open external URLs safely across browser and Tauri environments.
  *
- * In Tauri, delegates to the `open_url` backend command so the OS default
- * browser handles the URL. In the browser, falls back to `window.open`.
+ * The default behavior uses `window.open`. Hosts (e.g. the Tauri app shell)
+ * can override this via `configureExternalUrlOpener` to route URLs through
+ * a native handler instead.
  */
 
-import { isTauri } from "./tauri";
 import { isSafeUrl } from "./url-utils";
+
+/** Custom URL opener injected by the host (e.g. Tauri app shell). */
+let customUrlOpener: ((url: string) => Promise<boolean>) | null = null;
+
+/**
+ * Register a custom handler for opening external URLs.
+ *
+ * When set, `openExternalUrl` delegates to this handler instead of
+ * `window.open`. Pass `null` to restore the default browser behavior.
+ */
+export function configureExternalUrlOpener(
+  opener: ((url: string) => Promise<boolean>) | null,
+): void {
+  customUrlOpener = opener;
+}
 
 /**
  * Open an external URL in the OS default browser (Tauri) or a new tab (browser).
@@ -23,18 +38,16 @@ export async function openExternalUrl(url: string): Promise<boolean> {
     return false;
   }
 
-  if (isTauri()) {
+  if (customUrlOpener) {
     try {
-      const { invokeWithPerf } = await import("../app/perf");
-      await invokeWithPerf("open_url", { url });
-      return true;
+      return await customUrlOpener(url);
     } catch (e: unknown) {
-      console.error("[open-link] Tauri open_url failed:", e);
+      console.error("[open-link] custom URL opener failed:", e);
       return false;
     }
   }
 
-  // Browser fallback
+  // Browser default
   window.open(url, "_blank", "noopener,noreferrer");
   return true;
 }
