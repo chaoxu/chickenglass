@@ -46,7 +46,7 @@ export function mergeChildrenIntoTree(
   return changed ? { ...tree, children: mapped } : tree;
 }
 
-export type SidebarTab = "files" | "outline" | "symbols";
+export type SidebarTab = "files" | "outline" | "symbols" | "git";
 
 export interface AppWorkspaceSessionController {
   settings: ReturnType<typeof useSettings>["settings"];
@@ -134,11 +134,18 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     const id = ++gitStatusRequestRef.current;
     try {
       const { gitStatusCommand } = await import("../tauri-client/git");
-      const status = await measureAsync("sidebar.git_status", () => gitStatusCommand(), {
+      const result = await measureAsync("sidebar.git_status", () => gitStatusCommand(), {
         category: "sidebar",
       });
       if (id !== gitStatusRequestRef.current) return;
-      setGitStatus(status);
+      // Convert GitStatusResult to GitStatusMap for file-tree badges.
+      const map: GitStatusMap = {};
+      for (const f of result.files) {
+        if (f.staged === "added") map[f.path] = "added";
+        else if (f.unstaged === "untracked") map[f.path] = "untracked";
+        else map[f.path] = "modified";
+      }
+      setGitStatus(map);
     } catch (e: unknown) {
       if (id !== gitStatusRequestRef.current) return;
       console.error("[workspace] failed to load git status", e);

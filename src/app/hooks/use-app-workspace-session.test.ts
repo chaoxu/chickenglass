@@ -113,7 +113,17 @@ vi.mock("../project-config", () => ({
 }));
 
 vi.mock("../tauri-client/git", () => ({
-  gitStatusCommand: () => workspaceMockState.getGitStatus(),
+  gitStatusCommand: async () => {
+    // Test mocks return a flat Record<string, string> (GitStatusMap).
+    // Convert to GitStatusResult so loadGitStatus can consume it.
+    const map = await workspaceMockState.getGitStatus();
+    const files = Object.entries(map).map(([path, status]) => ({
+      path,
+      staged: status === "added" ? "added" : null,
+      unstaged: status === "untracked" ? "untracked" : status === "modified" ? "modified" : null,
+    }));
+    return { isRepo: true, branch: "main", files };
+  },
 }));
 
 vi.mock("../perf", () => ({

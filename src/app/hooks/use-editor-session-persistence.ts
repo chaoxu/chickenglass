@@ -34,6 +34,8 @@ interface UseEditorSessionPersistenceOptions {
   pipeline: SavePipeline;
   refreshTree: () => Promise<void>;
   addRecentFile: (path: string) => void;
+  /** Lightweight callback fired after every successful save (not tree refresh). */
+  onAfterSave?: () => void;
   buffers: RefObject<Map<string, string>>;
   liveDocs: RefObject<Map<string, string>>;
   sourceMaps: RefObject<Map<string, SourceMap>>;
@@ -70,6 +72,7 @@ export function useEditorSessionPersistence({
   pipeline,
   refreshTree,
   addRecentFile,
+  onAfterSave,
   buffers,
   liveDocs,
   sourceMaps,
@@ -128,6 +131,7 @@ export function useEditorSessionPersistence({
         markSessionDocumentDirty(getSessionState(), currentPath, false),
         { editorDoc: doc },
       );
+      onAfterSave?.();
     }
     return result.saved;
   }, [
@@ -136,6 +140,7 @@ export function useEditorSessionPersistence({
     getSessionState,
     liveDocs,
     pipeline,
+    onAfterSave,
     sourceMaps,
   ]);
 
