@@ -380,6 +380,54 @@ describe("useAppWorkspaceSession", () => {
     expect(ref.gitBranch).toEqual({ branch: "feature-x", isDetached: false });
   });
 
+  it("discards stale git branch when a newer project open wins the race", async () => {
+    workspaceMockState.windowState = {
+      ...workspaceMockState.windowState,
+      projectRoot: null,
+    };
+    const firstTree = createDeferred<FileEntry>();
+    const secondTree = createDeferred<FileEntry>();
+    const firstGitBranch = createDeferred<{ branch: string; isDetached: boolean } | null>();
+    const secondGitBranch = createDeferred<{ branch: string; isDetached: boolean } | null>();
+    const fs = createQueuedFs([firstTree, secondTree]);
+    workspaceMockState.getGitBranch
+      .mockImplementationOnce(async () => firstGitBranch.promise)
+      .mockImplementationOnce(async () => secondGitBranch.promise);
+    const { Harness, ref } = createHarness(fs);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    let openFirst!: Promise<FileEntry | null>;
+    let openSecond!: Promise<FileEntry | null>;
+
+    await act(async () => {
+      openFirst = ref.openProjectRoot("/tmp/project-a");
+    });
+    await act(async () => {
+      openSecond = ref.openProjectRoot("/tmp/project-b");
+    });
+
+    // Resolve the newer project first
+    await act(async () => {
+      secondTree.resolve({ name: "project-b", path: "", isDirectory: true, children: [] });
+      secondGitBranch.resolve({ branch: "branch-b", isDetached: false });
+      await openSecond;
+    });
+
+    // Now resolve the stale project — its git branch must NOT overwrite
+    await act(async () => {
+      firstTree.resolve({ name: "project-a", path: "", isDirectory: true, children: [] });
+      firstGitBranch.resolve({ branch: "branch-a", isDetached: false });
+      await openFirst;
+    });
+
+    expect(ref.projectRoot).toBe("/tmp/project-b");
+    expect(ref.gitBranch).toEqual({ branch: "branch-b", isDetached: false });
+  });
+
   it("does not let a stale startup restore overwrite a newer manual open", async () => {
     const restoredOpen = createDeferred<boolean>();
     workspaceMockState.openFolderAt

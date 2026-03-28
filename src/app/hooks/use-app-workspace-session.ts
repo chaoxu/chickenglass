@@ -88,7 +88,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     });
   }, [saveWindowState]);
 
-  const loadGitBranch = useCallback(async () => {
+  const loadGitBranch = useCallback(async (requestId: number) => {
     if (!isTauri()) {
       setGitBranch(null);
       return;
@@ -98,8 +98,10 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       const info = await measureAsync("startup.git_branch", () => getGitBranchCommand(), {
         category: "startup",
       });
+      if (requestId !== workspaceRequestRef.current) return;
       setGitBranch(info);
     } catch (e: unknown) {
+      if (requestId !== workspaceRequestRef.current) return;
       console.error("[workspace] failed to detect git branch", e);
       setGitBranch(null);
     }
@@ -160,7 +162,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       projectRoot: path,
       currentDocument: null,
     });
-    const [tree] = await Promise.all([loadWorkspaceContents(requestId), loadGitBranch()]);
+    const [tree] = await Promise.all([loadWorkspaceContents(requestId), loadGitBranch(requestId)]);
     return tree;
   }, [loadWorkspaceContents, loadGitBranch, saveWindowState]);
 
@@ -177,7 +179,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
                 return;
               }
               setProjectRoot(windowState.projectRoot);
-              await Promise.all([loadWorkspaceContents(requestId), loadGitBranch()]);
+              await Promise.all([loadWorkspaceContents(requestId), loadGitBranch(requestId)]);
             } catch (e: unknown) {
               if (requestId !== workspaceRequestRef.current) {
                 return;
