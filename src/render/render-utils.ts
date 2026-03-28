@@ -105,6 +105,16 @@ export function serializeMacros(macros: Record<string, string>): string {
   return result;
 }
 
+/**
+ * Maps live widget DOM elements to their owning RenderWidget instance.
+ *
+ * Search-highlight reads `sourceFrom`/`sourceTo` from the widget instance
+ * via this map rather than from DOM `data-source-from`/`data-source-to`
+ * attributes, which can become stale when CM6 maps decoration positions
+ * without calling `toDOM()` again.
+ */
+export const widgetSourceMap = new WeakMap<HTMLElement, RenderWidget>();
+
 /** Shared Decoration.mark that visually hides source markers via CSS while keeping them in the DOM. */
 export const decorationHidden = Decoration.mark({ class: "cf-hidden" });
 
@@ -210,13 +220,6 @@ export abstract class RenderWidget extends WidgetType {
   private cachedDOM: HTMLElement | null = null;
 
   /**
-   * Reference to the live DOM element returned by the most recent `toDOM()` call.
-   * Used by `updateSourceRange()` to keep data-source-from/to attributes in sync
-   * when decorations are position-mapped instead of rebuilt.
-   */
-  private liveDOM: HTMLElement | null = null;
-
-  /**
    * Subclasses build their DOM element here.
    *
    * Called by the default `toDOM()` implementation. Widgets that override
@@ -245,13 +248,13 @@ export abstract class RenderWidget extends WidgetType {
   }
 
   protected setSourceRangeAttrs(el: HTMLElement): void {
-    this.liveDOM = el;
     if (this.sourceFrom >= 0) {
       el.dataset.sourceFrom = String(this.sourceFrom);
     }
     if (this.sourceTo >= 0) {
       el.dataset.sourceTo = String(this.sourceTo);
     }
+    widgetSourceMap.set(el, this);
   }
 
   /**
@@ -259,17 +262,13 @@ export abstract class RenderWidget extends WidgetType {
    *
    * When a decoration set is mapped through document changes instead of
    * rebuilt, the widget instances are reused at shifted positions.  This
-   * method patches `sourceFrom`/`sourceTo` and the live DOM's
-   * `data-source-from`/`data-source-to` attributes so that click-to-edit
-   * and search-highlight remain correct.
+   * method patches `sourceFrom`/`sourceTo` so that click-to-edit handlers
+   * (which read these fields at event time) and search-highlight (which
+   * reads them via {@link widgetSourceMap}) remain correct.
    */
   updateSourceRange(from: number, to: number): void {
     this.sourceFrom = from;
     this.sourceTo = to;
-    if (this.liveDOM) {
-      this.liveDOM.dataset.sourceFrom = String(from);
-      this.liveDOM.dataset.sourceTo = String(to);
-    }
   }
 
   protected bindSourceReveal(

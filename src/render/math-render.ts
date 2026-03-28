@@ -366,7 +366,7 @@ const mathDecorationField = StateField.define<DecorationSet>({
       ) {
         const mapped = value.map(tr.changes);
         // Patch sourceFrom/sourceTo on reused widgets so click-to-edit
-        // and data-source-from/to attributes stay correct after mapping.
+        // and search-highlight stay correct after position mapping.
         const cursor = mapped.iter();
         while (cursor.value) {
           const widget = cursor.value.spec?.widget;
