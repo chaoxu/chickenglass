@@ -1,4 +1,5 @@
 import { FileTree } from "./file-tree";
+import { GitPanel } from "./git-panel";
 import { Outline } from "./outline";
 import {
   Sidebar,
@@ -10,6 +11,7 @@ import {
 import { SymbolPanel } from "./symbol-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import type { AppEditorShellController } from "../hooks/use-app-editor-shell";
+import type { GitController } from "../hooks/use-git";
 import type {
   AppWorkspaceSessionController,
   SidebarTab,
@@ -25,9 +27,10 @@ interface AppSidebarShellProps {
     AppEditorShellController,
     "currentPath" | "openFile" | "handleRename" | "handleDelete" | "createFile" | "createDirectory" | "headings" | "handleOutlineSelect" | "handleSymbolInsert" | "editorState"
   >;
+  git: GitController | null;
 }
 
-export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
+export function AppSidebarShell({ workspace, editor, git }: AppSidebarShellProps) {
   const fileTreePersistRef = usePersistentTreeState();
 
   return (
@@ -51,6 +54,7 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
             <TabsTrigger value="files">Files</TabsTrigger>
             <TabsTrigger value="outline">Outline</TabsTrigger>
             <TabsTrigger value="symbols">Symbols</TabsTrigger>
+            {git && <TabsTrigger value="git">Git</TabsTrigger>}
           </TabsList>
 
           <SidebarContent>
@@ -78,6 +82,11 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
                 view={editor.editorState?.view ?? null}
               />
             </TabsContent>
+            {git && (
+              <TabsContent value="git" className="min-h-full">
+                <GitPanel git={git} />
+              </TabsContent>
+            )}
           </SidebarContent>
         </Tabs>
       </Sidebar>

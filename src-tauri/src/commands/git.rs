@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 
+use git2::{Repository, StatusOptions, StatusShow};
 use serde::Serialize;
 use tauri::{State, WebviewWindow, command};
 
@@ -409,12 +409,179 @@ pub fn git_create_branch(
     )
 }
 
+// ── File-level staging & commit (git2) ────────────────────────────────────────
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GitStatusEntry {
+    pub path: String,
+    /// Index (staged) status: "added", "modified", "deleted", "renamed", "typechange"
+    pub staged: Option<String>,
+    /// Working-tree (unstaged) status: "modified", "deleted", "untracked", "renamed"
+    pub unstaged: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitStatusResult {
+    pub is_repo: bool,
+    pub branch: Option<String>,
+    pub files: Vec<GitStatusEntry>,
+}
+
+fn open_repo(project_root: &Path) -> Result<Repository, String> {
+    Repository::discover(project_root)
+        .map_err(|e| format!("Not a git repository: {}", e))
+}
+
+/// Compute the project-root prefix relative to the repo working directory.
+///
+/// Returns `""` when the project root IS the repo root (the common case),
+/// or something like `"docs/"` when the user opened a subdirectory.
+/// All returned paths use forward slashes and end with `/` when non-empty.
+fn workspace_prefix(repo: &Repository, project_root: &Path) -> Result<String, String> {
+    let workdir = repo
+        .workdir()
+        .ok_or("Bare repositories are not supported")?;
+
+    let canonical_workdir = workdir
+        .canonicalize()
+        .map_err(|e| format!("Cannot canonicalize repo workdir: {}", e))?;
+    let canonical_project = project_root
+        .canonicalize()
+        .map_err(|e| format!("Cannot canonicalize project root: {}", e))?;
+
+    let relative = canonical_project
+        .strip_prefix(&canonical_workdir)
+        .map_err(|_| "Project root is not inside the git repository".to_string())?;
+
+    let prefix = relative.to_string_lossy().replace('\\', "/");
+    if prefix.is_empty() {
+        Ok(String::new())
+    } else {
+        Ok(format!("{}/", prefix))
+    }
+}
+
+/// Convert a workspace-relative path to a repo-relative path by prepending
+/// the workspace prefix.
+fn to_repo_path(prefix: &str, workspace_path: &str) -> String {
+    format!("{}{}", prefix, workspace_path)
+}
+
+fn get_repo_branch_name(repo: &Repository) -> Option<String> {
+    let head = repo.head().ok()?;
+    if head.is_branch() {
+        head.shorthand().map(|s| s.to_string())
+    } else {
+        // Detached HEAD — show abbreviated OID
+        head.target().map(|oid| format!("{:.7}", oid))
+    }
+}
+
+fn status_flag_to_staged(flags: git2::Status) -> Option<&'static str> {
+    if flags.intersects(git2::Status::INDEX_NEW) {
+        Some("added")
+    } else if flags.intersects(git2::Status::INDEX_MODIFIED) {
+        Some("modified")
+    } else if flags.intersects(git2::Status::INDEX_DELETED) {
+        Some("deleted")
+    } else if flags.intersects(git2::Status::INDEX_RENAMED) {
+        Some("renamed")
+    } else if flags.intersects(git2::Status::INDEX_TYPECHANGE) {
+        Some("typechange")
+    } else {
+        None
+    }
+}
+
+fn status_flag_to_unstaged(flags: git2::Status) -> Option<&'static str> {
+    if flags.intersects(git2::Status::WT_NEW) {
+        Some("untracked")
+    } else if flags.intersects(git2::Status::WT_MODIFIED) {
+        Some("modified")
+    } else if flags.intersects(git2::Status::WT_DELETED) {
+        Some("deleted")
+    } else if flags.intersects(git2::Status::WT_RENAMED) {
+        Some("renamed")
+    } else {
+        None
+    }
+}
+
+/// Core logic for git status, extracted so it can be tested without Tauri state.
+fn git_status_for_root(project_root: &Path) -> Result<GitStatusResult, String> {
+    let repo = match open_repo(project_root) {
+        Ok(r) => r,
+        Err(_) => {
+            return Ok(GitStatusResult {
+                is_repo: false,
+                branch: None,
+                files: vec![],
+            });
+        }
+    };
+
+    let prefix = workspace_prefix(&repo, project_root)?;
+    let branch = get_repo_branch_name(&repo);
+
+    let mut opts = StatusOptions::new();
+    opts.show(StatusShow::IndexAndWorkdir);
+    opts.include_untracked(true);
+    opts.recurse_untracked_dirs(true);
+
+    let statuses = repo
+        .statuses(Some(&mut opts))
+        .map_err(|e| format!("Failed to get git status: {}", e))?;
+
+    let files: Vec<GitStatusEntry> = statuses
+        .iter()
+        .filter_map(|entry| {
+            let path = entry.path()?.to_string();
+            let flags = entry.status();
+            if flags.is_empty() || flags.intersects(git2::Status::IGNORED) {
+                return None;
+            }
+
+            // Filter to only files within the opened workspace.
+            if !prefix.is_empty() && !path.starts_with(&prefix) {
+                return None;
+            }
+
+            let staged = status_flag_to_staged(flags).map(String::from);
+            let unstaged = status_flag_to_unstaged(flags).map(String::from);
+            if staged.is_none() && unstaged.is_none() {
+                return None;
+            }
+
+            // Strip workspace prefix so the frontend sees project-relative paths.
+            let display_path = if prefix.is_empty() {
+                path
+            } else {
+                path[prefix.len()..].to_string()
+            };
+
+            Some(GitStatusEntry {
+                path: display_path,
+                staged,
+                unstaged,
+            })
+        })
+        .collect();
+
+    Ok(GitStatusResult {
+        is_repo: true,
+        branch,
+        files,
+    })
+}
+
 /// Query git working-tree status for the current project root.
 ///
 /// Returns a map of project-relative paths to status strings:
-/// - `"modified"`  — tracked file with uncommitted changes
-/// - `"added"`     — new file staged in the index
-/// - `"untracked"` — file not tracked by git
+/// - `"modified"`  -- tracked file with uncommitted changes
+/// - `"added"`     -- new file staged in the index
+/// - `"untracked"` -- file not tracked by git
 ///
 /// Returns an empty map when the project root is not inside a git
 /// repository, so non-git folders never break the file tree.
@@ -423,97 +590,237 @@ pub fn git_status(
     window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
-) -> Result<HashMap<String, String>, String> {
+) -> Result<GitStatusResult, String> {
     measure_command(
         &perf,
         "tauri.git_status",
-        "tauri.git.git_status",
-        "tauri",
+        "tauri.git.status",
+        "git",
         None,
         || {
             let project_root = current_project_root(&root, &window)?;
-            git_file_statuses(&project_root)
+            git_status_for_root(&project_root)
         },
     )
 }
 
-/// Collect per-file git statuses, mapped to project-relative paths.
-///
-/// Uses `git status --porcelain=v1 -z --no-renames` for reliable,
-/// NUL-separated output that handles paths with special characters.
-pub fn git_file_statuses(project_root: &Path) -> Result<HashMap<String, String>, String> {
-    // 1. Discover the repo root (fails gracefully for non-git dirs).
-    let toplevel_output = Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .current_dir(project_root)
-        .output();
+/// Core logic for git stage, extracted so it can be tested without Tauri state.
+fn git_stage_for_root(project_root: &Path, paths: &[String]) -> Result<(), String> {
+    let repo = open_repo(project_root)?;
+    let prefix = workspace_prefix(&repo, project_root)?;
+    let workdir = repo
+        .workdir()
+        .ok_or("Bare repositories are not supported")?;
 
-    let repo_root_str = match toplevel_output {
-        Ok(output) if output.status.success() => {
-            String::from_utf8_lossy(&output.stdout).trim().to_string()
+    let mut index = repo
+        .index()
+        .map_err(|e| format!("Failed to open index: {}", e))?;
+
+    for ws_path in paths {
+        let repo_path = to_repo_path(&prefix, ws_path);
+        let abs_path = workdir.join(&repo_path);
+        if abs_path.exists() {
+            index
+                .add_path(Path::new(&repo_path))
+                .map_err(|e| format!("Failed to stage '{}': {}", ws_path, e))?;
+        } else {
+            // File was deleted in the working tree — stage the deletion
+            index
+                .remove_path(Path::new(&repo_path))
+                .map_err(|e| format!("Failed to stage deletion '{}': {}", ws_path, e))?;
         }
-        _ => return Ok(HashMap::new()),
+    }
+
+    index
+        .write()
+        .map_err(|e| format!("Failed to write index: {}", e))
+}
+
+#[command]
+pub fn git_stage(
+    window: WebviewWindow,
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    measure_command(
+        &perf,
+        "tauri.git_stage",
+        "tauri.git.stage",
+        "git",
+        None,
+        || {
+            let project_root = current_project_root(&root, &window)?;
+            git_stage_for_root(&project_root, &paths)
+        },
+    )
+}
+
+/// Core logic for git unstage, extracted so it can be tested without Tauri state.
+fn git_unstage_for_root(project_root: &Path, paths: &[String]) -> Result<(), String> {
+    let repo = open_repo(project_root)?;
+    let prefix = workspace_prefix(&repo, project_root)?;
+
+    let head_commit = repo
+        .head()
+        .ok()
+        .and_then(|h| h.peel_to_commit().ok());
+
+    // Convert workspace-relative paths to repo-relative paths.
+    let repo_paths: Vec<String> = paths
+        .iter()
+        .map(|p| to_repo_path(&prefix, p))
+        .collect();
+
+    match head_commit {
+        Some(commit) => {
+            // Equivalent to `git reset HEAD -- <paths>`: resets index entries
+            // to their HEAD version (or removes them if absent from HEAD).
+            let path_strs: Vec<&str> = repo_paths.iter().map(|s| s.as_str()).collect();
+            repo.reset_default(Some(commit.as_object()), path_strs.iter())
+                .map_err(|e| format!("Failed to unstage: {}", e))
+        }
+        None => {
+            // No HEAD (empty repo) — remove paths from index
+            let mut index = repo
+                .index()
+                .map_err(|e| format!("Failed to open index: {}", e))?;
+            for repo_path in &repo_paths {
+                index
+                    .remove_path(Path::new(repo_path))
+                    .map_err(|e| format!("Failed to unstage '{}': {}", repo_path, e))?;
+            }
+            index
+                .write()
+                .map_err(|e| format!("Failed to write index: {}", e))
+        }
+    }
+}
+
+#[command]
+pub fn git_unstage(
+    window: WebviewWindow,
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    measure_command(
+        &perf,
+        "tauri.git_unstage",
+        "tauri.git.unstage",
+        "git",
+        None,
+        || {
+            let project_root = current_project_root(&root, &window)?;
+            git_unstage_for_root(&project_root, &paths)
+        },
+    )
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitResult {
+    pub oid: String,
+}
+
+/// Core logic for git commit, extracted so it can be tested without Tauri state.
+fn git_commit_for_root(project_root: &Path, message: &str) -> Result<GitCommitResult, String> {
+    if message.trim().is_empty() {
+        return Err("Commit message cannot be empty".to_string());
+    }
+
+    let repo = open_repo(project_root)?;
+    let prefix = workspace_prefix(&repo, project_root)?;
+
+    // Check for staged changes and scope violations in a single pass.
+    let mut opts = StatusOptions::new();
+    opts.show(StatusShow::Index);
+    let statuses = repo
+        .statuses(Some(&mut opts))
+        .map_err(|e| format!("Failed to get git status: {}", e))?;
+
+    let mut has_staged = false;
+    let mut outside: Vec<String> = Vec::new();
+    for entry in statuses.iter() {
+        let flags = entry.status();
+        if flags.is_empty() {
+            continue;
+        }
+        let path = match entry.path() {
+            Some(p) => p.to_string(),
+            None => continue,
+        };
+        if !prefix.is_empty() && !path.starts_with(&prefix) {
+            outside.push(path);
+        } else {
+            has_staged = true;
+        }
+    }
+
+    if !has_staged {
+        return Err("Nothing to commit — no staged changes".to_string());
+    }
+
+    if !outside.is_empty() {
+        return Err(format!(
+            "There are staged changes outside the current workspace ({}). \
+             Open the repository root to commit, or unstage those files first.",
+            outside.join(", ")
+        ));
+    }
+
+    let sig = repo
+        .signature()
+        .map_err(|e| format!("No git identity configured (set user.name and user.email): {}", e))?;
+
+    let mut index = repo
+        .index()
+        .map_err(|e| format!("Failed to open index: {}", e))?;
+
+    let tree_oid = index
+        .write_tree()
+        .map_err(|e| format!("Failed to write tree: {}", e))?;
+    let tree = repo
+        .find_tree(tree_oid)
+        .map_err(|e| format!("Failed to find tree: {}", e))?;
+
+    let parent_commit = repo
+        .head()
+        .ok()
+        .and_then(|h| h.peel_to_commit().ok());
+
+    let parents: Vec<&git2::Commit<'_>> = match &parent_commit {
+        Some(c) => vec![c],
+        None => vec![],
     };
 
-    // 2. Compute the prefix to strip from repo-relative paths.
-    //    When the project root is a subdirectory of the repo, porcelain
-    //    paths start with that subdirectory prefix.
-    let repo_root = Path::new(&repo_root_str);
-    let prefix = project_root
-        .canonicalize()
-        .and_then(|pr| {
-            repo_root.canonicalize().map(|rr| {
-                pr.strip_prefix(&rr)
-                    .map(|p| {
-                        let s = p.to_string_lossy().replace('\\', "/");
-                        if s.is_empty() { s } else { format!("{s}/") }
-                    })
-                    .unwrap_or_default()
-            })
-        })
-        .unwrap_or_default();
+    let oid = repo
+        .commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)
+        .map_err(|e| format!("Commit failed: {}", e))?;
 
-    // 3. Run porcelain status.
-    let output = Command::new("git")
-        .args(["status", "--porcelain=v1", "-z", "--no-renames", "-uall"])
-        .current_dir(project_root)
-        .output()
-        .map_err(|e| format!("Failed to run git status: {e}"))?;
+    Ok(GitCommitResult {
+        oid: oid.to_string(),
+    })
+}
 
-    if !output.status.success() {
-        return Ok(HashMap::new());
-    }
-
-    // 4. Parse NUL-separated entries.
-    let raw = String::from_utf8_lossy(&output.stdout);
-    let mut statuses = HashMap::new();
-
-    for entry in raw.split('\0') {
-        if entry.len() < 4 {
-            continue; // need "XY PATH" (at least 4 chars)
-        }
-        let index_char = entry.as_bytes()[0];
-        let worktree_char = entry.as_bytes()[1];
-        let path = &entry[3..];
-
-        let project_path = if prefix.is_empty() {
-            path.to_string()
-        } else if let Some(relative) = path.strip_prefix(&prefix) {
-            relative.to_string()
-        } else {
-            continue; // outside project root
-        };
-
-        let status = match (index_char, worktree_char) {
-            (b'?', b'?') => "untracked",
-            (b'A', _) => "added",
-            _ => "modified",
-        };
-
-        statuses.insert(project_path, status.to_string());
-    }
-
-    Ok(statuses)
+#[command]
+pub fn git_commit(
+    window: WebviewWindow,
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    message: String,
+) -> Result<GitCommitResult, String> {
+    measure_command(
+        &perf,
+        "tauri.git_commit",
+        "tauri.git.commit",
+        "git",
+        None,
+        || {
+            let project_root = current_project_root(&root, &window)?;
+            git_commit_for_root(&project_root, &message)
+        },
+    )
 }
 
 #[cfg(test)]
@@ -530,24 +837,6 @@ mod tests {
         let path = std::env::temp_dir().join(format!("coflat-git-{prefix}-{unique}"));
         fs::create_dir_all(&path).expect("create temp dir");
         path.canonicalize().expect("canonicalize temp dir")
-    }
-
-    fn git_init(dir: &Path) {
-        Command::new("git")
-            .args(["init"])
-            .current_dir(dir)
-            .output()
-            .expect("git init");
-        Command::new("git")
-            .args(["config", "user.email", "test@test.com"])
-            .current_dir(dir)
-            .output()
-            .expect("git config email");
-        Command::new("git")
-            .args(["config", "user.name", "Test"])
-            .current_dir(dir)
-            .output()
-            .expect("git config name");
     }
 
     fn temp_dir(prefix: &str) -> std::path::PathBuf {
@@ -815,104 +1104,335 @@ mod tests {
         fs::remove_dir_all(&clone).unwrap();
     }
 
-    #[test]
-    fn non_git_folder_returns_empty_map() {
-        let dir = create_temp_dir("no-git");
-        let result = git_file_statuses(&dir).unwrap();
-        assert!(result.is_empty());
-        fs::remove_dir_all(&dir).unwrap();
+    // ── Status / stage / commit tests ─────────────────────────────────────────
+
+    /// Helper: init a git repo with an initial commit so HEAD exists.
+    fn init_repo_with_commit(dir: &Path) -> Repository {
+        let repo = Repository::init(dir).expect("init repo");
+
+        // Configure a test identity.
+        let mut config = repo.config().expect("repo config");
+        config.set_str("user.name", "Test").expect("set user.name");
+        config
+            .set_str("user.email", "test@test.com")
+            .expect("set user.email");
+
+        // Create a file, stage it, and commit so HEAD exists.
+        fs::write(dir.join(".gitkeep"), "").expect("write .gitkeep");
+        {
+            let mut index = repo.index().expect("index");
+            index
+                .add_path(Path::new(".gitkeep"))
+                .expect("add .gitkeep");
+            index.write().expect("write index");
+            let tree_oid = index.write_tree().expect("write tree");
+            let tree = repo.find_tree(tree_oid).expect("find tree");
+            let sig = repo.signature().expect("signature");
+            repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
+                .expect("initial commit");
+        }
+
+        repo
     }
 
     #[test]
-    fn detects_untracked_file() {
-        let dir = create_temp_dir("untracked");
-        git_init(&dir);
-        fs::write(dir.join("new.md"), "hello").unwrap();
-
-        let result = git_file_statuses(&dir).unwrap();
-        assert_eq!(result.get("new.md").map(String::as_str), Some("untracked"));
-        fs::remove_dir_all(&dir).unwrap();
+    fn git_status_entry_serializes_as_camel_case() {
+        let entry = GitStatusEntry {
+            path: "src/main.rs".to_string(),
+            staged: Some("modified".to_string()),
+            unstaged: None,
+        };
+        let json = serde_json::to_value(&entry).expect("serialize GitStatusEntry");
+        assert_eq!(json["path"], "src/main.rs");
+        assert_eq!(json["staged"], "modified");
+        assert!(json["unstaged"].is_null());
+        assert!(json.get("is_staged").is_none());
     }
 
     #[test]
-    fn detects_added_file() {
-        let dir = create_temp_dir("added");
-        git_init(&dir);
-        fs::write(dir.join("staged.md"), "hello").unwrap();
-        Command::new("git")
-            .args(["add", "staged.md"])
-            .current_dir(&dir)
-            .output()
-            .expect("git add");
-
-        let result = git_file_statuses(&dir).unwrap();
-        assert_eq!(result.get("staged.md").map(String::as_str), Some("added"));
-        fs::remove_dir_all(&dir).unwrap();
+    fn git_status_result_serializes_as_camel_case() {
+        let result = GitStatusResult {
+            is_repo: true,
+            branch: Some("main".to_string()),
+            files: vec![],
+        };
+        let json = serde_json::to_value(&result).expect("serialize GitStatusResult");
+        assert_eq!(json["isRepo"], true);
+        assert_eq!(json["branch"], "main");
+        assert!(json.get("is_repo").is_none());
     }
 
     #[test]
-    fn detects_modified_file() {
-        let dir = create_temp_dir("modified");
-        git_init(&dir);
-        fs::write(dir.join("tracked.md"), "v1").unwrap();
-        Command::new("git")
-            .args(["add", "tracked.md"])
-            .current_dir(&dir)
-            .output()
-            .expect("git add");
-        Command::new("git")
-            .args(["commit", "-m", "initial"])
-            .current_dir(&dir)
-            .output()
-            .expect("git commit");
-        fs::write(dir.join("tracked.md"), "v2").unwrap();
+    fn git_commit_result_serializes_as_camel_case() {
+        let result = GitCommitResult {
+            oid: "abc1234".to_string(),
+        };
+        let json = serde_json::to_value(&result).expect("serialize GitCommitResult");
+        assert_eq!(json["oid"], "abc1234");
+    }
 
-        let result = git_file_statuses(&dir).unwrap();
-        assert_eq!(
-            result.get("tracked.md").map(String::as_str),
-            Some("modified"),
+    /// When the project root IS the repo root, all changed files appear with
+    /// their original repo-relative paths and staging works normally.
+    #[test]
+    fn status_and_stage_at_repo_root() {
+        let dir = create_temp_dir("git-root");
+        init_repo_with_commit(&dir);
+
+        // Create a modified file.
+        fs::write(dir.join("file.txt"), "changed").expect("write file");
+
+        let status = git_status_for_root(&dir).expect("status");
+        assert!(status.is_repo);
+        assert_eq!(status.files.len(), 1);
+        assert_eq!(status.files[0].path, "file.txt");
+        assert_eq!(status.files[0].unstaged.as_deref(), Some("untracked"));
+
+        // Stage it.
+        git_stage_for_root(&dir, &["file.txt".to_string()]).expect("stage");
+
+        let status = git_status_for_root(&dir).expect("status after stage");
+        assert_eq!(status.files.len(), 1);
+        assert_eq!(status.files[0].staged.as_deref(), Some("added"));
+        assert!(status.files[0].unstaged.is_none());
+
+        // Unstage it.
+        git_unstage_for_root(&dir, &["file.txt".to_string()]).expect("unstage");
+
+        let status = git_status_for_root(&dir).expect("status after unstage");
+        assert_eq!(status.files.len(), 1);
+        assert!(status.files[0].staged.is_none());
+        assert_eq!(status.files[0].unstaged.as_deref(), Some("untracked"));
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// When the user opens a subdirectory inside a larger repo, git_status
+    /// must only return files within that subdirectory and paths must be
+    /// relative to the opened directory, not the repo root.
+    #[test]
+    fn subdirectory_filters_and_normalizes_paths() {
+        let dir = create_temp_dir("git-subdir");
+        init_repo_with_commit(&dir);
+
+        // Create files inside and outside the subdirectory.
+        fs::create_dir_all(dir.join("docs")).expect("mkdir docs");
+        fs::write(dir.join("docs/readme.md"), "hello").expect("write docs/readme.md");
+        fs::write(dir.join("root-file.txt"), "top").expect("write root-file.txt");
+
+        // Open the subdirectory as the project root.
+        let subdir = dir.join("docs");
+
+        let status = git_status_for_root(&subdir).expect("status from subdir");
+        assert!(status.is_repo);
+
+        // Only the file inside docs/ should appear, with its workspace-relative path.
+        assert_eq!(status.files.len(), 1, "expected 1 file, got: {:?}", status.files);
+        assert_eq!(status.files[0].path, "readme.md");
+        assert_eq!(status.files[0].unstaged.as_deref(), Some("untracked"));
+
+        // Stage using the workspace-relative path.
+        git_stage_for_root(&subdir, &["readme.md".to_string()]).expect("stage from subdir");
+
+        let status = git_status_for_root(&subdir).expect("status after stage");
+        assert_eq!(status.files.len(), 1);
+        assert_eq!(status.files[0].path, "readme.md");
+        assert_eq!(status.files[0].staged.as_deref(), Some("added"));
+
+        // Unstage.
+        git_unstage_for_root(&subdir, &["readme.md".to_string()]).expect("unstage from subdir");
+
+        let status = git_status_for_root(&subdir).expect("status after unstage");
+        assert_eq!(status.files[0].staged, None);
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Staging a file that was deleted in the working tree should stage the
+    /// deletion rather than erroring.
+    #[test]
+    fn stage_deleted_file() {
+        let dir = create_temp_dir("git-del");
+        let repo = init_repo_with_commit(&dir);
+
+        // Create and commit a file.
+        let file_path = dir.join("to-delete.txt");
+        fs::write(&file_path, "content").expect("write file");
+        let mut index = repo.index().expect("index");
+        index
+            .add_path(Path::new("to-delete.txt"))
+            .expect("add file");
+        index.write().expect("write index");
+        let tree_oid = index.write_tree().expect("write tree");
+        let tree = repo.find_tree(tree_oid).expect("find tree");
+        let sig = repo.signature().expect("signature");
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "add file",
+            &tree,
+            &[&parent],
+        )
+        .expect("commit");
+
+        // Delete the file from disk.
+        fs::remove_file(&file_path).expect("delete file");
+
+        // Stage the deletion.
+        git_stage_for_root(&dir, &["to-delete.txt".to_string()]).expect("stage deletion");
+
+        let status = git_status_for_root(&dir).expect("status after staging deletion");
+        assert_eq!(status.files.len(), 1);
+        assert_eq!(status.files[0].staged.as_deref(), Some("deleted"));
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// When the workspace is a subdirectory, committing must reject if there are
+    /// staged files outside the workspace prefix.
+    #[test]
+    fn commit_rejects_staged_files_outside_workspace() {
+        let dir = create_temp_dir("git-commit-scope");
+        init_repo_with_commit(&dir);
+
+        // Create files inside and outside the subdirectory.
+        fs::create_dir_all(dir.join("docs")).expect("mkdir docs");
+        fs::write(dir.join("docs/readme.md"), "hello").expect("write docs/readme.md");
+        fs::write(dir.join("outside.txt"), "top").expect("write outside.txt");
+
+        // Stage both files from the repo root.
+        git_stage_for_root(&dir, &["docs/readme.md".to_string(), "outside.txt".to_string()])
+            .expect("stage both");
+
+        // Commit from the subdirectory workspace — should be rejected.
+        let subdir = dir.join("docs");
+        let result = git_commit_for_root(&subdir, "should fail");
+        assert!(result.is_err(), "commit should be rejected when staged files exist outside workspace");
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("outside the current workspace"),
+            "error should mention outside workspace, got: {err}"
         );
+
+        // Unstage the outside file, then commit should succeed.
+        git_unstage_for_root(&dir, &["outside.txt".to_string()]).expect("unstage outside");
+
+        let result = git_commit_for_root(&subdir, "scoped commit");
+        assert!(result.is_ok(), "commit should succeed with only workspace-scoped staged files");
+
         fs::remove_dir_all(&dir).unwrap();
     }
 
+    /// Committing with no staged changes must be rejected rather than
+    /// creating an empty commit.
     #[test]
-    fn clean_repo_returns_empty_map() {
-        let dir = create_temp_dir("clean");
-        git_init(&dir);
-        fs::write(dir.join("a.md"), "ok").unwrap();
-        Command::new("git")
-            .args(["add", "a.md"])
-            .current_dir(&dir)
-            .output()
-            .expect("git add");
-        Command::new("git")
-            .args(["commit", "-m", "init"])
-            .current_dir(&dir)
-            .output()
-            .expect("git commit");
+    fn commit_rejects_empty_index() {
+        let dir = create_temp_dir("git-empty-commit");
+        init_repo_with_commit(&dir);
 
-        let result = git_file_statuses(&dir).unwrap();
-        assert!(result.is_empty());
-        fs::remove_dir_all(&dir).unwrap();
-    }
-
-    /// When the project root is a subdirectory of the git repo, paths
-    /// must be relative to the project root, not the repo root.
-    #[test]
-    fn subdirectory_project_root_strips_prefix() {
-        let repo = create_temp_dir("subrepo");
-        git_init(&repo);
-        let sub = repo.join("docs");
-        fs::create_dir_all(&sub).unwrap();
-        fs::write(sub.join("note.md"), "hello").unwrap();
-
-        let result = git_file_statuses(&sub).unwrap();
-        assert_eq!(
-            result.get("note.md").map(String::as_str),
-            Some("untracked"),
+        // No changes — commit should fail.
+        let result = git_commit_for_root(&dir, "empty commit");
+        assert!(result.is_err(), "commit should be rejected with no staged changes");
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("no staged changes"),
+            "error should mention no staged changes, got: {err}"
         );
-        // The full repo-relative path should NOT appear
-        assert!(result.get("docs/note.md").is_none());
-        fs::remove_dir_all(&repo).unwrap();
+
+        // Stage a real change — commit should succeed.
+        fs::write(dir.join("new.txt"), "content").expect("write file");
+        git_stage_for_root(&dir, &["new.txt".to_string()]).expect("stage");
+
+        let result = git_commit_for_root(&dir, "real commit");
+        assert!(result.is_ok(), "commit should succeed with staged changes");
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Helper: commit all currently-staged changes.
+    fn commit_staged(dir: &Path, message: &str) {
+        let repo = Repository::open(dir).expect("open repo for commit");
+        let mut index = repo.index().expect("index");
+        let tree_oid = index.write_tree().expect("write tree");
+        let tree = repo.find_tree(tree_oid).expect("find tree");
+        let sig = repo.signature().expect("signature");
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
+            .expect("commit");
+    }
+
+    /// A staged rename from inside the workspace to outside must be rejected
+    /// by the commit guard.
+    #[test]
+    fn rename_inside_to_outside_rejected_by_commit() {
+        let dir = create_temp_dir("git-rename-out");
+        init_repo_with_commit(&dir);
+
+        // Commit a file inside docs/.
+        fs::create_dir_all(dir.join("docs")).expect("mkdir docs");
+        fs::write(dir.join("docs/readme.md"), "hello").expect("write");
+        git_stage_for_root(&dir, &["docs/readme.md".to_string()]).expect("stage");
+        commit_staged(&dir, "add doc");
+
+        // Rename docs/readme.md → outside.txt in the working tree and index.
+        fs::rename(dir.join("docs/readme.md"), dir.join("outside.txt")).expect("rename");
+        {
+            let repo = Repository::open(&dir).expect("open");
+            let mut index = repo.index().expect("index");
+            index.remove_path(Path::new("docs/readme.md")).expect("rm old");
+            index.add_path(Path::new("outside.txt")).expect("add new");
+            index.write().expect("write index");
+        }
+
+        let subdir = dir.join("docs");
+
+        // Commit from docs/ must be rejected — outside.txt is out of scope.
+        let result = git_commit_for_root(&subdir, "rename out");
+        assert!(result.is_err(), "commit should reject inside->outside rename");
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("outside") || err.contains("no staged"),
+            "error should mention scope violation, got: {err}"
+        );
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A staged rename from outside the workspace to inside must also be
+    /// rejected by the commit guard.
+    #[test]
+    fn rename_outside_to_inside_rejected_by_commit() {
+        let dir = create_temp_dir("git-rename-in");
+        init_repo_with_commit(&dir);
+
+        // Commit a file outside docs/.
+        fs::write(dir.join("outside.txt"), "hello").expect("write");
+        fs::create_dir_all(dir.join("docs")).expect("mkdir docs");
+        git_stage_for_root(&dir, &["outside.txt".to_string()]).expect("stage");
+        commit_staged(&dir, "add outside");
+
+        // Rename outside.txt → docs/readme.md in the working tree and index.
+        fs::rename(dir.join("outside.txt"), dir.join("docs/readme.md")).expect("rename");
+        {
+            let repo = Repository::open(&dir).expect("open");
+            let mut index = repo.index().expect("index");
+            index.remove_path(Path::new("outside.txt")).expect("rm old");
+            index.add_path(Path::new("docs/readme.md")).expect("add new");
+            index.write().expect("write index");
+        }
+
+        let subdir = dir.join("docs");
+
+        // Commit from docs/ must be rejected — outside.txt deletion is out of scope.
+        let result = git_commit_for_root(&subdir, "rename in");
+        assert!(result.is_err(), "commit should reject outside->inside rename");
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("outside") || err.contains("no staged"),
+            "error should mention scope violation, got: {err}"
+        );
+
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

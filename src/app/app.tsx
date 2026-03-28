@@ -19,6 +19,7 @@ import { useGitBranch } from "./hooks/use-git-branch";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
 import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
 import { useAppWorkspaceSession } from "./hooks/use-app-workspace-session";
+import { useGit } from "./hooks/use-git";
 import { useGitStatus } from "./hooks/use-git-status";
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
 
@@ -37,19 +38,31 @@ function AppInner() {
   const dialogs = useDialogs();
   const unsavedChanges = useUnsavedChangesDialog();
   const workspace = useAppWorkspaceSession(fs);
+  const gitCommit = useGit(workspace.projectRoot);
+
+  // Wrap refreshTree so every workspace mutation (save, rename, delete, create)
+  // also refreshes git status. The editor session calls refreshTree after all
+  // file-system mutations, so piggybacking here avoids threading git.refresh
+  // through every hook in the chain.
+  const refreshTreeAndGit = useCallback(async () => {
+    await workspace.refreshTree();
+    void gitCommit.refresh();
+  }, [workspace.refreshTree, gitCommit.refresh]);
+
   const editor = useAppEditorShell({
     fs,
     settings: workspace.settings,
-    refreshTree: workspace.refreshTree,
+    refreshTree: refreshTreeAndGit,
     refreshGitStatus: workspace.refreshGitStatus,
     addRecentFile: workspace.addRecentFile,
+    onAfterSave: gitCommit.refresh,
     requestUnsavedChangesDecision: unsavedChanges.requestDecision,
   });
 
   const [branchSwitcherOpen, setBranchSwitcherOpen] = useState(false);
   const gitBranch = useGitBranch({
     projectRoot: workspace.projectRoot,
-    refreshTree: workspace.refreshTree,
+    refreshTree: refreshTreeAndGit,
     reloadFile: editor.reloadFile,
     closeCurrentFile: editor.closeCurrentFile,
     currentPath: editor.currentPath,
@@ -223,7 +236,7 @@ function AppInner() {
         onDragOver={editor.handleDragOver}
         onDrop={editor.handleDrop}
       >
-        <AppSidebarShell workspace={workspace} editor={editor} />
+        <AppSidebarShell workspace={workspace} editor={editor} git={isTauri() ? gitCommit : null} />
         <AppMainShell
           fs={fs}
           projectConfig={workspace.projectConfig}

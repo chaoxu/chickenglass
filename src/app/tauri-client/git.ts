@@ -47,12 +47,40 @@ export function gitCreateBranchCommand(name: string, force = false): Promise<voi
   return invokeWithPerf("git_create_branch", { name, force });
 }
 
-/** Git working-tree status for a single file. */
+/** Git working-tree status for a single file (used by file-tree badges). */
 export type GitFileStatus = "modified" | "added" | "untracked";
 
-/** Map from project-relative path to its git status. */
+/** Map from project-relative path to its git status (used by file-tree badges). */
 export type GitStatusMap = Record<string, GitFileStatus>;
 
-export function gitStatusCommand(): Promise<GitStatusMap> {
-  return invokeWithPerf<GitStatusMap>("git_status");
+export interface GitStatusEntry {
+  path: string;
+  staged: string | null;
+  unstaged: string | null;
+}
+
+export interface GitStatusResult {
+  isRepo: boolean;
+  branch: string | null;
+  files: GitStatusEntry[];
+}
+
+export interface GitCommitResult {
+  oid: string;
+}
+
+export function gitStatusCommand(): Promise<GitStatusResult> {
+  return invokeWithPerf<GitStatusResult>("git_status");
+}
+
+export function gitStageCommand(paths: string[]): Promise<void> {
+  return invokeWithPerf("git_stage", { paths });
+}
+
+export function gitUnstageCommand(paths: string[]): Promise<void> {
+  return invokeWithPerf("git_unstage", { paths });
+}
+
+export function gitCommitCommand(message: string): Promise<GitCommitResult> {
+  return invokeWithPerf<GitCommitResult>("git_commit", { message });
 }

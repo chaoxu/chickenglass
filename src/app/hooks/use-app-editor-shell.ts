@@ -33,6 +33,8 @@ export interface AppEditorShellDeps {
   refreshGitStatus: () => Promise<void>;
   /** Callback to record a newly opened path in the recent-files list. */
   addRecentFile: (path: string) => void;
+  /** Lightweight callback fired after every successful save (not tree refresh). */
+  onAfterSave?: () => void;
   /** Ask the user how to handle unsaved changes before replacing the current document. */
   requestUnsavedChangesDecision: (
     request: UnsavedChangesRequest,
@@ -228,6 +230,7 @@ export function useAppEditorShell({
   refreshTree,
   refreshGitStatus,
   addRecentFile,
+  onAfterSave,
   requestUnsavedChangesDecision,
 }: AppEditorShellDeps): AppEditorShellController {
   const [pluginManager] = useState(() => {
@@ -241,6 +244,7 @@ export function useAppEditorShell({
     refreshTree,
     refreshGitStatus,
     addRecentFile,
+    onAfterSave,
     requestUnsavedChangesDecision,
   });
   const {

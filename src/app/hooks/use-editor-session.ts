@@ -28,6 +28,8 @@ export interface EditorSessionDeps {
   refreshTree: () => Promise<void>;
   refreshGitStatus: () => Promise<void>;
   addRecentFile: (path: string) => void;
+  /** Lightweight callback fired after every successful save (not tree refresh). */
+  onAfterSave?: () => void;
   requestUnsavedChangesDecision: (
     request: UnsavedChangesRequest,
   ) => Promise<UnsavedChangesDecision>;
@@ -89,6 +91,7 @@ export function useEditorSession({
   refreshTree,
   refreshGitStatus,
   addRecentFile,
+  onAfterSave,
   requestUnsavedChangesDecision,
 }: EditorSessionDeps): UseEditorSessionReturn {
   const [sessionState, setSessionState] = useState<EditorSessionState>(
@@ -141,6 +144,7 @@ export function useEditorSession({
     pipeline,
     refreshTree,
     addRecentFile,
+    onAfterSave,
     buffers,
     liveDocs,
     sourceMaps,
