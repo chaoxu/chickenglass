@@ -1,4 +1,4 @@
-/* global setTimeout, window */
+/* global window */
 /**
  * Playwright test helpers for CDP-based browser testing.
  *
@@ -12,7 +12,10 @@
  *   console.log(await dump(page));
  */
 
+import { setTimeout as delay } from "node:timers/promises";
+import process from "node:process";
 import { chromium } from "playwright";
+import { findFirstPage } from "./chrome-common.mjs";
 
 const DEFAULT_PORT = 9322;
 const MODE_LABELS = {
@@ -21,15 +24,9 @@ const MODE_LABELS = {
   read: "Read",
 };
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function findFirstPage(browser) {
-  for (const ctx of browser.contexts()) {
-    if (ctx.pages().length > 0) return ctx.pages()[0];
-  }
-  return null;
+/** Promise-based sleep. */
+export function sleep(ms) {
+  return delay(ms);
 }
 
 /**
@@ -38,10 +35,10 @@ function findFirstPage(browser) {
  */
 export async function connectEditor(port = DEFAULT_PORT) {
   const browser = await chromium.connectOverCDP(`http://localhost:${port}`);
-  let page = findFirstPage(browser);
+  let page = await findFirstPage(browser);
   if (!page) {
     await sleep(1000);
-    page = findFirstPage(browser);
+    page = await findFirstPage(browser);
   }
   if (!page) throw new Error("No page found. Is Chrome running with npm run chrome?");
   page.setDefaultTimeout(10000);
@@ -167,6 +164,55 @@ export async function scrollToText(page, needle) {
   }
   await scrollTo(page, line);
   return line;
+}
+
+/**
+ * Create a flag-value parser for CLI arguments.
+ *
+ * @param {string[]} [argv] - defaults to process.argv.slice(2)
+ * @returns {{ getFlag: (flag: string, fallback?: string) => string|undefined, getIntFlag: (flag: string, fallback?: number) => number, hasFlag: (flag: string) => boolean }}
+ */
+export function createArgParser(argv = process.argv.slice(2)) {
+  const getFlag = (flag, fallback = undefined) => {
+    const index = argv.indexOf(flag);
+    return index >= 0 && index + 1 < argv.length ? argv[index + 1] : fallback;
+  };
+  const getIntFlag = (flag, fallback) => {
+    const value = getFlag(flag);
+    return value !== undefined ? parseInt(value, 10) : fallback;
+  };
+  const hasFlag = (flag) => argv.includes(flag);
+  return { getFlag, getIntFlag, hasFlag };
+}
+
+/**
+ * Wait for the debug bridge globals (__app, __cmView, __cmDebug, __cfDebug).
+ *
+ * @param {import("playwright").Page} page
+ * @param {object} [options]
+ * @param {number} [options.timeout=15000]
+ */
+export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
+  await page.waitForFunction(
+    () => Boolean(window.__app && window.__cmView && window.__cmDebug && window.__cfDebug),
+    { timeout },
+  );
+}
+
+/**
+ * Reset the editor to rich mode with index.md loaded (baseline state).
+ *
+ * @param {import("playwright").Page} page
+ */
+export async function resetEditorState(page) {
+  await page.evaluate(() => {
+    window.__app.setMode("rich");
+    window.__app.openFile("index.md");
+  });
+  await page.waitForFunction(
+    () => window.__cmView?.state?.doc?.length > 100,
+    { timeout: 5000 },
+  ).catch(() => {});
 }
 
 /**

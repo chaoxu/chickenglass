@@ -14,32 +14,15 @@
  *   node scripts/test-regression.mjs [--port 9322] [--filter headings,math]
  */
 
-/* global window */
-
 import console from "node:console";
 import { readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { connectEditor } from "./test-helpers.mjs";
+import { connectEditor, createArgParser, waitForDebugBridge, resetEditorState } from "./test-helpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "regression-tests");
-
-/** Parse CLI arguments. */
-function parseArgs() {
-  const argv = process.argv.slice(2);
-  const getValue = (flag, fallback) => {
-    const index = argv.indexOf(flag);
-    return index >= 0 && index + 1 < argv.length ? argv[index + 1] : fallback;
-  };
-
-  const port = parseInt(getValue("--port", "9322"), 10);
-  const filterArg = getValue("--filter", "");
-  const filter = filterArg ? filterArg.split(",").map((s) => s.trim()) : [];
-
-  return { port, filter };
-}
 
 /** Dynamically import all test modules from the regression-tests directory. */
 async function loadTests(filter) {
@@ -63,29 +46,11 @@ async function loadTests(filter) {
   return tests;
 }
 
-/** Wait for the debug bridge (__app, __cmView, __cmDebug) to be available. */
-async function waitForDebugBridge(page) {
-  await page.waitForFunction(
-    () => Boolean(window.__app && window.__cmView && window.__cmDebug),
-    { timeout: 15000 },
-  );
-}
-
-/** Ensure the editor is in rich mode with index.md loaded (baseline state). */
-async function resetEditorState(page) {
-  await page.evaluate(() => {
-    window.__app.setMode("rich");
-    window.__app.openFile("index.md");
-  });
-  // Wait for document to be loaded and parsed
-  await page.waitForFunction(
-    () => window.__cmView?.state?.doc?.length > 100,
-    { timeout: 5000 },
-  ).catch(() => {});
-}
-
 async function main() {
-  const { port, filter } = parseArgs();
+  const { getFlag, getIntFlag } = createArgParser();
+  const port = getIntFlag("--port", 9322);
+  const filterArg = getFlag("--filter", "");
+  const filter = filterArg ? filterArg.split(",").map((s) => s.trim()) : [];
 
   console.log("Browser Regression Tests");
   console.log("========================\n");
@@ -107,7 +72,7 @@ async function main() {
   try {
     await waitForDebugBridge(page);
   } catch {
-    console.error("Timed out waiting for debug bridge (__app, __cmView, __cmDebug).");
+    console.error("Timed out waiting for debug bridge (__app, __cmView, __cmDebug, __cfDebug).");
     console.error("The dev server may not have finished loading.");
     process.exit(1);
   }
