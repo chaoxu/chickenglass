@@ -35,11 +35,11 @@ vi.mock("@tauri-apps/api/event", () => ({
 const { useMenuEvents } = await import("./use-menu-events");
 
 interface HarnessProps {
-  onQuit?: () => void;
+  handlers: Record<string, () => void>;
 }
 
-const Harness: FC<HarnessProps> = ({ onQuit }) => {
-  useMenuEvents({ onQuit });
+const Harness: FC<HarnessProps> = ({ handlers }) => {
+  useMenuEvents(handlers);
   return null;
 };
 
@@ -63,7 +63,7 @@ describe("useMenuEvents", () => {
     const onQuit = vi.fn();
 
     await act(async () => {
-      root.render(createElement(Harness, { onQuit }));
+      root.render(createElement(Harness, { handlers: { file_quit: onQuit } }));
       await Promise.resolve();
     });
 
