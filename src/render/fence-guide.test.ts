@@ -231,3 +231,21 @@ describe("fence-guide rebuild skipping", () => {
     expect(after).not.toBe(before);
   });
 });
+
+describe("fence-guide fence boundary correctness", () => {
+  it("shows guides when cursor is on the opening fence", () => {
+    const state = createState(SINGLE_DIV, 0); // start of "::: {.theorem}"
+    expect(getGuideLineNumbers(state)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("shows guides when cursor is on the closing fence", () => {
+    const state = createState(SINGLE_DIV, 45); // start of closing ":::"
+    expect(getGuideLineNumbers(state)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("hides guides when cursor is after the closing fence", () => {
+    const doc = SINGLE_DIV + "\nafter";
+    const state = createState(doc, 49); // "after" line
+    expect(getGuideLineNumbers(state)).toEqual([]);
+  });
+});
