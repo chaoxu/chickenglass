@@ -173,6 +173,24 @@ fn guard_dirty(root: &Path, force: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Resolve the current branch name.
+///
+/// Handles three HEAD states:
+///   1. Normal branch — `rev-parse --abbrev-ref HEAD` returns the name.
+///   2. Detached HEAD — `rev-parse --abbrev-ref HEAD` returns literal "HEAD".
+///   3. Unborn branch (fresh `git init`, no commits) —
+///      `rev-parse` fails; fall back to `symbolic-ref --short HEAD`.
+fn resolve_branch_name(root: &std::path::Path) -> Option<String> {
+    if let Ok(branch) = run_git(root, &["rev-parse", "--abbrev-ref", "HEAD"]) {
+        return Some(branch.trim().to_string());
+    }
+    // Unborn branch: HEAD is a symbolic ref pointing to a ref that
+    // doesn't exist yet. symbolic-ref still returns the name.
+    run_git(root, &["symbolic-ref", "--short", "HEAD"])
+        .ok()
+        .map(|s| s.trim().to_string())
+}
+
 /// Return the name of the current branch, or `null` if the project is not
 /// a git repository (or git is not installed).
 #[command]
@@ -189,11 +207,7 @@ pub fn git_current_branch(
         None,
         || {
             let project_root = current_project_root(&root, &window)?;
-            match run_git(&project_root, &["rev-parse", "--abbrev-ref", "HEAD"]) {
-                Ok(branch) => Ok(Some(branch.trim().to_string())),
-                // Not a git repo or git not installed — not an error, just no branch.
-                Err(_) => Ok(None),
-            }
+            Ok(resolve_branch_name(&project_root))
         },
     )
 }
@@ -449,5 +463,60 @@ mod tests {
         // errors from hard failures.
         let err = format!("{}message", DIRTY_WORKTREE_PREFIX);
         assert!(err.starts_with("DIRTY_WORKTREE: "));
+    }
+
+    #[test]
+    fn resolve_branch_name_unborn_repo() {
+        let dir = std::env::temp_dir().join("coflat-test-unborn");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Command::new("git")
+            .args(["init"])
+            .current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap();
+
+        let name = resolve_branch_name(&dir);
+        assert!(name.is_some(), "should resolve in an unborn repo");
+        assert!(!name.unwrap().is_empty(), "branch name should not be empty");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_branch_name_normal_repo() {
+        let dir = std::env::temp_dir().join("coflat-test-branch-normal");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Command::new("git").args(["init"]).current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status().unwrap();
+        Command::new("git").args(["config", "user.name", "test"]).current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status().unwrap();
+        Command::new("git").args(["config", "user.email", "test@test"]).current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status().unwrap();
+        Command::new("git").args(["commit", "--allow-empty", "-m", "init"]).current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status().unwrap();
+
+        let name = resolve_branch_name(&dir);
+        assert!(name.is_some(), "should resolve in a normal repo");
+        assert!(!name.unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_branch_name_non_git_dir() {
+        let dir = std::env::temp_dir().join("coflat-test-nongit");
+        let _ = std::fs::create_dir_all(&dir);
+        assert!(resolve_branch_name(&dir).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
