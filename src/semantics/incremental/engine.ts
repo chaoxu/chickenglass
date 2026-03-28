@@ -35,9 +35,17 @@ import {
   mergeReferenceSlice,
   type ReferenceSlice,
 } from "./slices/reference-slice";
-import type { PositionMapper } from "./merge-utils";
-import type { SemanticDelta } from "./types";
-import { extractStructuralWindow } from "./window-extractor";
+import {
+  mapRangeObject,
+  replaceOverlappingRanges,
+  type PositionMapper,
+} from "./merge-utils";
+import type { DirtyWindow, SemanticDelta } from "./types";
+import {
+  extractStructuralWindow,
+  type ExcludedRange,
+  type StructuralWindowExtraction,
+} from "./window-extractor";
 
 export interface DocumentAnalysisSliceRevisions {
   readonly headings: number;
@@ -78,6 +86,7 @@ interface DocumentAnalysisSlices {
 
 interface InternalDocumentAnalysisState extends DocumentAnalysisSlices {
   readonly revisions: DocumentAnalysisRevisionInfo;
+  readonly excludedRanges: readonly ExcludedRange[];
 }
 
 const ZERO_SLICE_REVISIONS: DocumentAnalysisSliceRevisions = Object.freeze({
@@ -143,20 +152,28 @@ function createIncludeSlice(
   };
 }
 
-function buildSlices(doc: TextSource, tree: Tree): DocumentAnalysisSlices {
+interface FullBuildResult {
+  readonly slices: DocumentAnalysisSlices;
+  readonly excludedRanges: readonly ExcludedRange[];
+}
+
+function buildSlicesAndExcludedRanges(doc: TextSource, tree: Tree): FullBuildResult {
   const structural = extractStructuralWindow(doc, tree);
   const fencedDivSlice = createFencedDivSlice(structural.fencedDivs);
 
   return {
-    headingSlice: buildHeadingSlice(structural),
-    footnoteSlice: buildFootnoteSlice(structural),
-    fencedDivSlice,
-    equationSlice: buildEquationSlice(structural),
-    mathSlice: buildMathSlice(structural),
-    referenceSlice: buildReferenceSlice(doc, structural),
-    includeSlice: createIncludeSlice(
-      deriveIncludeSlice(doc, fencedDivSlice.fencedDivs),
-    ),
+    slices: {
+      headingSlice: buildHeadingSlice(structural),
+      footnoteSlice: buildFootnoteSlice(structural),
+      fencedDivSlice,
+      equationSlice: buildEquationSlice(structural),
+      mathSlice: buildMathSlice(structural),
+      referenceSlice: buildReferenceSlice(doc, structural),
+      includeSlice: createIncludeSlice(
+        deriveIncludeSlice(doc, fencedDivSlice.fencedDivs),
+      ),
+    },
+    excludedRanges: structural.excludedRanges,
   };
 }
 
@@ -228,9 +245,14 @@ function sameSlices(
 function finalizeDocumentAnalysis(
   previous: DocumentAnalysis | undefined,
   slices: DocumentAnalysisSlices,
+  excludedRanges: readonly ExcludedRange[],
 ): DocumentAnalysis {
   const previousState = previous ? getInternalState(previous) : undefined;
-  if (previous && previousState && sameSlices(previousState, slices)) {
+  if (
+    previous && previousState
+    && sameSlices(previousState, slices)
+    && previousState.excludedRanges === excludedRanges
+  ) {
     return previous;
   }
 
@@ -253,6 +275,7 @@ function finalizeDocumentAnalysis(
   return withInternalState(analysis, {
     ...slices,
     revisions,
+    excludedRanges,
   });
 }
 
@@ -260,7 +283,77 @@ export function createDocumentAnalysis(
   doc: TextSource,
   tree: Tree,
 ): DocumentAnalysis {
-  return finalizeDocumentAnalysis(undefined, buildSlices(doc, tree));
+  const { slices, excludedRanges } = buildSlicesAndExcludedRanges(doc, tree);
+  return finalizeDocumentAnalysis(undefined, slices, excludedRanges);
+}
+
+function mapExcludedRanges(
+  values: readonly ExcludedRange[],
+  changes: PositionMapper,
+): readonly ExcludedRange[] {
+  let changed = false;
+  const mapped = values.map((value) => {
+    const next = mapRangeObject(value, changes);
+    if (next !== value) changed = true;
+    return next;
+  });
+  return changed ? mapped : values;
+}
+
+function expandDirtyWindows(
+  dirtyWindows: readonly DirtyWindow[],
+  previousRanges: readonly { readonly from: number; readonly to: number }[],
+  mapOldToNew: (pos: number, assoc?: number) => number,
+  touchingInclusive: boolean,
+): readonly DirtyWindow[] {
+  if (previousRanges.length === 0) return dirtyWindows;
+
+  let anyExpanded = false;
+  const result = dirtyWindows.map((window) => {
+    let { fromOld, toOld, fromNew, toNew } = window;
+    let expanded = false;
+
+    for (const range of previousRanges) {
+      const overlaps = touchingInclusive
+        ? range.from <= toOld && fromOld <= range.to
+        : range.from <= toOld && fromOld < range.to;
+      if (overlaps) {
+        const mappedFrom = mapOldToNew(range.from, -1);
+        const mappedTo = Math.max(mappedFrom, mapOldToNew(range.to, 1));
+        fromOld = Math.min(fromOld, range.from);
+        toOld = Math.max(toOld, range.to);
+        fromNew = Math.min(fromNew, mappedFrom);
+        toNew = Math.max(toNew, mappedTo);
+        expanded = true;
+      }
+    }
+
+    if (expanded) anyExpanded = true;
+    return expanded ? { fromOld, toOld, fromNew, toNew } : window;
+  });
+
+  return anyExpanded ? result : dirtyWindows;
+}
+
+interface DirtyExcludedRangesExtraction {
+  readonly window: Pick<DirtyWindow, "fromNew" | "toNew">;
+  readonly structural: Pick<StructuralWindowExtraction, "excludedRanges">;
+}
+
+function mergeExcludedRanges(
+  previous: readonly ExcludedRange[],
+  delta: Pick<SemanticDelta, "mapOldToNew">,
+  dirtyExtractions: readonly DirtyExcludedRangesExtraction[],
+): readonly ExcludedRange[] {
+  let ranges = mapExcludedRanges(previous, createPositionMapper(delta));
+  for (const { window, structural } of dirtyExtractions) {
+    ranges = replaceOverlappingRanges(
+      ranges,
+      { from: window.fromNew, to: window.toNew },
+      structural.excludedRanges,
+    );
+  }
+  return ranges;
 }
 
 export function updateDocumentAnalysis(
@@ -278,20 +371,34 @@ export function updateDocumentAnalysis(
     if (!delta.syntaxTreeChanged && !delta.globalInvalidation) {
       return previous;
     }
-    return finalizeDocumentAnalysis(previous, buildSlices(doc, tree));
+    const { slices, excludedRanges } = buildSlicesAndExcludedRanges(doc, tree);
+    return finalizeDocumentAnalysis(previous, slices, excludedRanges);
   }
 
   if (delta.globalInvalidation || delta.dirtyWindows.length === 0) {
-    return finalizeDocumentAnalysis(previous, buildSlices(doc, tree));
+    const { slices, excludedRanges } = buildSlicesAndExcludedRanges(doc, tree);
+    return finalizeDocumentAnalysis(previous, slices, excludedRanges);
   }
 
   const changes = createPositionMapper(delta);
+  const expandedForEquations = expandDirtyWindows(
+    delta.dirtyWindows,
+    previousState.equationSlice.equations,
+    delta.mapOldToNew,
+    false,
+  );
+  const expandedDirtyWindows = expandDirtyWindows(
+    expandedForEquations,
+    previousState.excludedRanges,
+    delta.mapOldToNew,
+    true,
+  );
   const extractedDirtyWindows = extractDirtyFencedDivWindows(
     previousState.fencedDivSlice.fencedDivs,
     doc,
     tree,
     changes,
-    delta.dirtyWindows,
+    expandedDirtyWindows,
   );
   const dirtyExtractions = extractedDirtyWindows.map(({ window, range, structural }) => ({
     window: {
@@ -340,18 +447,22 @@ export function updateDocumentAnalysis(
     delta,
     dirtyExtractions,
   );
-  const globalStructural = extractStructuralWindow(doc, tree);
   const equationSlice = mergeEquationSlice(
     previousState.equationSlice,
-    buildEquationSlice(globalStructural).equations,
-    changes,
+    delta,
+    dirtyExtractions,
+  );
+  const excludedRanges = mergeExcludedRanges(
+    previousState.excludedRanges,
+    delta,
+    dirtyExtractions,
   );
   const referenceSlice = mergeReferenceSlice(
     previousState.referenceSlice,
     doc,
     delta,
     dirtyExtractions,
-    globalStructural,
+    excludedRanges,
   );
 
   return finalizeDocumentAnalysis(previous, {
@@ -362,7 +473,7 @@ export function updateDocumentAnalysis(
     mathSlice,
     referenceSlice,
     includeSlice,
-  });
+  }, excludedRanges);
 }
 
 export function getDocumentAnalysisRevisionInfo(

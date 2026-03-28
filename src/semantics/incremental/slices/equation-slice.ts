@@ -1,8 +1,13 @@
 import type { EquationSemantics } from "../../document";
 import {
+  firstOverlapIndex,
   mapRangeObject,
+  rangesOverlap,
+  replaceOverlappingRanges,
   type PositionMapper,
+  type RangeLike,
 } from "../merge-utils";
+import type { DirtyWindow, SemanticDelta } from "../types";
 import type {
   EquationStructure,
   StructuralWindowExtraction,
@@ -13,41 +18,15 @@ export interface EquationSlice {
   readonly equationById: ReadonlyMap<string, EquationSemantics>;
 }
 
+export interface DirtyEquationWindowExtraction {
+  readonly window: Pick<DirtyWindow, "fromNew" | "toNew">;
+  readonly structural: Pick<StructuralWindowExtraction, "equations">;
+}
+
 function buildEquationById(
   equations: readonly EquationSemantics[],
 ): ReadonlyMap<string, EquationSemantics> {
   return new Map(equations.map((equation) => [equation.id, equation]));
-}
-
-function sameEquationStructure(
-  left: Pick<EquationSemantics, "id" | "from" | "to" | "labelFrom" | "labelTo" | "latex">,
-  right: Pick<EquationSemantics, "id" | "from" | "to" | "labelFrom" | "labelTo" | "latex">,
-): boolean {
-  return (
-    left.id === right.id
-    && left.from === right.from
-    && left.to === right.to
-    && left.labelFrom === right.labelFrom
-    && left.labelTo === right.labelTo
-    && left.latex === right.latex
-  );
-}
-
-function sameEquation(
-  left: EquationSemantics,
-  right: EquationSemantics,
-): boolean {
-  return left.number === right.number && sameEquationStructure(left, right);
-}
-
-function finalizeEquations(
-  equations: readonly EquationStructure[],
-): EquationSemantics[] {
-  let nextNumber = 1;
-  return equations.map((equation) => ({
-    ...equation,
-    number: nextNumber++,
-  }));
 }
 
 export function mapEquationSemantics(
@@ -98,28 +77,122 @@ export function createEquationSlice(
 export function buildEquationSlice(
   structural: Pick<StructuralWindowExtraction, "equations">,
 ): EquationSlice {
-  return createEquationSlice(finalizeEquations(structural.equations));
+  return createEquationSlice(finalizeEquationTail(structural.equations, 0));
+}
+
+function deltaMapper(delta: Pick<SemanticDelta, "mapOldToNew">): PositionMapper {
+  return {
+    mapPos(pos, assoc = -1) {
+      return delta.mapOldToNew(pos, assoc);
+    },
+  };
+}
+
+function replacementStartIndex(
+  equations: readonly EquationStructure[],
+  window: RangeLike,
+): number {
+  const overlapIndex = firstOverlapIndex(equations, window);
+  if (overlapIndex !== -1) return overlapIndex;
+  let lo = 0;
+  let hi = equations.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (equations[mid].from < window.from) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+function equationTouchesDirtyWindow(
+  equation: EquationStructure,
+  window: RangeLike,
+): boolean {
+  if (rangesOverlap(equation, window)) return true;
+  if (window.from !== window.to) return false;
+  return equation.from <= window.from && window.from <= equation.to;
+}
+
+function expandMergeWindow(
+  window: RangeLike,
+  replacements: readonly EquationStructure[],
+): RangeLike {
+  if (replacements.length === 0) return window;
+  return {
+    from: Math.min(window.from, replacements[0].from),
+    to: Math.max(window.to, replacements[replacements.length - 1].to),
+  };
+}
+
+function finalizeEquationTail(
+  equations: readonly EquationStructure[],
+  startIndex: number,
+): readonly EquationSemantics[] {
+  let nextNumber = 1;
+  const prefix: EquationSemantics[] = [];
+  for (let i = 0; i < startIndex; i++) {
+    const eq = equations[i];
+    prefix.push(finalizeEquation(eq, nextNumber++));
+  }
+
+  const tail: EquationSemantics[] = [];
+  for (let i = startIndex; i < equations.length; i++) {
+    const eq = equations[i];
+    tail.push(finalizeEquation(eq, nextNumber++));
+  }
+
+  if (startIndex === 0) return tail;
+  return [...prefix, ...tail];
+}
+
+function finalizeEquation(
+  equation: EquationStructure,
+  number: number,
+): EquationSemantics {
+  if (isFinalized(equation) && equation.number === number) return equation;
+  return { ...equation, number };
+}
+
+function isFinalized(
+  equation: EquationStructure,
+): equation is EquationSemantics {
+  return "number" in equation;
 }
 
 export function mergeEquationSlice(
   previous: EquationSlice,
-  nextEquations: readonly EquationSemantics[],
-  changes: PositionMapper,
+  delta: Pick<SemanticDelta, "mapOldToNew">,
+  dirtyExtractions: readonly DirtyEquationWindowExtraction[],
 ): EquationSlice {
-  // Display-math pairing can shift beyond the edited window while the user is
-  // typing, so the rebuilt next slice is the correctness source of truth here.
-  const mappedPrevious = mapEquations(previous.equations, changes);
-  const equations = nextEquations.map((equation, index) => {
-    const candidate = mappedPrevious[index];
-    return candidate && sameEquation(candidate, equation) ? candidate : equation;
-  });
+  let equations: readonly EquationStructure[] = mapEquations(
+    previous.equations,
+    deltaMapper(delta),
+  );
+  let earliestAffectedIndex = Number.POSITIVE_INFINITY;
 
-  if (
-    equations.length === previous.equations.length
-    && equations.every((equation, index) => equation === previous.equations[index])
-  ) {
-    return previous;
+  for (const { window, structural } of dirtyExtractions) {
+    const rawMergeWindow = { from: window.fromNew, to: window.toNew };
+    const replacementEquations = structural.equations.filter((eq) =>
+      equationTouchesDirtyWindow(eq, rawMergeWindow),
+    );
+    const mergeWindow = expandMergeWindow(rawMergeWindow, replacementEquations);
+    const startIndex = replacementStartIndex(equations, mergeWindow);
+    const nextEquations = replaceOverlappingRanges(
+      equations,
+      mergeWindow,
+      replacementEquations,
+    );
+
+    if (nextEquations !== equations) {
+      earliestAffectedIndex = Math.min(earliestAffectedIndex, startIndex);
+      equations = nextEquations;
+    }
   }
 
-  return createEquationSlice(equations);
+  if (earliestAffectedIndex === Number.POSITIVE_INFINITY) {
+    if (equations === previous.equations) return previous;
+    return createEquationSlice(equations as readonly EquationSemantics[]);
+  }
+
+  return createEquationSlice(finalizeEquationTail(equations, earliestAffectedIndex));
 }

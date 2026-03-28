@@ -5,7 +5,10 @@ import { describe, expect, it } from "vitest";
 
 import { markdownExtensions } from "../../../parser";
 import { editorStateTextSource } from "../../codemirror-source";
+import { buildSemanticDelta } from "../semantic-delta";
+import type { DirtyWindow } from "../types";
 import { extractStructuralWindow } from "../window-extractor";
+import { extractDirtyFencedDivWindows } from "./fenced-div-slice";
 import {
   buildEquationSlice,
   mapEquationSemantics,
@@ -35,6 +38,30 @@ function expectEquationByIdMatchesSlice(slice: EquationSlice): void {
   }
 }
 
+function expandWindowsForEquations(
+  dirtyWindows: readonly DirtyWindow[],
+  equations: readonly { readonly from: number; readonly to: number }[],
+  mapOldToNew: (pos: number, assoc?: number) => number,
+): readonly DirtyWindow[] {
+  if (equations.length === 0) return dirtyWindows;
+  return dirtyWindows.map((window) => {
+    let { fromOld, toOld, fromNew, toNew } = window;
+    let expanded = false;
+    for (const eq of equations) {
+      if (eq.from <= toOld && fromOld < eq.to) {
+        const mFrom = mapOldToNew(eq.from, 1);
+        const mTo = Math.max(mFrom, mapOldToNew(eq.to, -1));
+        fromOld = Math.min(fromOld, eq.from);
+        toOld = Math.max(toOld, eq.to);
+        fromNew = Math.min(fromNew, mFrom);
+        toNew = Math.max(toNew, mTo);
+        expanded = true;
+      }
+    }
+    return expanded ? { fromOld, toOld, fromNew, toNew } : window;
+  });
+}
+
 function mergeAndRebuild(
   state: EditorState,
   changes: ChangeSpec | readonly ChangeSpec[],
@@ -42,7 +69,26 @@ function mergeAndRebuild(
 ): { before: EquationSlice; after: EquationSlice; rebuilt: EquationSlice } {
   const tr = state.update({ changes });
   const rebuilt = analyzeEquationSlice(tr.state);
-  const after = mergeEquationSlice(before, rebuilt.equations, tr.changes);
+  const delta = buildSemanticDelta(tr);
+  const source = editorStateTextSource(tr.state);
+  const tree = syntaxTree(tr.state);
+  const expandedWindows = expandWindowsForEquations(
+    delta.dirtyWindows,
+    before.equations,
+    delta.mapOldToNew,
+  );
+  const extractedWindows = extractDirtyFencedDivWindows(
+    [],
+    source,
+    tree,
+    tr.changes,
+    expandedWindows,
+  );
+  const dirtyExtractions = extractedWindows.map(({ window, range, structural }) => ({
+    window: { ...window, fromNew: range.from, toNew: range.to },
+    structural,
+  }));
+  const after = mergeEquationSlice(before, delta, dirtyExtractions);
   return { before, after, rebuilt };
 }
 
