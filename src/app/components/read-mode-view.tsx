@@ -4,30 +4,26 @@
  * Replaces the CM6 EditorView when the editor is in "read" mode, enabling
  * proper typography (justify, hyphens) that CM6's `.cm-line` divs prevent.
  *
- * Uses the existing `markdownToHtml` converter with math macros from the
- * CM6 frontmatter state and section numbering support. After rendering, applies
- * Knuth-Plass optimal line breaking via tex-linebreak2 for book-quality
- * justified text.
+ * The post-render pipeline is decomposed into focused hooks:
+ *   useReadModeHtml   — HTML generation + async image override resolution
+ *   useLineBreaking   — Knuth-Plass optimal line breaking + resize reflow
+ *   useScrollRestore  — scroll position restoration across document switches
+ *   useHyphenation    — Hyphenopoly soft-hyphen insertion
+ *   useScrollTracking — passive scroll position reporting
+ *   useLinkInterception — external link click interception (Tauri)
  */
 
-import { useRef, useEffect, useMemo, useCallback, useState } from "react";
-import { markdownToHtml } from "../markdown-to-html";
+import { useRef } from "react";
 import type { BibStore } from "../../citations/citation-render";
 import type { FrontmatterConfig } from "../../parser/frontmatter";
 import type { CslProcessor } from "../../citations/csl-processor";
-import {
-  texLinebreakDOM,
-  resetDOMJustification,
-} from "tex-linebreak2";
-import { getHyphenator, applyHyphensToContainer } from "../hyphenation";
-import { measureAsync, measureSync } from "../perf";
-import { renderDocumentFragmentToHtml } from "../../document-surfaces";
-import { resolveLocalImageOverrides } from "../pdf-image-previews";
 import type { FileSystem } from "../file-manager";
-import { handleExternalLinkClick } from "../../lib/open-link";
-
-/** Debounce delay (ms) for re-applying line breaking on resize. */
-const RESIZE_DEBOUNCE_MS = 200;
+import { useReadModeHtml } from "../hooks/use-read-mode-html";
+import { useLineBreaking } from "../hooks/use-line-breaking";
+import { useScrollRestore } from "../hooks/use-scroll-restore";
+import { useHyphenation } from "../hooks/use-hyphenation";
+import { useScrollTracking } from "../hooks/use-scroll-tracking";
+import { useLinkInterception } from "../hooks/use-link-interception";
 
 export interface ReadModeViewProps {
   /** Raw markdown document content. */
@@ -46,78 +42,6 @@ export interface ReadModeViewProps {
   fs?: FileSystem;
   /** Current document path for resolving relative image targets. */
   docPath?: string;
-}
-
-function buildReadModeHtml(
-  content: string,
-  frontmatterConfig: FrontmatterConfig,
-  bibliography?: BibStore,
-  cslProcessor?: CslProcessor,
-  documentPath = "",
-  imageUrlOverrides?: ReadonlyMap<string, string>,
-): string {
-  const bodyHtml = markdownToHtml(content, {
-    macros: frontmatterConfig.math,
-    sectionNumbers: true,
-    bibliography,
-    cslProcessor,
-    documentPath,
-    imageUrlOverrides,
-  });
-
-  const titleHtml = frontmatterConfig.title
-    ? `<h1 class="cf-read-title">${renderDocumentFragmentToHtml({
-      kind: "title",
-      text: frontmatterConfig.title,
-      macros: frontmatterConfig.math,
-    })}</h1>`
-    : "";
-
-  return titleHtml + bodyHtml;
-}
-
-/**
- * Filter paragraphs to only those without inline math.
- * Paragraphs with .katex elements are skipped — they fall back to
- * CSS text-align:justify + Hyphenopoly soft hyphens, which handles
- * KaTeX's complex DOM without any compatibility issues.
- */
-function getTextOnlyParagraphs(container: HTMLElement): HTMLElement[] {
-  const result: HTMLElement[] = [];
-  for (const p of container.querySelectorAll<HTMLElement>("p")) {
-    if (!p.querySelector(".katex")) {
-      result.push(p);
-    }
-  }
-  return result;
-}
-
-/**
- * Apply Knuth-Plass line breaking to all `<p>` elements inside the container.
- * Resets any previous justification before re-applying so the algorithm
- * measures against the original DOM structure.
- */
-async function applyLineBreaking(container: HTMLElement): Promise<void> {
-  const paragraphs = container.querySelectorAll<HTMLElement>("p");
-  if (paragraphs.length === 0) return;
-
-  // Reset previous line-breaking modifications before re-measuring
-  for (const p of paragraphs) {
-    resetDOMJustification(p);
-  }
-
-  // Only apply Knuth-Plass to paragraphs without math — tex-linebreak2
-  // cannot handle KaTeX's DOM (all placeholder approaches fail due to
-  // skipWhenRendering/display:none in the rendering phase). Math paragraphs
-  // fall back to CSS text-align:justify + Hyphenopoly soft hyphens.
-  const textParagraphs = getTextOnlyParagraphs(container);
-  if (textParagraphs.length === 0) return;
-
-  await texLinebreakDOM(textParagraphs, {
-    justify: true,
-    updateOnWindowResize: false,
-  });
-
 }
 
 /**
@@ -140,161 +64,13 @@ export function ReadModeView({
   docPath,
 }: ReadModeViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const didRestoreScroll = useRef(false);
-  const resolvedDocPath = docPath ?? "";
 
-  const baseHtmlContent = useMemo(
-    () => buildReadModeHtml(content, frontmatterConfig, bibliography, cslProcessor, resolvedDocPath),
-    [content, frontmatterConfig, bibliography, cslProcessor, resolvedDocPath],
-  );
-  const [htmlContent, setHtmlContent] = useState(baseHtmlContent);
-
-  useEffect(() => {
-    let cancelled = false;
-    setHtmlContent(baseHtmlContent);
-
-    if (!fs) return () => {
-      cancelled = true;
-    };
-
-    void measureAsync("read_mode.pdf_previews", async () => {
-      const imageUrlOverrides = await resolveLocalImageOverrides(content, fs, resolvedDocPath);
-      if (cancelled || imageUrlOverrides.size === 0) return;
-      setHtmlContent(
-        buildReadModeHtml(
-          content,
-          frontmatterConfig,
-          bibliography,
-          cslProcessor,
-          resolvedDocPath,
-          imageUrlOverrides,
-        ),
-      );
-    }, {
-      category: "read_mode",
-      detail: docPath,
-    }).catch(() => {
-      // Silently ignore preview-preparation errors — broken-image fallback remains.
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [baseHtmlContent, bibliography, content, cslProcessor, docPath, frontmatterConfig, fs]);
-
-  // Stable callback for applying line breaking (used by both effect and resize observer)
-  const applyLineBreakingCb = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    measureAsync("read_mode.line_breaking", () => applyLineBreaking(el), {
-      category: "read_mode",
-    }).catch(() => {
-      // Silently ignore line-breaking errors — CSS justify is the fallback
-    });
-  }, []);
-
-  // Apply Knuth-Plass line breaking after HTML renders to the DOM
-  useEffect(() => {
-    applyLineBreakingCb();
-  }, [htmlContent, applyLineBreakingCb]);
-
-  // Re-apply line breaking on container resize (debounced).
-  // Skips the initial ResizeObserver callback to avoid duplicating
-  // the useEffect above which already applies on first render.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    let isFirstCallback = true;
-
-    const observer = new ResizeObserver(() => {
-      // ResizeObserver fires immediately on observe(); skip that first call
-      // since the htmlContent effect already handles the initial application.
-      if (isFirstCallback) {
-        isFirstCallback = false;
-        return;
-      }
-      if (timeoutId !== null) clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        applyLineBreakingCb();
-        timeoutId = null;
-      }, RESIZE_DEBOUNCE_MS);
-    });
-
-    observer.observe(el);
-
-    return () => {
-      observer.disconnect();
-      if (timeoutId !== null) clearTimeout(timeoutId);
-    };
-  }, [applyLineBreakingCb]);
-
-  useEffect(() => {
-    didRestoreScroll.current = false;
-  }, [htmlContent]);
-
-  // Restore scroll position after each document render.
-  // Always set scrollTop (defaulting to 0) so that switching documents
-  // resets the container rather than keeping the previous file's position.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el || didRestoreScroll.current) return;
-    didRestoreScroll.current = true;
-    el.scrollTop = scrollTop ?? 0;
-  }, [htmlContent, scrollTop]);
-
-  // Apply Hyphenopoly soft hyphens to text nodes after HTML renders.
-  // Runs after each htmlContent change. Math (.katex) and code subtrees
-  // are excluded by applyHyphensToContainer.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    let cancelled = false;
-    getHyphenator()
-      .then((hyphenate) => {
-        if (!cancelled) {
-          measureSync("read_mode.hyphenation", () => {
-            applyHyphensToContainer(el, hyphenate);
-          }, { category: "read_mode" });
-        }
-      })
-      .catch((err: unknown) => {
-        // Non-fatal: CSS hyphens:auto serves as fallback
-        console.warn("Hyphenopoly failed to load:", err);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [htmlContent]);
-
-  // Track scroll position
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el || !onScroll) return;
-
-    const handler = () => {
-      onScroll(el.scrollTop);
-    };
-
-    el.addEventListener("scroll", handler, { passive: true });
-    return () => el.removeEventListener("scroll", handler);
-  }, [onScroll]);
-
-  // Intercept external link clicks so the Tauri webview never navigates away.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const handler = (e: MouseEvent) => {
-      handleExternalLinkClick(e);
-    };
-
-    el.addEventListener("click", handler);
-    return () => el.removeEventListener("click", handler);
-  }, []);
+  const htmlContent = useReadModeHtml(content, frontmatterConfig, bibliography, cslProcessor, docPath, fs);
+  useLineBreaking(containerRef, htmlContent);
+  useScrollRestore(containerRef, htmlContent, scrollTop);
+  useHyphenation(containerRef, htmlContent);
+  useScrollTracking(containerRef, onScroll);
+  useLinkInterception(containerRef);
 
   return (
     <div
