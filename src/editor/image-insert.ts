@@ -6,14 +6,7 @@
  */
 
 import type { EditorView } from "@codemirror/view";
-import {
-  isImageMime,
-  IMAGE_EXTENSIONS,
-  fileToDataUrl,
-  logImageError,
-  saveAndInsertImage,
-} from "./image-save";
-import { insertImageMarkdown } from "./image-paste";
+import { isImageMime, IMAGE_EXTENSIONS, logImageError, handleImageInsert } from "./image-save";
 import { IMAGE_TIMEOUT_MS } from "../constants";
 
 /**
@@ -27,8 +20,6 @@ export async function insertImageFromPicker(
   view: EditorView,
   saveImage?: (file: File) => Promise<string>,
 ): Promise<void> {
-  const save = saveImage ?? fileToDataUrl;
-
   return new Promise<void>((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -48,18 +39,10 @@ export async function insertImageFromPicker(
         return;
       }
 
-      void saveAndInsertImage(
-        file,
-        save,
-        (path, alt) => {
-          insertImageMarkdown(view, path, alt);
-          view.focus();
-        },
-        "insert",
-      ).then(resolve).catch((e: unknown) => {
-        logImageError("insert", `saveAndInsertImage failed: ${e instanceof Error ? e.message : String(e)}`);
-        resolve();
-      });
+      void handleImageInsert(view, file, {
+        save: saveImage,
+        operation: "insert",
+      }).then(resolve);
     });
 
     // Handle cancel (user closes the dialog without selecting)

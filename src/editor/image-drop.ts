@@ -18,13 +18,7 @@
 
 import { type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import {
-  isImageMime,
-  fileToDataUrl,
-  saveAndInsertImage,
-  type ImageSaveConfig,
-} from "./image-save";
-import { insertImageMarkdown } from "./image-paste";
+import { isImageMime, createImageHandler, type ImageSaveConfig } from "./image-save";
 
 /**
  * Configuration for the image-drop extension.
@@ -39,7 +33,7 @@ export type ImageDropConfig = ImageSaveConfig;
  * provided callback, and inserts markdown at the drop position.
  */
 export function imageDropExtension(config: ImageDropConfig = {}): Extension {
-  const save = config.saveImage ?? fileToDataUrl;
+  const handle = createImageHandler(config);
 
   return EditorView.domEventHandlers({
     dragover(event) {
@@ -65,20 +59,15 @@ export function imageDropExtension(config: ImageDropConfig = {}): Extension {
         event.preventDefault();
 
         // Capture the drop position from mouse coordinates synchronously.
-        // We pass this explicitly to insertImageMarkdown rather than relying
-        // on view.state.selection.main, which may have moved by the time the
+        // We pass this explicitly rather than relying on
+        // view.state.selection.main, which may have moved by the time the
         // async save resolves.
         const dropPos = view.posAtCoords({
           x: event.clientX,
           y: event.clientY,
         });
 
-        saveAndInsertImage(
-          file,
-          save,
-          (path, alt) => insertImageMarkdown(view, path, alt, dropPos ?? undefined),
-          "drop",
-        );
+        handle(view, file, "drop", dropPos ?? undefined);
 
         // Only handle the first image
         return true;

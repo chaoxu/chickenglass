@@ -2,14 +2,13 @@
  * Regression tests proving picker/paste/drop image insertion parity (#330).
  *
  * All three insertion paths must:
- *   1. Funnel through `saveAndInsertImage` from image-save.ts
- *   2. Use `insertImageMarkdown` for the final CM6 dispatch
- *   3. Produce identical markdown for the same image file
+ *   1. Funnel through `handleImageInsert` from image-save.ts
+ *   2. Produce identical markdown for the same image file
  *
- * The paste and drop paths wire DOM events to `saveAndInsertImage` inside
+ * The paste and drop paths wire DOM events to `handleImageInsert` inside
  * CM6 `domEventHandlers`, which jsdom cannot fully simulate (no DataTransfer).
- * We verify those paths structurally: the modules import and re-export
- * `saveAndInsertImage` / `insertImageMarkdown`, and the shared function
+ * We verify those paths structurally: the modules import and call
+ * `handleImageInsert` / `createImageHandler`, and the shared function
  * itself is tested end-to-end below.
  *
  * The picker path CAN be tested directly because it only needs a stubbed
@@ -20,7 +19,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { EditorView } from "@codemirror/view";
 
 import * as imageSave from "./image-save";
-import { insertImageMarkdown } from "./image-paste";
 import { insertImageFromPicker } from "./image-insert";
 import { createTestView } from "../test-utils";
 
@@ -74,9 +72,9 @@ describe("image insertion parity (#330)", () => {
     }
   });
 
-  describe("picker calls saveAndInsertImage", () => {
-    it("insertImageFromPicker funnels through saveAndInsertImage", async () => {
-      const spy = vi.spyOn(imageSave, "saveAndInsertImage");
+  describe("picker calls handleImageInsert", () => {
+    it("insertImageFromPicker funnels through handleImageInsert", async () => {
+      const spy = vi.spyOn(imageSave, "handleImageInsert");
       spy.mockResolvedValue(undefined);
 
       const view = makeView();
@@ -87,15 +85,14 @@ describe("image insertion parity (#330)", () => {
 
       expect(spy).toHaveBeenCalledTimes(1);
       expect(spy).toHaveBeenCalledWith(
+        view,
         file,
-        expect.any(Function),
-        expect.any(Function),
-        "insert",
+        expect.objectContaining({ operation: "insert" }),
       );
     });
 
     it("picker forwards a custom saveImage callback", async () => {
-      const spy = vi.spyOn(imageSave, "saveAndInsertImage");
+      const spy = vi.spyOn(imageSave, "handleImageInsert");
       spy.mockResolvedValue(undefined);
 
       const customSave = vi.fn().mockResolvedValue("custom/path.png");
@@ -105,15 +102,14 @@ describe("image insertion parity (#330)", () => {
       await insertImageFromPicker(makeView(), customSave);
 
       expect(spy).toHaveBeenCalledWith(
+        expect.anything(),
         file,
-        customSave,
-        expect.any(Function),
-        "insert",
+        expect.objectContaining({ save: customSave, operation: "insert" }),
       );
     });
 
     it("picker rejects non-image MIME types", async () => {
-      const spy = vi.spyOn(imageSave, "saveAndInsertImage");
+      const spy = vi.spyOn(imageSave, "handleImageInsert");
       spy.mockResolvedValue(undefined);
 
       const textFile = new File(["hello"], "doc.txt", { type: "text/plain" });
@@ -126,24 +122,19 @@ describe("image insertion parity (#330)", () => {
   });
 
   describe("all paths produce identical markdown", () => {
-    it("same image yields identical markdown via paste, drop, and picker paths", async () => {
+    it("same image yields identical markdown via all paths", async () => {
       const savedPath = "assets/photo.png";
       const results: string[] = [];
 
       for (const operation of ["paste", "drop", "insert"]) {
         const view = makeView();
         const save = vi.fn().mockResolvedValue(savedPath);
-        const insert = vi.fn();
 
-        await imageSave.saveAndInsertImage(
-          fakeImageFile(),
+        await imageSave.handleImageInsert(view, fakeImageFile(), {
           save,
-          insert,
           operation,
-        );
+        });
 
-        const [path, alt] = insert.mock.calls[0] as [string, string];
-        insertImageMarkdown(view, path, alt);
         results.push(view.state.doc.toString());
       }
 
@@ -158,30 +149,29 @@ describe("image insertion parity (#330)", () => {
       const now = Date.now();
       vi.spyOn(Date, "now").mockReturnValue(now);
 
-      const alts: string[] = [];
+      const docs: string[] = [];
 
       for (const operation of ["paste", "drop", "insert"]) {
+        const view = makeView();
         const save = vi.fn().mockResolvedValue("assets/image-999.png");
-        const insert = vi.fn();
 
         // Use the generic "image.png" name that triggers timestamp generation
-        await imageSave.saveAndInsertImage(
+        await imageSave.handleImageInsert(
+          view,
           fakeImageFile("image.png"),
-          save,
-          insert,
-          operation,
+          { save, operation },
         );
 
-        alts.push(insert.mock.calls[0][1] as string);
+        docs.push(view.state.doc.toString());
       }
 
       vi.restoreAllMocks();
 
-      // All alt texts match (all derived from the same generated filename)
-      expect(alts[0]).toBe(alts[1]);
-      expect(alts[1]).toBe(alts[2]);
+      // All documents match (same generated alt text)
+      expect(docs[0]).toBe(docs[1]);
+      expect(docs[1]).toBe(docs[2]);
       // Alt text is the filename without extension
-      expect(alts[0]).toMatch(/^image-\d+$/);
+      expect(docs[0]).toMatch(/!\[image-\d+\]/);
     });
 
     it("multiple MIME types produce identical results across paths", async () => {
@@ -196,17 +186,13 @@ describe("image insertion parity (#330)", () => {
         for (const operation of ["paste", "drop", "insert"]) {
           const view = makeView();
           const save = vi.fn().mockResolvedValue(savedPath);
-          const insert = vi.fn();
 
-          await imageSave.saveAndInsertImage(
+          await imageSave.handleImageInsert(
+            view,
             fakeImageFile(name, mime),
-            save,
-            insert,
-            operation,
+            { save, operation },
           );
 
-          const [path, alt] = insert.mock.calls[0] as [string, string];
-          insertImageMarkdown(view, path, alt);
           markdowns.push(view.state.doc.toString());
         }
 
@@ -218,28 +204,12 @@ describe("image insertion parity (#330)", () => {
   });
 
   describe("shared path architecture", () => {
-    it("saveAndInsertImage is the single entry point for all paths", () => {
-      expect(typeof imageSave.saveAndInsertImage).toBe("function");
-      expect(imageSave.saveAndInsertImage.length).toBe(4);
+    it("handleImageInsert is the single entry point for all paths", () => {
+      expect(typeof imageSave.handleImageInsert).toBe("function");
+      expect(imageSave.handleImageInsert.length).toBe(3);
     });
 
-    it("insertImageMarkdown produces correct markdown on an empty doc", () => {
-      const view = makeView();
-      insertImageMarkdown(view, "assets/fig.png", "fig");
-      expect(view.state.doc.toString()).toBe("![fig](assets/fig.png)\n");
-    });
-
-    it("insertImageMarkdown adds a newline prefix on a non-empty line", () => {
-      const view = makeView("some text");
-      // Place cursor at end of "some text"
-      view.dispatch({ selection: { anchor: 9 } });
-      insertImageMarkdown(view, "assets/fig.png", "fig");
-      expect(view.state.doc.toString()).toBe(
-        "some text\n![fig](assets/fig.png)\n",
-      );
-    });
-
-    it("all paths default to fileToDataUrl when no saveImage provided", async () => {
+    it("all paths default to fileToDataUrl when no save provided", async () => {
       expect(typeof imageSave.fileToDataUrl).toBe("function");
 
       const file = fakeImageFile();
