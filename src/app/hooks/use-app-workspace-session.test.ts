@@ -18,6 +18,7 @@ const workspaceMockState = vi.hoisted(() => ({
   addRecentFile: vi.fn(),
   removeRecentFile: vi.fn(),
   loadProjectConfig: vi.fn(async () => ({})),
+  getGitStatus: vi.fn(async (): Promise<Record<string, string>> => ({})),
   windowState: {
     projectRoot: "/tmp/restored-project",
     currentDocument: { path: "draft.md", name: "draft.md" },
@@ -34,6 +35,8 @@ const workspaceMockState = vi.hoisted(() => ({
     this.removeRecentFile.mockReset();
     this.loadProjectConfig.mockReset();
     this.loadProjectConfig.mockImplementation(async () => ({}));
+    this.getGitStatus.mockReset();
+    this.getGitStatus.mockImplementation(async (): Promise<Record<string, string>> => ({}));
     this.windowState = {
       projectRoot: "/tmp/restored-project",
       currentDocument: { path: "draft.md", name: "draft.md" },
@@ -109,6 +112,10 @@ vi.mock("../project-config", () => ({
   loadProjectConfig: workspaceMockState.loadProjectConfig,
 }));
 
+vi.mock("../tauri-client/git", () => ({
+  gitStatusCommand: () => workspaceMockState.getGitStatus(),
+}));
+
 vi.mock("../perf", () => ({
   measureAsync: (_name: string, task: () => Promise<unknown>) => task(),
   withPerfOperation: async (
@@ -135,8 +142,10 @@ interface HarnessRef {
   projectRoot: string | null;
   fileTree: FileEntry | null;
   projectConfig: Record<string, unknown>;
+  gitStatus: Record<string, string>;
   startupComplete: boolean;
   openProjectRoot: (path: string) => Promise<FileEntry | null>;
+  refreshGitStatus: () => Promise<void>;
 }
 
 function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
@@ -144,8 +153,10 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
     projectRoot: null,
     fileTree: null,
     projectConfig: {},
+    gitStatus: {},
     startupComplete: false,
     openProjectRoot: async () => null,
+    refreshGitStatus: async () => {},
   };
 
   const Harness: FC = () => {
@@ -153,8 +164,10 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
     ref.projectRoot = result.projectRoot;
     ref.fileTree = result.fileTree;
     ref.projectConfig = result.projectConfig;
+    ref.gitStatus = result.gitStatus;
     ref.startupComplete = result.startupComplete;
     ref.openProjectRoot = result.openProjectRoot;
+    ref.refreshGitStatus = result.refreshGitStatus;
     return null;
   };
 
@@ -319,6 +332,48 @@ describe("useAppWorkspaceSession", () => {
     expect(ref.projectRoot).toBe("/tmp/project-b");
     expect(ref.fileTree?.name).toBe("project-b");
     expect(ref.projectConfig).toEqual({ bibliography: "b.bib" });
+  });
+
+  it("discards stale git status when a newer project open wins the race", async () => {
+    // Scenario: save triggers refreshGitStatus() in repo A, user immediately
+    // opens non-git folder B. The slow git status from repo A must not
+    // overwrite B's empty state.
+    const staleGitStatus = createDeferred<Record<string, string>>();
+    workspaceMockState.getGitStatus
+      .mockImplementationOnce(async () => ({}))          // startup load
+      .mockImplementationOnce(async () => staleGitStatus.promise); // refreshGitStatus after "save"
+    const { Harness, ref } = createHarness(fsStub);
+
+    // Boot with the saved project root (repo A).
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(ref.startupComplete).toBe(true);
+    expect(ref.gitStatus).toEqual({});
+
+    // Simulate save → refreshGitStatus(); the result is delayed.
+    await act(async () => {
+      void ref.refreshGitStatus();
+    });
+
+    // Before the stale status resolves, open a different (non-git) folder.
+    // This bumps the workspace generation, so the pending result is stale.
+    await act(async () => {
+      await ref.openProjectRoot("/tmp/non-git-folder");
+    });
+
+    expect(ref.projectRoot).toBe("/tmp/non-git-folder");
+    expect(ref.gitStatus).toEqual({});
+
+    // Now the stale result from repo A arrives — it must be discarded.
+    await act(async () => {
+      staleGitStatus.resolve({ "dirty-file.md": "modified" });
+      await Promise.resolve();
+    });
+
+    expect(ref.gitStatus).toEqual({});
   });
 
   it("does not let a stale startup restore overwrite a newer manual open", async () => {
