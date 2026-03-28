@@ -5,11 +5,8 @@ import { SidebarProvider } from "./components/sidebar";
 import { AppMainShell } from "./components/app-main-shell";
 import { AppSidebarShell } from "./components/app-sidebar-shell";
 import { ErrorBoundary } from "./components/error-boundary";
-import { isProjectRootEscapeError } from "./project-root-errors";
-import { openProjectInCurrentWindow as openProjectInCurrentWindowFlow } from "./project-open";
-import { dirname, basename } from "../lib/utils";
+import { useAppFileDialogs } from "./hooks/use-app-file-dialogs";
 import { isTauri } from "../lib/tauri";
-import { openDocumentInNewWindow } from "./window-launch";
 import { useAppDebug } from "./hooks/use-app-debug";
 import { useAppEditorShell } from "./hooks/use-app-editor-shell";
 import { useAppOverlays } from "./hooks/use-app-overlays";
@@ -34,7 +31,6 @@ const BranchSwitcher = lazy(() =>
 function AppInner() {
   const fs = useFileSystem();
   const appContainerRef = useRef<HTMLDivElement | null>(null);
-  const openProjectRequestRef = useRef(0);
   const dialogs = useDialogs();
   const unsavedChanges = useUnsavedChangesDialog();
   const workspace = useAppWorkspaceSession(fs);
@@ -76,88 +72,13 @@ function AppInner() {
     [fs],
   );
 
-  const openProjectInCurrentWindow = useCallback(async (
-    projectRoot: string,
-    initialPath?: string,
-  ): Promise<boolean> => {
-    return openProjectInCurrentWindowFlow({
-      projectRoot,
-      initialPath,
-      currentProjectRoot: workspace.projectRoot,
-      nextRequestId: () => ++openProjectRequestRef.current,
-      isRequestCurrent: (requestId) => requestId === openProjectRequestRef.current,
-      cancelPendingOpenFile: editor.cancelPendingOpenFile,
-      closeCurrentFile: editor.closeCurrentFile,
-      openProjectRoot: workspace.openProjectRoot,
-      openFile: editor.openFile,
-      listChildren: listChildrenStable,
-    });
-  }, [editor, workspace, listChildrenStable]);
+  const fileDialogs = useAppFileDialogs({
+    editor,
+    workspace,
+    listChildren: listChildrenStable,
+  });
 
   const git = useGitStatus(workspace.projectRoot, workspace.refreshTree);
-
-  const handleOpenFolderRequest = useCallback(() => {
-    if (!isTauri()) return;
-    void (async () => {
-      try {
-        const { pickFolder } = await import("./tauri-fs");
-        const folderPath = await pickFolder();
-        if (!folderPath || folderPath === workspace.projectRoot) {
-          return;
-        }
-        await openProjectInCurrentWindow(folderPath);
-      } catch (e: unknown) {
-        console.error("[app] open folder request failed", e);
-      }
-    })();
-  }, [openProjectInCurrentWindow, workspace.projectRoot]);
-
-  const handleOpenFileRequest = useCallback(() => {
-    if (!isTauri()) return;
-    void (async () => {
-      try {
-        const { open } = await import("@tauri-apps/plugin-dialog");
-        const selected = await open({
-          directory: false,
-          multiple: false,
-          filters: [{ name: "Markdown", extensions: ["md"] }],
-        });
-        if (!selected || Array.isArray(selected)) return;
-
-        const projectRelativeTarget = basename(selected);
-        if (!workspace.projectRoot) {
-          await openProjectInCurrentWindow(dirname(selected), projectRelativeTarget);
-          return;
-        }
-
-        let relativePath: string;
-        try {
-          const { toProjectRelativePathCommand } = await import("./tauri-client/fs");
-          relativePath = await toProjectRelativePathCommand(selected);
-        } catch (error: unknown) {
-          if (!isProjectRootEscapeError(error)) {
-            throw error;
-          }
-          await openDocumentInNewWindow(dirname(selected), projectRelativeTarget);
-          return;
-        }
-
-        await editor.openFile(relativePath);
-      } catch (e: unknown) {
-        console.error("[app] open file request failed", e);
-      }
-    })();
-  }, [editor, openProjectInCurrentWindow, workspace.projectRoot]);
-
-  const handleQuitRequest = useCallback(async (): Promise<void> => {
-    if (!isTauri()) return;
-    try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      await getCurrentWindow().close();
-    } catch (e: unknown) {
-      console.error("[app] quit request failed", e);
-    }
-  }, []);
 
   useWindowCloseGuard({
     hasDirtyDocument: editor.hasDirtyDocument,
@@ -198,22 +119,22 @@ function AppInner() {
     suspendAutoSaveVersionRef: unsavedChanges.suspensionVersionRef,
     workspace: {
       ...workspace,
-      handleOpenFolder: handleOpenFolderRequest,
+      handleOpenFolder: fileDialogs.handleOpenFolderRequest,
     },
     editor,
     git,
-    onOpenFile: handleOpenFileRequest,
-    onQuit: handleQuitRequest,
+    onOpenFile: fileDialogs.handleOpenFileRequest,
+    onQuit: fileDialogs.handleQuitRequest,
   });
 
   useAppDebug({
-    openProject: (path) => openProjectInCurrentWindow(path),
+    openProject: (path) => fileDialogs.openProjectInCurrentWindow(path),
     openFile: editor.openFile,
     saveFile: editor.saveFile,
     closeFile: () => {
       void editor.closeCurrentFile();
     },
-    requestNativeClose: handleQuitRequest,
+    requestNativeClose: fileDialogs.handleQuitRequest,
     setMode: editor.handleModeChange,
     getMode: () => editor.editorMode,
     projectRoot: workspace.projectRoot,
