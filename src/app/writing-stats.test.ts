@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeDocStats } from "./writing-stats";
+import { computeDocStats, computeLiveStats } from "./writing-stats";
 
 describe("computeDocStats", () => {
   it("ignores YAML frontmatter when counting words", () => {
@@ -59,5 +59,35 @@ describe("computeDocStats", () => {
   it("counts multiple sentences correctly", () => {
     const stats = computeDocStats("First sentence. Second sentence! Third?");
     expect(stats.sentences).toBe(3);
+  });
+});
+
+describe("computeLiveStats", () => {
+  it("returns word and char counts consistent with computeDocStats", () => {
+    const text = "Hello world. This is a test.";
+    const live = computeLiveStats(text);
+    const full = computeDocStats(text);
+    expect(live.words).toBe(full.words);
+    expect(live.chars).toBe(full.chars);
+  });
+
+  it("strips frontmatter before counting", () => {
+    const text = ["---", "title: Test", "---", "One two."].join("\n");
+    const live = computeLiveStats(text);
+    expect(live.words).toBe(2);
+    // chars = body after frontmatter (past the closing ---\n)
+    expect(live.chars).toBe("One two.".length);
+  });
+
+  it("handles empty text", () => {
+    const live = computeLiveStats("");
+    expect(live.words).toBe(0);
+    expect(live.chars).toBe(0);
+  });
+
+  it("does not include sentence count or reading time", () => {
+    const live = computeLiveStats("Hello world.");
+    // computeLiveStats returns only { words, chars }
+    expect(Object.keys(live).sort()).toEqual(["chars", "words"]);
   });
 });

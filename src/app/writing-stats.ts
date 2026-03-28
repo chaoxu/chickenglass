@@ -55,10 +55,26 @@ function countSentences(text: string): number {
   return count;
 }
 
-/** Compute document statistics from raw markdown text. */
-export function computeDocStats(text: string): DocStats {
+/** Strip frontmatter and return the document body. */
+function getBody(text: string): string {
   const { end } = parseFrontmatter(text);
-  const body = end >= 0 ? text.slice(end) : text;
+  return end >= 0 ? text.slice(end) : text;
+}
+
+/**
+ * Cheap live counters for the status-bar hot path.
+ *
+ * Skips sentence segmentation and derived stats — only word count (via
+ * Intl.Segmenter word pass) and character count (body.length) are computed.
+ */
+export function computeLiveStats(text: string): { words: number; chars: number } {
+  const body = getBody(text);
+  return { words: countWords(body), chars: body.length };
+}
+
+/** Compute full document statistics from raw markdown text. */
+export function computeDocStats(text: string): DocStats {
+  const body = getBody(text);
 
   const words = countWords(body);
 
