@@ -1,9 +1,4 @@
-import { invokeWithPerf } from "../perf";
+import { tauriArgs } from "./make-command";
 
-export function watchDirectoryCommand(path: string, generation: number): Promise<boolean> {
-  return invokeWithPerf<boolean>("watch_directory", { path, generation });
-}
-
-export function unwatchDirectoryCommand(generation: number): Promise<boolean> {
-  return invokeWithPerf<boolean>("unwatch_directory", { generation });
-}
+export const watchDirectoryCommand = tauriArgs<boolean>("watch_directory")((path: string, generation: number) => ({ path, generation }));
+export const unwatchDirectoryCommand = tauriArgs<boolean>("unwatch_directory")((generation: number) => ({ generation }));

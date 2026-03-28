@@ -1,4 +1,4 @@
-import { invokeWithPerf } from "../perf";
+import { tauriCommand, tauriArgs } from "./make-command";
 
 export interface NativeWindowDebugInfo {
   label: string;
@@ -14,14 +14,6 @@ export interface NativeDebugState {
   last_focused_window: string | null;
 }
 
-export function debugListWindowsCommand(): Promise<NativeWindowDebugInfo[]> {
-  return invokeWithPerf<NativeWindowDebugInfo[]>("debug_list_windows");
-}
-
-export function debugGetNativeStateCommand(): Promise<NativeDebugState> {
-  return invokeWithPerf<NativeDebugState>("debug_get_native_state");
-}
-
-export function debugEmitFileChangedCommand(relativePath: string): Promise<void> {
-  return invokeWithPerf("debug_emit_file_changed", { relativePath });
-}
+export const debugListWindowsCommand = tauriCommand<NativeWindowDebugInfo[]>("debug_list_windows");
+export const debugGetNativeStateCommand = tauriCommand<NativeDebugState>("debug_get_native_state");
+export const debugEmitFileChangedCommand = tauriArgs<undefined>("debug_emit_file_changed")((relativePath: string) => ({ relativePath }));

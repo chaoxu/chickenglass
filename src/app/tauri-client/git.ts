@@ -1,22 +1,10 @@
-import { invokeWithPerf } from "../perf";
+import { tauriCommand, tauriArgs } from "./make-command";
 
 export interface GitBranchInfo {
   branch: string | null;
   hasUpstream: boolean;
   ahead: number;
   behind: number;
-}
-
-export function gitBranchInfoCommand(): Promise<GitBranchInfo> {
-  return invokeWithPerf<GitBranchInfo>("git_branch_info");
-}
-
-export function gitPullCommand(): Promise<string> {
-  return invokeWithPerf<string>("git_pull");
-}
-
-export function gitPushCommand(): Promise<string> {
-  return invokeWithPerf<string>("git_push");
 }
 
 export interface GitBranchEntry {
@@ -29,22 +17,6 @@ export const DIRTY_WORKTREE_PREFIX = "DIRTY_WORKTREE: ";
 
 export function isDirtyWorktreeError(error: unknown): boolean {
   return typeof error === "string" && error.startsWith(DIRTY_WORKTREE_PREFIX);
-}
-
-export function gitCurrentBranchCommand(): Promise<string | null> {
-  return invokeWithPerf<string | null>("git_current_branch");
-}
-
-export function gitListBranchesCommand(): Promise<GitBranchEntry[]> {
-  return invokeWithPerf<GitBranchEntry[]>("git_list_branches");
-}
-
-export function gitSwitchBranchCommand(name: string, force = false): Promise<void> {
-  return invokeWithPerf("git_switch_branch", { name, force });
-}
-
-export function gitCreateBranchCommand(name: string, force = false): Promise<void> {
-  return invokeWithPerf("git_create_branch", { name, force });
 }
 
 /** Git working-tree status for a single file (used by file-tree badges). */
@@ -69,18 +41,14 @@ export interface GitCommitResult {
   oid: string;
 }
 
-export function gitStatusCommand(): Promise<GitStatusResult> {
-  return invokeWithPerf<GitStatusResult>("git_status");
-}
-
-export function gitStageCommand(paths: string[]): Promise<void> {
-  return invokeWithPerf("git_stage", { paths });
-}
-
-export function gitUnstageCommand(paths: string[]): Promise<void> {
-  return invokeWithPerf("git_unstage", { paths });
-}
-
-export function gitCommitCommand(message: string): Promise<GitCommitResult> {
-  return invokeWithPerf<GitCommitResult>("git_commit", { message });
-}
+export const gitBranchInfoCommand = tauriCommand<GitBranchInfo>("git_branch_info");
+export const gitPullCommand = tauriCommand<string>("git_pull");
+export const gitPushCommand = tauriCommand<string>("git_push");
+export const gitCurrentBranchCommand = tauriCommand<string | null>("git_current_branch");
+export const gitListBranchesCommand = tauriCommand<GitBranchEntry[]>("git_list_branches");
+export const gitSwitchBranchCommand = tauriArgs<undefined>("git_switch_branch")((name: string, force = false) => ({ name, force }));
+export const gitCreateBranchCommand = tauriArgs<undefined>("git_create_branch")((name: string, force = false) => ({ name, force }));
+export const gitStatusCommand = tauriCommand<GitStatusResult>("git_status");
+export const gitStageCommand = tauriArgs<undefined>("git_stage")((paths: string[]) => ({ paths }));
+export const gitUnstageCommand = tauriArgs<undefined>("git_unstage")((paths: string[]) => ({ paths }));
+export const gitCommitCommand = tauriArgs<GitCommitResult>("git_commit")((message: string) => ({ message }));
