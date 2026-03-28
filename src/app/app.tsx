@@ -153,6 +153,7 @@ function AppInner() {
   useAppSessionPersistence({
     fileTree: workspace.fileTree,
     listChildren: listChildrenStable,
+    workspaceRequestRef: workspace.workspaceRequestRef,
     workspace,
     editor,
   });

@@ -77,6 +77,8 @@ export interface AppWorkspaceSessionController {
   startupComplete: boolean;
   openProjectRoot: (path: string) => Promise<FileEntry | null>;
   handleOpenFolder: () => void;
+  /** Generation counter — incremented before each project-root change. */
+  workspaceRequestRef: { readonly current: number };
 }
 
 export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionController {
@@ -298,5 +300,6 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     startupComplete,
     openProjectRoot,
     handleOpenFolder,
+    workspaceRequestRef,
   };
 }
