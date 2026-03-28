@@ -6,13 +6,12 @@ import console from "node:console";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
-import { setTimeout as delay } from "node:timers/promises";
 import {
   PERF_REPORT_VERSION,
   buildPerfRegressionReport,
   comparePerfRegressionReports,
 } from "./perf-regression-lib.mjs";
-import { connectEditor, openFile, switchToMode } from "./test-helpers.mjs";
+import { connectEditor, openFile, switchToMode, sleep, createArgParser, waitForDebugBridge } from "./test-helpers.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
 
 const argv = process.argv.slice(2);
@@ -20,29 +19,10 @@ const hasExplicitCommand = argv[0] === "capture" || argv[0] === "compare";
 const command = hasExplicitCommand ? argv[0] : "capture";
 const options = hasExplicitCommand ? argv.slice(1) : argv;
 const chromeArgs = parseChromeArgs(options);
-
-function getFlag(flag, fallback = undefined) {
-  const index = options.indexOf(flag);
-  return index >= 0 && index + 1 < options.length ? options[index + 1] : fallback;
-}
-
-function getIntFlag(flag, fallback) {
-  const value = getFlag(flag);
-  return value ? parseInt(value, 10) : fallback;
-}
-
-function sleep(ms) {
-  return delay(ms);
-}
+const { getFlag, getIntFlag } = createArgParser(options);
 
 function ensureDir(path) {
   mkdirSync(dirname(path), { recursive: true });
-}
-
-async function waitForDebugBridge(page) {
-  await page.waitForFunction(() => {
-    return Boolean(window.__app && window.__cfDebug && window.__cmView);
-  });
 }
 
 async function clearPerf(page) {
