@@ -127,6 +127,20 @@ export function addSingleLineClosingFence(
   items.push(decorationHidden.range(hideFrom, closeFenceTo));
 }
 
+/** Hide a multi-line closing fence (hidden text + zero-height line class). */
+export function hideMultiLineClosingFence(
+  closeFenceFrom: number,
+  closeFenceTo: number,
+  items: Range<Decoration>[],
+): void {
+  if (closeFenceFrom < 0 || closeFenceTo <= closeFenceFrom) return;
+
+  items.push(decorationHidden.range(closeFenceFrom, closeFenceTo));
+  items.push(
+    Decoration.line({ class: CSS.blockClosingFence }).range(closeFenceFrom),
+  );
+}
+
 /** Hide a multi-line closing fence and collapse its line. */
 export function addCollapsedClosingFence(
   closeFenceFrom: number,

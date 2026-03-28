@@ -59,6 +59,7 @@ export {
   getLineElement,
   addSingleLineClosingFence,
   addCollapsedClosingFence,
+  hideMultiLineClosingFence,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
 } from "./fenced-block-core";
