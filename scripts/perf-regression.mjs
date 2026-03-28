@@ -64,8 +64,6 @@ const SCROLL_FIXTURE = "cogirth/main2.md";
 
 async function runSteppedScroll(page) {
   return page.evaluate(async (stepSize) => {
-    const waitFrame = () =>
-      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const view = window.__cmView;
     const totalLines = view.state.doc.lines;
     const steps = [];
@@ -74,8 +72,8 @@ async function runSteppedScroll(page) {
       const lineObj = view.state.doc.line(target);
       const t0 = performance.now();
       view.dispatch({ selection: { anchor: lineObj.from }, scrollIntoView: true });
-      await waitFrame();
       steps.push(performance.now() - t0);
+      await new Promise((r) => setTimeout(r, 16));
     }
     const total = steps.reduce((a, b) => a + b, 0);
     return {
@@ -216,8 +214,6 @@ const scenarios = {
       await sleep(800);
 
       const jumpResult = await page.evaluate(async () => {
-        const waitFrame = () =>
-          new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         const view = window.__cmView;
         const totalLines = view.state.doc.lines;
         const nearBottom = Math.max(1, totalLines - 10);
@@ -226,7 +222,6 @@ const scenarios = {
         const lb = view.state.doc.line(nearBottom);
         const t0 = performance.now();
         view.dispatch({ selection: { anchor: lb.from }, scrollIntoView: true });
-        await waitFrame();
         const coldMs = performance.now() - t0;
 
         await new Promise((r) => setTimeout(r, 200));
@@ -235,7 +230,6 @@ const scenarios = {
         const lt = view.state.doc.line(1);
         const t1 = performance.now();
         view.dispatch({ selection: { anchor: lt.from }, scrollIntoView: true });
-        await waitFrame();
         const warmBackMs = performance.now() - t1;
 
         await new Promise((r) => setTimeout(r, 200));
@@ -244,7 +238,6 @@ const scenarios = {
         const lb2 = view.state.doc.line(nearBottom);
         const t2 = performance.now();
         view.dispatch({ selection: { anchor: lb2.from }, scrollIntoView: true });
-        await waitFrame();
         const warmForwardMs = performance.now() - t2;
 
         return { coldMs, warmBackMs, warmForwardMs };

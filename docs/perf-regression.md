@@ -115,7 +115,7 @@ The scroll scenarios report custom metrics alongside the usual frontend/backend 
 - **Stepped scroll** (`scroll-step-rich`, `scroll-step-source`): `scroll.step_count`, `scroll.mean_step_ms`, `scroll.max_step_ms`, `scroll.total_ms`
 - **Jump scroll** (`scroll-jump-rich`): `scroll.cold_jump_ms`, `scroll.warm_back_ms`, `scroll.warm_forward_ms`
 
-Per-step timing uses `performance.now()` around each scroll dispatch plus a double-`requestAnimationFrame` wait, so values measure actual rendering work without a fixed settle delay. Comparing Rich vs Source isolates rendering overhead.
+Per-step timing uses `performance.now()` around each synchronous `view.dispatch()` call, so values measure the CM6 update/render cost directly. A 16 ms `setTimeout` between steps yields the event loop without blocking on `requestAnimationFrame` (which stalls in non-interactive CDP windows). Comparing Rich vs Source isolates rendering overhead. The `--min-delta-ms` threshold applies to ms-valued scroll metrics the same way it applies to frontend/backend spans.
 
 ## Notes
 
