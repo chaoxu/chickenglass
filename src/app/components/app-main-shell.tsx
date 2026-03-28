@@ -18,6 +18,8 @@ interface AppMainShellProps {
     "currentPath" | "editorDoc" | "pluginManager" | "handleDocChange" | "handleProgrammaticDocChange" | "setDocumentSourceMap" | "handleEditorStateChange" | "handleEditorDocumentReady" | "editorMode" | "handleModeChange" | "docTextForStats" | "isMarkdownFile"
   >;
   onOpenPalette: () => void;
+  branchName?: string | null;
+  onBranchClick?: () => void;
 }
 
 export function AppMainShell({
@@ -27,6 +29,8 @@ export function AppMainShell({
   workspace,
   editor,
   onOpenPalette,
+  branchName,
+  onBranchClick,
 }: AppMainShellProps) {
   const currentPath = editor.currentPath;
 
@@ -65,7 +69,8 @@ export function AppMainShell({
         onOpenPalette={onOpenPalette}
         docText={editor.docTextForStats}
         isMarkdown={editor.isMarkdownFile}
-        gitBranch={workspace.gitBranch}
+        branchName={branchName}
+        onBranchClick={onBranchClick}
       />
     </SidebarInset>
   );

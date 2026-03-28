@@ -50,7 +50,7 @@ export interface UseEditorSessionReturn {
   saveFile: () => Promise<void>;
   createFile: (path: string) => Promise<void>;
   createDirectory: (path: string) => Promise<void>;
-  closeCurrentFile: () => Promise<boolean>;
+  closeCurrentFile: (options?: { discard?: boolean }) => Promise<boolean>;
   handleRename: (oldPath: string, newPath: string) => Promise<void>;
   handleDelete: (path: string) => Promise<void>;
   saveAs: () => Promise<void>;
@@ -367,12 +367,16 @@ export function useEditorSession({
     }
   }, [fs, refreshTree]);
 
-  const closeCurrentFile = useCallback(async (): Promise<boolean> => {
+  const closeCurrentFile = useCallback(async (
+    options?: { discard?: boolean },
+  ): Promise<boolean> => {
     const currentDocument = getCurrentSessionDocument(stateRef.current);
     if (!currentDocument) return true;
 
-    const canClose = await prepareCurrentDocumentForTransition("close-file");
-    if (!canClose) return false;
+    if (!options?.discard) {
+      const canClose = await prepareCurrentDocumentForTransition("close-file");
+      if (!canClose) return false;
+    }
 
     buffers.current.delete(currentDocument.path);
     liveDocs.current.delete(currentDocument.path);

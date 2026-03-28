@@ -12,11 +12,6 @@ export interface CursorPosition {
   col: number;
 }
 
-export interface GitBranchDisplay {
-  readonly branch: string;
-  readonly isDetached: boolean;
-}
-
 export interface StatusBarProps {
   editorMode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
@@ -25,8 +20,10 @@ export interface StatusBarProps {
   docText?: string;
   /** Whether the active file is markdown (non-md files are Source-only). */
   isMarkdown?: boolean;
-  /** Current git branch info — null when not in a git repo or in browser mode. */
-  gitBranch?: GitBranchDisplay | null;
+  /** Current git branch name — shown at the far left when present. */
+  branchName?: string | null;
+  /** Callback when the branch indicator is clicked (opens branch switcher). */
+  onBranchClick?: () => void;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -130,7 +127,8 @@ export function StatusBar({
   onOpenPalette,
   docText = "",
   isMarkdown = true,
-  gitBranch,
+  branchName,
+  onBranchClick,
 }: StatusBarProps) {
   const wordCount = useEditorTelemetry((s) => s.wordCount);
   const cursorLine = useEditorTelemetry((s) => s.cursorLine);
@@ -155,8 +153,35 @@ export function StatusBar({
   return (
     <>
       <div data-statusbar className="shrink-0 flex items-center border-t border-[var(--cf-border)] bg-[var(--cf-bg)] h-6 px-2 text-xs text-[var(--cf-muted)] select-none">
-        {/* Left: word + char count */}
+        {/* Left: branch + word + char count */}
         <div className="flex items-center gap-2">
+          {branchName && (
+            <button
+              type="button"
+              aria-label={`Git branch: ${branchName}. Click to switch branch`}
+              onClick={onBranchClick}
+              className="px-1 rounded hover:bg-[var(--cf-hover)] transition-colors flex items-center gap-1"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <line x1="6" y1="3" x2="6" y2="15" />
+                <circle cx="18" cy="6" r="3" />
+                <circle cx="6" cy="18" r="3" />
+                <path d="M18 9a9 9 0 0 1-9 9" />
+              </svg>
+              <span className="max-w-[120px] truncate">{branchName}</span>
+            </button>
+          )}
+          {branchName && <span className="opacity-50">·</span>}
           <button
             ref={wordCountRef}
             type="button"
@@ -181,17 +206,8 @@ export function StatusBar({
           </span>
         </div>
 
-        {/* Right: git branch + command palette + mode indicator */}
+        {/* Right: command palette + mode indicator */}
         <div className="flex items-center gap-1 pr-1">
-          {gitBranch && (
-            <span
-              data-testid="git-branch"
-              className="px-1 text-[var(--cf-muted)]"
-              title={gitBranch.isDetached ? `Detached HEAD at ${gitBranch.branch}` : `Branch: ${gitBranch.branch}`}
-            >
-              {gitBranch.isDetached ? `(${gitBranch.branch})` : gitBranch.branch}
-            </span>
-          )}
           {onOpenPalette && (
             <button
               type="button"
