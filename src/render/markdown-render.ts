@@ -2,10 +2,11 @@ import {
   Decoration,
   type DecorationSet,
   type EditorView,
+  type ViewUpdate,
 } from "@codemirror/view";
-import { type Range, type Extension } from "@codemirror/state";
+import { type EditorState, type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { cursorInRange, decorationHidden, addMarkerReplacement, createSimpleViewPlugin, cursorSensitiveShouldUpdate } from "./render-utils";
+import { cursorInRange, decorationHidden, addMarkerReplacement, createSimpleViewPlugin } from "./render-utils";
 import { findTrailingHeadingAttributes } from "../semantics/heading-ancestry";
 import { isSafeUrl } from "../lib/url-utils";
 import { openExternalUrl } from "../lib/open-link";
@@ -74,6 +75,73 @@ const bulletListDecoration = Decoration.mark({ class: "cf-list-bullet" });
 
 /** Decoration to style ordered list markers. */
 const numberListDecoration = Decoration.mark({ class: "cf-list-number" });
+
+/**
+ * All node types whose marker visibility depends on cursor proximity.
+ * Must stay in sync with the cursorInRange checks in buildMarkdownDecorations.
+ */
+const CURSOR_SENSITIVE_NODES = new Set([
+  ...ELEMENT_NODES,
+  "ATXHeading1", "ATXHeading2", "ATXHeading3",
+  "ATXHeading4", "ATXHeading5", "ATXHeading6",
+  "Highlight", "Link", "HorizontalRule", "Escape",
+]);
+
+/**
+ * Return a key identifying all cursor-sensitive nodes that contain the
+ * primary selection. Changes in this key mean the cursor crossed a
+ * node boundary that affects marker visibility.
+ *
+ * Checks both resolve directions at each selection endpoint to handle
+ * inclusive-end boundaries (cursorInRange uses pos <= node.to).
+ */
+export function cursorContextKey(state: EditorState): string {
+  const { from, to } = state.selection.main;
+  const tree = syntaxTree(state);
+  const seen = new Set<string>();
+
+  const positions = from === to ? [from] : [from, to];
+  for (const pos of positions) {
+    for (const side of [1, -1] as const) {
+      let node = tree.resolveInner(pos, side);
+      while (node.parent) {
+        if (CURSOR_SENSITIVE_NODES.has(node.name) && from >= node.from && to <= node.to) {
+          seen.add(`${node.name}:${node.from}:${node.to}`);
+        }
+        node = node.parent;
+      }
+    }
+  }
+
+  if (seen.size === 0) return "";
+  if (seen.size === 1) return seen.values().next().value!;
+  return [...seen].sort().join("|");
+}
+
+/**
+ * Narrowed shouldUpdate for markdown-render (#579).
+ *
+ * Rebuilds on structural changes (doc, tree, viewport, focus) unconditionally.
+ * For selection-only changes, only rebuilds when the cursor crosses a
+ * cursor-sensitive node boundary — i.e., moved into, out of, or between
+ * nodes that toggle marker visibility.
+ */
+export function markdownShouldUpdate(update: ViewUpdate): boolean {
+  if (
+    update.docChanged ||
+    update.focusChanged ||
+    update.viewportChanged ||
+    syntaxTree(update.state) !== syntaxTree(update.startState)
+  ) {
+    return true;
+  }
+
+  if (update.selectionSet) {
+    return cursorContextKey(update.state) !== cursorContextKey(update.startState);
+  }
+
+  return false;
+}
 
 /** Map from element node names to their content style decorations. */
 const styleMap: Readonly<Record<string, Decoration>> = {
@@ -275,7 +343,7 @@ function buildMarkdownDecorations(view: EditorView): DecorationSet {
 export const markdownRenderPlugin: Extension = createSimpleViewPlugin(
   buildMarkdownDecorations,
   {
-    shouldUpdate: cursorSensitiveShouldUpdate,
+    shouldUpdate: markdownShouldUpdate,
     pluginSpec: {
       eventHandlers: {
         click(event: MouseEvent, _view: EditorView) {
