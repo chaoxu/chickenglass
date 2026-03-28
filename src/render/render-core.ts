@@ -21,6 +21,8 @@ export {
   createDecorationsField,
   createSimpleViewPlugin,
   createSimpleTextWidget,
+  createCursorSensitiveViewPlugin,
+  diffVisibleRanges,
   collectNodeRangesExcludingCursor,
   makeTextElement,
   pushWidgetDecoration,
@@ -39,6 +41,8 @@ export {
   cursorSensitiveShouldRebuild,
   type RenderableNode,
   type SimpleTextRenderSpec,
+  type VisibleRange,
+  type CursorSensitiveCollectFn,
 } from "./render-utils";
 
 // ── inline-shared.ts ─────────────────────────────────────────────────────────

@@ -403,8 +403,10 @@ export function defaultShouldUpdate(update: ViewUpdate): boolean {
  * must rebuild when the viewport changes — otherwise content scrolled
  * into view stays as raw markdown (#437).
  *
- * TODO (#443): implement differential viewport update (only walk newly-
- * visible ranges) so viewport rebuilds are incremental, not full.
+ * NOTE: Plugins that want *incremental* viewport updates should use
+ * `createCursorSensitiveViewPlugin` instead of `createSimpleViewPlugin`
+ * with this predicate.  The new factory handles differential viewport
+ * diffing internally (#578, split from #443).
  */
 export function cursorSensitiveShouldUpdate(update: ViewUpdate): boolean {
   return (
@@ -414,6 +416,192 @@ export function cursorSensitiveShouldUpdate(update: ViewUpdate): boolean {
     update.viewportChanged ||
     syntaxTree(update.state) !== syntaxTree(update.startState)
   );
+}
+
+// ── Differential viewport update (#578) ──────────────────────────────────────
+
+/** A snapshot of a visible document range (matches CM6 visibleRanges shape). */
+export interface VisibleRange {
+  readonly from: number;
+  readonly to: number;
+}
+
+/**
+ * Compute the fragments of `newRanges` not covered by `oldRanges`.
+ *
+ * Both inputs must be sorted by `from` and non-overlapping (CM6's
+ * `view.visibleRanges` satisfies both conditions).
+ *
+ * Returns ranges in document order.  Empty when `newRanges` ⊆ `oldRanges`.
+ */
+export function diffVisibleRanges(
+  oldRanges: readonly VisibleRange[],
+  newRanges: readonly VisibleRange[],
+): VisibleRange[] {
+  const result: VisibleRange[] = [];
+  let oi = 0;
+
+  for (const nr of newRanges) {
+    let cursor = nr.from;
+
+    // Advance old-range pointer past ranges entirely before `cursor`.
+    while (oi < oldRanges.length && oldRanges[oi].to <= cursor) oi++;
+
+    // Subtract each overlapping old range from [cursor, nr.to].
+    for (let j = oi; j < oldRanges.length && oldRanges[j].from < nr.to; j++) {
+      const or_ = oldRanges[j];
+      if (or_.from > cursor) {
+        result.push({ from: cursor, to: or_.from });
+      }
+      cursor = Math.max(cursor, or_.to);
+      if (cursor >= nr.to) break;
+    }
+
+    if (cursor < nr.to) {
+      result.push({ from: cursor, to: nr.to });
+    }
+  }
+
+  return result;
+}
+
+/** Check whether a document position falls inside any of the given sorted ranges. */
+function isPositionInRanges(
+  pos: number,
+  ranges: readonly VisibleRange[],
+): boolean {
+  for (const r of ranges) {
+    if (pos >= r.from && pos < r.to) return true;
+    if (r.from > pos) break; // ranges are sorted — no later range can contain pos
+  }
+  return false;
+}
+
+/** Merge overlapping/adjacent ranges into a minimal sorted set. */
+function mergeRanges(ranges: VisibleRange[]): VisibleRange[] {
+  if (ranges.length <= 1) return ranges;
+  const sorted = [...ranges].sort((a, b) => a.from - b.from);
+  const merged: VisibleRange[] = [sorted[0]];
+  for (let i = 1; i < sorted.length; i++) {
+    const last = merged[merged.length - 1];
+    const curr = sorted[i];
+    if (curr.from <= last.to) {
+      merged[merged.length - 1] = { from: last.from, to: Math.max(last.to, curr.to) };
+    } else {
+      merged.push(curr);
+    }
+  }
+  return merged;
+}
+
+/** Snapshot CM6's live visibleRanges into a plain array of {from, to}. */
+function snapshotRanges(ranges: readonly { from: number; to: number }[]): VisibleRange[] {
+  return ranges.map(r => ({ from: r.from, to: r.to }));
+}
+
+const NO_SKIP = () => false;
+
+/**
+ * Collect function signature for cursor-sensitive view plugins.
+ *
+ * @param view    The editor view.
+ * @param ranges  Ranges to iterate (full visibleRanges for a complete rebuild,
+ *                or newly-visible ranges for a differential update).
+ * @param skip    Returns true for node start positions already processed in a
+ *                previous viewport.  Always returns false during full rebuilds.
+ */
+export type CursorSensitiveCollectFn = (
+  view: EditorView,
+  ranges: readonly VisibleRange[],
+  skip: (nodeFrom: number) => boolean,
+) => Range<Decoration>[];
+
+/**
+ * Factory for cursor-sensitive ViewPlugins with differential viewport updates.
+ *
+ * On structural / cursor changes (doc, selection, focus, tree) the plugin
+ * performs a full rebuild via `collectFn`.  On pure viewport changes (scroll)
+ * it computes the newly-visible range fragments, builds decorations only for
+ * those, and merges them into the existing DecorationSet — avoiding a full
+ * rescan of already-visible content (#578, split from #443).
+ *
+ * @param collectFn  Collects decoration ranges.  Receives explicit ranges
+ *                   (instead of reading view.visibleRanges) and a `skip`
+ *                   predicate to avoid re-processing boundary-straddling
+ *                   nodes from a previous viewport.
+ * @param options    Optional overrides:
+ *   - selectionCheck: replaces the default `update.selectionSet` condition.
+ *     Allows narrowing selection-triggered rebuilds (e.g. only when the cursor
+ *     crosses a sensitive node boundary).  Receives the ViewUpdate and should
+ *     return true when a full rebuild is needed.
+ *   - extraRebuildCheck: additional conditions that trigger a full rebuild
+ *     (e.g. cache field changes for the image-render plugin).
+ *   - pluginSpec: additional PluginSpec fields (e.g. eventHandlers).
+ */
+export function createCursorSensitiveViewPlugin(
+  collectFn: CursorSensitiveCollectFn,
+  options?: {
+    selectionCheck?: (update: ViewUpdate) => boolean;
+    extraRebuildCheck?: (update: ViewUpdate) => boolean;
+    pluginSpec?: Omit<PluginSpec<PluginValue>, "decorations">;
+  },
+): Extension {
+  class CursorSensitivePlugin implements PluginValue {
+    decorations: DecorationSet;
+    private coveredRanges: VisibleRange[];
+
+    constructor(view: EditorView) {
+      const items = collectFn(view, view.visibleRanges, NO_SKIP);
+      this.decorations = buildDecorations(items);
+      this.coveredRanges = snapshotRanges(view.visibleRanges);
+    }
+
+    update(update: ViewUpdate): void {
+      const selectionNeedsRebuild = options?.selectionCheck
+        ? options.selectionCheck(update)
+        : update.selectionSet;
+
+      const needsFullRebuild =
+        update.docChanged ||
+        selectionNeedsRebuild ||
+        update.focusChanged ||
+        syntaxTree(update.state) !== syntaxTree(update.startState) ||
+        (options?.extraRebuildCheck?.(update) ?? false);
+
+      if (needsFullRebuild) {
+        const items = collectFn(update.view, update.view.visibleRanges, NO_SKIP);
+        this.decorations = buildDecorations(items);
+        this.coveredRanges = snapshotRanges(update.view.visibleRanges);
+        return;
+      }
+
+      if (update.viewportChanged) {
+        const newRanges = update.view.visibleRanges;
+        const newlyVisible = diffVisibleRanges(this.coveredRanges, newRanges);
+
+        if (newlyVisible.length > 0) {
+          const skip = (pos: number) => isPositionInRanges(pos, this.coveredRanges);
+          const newItems = collectFn(update.view, newlyVisible, skip);
+          if (newItems.length > 0) {
+            this.decorations = this.decorations.update({
+              add: newItems,
+              sort: true,
+            });
+          }
+          this.coveredRanges = mergeRanges([
+            ...this.coveredRanges,
+            ...newlyVisible,
+          ]);
+        }
+        // No newly-visible ranges → keep existing decorations unchanged.
+      }
+    }
+  }
+
+  return ViewPlugin.fromClass(CursorSensitivePlugin, {
+    ...options?.pluginSpec,
+    decorations: (v) => v.decorations,
+  });
 }
 
 /**
@@ -558,23 +746,35 @@ export function createDecorationsField(
  * @param buildItem   Callback invoked for each matching node outside the cursor.
  *                    Receives the SyntaxNodeRef and the accumulator array.
  *                    Return false to prevent descending into children.
+ * @param options     Optional overrides for differential viewport updates:
+ *   - ranges: explicit ranges to iterate (defaults to view.visibleRanges).
+ *   - skip: predicate returning true for node start positions already
+ *     processed in a previous viewport (prevents duplicate decorations
+ *     for nodes straddling the old/new boundary).
  */
 export function collectNodeRangesExcludingCursor(
   view: EditorView,
   nodeTypes: ReadonlySet<string>,
   // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
   buildItem: (node: SyntaxNodeRef, items: Range<Decoration>[]) => false | void,
+  options?: {
+    ranges?: readonly VisibleRange[];
+    skip?: (nodeFrom: number) => boolean;
+  },
 ): Range<Decoration>[] {
   const items: Range<Decoration>[] = [];
   const tree = syntaxTree(view.state);
+  const ranges = options?.ranges ?? view.visibleRanges;
+  const skip = options?.skip;
 
-  for (const { from, to } of view.visibleRanges) {
+  for (const { from, to } of ranges) {
     tree.iterate({
       from,
       to,
       enter(node) {
         if (!nodeTypes.has(node.type.name)) return;
         if (cursorInRange(view, node.from, node.to)) return false;
+        if (skip?.(node.from)) return false;
         return buildItem(node, items);
       },
     });
