@@ -26,6 +26,12 @@ export function useAppSessionPersistence({
 }: AppSessionPersistenceDeps): void {
   const didInitRef = useRef(false);
   const restorePromiseRef = useRef<Promise<void> | null>(null);
+  // Tracks the current fileTree so the async restore can detect a
+  // project-switch that happened while findDefaultDocumentPathLazy was
+  // in flight (the lazy search reads against the backend root, which
+  // changes when a new project is opened).
+  const fileTreeRef = useRef(fileTree);
+  fileTreeRef.current = fileTree;
   const {
     windowState,
     saveWindowState,
@@ -84,6 +90,9 @@ export function useAppSessionPersistence({
         const first = listChildren
           ? await findDefaultDocumentPathLazy(fileTree, listChildren)
           : findDefaultDocumentPath(fileTree);
+        // Abort if the project changed during the lazy search — the
+        // returned path may belong to the new project's namespace.
+        if (fileTreeRef.current !== fileTree) return;
         if (first) {
           await openFile(first).catch(() => {
             // Default file may have disappeared between tree load and open.
