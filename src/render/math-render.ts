@@ -1,4 +1,4 @@
-import { type EditorState, type Extension, type Range, type SelectionRange, type Transaction } from "@codemirror/state";
+import { type EditorState, type Extension, type Range, type SelectionRange, StateField, type Transaction } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 import {
   Decoration,
@@ -12,8 +12,8 @@ import { CSS } from "../constants/css-classes";
 import {
   cursorInRange,
   buildDecorations,
-  createDecorationsField,
   pushWidgetDecoration,
+  RenderWidget,
   MacroAwareWidget,
   editorFocusField,
   focusEffect,
@@ -296,22 +296,37 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
   return buildDecorations(items);
 }
 
-function mathShouldRebuild(tr: Transaction): boolean {
-  if (tr.state.field(documentAnalysisField).mathRegions !== tr.startState.field(documentAnalysisField).mathRegions) {
-    return true;
+/**
+ * Check whether math content is semantically unchanged between two region
+ * arrays.  Returns true when count, LaTeX content, display mode, and node
+ * size all match — meaning only document positions shifted.
+ *
+ * For position-only shifts the `latex` field is the same string reference
+ * (carried via object spread in mapMathSemantics), so each comparison is
+ * an O(1) reference check in the common case.
+ */
+function mathContentUnchanged(
+  before: readonly MathSemantics[],
+  after: readonly MathSemantics[],
+): boolean {
+  if (before.length !== after.length) return false;
+  for (let i = 0; i < before.length; i++) {
+    const b = before[i];
+    const a = after[i];
+    if (
+      b.latex !== a.latex
+      || b.isDisplay !== a.isDisplay
+      || (b.to - b.from) !== (a.to - a.from)
+    ) {
+      return false;
+    }
   }
+  return true;
+}
 
-  if (mathMacrosChanged(tr)) {
-    return true;
-  }
-
-  const focusChanged = tr.effects.some((e) => e.is(focusEffect));
-  if (tr.selection === undefined && !focusChanged) return false;
-
-  const before = findFocusedActiveMath(tr.startState);
-  const after = findFocusedActiveMath(tr.state);
-
-  return before?.from !== after?.from || before?.to !== after?.to;
+function rebuildMathDecorations(state: EditorState): DecorationSet {
+  const focused = state.field(editorFocusField, false) ?? false;
+  return buildMathDecorationsFromState(state, focused);
 }
 
 /**
@@ -319,11 +334,68 @@ function mathShouldRebuild(tr: Transaction): boolean {
  *
  * Uses a StateField (not ViewPlugin) so that block-level replace decorations
  * for display math (which cross line breaks) are permitted by CM6.
+ *
+ * On document edits that only shift positions (prose edits outside math),
+ * the field maps existing decorations through the changes instead of
+ * rebuilding all math widgets — avoiding the dominant cost path of
+ * buildMathItems → MathWidget → serializeMacros → KaTeX cache lookups.
  */
-const mathDecorationField = createDecorationsField((state) => {
-  const focused = state.field(editorFocusField, false) ?? false;
-  return buildMathDecorationsFromState(state, focused);
-}, mathShouldRebuild);
+const mathDecorationField = StateField.define<DecorationSet>({
+  create(state) {
+    return rebuildMathDecorations(state);
+  },
+
+  update(value, tr) {
+    if (mathMacrosChanged(tr)) {
+      return rebuildMathDecorations(tr.state);
+    }
+
+    const regionsBefore = tr.startState.field(documentAnalysisField).mathRegions;
+    const regionsAfter = tr.state.field(documentAnalysisField).mathRegions;
+
+    if (regionsBefore !== regionsAfter) {
+      // Regions changed.  When the doc changed and only positions shifted
+      // (no content, focus, or explicit selection change), map the existing
+      // decoration set through the changes — O(log n) instead of O(n) widget
+      // construction.
+      if (
+        tr.docChanged
+        && tr.selection === undefined
+        && !tr.effects.some((e) => e.is(focusEffect))
+        && mathContentUnchanged(regionsBefore, regionsAfter)
+      ) {
+        const mapped = value.map(tr.changes);
+        // Patch sourceFrom/sourceTo on reused widgets so click-to-edit
+        // and search-highlight stay correct after position mapping.
+        const cursor = mapped.iter();
+        while (cursor.value) {
+          const widget = cursor.value.spec?.widget;
+          if (widget instanceof RenderWidget) {
+            widget.updateSourceRange(cursor.from, cursor.to);
+          }
+          cursor.next();
+        }
+        return mapped;
+      }
+      return rebuildMathDecorations(tr.state);
+    }
+
+    // Regions unchanged — check if cursor/focus crossed a math boundary.
+    const focusChanged = tr.effects.some((e) => e.is(focusEffect));
+    if (tr.selection === undefined && !focusChanged) return value;
+
+    const before = findFocusedActiveMath(tr.startState);
+    const after = findFocusedActiveMath(tr.state);
+    if (before?.from !== after?.from || before?.to !== after?.to) {
+      return rebuildMathDecorations(tr.state);
+    }
+    return value;
+  },
+
+  provide(field) {
+    return EditorView.decorations.from(field);
+  },
+});
 
 export { mathDecorationField as _mathDecorationFieldForTest };
 

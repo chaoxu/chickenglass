@@ -105,6 +105,16 @@ export function serializeMacros(macros: Record<string, string>): string {
   return result;
 }
 
+/**
+ * Maps live widget DOM elements to their owning RenderWidget instance.
+ *
+ * Search-highlight reads `sourceFrom`/`sourceTo` from the widget instance
+ * via this map rather than from DOM `data-source-from`/`data-source-to`
+ * attributes, which can become stale when CM6 maps decoration positions
+ * without calling `toDOM()` again.
+ */
+export const widgetSourceMap = new WeakMap<HTMLElement, RenderWidget>();
+
 /** Shared Decoration.mark that visually hides source markers via CSS while keeping them in the DOM. */
 export const decorationHidden = Decoration.mark({ class: "cf-hidden" });
 
@@ -244,12 +254,26 @@ export abstract class RenderWidget extends WidgetType {
     if (this.sourceTo >= 0) {
       el.dataset.sourceTo = String(this.sourceTo);
     }
+    widgetSourceMap.set(el, this);
+  }
+
+  /**
+   * Update the source range after a position-mapping operation.
+   *
+   * When a decoration set is mapped through document changes instead of
+   * rebuilt, the widget instances are reused at shifted positions.  This
+   * method patches `sourceFrom`/`sourceTo` so that click-to-edit handlers
+   * (which read these fields at event time) and search-highlight (which
+   * reads them via {@link widgetSourceMap}) remain correct.
+   */
+  updateSourceRange(from: number, to: number): void {
+    this.sourceFrom = from;
+    this.sourceTo = to;
   }
 
   protected bindSourceReveal(
     el: HTMLElement,
     view: EditorView,
-    from = this.sourceFrom,
   ): void {
     el.style.cursor = "pointer";
     el.addEventListener("mousedown", (e) => {
@@ -257,7 +281,17 @@ export abstract class RenderWidget extends WidgetType {
       // Focus first so the focus state field is updated before
       // the selection dispatch triggers decoration rebuilding.
       view.focus();
-      view.dispatch({ selection: { anchor: from }, scrollIntoView: false });
+      // Derive position from CM6's live DOM tracking (always correct
+      // after decoration mapping or rebuild) rather than the widget's
+      // sourceFrom field, which can become stale when CM6 reuses
+      // widget DOM across decoration rebuilds without calling toDOM().
+      let pos: number;
+      try {
+        pos = view.posAtDOM(el);
+      } catch {
+        pos = this.sourceFrom;
+      }
+      view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
     });
   }
 

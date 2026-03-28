@@ -11,7 +11,7 @@ import { MathWidget, collectMathRanges, stripMathDelimiters, getDisplayMathConte
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
 import { createMockEditorView, createTestView } from "../test-utils";
-import { focusEffect } from "./render-utils";
+import { focusEffect, widgetSourceMap } from "./render-utils";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { renderInlineMarkdown } from "./inline-render";
 
@@ -112,6 +112,25 @@ describe("MathWidget (inline)", () => {
     const b = new MathWidget("x", "$x$", true);
     expect(a.eq(b)).toBe(false);
   });
+
+  it("click dispatches to updated position after updateSourceRange (position mapping)", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new MathWidget("x^2", "$x^2$", false);
+    widget.sourceFrom = 410;
+    widget.sourceTo = 415;
+
+    const el = widget.toDOM(view);
+    widget.updateSourceRange(411, 416);
+
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(dispatch).toHaveBeenCalledWith({
+      selection: { anchor: 411 },
+      scrollIntoView: false,
+    });
+  });
 });
 
 describe("MathWidget (display)", () => {
@@ -209,6 +228,45 @@ describe("MathWidget (display)", () => {
       selection: { anchor: 8 },
       scrollIntoView: false,
     });
+  });
+
+  it("click dispatches to updated position after updateSourceRange (position mapping)", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new MathWidget("x^2", "$$x^2$$", true);
+    widget.sourceFrom = 950;
+    widget.sourceTo = 1022;
+
+    const el = widget.toDOM(view);
+    // Simulate position mapping: an insert before the widget shifted it by 1
+    widget.updateSourceRange(951, 1023);
+
+    const content = el.querySelector<HTMLElement>(`.${CSS.mathDisplayContent}`);
+    content?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(dispatch).toHaveBeenCalledWith({
+      selection: { anchor: 951 },
+      scrollIntoView: false,
+    });
+  });
+
+  it("widgetSourceMap returns updated positions after updateSourceRange", () => {
+    const widget = new MathWidget("x^2", "$$x^2$$", true);
+    widget.sourceFrom = 950;
+    widget.sourceTo = 1022;
+
+    const el = widget.toDOM();
+    // After toDOM, widgetSourceMap should point el → widget
+    expect(widgetSourceMap.get(el)).toBe(widget);
+    expect(widgetSourceMap.get(el)!.sourceFrom).toBe(950);
+
+    // Simulate position mapping
+    widget.updateSourceRange(951, 1023);
+
+    // widgetSourceMap still points to the same widget, now with updated fields
+    expect(widgetSourceMap.get(el)!.sourceFrom).toBe(951);
+    expect(widgetSourceMap.get(el)!.sourceTo).toBe(1023);
   });
 });
 
@@ -333,7 +391,10 @@ describe("math decoration invalidation", () => {
       },
     }).state.field(mathDecorationField);
 
-    expect(after).toBe(before);
+    // Math is after the edit so positions shift — the decoration set is
+    // position-mapped (not rebuilt from scratch), producing a new object
+    // with the same number of decorations.
+    expect(after.size).toBe(before.size);
   });
 
   it("rebuilds when math content changes", () => {
@@ -350,6 +411,25 @@ describe("math decoration invalidation", () => {
       },
     }).state.field(mathDecorationField);
 
+    expect(after).not.toBe(before);
+  });
+
+  it("rebuilds when editing first math also shifts later math positions", () => {
+    const doc = "$x$ and $y$";
+    const state = createMathRenderState(doc);
+    const before = state.field(mathDecorationField);
+    const mathText = doc.indexOf("x");
+
+    const after = state.update({
+      changes: {
+        from: mathText,
+        to: mathText + 1,
+        insert: "ab",
+      },
+    }).state.field(mathDecorationField);
+
+    // Full rebuild because first math region's content changed,
+    // even though the second only had a position shift.
     expect(after).not.toBe(before);
   });
 
@@ -419,6 +499,45 @@ describe("math decoration invalidation", () => {
     const after = state.update({ effects: focusEffect.of(true) }).state.field(mathDecorationField);
 
     expect(after).not.toBe(before);
+  });
+
+  it("maps decorations instead of rebuilding when prose before math is edited", () => {
+    const doc = "hello $x$ end";
+    const state = createMathRenderState(doc, 0);
+    const before = state.field(mathDecorationField);
+
+    // Insert text before the math expression — only positions shift
+    const after = state.update({
+      changes: { from: 0, to: 0, insert: "a" },
+    }).state.field(mathDecorationField);
+
+    // Mapped (not identity-preserved) since positions shifted,
+    // but same number of decorations (not rebuilt from scratch).
+    expect(after).not.toBe(before);
+    expect(after.size).toBe(before.size);
+  });
+
+  it("updates sourceFrom/sourceTo on mapped widgets after position-only edit", () => {
+    const doc = "hello $x$ end";
+    const state = createMathRenderState(doc, 0);
+
+    // Math "$x$" starts at index 6 in the original document
+    const originalMathFrom = doc.indexOf("$x$");
+    expect(originalMathFrom).toBe(6);
+
+    // Insert "abc" at the start — math shifts by 3
+    const after = state.update({
+      changes: { from: 0, to: 0, insert: "abc" },
+    }).state.field(mathDecorationField);
+
+    // Extract widget sourceFrom from the mapped decoration set
+    const cursor = after.iter();
+    expect(cursor.value).not.toBeNull();
+    const widget = cursor.value!.spec?.widget as MathWidget | undefined;
+    expect(widget).toBeInstanceOf(MathWidget);
+    // sourceFrom must reflect the new position (6 + 3 = 9), not the stale 6
+    expect(widget!.sourceFrom).toBe(originalMathFrom + 3);
+    expect(widget!.sourceTo).toBe(originalMathFrom + 3 + "$x$".length);
   });
 });
 
