@@ -340,9 +340,7 @@ export function useAppEditorShell({
   const handleInsertImage = useCallback(() => {
     const view = editorState?.view;
     if (view) {
-      void insertImageFromPicker(view, editorState?.imageSaver ?? undefined).catch((e: unknown) => {
-        console.error("[editor] insertImageFromPicker failed", e);
-      });
+      void insertImageFromPicker(view, editorState?.imageSaver ?? undefined);
     }
   }, [editorState?.view, editorState?.imageSaver]);
 
