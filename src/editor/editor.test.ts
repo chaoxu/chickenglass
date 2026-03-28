@@ -6,6 +6,13 @@ import {
   normalizeEditorMode,
   setEditorMode,
 } from "./editor";
+import { frontmatterField } from "./frontmatter-state";
+import { documentSemanticsField } from "../semantics/codemirror-source";
+import { blockCounterField } from "../plugins/block-counter";
+import { bibDataField } from "../citations/citation-render";
+import { includeRegionsField } from "../lib/include-regions";
+import { pdfPreviewField } from "../render/pdf-preview-cache";
+import { imageUrlField } from "../render/image-url-cache";
 
 describe("createEditor", () => {
   it("creates an editor view attached to the given parent", () => {
@@ -69,6 +76,37 @@ describe("editorModeField", () => {
 
     // Read the field — must reflect what the app set
     expect(view.state.field(editorModeField)).toBe("source");
+
+    view.destroy();
+  });
+});
+
+describe("extension bundle composition", () => {
+  it("installs all document state fields from coreDocumentStateExtensions", () => {
+    const parent = document.createElement("div");
+    const view = createEditor({ parent, doc: "# Hello\n" });
+
+    // Each field is queryable — proves the bundle installed them in order
+    expect(view.state.field(frontmatterField)).toBeDefined();
+    expect(view.state.field(includeRegionsField)).toBeDefined();
+    expect(view.state.field(documentSemanticsField)).toBeDefined();
+    expect(view.state.field(blockCounterField)).toBeDefined();
+    expect(view.state.field(bibDataField)).toBeDefined();
+    expect(view.state.field(pdfPreviewField)).toBeDefined();
+    expect(view.state.field(imageUrlField)).toBeDefined();
+
+    view.destroy();
+  });
+
+  it("installs render mode compartments that support mode cycling", () => {
+    const parent = document.createElement("div");
+    const view = createEditor({ parent, doc: "# Hello\n" });
+
+    // Cycle through all three modes — proves compartments are wired correctly
+    for (const mode of ["source", "read", "rich"] as const) {
+      setEditorMode(view, mode);
+      expect(view.state.field(editorModeField)).toBe(mode);
+    }
 
     view.destroy();
   });
