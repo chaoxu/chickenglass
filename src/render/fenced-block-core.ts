@@ -110,7 +110,7 @@ export function addSingleLineClosingFence(
   closeFenceTo: number,
   items: Range<Decoration>[],
 ): void {
-  if (closeFenceFrom < 0 || closeFenceTo < closeFenceFrom) return;
+  if (closeFenceFrom < 0 || closeFenceTo <= closeFenceFrom) return;
 
   let hideFrom = closeFenceFrom;
   const line = state.doc.lineAt(closeFenceFrom);
@@ -133,7 +133,7 @@ export function addCollapsedClosingFence(
   closeFenceTo: number,
   items: Range<Decoration>[],
 ): void {
-  if (closeFenceFrom < 0 || closeFenceTo < closeFenceFrom) return;
+  if (closeFenceFrom < 0 || closeFenceTo <= closeFenceFrom) return;
 
   items.push(decorationHidden.range(closeFenceFrom, closeFenceTo));
   items.push(

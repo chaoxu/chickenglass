@@ -240,7 +240,7 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
     // Always hidden in rich mode regardless of cursor position (#429).
     // The closing fence is protected from accidental deletion by a
     // transaction filter and skipped by atomicRanges (see below).
-    if (!block.singleLine && block.closeFenceFrom >= 0 && block.closeFenceTo >= block.closeFenceFrom) {
+    if (!block.singleLine && block.closeFenceFrom >= 0 && block.closeFenceTo > block.closeFenceFrom) {
       items.push(decorationHidden.range(block.closeFenceFrom, block.closeFenceTo));
       items.push(
         Decoration.line({ class: CSS.blockClosingFence }).range(block.closeFenceFrom),

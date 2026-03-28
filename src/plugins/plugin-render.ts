@@ -278,7 +278,7 @@ function addIncludeDecorations(
     items.push(decorationHidden.range(div.titleFrom, div.titleTo));
   }
   // Hide closing fence
-  if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
+  if (div.closeFenceFrom >= 0 && div.closeFenceTo > div.closeFenceFrom) {
     items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
   }
   // Collapse fence lines to zero height
@@ -485,7 +485,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // transaction filter and skipped by atomicRanges (see below).
     if (div.singleLine) {
       addSingleLineClosingFence(state, div.closeFenceFrom, div.closeFenceTo, items);
-    } else if (div.closeFenceFrom >= 0 && div.closeFenceTo >= div.closeFenceFrom) {
+    } else if (div.closeFenceFrom >= 0 && div.closeFenceTo > div.closeFenceFrom) {
       items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
       items.push(
         Decoration.line({ class: CSS.blockClosingFence }).range(div.closeFenceFrom),
