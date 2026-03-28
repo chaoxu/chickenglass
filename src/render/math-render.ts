@@ -180,22 +180,14 @@ export class MathWidget extends MacroAwareWidget {
 }
 
 /**
- * Build decoration ranges for math nodes, skipping nodes where
- * `shouldSkip(from, to)` returns true (typically a cursor check).
+ * Binary-search the sorted math regions for the one containing the cursor.
+ * Returns the matching MathSemantics or undefined if the cursor is outside
+ * all math.
  *
- * Shared helper used by both collectMathRanges() and
- * buildMathDecorationsFromState().
- *
- * NOTE: collectNodeRangesExcludingCursor() does not apply here.
- * This function operates on EditorState (not EditorView), because it is called
- * from both a ViewPlugin (EditorView path) and a StateField (EditorState path).
- * collectNodeRangesExcludingCursor requires an EditorView for visible ranges and
- * focus-guarded cursor checks. Additionally, when shouldSkip returns true the
- * callback adds Decoration.mark items (cf-math-source) rather than skipping —
- * this dual-path logic cannot be expressed as a simple "exclude and push widget"
- * callback.
+ * Shared by both the render path (mathShouldRebuild) and the preview path
+ * (MathPreviewPlugin.scheduleCheck).
  */
-function findActiveMath(
+export function findActiveMath(
   regions: readonly MathSemantics[],
   selection: SelectionRange,
 ): MathSemantics | undefined {
@@ -231,6 +223,19 @@ function findFocusedActiveMath(state: EditorState): MathSemantics | undefined {
     : undefined;
 }
 
+/**
+ * Build decoration ranges for math nodes, skipping nodes where
+ * `shouldSkip(from, to)` returns true (typically a cursor check).
+ *
+ * NOTE: collectNodeRangesExcludingCursor() does not apply here.
+ * This function operates on EditorState (not EditorView), because it is called
+ * from both a ViewPlugin (EditorView path) and a StateField (EditorState path).
+ * collectNodeRangesExcludingCursor requires an EditorView for visible ranges and
+ * focus-guarded cursor checks. Additionally, when shouldSkip returns true the
+ * callback adds Decoration.mark items (cf-math-source) rather than skipping —
+ * this dual-path logic cannot be expressed as a simple "exclude and push widget"
+ * callback.
+ */
 function buildMathItems(
   state: EditorState,
   shouldSkip: (from: number, to: number) => boolean,

@@ -13,54 +13,9 @@ import {
   ViewPlugin,
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
-import { stripMathDelimiters, MATH_TYPES, renderKatex, getDisplayMathContentEnd } from "./math-render";
+import { findActiveMath, renderKatex } from "./math-render";
 import { mathMacrosField } from "./math-macros";
-import { cursorInRange } from "./render-utils";
-
-interface MathNodeInfo {
-  readonly from: number;
-  readonly to: number;
-  readonly isDisplay: boolean;
-  /** Relative offset (from node start) of the content boundary for labeled display math. */
-  readonly contentTo?: number;
-}
-
-/**
- * Find the math node containing the cursor, if any.
- *
- * NOTE: collectNodeRangesExcludingCursor() does not apply here.
- * This function uses the inverse logic — it looks for nodes WHERE the cursor
- * IS inside (to show the preview), not nodes that should be excluded because
- * the cursor is inside them. It also returns a single data value rather than
- * accumulating a decoration array.
- */
-function findMathAtCursor(view: EditorView): MathNodeInfo | null {
-  if (!view.hasFocus) return null;
-  let result: MathNodeInfo | null = null;
-
-  for (const { from, to } of view.visibleRanges) {
-    syntaxTree(view.state).iterate({
-      from,
-      to,
-      enter(node) {
-        if (MATH_TYPES.has(node.name)) {
-          if (cursorInRange(view, node.from, node.to)) {
-            const isDisplay = node.name === "DisplayMath";
-            result = {
-              from: node.from,
-              to: node.to,
-              isDisplay,
-              contentTo: isDisplay ? getDisplayMathContentEnd(node.node) : undefined,
-            };
-          }
-        }
-      },
-    });
-  }
-
-  return result;
-}
+import { documentAnalysisField } from "../semantics/codemirror-source";
 
 class MathPreviewPlugin implements PluginValue {
   private panel: HTMLElement | null = null;
@@ -83,7 +38,8 @@ class MathPreviewPlugin implements PluginValue {
       update.docChanged ||
       update.selectionSet ||
       update.focusChanged ||
-      syntaxTree(update.state) !== syntaxTree(update.startState)
+      update.state.field(documentAnalysisField).mathRegions !==
+        update.startState.field(documentAnalysisField).mathRegions
     ) {
       this.view = update.view;
       this.scheduleCheck();
@@ -96,7 +52,13 @@ class MathPreviewPlugin implements PluginValue {
 
   /** Schedule a check after the update cycle completes (layout reads are safe). */
   private scheduleCheck(): void {
-    const info = findMathAtCursor(this.view);
+    if (!this.view.hasFocus) {
+      this.removePanel();
+      return;
+    }
+
+    const regions = this.view.state.field(documentAnalysisField).mathRegions;
+    const info = findActiveMath(regions, this.view.state.selection.main);
 
     if (!info) {
       this.removePanel();
@@ -104,7 +66,6 @@ class MathPreviewPlugin implements PluginValue {
     }
 
     const raw = this.view.state.sliceDoc(info.from, info.to);
-    const latex = stripMathDelimiters(raw, info.isDisplay, info.contentTo);
 
     if (!this.panel) {
       this.createPanel();
@@ -112,7 +73,7 @@ class MathPreviewPlugin implements PluginValue {
 
     if (raw !== this.lastRaw) {
       this.lastRaw = raw;
-      this.renderLatex(latex, info.isDisplay);
+      this.renderLatex(info.latex, info.isDisplay);
     }
 
     // Position below the entire math block: left from start, top from end.
