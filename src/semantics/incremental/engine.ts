@@ -84,20 +84,65 @@ interface DocumentAnalysisSlices {
   readonly includeSlice: IncludeSlice;
 }
 
+interface SliceRegistryEntry {
+  readonly revisionKey: DocumentAnalysisSliceName;
+  readonly sliceKey: keyof DocumentAnalysisSlices;
+  readonly project: (
+    slice: DocumentAnalysisSlices[keyof DocumentAnalysisSlices],
+  ) => Partial<DocumentAnalysis>;
+}
+
+function sliceEntry<SK extends keyof DocumentAnalysisSlices>(
+  revisionKey: DocumentAnalysisSliceName,
+  sliceKey: SK,
+  project: (slice: DocumentAnalysisSlices[SK]) => Partial<DocumentAnalysis>,
+): SliceRegistryEntry {
+  return {
+    revisionKey,
+    sliceKey,
+    project: project as SliceRegistryEntry["project"],
+  };
+}
+
+const SLICE_REGISTRY: readonly SliceRegistryEntry[] = [
+  sliceEntry("headings", "headingSlice", (s) => ({
+    headings: s.headings,
+    headingByFrom: s.headingByFrom,
+  })),
+  sliceEntry("footnotes", "footnoteSlice", (s) => ({
+    footnotes: s,
+  })),
+  sliceEntry("fencedDivs", "fencedDivSlice", (s) => ({
+    fencedDivs: s.fencedDivs,
+    fencedDivByFrom: s.fencedDivByFrom,
+  })),
+  sliceEntry("equations", "equationSlice", (s) => ({
+    equations: s.equations,
+    equationById: s.equationById,
+  })),
+  sliceEntry("mathRegions", "mathSlice", (s) => ({
+    mathRegions: s.mathRegions,
+  })),
+  sliceEntry("references", "referenceSlice", (s) => ({
+    references: s.references,
+    referenceByFrom: s.referenceByFrom,
+  })),
+  sliceEntry("includes", "includeSlice", (s) => ({
+    includes: s.includes,
+    includeByFrom: s.includeByFrom,
+  })),
+];
+
 interface InternalDocumentAnalysisState extends DocumentAnalysisSlices {
   readonly revisions: DocumentAnalysisRevisionInfo;
   readonly excludedRanges: readonly ExcludedRange[];
 }
 
-const ZERO_SLICE_REVISIONS: DocumentAnalysisSliceRevisions = Object.freeze({
-  headings: 0,
-  footnotes: 0,
-  fencedDivs: 0,
-  equations: 0,
-  mathRegions: 0,
-  references: 0,
-  includes: 0,
-});
+const ZERO_SLICE_REVISIONS = Object.freeze(
+  Object.fromEntries(
+    SLICE_REGISTRY.map(({ revisionKey }) => [revisionKey, 0]),
+  ) as unknown as DocumentAnalysisSliceRevisions,
+);
 
 const ZERO_REVISION_INFO: DocumentAnalysisRevisionInfo = Object.freeze({
   revision: 0,
@@ -201,25 +246,13 @@ function buildRevisionInfo(
     return ZERO_REVISION_INFO;
   }
 
-  const slicesChanged = {
-    headings: previous.headingSlice !== slices.headingSlice,
-    footnotes: previous.footnoteSlice !== slices.footnoteSlice,
-    fencedDivs: previous.fencedDivSlice !== slices.fencedDivSlice,
-    equations: previous.equationSlice !== slices.equationSlice,
-    mathRegions: previous.mathSlice !== slices.mathSlice,
-    references: previous.referenceSlice !== slices.referenceSlice,
-    includes: previous.includeSlice !== slices.includeSlice,
-  } satisfies Record<DocumentAnalysisSliceName, boolean>;
-
-  const nextSlices: DocumentAnalysisSliceRevisions = {
-    headings: previous.revisions.slices.headings + Number(slicesChanged.headings),
-    footnotes: previous.revisions.slices.footnotes + Number(slicesChanged.footnotes),
-    fencedDivs: previous.revisions.slices.fencedDivs + Number(slicesChanged.fencedDivs),
-    equations: previous.revisions.slices.equations + Number(slicesChanged.equations),
-    mathRegions: previous.revisions.slices.mathRegions + Number(slicesChanged.mathRegions),
-    references: previous.revisions.slices.references + Number(slicesChanged.references),
-    includes: previous.revisions.slices.includes + Number(slicesChanged.includes),
-  };
+  const nextSlices = Object.fromEntries(
+    SLICE_REGISTRY.map(({ revisionKey, sliceKey }) => [
+      revisionKey,
+      previous.revisions.slices[revisionKey]
+        + Number(previous[sliceKey] !== slices[sliceKey]),
+    ]),
+  ) as unknown as DocumentAnalysisSliceRevisions;
 
   return {
     revision: previous.revisions.revision + 1,
@@ -231,14 +264,8 @@ function sameSlices(
   previous: InternalDocumentAnalysisState,
   next: DocumentAnalysisSlices,
 ): boolean {
-  return (
-    previous.headingSlice === next.headingSlice
-    && previous.footnoteSlice === next.footnoteSlice
-    && previous.fencedDivSlice === next.fencedDivSlice
-    && previous.equationSlice === next.equationSlice
-    && previous.mathSlice === next.mathSlice
-    && previous.referenceSlice === next.referenceSlice
-    && previous.includeSlice === next.includeSlice
+  return SLICE_REGISTRY.every(({ sliceKey }) =>
+    previous[sliceKey] === next[sliceKey],
   );
 }
 
@@ -257,20 +284,10 @@ function finalizeDocumentAnalysis(
   }
 
   const revisions = buildRevisionInfo(previousState, slices);
-  const analysis: DocumentAnalysis = {
-    headings: slices.headingSlice.headings,
-    headingByFrom: slices.headingSlice.headingByFrom,
-    footnotes: slices.footnoteSlice,
-    fencedDivs: slices.fencedDivSlice.fencedDivs,
-    fencedDivByFrom: slices.fencedDivSlice.fencedDivByFrom,
-    equations: slices.equationSlice.equations,
-    equationById: slices.equationSlice.equationById,
-    mathRegions: slices.mathSlice.mathRegions,
-    references: slices.referenceSlice.references,
-    referenceByFrom: slices.referenceSlice.referenceByFrom,
-    includes: slices.includeSlice.includes,
-    includeByFrom: slices.includeSlice.includeByFrom,
-  };
+  const analysis = {} as DocumentAnalysis;
+  for (const { sliceKey, project } of SLICE_REGISTRY) {
+    Object.assign(analysis, project(slices[sliceKey]));
+  }
 
   return withInternalState(analysis, {
     ...slices,
