@@ -429,7 +429,7 @@ export function cursorSensitiveShouldUpdate(update: ViewUpdate): boolean {
  *
  * @param buildFn  Pure function that computes the DecorationSet from the view.
  * @param options  Optional overrides:
- *   - shouldUpdate: custom predicate (defaults to the standard 5-condition check).
+ *   - shouldUpdate: custom predicate (defaults to structural-only: docChanged / tree).
  *   - pluginSpec: additional PluginSpec fields (e.g., eventHandlers) merged with
  *     the decorations accessor.
  */
