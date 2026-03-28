@@ -16,8 +16,10 @@ import { CSS } from "../constants/css-classes";
 import { createTestView, makeBlockPlugin, makeBibStore } from "../test-utils";
 import {
   collectReferenceRanges,
+  planReferenceRendering,
   referenceRenderDependenciesChanged,
   referenceRenderPlugin,
+  type ReferenceRenderItem,
 } from "./reference-render";
 
 const testPlugins: readonly BlockPlugin[] = [
@@ -751,5 +753,110 @@ describe("collectReferenceRanges", () => {
       expect(registerSpy).toHaveBeenCalledTimes(1);
       registerSpy.mockRestore();
     });
+  });
+});
+
+describe("planReferenceRendering", () => {
+  let view: EditorView;
+
+  afterEach(() => {
+    view?.destroy();
+  });
+
+  function plan(doc: string, cursorPos?: number): ReferenceRenderItem[] {
+    view = createView(doc, cursorPos ?? doc.length);
+    const { cslProcessor } = view.state.field(bibDataField);
+    return planReferenceRendering(view, store, cslProcessor);
+  }
+
+  function findPlan(items: ReferenceRenderItem[], text: string): ReferenceRenderItem | undefined {
+    return items.find((item) => view.state.sliceDoc(item.from, item.to) === text);
+  }
+
+  it("routes bracketed block reference to crossref plan", () => {
+    const doc = [
+      "::: {.theorem #thm-main}",
+      "Statement.",
+      ":::",
+      "",
+      "See [@thm-main].",
+    ].join("\n");
+    const items = plan(doc);
+    const item = findPlan(items, "[@thm-main]");
+    expect(item).toBeDefined();
+    expect(item!.kind).toBe("crossref");
+  });
+
+  it("routes bracketed citation to citation plan", () => {
+    const items = plan("See [@karger2000] for details.");
+    const item = findPlan(items, "[@karger2000]");
+    expect(item).toBeDefined();
+    expect(item!.kind).toBe("citation");
+    if (item!.kind === "citation") {
+      expect(item!.narrative).toBe(false);
+    }
+  });
+
+  it("routes narrative bib reference to narrative citation plan", () => {
+    const items = plan("As @karger2000 showed.");
+    const item = findPlan(items, "@karger2000");
+    expect(item).toBeDefined();
+    expect(item!.kind).toBe("citation");
+    if (item!.kind === "citation") {
+      expect(item!.narrative).toBe(true);
+    }
+  });
+
+  it("routes unknown bracketed id to unresolved plan", () => {
+    const items = plan("See [@unknown-thing].");
+    const item = findPlan(items, "[@unknown-thing]");
+    expect(item).toBeDefined();
+    expect(item!.kind).toBe("unresolved");
+  });
+
+  it("routes cursor-in reference to source-mark plan", () => {
+    const doc = [
+      "::: {.theorem #thm-1}",
+      "T1.",
+      ":::",
+      "",
+      "See [@thm-1].",
+    ].join("\n");
+    const refStart = doc.indexOf("[@thm-1]");
+    const items = plan(doc, refStart + 3);
+    const item = items.find((i) => i.from === refStart);
+    expect(item).toBeDefined();
+    expect(item!.kind).toBe("source-mark");
+  });
+
+  it("routes mixed crossref+citation to mixed-cluster plan", () => {
+    const doc = [
+      "$$a^2$$ {#eq:alpha}",
+      "",
+      "See [@eq:alpha; @karger2000].",
+    ].join("\n");
+    const items = plan(doc);
+    const item = findPlan(items, "[@eq:alpha; @karger2000]");
+    expect(item).toBeDefined();
+    expect(item!.kind).toBe("mixed-cluster");
+  });
+
+  it("routes clustered equation crossrefs to clustered-crossref plan", () => {
+    const doc = [
+      "$$a^2$$ {#eq:alpha}",
+      "",
+      "$$b^2$$ {#eq:beta}",
+      "",
+      "See [@eq:alpha; @eq:beta].",
+    ].join("\n");
+    const items = plan(doc);
+    const item = findPlan(items, "[@eq:alpha; @eq:beta]");
+    expect(item).toBeDefined();
+    expect(item!.kind).toBe("clustered-crossref");
+  });
+
+  it("skips narrative refs that resolve to neither crossref nor citation", () => {
+    const items = plan("As @unknown-thing goes.");
+    expect(items).toHaveLength(0);
   });
 });
