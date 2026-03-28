@@ -13,8 +13,6 @@ import {
   extractIncludePaths,
   resolveIncludesFromContent,
   flattenIncludesWithSourceMap,
-  IncludeCycleError,
-  IncludeNotFoundError,
 } from "../../plugins";
 import type { FileSystem } from "../file-manager";
 import { SourceMap, type IncludeRegion } from "../source-map";
@@ -48,15 +46,9 @@ async function expandIncludes(
     try {
       includes = await resolveIncludesFromContent(mainPath, rawContent, fs);
     } catch (e: unknown) {
-      if (e instanceof IncludeCycleError) {
-        console.warn("[includes] cycle detected, skipping expansion:", e.message);
-        return { text: rawContent, regions: [] };
-      }
-      if (e instanceof IncludeNotFoundError) {
-        console.warn("[includes] file not found, skipping expansion:", e.message);
-        return { text: rawContent, regions: [] };
-      }
-      throw e;
+      const message = e instanceof Error ? e.message : String(e);
+      console.warn("[includes] expansion failed, skipping:", message);
+      return { text: rawContent, regions: [] };
     }
 
     const result = flattenIncludesWithSourceMap(rawContent, includes);

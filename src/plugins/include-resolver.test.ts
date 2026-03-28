@@ -410,6 +410,31 @@ chapter1.md
     const includes = await resolveIncludesFromContent("main.md", "# Just text", fs);
     expect(includes).toEqual([]);
   });
+
+  it("throws generic error when file exists but readFile fails (e.g. EACCES)", async () => {
+    const memory = new MemoryFileSystem({
+      "chapter.md": "content that should not be returned",
+    });
+    const fs = {
+      listTree: () => memory.listTree(),
+      readFile: async (path: string) => {
+        if (path === "chapter.md") throw new Error("EACCES: permission denied");
+        return memory.readFile(path);
+      },
+      writeFile: (p: string, c: string) => memory.writeFile(p, c),
+      createFile: (p: string, c?: string) => memory.createFile(p, c),
+      exists: (p: string) => memory.exists(p),
+      renameFile: (o: string, n: string) => memory.renameFile(o, n),
+      createDirectory: (p: string) => memory.createDirectory(p),
+      deleteFile: (p: string) => memory.deleteFile(p),
+      writeFileBinary: (p: string, d: Uint8Array) => memory.writeFileBinary(p, d),
+      readFileBinary: (p: string) => memory.readFileBinary(p),
+    };
+    const rootContent = `::: {.include}\nchapter.md\n:::`;
+    await expect(
+      resolveIncludesFromContent("main.md", rootContent, fs),
+    ).rejects.toThrow("EACCES");
+  });
 });
 
 describe("flattenIncludesWithSourceMap", () => {
