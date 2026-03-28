@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { CSS } from "../constants/css-classes";
-import { ImageLoadingWidget, ImageWidget, PdfLoadingWidget } from "./image-render";
+import {
+  ImageLoadingWidget,
+  ImageWidget,
+  PdfLoadingWidget,
+  cursorImageRelationChanged,
+  trackedCacheChanged,
+} from "./image-render";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
 
@@ -326,5 +332,153 @@ describe("PDF path resolution for cache keys", () => {
     // `![](./figures/../figures/plot.pdf)` in `posts/math.md`
     const resolved = resolveProjectPathFromDocument("posts/math.md", "./figures/../figures/plot.pdf");
     expect(resolved).toBe("posts/figures/plot.pdf");
+  });
+});
+
+// ── Targeted invalidation helpers (#580) ─────────────────────────────────────
+
+describe("cursorImageRelationChanged", () => {
+  const nodeRanges = [
+    { from: 10, to: 30 },
+    { from: 50, to: 70 },
+  ];
+
+  it("returns false when there are no image nodes", () => {
+    expect(
+      cursorImageRelationChanged([], true, true, 5, 5, 15, 15),
+    ).toBe(false);
+  });
+
+  it("returns false when cursor moves but stays outside all image nodes", () => {
+    expect(
+      cursorImageRelationChanged(nodeRanges, true, true, 0, 0, 40, 40),
+    ).toBe(false);
+  });
+
+  it("returns true when cursor moves into an image node", () => {
+    expect(
+      cursorImageRelationChanged(nodeRanges, true, true, 0, 0, 15, 15),
+    ).toBe(true);
+  });
+
+  it("returns true when cursor moves out of an image node", () => {
+    expect(
+      cursorImageRelationChanged(nodeRanges, true, true, 15, 15, 40, 40),
+    ).toBe(true);
+  });
+
+  it("returns false when cursor moves within the same image node", () => {
+    expect(
+      cursorImageRelationChanged(nodeRanges, true, true, 12, 12, 20, 20),
+    ).toBe(false);
+  });
+
+  it("returns true when cursor moves between two image nodes", () => {
+    expect(
+      cursorImageRelationChanged(nodeRanges, true, true, 15, 15, 55, 55),
+    ).toBe(true);
+  });
+
+  it("returns true when focus is lost while cursor is inside an image node", () => {
+    expect(
+      cursorImageRelationChanged(nodeRanges, true, false, 15, 15, 15, 15),
+    ).toBe(true);
+  });
+
+  it("returns true when focus is gained while cursor is inside an image node", () => {
+    expect(
+      cursorImageRelationChanged(nodeRanges, false, true, 15, 15, 15, 15),
+    ).toBe(true);
+  });
+
+  it("returns false when focus changes but cursor is outside all image nodes", () => {
+    expect(
+      cursorImageRelationChanged(nodeRanges, true, false, 40, 40, 40, 40),
+    ).toBe(false);
+  });
+
+  it("handles selection ranges (not just cursors)", () => {
+    // Selection from 12 to 25 is fully inside [10,30]
+    expect(
+      cursorImageRelationChanged(nodeRanges, true, true, 0, 0, 12, 25),
+    ).toBe(true);
+  });
+
+  it("returns false when selection extends beyond node boundary", () => {
+    // Selection 5→35 is NOT contained in [10,30] (from < node.from)
+    expect(
+      cursorImageRelationChanged(nodeRanges, true, true, 0, 0, 5, 35),
+    ).toBe(false);
+  });
+});
+
+describe("trackedCacheChanged", () => {
+  it("returns false when both caches are identity-equal", () => {
+    const cache = new Map([["a.pdf", { status: "loading" }]]);
+    const paths = new Set(["a.pdf"]);
+    expect(trackedCacheChanged(paths, cache, cache, cache, cache)).toBe(false);
+  });
+
+  it("returns false when tracked paths is empty", () => {
+    const old = new Map([["a.pdf", { status: "loading" }]]);
+    const updated = new Map([["a.pdf", { status: "ready" }]]);
+    expect(trackedCacheChanged(new Set(), old, updated, old, old)).toBe(false);
+  });
+
+  it("detects tracked PDF path entry change (loading->ready)", () => {
+    const entry1 = { status: "loading" };
+    const entry2 = { status: "ready" };
+    const oldPdf = new Map([["a.pdf", entry1]]);
+    const newPdf = new Map([["a.pdf", entry2]]);
+    const imgCache = new Map<string, unknown>();
+    const paths = new Set(["a.pdf"]);
+    expect(trackedCacheChanged(paths, oldPdf, newPdf, imgCache, imgCache)).toBe(true);
+  });
+
+  it("detects tracked image path entry change (loading->ready)", () => {
+    const entry1 = { status: "loading" };
+    const entry2 = { status: "ready" };
+    const pdfCache = new Map<string, unknown>();
+    const oldImg = new Map([["photo.png", entry1]]);
+    const newImg = new Map([["photo.png", entry2]]);
+    const paths = new Set(["photo.png"]);
+    expect(trackedCacheChanged(paths, pdfCache, pdfCache, oldImg, newImg)).toBe(true);
+  });
+
+  it("ignores untracked path changes", () => {
+    const entry1 = { status: "loading" };
+    const entry2 = { status: "ready" };
+    const oldPdf = new Map([["other.pdf", entry1]]);
+    const newPdf = new Map([["other.pdf", entry2]]);
+    const imgCache = new Map<string, unknown>();
+    const paths = new Set(["a.pdf"]);
+    expect(trackedCacheChanged(paths, oldPdf, newPdf, imgCache, imgCache)).toBe(false);
+  });
+
+  it("detects entry removal (eviction)", () => {
+    const entry = { status: "ready" };
+    const oldPdf = new Map([["a.pdf", entry]]);
+    const newPdf = new Map<string, unknown>();
+    const imgCache = new Map<string, unknown>();
+    const paths = new Set(["a.pdf"]);
+    expect(trackedCacheChanged(paths, oldPdf, newPdf, imgCache, imgCache)).toBe(true);
+  });
+
+  it("detects entry addition for tracked path", () => {
+    const entry = { status: "loading" };
+    const oldPdf = new Map<string, unknown>();
+    const newPdf = new Map([["a.pdf", entry]]);
+    const imgCache = new Map<string, unknown>();
+    const paths = new Set(["a.pdf"]);
+    expect(trackedCacheChanged(paths, oldPdf, newPdf, imgCache, imgCache)).toBe(true);
+  });
+
+  it("returns false when tracked path entry is same reference", () => {
+    const entry = { status: "ready" };
+    const oldPdf = new Map([["a.pdf", entry], ["b.pdf", { status: "loading" }]]);
+    const newPdf = new Map([["a.pdf", entry], ["b.pdf", { status: "ready" }]]);
+    const imgCache = new Map<string, unknown>();
+    const paths = new Set(["a.pdf"]);
+    expect(trackedCacheChanged(paths, oldPdf, newPdf, imgCache, imgCache)).toBe(false);
   });
 });

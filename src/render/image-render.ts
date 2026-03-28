@@ -1,17 +1,19 @@
-import { type Extension } from "@codemirror/state";
+import { type Extension, type Range } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 import {
+  type Decoration,
   type DecorationSet,
   type EditorView,
+  type PluginValue,
+  ViewPlugin,
   type ViewUpdate,
 } from "@codemirror/view";
+import { syntaxTree } from "@codemirror/language";
 import {
   buildDecorations,
-  collectNodeRangesExcludingCursor,
-  cursorSensitiveShouldUpdate,
+  cursorInRange,
   pushWidgetDecoration,
   RenderWidget,
-  createSimpleViewPlugin,
 } from "./render-utils";
 import {
   getImageDataUrl,
@@ -153,108 +155,251 @@ function readImageContent(
   return { alt, src };
 }
 
-// ── Decoration builder ────────────────────────────────────────────────────────
+// ── Targeted invalidation helpers ────────────────────────────────────────────
 
-const IMAGE_TYPES = new Set(["Image"]);
-
-/** Collect decoration ranges for images outside the cursor. */
-function collectImageRanges(view: EditorView) {
-  return collectNodeRangesExcludingCursor(view, IMAGE_TYPES, (node, items) => {
-    const parsed = readImageContent(view, node.node);
-    if (!parsed) return;
-
-    if (isPdfTarget(parsed.src)) {
-      // Resolve the raw markdown target relative to the current document,
-      // so that `![](diagram.pdf)` in `posts/math.md` resolves to
-      // `posts/diagram.pdf`. The resolved path is used as cache key to
-      // prevent collisions between same-named PDFs in different directories.
-      const docPath = view.state.facet(documentPathFacet);
-      const resolvedPath = resolveProjectPathFromDocument(docPath, parsed.src);
-
-      // PDF target — resolve from the preview cache
-      const cache = view.state.field(pdfPreviewField);
-      const entry = cache.get(resolvedPath);
-
-      // #473: "ready" with no canvas means the canvas was evicted from the
-      // module-level cache — treat as a cache miss and re-request.
-      const canvasPresent = entry?.status === "ready" && getPdfCanvas(resolvedPath) !== undefined;
-
-      if (canvasPresent) {
-        // Rasterized — render the canvas directly
-        pushWidgetDecoration(items, new PdfCanvasWidget(parsed.alt, resolvedPath), node.from, node.to);
-      } else if (entry?.status === "error") {
-        // Error — show the existing broken-image fallback
-        pushWidgetDecoration(items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to);
-
-        // #472: re-request so the retry cooldown logic in requestPdfPreview
-        // can decide whether to retry.
-        const fs = view.state.facet(fileSystemFacet);
-        if (fs) {
-          void requestPdfPreview(view, resolvedPath, fs);
-        }
-      } else {
-        // Loading, not yet requested, or "ready" with evicted canvas — show loading placeholder
-        pushWidgetDecoration(items, new PdfLoadingWidget(parsed.alt), node.from, node.to);
-
-        // Trigger async preview request if not yet in cache or needs re-request
-        if (!entry || entry.status !== "loading") {
-          const fs = view.state.facet(fileSystemFacet);
-          if (fs) {
-            void requestPdfPreview(view, resolvedPath, fs);
-          }
-        }
-      }
-    } else if (isRelativeFilePath(parsed.src)) {
-      const docPath = view.state.facet(documentPathFacet);
-      const resolvedPath = resolveProjectPathFromDocument(docPath, parsed.src);
-      const cache = view.state.field(imageUrlField);
-      const entry = cache.get(resolvedPath);
-      const dataUrl = entry?.status === "ready" ? getImageDataUrl(resolvedPath) : undefined;
-
-      if (dataUrl) {
-        pushWidgetDecoration(items, new ImageWidget(parsed.alt, dataUrl), node.from, node.to);
-      } else if (entry?.status === "error") {
-        pushWidgetDecoration(items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to);
-      } else {
-        pushWidgetDecoration(items, new ImageLoadingWidget(parsed.alt), node.from, node.to);
-
-        if (!entry || entry.status !== "loading") {
-          const fs = view.state.facet(fileSystemFacet);
-          if (fs) {
-            void requestImageDataUrl(view, resolvedPath, fs);
-          }
-        }
-      }
-    } else {
-      pushWidgetDecoration(items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to);
-    }
-  });
-}
-
-/** Build a DecorationSet for images (convenience wrapper). */
-function imageDecorations(view: EditorView): DecorationSet {
-  return buildDecorations(collectImageRanges(view));
+/**
+ * Check whether the cursor moved into or out of any image node.
+ *
+ * Uses the same containment semantics as `cursorInRange` (cursor.from >= from
+ * && cursor.to <= to) plus focus state (unfocused => never inside).
+ */
+export function cursorImageRelationChanged(
+  nodeRanges: ReadonlyArray<{ readonly from: number; readonly to: number }>,
+  hadFocus: boolean,
+  hasFocus: boolean,
+  oldFrom: number,
+  oldTo: number,
+  newFrom: number,
+  newTo: number,
+): boolean {
+  for (const { from, to } of nodeRanges) {
+    const wasInside = hadFocus && oldFrom >= from && oldTo <= to;
+    const isInside = hasFocus && newFrom >= from && newTo <= to;
+    if (wasInside !== isInside) return true;
+  }
+  return false;
 }
 
 /**
- * Custom shouldUpdate that also triggers on pdfPreviewField changes,
- * so the plugin re-renders when a PDF preview becomes ready.
+ * Check whether any tracked cache path's entry changed between two state
+ * snapshots. Uses reference equality on map entries, so only detects
+ * actual state transitions (loading->ready, ready->evicted, etc.).
  */
-function imageShouldUpdate(update: ViewUpdate): boolean {
-  if (cursorSensitiveShouldUpdate(update)) return true;
+export function trackedCacheChanged(
+  trackedPaths: ReadonlySet<string>,
+  oldPdfCache: ReadonlyMap<string, unknown>,
+  newPdfCache: ReadonlyMap<string, unknown>,
+  oldImgCache: ReadonlyMap<string, unknown>,
+  newImgCache: ReadonlyMap<string, unknown>,
+): boolean {
+  if (oldPdfCache !== newPdfCache) {
+    for (const path of trackedPaths) {
+      if (oldPdfCache.get(path) !== newPdfCache.get(path)) return true;
+    }
+  }
+  if (oldImgCache !== newImgCache) {
+    for (const path of trackedPaths) {
+      if (oldImgCache.get(path) !== newImgCache.get(path)) return true;
+    }
+  }
+  return false;
+}
 
-  // Re-render when the PDF preview cache has been updated
-  const oldCache = update.startState.field(pdfPreviewField);
-  const newCache = update.state.field(pdfPreviewField);
-  if (oldCache !== newCache) return true;
+// ── Decoration builder ───────────────────────────────────────────────────────
 
-  const oldImageCache = update.startState.field(imageUrlField);
-  const newImageCache = update.state.field(imageUrlField);
-  return oldImageCache !== newImageCache;
+/** Metadata collected during decoration build for targeted invalidation. */
+interface ImageBuildResult {
+  readonly items: Range<Decoration>[];
+  /** Positions of all Image nodes in visible ranges (including cursor-adjacent). */
+  readonly nodeRanges: ReadonlyArray<{ readonly from: number; readonly to: number }>;
+  /** Resolved paths for local images/PDFs currently referenced. */
+  readonly trackedPaths: ReadonlySet<string>;
+}
+
+/** Collect decoration ranges for images outside the cursor, plus tracking metadata. */
+function collectImageRangesTracked(view: EditorView): ImageBuildResult {
+  const items: Range<Decoration>[] = [];
+  const nodeRanges: { from: number; to: number }[] = [];
+  const trackedPaths = new Set<string>();
+  const tree = syntaxTree(view.state);
+
+  for (const { from, to } of view.visibleRanges) {
+    tree.iterate({
+      from,
+      to,
+      enter(node) {
+        if (node.type.name !== "Image") return;
+
+        nodeRanges.push({ from: node.from, to: node.to });
+
+        if (cursorInRange(view, node.from, node.to)) return false;
+
+        const parsed = readImageContent(view, node.node);
+        if (!parsed) return;
+
+        if (isPdfTarget(parsed.src)) {
+          // Resolve the raw markdown target relative to the current document,
+          // so that `![](diagram.pdf)` in `posts/math.md` resolves to
+          // `posts/diagram.pdf`. The resolved path is used as cache key to
+          // prevent collisions between same-named PDFs in different directories.
+          const docPath = view.state.facet(documentPathFacet);
+          const resolvedPath = resolveProjectPathFromDocument(docPath, parsed.src);
+          trackedPaths.add(resolvedPath);
+
+          // PDF target — resolve from the preview cache
+          const cache = view.state.field(pdfPreviewField);
+          const entry = cache.get(resolvedPath);
+
+          // #473: "ready" with no canvas means the canvas was evicted from the
+          // module-level cache — treat as a cache miss and re-request.
+          const canvasPresent =
+            entry?.status === "ready" && getPdfCanvas(resolvedPath) !== undefined;
+
+          if (canvasPresent) {
+            pushWidgetDecoration(
+              items, new PdfCanvasWidget(parsed.alt, resolvedPath), node.from, node.to,
+            );
+          } else if (entry?.status === "error") {
+            pushWidgetDecoration(
+              items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to,
+            );
+
+            // #472: re-request so the retry cooldown logic in requestPdfPreview
+            // can decide whether to retry.
+            const fs = view.state.facet(fileSystemFacet);
+            if (fs) {
+              void requestPdfPreview(view, resolvedPath, fs);
+            }
+          } else {
+            pushWidgetDecoration(
+              items, new PdfLoadingWidget(parsed.alt), node.from, node.to,
+            );
+
+            if (!entry || entry.status !== "loading") {
+              const fs = view.state.facet(fileSystemFacet);
+              if (fs) {
+                void requestPdfPreview(view, resolvedPath, fs);
+              }
+            }
+          }
+        } else if (isRelativeFilePath(parsed.src)) {
+          const docPath = view.state.facet(documentPathFacet);
+          const resolvedPath = resolveProjectPathFromDocument(docPath, parsed.src);
+          trackedPaths.add(resolvedPath);
+
+          const cache = view.state.field(imageUrlField);
+          const entry = cache.get(resolvedPath);
+          const dataUrl =
+            entry?.status === "ready" ? getImageDataUrl(resolvedPath) : undefined;
+
+          if (dataUrl) {
+            pushWidgetDecoration(
+              items, new ImageWidget(parsed.alt, dataUrl), node.from, node.to,
+            );
+          } else if (entry?.status === "error") {
+            pushWidgetDecoration(
+              items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to,
+            );
+          } else {
+            pushWidgetDecoration(
+              items, new ImageLoadingWidget(parsed.alt), node.from, node.to,
+            );
+
+            if (!entry || entry.status !== "loading") {
+              const fs = view.state.facet(fileSystemFacet);
+              if (fs) {
+                void requestImageDataUrl(view, resolvedPath, fs);
+              }
+            }
+          }
+        } else {
+          pushWidgetDecoration(
+            items, new ImageWidget(parsed.alt, parsed.src), node.from, node.to,
+          );
+        }
+      },
+    });
+  }
+
+  return { items, nodeRanges, trackedPaths };
+}
+
+// ── ViewPlugin ───────────────────────────────────────────────────────────────
+
+/**
+ * Custom ViewPlugin that narrows image decoration rebuilds to avoid
+ * full visible-range rescans on unrelated cursor moves.
+ *
+ * Tracks image node positions and referenced cache paths from each rebuild.
+ * On update, only rebuilds when:
+ * - document, viewport, or syntax tree changed (structural)
+ * - cursor moved into/out of an image node (cursor adjacency)
+ * - a tracked cache path's entry changed (async preview readiness)
+ */
+class ImageRenderPlugin implements PluginValue {
+  decorations: DecorationSet;
+  private nodeRanges: ReadonlyArray<{ readonly from: number; readonly to: number }>;
+  private trackedPaths: ReadonlySet<string>;
+
+  constructor(view: EditorView) {
+    const result = collectImageRangesTracked(view);
+    this.decorations = buildDecorations(result.items);
+    this.nodeRanges = result.nodeRanges;
+    this.trackedPaths = result.trackedPaths;
+  }
+
+  update(update: ViewUpdate): void {
+    // Structural changes require full rebuild
+    if (
+      update.docChanged ||
+      update.viewportChanged ||
+      syntaxTree(update.state) !== syntaxTree(update.startState)
+    ) {
+      this.rebuild(update.view);
+      return;
+    }
+
+    // Selection/focus: rebuild only if cursor moved into/out of an image node
+    if (update.selectionSet || update.focusChanged) {
+      const hasFocus = update.view.hasFocus;
+      const hadFocus = update.focusChanged ? !hasFocus : hasFocus;
+      const oldSel = update.startState.selection.main;
+      const newSel = update.state.selection.main;
+      if (
+        cursorImageRelationChanged(
+          this.nodeRanges, hadFocus, hasFocus,
+          oldSel.from, oldSel.to, newSel.from, newSel.to,
+        )
+      ) {
+        this.rebuild(update.view);
+        return;
+      }
+    }
+
+    // Cache changes: rebuild only if a tracked path's entry changed
+    if (
+      trackedCacheChanged(
+        this.trackedPaths,
+        update.startState.field(pdfPreviewField),
+        update.state.field(pdfPreviewField),
+        update.startState.field(imageUrlField),
+        update.state.field(imageUrlField),
+      )
+    ) {
+      this.rebuild(update.view);
+    }
+  }
+
+  private rebuild(view: EditorView): void {
+    const result = collectImageRangesTracked(view);
+    this.decorations = buildDecorations(result.items);
+    this.nodeRanges = result.nodeRanges;
+    this.trackedPaths = result.trackedPaths;
+  }
 }
 
 /** CM6 extension that renders inline images with Typora-style click-to-edit. */
-export const imageRenderPlugin: Extension = createSimpleViewPlugin(
-  imageDecorations,
-  { shouldUpdate: imageShouldUpdate },
+export const imageRenderPlugin: Extension = ViewPlugin.fromClass(
+  ImageRenderPlugin,
+  { decorations: (v) => v.decorations },
 );
