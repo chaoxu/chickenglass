@@ -21,6 +21,7 @@ function region(
   originalRef?: string,
   rawFrom?: number,
   rawTo?: number,
+  children?: IncludeRegion[],
 ): IncludeRegion {
   return {
     from,
@@ -29,6 +30,7 @@ function region(
     originalRef: originalRef ?? `{{include ${file}}}`,
     rawFrom: rawFrom ?? 0,
     rawTo: rawTo ?? (originalRef?.length ?? `{{include ${file}}}`.length),
+    children: children ?? [],
   };
 }
 
@@ -342,6 +344,70 @@ describe("SourceMap", () => {
         expect(sm.fileAt(regionStart + 5)).toBe(`file${i}.md`);
         expect(sm.fileAt(regionStart + 9)).toBe(`file${i}.md`);
       }
+    });
+  });
+
+  describe("nested regions", () => {
+    // Simulated: main -> chapter -> section
+    // Expanded: "HEADER|chapter-text|section-text|more-chapter|FOOTER"
+    const sectionRegion: IncludeRegion = {
+      from: 20, to: 33, file: "section.md",
+      originalRef: "{{include section.md}}", rawFrom: 13, rawTo: 35, children: [],
+    };
+    const chapterRegion: IncludeRegion = {
+      from: 7, to: 46, file: "chapter.md",
+      originalRef: "{{include chapter.md}}", rawFrom: 7, rawTo: 29,
+      children: [sectionRegion],
+    };
+
+    it("fileAt returns the nested file for positions inside a child region", () => {
+      const sm = new SourceMap([chapterRegion]);
+      expect(sm.fileAt(0)).toBeNull();
+      expect(sm.fileAt(10)).toBe("chapter.md");
+      expect(sm.fileAt(25)).toBe("section.md");
+      expect(sm.fileAt(40)).toBe("chapter.md");
+      expect(sm.fileAt(50)).toBeNull();
+    });
+
+    it("regionAt returns the deepest matching region", () => {
+      const sm = new SourceMap([chapterRegion]);
+      expect(sm.regionAt(10)).toBe(chapterRegion);
+      expect(sm.regionAt(25)).toBe(sectionRegion);
+      expect(sm.regionAt(40)).toBe(chapterRegion);
+    });
+
+    it("decompose reconstructs each file with nested include refs restored", () => {
+      const doc = "HEADER|chapter-text|section-text|more-chapter|FOOTER";
+      const sm = new SourceMap([chapterRegion]);
+      const parts = sm.decompose(doc);
+
+      expect(parts.get("section.md")).toBe("section-text|");
+      expect(parts.get("chapter.md")).toBe(
+        "chapter-text|{{include section.md}}more-chapter|",
+      );
+    });
+
+    it("reconstructMain only uses top-level regions", () => {
+      const doc = "HEADER|chapter-text|section-text|more-chapter|FOOTER";
+      const sm = new SourceMap([chapterRegion]);
+      expect(sm.reconstructMain(doc, "main.md")).toBe(
+        "HEADER|{{include chapter.md}}FOOTER",
+      );
+    });
+
+    it("mapThrough updates nested region positions", () => {
+      const sm = new SourceMap([{
+        ...chapterRegion, children: [{ ...sectionRegion }],
+      }]);
+      const changes = makeChanges(
+        "HEADER|chapter-text|section-text|more-chapter|FOOTER",
+        [{ from: 0, insert: "XX" }],
+      );
+      sm.mapThrough(changes);
+      expect(sm.regions[0].from).toBe(9);
+      expect(sm.regions[0].to).toBe(48);
+      expect(sm.regions[0].children[0].from).toBe(22);
+      expect(sm.regions[0].children[0].to).toBe(35);
     });
   });
 });

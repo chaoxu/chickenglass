@@ -11,9 +11,8 @@ import {
 import { fileSystemFacet, documentPathFacet } from "../../lib/types";
 import {
   extractIncludePaths,
-  resolveIncludePath,
+  resolveIncludesFromContent,
   flattenIncludesWithSourceMap,
-  type ResolvedInclude,
 } from "../../plugins";
 import type { FileSystem } from "../file-manager";
 import { SourceMap, type IncludeRegion } from "../source-map";
@@ -24,29 +23,15 @@ import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-
 import { setIncludeRegionsEffect } from "../../lib/include-regions";
 
 /**
- * Expand `!include` directives in a document, producing a flattened text
+ * Expand include directives in a document, producing a flattened text
  * and a source-map that tracks which regions originated from which file.
  *
- * Algorithm (O(n) in number of include directives):
- * 1. `extractIncludePaths` scans `rawContent` for all `!include` lines.
- * 2. Each path is resolved relative to `mainPath` and read from `fs`.
- * 3. `flattenIncludesWithSourceMap` splices the included content into
- *    `rawContent`, replacing each include directive with the file's text,
- *    and records `IncludeRegion` entries mapping flattened offsets back
- *    to their original files.
+ * Nested includes inside included files are expanded recursively.
+ * Cycles are detected and cause a graceful fallback to the original content.
  *
- * Cycle detection: deliberately not implemented at this layer — callers
- * are expected to avoid circular includes. The function is intentionally
- * shallow (one level); nested includes inside included files are not
- * re-expanded.
- *
- * Fallback behavior: if **any** included file cannot be read, the function
- * returns `{ text: rawContent, regions: [] }` — i.e. the original content
- * unchanged with no source map. This is intentional so that a missing
- * include file does not silently corrupt the rest of the document.
- *
- * Performance: wrapped in `measureAsync("includes.expand", …)` so the
- * duration appears in the frontend perf panel.
+ * Fallback behavior: if any included file cannot be read or a cycle is
+ * detected, the function returns `{ text: rawContent, regions: [] }` —
+ * the original content unchanged with no source map.
  */
 async function expandIncludes(
   mainPath: string,
@@ -57,30 +42,29 @@ async function expandIncludes(
     const paths = extractIncludePaths(rawContent);
     if (paths.length === 0) return { text: rawContent, regions: [] };
 
-    const includes: ResolvedInclude[] = [];
-    for (const rawPath of paths) {
-      const resolved = resolveIncludePath(mainPath, rawPath);
-      let content: string;
-      try {
-        content = await fs.readFile(resolved);
-      } catch {
-        // best-effort: included file unreadable, fall back to raw content without includes
-        return { text: rawContent, regions: [] };
-      }
-      includes.push({ path: resolved, content, children: [] });
+    let includes;
+    try {
+      includes = await resolveIncludesFromContent(mainPath, rawContent, fs);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.warn("[includes] expansion failed, skipping:", message);
+      return { text: rawContent, regions: [] };
     }
 
     const result = flattenIncludesWithSourceMap(rawContent, includes);
     return {
       text: result.text,
-      regions: result.regions.map((region) => ({
-        from: region.from,
-        to: region.to,
-        file: region.file,
-        originalRef: region.originalRef,
-        rawFrom: region.rawFrom,
-        rawTo: region.rawTo,
-      })),
+      regions: result.regions.map(function toRegion(r): IncludeRegion {
+        return {
+          from: r.from,
+          to: r.to,
+          file: r.file,
+          originalRef: r.originalRef,
+          rawFrom: r.rawFrom,
+          rawTo: r.rawTo,
+          children: r.children.map(toRegion),
+        };
+      }),
     };
   }, {
     category: "includes",
