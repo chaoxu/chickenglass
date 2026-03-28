@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="logo-title logo-desc">
+  <title id="logo-title">Coflat logo</title>
+  <desc id="logo-desc">A graph with a square boundary and two interior vertices placed on one diagonal, drawn in black on a transparent background and symmetric with respect to both diagonals.</desc>
+  <g
+    fill="none"
+    stroke="#000"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="10"
+  >
+    <path d="M52 52H204"/>
+    <path d="M52 52V204"/>
+    <path d="M204 52V204"/>
+    <path d="M52 204H204"/>
+    <path d="M52 52L98 98"/>
+    <path d="M158 158L204 204"/>
+    <path d="M204 52L98 98"/>
+    <path d="M204 52L158 158"/>
+    <path d="M52 204L98 98"/>
+    <path d="M52 204L158 158"/>
+  </g>
+  <circle cx="52" cy="52" r="11" fill="#000"/>
+  <circle cx="204" cy="52" r="11" fill="#000"/>
+  <circle cx="52" cy="204" r="11" fill="#000"/>
+  <circle cx="204" cy="204" r="11" fill="#000"/>
+  <circle cx="98" cy="98" r="11" fill="#000"/>
+  <circle cx="158" cy="158" r="11" fill="#000"/>
+</svg>

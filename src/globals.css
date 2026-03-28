@@ -37,6 +37,7 @@
   /* Overlay (semi-transparent background for floating bars) */
   --cf-bg-overlay: rgba(255, 255, 255, 0.82);
   --cf-border-overlay: rgba(228, 228, 231, 0.6);
+  --cf-logo-display-filter: none;
 
   /* Theme-owned special surfaces */
   --cf-block-header-accent: var(--cf-fg);
@@ -140,6 +141,7 @@
   --cf-accent-fg: #09090b;
   --cf-bg-overlay: rgba(10, 10, 10, 0.82);
   --cf-border-overlay: rgba(63, 63, 70, 0.6);
+  --cf-logo-display-filter: invert(1);
 }
 
 /* ── Base styles ────────────────────────────────────────────────────────────── */

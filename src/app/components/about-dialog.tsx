@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { openExternalUrl } from "../../lib/open-link";
+import coflatLogoUrl from "../../assets/coflat-logo.svg";
 
 const GITHUB_URL = "https://github.com/chaoxu/coflat";
 
@@ -54,19 +55,29 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
         className="min-w-[320px] w-full max-w-[480px]"
         aria-describedby={undefined}
       >
-        <DialogHeader>
-          <div className="flex items-baseline gap-2">
-            <DialogTitle className="text-base">Coflat</DialogTitle>
-            <span className="text-sm text-[var(--cf-muted)]">v0.1.0</span>
+        <DialogHeader className="items-start">
+          <div className="flex min-w-0 items-center gap-4">
+            <img
+              src={coflatLogoUrl}
+              alt="Coflat logo"
+              className="h-14 w-14 shrink-0"
+              draggable={false}
+              style={{ filter: "var(--cf-logo-display-filter, none)" }}
+            />
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-baseline gap-2">
+                <DialogTitle className="text-base">Coflat</DialogTitle>
+                <span className="text-sm text-[var(--cf-muted)]">v0.1.0</span>
+              </div>
+              <DialogDescription>
+                Semantic document editor for mathematical writing.
+              </DialogDescription>
+            </div>
           </div>
           <DialogCloseButton aria-label="Close about dialog" />
         </DialogHeader>
 
         <DialogBody className="space-y-5 px-10 py-6">
-          <DialogDescription>
-            Semantic document editor for mathematical writing.
-          </DialogDescription>
-
           <div>
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-[var(--cf-muted)]">
               Built with
