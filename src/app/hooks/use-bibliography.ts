@@ -8,12 +8,32 @@
 import { useRef, useCallback } from "react";
 import { EditorView } from "@codemirror/view";
 import { parseBibTeX } from "../../citations/bibtex-parser";
-import { bibDataEffect } from "../../citations/citation-render";
+import type { CslJsonItem } from "../../citations/bibtex-parser";
+import { bibDataEffect, type BibStore } from "../../citations/citation-render";
 import { CslProcessor } from "../../citations/csl-processor";
 import type { FileSystem } from "../file-manager";
 import { projectPathCandidatesFromDocument } from "../lib/project-paths";
 import { dispatchIfConnected } from "../lib/view-dispatch";
 import { measureAsync, withPerfOperation } from "../perf";
+
+/**
+ * Module-level cache for the last successful bibliography bootstrap.
+ * Keyed by (bibText, cslXml) content so reopening unchanged inputs
+ * skips the expensive parse + processor-creation work.
+ */
+interface BootstrapCacheEntry {
+  readonly bibText: string;
+  readonly cslXml: string | undefined;
+  readonly store: ReadonlyMap<string, CslJsonItem>;
+  readonly cslProcessor: CslProcessor;
+}
+
+let bootstrapCache: BootstrapCacheEntry | null = null;
+
+/** Clear the bootstrap cache (exposed for testing). */
+export function clearBootstrapCache(): void {
+  bootstrapCache = null;
+}
 
 /**
  * Load a bibliography file (and optional CSL style) relative to the document,
@@ -49,11 +69,6 @@ export async function loadBibliography(
         detail: bibPath,
       });
       if (isCurrent && !isCurrent()) return;
-      const items = operation.measureSync("citations.parse_bib", () => parseBibTeX(bibText), {
-        category: "citations",
-        detail: bibPath,
-      });
-      const store = new Map(items.map((item) => [item.id, item]));
 
       let cslXml: string | undefined;
       if (cslPath) {
@@ -68,12 +83,30 @@ export async function loadBibliography(
         }
       }
 
+      // Reuse cached bootstrap artifacts when inputs are unchanged.
+      if (bootstrapCache && bootstrapCache.bibText === bibText && bootstrapCache.cslXml === cslXml) {
+        dispatchIfConnected(
+          view,
+          { effects: bibDataEffect.of({ store: bootstrapCache.store, cslProcessor: bootstrapCache.cslProcessor }) },
+          { context: "Bibliography dispatch error:" },
+        );
+        return;
+      }
+
+      const items = operation.measureSync("citations.parse_bib", () => parseBibTeX(bibText), {
+        category: "citations",
+        detail: bibPath,
+      });
+      const store: BibStore = new Map(items.map((item) => [item.id, item]));
+
       const cslProcessor = await operation.measureAsync(
         "citations.create_processor",
         () => CslProcessor.create(items, cslXml),
         { category: "citations", detail: cslPath || bibPath },
       );
       if (isCurrent && !isCurrent()) return;
+
+      bootstrapCache = { bibText, cslXml, store, cslProcessor };
       dispatchIfConnected(
         view,
         { effects: bibDataEffect.of({ store, cslProcessor }) },
