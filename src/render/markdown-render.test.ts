@@ -1,9 +1,9 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { EditorView } from "@codemirror/view";
+import { Decoration, EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
-import { markdownRenderPlugin } from "./markdown-render";
-import { cursorInRange } from "./render-utils";
-import { createTestView } from "../test-utils";
+import { markdownRenderPlugin, cursorContextKey, markdownShouldUpdate } from "./markdown-render";
+import { cursorInRange, createSimpleViewPlugin } from "./render-utils";
+import { createEditorState, createTestView } from "../test-utils";
 
 /** Create an EditorView with the markdown render plugin at the given cursor position. */
 function createView(doc: string, cursorPos?: number): EditorView {
@@ -184,5 +184,156 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
       view = createView(longLine);
       expect(view.state.doc.toString().length).toBe(10000);
     });
+  });
+});
+
+describe("cursorContextKey", () => {
+  it("returns empty string for plain text", () => {
+    const state = createEditorState("hello world", {
+      cursorPos: 5,
+      extensions: markdown(),
+    });
+    expect(cursorContextKey(state)).toBe("");
+  });
+
+  it("returns a key when cursor is inside bold", () => {
+    const state = createEditorState("**bold** text", {
+      cursorPos: 4,
+      extensions: markdown(),
+    });
+    expect(cursorContextKey(state)).toMatch(/^StrongEmphasis:\d+:\d+$/);
+  });
+
+  it("returns a key when cursor is inside italic", () => {
+    const state = createEditorState("*italic* text", {
+      cursorPos: 3,
+      extensions: markdown(),
+    });
+    expect(cursorContextKey(state)).toMatch(/^Emphasis:\d+:\d+$/);
+  });
+
+  it("returns a key when cursor is inside a heading", () => {
+    const state = createEditorState("# Heading\n\ntext", {
+      cursorPos: 3,
+      extensions: markdown(),
+    });
+    expect(cursorContextKey(state)).toMatch(/^ATXHeading1:\d+:\d+$/);
+  });
+
+  it("returns a key when cursor is inside a link", () => {
+    const state = createEditorState("[link](url) text", {
+      cursorPos: 3,
+      extensions: markdown(),
+    });
+    expect(cursorContextKey(state)).toMatch(/^Link:\d+:\d+$/);
+  });
+
+  it("same key for two positions within the same node", () => {
+    const ext = markdown();
+    const stateA = createEditorState("**bold** text", {
+      cursorPos: 3,
+      extensions: ext,
+    });
+    const stateB = createEditorState("**bold** text", {
+      cursorPos: 5,
+      extensions: ext,
+    });
+    expect(cursorContextKey(stateA)).toBe(cursorContextKey(stateB));
+  });
+
+  it("different key for positions in different nodes", () => {
+    const ext = markdown();
+    const stateInBold = createEditorState("**bold** *italic*", {
+      cursorPos: 3,
+      extensions: ext,
+    });
+    const stateInItalic = createEditorState("**bold** *italic*", {
+      cursorPos: 11,
+      extensions: ext,
+    });
+    expect(cursorContextKey(stateInBold)).not.toBe(cursorContextKey(stateInItalic));
+  });
+});
+
+describe("markdownShouldUpdate (rebuild narrowing, #579)", () => {
+  let view: EditorView;
+
+  afterEach(() => {
+    view?.destroy();
+  });
+
+  /**
+   * Create a view with a counting plugin that uses markdownShouldUpdate.
+   * Performs a warm-up dispatch to flush the spurious focusChanged that
+   * JSDOM produces on the first dispatch after construction.
+   */
+  function createCountingView(doc: string, cursorPos = 0) {
+    let buildCount = 0;
+    const ext = createSimpleViewPlugin(
+      () => { buildCount++; return Decoration.none; },
+      { shouldUpdate: markdownShouldUpdate },
+    );
+    view = createTestView(doc, {
+      cursorPos,
+      extensions: [markdown(), ext],
+    });
+    // Warm-up: first dispatch after construction has spurious focusChanged
+    view.dispatch({ selection: { anchor: cursorPos } });
+    buildCount = 0;
+    return { getBuildCount: () => buildCount };
+  }
+
+  it("does not rebuild when cursor moves within plain text", () => {
+    const { getBuildCount } = createCountingView("hello world", 0);
+    view.dispatch({ selection: { anchor: 5 } });
+    expect(getBuildCount()).toBe(0);
+  });
+
+  it("rebuilds when cursor enters a bold node", () => {
+    const { getBuildCount } = createCountingView("**bold** text", 12);
+    view.dispatch({ selection: { anchor: 4 } });
+    expect(getBuildCount()).toBe(1);
+  });
+
+  it("does not rebuild when cursor moves within the same bold node", () => {
+    const { getBuildCount } = createCountingView("**bold** text", 3);
+    view.dispatch({ selection: { anchor: 5 } });
+    expect(getBuildCount()).toBe(0);
+  });
+
+  it("rebuilds when cursor leaves a bold node", () => {
+    const { getBuildCount } = createCountingView("**bold** text", 4);
+    view.dispatch({ selection: { anchor: 12 } });
+    expect(getBuildCount()).toBe(1);
+  });
+
+  it("rebuilds when cursor moves between different sensitive nodes", () => {
+    const { getBuildCount } = createCountingView("**bold** *italic*", 4);
+    view.dispatch({ selection: { anchor: 11 } });
+    expect(getBuildCount()).toBe(1);
+  });
+
+  it("rebuilds on document change", () => {
+    const { getBuildCount } = createCountingView("hello", 0);
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+    expect(getBuildCount()).toBe(1);
+  });
+
+  it("does not rebuild when cursor moves within a heading", () => {
+    const { getBuildCount } = createCountingView("# Hello World\n\ntext", 3);
+    view.dispatch({ selection: { anchor: 7 } });
+    expect(getBuildCount()).toBe(0);
+  });
+
+  it("rebuilds when cursor enters a heading", () => {
+    const { getBuildCount } = createCountingView("# Hello\n\ntext", 12);
+    view.dispatch({ selection: { anchor: 3 } });
+    expect(getBuildCount()).toBe(1);
+  });
+
+  it("rebuilds when cursor moves from heading to nested inline node", () => {
+    const { getBuildCount } = createCountingView("# Hello **bold**\n\ntext", 3);
+    view.dispatch({ selection: { anchor: 12 } }); // into bold inside heading
+    expect(getBuildCount()).toBe(1);
   });
 });
