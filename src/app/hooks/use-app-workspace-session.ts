@@ -14,24 +14,35 @@ import { isTauri } from "../../lib/tauri";
 // was the only thing preventing Vite from code-splitting it.
 const tauriFs = () => import("../tauri-fs");
 
-/** Immutably merge loaded children into a tree at `dirPath`. */
+/**
+ * Immutably merge loaded children into a tree at `dirPath`.
+ *
+ * Only merges when the target directory's children are still `undefined`
+ * (not yet loaded). This prevents a late `listChildren` response from
+ * overwriting a fully-populated subtree that arrived via `listTree`.
+ *
+ * Returns the same reference when nothing changed, so React state updates
+ * can skip re-renders.
+ */
 export function mergeChildrenIntoTree(
   tree: FileEntry,
   dirPath: string,
   children: FileEntry[],
 ): FileEntry {
   if (tree.path === dirPath) {
+    if (tree.children !== undefined) return tree;
     return { ...tree, children };
   }
   if (!tree.children) return tree;
-  return {
-    ...tree,
-    children: tree.children.map((child) =>
-      child.isDirectory && (child.path === dirPath || dirPath.startsWith(child.path + "/"))
-        ? mergeChildrenIntoTree(child, dirPath, children)
-        : child,
-    ),
-  };
+  let changed = false;
+  const mapped = tree.children.map((child) => {
+    if (!child.isDirectory) return child;
+    if (child.path !== dirPath && !dirPath.startsWith(child.path + "/")) return child;
+    const merged = mergeChildrenIntoTree(child, dirPath, children);
+    if (merged !== child) changed = true;
+    return merged;
+  });
+  return changed ? { ...tree, children: mapped } : tree;
 }
 
 export type SidebarTab = "files" | "outline" | "symbols";
@@ -106,18 +117,35 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     });
   }, [saveWindowState]);
 
-  /** Load the initial tree — shallow when `listChildren` is available. */
-  const loadInitialTree = useCallback(async (): Promise<FileEntry> => {
-    if (fs.listChildren) {
-      const children = await fs.listChildren("");
-      return { name: "project", path: "", isDirectory: true, children };
-    }
-    return fs.listTree();
-  }, [fs]);
-
   const loadWorkspaceContents = useCallback(async (requestId: number): Promise<FileEntry | null> => {
+    if (fs.listChildren) {
+      // Phase 1: shallow tree + config in parallel — sidebar renders immediately.
+      const [shallowChildren, nextProjectConfig] = await Promise.all([
+        measureAsync("sidebar.file_tree_shallow", () => fs.listChildren!(""), {
+          category: "sidebar",
+        }),
+        measureAsync(
+          "startup.project_config",
+          () => loadProjectConfig(fs),
+          { category: "startup" },
+        ),
+      ]);
+      if (requestId !== workspaceRequestRef.current) return null;
+      setFileTree({ name: "project", path: "", isDirectory: true, children: shallowChildren });
+      setProjectConfig(nextProjectConfig);
+
+      // Phase 2: full tree — consumers (default-doc, export) need complete depth.
+      const fullTree = await measureAsync("sidebar.file_tree_full", () => fs.listTree(), {
+        category: "sidebar",
+      });
+      if (requestId !== workspaceRequestRef.current) return null;
+      setFileTree(fullTree);
+      return fullTree;
+    }
+
+    // Browser / demo mode: load the complete tree in one shot.
     const [tree, nextProjectConfig] = await Promise.all([
-      measureAsync("sidebar.file_tree", () => loadInitialTree(), {
+      measureAsync("sidebar.file_tree", () => fs.listTree(), {
         category: "sidebar",
       }),
       measureAsync(
@@ -126,13 +154,11 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         { category: "startup" },
       ),
     ]);
-    if (requestId !== workspaceRequestRef.current) {
-      return null;
-    }
+    if (requestId !== workspaceRequestRef.current) return null;
     setFileTree(tree);
     setProjectConfig(nextProjectConfig);
     return tree;
-  }, [fs, loadInitialTree]);
+  }, [fs]);
 
   const refreshTree = useCallback(async () => {
     const requestId = workspaceRequestRef.current;
@@ -141,7 +167,9 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       return;
     }
     try {
-      const tree = await measureAsync("sidebar.file_tree", () => loadInitialTree(), {
+      // Full recursive load so expanded folders keep their children and
+      // consumers (export, default-doc) still see the complete tree.
+      const tree = await measureAsync("sidebar.file_tree", () => fs.listTree(), {
         category: "sidebar",
       });
       if (requestId !== workspaceRequestRef.current) {
@@ -155,12 +183,15 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       console.error("[workspace] failed to list file tree", e);
       setFileTree(null);
     }
-  }, [loadInitialTree, projectRoot]);
+  }, [fs, projectRoot]);
 
   const loadChildren = useCallback(async (dirPath: string) => {
     if (!fs.listChildren) return;
+    const requestId = workspaceRequestRef.current;
     try {
       const children = await fs.listChildren(dirPath);
+      // Drop stale responses from a previous project.
+      if (requestId !== workspaceRequestRef.current) return;
       setFileTree((prev) => prev ? mergeChildrenIntoTree(prev, dirPath, children) : prev);
     } catch (e: unknown) {
       console.error("[workspace] failed to load children for", dirPath, e);

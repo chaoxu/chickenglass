@@ -7,6 +7,8 @@ import {
   resolveFileTreeKey,
 } from "./use-file-tree-controller";
 import { mergeChildrenIntoTree } from "./use-app-workspace-session";
+import { findDefaultDocumentPath } from "../default-document-path";
+import { collectMdPaths } from "../export";
 
 function file(
   path: string,
@@ -342,5 +344,130 @@ describe("mergeChildrenIntoTree", () => {
 
     const result = mergeChildrenIntoTree(tree, "nonexistent", []);
     expect(result.children).toEqual(tree.children);
+  });
+
+  it("skips merge when directory children are already loaded (#575 review)", () => {
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        {
+          name: "docs",
+          path: "docs",
+          isDirectory: true,
+          children: [
+            { name: "deep", path: "docs/deep", isDirectory: true, children: [] },
+            { name: "notes.md", path: "docs/notes.md", isDirectory: false },
+          ],
+        },
+      ],
+    };
+
+    // A stale listChildren response should NOT overwrite a fully-loaded subtree
+    const staleChildren: FileEntry[] = [
+      { name: "notes.md", path: "docs/notes.md", isDirectory: false },
+    ];
+
+    const result = mergeChildrenIntoTree(tree, "docs", staleChildren);
+    // Tree should be unchanged — docs already has children loaded
+    expect(result).toBe(tree);
+  });
+
+  it("skips merge at root when children are already loaded", () => {
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "readme.md", path: "readme.md", isDirectory: false },
+      ],
+    };
+
+    const result = mergeChildrenIntoTree(tree, "", []);
+    expect(result).toBe(tree);
+  });
+});
+
+describe("partial-tree regression (#575)", () => {
+  it("findDefaultDocumentPath finds a nested .md when none exist at root", () => {
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        {
+          name: "chapters",
+          path: "chapters",
+          isDirectory: true,
+          children: [
+            { name: "intro.md", path: "chapters/intro.md", isDirectory: false },
+          ],
+        },
+      ],
+    };
+    expect(findDefaultDocumentPath(tree)).toBe("chapters/intro.md");
+  });
+
+  it("findDefaultDocumentPath returns null on a shallow tree with only unloaded dirs", () => {
+    // This is the scenario the two-phase load prevents: a shallow tree
+    // where directories have children: undefined.
+    const shallowTree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "chapters", path: "chapters", isDirectory: true },
+      ],
+    };
+    // On a shallow tree, findDefaultDocumentPath can't see nested docs.
+    expect(findDefaultDocumentPath(shallowTree)).toBeNull();
+  });
+
+  it("collectMdPaths collects nested markdown files from a full tree", () => {
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "readme.md", path: "readme.md", isDirectory: false },
+        {
+          name: "docs",
+          path: "docs",
+          isDirectory: true,
+          children: [
+            { name: "guide.md", path: "docs/guide.md", isDirectory: false },
+            {
+              name: "deep",
+              path: "docs/deep",
+              isDirectory: true,
+              children: [
+                { name: "proof.md", path: "docs/deep/proof.md", isDirectory: false },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    expect(collectMdPaths(tree)).toEqual([
+      "readme.md",
+      "docs/guide.md",
+      "docs/deep/proof.md",
+    ]);
+  });
+
+  it("collectMdPaths misses nested files when directories are unloaded", () => {
+    // Verifies the scenario that the two-phase load avoids: if export
+    // received a shallow tree, nested docs would be silently skipped.
+    const shallowTree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "readme.md", path: "readme.md", isDirectory: false },
+        { name: "docs", path: "docs", isDirectory: true },
+      ],
+    };
+    expect(collectMdPaths(shallowTree)).toEqual(["readme.md"]);
   });
 });
