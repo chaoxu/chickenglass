@@ -68,6 +68,9 @@ export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
   const ancestryLenRef = useRef(0);
   ancestryLenRef.current = ancestry.length;
   const visibleRef = useRef(false);
+  // Flag: a scroll event fired but containerRef was null (component was
+  // returning null). The mount-recovery effect picks this up.
+  const pendingShowRef = useRef(false);
 
   const clearTimer = useCallback(() => {
     if (hideTimerRef.current !== null) {
@@ -114,7 +117,15 @@ export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
       if (state.scrollTop === prev.scrollTop) return;
 
       const el = containerRef.current;
-      if (!el) return;
+      if (!el) {
+        // Container not mounted — ancestry may be transitioning from
+        // empty to non-empty. Flag so the mount-recovery effect can
+        // show the breadcrumb after React commits the new ancestry.
+        pendingShowRef.current = true;
+        return;
+      }
+
+      pendingShowRef.current = false;
 
       if (ancestryLenRef.current === 0) {
         clearTimer();
@@ -133,6 +144,20 @@ export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
       clearTimer();
     };
   }, [clearTimer, scheduleHide]);
+
+  // Mount recovery: when ancestry transitions from empty to non-empty,
+  // the scroll subscriber that caused it found containerRef null and
+  // set pendingShowRef. Now that React has committed the container,
+  // make it visible.
+  useEffect(() => {
+    if (ancestry.length === 0 || !pendingShowRef.current) return;
+    pendingShowRef.current = false;
+    const el = containerRef.current;
+    if (!el) return;
+    visibleRef.current = true;
+    applyVisibility(el, true, false);
+    if (!hoveredRef.current) scheduleHide();
+  }, [ancestry, scheduleHide]);
 
   const handleMouseEnter = useCallback(() => {
     hoveredRef.current = true;
