@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { MemoryFileSystem } from "../app/file-manager";
 import {
+  IncludeExpansionCache,
   extractIncludePaths,
   resolveIncludePath,
   resolveIncludes,
@@ -595,5 +596,101 @@ describe("collectIncludedPaths", () => {
       "sec1.md",
       "ch2.md",
     ]);
+  });
+});
+
+describe("IncludeExpansionCache", () => {
+  const rootContent = `::: {.include}\nch1.md\n:::`;
+
+  function makeFs(files: Record<string, string>) {
+    return new MemoryFileSystem(files);
+  }
+
+  it("returns null on empty cache", async () => {
+    const cache = new IncludeExpansionCache();
+    const fs = makeFs({ "ch1.md": "Chapter 1" });
+    expect(await cache.get("main.md", rootContent, fs)).toBeNull();
+  });
+
+  it("returns cached result when nothing changed", async () => {
+    const cache = new IncludeExpansionCache();
+    const fs = makeFs({ "ch1.md": "Chapter 1" });
+    const includes = [{ path: "ch1.md", content: "Chapter 1", children: [] }];
+    const result = { text: "Chapter 1", regions: [] };
+    cache.set("main.md", rootContent, includes, result);
+
+    const hit = await cache.get("main.md", rootContent, fs);
+    expect(hit).toEqual(result);
+  });
+
+  it("misses when root content changes", async () => {
+    const cache = new IncludeExpansionCache();
+    const fs = makeFs({ "ch1.md": "Chapter 1" });
+    const includes = [{ path: "ch1.md", content: "Chapter 1", children: [] }];
+    cache.set("main.md", rootContent, includes, { text: "Chapter 1", regions: [] });
+
+    const newRoot = `::: {.include}\nch2.md\n:::`;
+    expect(await cache.get("main.md", newRoot, fs)).toBeNull();
+  });
+
+  it("misses when an included file changes on disk", async () => {
+    const cache = new IncludeExpansionCache();
+    const fs = makeFs({ "ch1.md": "Chapter 1" });
+    const includes = [{ path: "ch1.md", content: "Chapter 1", children: [] }];
+    cache.set("main.md", rootContent, includes, { text: "Chapter 1", regions: [] });
+
+    // Modify the included file on disk
+    await fs.writeFile("ch1.md", "Chapter 1 — revised");
+    expect(await cache.get("main.md", rootContent, fs)).toBeNull();
+  });
+
+  it("misses when an included file is deleted", async () => {
+    const cache = new IncludeExpansionCache();
+    const fs = makeFs({ "ch1.md": "Chapter 1" });
+    const includes = [{ path: "ch1.md", content: "Chapter 1", children: [] }];
+    cache.set("main.md", rootContent, includes, { text: "Chapter 1", regions: [] });
+
+    await fs.deleteFile("ch1.md");
+    expect(await cache.get("main.md", rootContent, fs)).toBeNull();
+  });
+
+  it("validates nested include files", async () => {
+    const cache = new IncludeExpansionCache();
+    const fs = makeFs({ "ch1.md": "Chapter 1 text", "sec1.md": "Section 1" });
+    const includes = [{
+      path: "ch1.md",
+      content: "Chapter 1 text",
+      children: [{ path: "sec1.md", content: "Section 1", children: [] }],
+    }];
+    const result = { text: "expanded", regions: [] };
+    cache.set("main.md", rootContent, includes, result);
+
+    // Nested file unchanged → hit
+    expect(await cache.get("main.md", rootContent, fs)).toEqual(result);
+
+    // Modify nested file → miss
+    await fs.writeFile("sec1.md", "Section 1 — revised");
+    expect(await cache.get("main.md", rootContent, fs)).toBeNull();
+  });
+
+  it("clear removes all entries", async () => {
+    const cache = new IncludeExpansionCache();
+    const fs = makeFs({ "ch1.md": "Chapter 1" });
+    const includes = [{ path: "ch1.md", content: "Chapter 1", children: [] }];
+    cache.set("main.md", rootContent, includes, { text: "Chapter 1", regions: [] });
+
+    cache.clear();
+    expect(await cache.get("main.md", rootContent, fs)).toBeNull();
+  });
+
+  it("skips file reads on root content mismatch (fast reject)", async () => {
+    const cache = new IncludeExpansionCache();
+    const fs = makeFs({ "ch1.md": "Chapter 1" });
+    const readSpy = vi.spyOn(fs, "readFile");
+    const includes = [{ path: "ch1.md", content: "Chapter 1", children: [] }];
+    cache.set("main.md", rootContent, includes, { text: "Chapter 1", regions: [] });
+
+    await cache.get("main.md", "different content", fs);
+    expect(readSpy).not.toHaveBeenCalled();
   });
 });

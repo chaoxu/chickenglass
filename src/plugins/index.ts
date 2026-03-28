@@ -65,8 +65,10 @@ export {
 export {
   type ResolvedInclude,
   type FlattenRegion,
+  type IncludeExpansionResult,
   IncludeCycleError,
   IncludeNotFoundError,
+  IncludeExpansionCache,
   extractIncludePaths,
   resolveIncludePath,
   resolveIncludes,

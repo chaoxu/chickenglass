@@ -376,3 +376,91 @@ export function collectIncludedPaths(
   }
   return paths;
 }
+
+// ---------------------------------------------------------------------------
+// Include expansion cache
+// ---------------------------------------------------------------------------
+
+/** Cached result of a full include expansion (resolve + flatten). */
+export interface IncludeExpansionResult {
+  readonly text: string;
+  readonly regions: FlattenRegion[];
+}
+
+interface CacheEntry {
+  readonly rootContent: string;
+  /** Content of every transitively included file at cache-write time. */
+  readonly fileContents: ReadonlyMap<string, string>;
+  readonly result: IncludeExpansionResult;
+}
+
+function collectFileContents(
+  includes: readonly ResolvedInclude[],
+  out: Map<string, string>,
+): void {
+  for (const inc of includes) {
+    out.set(inc.path, inc.content);
+    collectFileContents(inc.children, out);
+  }
+}
+
+/**
+ * Cache for include expansion results.
+ *
+ * Keyed on root file path. A cache hit requires:
+ * 1. The root content is identical (same include directives).
+ * 2. Every transitively included file still has the same content on disk.
+ *
+ * Validation reads each included file in parallel but skips all Lezer
+ * parsing, making a cache hit much cheaper than a full expansion.
+ */
+export class IncludeExpansionCache {
+  private readonly entries = new Map<string, CacheEntry>();
+
+  /**
+   * Return a cached expansion result if the root content and all included
+   * files are unchanged. Returns `null` on a cache miss.
+   */
+  async get(
+    rootPath: string,
+    rootContent: string,
+    fs: FileSystem,
+  ): Promise<IncludeExpansionResult | null> {
+    const entry = this.entries.get(rootPath);
+    if (!entry || entry.rootContent !== rootContent) return null;
+
+    // Validate all included files in parallel.
+    const checks = Array.from(entry.fileContents.entries()).map(
+      async ([path, cached]): Promise<boolean> => {
+        try {
+          const exists = await fs.exists(path);
+          if (!exists) return false;
+          const current = await fs.readFile(path);
+          return current === cached;
+        } catch {
+          return false;
+        }
+      },
+    );
+
+    if (!(await Promise.all(checks)).every(Boolean)) return null;
+    return entry.result;
+  }
+
+  /** Store an expansion result in the cache. */
+  set(
+    rootPath: string,
+    rootContent: string,
+    includes: readonly ResolvedInclude[],
+    result: IncludeExpansionResult,
+  ): void {
+    const fileContents = new Map<string, string>();
+    collectFileContents(includes, fileContents);
+    this.entries.set(rootPath, { rootContent, fileContents, result });
+  }
+
+  /** Remove all cached entries. */
+  clear(): void {
+    this.entries.clear();
+  }
+}
