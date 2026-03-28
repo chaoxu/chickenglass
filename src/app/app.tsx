@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
 import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
 import type { FileSystem } from "./file-manager";
 import { SidebarProvider } from "./components/sidebar";
@@ -55,6 +55,13 @@ function AppInner() {
     hasDirtyDocument: editor.hasDirtyDocument,
   });
 
+  // Stable reference for lazy child loading — used by default-doc search
+  // and session persistence so their effects don't re-fire unnecessarily.
+  const listChildrenStable = useMemo(
+    () => fs.listChildren ? (path: string) => fs.listChildren!(path) : undefined,
+    [fs],
+  );
+
   const openProjectInCurrentWindow = useCallback(async (
     projectRoot: string,
     initialPath?: string,
@@ -69,8 +76,9 @@ function AppInner() {
       closeCurrentFile: editor.closeCurrentFile,
       openProjectRoot: workspace.openProjectRoot,
       openFile: editor.openFile,
+      listChildren: listChildrenStable,
     });
-  }, [editor, workspace]);
+  }, [editor, workspace, listChildrenStable]);
 
   const git = useGitStatus(workspace.projectRoot, workspace.refreshTree);
 
@@ -144,6 +152,8 @@ function AppInner() {
 
   useAppSessionPersistence({
     fileTree: workspace.fileTree,
+    listChildren: listChildrenStable,
+    workspaceRequestRef: workspace.workspaceRequestRef,
     workspace,
     editor,
   });

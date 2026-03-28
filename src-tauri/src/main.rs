@@ -39,6 +39,7 @@ fn main() {
             commands::fs::file_exists,
             commands::fs::rename_file,
             commands::fs::list_tree,
+            commands::fs::list_children,
             commands::export::check_pandoc,
             commands::export::export_document,
             commands::watch::watch_directory,

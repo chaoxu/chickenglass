@@ -1,4 +1,4 @@
-import { findDefaultDocumentPath } from "./default-document-path";
+import { findDefaultDocumentPath, findDefaultDocumentPathLazy } from "./default-document-path";
 import type { FileEntry } from "./file-manager";
 
 export interface OpenProjectInCurrentWindowOptions {
@@ -11,6 +11,8 @@ export interface OpenProjectInCurrentWindowOptions {
   closeCurrentFile: () => Promise<boolean>;
   openProjectRoot: (path: string) => Promise<FileEntry | null>;
   openFile: (path: string) => Promise<void>;
+  /** When provided, default-doc search loads subdirectories lazily. */
+  listChildren?: (path: string) => Promise<FileEntry[]>;
 }
 
 export async function openProjectInCurrentWindow({
@@ -23,6 +25,7 @@ export async function openProjectInCurrentWindow({
   closeCurrentFile,
   openProjectRoot,
   openFile,
+  listChildren,
 }: OpenProjectInCurrentWindowOptions): Promise<boolean> {
   const requestId = nextRequestId();
 
@@ -43,7 +46,11 @@ export async function openProjectInCurrentWindow({
     return false;
   }
 
-  const targetPath = initialPath ?? findDefaultDocumentPath(tree);
+  const targetPath = initialPath ?? (
+    listChildren
+      ? await findDefaultDocumentPathLazy(tree, listChildren)
+      : findDefaultDocumentPath(tree)
+  );
   if (!targetPath) {
     return isRequestCurrent(requestId);
   }

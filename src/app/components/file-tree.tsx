@@ -18,6 +18,8 @@ interface FileTreeProps {
   onCreateDir: (path: string) => void;
   /** When provided, tree state (expanded folders, focus, scroll) persists across unmount/remount. */
   persistRef?: React.MutableRefObject<PersistentTreeState>;
+  /** Load children for a directory on expand (lazy tree loading). */
+  onLoadChildren?: (dirPath: string) => void;
 }
 
 export function FileTree({
@@ -30,8 +32,9 @@ export function FileTree({
   onCreateFile,
   onCreateDir,
   persistRef,
+  onLoadChildren,
 }: FileTreeProps) {
-  const controller = useFileTreeController({ root, onSelect, persistRef });
+  const controller = useFileTreeController({ root, onSelect, persistRef, onLoadChildren });
   const containerRef = useRef<HTMLDivElement | null>(null);
   const saveScrollRef = useRef(controller.saveScrollPosition);
   saveScrollRef.current = controller.saveScrollPosition;

@@ -301,6 +301,8 @@ interface UseFileTreeControllerProps {
   onSelect: (path: string) => void;
   /** When provided, tree state survives unmount/remount (tab switches). */
   persistRef?: React.MutableRefObject<PersistentTreeState>;
+  /** Load children for a directory on expand (lazy tree loading). */
+  onLoadChildren?: (dirPath: string) => void;
 }
 
 interface FileTreeController {
@@ -316,6 +318,7 @@ export function useFileTreeController({
   root,
   onSelect,
   persistRef,
+  onLoadChildren,
 }: UseFileTreeControllerProps): FileTreeController {
   const index = useMemo(() => buildTreeIndex(root), [root]);
   const [state, setState] = useState<Partial<TreeState<FileEntry>>>(
@@ -339,6 +342,19 @@ export function useFileTreeController({
           : null,
     }));
   }, [index]);
+
+  // Trigger lazy loading when a directory is expanded but has no children loaded.
+  // Checks ALL expanded items (not just newly expanded ones) so that a tree
+  // refresh that resets children to undefined triggers a reload.
+  useEffect(() => {
+    if (!onLoadChildren) return;
+    for (const id of state.expandedItems ?? []) {
+      const entry = index.entriesById.get(id);
+      if (entry?.isDirectory && entry.children === undefined) {
+        onLoadChildren(id);
+      }
+    }
+  }, [state.expandedItems, index, onLoadChildren]);
 
   const tree = useTree<FileEntry>({
     rootItemId: ROOT_ITEM_ID,

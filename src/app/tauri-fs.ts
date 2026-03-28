@@ -14,6 +14,7 @@ import {
   createFileCommand,
   deleteFileCommand,
   fileExistsCommand,
+  listChildrenCommand,
   listTreeCommand,
   openFolderCommand,
   readFileBinaryCommand,
@@ -77,6 +78,10 @@ export async function revealInFinder(path: string): Promise<void> {
 export class TauriFileSystem implements FileSystem {
   async listTree(): Promise<FileEntry> {
     return listTreeCommand();
+  }
+
+  async listChildren(path: string): Promise<FileEntry[]> {
+    return listChildrenCommand(path);
   }
 
   async readFile(path: string): Promise<string> {
