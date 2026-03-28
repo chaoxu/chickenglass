@@ -7,7 +7,7 @@ import { basename, modKey } from "../lib/utils";
 import type { PaletteCommand } from "../components/command-palette";
 import { useAutoSave } from "./use-auto-save";
 import type { UseDialogsReturn } from "./use-dialogs";
-import { useHotkeys } from "./use-hotkeys";
+import { useHotkeys, type HotkeyBinding } from "./use-hotkeys";
 import { useMenuEvents } from "./use-menu-events";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
@@ -37,6 +37,64 @@ export interface AppOverlayController {
   indexer: BackgroundIndexer;
   openPalette: () => void;
 }
+
+// ── Command registry ─────────────────────────────────────────────────────────
+
+/**
+ * A single command definition that serves as the source of truth for the
+ * command palette, keyboard shortcuts, and native menu event wiring.
+ */
+interface CommandDef {
+  /** Unique command identifier (e.g., "file.save"). */
+  id: string;
+  /** Display label shown in the command palette. */
+  label: string;
+  /** Category for palette grouping. */
+  category?: string;
+  /** Display-only shortcut hint (e.g., "Cmd+S"). */
+  shortcut?: string;
+  /** Hotkey binding string (e.g., "mod+s"). Registers a global keyboard shortcut. */
+  hotkey?: string;
+  /** Tauri menu event ID (e.g., "file_save"). Wires the native menu bar. */
+  menuId?: string;
+  /** Action executed from the command palette or native menu. */
+  action: () => void;
+  /**
+   * Optional hotkey handler override. Some commands need different behavior
+   * when triggered via hotkey (e.g., toggling a dialog) vs palette (opening).
+   * Defaults to `action` when not provided.
+   */
+  hotkeyAction?: () => void;
+}
+
+/** Extract PaletteCommand[] from the registry. */
+function toPaletteCommands(defs: CommandDef[]): PaletteCommand[] {
+  return defs.map(({ id, label, category, shortcut, action }) => ({
+    id, label, category, shortcut, action,
+  }));
+}
+
+/** Extract HotkeyBinding[] from entries that declare a hotkey. */
+function toHotkeyBindings(defs: CommandDef[]): HotkeyBinding[] {
+  const result: HotkeyBinding[] = [];
+  for (const d of defs) {
+    if (d.hotkey) {
+      result.push({ key: d.hotkey, handler: d.hotkeyAction ?? d.action });
+    }
+  }
+  return result;
+}
+
+/** Extract a menuId → handler map from entries that declare a menuId. */
+function toMenuHandlers(defs: CommandDef[]): Record<string, () => void> {
+  const map: Record<string, () => void> = {};
+  for (const d of defs) {
+    if (d.menuId) map[d.menuId] = d.action;
+  }
+  return map;
+}
+
+// ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useAppOverlays({
   fs,
@@ -100,42 +158,74 @@ export function useAppOverlays({
     });
   }, [editor]);
 
-  const commands: PaletteCommand[] = useMemo(() => [
-    { id: "file.save", label: "Save File", category: "File", shortcut: `${modKey}+S`, action: () => { void editor.saveFile(); } },
-    { id: "file.open-file", label: "Open File...", category: "File", shortcut: `${modKey}+O`, action: () => onOpenFile() },
-    { id: "file.save-as", label: "Save As...", category: "File", shortcut: `${modKey}+Shift+S`, action: handleSaveAs },
-    { id: "file.close-file", label: "Close File", category: "File", shortcut: `${modKey}+W`, action: () => { void editor.closeCurrentFile(); } },
-    { id: "file.open-folder", label: "Open Folder...", category: "File", action: () => workspace.handleOpenFolder() },
-    { id: "file.quit", label: "Quit App", category: "File", shortcut: `${modKey}+Q`, action: onQuit },
+  // ── Single command registry ──────────────────────────────────────────────
+  // Each command is defined once. Palette entries, hotkey bindings, and
+  // Tauri menu handlers are all derived from this array.
+
+  const commandDefs: CommandDef[] = useMemo(() => [
+    // ── File ──────────────────────────────────────────────────────────────
+    { id: "file.save", label: "Save File", category: "File", shortcut: `${modKey}+S`, hotkey: "mod+s", menuId: "file_save", action: () => { void editor.saveFile(); } },
+    { id: "file.open-file", label: "Open File...", category: "File", shortcut: `${modKey}+O`, menuId: "file_open_file", action: () => onOpenFile() },
+    { id: "file.save-as", label: "Save As...", category: "File", shortcut: `${modKey}+Shift+S`, hotkey: "mod+shift+s", menuId: "file_save_as", action: handleSaveAs },
+    { id: "file.close-file", label: "Close File", category: "File", shortcut: `${modKey}+W`, menuId: "file_close_tab", action: () => { void editor.closeCurrentFile(); } },
+    { id: "file.open-folder", label: "Open Folder...", category: "File", menuId: "file_open_folder", action: () => workspace.handleOpenFolder() },
+    { id: "file.quit", label: "Quit App", category: "File", shortcut: `${modKey}+Q`, menuId: "file_quit", action: onQuit },
+
+    // ── Format ────────────────────────────────────────────────────────────
+    { id: "format.bold", label: "Toggle Bold", category: "Format", shortcut: `${modKey}+B`, action: () => dispatchFormatEvent("bold") },
+    { id: "format.italic", label: "Toggle Italic", category: "Format", shortcut: `${modKey}+I`, action: () => dispatchFormatEvent("italic") },
+    { id: "format.heading1", label: "Heading 1", category: "Format", action: () => dispatchFormatEvent("heading", { level: 1 }) },
+    { id: "format.heading2", label: "Heading 2", category: "Format", action: () => dispatchFormatEvent("heading", { level: 2 }) },
+    { id: "format.heading3", label: "Heading 3", category: "Format", action: () => dispatchFormatEvent("heading", { level: 3 }) },
+
+    // ── Navigation ────────────────────────────────────────────────────────
+    { id: "nav.go-to-line", label: "Go to Line", category: "Navigation", shortcut: `${modKey}+G`, hotkey: "mod+g", action: () => dialogs.setGotoLineOpen(true), hotkeyAction: () => dialogs.setGotoLineOpen((value) => !value) },
+    { id: "nav.show-files", label: "Show Files Panel", category: "Navigation", action: () => { workspace.setSidebarCollapsed(false); workspace.setSidebarTab("files"); } },
+    { id: "nav.show-outline", label: "Show Outline Panel", category: "Navigation", action: () => { workspace.setSidebarCollapsed(false); workspace.setSidebarTab("outline"); } },
+    { id: "nav.search", label: "Find in Files", category: "Navigation", shortcut: `${modKey}+Shift+F`, hotkey: "mod+shift+f", menuId: "edit_find", action: () => dialogs.setSearchOpen(true), hotkeyAction: () => dialogs.setSearchOpen((value) => !value) },
+    { id: "nav.settings", label: "Settings", category: "Navigation", shortcut: `${modKey}+,`, hotkey: "mod+,", action: () => dialogs.setSettingsOpen(true), hotkeyAction: () => dialogs.setSettingsOpen((value) => !value) },
+
+    // ── View ──────────────────────────────────────────────────────────────
+    { id: "view.toggle-sidebar", label: "Toggle Sidebar", category: "View", shortcut: `${modKey}+\\`, hotkey: "mod+\\", menuId: "view_toggle_sidebar", action: () => workspace.setSidebarCollapsed((value) => !value) },
+    { id: "view.toggle-sidenotes", label: "Toggle Sidenote Margin", category: "View", action: () => workspace.setSidenotesCollapsed((value) => !value) },
+    { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => workspace.setTheme(workspace.resolvedTheme === "dark" ? "light" : "dark") },
+
+    // ── Insert ────────────────────────────────────────────────────────────
+    { id: "insert.image", label: "Insert Image", category: "Insert", action: () => editor.handleInsertImage() },
+
+    // ── Export ────────────────────────────────────────────────────────────
+    { id: "export.html", label: "Export Current File to HTML", category: "Export", menuId: "file_export", action: handleExportHtml },
+    { id: "export.batch-html", label: "Export All Files to HTML", category: "Export", action: handleBatchExportHtml },
+
+    // ── Git ───────────────────────────────────────────────────────────────
+    ...(git.branch && git.hasUpstream ? [
+      { id: "git.pull", label: git.isPulling ? "Pulling..." : "Pull", category: "Git", action: () => { git.pull(); } },
+      { id: "git.push", label: git.isPushing ? "Pushing..." : "Push", category: "Git", action: () => { git.push(); } },
+    ] : []),
+
+    // ── Help ──────────────────────────────────────────────────────────────
+    { id: "help.shortcuts", label: "Keyboard Shortcuts", category: "Help", shortcut: `${modKey}+/`, hotkey: "mod+/", menuId: "help_shortcuts", action: () => dialogs.setShortcutsOpen(true), hotkeyAction: () => dialogs.setShortcutsOpen((value) => !value) },
+    { id: "help.about", label: "About Coflat", category: "Help", menuId: "help_about", action: () => dialogs.setAboutOpen(true) },
+
+    // ── Recent files (palette only) ──────────────────────────────────────
     ...(workspace.recentFiles ?? []).map((path, i) => ({
       id: `file.recent-${i}`,
       label: `Open Recent: ${basename(path)}`,
       category: "File",
       action: () => { void editor.openFile(path); },
     })),
-    { id: "format.bold", label: "Toggle Bold", category: "Format", shortcut: `${modKey}+B`, action: () => dispatchFormatEvent("bold") },
-    { id: "format.italic", label: "Toggle Italic", category: "Format", shortcut: `${modKey}+I`, action: () => dispatchFormatEvent("italic") },
-    { id: "format.heading1", label: "Heading 1", category: "Format", action: () => dispatchFormatEvent("heading", { level: 1 }) },
-    { id: "format.heading2", label: "Heading 2", category: "Format", action: () => dispatchFormatEvent("heading", { level: 2 }) },
-    { id: "format.heading3", label: "Heading 3", category: "Format", action: () => dispatchFormatEvent("heading", { level: 3 }) },
-    { id: "nav.go-to-line", label: "Go to Line", category: "Navigation", shortcut: `${modKey}+G`, action: () => dialogs.setGotoLineOpen(true) },
-    { id: "nav.show-files", label: "Show Files Panel", category: "Navigation", action: () => { workspace.setSidebarCollapsed(false); workspace.setSidebarTab("files"); } },
-    { id: "nav.show-outline", label: "Show Outline Panel", category: "Navigation", action: () => { workspace.setSidebarCollapsed(false); workspace.setSidebarTab("outline"); } },
-    { id: "nav.search", label: "Find in Files", category: "Navigation", shortcut: `${modKey}+Shift+F`, action: () => dialogs.setSearchOpen(true) },
-    { id: "nav.settings", label: "Settings", category: "Navigation", shortcut: `${modKey}+,`, action: () => dialogs.setSettingsOpen(true) },
-    { id: "view.toggle-sidebar", label: "Toggle Sidebar", category: "View", shortcut: `${modKey}+\\`, action: () => workspace.setSidebarCollapsed((value) => !value) },
-    { id: "view.toggle-sidenotes", label: "Toggle Sidenote Margin", category: "View", action: () => workspace.setSidenotesCollapsed((value) => !value) },
-    { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => workspace.setTheme(workspace.resolvedTheme === "dark" ? "light" : "dark") },
-    { id: "insert.image", label: "Insert Image", category: "Insert", action: () => editor.handleInsertImage() },
-    { id: "export.html", label: "Export Current File to HTML", category: "Export", action: handleExportHtml },
-    { id: "export.batch-html", label: "Export All Files to HTML", category: "Export", action: handleBatchExportHtml },
-    ...(git.branch && git.hasUpstream ? [
-      { id: "git.pull", label: git.isPulling ? "Pulling..." : "Pull", category: "Git", action: () => { git.pull(); } },
-      { id: "git.push", label: git.isPushing ? "Pushing..." : "Push", category: "Git", action: () => { git.push(); } },
-    ] : []),
-    { id: "help.shortcuts", label: "Keyboard Shortcuts", category: "Help", shortcut: `${modKey}+/`, action: () => dialogs.setShortcutsOpen(true) },
-    { id: "help.about", label: "About Coflat", category: "Help", action: () => dialogs.setAboutOpen(true) },
   ], [dialogs, editor, workspace, git, handleExportHtml, handleBatchExportHtml, handleSaveAs, onOpenFile, onQuit]);
+
+  // ── Derive palette commands, hotkeys, and menu handlers ────────────────
+  const commands = useMemo(() => toPaletteCommands(commandDefs), [commandDefs]);
+
+  const hotkeys = useMemo(() => [
+    // Palette toggle is a meta-command — not in the palette itself.
+    { key: "mod+shift+p", handler: () => dialogs.setPaletteOpen((value) => !value) },
+    ...toHotkeyBindings(commandDefs),
+  ], [commandDefs, dialogs]);
+
+  const menuHandlers = useMemo(() => toMenuHandlers(commandDefs), [commandDefs]);
 
   useAutoSave(
     editor.hasDirtyDocument,
@@ -146,32 +236,8 @@ export function useAppOverlays({
     suspendAutoSaveVersionRef,
   );
 
-  const hotkeys = useMemo(() => [
-    { key: "mod+s", handler: () => { void editor.saveFile(); } },
-    { key: "mod+shift+s", handler: handleSaveAs },
-    { key: "mod+shift+p", handler: () => dialogs.setPaletteOpen((value) => !value) },
-    { key: "mod+shift+f", handler: () => dialogs.setSearchOpen((value) => !value) },
-    { key: "mod+,", handler: () => dialogs.setSettingsOpen((value) => !value) },
-    { key: "mod+/", handler: () => dialogs.setShortcutsOpen((value) => !value) },
-    { key: "mod+g", handler: () => dialogs.setGotoLineOpen((value) => !value) },
-    { key: "mod+\\", handler: () => workspace.setSidebarCollapsed((value) => !value) },
-  ], [dialogs, editor, handleSaveAs, workspace]);
-
   useHotkeys(hotkeys);
-
-  useMenuEvents({
-    onSave: () => { void editor.saveFile(); },
-    onOpenFile: onOpenFile,
-    onSaveAs: handleSaveAs,
-    onCloseFile: () => { void editor.closeCurrentFile(); },
-    onQuit: onQuit,
-    onToggleSidebar: () => workspace.setSidebarCollapsed((value) => !value),
-    onShowSearch: () => dialogs.setSearchOpen(true),
-    onShowShortcuts: () => dialogs.setShortcutsOpen(true),
-    onAbout: () => dialogs.setAboutOpen(true),
-    onOpenFolder: workspace.handleOpenFolder,
-    onExport: handleExportHtml,
-  });
+  useMenuEvents(menuHandlers);
 
   return {
     commands,
