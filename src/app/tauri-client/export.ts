@@ -1,20 +1,10 @@
 import type { ExportFormat } from "../lib/types";
-import { invokeWithPerf } from "../perf";
+import { tauriCommand, tauriArgs } from "./make-command";
 
 /** Check whether Pandoc is installed. Returns the version string on success. */
-export function checkPandocCommand(): Promise<string> {
-  return invokeWithPerf<string>("check_pandoc");
-}
+export const checkPandocCommand = tauriCommand<string>("check_pandoc");
 
 /** Export a document to PDF or LaTeX via the Rust/Pandoc backend. */
-export function exportDocumentCommand(
-  content: string,
-  format: ExportFormat,
-  outputPath: string,
-): Promise<string> {
-  return invokeWithPerf<string>("export_document", {
-    content,
-    format,
-    outputPath,
-  });
-}
+export const exportDocumentCommand = tauriArgs<string>("export_document")(
+  (content: string, format: ExportFormat, outputPath: string) => ({ content, format, outputPath }),
+);
