@@ -29,6 +29,18 @@ export interface BlockManifestEntry {
   readonly specialBehavior?: SpecialBehavior;
   /** Where caption is placed. Defaults to "above". */
   readonly captionPosition?: CaptionPosition;
+  /**
+   * Display title for the rendered header. Defaults to the name with
+   * the first letter capitalized. Override when the default capitalization
+   * is wrong (e.g. "YouTube" instead of "Youtube").
+   */
+  readonly title?: string;
+  /**
+   * Whether to show a rendered header label. Defaults to true.
+   * Set to false for blocks like blockquote that render as styled
+   * content without a label.
+   */
+  readonly displayHeader?: boolean;
 }
 
 /**
@@ -69,13 +81,13 @@ export const BLOCK_MANIFEST = [
   // Table — own counter, caption below content
   { name: "table",       counterGroup: "table",      numbered: true,  bodyStyle: "normal", captionPosition: "below" },
 
-  // Blockquote — unnumbered, special rendering
-  { name: "blockquote",  counterGroup: undefined,    numbered: false, bodyStyle: "normal", specialBehavior: "blockquote" },
+  // Blockquote — unnumbered, special rendering, no header label
+  { name: "blockquote",  counterGroup: undefined,    numbered: false, bodyStyle: "normal", specialBehavior: "blockquote", displayHeader: false },
 
   // Embed family — unnumbered, embed behavior
   { name: "embed",       counterGroup: undefined,    numbered: false, bodyStyle: "normal", specialBehavior: "embed" },
   { name: "iframe",      counterGroup: undefined,    numbered: false, bodyStyle: "normal", specialBehavior: "embed" },
-  { name: "youtube",     counterGroup: undefined,    numbered: false, bodyStyle: "normal", specialBehavior: "embed" },
+  { name: "youtube",     counterGroup: undefined,    numbered: false, bodyStyle: "normal", specialBehavior: "embed", title: "YouTube" },
   { name: "gist",        counterGroup: undefined,    numbered: false, bodyStyle: "normal", specialBehavior: "embed" },
 ] as const satisfies readonly BlockManifestEntry[];
 

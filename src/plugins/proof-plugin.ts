@@ -1,19 +1,9 @@
 /**
- * Proof block plugin.
+ * Proof block constants.
  *
- * Proofs are unnumbered and render with "Proof" (or "Proof (of Theorem 1)")
- * as the header. The QED symbol (∎) is appended to the header suffix
- * to indicate completion.
+ * The proof plugin itself is generated from BLOCK_MANIFEST in default-plugins.ts.
+ * This file only exports the QED symbol used by the renderer.
  */
-
-import type { BlockPlugin } from "./plugin-types";
-import { createStandardPlugin } from "./plugin-factory";
 
 /** The default QED symbol appended to proof blocks. */
 export const QED_SYMBOL = "\u220E"; // ∎
-
-export const proofPlugin: BlockPlugin = createStandardPlugin({
-  name: "proof",
-  numbered: false,
-  specialBehavior: "qed",
-});

@@ -13,21 +13,16 @@ import {
 } from "./plugin-registry";
 import { computeBlockNumbers } from "./block-counter";
 import { formatBlockHeader, createBlockRender } from "./block-render";
-
-import {
-  theoremPlugin,
-  lemmaPlugin,
-  corollaryPlugin,
-  propositionPlugin,
-  conjecturePlugin,
-  theoremFamilyPlugins,
-} from "./theorem-plugin";
-import { proofPlugin, QED_SYMBOL } from "./proof-plugin";
-import { definitionPlugin } from "./definition-plugin";
-import { remarkPlugin, examplePlugin } from "./remark-plugin";
-import { algorithmPlugin } from "./algorithm-plugin";
-import { defaultPlugins } from "./default-plugins";
+import { defaultPlugins, theoremFamilyPlugins } from "./default-plugins";
+import { QED_SYMBOL } from "./proof-plugin";
 import { BLOCK_MANIFEST, EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
+
+/** Look up a default plugin by name. */
+function pluginByName(name: string) {
+  const p = defaultPlugins.find((p) => p.name === name);
+  if (!p) throw new Error(`No plugin named "${name}"`);
+  return p;
+}
 
 /** Create an EditorState with fenced div parser. */
 function createState(doc: string) {
@@ -103,38 +98,45 @@ describe("theorem-family plugins", () => {
   });
 
   it("theoremPlugin has correct fields", () => {
-    expect(theoremPlugin.name).toBe("theorem");
-    expect(theoremPlugin.title).toBe("Theorem");
+    const theorem = pluginByName("theorem");
+    expect(theorem.name).toBe("theorem");
+    expect(theorem.title).toBe("Theorem");
   });
 
   it("lemmaPlugin has correct fields", () => {
-    expect(lemmaPlugin.name).toBe("lemma");
-    expect(lemmaPlugin.title).toBe("Lemma");
+    const lemma = pluginByName("lemma");
+    expect(lemma.name).toBe("lemma");
+    expect(lemma.title).toBe("Lemma");
   });
 
   it("corollaryPlugin has correct fields", () => {
-    expect(corollaryPlugin.name).toBe("corollary");
-    expect(corollaryPlugin.title).toBe("Corollary");
+    const corollary = pluginByName("corollary");
+    expect(corollary.name).toBe("corollary");
+    expect(corollary.title).toBe("Corollary");
   });
 
   it("propositionPlugin has correct fields", () => {
-    expect(propositionPlugin.name).toBe("proposition");
-    expect(propositionPlugin.title).toBe("Proposition");
+    const proposition = pluginByName("proposition");
+    expect(proposition.name).toBe("proposition");
+    expect(proposition.title).toBe("Proposition");
   });
 
   it("conjecturePlugin has correct fields", () => {
-    expect(conjecturePlugin.name).toBe("conjecture");
-    expect(conjecturePlugin.title).toBe("Conjecture");
+    const conjecture = pluginByName("conjecture");
+    expect(conjecture.name).toBe("conjecture");
+    expect(conjecture.title).toBe("Conjecture");
   });
 });
 
 describe("proofPlugin", () => {
+  const proof = pluginByName("proof");
+
   it("is unnumbered", () => {
-    expect(proofPlugin.numbered).toBe(false);
+    expect(proof.numbered).toBe(false);
   });
 
   it("has no counter", () => {
-    expect(proofPlugin.counter).toBeUndefined();
+    expect(proof.counter).toBeUndefined();
   });
 
   it("QED_SYMBOL is the tombstone character", () => {
@@ -142,7 +144,7 @@ describe("proofPlugin", () => {
   });
 
   it("renders with title when provided", () => {
-    const spec = proofPlugin.render({
+    const spec = proof.render({
       type: "proof",
       title: "of Theorem 1",
     });
@@ -151,19 +153,21 @@ describe("proofPlugin", () => {
   });
 
   it("renders without title", () => {
-    const spec = proofPlugin.render({ type: "proof" });
+    const spec = proof.render({ type: "proof" });
     expect(spec.header).toBe("Proof");
   });
 });
 
 describe("definitionPlugin", () => {
+  const definition = pluginByName("definition");
+
   it("has its own counter group", () => {
-    expect(definitionPlugin.counter).toBe("definition");
-    expect(definitionPlugin.numbered).toBe(true);
+    expect(definition.counter).toBe("definition");
+    expect(definition.numbered).toBe(true);
   });
 
   it("renders correctly", () => {
-    const spec = definitionPlugin.render({
+    const spec = definition.render({
       type: "definition",
       number: 1,
       title: "Continuity",
@@ -174,31 +178,35 @@ describe("definitionPlugin", () => {
 });
 
 describe("remarkPlugin", () => {
+  const remark = pluginByName("remark");
+
   it("is unnumbered", () => {
-    expect(remarkPlugin.numbered).toBe(false);
+    expect(remark.numbered).toBe(false);
   });
 
   it("has no counter", () => {
-    expect(remarkPlugin.counter).toBeUndefined();
+    expect(remark.counter).toBeUndefined();
   });
 
   it("renders correctly", () => {
-    const spec = remarkPlugin.render({ type: "remark" });
+    const spec = remark.render({ type: "remark" });
     expect(spec.header).toBe("Remark");
   });
 });
 
 describe("examplePlugin", () => {
+  const example = pluginByName("example");
+
   it("is unnumbered", () => {
-    expect(examplePlugin.numbered).toBe(false);
+    expect(example.numbered).toBe(false);
   });
 
   it("has no counter", () => {
-    expect(examplePlugin.counter).toBeUndefined();
+    expect(example.counter).toBeUndefined();
   });
 
   it("renders correctly", () => {
-    const spec = examplePlugin.render({
+    const spec = example.render({
       type: "example",
       title: "Cantor's diagonal",
     });
@@ -207,13 +215,15 @@ describe("examplePlugin", () => {
 });
 
 describe("algorithmPlugin", () => {
+  const algorithm = pluginByName("algorithm");
+
   it("has its own counter group", () => {
-    expect(algorithmPlugin.counter).toBe("algorithm");
-    expect(algorithmPlugin.numbered).toBe(true);
+    expect(algorithm.counter).toBe("algorithm");
+    expect(algorithm.numbered).toBe(true);
   });
 
   it("renders correctly", () => {
-    const spec = algorithmPlugin.render({
+    const spec = algorithm.render({
       type: "algorithm",
       number: 2,
       title: "Dijkstra",
@@ -447,7 +457,8 @@ describe("shared counters", () => {
 
 describe("rendering", () => {
   it("theorem renders with number and title", () => {
-    const spec = theoremPlugin.render({
+    const theorem = pluginByName("theorem");
+    const spec = theorem.render({
       type: "theorem",
       number: 1,
       title: "Fermat's Last",
@@ -457,17 +468,17 @@ describe("rendering", () => {
   });
 
   it("lemma renders with number", () => {
-    const spec = lemmaPlugin.render({ type: "lemma", number: 5 });
+    const spec = pluginByName("lemma").render({ type: "lemma", number: 5 });
     expect(spec.header).toBe("Lemma 5");
   });
 
   it("corollary renders with number", () => {
-    const spec = corollaryPlugin.render({ type: "corollary", number: 2 });
+    const spec = pluginByName("corollary").render({ type: "corollary", number: 2 });
     expect(spec.header).toBe("Corollary 2");
   });
 
   it("proposition renders with number and title", () => {
-    const spec = propositionPlugin.render({
+    const spec = pluginByName("proposition").render({
       type: "proposition",
       number: 3,
       title: "Key step",
@@ -476,28 +487,28 @@ describe("rendering", () => {
   });
 
   it("conjecture renders with number", () => {
-    const spec = conjecturePlugin.render({ type: "conjecture", number: 1 });
+    const spec = pluginByName("conjecture").render({ type: "conjecture", number: 1 });
     expect(spec.header).toBe("Conjecture 1");
   });
 
   it("proof renders without number", () => {
-    const spec = proofPlugin.render({ type: "proof" });
+    const spec = pluginByName("proof").render({ type: "proof" });
     expect(spec.header).toBe("Proof");
     expect(spec.className).toBe(CSS.block("proof"));
   });
 
   it("definition renders with number", () => {
-    const spec = definitionPlugin.render({ type: "definition", number: 4 });
+    const spec = pluginByName("definition").render({ type: "definition", number: 4 });
     expect(spec.header).toBe("Definition 4");
   });
 
   it("remark renders without number", () => {
-    const spec = remarkPlugin.render({ type: "remark" });
+    const spec = pluginByName("remark").render({ type: "remark" });
     expect(spec.header).toBe("Remark");
   });
 
   it("example renders without number but with title", () => {
-    const spec = examplePlugin.render({
+    const spec = pluginByName("example").render({
       type: "example",
       title: "A simple case",
     });
@@ -505,7 +516,7 @@ describe("rendering", () => {
   });
 
   it("algorithm renders with number", () => {
-    const spec = algorithmPlugin.render({ type: "algorithm", number: 1 });
+    const spec = pluginByName("algorithm").render({ type: "algorithm", number: 1 });
     expect(spec.header).toBe("Algorithm 1");
   });
 
@@ -521,7 +532,7 @@ describe("rendering", () => {
 
   describe("negative / edge-case", () => {
     it("numbered plugin omits number when number is undefined", () => {
-      const spec = theoremPlugin.render({ type: "theorem" });
+      const spec = pluginByName("theorem").render({ type: "theorem" });
       // Header should still be "Theorem" without a trailing number
       expect(spec.header).toBe("Theorem");
     });
@@ -530,17 +541,17 @@ describe("rendering", () => {
       // proofPlugin.numbered === false, but the render function does not filter
       // number from attrs — that's the caller's responsibility. The header
       // just shows whatever number is passed.
-      const spec = proofPlugin.render({ type: "proof", number: 99 });
+      const spec = pluginByName("proof").render({ type: "proof", number: 99 });
       expect(spec.header).toBe("Proof 99");
     });
 
     it("algorithm render with number 0 does not crash", () => {
-      const spec = algorithmPlugin.render({ type: "algorithm", number: 0 });
+      const spec = pluginByName("algorithm").render({ type: "algorithm", number: 0 });
       expect(spec.header).toBe("Algorithm 0");
     });
 
     it("definition render with very large number does not crash", () => {
-      const spec = definitionPlugin.render({ type: "definition", number: 9999 });
+      const spec = pluginByName("definition").render({ type: "definition", number: 9999 });
       expect(spec.header).toBe("Definition 9999");
     });
   });

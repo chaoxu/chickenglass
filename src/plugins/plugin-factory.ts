@@ -6,7 +6,7 @@
  */
 
 import type { BlockPlugin } from "./plugin-types";
-import type { CaptionPosition, SpecialBehavior } from "../constants/block-manifest";
+import type { BlockManifestEntry, CaptionPosition, SpecialBehavior } from "../constants/block-manifest";
 import { createBlockRender } from "./block-render";
 import { capitalize } from "../lib/utils";
 
@@ -55,10 +55,29 @@ export interface StandardPluginOptions {
  * ```ts
  * const theoremPlugin = createStandardPlugin({
  *   name: "theorem",
- *   counter: THEOREM_COUNTER,
+ *   counter: "theorem",
  * });
  * ```
  */
+
+/**
+ * Create a BlockPlugin directly from a BlockManifestEntry.
+ *
+ * Maps manifest fields to StandardPluginOptions so the manifest is
+ * the single source of truth — no per-plugin file needed.
+ */
+export function pluginFromManifest(entry: BlockManifestEntry): BlockPlugin {
+  return createStandardPlugin({
+    name: entry.name,
+    ...(entry.title !== undefined ? { title: entry.title } : {}),
+    numbered: entry.numbered,
+    ...(entry.counterGroup !== undefined ? { counter: entry.counterGroup } : {}),
+    ...(entry.specialBehavior !== undefined ? { specialBehavior: entry.specialBehavior } : {}),
+    ...(entry.displayHeader !== undefined ? { displayHeader: entry.displayHeader } : {}),
+    ...(entry.captionPosition !== undefined ? { captionPosition: entry.captionPosition } : {}),
+  });
+}
+
 export function createStandardPlugin(options: StandardPluginOptions): BlockPlugin {
   const title = options.title ?? capitalize(options.name);
   const numbered = options.numbered ?? true;
