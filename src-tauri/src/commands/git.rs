@@ -134,15 +134,64 @@ mod tests {
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status().unwrap();
+        // Set a local identity so the commit succeeds on machines without
+        // a global git user.name / user.email.
+        Command::new("git").args(["config", "user.name", "test"])
+            .current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status().unwrap();
+        Command::new("git").args(["config", "user.email", "test@test"])
+            .current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status().unwrap();
+        let commit_ok = Command::new("git").args(["commit", "--allow-empty", "-m", "init"])
+            .current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status().unwrap();
+        assert!(commit_ok.success(), "initial commit must succeed for this test to be meaningful");
+
+        let info = resolve_branch(&dir).expect("should resolve in a normal repo");
+        assert!(!info.branch.is_empty());
+        assert!(!info.is_detached);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_branch_detached_head() {
+        let dir = std::env::temp_dir().join("coflat-test-detached");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Command::new("git").args(["init"]).current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status().unwrap();
+        Command::new("git").args(["config", "user.name", "test"])
+            .current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status().unwrap();
+        Command::new("git").args(["config", "user.email", "test@test"])
+            .current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status().unwrap();
         Command::new("git").args(["commit", "--allow-empty", "-m", "init"])
             .current_dir(&dir)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status().unwrap();
+        Command::new("git").args(["checkout", "--detach", "HEAD"])
+            .current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status().unwrap();
 
-        let info = resolve_branch(&dir).expect("should resolve in a normal repo");
-        assert!(!info.branch.is_empty());
-        assert!(!info.is_detached);
+        let info = resolve_branch(&dir).expect("should resolve in a detached HEAD repo");
+        assert!(!info.branch.is_empty(), "detached branch label should not be empty");
+        assert!(info.is_detached, "should be marked as detached");
         let _ = fs::remove_dir_all(&dir);
     }
 
