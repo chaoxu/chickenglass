@@ -210,6 +210,13 @@ export abstract class RenderWidget extends WidgetType {
   private cachedDOM: HTMLElement | null = null;
 
   /**
+   * Reference to the live DOM element returned by the most recent `toDOM()` call.
+   * Used by `updateSourceRange()` to keep data-source-from/to attributes in sync
+   * when decorations are position-mapped instead of rebuilt.
+   */
+  private liveDOM: HTMLElement | null = null;
+
+  /**
    * Subclasses build their DOM element here.
    *
    * Called by the default `toDOM()` implementation. Widgets that override
@@ -238,6 +245,7 @@ export abstract class RenderWidget extends WidgetType {
   }
 
   protected setSourceRangeAttrs(el: HTMLElement): void {
+    this.liveDOM = el;
     if (this.sourceFrom >= 0) {
       el.dataset.sourceFrom = String(this.sourceFrom);
     }
@@ -246,10 +254,27 @@ export abstract class RenderWidget extends WidgetType {
     }
   }
 
+  /**
+   * Update the source range after a position-mapping operation.
+   *
+   * When a decoration set is mapped through document changes instead of
+   * rebuilt, the widget instances are reused at shifted positions.  This
+   * method patches `sourceFrom`/`sourceTo` and the live DOM's
+   * `data-source-from`/`data-source-to` attributes so that click-to-edit
+   * and search-highlight remain correct.
+   */
+  updateSourceRange(from: number, to: number): void {
+    this.sourceFrom = from;
+    this.sourceTo = to;
+    if (this.liveDOM) {
+      this.liveDOM.dataset.sourceFrom = String(from);
+      this.liveDOM.dataset.sourceTo = String(to);
+    }
+  }
+
   protected bindSourceReveal(
     el: HTMLElement,
     view: EditorView,
-    from = this.sourceFrom,
   ): void {
     el.style.cursor = "pointer";
     el.addEventListener("mousedown", (e) => {
@@ -257,7 +282,9 @@ export abstract class RenderWidget extends WidgetType {
       // Focus first so the focus state field is updated before
       // the selection dispatch triggers decoration rebuilding.
       view.focus();
-      view.dispatch({ selection: { anchor: from }, scrollIntoView: false });
+      // Read sourceFrom at click time (not bind time) so that
+      // position-mapped widgets dispatch to the correct offset.
+      view.dispatch({ selection: { anchor: this.sourceFrom }, scrollIntoView: false });
     });
   }
 

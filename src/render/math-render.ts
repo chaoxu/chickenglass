@@ -13,6 +13,7 @@ import {
   cursorInRange,
   buildDecorations,
   pushWidgetDecoration,
+  RenderWidget,
   MacroAwareWidget,
   editorFocusField,
   focusEffect,
@@ -363,7 +364,18 @@ const mathDecorationField = StateField.define<DecorationSet>({
         && !tr.effects.some((e) => e.is(focusEffect))
         && mathContentUnchanged(regionsBefore, regionsAfter)
       ) {
-        return value.map(tr.changes);
+        const mapped = value.map(tr.changes);
+        // Patch sourceFrom/sourceTo on reused widgets so click-to-edit
+        // and data-source-from/to attributes stay correct after mapping.
+        const cursor = mapped.iter();
+        while (cursor.value) {
+          const widget = cursor.value.spec?.widget;
+          if (widget instanceof RenderWidget) {
+            widget.updateSourceRange(cursor.from, cursor.to);
+          }
+          cursor.next();
+        }
+        return mapped;
       }
       return rebuildMathDecorations(tr.state);
     }
