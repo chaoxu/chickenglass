@@ -147,7 +147,11 @@ export function useEditorDocumentServices({
     imageSaverRef.current = null;
     publishSourceMap(null);
     includeExpansionGenerationRef.current += 1;
-    includeCache.clear();
+    // Note: includeCache is intentionally NOT cleared here. resetServices()
+    // runs on every document switch and unmount, but the cache must survive
+    // across repeated opens to deliver the perf benefit. The cache is
+    // self-validating — get() re-reads every included file and rejects
+    // stale entries automatically.
   }, [bibliography, publishSourceMap]);
 
   const imageFolderRef = useRef<string | undefined>(undefined);
