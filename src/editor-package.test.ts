@@ -9,7 +9,7 @@ interface PackageExport {
 }
 
 interface PackageManifest {
-  readonly exports?: Record<string, PackageExport>;
+  readonly exports?: Record<string, PackageExport | string>;
   readonly files?: readonly string[];
 }
 
@@ -29,5 +29,12 @@ describe("package editor export", () => {
       import: "./dist/editor.mjs",
     });
     expect(packageJson.files).toContain("dist");
+  });
+
+  it("publishes the standalone editor stylesheet", () => {
+    const packageJson = readPackageJson();
+    const cssExport = packageJson.exports?.["./editor/style.css"];
+
+    expect(cssExport).toBe("./dist/editor.css");
   });
 });

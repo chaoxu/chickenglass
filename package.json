@@ -10,7 +10,8 @@
     "./editor": {
       "types": "./dist/editor.d.ts",
       "import": "./dist/editor.mjs"
-    }
+    },
+    "./editor/style.css": "./dist/editor.css"
   },
   "scripts": {
     "dev": "vite",
