@@ -13,12 +13,11 @@ import {
 } from "../../editor";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import type { UseEditorReturn } from "./use-editor";
-import { useEditorSession } from "./use-editor-session";
+import { useEditorSession, type UseEditorSessionReturn } from "./use-editor-session";
 import { useEditorNavigation } from "./use-editor-navigation";
 import type { FileSystem } from "../file-manager";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import type { Settings } from "../lib/types";
-import type { SavePipeline } from "../save-pipeline";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 
 /** Dependencies injected into the shell hook from the top-level app component. */
@@ -45,90 +44,16 @@ export interface AppEditorShellDeps {
  * The full public API surface of the editor shell.
  *
  * Returned by `useAppEditorShell` and consumed by the top-level `App`
- * component (and sub-components via prop-drilling or context). This
- * interface is the single source of truth for what the shell exposes —
- * everything in the app that touches files, editor state, or modes
- * goes through here.
+ * component (and sub-components via prop-drilling or context).
  *
- * Property groups:
- * - **Session / document** (`currentDocument`, `currentPath`, `openFile`, `closeCurrentFile`, …):
- *   Delegates to `useEditorSession`; manages the current document and in-memory buffers.
- * - **Editor state** (`editorState`, `headings`, `handleEditorStateChange`):
- *   Tracks the live CM6 `EditorView` and derived heading list.
- * - **Navigation** (`handleOutlineSelect`, `handleGotoLine`, `handleSearchResult`):
- *   Scrolls the view to a position, a 1-based line/col, or a cross-file search hit.
- * - **Insertion** (`handleSymbolInsert`, `handleInsertImage`):
- *   Inserts content at the cursor without the caller needing a CM6 reference.
- * - **Mode** (`editorMode`, `handleModeChange`, `isMarkdownFile`):
- *   Controls the rich / source mode per file.
- * - **Stats** (`docTextForStats`, `hasDirtyDocument`):
- *   Read-only derived values for the status bar and window-title indicator.
- * - **Drag-and-drop** (`handleDragOver`, `handleDrop`):
- *   Accepts `.md` files dragged onto the editor surface.
+ * Session-level properties (document state, file operations, buffers, dirty
+ * tracking) are inherited from {@link UseEditorSessionReturn}.  Shell-level
+ * additions handle editor state, navigation, insertion, modes, stats, and
+ * drag-and-drop.
  */
-export interface AppEditorShellController {
+export interface AppEditorShellController extends UseEditorSessionReturn {
   /** Singleton plugin manager; registers all default editor plugins on first render. */
   pluginManager: EditorPluginManager;
-
-  /** Save pipeline for coordinating writes, revision tracking, and self-change suppression. */
-  pipeline: SavePipeline;
-
-  // --- Session / current document (delegated to useEditorSession) ---
-
-  /** The single document currently open in this window, or null when empty. */
-  currentDocument: ReturnType<typeof useEditorSession>["currentDocument"];
-  /** Path of the current document, or null when no file is open. */
-  currentPath: ReturnType<typeof useEditorSession>["currentPath"];
-  /** The CM6 document text for the current document (kept in sync with the editor). */
-  editorDoc: ReturnType<typeof useEditorSession>["editorDoc"];
-  /** Replace the CM6 document text programmatically (e.g. after include expansion). */
-  setEditorDoc: ReturnType<typeof useEditorSession>["setEditorDoc"];
-  /**
-   * In-memory text buffers keyed by file path.
-   * Holds the last-known content for the current file and any temporary
-   * replacements during document transitions.
-   */
-  buffers: ReturnType<typeof useEditorSession>["buffers"];
-  /**
-   * Ref to a Map of live document text for the current file.
-   * Unlike `buffers`, this map is updated on every keystroke so it reflects
-   * unsaved changes; used for word-count stats and dirty detection.
-   */
-  liveDocs: ReturnType<typeof useEditorSession>["liveDocs"];
-  /** Returns true if the given path is the current document. */
-  isPathOpen: ReturnType<typeof useEditorSession>["isPathOpen"];
-  /** Returns true if the given path is dirty in the current window. */
-  isPathDirty: ReturnType<typeof useEditorSession>["isPathDirty"];
-  /** Invalidate any in-flight openFile request that should no longer commit. */
-  cancelPendingOpenFile: ReturnType<typeof useEditorSession>["cancelPendingOpenFile"];
-  /** Open a file by path from the filesystem, replacing the current document if needed. */
-  openFile: ReturnType<typeof useEditorSession>["openFile"];
-  /** Open a virtual file from an in-memory string (e.g. a dragged-in `.md` file). */
-  openFileWithContent: ReturnType<typeof useEditorSession>["openFileWithContent"];
-  /** Reload the current document from disk. */
-  reloadFile: ReturnType<typeof useEditorSession>["reloadFile"];
-  /** Persist the active file to the filesystem. */
-  saveFile: ReturnType<typeof useEditorSession>["saveFile"];
-  /** Create a new empty file at the given path. */
-  createFile: ReturnType<typeof useEditorSession>["createFile"];
-  /** Create a new directory at the given path. */
-  createDirectory: ReturnType<typeof useEditorSession>["createDirectory"];
-  /** Close the current document, prompting to save if dirty. */
-  closeCurrentFile: ReturnType<typeof useEditorSession>["closeCurrentFile"];
-  /** Rename a file on disk and update the current-document reference if needed. */
-  handleRename: ReturnType<typeof useEditorSession>["handleRename"];
-  /** Delete a file from disk and close it if it is currently open. */
-  handleDelete: ReturnType<typeof useEditorSession>["handleDelete"];
-  /** Save the active file to a new path chosen by the user. */
-  saveAs: ReturnType<typeof useEditorSession>["saveAs"];
-  /** Decide whether a native window close should proceed. */
-  handleWindowCloseRequest: ReturnType<typeof useEditorSession>["handleWindowCloseRequest"];
-  /** Notify the session that the CM6 document changed (marks the current document dirty, updates liveDocs). */
-  handleDocChange: ReturnType<typeof useEditorSession>["handleDocChange"];
-  /** Sync annotated CM6 document replacements without treating them as user edits. */
-  handleProgrammaticDocChange: ReturnType<typeof useEditorSession>["handleProgrammaticDocChange"];
-  /** Register or clear the include source map for the active document. */
-  setDocumentSourceMap: ReturnType<typeof useEditorSession>["setDocumentSourceMap"];
 
   // --- Editor state ---
 
@@ -250,28 +175,11 @@ export function useAppEditorShell({
   const {
     currentDocument,
     currentPath,
-    editorDoc,
-    setEditorDoc,
-    buffers,
     liveDocs,
-    pipeline,
-    isPathOpen,
-    isPathDirty,
-    cancelPendingOpenFile,
-    handleDocChange,
-    handleProgrammaticDocChange,
-    setDocumentSourceMap,
     openFile,
+    isPathOpen,
     openFileWithContent,
-    reloadFile,
     saveFile: sessionSaveFile,
-    createFile,
-    createDirectory,
-    closeCurrentFile,
-    handleRename,
-    handleDelete,
-    saveAs,
-    handleWindowCloseRequest,
   } = session;
 
   const saveFile = useCallback(async () => {
@@ -398,31 +306,9 @@ export function useAppEditorShell({
   }, [openFileWithContent]);
 
   return {
+    ...session,
     pluginManager,
-    pipeline,
-    currentDocument,
-    currentPath,
-    editorDoc,
-    setEditorDoc,
-    buffers,
-    liveDocs,
-    isPathOpen,
-    isPathDirty,
-    cancelPendingOpenFile,
-    openFile,
-    openFileWithContent,
-    reloadFile,
     saveFile,
-    createFile,
-    createDirectory,
-    closeCurrentFile,
-    handleRename,
-    handleDelete,
-    saveAs,
-    handleWindowCloseRequest,
-    handleDocChange,
-    handleProgrammaticDocChange,
-    setDocumentSourceMap,
     editorState,
     headings,
     handleEditorStateChange,
