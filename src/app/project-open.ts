@@ -1,4 +1,4 @@
-import { findDefaultDocumentPath, findDefaultDocumentPathLazy } from "./default-document-path";
+import { findDefaultDocumentPath } from "./default-document-path";
 import type { FileEntry } from "./file-manager";
 
 export interface OpenProjectInCurrentWindowOptions {
@@ -46,11 +46,7 @@ export async function openProjectInCurrentWindow({
     return false;
   }
 
-  const targetPath = initialPath ?? (
-    listChildren
-      ? await findDefaultDocumentPathLazy(tree, listChildren)
-      : findDefaultDocumentPath(tree)
-  );
+  const targetPath = initialPath ?? await findDefaultDocumentPath(tree, listChildren);
   if (!targetPath) {
     return isRequestCurrent(requestId);
   }
