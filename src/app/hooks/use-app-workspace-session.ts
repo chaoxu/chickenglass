@@ -242,43 +242,54 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     }
   }, [fs]);
 
+  /** Open a Tauri project folder with stale-request protection, set the root,
+   *  and hydrate workspace contents.
+   *
+   *  Shared by startup restore and user-initiated project open.  `onRootSet`
+   *  runs after the folder is validated and the root is set but before workspace
+   *  contents are loaded — use it to clear state that must not leak across
+   *  projects (git status, window state).
+   *
+   *  Returns the file tree on success or null when the folder couldn't be opened
+   *  or a newer request superseded this one.  Stale errors are silently
+   *  swallowed; current errors re-throw. */
+  const openTauriFolder = useCallback(async (
+    path: string,
+    onRootSet?: () => void,
+  ): Promise<FileEntry | null> => {
+    const requestId = ++workspaceRequestRef.current;
+    try {
+      const { openFolderAt } = await tauriFs();
+      const opened = await openFolderAt(path, requestId);
+      if (!opened || requestId !== workspaceRequestRef.current) {
+        return null;
+      }
+      setProjectRoot(path);
+      onRootSet?.();
+      return await loadWorkspaceContents(requestId);
+    } catch (e: unknown) {
+      if (requestId !== workspaceRequestRef.current) return null;
+      throw e;
+    }
+  }, [loadWorkspaceContents]);
+
   const openProjectRoot = useCallback(async (path: string): Promise<FileEntry | null> => {
     if (!isTauri()) return null;
-    const requestId = ++workspaceRequestRef.current;
-    const { openFolderAt } = await tauriFs();
-    const opened = await openFolderAt(path, requestId);
-    if (!opened || requestId !== workspaceRequestRef.current) {
-      return null;
-    }
-    setProjectRoot(path);
-    ++gitStatusRequestRef.current;
-    setGitStatus({});
-    saveWindowState({
-      projectRoot: path,
-      currentDocument: null,
+    return openTauriFolder(path, () => {
+      ++gitStatusRequestRef.current;
+      setGitStatus({});
+      saveWindowState({ projectRoot: path, currentDocument: null });
     });
-    const tree = await loadWorkspaceContents(requestId);
-    return tree;
-  }, [loadWorkspaceContents, saveWindowState]);
+  }, [openTauriFolder, saveWindowState]);
 
   useEffect(() => {
     void withPerfOperation("startup.initial_session", async () => {
       try {
         if (isTauri()) {
           if (windowState.projectRoot) {
-            const requestId = ++workspaceRequestRef.current;
             try {
-              const { openFolderAt } = await tauriFs();
-              const opened = await openFolderAt(windowState.projectRoot, requestId);
-              if (!opened || requestId !== workspaceRequestRef.current) {
-                return;
-              }
-              setProjectRoot(windowState.projectRoot);
-              await loadWorkspaceContents(requestId);
+              await openTauriFolder(windowState.projectRoot);
             } catch (e: unknown) {
-              if (requestId !== workspaceRequestRef.current) {
-                return;
-              }
               console.error("[workspace] failed to restore saved project root", e);
               clearRestoredProjectState();
             }
@@ -297,7 +308,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       console.error("[workspace] initial session startup failed", e);
       setStartupComplete(true);
     });
-  }, [clearRestoredProjectState, loadWorkspaceContents, windowState.projectRoot]);
+  }, [clearRestoredProjectState, openTauriFolder, loadWorkspaceContents, windowState.projectRoot]);
 
   const handleOpenFolder = useCallback(() => {
     if (!isTauri()) return;
