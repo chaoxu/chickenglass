@@ -5,7 +5,7 @@ import {
   type DecorationSet,
   EditorView,
 } from "@codemirror/view";
-import "katex/dist/katex.min.css";
+import katexStyles from "katex/dist/katex.min.css?inline";
 import { CSS } from "../constants/css-classes";
 import {
   cursorInRange,
@@ -26,6 +26,20 @@ import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
 export { renderKatexToHtml } from "./inline-shared";
 
 export const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
+
+const KATEX_STYLE_ID = "cf-katex-styles";
+
+function ensureKatexStyles(): void {
+  if (typeof document === "undefined") return;
+  if (document.getElementById(KATEX_STYLE_ID)) return;
+
+  const styleEl = document.createElement("style");
+  styleEl.id = KATEX_STYLE_ID;
+  styleEl.textContent = katexStyles;
+  document.head.appendChild(styleEl);
+}
+
+ensureKatexStyles();
 
 /** A pair of opening and closing delimiters for math expressions. */
 interface MathDelimiterPair {
