@@ -35,11 +35,16 @@ interface BreadcrumbsProps {
 /** Milliseconds to wait after last scroll before fading out. */
 const FADE_DELAY_MS = 2000;
 
-/** Compare ancestry arrays by heading positions. */
-function ancestryEqual(a: HeadingEntry[], b: HeadingEntry[]): boolean {
+/** Compare ancestry arrays by all heading fields (pos, level, text, number). */
+export function ancestryEqual(a: HeadingEntry[], b: HeadingEntry[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
-    if (a[i].pos !== b[i].pos) return false;
+    if (
+      a[i].pos !== b[i].pos ||
+      a[i].level !== b[i].level ||
+      a[i].text !== b[i].text ||
+      a[i].number !== b[i].number
+    ) return false;
   }
   return true;
 }
