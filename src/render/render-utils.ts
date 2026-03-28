@@ -281,9 +281,17 @@ export abstract class RenderWidget extends WidgetType {
       // Focus first so the focus state field is updated before
       // the selection dispatch triggers decoration rebuilding.
       view.focus();
-      // Read sourceFrom at click time (not bind time) so that
-      // position-mapped widgets dispatch to the correct offset.
-      view.dispatch({ selection: { anchor: this.sourceFrom }, scrollIntoView: false });
+      // Derive position from CM6's live DOM tracking (always correct
+      // after decoration mapping or rebuild) rather than the widget's
+      // sourceFrom field, which can become stale when CM6 reuses
+      // widget DOM across decoration rebuilds without calling toDOM().
+      let pos: number;
+      try {
+        pos = view.posAtDOM(el);
+      } catch {
+        pos = this.sourceFrom;
+      }
+      view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
     });
   }
 

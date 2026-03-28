@@ -11,7 +11,7 @@ import { MathWidget, collectMathRanges, stripMathDelimiters, getDisplayMathConte
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
 import { createMockEditorView, createTestView } from "../test-utils";
-import { focusEffect } from "./render-utils";
+import { focusEffect, widgetSourceMap } from "./render-utils";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { renderInlineMarkdown } from "./inline-render";
 
@@ -112,6 +112,25 @@ describe("MathWidget (inline)", () => {
     const b = new MathWidget("x", "$x$", true);
     expect(a.eq(b)).toBe(false);
   });
+
+  it("click dispatches to updated position after updateSourceRange (position mapping)", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new MathWidget("x^2", "$x^2$", false);
+    widget.sourceFrom = 410;
+    widget.sourceTo = 415;
+
+    const el = widget.toDOM(view);
+    widget.updateSourceRange(411, 416);
+
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(dispatch).toHaveBeenCalledWith({
+      selection: { anchor: 411 },
+      scrollIntoView: false,
+    });
+  });
 });
 
 describe("MathWidget (display)", () => {
@@ -209,6 +228,45 @@ describe("MathWidget (display)", () => {
       selection: { anchor: 8 },
       scrollIntoView: false,
     });
+  });
+
+  it("click dispatches to updated position after updateSourceRange (position mapping)", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new MathWidget("x^2", "$$x^2$$", true);
+    widget.sourceFrom = 950;
+    widget.sourceTo = 1022;
+
+    const el = widget.toDOM(view);
+    // Simulate position mapping: an insert before the widget shifted it by 1
+    widget.updateSourceRange(951, 1023);
+
+    const content = el.querySelector<HTMLElement>(`.${CSS.mathDisplayContent}`);
+    content?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(dispatch).toHaveBeenCalledWith({
+      selection: { anchor: 951 },
+      scrollIntoView: false,
+    });
+  });
+
+  it("widgetSourceMap returns updated positions after updateSourceRange", () => {
+    const widget = new MathWidget("x^2", "$$x^2$$", true);
+    widget.sourceFrom = 950;
+    widget.sourceTo = 1022;
+
+    const el = widget.toDOM();
+    // After toDOM, widgetSourceMap should point el → widget
+    expect(widgetSourceMap.get(el)).toBe(widget);
+    expect(widgetSourceMap.get(el)!.sourceFrom).toBe(950);
+
+    // Simulate position mapping
+    widget.updateSourceRange(951, 1023);
+
+    // widgetSourceMap still points to the same widget, now with updated fields
+    expect(widgetSourceMap.get(el)!.sourceFrom).toBe(951);
+    expect(widgetSourceMap.get(el)!.sourceTo).toBe(1023);
   });
 });
 
