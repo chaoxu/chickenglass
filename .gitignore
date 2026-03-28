@@ -15,4 +15,5 @@ src-tauri/gen/schemas/
 .playwright-cli/
 demo/*
 !demo/embed/
+!demo/cogirth/
 __pycache__/

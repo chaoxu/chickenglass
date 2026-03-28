@@ -158,7 +158,7 @@ function compareEntrySets(baselineEntries, currentEntries, thresholdPct, minDelt
   return comparisons;
 }
 
-function compareMetricSets(baselineEntries, currentEntries, thresholdPct, minDeltaValue) {
+function compareMetricSets(baselineEntries, currentEntries, thresholdPct, minDeltaMs) {
   const currentByKey = new Map(
     currentEntries.map((entry) => [`${entry.name}:${entry.unit ?? "count"}`, entry]),
   );
@@ -179,6 +179,8 @@ function compareMetricSets(baselineEntries, currentEntries, thresholdPct, minDel
       continue;
     }
 
+    const unit = baseline.unit ?? "count";
+    const minDelta = unit === "ms" ? minDeltaMs : 0;
     const meanDelta = roundMs(current.meanValue - baseline.meanValue);
     const maxDelta = roundMs(current.maxValue - baseline.maxValue);
     const meanPct = baseline.meanValue > 0
@@ -187,8 +189,8 @@ function compareMetricSets(baselineEntries, currentEntries, thresholdPct, minDel
     const maxPct = baseline.maxValue > 0
       ? (current.maxValue - baseline.maxValue) / baseline.maxValue
       : (maxDelta > 0 ? 1 : 0);
-    const meanRegressed = meanDelta > minDeltaValue && meanPct > thresholdPct;
-    const maxRegressed = maxDelta > minDeltaValue && maxPct > thresholdPct;
+    const meanRegressed = meanDelta > minDelta && meanPct > thresholdPct;
+    const maxRegressed = maxDelta > minDelta && maxPct > thresholdPct;
 
     comparisons.push({
       key,
@@ -230,7 +232,7 @@ export function comparePerfRegressionReports(
     baselineReport.metrics ?? [],
     currentReport.metrics ?? [],
     thresholdPct,
-    0,
+    minDeltaMs,
   );
   const regressions = [...frontend, ...backend, ...metrics].filter((entry) => entry.status === "regressed");
 
