@@ -266,7 +266,7 @@ export function analyzeMath(doc: TextSource, tree: Tree): MathSemantics[] {
 }
 
 export function analyzeReferences(doc: TextSource, tree: Tree): ReferenceSemantics[] {
-  return [...buildReferenceSlice(doc, extractStructuralWindow(doc, tree)).references];
+  return [...buildReferenceSlice(extractStructuralWindow(doc, tree)).references];
 }
 
 // ---------------------------------------------------------------------------

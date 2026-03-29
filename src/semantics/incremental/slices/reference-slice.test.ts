@@ -24,7 +24,7 @@ function createState(doc: string): EditorState {
 
 function analyzeReferenceSlice(state: EditorState): ReferenceSlice {
   const source = editorStateTextSource(state);
-  return buildReferenceSlice(source, extractStructuralWindow(source, syntaxTree(state)));
+  return buildReferenceSlice(extractStructuralWindow(source, syntaxTree(state)));
 }
 
 function extractDirtyReferenceWindows(
@@ -89,10 +89,8 @@ describe("reference slice", () => {
     const delta = buildSemanticDelta(tr);
     const after = mergeReferenceSlice(
       before,
-      editorStateTextSource(tr.state),
       delta,
       extractDirtyReferenceWindows(tr.state, delta),
-      extractStructuralWindow(editorStateTextSource(tr.state), syntaxTree(tr.state)).excludedRanges,
     );
 
     expect(after.bracketedReferences).toHaveLength(3);
@@ -105,7 +103,7 @@ describe("reference slice", () => {
     );
   });
 
-  it("recomputes narrative references through the global fallback after exclusion edits", () => {
+  it("incrementally merges narrative references after exclusion edits", () => {
     const doc = [
       "Lead @lead.",
       "[@skip]@afterLink",
@@ -129,10 +127,8 @@ describe("reference slice", () => {
 
       slice = mergeReferenceSlice(
         slice,
-        editorStateTextSource(tr.state),
         delta,
         extractDirtyReferenceWindows(tr.state, delta),
-        extractStructuralWindow(editorStateTextSource(tr.state), syntaxTree(tr.state)).excludedRanges,
       );
       state = tr.state;
     }
@@ -163,5 +159,75 @@ describe("reference slice", () => {
     expect(slice.referenceByFrom.get(slice.references[0].from)).toBe(slice.references[0]);
     expect(slice.referenceByFrom.get(slice.references[1].from)).toBe(slice.references[1]);
     expect(slice.referenceByFrom.get(slice.references[2].from)).toBe(slice.references[2]);
+  });
+
+  it("excludes narrative references inside code spans", () => {
+    const doc = "See `@hidden` and @visible ref.";
+    const slice = analyzeReferenceSlice(createState(doc));
+
+    expect(slice.narrativeReferences.map((r) => r.ids[0])).toEqual(["visible"]);
+  });
+
+  it("excludes narrative references inside inline math", () => {
+    const doc = "See $@hidden$ and @visible ref.";
+    const slice = analyzeReferenceSlice(createState(doc));
+
+    expect(slice.narrativeReferences.map((r) => r.ids[0])).toEqual(["visible"]);
+  });
+
+  it("excludes narrative references inside links", () => {
+    const doc = "See [@hidden] and @visible ref.";
+    const slice = analyzeReferenceSlice(createState(doc));
+
+    expect(slice.narrativeReferences.map((r) => r.ids[0])).toEqual(["visible"]);
+  });
+
+  it("preserves narrative references outside dirty windows on incremental update", () => {
+    const doc = [
+      "First @alpha ref.",
+      "",
+      "Second @beta ref.",
+    ].join("\n");
+    const state = createState(doc);
+    const before = analyzeReferenceSlice(state);
+
+    expect(before.narrativeReferences.map((r) => r.ids[0])).toEqual(["alpha", "beta"]);
+
+    const insertAt = doc.indexOf("Second");
+    const tr = state.update({
+      changes: { from: insertAt, insert: "Prefix " },
+    });
+    const delta = buildSemanticDelta(tr);
+    const after = mergeReferenceSlice(
+      before,
+      delta,
+      extractDirtyReferenceWindows(tr.state, delta),
+    );
+
+    expect(after.narrativeReferences.map((r) => r.ids[0])).toEqual(["alpha", "beta"]);
+    // The first narrative ref should be identity-preserved (untouched window).
+    expect(after.narrativeReferences[0]).toBe(before.narrativeReferences[0]);
+  });
+
+  it("picks up a new narrative reference inserted via incremental update", () => {
+    const doc = "See @alpha ref.";
+    const state = createState(doc);
+    const before = analyzeReferenceSlice(state);
+
+    expect(before.narrativeReferences.map((r) => r.ids[0])).toEqual(["alpha"]);
+
+    // Insert a second narrative reference in the same line.
+    const insertAt = doc.indexOf(" ref.");
+    const tr = state.update({
+      changes: { from: insertAt, insert: " and @beta" },
+    });
+    const delta = buildSemanticDelta(tr);
+    const after = mergeReferenceSlice(
+      before,
+      delta,
+      extractDirtyReferenceWindows(tr.state, delta),
+    );
+
+    expect(after.narrativeReferences.map((r) => r.ids[0])).toEqual(["alpha", "beta"]);
   });
 });

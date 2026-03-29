@@ -15,7 +15,10 @@ import {
   findTrailingHeadingAttributes,
   hasUnnumberedHeadingAttributes,
 } from "../document";
-import { matchBracketedReference } from "../reference-parts";
+import {
+  matchBracketedReference,
+  NARRATIVE_REFERENCE_RE,
+} from "../reference-parts";
 
 export interface StructuralWindow {
   readonly from: number;
@@ -38,6 +41,7 @@ export interface StructuralWindowExtraction {
   readonly equations: EquationStructure[];
   readonly mathRegions: MathSemantics[];
   readonly bracketedRefs: ReferenceSemantics[];
+  readonly narrativeRefs: ReferenceSemantics[];
   readonly excludedRanges: ExcludedRange[];
 }
 
@@ -52,6 +56,7 @@ function createStructuralWindowExtraction(): StructuralWindowExtraction {
     equations: [],
     mathRegions: [],
     bracketedRefs: [],
+    narrativeRefs: [],
     excludedRanges: [],
   };
 }
@@ -311,6 +316,118 @@ function collectLink(
   result.excludedRanges.push({ from: node.from, to: node.to });
 }
 
+/**
+ * Collect narrative `@id` references within a window by running
+ * {@link NARRATIVE_REFERENCE_RE} on the window text and filtering out
+ * matches that fall inside any excluded range (code, math, links).
+ *
+ * One character of document context before the window is included so
+ * the regex lookbehind `(?<![[@\w])` works correctly at the boundary.
+ */
+export function collectNarrativeRefsInWindow(
+  doc: TextSource,
+  excludedRanges: readonly ExcludedRange[],
+  range: StructuralWindow,
+  result: ReferenceSemantics[],
+): void {
+  const prefixLen = range.from > 0 ? 1 : 0;
+  const text = doc.slice(range.from - prefixLen, range.to);
+
+  NARRATIVE_REFERENCE_RE.lastIndex = prefixLen;
+  let match: RegExpExecArray | null;
+  let exIdx = 0;
+  while ((match = NARRATIVE_REFERENCE_RE.exec(text)) !== null) {
+    const from = range.from - prefixLen + match.index;
+    const to = from + match[0].length;
+
+    // Linear sweep: advance past excluded ranges that end before this match.
+    while (exIdx < excludedRanges.length && excludedRanges[exIdx].to <= from) {
+      exIdx++;
+    }
+    if (
+      exIdx < excludedRanges.length
+      && from >= excludedRanges[exIdx].from
+      && to <= excludedRanges[exIdx].to
+    ) {
+      continue;
+    }
+
+    result.push({
+      from,
+      to,
+      bracketed: false,
+      ids: [match[1]],
+      locators: [undefined],
+    });
+  }
+}
+
+/**
+ * Find the start of the paragraph containing `pos` — walk backward past
+ * non-blank lines until we hit a blank line or the document start.
+ * In standard markdown, inline elements (code spans, math, links) cannot
+ * cross blank-line paragraph breaks, so the paragraph is the natural
+ * maximum scope for exclusion changes.
+ */
+function paragraphStart(doc: TextSource, pos: number): number {
+  let line = doc.lineAt(pos);
+  while (line.from > 0) {
+    const prev = doc.lineAt(line.from - 1);
+    if (prev.from === prev.to || prev.text.trim() === "") break;
+    line = prev;
+  }
+  return line.from;
+}
+
+/** Find the end of the paragraph containing `pos`. */
+function paragraphEnd(doc: TextSource, pos: number): number {
+  let line = doc.lineAt(pos);
+  while (line.to < doc.length) {
+    const next = doc.lineAt(line.to + 1);
+    if (next.from === next.to || next.text.trim() === "") break;
+    line = next;
+  }
+  return line.to;
+}
+
+/**
+ * Compute the narrative-ref extraction range and its fresh excluded ranges.
+ *
+ * Expands to the full paragraph containing the dirty window, then walks the
+ * Lezer tree for that range to collect current InlineCode/InlineMath/Link
+ * exclusions.  Paragraph scope is correct because inline elements cannot
+ * cross blank-line paragraph breaks in standard markdown — this ensures
+ * that any exclusion change within the paragraph (grow, shrink, appear, or
+ * disappear) is caught, even when the edit doesn't overlap the old
+ * exclusion range.
+ */
+export function computeNarrativeExtractionRange(
+  doc: TextSource,
+  tree: Tree,
+  windowFrom: number,
+  windowTo: number,
+): { range: StructuralWindow; excludedRanges: readonly ExcludedRange[] } {
+  const from = paragraphStart(doc, windowFrom);
+  const to = paragraphEnd(doc, windowTo);
+
+  const excludedRanges: ExcludedRange[] = [];
+  tree.iterate({
+    from,
+    to,
+    enter(node) {
+      switch (node.type.name) {
+        case "InlineCode":
+        case "InlineMath":
+        case "Link":
+          excludedRanges.push({ from: node.from, to: node.to });
+          break;
+      }
+    },
+  });
+
+  return { range: { from, to }, excludedRanges };
+}
+
 export function collectStructuralWindow(
   doc: TextSource,
   tree: Tree,
@@ -354,6 +471,8 @@ export function collectStructuralWindow(
       }
     },
   });
+
+  collectNarrativeRefsInWindow(doc, result.excludedRanges, range, result.narrativeRefs);
 
   return result;
 }

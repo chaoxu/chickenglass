@@ -33,6 +33,7 @@ import {
 import {
   buildReferenceSlice,
   mergeReferenceSlice,
+  type NarrativeRefExtraction,
   type ReferenceSlice,
 } from "./slices/reference-slice";
 import {
@@ -41,7 +42,10 @@ import {
   type PositionMapper,
 } from "./merge-utils";
 import type { DirtyWindow, SemanticDelta } from "./types";
+import type { ReferenceSemantics } from "../document";
 import {
+  collectNarrativeRefsInWindow,
+  computeNarrativeExtractionRange,
   extractStructuralWindow,
   type ExcludedRange,
   type StructuralWindowExtraction,
@@ -213,7 +217,7 @@ function buildSlicesAndExcludedRanges(doc: TextSource, tree: Tree): FullBuildRes
       fencedDivSlice,
       equationSlice: buildEquationSlice(structural),
       mathSlice: buildMathSlice(structural),
-      referenceSlice: buildReferenceSlice(doc, structural),
+      referenceSlice: buildReferenceSlice(structural),
       includeSlice: createIncludeSlice(
         deriveIncludeSlice(doc, fencedDivSlice.fencedDivs),
       ),
@@ -404,7 +408,7 @@ export function updateDocumentAnalysis(
     delta.mapOldToNew,
     false,
   );
-  const expandedDirtyWindows = expandDirtyWindows(
+  const expandedForExcluded = expandDirtyWindows(
     expandedForEquations,
     previousState.excludedRanges,
     delta.mapOldToNew,
@@ -415,7 +419,7 @@ export function updateDocumentAnalysis(
     doc,
     tree,
     changes,
-    expandedDirtyWindows,
+    expandedForExcluded,
   );
   const dirtyExtractions = extractedDirtyWindows.map(({ window, range, structural }) => ({
     window: {
@@ -474,12 +478,27 @@ export function updateDocumentAnalysis(
     delta,
     dirtyExtractions,
   );
+
+  // Compute narrative ref extractions using fresh tree-based excluded ranges.
+  // Line-expands so the regex sees full-line context, then further expands
+  // when the tree reports excluded nodes (InlineCode/InlineMath/Link) that
+  // extend beyond the initial line range — e.g. a multi-line code span
+  // created by a delimiter edit.
+  const narrativeExtractions: NarrativeRefExtraction[] = dirtyExtractions.map(
+    ({ window }) => {
+      const { range, excludedRanges: freshExcluded } =
+        computeNarrativeExtractionRange(doc, tree, window.fromNew, window.toNew);
+      const narrativeRefs: ReferenceSemantics[] = [];
+      collectNarrativeRefsInWindow(doc, freshExcluded, range, narrativeRefs);
+      return { window: range, narrativeRefs };
+    },
+  );
+
   const referenceSlice = mergeReferenceSlice(
     previousState.referenceSlice,
-    doc,
     delta,
     dirtyExtractions,
-    excludedRanges,
+    narrativeExtractions,
   );
 
   return finalizeDocumentAnalysis(previous, {

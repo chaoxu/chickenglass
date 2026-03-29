@@ -1,15 +1,11 @@
-import type { ReferenceSemantics, TextSource } from "../../document";
-import { NARRATIVE_REFERENCE_RE } from "../../reference-parts";
+import type { ReferenceSemantics } from "../../document";
 import {
   mapRangeObject,
   replaceOverlappingRanges,
   type PositionMapper,
 } from "../merge-utils";
 import type { DirtyWindow, SemanticDelta } from "../types";
-import type {
-  ExcludedRange,
-  StructuralWindowExtraction,
-} from "../window-extractor";
+import type { StructuralWindowExtraction } from "../window-extractor";
 
 export interface ReferenceSlice {
   readonly bracketedReferences: readonly ReferenceSemantics[];
@@ -20,70 +16,12 @@ export interface ReferenceSlice {
 
 export interface DirtyReferenceWindowExtraction {
   readonly window: Pick<DirtyWindow, "fromNew" | "toNew">;
-  readonly structural: Pick<StructuralWindowExtraction, "bracketedRefs">;
+  readonly structural: Pick<StructuralWindowExtraction, "bracketedRefs" | "narrativeRefs">;
 }
 
-/**
- * Binary search for the rightmost excluded range whose `from` <= target.
- * Returns the index, or -1 if no such range exists.
- */
-function upperBoundExcluded(
-  ranges: readonly ExcludedRange[],
-  target: number,
-): number {
-  let lo = 0;
-  let hi = ranges.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (ranges[mid].from <= target) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo - 1;
-}
-
-/**
- * Check whether position [from, to] falls inside any excluded range,
- * using binary search on the sorted array. O(log n) per check.
- */
-function isInsideExcludedRange(
-  sorted: readonly ExcludedRange[],
-  from: number,
-  to: number,
-): boolean {
-  const idx = upperBoundExcluded(sorted, from);
-  if (idx < 0) return false;
-  return from >= sorted[idx].from && to <= sorted[idx].to;
-}
-
-/**
- * Narrative references still depend on full-document regex scanning with
- * excluded structural ranges, so this remains an explicit global fallback.
- */
-export function collectNarrativeReferences(
-  doc: TextSource,
-  excludedRanges: readonly ExcludedRange[],
-): ReferenceSemantics[] {
-  const refs: ReferenceSemantics[] = [];
-  const fullText = doc.slice(0, doc.length);
-  const sorted = excludedRanges.slice().sort((a, b) => a.from - b.from);
-
-  NARRATIVE_REFERENCE_RE.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = NARRATIVE_REFERENCE_RE.exec(fullText)) !== null) {
-    const from = match.index;
-    const to = from + match[0].length;
-    if (isInsideExcludedRange(sorted, from, to)) continue;
-
-    refs.push({
-      from,
-      to,
-      bracketed: false,
-      ids: [match[1]],
-      locators: [undefined],
-    });
-  }
-
-  return refs;
+export interface NarrativeRefExtraction {
+  readonly window: { readonly from: number; readonly to: number };
+  readonly narrativeRefs: readonly ReferenceSemantics[];
 }
 
 function sortReferences(
@@ -93,43 +31,6 @@ function sortReferences(
   const references = [...bracketedReferences, ...narrativeReferences];
   references.sort((a, b) => (a.from - b.from) || (a.to - b.to));
   return references;
-}
-
-function sameStringArray(
-  left: readonly string[],
-  right: readonly string[],
-): boolean {
-  if (left.length !== right.length) return false;
-  return left.every((value, index) => value === right[index]);
-}
-
-function sameLocatorArray(
-  left: readonly (string | undefined)[],
-  right: readonly (string | undefined)[],
-): boolean {
-  if (left.length !== right.length) return false;
-  return left.every((value, index) => value === right[index]);
-}
-
-function sameReference(
-  left: ReferenceSemantics,
-  right: ReferenceSemantics,
-): boolean {
-  return (
-    left.from === right.from
-    && left.to === right.to
-    && left.bracketed === right.bracketed
-    && sameStringArray(left.ids, right.ids)
-    && sameLocatorArray(left.locators, right.locators)
-  );
-}
-
-function sameReferenceArray(
-  left: readonly ReferenceSemantics[],
-  right: readonly ReferenceSemantics[],
-): boolean {
-  if (left.length !== right.length) return false;
-  return left.every((value, index) => sameReference(value, right[index]));
 }
 
 function deltaMapper(delta: Pick<SemanticDelta, "mapOldToNew">): PositionMapper {
@@ -174,42 +75,56 @@ export function createReferenceSlice(
 }
 
 export function buildReferenceSlice(
-  doc: TextSource,
-  structural: Pick<StructuralWindowExtraction, "bracketedRefs" | "excludedRanges">,
+  structural: Pick<StructuralWindowExtraction, "bracketedRefs" | "narrativeRefs">,
 ): ReferenceSlice {
   return createReferenceSlice(
     structural.bracketedRefs,
-    collectNarrativeReferences(doc, structural.excludedRanges),
+    structural.narrativeRefs,
   );
 }
 
 export function mergeReferenceSlice(
   previous: ReferenceSlice,
-  doc: TextSource,
   delta: Pick<SemanticDelta, "mapOldToNew">,
   dirtyExtractions: readonly DirtyReferenceWindowExtraction[],
-  excludedRanges: readonly ExcludedRange[],
+  narrativeExtractions?: readonly NarrativeRefExtraction[],
 ): ReferenceSlice {
+  const mapper = deltaMapper(delta);
   let bracketedReferences = mapBracketedReferences(
     previous.bracketedReferences,
-    deltaMapper(delta),
+    mapper,
+  );
+  let narrativeReferences = mapBracketedReferences(
+    previous.narrativeReferences,
+    mapper,
   );
 
   for (const { window, structural: dirtyStructural } of dirtyExtractions) {
+    const windowRange = { from: window.fromNew, to: window.toNew };
     bracketedReferences = replaceOverlappingRanges(
       bracketedReferences,
-      { from: window.fromNew, to: window.toNew },
+      windowRange,
       dirtyStructural.bracketedRefs,
     );
   }
 
-  const nextNarrativeReferences = collectNarrativeReferences(doc, excludedRanges);
-  const narrativeReferences = sameReferenceArray(
-    previous.narrativeReferences,
-    nextNarrativeReferences,
-  )
-    ? previous.narrativeReferences
-    : nextNarrativeReferences;
+  if (narrativeExtractions) {
+    for (const { window, narrativeRefs } of narrativeExtractions) {
+      narrativeReferences = replaceOverlappingRanges(
+        narrativeReferences,
+        window,
+        narrativeRefs,
+      );
+    }
+  } else {
+    for (const { window, structural: dirtyStructural } of dirtyExtractions) {
+      narrativeReferences = replaceOverlappingRanges(
+        narrativeReferences,
+        { from: window.fromNew, to: window.toNew },
+        dirtyStructural.narrativeRefs,
+      );
+    }
+  }
 
   if (
     bracketedReferences === previous.bracketedReferences
