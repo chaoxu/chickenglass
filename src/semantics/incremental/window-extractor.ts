@@ -324,7 +324,7 @@ function collectLink(
  * One character of document context before the window is included so
  * the regex lookbehind `(?<![[@\w])` works correctly at the boundary.
  */
-function collectNarrativeRefsInWindow(
+export function collectNarrativeRefsInWindow(
   doc: TextSource,
   excludedRanges: readonly ExcludedRange[],
   range: StructuralWindow,

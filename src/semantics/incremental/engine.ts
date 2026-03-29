@@ -33,6 +33,7 @@ import {
 import {
   buildReferenceSlice,
   mergeReferenceSlice,
+  type NarrativeRefExtraction,
   type ReferenceSlice,
 } from "./slices/reference-slice";
 import {
@@ -41,7 +42,9 @@ import {
   type PositionMapper,
 } from "./merge-utils";
 import type { DirtyWindow, SemanticDelta } from "./types";
+import type { ReferenceSemantics } from "../document";
 import {
+  collectNarrativeRefsInWindow,
   extractStructuralWindow,
   type ExcludedRange,
   type StructuralWindowExtraction,
@@ -410,18 +413,12 @@ export function updateDocumentAnalysis(
     delta.mapOldToNew,
     true,
   );
-  const expandedDirtyWindows = expandDirtyWindows(
-    expandedForExcluded,
-    previousState.referenceSlice.narrativeReferences,
-    delta.mapOldToNew,
-    false,
-  );
   const extractedDirtyWindows = extractDirtyFencedDivWindows(
     previousState.fencedDivSlice.fencedDivs,
     doc,
     tree,
     changes,
-    expandedDirtyWindows,
+    expandedForExcluded,
   );
   const dirtyExtractions = extractedDirtyWindows.map(({ window, range, structural }) => ({
     window: {
@@ -480,10 +477,31 @@ export function updateDocumentAnalysis(
     delta,
     dirtyExtractions,
   );
+
+  // Compute narrative ref extractions using line-expanded windows so the
+  // regex sees full line context (needed when `@` or trailing chars are at
+  // the dirty-window boundary).  We use the merged excludedRanges so that
+  // code/math/link exclusions are correct across the whole document.
+  const narrativeExtractions: NarrativeRefExtraction[] = dirtyExtractions.map(
+    ({ window }) => {
+      const lineFrom = doc.lineAt(window.fromNew).from;
+      const lineTo = doc.lineAt(window.toNew).to;
+      const narrativeRefs: ReferenceSemantics[] = [];
+      collectNarrativeRefsInWindow(
+        doc,
+        excludedRanges,
+        { from: lineFrom, to: lineTo },
+        narrativeRefs,
+      );
+      return { window: { from: lineFrom, to: lineTo }, narrativeRefs };
+    },
+  );
+
   const referenceSlice = mergeReferenceSlice(
     previousState.referenceSlice,
     delta,
     dirtyExtractions,
+    narrativeExtractions,
   );
 
   return finalizeDocumentAnalysis(previous, {

@@ -19,6 +19,11 @@ export interface DirtyReferenceWindowExtraction {
   readonly structural: Pick<StructuralWindowExtraction, "bracketedRefs" | "narrativeRefs">;
 }
 
+export interface NarrativeRefExtraction {
+  readonly window: { readonly from: number; readonly to: number };
+  readonly narrativeRefs: readonly ReferenceSemantics[];
+}
+
 function sortReferences(
   bracketedReferences: readonly ReferenceSemantics[],
   narrativeReferences: readonly ReferenceSemantics[],
@@ -82,6 +87,7 @@ export function mergeReferenceSlice(
   previous: ReferenceSlice,
   delta: Pick<SemanticDelta, "mapOldToNew">,
   dirtyExtractions: readonly DirtyReferenceWindowExtraction[],
+  narrativeExtractions?: readonly NarrativeRefExtraction[],
 ): ReferenceSlice {
   const mapper = deltaMapper(delta);
   let bracketedReferences = mapBracketedReferences(
@@ -100,11 +106,24 @@ export function mergeReferenceSlice(
       windowRange,
       dirtyStructural.bracketedRefs,
     );
-    narrativeReferences = replaceOverlappingRanges(
-      narrativeReferences,
-      windowRange,
-      dirtyStructural.narrativeRefs,
-    );
+  }
+
+  if (narrativeExtractions) {
+    for (const { window, narrativeRefs } of narrativeExtractions) {
+      narrativeReferences = replaceOverlappingRanges(
+        narrativeReferences,
+        window,
+        narrativeRefs,
+      );
+    }
+  } else {
+    for (const { window, structural: dirtyStructural } of dirtyExtractions) {
+      narrativeReferences = replaceOverlappingRanges(
+        narrativeReferences,
+        { from: window.fromNew, to: window.toNew },
+        dirtyStructural.narrativeRefs,
+      );
+    }
   }
 
   if (

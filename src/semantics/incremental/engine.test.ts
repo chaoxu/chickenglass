@@ -195,6 +195,60 @@ describe("incremental document analysis engine", () => {
     }
   });
 
+  it("detects a narrative reference created by inserting @ before plain text", () => {
+    // Repro from PR #693 review (round 2): insert "@" before "beta".
+    // Without line-boundary expansion the dirty window covers only the
+    // inserted "@", the regex can't see "beta", and no ref is found.
+    const state = createState("See beta ref.");
+    const before = analyze(state);
+    expect(before.references.length).toBe(0);
+
+    const pos = state.doc.toString().indexOf("beta");
+    const tr = state.update({ changes: { from: pos, insert: "@" } });
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      syntaxTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+
+    const rebuilt = analyze(tr.state);
+    expect(rebuilt.references.length).toBe(1);
+    expect(after.references.length).toBe(rebuilt.references.length);
+    for (let i = 0; i < rebuilt.references.length; i++) {
+      expect(after.references[i]).toEqual(rebuilt.references[i]);
+    }
+  });
+
+  it("extends a narrative reference when appending to its trailing boundary", () => {
+    // Repro from PR #693 review (round 2): insert "a" after "@bet".
+    // Without line-boundary expansion the dirty window is at the boundary
+    // of the old token, the regex finds only the old "@bet" extent, and
+    // the updated "@beta" is missed.
+    const state = createState("See @bet ref.");
+    const before = analyze(state);
+    expect(before.references.length).toBe(1);
+    expect(before.references[0]).toEqual(
+      expect.objectContaining({ ids: ["bet"], bracketed: false }),
+    );
+
+    const insertPos = state.doc.toString().indexOf("@bet") + "@bet".length;
+    const tr = state.update({ changes: { from: insertPos, insert: "a" } });
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      syntaxTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+
+    const rebuilt = analyze(tr.state);
+    expect(rebuilt.references.length).toBe(1);
+    expect(after.references.length).toBe(rebuilt.references.length);
+    for (let i = 0; i < rebuilt.references.length; i++) {
+      expect(after.references[i]).toEqual(rebuilt.references[i]);
+    }
+  });
+
   it("keeps revisions off the public enumerable DocumentAnalysis shape", () => {
     const analysis = analyze(createState("Alpha $x$."));
 
