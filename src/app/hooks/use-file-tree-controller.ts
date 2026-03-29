@@ -292,7 +292,7 @@ const DEFAULT_PERSISTENT_STATE: PersistentTreeState = {
  * Create a ref that holds persistent file tree state across
  * unmount/remount cycles. Call once in a component that never unmounts.
  */
-export function usePersistentTreeState(): React.MutableRefObject<PersistentTreeState> {
+export function usePersistentTreeState(): React.RefObject<PersistentTreeState> {
   return useRef<PersistentTreeState>(DEFAULT_PERSISTENT_STATE);
 }
 
@@ -300,7 +300,7 @@ interface UseFileTreeControllerProps {
   root: FileEntry | null;
   onSelect: (path: string) => void;
   /** When provided, tree state survives unmount/remount (tab switches). */
-  persistRef?: React.MutableRefObject<PersistentTreeState>;
+  persistRef?: React.RefObject<PersistentTreeState>;
   /** Load children for a directory on expand (lazy tree loading). */
   onLoadChildren?: (dirPath: string) => void;
 }
