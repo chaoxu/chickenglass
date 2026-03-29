@@ -363,31 +363,55 @@ export function collectNarrativeRefsInWindow(
 }
 
 /**
- * Walk the Lezer tree within a range and collect excluded ranges
- * (InlineCode, InlineMath, Link).  This provides fresh, authoritative
- * exclusion data from the current parse tree — unlike merged excluded
- * ranges which can be stale when a delimiter edit outside the dirty
- * window changes which regions are code/math/link spans.
+ * Compute the narrative-ref extraction range and its fresh excluded ranges.
+ *
+ * Starts from line-expanded dirty-window coordinates, then iteratively
+ * expands when the Lezer tree reports InlineCode/InlineMath/Link nodes
+ * that extend beyond the current range (e.g. a multi-line code span
+ * created by a delimiter edit on a different line).  Returns the
+ * stabilised range together with the authoritative excluded ranges from
+ * the current parse tree.
  */
-export function collectExcludedRangesInWindow(
+export function computeNarrativeExtractionRange(
+  doc: TextSource,
   tree: Tree,
-  range: StructuralWindow,
-): ExcludedRange[] {
-  const result: ExcludedRange[] = [];
-  tree.iterate({
-    from: range.from,
-    to: range.to,
-    enter(node) {
-      switch (node.type.name) {
-        case "InlineCode":
-        case "InlineMath":
-        case "Link":
-          result.push({ from: node.from, to: node.to });
-          break;
+  windowFrom: number,
+  windowTo: number,
+): { range: StructuralWindow; excludedRanges: readonly ExcludedRange[] } {
+  let from = doc.lineAt(windowFrom).from;
+  let to = doc.lineAt(windowTo).to;
+
+  for (;;) {
+    const excludedRanges: ExcludedRange[] = [];
+    tree.iterate({
+      from,
+      to,
+      enter(node) {
+        switch (node.type.name) {
+          case "InlineCode":
+          case "InlineMath":
+          case "Link":
+            excludedRanges.push({ from: node.from, to: node.to });
+            break;
+        }
+      },
+    });
+
+    let expanded = false;
+    for (const ex of excludedRanges) {
+      if (ex.from < from) {
+        from = doc.lineAt(ex.from).from;
+        expanded = true;
       }
-    },
-  });
-  return result;
+      if (ex.to > to) {
+        to = doc.lineAt(ex.to).to;
+        expanded = true;
+      }
+    }
+    if (!expanded) {
+      return { range: { from, to }, excludedRanges };
+    }
+  }
 }
 
 export function collectStructuralWindow(

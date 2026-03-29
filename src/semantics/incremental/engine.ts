@@ -44,8 +44,8 @@ import {
 import type { DirtyWindow, SemanticDelta } from "./types";
 import type { ReferenceSemantics } from "../document";
 import {
-  collectExcludedRangesInWindow,
   collectNarrativeRefsInWindow,
+  computeNarrativeExtractionRange,
   extractStructuralWindow,
   type ExcludedRange,
   type StructuralWindowExtraction,
@@ -479,21 +479,18 @@ export function updateDocumentAnalysis(
     dirtyExtractions,
   );
 
-  // Compute narrative ref extractions using line-expanded windows so the
-  // regex sees full line context (needed when `@` or trailing chars are at
-  // the dirty-window boundary).  We use fresh excluded ranges from the Lezer
-  // tree rather than the merged excludedRanges — a delimiter edit outside
-  // the dirty window can change which regions are code/math/link spans, and
-  // the merged ranges would be stale for those regions.
+  // Compute narrative ref extractions using fresh tree-based excluded ranges.
+  // Line-expands so the regex sees full-line context, then further expands
+  // when the tree reports excluded nodes (InlineCode/InlineMath/Link) that
+  // extend beyond the initial line range — e.g. a multi-line code span
+  // created by a delimiter edit.
   const narrativeExtractions: NarrativeRefExtraction[] = dirtyExtractions.map(
     ({ window }) => {
-      const lineFrom = doc.lineAt(window.fromNew).from;
-      const lineTo = doc.lineAt(window.toNew).to;
-      const lineRange = { from: lineFrom, to: lineTo };
-      const freshExcluded = collectExcludedRangesInWindow(tree, lineRange);
+      const { range, excludedRanges: freshExcluded } =
+        computeNarrativeExtractionRange(doc, tree, window.fromNew, window.toNew);
       const narrativeRefs: ReferenceSemantics[] = [];
-      collectNarrativeRefsInWindow(doc, freshExcluded, lineRange, narrativeRefs);
-      return { window: lineRange, narrativeRefs };
+      collectNarrativeRefsInWindow(doc, freshExcluded, range, narrativeRefs);
+      return { window: range, narrativeRefs };
     },
   );
 

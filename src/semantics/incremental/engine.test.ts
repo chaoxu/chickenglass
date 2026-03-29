@@ -280,6 +280,34 @@ describe("incremental document analysis engine", () => {
     }
   });
 
+  it("excludes a narrative ref when a delimiter edit creates a multi-line code span", () => {
+    // Repro from PR #693 review (round 4): insert a backtick before "code"
+    // so a new InlineCode span covers lines 1–2, hiding @hidden.
+    // Without expanding the narrative extraction range beyond the edit line,
+    // the incremental path still returns @hidden.
+    const state = createState([
+      "Start code",
+      "@hidden` end",
+      "tail",
+    ].join("\n"));
+    const before = analyze(state);
+
+    const insertPos = state.doc.toString().indexOf("code");
+    const tr = state.update({ changes: { from: insertPos, insert: "`" } });
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      syntaxTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+
+    const rebuilt = analyze(tr.state);
+    expect(after.references.length).toBe(rebuilt.references.length);
+    for (let i = 0; i < rebuilt.references.length; i++) {
+      expect(after.references[i]).toEqual(rebuilt.references[i]);
+    }
+  });
+
   it("keeps revisions off the public enumerable DocumentAnalysis shape", () => {
     const analysis = analyze(createState("Alpha $x$."));
 
