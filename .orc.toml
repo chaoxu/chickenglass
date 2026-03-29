@@ -1,7 +1,3 @@
-solver = "claude"
-reviewers = ["claude"]
-retries = 5
-
 verify = [
   "npm ci",
   "npx tsc --noEmit",
