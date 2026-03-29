@@ -363,14 +363,43 @@ export function collectNarrativeRefsInWindow(
 }
 
 /**
+ * Find the start of the paragraph containing `pos` — walk backward past
+ * non-blank lines until we hit a blank line or the document start.
+ * In standard markdown, inline elements (code spans, math, links) cannot
+ * cross blank-line paragraph breaks, so the paragraph is the natural
+ * maximum scope for exclusion changes.
+ */
+function paragraphStart(doc: TextSource, pos: number): number {
+  let line = doc.lineAt(pos);
+  while (line.from > 0) {
+    const prev = doc.lineAt(line.from - 1);
+    if (prev.from === prev.to || prev.text.trim() === "") break;
+    line = prev;
+  }
+  return line.from;
+}
+
+/** Find the end of the paragraph containing `pos`. */
+function paragraphEnd(doc: TextSource, pos: number): number {
+  let line = doc.lineAt(pos);
+  while (line.to < doc.length) {
+    const next = doc.lineAt(line.to + 1);
+    if (next.from === next.to || next.text.trim() === "") break;
+    line = next;
+  }
+  return line.to;
+}
+
+/**
  * Compute the narrative-ref extraction range and its fresh excluded ranges.
  *
- * Starts from line-expanded dirty-window coordinates, then iteratively
- * expands when the Lezer tree reports InlineCode/InlineMath/Link nodes
- * that extend beyond the current range (e.g. a multi-line code span
- * created by a delimiter edit on a different line).  Returns the
- * stabilised range together with the authoritative excluded ranges from
- * the current parse tree.
+ * Expands to the full paragraph containing the dirty window, then walks the
+ * Lezer tree for that range to collect current InlineCode/InlineMath/Link
+ * exclusions.  Paragraph scope is correct because inline elements cannot
+ * cross blank-line paragraph breaks in standard markdown — this ensures
+ * that any exclusion change within the paragraph (grow, shrink, appear, or
+ * disappear) is caught, even when the edit doesn't overlap the old
+ * exclusion range.
  */
 export function computeNarrativeExtractionRange(
   doc: TextSource,
@@ -378,40 +407,25 @@ export function computeNarrativeExtractionRange(
   windowFrom: number,
   windowTo: number,
 ): { range: StructuralWindow; excludedRanges: readonly ExcludedRange[] } {
-  let from = doc.lineAt(windowFrom).from;
-  let to = doc.lineAt(windowTo).to;
+  const from = paragraphStart(doc, windowFrom);
+  const to = paragraphEnd(doc, windowTo);
 
-  for (;;) {
-    const excludedRanges: ExcludedRange[] = [];
-    tree.iterate({
-      from,
-      to,
-      enter(node) {
-        switch (node.type.name) {
-          case "InlineCode":
-          case "InlineMath":
-          case "Link":
-            excludedRanges.push({ from: node.from, to: node.to });
-            break;
-        }
-      },
-    });
+  const excludedRanges: ExcludedRange[] = [];
+  tree.iterate({
+    from,
+    to,
+    enter(node) {
+      switch (node.type.name) {
+        case "InlineCode":
+        case "InlineMath":
+        case "Link":
+          excludedRanges.push({ from: node.from, to: node.to });
+          break;
+      }
+    },
+  });
 
-    let expanded = false;
-    for (const ex of excludedRanges) {
-      if (ex.from < from) {
-        from = doc.lineAt(ex.from).from;
-        expanded = true;
-      }
-      if (ex.to > to) {
-        to = doc.lineAt(ex.to).to;
-        expanded = true;
-      }
-    }
-    if (!expanded) {
-      return { range: { from, to }, excludedRanges };
-    }
-  }
+  return { range: { from, to }, excludedRanges };
 }
 
 export function collectStructuralWindow(

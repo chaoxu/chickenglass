@@ -308,6 +308,36 @@ describe("incremental document analysis engine", () => {
     }
   });
 
+  it("exposes a narrative ref when a delimiter edit shrinks a multi-line exclusion", () => {
+    // Repro from PR #693 review (round 5): insert "$" at offset 1 in
+    // "foo $bar\n@baz\n$ qux".  The old 3-line InlineMath shrinks to a
+    // short span on line 1 ("$oo $"), exposing @baz on line 2.
+    // Without paragraph-scope expansion, the narrative extraction covers
+    // only line 1 and never re-scans @baz.
+    const state = createState([
+      "foo $bar",
+      "@baz",
+      "$ qux",
+    ].join("\n"));
+    const before = analyze(state);
+    expect(before.references.length).toBe(0);
+
+    const tr = state.update({ changes: { from: 1, insert: "$" } });
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      syntaxTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+
+    const rebuilt = analyze(tr.state);
+    expect(rebuilt.references.length).toBeGreaterThanOrEqual(1);
+    expect(after.references.length).toBe(rebuilt.references.length);
+    for (let i = 0; i < rebuilt.references.length; i++) {
+      expect(after.references[i]).toEqual(rebuilt.references[i]);
+    }
+  });
+
   it("keeps revisions off the public enumerable DocumentAnalysis shape", () => {
     const analysis = analyze(createState("Alpha $x$."));
 
