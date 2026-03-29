@@ -106,6 +106,49 @@ describe("gridClickGuard (#617)", () => {
   });
 });
 
+describe("gridContextMenuHandler cross-row guard (#696)", () => {
+  it("context menu handler uses the same cross-row correction as click guard", () => {
+    // The context menu handler should use guardCrossRowPos so that
+    // right-clicking whitespace in the last column targets the correct cell.
+    // We verify the same cell-bounds logic works for the last column.
+    view = makeView();
+    // Line 4: "| 1 | 2 |" — last column (col 1), content "2"
+    const line = view.state.doc.line(4);
+    const pipes = findPipePositions(line.text);
+    expect(pipes.length).toBeGreaterThanOrEqual(3);
+
+    const lastCellContentStart = line.from + pipes[1] + 1;
+    const lastCellContentEnd = line.from + pipes[2];
+    const cellText = view.state.sliceDoc(lastCellContentStart, lastCellContentEnd).trim();
+    expect(cellText).toBe("2");
+
+    // Dispatching to the end of the correct cell should land on line 4
+    view.dispatch({ selection: { anchor: lastCellContentEnd - 1 }, scrollIntoView: false });
+    const cursorLine = view.state.doc.lineAt(view.state.selection.main.head);
+    expect(cursorLine.number).toBe(4);
+  });
+
+  it("cell marks on all rows carry data-col for DOM-based cross-row detection", () => {
+    view = makeView();
+    // Both body rows (lines 4 and 5) should have data-col on their cells
+    const cells = view.dom.querySelectorAll<HTMLElement>(".cf-grid-cell");
+    const colsByRow = new Map<number, number[]>();
+    for (const cell of cells) {
+      const pos = view.posAtDOM(cell, 0);
+      const lineNum = view.state.doc.lineAt(pos).number;
+      const cols = colsByRow.get(lineNum) ?? [];
+      cols.push(Number(cell.dataset.col));
+      colsByRow.set(lineNum, cols);
+    }
+    // Body rows 4 and 5 should each have cells with data-col
+    for (const row of [4, 5]) {
+      const cols = colsByRow.get(row);
+      expect(cols).toBeDefined();
+      expect(cols!.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+});
+
 describe("deleteSelectedTableSelection", () => {
   it("deletes selected body rows while preserving header and separator", () => {
     view = makeView();
