@@ -15,7 +15,10 @@ import {
   findTrailingHeadingAttributes,
   hasUnnumberedHeadingAttributes,
 } from "../document";
-import { matchBracketedReference } from "../reference-parts";
+import {
+  matchBracketedReference,
+  NARRATIVE_REFERENCE_RE,
+} from "../reference-parts";
 
 export interface StructuralWindow {
   readonly from: number;
@@ -38,6 +41,7 @@ export interface StructuralWindowExtraction {
   readonly equations: EquationStructure[];
   readonly mathRegions: MathSemantics[];
   readonly bracketedRefs: ReferenceSemantics[];
+  readonly narrativeRefs: ReferenceSemantics[];
   readonly excludedRanges: ExcludedRange[];
 }
 
@@ -52,6 +56,7 @@ function createStructuralWindowExtraction(): StructuralWindowExtraction {
     equations: [],
     mathRegions: [],
     bracketedRefs: [],
+    narrativeRefs: [],
     excludedRanges: [],
   };
 }
@@ -311,6 +316,52 @@ function collectLink(
   result.excludedRanges.push({ from: node.from, to: node.to });
 }
 
+/**
+ * Collect narrative `@id` references within a window by running
+ * {@link NARRATIVE_REFERENCE_RE} on the window text and filtering out
+ * matches that fall inside any excluded range (code, math, links).
+ *
+ * One character of document context before the window is included so
+ * the regex lookbehind `(?<![[@\w])` works correctly at the boundary.
+ */
+function collectNarrativeRefsInWindow(
+  doc: TextSource,
+  excludedRanges: readonly ExcludedRange[],
+  range: StructuralWindow,
+  result: ReferenceSemantics[],
+): void {
+  const prefixLen = range.from > 0 ? 1 : 0;
+  const text = doc.slice(range.from - prefixLen, range.to);
+
+  NARRATIVE_REFERENCE_RE.lastIndex = prefixLen;
+  let match: RegExpExecArray | null;
+  let exIdx = 0;
+  while ((match = NARRATIVE_REFERENCE_RE.exec(text)) !== null) {
+    const from = range.from - prefixLen + match.index;
+    const to = from + match[0].length;
+
+    // Linear sweep: advance past excluded ranges that end before this match.
+    while (exIdx < excludedRanges.length && excludedRanges[exIdx].to <= from) {
+      exIdx++;
+    }
+    if (
+      exIdx < excludedRanges.length
+      && from >= excludedRanges[exIdx].from
+      && to <= excludedRanges[exIdx].to
+    ) {
+      continue;
+    }
+
+    result.push({
+      from,
+      to,
+      bracketed: false,
+      ids: [match[1]],
+      locators: [undefined],
+    });
+  }
+}
+
 export function collectStructuralWindow(
   doc: TextSource,
   tree: Tree,
@@ -354,6 +405,8 @@ export function collectStructuralWindow(
       }
     },
   });
+
+  collectNarrativeRefsInWindow(doc, result.excludedRanges, range, result.narrativeRefs);
 
   return result;
 }

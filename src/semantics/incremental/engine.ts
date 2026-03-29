@@ -213,7 +213,7 @@ function buildSlicesAndExcludedRanges(doc: TextSource, tree: Tree): FullBuildRes
       fencedDivSlice,
       equationSlice: buildEquationSlice(structural),
       mathSlice: buildMathSlice(structural),
-      referenceSlice: buildReferenceSlice(doc, structural),
+      referenceSlice: buildReferenceSlice(structural),
       includeSlice: createIncludeSlice(
         deriveIncludeSlice(doc, fencedDivSlice.fencedDivs),
       ),
@@ -476,10 +476,8 @@ export function updateDocumentAnalysis(
   );
   const referenceSlice = mergeReferenceSlice(
     previousState.referenceSlice,
-    doc,
     delta,
     dirtyExtractions,
-    excludedRanges,
   );
 
   return finalizeDocumentAnalysis(previous, {
