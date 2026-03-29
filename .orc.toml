@@ -1,5 +1,5 @@
 solver = "claude"
-reviewers = ["codex"]
+reviewers = ["claude"]
 retries = 5
 
 verify = [
