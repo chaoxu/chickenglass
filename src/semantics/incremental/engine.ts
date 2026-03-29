@@ -404,11 +404,17 @@ export function updateDocumentAnalysis(
     delta.mapOldToNew,
     false,
   );
-  const expandedDirtyWindows = expandDirtyWindows(
+  const expandedForExcluded = expandDirtyWindows(
     expandedForEquations,
     previousState.excludedRanges,
     delta.mapOldToNew,
     true,
+  );
+  const expandedDirtyWindows = expandDirtyWindows(
+    expandedForExcluded,
+    previousState.referenceSlice.narrativeReferences,
+    delta.mapOldToNew,
+    false,
   );
   const extractedDirtyWindows = extractDirtyFencedDivWindows(
     previousState.fencedDivSlice.fencedDivs,

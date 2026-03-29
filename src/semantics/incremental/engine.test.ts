@@ -166,6 +166,35 @@ describe("incremental document analysis engine", () => {
     }
   });
 
+  it("preserves narrative references when editing inside the @id token", () => {
+    // Repro from PR #693 review: replace the "p" in "@alpha" with "P".
+    // Without dirty-window expansion the window covers only the changed
+    // character, the regex finds no match, and the old ref is removed.
+    const state = createState("See @alpha ref.");
+    const before = analyze(state);
+    expect(before.references.length).toBe(1);
+    expect(before.references[0]).toEqual(
+      expect.objectContaining({ ids: ["alpha"], bracketed: false }),
+    );
+
+    const pPos = state.doc.toString().indexOf("p", state.doc.toString().indexOf("@alpha"));
+    const tr = state.update({
+      changes: { from: pPos, to: pPos + 1, insert: "P" },
+    });
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      syntaxTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+
+    const rebuilt = analyze(tr.state);
+    expect(after.references.length).toBe(rebuilt.references.length);
+    for (let i = 0; i < rebuilt.references.length; i++) {
+      expect(after.references[i]).toEqual(rebuilt.references[i]);
+    }
+  });
+
   it("keeps revisions off the public enumerable DocumentAnalysis shape", () => {
     const analysis = analyze(createState("Alpha $x$."));
 
