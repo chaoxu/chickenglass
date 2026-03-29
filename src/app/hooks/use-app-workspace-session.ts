@@ -266,7 +266,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       }
       setProjectRoot(path);
       onRootSet?.();
-      return await loadWorkspaceContents(requestId);
+      return loadWorkspaceContents(requestId);
     } catch (e: unknown) {
       if (requestId !== workspaceRequestRef.current) return null;
       throw e;

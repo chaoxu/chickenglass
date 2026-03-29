@@ -13,11 +13,12 @@
  *   useLinkInterception — external link click interception (Tauri)
  */
 
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import type { BibStore } from "../../citations/citation-render";
 import type { FrontmatterConfig } from "../../parser/frontmatter";
 import type { CslProcessor } from "../../citations/csl-processor";
 import type { FileSystem } from "../file-manager";
+import { renderDocumentFragmentToHtml } from "../../document-surfaces";
 import { useReadModeHtml } from "../hooks/use-read-mode-html";
 import { useLineBreaking } from "../hooks/use-line-breaking";
 import { useScrollRestore } from "../hooks/use-scroll-restore";
@@ -65,7 +66,18 @@ export function ReadModeView({
 }: ReadModeViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const htmlContent = useReadModeHtml(content, frontmatterConfig, bibliography, cslProcessor, docPath, fs);
+  const titleHtml = useMemo(() =>
+    frontmatterConfig.title
+      ? `<h1 class="cf-read-title">${renderDocumentFragmentToHtml({
+          kind: "title",
+          text: frontmatterConfig.title,
+          macros: frontmatterConfig.math,
+        })}</h1>`
+      : "",
+    [frontmatterConfig.title, frontmatterConfig.math],
+  );
+  const bodyHtml = useReadModeHtml(content, frontmatterConfig, bibliography, cslProcessor, docPath, fs);
+  const htmlContent = titleHtml + bodyHtml;
   useLineBreaking(containerRef, htmlContent);
   useScrollRestore(containerRef, htmlContent, scrollTop);
   useHyphenation(containerRef, htmlContent);

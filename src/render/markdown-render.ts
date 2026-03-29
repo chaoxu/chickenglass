@@ -79,7 +79,7 @@ interface MarkdownNodeHandler {
    * Handle a matching node. Return value follows Lezer enter() semantics:
    * undefined = walk children, false = skip children.
    */
-  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+  // biome-ignore lint/suspicious/noConfusingVoidType: CM6-style callback convention; false means skip, void means continue
   readonly handle: (node: SyntaxNodeRef, ctx: MarkdownHandlerContext) => false | void;
 }
 

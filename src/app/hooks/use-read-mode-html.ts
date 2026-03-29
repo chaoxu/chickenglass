@@ -10,7 +10,6 @@ import { markdownToHtml } from "../markdown-to-html";
 import type { BibStore } from "../../citations/citation-render";
 import type { FrontmatterConfig } from "../../parser/frontmatter";
 import type { CslProcessor } from "../../citations/csl-processor";
-import { renderDocumentFragmentToHtml } from "../../document-surfaces";
 import { resolveLocalImageOverrides } from "../pdf-image-previews";
 import type { FileSystem } from "../file-manager";
 import { measureAsync } from "../perf";
@@ -23,7 +22,7 @@ function buildReadModeHtml(
   documentPath = "",
   imageUrlOverrides?: ReadonlyMap<string, string>,
 ): string {
-  const bodyHtml = markdownToHtml(content, {
+  return markdownToHtml(content, {
     macros: frontmatterConfig.math,
     sectionNumbers: true,
     bibliography,
@@ -31,16 +30,6 @@ function buildReadModeHtml(
     documentPath,
     imageUrlOverrides,
   });
-
-  const titleHtml = frontmatterConfig.title
-    ? `<h1 class="cf-read-title">${renderDocumentFragmentToHtml({
-      kind: "title",
-      text: frontmatterConfig.title,
-      macros: frontmatterConfig.math,
-    })}</h1>`
-    : "";
-
-  return titleHtml + bodyHtml;
 }
 
 /**
