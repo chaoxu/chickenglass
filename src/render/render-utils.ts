@@ -803,7 +803,7 @@ export function createDecorationsField(
 export function collectNodeRangesExcludingCursor(
   view: EditorView,
   nodeTypes: ReadonlySet<string>,
-  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+  // biome-ignore lint/suspicious/noConfusingVoidType: CM6-style callback convention; false means skip, void means continue
   buildItem: (node: SyntaxNodeRef, items: Range<Decoration>[]) => false | void,
   options?: {
     ranges?: readonly VisibleRange[];

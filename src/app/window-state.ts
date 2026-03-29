@@ -196,8 +196,8 @@ export function loadWindowState(): WindowState {
     return persistedState;
   }
 
-  const launchOverridesProjectRoot = Object.prototype.hasOwnProperty.call(launchState, "projectRoot");
-  const launchOverridesCurrentDocument = Object.prototype.hasOwnProperty.call(launchState, "currentDocument");
+  const launchOverridesProjectRoot = Object.hasOwn(launchState, "projectRoot");
+  const launchOverridesCurrentDocument = Object.hasOwn(launchState, "currentDocument");
   const nextProjectRoot = launchOverridesProjectRoot
     ? launchState.projectRoot ?? null
     : persistedState.projectRoot;

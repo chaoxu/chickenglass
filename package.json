@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "description": "Semantic document editor for mathematical writing",
   "type": "module",
+  "packageManager": "pnpm@10.33.0",
   "files": [
     "dist"
   ],
@@ -16,19 +17,19 @@
   "scripts": {
     "dev": "vite",
     "dev:worktree": "node scripts/dev-worktree.mjs",
-    "dev:browser": "vite & sleep 2 && npm run chrome && wait",
+    "dev:browser": "vite & sleep 2 && pnpm run chrome && wait",
     "typecheck": "tsc --noEmit",
     "typecheck:app": "tsc --noEmit -p tsconfig.app.json",
     "typecheck:server": "tsc --noEmit -p server/tsconfig.json",
-    "build": "npm run typecheck && vite build && npm run build:editor",
+    "build": "pnpm typecheck && vite build && pnpm build:editor",
     "build:editor": "tsc -p tsconfig.editor.json && vite build --config vite.editor.config.ts",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint . --write",
     "test": "vitest run",
     "test:watch": "vitest",
     "tauri:dev": "cargo tauri dev",
     "tauri:build": "cargo tauri build",
-    "chrome": "npm run chrome:app --",
+    "chrome": "pnpm chrome:app --",
     "chrome:app": "node scripts/launch-chrome.mjs --activate",
     "chrome:cdp": "node scripts/launch-chrome.mjs --no-activate",
     "chrome:test": "node scripts/test-chrome.mjs",
@@ -37,9 +38,29 @@
     "perf:capture": "node scripts/perf-regression.mjs capture",
     "perf:compare": "node scripts/perf-regression.mjs compare",
     "smoke:editor-package": "node scripts/smoke-editor-package.mjs",
-    "prepack": "npm run build:editor"
+    "knip": "knip",
+    "publint": "publint",
+    "size": "size-limit",
+    "build:analyze": "vite build --config vite.editor.config.ts --mode analyze",
+    "prepare": "lefthook install",
+    "prepack": "pnpm build:editor"
   },
+  "size-limit": [
+    {
+      "name": "coflat/editor (JS)",
+      "path": "dist/editor.mjs",
+      "limit": "800 kB"
+    },
+    {
+      "name": "coflat/editor (CSS)",
+      "path": "dist/editor.css",
+      "limit": "100 kB"
+    }
+  ],
   "license": "MIT",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "lefthook"]
+  },
   "dependencies": {
     "@citation-js/core": "^0.7.21",
     "@citation-js/plugin-bibtex": "^0.7.21",
@@ -64,6 +85,8 @@
     "@floating-ui/dom": "^1.7.6",
     "@headless-tree/core": "^1.6.3",
     "@headless-tree/react": "^1.6.3",
+    "@lezer/common": "^1.5.1",
+    "@lezer/highlight": "^1.2.3",
     "@lezer/markdown": "^1.6.3",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-context-menu": "^2.2.16",
@@ -91,22 +114,28 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@biomejs/biome": "^2.4.9",
     "@overleaf/codemirror-tree-view": "^0.1.3",
+    "@size-limit/preset-small-lib": "^12.0.1",
     "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "^2.0.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/dompurify": "^3.0.5",
     "@types/katex": "^0.16.8",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "eslint": "^10.0.3",
     "fast-check": "^4.6.0",
     "jsdom": "^29.0.0",
+    "knip": "^6.1.0",
+    "lefthook": "^2.1.4",
     "playwright": "^1.58.2",
+    "publint": "^0.3.18",
+    "rollup-plugin-visualizer": "^7.0.1",
+    "size-limit": "^12.0.1",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.1",
     "vite": "^8.0.0",
     "vitest": "^4.1.0"
   }

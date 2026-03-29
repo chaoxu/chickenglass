@@ -295,7 +295,7 @@ function handleCopy(event: ClipboardEvent, view: EditorView): boolean {
 
   let text = view.state.sliceDoc(from, to);
   text = text.replace(/(?<!\\)\|/g, "");
-  text = text.replace(/  +/g, " ").trim();
+  text = text.replace(/ {2,}/g, " ").trim();
 
   event.clipboardData?.setData("text/plain", text);
   event.preventDefault();

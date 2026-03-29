@@ -10,7 +10,7 @@ Semantic document editor for mathematical writing. Runs as a native desktop app 
 - **Math**: KaTeX
 - **Desktop**: Tauri v2 (smaller bundles, native webview)
 - **Build**: Vite (frontend), Cargo (Rust backend)
-- **Package manager**: npm
+- **Package manager**: pnpm
 - **UI**: @radix-ui/dialog, @dnd-kit, lucide-react, cmdk
 
 ## Project structure
@@ -32,19 +32,68 @@ scripts/         # CDP test helpers, blog import tools
 ## Commands
 
 ```bash
-npm install          # install dependencies
-npm run dev          # start dev server (Vite) — browser mode with blog demo content
-npm run dev:worktree -- perf-444 --base origin/main --fetch
+pnpm install         # install dependencies
+pnpm dev             # start dev server (Vite) — browser mode with blog demo content
+pnpm dev:worktree -- perf-444 --base origin/main --fetch
                      # create an isolated worktree under .worktrees/ from a committed base ref
-npm run build        # production build (frontend only)
-npm run lint         # ESLint
-npm run lint:fix     # ESLint autofix
-npm run test         # run tests (Vitest)
-npx tsc --noEmit     # typecheck only
-npm run tauri:dev    # launch Tauri desktop app
-npm run tauri:build  # build production desktop binary
-npm run chrome       # launch Playwright Chromium with CDP on port 9322
+pnpm build           # production build (frontend only)
+pnpm lint            # Biome lint
+pnpm lint:fix        # Biome lint autofix
+pnpm test            # run tests (Vitest)
+pnpm typecheck       # typecheck only
+pnpm tauri:dev       # launch Tauri desktop app
+pnpm tauri:build     # build production desktop binary
+pnpm chrome          # launch Playwright Chromium with CDP on port 9322
 ```
+
+## Tooling
+
+```bash
+# Dead code / unused exports
+pnpm knip                           # find unused files, exports, dependencies
+
+# Standalone package validation
+pnpm publint                        # validate package.json exports (run after build:editor)
+pnpm size                           # check embed bundle size against limits (run after build:editor)
+
+# Bundle analysis
+pnpm build:analyze                  # build editor bundle + open dist/stats.html treemap
+
+# Rust tests (faster than cargo test)
+cargo nextest run                   # run all Rust tests in parallel
+cargo nextest run --test-threads 4  # with explicit concurrency
+```
+
+### What each tool does
+
+- **knip** — detects unused files, exports, and dependencies. Run after refactors. Config: `knip.config.ts`. The 226 unused UI component re-exports are expected (component library pattern); focus on unused files and unlisted deps.
+- **publint** — validates `package.json` exports point to real built files with correct types. Run after `build:editor` before publishing. Catches the class of packaging bugs from #588.
+- **size-limit** — enforces bundle size budgets for the standalone editor (`dist/editor.mjs` ≤ 800 kB, `dist/editor.css` ≤ 100 kB). Config in `package.json` under `"size-limit"`.
+- **rollup-plugin-visualizer** — generates `dist/stats.html` treemap of what's in the bundle. Activated via `pnpm build:analyze` (sets `mode=analyze`). Use to audit what's leaking into the embed path.
+- **@testing-library/react** (`renderHook`) — for hook-level tests (#707). Setup file: `src/test-setup.ts` (loads `@testing-library/jest-dom/vitest` matchers automatically).
+- **cargo-nextest** — parallel Rust test runner for the Tauri backend. Faster output than `cargo test`, supports per-test retry. Drop-in replacement.
+
+### Hooks (lefthook)
+
+Configured in `lefthook.yml`, installed automatically on `pnpm install` via the `prepare` script.
+
+| Hook | Runs | Commands |
+|---|---|---|
+| `pre-commit` | on every commit (parallel) | `pnpm lint`, `pnpm typecheck` |
+| `pre-push` | on every push | `pnpm test` |
+
+Skip hooks when needed: `git commit --no-verify` / `git push --no-verify`. Only use when you know what you're doing.
+
+### CI (Gitea Actions)
+
+Workflow at `.gitea/workflows/ci.yml`. Runs on push/PR to `main`.
+
+| Job | What it checks |
+|---|---|
+| `lint` | Biome lint + typecheck + knip |
+| `test` | Vitest unit tests |
+| `package` | `build:editor` → publint → size-limit |
+| `rust` | `cargo nextest run` on the Tauri backend |
 
 ## Debug helpers
 
@@ -71,14 +120,14 @@ Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile(
 
 ## Dev mode
 
-`npm run dev` runs Vite in dev mode (`import.meta.env.DEV === true`). Dev mode differences:
+`pnpm dev` runs Vite in dev mode (`import.meta.env.DEV === true`). Dev mode differences:
 - **No dirty-file confirmation** — switching files with unsaved changes skips the `window.confirm` dialog for faster testing. Controlled by `Settings.skipDirtyConfirm` (defaults to `true` in dev, `false` in production).
 
 ## Browser testing (CDP)
 
 **Only ONE dev server and ONE browser at a time.** Kill previous instances before launching. Use `page.reload()` after code changes — never open new browser instances.
 
-1. Start: `npm run dev`, then `npm run chrome` (CDP on port 9322)
+1. Start: `pnpm dev`, then `pnpm chrome` (CDP on port 9322)
 2. Connect: `chromium.connectOverCDP("http://localhost:9322")`
 3. Use `page.evaluate()` + `__cmView`/`__cmDebug`/`__app`. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout(10000)`.
 4. Screenshots: use the `screenshot()` helper from `scripts/test-helpers.mjs`, or `node scripts/screenshot.mjs [file] --output path.png`. **Do not call `page.screenshot()` directly** — Chrome 145's CDP has a headed-mode bug where it hangs indefinitely.
@@ -101,22 +150,47 @@ Do NOT use the Playwright MCP plugin — connect directly via CDP.
 
 Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` for math, fenced divs (`::: {.class #id} Title`), `[@id]` for cross-refs/citations, equation labels `$$ ... $$ {#eq:foo}`. See `FORMAT.md` for the canonical document-format spec. All markdown files in this repo must follow `FORMAT.md`.
 
+## Gitea / issue tracking
+
+This repo is hosted on a local Gitea instance at `http://localhost:3001`. Use the **`tea`** CLI (not `gh`, not raw curl) for all issue/PR interactions:
+
+```bash
+tea issues                             # list open issues (default verb is list)
+tea issues --state closed              # list closed issues
+tea issues --state closed --limit 30
+tea issues create --title "..." --description "..."
+tea pulls                              # list pull requests
+tea pr create --title "..." --base main --head <branch>
+tea logins                             # show configured logins (default: coflat / chaoxu)
+```
+
+`tea` is already logged in. The default login points to `http://localhost:3001` as user `chaoxu`.
+
 ## Workspace hygiene
 
 - Temporary files go in `/tmp/coflat-*` — never in the project directory.
-- For isolated local work, prefer `npm run dev:worktree -- <name>`.
+- For isolated local work, prefer `pnpm dev:worktree -- <name>`.
   - It creates a new branch + worktree under `.worktrees/<sanitized-name>`.
   - It links the repo's `node_modules` into the new worktree when available, so verification commands usually work immediately.
   - It is dirty-tree tolerant: uncommitted changes in the current worktree are NOT copied; only committed history from the chosen base ref is used.
   - `--base origin/main --fetch` refreshes the requested remote base ref before creating the worktree.
   - A custom relative `--path` is resolved from the repo root, not the caller's current subdirectory.
 
+## Performance issue standard
+
+Every performance issue and PR must include a **before/after measurement** on a large real document (`demo/cogirth/main2.md` is the standard fixture). Without numbers the change is unverifiable.
+
+- Run the perf harness: `node scripts/perf-regression.mjs` — or use the relevant `perf.*` span from the in-app telemetry.
+- For targeted micro-optimizations (e.g. a single function), a focused microbenchmark or Vitest perf test is acceptable instead, but must still report both numbers.
+- The PR description must include the before and after figures. A PR that claims a perf improvement without measurements will not be merged.
+- The fixture `demo/cogirth/main2.md` is the canonical heavy document for local-edit, scroll, and open benchmarks. Use a document with similar characteristics (math-heavy, large, with includes) if a different scenario is being measured.
+
 ## Development rules & architecture
 
 Detailed rules and architecture decisions are in reference files -- loaded on demand, not always in context:
 
-- **[Development rules](docs/architecture/development-rules.md)** — rigor mode, Typora-style editing, CM6 decorations, Lezer parser rules, testing policy, error handling, workflow gates, shell safety
+- **[Development rules](docs/architecture/development-rules.md)** — rigor mode, Typora-style editing, CM6 decorations, Lezer parser rules, testing policy, workflow gates, shell safety. Error handling policy: Never use bare `catch {}` without an explicit reason.
 - **[Architecture decisions](docs/architecture/architecture-decisions.md)** — Pandoc-free editing, plugin system, FileSystem abstraction, Lezer-everywhere philosophy, library preferences
-- **[Subsystem pattern](docs/architecture/subsystem-pattern.md)** — model/controller/render-adapter seam pattern for non-trivial features
+- **[Subsystem pattern](docs/architecture/subsystem-pattern.md)** — model/controller/render-adapter seam pattern for non-trivial features. One concept should have one clear owner.
 - **[Inline rendering policy](docs/design/inline-rendering-policy.md)** — how inline math, bold, italic rendering works
 - **[Theme contract](docs/architecture/theme-contract.md)** — CSS variable contract between editor and theme

@@ -121,7 +121,7 @@ export function useEditorSession({
     stateRef.current = nextState;
     setSessionState(nextState);
 
-    if (Object.prototype.hasOwnProperty.call(options ?? {}, "editorDoc")) {
+    if (options !== undefined && "editorDoc" in options) {
       setEditorDoc(options?.editorDoc ?? "");
       return;
     }

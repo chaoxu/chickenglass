@@ -2,6 +2,7 @@ import { copyFileSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
+import { visualizer } from "rollup-plugin-visualizer";
 
 interface PackageManifest {
   readonly dependencies?: Record<string, string>;
@@ -22,8 +23,18 @@ function copyEditorCss(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [copyEditorCss()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    copyEditorCss(),
+    // Run `npm run build:analyze` to generate dist/stats.html bundle treemap
+    mode === "analyze" &&
+      visualizer({
+        filename: "dist/stats.html",
+        open: true,
+        gzipSize: true,
+        brotliSize: true,
+      }),
+  ],
   build: {
     target: "es2022",
     outDir: "dist",
@@ -45,4 +56,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
