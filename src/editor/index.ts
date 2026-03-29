@@ -69,7 +69,8 @@ export {
   contentFont,
   monoFont,
 } from "../constants/editor-constants";
-export { imagePasteExtension, fileToDataUrl, type ImagePasteConfig } from "./image-paste";
+export { imagePasteExtension, type ImagePasteConfig } from "./image-paste";
+export { fileToDataUrl } from "./image-save";
 export { imageDropExtension, type ImageDropConfig } from "./image-drop";
 export { insertImageFromPicker } from "./image-insert";
 export {

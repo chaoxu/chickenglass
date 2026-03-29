@@ -28,7 +28,7 @@ import {
 } from "./image-save";
 
 // Re-export for backwards compatibility
-export { fileToDataUrl, escapeMarkdownPath, insertImageMarkdown } from "./image-save";
+export { escapeMarkdownPath, insertImageMarkdown } from "./image-save";
 
 /**
  * Configuration for the image-paste extension.
