@@ -20,7 +20,7 @@ interface FileTreeProps {
   onCreateFile: (path: string) => void;
   onCreateDir: (path: string) => void;
   /** When provided, tree state (expanded folders, focus, scroll) persists across unmount/remount. */
-  persistRef?: React.MutableRefObject<PersistentTreeState>;
+  persistRef?: React.RefObject<PersistentTreeState>;
   /** Load children for a directory on expand (lazy tree loading). */
   onLoadChildren?: (dirPath: string) => void;
 }
@@ -109,7 +109,7 @@ export function FileTree({
       containerRef.current = el;
       if (typeof htRef === "function") htRef(el);
       else if (htRef && typeof htRef === "object")
-        (htRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+        (htRef as React.RefObject<HTMLDivElement | null>).current = el;
     };
   }, [containerProps.ref]);
 
