@@ -71,8 +71,11 @@ const frontmatterDecorationField = createDecorationsField(
 );
 
 /**
- * The StateField for tests and direct field access.
- * Use `frontmatterDecoration` (the full extension) in the editor.
+ * The StateField for test access only.
+ *
+ * @internal This is exported only for testing purposes. Use `frontmatterDecoration`
+ * (the full extension) in the editor. Tests should access this field via the
+ * StateField returned by this export.
  */
 export { frontmatterDecorationField };
 
