@@ -16,7 +16,6 @@ export {
 export {
   CrossrefWidget,
   UnresolvedRefWidget,
-  collectCrossrefRanges,
 } from "./crossref-render";
 // reference-render re-exports removed — imports from citations/ would create
 // a cycle through this barrel.  Import from "./reference-render" directly.

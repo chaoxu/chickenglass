@@ -202,6 +202,18 @@ export function ensureCitationsRegistered(
   });
 }
 
+// ── Helper functions ──────────────────────────────────────────────
+
+/**
+ * Strip outer parentheses from a string if they exist.
+ * Used to clean citation formatting for display (e.g., "(Karger, 2000)" → "Karger, 2000").
+ */
+function stripOuterParens(text: string): string {
+  return text.startsWith("(") && text.endsWith(")")
+    ? text.slice(1, -1)
+    : text;
+}
+
 // ── Render-plan types ──────────────────────────────────────────────
 
 /** A planned reference rendering before widget emission. */
@@ -258,9 +270,7 @@ export function planReferenceRendering(
         const parts: MixedClusterPart[] = ref.ids.map((id, index) => {
           if (store.has(id)) {
             const rendered = processor.cite([id], ref.locators ? [ref.locators[index]] : undefined);
-            const stripped = rendered.startsWith("(") && rendered.endsWith(")")
-              ? rendered.slice(1, -1)
-              : rendered;
+            const stripped = stripOuterParens(rendered);
             return { kind: "citation" as const, id, text: stripped };
           }
           const resolved = resolveCrossref(view.state, id, equationLabels);

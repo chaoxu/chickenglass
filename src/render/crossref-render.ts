@@ -1,25 +1,15 @@
 /**
- * Cross-reference widget classes and collection helper.
+ * Cross-reference widget classes.
  *
  * The ViewPlugin that used these has been merged into the unified
  * `referenceRenderPlugin` in `./reference-render.ts`. This module
- * still exports widget classes and `collectCrossrefRanges` for
- * tests and other consumers.
+ * exports the widget classes used by the rendering system.
  */
 
 import {
-  Decoration,
-  type EditorView,
-} from "@codemirror/view";
-import { type Range } from "@codemirror/state";
-import {
   type ResolvedCrossref,
-  resolveCrossref,
 } from "../index/crossref-resolver";
-import { documentAnalysisField } from "../semantics/codemirror-source";
 import {
-  cursorInRange,
-  pushWidgetDecoration,
   RenderWidget,
   SimpleTextRenderWidget,
 } from "./render-utils";
@@ -183,29 +173,3 @@ export class UnresolvedRefWidget extends SimpleTextRenderWidget {
   }
 }
 
-/** Collect decoration ranges for cross-references outside the cursor. */
-export function collectCrossrefRanges(view: EditorView): Range<Decoration>[] {
-  const analysis = view.state.field(documentAnalysisField);
-  const allRefs = analysis.references;
-  const equationLabels = analysis.equationById;
-  const items: Range<Decoration>[] = [];
-
-  for (const ref of allRefs) {
-    if (ref.ids.length !== 1) continue;
-    if (cursorInRange(view, ref.from, ref.to)) continue;
-
-    const raw = view.state.sliceDoc(ref.from, ref.to);
-    const resolved = resolveCrossref(view.state, ref.ids[0], equationLabels);
-
-    // Skip citations — let the citation render plugin handle them
-    if (resolved.kind === "citation") continue;
-
-    const widget: RenderWidget =
-      resolved.kind === "block" || resolved.kind === "equation"
-        ? new CrossrefWidget(resolved, raw)
-        : new UnresolvedRefWidget(raw);
-    pushWidgetDecoration(items, widget, ref.from, ref.to);
-  }
-
-  return items;
-}
