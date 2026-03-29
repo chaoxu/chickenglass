@@ -249,6 +249,37 @@ describe("incremental document analysis engine", () => {
     }
   });
 
+  it("exposes a narrative ref when a delimiter edit reclassifies excluded regions", () => {
+    // Repro from PR #693 review (round 3): insert a backtick before "h" in
+    // "Math $@skip$ and `@code`." so the line becomes
+    // "Mat`h $@skip$ and `@code`." — the first backtick now pairs with the
+    // backtick before @code, making @code plain text instead of inline code.
+    // Without fresh tree-based excluded ranges, mergeExcludedRanges keeps
+    // the stale `@code` exclusion and the narrative ref is filtered out.
+    const state = createState([
+      "See @alpha and @beta.",
+      "",
+      "Math $@skip$ and `@code`.",
+    ].join("\n"));
+    const before = analyze(state);
+
+    const insertPos = state.doc.toString().indexOf("h $@skip");
+    const tr = state.update({ changes: { from: insertPos, insert: "`" } });
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      syntaxTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+
+    const rebuilt = analyze(tr.state);
+    expect(rebuilt.references.length).toBeGreaterThanOrEqual(3);
+    expect(after.references.length).toBe(rebuilt.references.length);
+    for (let i = 0; i < rebuilt.references.length; i++) {
+      expect(after.references[i]).toEqual(rebuilt.references[i]);
+    }
+  });
+
   it("keeps revisions off the public enumerable DocumentAnalysis shape", () => {
     const analysis = analyze(createState("Alpha $x$."));
 

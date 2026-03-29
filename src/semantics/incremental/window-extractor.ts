@@ -362,6 +362,34 @@ export function collectNarrativeRefsInWindow(
   }
 }
 
+/**
+ * Walk the Lezer tree within a range and collect excluded ranges
+ * (InlineCode, InlineMath, Link).  This provides fresh, authoritative
+ * exclusion data from the current parse tree — unlike merged excluded
+ * ranges which can be stale when a delimiter edit outside the dirty
+ * window changes which regions are code/math/link spans.
+ */
+export function collectExcludedRangesInWindow(
+  tree: Tree,
+  range: StructuralWindow,
+): ExcludedRange[] {
+  const result: ExcludedRange[] = [];
+  tree.iterate({
+    from: range.from,
+    to: range.to,
+    enter(node) {
+      switch (node.type.name) {
+        case "InlineCode":
+        case "InlineMath":
+        case "Link":
+          result.push({ from: node.from, to: node.to });
+          break;
+      }
+    },
+  });
+  return result;
+}
+
 export function collectStructuralWindow(
   doc: TextSource,
   tree: Tree,
