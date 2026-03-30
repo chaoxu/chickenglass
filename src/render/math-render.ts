@@ -177,6 +177,30 @@ export class MathWidget extends MacroAwareWidget {
       this.macrosKey === other.macrosKey
     );
   }
+
+  updateDOM(dom: HTMLElement): boolean {
+    // Structural mismatch (inline ↔ display) — force full rebuild
+    const expectedTag = this.isDisplay ? "DIV" : "SPAN";
+    if (dom.tagName !== expectedTag) return false;
+
+    // Reset class/role in case previous render hit a KaTeX error
+    dom.className = this.isDisplay ? CSS.mathDisplay : CSS.mathInline;
+    dom.setAttribute("role", "img");
+    dom.setAttribute("aria-label", this.latex);
+
+    if (this.isDisplay) {
+      const content = dom.firstElementChild as HTMLElement | null;
+      if (!content) return false;
+      content.className = CSS.mathDisplayContent;
+      renderKatex(content, this.latex, true, this.macros);
+    } else {
+      renderKatex(dom, this.latex, false, this.macros);
+    }
+
+    // Refresh source-range metadata so search-highlight reads correct positions
+    this.setSourceRangeAttrs(dom);
+    return true;
+  }
 }
 
 /**

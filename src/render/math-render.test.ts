@@ -270,6 +270,86 @@ describe("MathWidget (display)", () => {
   });
 });
 
+describe("MathWidget.updateDOM", () => {
+  it("updates inline math content and refreshes source-range metadata", () => {
+    const oldWidget = new MathWidget("x^2", "$x^2$", false);
+    oldWidget.sourceFrom = 10;
+    oldWidget.sourceTo = 15;
+    const dom = oldWidget.toDOM();
+
+    expect(widgetSourceMap.get(dom)).toBe(oldWidget);
+    expect(dom.dataset.sourceFrom).toBe("10");
+    expect(dom.dataset.sourceTo).toBe("15");
+    expect(dom.getAttribute("aria-label")).toBe("x^2");
+
+    const newWidget = new MathWidget("y^2", "$y^2$", false);
+    newWidget.sourceFrom = 20;
+    newWidget.sourceTo = 25;
+
+    const result = newWidget.updateDOM(dom);
+    expect(result).toBe(true);
+
+    // Source-range metadata must be refreshed (reviewer #732 blocking issue)
+    expect(widgetSourceMap.get(dom)).toBe(newWidget);
+    expect(widgetSourceMap.get(dom)!.sourceFrom).toBe(20);
+    expect(widgetSourceMap.get(dom)!.sourceTo).toBe(25);
+    expect(dom.dataset.sourceFrom).toBe("20");
+    expect(dom.dataset.sourceTo).toBe("25");
+
+    // Content must be updated
+    expect(dom.getAttribute("aria-label")).toBe("y^2");
+    expect(dom.querySelector(".katex")).not.toBeNull();
+  });
+
+  it("updates display math content and refreshes source-range metadata", () => {
+    const oldWidget = new MathWidget("x^2", "$$x^2$$", true);
+    oldWidget.sourceFrom = 100;
+    oldWidget.sourceTo = 107;
+    const dom = oldWidget.toDOM();
+
+    expect(widgetSourceMap.get(dom)).toBe(oldWidget);
+    expect(dom.dataset.sourceFrom).toBe("100");
+
+    const newWidget = new MathWidget("y^2", "$$y^2$$", true);
+    newWidget.sourceFrom = 110;
+    newWidget.sourceTo = 117;
+
+    const result = newWidget.updateDOM(dom);
+    expect(result).toBe(true);
+
+    expect(widgetSourceMap.get(dom)).toBe(newWidget);
+    expect(widgetSourceMap.get(dom)!.sourceFrom).toBe(110);
+    expect(dom.dataset.sourceFrom).toBe("110");
+    expect(dom.dataset.sourceTo).toBe("117");
+    expect(dom.getAttribute("aria-label")).toBe("y^2");
+    expect(dom.querySelector(".katex-display")).not.toBeNull();
+  });
+
+  it("preserves DOM node identity (no destroy/recreate)", () => {
+    const oldWidget = new MathWidget("a", "$a$", false);
+    oldWidget.sourceFrom = 0;
+    oldWidget.sourceTo = 3;
+    const dom = oldWidget.toDOM();
+    const domRef = dom;
+
+    const newWidget = new MathWidget("b", "$b$", false);
+    newWidget.sourceFrom = 0;
+    newWidget.sourceTo = 3;
+    newWidget.updateDOM(dom);
+
+    // Same DOM element, not a new one
+    expect(dom).toBe(domRef);
+  });
+
+  it("returns false when tag structure mismatches (inline vs display)", () => {
+    const oldWidget = new MathWidget("x", "$x$", false);
+    const dom = oldWidget.toDOM(); // span
+
+    const newWidget = new MathWidget("x", "$$x$$", true);
+    expect(newWidget.updateDOM(dom)).toBe(false);
+  });
+});
+
 describe("collectMathRanges", () => {
   let view: EditorView | undefined;
 

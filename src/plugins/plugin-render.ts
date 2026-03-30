@@ -87,7 +87,21 @@ class BlockHeaderWidget extends MacroAwareWidget {
   eq(other: BlockHeaderWidget): boolean {
     return this.header === other.header && this.macrosKey === other.macrosKey;
   }
+
+  updateDOM(dom: HTMLElement): boolean {
+    dom.textContent = "";
+    renderDocumentFragmentToDom(dom, {
+      kind: "block-title",
+      text: this.header,
+      macros: this.macros,
+    });
+    // Refresh source-range metadata so search-highlight reads correct positions
+    this.setSourceRangeAttrs(dom);
+    return true;
+  }
 }
+
+export { BlockHeaderWidget as _BlockHeaderWidgetForTest };
 
 /**
  * Widget that renders an attribute-only title (title="..." in the attributes,

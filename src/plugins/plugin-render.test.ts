@@ -12,12 +12,14 @@ import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import {
   _blockDecorationFieldForTest as blockDecorationField,
+  _BlockHeaderWidgetForTest as BlockHeaderWidget,
   embedSandboxPermissions,
 } from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
 import { blockCounterField } from "./block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { editorFocusField, focusEffect, mathMacrosField } from "../render/render-core";
+import { widgetSourceMap } from "../render/render-utils";
 import { frontmatterField } from "../editor/frontmatter-state";
 import {
   applyStateEffects,
@@ -415,6 +417,48 @@ describe("disabled blocks show raw fences (issue #356)", () => {
     // proof line: has cf-block-header (not disabled)
     const proofLine = state.doc.line(9).from;
     expect(hasLineClassAt(specs, proofLine, CSS.blockHeader)).toBe(true);
+  });
+});
+
+describe("BlockHeaderWidget.updateDOM", () => {
+  it("updates content and refreshes source-range metadata", () => {
+    const oldWidget = new BlockHeaderWidget("Theorem 1.", {});
+    oldWidget.sourceFrom = 0;
+    oldWidget.sourceTo = 15;
+    const dom = oldWidget.toDOM();
+
+    expect(widgetSourceMap.get(dom)).toBe(oldWidget);
+    expect(dom.dataset.sourceFrom).toBe("0");
+    expect(dom.dataset.sourceTo).toBe("15");
+
+    const newWidget = new BlockHeaderWidget("Theorem 2.", {});
+    newWidget.sourceFrom = 22;
+    newWidget.sourceTo = 37;
+
+    const result = newWidget.updateDOM(dom);
+    expect(result).toBe(true);
+
+    // Source-range metadata must be refreshed (reviewer #732 blocking issue)
+    expect(widgetSourceMap.get(dom)).toBe(newWidget);
+    expect(widgetSourceMap.get(dom)!.sourceFrom).toBe(22);
+    expect(widgetSourceMap.get(dom)!.sourceTo).toBe(37);
+    expect(dom.dataset.sourceFrom).toBe("22");
+    expect(dom.dataset.sourceTo).toBe("37");
+  });
+
+  it("preserves DOM node identity (no destroy/recreate)", () => {
+    const oldWidget = new BlockHeaderWidget("Proof.", {});
+    oldWidget.sourceFrom = 0;
+    oldWidget.sourceTo = 10;
+    const dom = oldWidget.toDOM();
+    const domRef = dom;
+
+    const newWidget = new BlockHeaderWidget("Lemma 1.", {});
+    newWidget.sourceFrom = 0;
+    newWidget.sourceTo = 10;
+    newWidget.updateDOM(dom);
+
+    expect(dom).toBe(domRef);
   });
 });
 
