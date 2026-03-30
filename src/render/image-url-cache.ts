@@ -2,10 +2,11 @@ import { StateEffect, StateField } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { readImageFileAsDataUrl } from "../lib/image-data-url";
 import type { FileSystem } from "../lib/types";
+import { ERROR_COOLDOWN_MS, type MediaEntryBase } from "./pdf-preview-cache";
 
 export type ImageUrlStatus = "loading" | "ready" | "error";
 
-export interface ImageUrlEntry {
+export interface ImageUrlEntry extends MediaEntryBase {
   readonly status: ImageUrlStatus;
 }
 
@@ -53,7 +54,17 @@ export async function requestImageDataUrl(
   const existing = view.state.field(imageUrlField).get(path);
 
   if (existing) {
+    // Ready with cached data URL — nothing to do
     if (existing.status === "ready" && dataUrlCache.has(path)) return;
+
+    // Error entries can be retried after cooldown
+    if (existing.status === "error") {
+      const elapsed = Date.now() - (existing.errorTime ?? 0);
+      if (elapsed < ERROR_COOLDOWN_MS) return;
+      // Cooldown expired — fall through to retry
+    }
+
+    // Loading — already in progress
     if (existing.status === "loading") return;
   }
 
@@ -65,14 +76,14 @@ export async function requestImageDataUrl(
   try {
     const dataUrl = await readImageFileAsDataUrl(path, fs);
     if (!dataUrl) {
-      safeDispatch(view, { path, entry: { status: "error" } });
+      safeDispatch(view, { path, entry: { status: "error", errorTime: Date.now() } });
       return;
     }
 
     dataUrlCache.set(path, dataUrl);
     safeDispatch(view, { path, entry: { status: "ready" } });
   } catch {
-    safeDispatch(view, { path, entry: { status: "error" } });
+    safeDispatch(view, { path, entry: { status: "error", errorTime: Date.now() } });
   } finally {
     pendingPaths.delete(path);
   }

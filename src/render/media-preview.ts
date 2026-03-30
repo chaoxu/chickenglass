@@ -93,6 +93,9 @@ function resolveImagePreview(
   }
 
   if (entry?.status === "error") {
+    // Re-request so the retry cooldown logic in requestImageDataUrl
+    // can decide whether to retry.
+    fireRequest(view, resolvedPath, requestImageDataUrl);
     return { kind: "error", resolvedPath, fallbackSrc: src };
   }
 

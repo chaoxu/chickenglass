@@ -31,6 +31,7 @@ export {
   pdfPreviewRemoveEffect,
   requestPdfPreview,
   ERROR_COOLDOWN_MS,
+  type MediaEntryBase,
   type PdfPreviewEntry,
   type PdfPreviewUpdate,
 } from "./pdf-preview-cache";

@@ -99,7 +99,8 @@ describe("requestImageDataUrl", () => {
 
     await requestImageDataUrl(view, "posts/diagram", fs);
 
-    expect(view.state.field(imageUrlField).get("posts/diagram")).toEqual({ status: "error" });
+    const entry = view.state.field(imageUrlField).get("posts/diagram");
+    expect(entry).toEqual({ status: "error", errorTime: expect.any(Number) });
     expect(fs.readFileBinary).not.toHaveBeenCalled();
   });
 });

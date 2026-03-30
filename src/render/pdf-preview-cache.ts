@@ -11,13 +11,18 @@ import type { FileSystem } from "../lib/types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type PdfPreviewStatus = "loading" | "ready" | "error";
-
-export interface PdfPreviewEntry {
-  readonly status: PdfPreviewStatus;
+/** Shared base type for media preview cache entries (images and PDFs). */
+export interface MediaEntryBase {
+  readonly status: "loading" | "ready" | "error";
   /** For error entries: timestamp (ms) when the error was recorded.
    *  Allows retry after ERROR_COOLDOWN_MS elapses. */
   readonly errorTime?: number;
+}
+
+export type PdfPreviewStatus = "loading" | "ready" | "error";
+
+export interface PdfPreviewEntry extends MediaEntryBase {
+  readonly status: PdfPreviewStatus;
 }
 
 export interface PdfPreviewUpdate {
