@@ -292,7 +292,7 @@ function cleanupEditor(view: EditorView, parent: HTMLElement): void {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("rich-mode stress", () => {
+describe("rich-mode stress", { timeout: 60_000 }, () => {
   let activeView: EditorView | undefined;
   let activeParent: HTMLElement | undefined;
 

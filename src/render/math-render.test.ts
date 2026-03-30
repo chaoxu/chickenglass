@@ -276,6 +276,7 @@ describe("collectMathRanges", () => {
   afterEach(() => {
     view?.destroy();
     view = undefined;
+    clearKatexCache();
   });
 
   it("collects inline math with dollar syntax", () => {
@@ -547,6 +548,7 @@ describe("cursor toggle behavior", () => {
   afterEach(() => {
     view?.destroy();
     view = undefined;
+    clearKatexCache();
   });
 
   it("reveals source when cursor enters math region", () => {
@@ -606,6 +608,7 @@ describe("performance", () => {
   afterEach(() => {
     view?.destroy();
     view = undefined;
+    clearKatexCache();
   });
 
   it("handles 100+ equations without error", () => {
@@ -729,6 +732,7 @@ describe("display math with equation labels", () => {
   afterEach(() => {
     view?.destroy();
     view = undefined;
+    clearKatexCache();
   });
 
   it("collects single-line display math with equation label", () => {

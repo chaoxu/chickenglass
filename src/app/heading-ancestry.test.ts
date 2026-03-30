@@ -1,19 +1,37 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, afterEach } from "vitest";
 import {
   extractHeadings,
   headingAncestryAt,
   activeHeadingIndex,
   type HeadingEntry,
 } from "./heading-ancestry";
+import type { EditorView } from "@codemirror/view";
+import { forceParsing } from "@codemirror/language";
 import { createEditor } from "../editor";
 
-/** Helper: create an editor with the given markdown and extract headings. */
+let lastView: EditorView | undefined;
+let lastParent: HTMLElement | undefined;
+
+afterEach(() => {
+  lastView?.destroy();
+  lastParent?.remove();
+  lastView = undefined;
+  lastParent = undefined;
+});
+
+/** Helper: create an editor, force a full parse, and extract headings. */
 function headingsFrom(doc: string): HeadingEntry[] {
+  lastView?.destroy();
+  lastParent?.remove();
   const parent = document.createElement("div");
+  document.body.appendChild(parent);
   const view = createEditor({ parent, doc });
-  const headings = extractHeadings(view.state);
-  view.destroy();
-  return headings;
+  // In jsdom the viewport is zero-height, so the parser may not complete
+  // the full document. Force it to parse everything before reading semantics.
+  forceParsing(view, view.state.doc.length, 5000);
+  lastView = view;
+  lastParent = parent;
+  return extractHeadings(view.state);
 }
 
 describe("extractHeadings", () => {
