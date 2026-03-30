@@ -508,7 +508,7 @@ export function diffVisibleRanges(
 }
 
 /** Check whether a document position falls inside any of the given sorted ranges. */
-function isPositionInRanges(
+export function isPositionInRanges(
   pos: number,
   ranges: readonly VisibleRange[],
 ): boolean {
@@ -520,7 +520,7 @@ function isPositionInRanges(
 }
 
 /** Merge overlapping/adjacent ranges into a minimal sorted set. */
-function mergeRanges(ranges: VisibleRange[]): VisibleRange[] {
+export function mergeRanges(ranges: VisibleRange[]): VisibleRange[] {
   if (ranges.length <= 1) return ranges;
   const sorted = [...ranges].sort((a, b) => a.from - b.from);
   const merged: VisibleRange[] = [sorted[0]];
@@ -537,7 +537,7 @@ function mergeRanges(ranges: VisibleRange[]): VisibleRange[] {
 }
 
 /** Snapshot CM6's live visibleRanges into a plain array of {from, to}. */
-function snapshotRanges(ranges: readonly { from: number; to: number }[]): VisibleRange[] {
+export function snapshotRanges(ranges: readonly { from: number; to: number }[]): VisibleRange[] {
   return ranges.map(r => ({ from: r.from, to: r.to }));
 }
 

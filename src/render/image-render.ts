@@ -10,10 +10,15 @@ import {
 } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import {
+  type VisibleRange,
   buildDecorations,
   cursorInRange,
+  diffVisibleRanges,
+  isPositionInRanges,
+  mergeRanges,
   pushWidgetDecoration,
   RenderWidget,
+  snapshotRanges,
 } from "./render-utils";
 import { imageUrlField } from "./image-url-cache";
 import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
@@ -232,14 +237,27 @@ function mediaPreviewWidget(
   }
 }
 
-/** Collect decoration ranges for images outside the cursor, plus tracking metadata. */
-function collectImageRangesTracked(view: EditorView): ImageBuildResult {
+/**
+ * Collect decoration ranges for images outside the cursor, plus tracking metadata.
+ *
+ * @param view    The editor view.
+ * @param ranges  Explicit ranges to scan (defaults to view.visibleRanges).
+ * @param skip    Returns true for node start positions already processed in a
+ *                previous viewport — prevents duplicate decorations for nodes
+ *                straddling the old/new boundary.
+ */
+function collectImageRangesTracked(
+  view: EditorView,
+  ranges?: readonly VisibleRange[],
+  skip?: (nodeFrom: number) => boolean,
+): ImageBuildResult {
   const items: Range<Decoration>[] = [];
   const nodeRanges: { from: number; to: number }[] = [];
   const trackedPaths = new Set<string>();
   const tree = syntaxTree(view.state);
+  const effectiveRanges = ranges ?? view.visibleRanges;
 
-  for (const { from, to } of view.visibleRanges) {
+  for (const { from, to } of effectiveRanges) {
     const c = tree.cursor();
     scan: for (;;) {
       let descend = false;
@@ -248,7 +266,7 @@ function collectImageRangesTracked(view: EditorView): ImageBuildResult {
         if (c.name === "Image") {
           nodeRanges.push({ from: c.from, to: c.to });
 
-          if (cursorInRange(view, c.from, c.to)) {
+          if (skip?.(c.from) || cursorInRange(view, c.from, c.to)) {
             descend = false;
           } else {
             const parsed = readImageContent(view, c.node);
@@ -301,23 +319,31 @@ class ImageRenderPlugin implements PluginValue {
   decorations: DecorationSet;
   private nodeRanges: ReadonlyArray<{ readonly from: number; readonly to: number }>;
   private trackedPaths: ReadonlySet<string>;
+  /** Ranges already processed — used to skip straddling nodes on scroll. */
+  private coveredRanges: VisibleRange[];
 
   constructor(view: EditorView) {
     const result = collectImageRangesTracked(view);
     this.decorations = buildDecorations(result.items);
     this.nodeRanges = result.nodeRanges;
     this.trackedPaths = result.trackedPaths;
+    this.coveredRanges = snapshotRanges(view.visibleRanges);
   }
 
   update(update: ViewUpdate): void {
-    // Structural changes require full rebuild
+    // Structural changes that alter the tree require full rebuild
     if (
       update.docChanged ||
-      update.viewportChanged ||
       syntaxTree(update.state) !== syntaxTree(update.startState)
     ) {
       this.rebuild(update.view);
       return;
+    }
+
+    // Viewport-only change (scroll): incremental add for newly visible ranges
+    if (update.viewportChanged) {
+      this.incrementalViewportUpdate(update);
+      // Fall through to check selection/cache
     }
 
     // Selection/focus: rebuild only if cursor moved into/out of an image node
@@ -351,11 +377,33 @@ class ImageRenderPlugin implements PluginValue {
     }
   }
 
+  /** Differential viewport update: only process newly-visible ranges. */
+  private incrementalViewportUpdate(update: ViewUpdate): void {
+    const newRanges = update.view.visibleRanges;
+    const newlyVisible = diffVisibleRanges(this.coveredRanges, newRanges);
+
+    if (newlyVisible.length > 0) {
+      const skip = (pos: number) => isPositionInRanges(pos, this.coveredRanges);
+      const result = collectImageRangesTracked(update.view, newlyVisible, skip);
+      if (result.items.length > 0) {
+        this.decorations = this.decorations.update({
+          add: result.items,
+          sort: true,
+        });
+      }
+      // Append new tracking metadata
+      this.nodeRanges = [...this.nodeRanges, ...result.nodeRanges];
+      this.trackedPaths = new Set([...this.trackedPaths, ...result.trackedPaths]);
+      this.coveredRanges = mergeRanges([...this.coveredRanges, ...newlyVisible]);
+    }
+  }
+
   private rebuild(view: EditorView): void {
     const result = collectImageRangesTracked(view);
     this.decorations = buildDecorations(result.items);
     this.nodeRanges = result.nodeRanges;
     this.trackedPaths = result.trackedPaths;
+    this.coveredRanges = snapshotRanges(view.visibleRanges);
   }
 }
 
