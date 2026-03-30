@@ -106,20 +106,58 @@ export const tableDiscoveryField = StateField.define<readonly TableRange[]>({
   },
 });
 
-/** Find the positions of all unescaped pipe characters in a string. */
+/**
+ * Find the positions of column-separator pipe characters in a table line.
+ *
+ * Implements Pandoc's inline-span-aware approach: before treating `|` as a
+ * column delimiter, the scanner tries to consume recognised inline spans at
+ * the current position. Pipes inside those spans are invisible to the
+ * column splitter. Spans handled:
+ *   - `\|`      — escaped pipe (and `\X` for any X)
+ *   - `\(...\)` — backslash-paren inline math
+ *   - `$...$`   — single-dollar inline math
+ *   - `` `...` `` / ` `` `` ``...`` `` `` ` — backtick code spans (any run length)
+ *
+ * Lezer's block-level table parser splits rows on all `|` characters before
+ * inline parsing runs, so no amount of Lezer tree-walking can detect pipes
+ * inside math or code that span apparent cell boundaries. A text-scanning
+ * approach is the only option, and is exactly what Pandoc's `pipeTableRow`
+ * does with its `chunk` combinator.
+ */
 export function findPipePositions(text: string): number[] {
   const pipes: number[] = [];
-  let isEscaped = false;
-  let inMath = false;
-  for (let i = 0; i < text.length; i++) {
-    if (isEscaped) {
-      isEscaped = false;
-    } else if (text[i] === "\\") {
-      isEscaped = true;
-    } else if (text[i] === "$") {
-      inMath = !inMath;
-    } else if (text[i] === "|" && !inMath) {
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === "\\") {
+      if (i + 1 < text.length && text[i + 1] === "(") {
+        const close = text.indexOf("\\)", i + 2);
+        i = close >= 0 ? close + 2 : text.length;
+      } else {
+        i += 2;
+      }
+    } else if (ch === "`") {
+      let tickCount = 0;
+      while (i + tickCount < text.length && text[i + tickCount] === "`") tickCount++;
+      let j = i + tickCount;
+      let found = false;
+      while (j < text.length) {
+        if (text[j] !== "`") { j++; continue; }
+        let closeCount = 0;
+        while (j + closeCount < text.length && text[j + closeCount] === "`") closeCount++;
+        if (closeCount === tickCount) { i = j + tickCount; found = true; break; }
+        j += closeCount;
+      }
+      if (!found) i += tickCount;
+    } else if (ch === "$") {
+      let j = i + 1;
+      while (j < text.length && text[j] !== "$") j++;
+      i = j < text.length ? j + 1 : text.length;
+    } else if (ch === "|") {
       pipes.push(i);
+      i++;
+    } else {
+      i++;
     }
   }
   return pipes;

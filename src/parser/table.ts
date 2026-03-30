@@ -1,0 +1,258 @@
+/**
+ * Span-aware GFM table block parser.
+ *
+ * Replaces the built-in @lezer/markdown Table extension. The only difference
+ * from the upstream implementation is parseRow(): before treating '|' as a
+ * column separator, the scanner first tries to consume recognised inline spans
+ * at the current position (escaped char, \(...\), $...$, $$...$$, `...`).
+ * Pipes inside those spans are invisible to the column splitter.
+ *
+ * This is Pandoc's approach (the `chunk` combinator in pipeTableRow): the
+ * block-level row parser must be span-aware because Lezer's inline parsers
+ * run *after* block structure is established, so InlineMath nodes for math
+ * containing '|' would never exist in the tree if the block parser splits
+ * those rows first.
+ */
+
+import {
+  BlockContext,
+  Element,
+  LeafBlock,
+  type LeafBlockParser,
+  Line,
+  type MarkdownConfig,
+} from "@lezer/markdown";
+import { tags as t } from "@lezer/highlight";
+
+/**
+ * Parse a table row, returning the cell count.
+ *
+ * When `elts` is provided, TableCell and TableDelimiter elements are pushed
+ * onto it. `offset` is the document-absolute position of `line[0]`.
+ *
+ * Spans handled (pipes inside are not treated as column separators):
+ *   \X        escaped character
+ *   \(...\)   backslash-paren inline math
+ *   $...$     single-dollar inline math
+ *   `...`     backtick code span (any run length)
+ */
+function parseRow(
+  cx: BlockContext,
+  line: string,
+  startI = 0,
+  elts?: Element[],
+  offset = 0,
+): number {
+  let count = 0,
+    first = true,
+    cellStart = -1,
+    cellEnd = -1;
+
+  const parseCell = () => {
+    elts!.push(
+      cx.elt(
+        "TableCell",
+        offset + cellStart,
+        offset + cellEnd,
+        cx.parser.parseInline(
+          line.slice(cellStart, cellEnd),
+          offset + cellStart,
+        ),
+      ),
+    );
+  };
+
+  /** Update cell content extent with a non-whitespace range [from, to). */
+  const markNonWS = (from: number, to: number) => {
+    if (cellStart < 0) cellStart = from;
+    cellEnd = to;
+  };
+
+  let i = startI;
+  while (i < line.length) {
+    const ch = line.charCodeAt(i);
+
+    if (ch === 92 /* '\\' */) {
+      if (i + 1 < line.length) {
+        if (line.charCodeAt(i + 1) === 40 /* '(' */) {
+          const close = line.indexOf("\\)", i + 2);
+          const end = close >= 0 ? close + 2 : line.length;
+          markNonWS(i, end);
+          i = end;
+        } else {
+          markNonWS(i, i + 2);
+          i += 2;
+        }
+      } else {
+        markNonWS(i, i + 1);
+        i++;
+      }
+    } else if (ch === 96 /* '`' */) {
+      let tickCount = 0;
+      while (i + tickCount < line.length && line.charCodeAt(i + tickCount) === 96)
+        tickCount++;
+      let j = i + tickCount;
+      let found = false;
+      while (j < line.length) {
+        if (line.charCodeAt(j) !== 96) {
+          j++;
+          continue;
+        }
+        let closeCount = 0;
+        while (j + closeCount < line.length && line.charCodeAt(j + closeCount) === 96)
+          closeCount++;
+        if (closeCount === tickCount) {
+          j += tickCount;
+          found = true;
+          break;
+        }
+        j += closeCount;
+      }
+      const end = found ? j : i + tickCount;
+      markNonWS(i, end);
+      i = end;
+    } else if (ch === 36 /* '$' */) {
+      let j = i + 1;
+      while (j < line.length && line.charCodeAt(j) !== 36) j++;
+      const end = j < line.length ? j + 1 : line.length;
+      markNonWS(i, end);
+      i = end;
+    } else if (ch === 124 /* '|' */) {
+      if (!first || cellStart > -1) count++;
+      first = false;
+      if (elts) {
+        if (cellStart > -1) parseCell();
+        elts.push(cx.elt("TableDelimiter", i + offset, i + offset + 1));
+      }
+      cellStart = cellEnd = -1;
+      i++;
+    } else if (ch !== 32 /* ' ' */ && ch !== 9 /* '\t' */) {
+      markNonWS(i, i + 1);
+      i++;
+    } else {
+      i++;
+    }
+  }
+
+  if (cellStart > -1) {
+    count++;
+    if (elts) parseCell();
+  }
+
+  return count;
+}
+
+/** Quick pre-check: does the string contain any unescaped pipe character? */
+function hasPipe(str: string, start: number): boolean {
+  for (let i = start; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    if (ch === 124 /* '|' */) return true;
+    if (ch === 92 /* '\\' */) i++;
+  }
+  return false;
+}
+
+const delimiterLine = /^\|?(\s*:?-+:?\s*\|)+(\s*:?-+:?\s*)?$/;
+
+class TableParser implements LeafBlockParser {
+  // null  = haven't seen the second line yet
+  // false = not a table
+  // array = table in progress; accumulated rows
+  rows: false | null | Element[] = null;
+
+  nextLine(cx: BlockContext, line: Line, leaf: LeafBlock): boolean {
+    if (this.rows == null) {
+      // Second line — check if it's a valid delimiter row
+      this.rows = false;
+      let lineText: string;
+      if (
+        (line.next === 45 || line.next === 58 || line.next === 124) &&
+        delimiterLine.test((lineText = line.text.slice(line.pos)))
+      ) {
+        const firstRow: Element[] = [];
+        const firstCount = parseRow(cx, leaf.content, 0, firstRow, leaf.start);
+        if (firstCount === parseRow(cx, lineText, line.pos)) {
+          this.rows = [
+            cx.elt(
+              "TableHeader",
+              leaf.start,
+              leaf.start + leaf.content.length,
+              firstRow,
+            ),
+            cx.elt(
+              "TableDelimiter",
+              cx.lineStart + line.pos,
+              cx.lineStart + line.text.length,
+            ),
+          ];
+        }
+      }
+    } else if (this.rows) {
+      // Data row
+      const content: Element[] = [];
+      parseRow(cx, line.text, line.pos, content, cx.lineStart);
+      this.rows.push(
+        cx.elt(
+          "TableRow",
+          cx.lineStart + line.pos,
+          cx.lineStart + line.text.length,
+          content,
+        ),
+      );
+    }
+    return false;
+  }
+
+  finish(cx: BlockContext, leaf: LeafBlock): boolean {
+    if (!this.rows) return false;
+    cx.addLeafElement(
+      leaf,
+      cx.elt(
+        "Table",
+        leaf.start,
+        leaf.start + leaf.content.length,
+        this.rows as readonly Element[],
+      ),
+    );
+    return true;
+  }
+}
+
+/**
+ * Span-aware GFM table extension.
+ *
+ * Drop-in replacement for the `Table` export from `@lezer/markdown`.
+ * Uses the same node names (Table, TableHeader, TableRow, TableCell,
+ * TableDelimiter) so all downstream consumers work without changes.
+ */
+export const tableExtension: MarkdownConfig = {
+  defineNodes: [
+    { name: "Table", block: true },
+    { name: "TableHeader", style: { "TableHeader/...": t.heading } },
+    "TableRow",
+    { name: "TableCell", style: t.content },
+    { name: "TableDelimiter", style: t.processingInstruction },
+  ],
+  parseBlock: [
+    {
+      name: "Table",
+      leaf(_, leaf) {
+        return hasPipe(leaf.content, 0) ? new TableParser() : null;
+      },
+      endLeaf(cx, line, leaf) {
+        if (
+          leaf.parsers.some((p) => p instanceof TableParser) ||
+          !hasPipe(line.text, line.basePos)
+        )
+          return false;
+        const next = cx.peekLine();
+        return (
+          delimiterLine.test(next) &&
+          parseRow(cx, line.text, line.basePos) ===
+            parseRow(cx, next, line.basePos)
+        );
+      },
+      before: "SetextHeading",
+    },
+  ],
+};

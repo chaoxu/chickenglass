@@ -15,7 +15,9 @@ export { equationLabelExtension } from "./equation-label";
 export { strikethroughExtension } from "./strikethrough";
 export { highlightExtension } from "./highlight";
 export { footnoteExtension } from "./footnote";
-import { Table, TaskList } from "@lezer/markdown";
+export { tableExtension } from "./table";
+import { TaskList } from "@lezer/markdown";
+import { tableExtension } from "./table";
 import { removeIndentedCode } from "./remove-indented-code";
 import { removeBlockquote } from "./remove-blockquote";
 import { mathExtension } from "./math-backslash";
@@ -39,7 +41,7 @@ export const markdownExtensions = [
   strikethroughExtension,
   highlightExtension,
   footnoteExtension,
-  Table,
+  tableExtension,
   TaskList,
 ];
 
@@ -60,6 +62,6 @@ export const htmlRenderExtensions = [
   strikethroughExtension,
   highlightExtension,
   footnoteExtension,
-  Table,
+  tableExtension,
   TaskList,
 ];
