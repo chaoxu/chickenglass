@@ -4,7 +4,7 @@ import {
   type Extension,
   RangeSetBuilder,
 } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
+import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import { createDecorationsField } from "./render-utils";
 
 /**
@@ -95,7 +95,9 @@ function buildContainerDecorations(state: EditorState) {
  */
 export const containerAttributesField = createDecorationsField(
   buildContainerDecorations,
-  (tr) => syntaxTree(tr.state) !== syntaxTree(tr.startState),
+  (tr) =>
+    syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
+    syntaxTreeAvailable(tr.state, tr.state.doc.length),
   true, // mapOnDocChanged
 );
 

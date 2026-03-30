@@ -1,5 +1,5 @@
 import { StateField, type EditorState, type Text } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
+import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import type { EditorView } from "@codemirror/view";
 import { parseTable, type ParsedTable } from "./table-utils";
 
@@ -79,9 +79,12 @@ export const tableDiscoveryField = StateField.define<readonly TableRange[]>({
   },
 
   update(value, tr) {
+    if (tr.docChanged) {
+      return collectTables(tr.state);
+    }
     if (
-      tr.docChanged ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+      syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
+      syntaxTreeAvailable(tr.state, tr.state.doc.length)
     ) {
       return collectTables(tr.state);
     }
