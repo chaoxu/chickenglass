@@ -357,4 +357,41 @@ describe("incremental document analysis engine", () => {
     ]);
     expect("revision" in analysis).toBe(false);
   });
+
+  it("correctly expands dirty windows with many equations (binary-search regression)", () => {
+    const equationCount = 100;
+    const lines: string[] = ["# Many equations", ""];
+    for (let i = 0; i < equationCount; i++) {
+      lines.push(`$$x_{${i}}$$ {#eq:e${i}}`, "");
+    }
+    lines.push("Tail.");
+    const doc = lines.join("\n");
+
+    const state = createState(doc);
+    const before = analyze(state);
+    // Parser may not find all equations in a single synchronous parse;
+    // just verify we got a substantial number for a meaningful test.
+    expect(before.equations.length).toBeGreaterThan(50);
+
+    // Edit inside an equation near the middle of the parsed range.
+    const midIdx = Math.floor(before.equations.length / 2);
+    const midEq = before.equations[midIdx];
+    const editPos = midEq.from + 2;
+    const tr = state.update({
+      changes: { from: editPos, to: editPos + 1, insert: "Z" },
+    });
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      syntaxTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+
+    const rebuilt = analyze(tr.state);
+    expect(after.equations.length).toBe(rebuilt.equations.length);
+    for (let i = 0; i < rebuilt.equations.length; i++) {
+      expect(after.equations[i]).toEqual(rebuilt.equations[i]);
+    }
+    expect(after.mathRegions.length).toBe(rebuilt.mathRegions.length);
+  });
 });

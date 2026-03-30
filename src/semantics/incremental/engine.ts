@@ -37,6 +37,7 @@ import {
   type ReferenceSlice,
 } from "./slices/reference-slice";
 import {
+  lowerBoundByTo,
   mapRangeObject,
   replaceOverlappingRanges,
   type PositionMapper,
@@ -334,19 +335,27 @@ function expandDirtyWindows(
     let { fromOld, toOld, fromNew, toNew } = window;
     let expanded = false;
 
-    for (const range of previousRanges) {
-      const overlaps = touchingInclusive
-        ? range.from <= toOld && fromOld <= range.to
-        : range.from <= toOld && fromOld < range.to;
-      if (overlaps) {
-        const mappedFrom = mapOldToNew(range.from, -1);
-        const mappedTo = Math.max(mappedFrom, mapOldToNew(range.to, 1));
-        fromOld = Math.min(fromOld, range.from);
-        toOld = Math.max(toOld, range.to);
-        fromNew = Math.min(fromNew, mappedFrom);
-        toNew = Math.max(toNew, mappedTo);
-        expanded = true;
-      }
+    // Binary search: jump to the first range whose `to` can satisfy the
+    // overlap condition with the window's left edge.
+    //   touchingInclusive: fromOld <= range.to  →  range.to >= fromOld
+    //   non-inclusive:     fromOld <  range.to  →  range.to >= fromOld + 1
+    const minTo = touchingInclusive ? fromOld : fromOld + 1;
+    let i = lowerBoundByTo(previousRanges, minTo);
+
+    // Scan forward: every candidate from `i` onward has range.to >= minTo,
+    // and fromOld can only decrease during expansion, so the `to` half of
+    // the overlap condition stays satisfied.  Stop once range.from exceeds
+    // the (growing) toOld.
+    while (i < previousRanges.length && previousRanges[i].from <= toOld) {
+      const range = previousRanges[i];
+      const mappedFrom = mapOldToNew(range.from, -1);
+      const mappedTo = Math.max(mappedFrom, mapOldToNew(range.to, 1));
+      fromOld = Math.min(fromOld, range.from);
+      toOld = Math.max(toOld, range.to);
+      fromNew = Math.min(fromNew, mappedFrom);
+      toNew = Math.max(toNew, mappedTo);
+      expanded = true;
+      i++;
     }
 
     if (expanded) anyExpanded = true;
