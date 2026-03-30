@@ -2,30 +2,16 @@ import type { KnipConfig } from "knip";
 
 const config: KnipConfig = {
   entry: [
-    "src/main.tsx",
+    "src/app/main.tsx",
     "editor.ts",
     "src/editor/index.ts",
     "src/app/index.ts",
-    "src/test-setup.ts",
     "scripts/*.mjs",
     "scripts/regression-tests/*.mjs",
-    "vite.config.ts",
-    "vite.editor.config.ts",
-    "vitest.config.ts",
-    "knip.config.ts",
   ],
   project: ["src/**/*.{ts,tsx}", "editor.ts", "scripts/**/*.mjs"],
-  ignore: [
-    "src-tauri/**",
-    "demo/**",
-    ".worktrees/**",
-    "dist/**",
-  ],
   ignoreBinaries: ["sleep", "wait", "python3"],
   ignoreDependencies: [
-    // Installed for hook-level tests (#707), not yet used
-    "@testing-library/react",
-    "@testing-library/jest-dom",
     // Tauri CLI — invoked via shell, not imported
     "@tauri-apps/cli",
     // Tailwind — used via @tailwindcss/vite plugin, not imported directly
@@ -33,10 +19,12 @@ const config: KnipConfig = {
     // Type-only packages
     "@types/dompurify",
     "@types/katex",
-    "@types/node",
-    "@types/react",
-    "@types/react-dom",
+    // Added for hook-level tests (#707); not yet imported in test files
+    "@testing-library/react",
   ],
+  // Focus on unused files and missing deps; skip unused-export noise from
+  // barrel re-exports (226 UI component re-exports are expected by design).
+  include: ["files", "dependencies", "unlisted"],
 };
 
 export default config;
