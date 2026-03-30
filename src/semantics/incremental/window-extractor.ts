@@ -411,19 +411,23 @@ export function computeNarrativeExtractionRange(
   const to = paragraphEnd(doc, windowTo);
 
   const excludedRanges: ExcludedRange[] = [];
-  tree.iterate({
-    from,
-    to,
-    enter(node) {
-      switch (node.type.name) {
+  const c = tree.cursor();
+  scan: for (;;) {
+    if (c.from <= to && c.to >= from) {
+      switch (c.name) {
         case "InlineCode":
         case "InlineMath":
         case "Link":
-          excludedRanges.push({ from: node.from, to: node.to });
+          excludedRanges.push({ from: c.from, to: c.to });
           break;
       }
-    },
-  });
+      if (c.firstChild()) continue;
+    }
+    for (;;) {
+      if (c.nextSibling()) break;
+      if (!c.parent()) break scan;
+    }
+  }
 
   return { range: { from, to }, excludedRanges };
 }
@@ -436,41 +440,44 @@ export function collectStructuralWindow(
 ): StructuralWindowExtraction {
   const range = normalizeWindow(doc, window);
 
-  tree.iterate({
-    from: range.from,
-    to: range.to,
-    enter(node) {
-      const name = node.type.name;
+  const c = tree.cursor();
+  scan: for (;;) {
+    if (c.from <= range.to && c.to >= range.from) {
+      const name = c.name;
 
       const headingMatch = ATX_HEADING_RE.exec(name);
       if (headingMatch) {
-        collectHeading(doc, node, result, Number(headingMatch[1]));
-        return;
+        collectHeading(doc, c, result, Number(headingMatch[1]));
+      } else {
+        switch (name) {
+          case "FootnoteRef":
+            collectFootnoteRef(doc, c, result);
+            break;
+          case "FootnoteDef":
+            collectFootnoteDef(doc, c, result);
+            break;
+          case "FencedDiv":
+            collectFencedDiv(doc, c, result);
+            break;
+          case "InlineMath":
+          case "DisplayMath":
+            collectMath(doc, c, result);
+            break;
+          case "InlineCode":
+            result.excludedRanges.push({ from: c.from, to: c.to });
+            break;
+          case "Link":
+            collectLink(doc, c, result);
+            break;
+        }
       }
-
-      switch (name) {
-        case "FootnoteRef":
-          collectFootnoteRef(doc, node, result);
-          return;
-        case "FootnoteDef":
-          collectFootnoteDef(doc, node, result);
-          return;
-        case "FencedDiv":
-          collectFencedDiv(doc, node, result);
-          return;
-        case "InlineMath":
-        case "DisplayMath":
-          collectMath(doc, node, result);
-          return;
-        case "InlineCode":
-          result.excludedRanges.push({ from: node.from, to: node.to });
-          return;
-        case "Link":
-          collectLink(doc, node, result);
-          return;
-      }
-    },
-  });
+      if (c.firstChild()) continue;
+    }
+    for (;;) {
+      if (c.nextSibling()) break;
+      if (!c.parent()) break scan;
+    }
+  }
 
   collectNarrativeRefsInWindow(doc, result.excludedRanges, range, result.narrativeRefs);
 

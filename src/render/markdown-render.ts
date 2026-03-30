@@ -350,14 +350,19 @@ function collectMarkdownItems(
   const ctx: MarkdownHandlerContext = { view, items: [], cursorInHeading: false };
 
   for (const { from, to } of ranges) {
-    syntaxTree(view.state).iterate({
-      from,
-      to,
-      enter(node) {
-        const handler = MARKDOWN_HANDLERS.get(node.name);
-        if (handler) return handler.handle(node, ctx);
-      },
-    });
+    const c = syntaxTree(view.state).cursor();
+    scan: for (;;) {
+      let descend = false;
+      if (c.from <= to && c.to >= from) {
+        const handler = MARKDOWN_HANDLERS.get(c.name);
+        descend = handler ? handler.handle(c, ctx) !== false : true;
+      }
+      if (descend && c.firstChild()) continue;
+      for (;;) {
+        if (c.nextSibling()) break;
+        if (!c.parent()) break scan;
+      }
+    }
   }
 
   return ctx.items;

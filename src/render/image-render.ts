@@ -240,39 +240,46 @@ function collectImageRangesTracked(view: EditorView): ImageBuildResult {
   const tree = syntaxTree(view.state);
 
   for (const { from, to } of view.visibleRanges) {
-    tree.iterate({
-      from,
-      to,
-      enter(node) {
-        if (node.type.name !== "Image") return;
+    const c = tree.cursor();
+    scan: for (;;) {
+      let descend = false;
+      if (c.from <= to && c.to >= from) {
+        descend = true;
+        if (c.name === "Image") {
+          nodeRanges.push({ from: c.from, to: c.to });
 
-        nodeRanges.push({ from: node.from, to: node.to });
-
-        if (cursorInRange(view, node.from, node.to)) return false;
-
-        const parsed = readImageContent(view, node.node);
-        if (!parsed) return;
-
-        const preview = resolveLocalMediaPreview(view, parsed.src);
-        if (preview) {
-          trackedPaths.add(preview.resolvedPath);
-          pushWidgetDecoration(
-            items,
-            mediaPreviewWidget(parsed.alt, preview),
-            node.from,
-            node.to,
-          );
-        } else {
-          // Non-local source (absolute URL, data URI, etc.) — render as-is
-          pushWidgetDecoration(
-            items,
-            new ImageWidget(parsed.alt, parsed.src),
-            node.from,
-            node.to,
-          );
+          if (cursorInRange(view, c.from, c.to)) {
+            descend = false;
+          } else {
+            const parsed = readImageContent(view, c.node);
+            if (parsed) {
+              const preview = resolveLocalMediaPreview(view, parsed.src);
+              if (preview) {
+                trackedPaths.add(preview.resolvedPath);
+                pushWidgetDecoration(
+                  items,
+                  mediaPreviewWidget(parsed.alt, preview),
+                  c.from,
+                  c.to,
+                );
+              } else {
+                pushWidgetDecoration(
+                  items,
+                  new ImageWidget(parsed.alt, parsed.src),
+                  c.from,
+                  c.to,
+                );
+              }
+            }
+          }
         }
-      },
-    });
+      }
+      if (descend && c.firstChild()) continue;
+      for (;;) {
+        if (c.nextSibling()) break;
+        if (!c.parent()) break scan;
+      }
+    }
   }
 
   return { items, nodeRanges, trackedPaths };
