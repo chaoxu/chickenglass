@@ -19,7 +19,7 @@ import { readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { connectEditor, createArgParser, waitForDebugBridge, resetEditorState } from "./test-helpers.mjs";
+import { connectEditor, createArgParser, waitForDebugBridge, resetEditorState, disconnectBrowser } from "./test-helpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "regression-tests");
@@ -149,11 +149,7 @@ async function main() {
   }
 
   // Disconnect
-  try {
-    await page.context().browser()?.close();
-  } catch {
-    // Ignore disconnect errors — the browser may already be closed
-  }
+  await disconnectBrowser(page);
 
   process.exit(failed > 0 ? 1 : 0);
 }
