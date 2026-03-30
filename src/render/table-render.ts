@@ -113,10 +113,12 @@ const tableDecorationField = StateField.define<DecorationSet>({
 
     if (
       cellEdit === "commit" ||
-      tr.docChanged ||
       tr.state.field(tableDiscoveryField, false) !== tr.startState.field(tableDiscoveryField, false)
     ) {
       return buildTableDecorationsFromState(tr.state);
+    }
+    if (tr.docChanged) {
+      return value.map(tr.changes);
     }
     return value;
   },

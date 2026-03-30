@@ -827,11 +827,15 @@ const tableGridPlugin = ViewPlugin.fromClass(
       this.atomicRanges = artifacts.atomicRanges;
     }
     update(update: ViewUpdate) {
-      if (update.docChanged || tableDiscoveryChanged(update)) {
+      if (tableDiscoveryChanged(update)) {
         const artifacts = buildTableGridArtifacts(update.state);
         this.decorations = artifacts.structuralDecorations;
         this.outerDecorations = artifacts.cellDecorations;
         this.atomicRanges = artifacts.atomicRanges;
+      } else if (update.docChanged) {
+        this.decorations = this.decorations.map(update.changes);
+        this.outerDecorations = this.outerDecorations.map(update.changes);
+        this.atomicRanges = this.atomicRanges.map(update.changes);
       }
     }
   },

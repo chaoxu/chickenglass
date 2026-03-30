@@ -325,6 +325,18 @@ export const pluginRegistryField = StateField.define<PluginRegistryState>({
     const fm = tr.state.field(frontmatterField, false);
     return buildRegistry(nextBuiltins, fm?.config.blocks);
   },
+
+  compare(a, b) {
+    if (a.plugins.size !== b.plugins.size || a.disabled.size !== b.disabled.size) return false;
+    for (const [key, pa] of a.plugins) {
+      const pb = b.plugins.get(key);
+      if (!pb || pa.numbered !== pb.numbered || pa.title !== pb.title || pa.counter !== pb.counter) return false;
+    }
+    for (const key of a.disabled) {
+      if (!b.disabled.has(key)) return false;
+    }
+    return true;
+  },
 });
 
 /**
