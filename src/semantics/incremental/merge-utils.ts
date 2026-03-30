@@ -41,7 +41,7 @@ export function rangesOverlap(value: RangeLike, window: RangeLike): boolean {
   return value.from < window.to && window.from < value.to;
 }
 
-function lowerBoundByTo<T extends RangeLike>(
+export function lowerBoundByTo<T extends RangeLike>(
   values: readonly T[],
   target: number,
 ): number {
