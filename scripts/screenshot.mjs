@@ -9,7 +9,7 @@
  */
 
 import process from "node:process";
-import { connectEditor, openFile, screenshot, createArgParser } from "./test-helpers.mjs";
+import { connectEditor, openFile, screenshot, createArgParser, disconnectBrowser } from "./test-helpers.mjs";
 
 const args = process.argv.slice(2);
 const { getFlag } = createArgParser(args);
@@ -32,3 +32,5 @@ try {
 await openFile(page, file);
 await screenshot(page, output, { fullPage: true });
 console.log(output);
+
+await disconnectBrowser(page);
