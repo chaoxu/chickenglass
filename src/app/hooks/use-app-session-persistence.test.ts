@@ -499,4 +499,55 @@ describe("useAppSessionPersistence", () => {
     // Stale result must not be opened
     expect(ref.openFileCalls).not.toContain("docs/new-file.md");
   });
+
+  it("stops calling listChildren after workspace generation changes mid-search", async () => {
+    // Regression test for #703: verify that the guarded listChildren wrapper
+    // actually prevents subsequent listChildren calls when the workspace
+    // generation changes, rather than just discarding the final result.
+    const firstDeferred = createDeferred<FileEntry[]>();
+    const listChildren = vi.fn(async (path: string) => {
+      if (path === "a") return firstDeferred.promise;
+      // "b" should never be called if cancellation works
+      return [{ name: "b.md", path: "b/b.md", isDirectory: false }];
+    });
+    const workspaceRequestRef = { current: 1 };
+    const windowState = createMockWindowState({
+      currentDocument: null,
+      sidebarWidth: 220,
+    });
+    const { Harness, ref } = createHarness({
+      fileTree: createFileTree("", [
+        { name: "a", path: "a", isDirectory: true, children: undefined },
+        { name: "b", path: "b", isDirectory: true, children: undefined },
+      ]),
+      listChildren,
+      workspaceRequestRef,
+      windowState,
+    });
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    // listChildren("a") is now in flight
+    expect(listChildren).toHaveBeenCalledWith("a");
+
+    // Simulate project switch while listChildren("a") is awaiting
+    workspaceRequestRef.current = 2;
+
+    // Resolve first listChildren — the guarded wrapper should detect
+    // the generation change and abort the signal
+    await act(async () => {
+      firstDeferred.resolve([
+        { name: "a.md", path: "a/a.md", isDirectory: false },
+      ]);
+      await Promise.resolve();
+    });
+
+    // The key assertion: listChildren should NOT have been called for "b"
+    // because the signal was aborted after "a" resolved with a stale generation
+    expect(listChildren).not.toHaveBeenCalledWith("b");
+    expect(ref.openFileCalls).toHaveLength(0);
+  });
 });

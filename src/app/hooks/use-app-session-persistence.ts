@@ -91,7 +91,25 @@ export function useAppSessionPersistence({
           }
         }
 
-        const first = await findDefaultDocumentPath(fileTree, listChildren);
+        // Wrap listChildren to abort the search when the workspace
+        // generation changes (project switch during lazy search).
+        const controller = new AbortController();
+        const guardedListChildren = listChildren
+          ? async (path: string): Promise<FileEntry[]> => {
+              if (workspaceRequestRef.current !== gen) {
+                controller.abort();
+                return [];
+              }
+              const result = await listChildren(path);
+              if (workspaceRequestRef.current !== gen) {
+                controller.abort();
+                return [];
+              }
+              return result;
+            }
+          : undefined;
+
+        const first = await findDefaultDocumentPath(fileTree, guardedListChildren, controller.signal);
         // Abort if the project changed during the lazy search — the
         // returned path may belong to the new project's namespace.
         if (workspaceRequestRef.current !== gen) return;

@@ -12,7 +12,10 @@ import type { FileEntry } from "./file-manager";
 export async function findDefaultDocumentPath(
   fileTree: FileEntry,
   listChildren?: (path: string) => Promise<FileEntry[]>,
+  signal?: AbortSignal,
 ): Promise<string | null> {
+  if (signal?.aborted) return null;
+
   const rootFiles = (fileTree.children ?? []).filter((entry) => !entry.isDirectory);
   const preferred = rootFiles.find((entry) => entry.path === "main.md")
     ?? rootFiles.find((entry) => entry.path === "index.md")
@@ -20,10 +23,12 @@ export async function findDefaultDocumentPath(
   if (preferred) return preferred.path;
 
   const findFirst = async (entry: FileEntry): Promise<string | null> => {
+    if (signal?.aborted) return null;
     if (!entry.isDirectory) return entry.path;
     const children = listChildren
       ? (entry.children ?? await listChildren(entry.path))
       : (entry.children ?? []);
+    if (signal?.aborted) return null;
     for (const child of children) {
       const found = await findFirst(child);
       if (found) return found;
