@@ -1,8 +1,8 @@
 verify = [
-  "npm ci",
-  "npx tsc --noEmit",
-  "npm run lint",
-  "npm test",
+  "pnpm install --frozen-lockfile",
+  "pnpm exec tsc --noEmit",
+  "pnpm run lint",
+  "pnpm test",
 ]
 
 accept = """
