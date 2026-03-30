@@ -25,9 +25,14 @@ function createState(doc: string): EditorState {
   return state;
 }
 
+function fullTree(state: EditorState) {
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return syntaxTree(state);
+}
+
 function analyzeEquationSlice(state: EditorState): EquationSlice {
   const source = editorStateTextSource(state);
-  return buildEquationSlice(extractStructuralWindow(source, syntaxTree(state)));
+  return buildEquationSlice(extractStructuralWindow(source, fullTree(state)));
 }
 
 function expectEquationByIdMatchesSlice(slice: EquationSlice): void {
@@ -73,7 +78,7 @@ function mergeAndRebuild(
   const rebuilt = analyzeEquationSlice(tr.state);
   const delta = buildSemanticDelta(tr);
   const source = editorStateTextSource(tr.state);
-  const tree = syntaxTree(tr.state);
+  const tree = fullTree(tr.state);
   const expandedWindows = expandWindowsForEquations(
     delta.dirtyWindows,
     before.equations,

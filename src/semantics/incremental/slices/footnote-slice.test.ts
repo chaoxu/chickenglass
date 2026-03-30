@@ -23,9 +23,14 @@ function createState(doc: string): EditorState {
   return state;
 }
 
+function fullTree(state: EditorState) {
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return syntaxTree(state);
+}
+
 function analyzeFootnoteSlice(state: EditorState): FootnoteSlice {
   const source = editorStateTextSource(state);
-  return buildFootnoteSlice(extractStructuralWindow(source, syntaxTree(state)));
+  return buildFootnoteSlice(extractStructuralWindow(source, fullTree(state)));
 }
 
 function extractDirtyFootnoteWindows(
@@ -33,7 +38,7 @@ function extractDirtyFootnoteWindows(
   delta: ReturnType<typeof buildSemanticDelta>,
 ): DirtyFootnoteWindowExtraction[] {
   const source = editorStateTextSource(state);
-  const tree = syntaxTree(state);
+  const tree = fullTree(state);
 
   return delta.dirtyWindows.map((window) => ({
     window,

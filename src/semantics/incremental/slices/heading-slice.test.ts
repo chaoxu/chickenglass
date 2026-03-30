@@ -24,9 +24,14 @@ function createState(doc: string): EditorState {
   return state;
 }
 
+function fullTree(state: EditorState) {
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return syntaxTree(state);
+}
+
 function analyzeHeadingSlice(state: EditorState): HeadingSlice {
   const source = editorStateTextSource(state);
-  return buildHeadingSlice(extractStructuralWindow(source, syntaxTree(state)));
+  return buildHeadingSlice(extractStructuralWindow(source, fullTree(state)));
 }
 
 function extractDirtyHeadingWindows(
@@ -34,7 +39,7 @@ function extractDirtyHeadingWindows(
   delta: ReturnType<typeof buildSemanticDelta>,
 ): DirtyHeadingWindowExtraction[] {
   const source = editorStateTextSource(state);
-  const tree = syntaxTree(state);
+  const tree = fullTree(state);
 
   return delta.dirtyWindows.map((window) => ({
     window,

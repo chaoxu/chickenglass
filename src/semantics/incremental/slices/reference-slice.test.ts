@@ -24,9 +24,14 @@ function createState(doc: string): EditorState {
   return state;
 }
 
+function fullTree(state: EditorState) {
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return syntaxTree(state);
+}
+
 function analyzeReferenceSlice(state: EditorState): ReferenceSlice {
   const source = editorStateTextSource(state);
-  return buildReferenceSlice(extractStructuralWindow(source, syntaxTree(state)));
+  return buildReferenceSlice(extractStructuralWindow(source, fullTree(state)));
 }
 
 function extractDirtyReferenceWindows(
@@ -34,7 +39,7 @@ function extractDirtyReferenceWindows(
   delta: ReturnType<typeof buildSemanticDelta>,
 ): DirtyReferenceWindowExtraction[] {
   const source = editorStateTextSource(state);
-  const tree = syntaxTree(state);
+  const tree = fullTree(state);
 
   return delta.dirtyWindows.map((window) => ({
     window,

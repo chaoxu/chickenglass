@@ -24,9 +24,14 @@ function createState(doc: string): EditorState {
   return state;
 }
 
+function fullTree(state: EditorState) {
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return syntaxTree(state);
+}
+
 function analyzeMathSlice(state: EditorState): MathSlice {
   const source = editorStateTextSource(state);
-  return buildMathSlice(extractStructuralWindow(source, syntaxTree(state)));
+  return buildMathSlice(extractStructuralWindow(source, fullTree(state)));
 }
 
 function extractDirtyMathWindows(
@@ -34,7 +39,7 @@ function extractDirtyMathWindows(
   delta: ReturnType<typeof buildSemanticDelta>,
 ): DirtyMathWindowExtraction[] {
   const source = editorStateTextSource(state);
-  const tree = syntaxTree(state);
+  const tree = fullTree(state);
 
   return delta.dirtyWindows.map((window) => ({
     window,

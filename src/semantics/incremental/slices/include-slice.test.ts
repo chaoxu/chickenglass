@@ -21,6 +21,11 @@ function createState(doc: string): EditorState {
   return state;
 }
 
+function fullTree(state: EditorState) {
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return syntaxTree(state);
+}
+
 describe("deriveIncludeSlice", () => {
   it("updates only affected include entries after fenced-div merge", () => {
     const doc = [
@@ -35,7 +40,7 @@ describe("deriveIncludeSlice", () => {
     ].join("\n");
     const beforeState = createState(doc);
     const beforeDoc = editorStateTextSource(beforeState);
-    const before = analyzeDocumentSemantics(beforeDoc, syntaxTree(beforeState));
+    const before = analyzeDocumentSemantics(beforeDoc, fullTree(beforeState));
     const stableSecondInclude = before.includes[1];
 
     const from = doc.indexOf("chapter1.md");
@@ -47,7 +52,7 @@ describe("deriveIncludeSlice", () => {
     const extractedDirtyWindows = extractDirtyFencedDivWindows(
       before.fencedDivs,
       afterDoc,
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       tr.changes,
       delta.dirtyWindows,
     );
@@ -65,7 +70,7 @@ describe("deriveIncludeSlice", () => {
     );
 
     expect(afterIncludes).toEqual(
-      analyzeDocumentSemantics(afterDoc, syntaxTree(tr.state)).includes,
+      analyzeDocumentSemantics(afterDoc, fullTree(tr.state)).includes,
     );
     expect(afterIncludes[0]?.path).toBe("chapterA.md");
     expect(afterIncludes[1]).toBe(stableSecondInclude);
@@ -80,7 +85,7 @@ describe("deriveIncludeSlice", () => {
     ].join("\n");
     const beforeState = createState(doc);
     const beforeDoc = editorStateTextSource(beforeState);
-    const before = analyzeDocumentSemantics(beforeDoc, syntaxTree(beforeState));
+    const before = analyzeDocumentSemantics(beforeDoc, fullTree(beforeState));
 
     const from = doc.indexOf(".proof") + 1;
     const tr = beforeState.update({
@@ -91,7 +96,7 @@ describe("deriveIncludeSlice", () => {
     const extractedDirtyWindows = extractDirtyFencedDivWindows(
       before.fencedDivs,
       afterDoc,
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       tr.changes,
       delta.dirtyWindows,
     );
@@ -109,7 +114,7 @@ describe("deriveIncludeSlice", () => {
     );
 
     expect(afterIncludes).toEqual(
-      analyzeDocumentSemantics(afterDoc, syntaxTree(tr.state)).includes,
+      analyzeDocumentSemantics(afterDoc, fullTree(tr.state)).includes,
     );
     expect(afterIncludes).toHaveLength(1);
     expect(afterIncludes[0]?.path).toBe("chapter1.md");
@@ -128,7 +133,7 @@ describe("deriveIncludeSlice", () => {
     ].join("\n");
     const beforeState = createState(doc);
     const beforeDoc = editorStateTextSource(beforeState);
-    const before = analyzeDocumentSemantics(beforeDoc, syntaxTree(beforeState));
+    const before = analyzeDocumentSemantics(beforeDoc, fullTree(beforeState));
 
     const secondStart = doc.indexOf("::: {.include}", 1);
     const tr = beforeState.update({
@@ -139,7 +144,7 @@ describe("deriveIncludeSlice", () => {
     const extractedDirtyWindows = extractDirtyFencedDivWindows(
       before.fencedDivs,
       afterDoc,
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       tr.changes,
       delta.dirtyWindows,
     );
@@ -157,7 +162,7 @@ describe("deriveIncludeSlice", () => {
     );
 
     expect(afterIncludes).toEqual(
-      analyzeDocumentSemantics(afterDoc, syntaxTree(tr.state)).includes,
+      analyzeDocumentSemantics(afterDoc, fullTree(tr.state)).includes,
     );
     expect(afterIncludes.map((include) => include.path)).toEqual([
       "chapter1.md",
@@ -177,7 +182,7 @@ describe("deriveIncludeSlice", () => {
     ].join("\n");
     const beforeState = createState(doc);
     const beforeDoc = editorStateTextSource(beforeState);
-    const before = analyzeDocumentSemantics(beforeDoc, syntaxTree(beforeState));
+    const before = analyzeDocumentSemantics(beforeDoc, fullTree(beforeState));
 
     const from = doc.indexOf("1\n\n:::");
     const tr = beforeState.update({
@@ -188,7 +193,7 @@ describe("deriveIncludeSlice", () => {
     const extractedDirtyWindows = extractDirtyFencedDivWindows(
       before.fencedDivs,
       afterDoc,
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       tr.changes,
       delta.dirtyWindows,
     );
@@ -206,10 +211,10 @@ describe("deriveIncludeSlice", () => {
     );
 
     expect(afterFencedDivs).toEqual(
-      analyzeDocumentSemantics(afterDoc, syntaxTree(tr.state)).fencedDivs,
+      analyzeDocumentSemantics(afterDoc, fullTree(tr.state)).fencedDivs,
     );
     expect(afterIncludes).toEqual(
-      analyzeDocumentSemantics(afterDoc, syntaxTree(tr.state)).includes,
+      analyzeDocumentSemantics(afterDoc, fullTree(tr.state)).includes,
     );
     expect(afterIncludes).toEqual([]);
   });

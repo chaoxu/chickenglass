@@ -23,6 +23,11 @@ function createSemanticsState(doc: string): EditorState {
   return state;
 }
 
+function fullTree(state: EditorState) {
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return syntaxTree(state);
+}
+
 function replaceOnce(state: EditorState, target: string, insert: string): EditorState {
   const from = state.doc.toString().indexOf(target);
   if (from < 0) {
@@ -47,7 +52,7 @@ function expectEquationStateMatchesRebuild(state: EditorState): void {
   const analysis = state.field(documentAnalysisField);
   const rebuilt = analyzeDocumentSemantics(
     editorStateTextSource(state),
-    syntaxTree(state),
+    fullTree(state),
   );
 
   expect(analysis.equations).toEqual(rebuilt.equations);

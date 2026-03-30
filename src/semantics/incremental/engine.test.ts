@@ -22,8 +22,13 @@ function createState(doc: string): EditorState {
   return state;
 }
 
+function fullTree(state: EditorState) {
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return syntaxTree(state);
+}
+
 function analyze(state: EditorState) {
-  return createDocumentAnalysis(editorStateTextSource(state), syntaxTree(state));
+  return createDocumentAnalysis(editorStateTextSource(state), fullTree(state));
 }
 
 describe("incremental document analysis engine", () => {
@@ -44,7 +49,7 @@ describe("incremental document analysis engine", () => {
     const after = updateDocumentAnalysis(
       before,
       editorStateTextSource(tr.state),
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       buildSemanticDelta(tr),
     );
 
@@ -75,7 +80,7 @@ describe("incremental document analysis engine", () => {
     const after = updateDocumentAnalysis(
       before,
       editorStateTextSource(tr.state),
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       buildSemanticDelta(tr),
     );
 
@@ -119,7 +124,7 @@ describe("incremental document analysis engine", () => {
     const mid = updateDocumentAnalysis(
       before,
       editorStateTextSource(tr1.state),
-      syntaxTree(tr1.state),
+      fullTree(tr1.state),
       buildSemanticDelta(tr1),
     );
 
@@ -129,7 +134,7 @@ describe("incremental document analysis engine", () => {
       updateDocumentAnalysis(
         mid,
         editorStateTextSource(tr2.state),
-        syntaxTree(tr2.state),
+        fullTree(tr2.state),
         buildSemanticDelta(tr2),
       ),
     ).not.toThrow();
@@ -147,7 +152,7 @@ describe("incremental document analysis engine", () => {
     const mid = updateDocumentAnalysis(
       before,
       editorStateTextSource(tr1.state),
-      syntaxTree(tr1.state),
+      fullTree(tr1.state),
       buildSemanticDelta(tr1),
     );
 
@@ -156,7 +161,7 @@ describe("incremental document analysis engine", () => {
     const after = updateDocumentAnalysis(
       mid,
       editorStateTextSource(tr2.state),
-      syntaxTree(tr2.state),
+      fullTree(tr2.state),
       buildSemanticDelta(tr2),
     );
 
@@ -186,7 +191,7 @@ describe("incremental document analysis engine", () => {
     const after = updateDocumentAnalysis(
       before,
       editorStateTextSource(tr.state),
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       buildSemanticDelta(tr),
     );
 
@@ -210,7 +215,7 @@ describe("incremental document analysis engine", () => {
     const after = updateDocumentAnalysis(
       before,
       editorStateTextSource(tr.state),
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       buildSemanticDelta(tr),
     );
 
@@ -239,7 +244,7 @@ describe("incremental document analysis engine", () => {
     const after = updateDocumentAnalysis(
       before,
       editorStateTextSource(tr.state),
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       buildSemanticDelta(tr),
     );
 
@@ -270,7 +275,7 @@ describe("incremental document analysis engine", () => {
     const after = updateDocumentAnalysis(
       before,
       editorStateTextSource(tr.state),
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       buildSemanticDelta(tr),
     );
 
@@ -299,7 +304,7 @@ describe("incremental document analysis engine", () => {
     const after = updateDocumentAnalysis(
       before,
       editorStateTextSource(tr.state),
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       buildSemanticDelta(tr),
     );
 
@@ -328,7 +333,7 @@ describe("incremental document analysis engine", () => {
     const after = updateDocumentAnalysis(
       before,
       editorStateTextSource(tr.state),
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       buildSemanticDelta(tr),
     );
 
@@ -385,7 +390,7 @@ describe("incremental document analysis engine", () => {
     const after = updateDocumentAnalysis(
       before,
       editorStateTextSource(tr.state),
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       buildSemanticDelta(tr),
     );
 

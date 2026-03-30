@@ -20,6 +20,11 @@ function createState(doc: string): EditorState {
   return state;
 }
 
+function fullTree(state: EditorState) {
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return syntaxTree(state);
+}
+
 describe("mergeFencedDivSlice", () => {
   it("replaces only dirty-window overlaps and preserves unrelated identity", () => {
     const doc = [
@@ -34,7 +39,7 @@ describe("mergeFencedDivSlice", () => {
     ].join("\n");
     const beforeState = createState(doc);
     const beforeDoc = editorStateTextSource(beforeState);
-    const beforeDivs = analyzeFencedDivs(beforeDoc, syntaxTree(beforeState));
+    const beforeDivs = analyzeFencedDivs(beforeDoc, fullTree(beforeState));
     const stableSecondDiv = beforeDivs[1];
 
     const from = doc.indexOf("alpha");
@@ -46,7 +51,7 @@ describe("mergeFencedDivSlice", () => {
     const extractedDirtyWindows = extractDirtyFencedDivWindows(
       beforeDivs,
       afterDoc,
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       tr.changes,
       delta.dirtyWindows,
     );
@@ -57,7 +62,7 @@ describe("mergeFencedDivSlice", () => {
       extractedDirtyWindows,
     );
 
-    expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, syntaxTree(tr.state)));
+    expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, fullTree(tr.state)));
     expect(afterDivs[1]).toBe(stableSecondDiv);
     expect(afterDivs[0]).not.toBe(beforeDivs[0]);
   });
@@ -70,7 +75,7 @@ describe("mergeFencedDivSlice", () => {
     ].join("\n");
     const beforeState = createState(doc);
     const beforeDoc = editorStateTextSource(beforeState);
-    const beforeDivs = analyzeFencedDivs(beforeDoc, syntaxTree(beforeState));
+    const beforeDivs = analyzeFencedDivs(beforeDoc, fullTree(beforeState));
 
     const from = doc.indexOf("alpha");
     const tr = beforeState.update({
@@ -81,7 +86,7 @@ describe("mergeFencedDivSlice", () => {
     const extractedDirtyWindows = extractDirtyFencedDivWindows(
       beforeDivs,
       afterDoc,
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       tr.changes,
       delta.dirtyWindows,
     );
@@ -92,7 +97,7 @@ describe("mergeFencedDivSlice", () => {
       extractedDirtyWindows,
     );
 
-    expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, syntaxTree(tr.state)));
+    expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, fullTree(tr.state)));
     expect(afterDivs[0]?.closeFenceFrom).toBe(-1);
     expect(afterDivs[0]?.closeFenceTo).toBe(-1);
   });
@@ -110,7 +115,7 @@ describe("mergeFencedDivSlice", () => {
     ].join("\n");
     const beforeState = createState(doc);
     const beforeDoc = editorStateTextSource(beforeState);
-    const beforeDivs = analyzeFencedDivs(beforeDoc, syntaxTree(beforeState));
+    const beforeDivs = analyzeFencedDivs(beforeDoc, fullTree(beforeState));
 
     const closeFenceFrom = doc.indexOf("\n:::\n") + 1;
     const tr = beforeState.update({
@@ -121,7 +126,7 @@ describe("mergeFencedDivSlice", () => {
     const extractedDirtyWindows = extractDirtyFencedDivWindows(
       beforeDivs,
       afterDoc,
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       tr.changes,
       delta.dirtyWindows,
     );
@@ -132,7 +137,7 @@ describe("mergeFencedDivSlice", () => {
       extractedDirtyWindows,
     );
 
-    expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, syntaxTree(tr.state)));
+    expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, fullTree(tr.state)));
     expect(afterDivs).toHaveLength(2);
     expect(afterDivs[1]?.to).toBe(53);
     expect(afterDivs[1]?.closeFenceFrom).toBe(54);
@@ -149,7 +154,7 @@ describe("mergeFencedDivSlice", () => {
     ].join("\n");
     const beforeState = createState(doc);
     const beforeDoc = editorStateTextSource(beforeState);
-    const beforeDivs = analyzeFencedDivs(beforeDoc, syntaxTree(beforeState));
+    const beforeDivs = analyzeFencedDivs(beforeDoc, fullTree(beforeState));
 
     const from = doc.indexOf("1\n\n:::");
     const tr = beforeState.update({
@@ -160,7 +165,7 @@ describe("mergeFencedDivSlice", () => {
     const extractedDirtyWindows = extractDirtyFencedDivWindows(
       beforeDivs,
       afterDoc,
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       tr.changes,
       delta.dirtyWindows,
     );
@@ -171,7 +176,7 @@ describe("mergeFencedDivSlice", () => {
       extractedDirtyWindows,
     );
 
-    expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, syntaxTree(tr.state)));
+    expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, fullTree(tr.state)));
     expect(afterDivs).toEqual([]);
   });
 
@@ -188,7 +193,7 @@ describe("mergeFencedDivSlice", () => {
     ].join("\n");
     const beforeState = createState(doc);
     const beforeDoc = editorStateTextSource(beforeState);
-    const beforeDivs = analyzeFencedDivs(beforeDoc, syntaxTree(beforeState));
+    const beforeDivs = analyzeFencedDivs(beforeDoc, fullTree(beforeState));
 
     const from = doc.lastIndexOf("::::::");
     const tr = beforeState.update({
@@ -199,7 +204,7 @@ describe("mergeFencedDivSlice", () => {
     const extractedDirtyWindows = extractDirtyFencedDivWindows(
       beforeDivs,
       afterDoc,
-      syntaxTree(tr.state),
+      fullTree(tr.state),
       tr.changes,
       delta.dirtyWindows,
     );
@@ -210,7 +215,7 @@ describe("mergeFencedDivSlice", () => {
       extractedDirtyWindows,
     );
 
-    expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, syntaxTree(tr.state)));
+    expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, fullTree(tr.state)));
     expect(afterDivs[0]?.primaryClass).toBe("proof");
     expect(afterDivs[0]?.closeFenceFrom).toBe(-1);
     expect(afterDivs[0]?.closeFenceTo).toBe(-1);
