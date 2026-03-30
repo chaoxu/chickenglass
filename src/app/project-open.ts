@@ -13,6 +13,8 @@ export interface OpenProjectInCurrentWindowOptions {
   openFile: (path: string) => Promise<void>;
   /** When provided, default-doc search loads subdirectories lazily. */
   listChildren?: (path: string) => Promise<FileEntry[]>;
+  /** When provided, cancels the in-flight default-doc search early. */
+  signal?: AbortSignal;
 }
 
 export async function openProjectInCurrentWindow({
@@ -26,6 +28,7 @@ export async function openProjectInCurrentWindow({
   openProjectRoot,
   openFile,
   listChildren,
+  signal,
 }: OpenProjectInCurrentWindowOptions): Promise<boolean> {
   const requestId = nextRequestId();
 
@@ -46,7 +49,7 @@ export async function openProjectInCurrentWindow({
     return false;
   }
 
-  const targetPath = initialPath ?? await findDefaultDocumentPath(tree, listChildren);
+  const targetPath = initialPath ?? await findDefaultDocumentPath(tree, listChildren, signal);
   if (!targetPath) {
     return isRequestCurrent(requestId);
   }

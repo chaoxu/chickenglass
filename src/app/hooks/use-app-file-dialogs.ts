@@ -42,11 +42,16 @@ export function useAppFileDialogs({
   listChildren,
 }: AppFileDialogsDeps): AppFileDialogsReturn {
   const openProjectRequestRef = useRef(0);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   const openProjectInCurrentWindow = useCallback(async (
     projectRoot: string,
     initialPath?: string,
   ): Promise<boolean> => {
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
     return openProjectInCurrentWindowFlow({
       projectRoot,
       initialPath,
@@ -58,6 +63,7 @@ export function useAppFileDialogs({
       openProjectRoot: workspace.openProjectRoot,
       openFile: editor.openFile,
       listChildren,
+      signal: controller.signal,
     });
   }, [editor, workspace, listChildren]);
 
