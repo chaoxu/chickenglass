@@ -50,4 +50,13 @@ export const includeRegionsField = StateField.define<readonly IncludeRegionState
     }
     return next;
   },
+
+  compare(a, b) {
+    if (a === b) return true;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i].from !== b[i].from || a[i].to !== b[i].to || a[i].file !== b[i].file) return false;
+    }
+    return true;
+  },
 });

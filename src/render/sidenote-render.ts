@@ -109,6 +109,14 @@ export const footnoteInlineExpandedField = StateField.define<ReadonlySet<string>
     }
     return changed && next ? next : value;
   },
+  compare(a, b) {
+    if (a === b) return true;
+    if (a.size !== b.size) return false;
+    for (const id of a) {
+      if (!b.has(id)) return false;
+    }
+    return true;
+  },
 });
 
 /** Collect footnote references and definitions from the shared semantics field. */

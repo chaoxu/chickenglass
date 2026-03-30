@@ -62,6 +62,21 @@ export const pdfPreviewField = StateField.define<
     }
     return updated ?? value;
   },
+  compare(a, b) {
+    if (a === b) return true;
+    if (a.size !== b.size) return false;
+    for (const [key, entryA] of a) {
+      const entryB = b.get(key);
+      if (
+        !entryB ||
+        entryA.status !== entryB.status ||
+        entryA.errorTime !== entryB.errorTime
+      ) {
+        return false;
+      }
+    }
+    return true;
+  },
 });
 
 // ── Canvas cache (module-level, not in CM6 state) ────────────────────────────
