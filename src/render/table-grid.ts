@@ -33,6 +33,7 @@ import {
   tableDiscoveryField,
   findTablesInState,
   findTableAtCursor,
+  findCellBounds,
   findPipePositions,
   getCursorColIndex,
   getCursorRowIndex,
@@ -644,20 +645,24 @@ function buildGridContextMenuItems(
 }
 
 // ---------------------------------------------------------------------------
-// Click guard — prevent posAtCoords cross-row misresolution (#617)
+// Click guard — clamp click position to cell content bounds (#617)
 //
-// In CSS grid table rows the browser's caretPositionFromPoint can resolve
-// whitespace clicks in the last column to a position on the *next* row.
-// We detect this by comparing the line of the DOM-based cell element with
-// the line posAtCoords returned. When they disagree we place the cursor at
-// the end of the correct cell.
+// In CSS grid table rows, `posAtCoords` (via caretPositionFromPoint) can
+// return positions outside the clicked cell's content: it may land on the
+// wrong row entirely (cross-row drift in the last column) or in the
+// leading/trailing atomic-range whitespace, which renders visually at the
+// start of the next row. We use posAtDOM on the `.cf-grid-cell` element to
+// identify the correct cell, then clamp the result to the trimmed content
+// bounds [cell.from, cell.to].
 // ---------------------------------------------------------------------------
 
 /**
- * When posAtCoords resolves to the wrong row (common in the last column of
- * CSS-grid tables), return the corrected position at the end of the correct
- * cell. Returns `null` when no correction is needed or when the click target
- * is not inside a grid cell.
+ * If the click lands outside the cell's content bounds — either on a
+ * different row (browser caretPositionFromPoint cross-row misresolution,
+ * common in the last column of CSS-grid tables) or in the leading/trailing
+ * whitespace area that maps to an atomic range — return the clamped position
+ * at the end of the cell's trimmed content. Returns `null` when `posAtCoords`
+ * already resolved within the cell content bounds.
  */
 function guardCrossRowPos(
   view: EditorView,
@@ -670,21 +675,13 @@ function guardCrossRowPos(
   const gridCell = el.closest(".cf-grid-cell");
   if (!gridCell) return null;
 
-  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-  if (pos === null) return null;
-
-  const cellPos = view.posAtDOM(gridCell, 0);
-  const cellLine = view.state.doc.lineAt(cellPos);
-  const posLine = view.state.doc.lineAt(pos);
-
-  if (posLine.number === cellLine.number) return null;
-
+  const cellLine = view.state.doc.lineAt(view.posAtDOM(gridCell, 0));
   const col = parseInt((gridCell as HTMLElement).getAttribute("data-col") ?? "0", 10);
-  const pipes = findPipePositions(cellLine.text);
-  if (pipes.length < 2) return null;
-  const cells = getCellBounds(cellLine, pipes);
-  const cell = cells.find(c => c.col === col);
+  const cell = findCellBounds(cellLine.text, cellLine.from, col);
   if (!cell) return null;
+
+  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+  if (pos !== null && pos >= cell.from && pos <= cell.to) return null;
 
   return cell.to;
 }
