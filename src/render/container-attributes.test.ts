@@ -150,4 +150,44 @@ describe("containerAttributesField", () => {
       expect(extractTagNames(newState)).toEqual(["p"]);
     });
   });
+
+  describe("mapOnDocChanged (#718)", () => {
+    it("decoration positions remain correct after text insertion", () => {
+      const state = createState("# Title\n\nParagraph text");
+      const before = extractTags(state);
+      expect(before).toEqual([
+        { pos: 0, tag: "h1" },
+        { pos: 9, tag: "p" },
+      ]);
+
+      // Insert text within the paragraph — shifts paragraph content
+      // but doesn't change block structure
+      const edited = state.update({
+        changes: { from: 9, insert: "More " },
+      }).state;
+      const after = extractTags(edited);
+
+      expect(after[0]).toEqual({ pos: 0, tag: "h1" });
+      expect(after[1].tag).toBe("p");
+      expect(after[1].pos).toBe(9); // paragraph starts at same line
+    });
+
+    it("decoration positions remain correct after text deletion", () => {
+      const state = createState("# Title\n\nParagraph");
+      const before = extractTags(state);
+      expect(before.length).toBe(2);
+
+      // Delete the blank line between heading and paragraph
+      const edited = state.update({
+        changes: { from: 8, to: 9 },
+      }).state;
+      const after = extractTags(edited);
+
+      // All decorations should reference valid line positions
+      for (const t of after) {
+        const line = edited.doc.lineAt(t.pos);
+        expect(line.from).toBe(t.pos);
+      }
+    });
+  });
 });

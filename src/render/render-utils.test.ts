@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { Decoration } from "@codemirror/view";
+import { Decoration, type DecorationSet } from "@codemirror/view";
 import type { Range, EditorState } from "@codemirror/state";
 import { StateEffect } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
@@ -683,6 +683,108 @@ describe("createDecorationsField", () => {
     const specs = getDecorationSpecs(view.state.field(field));
     expect(specs).toHaveLength(1);
     expect(specs[0].class).toBe("test-line");
+  });
+
+  // ── mapOnDocChanged (#718) ──────────────────────────────────────────
+
+  /** Iterate a DecorationSet into an array of {from, to} for position checks. */
+  function* iterDecos(decoSet: DecorationSet) {
+    const iter = decoSet.iter();
+    while (iter.value) {
+      yield { from: iter.from, to: iter.to };
+      iter.next();
+    }
+  }
+
+  it("maps decorations instead of rebuilding when mapOnDocChanged is true and predicate returns false", () => {
+    const lineDeco = Decoration.line({ class: "test-mapped" });
+    let buildCount = 0;
+    const field = createDecorationsField(
+      (s) => {
+        buildCount++;
+        // Place a line decoration at start of line 2
+        if (s.doc.lines >= 2) {
+          return Decoration.set([lineDeco.range(s.doc.line(2).from)]);
+        }
+        return Decoration.none;
+      },
+      () => false, // never rebuild — force mapping path
+      true, // mapOnDocChanged
+    );
+    const state = createEditorState("first\nsecond", { extensions: [field] });
+    expect(buildCount).toBe(1); // initial build
+
+    // Decoration at start of "second" = position 6
+    const iter1 = state.field(field).iter();
+    expect(iter1.from).toBe(6);
+
+    buildCount = 0;
+    // Insert "XX" at beginning — shifts all positions by 2
+    const edited = state.update({ changes: { from: 0, insert: "XX" } }).state;
+
+    expect(buildCount).toBe(0); // builder was NOT called
+    const iter2 = edited.field(field).iter();
+    expect(iter2.from).toBe(8); // 6 + 2 = correctly mapped
+  });
+
+  it("rebuilds when predicate fires even with mapOnDocChanged enabled", () => {
+    let buildCount = 0;
+    const field = createDecorationsField(
+      () => {
+        buildCount++;
+        return Decoration.none;
+      },
+      () => true, // always rebuild
+      true,
+    );
+    const state = createEditorState("hello", { extensions: [field] });
+    buildCount = 0;
+    const edited = state.update({ changes: { from: 0, insert: "X" } }).state;
+    edited.field(field); // access the field to trigger evaluation
+    expect(buildCount).toBe(1); // builder WAS called despite mapOnDocChanged
+  });
+
+  it("mapped decorations survive deletion without corruption (#718)", () => {
+    const lineDeco = Decoration.line({ class: "test-del" });
+    const field = createDecorationsField(
+      (s) => {
+        // Decorations on every line
+        const items: Range<Decoration>[] = [];
+        for (let i = 1; i <= s.doc.lines; i++) {
+          items.push(lineDeco.range(s.doc.line(i).from));
+        }
+        return Decoration.set(items);
+      },
+      () => false, // force mapping path
+      true,
+    );
+    const state = createEditorState("aaa\nbbb\nccc", { extensions: [field] });
+    // Positions: line1=0, line2=4, line3=8
+    const before = [...iterDecos(state.field(field))];
+    expect(before.map((d) => d.from)).toEqual([0, 4, 8]);
+
+    // Delete "aaa\n" (positions 0-4) — removes line 1, shifts rest by -4
+    const edited = state.update({ changes: { from: 0, to: 4 } }).state;
+    const after = [...iterDecos(edited.field(field))];
+    expect(after.map((d) => d.from)).toEqual([0, 4]); // mapped: bbb=0, ccc=4
+  });
+
+  it("does not map when docChanged is false with mapOnDocChanged enabled", () => {
+    let buildCount = 0;
+    const field = createDecorationsField(
+      () => {
+        buildCount++;
+        return Decoration.none;
+      },
+      () => false, // never rebuild
+      true,
+    );
+    const state = createEditorState("hello", { extensions: [field] });
+    buildCount = 0;
+    // Selection-only change — no doc change, no rebuild, no map
+    const updated = state.update({ selection: { anchor: 3 } }).state;
+    expect(buildCount).toBe(0);
+    expect(updated.field(field)).toBe(state.field(field)); // same reference
   });
 });
 

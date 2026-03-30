@@ -164,12 +164,15 @@ const fenceGuideField = StateField.define<FenceGuideState>({
   create: createFenceGuideState,
 
   update({ decorations, activePath }, tr) {
-    // Structural changes: always rebuild (positions shifted, tree may differ)
-    if (
-      tr.docChanged ||
-      syntaxTree(tr.state) !== syntaxTree(tr.startState)
-    ) {
+    // Tree changed: always rebuild (node boundaries may differ)
+    if (syntaxTree(tr.state) !== syntaxTree(tr.startState)) {
       return createFenceGuideState(tr.state);
+    }
+
+    // Doc changed without tree change: map positions to preserve
+    // RangeSet chunk identity for cheaper DOM reconciliation (#718).
+    if (tr.docChanged) {
+      return { decorations: decorations.map(tr.changes), activePath };
     }
 
     // Focus change: always rebuild (toggle visibility)
