@@ -1,6 +1,6 @@
 import { type EditorState, type Line, type Range, type StateField, type Transaction } from "@codemirror/state";
 import { type DecorationSet, Decoration, EditorView } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
+import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import {
   buildDecorations,
   createDecorationsField,
@@ -183,7 +183,8 @@ function cursorSensitiveMappedRebuild(tr: Transaction): boolean {
   return (
     tr.selection !== undefined ||
     tr.effects.some((e) => e.is(focusEffect)) ||
-    syntaxTree(tr.state) !== syntaxTree(tr.startState)
+    (syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
+      syntaxTreeAvailable(tr.state, tr.state.doc.length))
   );
 }
 

@@ -25,7 +25,7 @@ import {
   type Range,
   StateField,
 } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
+import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import {
   buildDecorations,
   editorFocusField,
@@ -164,9 +164,17 @@ const fenceGuideField = StateField.define<FenceGuideState>({
   create: createFenceGuideState,
 
   update({ decorations, activePath }, tr) {
-    // Tree changed: always rebuild (node boundaries may differ)
+    // Tree changed: rebuild only when the parse is complete.
+    // During progressive parsing, defer to avoid redundant rebuilds (#720).
     if (syntaxTree(tr.state) !== syntaxTree(tr.startState)) {
-      return createFenceGuideState(tr.state);
+      if (syntaxTreeAvailable(tr.state, tr.state.doc.length)) {
+        return createFenceGuideState(tr.state);
+      }
+      // Tree not yet complete — map positions if doc changed, else keep cached.
+      if (tr.docChanged) {
+        return { decorations: decorations.map(tr.changes), activePath };
+      }
+      return { decorations, activePath };
     }
 
     // Doc changed without tree change: map positions to preserve
