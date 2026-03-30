@@ -16,6 +16,54 @@ import { isTauri } from "../../lib/tauri";
 // was the only thing preventing Vite from code-splitting it.
 const tauriFs = () => import("../tauri-fs");
 
+/** Get the parent directory path. Root-level files return "". */
+function parentDir(path: string): string {
+  const i = path.lastIndexOf("/");
+  return i < 0 ? "" : path.substring(0, i);
+}
+
+/**
+ * Immutably replace a directory's children in the tree.
+ *
+ * Unlike `mergeChildrenInTree` (which only writes when `children` is
+ * undefined), this always overwrites the target directory's children —
+ * used after a file mutation when we know the directory contents changed.
+ *
+ * Already-loaded subtrees (expanded folders) are preserved: if a child
+ * directory existed before with populated children, those children carry
+ * over into the new entry so the sidebar doesn't collapse open folders.
+ *
+ * Returns the same reference when the target directory is not found.
+ */
+export function replaceChildrenInTree(
+  tree: FileEntry,
+  dirPath: string,
+  newChildren: FileEntry[],
+): FileEntry {
+  if (tree.path === dirPath) {
+    const prevChildren = tree.children;
+    const merged = newChildren.map((child) => {
+      if (!child.isDirectory || !prevChildren) return child;
+      const prev = prevChildren.find((c) => c.path === child.path && c.isDirectory);
+      if (prev?.children !== undefined) {
+        return { ...child, children: prev.children };
+      }
+      return child;
+    });
+    return { ...tree, children: merged };
+  }
+  if (!tree.children) return tree;
+  let changed = false;
+  const mapped = tree.children.map((child) => {
+    if (!child.isDirectory) return child;
+    if (child.path !== dirPath && !dirPath.startsWith(child.path + "/")) return child;
+    const replaced = replaceChildrenInTree(child, dirPath, newChildren);
+    if (replaced !== child) changed = true;
+    return replaced;
+  });
+  return changed ? { ...tree, children: mapped } : tree;
+}
+
 /**
  * Immutably merge loaded children into a tree at `dirPath`.
  *
@@ -64,7 +112,7 @@ export interface AppWorkspaceSessionController {
   windowState: ReturnType<typeof useWindowState>["windowState"];
   saveWindowState: ReturnType<typeof useWindowState>["saveState"];
   fileTree: FileEntry | null;
-  refreshTree: () => Promise<void>;
+  refreshTree: (changedPath?: string) => Promise<void>;
   /** Load children for a single directory and merge into the tree. */
   loadChildren: (dirPath: string) => Promise<void>;
   gitStatus: GitStatusMap;
@@ -201,7 +249,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     return tree;
   }, [fs, loadGitStatus]);
 
-  const refreshTree = useCallback(async () => {
+  const refreshTree = useCallback(async (changedPath?: string) => {
     const requestId = workspaceRequestRef.current;
     if (isTauri() && !projectRoot) {
       setFileTree(null);
@@ -209,9 +257,29 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       setGitStatus({});
       return;
     }
+
+    // Scoped refresh: reload only the parent directory of the changed path.
+    if (changedPath !== undefined && fs.listChildren) {
+      const dir = parentDir(changedPath);
+      try {
+        const children = await measureAsync(
+          "sidebar.file_tree_dir",
+          () => fs.listChildren?.(dir) as Promise<FileEntry[]>,
+          { category: "sidebar", detail: dir },
+        );
+        if (requestId !== workspaceRequestRef.current) return;
+        setFileTree((prev) => prev ? replaceChildrenInTree(prev, dir, children) : prev);
+        void loadGitStatus();
+        return;
+      } catch (e: unknown) {
+        if (requestId !== workspaceRequestRef.current) return;
+        console.error("[workspace] scoped tree refresh failed, falling back to full refresh", e);
+      }
+    }
+
+    // Full recursive load so expanded folders keep their children and
+    // consumers (export, default-doc) still see the complete tree.
     try {
-      // Full recursive load so expanded folders keep their children and
-      // consumers (export, default-doc) still see the complete tree.
       const tree = await measureAsync("sidebar.file_tree", () => fs.listTree(), {
         category: "sidebar",
       });

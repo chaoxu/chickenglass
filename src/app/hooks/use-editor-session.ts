@@ -25,7 +25,7 @@ import { useEditorSessionPersistence } from "./use-editor-session-persistence";
 
 export interface EditorSessionDeps {
   fs: FileSystem;
-  refreshTree: () => Promise<void>;
+  refreshTree: (changedPath?: string) => Promise<void>;
   refreshGitStatus: () => Promise<void>;
   addRecentFile: (path: string) => void;
   /** Lightweight callback fired after every successful save (not tree refresh). */
@@ -377,7 +377,7 @@ export function useEditorSession({
         category: "create_file",
         detail: path,
       });
-      await refreshTree();
+      await refreshTree(path);
       await openFile(path);
     } catch (e: unknown) {
       console.error("[session] create file failed:", e);
@@ -390,7 +390,7 @@ export function useEditorSession({
         category: "create_directory",
         detail: path,
       });
-      await refreshTree();
+      await refreshTree(path);
     } catch (e: unknown) {
       console.error("[session] create directory failed:", e);
     }

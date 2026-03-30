@@ -27,7 +27,7 @@ export interface AppEditorShellDeps {
   /** User settings (plugins enabled/disabled, word wrap, line numbers, tab size, etc.). */
   settings: Settings;
   /** Callback to refresh the file-tree sidebar after file-system mutations. */
-  refreshTree: () => Promise<void>;
+  refreshTree: (changedPath?: string) => Promise<void>;
   /** Callback to refresh git working-tree badges after saves. */
   refreshGitStatus: () => Promise<void>;
   /** Callback to record a newly opened path in the recent-files list. */

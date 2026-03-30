@@ -17,7 +17,7 @@ export interface GitBranchController {
 
 export interface UseGitBranchOptions {
   projectRoot: string | null;
-  refreshTree: () => Promise<void>;
+  refreshTree: (changedPath?: string) => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
   /** Close the active document (used when the file no longer exists after a branch switch). */
   closeCurrentFile: (options?: { discard?: boolean }) => Promise<boolean>;

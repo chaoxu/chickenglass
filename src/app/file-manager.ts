@@ -72,6 +72,39 @@ export class MemoryFileSystem implements FileSystem {
     return root;
   }
 
+  async listChildren(path: string): Promise<FileEntry[]> {
+    const prefix = path === "" ? "" : `${path}/`;
+    const entries = new Map<string, FileEntry>();
+
+    for (const dirPath of this.dirs) {
+      const rest = prefix === "" ? dirPath : (dirPath.startsWith(prefix) ? dirPath.slice(prefix.length) : null);
+      if (rest === null || rest === "" || rest.includes("/")) continue;
+      entries.set(dirPath, { name: rest, path: dirPath, isDirectory: true });
+    }
+
+    for (const filePath of this.files.keys()) {
+      const rest = prefix === "" ? filePath : (filePath.startsWith(prefix) ? filePath.slice(prefix.length) : null);
+      if (rest === null || rest === "") continue;
+      const slashIdx = rest.indexOf("/");
+      if (slashIdx === -1) {
+        entries.set(filePath, { name: rest, path: filePath, isDirectory: false });
+      } else {
+        const dirName = rest.substring(0, slashIdx);
+        const dirFullPath = prefix + dirName;
+        if (!entries.has(dirFullPath)) {
+          entries.set(dirFullPath, { name: dirName, path: dirFullPath, isDirectory: true });
+        }
+      }
+    }
+
+    const result = [...entries.values()];
+    result.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    return result;
+  }
+
   async readFile(path: string): Promise<string> {
     const content = this.files.get(path);
     if (content === undefined) {

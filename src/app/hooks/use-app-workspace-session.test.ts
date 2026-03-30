@@ -2,6 +2,7 @@ import { act, createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileEntry, FileSystem } from "../file-manager";
+import { replaceChildrenInTree } from "./use-app-workspace-session";
 
 interface MockWindowState {
   projectRoot: string | null;
@@ -155,6 +156,7 @@ interface HarnessRef {
   gitStatus: Record<string, string>;
   startupComplete: boolean;
   openProjectRoot: (path: string) => Promise<FileEntry | null>;
+  refreshTree: (changedPath?: string) => Promise<void>;
   refreshGitStatus: () => Promise<void>;
 }
 
@@ -166,6 +168,7 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
     gitStatus: {},
     startupComplete: false,
     openProjectRoot: async () => null,
+    refreshTree: async () => {},
     refreshGitStatus: async () => {},
   };
 
@@ -177,6 +180,7 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
     ref.gitStatus = result.gitStatus;
     ref.startupComplete = result.startupComplete;
     ref.openProjectRoot = result.openProjectRoot;
+    ref.refreshTree = result.refreshTree;
     ref.refreshGitStatus = result.refreshGitStatus;
     return null;
   };
@@ -600,5 +604,248 @@ describe("useAppWorkspaceSession", () => {
       projectRoot: null,
       currentDocument: null,
     });
+  });
+});
+
+describe("replaceChildrenInTree", () => {
+  const root: FileEntry = {
+    name: "project", path: "", isDirectory: true,
+    children: [
+      {
+        name: "docs", path: "docs", isDirectory: true,
+        children: [
+          { name: "readme.md", path: "docs/readme.md", isDirectory: false },
+          {
+            name: "sub", path: "docs/sub", isDirectory: true,
+            children: [{ name: "deep.md", path: "docs/sub/deep.md", isDirectory: false }],
+          },
+        ],
+      },
+      { name: "main.md", path: "main.md", isDirectory: false },
+    ],
+  };
+
+  it("replaces children of the target directory", () => {
+    const newChildren: FileEntry[] = [
+      { name: "new.md", path: "docs/new.md", isDirectory: false },
+    ];
+    const result = replaceChildrenInTree(root, "docs", newChildren);
+    expect(result).not.toBe(root);
+    expect(result.children?.[0].children).toEqual(newChildren);
+  });
+
+  it("preserves already-loaded subtrees in replaced children", () => {
+    const newChildren: FileEntry[] = [
+      { name: "readme.md", path: "docs/readme.md", isDirectory: false },
+      { name: "sub", path: "docs/sub", isDirectory: true },
+    ];
+    const result = replaceChildrenInTree(root, "docs", newChildren);
+    const sub = result.children?.[0].children?.find((c) => c.name === "sub");
+    expect(sub?.children).toEqual([
+      { name: "deep.md", path: "docs/sub/deep.md", isDirectory: false },
+    ]);
+  });
+
+  it("returns same reference when target directory is not found", () => {
+    const result = replaceChildrenInTree(root, "nonexistent", []);
+    expect(result).toBe(root);
+  });
+
+  it("handles root directory replacement", () => {
+    const newChildren: FileEntry[] = [
+      { name: "only.md", path: "only.md", isDirectory: false },
+    ];
+    const result = replaceChildrenInTree(root, "", newChildren);
+    expect(result.children).toEqual(newChildren);
+  });
+});
+
+describe("refreshTree scoped refresh", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    workspaceMockState.reset();
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  interface TrackedFs extends FileSystem {
+    tracker: { listChildrenCalls: string[]; listTreeCalls: number };
+  }
+
+  function createScopedFs(): TrackedFs {
+    const tracker = { listChildrenCalls: [] as string[], listTreeCalls: 0 };
+    const fullTree: FileEntry = {
+      name: "project", path: "", isDirectory: true,
+      children: [
+        {
+          name: "docs", path: "docs", isDirectory: true,
+          children: [
+            { name: "a.md", path: "docs/a.md", isDirectory: false },
+          ],
+        },
+        { name: "main.md", path: "main.md", isDirectory: false },
+      ],
+    };
+    return {
+      tracker,
+      listTree: async () => { tracker.listTreeCalls++; return fullTree; },
+      listChildren: async (path: string) => {
+        tracker.listChildrenCalls.push(path);
+        if (path === "") return fullTree.children ?? [];
+        if (path === "docs") return [
+          { name: "a.md", path: "docs/a.md", isDirectory: false },
+          { name: "b.md", path: "docs/b.md", isDirectory: false },
+        ];
+        return [];
+      },
+      readFile: async () => "",
+      writeFile: async () => {},
+      createFile: async () => {},
+      exists: async () => false,
+      renameFile: async () => {},
+      createDirectory: async () => {},
+      deleteFile: async () => {},
+      writeFileBinary: async () => {},
+      readFileBinary: async () => new Uint8Array(),
+    };
+  }
+
+  it("uses listChildren instead of listTree when changedPath is provided", async () => {
+    const fs = createScopedFs();
+    const { Harness, ref } = createHarness(fs);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(ref.startupComplete).toBe(true);
+    // Reset counters after startup
+    fs.tracker.listTreeCalls = 0;
+    fs.tracker.listChildrenCalls = [];
+
+    await act(async () => {
+      await ref.refreshTree("docs/b.md");
+    });
+
+    expect(fs.tracker.listChildrenCalls).toEqual(["docs"]);
+    expect(fs.tracker.listTreeCalls).toBe(0);
+  });
+
+  it("falls back to full listTree when no changedPath is provided", async () => {
+    const fs = createScopedFs();
+    const { Harness, ref } = createHarness(fs);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fs.tracker.listTreeCalls = 0;
+    fs.tracker.listChildrenCalls = [];
+
+    await act(async () => {
+      await ref.refreshTree();
+    });
+
+    expect(fs.tracker.listTreeCalls).toBe(1);
+    expect(fs.tracker.listChildrenCalls).toEqual([]);
+  });
+
+  it("updates the file tree with new children from scoped refresh", async () => {
+    const fs = createScopedFs();
+    const { Harness, ref } = createHarness(fs);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await ref.refreshTree("docs/b.md");
+    });
+
+    const docsNode = ref.fileTree?.children?.find((c) => c.name === "docs");
+    expect(docsNode?.children?.map((c) => c.name)).toEqual(["a.md", "b.md"]);
+  });
+
+  it("refreshes root when changed path has no parent directory", async () => {
+    const fs = createScopedFs();
+    const { Harness, ref } = createHarness(fs);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fs.tracker.listChildrenCalls = [];
+
+    await act(async () => {
+      await ref.refreshTree("new-file.md");
+    });
+
+    expect(fs.tracker.listChildrenCalls).toEqual([""]);
+  });
+
+  it("falls back to listTree when fs has no listChildren", async () => {
+    const listTreeSpy = vi.fn(async (): Promise<FileEntry> => ({
+      name: "project", path: "", isDirectory: true, children: [],
+    }));
+    const noListChildrenFs: FileSystem = {
+      listTree: listTreeSpy,
+      readFile: async () => "",
+      writeFile: async () => {},
+      createFile: async () => {},
+      exists: async () => false,
+      renameFile: async () => {},
+      createDirectory: async () => {},
+      deleteFile: async () => {},
+      writeFileBinary: async () => {},
+      readFileBinary: async () => new Uint8Array(),
+    };
+    const { Harness, ref } = createHarness(noListChildrenFs);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    listTreeSpy.mockClear();
+
+    await act(async () => {
+      await ref.refreshTree("some/file.md");
+    });
+
+    expect(listTreeSpy).toHaveBeenCalledOnce();
   });
 });

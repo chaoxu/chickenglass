@@ -943,7 +943,7 @@ describe("#386 — async cleanup and parallelization", () => {
     expect(workspace).toContain("const [tree, nextProjectConfig] = await Promise.all([");
     expect(workspace).toContain("return loadWorkspaceContents(requestId)");
     expect(session).toContain("useEditorSessionPersistence({");
-    expect(session).toContain("await refreshTree()");
+    expect(session).toContain("await refreshTree(path)");
     expect(session).toContain("await openFile(path)");
     expect(persistence).toContain("await writeDocumentSnapshot(relativePath, doc, sourceMap, {");
     expect(persistence).toContain("createTargetIfMissing: true,");
