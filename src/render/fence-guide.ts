@@ -201,6 +201,10 @@ const fenceGuideField = StateField.define<FenceGuideState>({
     return { decorations, activePath };
   },
 
+  compare(a, b) {
+    return a.decorations === b.decorations && a.activePath === b.activePath;
+  },
+
   provide(field) {
     return EditorView.decorations.from(field, (s) => s.decorations);
   },

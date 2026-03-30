@@ -172,4 +172,18 @@ export const blockCounterField = StateField.define<BlockCounterState>({
     }
     return value;
   },
+
+  compare(a, b) {
+    if (a.blocks.length !== b.blocks.length) return false;
+    for (let i = 0; i < a.blocks.length; i++) {
+      const ba = a.blocks[i];
+      const bb = b.blocks[i];
+      if (
+        ba.from !== bb.from || ba.to !== bb.to ||
+        ba.type !== bb.type || ba.id !== bb.id ||
+        ba.number !== bb.number
+      ) return false;
+    }
+    return true;
+  },
 });

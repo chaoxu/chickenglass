@@ -90,6 +90,20 @@ export const tableDiscoveryField = StateField.define<readonly TableRange[]>({
     }
     return value;
   },
+
+  compare(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      const ta = a[i];
+      const tb = b[i];
+      if (ta.from !== tb.from || ta.to !== tb.to) return false;
+      if (ta.lines.length !== tb.lines.length) return false;
+      for (let j = 0; j < ta.lines.length; j++) {
+        if (ta.lines[j] !== tb.lines[j]) return false;
+      }
+    }
+    return true;
+  },
 });
 
 /** Find the positions of all unescaped pipe characters in a string. */
