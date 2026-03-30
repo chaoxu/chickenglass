@@ -9,16 +9,16 @@
  */
 
 import process from "node:process";
-import { connectEditor, openFile, screenshot } from "./test-helpers.mjs";
+import { connectEditor, openFile, screenshot, createArgParser } from "./test-helpers.mjs";
 
 const args = process.argv.slice(2);
+const { getFlag } = createArgParser(args);
+const output = getFlag("--output", `/tmp/coflat-screenshot-${Date.now()}.png`);
+
+// Get positional arguments (first non-flag arg that isn't a flag value)
 const outputIdx = args.indexOf("--output");
-const output =
-  outputIdx >= 0 && outputIdx + 1 < args.length
-    ? args[outputIdx + 1]
-    : `/tmp/coflat-screenshot-${Date.now()}.png`;
 const file =
-  args.find((a, i) => a !== "--output" && (outputIdx < 0 || i !== outputIdx + 1)) ??
+  args.find((a, i) => !a.startsWith("-") && (outputIdx < 0 || i !== outputIdx + 1)) ??
   "index.md";
 
 let page;

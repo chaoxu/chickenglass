@@ -230,3 +230,17 @@ export async function resetEditorState(page) {
 export async function screenshot(page, path, options = {}) {
   await page.screenshot({ path, ...options });
 }
+
+/**
+ * Disconnect from browser gracefully.
+ * Swallows errors in case the browser is already closed.
+ *
+ * @param {import("playwright").Page} page
+ */
+export async function disconnectBrowser(page) {
+  try {
+    await page.context().browser()?.close();
+  } catch {
+    // Ignore disconnect errors — the browser may already be closed
+  }
+}

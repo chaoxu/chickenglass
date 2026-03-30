@@ -11,7 +11,7 @@ import {
   buildPerfRegressionReport,
   comparePerfRegressionReports,
 } from "./perf-regression-lib.mjs";
-import { connectEditor, openFile, switchToMode, sleep, createArgParser, waitForDebugBridge } from "./test-helpers.mjs";
+import { connectEditor, openFile, switchToMode, sleep, createArgParser, waitForDebugBridge, disconnectBrowser } from "./test-helpers.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
 
 const argv = process.argv.slice(2);
@@ -442,7 +442,7 @@ async function main() {
 
     throw new Error(`Unknown command "${command}"`);
   } finally {
-    await page.context().browser()?.close();
+    await disconnectBrowser(page);
   }
 }
 
