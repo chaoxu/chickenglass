@@ -1,11 +1,11 @@
-import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
+import { Decoration } from "@codemirror/view";
 import {
   type EditorState,
   type Extension,
   RangeSetBuilder,
-  StateField,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
+import { createDecorationsField } from "./render-utils";
 
 /**
  * Maps Lezer syntax node type names to HTML tag names.
@@ -36,7 +36,7 @@ const TAG_NAME_MAP: Readonly<Record<string, string>> = {
  * We iterate over every line that falls within each matching node and
  * apply the decoration to each line's start.
  */
-function buildContainerDecorations(state: EditorState): DecorationSet {
+function buildContainerDecorations(state: EditorState) {
   const builder = new RangeSetBuilder<Decoration>();
 
   // Collect (lineStart, tagName) pairs, deduplicated by position.
@@ -46,16 +46,17 @@ function buildContainerDecorations(state: EditorState): DecorationSet {
   // which positions we've already assigned.
   const lineTagMap = new Map<number, string>();
 
-  const cursor = syntaxTree(state).cursor();
-  do {
-    const tagName = TAG_NAME_MAP[cursor.name];
-    if (tagName) {
+  syntaxTree(state).iterate({
+    enter(node) {
+      const tagName = TAG_NAME_MAP[node.type.name];
+      if (!tagName) return;
+
       // Walk every line that this node spans and assign the tag.
       // Inner nodes will override outer ones because the tree is iterated
       // in document order (outer before inner). We overwrite on each entry,
       // so the last (innermost) assignment wins.
-      let lineStart = state.doc.lineAt(cursor.from).from;
-      const nodeEnd = cursor.to;
+      let lineStart = state.doc.lineAt(node.from).from;
+      const nodeEnd = node.to;
 
       while (lineStart <= nodeEnd) {
         lineTagMap.set(lineStart, tagName);
@@ -63,8 +64,8 @@ function buildContainerDecorations(state: EditorState): DecorationSet {
         if (line.to >= nodeEnd) break;
         lineStart = line.to + 1; // next line start
       }
-    }
-  } while (cursor.next());
+    },
+  });
 
   // Sort positions and build the RangeSet (builder requires sorted order).
   const sortedPositions = [...lineTagMap.keys()].sort((a, b) => a - b);
@@ -86,29 +87,18 @@ function buildContainerDecorations(state: EditorState): DecorationSet {
  * decorations for all block-level nodes, adding `data-tag-name`
  * attributes to the corresponding `cm-line` DOM elements.
  *
+ * Uses `mapOnDocChanged` so that text edits preserving the syntax tree
+ * map decoration positions via `value.map(tr.changes)` instead of a
+ * full rebuild — enabling CM6's shared-chunk RangeSet shortcut (#718).
+ *
  * This enables CSS targeting such as:
  *   `.cm-line[data-tag-name="h1"] { ... }`
  */
-export const containerAttributesField = StateField.define<DecorationSet>({
-  create(state) {
-    return buildContainerDecorations(state);
-  },
-
-  update(decorations, tr) {
-    if (
-      !tr.docChanged &&
-      !tr.reconfigured &&
-      syntaxTree(tr.state) === syntaxTree(tr.startState)
-    ) {
-      return decorations.map(tr.changes);
-    }
-    return buildContainerDecorations(tr.state);
-  },
-
-  provide(field) {
-    return EditorView.decorations.from(field);
-  },
-});
+export const containerAttributesField = createDecorationsField(
+  buildContainerDecorations,
+  (tr) => syntaxTree(tr.state) !== syntaxTree(tr.startState),
+  true, // mapOnDocChanged
+);
 
 /** CM6 extension that adds `data-tag-name` attributes to `cm-line` elements. */
 export const containerAttributesPlugin: Extension = containerAttributesField;
