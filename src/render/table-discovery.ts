@@ -110,12 +110,15 @@ export const tableDiscoveryField = StateField.define<readonly TableRange[]>({
 export function findPipePositions(text: string): number[] {
   const pipes: number[] = [];
   let isEscaped = false;
+  let inMath = false;
   for (let i = 0; i < text.length; i++) {
     if (isEscaped) {
       isEscaped = false;
     } else if (text[i] === "\\") {
       isEscaped = true;
-    } else if (text[i] === "|") {
+    } else if (text[i] === "$") {
+      inMath = !inMath;
+    } else if (text[i] === "|" && !inMath) {
       pipes.push(i);
     }
   }

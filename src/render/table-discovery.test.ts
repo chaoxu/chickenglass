@@ -37,6 +37,10 @@ describe("findPipePositions", () => {
   it("ignores escaped pipes", () => {
     expect(findPipePositions("| a \\| b | c |")).toEqual([0, 9, 13]);
   });
+
+  it("ignores pipes inside inline math spans", () => {
+    expect(findPipePositions("| $O(r \\cdot |E| \\cdot T)$ | No |")).toEqual([0, 27, 32]);
+  });
 });
 
 describe("findCellBounds", () => {
