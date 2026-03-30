@@ -232,6 +232,51 @@ describe("fence-guide rebuild skipping", () => {
   });
 });
 
+describe("fence-guide mapOnDocChanged (#718)", () => {
+  /** Extract decoration positions from the fence guide field. */
+  function getGuidePositions(state: EditorState): number[] {
+    const { decorations } = state.field(fenceGuideField);
+    const positions: number[] = [];
+    const iter = decorations.iter();
+    while (iter.value) {
+      positions.push(iter.from);
+      iter.next();
+    }
+    return positions;
+  }
+
+  it("maps decoration positions correctly after a text insertion", () => {
+    const state = createState(SINGLE_DIV, 16); // cursor inside div
+    const beforePositions = getGuidePositions(state);
+    expect(beforePositions.length).toBeGreaterThan(0);
+
+    // Insert text in the content line — shifts later positions
+    const edited = state.update({
+      changes: { from: 16, insert: "EXTRA " },
+    }).state;
+    const afterPositions = getGuidePositions(edited);
+
+    // All decoration positions should be valid line starts
+    for (const pos of afterPositions) {
+      const line = edited.doc.lineAt(pos);
+      expect(line.from).toBe(pos);
+    }
+  });
+
+  it("preserves decoration count after text insertion", () => {
+    const state = createState(SINGLE_DIV, 16);
+    const beforeCount = getGuidePositions(state).length;
+
+    // Insert text within a content line (doesn't add/remove lines)
+    const edited = state.update({
+      changes: { from: 20, insert: "X" },
+    }).state;
+    const afterCount = getGuidePositions(edited).length;
+
+    expect(afterCount).toBe(beforeCount);
+  });
+});
+
 describe("fence-guide fence boundary correctness", () => {
   it("shows guides when cursor is on the opening fence", () => {
     const state = createState(SINGLE_DIV, 0); // start of "::: {.theorem}"

@@ -1,11 +1,12 @@
-import { type EditorState, type Line, type Range, type StateField } from "@codemirror/state";
+import { type EditorState, type Line, type Range, type StateField, type Transaction } from "@codemirror/state";
 import { type DecorationSet, Decoration, EditorView } from "@codemirror/view";
+import { syntaxTree } from "@codemirror/language";
 import {
   buildDecorations,
   createDecorationsField,
-  cursorSensitiveShouldRebuild,
   decorationHidden,
   editorFocusField,
+  focusEffect,
 } from "./render-utils";
 import { CSS } from "../constants/css-classes";
 
@@ -172,11 +173,27 @@ export function buildFencedBlockDecorations<T extends FencedBlockInfo>(
   return buildDecorations(items);
 }
 
+/**
+ * Cursor-sensitive rebuild predicate excluding docChanged.
+ *
+ * Used with `mapOnDocChanged: true` so that text edits preserving the
+ * syntax tree map decoration positions instead of rebuilding (#718).
+ */
+function cursorSensitiveMappedRebuild(tr: Transaction): boolean {
+  return (
+    tr.selection !== undefined ||
+    tr.effects.some((e) => e.is(focusEffect)) ||
+    syntaxTree(tr.state) !== syntaxTree(tr.startState)
+  );
+}
+
 /** Shared StateField wrapper for fenced-block renderers.
  * Uses cursor-sensitive rebuild because fenced blocks show/hide fences
- * based on cursor proximity. */
+ * based on cursor proximity.
+ * Uses `mapOnDocChanged` so text edits preserving the syntax tree
+ * map decoration positions for cheaper DOM reconciliation (#718). */
 export function createFencedBlockDecorationField(
   build: (state: EditorState) => DecorationSet,
 ): StateField<DecorationSet> {
-  return createDecorationsField(build, cursorSensitiveShouldRebuild);
+  return createDecorationsField(build, cursorSensitiveMappedRebuild, true);
 }

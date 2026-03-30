@@ -46,17 +46,16 @@ function buildContainerDecorations(state: EditorState): DecorationSet {
   // which positions we've already assigned.
   const lineTagMap = new Map<number, string>();
 
-  syntaxTree(state).iterate({
-    enter(node) {
-      const tagName = TAG_NAME_MAP[node.type.name];
-      if (!tagName) return;
-
+  const cursor = syntaxTree(state).cursor();
+  do {
+    const tagName = TAG_NAME_MAP[cursor.name];
+    if (tagName) {
       // Walk every line that this node spans and assign the tag.
       // Inner nodes will override outer ones because the tree is iterated
       // in document order (outer before inner). We overwrite on each entry,
       // so the last (innermost) assignment wins.
-      let lineStart = state.doc.lineAt(node.from).from;
-      const nodeEnd = node.to;
+      let lineStart = state.doc.lineAt(cursor.from).from;
+      const nodeEnd = cursor.to;
 
       while (lineStart <= nodeEnd) {
         lineTagMap.set(lineStart, tagName);
@@ -64,8 +63,8 @@ function buildContainerDecorations(state: EditorState): DecorationSet {
         if (line.to >= nodeEnd) break;
         lineStart = line.to + 1; // next line start
       }
-    },
-  });
+    }
+  } while (cursor.next());
 
   // Sort positions and build the RangeSet (builder requires sorted order).
   const sortedPositions = [...lineTagMap.keys()].sort((a, b) => a - b);
