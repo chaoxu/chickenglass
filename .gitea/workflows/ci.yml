@@ -25,6 +25,7 @@ jobs:
   # ── Frontend: unit tests ──────────────────────────────────────────────────
   test:
     name: Tests
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +39,7 @@ jobs:
   # ── Standalone package: build + publint + size-limit ─────────────────────
   package:
     name: Editor package
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
