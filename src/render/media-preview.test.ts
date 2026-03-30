@@ -120,7 +120,7 @@ describe("resolveLocalMediaPreview", () => {
       view.dispatch({
         effects: imageUrlEffect.of({
           path: "posts/broken.png",
-          entry: { status: "error" },
+          entry: { status: "error", errorTime: Date.now() },
         }),
       });
 
