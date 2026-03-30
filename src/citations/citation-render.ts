@@ -56,6 +56,13 @@ export const bibDataField = StateField.define<BibDataState>({
     }
     return value;
   },
+  compare(a, b) {
+    return (
+      a.store === b.store &&
+      a.cslProcessor === b.cslProcessor &&
+      a.processorRevision === b.processorRevision
+    );
+  },
 });
 
 /**
