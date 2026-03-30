@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
+import { ensureSyntaxTree } from "@codemirror/language";
 import { CSS } from "../constants/css-classes";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import { editorFocusField, focusEffect } from "./render-utils";
 import {
   _codeBlockDecorationFieldForTest as codeBlockDecorationField,
+  _computeCodeBlockDirtyRegionForTest as computeCodeBlockDirtyRegion,
+  _incrementalCodeBlockUpdateForTest as incrementalCodeBlockUpdate,
 } from "./code-block-render";
 import { closingFenceProtection } from "../plugins/fence-protection";
 import {
@@ -202,5 +205,155 @@ describe("closingCodeFenceProtection (unified)", () => {
       changes: { from: 0, to: larger.length, insert: "" },
     });
     expect(tr.state.doc.toString()).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Incremental doc-change update (#723)
+// ---------------------------------------------------------------------------
+
+/**
+ * Create an EditorState with forced tree parse, suitable for testing
+ * incremental updates that depend on tree comparison.
+ */
+function createParsedState(doc: string, cursorPos = 0) {
+  const state = createEditorState(doc, {
+    cursorPos,
+    extensions: [
+      markdown({ extensions: markdownExtensions }),
+      editorFocusField,
+      codeBlockDecorationField,
+    ],
+  });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return state;
+}
+
+describe("computeCodeBlockDirtyRegion (#723)", () => {
+  it("covers the full extent of a destroyed code block", () => {
+    const doc = "```js\nconsole.log('x')\n```";
+    const state = createParsedState(doc);
+
+    // Delete the opening fence markers (```)
+    const tr = state.update({ changes: { from: 0, to: 3, insert: "" } });
+    ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
+
+    const dirty = computeCodeBlockDirtyRegion(tr);
+    expect(dirty).not.toBeNull();
+    // The old block spanned the entire doc (0..22). After deleting 3 chars,
+    // the mapped block end is at 19 (= old doc.length - 3). The dirty region
+    // must cover this full mapped range so stale body/closing decorations
+    // inside it are filtered out.
+    expect(dirty!.filterFrom).toBe(0);
+    expect(dirty!.filterTo).toBeGreaterThanOrEqual(tr.state.doc.length - 1);
+  });
+
+  it("covers a newly created code block", () => {
+    const doc = "line one\nline two";
+    const state = createParsedState(doc);
+
+    // Insert a code fence that creates a new block
+    const tr = state.update({
+      changes: { from: 0, to: 0, insert: "```py\n" },
+    });
+    ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
+
+    const dirty = computeCodeBlockDirtyRegion(tr);
+    expect(dirty).not.toBeNull();
+    // The new FencedCode block should be covered
+    expect(dirty!.filterFrom).toBe(0);
+  });
+
+  it("returns null when changes do not affect any code block", () => {
+    const doc = "hello\n\n```js\ncode\n```\n\nworld";
+    const state = createParsedState(doc);
+
+    // Edit "hello" → "hi" (far from the code block)
+    const tr = state.update({
+      changes: { from: 0, to: 5, insert: "hi" },
+    });
+    ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
+
+    const dirty = computeCodeBlockDirtyRegion(tr);
+    // The changed range [0,2] doesn't overlap any FencedCode node,
+    // so the dirty region is just the changed range itself, not null
+    expect(dirty).not.toBeNull();
+    // But the dirty range should NOT extend to the code block
+    expect(dirty!.filterTo).toBeLessThan(tr.state.doc.line(3).from);
+  });
+});
+
+describe("incrementalCodeBlockUpdate (#723)", () => {
+  it("removes stale decorations when a code block is destroyed", () => {
+    // Regression test for PR #736 review: deleting the opening fence of a
+    // code block must clear all body/closing-fence decorations, not leave
+    // them behind because the incremental path only looks at the new tree.
+    const doc = "```py\ncode line\n```";
+    const state = createParsedState(doc);
+    const initialDecos = state.field(codeBlockDecorationField);
+
+    // Verify initial decorations exist
+    const specsBefore = getDecorationSpecs(initialDecos);
+    expect(specsBefore.some((s) => s.class?.includes(CSS.codeblockHeader))).toBe(true);
+
+    // Delete all 3 backticks from the opening fence
+    const tr = state.update({ changes: { from: 0, to: 3, insert: "" } });
+    ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
+
+    // Directly invoke the incremental update function
+    const result = incrementalCodeBlockUpdate(initialDecos, tr);
+
+    // No code block exists in the new doc ("py\ncode line\n```" has ``` as
+    // a new unclosed fence, but the OLD block's body decorations for "code line"
+    // at their original positions must be removed). Check that decorations
+    // in the old block's range are gone.
+    const specsAfter = getDecorationSpecs(result);
+
+    // The old "code line" body decoration was on old line 2 (mapped through
+    // the deletion). It should be removed because it falls in the dirty region.
+    const oldBodyPos = tr.changes.mapPos(state.doc.line(2).from);
+    const hasStaleBodyAtOldPos = specsAfter.some(
+      (s) =>
+        s.from === oldBodyPos &&
+        (s.class?.includes(CSS.codeblockBody) || s.class?.includes(CSS.codeblockLast)),
+    );
+    expect(hasStaleBodyAtOldPos).toBe(false);
+  });
+
+  it("preserves decorations for blocks outside the dirty region", () => {
+    const doc = [
+      "```js",
+      "console.log('a')",
+      "```",
+      "",
+      "some prose here",
+      "",
+      "```py",
+      "print('b')",
+      "```",
+    ].join("\n");
+    const state = createParsedState(doc);
+    const initialDecos = state.field(codeBlockDecorationField);
+
+    // Both blocks should be decorated
+    const specsBefore = getDecorationSpecs(initialDecos);
+    const headersBefore = specsBefore.filter((s) => s.class?.includes(CSS.codeblockHeader)).length;
+    expect(headersBefore).toBe(2);
+
+    // Edit prose between the two blocks (no code block affected)
+    const proseLineStart = state.doc.line(5).from;
+    const tr = state.update({
+      changes: {
+        from: proseLineStart,
+        to: proseLineStart + "some prose here".length,
+        insert: "different text",
+      },
+    });
+    ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
+
+    const result = incrementalCodeBlockUpdate(initialDecos, tr);
+    const specsAfter = getDecorationSpecs(result);
+    const headersAfter = specsAfter.filter((s) => s.class?.includes(CSS.codeblockHeader)).length;
+    expect(headersAfter).toBe(2);
   });
 });

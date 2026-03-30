@@ -26,20 +26,25 @@ import {
 import {
   EditorState,
   type Extension,
+  type Range,
+  StateField,
+  type Transaction,
 } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
+import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import {
   RenderWidget,
   editorFocusField,
+  focusEffect,
   focusTracker,
   pushWidgetDecoration,
   SimpleTextRenderWidget,
 } from "./render-utils";
 import {
   buildFencedBlockDecorations,
-  createFencedBlockDecorationField,
   findFencedBlockAt,
   type FencedBlockInfo,
+  type FencedBlockRenderContext,
+  getFencedBlockRenderContext,
   getLineElement,
   hideMultiLineClosingFence,
   isCursorOnCloseFence,
@@ -176,73 +181,199 @@ export function collectCodeBlocks(state: EditorState): CodeBlockInfo[] {
   return results;
 }
 
-/** Build decorations for all fenced code blocks. */
-function buildCodeBlockDecorations(state: EditorState): DecorationSet {
-  return buildFencedBlockDecorations(state, collectCodeBlocks, ({
-    state,
-    block,
-    cursorOnEitherFence,
-    openLine,
-    closeLine,
-    bodyLineCount,
-  }, items) => {
-    // --- Opening fence ---
-    if (cursorOnEitherFence) {
+/** Decoration callback for a single code block. Shared by full and incremental paths. */
+function decorateCodeBlock(
+  context: FencedBlockRenderContext<CodeBlockInfo>,
+  items: Range<Decoration>[],
+): void {
+  const { state, block, cursorOnEitherFence, openLine, closeLine, bodyLineCount } = context;
+
+  // --- Opening fence ---
+  if (cursorOnEitherFence) {
+    items.push(
+      Decoration.line({ class: CSS.codeblockSourceOpen })
+        .range(block.openFenceFrom),
+    );
+  } else {
+    items.push(
+      Decoration.line({
+        class: CSS.codeblockHeader,
+      }).range(block.openFenceFrom),
+    );
+    const codeText = bodyLineCount > 0
+      ? state.doc.sliceString(
+        state.doc.line(openLine.number + 1).from,
+        state.doc.line(closeLine.number - 1).to,
+      )
+      : "";
+    pushWidgetDecoration(items, new SimpleTextRenderWidget({
+      tagName: "span",
+      className: CSS.codeblockLanguage,
+      text: block.language,
+    }), block.openFenceFrom, block.openFenceTo);
+    if (bodyLineCount > 0) {
       items.push(
-        Decoration.line({ class: CSS.codeblockSourceOpen })
-          .range(block.openFenceFrom),
-      );
-    } else {
-      items.push(
-        Decoration.line({
-          class: CSS.codeblockHeader,
+        Decoration.widget({
+          widget: new CopyButtonWidget(codeText),
+          side: 1,
         }).range(block.openFenceFrom),
       );
-      const codeText = bodyLineCount > 0
-        ? state.doc.sliceString(
-          state.doc.line(openLine.number + 1).from,
-          state.doc.line(closeLine.number - 1).to,
-        )
-        : "";
-      pushWidgetDecoration(items, new SimpleTextRenderWidget({
-        tagName: "span",
-        className: CSS.codeblockLanguage,
-        text: block.language,
-      }), block.openFenceFrom, block.openFenceTo);
-      if (bodyLineCount > 0) {
-        items.push(
-          Decoration.widget({
-            widget: new CopyButtonWidget(codeText),
-            side: 1,
-          }).range(block.openFenceFrom),
-        );
+    }
+  }
+
+  // --- Body lines ---
+  for (let ln = openLine.number + 1; ln < closeLine.number; ln++) {
+    const line = state.doc.line(ln);
+    const isLast = ln === closeLine.number - 1;
+    items.push(
+      Decoration.line({
+        class: !cursorOnEitherFence && isLast ? CSS.codeblockLast : CSS.codeblockBody,
+      }).range(line.from),
+    );
+  }
+
+  if (bodyLineCount === 0 && !cursorOnEitherFence) {
+    items.push(
+      Decoration.line({ class: CSS.codeblockLast }).range(block.openFenceFrom),
+    );
+  }
+
+  // --- Closing fence ---
+  // Always hidden in rich mode regardless of cursor position (#429).
+  // The closing fence is protected from accidental deletion by a
+  // transaction filter and skipped by atomicRanges (see below).
+  if (!block.singleLine) {
+    hideMultiLineClosingFence(block.closeFenceFrom, block.closeFenceTo, items);
+  }
+}
+
+/** Build decorations for all fenced code blocks. */
+function buildCodeBlockDecorations(state: EditorState): DecorationSet {
+  return buildFencedBlockDecorations(state, collectCodeBlocks, decorateCodeBlock);
+}
+
+// ── Incremental doc-change support ──────────────────────────────────────────
+
+/**
+ * Compute the dirty region in the new document that needs decoration rebuild.
+ *
+ * Expands the literal changed ranges to cover any FencedCode blocks that
+ * overlap them in BOTH the old and new trees. This ensures that decorations
+ * for destroyed blocks (present in old tree but absent in new) are removed,
+ * and decorations for newly created blocks are added.
+ */
+function computeCodeBlockDirtyRegion(
+  tr: Transaction,
+): { filterFrom: number; filterTo: number } | null {
+  let filterFrom = Number.POSITIVE_INFINITY;
+  let filterTo = Number.NEGATIVE_INFINITY;
+
+  const oldTree = syntaxTree(tr.startState);
+  const newTree = syntaxTree(tr.state);
+
+  tr.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    // Start with the literal changed range in the new document
+    filterFrom = Math.min(filterFrom, fromB);
+    filterTo = Math.max(filterTo, toB);
+
+    // Expand for blocks in the OLD tree (mapped to new positions)
+    oldTree.iterate({
+      from: fromA,
+      to: toA,
+      enter(node) {
+        if (node.type.name === "FencedCode") {
+          filterFrom = Math.min(filterFrom, tr.changes.mapPos(node.from));
+          filterTo = Math.max(filterTo, tr.changes.mapPos(node.to));
+          return false; // don't descend into children
+        }
+      },
+    });
+
+    // Expand for blocks in the NEW tree
+    newTree.iterate({
+      from: fromB,
+      to: toB,
+      enter(node) {
+        if (node.type.name === "FencedCode") {
+          filterFrom = Math.min(filterFrom, node.from);
+          filterTo = Math.max(filterTo, node.to);
+          return false;
+        }
+      },
+    });
+  });
+
+  if (filterFrom > filterTo) return null;
+  return { filterFrom, filterTo };
+}
+
+/** Build decoration items for code blocks overlapping a specific range. */
+function buildCodeBlockItemsInRange(
+  state: EditorState,
+  rangeFrom: number,
+  rangeTo: number,
+): Range<Decoration>[] {
+  const focused = state.field(editorFocusField, false) ?? false;
+  const items: Range<Decoration>[] = [];
+  const tree = syntaxTree(state);
+
+  tree.iterate({
+    from: rangeFrom,
+    to: rangeTo,
+    enter(node) {
+      if (node.type.name !== "FencedCode") return;
+
+      const openLine = state.doc.lineAt(node.from);
+      const closeLine = state.doc.lineAt(node.to);
+
+      let language = "";
+      const codeInfoNode = node.node.getChild("CodeInfo");
+      if (codeInfoNode) {
+        language = state.doc.sliceString(codeInfoNode.from, codeInfoNode.to).trim();
       }
-    }
 
-    // --- Body lines ---
-    for (let ln = openLine.number + 1; ln < closeLine.number; ln++) {
-      const line = state.doc.line(ln);
-      const isLast = ln === closeLine.number - 1;
-      items.push(
-        Decoration.line({
-          class: !cursorOnEitherFence && isLast ? CSS.codeblockLast : CSS.codeblockBody,
-        }).range(line.from),
+      const block: CodeBlockInfo = {
+        from: node.from,
+        to: node.to,
+        openFenceFrom: openLine.from,
+        openFenceTo: openLine.to,
+        closeFenceFrom: closeLine.from,
+        closeFenceTo: closeLine.to,
+        singleLine: closeLine.from === openLine.from,
+        language,
+      };
+
+      decorateCodeBlock(
+        getFencedBlockRenderContext(state, block, focused),
+        items,
       );
-    }
+    },
+  });
 
-    if (bodyLineCount === 0 && !cursorOnEitherFence) {
-      items.push(
-        Decoration.line({ class: CSS.codeblockLast }).range(block.openFenceFrom),
-      );
-    }
+  return items;
+}
 
-    // --- Closing fence ---
-    // Always hidden in rich mode regardless of cursor position (#429).
-    // The closing fence is protected from accidental deletion by a
-    // transaction filter and skipped by atomicRanges (see below).
-    if (!block.singleLine) {
-      hideMultiLineClosingFence(block.closeFenceFrom, block.closeFenceTo, items);
-    }
+/**
+ * Incremental doc-change update: map existing decorations through changes,
+ * then filter and rebuild only the dirty region.
+ */
+function incrementalCodeBlockUpdate(
+  value: DecorationSet,
+  tr: Transaction,
+): DecorationSet {
+  const mapped = value.map(tr.changes);
+  const dirty = computeCodeBlockDirtyRegion(tr);
+  if (!dirty) return mapped;
+
+  const { filterFrom, filterTo } = dirty;
+  const newItems = buildCodeBlockItemsInRange(tr.state, filterFrom, filterTo);
+
+  return mapped.update({
+    filterFrom,
+    filterTo,
+    filter: () => false, // remove all mapped decorations in the dirty region
+    add: newItems,
+    sort: true,
   });
 }
 
@@ -367,11 +498,58 @@ class CodeBlockHoverPlugin {
  *
  * Uses a StateField so that line decorations (Decoration.line) are
  * permitted by CM6.
+ *
+ * On doc change with tree change: incremental rebuild scoped to the dirty
+ * region (filterFrom/filterTo) instead of full-document rebuild (#723).
+ * On doc change without tree change: maps decoration positions only.
+ * On cursor/focus/tree-only change: full rebuild.
  */
-const codeBlockDecorationField = createFencedBlockDecorationField(buildCodeBlockDecorations);
+const codeBlockDecorationField = StateField.define<DecorationSet>({
+  create(state) {
+    return buildCodeBlockDecorations(state);
+  },
+
+  update(value, tr) {
+    // Focus effect: global cursor-awareness change — full rebuild
+    if (tr.effects.some((e) => e.is(focusEffect))) {
+      return buildCodeBlockDecorations(tr.state);
+    }
+
+    if (tr.docChanged) {
+      const treeChanged = syntaxTree(tr.state) !== syntaxTree(tr.startState);
+      const treeReady = syntaxTreeAvailable(tr.state, tr.state.doc.length);
+
+      if (treeChanged && treeReady) {
+        // Tree structure changed: incremental rebuild of dirty region only
+        return incrementalCodeBlockUpdate(value, tr);
+      }
+      // Doc changed, tree unchanged (or not ready): map positions only
+      return value.map(tr.changes);
+    }
+
+    // Selection or tree change without doc change: full rebuild
+    if (
+      tr.selection !== undefined ||
+      (syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
+        syntaxTreeAvailable(tr.state, tr.state.doc.length))
+    ) {
+      return buildCodeBlockDecorations(tr.state);
+    }
+
+    return value;
+  },
+
+  provide(field) {
+    return EditorView.decorations.from(field);
+  },
+});
 
 /** Exported for unit testing decoration logic without a browser. */
-export { codeBlockDecorationField as _codeBlockDecorationFieldForTest };
+export {
+  codeBlockDecorationField as _codeBlockDecorationFieldForTest,
+  computeCodeBlockDirtyRegion as _computeCodeBlockDirtyRegionForTest,
+  incrementalCodeBlockUpdate as _incrementalCodeBlockUpdateForTest,
+};
 
 /** CM6 extension that renders fenced code blocks with language label and fence hiding. */
 export const codeBlockRenderPlugin: Extension = [
