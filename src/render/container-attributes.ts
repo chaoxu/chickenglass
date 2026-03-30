@@ -46,26 +46,25 @@ function buildContainerDecorations(state: EditorState) {
   // which positions we've already assigned.
   const lineTagMap = new Map<number, string>();
 
-  syntaxTree(state).iterate({
-    enter(node) {
-      const tagName = TAG_NAME_MAP[node.type.name];
-      if (!tagName) return;
+  const c = syntaxTree(state).cursor();
+  do {
+    const tagName = TAG_NAME_MAP[c.name];
+    if (!tagName) continue;
 
-      // Walk every line that this node spans and assign the tag.
-      // Inner nodes will override outer ones because the tree is iterated
-      // in document order (outer before inner). We overwrite on each entry,
-      // so the last (innermost) assignment wins.
-      let lineStart = state.doc.lineAt(node.from).from;
-      const nodeEnd = node.to;
+    // Walk every line that this node spans and assign the tag.
+    // Inner nodes will override outer ones because the tree is iterated
+    // in document order (outer before inner). We overwrite on each entry,
+    // so the last (innermost) assignment wins.
+    let lineStart = state.doc.lineAt(c.from).from;
+    const nodeEnd = c.to;
 
-      while (lineStart <= nodeEnd) {
-        lineTagMap.set(lineStart, tagName);
-        const line = state.doc.lineAt(lineStart);
-        if (line.to >= nodeEnd) break;
-        lineStart = line.to + 1; // next line start
-      }
-    },
-  });
+    while (lineStart <= nodeEnd) {
+      lineTagMap.set(lineStart, tagName);
+      const line = state.doc.lineAt(lineStart);
+      if (line.to >= nodeEnd) break;
+      lineStart = line.to + 1; // next line start
+    }
+  } while (c.next());
 
   // Sort positions and build the RangeSet (builder requires sorted order).
   const sortedPositions = [...lineTagMap.keys()].sort((a, b) => a - b);

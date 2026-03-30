@@ -65,18 +65,12 @@ export function collectNodes(
 ): RenderableNode[] {
   const state = "state" in viewOrState ? viewOrState.state : viewOrState;
   const results: RenderableNode[] = [];
-  const tree = syntaxTree(state);
-  tree.iterate({
-    enter(node) {
-      if (types.has(node.type.name)) {
-        results.push({
-          type: node.type.name,
-          from: node.from,
-          to: node.to,
-        });
-      }
-    },
-  });
+  const c = syntaxTree(state).cursor();
+  do {
+    if (types.has(c.name)) {
+      results.push({ type: c.name, from: c.from, to: c.to });
+    }
+  } while (c.next());
   return results;
 }
 
@@ -816,16 +810,24 @@ export function collectNodeRangesExcludingCursor(
   const skip = options?.skip;
 
   for (const { from, to } of ranges) {
-    tree.iterate({
-      from,
-      to,
-      enter(node) {
-        if (!nodeTypes.has(node.type.name)) return;
-        if (cursorInRange(view, node.from, node.to)) return false;
-        if (skip?.(node.from)) return false;
-        return buildItem(node, items);
-      },
-    });
+    const c = tree.cursor();
+    scan: for (;;) {
+      let descend = false;
+      if (c.from <= to && c.to >= from) {
+        if (!nodeTypes.has(c.name)) {
+          descend = true;
+        } else if (cursorInRange(view, c.from, c.to) || skip?.(c.from)) {
+          // cursor inside or already processed — skip children
+        } else {
+          descend = buildItem(c, items) !== false;
+        }
+      }
+      if (descend && c.firstChild()) continue;
+      for (;;) {
+        if (c.nextSibling()) break;
+        if (!c.parent()) break scan;
+      }
+    }
   }
 
   return items;
