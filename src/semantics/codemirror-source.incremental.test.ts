@@ -1,6 +1,6 @@
 import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
-import { syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import { describe, expect, it } from "vitest";
 import { markdownExtensions } from "../parser";
 import { analyzeDocumentSemantics } from "./document";
@@ -12,13 +12,15 @@ import {
 } from "./codemirror-source";
 
 function createSemanticsState(doc: string): EditorState {
-  return EditorState.create({
+  const state = EditorState.create({
     doc,
     extensions: [
       markdown({ extensions: markdownExtensions }),
       documentAnalysisField,
     ],
   });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return state;
 }
 
 function replaceOnce(state: EditorState, target: string, insert: string): EditorState {

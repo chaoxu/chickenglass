@@ -1,5 +1,5 @@
 import { markdown } from "@codemirror/lang-markdown";
-import { syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 
@@ -14,10 +14,12 @@ import {
 } from "./engine";
 
 function createState(doc: string): EditorState {
-  return EditorState.create({
+  const state = EditorState.create({
     doc,
     extensions: [markdown({ extensions: markdownExtensions })],
   });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return state;
 }
 
 function analyze(state: EditorState) {

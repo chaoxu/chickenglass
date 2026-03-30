@@ -1,6 +1,6 @@
 import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
-import { syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import { describe, expect, it } from "vitest";
 import { markdownExtensions } from "../../../parser";
 import { analyzeFencedDivs } from "../../document";
@@ -12,10 +12,12 @@ import {
 } from "./fenced-div-slice";
 
 function createState(doc: string): EditorState {
-  return EditorState.create({
+  const state = EditorState.create({
     doc,
     extensions: [markdown({ extensions: markdownExtensions })],
   });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  return state;
 }
 
 describe("mergeFencedDivSlice", () => {

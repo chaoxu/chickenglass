@@ -68,7 +68,7 @@ cargo nextest run --test-threads 4  # with explicit concurrency
 
 - **knip** — detects unused files, exports, and dependencies. Run after refactors. Config: `knip.config.ts`. The 226 unused UI component re-exports are expected (component library pattern); focus on unused files and unlisted deps.
 - **publint** — validates `package.json` exports point to real built files with correct types. Run after `build:editor` before publishing. Catches the class of packaging bugs from #588.
-- **size-limit** — enforces bundle size budgets for the standalone editor (`dist/editor.mjs` ≤ 800 kB, `dist/editor.css` ≤ 100 kB). Config in `package.json` under `"size-limit"`.
+- **size-limit** — enforces bundle size budgets for the standalone editor (`dist/editor.mjs` ≤ 2000 kB, `dist/editor.css` ≤ 100 kB). Config in `package.json` under `"size-limit"`. The JS budget is large because KaTeX CSS (~1.4 MB raw) is inlined for self-contained embedding.
 - **rollup-plugin-visualizer** — generates `dist/stats.html` treemap of what's in the bundle. Activated via `pnpm build:analyze` (sets `mode=analyze`). Use to audit what's leaking into the embed path.
 - **@testing-library/react** (`renderHook`) — for hook-level tests (#707). Setup file: `src/test-setup.ts` (loads `@testing-library/jest-dom/vitest` matchers automatically).
 - **cargo-nextest** — parallel Rust test runner for the Tauri backend. Faster output than `cargo test`, supports per-test retry. Drop-in replacement.

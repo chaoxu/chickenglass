@@ -49,7 +49,7 @@
     {
       "name": "coflat/editor (JS)",
       "path": "dist/editor.mjs",
-      "limit": "800 kB"
+      "limit": "2000 kB"
     },
     {
       "name": "coflat/editor (CSS)",
