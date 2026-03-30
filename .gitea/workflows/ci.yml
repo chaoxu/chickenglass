@@ -39,7 +39,7 @@ jobs:
   # ── Standalone package: build + publint + size-limit ─────────────────────
   package:
     name: Editor package
-    needs: [lint]
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
