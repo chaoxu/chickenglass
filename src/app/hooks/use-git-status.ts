@@ -16,7 +16,7 @@ export interface GitStatus {
 
 export function useGitStatus(
   projectRoot: string | null,
-  refreshTree: () => Promise<void>,
+  refreshTree: (changedPath?: string) => Promise<void>,
 ): GitStatus {
   const [branchInfo, setBranchInfo] = useState<GitBranchInfo | null>(null);
   const [isPulling, setIsPulling] = useState(false);

@@ -40,8 +40,8 @@ function AppInner() {
   // also refreshes git status. The editor session calls refreshTree after all
   // file-system mutations, so piggybacking here avoids threading git.refresh
   // through every hook in the chain.
-  const refreshTreeAndGit = useCallback(async () => {
-    await workspace.refreshTree();
+  const refreshTreeAndGit = useCallback(async (changedPath?: string) => {
+    await workspace.refreshTree(changedPath);
     void gitCommit.refresh();
   }, [workspace.refreshTree, gitCommit.refresh]);
 

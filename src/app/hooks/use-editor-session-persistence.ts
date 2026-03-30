@@ -32,7 +32,7 @@ type CommitSessionState = (
 interface UseEditorSessionPersistenceOptions {
   fs: FileSystem;
   pipeline: SavePipeline;
-  refreshTree: () => Promise<void>;
+  refreshTree: (changedPath?: string) => Promise<void>;
   addRecentFile: (path: string) => void;
   /** Lightweight callback fired after every successful save (not tree refresh). */
   onAfterSave?: () => void;
@@ -181,7 +181,10 @@ export function useEditorSessionPersistence({
   const handleRename = useCallback(async (oldPath: string, newPath: string) => {
     try {
       await fs.renameFile(oldPath, newPath);
-      await refreshTree();
+      const oldDir = oldPath.substring(0, Math.max(0, oldPath.lastIndexOf("/")));
+      const newDir = newPath.substring(0, Math.max(0, newPath.lastIndexOf("/")));
+      // Same-directory rename: scoped refresh. Cross-directory: full refresh.
+      await refreshTree(oldDir === newDir ? newPath : undefined);
       renameBuffers(oldPath, newPath);
       addRecentFile(newPath);
     } catch (e: unknown) {
@@ -219,7 +222,7 @@ export function useEditorSessionPersistence({
       );
     }
 
-    await refreshTree();
+    await refreshTree(path);
   }, [buffers, commitSessionState, fs, liveDocs, refreshTree, sourceMaps, stateRef]);
 
   const saveAs = useCallback(async () => {
@@ -263,7 +266,7 @@ export function useEditorSessionPersistence({
           { editorDoc: doc },
         );
         addRecentFile(relativePath);
-        await refreshTree();
+        await refreshTree(relativePath);
       } catch (e: unknown) {
         console.error("[session] save-as failed:", e);
         throw e;
