@@ -385,15 +385,18 @@ export const editorFocusField = createBooleanToggleField(focusEffect);
 /**
  * Extension that dispatches focus-change effects when the editor
  * gains or loses focus.
+ *
+ * Uses CM6's built-in {@link EditorView.focusChangeEffect} facet, which
+ * defers the dispatch via setTimeout(10ms). The previous domEventHandlers
+ * approach dispatched synchronously during the focus event — this caused
+ * decoration rebuilds between mousedown and CM6's initial selection
+ * computation, shifting the DOM so that `start.pos !== cur.pos` and
+ * producing an unwanted range selection on the first click after scroll
+ * (#755).
  */
-export const focusTracker: Extension = EditorView.domEventHandlers({
-  focus(_event, view) {
-    view.dispatch({ effects: focusEffect.of(true) });
-  },
-  blur(_event, view) {
-    view.dispatch({ effects: focusEffect.of(false) });
-  },
-});
+export const focusTracker: Extension = EditorView.focusChangeEffect.of(
+  (_state, focusing) => focusEffect.of(focusing),
+);
 
 /**
  * Push a widget replacement decoration, setting source range for click-to-edit.
