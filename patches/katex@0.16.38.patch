@@ -1,0 +1,53 @@
+diff --git a/dist/katex.js b/dist/katex.js
+index 69a5eac63dba04361390b46275880332c983cc9f..9951d562d8dd7fc2d2b2c04c1bfb46191bc222b5 100644
+--- a/dist/katex.js
++++ b/dist/katex.js
+@@ -5841,6 +5841,11 @@ const buildGroup = function (group, options, baseOptions) {
+       groupNode.height *= multiplier;
+       groupNode.depth *= multiplier;
+     }
++    const loc = group.loc;
++    if (loc != null && "setAttribute" in groupNode && typeof groupNode.setAttribute === "function") {
++      groupNode.setAttribute("data-loc-start", String(loc.start));
++      groupNode.setAttribute("data-loc-end", String(loc.end));
++    }
+     return groupNode;
+   } else {
+     throw new src_ParseError("Got group of unknown type: '" + group.type + "'");
+diff --git a/dist/katex.mjs b/dist/katex.mjs
+index 250484b791d3954163ae2320972ca011d2494df9..ec6e5f7dd7b0869e01fe08ff4a32f6d3836a8862 100644
+--- a/dist/katex.mjs
++++ b/dist/katex.mjs
+@@ -5531,6 +5531,11 @@ var buildGroup$1 = function buildGroup(group, options, baseOptions) {
+       groupNode.height *= multiplier;
+       groupNode.depth *= multiplier;
+     }
++    var loc = group.loc;
++    if (loc != null && "setAttribute" in groupNode && typeof groupNode.setAttribute === "function") {
++      groupNode.setAttribute("data-loc-start", String(loc.start));
++      groupNode.setAttribute("data-loc-end", String(loc.end));
++    }
+     return groupNode;
+   } else {
+     throw new ParseError("Got group of unknown type: '" + group.type + "'");
+diff --git a/src/buildHTML.ts b/src/buildHTML.ts
+index 24ef95b02bf9506aebfa339b7f305d1794589f23..04cddf5dea55b79a833738b5d55c134639a2078c 100644
+--- a/src/buildHTML.ts
++++ b/src/buildHTML.ts
+@@ -283,6 +283,16 @@ export const buildGroup = function(
+             groupNode.depth *= multiplier;
+         }
+ 
++        const loc = group.loc;
++        if (
++            loc != null &&
++            "setAttribute" in groupNode &&
++            typeof groupNode.setAttribute === "function"
++        ) {
++            groupNode.setAttribute("data-loc-start", String(loc.start));
++            groupNode.setAttribute("data-loc-end", String(loc.end));
++        }
++
+         return groupNode;
+     } else {
+         throw new ParseError(

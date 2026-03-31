@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  katex@0.16.38:
+    hash: ec0b80f04c45961b4e63a65d563bcf6d40838e4fd6313424b6d15c346ea0aa71
+    path: patches/katex@0.16.38.patch
+
 importers:
 
   .:
@@ -130,7 +135,7 @@ importers:
         version: 6.1.0
       katex:
         specifier: ^0.16.38
-        version: 0.16.38
+        version: 0.16.38(patch_hash=ec0b80f04c45961b4e63a65d563bcf6d40838e4fd6313424b6d15c346ea0aa71)
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.4)
@@ -4493,7 +4498,7 @@ snapshots:
     transitivePeerDependencies:
       - '@noble/hashes'
 
-  katex@0.16.38:
+  katex@0.16.38(patch_hash=ec0b80f04c45961b4e63a65d563bcf6d40838e4fd6313424b6d15c346ea0aa71):
     dependencies:
       commander: 8.3.0
 

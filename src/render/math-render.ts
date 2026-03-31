@@ -124,8 +124,42 @@ export class MathWidget extends MacroAwareWidget {
     private readonly raw: string,
     private readonly isDisplay: boolean,
     private readonly macros: Record<string, string> = {},
+    private readonly contentOffset = 0,
   ) {
     super(macros);
+  }
+
+  protected override bindSourceReveal(
+    el: HTMLElement,
+    view: EditorView,
+  ): void {
+    el.style.cursor = "pointer";
+    el.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      view.focus();
+
+      let pos: number | undefined;
+      if (e.target instanceof Element) {
+        const hit = e.target.closest<HTMLElement>("[data-loc-start]");
+        if (hit && el.contains(hit)) {
+          const locStart = Number.parseInt(hit.dataset.locStart ?? "", 10);
+          if (Number.isFinite(locStart)) {
+            const contentFrom = this.sourceFrom + this.contentOffset;
+            pos = Math.max(this.sourceFrom, Math.min(this.sourceTo, contentFrom + locStart));
+          }
+        }
+      }
+
+      if (pos === undefined) {
+        try {
+          pos = view.posAtDOM(el);
+        } catch {
+          pos = this.sourceFrom;
+        }
+      }
+
+      view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
+    });
   }
 
   createDOM(): HTMLElement {
@@ -282,7 +316,13 @@ function buildMathItems(
       }
       if (region.isDisplay) {
         const raw = state.sliceDoc(region.from, region.to);
-        const widget = new MathWidget(region.latex, raw, true, macros);
+        const widget = new MathWidget(
+          region.latex,
+          raw,
+          true,
+          macros,
+          region.contentFrom - region.from,
+        );
         widget.sourceFrom = region.from;
         widget.sourceTo = region.to;
         items.push(
@@ -297,7 +337,13 @@ function buildMathItems(
     // block: true breaks CM6 height tracking for subsequent lines
     pushWidgetDecoration(
       items,
-      new MathWidget(region.latex, raw, region.isDisplay, macros),
+      new MathWidget(
+        region.latex,
+        raw,
+        region.isDisplay,
+        macros,
+        region.contentFrom - region.from,
+      ),
       region.from,
       region.to,
     );

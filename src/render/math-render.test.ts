@@ -85,6 +85,12 @@ describe("MathWidget (inline)", () => {
     expect(el.querySelector(".katex")).not.toBeNull();
   });
 
+  it("includes relative source-location attributes in cached KaTeX HTML", () => {
+    const html = renderKatexToHtml("x^2+y^2", false, {});
+    expect(html).toContain("data-loc-start");
+    expect(html).toContain("data-loc-end");
+  });
+
   it("shows error for invalid LaTeX", () => {
     const widget = new MathWidget("\\invalid{", "$\\invalid{$", false);
     const el = widget.toDOM();
@@ -251,6 +257,30 @@ describe("MathWidget (display)", () => {
 
     expect(dispatch).toHaveBeenCalledWith({
       selection: { anchor: 951 },
+      scrollIntoView: false,
+    });
+  });
+
+  it("maps nested KaTeX clicks to content-relative source positions", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new MathWidget("x^2+y^2", "$$x^2+y^2$$", true, {}, 2);
+    widget.sourceFrom = 100;
+    widget.sourceTo = 111;
+
+    const el = widget.toDOM(view);
+    const hit = [...el.querySelectorAll<HTMLElement>("[data-loc-start]")]
+      .find((node) => Number.parseInt(node.dataset.locStart ?? "", 10) > 0);
+
+    expect(hit).toBeDefined();
+    const locStart = Number.parseInt(hit?.dataset.locStart ?? "", 10);
+    expect(Number.isFinite(locStart)).toBe(true);
+
+    hit?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(dispatch).toHaveBeenCalledWith({
+      selection: { anchor: 102 + locStart },
       scrollIntoView: false,
     });
   });

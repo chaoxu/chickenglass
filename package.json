@@ -59,7 +59,13 @@
   ],
   "license": "MIT",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "lefthook"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "lefthook"
+    ],
+    "patchedDependencies": {
+      "katex@0.16.38": "patches/katex@0.16.38.patch"
+    }
   },
   "dependencies": {
     "@citation-js/core": "^0.7.21",
