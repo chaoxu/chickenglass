@@ -61,6 +61,7 @@ declare global {
       printPerfSummary: () => Promise<unknown>;
       clearPerf: () => Promise<void>;
       togglePerfPanel: () => void;
+      toggleFps: () => boolean;
     };
 
     /**

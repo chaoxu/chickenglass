@@ -7,6 +7,7 @@ import {
   printPerfSummary,
   togglePerfPanel,
 } from "../perf";
+import { toggleFpsMeter, stopFpsMeter } from "../fps-meter";
 import {
   debugEmitFileChangedCommand,
   debugGetNativeStateCommand,
@@ -63,6 +64,10 @@ export function useAppDebug({
   startupComplete,
   restoredProjectRoot,
 }: AppDebugDeps): void {
+  // Stop the FPS rAF loop only on true unmount / HMR — not on every effect
+  // refresh caused by dependency changes (openProject, currentDocument, etc.).
+  useEffect(() => () => stopFpsMeter(), []);
+
   useEffect(() => {
     window.__app = {
       openFile,
@@ -76,6 +81,7 @@ export function useAppDebug({
       printPerfSummary,
       clearPerf: clearCombinedPerf,
       togglePerfPanel,
+      toggleFps: toggleFpsMeter,
     };
     if (import.meta.env.DEV && isTauri()) {
       window.__tauriSmoke = {
