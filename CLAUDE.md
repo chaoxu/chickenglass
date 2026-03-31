@@ -34,6 +34,7 @@ scripts/         # CDP test helpers, blog import tools
 ```bash
 pnpm install         # install dependencies
 pnpm dev             # start dev server (Vite) — browser mode with blog demo content
+pnpm preview         # serve the production build on 0.0.0.0 for IPv4 access
 pnpm dev:worktree -- perf-444 --base origin/main --fetch
                      # create an isolated worktree under .worktrees/ from a committed base ref
 pnpm build           # production build (frontend only)
@@ -122,6 +123,8 @@ Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile(
 
 `pnpm dev` runs Vite in dev mode (`import.meta.env.DEV === true`). Dev mode differences:
 - **No dirty-file confirmation** — switching files with unsaved changes skips the `window.confirm` dialog for faster testing. Controlled by `Settings.skipDirtyConfirm` (defaults to `true` in dev, `false` in production).
+
+When asked to start the preview server, prefer `pnpm build && pnpm preview`. The preview script binds `0.0.0.0` so it is reachable over IPv4.
 
 ## Browser testing (CDP)
 

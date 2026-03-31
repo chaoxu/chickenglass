@@ -10,7 +10,7 @@ Semantic document editor for mathematical writing. Runs as a native desktop app 
 - **Math**: KaTeX
 - **Desktop**: Tauri v2 (smaller bundles, native webview)
 - **Build**: Vite (frontend), Cargo (Rust backend)
-- **Package manager**: npm
+- **Package manager**: pnpm
 - **UI**: @radix-ui/dialog, @dnd-kit, lucide-react, cmdk
 
 ## Project structure
@@ -32,16 +32,17 @@ scripts/         # CDP test helpers, blog import tools
 ## Commands
 
 ```bash
-npm install          # install dependencies
-npm run dev          # start dev server (Vite) — browser mode with blog demo content
-npm run build        # production build (frontend only)
-npm run lint         # ESLint
-npm run lint:fix     # ESLint autofix
-npm run test         # run tests (Vitest)
-npx tsc --noEmit     # typecheck only
-npm run tauri:dev    # launch Tauri desktop app
-npm run tauri:build  # build production desktop binary
-npm run chrome       # launch Playwright Chromium with CDP on port 9322
+pnpm install         # install dependencies
+pnpm dev             # start dev server (Vite) — browser mode with blog demo content
+pnpm build           # production build (frontend only)
+pnpm preview         # serve the production build on 0.0.0.0 for IPv4 access
+pnpm lint            # ESLint
+pnpm lint:fix        # ESLint autofix
+pnpm test            # run tests (Vitest)
+pnpm typecheck       # typecheck only
+pnpm tauri:dev       # launch Tauri desktop app
+pnpm tauri:build     # build production desktop binary
+pnpm chrome          # launch Playwright Chromium with CDP on port 9322
 ```
 
 ## Debug helpers
@@ -66,13 +67,15 @@ Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile(
 
 ## Dev mode
 
-`npm run dev` runs Vite in dev mode. Dev mode skips the dirty-file confirmation dialog when switching files, so testing is faster. Controlled by `Settings.skipDirtyConfirm`.
+`pnpm dev` runs Vite in dev mode. Dev mode skips the dirty-file confirmation dialog when switching files, so testing is faster. Controlled by `Settings.skipDirtyConfirm`.
+
+When asked to start the preview server, prefer `pnpm build && pnpm preview`. The preview script binds `0.0.0.0` so it is reachable over IPv4.
 
 ## Browser testing (CDP)
 
 **Only ONE dev server and ONE browser at a time.** Kill previous instances before launching. Use `page.reload()` after code changes — never open new browser instances.
 
-1. Start: `npm run dev`, then `npm run chrome` (CDP on port 9322)
+1. Start: `pnpm dev`, then `pnpm chrome` (CDP on port 9322)
 2. Connect: `chromium.connectOverCDP("http://localhost:9322")`
 3. Use `page.evaluate()` + `__cmView`/`__cmDebug`/`__app`. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout(10000)`.
 4. Kill: `kill $(lsof -ti:5173 -ti:5174 -ti:5175) 2>/dev/null; pkill -f "launch-chrome" 2>/dev/null`
