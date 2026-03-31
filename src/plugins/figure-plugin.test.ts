@@ -62,7 +62,7 @@ describe("figure plugin", () => {
     view.destroy();
   });
 
-  it("places caption label on last body line, not opening fence", () => {
+  it("places caption label below the content, not on the opening fence", () => {
     const doc = [
       "::: {.figure #fig-test}",
       "![](image.png)",
@@ -86,12 +86,12 @@ describe("figure plugin", () => {
     );
     expect(headerOnOpenFence).toHaveLength(0);
 
-    // The last body line ("A caption line.") should have cf-block-header
+    // The caption should render as a below-content widget anchored after the
+    // last body line, not as a line decoration on the opening fence.
     const captionLine = view.state.doc.line(3); // "A caption line."
-    const headerOnCaption = headerOnOpen.filter(
-      (s) => s.from === captionLine.from,
-    );
-    expect(headerOnCaption).toHaveLength(1);
+    const captionWidgets = specs.filter((s) => s.widgetClass === "BlockCaptionWidget");
+    expect(captionWidgets).toHaveLength(1);
+    expect(captionWidgets[0]?.from).toBe(captionLine.to);
 
     view.destroy();
   });
