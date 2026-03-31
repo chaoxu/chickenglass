@@ -12,7 +12,7 @@ If the change affects rendering, CSS, decorations, themes, or layout:
   3. Verify the live browser state against `index.md` (or the relevant file) using the existing debug bridge and helper workflow.
   4. Clean up any background dev-server / Chrome processes you started.
 If the change affects desktop UI or other Tauri-specific behavior that can differ from browser mode:
-  1. Run the app in Tauri with `npm run tauri:dev` and verify the behavior there.
+  1. Run the app in Tauri with `pnpm tauri:dev` and verify the behavior there.
   2. Use this for native menus/dialogs, folder/file picker flows, window lifecycle, external link handling, and other desktop-only interactions.
   3. Do not treat browser-only verification as sufficient for those changes.
   4. Clean up any background Tauri / dev-server processes you started.
