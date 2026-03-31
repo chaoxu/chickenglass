@@ -48,6 +48,20 @@ export interface EquationEntry {
   readonly number: number;
 }
 
+function formatHeadingCrossrefLabel(
+  analysis: DocumentAnalysis,
+  id: string,
+): ResolvedCrossref | undefined {
+  for (const heading of analysis.headings) {
+    if (heading.id !== id) continue;
+    return {
+      kind: "block",
+      label: heading.number ? `Section ${heading.number}` : heading.text,
+    };
+  }
+  return undefined;
+}
+
 export function collectEquationLabels(
   state: EditorState,
 ): ReadonlyMap<string, EquationEntry> {
@@ -66,7 +80,8 @@ export function collectEquationLabels(
  * Resolution order:
  * 1. Check block labels (from blockCounterField)
  * 2. Check equation labels (from EquationLabel nodes)
- * 3. Assume it's a citation (to be resolved by the citation system)
+ * 3. Check heading labels
+ * 4. Assume it's a citation (to be resolved by the citation system)
  */
 export function resolveCrossref(
   state: EditorState,
@@ -91,10 +106,12 @@ export function resolveCrossref(
     }
   }
 
+  const analysis = getAnalysisOrRecompute(state);
+
   // 2. Check equation labels
   const eqLabels =
     equationLabels ??
-    getAnalysisOrRecompute(state).equationById;
+    analysis.equationById;
   const eqEntry = eqLabels.get(id);
   if (eqEntry) {
     return {
@@ -104,7 +121,13 @@ export function resolveCrossref(
     };
   }
 
-  // 3. Assume citation if not found as block or equation
+  // 3. Check heading labels
+  const heading = formatHeadingCrossrefLabel(analysis, id);
+  if (heading) {
+    return heading;
+  }
+
+  // 4. Assume citation if not found as block, equation, or heading
   // Citations use identifiers that typically don't have prefixes like "eq:" or "thm-"
   // But we can't know for sure until the citation system is loaded,
   // so we mark it as citation (to be verified later by the citation renderer).

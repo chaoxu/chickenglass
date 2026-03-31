@@ -174,6 +174,36 @@ describe("resolveCrossref", () => {
     expect(second.label).toBe("Eq. (2)");
   });
 
+  it("resolves a numbered heading reference as a section label", () => {
+    const doc = [
+      "# Intro",
+      "",
+      "## Min-Cost Circulation {#sec:mincostcirc}",
+      "",
+      "See [@sec:mincostcirc].",
+    ].join("\n");
+    const state = createState(doc);
+    const result = resolveCrossref(state, "sec:mincostcirc");
+
+    expect(result.kind).toBe("block");
+    expect(result.label).toBe("Section 1.1");
+  });
+
+  it("falls back to heading text for unnumbered heading references", () => {
+    const doc = [
+      "# Intro",
+      "",
+      "## Appendix {#sec:appendix .unnumbered}",
+      "",
+      "See [@sec:appendix].",
+    ].join("\n");
+    const state = createState(doc);
+    const result = resolveCrossref(state, "sec:appendix");
+
+    expect(result.kind).toBe("block");
+    expect(result.label).toBe("Appendix");
+  });
+
   it("returns citation for unknown id", () => {
     const doc = "Some text.";
     const state = createState(doc);

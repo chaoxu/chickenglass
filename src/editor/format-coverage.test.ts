@@ -584,6 +584,19 @@ describe("FORMAT.md coverage: Cross-References", () => {
     expect(result.number).toBe(1);
   });
 
+  it("resolves heading reference [@sec:background] to Section number", () => {
+    const state = createTestState([
+      "# Intro",
+      "",
+      "## Background {#sec:background}",
+      "",
+      "See [@sec:background].",
+    ].join("\n"));
+    const result = resolveCrossref(state, "sec:background");
+    expect(result.kind).toBe("block");
+    expect(result.label).toBe("Section 1.1");
+  });
+
   it("treats unknown reference as citation", () => {
     const result = resolveCrossref(masterState, "karger2000");
     expect(result.kind).toBe("citation");
