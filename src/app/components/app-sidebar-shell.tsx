@@ -8,7 +8,6 @@ import {
   SidebarRail,
   SidebarTrigger,
 } from "./sidebar";
-import { SymbolPanel } from "./symbol-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import type { AppEditorShellController } from "../hooks/use-app-editor-shell";
 import type { GitController } from "../hooks/use-git";
@@ -25,7 +24,7 @@ interface AppSidebarShellProps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "openFile" | "handleRename" | "handleDelete" | "createFile" | "createDirectory" | "headings" | "handleOutlineSelect" | "handleSymbolInsert" | "editorState"
+    "currentPath" | "openFile" | "handleRename" | "handleDelete" | "createFile" | "createDirectory" | "headings" | "handleOutlineSelect" | "editorState"
   >;
   git: GitController | null;
 }
@@ -53,7 +52,6 @@ export function AppSidebarShell({ workspace, editor, git }: AppSidebarShellProps
           <TabsList className="flex shrink-0 border-b border-[var(--cf-border)]">
             <TabsTrigger value="files">Files</TabsTrigger>
             <TabsTrigger value="outline">Outline</TabsTrigger>
-            <TabsTrigger value="symbols">Symbols</TabsTrigger>
             {git && <TabsTrigger value="git">Git</TabsTrigger>}
           </TabsList>
 
@@ -75,12 +73,6 @@ export function AppSidebarShell({ workspace, editor, git }: AppSidebarShellProps
             </TabsContent>
             <TabsContent value="outline" className="min-h-full">
               <Outline headings={editor.headings} onSelect={editor.handleOutlineSelect} />
-            </TabsContent>
-            <TabsContent value="symbols" className="min-h-full">
-              <SymbolPanel
-                onInsert={editor.handleSymbolInsert}
-                view={editor.editorState?.view ?? null}
-              />
             </TabsContent>
             {git && (
               <TabsContent value="git" className="min-h-full">

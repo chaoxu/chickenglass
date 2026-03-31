@@ -177,15 +177,6 @@ describe("#113 — about dialog", () => {
   });
 });
 
-// ─── Issue #116: Math symbol panel ───────────────────────────────────────────
-
-describe("#116 — symbol panel", () => {
-  it("React SymbolPanel component exists", async () => {
-    const mod = await import("./components/symbol-panel");
-    expect(mod.SymbolPanel).toBeDefined();
-  });
-});
-
 // ─── Issue #117: Sidebar hover arrows ────────────────────────────────────────
 
 describe("#117 — sidebar collapse arrows on hover", () => {
@@ -450,11 +441,6 @@ describe("React migration — #141 small dialogs", () => {
 });
 
 describe("React migration — #142 remaining", () => {
-  it("SymbolPanel exists", async () => {
-    const mod = await import("./components/symbol-panel");
-    expect(mod.SymbolPanel).toBeDefined();
-  });
-
   it("SplitPane exists", async () => {
     const mod = await import("./components/split-pane");
     expect(mod.SplitPane).toBeDefined();

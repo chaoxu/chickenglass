@@ -101,11 +101,6 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
   // --- Insertion ---
 
   /**
-   * Insert a LaTeX string at the current cursor position without exposing the
-   * CM6 view to the caller. Used by the symbol picker panel.
-   */
-  handleSymbolInsert: (latex: string) => void;
-  /**
    * Open the native file picker to select an image, then insert it into the
    * document (as a data URL or saved file, depending on frontmatter imageFolder).
    */
@@ -237,14 +232,6 @@ export function useAppEditorShell({
     });
   }, [editorState?.view, settings.wordWrap, settings.showLineNumbers, settings.tabSize]);
 
-  const handleSymbolInsert = useCallback((latex: string) => {
-    const view = editorState?.view;
-    if (!view) return;
-    const { from } = view.state.selection.main;
-    view.dispatch({ changes: { from, insert: latex } });
-    view.focus();
-  }, [editorState?.view]);
-
   const handleInsertImage = useCallback(() => {
     const view = editorState?.view;
     if (view) {
@@ -316,7 +303,6 @@ export function useAppEditorShell({
     handleOutlineSelect,
     handleGotoLine,
     handleSearchResult,
-    handleSymbolInsert,
     handleInsertImage,
     editorMode,
     handleModeChange,
