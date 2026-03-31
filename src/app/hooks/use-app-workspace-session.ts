@@ -95,7 +95,7 @@ export function mergeChildrenIntoTree(
   return changed ? { ...tree, children: mapped } : tree;
 }
 
-export type SidebarTab = "files" | "outline" | "symbols" | "git";
+export type SidebarTab = "files" | "outline" | "git";
 
 export interface AppWorkspaceSessionController {
   settings: ReturnType<typeof useSettings>["settings"];

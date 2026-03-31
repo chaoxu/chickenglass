@@ -13,7 +13,6 @@ export { SearchPanel } from "./components/search-panel";
 export { AboutDialog } from "./components/about-dialog";
 export { ShortcutsDialog } from "./components/shortcuts-dialog";
 export { SettingsDialog } from "./components/settings-dialog";
-export { SymbolPanel } from "./components/symbol-panel";
 export { SplitPane } from "./components/split-pane";
 export { GotoLineDialog } from "./components/goto-line-dialog";
 
