@@ -7,6 +7,7 @@ import {
   printPerfSummary,
   togglePerfPanel,
 } from "../perf";
+import { toggleFpsMeter, stopFpsMeter } from "../fps-meter";
 import {
   debugEmitFileChangedCommand,
   debugGetNativeStateCommand,
@@ -76,6 +77,7 @@ export function useAppDebug({
       printPerfSummary,
       clearPerf: clearCombinedPerf,
       togglePerfPanel,
+      toggleFps: toggleFpsMeter,
     };
     if (import.meta.env.DEV && isTauri()) {
       window.__tauriSmoke = {
@@ -108,6 +110,7 @@ export function useAppDebug({
     return () => {
       // Clear debug globals on unmount / HMR so stale closures are not left
       // on window between hot-reloads or component teardowns.
+      stopFpsMeter();
       delete window.__app;
       delete window.__cfDebug;
       delete window.__tauriSmoke;

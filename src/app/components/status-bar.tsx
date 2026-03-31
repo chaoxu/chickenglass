@@ -1,6 +1,7 @@
-import { memo, useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { memo, useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import { markdownEditorModes, type EditorMode } from "../../editor";
 import { computeDocStats, formatReadingTime, type DocStats } from "../writing-stats";
+import { subscribeFpsMeter, getFpsMeterSnapshot } from "../fps-meter";
 import { cn } from "../lib/utils";
 import { useEditorTelemetry } from "../stores/editor-telemetry-store";
 
@@ -117,6 +118,19 @@ const StatsPopover = memo(function StatsPopover({ stats, anchorRef, onClose }: S
   );
 });
 
+// ── FpsIndicator ──────────────────────────────────────────────────────────────
+
+const FpsIndicator = memo(function FpsIndicator() {
+  const { enabled, fps, frameTime } = useSyncExternalStore(subscribeFpsMeter, getFpsMeterSnapshot);
+  if (!enabled) return null;
+
+  return (
+    <span className="tabular-nums text-[var(--cf-muted)]" title={`${frameTime} ms/frame`}>
+      {fps} FPS
+    </span>
+  );
+});
+
 // ── StatusBar ──────────────────────────────────────────────────────────────────
 
 /**
@@ -220,8 +234,9 @@ export function StatusBar({
           </span>
         </div>
 
-        {/* Right: command palette + mode indicator */}
+        {/* Right: FPS meter + command palette + mode indicator */}
         <div className="flex items-center gap-1 pr-1">
+          <FpsIndicator />
           {onOpenPalette && (
             <button
               type="button"

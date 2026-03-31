@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { BackgroundIndexer } from "../../index";
 import { dispatchFormatEvent } from "../../constants/events";
+import { toggleFpsMeter } from "../fps-meter";
 import { batchExport, exportDocument } from "../export";
 import type { FileSystem } from "../file-manager";
 import { basename, modKey } from "../lib/utils";
@@ -189,6 +190,7 @@ export function useAppOverlays({
     { id: "view.toggle-sidebar", label: "Toggle Sidebar", category: "View", shortcut: `${modKey}+\\`, hotkey: "mod+\\", menuId: "view_toggle_sidebar", action: () => workspace.setSidebarCollapsed((value) => !value) },
     { id: "view.toggle-sidenotes", label: "Toggle Sidenote Margin", category: "View", action: () => workspace.setSidenotesCollapsed((value) => !value) },
     { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => workspace.setTheme(workspace.resolvedTheme === "dark" ? "light" : "dark") },
+    { id: "view.toggle-fps", label: "Toggle FPS Meter", category: "View", action: () => toggleFpsMeter() },
 
     // ── Insert ────────────────────────────────────────────────────────────
     { id: "insert.image", label: "Insert Image", category: "Insert", action: () => editor.handleInsertImage() },
