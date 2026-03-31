@@ -5,18 +5,10 @@
 
 :root {
   --cf-logo-display-filter: none;
-
-  /* Git status indicators */
-  --cf-git-modified: #c4a000;
-  --cf-git-added: #4e9a06;
-  --cf-git-untracked: #75868c;
 }
 
 [data-theme="dark"] {
   --cf-logo-display-filter: invert(1);
-  --cf-git-modified: #e2c08d;
-  --cf-git-added: #73c991;
-  --cf-git-untracked: #8db0b8;
 }
 
 /* ── Base styles ────────────────────────────────────────────────────────────── */

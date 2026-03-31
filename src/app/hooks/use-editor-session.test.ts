@@ -80,7 +80,6 @@ function createHarness(
     ref.result = useEditorSession({
       fs,
       refreshTree: async () => {},
-      refreshGitStatus: async () => {},
       addRecentFile: () => {},
       requestUnsavedChangesDecision,
     });

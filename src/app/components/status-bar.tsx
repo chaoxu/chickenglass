@@ -19,16 +19,6 @@ export interface StatusBarProps {
   docText?: string;
   /** Whether the active file is markdown (non-md files are Source-only). */
   isMarkdown?: boolean;
-  /** Current git branch name — shown at the far left when present. */
-  branchName?: string | null;
-  /** Callback when the branch indicator is clicked (opens branch switcher). */
-  onBranchClick?: () => void;
-  /** Commits ahead of upstream. */
-  gitAhead?: number;
-  /** Commits behind upstream. */
-  gitBehind?: number;
-  /** Whether a git operation (pull/push) is running. */
-  gitIsBusy?: boolean;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -132,11 +122,6 @@ export function StatusBar({
   onOpenPalette,
   docText = "",
   isMarkdown = true,
-  branchName,
-  onBranchClick,
-  gitAhead = 0,
-  gitBehind = 0,
-  gitIsBusy = false,
 }: StatusBarProps) {
   const wordCount = useEditorTelemetry((s) => s.wordCount);
   const charCount = useEditorTelemetry((s) => s.charCount);
@@ -165,37 +150,8 @@ export function StatusBar({
   return (
     <>
       <div data-statusbar className="shrink-0 flex items-center border-t border-[var(--cf-border)] bg-[var(--cf-bg)] h-6 px-2 text-xs text-[var(--cf-muted)] select-none">
-        {/* Left: branch + word + char count */}
+        {/* Left: word + char count */}
         <div className="flex items-center gap-2">
-          {branchName && (
-            <button
-              type="button"
-              aria-label={`Git branch: ${branchName}. Click to switch branch`}
-              onClick={onBranchClick}
-              className={cn("px-1 rounded hover:bg-[var(--cf-hover)] transition-colors flex items-center gap-1", gitIsBusy && "opacity-50")}
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <line x1="6" y1="3" x2="6" y2="15" />
-                <circle cx="18" cy="6" r="3" />
-                <circle cx="6" cy="18" r="3" />
-                <path d="M18 9a9 9 0 0 1-9 9" />
-              </svg>
-              <span className="max-w-[120px] truncate">{branchName}</span>
-              {gitAhead > 0 && <span>{"\u2191"}{gitAhead}</span>}
-              {gitBehind > 0 && <span>{"\u2193"}{gitBehind}</span>}
-            </button>
-          )}
-          {branchName && <span className="opacity-50">·</span>}
           <button
             ref={wordCountRef}
             type="button"

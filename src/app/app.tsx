@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef } from "react";
 import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
 import type { FileSystem } from "./file-manager";
 import { SidebarProvider } from "./components/sidebar";
@@ -6,26 +6,19 @@ import { AppMainShell } from "./components/app-main-shell";
 import { AppSidebarShell } from "./components/app-sidebar-shell";
 import { ErrorBoundary } from "./components/error-boundary";
 import { useAppFileDialogs } from "./hooks/use-app-file-dialogs";
-import { isTauri } from "../lib/tauri";
 import { useAppDebug } from "./hooks/use-app-debug";
 import { useAppEditorShell } from "./hooks/use-app-editor-shell";
 import { useAppOverlays } from "./hooks/use-app-overlays";
 import { useAppSessionPersistence } from "./hooks/use-app-session-persistence";
 import { useDialogs } from "./hooks/use-dialogs";
-import { useGitBranch } from "./hooks/use-git-branch";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
 import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
 import { useAppWorkspaceSession } from "./hooks/use-app-workspace-session";
-import { useGit } from "./hooks/use-git";
-import { useGitStatus } from "./hooks/use-git-status";
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
 
 /** Lazy-loaded overlay dialogs — not needed until the user opens one. */
 const AppOverlays = lazy(() =>
   import("./components/app-overlays").then((m) => ({ default: m.AppOverlays })),
-);
-const BranchSwitcher = lazy(() =>
-  import("./components/branch-switcher").then((m) => ({ default: m.BranchSwitcher })),
 );
 
 function AppInner() {
@@ -34,35 +27,13 @@ function AppInner() {
   const dialogs = useDialogs();
   const unsavedChanges = useUnsavedChangesDialog();
   const workspace = useAppWorkspaceSession(fs);
-  const gitCommit = useGit(workspace.projectRoot);
-
-  // Wrap refreshTree so every workspace mutation (save, rename, delete, create)
-  // also refreshes git status. The editor session calls refreshTree after all
-  // file-system mutations, so piggybacking here avoids threading git.refresh
-  // through every hook in the chain.
-  const refreshTreeAndGit = useCallback(async (changedPath?: string) => {
-    await workspace.refreshTree(changedPath);
-    void gitCommit.refresh();
-  }, [workspace.refreshTree, gitCommit.refresh]);
 
   const editor = useAppEditorShell({
     fs,
     settings: workspace.settings,
-    refreshTree: refreshTreeAndGit,
-    refreshGitStatus: workspace.refreshGitStatus,
+    refreshTree: workspace.refreshTree,
     addRecentFile: workspace.addRecentFile,
-    onAfterSave: gitCommit.refresh,
     requestUnsavedChangesDecision: unsavedChanges.requestDecision,
-  });
-
-  const [branchSwitcherOpen, setBranchSwitcherOpen] = useState(false);
-  const gitBranch = useGitBranch({
-    projectRoot: workspace.projectRoot,
-    refreshTree: refreshTreeAndGit,
-    reloadFile: editor.reloadFile,
-    closeCurrentFile: editor.closeCurrentFile,
-    currentPath: editor.currentPath,
-    hasDirtyDocument: editor.hasDirtyDocument,
   });
 
   // Stable reference for lazy child loading — used by default-doc search
@@ -77,8 +48,6 @@ function AppInner() {
     workspace,
     listChildren: listChildrenStable,
   });
-
-  const git = useGitStatus(workspace.projectRoot, workspace.refreshTree);
 
   useWindowCloseGuard({
     hasDirtyDocument: editor.hasDirtyDocument,
@@ -122,7 +91,6 @@ function AppInner() {
       handleOpenFolder: fileDialogs.handleOpenFolderRequest,
     },
     editor,
-    git,
     onOpenFile: fileDialogs.handleOpenFileRequest,
     onQuit: fileDialogs.handleQuitRequest,
   });
@@ -157,17 +125,14 @@ function AppInner() {
         onDragOver={editor.handleDragOver}
         onDrop={editor.handleDrop}
       >
-        <AppSidebarShell workspace={workspace} editor={editor} git={isTauri() ? gitCommit : null} />
+        <AppSidebarShell workspace={workspace} editor={editor} />
         <AppMainShell
           fs={fs}
           projectConfig={workspace.projectConfig}
           resolvedTheme={workspace.resolvedTheme}
           workspace={workspace}
           editor={editor}
-          git={git}
           onOpenPalette={overlays.openPalette}
-          branchName={gitBranch.currentBranch}
-          onBranchClick={() => setBranchSwitcherOpen(true)}
         />
         <Suspense fallback={null}>
           <AppOverlays
@@ -176,12 +141,6 @@ function AppInner() {
             dialogs={dialogs}
             overlays={overlays}
             unsavedChanges={unsavedChanges}
-          />
-          <BranchSwitcher
-            open={branchSwitcherOpen}
-            onOpenChange={setBranchSwitcherOpen}
-            onSwitch={gitBranch.switchBranch}
-            onCreate={gitBranch.createBranch}
           />
         </Suspense>
       </div>

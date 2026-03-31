@@ -3,7 +3,6 @@ import type { FileEntry } from "../file-manager";
 import { dirname } from "../lib/utils";
 import { useFileTreeContext } from "../contexts/file-tree-context";
 import { FileIcon } from "./file-icon";
-import { GitStatusBadge } from "./git-status-badge";
 import { InlineCreateInput } from "./inline-create-input";
 import { RenameEditor } from "./rename-editor";
 import { TreeNodeRow } from "./tree-node-row";
@@ -20,7 +19,7 @@ export function FileTreeNodeFile({ item }: FileTreeNodeFileProps) {
     entry, depth, indent,
     renaming, renameValue, setRenameValue, creating,
     isActive, isFocused,
-    mergedRef, rowProps, gitStatus,
+    mergedRef, rowProps,
     startRename, commitRename, cancelRename,
     startCreate, cancelCreate, handleCreateConfirm,
     handleClick, handleContextSelection, handleRowKey,
@@ -75,7 +74,6 @@ export function FileTreeNodeFile({ item }: FileTreeNodeFileProps) {
         ) : (
           <span className="cf-ui-font truncate">{entry.name}</span>
         )}
-        {gitStatus[entry.path] && <GitStatusBadge status={gitStatus[entry.path]} />}
       </TreeNodeRow>
 
       {creating && (

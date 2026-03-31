@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { FileEntry, FileSystem } from "../file-manager";
-import type { GitStatusMap } from "../tauri-client/git";
-import { gitClient } from "../git-command";
 import { loadProjectConfig } from "../project-config";
 import type { ProjectConfig } from "../project-config";
 import { useRecentFiles } from "./use-recent-files";
@@ -95,7 +93,11 @@ export function mergeChildrenIntoTree(
   return changed ? { ...tree, children: mapped } : tree;
 }
 
+<<<<<<< HEAD
 export type SidebarTab = "files" | "outline" | "git";
+=======
+export type SidebarTab = "files" | "outline" | "symbols";
+>>>>>>> 4bc1116 (refactor: remove all git features (#750))
 
 export interface AppWorkspaceSessionController {
   settings: ReturnType<typeof useSettings>["settings"];
@@ -115,8 +117,6 @@ export interface AppWorkspaceSessionController {
   refreshTree: (changedPath?: string) => Promise<void>;
   /** Load children for a single directory and merge into the tree. */
   loadChildren: (dirPath: string) => Promise<void>;
-  gitStatus: GitStatusMap;
-  refreshGitStatus: () => Promise<void>;
   projectConfig: ProjectConfig;
   sidebarCollapsed: boolean;
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
@@ -153,7 +153,6 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   } = useRecentFiles(projectRoot);
 
   const [fileTree, setFileTree] = useState<FileEntry | null>(null);
-  const [gitStatus, setGitStatus] = useState<GitStatusMap>({});
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(224);
@@ -161,51 +160,16 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   const [sidenotesCollapsed, setSidenotesCollapsed] = useState(true);
   const [startupComplete, setStartupComplete] = useState(false);
   const workspaceRequestRef = useRef(0);
-  const gitStatusRequestRef = useRef(0);
 
   const clearRestoredProjectState = useCallback(() => {
     setProjectRoot(null);
     setFileTree(null);
-    ++gitStatusRequestRef.current;
-    setGitStatus({});
     setProjectConfig({});
     saveWindowState({
       projectRoot: null,
       currentDocument: null,
     });
   }, [saveWindowState]);
-
-  /** Fetch git working-tree status (Tauri only; no-op in browser mode).
-   *  Uses its own monotonic counter so overlapping refreshes within the
-   *  same workspace are correctly ordered (only the newest wins). */
-  const loadGitStatus = useCallback(async () => {
-    if (!isTauri()) return;
-    const id = ++gitStatusRequestRef.current;
-    try {
-      const { gitStatusCommand } = await gitClient();
-      const result = await measureAsync("sidebar.git_status", () => gitStatusCommand(), {
-        category: "sidebar",
-      });
-      if (id !== gitStatusRequestRef.current) return;
-      // Convert GitStatusResult to GitStatusMap for file-tree badges.
-      const map: GitStatusMap = {};
-      for (const f of result.files) {
-        if (f.staged === "added") map[f.path] = "added";
-        else if (f.unstaged === "untracked") map[f.path] = "untracked";
-        else map[f.path] = "modified";
-      }
-      setGitStatus(map);
-    } catch (e: unknown) {
-      if (id !== gitStatusRequestRef.current) return;
-      console.error("[workspace] failed to load git status", e);
-      setGitStatus({});
-    }
-  }, []);
-
-  /** Fire-and-forget git status refresh. */
-  const refreshGitStatus = useCallback(async () => {
-    void loadGitStatus();
-  }, [loadGitStatus]);
 
   const loadWorkspaceContents = useCallback(async (requestId: number): Promise<FileEntry | null> => {
     if (fs.listChildren) {
@@ -227,7 +191,6 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       const tree: FileEntry = { name: "project", path: "", isDirectory: true, children: shallowChildren };
       setFileTree(tree);
       setProjectConfig(nextProjectConfig);
-      void loadGitStatus();
       return tree;
     }
 
@@ -245,16 +208,13 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     if (requestId !== workspaceRequestRef.current) return null;
     setFileTree(tree);
     setProjectConfig(nextProjectConfig);
-    void loadGitStatus();
     return tree;
-  }, [fs, loadGitStatus]);
+  }, [fs]);
 
   const refreshTree = useCallback(async (changedPath?: string) => {
     const requestId = workspaceRequestRef.current;
     if (isTauri() && !projectRoot) {
       setFileTree(null);
-      ++gitStatusRequestRef.current;
-      setGitStatus({});
       return;
     }
 
@@ -269,7 +229,6 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         );
         if (requestId !== workspaceRequestRef.current) return;
         setFileTree((prev) => prev ? replaceChildrenInTree(prev, dir, children) : prev);
-        void loadGitStatus();
         return;
       } catch (e: unknown) {
         if (requestId !== workspaceRequestRef.current) return;
@@ -287,7 +246,6 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         return;
       }
       setFileTree(tree);
-      void loadGitStatus();
     } catch (e: unknown) {
       if (requestId !== workspaceRequestRef.current) {
         return;
@@ -295,7 +253,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       console.error("[workspace] failed to list file tree", e);
       setFileTree(null);
     }
-  }, [fs, projectRoot, loadGitStatus]);
+  }, [fs, projectRoot]);
 
   const loadChildren = useCallback(async (dirPath: string) => {
     if (!fs.listChildren) return;
@@ -316,7 +274,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
    *  Shared by startup restore and user-initiated project open.  `onRootSet`
    *  runs after the folder is validated and the root is set but before workspace
    *  contents are loaded — use it to clear state that must not leak across
-   *  projects (git status, window state).
+   *  projects (window state, etc.).
    *
    *  Returns the file tree on success or null when the folder couldn't be opened
    *  or a newer request superseded this one.  Stale errors are silently
@@ -344,8 +302,6 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   const openProjectRoot = useCallback(async (path: string): Promise<FileEntry | null> => {
     if (!isTauri()) return null;
     return openTauriFolder(path, () => {
-      ++gitStatusRequestRef.current;
-      setGitStatus({});
       saveWindowState({ projectRoot: path, currentDocument: null });
     });
   }, [openTauriFolder, saveWindowState]);
@@ -414,8 +370,6 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     fileTree,
     refreshTree,
     loadChildren,
-    gitStatus,
-    refreshGitStatus,
     projectConfig,
     sidebarCollapsed,
     setSidebarCollapsed,

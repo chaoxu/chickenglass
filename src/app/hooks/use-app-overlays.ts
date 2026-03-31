@@ -11,7 +11,6 @@ import { useHotkeys, type HotkeyBinding } from "./use-hotkeys";
 import { useMenuEvents } from "./use-menu-events";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
-import type { GitStatus } from "./use-git-status";
 
 interface AppOverlayDeps {
   fs: FileSystem;
@@ -27,7 +26,6 @@ interface AppOverlayDeps {
     AppEditorShellController,
     "currentPath" | "liveDocs" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
   >;
-  git: Pick<GitStatus, "branch" | "hasUpstream" | "isPulling" | "isPushing" | "pull" | "push">;
   onOpenFile: () => void;
   onQuit: () => void;
 }
@@ -104,7 +102,6 @@ export function useAppOverlays({
   suspendAutoSaveVersionRef,
   workspace,
   editor,
-  git,
   onOpenFile,
   onQuit,
 }: AppOverlayDeps): AppOverlayController {
@@ -197,12 +194,6 @@ export function useAppOverlays({
     { id: "export.html", label: "Export Current File to HTML", category: "Export", menuId: "file_export", action: handleExportHtml },
     { id: "export.batch-html", label: "Export All Files to HTML", category: "Export", action: handleBatchExportHtml },
 
-    // ── Git ───────────────────────────────────────────────────────────────
-    ...(git.branch && git.hasUpstream ? [
-      { id: "git.pull", label: git.isPulling ? "Pulling..." : "Pull", category: "Git", action: () => { git.pull(); } },
-      { id: "git.push", label: git.isPushing ? "Pushing..." : "Push", category: "Git", action: () => { git.push(); } },
-    ] : []),
-
     // ── Help ──────────────────────────────────────────────────────────────
     { id: "help.shortcuts", label: "Keyboard Shortcuts", category: "Help", shortcut: `${modKey}+/`, hotkey: "mod+/", menuId: "help_shortcuts", action: () => dialogs.setShortcutsOpen(true), hotkeyAction: () => dialogs.setShortcutsOpen((value) => !value) },
     { id: "help.about", label: "About Coflat", category: "Help", menuId: "help_about", action: () => dialogs.setAboutOpen(true) },
@@ -214,7 +205,7 @@ export function useAppOverlays({
       category: "File",
       action: () => { void editor.openFile(path); },
     })),
-  ], [dialogs, editor, workspace, git, handleExportHtml, handleBatchExportHtml, handleSaveAs, onOpenFile, onQuit]);
+  ], [dialogs, editor, workspace, handleExportHtml, handleBatchExportHtml, handleSaveAs, onOpenFile, onQuit]);
 
   // ── Derive palette commands, hotkeys, and menu handlers ────────────────
   const commands = useMemo(() => toPaletteCommands(commandDefs), [commandDefs]);
