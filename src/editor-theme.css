@@ -258,6 +258,16 @@
   margin-top: 0.15em;
 }
 
+.cf-bibliography-backlinks {
+  margin-left: 0.5em;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.cf-bibliography-backlink + .cf-bibliography-backlink {
+  margin-left: 0.35em;
+}
+
 /* No heading math size hacks needed — font-size is on .cm-line via
  * Decoration.line (.cf-heading-line-N), so all children inherit it. */
 
@@ -435,6 +445,37 @@
   color: var(--cf-proof-marker-color);
   font-size: var(--cf-proof-marker-size);
   float: right;
+}
+
+.cf-block-caption {
+  display: block;
+  margin-top: var(--cf-spacing-xs);
+  text-align: center;
+}
+
+.cf-block-caption .cf-block-header-rendered::after {
+  content: var(--cf-block-title-separator);
+}
+
+.cf-block-proof .cf-block-header-rendered {
+  font-style: italic;
+  font-weight: 400;
+}
+
+.cf-block-proof .cf-block-header-rendered::after {
+  content: ". ";
+}
+
+.cf-block-figure img {
+  display: block;
+  margin-inline: auto;
+  max-width: 100%;
+}
+
+.cf-block-table table {
+  width: auto;
+  margin-inline: auto;
+  max-width: 100%;
 }
 
 /* Blockquote styling — cf-block-blockquote is unscoped (shared with export),

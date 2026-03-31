@@ -209,7 +209,7 @@ describe("sortBibEntries", () => {
 
 describe("BibliographyWidget", () => {
   it("creates a div with heading and list", () => {
-    const widget = new BibliographyWidget([karger, stein], []);
+    const widget = new BibliographyWidget([karger, stein], [], new Map());
     const el = widget.toDOM();
 
     expect(el.tagName).toBe("DIV");
@@ -226,34 +226,48 @@ describe("BibliographyWidget", () => {
   });
 
   it("eq returns true for same entries", () => {
-    const a = new BibliographyWidget([karger, stein], []);
-    const b = new BibliographyWidget([karger, stein], []);
+    const a = new BibliographyWidget([karger, stein], [], new Map());
+    const b = new BibliographyWidget([karger, stein], [], new Map());
     expect(a.eq(b)).toBe(true);
   });
 
   it("eq returns false for different entries", () => {
-    const a = new BibliographyWidget([karger], []);
-    const b = new BibliographyWidget([stein], []);
+    const a = new BibliographyWidget([karger], [], new Map());
+    const b = new BibliographyWidget([stein], [], new Map());
     expect(a.eq(b)).toBe(false);
   });
 
   it("eq returns false for different lengths", () => {
-    const a = new BibliographyWidget([karger], []);
-    const b = new BibliographyWidget([karger, stein], []);
+    const a = new BibliographyWidget([karger], [], new Map());
+    const b = new BibliographyWidget([karger, stein], [], new Map());
     expect(a.eq(b)).toBe(false);
   });
 
   it("eq returns false when CSL HTML changes with the same entries", () => {
-    const a = new BibliographyWidget([karger], ['<span class="csl-entry">[1] Old</span>']);
-    const b = new BibliographyWidget([karger], ['<span class="csl-entry">[1] New</span>']);
+    const a = new BibliographyWidget([karger], ['<span class="csl-entry">[1] Old</span>'], new Map());
+    const b = new BibliographyWidget([karger], ['<span class="csl-entry">[1] New</span>'], new Map());
     expect(a.eq(b)).toBe(false);
+  });
+
+  it("renders bibliography backlinks for cited entries", () => {
+    const widget = new BibliographyWidget(
+      [karger],
+      [],
+      new Map([["karger2000", [{ occurrence: 1, from: 4, to: 17 }]]]),
+    );
+    const el = widget.toDOM();
+
+    const backlink = el.querySelector(`.${CSS.bibliographyBacklink}`);
+    expect(backlink).not.toBeNull();
+    expect(backlink?.getAttribute("href")).toBe("#cite-ref-1");
+    expect(backlink?.textContent).toBe("↩1");
   });
 });
 
 describe("buildBibliographyDecorations", () => {
   it("inserts the bibliography as a block widget at document end", () => {
     const specs = getDecorationSpecs(
-      buildBibliographyDecorations(createEditorState("hello world"), [karger], []),
+      buildBibliographyDecorations(createEditorState("hello world"), [karger], [], new Map()),
     );
 
     expect(specs).toHaveLength(1);

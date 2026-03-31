@@ -198,6 +198,19 @@ describe("markdownToHtml", () => {
     expect(html).toContain("The converse is false.");
   });
 
+  it("renders proof labels inline with the first paragraph", () => {
+    const html = markdownToHtml("::: {.proof}\nProof text.\n:::");
+    expect(html).toContain(`<p><span class="${CSS.blockHeaderRendered}">Proof</span>`);
+    expect(html).toContain("Proof text.</p>");
+  });
+
+  it("renders figure captions below the content", () => {
+    const html = markdownToHtml("::: {.figure} Caption text\n![alt](img.png)\n:::");
+    expect(html).toContain('class="cf-block-caption"');
+    expect(html.indexOf('class="cf-block-caption"')).toBeGreaterThan(html.indexOf("<img"));
+    expect(html).toContain("Caption text");
+  });
+
   it("renders tables", () => {
     const md = "| A | B |\n| --- | --- |\n| 1 | 2 |";
     const html = markdownToHtml(md);
@@ -315,8 +328,8 @@ describe("markdownToHtml", () => {
     expect(fakeCsl.registerCitations).toHaveBeenCalled();
     expect(fakeCsl.cite).toHaveBeenCalledWith(["karger2000"]);
     expect(fakeCsl.bibliography).toHaveBeenCalledWith(["karger2000"]);
-    expect(html).toContain(`<span class="${CSS.citation}">[1]</span>`);
-    expect(html).toContain(`<div class="${CSS.bibliographyEntry}" id="bib-karger2000"><span class="csl-entry">[1] Karger.</span></div>`);
+    expect(html).toContain(`id="cite-ref-1" class="${CSS.citation}"`);
+    expect(html).toContain(`<div class="${CSS.bibliographyEntry}" id="bib-karger2000"><span class="csl-entry">[1] Karger.</span> <span class="${CSS.bibliographyBacklinks}">cited at <a class="${CSS.bibliographyBacklink}" href="#cite-ref-1">↩1</a></span></div>`);
   });
 
   // Regression (#482): CSL bibliography HTML must be sanitized before
@@ -372,7 +385,7 @@ describe("markdownToHtml", () => {
     });
 
     expect(fakeCsl.citeNarrative).toHaveBeenCalledWith("karger2000");
-    expect(html).toContain(`<span class="${CSS.citationNarrative}">Karger [1]</span>`);
+    expect(html).toContain(`id="cite-ref-1" class="${CSS.citationNarrative}"`);
   });
 
   // Regression: clustered equation references like [@eq:a; @eq:b] should
@@ -574,6 +587,31 @@ describe("markdownToHtml", () => {
 
     expect(html).toContain('href="#sec:background"');
     expect(html).toContain("Section 1.1");
+  });
+
+  it("renders bibliography backlinks to citation occurrences", () => {
+    const entry: CslJsonItem = {
+      id: "karger2000",
+      type: "article-journal",
+      author: [{ family: "Karger", given: "David R." }],
+      title: "Minimum Cuts in Near-Linear Time",
+      issued: { "date-parts": [[2000]] },
+    };
+    const bibliography = new Map([[entry.id, entry]]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Karger [1]"),
+      bibliography: vi.fn(() => ['<span class="csl-entry">[1] Karger.</span>']),
+    } as unknown as CslProcessor;
+    const doc = "See [@karger2000] and again [@karger2000].";
+    const html = markdownToHtml(doc, { bibliography, cslProcessor: fakeCsl });
+
+    expect(html).toContain('id="cite-ref-1"');
+    expect(html).toContain('id="cite-ref-2"');
+    expect(html).toContain(`class="${CSS.bibliographyBacklinks}"`);
+    expect(html).toContain('href="#cite-ref-1"');
+    expect(html).toContain('href="#cite-ref-2"');
   });
 
   // Regression (#399): existing non-citation, non-block content renders correctly

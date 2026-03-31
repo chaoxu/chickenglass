@@ -51,6 +51,21 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     fontWeight: "var(--cf-block-title-weight)",
     color: "var(--cf-block-title-color)",
   },
+  ".cf-block-caption": {
+    display: "block",
+    marginTop: "var(--cf-spacing-xs)",
+    textAlign: "center",
+  },
+  ".cf-block-caption .cf-block-header-rendered::after": {
+    content: "var(--cf-block-title-separator)",
+  },
+  ".cf-block-proof .cf-block-header-rendered": {
+    fontStyle: "italic",
+    fontWeight: "400",
+  },
+  ".cf-block-proof .cf-block-header-rendered::after": {
+    content: '". "',
+  },
 
   /* Block title paren widgets — inserted via Decoration.widget, not CSS
    * pseudo-elements. CSS ::before/::after breaks when Decoration.replace
@@ -148,6 +163,12 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     maxWidth: "100%",
     maxHeight: IMAGE_MAX_HEIGHT,
   },
+  ".cf-block-figure .cf-image-wrapper": {
+    display: "block",
+    width: "fit-content",
+    maxWidth: "100%",
+    margin: "0 auto",
+  },
   ".cf-image-error": {
     display: "inline-block",
     color: "var(--cf-fg)",
@@ -166,11 +187,20 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
   ".cf-table-widget": {
     margin: "var(--cf-spacing-sm) 0",
   },
+  ".cf-block-table .cf-table-widget": {
+    width: "fit-content",
+    maxWidth: "100%",
+    margin: "var(--cf-spacing-sm) auto",
+  },
 
   ".cf-table-widget table": {
     borderCollapse: "collapse",
     width: "100%",
     fontSize: "var(--cf-table-font-size, 0.9em)",
+  },
+  ".cf-block-table .cf-table-widget table": {
+    width: "auto",
+    maxWidth: "100%",
   },
 
   ".cf-table-widget th, .cf-table-widget td": {

@@ -105,6 +105,8 @@ export const CSS = {
   bibliographyHeading: "cf-bibliography-heading",
   bibliographyList: "cf-bibliography-list",
   bibliographyEntry: "cf-bibliography-entry",
+  bibliographyBacklinks: "cf-bibliography-backlinks",
+  bibliographyBacklink: "cf-bibliography-backlink",
 
   /** Cross-reference. */
   crossref: "cf-crossref",

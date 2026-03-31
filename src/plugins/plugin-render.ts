@@ -103,6 +103,55 @@ class BlockHeaderWidget extends MacroAwareWidget {
 
 export { BlockHeaderWidget as _BlockHeaderWidgetForTest };
 
+class BlockCaptionWidget extends MacroAwareWidget {
+  constructor(
+    private readonly header: string,
+    private readonly title: string,
+    private readonly macros: Record<string, string>,
+  ) {
+    super(macros);
+  }
+
+  createDOM(): HTMLElement {
+    return this.createCachedDOM(() => {
+      const el = document.createElement("div");
+      el.className = "cf-block-caption";
+
+      const headerEl = document.createElement("span");
+      headerEl.className = CSS.blockHeaderRendered;
+      renderDocumentFragmentToDom(headerEl, {
+        kind: "block-title",
+        text: this.header,
+        macros: this.macros,
+      });
+      el.appendChild(headerEl);
+
+      if (this.title) {
+        const titleEl = document.createElement("span");
+        titleEl.className = "cf-block-caption-text";
+        renderDocumentFragmentToDom(titleEl, {
+          kind: "block-title",
+          text: this.title,
+          macros: this.macros,
+        });
+        el.appendChild(titleEl);
+      }
+
+      return el;
+    });
+  }
+
+  eq(other: BlockCaptionWidget): boolean {
+    return (
+      this.header === other.header &&
+      this.title === other.title &&
+      this.macrosKey === other.macrosKey
+    );
+  }
+}
+
+export { BlockCaptionWidget as _BlockCaptionWidgetForTest };
+
 /**
  * Widget that renders an attribute-only title (title="..." in the attributes,
  * no inline title text in the document).
@@ -330,7 +379,7 @@ function addHeaderWidgetDecoration(
   // No-title case: replaceEnd = openFenceTo (whole fence line, nothing to split).
   // With-title case: replaceEnd = titleFrom (stop before title text).
   const replaceEnd = div.titleFrom ?? div.openFenceTo;
-  const widget = new BlockHeaderWidget(header, macros);
+  const widget = header ? new BlockHeaderWidget(header, macros) : null;
   addMarkerReplacement(div.openFenceFrom, replaceEnd, cursorInside, widget, items);
 }
 
@@ -429,6 +478,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     };
     const spec = plugin.render(labelAttrs);
     const captionBelow = plugin.captionPosition === "below";
+    const inlineHeader = div.className === "proof";
 
     // --- Opening fence ---
     // Heading-like pattern: ALWAYS apply block styling, toggle marker visibility.
@@ -448,7 +498,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // the last body line instead of the opening fence. The opening fence gets
     // collapsed (no label) and the title text becomes the caption, displayed
     // on the opening line without the "Figure 1." prefix.
-    const showHeader = plugin.displayHeader !== false && !captionBelow;
+    const showHeader = plugin.displayHeader !== false && !captionBelow && !inlineHeader;
     const headerClass = cursorOnEitherFence
       ? spec.className
       : showHeader
@@ -461,9 +511,9 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
         items.push(blockSourceMark.range(div.openFenceFrom, syntaxEnd));
       }
     }
-    if (captionBelow) {
+    if (captionBelow || inlineHeader) {
       // For below-caption blocks: hide fence prefix but show no label on opening line.
-      // The label widget goes on the last body line (added below after body lines).
+      // The rendered label is emitted elsewhere in the block.
       addHeaderWidgetDecoration(div, "", cursorOnEitherFence, macros, items);
     } else {
       addHeaderWidgetDecoration(div, spec.header, cursorOnEitherFence, macros, items);
@@ -473,9 +523,13 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // Uses Decoration.widget (not Decoration.mark with CSS ::before/::after) because
     // marks get split around Decoration.replace (math widgets), causing ") $x^2$".
     // For below-caption blocks, title text is the caption — no parens needed.
-    if (!cursorOnEitherFence && !captionBelow && div.titleFrom !== undefined && div.titleTo !== undefined) {
+    if (!cursorOnEitherFence && !captionBelow && !inlineHeader && div.titleFrom !== undefined && div.titleTo !== undefined) {
       items.push(openParenWidget.range(div.titleFrom));
       items.push(closeParenWidget.range(div.titleTo));
+    }
+
+    if (!cursorOnEitherFence && (captionBelow || inlineHeader) && div.titleFrom !== undefined && div.titleTo !== undefined) {
+      items.push(decorationHidden.range(div.titleFrom, div.titleTo));
     }
 
     // Attribute-only title (not used for below-caption blocks — their title is the caption).
@@ -520,17 +574,31 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
         items.push(Decoration.line({ class: spec.className }).range(line.from));
       }
 
-      // Below-caption label: "Figure 1." widget on the last body line
-      if (captionBelow && !cursorOnEitherFence && closeLine.number > openLine.number + 1) {
-        const lastBodyLine = state.doc.line(closeLine.number - 1);
+      if (inlineHeader && !cursorOnEitherFence && closeLine.number > openLine.number + 1) {
+        const firstBodyLine = state.doc.line(openLine.number + 1);
         items.push(
-          Decoration.line({ class: `${spec.className} ${CSS.blockHeader}` }).range(lastBodyLine.from),
+          Decoration.line({ class: `${spec.className} ${CSS.blockHeader}` }).range(firstBodyLine.from),
         );
         items.push(
           Decoration.widget({
             widget: new BlockHeaderWidget(spec.header, macros),
             side: -1,
-          }).range(lastBodyLine.from),
+          }).range(firstBodyLine.from),
+        );
+      }
+
+      // Below-caption label: add a real caption block after the content.
+      if (captionBelow && !cursorOnEitherFence && closeLine.number > openLine.number + 1) {
+        const lastBodyLine = state.doc.line(closeLine.number - 1);
+        const captionWidget = new BlockCaptionWidget(spec.header, div.title ?? "", macros);
+        captionWidget.sourceFrom = div.openFenceFrom;
+        captionWidget.sourceTo = div.openFenceTo;
+        items.push(
+          Decoration.widget({
+            widget: captionWidget,
+            side: 1,
+            block: true,
+          }).range(lastBodyLine.to),
         );
       }
     }

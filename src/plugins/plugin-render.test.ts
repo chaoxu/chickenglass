@@ -418,6 +418,35 @@ describe("disabled blocks show raw fences (issue #356)", () => {
     const proofLine = state.doc.line(9).from;
     expect(hasLineClassAt(specs, proofLine, CSS.blockHeader)).toBe(true);
   });
+
+  it("renders proof label inline on the first body line", () => {
+    const doc = `::: {.proof}\nProof text\n:::`;
+    const state = createTestStateWithPlugins(
+      doc,
+      [makeBlockPlugin({ name: "proof", numbered: false, title: "Proof" })],
+    );
+    const specs = getDecoSpecs(state);
+
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.blockHeaderCollapsed)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.blockHeader)).toBe(true);
+
+    const widgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
+    expect(widgets).toHaveLength(1);
+    expect(widgets[0]?.from).toBe(state.doc.line(2).from);
+  });
+
+  it("renders figure captions as below-content widgets", () => {
+    const doc = `::: {.figure} Caption text\n![alt](img.png)\n:::`;
+    const state = createTestStateWithPlugins(
+      doc,
+      [makeBlockPlugin({ name: "figure", numbered: true, title: "Figure", captionPosition: "below" })],
+    );
+    const specs = getDecoSpecs(state);
+
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.blockHeaderCollapsed)).toBe(true);
+    const captionWidgets = specs.filter((s) => s.widgetClass === "BlockCaptionWidget");
+    expect(captionWidgets).toHaveLength(1);
+  });
 });
 
 describe("BlockHeaderWidget.updateDOM", () => {
@@ -470,4 +499,3 @@ describe("embedSandboxPermissions", () => {
     expect(embedSandboxPermissions("youtube")).toBe("allow-scripts allow-presentation");
   });
 });
-

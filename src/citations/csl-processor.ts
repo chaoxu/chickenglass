@@ -344,6 +344,8 @@ export class CslProcessor {
 
 /** Shape of a reference with parallel id/locator arrays (matches ReferenceSemantics). */
 interface RefWithIds {
+  readonly from: number;
+  readonly to: number;
   readonly ids: readonly string[];
   readonly locators: readonly (string | undefined)[];
 }
@@ -401,6 +403,50 @@ export function collectCitedIdsFromReferences(
     }
   }
   return citedIds;
+}
+
+export interface CitationBacklink {
+  readonly occurrence: number;
+  readonly from: number;
+  readonly to: number;
+}
+
+/**
+ * Collect bibliography backlink targets in citation order.
+ *
+ * Each citation cluster that contains at least one known bibliography id gets a
+ * sequential occurrence number. Every cited id in that cluster receives a
+ * backlink to the same source range.
+ */
+export function collectCitationBacklinksFromReferences(
+  references: readonly RefWithIds[],
+  store: IdLookup,
+): ReadonlyMap<string, readonly CitationBacklink[]> {
+  const backlinks = new Map<string, CitationBacklink[]>();
+  let occurrence = 0;
+
+  for (const ref of references) {
+    const ids = ref.ids.filter((id, index, arr) => store.has(id) && arr.indexOf(id) === index);
+    if (ids.length === 0) continue;
+
+    occurrence += 1;
+    const backlink: CitationBacklink = {
+      occurrence,
+      from: ref.from,
+      to: ref.to,
+    };
+
+    for (const id of ids) {
+      const entries = backlinks.get(id);
+      if (entries) {
+        entries.push(backlink);
+      } else {
+        backlinks.set(id, [backlink]);
+      }
+    }
+  }
+
+  return backlinks;
 }
 
 /**

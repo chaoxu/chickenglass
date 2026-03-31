@@ -8,11 +8,18 @@
 import {
   Decoration,
   type DecorationSet,
+  EditorView,
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Transaction } from "@codemirror/state";
 import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors } from "./bibtex-parser";
 import { type BibStore, bibDataEffect, bibDataField, findCitations } from "./citation-render";
-import { type CslProcessor, collectCitedIdsFromReferences } from "./csl-processor";
+import {
+  type CitationBacklink,
+  type CslProcessor,
+  collectCitationBacklinksFromReferences,
+  collectCitedIdsFromReferences,
+} from "./csl-processor";
+import { CSS } from "../constants/css-classes";
 import { RenderWidget, buildDecorations, createDecorationsField, sanitizeCslHtml } from "../render/render-core";
 import { ensureCitationsRegistered } from "../render/reference-render";
 import {
@@ -100,28 +107,32 @@ export class BibliographyWidget extends RenderWidget {
   constructor(
     private readonly entries: readonly CslJsonItem[],
     private readonly cslHtml: readonly string[],
+    private readonly backlinks: ReadonlyMap<string, readonly CitationBacklink[]>,
   ) {
     super();
   }
 
   createDOM(): HTMLElement {
     const section = document.createElement("div");
-    section.className = "cf-bibliography";
+    section.className = CSS.bibliography;
 
     const heading = document.createElement("h2");
-    heading.className = "cf-bibliography-heading";
+    heading.className = CSS.bibliographyHeading;
     heading.textContent = "References";
     section.appendChild(heading);
 
     const list = document.createElement("div");
-    list.className = "cf-bibliography-list";
+    list.className = CSS.bibliographyList;
 
     if (this.cslHtml.length > 0) {
       // Use CSL-formatted entries (already include [1] numbering for IEEE)
       for (let i = 0; i < this.cslHtml.length; i++) {
+        const entry = this.entries[i];
         const div = document.createElement("div");
-        div.className = "cf-bibliography-entry";
+        div.className = CSS.bibliographyEntry;
+        div.id = `bib-${entry.id}`;
         div.innerHTML = sanitizeCslHtml(this.cslHtml[i]);
+        appendBacklinks(div, entry.id, this.backlinks);
         list.appendChild(div);
       }
     } else {
@@ -129,9 +140,10 @@ export class BibliographyWidget extends RenderWidget {
       for (let i = 0; i < this.entries.length; i++) {
         const entry = this.entries[i];
         const div = document.createElement("div");
-        div.className = "cf-bibliography-entry";
+        div.className = CSS.bibliographyEntry;
         div.id = `bib-${entry.id}`;
         div.textContent = `[${i + 1}] ${formatBibEntry(entry)}`;
+        appendBacklinks(div, entry.id, this.backlinks);
         list.appendChild(div);
       }
     }
@@ -140,20 +152,78 @@ export class BibliographyWidget extends RenderWidget {
     return section;
   }
 
+  override toDOM(view?: EditorView): HTMLElement {
+    const section = this.createDOM();
+    if (!view) return section;
+    for (const link of section.querySelectorAll<HTMLElement>(`.${CSS.bibliographyBacklink}`)) {
+      const from = Number(link.dataset.sourceFrom ?? "-1");
+      link.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        if (from < 0) return;
+        view.focus();
+        view.dispatch({
+          selection: { anchor: from },
+          scrollIntoView: true,
+        });
+      });
+    }
+    return section;
+  }
+
   eq(other: BibliographyWidget): boolean {
     if (this.entries.length !== other.entries.length) return false;
     if (this.cslHtml.length !== other.cslHtml.length) return false;
-    return this.entries.every((e, i) => e.id === other.entries[i].id)
-      && this.cslHtml.every((html, i) => html === other.cslHtml[i]);
+    if (!this.entries.every((e, i) => e.id === other.entries[i].id)) return false;
+    if (!this.cslHtml.every((html, i) => html === other.cslHtml[i])) return false;
+    return this.entries.every((entry) => sameBacklinks(this.backlinks.get(entry.id), other.backlinks.get(entry.id)));
   }
+}
+
+function sameBacklinks(
+  left: readonly CitationBacklink[] | undefined,
+  right: readonly CitationBacklink[] | undefined,
+): boolean {
+  if (left === right) return true;
+  if (!left || !right || left.length !== right.length) return false;
+  return left.every((backlink, index) =>
+    backlink.occurrence === right[index].occurrence &&
+    backlink.from === right[index].from &&
+    backlink.to === right[index].to,
+  );
+}
+
+function appendBacklinks(
+  entryEl: HTMLElement,
+  id: string,
+  backlinks: ReadonlyMap<string, readonly CitationBacklink[]>,
+): void {
+  const refs = backlinks.get(id);
+  if (!refs || refs.length === 0) return;
+
+  const container = document.createElement("span");
+  container.className = CSS.bibliographyBacklinks;
+
+  for (const backlink of refs) {
+    const link = document.createElement("a");
+    link.className = CSS.bibliographyBacklink;
+    link.href = `#cite-ref-${backlink.occurrence}`;
+    link.dataset.sourceFrom = String(backlink.from);
+    link.textContent = `↩${backlink.occurrence}`;
+    link.setAttribute("aria-label", `Jump to citation ${backlink.occurrence}`);
+    container.appendChild(link);
+  }
+
+  entryEl.append(" ");
+  entryEl.appendChild(container);
 }
 
 export function buildBibliographyDecorations(
   state: EditorState,
   entries: readonly CslJsonItem[],
   cslHtml: readonly string[],
+  backlinks: ReadonlyMap<string, readonly CitationBacklink[]>,
 ): DecorationSet {
-  const widget = new BibliographyWidget(entries, cslHtml);
+  const widget = new BibliographyWidget(entries, cslHtml, backlinks);
   return buildDecorations([
     Decoration.widget({ widget, side: 1, block: true }).range(state.doc.length),
   ]);
@@ -218,6 +288,7 @@ function buildBibliographyDecorationsFromState(state: EditorState): DecorationSe
   const analysis = state.field(documentAnalysisField);
   const citedIds = collectCitedIdsFromReferences(analysis.references, store);
   if (citedIds.length === 0) return Decoration.none;
+  const backlinks = collectCitationBacklinksFromReferences(analysis.references, store);
 
   let cslHtml: readonly string[] = [];
   if (cslProcessor) {
@@ -248,7 +319,7 @@ function buildBibliographyDecorationsFromState(state: EditorState): DecorationSe
         citedIds.map((id) => store.get(id)).filter((e): e is CslJsonItem => e !== undefined),
       );
 
-  return buildBibliographyDecorations(state, entries, cslHtml);
+  return buildBibliographyDecorations(state, entries, cslHtml, backlinks);
 }
 
 /** CM6 extension that renders a bibliography section at the end of the document. */
