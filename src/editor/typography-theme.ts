@@ -135,6 +135,7 @@ export const typographyThemeStyles = {
   /* Math source content — LaTeX between $ delimiters when editing */
   ".cf-math-source": {
     fontFamily: monoFont,
+    fontSize: "0.85em",
   },
 
   /* Reference source — raw [@id] token when cursor is inside */
