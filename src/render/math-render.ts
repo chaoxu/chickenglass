@@ -280,6 +280,15 @@ function buildMathItems(
           Decoration.mark({ class: "cf-math-source" }).range(region.labelFrom, region.to),
         );
       }
+      if (region.isDisplay) {
+        const raw = state.sliceDoc(region.from, region.to);
+        const widget = new MathWidget(region.latex, raw, true, macros);
+        widget.sourceFrom = region.from;
+        widget.sourceTo = region.to;
+        items.push(
+          Decoration.widget({ widget, block: true, side: 1 }).range(region.to),
+        );
+      }
       continue;
     }
 

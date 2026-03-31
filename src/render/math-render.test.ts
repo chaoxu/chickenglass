@@ -20,6 +20,10 @@ function countWidgets(ranges: ReturnType<typeof collectMathRanges>): number {
   return ranges.filter(r => r.value.spec.widget).length;
 }
 
+function countSourceMarks(ranges: ReturnType<typeof collectMathRanges>): number {
+  return ranges.filter((r) => r.value.spec.class === CSS.mathSource).length;
+}
+
 /** Create an EditorView with math parser extensions at the given cursor position. */
 function createMathView(doc: string, cursorPos?: number): EditorView {
   return createTestView(doc, {
@@ -403,12 +407,21 @@ describe("collectMathRanges", () => {
     expect(ranges.length).toBe(1);
   });
 
-  it("does not collect display math when cursor is inside", () => {
+  it("keeps rendered display math visible when cursor is inside", () => {
     const doc = "before\n\n$$x^2$$\n\nafter";
     // Cursor inside the $$ block
     view = createMathView(doc, 10);
     const ranges = collectMathRanges(view);
-    expect(countWidgets(ranges)).toBe(0);
+    expect(countWidgets(ranges)).toBe(1);
+    expect(countSourceMarks(ranges)).toBeGreaterThan(0);
+  });
+
+  it("keeps rendered labeled display math visible when cursor is inside", () => {
+    const doc = "before\n\n$$\nx^2\n$$ {#eq:test}\n\nafter";
+    view = createMathView(doc, 11);
+    const ranges = collectMathRanges(view);
+    expect(countWidgets(ranges)).toBe(1);
+    expect(countSourceMarks(ranges)).toBeGreaterThan(1);
   });
 
   it("collects multiple math expressions", () => {
