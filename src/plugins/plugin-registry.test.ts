@@ -262,6 +262,19 @@ describe("pluginFromConfig", () => {
     expect(plugin.numbered).toBe(false);
   });
 
+  it("inherits rendering metadata from existing plugin when partially overridden", () => {
+    const existing = makeBlockPlugin({
+      name: "proof",
+      numbered: false,
+      title: "Proof",
+      specialBehavior: "qed",
+      headerPosition: "inline",
+    });
+    const plugin = pluginFromConfig("proof", { title: "Beweis" }, existing);
+    expect(plugin.specialBehavior).toBe("qed");
+    expect(plugin.headerPosition).toBe("inline");
+  });
+
   it("inherits title from existing plugin when config.title is undefined", () => {
     const existing = makeBlockPlugin({ name: "theorem", title: "Theorem", counter: "theorem" });
     const plugin = pluginFromConfig("theorem", { numbered: false }, existing);
@@ -341,7 +354,7 @@ describe("applyFrontmatterBlocks", () => {
 const builtinTestPlugins: readonly BlockPlugin[] = [
   makeBlockPlugin({ name: "theorem", counter: "theorem", title: "Theorem" }),
   makeBlockPlugin({ name: "lemma", counter: "theorem", title: "Lemma" }),
-  makeBlockPlugin({ name: "proof", numbered: false, title: "Proof" }),
+  makeBlockPlugin({ name: "proof", numbered: false, title: "Proof", specialBehavior: "qed", headerPosition: "inline" }),
 ];
 
 /** Create an EditorState with the plugin registry loaded from builtins. */
@@ -454,6 +467,23 @@ describe("createPluginRegistryField (CM6 integration)", () => {
     expect(proof?.title).toBe("Beweis");
     // numbered must be inherited from built-in (false for proof)
     expect(proof?.numbered).toBe(false);
+  });
+
+  it("partial proof override preserves built-in rendering metadata", () => {
+    const doc = [
+      "---",
+      "blocks:",
+      "  proof:",
+      "    title: Beweis",
+      "---",
+      "Content",
+    ].join("\n");
+    const state = createEditorState(doc);
+    const registry = state.field(pluginRegistryField);
+    const proof = getPlugin(registry, "proof");
+    expect(proof?.title).toBe("Beweis");
+    expect(proof?.specialBehavior).toBe("qed");
+    expect(proof?.headerPosition).toBe("inline");
   });
 
   it("frontmatter counter: null explicitly removes counter group (issue #493)", () => {

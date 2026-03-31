@@ -6,7 +6,7 @@
  */
 
 import type { BlockPlugin } from "./plugin-types";
-import type { BlockManifestEntry, CaptionPosition, SpecialBehavior } from "../constants/block-manifest";
+import type { BlockManifestEntry, CaptionPosition, HeaderPosition, SpecialBehavior } from "../constants/block-manifest";
 import { createBlockRender } from "./block-render";
 import { capitalize } from "../lib/utils";
 
@@ -43,6 +43,8 @@ export interface StandardPluginOptions {
    * Set to "below" for figure/table blocks where the caption goes after content.
    */
   readonly captionPosition?: CaptionPosition;
+  /** Whether the rendered header is block-level or inline with the first body line. */
+  readonly headerPosition?: HeaderPosition;
 }
 
 /**
@@ -75,6 +77,7 @@ export function pluginFromManifest(entry: BlockManifestEntry): BlockPlugin {
     ...(entry.specialBehavior !== undefined ? { specialBehavior: entry.specialBehavior } : {}),
     ...(entry.displayHeader !== undefined ? { displayHeader: entry.displayHeader } : {}),
     ...(entry.captionPosition !== undefined ? { captionPosition: entry.captionPosition } : {}),
+    ...(entry.headerPosition !== undefined ? { headerPosition: entry.headerPosition } : {}),
   });
 }
 
@@ -90,5 +93,6 @@ export function createStandardPlugin(options: StandardPluginOptions): BlockPlugi
     ...(options.specialBehavior !== undefined ? { specialBehavior: options.specialBehavior } : {}),
     ...(options.displayHeader !== undefined ? { displayHeader: options.displayHeader } : {}),
     ...(options.captionPosition !== undefined ? { captionPosition: options.captionPosition } : {}),
+    ...(options.headerPosition !== undefined ? { headerPosition: options.headerPosition } : {}),
   };
 }

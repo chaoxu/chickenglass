@@ -202,6 +202,7 @@ function appendBacklinks(
 
   const container = document.createElement("span");
   container.className = CSS.bibliographyBacklinks;
+  container.append("cited at ");
 
   for (const backlink of refs) {
     const link = document.createElement("a");
@@ -210,6 +211,9 @@ function appendBacklinks(
     link.dataset.sourceFrom = String(backlink.from);
     link.textContent = `↩${backlink.occurrence}`;
     link.setAttribute("aria-label", `Jump to citation ${backlink.occurrence}`);
+    if (container.childNodes.length > 1) {
+      container.append(" ");
+    }
     container.appendChild(link);
   }
 
@@ -242,6 +246,17 @@ function getCitedIdsKey(citedIds: readonly string[]): string {
   return citedIds.join("\0");
 }
 
+function getCitationBacklinksKey(
+  references: readonly Parameters<typeof collectCitationBacklinksFromReferences>[0][number][],
+  store: BibStore,
+): string {
+  return [...collectCitationBacklinksFromReferences(references, store).entries()]
+    .map(([id, backlinks]) =>
+      `${id}\0${backlinks.map((backlink) =>
+        `${backlink.occurrence}\0${backlink.from}\0${backlink.to}`).join("\u0001")}`)
+    .join("\u0002");
+}
+
 export function bibliographyDependenciesChanged(
   beforeState: EditorState,
   afterState: EditorState,
@@ -268,8 +283,8 @@ export function bibliographyDependenciesChanged(
     return false;
   }
 
-  return getCitedIdsKey(collectCitedIdsFromReferences(beforeAnalysis.references, beforeBib.store))
-    !== getCitedIdsKey(collectCitedIdsFromReferences(afterAnalysis.references, afterBib.store));
+  return getCitationBacklinksKey(beforeAnalysis.references, beforeBib.store)
+    !== getCitationBacklinksKey(afterAnalysis.references, afterBib.store);
 }
 
 function bibliographyShouldRebuild(tr: Transaction): boolean {

@@ -15,6 +15,9 @@ export type SpecialBehavior = "qed" | "embed" | "blockquote";
 /** Where the caption/header label is placed relative to block content. */
 export type CaptionPosition = "above" | "below";
 
+/** Whether the header label sits on its own block line or inline with content. */
+export type HeaderPosition = "block" | "inline";
+
 /** Manifest entry describing a single block type. */
 export interface BlockManifestEntry {
   /** Block class name (e.g. "theorem"). */
@@ -29,6 +32,8 @@ export interface BlockManifestEntry {
   readonly specialBehavior?: SpecialBehavior;
   /** Where caption is placed. Defaults to "above". */
   readonly captionPosition?: CaptionPosition;
+  /** Whether the rendered header is block-level or inline with the first body line. */
+  readonly headerPosition?: HeaderPosition;
   /**
    * Display title for the rendered header. Defaults to the name with
    * the first letter capitalized. Override when the default capitalization
@@ -68,7 +73,7 @@ export const BLOCK_MANIFEST = [
   { name: "problem",     counterGroup: "theorem",    numbered: true,  bodyStyle: "normal" },
 
   // Unnumbered blocks — no counter
-  { name: "proof",       counterGroup: undefined,    numbered: false, bodyStyle: "normal", specialBehavior: "qed" },
+  { name: "proof",       counterGroup: undefined,    numbered: false, bodyStyle: "normal", specialBehavior: "qed", headerPosition: "inline" },
   { name: "remark",      counterGroup: undefined,    numbered: false, bodyStyle: "normal" },
   { name: "example",     counterGroup: undefined,    numbered: false, bodyStyle: "normal" },
 

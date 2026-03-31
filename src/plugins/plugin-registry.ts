@@ -204,6 +204,10 @@ export function pluginFromConfig(
     counter,
     numbered,
     title,
+    ...(existing?.displayHeader !== undefined ? { displayHeader: existing.displayHeader } : {}),
+    ...(existing?.specialBehavior !== undefined ? { specialBehavior: existing.specialBehavior } : {}),
+    ...(existing?.captionPosition !== undefined ? { captionPosition: existing.captionPosition } : {}),
+    ...(existing?.headerPosition !== undefined ? { headerPosition: existing.headerPosition } : {}),
     render: createBlockRender(title),
   };
 }

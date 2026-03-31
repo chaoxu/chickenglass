@@ -423,7 +423,7 @@ describe("disabled blocks show raw fences (issue #356)", () => {
     const doc = `::: {.proof}\nProof text\n:::`;
     const state = createTestStateWithPlugins(
       doc,
-      [makeBlockPlugin({ name: "proof", numbered: false, title: "Proof" })],
+      [makeBlockPlugin({ name: "proof", numbered: false, title: "Proof", headerPosition: "inline" })],
     );
     const specs = getDecoSpecs(state);
 

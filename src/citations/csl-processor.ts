@@ -411,6 +411,10 @@ export interface CitationBacklink {
   readonly to: number;
 }
 
+export interface CitationBacklinkIndex {
+  readonly backlinks: ReadonlyMap<string, readonly CitationBacklink[]>;
+}
+
 /**
  * Collect bibliography backlink targets in citation order.
  *
@@ -422,6 +426,13 @@ export function collectCitationBacklinksFromReferences(
   references: readonly RefWithIds[],
   store: IdLookup,
 ): ReadonlyMap<string, readonly CitationBacklink[]> {
+  return collectCitationBacklinkIndexFromReferences(references, store).backlinks;
+}
+
+export function collectCitationBacklinkIndexFromReferences(
+  references: readonly RefWithIds[],
+  store: IdLookup,
+): CitationBacklinkIndex {
   const backlinks = new Map<string, CitationBacklink[]>();
   let occurrence = 0;
 
@@ -446,7 +457,7 @@ export function collectCitationBacklinksFromReferences(
     }
   }
 
-  return backlinks;
+  return { backlinks };
 }
 
 /**

@@ -478,7 +478,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     };
     const spec = plugin.render(labelAttrs);
     const captionBelow = plugin.captionPosition === "below";
-    const inlineHeader = div.className === "proof";
+    const inlineHeader = plugin.headerPosition === "inline";
 
     // --- Opening fence ---
     // Heading-like pattern: ALWAYS apply block styling, toggle marker visibility.

@@ -31,12 +31,18 @@ import { isSafeUrl } from "../lib/url-utils";
 import { sanitizeCslHtml } from "../render/inline-shared";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isRelativeFilePath } from "../lib/pdf-target";
+import { capitalize } from "../lib/utils";
 import { type CslJsonItem } from "../citations/bibtex-parser";
 import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import {
   type BibStore,
 } from "../citations/citation-render";
-import { CslProcessor, collectCitationMatches, registerCitationsWithProcessor } from "../citations/csl-processor";
+import {
+  CslProcessor,
+  collectCitationBacklinkIndexFromReferences,
+  collectCitationMatches,
+  registerCitationsWithProcessor,
+} from "../citations/csl-processor";
 import {
   analyzeDocumentSemantics,
   stringTextSource,
@@ -143,7 +149,6 @@ interface InlineContext {
   macros?: Record<string, string>;
   bibliography?: BibStore;
   citedIds?: string[];
-  citationAnchors?: Map<string, string[]>;
   nextCitationOccurrence?: { value: number };
   cslProcessor?: CslProcessor;
   blockCounters?: ReadonlyMap<string, BlockCounterEntry>;
@@ -180,7 +185,7 @@ function renderInlineWithSurface(
   text: string,
   options: Pick<
     InlineContext,
-    "macros" | "bibliography" | "citedIds" | "cslProcessor" | "blockCounters" | "surface" | "doc" | "semantics" | "documentPath" | "imageUrlOverrides"
+    "macros" | "bibliography" | "citedIds" | "nextCitationOccurrence" | "cslProcessor" | "blockCounters" | "surface" | "doc" | "semantics" | "documentPath" | "imageUrlOverrides"
   >,
 ): string {
   return renderInlineFragments(parseInlineFragments(text), {
@@ -188,12 +193,29 @@ function renderInlineWithSurface(
     macros: options.macros,
     bibliography: options.bibliography,
     citedIds: options.citedIds,
+    nextCitationOccurrence: options.nextCitationOccurrence,
     cslProcessor: options.cslProcessor,
     blockCounters: options.blockCounters,
     surface: options.surface,
     semantics: options.semantics,
     documentPath: options.documentPath,
     imageUrlOverrides: options.imageUrlOverrides,
+  });
+}
+
+function renderDocumentInline(text: string, ctx: WalkContext): string {
+  return renderInlineWithSurface(text, {
+    doc: text,
+    macros: ctx.macros,
+    bibliography: ctx.bibliography,
+    citedIds: ctx.citedIds,
+    nextCitationOccurrence: ctx.nextCitationOccurrence,
+    cslProcessor: ctx.cslProcessor,
+    blockCounters: ctx.blockCounters,
+    surface: "document-inline",
+    semantics: ctx.semantics,
+    documentPath: ctx.documentPath,
+    imageUrlOverrides: ctx.imageUrlOverrides,
   });
 }
 
@@ -211,8 +233,8 @@ interface WalkContext {
   readonly surface: "document-body";
   /** Accumulates cited entry IDs in document order for the bibliography section. */
   readonly citedIds: string[];
-  /** Per-entry citation occurrence anchors for bibliography backlinks. */
-  readonly citationAnchors: Map<string, string[]>;
+  /** Precomputed bibliography backlinks keyed by citation id. */
+  readonly citationBacklinks: ReadonlyMap<string, readonly { occurrence: number }[]>;
   /** Monotonic citation occurrence counter shared across inline rendering. */
   readonly nextCitationOccurrence: { value: number };
   readonly documentPath?: string;
@@ -243,6 +265,9 @@ export function markdownToHtml(
     const matches = collectCitationMatches(semantics.references, options.bibliography);
     registerCitationsWithProcessor(matches, cslProcessor);
   }
+  const citationBacklinkIndex = options?.bibliography
+    ? collectCitationBacklinkIndexFromReferences(semantics.references, options.bibliography)
+    : undefined;
   const ctx: WalkContext = {
     doc: content,
     macros: options?.macros,
@@ -253,7 +278,7 @@ export function markdownToHtml(
     blockCounters: options?.blockCounters,
     surface: "document-body",
     citedIds: [],
-    citationAnchors: new Map(),
+    citationBacklinks: citationBacklinkIndex?.backlinks ?? new Map(),
     nextCitationOccurrence: { value: 0 },
     documentPath: options?.documentPath,
     imageUrlOverrides: options?.imageUrlOverrides,
@@ -263,7 +288,7 @@ export function markdownToHtml(
 
   // Render bibliography section if there are cited entries
   if (ctx.bibliography && ctx.citedIds.length > 0) {
-    html += renderBibliography(ctx.bibliography, ctx.citedIds, ctx.cslProcessor, ctx.citationAnchors);
+    html += renderBibliography(ctx.bibliography, ctx.citedIds, ctx.cslProcessor, ctx.citationBacklinks);
   }
 
   return html;
@@ -385,10 +410,9 @@ function renderHeading(node: SyntaxNode, ctx: WalkContext): string {
   const heading = ctx.semantics.headingByFrom.get(node.from);
   const levelChar = node.name[node.name.length - 1];
   const level = Number(levelChar);
-  const renderedText = renderInline(
+  const renderedText = renderDocumentInline(
     heading?.text ?? ctx.doc.slice(node.from, node.to).trim(),
-    ctx.macros,
-    "document-inline",
+    ctx,
   );
   const prefix = ctx.sectionNumbers && heading?.number
     ? `<span class="${CSS.sectionNumber}">${heading.number}</span> `
@@ -454,6 +478,7 @@ function renderListItem(node: SyntaxNode, ctx: WalkContext): string {
         macros: ctx.macros,
         bibliography: ctx.bibliography,
         citedIds: ctx.citedIds,
+        nextCitationOccurrence: ctx.nextCitationOccurrence,
         cslProcessor: ctx.cslProcessor,
         surface: "document-body",
       }));
@@ -497,16 +522,17 @@ function renderFencedDiv(node: SyntaxNode, ctx: WalkContext): string {
   const isSelfClosing = semantics?.isSelfClosing ?? false;
   const primaryClass = BLOCK_MANIFEST_ENTRIES.find((entry) => classes.includes(entry.name));
   const captionBelow = primaryClass?.captionPosition === "below";
-  const inlineHeader = primaryClass?.name === "proof";
+  const inlineHeader = primaryClass?.headerPosition === "inline";
+  const headerLabel = escapeHtml(primaryClass?.title ?? capitalize(primaryClass?.name ?? ""));
 
   const output: string[] = [];
   output.push(`<div${classAttr}${idAttr}>`);
 
   if (title) {
     if (isSelfClosing) {
-      output.push(`<p>${renderInline(title, ctx.macros, "document-inline")}</p>`);
+      output.push(`<p>${renderDocumentInline(title, ctx)}</p>`);
     } else if (!captionBelow && !inlineHeader) {
-      output.push(`<strong class="${CSS.blockHeaderRendered}">${renderInline(title, ctx.macros, "document-inline")}</strong>`);
+      output.push(`<strong class="${CSS.blockHeaderRendered}">${renderDocumentInline(title, ctx)}</strong>`);
     }
   }
 
@@ -527,12 +553,12 @@ function renderFencedDiv(node: SyntaxNode, ctx: WalkContext): string {
     }
     if (innerParts.length > 0) {
       if (inlineHeader) {
-        const proofLabel = `<span class="${CSS.blockHeaderRendered}">Proof</span>`;
+        const inlineLabel = `<span class="${CSS.blockHeaderRendered}">${headerLabel}</span>`;
         const first = innerParts[0];
         if (first.startsWith("<p>")) {
-          innerParts[0] = first.replace("<p>", `<p>${proofLabel}`);
+          innerParts[0] = first.replace("<p>", `<p>${inlineLabel}`);
         } else {
-          innerParts[0] = `<p>${proofLabel}${first}</p>`;
+          innerParts.unshift(`<p>${inlineLabel}</p>`);
         }
       }
       output.push(innerParts.join("\n"));
@@ -540,9 +566,9 @@ function renderFencedDiv(node: SyntaxNode, ctx: WalkContext): string {
   }
 
   if (!isSelfClosing && captionBelow && title) {
-    const captionLabel = escapeHtml(primaryClass?.title ?? primaryClass?.name ?? "");
+    const captionLabel = escapeHtml(primaryClass?.title ?? capitalize(primaryClass?.name ?? ""));
     output.push(
-      `<div class="cf-block-caption"><span class="${CSS.blockHeaderRendered}">${captionLabel}</span><span class="cf-block-caption-text">${renderInline(title, ctx.macros, "document-inline")}</span></div>`,
+      `<div class="cf-block-caption"><span class="${CSS.blockHeaderRendered}">${captionLabel}</span><span class="cf-block-caption-text">${renderDocumentInline(title, ctx)}</span></div>`,
     );
   }
 
@@ -580,6 +606,7 @@ function renderFootnoteDef(node: SyntaxNode, ctx: WalkContext): string {
         macros: ctx.macros,
         bibliography: ctx.bibliography,
         citedIds: ctx.citedIds,
+        nextCitationOccurrence: ctx.nextCitationOccurrence,
         cslProcessor: ctx.cslProcessor,
         surface: "document-body",
       })}</p>`
@@ -735,7 +762,6 @@ const inlineFragmentRenderers: {
       cslProcessor: ctx.cslProcessor,
       blockCounters: ctx.blockCounters,
       semantics: ctx.semantics,
-      citationAnchors: ctx.citationAnchors,
       nextCitationOccurrence: ctx.nextCitationOccurrence,
     };
     return fragment.parenthetical
@@ -788,7 +814,6 @@ interface CitationRenderContext {
   cslProcessor?: CslProcessor;
   blockCounters?: ReadonlyMap<string, BlockCounterEntry>;
   semantics?: DocumentSemantics;
-  citationAnchors?: Map<string, string[]>;
   nextCitationOccurrence?: { value: number };
 }
 
@@ -842,28 +867,16 @@ function trackCitedIds(
   }
 }
 
-function trackCitationAnchor(
+function nextCitationAnchorId(
   ids: readonly string[],
   bibliography: BibStore | undefined,
-  citationAnchors: Map<string, string[]> | undefined,
   nextCitationOccurrence: { value: number } | undefined,
 ): string | undefined {
-  if (!bibliography || !citationAnchors || !nextCitationOccurrence) return undefined;
-
-  const knownIds = ids.filter((id, index, arr) => bibliography.has(id) && arr.indexOf(id) === index);
-  if (knownIds.length === 0) return undefined;
-
+  if (!bibliography || !nextCitationOccurrence) return undefined;
+  const hasKnownId = ids.some((id) => bibliography.has(id));
+  if (!hasKnownId) return undefined;
   nextCitationOccurrence.value += 1;
-  const anchorId = `cite-ref-${nextCitationOccurrence.value}`;
-  for (const id of knownIds) {
-    const anchors = citationAnchors.get(id);
-    if (anchors) {
-      anchors.push(anchorId);
-    } else {
-      citationAnchors.set(id, [anchorId]);
-    }
-  }
-  return anchorId;
+  return `cite-ref-${nextCitationOccurrence.value}`;
 }
 
 /**
@@ -881,7 +894,6 @@ function renderCitationCluster(
     cslProcessor,
     blockCounters,
     semantics,
-    citationAnchors,
     nextCitationOccurrence,
   } = citCtx;
   const knownCount = bibliography
@@ -900,7 +912,7 @@ function renderCitationCluster(
   }
 
   trackCitedIds(ids, bibliography, citedIds);
-  const anchorId = trackCitationAnchor(ids, bibliography, citationAnchors, nextCitationOccurrence);
+  const anchorId = nextCitationAnchorId(ids, bibliography, nextCitationOccurrence);
   const anchorAttr = anchorId ? ` id="${anchorId}"` : "";
 
   if (bibliography && knownCount === ids.length && cslProcessor) {
@@ -932,14 +944,11 @@ function renderCitationCluster(
   return `<span${anchorAttr} class="${CSS.citation}">(${parts.join("; ")})</span>`;
 }
 
-function renderNarrativeReference(
-  id: string,
-  citCtx: CitationRenderContext,
-): string {
-  const { bibliography, citedIds, cslProcessor, citationAnchors, nextCitationOccurrence } = citCtx;
+function renderNarrativeReference(id: string, citCtx: CitationRenderContext): string {
+  const { bibliography, citedIds, cslProcessor, nextCitationOccurrence } = citCtx;
   if (bibliography?.has(id)) {
     trackCitedIds([id], bibliography, citedIds);
-    const anchorId = trackCitationAnchor([id], bibliography, citationAnchors, nextCitationOccurrence);
+    const anchorId = nextCitationAnchorId([id], bibliography, nextCitationOccurrence);
     const anchorAttr = anchorId ? ` id="${anchorId}"` : "";
     if (cslProcessor) {
       return `<span${anchorAttr} class="${CSS.citation} ${CSS.citation}-narrative">${escapeHtml(cslProcessor.citeNarrative(id))}</span>`;
@@ -955,7 +964,7 @@ function renderBibliography(
   bib: BibStore,
   citedIds: string[],
   cslProcessor?: CslProcessor,
-  citationAnchors?: ReadonlyMap<string, readonly string[]>,
+  citationBacklinks?: ReadonlyMap<string, readonly { occurrence: number }[]>,
 ): string {
   let cslHtml: string[] = [];
   if (cslProcessor) {
@@ -971,9 +980,9 @@ function renderBibliography(
 
   const items = cslHtml.length > 0
     ? entries.map((entry, i) =>
-        `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${sanitizeCslHtml(cslHtml[i] ?? "")}${renderBibliographyBacklinks(entry.id, citationAnchors)}</div>`)
+        `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${sanitizeCslHtml(cslHtml[i] ?? "")}${renderBibliographyBacklinks(entry.id, citationBacklinks)}</div>`)
     : entries.map((entry) =>
-        `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${escapeHtml(formatBibEntry(entry))}${renderBibliographyBacklinks(entry.id, citationAnchors)}</div>`);
+        `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${escapeHtml(formatBibEntry(entry))}${renderBibliographyBacklinks(entry.id, citationBacklinks)}</div>`);
 
   return [
     "",
@@ -988,12 +997,12 @@ function renderBibliography(
 
 function renderBibliographyBacklinks(
   id: string,
-  citationAnchors?: ReadonlyMap<string, readonly string[]>,
+  citationBacklinks?: ReadonlyMap<string, readonly { occurrence: number }[]>,
 ): string {
-  const anchors = citationAnchors?.get(id);
-  if (!anchors || anchors.length === 0) return "";
+  const backlinks = citationBacklinks?.get(id);
+  if (!backlinks || backlinks.length === 0) return "";
 
-  const links = anchors.map((anchorId, index) =>
-    `<a class="${CSS.bibliographyBacklink}" href="#${escapeHtml(anchorId)}">↩${index + 1}</a>`).join(" ");
+  const links = backlinks.map((backlink) =>
+    `<a class="${CSS.bibliographyBacklink}" href="#cite-ref-${backlink.occurrence}">↩${backlink.occurrence}</a>`).join(" ");
   return ` <span class="${CSS.bibliographyBacklinks}">cited at ${links}</span>`;
 }

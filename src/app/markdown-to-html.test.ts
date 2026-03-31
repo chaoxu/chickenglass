@@ -204,6 +204,13 @@ describe("markdownToHtml", () => {
     expect(html).toContain("Proof text.</p>");
   });
 
+  it("keeps inline proof labels valid when the body starts with a block node", () => {
+    const html = markdownToHtml("::: {.proof}\n- Step 1\n:::");
+    expect(html).toContain(`<p><span class="${CSS.blockHeaderRendered}">Proof</span></p>`);
+    expect(html).toContain("<ul>");
+    expect(html).not.toContain("<p><ul>");
+  });
+
   it("renders figure captions below the content", () => {
     const html = markdownToHtml("::: {.figure} Caption text\n![alt](img.png)\n:::");
     expect(html).toContain('class="cf-block-caption"');
@@ -612,6 +619,98 @@ describe("markdownToHtml", () => {
     expect(html).toContain(`class="${CSS.bibliographyBacklinks}"`);
     expect(html).toContain('href="#cite-ref-1"');
     expect(html).toContain('href="#cite-ref-2"');
+  });
+
+  it("keeps heading citations in the shared backlink sequence", () => {
+    const entry: CslJsonItem = {
+      id: "karger2000",
+      type: "article-journal",
+      author: [{ family: "Karger", given: "David R." }],
+      title: "Minimum Cuts in Near-Linear Time",
+      issued: { "date-parts": [[2000]] },
+    };
+    const bibliography = new Map([[entry.id, entry]]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Karger [1]"),
+      bibliography: vi.fn(() => ['<span class="csl-entry">[1] Karger.</span>']),
+    } as unknown as CslProcessor;
+    const doc = ["# [@karger2000]", "", "Again [@karger2000]."].join("\n");
+    const html = markdownToHtml(doc, { bibliography, cslProcessor: fakeCsl });
+
+    expect(html).toContain('id="cite-ref-1"');
+    expect(html).toContain('id="cite-ref-2"');
+    expect(html).toContain(`href="#cite-ref-1">↩1</a> <a class="${CSS.bibliographyBacklink}" href="#cite-ref-2">↩2</a>`);
+  });
+
+  it("keeps fenced-div title citations in the shared backlink sequence", () => {
+    const entry: CslJsonItem = {
+      id: "karger2000",
+      type: "article-journal",
+      author: [{ family: "Karger", given: "David R." }],
+      title: "Minimum Cuts in Near-Linear Time",
+      issued: { "date-parts": [[2000]] },
+    };
+    const bibliography = new Map([[entry.id, entry]]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Karger [1]"),
+      bibliography: vi.fn(() => ['<span class="csl-entry">[1] Karger.</span>']),
+    } as unknown as CslProcessor;
+    const doc = ["::: {.theorem} [@karger2000]", "Body.", ":::", "", "Again [@karger2000]."].join("\n");
+    const html = markdownToHtml(doc, { bibliography, cslProcessor: fakeCsl });
+
+    expect(html).toContain('id="cite-ref-1"');
+    expect(html).toContain('id="cite-ref-2"');
+    expect(html).toContain(`href="#cite-ref-1">↩1</a> <a class="${CSS.bibliographyBacklink}" href="#cite-ref-2">↩2</a>`);
+  });
+
+  it("keeps task-list citations in the shared backlink sequence", () => {
+    const entry: CslJsonItem = {
+      id: "karger2000",
+      type: "article-journal",
+      author: [{ family: "Karger", given: "David R." }],
+      title: "Minimum Cuts in Near-Linear Time",
+      issued: { "date-parts": [[2000]] },
+    };
+    const bibliography = new Map([[entry.id, entry]]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Karger [1]"),
+      bibliography: vi.fn(() => ['<span class="csl-entry">[1] Karger.</span>']),
+    } as unknown as CslProcessor;
+    const doc = ["- [ ] Task [@karger2000]", "", "Again [@karger2000]."].join("\n");
+    const html = markdownToHtml(doc, { bibliography, cslProcessor: fakeCsl });
+
+    expect(html).toContain('id="cite-ref-1"');
+    expect(html).toContain('id="cite-ref-2"');
+    expect(html).toContain(`href="#cite-ref-1">↩1</a> <a class="${CSS.bibliographyBacklink}" href="#cite-ref-2">↩2</a>`);
+  });
+
+  it("keeps footnote citations in the shared backlink sequence", () => {
+    const entry: CslJsonItem = {
+      id: "karger2000",
+      type: "article-journal",
+      author: [{ family: "Karger", given: "David R." }],
+      title: "Minimum Cuts in Near-Linear Time",
+      issued: { "date-parts": [[2000]] },
+    };
+    const bibliography = new Map([[entry.id, entry]]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Karger [1]"),
+      bibliography: vi.fn(() => ['<span class="csl-entry">[1] Karger.</span>']),
+    } as unknown as CslProcessor;
+    const doc = ["Text.[^1]", "", "[^1]: Footnote [@karger2000].", "", "Again [@karger2000]."].join("\n");
+    const html = markdownToHtml(doc, { bibliography, cslProcessor: fakeCsl });
+
+    expect(html).toContain('id="cite-ref-1"');
+    expect(html).toContain('id="cite-ref-2"');
+    expect(html).toContain(`href="#cite-ref-1">↩1</a> <a class="${CSS.bibliographyBacklink}" href="#cite-ref-2">↩2</a>`);
   });
 
   // Regression (#399): existing non-citation, non-block content renders correctly
