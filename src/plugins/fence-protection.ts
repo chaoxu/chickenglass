@@ -201,7 +201,30 @@ export const openingFenceDeletionCleanup = EditorState.transactionFilter.of((tr)
 
       const openLine = state.doc.lineAt(block.openFenceFrom);
 
-      if (fromA <= openLine.from && toA >= openLine.to) {
+      // Full opening line deletion
+      const fullLineDeletion = fromA <= openLine.from && toA >= openLine.to;
+
+      // Partial deletion that removes the structural prefix (colons/backticks).
+      // If the prefix is gone the line no longer parses as a fence, so the
+      // closing delimiter must be cleaned up (#766).
+      let prefixBroken = false;
+      if (!fullLineDeletion && fromA <= openLine.from) {
+        const text = state.sliceDoc(block.openFenceFrom, block.openFenceTo);
+        const firstChar = text.charAt(0);
+        let prefixEnd = -1;
+        if (firstChar === ":") {
+          const colonLen = countColons(text, 0);
+          if (colonLen >= 3) prefixEnd = block.openFenceFrom + colonLen;
+        } else if (firstChar === "`") {
+          const match = /^`{3,}/.exec(text);
+          if (match) prefixEnd = block.openFenceFrom + match[0].length;
+        }
+        if (prefixEnd > 0 && toA >= prefixEnd) {
+          prefixBroken = true;
+        }
+      }
+
+      if (fullLineDeletion || prefixBroken) {
         if (fromA <= block.closeFenceFrom && toA >= block.closeFenceTo) continue;
 
         // Include the preceding newline so the line is fully removed
