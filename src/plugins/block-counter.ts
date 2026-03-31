@@ -49,10 +49,10 @@ function getEffectiveNumbering(state: EditorState): NumberingScheme {
 }
 
 function shouldRecomputeBlockNumbers(tr: Transaction): boolean {
-  if (!tr.docChanged && !tr.reconfigured) {
-    return false;
-  }
-
+  // Check fencedDivs first — revision can change from async tree updates
+  // (Lezer parse completion), not just doc edits. Without this, block
+  // numbers go stale when the parser discovers new fenced divs after the
+  // initial partial parse (#752).
   const startSemantics = tr.startState.field(documentSemanticsField);
   const nextSemantics = tr.state.field(documentSemanticsField);
   if (
@@ -60,6 +60,10 @@ function shouldRecomputeBlockNumbers(tr: Transaction): boolean {
     !== getDocumentAnalysisSliceRevision(nextSemantics, "fencedDivs")
   ) {
     return true;
+  }
+
+  if (!tr.docChanged && !tr.reconfigured) {
+    return false;
   }
 
   if (tr.startState.field(pluginRegistryField) !== tr.state.field(pluginRegistryField)) {
