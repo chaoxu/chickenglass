@@ -60,7 +60,7 @@ class MathPreviewPlugin implements PluginValue {
     const regions = this.view.state.field(documentAnalysisField).mathRegions;
     const info = findActiveMath(regions, this.view.state.selection.main);
 
-    if (!info) {
+    if (!info || info.isDisplay) {
       this.removePanel();
       return;
     }
