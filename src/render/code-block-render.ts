@@ -227,7 +227,7 @@ function decorateCodeBlock(
     const isLast = ln === closeLine.number - 1;
     items.push(
       Decoration.line({
-        class: !cursorOnEitherFence && isLast ? CSS.codeblockLast : CSS.codeblockBody,
+        class: isLast ? CSS.codeblockLast : CSS.codeblockBody,
       }).range(line.from),
     );
   }

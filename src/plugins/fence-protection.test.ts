@@ -17,6 +17,7 @@ import {
   openingFenceDeletionCleanup,
   closingFenceProtection,
   openingFenceColonProtection,
+  openingFenceBacktickProtection,
 } from "./fence-protection";
 import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
@@ -230,9 +231,47 @@ function createCodeBlockProtectedState(doc: string) {
       markdown({ extensions: markdownExtensions }),
       openingFenceDeletionCleanup,
       closingFenceProtection,
+      openingFenceBacktickProtection,
     ],
   });
 }
+
+describe("openingFenceBacktickProtection", () => {
+  const doc = "```js\nconsole.log('x')\n```";
+
+  it("blocks deletion of opening backtick prefix on code fences", () => {
+    const state = createCodeBlockProtectedState(doc);
+    const tr = state.update({ changes: { from: 0, to: 3, insert: "" } });
+    expect(tr.state.doc.toString()).toBe(doc);
+  });
+
+  it("blocks partial deletion of opening backticks", () => {
+    const state = createCodeBlockProtectedState(doc);
+    const tr = state.update({ changes: { from: 0, to: 1, insert: "" } });
+    expect(tr.state.doc.toString()).toBe(doc);
+  });
+
+  it("allows editing the info string after opening backticks", () => {
+    const state = createCodeBlockProtectedState(doc);
+    const tr = state.update({ changes: { from: 3, to: 5, insert: "ts" } });
+    expect(tr.state.doc.toString()).toBe("```ts\nconsole.log('x')\n```");
+  });
+
+  it("allows whole-block deletion spanning beyond the opening fence", () => {
+    const state = createCodeBlockProtectedState(doc);
+    const tr = state.update({ changes: { from: 0, to: doc.length, insert: "" } });
+    expect(tr.state.doc.toString()).toBe("");
+  });
+
+  it("allows edits with fenceOperationAnnotation bypass", () => {
+    const state = createCodeBlockProtectedState(doc);
+    const tr = state.update({
+      changes: { from: 0, to: 3, insert: "````" },
+      annotations: fenceOperationAnnotation.of(true),
+    });
+    expect(tr.state.doc.toString()).toBe("````js\nconsole.log('x')\n```");
+  });
+});
 
 describe("closingFenceProtection (code blocks)", () => {
   const doc = "```js\nconsole.log('x')\n```";

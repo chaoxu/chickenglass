@@ -14,9 +14,11 @@
  * - `getProtectedDivs` — collect fenced divs eligible for protection
  * - `getClosingFenceRanges` — closing fence line ranges (divs + code blocks)
  * - `getOpeningFenceColonRanges` — opening fence colon-prefix ranges (divs only)
+ * - `getOpeningFenceBacktickRanges` — opening fence backtick-prefix ranges (code blocks only)
  * - `openingFenceDeletionCleanup` — auto-remove closing fence on opening delete
  * - `closingFenceProtection` — block edits targeting only the closing fence
  * - `openingFenceColonProtection` — block edits targeting opening fence colons
+ * - `openingFenceBacktickProtection` — block edits targeting opening fence backticks
  * - `closingFenceAtomicRanges` — cursor skips over hidden closing fences
  * - `fenceProtectionExtension` — combined CM6 extension
  */
@@ -144,6 +146,26 @@ export function getOpeningFenceColonRanges(state: EditorState): { from: number; 
     const colonLen = countColons(text, 0);
     if (colonLen >= 3) {
       ranges.push({ from: div.openFenceFrom, to: div.openFenceFrom + colonLen });
+    }
+  }
+  return ranges;
+}
+
+/** Collect opening fence backtick-prefix ranges for protection (code blocks only). */
+export function getOpeningFenceBacktickRanges(state: EditorState): { from: number; to: number }[] {
+  const ranges: { from: number; to: number }[] = [];
+  const seen = new Set<number>();
+  for (const block of collectCodeBlocks(state)) {
+    if (block.singleLine) continue;
+    if (seen.has(block.openFenceFrom)) continue;
+    seen.add(block.openFenceFrom);
+    const text = state.sliceDoc(block.openFenceFrom, block.openFenceTo);
+    const match = /^`{3,}/.exec(text);
+    if (match) {
+      ranges.push({
+        from: block.openFenceFrom,
+        to: block.openFenceFrom + match[0].length,
+      });
     }
   }
   return ranges;
@@ -302,6 +324,41 @@ export const openingFenceColonProtection = EditorState.transactionFilter.of((tr)
 });
 
 /**
+ * Transaction filter that protects opening code-fence backtick prefixes.
+ *
+ * Mirrors openingFenceColonProtection for fenced divs: edits that target only
+ * the opening ``` prefix are blocked, while language/info-string edits and
+ * whole-block deletion remain allowed.
+ */
+export const openingFenceBacktickProtection = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged) return tr;
+  if (tr.annotation(fenceOperationAnnotation)) return tr;
+  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
+
+  const backtickRanges = getOpeningFenceBacktickRanges(tr.startState);
+  if (backtickRanges.length === 0) return tr;
+
+  let blocked = false;
+  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    if (blocked) return;
+    for (const backticks of backtickRanges) {
+      if (fromA <= backticks.to && toA >= backticks.from) {
+        if (fromA === toA) continue; // pure insertion
+        if (fromA >= backticks.to) continue; // editing language/info string after backticks
+        const atOrBeforeStart = fromA <= backticks.from;
+        const pastBacktickEnd = toA > backticks.to;
+        if (atOrBeforeStart && pastBacktickEnd) continue;
+        if (inserted.length > 0 && fromA < backticks.from) continue; // structural replacement
+        blocked = true;
+        return;
+      }
+    }
+  });
+
+  return blocked ? [] : tr;
+});
+
+/**
  * Atomic ranges for closing fence lines so the cursor skips over them.
  *
  * Covers both fenced divs and fenced code blocks. Uses EditorView.atomicRanges
@@ -334,5 +391,6 @@ export const fenceProtectionExtension: Extension = [
   openingFenceDeletionCleanup,
   closingFenceProtection,
   openingFenceColonProtection,
+  openingFenceBacktickProtection,
   closingFenceAtomicRanges,
 ];

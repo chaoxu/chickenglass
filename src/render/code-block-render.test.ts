@@ -112,8 +112,8 @@ describe("codeBlockDecorationField", () => {
     // Opening fence shows as source
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(false);
-    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockBody)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockLast)).toBe(false);
+    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockBody)).toBe(false);
+    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockLast)).toBe(true);
     // Closing fence always hidden (#429) — no source mode
     expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
 
