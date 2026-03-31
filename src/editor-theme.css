@@ -569,6 +569,7 @@
  * and as a line decoration on the closing fence (which has no title content). */
 .cf-block-source {
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: 0.85em;
   font-style: normal;
 }
 
