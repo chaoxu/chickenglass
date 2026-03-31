@@ -159,6 +159,20 @@ describe("closingFenceProtection", () => {
     });
     expect(tr.state.doc.toString()).not.toBe(doc);
   });
+
+  it("allows whole-block deletion when content follows (atomic range boundary)", () => {
+    // When a block is NOT at end of doc, atomic ranges snap the selection
+    // to fence.to + 1. The protection check must use >= (not >) to allow this.
+    const withAfter = `::: {.theorem}\ncontent\n:::\nafter`;
+    const state = createProtectedState(withAfter);
+    const closingLine = state.doc.line(3);
+    // Simulate selection from before the block through fence.to + 1
+    // (exactly where atomic ranges snap the cursor)
+    const tr = state.update({
+      changes: { from: 0, to: closingLine.to + 1, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe("after");
+  });
 });
 
 describe("openingFenceDeletionCleanup", () => {

@@ -269,7 +269,7 @@ export const closingFenceProtection = EditorState.transactionFilter.of((tr) => {
         // Account for document boundaries: start-of-doc counts as "before",
         // end-of-doc counts as "after".
         const extendsBeforeFence = fromA < fence.from - 1 || fromA === 0;
-        const extendsAfterFence = toA > fence.to + 1 || toA >= docLen;
+        const extendsAfterFence = toA >= fence.to + 1 || toA >= docLen;
         if (extendsBeforeFence && extendsAfterFence) continue;
         // Allow if it's a replacement that includes the fence (structural edit)
         if (inserted.length > 0 && extendsBeforeFence) continue;
