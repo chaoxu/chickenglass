@@ -562,6 +562,20 @@ describe("markdownToHtml", () => {
     expect(html).toContain("Result 7");
   });
 
+  it("resolves heading crossrefs to section labels", () => {
+    const doc = [
+      "# Intro",
+      "",
+      "## Background {#sec:background}",
+      "",
+      "See [@sec:background].",
+    ].join("\n");
+    const html = markdownToHtml(doc, { sectionNumbers: true });
+
+    expect(html).toContain('href="#sec:background"');
+    expect(html).toContain("Section 1.1");
+  });
+
   // Regression (#399): existing non-citation, non-block content renders correctly
   // when blockCounters is provided (no interference).
   it("non-crossref content renders normally with blockCounters option", () => {

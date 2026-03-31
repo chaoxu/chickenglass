@@ -788,7 +788,9 @@ function resolveCrossrefLabel(
   if (eq) return `Eq. (${eq.number})`;
   // 3. Heading lookup by id attribute
   for (const heading of semantics.headings) {
-    if (heading.id === id) return heading.number || heading.text;
+    if (heading.id === id) {
+      return heading.number ? `Section ${heading.number}` : heading.text;
+    }
   }
   return id;
 }
