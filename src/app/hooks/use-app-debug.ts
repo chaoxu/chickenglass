@@ -64,6 +64,10 @@ export function useAppDebug({
   startupComplete,
   restoredProjectRoot,
 }: AppDebugDeps): void {
+  // Stop the FPS rAF loop only on true unmount / HMR — not on every effect
+  // refresh caused by dependency changes (openProject, currentDocument, etc.).
+  useEffect(() => () => stopFpsMeter(), []);
+
   useEffect(() => {
     window.__app = {
       openFile,
@@ -110,7 +114,6 @@ export function useAppDebug({
     return () => {
       // Clear debug globals on unmount / HMR so stale closures are not left
       // on window between hot-reloads or component teardowns.
-      stopFpsMeter();
       delete window.__app;
       delete window.__cfDebug;
       delete window.__tauriSmoke;
