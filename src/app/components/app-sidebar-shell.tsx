@@ -49,11 +49,6 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
           <TabsList className="flex shrink-0 border-b border-[var(--cf-border)]">
             <TabsTrigger value="files">Files</TabsTrigger>
             <TabsTrigger value="outline">Outline</TabsTrigger>
-<<<<<<< HEAD
-            {git && <TabsTrigger value="git">Git</TabsTrigger>}
-=======
-            <TabsTrigger value="symbols">Symbols</TabsTrigger>
->>>>>>> 4bc1116 (refactor: remove all git features (#750))
           </TabsList>
 
           <SidebarContent>
@@ -74,20 +69,6 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
             <TabsContent value="outline" className="min-h-full">
               <Outline headings={editor.headings} onSelect={editor.handleOutlineSelect} />
             </TabsContent>
-<<<<<<< HEAD
-            {git && (
-              <TabsContent value="git" className="min-h-full">
-                <GitPanel git={git} />
-              </TabsContent>
-            )}
-=======
-            <TabsContent value="symbols" className="min-h-full">
-              <SymbolPanel
-                onInsert={editor.handleSymbolInsert}
-                view={editor.editorState?.view ?? null}
-              />
-            </TabsContent>
->>>>>>> 4bc1116 (refactor: remove all git features (#750))
           </SidebarContent>
         </Tabs>
       </Sidebar>
