@@ -1,4 +1,4 @@
-import { useRef, lazy, Suspense } from "react";
+import { useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import { EditorView } from "@codemirror/view";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
@@ -7,7 +7,11 @@ import { useSidenotesAutoCollapse } from "../hooks/use-sidenotes-auto-collapse";
 import { useFootnoteTooltip } from "../hooks/use-footnote-tooltip";
 import { Breadcrumbs } from "./breadcrumbs";
 import { SidenoteMargin } from "./sidenote-margin";
-import { extractHeadings } from "../heading-ancestry";
+import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
+import {
+  documentSemanticsField,
+  getDocumentAnalysisSliceRevision,
+} from "../../semantics/codemirror-source";
 import { bibDataField } from "../../citations/citation-render";
 import { frontmatterField, type EditorMode } from "../../editor";
 
@@ -21,6 +25,8 @@ export interface EditorPaneProps extends UseEditorOptions {
   onSidenotesCollapsedChange?: (collapsed: boolean) => void;
   onStateChange?: (state: UseEditorReturn) => void;
   onDocumentReady?: (view: EditorView, docPath: string | undefined) => void;
+  /** Called when the document heading list changes (e.g. after async parse completes). */
+  onHeadingsChange?: (headings: HeadingEntry[]) => void;
   /** Current editor mode — "read" shows the HTML renderer instead of CM6. */
   editorMode?: EditorMode;
 }
@@ -30,14 +36,42 @@ export function EditorPane({
   onDocumentReady,
   sidenotesCollapsed,
   onSidenotesCollapsedChange,
+  onHeadingsChange,
   editorMode,
   ...editorOptions
 }: EditorPaneProps) {
   const isReadMode = editorMode === "read";
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // Stable ref so the CM6 listener always sees the latest callback
+  // without forcing an editor re-creation.
+  const onHeadingsChangeRef = useRef(onHeadingsChange);
+  useEffect(() => { onHeadingsChangeRef.current = onHeadingsChange; }, [onHeadingsChange]);
+
+  // CM6 extension that detects heading-slice revision changes and
+  // pushes fresh headings into React.  Created once (stable reference)
+  // so it never triggers editor re-creation.
+  const headingTrackingExtension = useMemo(() => {
+    let lastRev: number | undefined;
+    return EditorView.updateListener.of((update) => {
+      const analysis = update.state.field(documentSemanticsField, false);
+      if (!analysis) return;
+      const rev = getDocumentAnalysisSliceRevision(analysis, "headings");
+      if (rev === lastRev) return;
+      lastRev = rev;
+      onHeadingsChangeRef.current?.(extractHeadings(update.state));
+    });
+  }, []);
+
+  const extensions = useMemo(
+    () => [...(editorOptions.extensions ?? []), headingTrackingExtension],
+    [editorOptions.extensions, headingTrackingExtension],
+  );
+
   const editorState = useEditor(containerRef, {
     ...editorOptions,
     onDocumentReady,
+    extensions,
   });
 
   const { view } = editorState;

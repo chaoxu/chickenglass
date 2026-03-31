@@ -72,6 +72,12 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
    * to `useEditorNavigation` via `syncView`.
    */
   handleEditorStateChange: (state: UseEditorReturn) => void;
+  /**
+   * Called by the heading-tracking CM6 extension in `EditorPane` whenever the
+   * heading slice revision changes (e.g. when the Lezer parser finishes
+   * parsing regions beyond the initial viewport).
+   */
+  handleHeadingsChange: (headings: HeadingEntry[]) => void;
   /** Called after `useEditor` has applied the current document/path to the live CM6 view. */
   handleEditorDocumentReady: (view: EditorView, docPath: string | undefined) => void;
 
@@ -200,6 +206,10 @@ export function useAppEditorShell({
     }
   }, [syncView]);
 
+  const handleHeadingsChange = useCallback((h: HeadingEntry[]) => {
+    setHeadings(h);
+  }, []);
+
   useEffect(() => {
     const view = editorState?.view ?? null;
     for (const { plugin, enabled } of pluginManager.getPlugins()) {
@@ -294,6 +304,7 @@ export function useAppEditorShell({
     editorState,
     headings,
     handleEditorStateChange,
+    handleHeadingsChange,
     handleEditorDocumentReady,
     handleOutlineSelect,
     handleGotoLine,
