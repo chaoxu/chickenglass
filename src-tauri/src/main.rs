@@ -55,17 +55,6 @@ fn main() {
             commands::debug::debug_list_windows,
             commands::debug::debug_get_native_state,
             commands::debug::debug_emit_file_changed,
-            commands::git::git_branch_info,
-            commands::git::git_pull,
-            commands::git::git_push,
-            commands::git::git_current_branch,
-            commands::git::git_list_branches,
-            commands::git::git_switch_branch,
-            commands::git::git_create_branch,
-            commands::git::git_status,
-            commands::git::git_stage,
-            commands::git::git_unstage,
-            commands::git::git_commit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Coflat");

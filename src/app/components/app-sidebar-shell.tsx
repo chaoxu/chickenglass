@@ -1,5 +1,4 @@
 import { FileTree } from "./file-tree";
-import { GitPanel } from "./git-panel";
 import { Outline } from "./outline";
 import {
   Sidebar,
@@ -10,7 +9,6 @@ import {
 } from "./sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import type { AppEditorShellController } from "../hooks/use-app-editor-shell";
-import type { GitController } from "../hooks/use-git";
 import type {
   AppWorkspaceSessionController,
   SidebarTab,
@@ -20,16 +18,15 @@ import { usePersistentTreeState } from "../hooks/use-file-tree-controller";
 interface AppSidebarShellProps {
   workspace: Pick<
     AppWorkspaceSessionController,
-    "sidebarTab" | "setSidebarTab" | "fileTree" | "loadChildren" | "gitStatus"
+    "sidebarTab" | "setSidebarTab" | "fileTree" | "loadChildren"
   >;
   editor: Pick<
     AppEditorShellController,
     "currentPath" | "openFile" | "handleRename" | "handleDelete" | "createFile" | "createDirectory" | "headings" | "handleOutlineSelect" | "editorState"
   >;
-  git: GitController | null;
 }
 
-export function AppSidebarShell({ workspace, editor, git }: AppSidebarShellProps) {
+export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
   const fileTreePersistRef = usePersistentTreeState();
 
   return (
@@ -52,14 +49,17 @@ export function AppSidebarShell({ workspace, editor, git }: AppSidebarShellProps
           <TabsList className="flex shrink-0 border-b border-[var(--cf-border)]">
             <TabsTrigger value="files">Files</TabsTrigger>
             <TabsTrigger value="outline">Outline</TabsTrigger>
+<<<<<<< HEAD
             {git && <TabsTrigger value="git">Git</TabsTrigger>}
+=======
+            <TabsTrigger value="symbols">Symbols</TabsTrigger>
+>>>>>>> 4bc1116 (refactor: remove all git features (#750))
           </TabsList>
 
           <SidebarContent>
             <TabsContent value="files" className="min-h-full">
               <FileTree
                 root={workspace.fileTree}
-                gitStatus={workspace.gitStatus}
                 activePath={editor.currentPath}
                 onSelect={(path) => { void editor.openFile(path); }}
                 onDoubleClick={(path) => { void editor.openFile(path); }}
@@ -74,11 +74,20 @@ export function AppSidebarShell({ workspace, editor, git }: AppSidebarShellProps
             <TabsContent value="outline" className="min-h-full">
               <Outline headings={editor.headings} onSelect={editor.handleOutlineSelect} />
             </TabsContent>
+<<<<<<< HEAD
             {git && (
               <TabsContent value="git" className="min-h-full">
                 <GitPanel git={git} />
               </TabsContent>
             )}
+=======
+            <TabsContent value="symbols" className="min-h-full">
+              <SymbolPanel
+                onInsert={editor.handleSymbolInsert}
+                view={editor.editorState?.view ?? null}
+              />
+            </TabsContent>
+>>>>>>> 4bc1116 (refactor: remove all git features (#750))
           </SidebarContent>
         </Tabs>
       </Sidebar>

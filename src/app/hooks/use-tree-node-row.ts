@@ -25,7 +25,7 @@ export interface UseTreeNodeRowArgs {
 }
 
 export function useTreeNodeRow({ item, createParentPath, onBeforeCreate }: UseTreeNodeRowArgs) {
-  const { activePath, gitStatus, onRename, onDelete, onCreateFile, onCreateDir } = useFileTreeContext();
+  const { activePath, onRename, onDelete, onCreateFile, onCreateDir } = useFileTreeContext();
 
   const entry = item.getItemData();
   const depth = item.getItemMeta().level;
@@ -162,7 +162,6 @@ export function useTreeNodeRow({ item, createParentPath, onBeforeCreate }: UseTr
     isFocused,
     mergedRef,
     rowProps,
-    gitStatus,
     startRename,
     commitRename,
     cancelRename,

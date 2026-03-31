@@ -1,7 +1,6 @@
 import type { ItemInstance } from "@headless-tree/core";
 import type { FileEntry } from "../file-manager";
 import { FolderClosed, FolderOpen } from "lucide-react";
-import { GitStatusBadge } from "./git-status-badge";
 import { InlineCreateInput } from "./inline-create-input";
 import { RenameEditor } from "./rename-editor";
 import { TreeNodeRow } from "./tree-node-row";
@@ -18,7 +17,7 @@ export function FileTreeNodeFolder({ item }: FileTreeNodeFolderProps) {
     entry, depth, indent,
     renaming, renameValue, setRenameValue, creating,
     isActive, isFocused,
-    mergedRef, rowProps, gitStatus,
+    mergedRef, rowProps,
     startRename, commitRename, cancelRename,
     startCreate, cancelCreate, handleCreateConfirm,
     handleClick, handleContextSelection, handleRowKey,
@@ -77,7 +76,6 @@ export function FileTreeNodeFolder({ item }: FileTreeNodeFolderProps) {
         ) : (
           <span className="cf-ui-font truncate">{entry.name}</span>
         )}
-        {gitStatus[entry.path] && <GitStatusBadge status={gitStatus[entry.path]} />}
       </TreeNodeRow>
 
       {open && creating && (

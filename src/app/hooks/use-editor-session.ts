@@ -26,7 +26,6 @@ import { useEditorSessionPersistence } from "./use-editor-session-persistence";
 export interface EditorSessionDeps {
   fs: FileSystem;
   refreshTree: (changedPath?: string) => Promise<void>;
-  refreshGitStatus: () => Promise<void>;
   addRecentFile: (path: string) => void;
   /** Lightweight callback fired after every successful save (not tree refresh). */
   onAfterSave?: () => void;
@@ -89,7 +88,6 @@ function documentForPath(
 export function useEditorSession({
   fs,
   refreshTree,
-  refreshGitStatus,
   addRecentFile,
   onAfterSave,
   requestUnsavedChangesDecision,
@@ -185,16 +183,13 @@ export function useEditorSession({
     }
 
     if (decision === "save") {
-      const saved = await saveCurrentDocument();
-      if (saved) void refreshGitStatus();
-      return saved;
+      return saveCurrentDocument();
     }
 
     discardDocumentChanges(currentDocument.path);
     return true;
   }, [
     discardDocumentChanges,
-    refreshGitStatus,
     requestUnsavedChangesDecision,
     saveCurrentDocument,
   ]);
