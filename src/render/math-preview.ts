@@ -13,7 +13,7 @@ import {
   ViewPlugin,
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
-import { findActiveMath, renderKatex } from "./math-render";
+import { findActiveMath, renderKatex, snapToTokenBoundary, findLocAtPoint } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 
@@ -22,6 +22,10 @@ class MathPreviewPlugin implements PluginValue {
   private contentEl: HTMLElement | null = null;
   private cleanupListeners: (() => void) | null = null;
   private lastRaw = "";
+  private lastLatex = "";
+  private lastContentFrom = 0;
+  private lastFrom = 0;
+  private lastTo = 0;
   private isDragging = false;
   private dragOffsetX = 0;
   private dragOffsetY = 0;
@@ -73,6 +77,10 @@ class MathPreviewPlugin implements PluginValue {
 
     if (raw !== this.lastRaw) {
       this.lastRaw = raw;
+      this.lastLatex = info.latex;
+      this.lastContentFrom = info.contentFrom;
+      this.lastFrom = info.from;
+      this.lastTo = info.to;
       this.renderLatex(info.latex, info.isDisplay);
     }
 
@@ -122,9 +130,39 @@ class MathPreviewPlugin implements PluginValue {
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
 
-    // Content area
+    // Content area — clicking rendered math navigates to the source position
     const content = document.createElement("div");
     content.className = "cf-math-preview-content";
+    content.style.cursor = "pointer";
+    content.addEventListener("mousedown", (e) => {
+      e.stopPropagation(); // don't start a panel drag
+      e.preventDefault();
+
+      let pos: number | undefined;
+      const locStart = findLocAtPoint(content, e.clientX, e.clientY);
+      if (locStart !== undefined) {
+        pos = Math.max(this.lastFrom, Math.min(this.lastTo, this.lastContentFrom + locStart));
+      }
+
+      if (pos === undefined) {
+        // Proportional fallback with token snapping
+        const contentLen = this.lastTo - this.lastContentFrom;
+        if (contentLen > 0) {
+          const rect = content.getBoundingClientRect();
+          const fraction = rect.width > 0
+            ? Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+            : 0;
+          const raw = Math.round(this.lastContentFrom + fraction * contentLen);
+          pos = snapToTokenBoundary(this.lastLatex, this.lastContentFrom, raw);
+          pos = Math.max(this.lastFrom, Math.min(this.lastTo, pos));
+        } else {
+          pos = this.lastFrom;
+        }
+      }
+
+      this.view.focus();
+      this.view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+    });
     panel.appendChild(content);
 
     this.contentEl = content;

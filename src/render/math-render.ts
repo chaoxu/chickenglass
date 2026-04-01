@@ -117,6 +117,117 @@ export function renderKatex(
   }
 }
 
+/**
+ * Find the best `data-loc-start` value for a click at (clientX, clientY)
+ * inside a rendered math container.
+ *
+ * Strategy: collect all elements with `data-loc-start`, then pick the
+ * **smallest** one (by area) whose bounding box contains the click point.
+ * If none contains the point, pick the one whose center is nearest.
+ * This avoids the problems of `closest()` walking up to merged parents.
+ */
+export function findLocAtPoint(
+  root: HTMLElement,
+  clientX: number,
+  clientY: number,
+): number | undefined {
+  const candidates = root.querySelectorAll<HTMLElement>("[data-loc-start]");
+  if (candidates.length === 0) return undefined;
+
+  // First pass: find the smallest element that contains the click point
+  let bestContaining: HTMLElement | null = null;
+  let bestArea = Infinity;
+  for (const el of candidates) {
+    const rect = el.getBoundingClientRect();
+    if (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    ) {
+      const area = rect.width * rect.height;
+      if (area < bestArea) {
+        bestArea = area;
+        bestContaining = el;
+      }
+    }
+  }
+
+  if (bestContaining) {
+    const v = Number.parseInt(bestContaining.dataset.locStart ?? "", 10);
+    if (Number.isFinite(v)) return v;
+  }
+
+  // Second pass: no element contains the point — pick nearest by center distance
+  let bestDist = Infinity;
+  let bestLoc: number | undefined;
+  for (const el of candidates) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) continue;
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dist = (clientX - cx) ** 2 + (clientY - cy) ** 2;
+    if (dist < bestDist) {
+      const v = Number.parseInt(el.dataset.locStart ?? "", 10);
+      if (Number.isFinite(v)) {
+        bestDist = dist;
+        bestLoc = v;
+      }
+    }
+  }
+  return bestLoc;
+}
+
+/**
+ * Given an estimated absolute document position inside a LaTeX string,
+ * snap to the nearest token boundary.  LaTeX tokens are:
+ *   - backslash commands: `\alpha`, `\frac`, `\,`
+ *   - braces: `{`, `}`
+ *   - single characters: `x`, `+`, `2`, ` `
+ *
+ * Returns the absolute position of the nearest token start.
+ */
+export function snapToTokenBoundary(
+  latex: string,
+  contentFrom: number,
+  absPos: number,
+): number {
+  const rel = absPos - contentFrom;
+  // Collect token start offsets
+  const starts: number[] = [];
+  let i = 0;
+  while (i < latex.length) {
+    starts.push(i);
+    if (latex[i] === "\\") {
+      // Backslash command: \cmd or \<single char>
+      i++;
+      if (i < latex.length && /[a-zA-Z]/.test(latex[i])) {
+        while (i < latex.length && /[a-zA-Z]/.test(latex[i])) i++;
+      } else if (i < latex.length) {
+        i++; // \, \; \{ etc.
+      }
+    } else {
+      i++;
+    }
+  }
+  // Also allow snapping to the end
+  starts.push(latex.length);
+
+  // Find the closest token boundary
+  let best = starts[0];
+  let bestDist = Math.abs(rel - best);
+  for (const s of starts) {
+    const d = Math.abs(rel - s);
+    if (d < bestDist) {
+      best = s;
+      bestDist = d;
+    }
+  }
+  return contentFrom + best;
+}
+
 /** Unified widget that renders both inline and display math via KaTeX. */
 export class MathWidget extends MacroAwareWidget {
   constructor(
@@ -139,21 +250,27 @@ export class MathWidget extends MacroAwareWidget {
       view.focus();
 
       let pos: number | undefined;
-      if (e.target instanceof Element) {
-        const hit = e.target.closest<HTMLElement>("[data-loc-start]");
-        if (hit && el.contains(hit)) {
-          const locStart = Number.parseInt(hit.dataset.locStart ?? "", 10);
-          if (Number.isFinite(locStart)) {
-            const contentFrom = this.sourceFrom + this.contentOffset;
-            pos = Math.max(this.sourceFrom, Math.min(this.sourceTo, contentFrom + locStart));
-          }
-        }
+      const locStart = findLocAtPoint(el, e.clientX, e.clientY);
+      if (locStart !== undefined) {
+        const contentFrom = this.sourceFrom + this.contentOffset;
+        pos = Math.max(this.sourceFrom, Math.min(this.sourceTo, contentFrom + locStart));
       }
 
       if (pos === undefined) {
-        try {
-          pos = view.posAtDOM(el);
-        } catch {
+        // Fallback: estimate position proportionally from click X offset,
+        // then snap to the nearest LaTeX token boundary so we don't land
+        // in the middle of e.g. `\alpha`.
+        const contentFrom = this.sourceFrom + this.contentOffset;
+        const contentLen = this.sourceTo - contentFrom;
+        if (contentLen > 0) {
+          const rect = el.getBoundingClientRect();
+          const fraction = rect.width > 0
+            ? Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+            : 0;
+          const raw = Math.round(contentFrom + fraction * contentLen);
+          pos = snapToTokenBoundary(this.latex, contentFrom, raw);
+          pos = Math.max(this.sourceFrom, Math.min(this.sourceTo, pos));
+        } else {
           pos = this.sourceFrom;
         }
       }
