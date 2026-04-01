@@ -13,15 +13,23 @@ import {
   ViewPlugin,
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
-import { findActiveMath, renderKatex } from "./math-render";
+import { findActiveMath, renderKatex, resolveClickToSourcePos } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { documentAnalysisField } from "../semantics/codemirror-source";
+
+interface MathRegionSnapshot {
+  latex: string;
+  contentFrom: number;
+  from: number;
+  to: number;
+}
 
 class MathPreviewPlugin implements PluginValue {
   private panel: HTMLElement | null = null;
   private contentEl: HTMLElement | null = null;
   private cleanupListeners: (() => void) | null = null;
   private lastRaw = "";
+  private lastRegion: MathRegionSnapshot | null = null;
   private isDragging = false;
   private dragOffsetX = 0;
   private dragOffsetY = 0;
@@ -73,6 +81,12 @@ class MathPreviewPlugin implements PluginValue {
 
     if (raw !== this.lastRaw) {
       this.lastRaw = raw;
+      this.lastRegion = {
+        latex: info.latex,
+        contentFrom: info.contentFrom,
+        from: info.from,
+        to: info.to,
+      };
       this.renderLatex(info.latex, info.isDisplay);
     }
 
@@ -122,9 +136,23 @@ class MathPreviewPlugin implements PluginValue {
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
 
-    // Content area
+    // Clicking rendered math in the preview navigates to the source position
     const content = document.createElement("div");
     content.className = "cf-math-preview-content";
+    content.style.cursor = "pointer";
+    content.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const r = this.lastRegion;
+      if (!r) return;
+
+      const contentOffset = r.contentFrom - r.from;
+      const pos = resolveClickToSourcePos(
+        content, e, r.latex, r.from, r.to, contentOffset,
+      );
+      this.view.focus();
+      this.view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+    });
     panel.appendChild(content);
 
     this.contentEl = content;
@@ -154,6 +182,7 @@ class MathPreviewPlugin implements PluginValue {
     this.panel = null;
     this.contentEl = null;
     this.lastRaw = "";
+    this.lastRegion = null;
     this.measureFromPos = -1;
     this.measureToPos = -1;
   }
