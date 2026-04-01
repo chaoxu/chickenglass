@@ -77,6 +77,10 @@ export function collectFencedDivs(state: EditorState): FencedDivInfo[] {
  * Collect multi-line display math blocks as FencedBlockInfo for protection.
  * Reads from documentSemanticsField.mathRegions, filtering for isDisplay.
  * The opening fence is the $$ or \[ line; the closing fence is the $$ or \] line.
+ *
+ * `closeFenceTo` is set to the end of the delimiter characters only (not any
+ * trailing label like `{#eq:energy}`), so that `closingFenceProtection` only
+ * blocks edits to the delimiter itself and leaves the label editable.
  */
 function collectDisplayMathBlocks(state: EditorState): FencedBlockInfo[] {
   const semantics = state.field(documentSemanticsField, false);
@@ -87,9 +91,28 @@ function collectDisplayMathBlocks(state: EditorState): FencedBlockInfo[] {
     if (!region.isDisplay) continue;
 
     const openLine = state.doc.lineAt(region.from);
-    // contentTo sits at the start of the closing delimiter mark ($$  or \])
+    // contentTo sits at the start of the closing delimiter mark ($$ or \])
     const closeLine = state.doc.lineAt(region.contentTo);
     if (closeLine.from === openLine.from) continue; // single-line display math
+
+    // Determine the end of the closing delimiter characters ($$  or \]).
+    // region.labelFrom is defined when an EquationLabel follows the closing
+    // delimiter; in that case it points to just after the delimiter mark.
+    // Otherwise we measure the delimiter length from the raw text.
+    let closeDelimTo: number;
+    if (region.labelFrom !== undefined) {
+      // labelFrom is the position right after the closing delimiter mark
+      closeDelimTo = region.labelFrom;
+    } else {
+      // No label: measure $$ or \] length from the closing line text
+      const closeText = state.sliceDoc(region.contentTo, closeLine.to);
+      const trimmed = closeText.trimStart();
+      let delimLen = 0;
+      if (trimmed.startsWith("$$")) delimLen = 2;
+      else if (trimmed.startsWith("\\]")) delimLen = 2;
+      const indent = closeText.length - trimmed.length;
+      closeDelimTo = region.contentTo + indent + delimLen;
+    }
 
     results.push({
       from: region.from,
@@ -97,7 +120,7 @@ function collectDisplayMathBlocks(state: EditorState): FencedBlockInfo[] {
       openFenceFrom: openLine.from,
       openFenceTo: openLine.to,
       closeFenceFrom: closeLine.from,
-      closeFenceTo: closeLine.to,
+      closeFenceTo: closeDelimTo,
       singleLine: false,
     });
   }
@@ -542,9 +565,12 @@ export const pairedMathEntry = EditorView.inputHandler.of((view, from, to, text)
   const line = state.doc.lineAt(from);
 
   if (text === "$") {
-    // Check if completing $$ on a blank line
+    // Check if completing $$ on a (possibly indented) otherwise-blank line.
+    // `before` contains everything from line start to cursor; trim leading
+    // whitespace so indented lines (e.g. inside a list) still match.
     const before = state.sliceDoc(line.from, from);
-    if (before !== "$") return false;
+    const beforeTrimmed = before.trimStart();
+    if (beforeTrimmed !== "$") return false;
     const after = state.sliceDoc(from, line.to).trim();
     if (after !== "") return false;
 
@@ -556,18 +582,21 @@ export const pairedMathEntry = EditorView.inputHandler.of((view, from, to, text)
       break;
     }
 
+    // Preserve indentation: keep the leading whitespace on all three lines.
+    const indent = before.slice(0, before.length - beforeTrimmed.length);
     view.dispatch({
-      changes: { from: line.from, to: line.to, insert: "$$\n\n$$" },
-      selection: { anchor: line.from + 3 },
+      changes: { from: line.from, to: line.to, insert: `${indent}$$\n\n${indent}$$` },
+      selection: { anchor: line.from + indent.length + 3 },
       annotations: fenceOperationAnnotation.of(true),
     });
     return true;
   }
 
   if (text === "[") {
-    // Check if completing \[ on a blank line
+    // Check if completing \[ on a (possibly indented) otherwise-blank line.
     const before = state.sliceDoc(line.from, from);
-    if (before !== "\\") return false;
+    const beforeTrimmed = before.trimStart();
+    if (beforeTrimmed !== "\\") return false;
     const after = state.sliceDoc(from, line.to).trim();
     if (after !== "") return false;
 
@@ -579,9 +608,11 @@ export const pairedMathEntry = EditorView.inputHandler.of((view, from, to, text)
       break;
     }
 
+    // Preserve indentation: keep the leading whitespace on all three lines.
+    const indent = before.slice(0, before.length - beforeTrimmed.length);
     view.dispatch({
-      changes: { from: line.from, to: line.to, insert: "\\[\n\n\\]" },
-      selection: { anchor: line.from + 3 },
+      changes: { from: line.from, to: line.to, insert: `${indent}\\[\n\n${indent}\\]` },
+      selection: { anchor: line.from + indent.length + 3 },
       annotations: fenceOperationAnnotation.of(true),
     });
     return true;
