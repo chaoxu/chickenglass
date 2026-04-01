@@ -55,6 +55,34 @@ export async function openFile(page, path) {
 }
 
 /**
+ * Open a stable baseline document for browser regression tests.
+ *
+ * The dev fixture set varies between workspaces, so tests should not hard-code
+ * a single file like index.md. Try a small ordered set of known demo docs and
+ * use the first one that exists.
+ */
+export async function openRegressionDocument(page) {
+  const candidates = ["index.md", "main.md", "cogirth/main2.md", "FORMAT.md"];
+
+  for (const path of candidates) {
+    const opened = await page.evaluate(async (candidate) => {
+      try {
+        await window.__app.openFile(candidate);
+        return true;
+      } catch {
+        return false;
+      }
+    }, path);
+    if (opened) {
+      await sleep(500);
+      return path;
+    }
+  }
+
+  throw new Error(`Failed to open a regression document. Tried: ${candidates.join(", ")}`);
+}
+
+/**
  * Find the first line number whose raw text contains `needle`.
  */
 export async function findLine(page, needle) {
@@ -200,15 +228,15 @@ export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
 }
 
 /**
- * Reset the editor to rich mode with index.md loaded (baseline state).
+ * Reset the editor to rich mode with a baseline regression document loaded.
  *
  * @param {import("playwright").Page} page
  */
 export async function resetEditorState(page) {
   await page.evaluate(() => {
     window.__app.setMode("rich");
-    window.__app.openFile("index.md");
   });
+  await openRegressionDocument(page);
   await page.waitForFunction(
     () => window.__cmView?.state?.doc?.length > 100,
     { timeout: 5000 },

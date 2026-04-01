@@ -53,6 +53,22 @@ describe("findPipePositions", () => {
   it("ignores pipes inside double-backtick code spans", () => {
     expect(findPipePositions("| ``a | b`` | c |")).toEqual([0, 12, 16]);
   });
+
+  it("keeps separators visible after an unmatched $", () => {
+    expect(findPipePositions("| $a | c |")).toEqual([0, 5, 9]);
+  });
+
+  it("keeps separators visible after an unmatched \\(", () => {
+    expect(findPipePositions("| \\(a | c |")).toEqual([0, 6, 10]);
+  });
+
+  it("does not treat $$ as an inline span that hides separators", () => {
+    expect(findPipePositions("| $$ | c |")).toEqual([0, 5, 9]);
+  });
+
+  it("keeps separators visible after an unmatched backtick", () => {
+    expect(findPipePositions("| `a | c |")).toEqual([0, 5, 9]);
+  });
 });
 
 describe("findCellBounds", () => {
