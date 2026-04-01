@@ -21,6 +21,7 @@ import {
   openingFenceColonProtection,
   openingFenceBacktickProtection,
   openingFenceMathProtection,
+  emptyMathBlockBackspaceCleanup,
 } from "./fence-protection";
 import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
@@ -465,6 +466,7 @@ function createMathProtectedState(doc: string) {
       documentSemanticsField,
       mathMacrosField,
       openingFenceDeletionCleanup,
+      emptyMathBlockBackspaceCleanup,
       closingFenceProtection,
       openingFenceMathProtection,
     ],
@@ -632,5 +634,78 @@ describe("openingFenceDeletionCleanup (display math \\[)", () => {
       changes: { from: openLine.from, to: openLine.to + 1, insert: "" },
     });
     expect(tr.state.doc.toString()).toBe("x^2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Empty math block backspace cleanup (#777) — paired entry undo
+// ---------------------------------------------------------------------------
+
+describe("emptyMathBlockBackspaceCleanup ($$)", () => {
+  it("removes entire empty $$ block on backspace from blank content line", () => {
+    // After pairedMathEntry: $$\n\n$$ with cursor at position 3 (start of blank line)
+    // Backspace deletes the newline at position 2-3
+    const doc = "$$\n\n$$";
+    const state = createMathProtectedState(doc);
+    const tr = state.update({ changes: { from: 2, to: 3, insert: "" } });
+    expect(tr.state.doc.toString()).toBe("");
+  });
+
+  it("preserves surrounding content when removing empty $$ block", () => {
+    const doc = "before\n$$\n\n$$\nafter";
+    const state = createMathProtectedState(doc);
+    // Line 2 "$$" ends at position 9; backspace from blank line 3 (position 10)
+    const blankLine = state.doc.line(3);
+    const openLine = state.doc.line(2);
+    const tr = state.update({
+      changes: { from: openLine.to, to: blankLine.from, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe("before\nafter");
+  });
+
+  it("does not trigger for non-empty math block content", () => {
+    const doc = "$$\nx^2\n$$";
+    const state = createMathProtectedState(doc);
+    // Backspace from start of content line "x^2" (position 3)
+    const tr = state.update({ changes: { from: 2, to: 3, insert: "" } });
+    // Content is not blank — cleanup should NOT trigger, just join lines
+    expect(tr.state.doc.toString()).toBe("$$x^2\n$$");
+  });
+
+  it("does not trigger for multi-character deletions", () => {
+    const doc = "$$\n\n$$";
+    const state = createMathProtectedState(doc);
+    // Deleting two characters (not a single-char backspace)
+    const tr = state.update({ changes: { from: 1, to: 3, insert: "" } });
+    // Should not expand to full block deletion
+    expect(tr.state.doc.toString()).not.toBe("");
+  });
+
+  it("handles block with multiple blank lines between delimiters", () => {
+    const doc = "$$\n\n\n$$";
+    const state = createMathProtectedState(doc);
+    // Backspace from the first blank line (position 3)
+    const tr = state.update({ changes: { from: 2, to: 3, insert: "" } });
+    expect(tr.state.doc.toString()).toBe("");
+  });
+});
+
+describe("emptyMathBlockBackspaceCleanup (\\[)", () => {
+  it("removes entire empty \\[ block on backspace from blank content line", () => {
+    const doc = "\\[\n\n\\]";
+    const state = createMathProtectedState(doc);
+    const tr = state.update({ changes: { from: 2, to: 3, insert: "" } });
+    expect(tr.state.doc.toString()).toBe("");
+  });
+
+  it("preserves surrounding content when removing empty \\[ block", () => {
+    const doc = "before\n\\[\n\n\\]\nafter";
+    const state = createMathProtectedState(doc);
+    const blankLine = state.doc.line(3);
+    const openLine = state.doc.line(2);
+    const tr = state.update({
+      changes: { from: openLine.to, to: blankLine.from, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe("before\nafter");
   });
 });

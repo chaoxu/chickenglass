@@ -24,6 +24,7 @@
  * - `openingFenceBacktickProtection` — block edits targeting opening fence backticks
  * - `openingFenceMathProtection` — block edits targeting opening math delimiters
  * - `pairedMathEntry` — auto-insert closing delimiter when typing $$ or \[
+ * - `emptyMathBlockBackspaceCleanup` — remove entire block when backspacing empty paired math
  * - `closingFenceAtomicRanges` — cursor skips over hidden closing fences
  * - `fenceProtectionExtension` — combined CM6 extension
  */
@@ -590,6 +591,78 @@ export const pairedMathEntry = EditorView.inputHandler.of((view, from, to, text)
 });
 
 /**
+ * Transaction filter that removes an empty display math block when a backspace
+ * joins the blank content line with the opening delimiter.
+ *
+ * After pairedMathEntry creates `$$\n\n$$`, pressing Backspace on the empty
+ * content line would normally just delete the newline, producing `$$\n$$` with
+ * the closing delimiter orphaned. This filter detects that pattern — a single-
+ * character newline deletion where the line above is a math opening delimiter
+ * and all content below (until the closing delimiter) is blank — and expands
+ * the deletion to remove the entire block.
+ *
+ * Works for both `$$` and `\[`/`\]` delimiter styles.
+ */
+export const emptyMathBlockBackspaceCleanup = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged) return tr;
+  if (tr.annotation(fenceOperationAnnotation)) return tr;
+  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
+
+  const state = tr.startState;
+
+  // Only handle single-change, single-character deletions (backspace/delete)
+  let deleteFrom = -1;
+  let deleteTo = -1;
+  let changeCount = 0;
+  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    changeCount++;
+    if (changeCount === 1 && inserted.length === 0 && toA - fromA === 1) {
+      deleteFrom = fromA;
+      deleteTo = toA;
+    }
+  });
+  if (changeCount !== 1 || deleteFrom < 0) return tr;
+
+  // The line containing deleteFrom should be a math opening delimiter
+  const openLine = state.doc.lineAt(deleteFrom);
+  const openText = openLine.text.trim();
+
+  let closingDelimiter: string;
+  if (openText === "$$") closingDelimiter = "$$";
+  else if (openText === "\\[") closingDelimiter = "\\]";
+  else return tr;
+
+  // The deletion must cross a line boundary (joining the content line up)
+  if (deleteTo <= openLine.to) return tr;
+
+  // The line being joined should be blank (empty content)
+  const contentLine = state.doc.lineAt(deleteTo);
+  if (contentLine.text.trim() !== "") return tr;
+
+  // All lines from contentLine forward must be blank until the closing delimiter
+  let closingLine: { from: number; to: number } | null = null;
+  for (let n = contentLine.number; n <= state.doc.lines; n++) {
+    const l = state.doc.line(n);
+    const trimmed = l.text.trim();
+    if (trimmed === "") continue;
+    if (trimmed === closingDelimiter) closingLine = { from: l.from, to: l.to };
+    break;
+  }
+  if (!closingLine) return tr;
+
+  // Remove the entire block (opening + blank content + closing)
+  let removeFrom = openLine.from;
+  let removeTo = closingLine.to;
+  if (removeTo < state.doc.length) removeTo += 1; // include trailing newline
+  else if (removeFrom > 0) removeFrom -= 1; // include preceding newline
+
+  return {
+    changes: { from: removeFrom, to: removeTo, insert: "" },
+    annotations: fenceOperationAnnotation.of(true),
+  };
+});
+
+/**
  * Combined CM6 extension for all fence protection behavior.
  *
  * Covers fenced divs, fenced code blocks (#441), and display math (#777).
@@ -599,6 +672,7 @@ export const pairedMathEntry = EditorView.inputHandler.of((view, from, to, text)
  */
 export const fenceProtectionExtension: Extension = [
   openingFenceDeletionCleanup,
+  emptyMathBlockBackspaceCleanup,
   closingFenceProtection,
   openingFenceColonProtection,
   openingFenceBacktickProtection,
