@@ -1,11 +1,12 @@
 import { describe, expect, it, afterEach, vi } from "vitest";
+import type { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { frontmatterField } from "../editor/frontmatter-state";
-import { createPluginRegistryField } from "../plugins/plugin-registry";
+import { createPluginRegistryField, pluginRegistryField } from "../plugins/plugin-registry";
 import { blockCounterField } from "../plugins/block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import type { BlockPlugin } from "../plugins/plugin-types";
@@ -353,6 +354,34 @@ describe("collectReferenceRanges", () => {
     expect(widgetClass(ref)).toBe("UnresolvedRefWidget");
   });
 
+  it("keeps partially resolved crossref clusters rendered in place", () => {
+    const doc = [
+      "::: {.theorem #thm-a}",
+      "A.",
+      ":::",
+      "",
+      "See [@thm-a; @missing].",
+    ].join("\n");
+    view = createView(doc, doc.length);
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find(
+      (r) => view.state.sliceDoc(r.from, r.to) === "[@thm-a; @missing]",
+    );
+    expect(ref).toBeDefined();
+    if (!ref) return;
+    expect(widgetClass(ref)).toBe("ClusteredCrossrefWidget");
+    const widget = ref.value.spec.widget;
+    expect(widget).toBeDefined();
+    if (!widget) return;
+    const el = widget.toDOM() as HTMLElement;
+    const spans = el.querySelectorAll("span[data-ref-id]");
+    expect(spans.length).toBe(2);
+    expect(spans[0].textContent).toBe("Theorem 1");
+    expect(spans[1].textContent).toBe("missing");
+    expect(spans[1].className).toBe(CSS.crossrefUnresolved);
+  });
+
   // Regression (#358): mixed crossref+citation clusters like [@eq:foo; @smith2020]
   // must NOT send all ids to CSL. Instead, crossref ids are resolved as labels
   // and citation ids are formatted via CslProcessor.cite().
@@ -615,6 +644,105 @@ describe("collectReferenceRanges", () => {
 
       expect(referenceRenderDependenciesChanged(beforeState, view.state)).toBe(true);
       expect(view.dom.querySelector(`.${CSS.crossref}`)?.textContent).toBe("Remark 1");
+    });
+
+    it("rerenders existing block refs when the numbering scheme flips", () => {
+      const originalDoc = [
+        "---",
+        "title: AB",
+        "numbering: global",
+        "---",
+        "",
+        "::: {.theorem #thm-a}",
+        "A.",
+        ":::",
+        "",
+        "::: {.definition #def-b}",
+        "B.",
+        ":::",
+        "",
+        "See [@def-b].",
+      ].join("\n");
+      const nextDoc = originalDoc
+        .replace("title: AB", "title: A")
+        .replace("numbering: global", "numbering: grouped");
+
+      view = createPluginView(originalDoc, 0);
+      expect(view.dom.querySelector(`.${CSS.crossref}`)?.textContent).toBe("Definition 2");
+
+      const beforeState = view.state;
+
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: originalDoc.length,
+          insert: nextDoc,
+        },
+      });
+
+      expect(referenceRenderDependenciesChanged(beforeState, view.state)).toBe(true);
+      expect(view.dom.querySelector(`.${CSS.crossref}`)?.textContent).toBe("Definition 1");
+    });
+
+    it("treats pure block-numbering changes as render dependencies", () => {
+      const originalDoc = [
+        "---",
+        "title: AB",
+        "numbering: global",
+        "---",
+        "",
+        "::: {.theorem #thm-a}",
+        "A.",
+        ":::",
+        "",
+        "::: {.definition #def-b}",
+        "B.",
+        ":::",
+        "",
+        "See [@def-b].",
+      ].join("\n");
+      const nextDoc = originalDoc
+        .replace("title: AB", "title: A")
+        .replace("numbering: global", "numbering: grouped");
+
+      const beforeView = createPluginView(originalDoc, 0);
+      const afterView = createPluginView(nextDoc, 0);
+      const beforeAnalysis = beforeView.state.field(documentSemanticsField);
+      const afterAnalysis = afterView.state.field(documentSemanticsField);
+
+      (
+        afterAnalysis as {
+          references: typeof beforeAnalysis.references;
+          referenceByFrom: typeof beforeAnalysis.referenceByFrom;
+        }
+      ).references = beforeAnalysis.references;
+      (
+        afterAnalysis as {
+          references: typeof beforeAnalysis.references;
+          referenceByFrom: typeof beforeAnalysis.referenceByFrom;
+        }
+      ).referenceByFrom = beforeAnalysis.referenceByFrom;
+
+      const makeState = (
+        analysis: typeof beforeAnalysis,
+        baseState: EditorState,
+      ): EditorState => ({
+        field(field: unknown) {
+          if (field === documentSemanticsField) return analysis;
+          if (field === blockCounterField) return baseState.field(blockCounterField);
+          if (field === pluginRegistryField) return baseState.field(pluginRegistryField);
+          if (field === bibDataField) return baseState.field(bibDataField);
+          return undefined;
+        },
+      }) as unknown as EditorState;
+
+      const beforeState = makeState(beforeAnalysis, beforeView.state);
+      const afterState = makeState(afterAnalysis, afterView.state);
+
+      expect(referenceRenderDependenciesChanged(beforeState, afterState)).toBe(true);
+
+      beforeView.destroy();
+      afterView.destroy();
     });
 
     it("ignores equation body edits that preserve crossref numbering", () => {
@@ -883,6 +1011,25 @@ describe("planReferenceRendering", () => {
     const item = findPlan(items, "[@eq:alpha; @eq:beta]");
     expect(item).toBeDefined();
     expect(item!.kind).toBe("clustered-crossref");
+  });
+
+  it("keeps unresolved items inside clustered-crossref plans", () => {
+    const doc = [
+      "::: {.theorem #thm-a}",
+      "A.",
+      ":::",
+      "",
+      "See [@thm-a; @missing].",
+    ].join("\n");
+    const items = plan(doc);
+    const item = findPlan(items, "[@thm-a; @missing]");
+    expect(item).toBeDefined();
+    expect(item?.kind).toBe("clustered-crossref");
+    if (!item || item.kind !== "clustered-crossref") return;
+    expect(item.parts).toEqual([
+      { id: "thm-a", text: "Theorem 1" },
+      { id: "missing", text: "missing", unresolved: true },
+    ]);
   });
 
   it("skips narrative refs that resolve to neither crossref nor citation", () => {

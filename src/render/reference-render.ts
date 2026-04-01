@@ -26,7 +26,14 @@ import {
   CitationWidget,
 } from "../citations/citation-render";
 import { type CslProcessor, collectCitationMatches, registerCitationsWithProcessor } from "../citations/csl-processor";
-import { CrossrefWidget, ClusteredCrossrefWidget, MixedClusterWidget, UnresolvedRefWidget, type MixedClusterPart } from "./crossref-render";
+import {
+  CrossrefWidget,
+  ClusteredCrossrefWidget,
+  MixedClusterWidget,
+  UnresolvedRefWidget,
+  type ClusteredCrossrefPart,
+  type MixedClusterPart,
+} from "./crossref-render";
 import { buildDecorations, cursorInRange, pushWidgetDecoration, createSimpleViewPlugin } from "./render-utils";
 import { blockCounterField, pluginRegistryField } from "../plugins";
 import {
@@ -89,21 +96,25 @@ function crossrefNumberingChanged(
 ): boolean {
   const beforeAnalysis = beforeState.field(documentAnalysisField);
   const afterAnalysis = afterState.field(documentAnalysisField);
-
+  const beforeCounters = beforeState.field(blockCounterField, false);
+  const afterCounters = afterState.field(blockCounterField, false);
   const equationSliceChanged =
     beforeAnalysis.equations !== afterAnalysis.equations ||
     beforeAnalysis.equationById !== afterAnalysis.equationById ||
     getDocumentAnalysisSliceRevision(beforeAnalysis, "equations")
       !== getDocumentAnalysisSliceRevision(afterAnalysis, "equations");
-  if (equationSliceChanged && getEquationNumberingKey(beforeAnalysis) !== getEquationNumberingKey(afterAnalysis)) {
+
+  if (
+    equationSliceChanged &&
+    getEquationNumberingKey(beforeAnalysis) !== getEquationNumberingKey(afterAnalysis)
+  ) {
     return true;
   }
 
-  const blockSliceChanged =
-    beforeAnalysis.fencedDivs !== afterAnalysis.fencedDivs ||
-    getDocumentAnalysisSliceRevision(beforeAnalysis, "fencedDivs")
-      !== getDocumentAnalysisSliceRevision(afterAnalysis, "fencedDivs");
-  return blockSliceChanged && getBlockNumberingKey(beforeState) !== getBlockNumberingKey(afterState);
+  return (
+    beforeCounters !== afterCounters &&
+    getBlockNumberingKey(beforeState) !== getBlockNumberingKey(afterState)
+  );
 }
 
 function bibliographyInputsChanged(
@@ -214,6 +225,12 @@ function stripOuterParens(text: string): string {
     : text;
 }
 
+function isResolvedCrossref(
+  resolved: ResolvedCrossref,
+): resolved is ResolvedCrossref & { kind: "block" | "equation" } {
+  return resolved.kind === "block" || resolved.kind === "equation";
+}
+
 // ── Render-plan types ──────────────────────────────────────────────
 
 /** A planned reference rendering before widget emission. */
@@ -222,7 +239,7 @@ export type ReferenceRenderItem =
   | { readonly kind: "citation"; readonly from: number; readonly to: number; readonly rendered: string; readonly ids: readonly string[]; readonly narrative: boolean }
   | { readonly kind: "mixed-cluster"; readonly from: number; readonly to: number; readonly parts: readonly MixedClusterPart[]; readonly raw: string }
   | { readonly kind: "crossref"; readonly from: number; readonly to: number; readonly resolved: ResolvedCrossref; readonly raw: string }
-  | { readonly kind: "clustered-crossref"; readonly from: number; readonly to: number; readonly resolvedItems: readonly ResolvedCrossref[]; readonly ids: readonly string[]; readonly raw: string }
+  | { readonly kind: "clustered-crossref"; readonly from: number; readonly to: number; readonly parts: readonly ClusteredCrossrefPart[]; readonly raw: string }
   | { readonly kind: "unresolved"; readonly from: number; readonly to: number; readonly raw: string };
 
 // ── Plan: pure routing without widget creation ─────────────────────
@@ -234,8 +251,10 @@ export type ReferenceRenderItem =
  * - Cursor inside → source-mark
  * - Bracketed all-bib cluster → citation (parenthetical)
  * - Bracketed mixed cluster (some bib, some crossref) → mixed-cluster
- * - Bracketed single/multi id, all block/equation → crossref / clustered-crossref
- * - Bracketed single/multi id, any unknown → unresolved
+ * - Bracketed single id, block/equation → crossref
+ * - Bracketed multi id, at least one block/equation → clustered-crossref
+ *   with unresolved items degraded in place
+ * - Bracketed ids, none resolve to block/equation/citation → unresolved
  * - Narrative, block/equation → crossref
  * - Narrative, bib id → citation (narrative)
  *
@@ -291,9 +310,21 @@ export function planReferenceRendering(
       } else {
         const resolvedItems = ref.ids.map((id) => resolveCrossref(view.state, id, equationLabels));
         const raw = view.state.sliceDoc(ref.from, ref.to);
-        const allResolved = resolvedItems.every((r) => r.kind === "block" || r.kind === "equation");
-        if (allResolved) {
-          items.push({ kind: "clustered-crossref", from: ref.from, to: ref.to, resolvedItems, ids: ref.ids, raw });
+        const parts = resolvedItems.map((resolved, index) => {
+          if (isResolvedCrossref(resolved)) {
+            return {
+              id: ref.ids[index],
+              text: resolved.label,
+            };
+          }
+          return {
+            id: ref.ids[index],
+            text: ref.ids[index],
+            unresolved: true,
+          };
+        });
+        if (parts.some((part) => !part.unresolved)) {
+          items.push({ kind: "clustered-crossref", from: ref.from, to: ref.to, parts, raw });
         } else {
           items.push({ kind: "unresolved", from: ref.from, to: ref.to, raw });
         }
@@ -334,7 +365,7 @@ function emitReferenceDecorations(plan: readonly ReferenceRenderItem[]): Range<D
         pushWidgetDecoration(ranges, new CrossrefWidget(item.resolved, item.raw), item.from, item.to);
         break;
       case "clustered-crossref":
-        pushWidgetDecoration(ranges, new ClusteredCrossrefWidget(item.resolvedItems, item.ids, item.raw), item.from, item.to);
+        pushWidgetDecoration(ranges, new ClusteredCrossrefWidget(item.parts, item.raw), item.from, item.to);
         break;
       case "unresolved":
         pushWidgetDecoration(ranges, new UnresolvedRefWidget(item.raw), item.from, item.to);
