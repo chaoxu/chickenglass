@@ -5,7 +5,10 @@
   "windows": ["main", "document-*"],
   "permissions": [
     "core:default",
+    "core:window:allow-close",
     "core:window:allow-create",
+    "core:window:allow-destroy",
+    "core:window:allow-get-all-windows",
     "core:window:allow-set-focus",
     "core:webview:allow-create-webview-window",
     "dialog:default",
