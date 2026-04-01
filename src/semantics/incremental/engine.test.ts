@@ -453,4 +453,63 @@ describe("incremental document analysis engine", () => {
       expect(after.equations[i]).toEqual(rebuilt.equations[i]);
     }
   });
+
+  it("does not duplicate mathRegions in a multi-range transaction closing $$ and appending text (#780)", () => {
+    // Regression: in a transaction with two changes — one that inserts a
+    // closing $$ (which collapses a BigUnclosed region and triggers overhang
+    // re-extraction) and one that appends new text — the overhang extraction
+    // window uses an inclusive boundary while replaceOverlappingRanges uses
+    // a strict-overlap boundary.  A math region whose `from` equals
+    // `overhangTo` (the right edge of the overhang window) survives the
+    // remove step but is also emitted by the extractor, producing a
+    // duplicate entry in mathRegions.
+    const doc = [
+      "Intro.",
+      "",
+      "$$",
+      "broken",
+      "",
+      "$$a$$ {#eq:first}",
+      "",
+      "$$b$$ {#eq:second}",
+    ].join("\n");
+    const state = createState(doc);
+    const before = analyze(state);
+
+    // Before: only eq:second is visible (eq:first is swallowed by the $$-pairing).
+    expect(before.equations.length).toBe(1);
+
+    // Two changes in a single transaction:
+    //   1. Insert "$$\n\n" to close the multi-line block (dirty window W1).
+    //   2. Append "\n\n$$c$$" to add a new equation at the end (dirty window W2).
+    const insertPos = doc.indexOf("$$a$$");
+    const appendPos = doc.length;
+    const tr = state.update({
+      changes: [
+        { from: insertPos, insert: "$$\n\n" },
+        { from: appendPos, insert: "\n\n$$c$$" },
+      ],
+    });
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      fullTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+
+    const rebuilt = analyze(tr.state);
+
+    // mathRegions must match a fresh rebuild exactly — no duplicates.
+    expect(after.mathRegions.length).toBe(rebuilt.mathRegions.length);
+    for (let i = 0; i < rebuilt.mathRegions.length; i++) {
+      expect(after.mathRegions[i]).toEqual(rebuilt.mathRegions[i]);
+    }
+
+    // Equations must also match — eq:first, eq:second, and the new $$c$$ (if
+    // it has a label) should all be present.
+    expect(after.equations.length).toBe(rebuilt.equations.length);
+    for (let i = 0; i < rebuilt.equations.length; i++) {
+      expect(after.equations[i]).toEqual(rebuilt.equations[i]);
+    }
+  });
 });

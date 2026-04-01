@@ -139,10 +139,22 @@ export function mergeMathSlice(
   for (const { window, structural } of dirtyExtractions) {
     const overhangTo = findOverhangTo(mathRegions, window);
 
+    // extractStructuralWindow uses inclusive boundary checks (c.from <=
+    // range.to && c.to >= range.from), so it can return regions that merely
+    // touch the window boundary without strictly overlapping it.
+    // replaceOverlappingRanges uses strict overlap (value.from < window.to &&
+    // window.from < value.to), so boundary-touching regions are NOT removed
+    // from the existing mathRegions array before the replacements are spliced
+    // in, causing duplicates.  Filter both the structural and overhang
+    // replacement lists to only include regions that strictly overlap their
+    // respective replacement windows.
+    const strictStructural = structural.mathRegions.filter(
+      (r) => r.from < window.toNew && r.to > window.fromNew,
+    );
     mathRegions = replaceOverlappingRanges(
       mathRegions,
       { from: window.fromNew, to: window.toNew },
-      structural.mathRegions,
+      strictStructural,
     );
 
     if (overhangTo > window.toNew) {
@@ -150,10 +162,13 @@ export function mergeMathSlice(
         from: window.toNew,
         to: overhangTo,
       });
+      const overhangRegions = overhang.mathRegions.filter(
+        (r) => r.from < overhangTo && r.to > window.toNew,
+      );
       mathRegions = replaceOverlappingRanges(
         mathRegions,
         { from: window.toNew, to: overhangTo },
-        overhang.mathRegions,
+        overhangRegions,
       );
     }
   }
