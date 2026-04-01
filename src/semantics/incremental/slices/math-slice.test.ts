@@ -97,10 +97,14 @@ describe("math slice", () => {
       },
     });
     const delta = buildSemanticDelta(tr);
+    const afterSource = editorStateTextSource(tr.state);
+    const afterTree = fullTree(tr.state);
     const after = mergeMathSlice(
       before,
       delta,
       extractDirtyMathWindows(tr.state, delta),
+      afterSource,
+      afterTree,
     );
 
     expect(after.mathRegions).toHaveLength(3);
@@ -122,10 +126,14 @@ describe("math slice", () => {
       changes: { from: beforeState.doc.length, insert: "\n\nTail paragraph." },
     });
     const delta = buildSemanticDelta(tr);
+    const afterSource = editorStateTextSource(tr.state);
+    const afterTree = fullTree(tr.state);
     const after = mergeMathSlice(
       before,
       delta,
       extractDirtyMathWindows(tr.state, delta),
+      afterSource,
+      afterTree,
     );
 
     expect(after).toBe(before);

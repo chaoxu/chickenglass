@@ -1,11 +1,16 @@
-import type { MathSemantics } from "../../document";
+import type { Tree } from "@lezer/common";
+import type { MathSemantics, TextSource } from "../../document";
 import {
   mapRangeObject,
+  rangesOverlap,
   replaceOverlappingRanges,
   type PositionMapper,
 } from "../merge-utils";
 import type { DirtyWindow, SemanticDelta } from "../types";
-import type { StructuralWindowExtraction } from "../window-extractor";
+import {
+  extractStructuralWindow,
+  type StructuralWindowExtraction,
+} from "../window-extractor";
 
 export interface MathSlice {
   readonly mathRegions: readonly MathSemantics[];
@@ -83,19 +88,49 @@ export function buildMathSlice(
   return createMathSlice(structural.mathRegions);
 }
 
+function findOverhangTo(
+  regions: readonly MathSemantics[],
+  window: Pick<DirtyWindow, "fromNew" | "toNew">,
+): number {
+  let maxTo = window.toNew;
+  for (const region of regions) {
+    if (region.from >= window.toNew) break;
+    if (rangesOverlap(region, { from: window.fromNew, to: window.toNew })) {
+      if (region.to > maxTo) maxTo = region.to;
+    }
+  }
+  return maxTo;
+}
+
 export function mergeMathSlice(
   previous: MathSlice,
   delta: Pick<SemanticDelta, "mapOldToNew">,
   dirtyExtractions: readonly DirtyMathWindowExtraction[],
+  doc: TextSource,
+  tree: Tree,
 ): MathSlice {
   let mathRegions = mapMathRegions(previous.mathRegions, deltaMapper(delta));
 
   for (const { window, structural } of dirtyExtractions) {
+    const overhangTo = findOverhangTo(mathRegions, window);
+
     mathRegions = replaceOverlappingRanges(
       mathRegions,
       { from: window.fromNew, to: window.toNew },
       structural.mathRegions,
     );
+
+    if (overhangTo > window.toNew) {
+      const overhang = extractStructuralWindow(doc, tree, {
+        from: window.toNew,
+        to: overhangTo,
+      });
+      mathRegions = replaceOverlappingRanges(
+        mathRegions,
+        { from: window.toNew, to: overhangTo },
+        overhang.mathRegions,
+      );
+    }
   }
 
   if (mathRegions === previous.mathRegions) {

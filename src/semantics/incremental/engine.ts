@@ -476,6 +476,8 @@ export function updateDocumentAnalysis(
     previousState.mathSlice,
     delta,
     dirtyExtractions,
+    doc,
+    tree,
   );
   const equationSlice = mergeEquationSlice(
     previousState.equationSlice,
