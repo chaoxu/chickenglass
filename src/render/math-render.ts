@@ -413,9 +413,24 @@ function buildMathItems(
 
   for (const region of regions) {
     if (shouldSkip(region.from, region.to)) {
+      // Opening delimiter
+      if (region.contentFrom > region.from) {
+        items.push(
+          Decoration.mark({ class: "cf-math-source" }).range(region.from, region.contentFrom),
+        );
+      }
       if (region.contentFrom < region.contentTo) {
         items.push(
           Decoration.mark({ class: "cf-math-source" }).range(region.contentFrom, region.contentTo),
+        );
+      }
+      // Closing delimiter (stop before label for labeled display math)
+      const delimClose = region.isDisplay && region.labelFrom !== undefined
+        ? region.labelFrom
+        : region.to;
+      if (delimClose > region.contentTo) {
+        items.push(
+          Decoration.mark({ class: "cf-math-source" }).range(region.contentTo, delimClose),
         );
       }
       if (region.isDisplay && region.labelFrom !== undefined && region.to > region.labelFrom) {
