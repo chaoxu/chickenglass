@@ -1,53 +1,337 @@
 diff --git a/dist/katex.js b/dist/katex.js
-index 69a5eac63dba04361390b46275880332c983cc9f..9951d562d8dd7fc2d2b2c04c1bfb46191bc222b5 100644
+index 69a5eac63dba04361390b46275880332c983cc9f..69d9b21b9610ac31c6a95b0db582509649ecbf85 100644
 --- a/dist/katex.js
 +++ b/dist/katex.js
-@@ -5841,6 +5841,11 @@ const buildGroup = function (group, options, baseOptions) {
+@@ -1265,6 +1265,7 @@ class SymbolNode {
+     this.width = width || 0;
+     this.classes = classes || [];
+     this.style = style || {};
++    this.attributes = {};
+     this.maxFontSize = 0;
+ 
+     // Mark text from non-Latin scripts with specific classes so that we
+@@ -1286,6 +1287,9 @@ class SymbolNode {
+   hasClass(className) {
+     return this.classes.includes(className);
+   }
++  setAttribute(attribute, value) {
++    this.attributes[attribute] = value;
++  }
+ 
+   /**
+    * Creates a text node or span from a symbol node. Note that a span is only
+@@ -1306,6 +1310,10 @@ class SymbolNode {
+       span = span || document.createElement("span");
+       span.style[key] = this.style[key];
+     }
++    for (const attr of Object.keys(this.attributes)) {
++      span = span || document.createElement("span");
++      span.setAttribute(attr, this.attributes[attr]);
++    }
+     if (span) {
+       span.appendChild(node);
+       return span;
+@@ -1339,6 +1347,10 @@ class SymbolNode {
+       needsSpan = true;
+       markup += " style=\"" + utils_escape(styles) + "\"";
+     }
++    for (const attr of Object.keys(this.attributes)) {
++      needsSpan = true;
++      markup += " " + attr + "=\"" + utils_escape(this.attributes[attr]) + "\"";
++    }
+     const escaped = utils_escape(this.text);
+     if (needsSpan) {
+       markup += ">";
+@@ -5819,6 +5831,40 @@ const makeNullDelimiter = function (options, classes) {
+   return makeSpan(classes.concat(moreClasses));
+ };
+ 
++/**
++ * Recursively scan a virtual DOM node for data-loc-start / data-loc-end
++ * attributes and return the merged [min, max] range, or null if none found.
++ */
++function _inheritLocRange(node) {
++  let minStart = Infinity;
++  let maxEnd = -Infinity;
++  const stack = [node];
++  while (stack.length) {
++    const cur = stack.pop();
++    if (cur.attributes) {
++      const s = cur.attributes["data-loc-start"];
++      const e = cur.attributes["data-loc-end"];
++      if (s != null) {
++        const sv = +s;
++        if (sv < minStart) minStart = sv;
++      }
++      if (e != null) {
++        const ev = +e;
++        if (ev > maxEnd) maxEnd = ev;
++      }
++    }
++    if (cur.children) {
++      for (let i = cur.children.length - 1; i >= 0; i--) {
++        stack.push(cur.children[i]);
++      }
++    }
++  }
++  if (minStart !== Infinity && maxEnd !== -Infinity) {
++    return [minStart, maxEnd];
++  }
++  return null;
++}
++
+ /**
+  * buildGroup is the function that takes a group and calls the correct groupType
+  * function for it. It also handles the interaction of size and style changes
+@@ -5841,6 +5887,19 @@ const buildGroup = function (group, options, baseOptions) {
        groupNode.height *= multiplier;
        groupNode.depth *= multiplier;
      }
-+    const loc = group.loc;
-+    if (loc != null && "setAttribute" in groupNode && typeof groupNode.setAttribute === "function") {
-+      groupNode.setAttribute("data-loc-start", String(loc.start));
-+      groupNode.setAttribute("data-loc-end", String(loc.end));
++    if ("setAttribute" in groupNode && typeof groupNode.setAttribute === "function") {
++      const loc = group.loc;
++      if (loc != null) {
++        groupNode.setAttribute("data-loc-start", String(loc.start));
++        groupNode.setAttribute("data-loc-end", String(loc.end));
++      } else {
++        const range = _inheritLocRange(groupNode);
++        if (range) {
++          groupNode.setAttribute("data-loc-start", String(range[0]));
++          groupNode.setAttribute("data-loc-end", String(range[1]));
++        }
++      }
 +    }
      return groupNode;
    } else {
      throw new src_ParseError("Got group of unknown type: '" + group.type + "'");
 diff --git a/dist/katex.mjs b/dist/katex.mjs
-index 250484b791d3954163ae2320972ca011d2494df9..ec6e5f7dd7b0869e01fe08ff4a32f6d3836a8862 100644
+index 250484b791d3954163ae2320972ca011d2494df9..2d2d1a45276b1277d32e7fc7d2a3fad389a1754f 100644
 --- a/dist/katex.mjs
 +++ b/dist/katex.mjs
-@@ -5531,6 +5531,11 @@ var buildGroup$1 = function buildGroup(group, options, baseOptions) {
+@@ -1123,6 +1123,7 @@ class SymbolNode {
+     this.width = width || 0;
+     this.classes = classes || [];
+     this.style = style || {};
++    this.attributes = {};
+     this.maxFontSize = 0;
+     // Mark text from non-Latin scripts with specific classes so that we
+     // can specify which fonts to use.  This allows us to render these
+@@ -1143,6 +1144,9 @@ class SymbolNode {
+   hasClass(className) {
+     return this.classes.includes(className);
+   }
++  setAttribute(attribute, value) {
++    this.attributes[attribute] = value;
++  }
+   /**
+    * Creates a text node or span from a symbol node. Note that a span is only
+    * created if it is needed.
+@@ -1162,6 +1166,10 @@ class SymbolNode {
+       span = span || document.createElement("span");
+       span.style[key] = this.style[key];
+     }
++    for (var attr of Object.keys(this.attributes)) {
++      span = span || document.createElement("span");
++      span.setAttribute(attr, this.attributes[attr]);
++    }
+     if (span) {
+       span.appendChild(node);
+       return span;
+@@ -1194,6 +1202,10 @@ class SymbolNode {
+       needsSpan = true;
+       markup += " style=\"" + escape(styles) + "\"";
+     }
++    for (var attr of Object.keys(this.attributes)) {
++      needsSpan = true;
++      markup += " " + attr + "=\"" + escape(this.attributes[attr]) + "\"";
++    }
+     var escaped = escape(this.text);
+     if (needsSpan) {
+       markup += ">";
+@@ -5510,6 +5522,39 @@ var makeNullDelimiter = function makeNullDelimiter(options, classes) {
+   var moreClasses = ["nulldelimiter"].concat(options.baseSizingClasses());
+   return makeSpan(classes.concat(moreClasses));
+ };
++/**
++ * Recursively scan a virtual DOM node for data-loc-start / data-loc-end
++ * attributes and return the merged [min, max] range, or null if none found.
++ */
++function _inheritLocRange(node) {
++  var minStart = Infinity;
++  var maxEnd = -Infinity;
++  var stack = [node];
++  while (stack.length) {
++    var cur = stack.pop();
++    if (cur.attributes) {
++      var s = cur.attributes["data-loc-start"];
++      var e = cur.attributes["data-loc-end"];
++      if (s != null) {
++        var sv = +s;
++        if (sv < minStart) minStart = sv;
++      }
++      if (e != null) {
++        var ev = +e;
++        if (ev > maxEnd) maxEnd = ev;
++      }
++    }
++    if (cur.children) {
++      for (var i = cur.children.length - 1; i >= 0; i--) {
++        stack.push(cur.children[i]);
++      }
++    }
++  }
++  if (minStart !== Infinity && maxEnd !== -Infinity) {
++    return [minStart, maxEnd];
++  }
++  return null;
++}
+ /**
+  * buildGroup is the function that takes a group and calls the correct groupType
+  * function for it. It also handles the interaction of size and style changes
+@@ -5531,6 +5576,19 @@ var buildGroup$1 = function buildGroup(group, options, baseOptions) {
        groupNode.height *= multiplier;
        groupNode.depth *= multiplier;
      }
-+    var loc = group.loc;
-+    if (loc != null && "setAttribute" in groupNode && typeof groupNode.setAttribute === "function") {
-+      groupNode.setAttribute("data-loc-start", String(loc.start));
-+      groupNode.setAttribute("data-loc-end", String(loc.end));
++    if ("setAttribute" in groupNode && typeof groupNode.setAttribute === "function") {
++      var loc = group.loc;
++      if (loc != null) {
++        groupNode.setAttribute("data-loc-start", String(loc.start));
++        groupNode.setAttribute("data-loc-end", String(loc.end));
++      } else {
++        var range = _inheritLocRange(groupNode);
++        if (range) {
++          groupNode.setAttribute("data-loc-start", String(range[0]));
++          groupNode.setAttribute("data-loc-end", String(range[1]));
++        }
++      }
 +    }
      return groupNode;
    } else {
      throw new ParseError("Got group of unknown type: '" + group.type + "'");
 diff --git a/src/buildHTML.ts b/src/buildHTML.ts
-index 24ef95b02bf9506aebfa339b7f305d1794589f23..04cddf5dea55b79a833738b5d55c134639a2078c 100644
+index 24ef95b02bf9506aebfa339b7f305d1794589f23..22121794c93d3d7ab3baea67ad36268380ebb092 100644
 --- a/src/buildHTML.ts
 +++ b/src/buildHTML.ts
-@@ -283,6 +283,16 @@ export const buildGroup = function(
+@@ -251,6 +251,42 @@ export const makeNullDelimiter = function(
+     return makeSpan(classes.concat(moreClasses));
+ };
+ 
++/**
++ * Recursively scan a virtual DOM node for data-loc-start / data-loc-end
++ * attributes and return the merged [min, max] range, or null if none found.
++ */
++function inheritLocRange(
++    node: HtmlDomNode,
++): [number, number] | null {
++    let minStart = Infinity;
++    let maxEnd = -Infinity;
++    const stack: HtmlDomNode[] = [node];
++    while (stack.length) {
++        const cur = stack.pop()!;
++        if ("attributes" in cur && (cur as any).attributes) {
++            const s = (cur as any).attributes["data-loc-start"];
++            const e = (cur as any).attributes["data-loc-end"];
++            if (s != null) {
++                const sv = +s;
++                if (sv < minStart) minStart = sv;
++            }
++            if (e != null) {
++                const ev = +e;
++                if (ev > maxEnd) maxEnd = ev;
++            }
++        }
++        if ("children" in cur && Array.isArray((cur as any).children)) {
++            for (let i = (cur as any).children.length - 1; i >= 0; i--) {
++                stack.push((cur as any).children[i]);
++            }
++        }
++    }
++    if (minStart !== Infinity && maxEnd !== -Infinity) {
++        return [minStart, maxEnd];
++    }
++    return null;
++}
++
+ /**
+  * buildGroup is the function that takes a group and calls the correct groupType
+  * function for it. It also handles the interaction of size and style changes
+@@ -283,6 +319,25 @@ export const buildGroup = function(
              groupNode.depth *= multiplier;
          }
  
-+        const loc = group.loc;
 +        if (
-+            loc != null &&
 +            "setAttribute" in groupNode &&
 +            typeof groupNode.setAttribute === "function"
 +        ) {
-+            groupNode.setAttribute("data-loc-start", String(loc.start));
-+            groupNode.setAttribute("data-loc-end", String(loc.end));
++            const loc = group.loc;
++            if (loc != null) {
++                groupNode.setAttribute("data-loc-start", String(loc.start));
++                groupNode.setAttribute("data-loc-end", String(loc.end));
++            } else {
++                const range = inheritLocRange(groupNode);
++                if (range) {
++                    groupNode.setAttribute(
++                        "data-loc-start", String(range[0]));
++                    groupNode.setAttribute(
++                        "data-loc-end", String(range[1]));
++                }
++            }
 +        }
 +
          return groupNode;
      } else {
          throw new ParseError(
+diff --git a/src/domTree.ts b/src/domTree.ts
+index 8d60b661b65abd83c64885b1e482e47ae4739c4c..2d3bf7f4ea502c5abb70993069f1527e3c8825df 100644
+--- a/src/domTree.ts
++++ b/src/domTree.ts
+@@ -369,6 +369,7 @@ export class SymbolNode implements HtmlDomNode {
+     width: number;
+     maxFontSize: number;
+     classes: string[];
++    attributes: Record<string, string>;
+     style: CssStyle;
+ 
+     constructor(
+@@ -389,6 +390,7 @@ export class SymbolNode implements HtmlDomNode {
+         this.width = width || 0;
+         this.classes = classes || [];
+         this.style = style || {};
++        this.attributes = {};
+         this.maxFontSize = 0;
+ 
+         // Mark text from non-Latin scripts with specific classes so that we
+@@ -412,6 +414,10 @@ export class SymbolNode implements HtmlDomNode {
+         return this.classes.includes(className);
+     }
+ 
++    setAttribute(attribute: string, value: string) {
++        this.attributes[attribute] = value;
++    }
++
+     /**
+      * Creates a text node or span from a symbol node. Note that a span is only
+      * created if it is needed.
+@@ -435,6 +441,11 @@ export class SymbolNode implements HtmlDomNode {
+             (span.style as any)[key] = this.style[key];
+         }
+ 
++        for (const attr of Object.keys(this.attributes)) {
++            span = span || document.createElement("span");
++            span.setAttribute(attr, this.attributes[attr]);
++        }
++
+         if (span) {
+             span.appendChild(node);
+             return span;
+@@ -474,6 +485,11 @@ export class SymbolNode implements HtmlDomNode {
+             markup += " style=\"" + escape(styles) + "\"";
+         }
+ 
++        for (const attr of Object.keys(this.attributes)) {
++            needsSpan = true;
++            markup += ` ${attr}="${escape(this.attributes[attr])}"`;
++        }
++
+         const escaped = escape(this.text);
+         if (needsSpan) {
+             markup += ">";

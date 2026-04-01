@@ -91,6 +91,31 @@ describe("MathWidget (inline)", () => {
     expect(html).toContain("data-loc-end");
   });
 
+  it("propagates data-loc attributes to ancestor spans via inheritance", () => {
+    // For \frac{a}{b}+c, every leaf math span (.mord, .mbin) that has text
+    // content should either have data-loc-start itself or have an ancestor
+    // with data-loc-start (so closest("[data-loc-start]") succeeds).
+    const el = document.createElement("span");
+    renderKatex(el, "\\frac{a}{b}+c", false, {});
+    const leaves = el.querySelectorAll<HTMLElement>(".mord, .mbin, .mrel, .mop");
+    expect(leaves.length).toBeGreaterThan(0);
+    for (const leaf of leaves) {
+      const hit = leaf.closest("[data-loc-start]");
+      expect(hit, `no data-loc-start ancestor for .${leaf.className}`).not.toBeNull();
+    }
+  });
+
+  it("propagates data-loc in display math mode", () => {
+    const el = document.createElement("div");
+    renderKatex(el, "\\sum_{i=1}^{n} x_i", true, {});
+    const leaves = el.querySelectorAll<HTMLElement>(".mord, .mbin, .mop");
+    expect(leaves.length).toBeGreaterThan(0);
+    for (const leaf of leaves) {
+      const hit = leaf.closest("[data-loc-start]");
+      expect(hit, `no data-loc-start ancestor for .${leaf.className}`).not.toBeNull();
+    }
+  });
+
   it("shows error for invalid LaTeX", () => {
     const widget = new MathWidget("\\invalid{", "$\\invalid{$", false);
     const el = widget.toDOM();
