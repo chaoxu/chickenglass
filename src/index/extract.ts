@@ -25,7 +25,7 @@ export function extractFileIndex(
   const references: IndexReference[] = [];
 
   extractFromAnalysis(content, file, analysis, entries, references);
-  return { file, entries, references };
+  return { file, sourceText: content, entries, references };
 }
 
 function extractFromAnalysis(

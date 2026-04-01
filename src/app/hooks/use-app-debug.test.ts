@@ -36,6 +36,7 @@ const openProject = vi.fn(async (_path: string) => true);
 const openFile = vi.fn(async (_path: string) => {});
 const saveFile = vi.fn(async () => {});
 const closeFile = vi.fn(() => {});
+const setSearchOpen = vi.fn((_open: boolean) => {});
 const requestNativeClose = vi.fn(async () => {});
 const setMode = vi.fn((_mode: "rich" | "source" | "read") => {});
 const getMode = vi.fn(() => "rich" as const);
@@ -46,6 +47,7 @@ const Harness: FC = () => {
     openFile,
     saveFile,
     closeFile,
+    setSearchOpen,
     requestNativeClose,
     setMode,
     getMode,
@@ -72,6 +74,7 @@ describe("useAppDebug", () => {
     openFile.mockClear();
     saveFile.mockClear();
     closeFile.mockClear();
+    setSearchOpen.mockClear();
     requestNativeClose.mockClear();
     setMode.mockClear();
     getMode.mockClear();

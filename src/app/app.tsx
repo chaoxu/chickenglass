@@ -102,6 +102,7 @@ function AppInner() {
     closeFile: () => {
       void editor.closeCurrentFile();
     },
+    setSearchOpen: dialogs.setSearchOpen,
     requestNativeClose: fileDialogs.handleQuitRequest,
     setMode: editor.handleModeChange,
     getMode: () => editor.editorMode,

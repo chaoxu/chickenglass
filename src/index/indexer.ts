@@ -15,8 +15,14 @@
  * find, filter) are pure Map/array lookups that complete in microseconds.
  */
 
-import type { IndexEntry, IndexQuery, FileIndex, ResolvedReference } from "./query-api";
-import { queryIndex, resolveLabel, findReferences } from "./query-api";
+import type {
+  FileIndex,
+  IndexEntry,
+  IndexQuery,
+  ResolvedReference,
+  SourceTextQuery,
+} from "./query-api";
+import { findReferences, queryIndex, querySourceText, resolveLabel } from "./query-api";
 import { extractFileIndex, updateFileInIndex, removeFileFromIndex } from "./extract";
 
 /**
@@ -64,6 +70,12 @@ export class BackgroundIndexer {
     return queryIndex(this.getDocumentIndex(), query);
   }
 
+  /** Query raw source text across indexed files. */
+  async querySourceText(query: SourceTextQuery): Promise<readonly IndexEntry[]> {
+    if (this.disposed) throw new Error("Indexer disposed");
+    return querySourceText(this.getDocumentIndex(), query);
+  }
+
   /** Resolve a label to its index entry. */
   async resolveLabel(label: string): Promise<IndexEntry | undefined> {
     if (this.disposed) throw new Error("Indexer disposed");
@@ -101,12 +113,14 @@ export class BackgroundIndexer {
     files: ReadonlyArray<{ file: string; content: string }>,
   ): Promise<number> {
     if (this.disposed) throw new Error("Indexer disposed");
+    const nextFiles = new Map<string, FileIndex>();
     let totalEntries = 0;
     for (const { file, content } of files) {
       const fileIndex = extractFileIndex(content, file);
-      this.files.set(file, fileIndex);
+      nextFiles.set(file, fileIndex);
       totalEntries += fileIndex.entries.length;
     }
+    this.files = nextFiles;
     return totalEntries;
   }
 

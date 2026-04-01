@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   insertImageFromPicker,
   normalizeEditorMode,
@@ -18,7 +18,14 @@ import { useEditorNavigation } from "./use-editor-navigation";
 import type { FileSystem } from "../file-manager";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import type { Settings } from "../lib/types";
+import type { SearchNavigationTarget } from "../search";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
+
+interface PendingModeOverride {
+  path: string;
+  mode: EditorMode;
+  requestId: number;
+}
 
 /** Dependencies injected into the shell hook from the top-level app component. */
 export interface AppEditorShellDeps {
@@ -100,7 +107,7 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
    * the async `openFile` resolves.
    * Calls `onComplete` when navigation finishes.
    */
-  handleSearchResult: (file: string, pos: number, onComplete?: () => void) => void;
+  handleSearchResult: (target: SearchNavigationTarget, onComplete?: () => void) => void;
 
   // --- Insertion ---
 
@@ -190,7 +197,7 @@ export function useAppEditorShell({
   const {
     handleOutlineSelect,
     handleGotoLine,
-    handleSearchResult,
+    handleSearchResult: handleSearchResultNavigation,
     handleEditorDocumentReady,
     syncView,
   } = navigation;
@@ -246,20 +253,23 @@ export function useAppEditorShell({
 
   const isMarkdownFile = currentPath?.endsWith(".md") ?? false;
 
-  // editorMode is derived from (currentPath, isMarkdownFile) via useMemo rather
-  // than being stored in a separate useState that is then synced via useEffect.
-  // An optional override captures user-initiated mode changes (handleModeChange)
-  // and is keyed to the current path so it is automatically discarded when
-  // the user switches to a different file.
-  const [modeOverride, setModeOverride] = useState<{ path: string | null; mode: EditorMode } | null>(null);
+  // Persist mode overrides per file so explicit mode choices survive tab/file
+  // switches, including cross-file search navigation that sets the target
+  // file's mode before it becomes current.
+  const [modeOverrides, setModeOverrides] = useState<Record<string, EditorMode>>({});
+  const [pendingModeOverride, setPendingModeOverride] = useState<PendingModeOverride | null>(null);
+  const pendingModeRequestIdRef = useRef(0);
 
   const editorMode = useMemo((): EditorMode => {
-    // If the user explicitly changed mode for the current tab, honour it.
-    if (modeOverride && modeOverride.path === currentPath) {
-      return normalizeEditorMode(modeOverride.mode, isMarkdownFile);
+    const override = currentPath ? modeOverrides[currentPath] : undefined;
+    if (override !== undefined) {
+      return normalizeEditorMode(override, isMarkdownFile);
+    }
+    if (pendingModeOverride && pendingModeOverride.path === currentPath) {
+      return normalizeEditorMode(pendingModeOverride.mode, isMarkdownFile);
     }
     return normalizeEditorMode("rich", isMarkdownFile);
-  }, [modeOverride, currentPath, isMarkdownFile]);
+  }, [modeOverrides, pendingModeOverride, currentPath, isMarkdownFile]);
 
   // Sync the computed mode into the CM6 view.
   useEffect(() => {
@@ -270,11 +280,48 @@ export function useAppEditorShell({
 
   const handleModeChange = useCallback((mode: EditorMode) => {
     const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
-    setModeOverride({ path: currentPath, mode: normalizedMode });
+    if (currentPath) {
+      setModeOverrides((previous) => ({
+        ...previous,
+        [currentPath]: normalizedMode,
+      }));
+    }
+    setPendingModeOverride((previous) =>
+      previous?.path === currentPath ? null : previous,
+    );
     const view = editorState?.view;
     if (!view) return;
     setEditorMode(view, normalizedMode);
   }, [currentPath, editorState?.view, isMarkdownFile]);
+
+  const handleSearchResult = useCallback((
+    target: SearchNavigationTarget,
+    onComplete?: () => void,
+  ) => {
+    const targetIsMarkdown = target.file.endsWith(".md");
+    const normalizedMode = normalizeEditorMode(target.editorMode, targetIsMarkdown);
+    const requestId = ++pendingModeRequestIdRef.current;
+    setPendingModeOverride({
+      path: target.file,
+      mode: normalizedMode,
+      requestId,
+    });
+    void handleSearchResultNavigation(target.file, target.pos, onComplete).then((opened) => {
+      setPendingModeOverride((previous) => {
+        if (!previous || previous.requestId !== requestId) {
+          return previous;
+        }
+        return null;
+      });
+      if (!opened) {
+        return;
+      }
+      setModeOverrides((previous) => ({
+        ...previous,
+        [target.file]: normalizedMode,
+      }));
+    });
+  }, [handleSearchResultNavigation]);
 
   const docTextForStats = currentPath ? (liveDocs.current.get(currentPath) ?? "") : "";
 

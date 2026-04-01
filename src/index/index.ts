@@ -21,11 +21,13 @@ export {
 // Background indexer query API (T15)
 export {
   queryIndex,
+  querySourceText,
   resolveLabel,
   findReferences,
   type IndexQuery,
   type IndexEntry,
   type IndexReference,
+  type SourceTextQuery,
   type FileIndex,
   type DocumentIndex,
   type ResolvedReference,

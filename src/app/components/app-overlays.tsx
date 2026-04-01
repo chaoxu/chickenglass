@@ -12,6 +12,7 @@ import { useEditorTelemetry } from "../stores/editor-telemetry-store";
 import type { AppOverlayController } from "../hooks/use-app-overlays";
 import type { AppWorkspaceSessionController } from "../hooks/use-app-workspace-session";
 import type { UseUnsavedChangesDialogReturn } from "../hooks/use-unsaved-changes-dialog";
+import { getAppSearchMode } from "../search";
 
 interface AppOverlaysProps {
   workspace: Pick<
@@ -20,7 +21,7 @@ interface AppOverlaysProps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "handleSearchResult" | "pluginManager" | "handleGotoLine"
+    "handleSearchResult" | "pluginManager" | "handleGotoLine" | "editorMode"
   >;
   dialogs: UseDialogsReturn;
   overlays: AppOverlayController;
@@ -46,9 +47,15 @@ export function AppOverlays({
       <SearchPanel
         open={dialogs.searchOpen}
         onOpenChange={dialogs.setSearchOpen}
-        onResultSelect={(file, pos) => {
-          editor.handleSearchResult(file, pos, () => dialogs.setSearchOpen(false));
+        onResultSelect={(entry) => {
+          editor.handleSearchResult({
+            file: entry.file,
+            pos: entry.position.from,
+            editorMode: editor.editorMode,
+          }, () => dialogs.setSearchOpen(false));
         }}
+        searchMode={getAppSearchMode(editor.editorMode)}
+        searchVersion={overlays.searchVersion}
         indexer={overlays.indexer}
       />
       <SettingsDialog
