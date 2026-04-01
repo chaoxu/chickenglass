@@ -26,6 +26,8 @@ import {
 } from "../../editor";
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
 import { setIncludeRegionsEffect } from "../../lib/include-regions";
+import { bibDataEffect, bibDataField } from "../../citations/citation-render";
+import { CslProcessor } from "../../citations/csl-processor";
 import type { ProjectConfig } from "../project-config";
 import type { FileSystem } from "../file-manager";
 import { computeLiveStats } from "../writing-stats";
@@ -286,6 +288,15 @@ export function useEditor(
 
     resetServicesRef.current();
 
+    // Replace only the CSL processor with an empty one so the stale engine
+    // from the previous document can't throw during the brief window before
+    // the async bibliography reload completes.  The store is kept so that
+    // store.has(id) still routes citations correctly (#770).
+    const clearBib = bibDataEffect.of({
+      store: view.state.field(bibDataField).store,
+      cslProcessor: CslProcessor.empty(),
+    });
+
     if (docChangedExternally) {
       view.dispatch({
         changes: {
@@ -294,11 +305,11 @@ export function useEditor(
           insert: doc,
         },
         selection: { anchor: 0 },
-        effects: setIncludeRegionsEffect.of([]),
+        effects: [setIncludeRegionsEffect.of([]), clearBib],
         annotations: programmaticDocumentChangeAnnotation.of(true),
       });
     } else if (pathChanged) {
-      view.dispatch({ selection: { anchor: 0 } });
+      view.dispatch({ selection: { anchor: 0 }, effects: clearBib });
     }
 
     applyDocumentReady(view, doc, docPath);

@@ -754,6 +754,36 @@ describe("collectReferenceRanges", () => {
       registerSpy.mockRestore();
     });
   });
+
+  it("keeps citation routing when only the processor is cleared (#770)", () => {
+    const doc = "See [@karger2000].";
+    view = createView(doc, doc.length);
+
+    // Initially the citation renders as a CitationWidget.
+    const before = collectReferenceRanges(view, store);
+    const citBefore = before.find(
+      (r) => view.state.sliceDoc(r.from, r.to) === "[@karger2000]",
+    );
+    expect(widgetClass(citBefore!)).toBe("CitationWidget");
+
+    // Simulate file-switch: keep the old store for routing, only replace
+    // the processor with an empty one so the stale engine can't throw.
+    view.dispatch({
+      effects: bibDataEffect.of({
+        store,
+        cslProcessor: CslProcessor.empty(),
+      }),
+    });
+
+    // Citations should still route as CitationWidget (store.has() works)
+    // with blank rendered text (empty processor returns "").
+    const after = collectReferenceRanges(view, store);
+    const citAfter = after.find(
+      (r) => view.state.sliceDoc(r.from, r.to) === "[@karger2000]",
+    );
+    expect(citAfter).toBeDefined();
+    expect(widgetClass(citAfter!)).toBe("CitationWidget");
+  });
 });
 
 describe("planReferenceRendering", () => {
