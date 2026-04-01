@@ -7,7 +7,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { parser as lezerParser } from "@lezer/markdown";
-import { MathWidget, collectMathRanges, stripMathDelimiters, getDisplayMathContentEnd, _mathDecorationFieldForTest as mathDecorationField, mathRenderPlugin, clearKatexCache, renderKatex, renderKatexToHtml } from "./math-render";
+import { MathWidget, collectMathRanges, stripMathDelimiters, getDisplayMathContentEnd, _mathDecorationFieldForTest as mathDecorationField, mathRenderPlugin, clearKatexCache, renderKatex, renderKatexToHtml, _snapToTokenBoundary } from "./math-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
 import { createMockEditorView, createTestView } from "../test-utils";
@@ -940,5 +940,34 @@ describe("display math with equation labels", () => {
     const ranges = collectMathRanges(view);
     const el = getFirstWidget(ranges).toDOM();
     expect(el.querySelector(".katex-display")).not.toBeNull();
+  });
+});
+
+describe("_snapToTokenBoundary", () => {
+  it("snaps to the start of a backslash command", () => {
+    // latex: \alpha + \beta, contentFrom: 10
+    // offset 0: \alpha (0-5), offset 7: +, offset 9: \beta (9-13)
+    const latex = "\\alpha + \\beta";
+    expect(_snapToTokenBoundary(latex, 10, 12)).toBe(10); // mid-\alpha → snap to \alpha
+    expect(_snapToTokenBoundary(latex, 10, 15)).toBe(16); // offset 5 is end of \alpha, nearest is ' ' at 6 → 16
+  });
+
+  it("snaps to single-char tokens", () => {
+    const latex = "x+y";
+    expect(_snapToTokenBoundary(latex, 0, 0)).toBe(0); // x
+    expect(_snapToTokenBoundary(latex, 0, 1)).toBe(1); // +
+    expect(_snapToTokenBoundary(latex, 0, 2)).toBe(2); // y
+  });
+
+  it("handles backslash-symbol commands like \\,", () => {
+    const latex = "a\\,b";
+    // tokens: a(0), \,(1-2), b(3)
+    expect(_snapToTokenBoundary(latex, 0, 1)).toBe(1); // \,
+    expect(_snapToTokenBoundary(latex, 0, 2)).toBe(1); // mid \, → snap to \,
+  });
+
+  it("snaps to end of expression", () => {
+    const latex = "xy";
+    expect(_snapToTokenBoundary(latex, 100, 102)).toBe(102); // end
   });
 });

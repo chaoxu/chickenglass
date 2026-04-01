@@ -13,19 +13,23 @@ import {
   ViewPlugin,
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
-import { findActiveMath, renderKatex, snapToTokenBoundary, findLocAtPoint } from "./math-render";
+import { findActiveMath, renderKatex, resolveClickToSourcePos } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { documentAnalysisField } from "../semantics/codemirror-source";
+
+interface MathRegionSnapshot {
+  latex: string;
+  contentFrom: number;
+  from: number;
+  to: number;
+}
 
 class MathPreviewPlugin implements PluginValue {
   private panel: HTMLElement | null = null;
   private contentEl: HTMLElement | null = null;
   private cleanupListeners: (() => void) | null = null;
   private lastRaw = "";
-  private lastLatex = "";
-  private lastContentFrom = 0;
-  private lastFrom = 0;
-  private lastTo = 0;
+  private lastRegion: MathRegionSnapshot | null = null;
   private isDragging = false;
   private dragOffsetX = 0;
   private dragOffsetY = 0;
@@ -77,10 +81,12 @@ class MathPreviewPlugin implements PluginValue {
 
     if (raw !== this.lastRaw) {
       this.lastRaw = raw;
-      this.lastLatex = info.latex;
-      this.lastContentFrom = info.contentFrom;
-      this.lastFrom = info.from;
-      this.lastTo = info.to;
+      this.lastRegion = {
+        latex: info.latex,
+        contentFrom: info.contentFrom,
+        from: info.from,
+        to: info.to,
+      };
       this.renderLatex(info.latex, info.isDisplay);
     }
 
@@ -130,36 +136,20 @@ class MathPreviewPlugin implements PluginValue {
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
 
-    // Content area — clicking rendered math navigates to the source position
+    // Clicking rendered math in the preview navigates to the source position
     const content = document.createElement("div");
     content.className = "cf-math-preview-content";
     content.style.cursor = "pointer";
     content.addEventListener("mousedown", (e) => {
-      e.stopPropagation(); // don't start a panel drag
+      e.stopPropagation();
       e.preventDefault();
+      const r = this.lastRegion;
+      if (!r) return;
 
-      let pos: number | undefined;
-      const locStart = findLocAtPoint(content, e.clientX, e.clientY);
-      if (locStart !== undefined) {
-        pos = Math.max(this.lastFrom, Math.min(this.lastTo, this.lastContentFrom + locStart));
-      }
-
-      if (pos === undefined) {
-        // Proportional fallback with token snapping
-        const contentLen = this.lastTo - this.lastContentFrom;
-        if (contentLen > 0) {
-          const rect = content.getBoundingClientRect();
-          const fraction = rect.width > 0
-            ? Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-            : 0;
-          const raw = Math.round(this.lastContentFrom + fraction * contentLen);
-          pos = snapToTokenBoundary(this.lastLatex, this.lastContentFrom, raw);
-          pos = Math.max(this.lastFrom, Math.min(this.lastTo, pos));
-        } else {
-          pos = this.lastFrom;
-        }
-      }
-
+      const contentOffset = r.contentFrom - r.from;
+      const pos = resolveClickToSourcePos(
+        content, e, r.latex, r.from, r.to, contentOffset,
+      );
       this.view.focus();
       this.view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
     });
@@ -192,6 +182,7 @@ class MathPreviewPlugin implements PluginValue {
     this.panel = null;
     this.contentEl = null;
     this.lastRaw = "";
+    this.lastRegion = null;
     this.measureFromPos = -1;
     this.measureToPos = -1;
   }

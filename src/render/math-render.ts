@@ -121,12 +121,12 @@ export function renderKatex(
  * Find the best `data-loc-start` value for a click at (clientX, clientY)
  * inside a rendered math container.
  *
- * Strategy: collect all elements with `data-loc-start`, then pick the
- * **smallest** one (by area) whose bounding box contains the click point.
- * If none contains the point, pick the one whose center is nearest.
- * This avoids the problems of `closest()` walking up to merged parents.
+ * Picks the smallest element (by area) whose bounding box contains the
+ * click point.  Returns undefined if nothing contains it, letting the
+ * caller use a proportional fallback instead of snapping to a distant
+ * loc'd element (e.g. clicking `(x+y)` in `(x+y)^n`).
  */
-export function findLocAtPoint(
+function findLocAtPoint(
   root: HTMLElement,
   clientX: number,
   clientY: number,
@@ -134,7 +134,6 @@ export function findLocAtPoint(
   const candidates = root.querySelectorAll<HTMLElement>("[data-loc-start]");
   if (candidates.length === 0) return undefined;
 
-  // First pass: find the smallest element that contains the click point
   let bestContaining: HTMLElement | null = null;
   let bestArea = Infinity;
   for (const el of candidates) {
@@ -160,72 +159,88 @@ export function findLocAtPoint(
     if (Number.isFinite(v)) return v;
   }
 
-  // Second pass: no element contains the point — pick nearest by center distance
-  let bestDist = Infinity;
-  let bestLoc: number | undefined;
-  for (const el of candidates) {
-    const rect = el.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) continue;
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const dist = (clientX - cx) ** 2 + (clientY - cy) ** 2;
-    if (dist < bestDist) {
-      const v = Number.parseInt(el.dataset.locStart ?? "", 10);
-      if (Number.isFinite(v)) {
-        bestDist = dist;
-        bestLoc = v;
-      }
-    }
-  }
-  return bestLoc;
+  // No data-loc element contains the click — let the caller's
+  // proportional fallback handle it rather than snapping to a
+  // distant loc'd element (e.g. clicking (x+y) in (x+y)^n).
+  return undefined;
 }
 
 /**
- * Given an estimated absolute document position inside a LaTeX string,
- * snap to the nearest token boundary.  LaTeX tokens are:
- *   - backslash commands: `\alpha`, `\frac`, `\,`
- *   - braces: `{`, `}`
- *   - single characters: `x`, `+`, `2`, ` `
+ * Snap an absolute document position to the nearest LaTeX token boundary
+ * so the cursor doesn't land mid-command (e.g. inside `\alpha`).
  *
- * Returns the absolute position of the nearest token start.
+ * Exported for the math-preview panel which shares the same fallback path.
+ * @internal
  */
-export function snapToTokenBoundary(
+export function _snapToTokenBoundary(
   latex: string,
   contentFrom: number,
   absPos: number,
 ): number {
   const rel = absPos - contentFrom;
-  // Collect token start offsets
   const starts: number[] = [];
   let i = 0;
   while (i < latex.length) {
     starts.push(i);
     if (latex[i] === "\\") {
-      // Backslash command: \cmd or \<single char>
       i++;
       if (i < latex.length && /[a-zA-Z]/.test(latex[i])) {
         while (i < latex.length && /[a-zA-Z]/.test(latex[i])) i++;
       } else if (i < latex.length) {
-        i++; // \, \; \{ etc.
+        i++;
       }
     } else {
       i++;
     }
   }
-  // Also allow snapping to the end
   starts.push(latex.length);
 
-  // Find the closest token boundary
   let best = starts[0];
   let bestDist = Math.abs(rel - best);
-  for (const s of starts) {
-    const d = Math.abs(rel - s);
+  for (let j = 1; j < starts.length; j++) {
+    const d = Math.abs(rel - starts[j]);
     if (d < bestDist) {
-      best = s;
+      best = starts[j];
       bestDist = d;
-    }
+    } else break;
   }
   return contentFrom + best;
+}
+
+/**
+ * Resolve a click on rendered math to an absolute document position.
+ *
+ * First tries `findLocAtPoint` (KaTeX's source-location attributes).
+ * Falls back to a proportional X-offset estimate snapped to the nearest
+ * LaTeX token boundary.
+ */
+export function resolveClickToSourcePos(
+  el: HTMLElement,
+  e: MouseEvent,
+  latex: string,
+  sourceFrom: number,
+  sourceTo: number,
+  contentOffset: number,
+): number {
+  const contentFrom = sourceFrom + contentOffset;
+
+  const locStart = findLocAtPoint(el, e.clientX, e.clientY);
+  if (locStart !== undefined) {
+    return Math.max(sourceFrom, Math.min(sourceTo, contentFrom + locStart));
+  }
+
+  // Proportional fallback with token-boundary snapping
+  const contentLen = sourceTo - contentFrom;
+  if (contentLen > 0) {
+    const rect = el.getBoundingClientRect();
+    const fraction = rect.width > 0
+      ? Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+      : 0;
+    const raw = Math.round(contentFrom + fraction * contentLen);
+    const snapped = _snapToTokenBoundary(latex, contentFrom, raw);
+    return Math.max(sourceFrom, Math.min(sourceTo, snapped));
+  }
+  return sourceFrom;
 }
 
 /** Unified widget that renders both inline and display math via KaTeX. */
@@ -249,32 +264,9 @@ export class MathWidget extends MacroAwareWidget {
       e.preventDefault();
       view.focus();
 
-      let pos: number | undefined;
-      const locStart = findLocAtPoint(el, e.clientX, e.clientY);
-      if (locStart !== undefined) {
-        const contentFrom = this.sourceFrom + this.contentOffset;
-        pos = Math.max(this.sourceFrom, Math.min(this.sourceTo, contentFrom + locStart));
-      }
-
-      if (pos === undefined) {
-        // Fallback: estimate position proportionally from click X offset,
-        // then snap to the nearest LaTeX token boundary so we don't land
-        // in the middle of e.g. `\alpha`.
-        const contentFrom = this.sourceFrom + this.contentOffset;
-        const contentLen = this.sourceTo - contentFrom;
-        if (contentLen > 0) {
-          const rect = el.getBoundingClientRect();
-          const fraction = rect.width > 0
-            ? Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-            : 0;
-          const raw = Math.round(contentFrom + fraction * contentLen);
-          pos = snapToTokenBoundary(this.latex, contentFrom, raw);
-          pos = Math.max(this.sourceFrom, Math.min(this.sourceTo, pos));
-        } else {
-          pos = this.sourceFrom;
-        }
-      }
-
+      const pos = resolveClickToSourcePos(
+        el, e, this.latex, this.sourceFrom, this.sourceTo, this.contentOffset,
+      );
       view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
     });
   }
