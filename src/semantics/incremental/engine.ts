@@ -27,6 +27,7 @@ import {
 import { deriveIncludeSlice } from "./slices/include-slice";
 import {
   buildMathSlice,
+  computeMathOverhangRanges,
   mergeMathSlice,
   type MathSlice,
 } from "./slices/math-slice";
@@ -479,10 +480,28 @@ export function updateDocumentAnalysis(
     doc,
     tree,
   );
+  // When a large mapped math region (e.g. BigUnclosed $$…EOF) overlaps a dirty
+  // window and is removed, its tail may contain equations that are not covered
+  // by any dirty window.  mergeMathSlice handles math-region re-extraction
+  // internally; here we extend the same overhang coverage to the equation slice.
+  const mathOverhangRanges = computeMathOverhangRanges(
+    previousState.mathSlice,
+    delta,
+    dirtyExtractions.map(e => e.window),
+  );
+  const equationDirtyExtractions = mathOverhangRanges.length === 0
+    ? dirtyExtractions
+    : [
+      ...dirtyExtractions,
+      ...mathOverhangRanges.map(range => ({
+        window: { fromNew: range.from, toNew: range.to },
+        structural: extractStructuralWindow(doc, tree, range),
+      })),
+    ];
   const equationSlice = mergeEquationSlice(
     previousState.equationSlice,
     delta,
-    dirtyExtractions,
+    equationDirtyExtractions,
   );
   const excludedRanges = mergeExcludedRanges(
     previousState.excludedRanges,

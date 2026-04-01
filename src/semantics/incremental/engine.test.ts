@@ -401,4 +401,56 @@ describe("incremental document analysis engine", () => {
     }
     expect(after.mathRegions.length).toBe(rebuilt.mathRegions.length);
   });
+
+  it("re-extracts equations in the math overhang after inserting a closing $$ (#778)", () => {
+    // Reviewer repro: the multi-line $$ pairs with the $$ at line start of
+    // "$$a$$", so eq:first is hidden (the "a$$ {#eq:first}" is leftover text).
+    // Inserting "$$\n\n" before "$$a$$" makes the multi-line $$ close properly,
+    // revealing $$a$$ as a separate equation block.  The mapped math region
+    // extends past the dirty window (overhang), and the equation slice must
+    // re-extract the overhang to discover eq:first.
+    const doc = [
+      "Intro.",
+      "",
+      "$$",
+      "broken",
+      "",
+      "$$a$$ {#eq:first}",
+      "",
+      "$$b$$ {#eq:second}",
+    ].join("\n");
+    const state = createState(doc);
+    const before = analyze(state);
+
+    // Before: only eq:second is visible (eq:first is hidden by the $$-pairing).
+    expect(before.equations.length).toBe(1);
+    expect(before.equations[0].id).toBe("eq:second");
+
+    // Insert "$$\n\n" right before "$$a$$" to close the multi-line block.
+    const insertPos = doc.indexOf("$$a$$");
+    const tr = state.update({
+      changes: { from: insertPos, insert: "$$\n\n" },
+    });
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      fullTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+
+    const rebuilt = analyze(tr.state);
+
+    // Math regions must match a fresh rebuild.
+    expect(after.mathRegions.length).toBe(rebuilt.mathRegions.length);
+    for (let i = 0; i < rebuilt.mathRegions.length; i++) {
+      expect(after.mathRegions[i]).toEqual(rebuilt.mathRegions[i]);
+    }
+
+    // Equations must also match — both eq:first and eq:second should be
+    // present with correct numbering.
+    expect(after.equations.length).toBe(rebuilt.equations.length);
+    for (let i = 0; i < rebuilt.equations.length; i++) {
+      expect(after.equations[i]).toEqual(rebuilt.equations[i]);
+    }
+  });
 });

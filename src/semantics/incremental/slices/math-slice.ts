@@ -102,6 +102,31 @@ function findOverhangTo(
   return maxTo;
 }
 
+/**
+ * Detect overhang ranges where mapped math regions extend past dirty windows.
+ *
+ * When a large mapped region (e.g. BigUnclosed $$…EOF) overlaps a dirty window
+ * and is removed by replaceOverlappingRanges, its tail beyond the window is
+ * lost.  mergeMathSlice handles re-extraction for mathRegions internally, but
+ * other slices (equations) need the overhang ranges so the engine can add extra
+ * dirty extractions for them.
+ */
+export function computeMathOverhangRanges(
+  previous: MathSlice,
+  delta: Pick<SemanticDelta, "mapOldToNew">,
+  dirtyWindows: readonly Pick<DirtyWindow, "fromNew" | "toNew">[],
+): readonly { readonly from: number; readonly to: number }[] {
+  const mapped = mapMathRegions(previous.mathRegions, deltaMapper(delta));
+  const overhangs: { from: number; to: number }[] = [];
+  for (const window of dirtyWindows) {
+    const overhangTo = findOverhangTo(mapped, window);
+    if (overhangTo > window.toNew) {
+      overhangs.push({ from: window.toNew, to: overhangTo });
+    }
+  }
+  return overhangs;
+}
+
 export function mergeMathSlice(
   previous: MathSlice,
   delta: Pick<SemanticDelta, "mapOldToNew">,
