@@ -207,19 +207,29 @@ export const openingFenceDeletionCleanup = EditorState.transactionFilter.of((tr)
       // Partial deletion that removes the structural prefix (colons/backticks).
       // If the prefix is gone the line no longer parses as a fence, so the
       // closing delimiter must be cleaned up (#766).
+      // Key off the actual prefix position, not the line start — fenced
+      // blocks can be indented inside list items so openFenceFrom may be
+      // past openLine.from, and code blocks set openFenceFrom to the line
+      // start so the text may contain leading whitespace.
       let prefixBroken = false;
-      if (!fullLineDeletion && fromA <= openLine.from) {
-        const text = state.sliceDoc(block.openFenceFrom, block.openFenceTo);
+      if (!fullLineDeletion) {
+        const rawText = state.sliceDoc(block.openFenceFrom, block.openFenceTo);
+        // Skip leading whitespace — code blocks include indentation in
+        // openFenceFrom..openFenceTo; fenced divs report openFenceFrom at
+        // the first colon so indent is 0 for them.
+        const indent = rawText.length - rawText.trimStart().length;
+        const prefixStart = block.openFenceFrom + indent;
+        const text = indent > 0 ? rawText.substring(indent) : rawText;
         const firstChar = text.charAt(0);
         let prefixEnd = -1;
         if (firstChar === ":") {
           const colonLen = countColons(text, 0);
-          if (colonLen >= 3) prefixEnd = block.openFenceFrom + colonLen;
+          if (colonLen >= 3) prefixEnd = prefixStart + colonLen;
         } else if (firstChar === "`") {
           const match = /^`{3,}/.exec(text);
-          if (match) prefixEnd = block.openFenceFrom + match[0].length;
+          if (match) prefixEnd = prefixStart + match[0].length;
         }
-        if (prefixEnd > 0 && toA >= prefixEnd) {
+        if (prefixEnd > 0 && fromA <= prefixStart && toA >= prefixEnd) {
           prefixBroken = true;
         }
       }

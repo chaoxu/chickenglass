@@ -252,6 +252,35 @@ describe("openingFenceDeletionCleanup", () => {
     expect(result).toContain("after");
     expect(result).not.toContain(":::");
   });
+
+  it("auto-removes closing fence for indented fenced div when prefix is deleted (#766)", () => {
+    // Indented fenced div (e.g. inside a list item) — openFenceFrom points
+    // to the first colon, which is past the line start.
+    const indented = `- text\n\n  ::: {.theorem} Title\n  content\n  :::`;
+    const state = createProtectedState(indented);
+    // Find the opening fence line
+    const openLine = state.doc.line(3); // "  ::: {.theorem} Title"
+    const colonStart = openLine.from + 2; // skip two spaces of indentation
+    // Delete from first colon past the prefix: `::: {.the` = 10 chars
+    const tr = state.update({
+      changes: { from: colonStart, to: colonStart + 10, insert: "" },
+    });
+    const result = tr.state.doc.toString();
+    // Closing fence should be removed since the colon prefix is gone
+    expect(result).not.toContain(":::");
+  });
+
+  it("auto-removes closing fence for indented fenced div on full-line deletion (#766)", () => {
+    const indented = `- text\n\n  ::: {.theorem} Title\n  content\n  :::`;
+    const state = createProtectedState(indented);
+    const openLine = state.doc.line(3);
+    // Delete the entire opening fence line (including newline)
+    const tr = state.update({
+      changes: { from: openLine.from, to: openLine.to + 1, insert: "" },
+    });
+    const result = tr.state.doc.toString();
+    expect(result).not.toContain(":::");
+  });
 });
 
 // ---------------------------------------------------------------------------
