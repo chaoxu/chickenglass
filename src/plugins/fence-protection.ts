@@ -1,6 +1,7 @@
 /**
  * Transaction filters and atomic ranges that protect fenced block fence syntax
- * (both fenced divs and fenced code blocks) from accidental edits in rich mode.
+ * (fenced divs, fenced code blocks, and display math) from accidental edits
+ * in rich mode.
  *
  * Extracted from plugin-render.ts so that fence protection is a standalone
  * module with clear boundaries. The blockRenderPlugin wires this extension
@@ -8,17 +9,21 @@
  *
  * Unified in #441 to cover both `::: {.class} ... :::` fenced divs and
  * ``` ``` ... ``` ``` fenced code blocks with a single protection stack.
+ * Extended in #777 to cover `$$ ... $$` and `\[ ... \]` display math.
  *
  * Provides:
  * - `fenceOperationAnnotation` — bypass annotation for programmatic edits
  * - `getProtectedDivs` — collect fenced divs eligible for protection
- * - `getClosingFenceRanges` — closing fence line ranges (divs + code blocks)
+ * - `getClosingFenceRanges` — closing fence line ranges (divs + code blocks + math)
  * - `getOpeningFenceColonRanges` — opening fence colon-prefix ranges (divs only)
  * - `getOpeningFenceBacktickRanges` — opening fence backtick-prefix ranges (code blocks only)
+ * - `getOpeningMathDelimiterRanges` — opening math delimiter ranges (display math only)
  * - `openingFenceDeletionCleanup` — auto-remove closing fence on opening delete
  * - `closingFenceProtection` — block edits targeting only the closing fence
  * - `openingFenceColonProtection` — block edits targeting opening fence colons
  * - `openingFenceBacktickProtection` — block edits targeting opening fence backticks
+ * - `openingFenceMathProtection` — block edits targeting opening math delimiters
+ * - `pairedMathEntry` — auto-insert closing delimiter when typing $$ or \[
  * - `closingFenceAtomicRanges` — cursor skips over hidden closing fences
  * - `fenceProtectionExtension` — combined CM6 extension
  */
@@ -68,15 +73,47 @@ export function collectFencedDivs(state: EditorState): FencedDivInfo[] {
 }
 
 /**
- * Collect all fenced blocks (both fenced divs and code blocks) for
+ * Collect multi-line display math blocks as FencedBlockInfo for protection.
+ * Reads from documentSemanticsField.mathRegions, filtering for isDisplay.
+ * The opening fence is the $$ or \[ line; the closing fence is the $$ or \] line.
+ */
+function collectDisplayMathBlocks(state: EditorState): FencedBlockInfo[] {
+  const semantics = state.field(documentSemanticsField, false);
+  if (!semantics) return [];
+
+  const results: FencedBlockInfo[] = [];
+  for (const region of semantics.mathRegions) {
+    if (!region.isDisplay) continue;
+
+    const openLine = state.doc.lineAt(region.from);
+    // contentTo sits at the start of the closing delimiter mark ($$  or \])
+    const closeLine = state.doc.lineAt(region.contentTo);
+    if (closeLine.from === openLine.from) continue; // single-line display math
+
+    results.push({
+      from: region.from,
+      to: region.to,
+      openFenceFrom: openLine.from,
+      openFenceTo: openLine.to,
+      closeFenceFrom: closeLine.from,
+      closeFenceTo: closeLine.to,
+      singleLine: false,
+    });
+  }
+  return results;
+}
+
+/**
+ * Collect all fenced blocks (fenced divs, code blocks, and display math) for
  * opening-fence deletion cleanup. Uses collectFencedDivs + collectCodeBlocks
- * directly (not getProtectedDivs) because cleanup should apply to ALL
- * fenced blocks, including unregistered/custom types.
+ * + collectDisplayMathBlocks directly (not getProtectedDivs) because cleanup
+ * should apply to ALL fenced blocks, including unregistered/custom types.
  */
 function collectAllFencedBlocks(state: EditorState): FencedBlockInfo[] {
   const divs: FencedBlockInfo[] = collectFencedDivs(state);
   const codeBlocks: FencedBlockInfo[] = collectCodeBlocks(state);
-  return [...divs, ...codeBlocks];
+  const mathBlocks: FencedBlockInfo[] = collectDisplayMathBlocks(state);
+  return [...divs, ...codeBlocks, ...mathBlocks];
 }
 
 // ---------------------------------------------------------------------------
@@ -104,9 +141,10 @@ export function getProtectedDivs(state: EditorState): FencedDivInfo[] {
 }
 
 /**
- * Collect closing fence line ranges for protection from both fenced divs
- * and fenced code blocks. All multi-line code blocks are protected
- * unconditionally (they have no registry/class filtering like divs).
+ * Collect closing fence line ranges for protection from fenced divs,
+ * fenced code blocks, and display math. All multi-line code blocks and
+ * display math blocks are protected unconditionally (they have no
+ * registry/class filtering like divs).
  */
 export function getClosingFenceRanges(state: EditorState): { from: number; to: number }[] {
   const ranges: { from: number; to: number }[] = [];
@@ -125,6 +163,15 @@ export function getClosingFenceRanges(state: EditorState): { from: number; to: n
   // Code block closing fences (all multi-line code blocks)
   for (const block of collectCodeBlocks(state)) {
     if (block.singleLine || block.closeFenceFrom < 0) continue;
+    const line = state.doc.lineAt(block.closeFenceFrom);
+    if (!seen.has(line.from)) {
+      seen.add(line.from);
+      ranges.push({ from: line.from, to: line.to });
+    }
+  }
+
+  // Display math closing fences (all multi-line display math)
+  for (const block of collectDisplayMathBlocks(state)) {
     const line = state.doc.lineAt(block.closeFenceFrom);
     if (!seen.has(line.from)) {
       seen.add(line.from);
@@ -228,6 +275,10 @@ export const openingFenceDeletionCleanup = EditorState.transactionFilter.of((tr)
         } else if (firstChar === "`") {
           const match = /^`{3,}/.exec(text);
           if (match) prefixEnd = prefixStart + match[0].length;
+        } else if (firstChar === "$" && text.startsWith("$$")) {
+          prefixEnd = prefixStart + 2;
+        } else if (firstChar === "\\" && text.startsWith("\\[")) {
+          prefixEnd = prefixStart + 2;
         }
         if (prefixEnd > 0 && fromA <= prefixStart && toA >= prefixEnd) {
           prefixBroken = true;
@@ -391,6 +442,69 @@ export const openingFenceBacktickProtection = EditorState.transactionFilter.of((
   return blocked ? [] : tr;
 });
 
+/** Collect opening math delimiter ranges for protection (display math only). */
+export function getOpeningMathDelimiterRanges(state: EditorState): { from: number; to: number }[] {
+  const ranges: { from: number; to: number }[] = [];
+  const seen = new Set<number>();
+  for (const block of collectDisplayMathBlocks(state)) {
+    if (seen.has(block.openFenceFrom)) continue;
+    seen.add(block.openFenceFrom);
+    const text = state.sliceDoc(block.openFenceFrom, block.openFenceTo);
+    const trimmed = text.trimStart();
+    const indent = text.length - trimmed.length;
+    let delimLen = 0;
+    if (trimmed.startsWith("$$")) delimLen = 2;
+    else if (trimmed.startsWith("\\[")) delimLen = 2;
+    if (delimLen > 0) {
+      ranges.push({
+        from: block.openFenceFrom + indent,
+        to: block.openFenceFrom + indent + delimLen,
+      });
+    }
+  }
+  return ranges;
+}
+
+/**
+ * Transaction filter that protects opening display math delimiter prefixes.
+ *
+ * Mirrors openingFenceColonProtection for fenced divs: edits that target only
+ * the opening $$ or \[ prefix are blocked, while whole-block deletion remains
+ * allowed.
+ */
+export const openingFenceMathProtection = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged) return tr;
+  if (tr.annotation(fenceOperationAnnotation)) return tr;
+  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
+
+  const delimRanges = getOpeningMathDelimiterRanges(tr.startState);
+  if (delimRanges.length === 0) return tr;
+
+  let blocked = false;
+  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    if (blocked) return;
+    for (const delim of delimRanges) {
+      if (fromA <= delim.to && toA >= delim.from) {
+        if (fromA === toA) continue; // pure insertion
+        if (fromA >= delim.to) continue; // editing after delimiter
+        const atOrBeforeStart = fromA <= delim.from;
+        // Unlike colon/backtick protection (which uses strict >), math
+        // delimiters use >= because the delimiter IS the entire opening
+        // line content — there are no attrs/title after it. Covering the
+        // full delimiter is an intentional deletion that the cleanup
+        // filter should handle.
+        const coversFullDelim = toA >= delim.to;
+        if (atOrBeforeStart && coversFullDelim) continue;
+        if (inserted.length > 0 && fromA < delim.from) continue; // structural replacement
+        blocked = true;
+        return;
+      }
+    }
+  });
+
+  return blocked ? [] : tr;
+});
+
 /**
  * Atomic ranges for closing fence lines so the cursor skips over them.
  *
@@ -413,9 +527,72 @@ export const closingFenceAtomicRanges = EditorView.atomicRanges.of((view) => {
 });
 
 /**
+ * Input handler for paired math entry. When the user completes a display math
+ * opening delimiter on a blank line ($$ or \[), auto-insert the closing
+ * delimiter and place the cursor between them.
+ *
+ * Skips auto-insert if the next non-blank line already contains the matching
+ * closing delimiter (bracket-match skip).
+ */
+export const pairedMathEntry = EditorView.inputHandler.of((view, from, to, text) => {
+  if (from !== to) return false; // has selection
+
+  const state = view.state;
+  const line = state.doc.lineAt(from);
+
+  if (text === "$") {
+    // Check if completing $$ on a blank line
+    const before = state.sliceDoc(line.from, from);
+    if (before !== "$") return false;
+    const after = state.sliceDoc(from, line.to).trim();
+    if (after !== "") return false;
+
+    // Bracket-match skip: don't auto-insert if next non-blank line is $$
+    for (let n = line.number + 1; n <= state.doc.lines; n++) {
+      const trimmed = state.doc.line(n).text.trim();
+      if (trimmed === "") continue;
+      if (trimmed === "$$") return false;
+      break;
+    }
+
+    view.dispatch({
+      changes: { from: line.from, to: line.to, insert: "$$\n\n$$" },
+      selection: { anchor: line.from + 3 },
+      annotations: fenceOperationAnnotation.of(true),
+    });
+    return true;
+  }
+
+  if (text === "[") {
+    // Check if completing \[ on a blank line
+    const before = state.sliceDoc(line.from, from);
+    if (before !== "\\") return false;
+    const after = state.sliceDoc(from, line.to).trim();
+    if (after !== "") return false;
+
+    // Bracket-match skip: don't auto-insert if next non-blank line is \]
+    for (let n = line.number + 1; n <= state.doc.lines; n++) {
+      const trimmed = state.doc.line(n).text.trim();
+      if (trimmed === "") continue;
+      if (trimmed === "\\]") return false;
+      break;
+    }
+
+    view.dispatch({
+      changes: { from: line.from, to: line.to, insert: "\\[\n\n\\]" },
+      selection: { anchor: line.from + 3 },
+      annotations: fenceOperationAnnotation.of(true),
+    });
+    return true;
+  }
+
+  return false;
+});
+
+/**
  * Combined CM6 extension for all fence protection behavior.
  *
- * Covers both fenced divs and fenced code blocks (#441).
+ * Covers fenced divs, fenced code blocks (#441), and display math (#777).
  *
  * CM6 runs transactionFilters in reverse registration order, so cleanup
  * (registered first) executes AFTER protections have already passed/blocked.
@@ -425,5 +602,7 @@ export const fenceProtectionExtension: Extension = [
   closingFenceProtection,
   openingFenceColonProtection,
   openingFenceBacktickProtection,
+  openingFenceMathProtection,
+  pairedMathEntry,
   closingFenceAtomicRanges,
 ];

@@ -1,12 +1,14 @@
 /**
  * Unit tests for fence protection transaction filters.
  *
- * Tests the closing fence protection, opening fence colon protection,
- * and opening fence deletion cleanup filters that prevent accidental
- * structural damage to fenced divs and fenced code blocks in rich mode.
+ * Tests the closing fence protection, opening fence colon/backtick/math
+ * protection, and opening fence deletion cleanup filters that prevent
+ * accidental structural damage to fenced divs, fenced code blocks, and
+ * display math in rich mode.
  *
  * Moved from plugin-render.test.ts during fence-protection extraction (#433).
  * Unified to cover both fenced divs and code blocks (#441).
+ * Extended to cover display math (#777).
  */
 
 import { describe, expect, it } from "vitest";
@@ -18,6 +20,7 @@ import {
   closingFenceProtection,
   openingFenceColonProtection,
   openingFenceBacktickProtection,
+  openingFenceMathProtection,
 } from "./fence-protection";
 import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
@@ -442,5 +445,192 @@ describe("openingFenceDeletionCleanup (code blocks)", () => {
     expect(result).toContain("console.log('x')");
     expect(result).toContain("after");
     expect(result).not.toContain("```");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Display math protection (#777) — $$ and \[ delimiters
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a minimal EditorState for display math protection tests.
+ * Needs the markdown parser with math extension and the semantics field
+ * for math region extraction, plus the relevant protection filters.
+ */
+function createMathProtectedState(doc: string) {
+  return createEditorState(doc, {
+    extensions: [
+      markdown({ extensions: markdownExtensions }),
+      frontmatterField,
+      documentSemanticsField,
+      mathMacrosField,
+      openingFenceDeletionCleanup,
+      closingFenceProtection,
+      openingFenceMathProtection,
+    ],
+  });
+}
+
+describe("openingFenceMathProtection ($$)", () => {
+  const doc = "$$\nx^2\n$$";
+
+  it("blocks partial deletion of opening $$ (single $)", () => {
+    const state = createMathProtectedState(doc);
+    const tr = state.update({ changes: { from: 0, to: 1, insert: "" } });
+    expect(tr.state.doc.toString()).toBe(doc);
+  });
+
+  it("allows full delimiter deletion (cleanup removes closing too)", () => {
+    // Unlike colons/backticks (which always have attrs after the prefix),
+    // math delimiters ARE the entire line content. Deleting both $$ is
+    // intentional and triggers cleanup of the closing $$.
+    const state = createMathProtectedState(doc);
+    const tr = state.update({ changes: { from: 0, to: 2, insert: "" } });
+    expect(tr.state.doc.toString()).not.toContain("$$");
+  });
+
+  it("allows whole-block deletion spanning beyond fence", () => {
+    const state = createMathProtectedState(doc);
+    const tr = state.update({ changes: { from: 0, to: doc.length, insert: "" } });
+    expect(tr.state.doc.toString()).toBe("");
+  });
+
+  it("allows edits with fenceOperationAnnotation bypass", () => {
+    const state = createMathProtectedState(doc);
+    const tr = state.update({
+      changes: { from: 0, to: 2, insert: "\\[" },
+      annotations: fenceOperationAnnotation.of(true),
+    });
+    expect(tr.state.doc.toString()).toBe("\\[\nx^2\n$$");
+  });
+
+  it("allows pure insertion at position 0 when block starts there", () => {
+    const state = createMathProtectedState(doc);
+    const tr = state.update({
+      changes: { from: 0, to: 0, insert: "text\n" },
+    });
+    expect(tr.state.doc.toString()).toBe(`text\n${doc}`);
+  });
+});
+
+describe("openingFenceMathProtection (\\[)", () => {
+  const doc = "\\[\nx^2\n\\]";
+
+  it("blocks partial deletion of opening \\[ (single char)", () => {
+    const state = createMathProtectedState(doc);
+    const tr = state.update({ changes: { from: 0, to: 1, insert: "" } });
+    expect(tr.state.doc.toString()).toBe(doc);
+  });
+
+  it("allows full delimiter deletion (cleanup removes closing too)", () => {
+    const state = createMathProtectedState(doc);
+    const tr = state.update({ changes: { from: 0, to: 2, insert: "" } });
+    expect(tr.state.doc.toString()).not.toContain("\\]");
+  });
+
+  it("allows whole-block deletion", () => {
+    const state = createMathProtectedState(doc);
+    const tr = state.update({ changes: { from: 0, to: doc.length, insert: "" } });
+    expect(tr.state.doc.toString()).toBe("");
+  });
+});
+
+describe("closingFenceProtection (display math $$)", () => {
+  const doc = "$$\nx^2\n$$";
+
+  it("blocks deletion of closing $$ line", () => {
+    const state = createMathProtectedState(doc);
+    const closingLine = state.doc.line(3);
+    const tr = state.update({
+      changes: { from: closingLine.from, to: closingLine.to, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe(doc);
+  });
+
+  it("allows whole-block deletion spanning beyond fence", () => {
+    const state = createMathProtectedState(doc);
+    const tr = state.update({
+      changes: { from: 0, to: doc.length, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe("");
+  });
+
+  it("allows deletion from content through end of doc (boundary edge case)", () => {
+    const state = createMathProtectedState(doc);
+    const contentLine = state.doc.line(2);
+    const tr = state.update({
+      changes: { from: contentLine.from, to: doc.length, insert: "" },
+    });
+    expect(tr.state.doc.toString()).not.toBe(doc);
+  });
+});
+
+describe("closingFenceProtection (display math \\[)", () => {
+  const doc = "\\[\nx^2\n\\]";
+
+  it("blocks deletion of closing \\] line", () => {
+    const state = createMathProtectedState(doc);
+    const closingLine = state.doc.line(3);
+    const tr = state.update({
+      changes: { from: closingLine.from, to: closingLine.to, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe(doc);
+  });
+
+  it("allows whole-block deletion", () => {
+    const state = createMathProtectedState(doc);
+    const tr = state.update({
+      changes: { from: 0, to: doc.length, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe("");
+  });
+});
+
+describe("openingFenceDeletionCleanup (display math $$)", () => {
+  const doc = "$$\nx^2\n$$";
+
+  it("auto-removes closing $$ when opening $$ line is deleted", () => {
+    const state = createMathProtectedState(doc);
+    const openLine = state.doc.line(1);
+    const tr = state.update({
+      changes: { from: openLine.from, to: openLine.to + 1, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe("x^2");
+  });
+
+  it("auto-removes closing $$ when opening $$ content is deleted", () => {
+    const state = createMathProtectedState(doc);
+    const openLine = state.doc.line(1);
+    const tr = state.update({
+      changes: { from: openLine.from, to: openLine.to, insert: "" },
+    });
+    expect(tr.state.doc.toString()).not.toContain("$$");
+  });
+
+  it("preserves content between fences when opening is deleted", () => {
+    const withContent = "before\n$$\nx^2 + y^2\n$$\nafter";
+    const state = createMathProtectedState(withContent);
+    const openLine = state.doc.line(2);
+    const tr = state.update({
+      changes: { from: openLine.from, to: openLine.to + 1, insert: "" },
+    });
+    const result = tr.state.doc.toString();
+    expect(result).toContain("before");
+    expect(result).toContain("x^2 + y^2");
+    expect(result).toContain("after");
+    expect(result).not.toContain("$$");
+  });
+});
+
+describe("openingFenceDeletionCleanup (display math \\[)", () => {
+  const doc = "\\[\nx^2\n\\]";
+
+  it("auto-removes closing \\] when opening \\[ line is deleted", () => {
+    const state = createMathProtectedState(doc);
+    const openLine = state.doc.line(1);
+    const tr = state.update({
+      changes: { from: openLine.from, to: openLine.to + 1, insert: "" },
+    });
+    expect(tr.state.doc.toString()).toBe("x^2");
   });
 });
