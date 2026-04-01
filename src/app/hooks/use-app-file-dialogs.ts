@@ -123,8 +123,9 @@ export function useAppFileDialogs({
   const handleQuitRequest = useCallback(async (): Promise<void> => {
     if (!isTauri()) return;
     try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      await getCurrentWindow().close();
+      const { getAllWindows } = await import("@tauri-apps/api/window");
+      const windows = await getAllWindows();
+      await Promise.all(windows.map((w) => w.close()));
     } catch (e: unknown) {
       console.error("[app] quit request failed", e);
     }
