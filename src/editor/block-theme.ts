@@ -46,10 +46,14 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
   /* Per-block-type accent overrides (auto-generated from BLOCK_MANIFEST) */
   ...buildAccentRules(),
 
-  /* Block header: rendered widget label (e.g. "Theorem 1.") */
+  /* Block header: rendered widget label (e.g. "Theorem 1.").
+   * lineHeight: 0 prevents the bold-serif content area from exceeding the
+   * .cm-content strut (lineHeight: var(--cf-line-height)), eliminating the
+   * 1px jitter when toggling between widget and source states (#776). */
   ".cf-block-header-rendered": {
     fontWeight: "var(--cf-block-title-weight)",
     color: "var(--cf-block-title-color)",
+    lineHeight: "0",
   },
   ".cf-block-caption": {
     display: "block",

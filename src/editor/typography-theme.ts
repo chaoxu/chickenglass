@@ -149,6 +149,7 @@ export const typographyThemeStyles = {
     {
       color: "var(--cf-muted)",
       fontFamily: monoFont,
+      lineHeight: "0",
     },
   /* Heading text should use foreground color and inherit serif font */
   ".cf-heading-1 .tok-heading, .cf-heading-2 .tok-heading, .cf-heading-3 .tok-heading, .cf-heading-4 .tok-heading, .cf-heading-5 .tok-heading, .cf-heading-6 .tok-heading":
