@@ -1,11 +1,16 @@
-import type { MathSemantics } from "../../document";
+import type { Tree } from "@lezer/common";
+import type { MathSemantics, TextSource } from "../../document";
 import {
   mapRangeObject,
+  rangesOverlap,
   replaceOverlappingRanges,
   type PositionMapper,
 } from "../merge-utils";
 import type { DirtyWindow, SemanticDelta } from "../types";
-import type { StructuralWindowExtraction } from "../window-extractor";
+import {
+  extractStructuralWindow,
+  type StructuralWindowExtraction,
+} from "../window-extractor";
 
 export interface MathSlice {
   readonly mathRegions: readonly MathSemantics[];
@@ -83,19 +88,89 @@ export function buildMathSlice(
   return createMathSlice(structural.mathRegions);
 }
 
+function findOverhangTo(
+  regions: readonly MathSemantics[],
+  window: Pick<DirtyWindow, "fromNew" | "toNew">,
+): number {
+  let maxTo = window.toNew;
+  for (const region of regions) {
+    if (region.from >= window.toNew) break;
+    if (rangesOverlap(region, { from: window.fromNew, to: window.toNew })) {
+      if (region.to > maxTo) maxTo = region.to;
+    }
+  }
+  return maxTo;
+}
+
+/**
+ * Detect overhang ranges where mapped math regions extend past dirty windows.
+ *
+ * When a large mapped region (e.g. BigUnclosed $$…EOF) overlaps a dirty window
+ * and is removed by replaceOverlappingRanges, its tail beyond the window is
+ * lost.  mergeMathSlice handles re-extraction for mathRegions internally, but
+ * other slices (equations) need the overhang ranges so the engine can add extra
+ * dirty extractions for them.
+ */
+export function computeMathOverhangRanges(
+  previous: MathSlice,
+  delta: Pick<SemanticDelta, "mapOldToNew">,
+  dirtyWindows: readonly Pick<DirtyWindow, "fromNew" | "toNew">[],
+): readonly { readonly from: number; readonly to: number }[] {
+  const mapped = mapMathRegions(previous.mathRegions, deltaMapper(delta));
+  const overhangs: { from: number; to: number }[] = [];
+  for (const window of dirtyWindows) {
+    const overhangTo = findOverhangTo(mapped, window);
+    if (overhangTo > window.toNew) {
+      overhangs.push({ from: window.toNew, to: overhangTo });
+    }
+  }
+  return overhangs;
+}
+
 export function mergeMathSlice(
   previous: MathSlice,
   delta: Pick<SemanticDelta, "mapOldToNew">,
   dirtyExtractions: readonly DirtyMathWindowExtraction[],
+  doc: TextSource,
+  tree: Tree,
 ): MathSlice {
   let mathRegions = mapMathRegions(previous.mathRegions, deltaMapper(delta));
 
   for (const { window, structural } of dirtyExtractions) {
+    const overhangTo = findOverhangTo(mathRegions, window);
+
+    // extractStructuralWindow uses inclusive boundary checks (c.from <=
+    // range.to && c.to >= range.from), so it can return regions that merely
+    // touch the window boundary without strictly overlapping it.
+    // replaceOverlappingRanges uses strict overlap (value.from < window.to &&
+    // window.from < value.to), so boundary-touching regions are NOT removed
+    // from the existing mathRegions array before the replacements are spliced
+    // in, causing duplicates.  Filter both the structural and overhang
+    // replacement lists to only include regions that strictly overlap their
+    // respective replacement windows.
+    const strictStructural = structural.mathRegions.filter(
+      (r) => r.from < window.toNew && r.to > window.fromNew,
+    );
     mathRegions = replaceOverlappingRanges(
       mathRegions,
       { from: window.fromNew, to: window.toNew },
-      structural.mathRegions,
+      strictStructural,
     );
+
+    if (overhangTo > window.toNew) {
+      const overhang = extractStructuralWindow(doc, tree, {
+        from: window.toNew,
+        to: overhangTo,
+      });
+      const overhangRegions = overhang.mathRegions.filter(
+        (r) => r.from < overhangTo && r.to > window.toNew,
+      );
+      mathRegions = replaceOverlappingRanges(
+        mathRegions,
+        { from: window.toNew, to: overhangTo },
+        overhangRegions,
+      );
+    }
   }
 
   if (mathRegions === previous.mathRegions) {
