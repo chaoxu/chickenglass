@@ -141,6 +141,7 @@ export const typographyThemeStyles = {
   /* Reference source — raw [@id] token when cursor is inside */
   ".cf-reference-source": {
     fontFamily: monoFont,
+    fontSize: "0.85em",
   },
 
   /* Header markers (# symbols) shown in muted color when editing. */
