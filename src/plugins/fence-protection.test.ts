@@ -200,6 +200,30 @@ describe("openingFenceDeletionCleanup", () => {
     expect(tr.state.doc.toString()).not.toContain(":::");
   });
 
+  it("auto-removes closing fence when partial deletion breaks the colon prefix (#766)", () => {
+    // Repro from #766: select `:::: {.the` from `:::: {.theorem} Gap Test` and delete
+    const partial = `:::: {.theorem} Gap Test\ncontent\n::::`;
+    const state = createProtectedState(partial);
+    // `:::: {.the` = positions 0-10; colon protection allows this because
+    // the selection spans past the colon prefix (atOrBeforeStart && pastColonEnd)
+    const tr = state.update({
+      changes: { from: 0, to: 10, insert: "" },
+    });
+    const result = tr.state.doc.toString();
+    // Closing fence should be removed since the colon prefix is gone
+    expect(result).not.toContain("::::");
+  });
+
+  it("auto-removes closing fence when deletion covers exactly the colon prefix", () => {
+    const state = createProtectedState(doc);
+    // Delete `:::` + the space = positions 0-4; spans past colon.to (3)
+    const tr = state.update({
+      changes: { from: 0, to: 4, insert: "" },
+    });
+    const result = tr.state.doc.toString();
+    expect(result).not.toContain(":::");
+  });
+
   it("does not remove closing fence for partial opening fence edits", () => {
     const state = createProtectedState(doc);
     // Delete only the attributes, not the whole line
@@ -226,6 +250,35 @@ describe("openingFenceDeletionCleanup", () => {
     expect(result).toContain("before");
     expect(result).toContain("content");
     expect(result).toContain("after");
+    expect(result).not.toContain(":::");
+  });
+
+  it("auto-removes closing fence for indented fenced div when prefix is deleted (#766)", () => {
+    // Indented fenced div (e.g. inside a list item) — openFenceFrom points
+    // to the first colon, which is past the line start.
+    const indented = `- text\n\n  ::: {.theorem} Title\n  content\n  :::`;
+    const state = createProtectedState(indented);
+    // Find the opening fence line
+    const openLine = state.doc.line(3); // "  ::: {.theorem} Title"
+    const colonStart = openLine.from + 2; // skip two spaces of indentation
+    // Delete from first colon past the prefix: `::: {.the` = 10 chars
+    const tr = state.update({
+      changes: { from: colonStart, to: colonStart + 10, insert: "" },
+    });
+    const result = tr.state.doc.toString();
+    // Closing fence should be removed since the colon prefix is gone
+    expect(result).not.toContain(":::");
+  });
+
+  it("auto-removes closing fence for indented fenced div on full-line deletion (#766)", () => {
+    const indented = `- text\n\n  ::: {.theorem} Title\n  content\n  :::`;
+    const state = createProtectedState(indented);
+    const openLine = state.doc.line(3);
+    // Delete the entire opening fence line (including newline)
+    const tr = state.update({
+      changes: { from: openLine.from, to: openLine.to + 1, insert: "" },
+    });
+    const result = tr.state.doc.toString();
     expect(result).not.toContain(":::");
   });
 });
@@ -350,6 +403,17 @@ describe("openingFenceDeletionCleanup (code blocks)", () => {
     });
     // Closing fence should also be removed
     expect(tr.state.doc.toString()).not.toContain("```");
+  });
+
+  it("auto-removes closing fence when partial deletion breaks the backtick prefix (#766)", () => {
+    const state = createCodeBlockProtectedState(doc);
+    // Delete "```j" (positions 0-4); backtick protection allows because
+    // the selection spans past the backtick prefix (atOrBeforeStart && pastBacktickEnd)
+    const tr = state.update({
+      changes: { from: 0, to: 4, insert: "" },
+    });
+    const result = tr.state.doc.toString();
+    expect(result).not.toContain("```");
   });
 
   it("does not remove closing fence for partial opening fence edits", () => {
