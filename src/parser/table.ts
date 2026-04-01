@@ -4,7 +4,7 @@
  * Replaces the built-in @lezer/markdown Table extension. The only difference
  * from the upstream implementation is parseRow(): before treating '|' as a
  * column separator, the scanner first tries to consume recognised inline spans
- * at the current position (escaped char, \(...\), $...$, $$...$$, `...`).
+ * at the current position (escaped char, \(...\), $...$, `...`).
  * Pipes inside those spans are invisible to the column splitter.
  *
  * This is Pandoc's approach (the `chunk` combinator in pipeTableRow): the
@@ -23,6 +23,7 @@ import {
   type MarkdownConfig,
 } from "@lezer/markdown";
 import { tags as t } from "@lezer/highlight";
+import { scanTableInlineSpan } from "../lib/table-inline-span";
 
 /**
  * Parse a table row, returning the cell count.
@@ -70,54 +71,11 @@ function parseRow(
 
   let i = startI;
   while (i < line.length) {
-    const ch = line.charCodeAt(i);
-
-    if (ch === 92 /* '\\' */) {
-      if (i + 1 < line.length) {
-        if (line.charCodeAt(i + 1) === 40 /* '(' */) {
-          const close = line.indexOf("\\)", i + 2);
-          const end = close >= 0 ? close + 2 : line.length;
-          markNonWS(i, end);
-          i = end;
-        } else {
-          markNonWS(i, i + 2);
-          i += 2;
-        }
-      } else {
-        markNonWS(i, i + 1);
-        i++;
-      }
-    } else if (ch === 96 /* '`' */) {
-      let tickCount = 0;
-      while (i + tickCount < line.length && line.charCodeAt(i + tickCount) === 96)
-        tickCount++;
-      let j = i + tickCount;
-      let found = false;
-      while (j < line.length) {
-        if (line.charCodeAt(j) !== 96) {
-          j++;
-          continue;
-        }
-        let closeCount = 0;
-        while (j + closeCount < line.length && line.charCodeAt(j + closeCount) === 96)
-          closeCount++;
-        if (closeCount === tickCount) {
-          j += tickCount;
-          found = true;
-          break;
-        }
-        j += closeCount;
-      }
-      const end = found ? j : i + tickCount;
-      markNonWS(i, end);
-      i = end;
-    } else if (ch === 36 /* '$' */) {
-      let j = i + 1;
-      while (j < line.length && line.charCodeAt(j) !== 36) j++;
-      const end = j < line.length ? j + 1 : line.length;
-      markNonWS(i, end);
-      i = end;
-    } else if (ch === 124 /* '|' */) {
+    const spanEnd = scanTableInlineSpan(line, i);
+    if (spanEnd !== null) {
+      markNonWS(i, spanEnd);
+      i = spanEnd;
+    } else if (line.charCodeAt(i) === 124 /* '|' */) {
       if (!first || cellStart > -1) count++;
       first = false;
       if (elts) {
@@ -126,7 +84,7 @@ function parseRow(
       }
       cellStart = cellEnd = -1;
       i++;
-    } else if (ch !== 32 /* ' ' */ && ch !== 9 /* '\t' */) {
+    } else if (line.charCodeAt(i) !== 32 /* ' ' */ && line.charCodeAt(i) !== 9 /* '\t' */) {
       markNonWS(i, i + 1);
       i++;
     } else {

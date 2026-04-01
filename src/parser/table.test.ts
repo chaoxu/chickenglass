@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { parser } from "@lezer/markdown";
 import { tableExtension } from "./table";
 import { mathExtension } from "./math-backslash";
+import { equationLabelExtension } from "./equation-label";
 
-const mdParser = parser.configure([mathExtension, tableExtension]);
+const mdParser = parser.configure([mathExtension, equationLabelExtension, tableExtension]);
 
 function parseNodes(text: string): Array<{ name: string; from: number; to: number }> {
   const tree = mdParser.parse(text);
@@ -101,5 +102,38 @@ describe("tableExtension — InlineMath nodes inside cells", () => {
     const mathNodes = findNodes(doc, "InlineMath");
     expect(mathNodes).toHaveLength(1);
     expect(nodeText(doc, mathNodes[0])).toBe("$a | b$");
+  });
+});
+
+describe("tableExtension — incomplete inline spans inside cells", () => {
+  it("treats an unmatched $ as literal cell text without hiding separators", () => {
+    const doc = "| A | B |\n| --- | --- |\n| $a | c |";
+    const cells = findNodes(doc, "TableCell");
+    expect(cells).toHaveLength(4);
+    expect(nodeText(doc, cells[2]).trim()).toBe("$a");
+    expect(findNodes(doc, "InlineMath")).toHaveLength(0);
+  });
+
+  it("treats an unmatched \\( as literal cell text without hiding separators", () => {
+    const doc = "| A | B |\n| --- | --- |\n| \\(a | c |";
+    const cells = findNodes(doc, "TableCell");
+    expect(cells).toHaveLength(4);
+    expect(nodeText(doc, cells[2]).trim()).toBe("\\(a");
+    expect(findNodes(doc, "InlineMath")).toHaveLength(0);
+  });
+
+  it("does not open DisplayMath for $$ inside a table cell", () => {
+    const doc = "| A | B |\n| --- | --- |\n| $$ | c |";
+    const cells = findNodes(doc, "TableCell");
+    expect(cells).toHaveLength(4);
+    expect(nodeText(doc, cells[2]).trim()).toBe("$$");
+    expect(findNodes(doc, "DisplayMath")).toHaveLength(0);
+  });
+
+  it("treats an unmatched backtick as literal cell text without hiding separators", () => {
+    const doc = "| A | B |\n| --- | --- |\n| `a | c |";
+    const cells = findNodes(doc, "TableCell");
+    expect(cells).toHaveLength(4);
+    expect(nodeText(doc, cells[2]).trim()).toBe("`a");
   });
 });

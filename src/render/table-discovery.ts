@@ -2,6 +2,7 @@ import { StateField, type EditorState, type Text } from "@codemirror/state";
 import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import type { EditorView } from "@codemirror/view";
 import { parseTable, type ParsedTable } from "./table-utils";
+import { scanTableInlineSpan } from "../lib/table-inline-span";
 
 /** A table found in the document with its source range. */
 export interface TableRange {
@@ -128,32 +129,10 @@ export function findPipePositions(text: string): number[] {
   const pipes: number[] = [];
   let i = 0;
   while (i < text.length) {
-    const ch = text[i];
-    if (ch === "\\") {
-      if (i + 1 < text.length && text[i + 1] === "(") {
-        const close = text.indexOf("\\)", i + 2);
-        i = close >= 0 ? close + 2 : text.length;
-      } else {
-        i += 2;
-      }
-    } else if (ch === "`") {
-      let tickCount = 0;
-      while (i + tickCount < text.length && text[i + tickCount] === "`") tickCount++;
-      let j = i + tickCount;
-      let found = false;
-      while (j < text.length) {
-        if (text[j] !== "`") { j++; continue; }
-        let closeCount = 0;
-        while (j + closeCount < text.length && text[j + closeCount] === "`") closeCount++;
-        if (closeCount === tickCount) { i = j + tickCount; found = true; break; }
-        j += closeCount;
-      }
-      if (!found) i += tickCount;
-    } else if (ch === "$") {
-      let j = i + 1;
-      while (j < text.length && text[j] !== "$") j++;
-      i = j < text.length ? j + 1 : text.length;
-    } else if (ch === "|") {
+    const spanEnd = scanTableInlineSpan(text, i);
+    if (spanEnd !== null) {
+      i = spanEnd;
+    } else if (text[i] === "|") {
       pipes.push(i);
       i++;
     } else {
