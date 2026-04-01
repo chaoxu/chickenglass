@@ -120,10 +120,9 @@ describe("ClusteredCrossrefWidget per-item spans", () => {
   it("renders one child span per item with data-ref-id", () => {
     const widget = new ClusteredCrossrefWidget(
       [
-        { kind: "block", label: "Theorem 1", number: 1 },
-        { kind: "block", label: "Theorem 2", number: 2 },
+        { id: "thm-a", text: "Theorem 1" },
+        { id: "thm-b", text: "Theorem 2" },
       ],
-      ["thm-a", "thm-b"],
       "[@thm-a; @thm-b]",
     );
     const el = widget.toDOM();
@@ -142,10 +141,9 @@ describe("ClusteredCrossrefWidget per-item spans", () => {
   it("renders separator text nodes between items", () => {
     const widget = new ClusteredCrossrefWidget(
       [
-        { kind: "equation", label: "Eq. (1)", number: 1 },
-        { kind: "equation", label: "Eq. (2)", number: 2 },
+        { id: "eq:a", text: "Eq. (1)" },
+        { id: "eq:b", text: "Eq. (2)" },
       ],
-      ["eq:a", "eq:b"],
       "[@eq:a; @eq:b]",
     );
     const el = widget.toDOM();
@@ -158,11 +156,10 @@ describe("ClusteredCrossrefWidget per-item spans", () => {
   it("separator text nodes have no data-ref-id", () => {
     const widget = new ClusteredCrossrefWidget(
       [
-        { kind: "block", label: "Theorem 1", number: 1 },
-        { kind: "block", label: "Theorem 2", number: 2 },
-        { kind: "block", label: "Theorem 3", number: 3 },
+        { id: "thm-a", text: "Theorem 1" },
+        { id: "thm-b", text: "Theorem 2" },
+        { id: "thm-c", text: "Theorem 3" },
       ],
-      ["thm-a", "thm-b", "thm-c"],
       "[@thm-a; @thm-b; @thm-c]",
     );
     const el = widget.toDOM();
@@ -181,10 +178,9 @@ describe("ClusteredCrossrefWidget per-item spans", () => {
   it("full text content matches joined labels", () => {
     const widget = new ClusteredCrossrefWidget(
       [
-        { kind: "equation", label: "Eq. (1)", number: 1 },
-        { kind: "equation", label: "Eq. (2)", number: 2 },
+        { id: "eq:a", text: "Eq. (1)" },
+        { id: "eq:b", text: "Eq. (2)" },
       ],
-      ["eq:a", "eq:b"],
       "[@eq:a; @eq:b]",
     );
     const el = widget.toDOM();
@@ -193,8 +189,7 @@ describe("ClusteredCrossrefWidget per-item spans", () => {
 
   it("single-item cluster renders one span with no separators", () => {
     const widget = new ClusteredCrossrefWidget(
-      [{ kind: "block", label: "Theorem 1", number: 1 }],
-      ["thm-a"],
+      [{ id: "thm-a", text: "Theorem 1" }],
       "[@thm-a]",
     );
     const el = widget.toDOM();
@@ -202,6 +197,21 @@ describe("ClusteredCrossrefWidget per-item spans", () => {
     const spans = el.querySelectorAll("span[data-ref-id]");
     expect(spans.length).toBe(1);
     expect(spans[0].getAttribute("data-ref-id")).toBe("thm-a");
+  });
+
+  it("marks unresolved items in place without collapsing the cluster", () => {
+    const widget = new ClusteredCrossrefWidget(
+      [
+        { id: "thm-a", text: "Theorem 1" },
+        { id: "thm-missing", text: "thm-missing", unresolved: true },
+      ],
+      "[@thm-a; @thm-missing]",
+    );
+    const el = widget.toDOM();
+    const spans = el.querySelectorAll("span[data-ref-id]");
+    expect(spans.length).toBe(2);
+    expect(spans[1].className).toContain(CSS.crossrefUnresolved);
+    expect(spans[1].textContent).toBe("thm-missing");
   });
 });
 

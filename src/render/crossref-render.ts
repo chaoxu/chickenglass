@@ -9,6 +9,7 @@
 import {
   type ResolvedCrossref,
 } from "../index/crossref-resolver";
+import { CSS } from "../constants/css-classes";
 import {
   RenderWidget,
   SimpleTextRenderWidget,
@@ -37,16 +38,22 @@ export class CrossrefWidget extends SimpleTextRenderWidget {
   }
 }
 
+export interface ClusteredCrossrefPart {
+  readonly id: string;
+  readonly text: string;
+  readonly unresolved?: boolean;
+}
+
 /**
- * Widget for a clustered cross-reference (multiple resolved crossrefs in one bracket).
+ * Widget for a clustered cross-reference (multiple ids in one bracket).
  *
  * Renders one child `<span data-ref-id="...">` per item with plain "; " text
  * node separators, so hover-preview can target individual items (#397).
+ * Unresolved items degrade in place instead of collapsing the whole cluster.
  */
 export class ClusteredCrossrefWidget extends RenderWidget {
   constructor(
-    private readonly resolvedItems: readonly ResolvedCrossref[],
-    private readonly ids: readonly string[],
+    private readonly parts: readonly ClusteredCrossrefPart[],
     private readonly raw: string,
   ) {
     super();
@@ -54,28 +61,31 @@ export class ClusteredCrossrefWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const container = document.createElement("span");
-    container.className = "cf-crossref";
+    container.className = CSS.crossref;
     container.setAttribute("aria-label", this.raw);
-    for (let i = 0; i < this.resolvedItems.length; i++) {
+    for (let i = 0; i < this.parts.length; i++) {
       if (i > 0) {
         container.appendChild(document.createTextNode("; "));
       }
       const span = document.createElement("span");
-      span.setAttribute("data-ref-id", this.ids[i]);
-      span.textContent = this.resolvedItems[i].label;
+      span.setAttribute("data-ref-id", this.parts[i].id);
+      if (this.parts[i].unresolved) {
+        span.className = CSS.crossrefUnresolved;
+      }
+      span.textContent = this.parts[i].text;
       container.appendChild(span);
     }
     return container;
   }
 
   eq(other: ClusteredCrossrefWidget): boolean {
-    if (this.resolvedItems.length !== other.resolvedItems.length) return false;
+    if (this.parts.length !== other.parts.length) return false;
     if (this.raw !== other.raw) return false;
-    return this.resolvedItems.every(
-      (r, i) =>
-        this.ids[i] === other.ids[i] &&
-        r.kind === other.resolvedItems[i].kind &&
-        r.label === other.resolvedItems[i].label,
+    return this.parts.every(
+      (part, i) =>
+        part.id === other.parts[i].id &&
+        part.text === other.parts[i].text &&
+        Boolean(part.unresolved) === Boolean(other.parts[i].unresolved),
     );
   }
 }
@@ -107,7 +117,7 @@ export class MixedClusterWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const container = document.createElement("span");
-    container.className = "cf-citation";
+    container.className = CSS.citation;
     container.setAttribute("aria-label", this.raw);
     container.appendChild(document.createTextNode("("));
     for (let i = 0; i < this.parts.length; i++) {
@@ -172,4 +182,3 @@ export class UnresolvedRefWidget extends SimpleTextRenderWidget {
     return this.raw === other.raw;
   }
 }
-
