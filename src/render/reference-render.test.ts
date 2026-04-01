@@ -10,7 +10,7 @@ import { blockCounterField } from "../plugins/block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import type { BlockPlugin } from "../plugins/plugin-types";
 import type { CslJsonItem } from "../citations/bibtex-parser";
-import { type BibStore, bibDataEffect, bibDataField } from "../citations/citation-render";
+import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CslProcessor } from "../citations/csl-processor";
 import { CSS } from "../constants/css-classes";
 import { createTestView, makeBlockPlugin, makeBibStore } from "../test-utils";
@@ -755,7 +755,7 @@ describe("collectReferenceRanges", () => {
     });
   });
 
-  it("degrades citations to unresolved when bib state is cleared (#770)", () => {
+  it("keeps citation routing when only the processor is cleared (#770)", () => {
     const doc = "See [@karger2000].";
     view = createView(doc, doc.length);
 
@@ -766,23 +766,23 @@ describe("collectReferenceRanges", () => {
     );
     expect(widgetClass(citBefore!)).toBe("CitationWidget");
 
-    // Simulate file-switch: clear bib state to empty (same as use-editor.ts).
-    const emptyStore: BibStore = new Map();
+    // Simulate file-switch: keep the old store for routing, only replace
+    // the processor with an empty one so the stale engine can't throw.
     view.dispatch({
       effects: bibDataEffect.of({
-        store: emptyStore,
+        store,
         cslProcessor: CslProcessor.empty(),
       }),
     });
 
-    // After clearing, the reference should degrade to UnresolvedRefWidget,
-    // not crash or show the (cormen2009) error fallback.
-    const after = collectReferenceRanges(view, emptyStore);
+    // Citations should still route as CitationWidget (store.has() works)
+    // with blank rendered text (empty processor returns "").
+    const after = collectReferenceRanges(view, store);
     const citAfter = after.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@karger2000]",
     );
     expect(citAfter).toBeDefined();
-    expect(widgetClass(citAfter!)).toBe("UnresolvedRefWidget");
+    expect(widgetClass(citAfter!)).toBe("CitationWidget");
   });
 });
 

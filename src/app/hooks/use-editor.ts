@@ -26,7 +26,7 @@ import {
 } from "../../editor";
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
 import { setIncludeRegionsEffect } from "../../lib/include-regions";
-import { bibDataEffect } from "../../citations/citation-render";
+import { bibDataEffect, bibDataField } from "../../citations/citation-render";
 import { CslProcessor } from "../../citations/csl-processor";
 import type { ProjectConfig } from "../project-config";
 import type { FileSystem } from "../file-manager";
@@ -288,11 +288,12 @@ export function useEditor(
 
     resetServicesRef.current();
 
-    // Reset bib state to the same empty initial state as page load so the
-    // stale CSL processor from the previous document can't throw during
-    // the brief window before the async bibliography reload completes (#770).
+    // Replace only the CSL processor with an empty one so the stale engine
+    // from the previous document can't throw during the brief window before
+    // the async bibliography reload completes.  The store is kept so that
+    // store.has(id) still routes citations correctly (#770).
     const clearBib = bibDataEffect.of({
-      store: new Map(),
+      store: view.state.field(bibDataField).store,
       cslProcessor: CslProcessor.empty(),
     });
 
