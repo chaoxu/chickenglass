@@ -70,6 +70,7 @@ async function main() {
 
   // Wait for the app to be ready
   try {
+    await page.reload({ waitUntil: "load" });
     await waitForDebugBridge(page);
   } catch {
     console.error("Timed out waiting for debug bridge (__app, __cmView, __cmDebug, __cfDebug).");

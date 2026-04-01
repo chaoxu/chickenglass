@@ -12,6 +12,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { BackgroundIndexer } from "../../index/indexer";
 import type { IndexEntry } from "../../index/query-api";
 import { basename } from "../lib/utils";
+import type { AppSearchMode } from "../search";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
@@ -42,7 +43,11 @@ export interface SearchPanelProps {
   /** Called to open or close the panel. */
   onOpenChange: (open: boolean) => void;
   /** Called when the user clicks a result. */
-  onResultSelect: (file: string, pos: number) => void;
+  onResultSelect: (entry: IndexEntry) => void;
+  /** Whether the app-level search is semantic or raw source text. */
+  searchMode: AppSearchMode;
+  /** Monotonic version that bumps whenever the backing index changes. */
+  searchVersion: number;
   /** The background indexer to query. */
   indexer?: BackgroundIndexer | null;
 }
@@ -120,7 +125,14 @@ export const SearchResultItem = memo(function SearchResultItem({
  * Results are grouped by file. Clicking a result calls onResultSelect
  * and closes the panel.
  */
-export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: SearchPanelProps) {
+export function SearchPanel({
+  open,
+  onOpenChange,
+  onResultSelect,
+  searchMode,
+  searchVersion,
+  indexer,
+}: SearchPanelProps) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -139,11 +151,24 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
     }
   }, [open]);
 
-  const { results, searching } = useSearchIndexer(open, query, typeFilter, indexer);
+  useEffect(() => {
+    if (searchMode === "source") {
+      setTypeFilter("");
+    }
+  }, [searchMode]);
+
+  const { results, searching } = useSearchIndexer(
+    open,
+    query,
+    typeFilter,
+    searchMode,
+    searchVersion,
+    indexer,
+  );
 
   const handleResultClick = useCallback(
     (entry: IndexEntry) => {
-      onResultSelect(entry.file, entry.position.from);
+      onResultSelect(entry);
       onOpenChange(false);
     },
     [onResultSelect, onOpenChange],
@@ -180,28 +205,30 @@ export function SearchPanel({ open, onOpenChange, onResultSelect, indexer }: Sea
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search blocks, labels, math…"
+            placeholder={searchMode === "semantic" ? "Search blocks, labels, math…" : "Search source text…"}
             className="h-8 flex-1 border-0 bg-transparent px-0 py-0 shadow-none focus:ring-0"
           />
-          <Select
-            value={typeFilter || ALL_TYPES_VALUE}
-            onValueChange={(value) => setTypeFilter(value === ALL_TYPES_VALUE ? "" : value)}
-          >
-            <SelectTrigger
-              aria-label="Filter search results by block type"
-              className="h-8 w-[8.5rem] border-[var(--cf-border)] bg-[var(--cf-subtle)] px-2 text-xs shadow-none"
+          {searchMode === "semantic" && (
+            <Select
+              value={typeFilter || ALL_TYPES_VALUE}
+              onValueChange={(value) => setTypeFilter(value === ALL_TYPES_VALUE ? "" : value)}
             >
-              <SelectValue placeholder="All types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_TYPES_VALUE}>All types</SelectItem>
-              {BLOCK_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <SelectTrigger
+                aria-label="Filter search results by block type"
+                className="h-8 w-[8.5rem] border-[var(--cf-border)] bg-[var(--cf-subtle)] px-2 text-xs shadow-none"
+              >
+                <SelectValue placeholder="All types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_TYPES_VALUE}>All types</SelectItem>
+                {BLOCK_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* Results list */}

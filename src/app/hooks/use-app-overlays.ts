@@ -6,6 +6,7 @@ import { batchExport, exportDocument } from "../export";
 import type { FileSystem } from "../file-manager";
 import { basename, modKey } from "../lib/utils";
 import type { PaletteCommand } from "../components/command-palette";
+import { collectSearchableMarkdownPaths } from "../search";
 import { useAutoSave } from "./use-auto-save";
 import type { UseDialogsReturn } from "./use-dialogs";
 import { useHotkeys, type HotkeyBinding } from "./use-hotkeys";
@@ -25,7 +26,7 @@ interface AppOverlayDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "liveDocs" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
+    "currentPath" | "liveDocs" | "docTextForStats" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
   >;
   onOpenFile: () => void;
   onQuit: () => void;
@@ -34,6 +35,7 @@ interface AppOverlayDeps {
 export interface AppOverlayController {
   commands: PaletteCommand[];
   indexer: BackgroundIndexer;
+  searchVersion: number;
   openPalette: () => void;
 }
 
@@ -107,12 +109,65 @@ export function useAppOverlays({
   onQuit,
 }: AppOverlayDeps): AppOverlayController {
   const [indexer] = useState(() => new BackgroundIndexer());
+  const [searchVersion, setSearchVersion] = useState(0);
+  const activeSearchDoc = editor.currentPath ? editor.docTextForStats : "";
 
   useEffect(() => {
+    if (!dialogs.searchOpen) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const tree = await fs.listTree();
+        const markdownPaths = collectSearchableMarkdownPaths(tree);
+        const files = await Promise.all(
+          markdownPaths.map(async (path) => ({
+            file: path,
+            content:
+              path === editor.currentPath
+                ? activeSearchDoc
+                : await fs.readFile(path),
+          })),
+        );
+
+        if (!cancelled) {
+          await indexer.bulkUpdate(files);
+          setSearchVersion((version) => version + 1);
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          console.error("[search] failed to build app search index", error);
+        }
+      }
+    })();
+
     return () => {
-      indexer.dispose();
+      cancelled = true;
     };
-  }, [indexer]);
+  }, [
+    dialogs.searchOpen,
+    workspace.fileTree,
+    fs,
+    indexer,
+  ]);
+
+  useEffect(() => {
+    if (!dialogs.searchOpen || !editor.currentPath?.endsWith(".md")) {
+      return;
+    }
+
+    void indexer
+      .updateFile(editor.currentPath, activeSearchDoc)
+      .then(() => {
+        setSearchVersion((version) => version + 1);
+      })
+      .catch((error: unknown) => {
+        console.error("[search] failed to sync active file into app search index", error);
+      });
+  }, [dialogs.searchOpen, indexer, editor.currentPath, activeSearchDoc]);
 
   const handleExportHtml = useCallback(() => {
     const currentPath = editor.currentPath;
@@ -235,6 +290,7 @@ export function useAppOverlays({
   return {
     commands,
     indexer,
+    searchVersion,
     openPalette: () => dialogs.setPaletteOpen(true),
   };
 }

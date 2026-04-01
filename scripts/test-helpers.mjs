@@ -119,6 +119,44 @@ export async function switchToMode(page, mode) {
 }
 
 /**
+ * Open the app-level search panel and wait for its input to appear.
+ *
+ * @param {import("playwright").Page} page
+ */
+export async function openAppSearch(page) {
+  await page.evaluate(() => {
+    window.__app.setSearchOpen(true);
+  });
+  await page.waitForFunction(
+    () => Boolean(document.querySelector('[role="dialog"] input')),
+    { timeout: 5000 },
+  );
+  await sleep(150);
+}
+
+/**
+ * Close the app-level search panel if it is open.
+ *
+ * @param {import("playwright").Page} page
+ */
+export async function closeAppSearch(page) {
+  const isOpen = await page.evaluate(
+    () => Boolean(document.querySelector('[role="dialog"] input')),
+  );
+  if (!isOpen) {
+    return;
+  }
+  await page.evaluate(() => {
+    window.__app.setSearchOpen(false);
+  });
+  await page.waitForFunction(
+    () => !document.querySelector('[role="dialog"] input'),
+    { timeout: 5000 },
+  );
+  await sleep(100);
+}
+
+/**
  * Return FencedDiv nodes from the current Lezer syntax tree.
  * Requires `__cmDebug` to be wired up (see use-editor.ts).
  */

@@ -40,6 +40,7 @@ interface AppDebugDeps {
   openFile: (path: string) => Promise<void>;
   saveFile: () => Promise<void>;
   closeFile: () => void;
+  setSearchOpen: (open: boolean) => void;
   requestNativeClose: () => Promise<void>;
   setMode: (mode: EditorMode) => void;
   getMode: () => EditorMode;
@@ -55,6 +56,7 @@ export function useAppDebug({
   openFile,
   saveFile,
   closeFile,
+  setSearchOpen,
   requestNativeClose,
   setMode,
   getMode,
@@ -73,6 +75,7 @@ export function useAppDebug({
       openFile,
       saveFile,
       closeFile,
+      setSearchOpen,
       setMode,
       getMode,
     };
@@ -123,6 +126,7 @@ export function useAppDebug({
     openFile,
     saveFile,
     closeFile,
+    setSearchOpen,
     requestNativeClose,
     setMode,
     getMode,

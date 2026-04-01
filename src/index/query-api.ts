@@ -17,6 +17,14 @@ export interface IndexQuery {
   readonly file?: string;
 }
 
+/** A raw-text search against source files. */
+export interface SourceTextQuery {
+  /** Raw source text to match, case-insensitively. */
+  readonly text: string;
+  /** Restrict results to a specific file path. */
+  readonly file?: string;
+}
+
 /** A single entry in the document index. */
 export interface IndexEntry {
   /** Block type: "theorem", "definition", "equation", "heading", etc. */
@@ -53,6 +61,8 @@ export interface IndexReference {
 export interface FileIndex {
   /** File path. */
   readonly file: string;
+  /** Full raw source text of the file. */
+  readonly sourceText: string;
   /** All indexed entries in this file. */
   readonly entries: readonly IndexEntry[];
   /** All references found in this file. */
@@ -95,6 +105,59 @@ export function queryIndex(
         continue;
       }
       results.push(entry);
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Search raw source text line-by-line across indexed files.
+ *
+ * Returns synthetic `IndexEntry` objects with `type: "text"` and `number`
+ * set to the 1-based line number. This keeps the app-search UI and navigation
+ * contract uniform across semantic and source-mode search results.
+ */
+export function querySourceText(
+  index: DocumentIndex,
+  query: SourceTextQuery,
+): readonly IndexEntry[] {
+  const text = query.text.trim();
+  if (!text) return [];
+
+  const needle = text.toLowerCase();
+  const results: IndexEntry[] = [];
+
+  for (const [, fileIndex] of index.files) {
+    if (query.file !== undefined && fileIndex.file !== query.file) continue;
+
+    const lines = fileIndex.sourceText.split("\n");
+    let offset = 0;
+
+    for (let lineNumber = 0; lineNumber < lines.length; lineNumber++) {
+      const lineText = lines[lineNumber];
+      const haystack = lineText.toLowerCase();
+      let searchFrom = 0;
+
+      while (true) {
+        const found = haystack.indexOf(needle, searchFrom);
+        if (found < 0) break;
+
+        results.push({
+          type: "text",
+          number: String(lineNumber + 1),
+          file: fileIndex.file,
+          position: {
+            from: offset + found,
+            to: offset + found + text.length,
+          },
+          content: lineText,
+        });
+
+        searchFrom = found + Math.max(text.length, 1);
+      }
+
+      offset += lineText.length + 1;
     }
   }
 

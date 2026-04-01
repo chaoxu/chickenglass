@@ -42,7 +42,7 @@ export interface EditorNavigationController {
    * is always fresh after the async `openFile` resolves.
    * Calls `onComplete` when navigation finishes.
    */
-  handleSearchResult: (file: string, pos: number, onComplete?: () => void) => void;
+  handleSearchResult: (file: string, pos: number, onComplete?: () => void) => Promise<boolean>;
   /** Called after the editor has applied the current document/path to the live CM6 view. */
   handleEditorDocumentReady: (view: EditorView, docPath: string | undefined) => void;
   /**
@@ -136,37 +136,41 @@ export function useEditorNavigation({
     view.focus();
   }, []);
 
-  const handleSearchResult = useCallback((file: string, pos: number, onComplete?: () => void) => {
+  const handleSearchResult = useCallback(async (
+    file: string,
+    pos: number,
+    onComplete?: () => void,
+  ): Promise<boolean> => {
     const requestId = ++searchRequestRef.current;
-    void (async () => {
-      try {
-        await openFile(file);
-        if (requestId !== searchRequestRef.current || !isPathOpen(file)) {
-          onComplete?.();
-          return;
-        }
-
-        const didBecomeReady = await waitForEditorDocumentReady(file);
-        if (!didBecomeReady) {
-          onComplete?.();
-          return;
-        }
-
-        if (requestId !== searchRequestRef.current || !isPathOpen(file)) {
-          onComplete?.();
-          return;
-        }
-
-        const view = latestViewRef.current;
-        if (view && latestReadyPathRef.current === file) {
-          view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
-          view.focus();
-        }
+    try {
+      await openFile(file);
+      if (requestId !== searchRequestRef.current || !isPathOpen(file)) {
         onComplete?.();
-      } catch (e: unknown) {
-        console.error("[editor] handleSearchResult: failed to open file", file, e);
+        return false;
       }
-    })();
+
+      const didBecomeReady = await waitForEditorDocumentReady(file);
+      if (!didBecomeReady) {
+        onComplete?.();
+        return isPathOpen(file);
+      }
+
+      if (requestId !== searchRequestRef.current || !isPathOpen(file)) {
+        onComplete?.();
+        return false;
+      }
+
+      const view = latestViewRef.current;
+      if (view && latestReadyPathRef.current === file) {
+        view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+        view.focus();
+      }
+      onComplete?.();
+      return true;
+    } catch (e: unknown) {
+      console.error("[editor] handleSearchResult: failed to open file", file, e);
+      return false;
+    }
   }, [isPathOpen, openFile, waitForEditorDocumentReady]);
 
   return {

@@ -12,7 +12,8 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { BackgroundIndexer } from "../../index/indexer";
-import type { IndexEntry, IndexQuery } from "../../index/query-api";
+import type { IndexEntry, IndexQuery, SourceTextQuery } from "../../index/query-api";
+import { buildSemanticSearchQuery, type AppSearchMode } from "../search";
 
 /**
  * Minimal mock indexer whose query() returns a controllable promise.
@@ -28,10 +29,21 @@ function createMockIndexer() {
         rejectQuery = reject;
       }),
   );
+  const querySourceTextSpy = vi.fn<(q: SourceTextQuery) => Promise<readonly IndexEntry[]>>(
+    () =>
+      new Promise<readonly IndexEntry[]>((resolve, reject) => {
+        resolveQuery = resolve;
+        rejectQuery = reject;
+      }),
+  );
 
   return {
-    indexer: { query: querySpy } as unknown as BackgroundIndexer,
+    indexer: {
+      query: querySpy,
+      querySourceText: querySourceTextSpy,
+    } as unknown as BackgroundIndexer,
     querySpy,
+    querySourceTextSpy,
     resolve(entries: readonly IndexEntry[] = []) {
       resolveQuery?.(entries);
       resolveQuery = null;
@@ -58,6 +70,9 @@ function createMockIndexer() {
 function simulateEffect(
   open: boolean,
   query: string,
+  typeFilter: string,
+  searchMode: AppSearchMode,
+  _indexVersion: number,
   indexer: BackgroundIndexer | null | undefined,
 ): {
   state: { results: readonly IndexEntry[]; searching: boolean };
@@ -76,11 +91,21 @@ function simulateEffect(
   let cancelled = false;
 
   const text = query.trim();
-  const indexQuery: IndexQuery = { content: text || undefined };
+  const type = typeFilter || undefined;
+  const isSemanticIdle = searchMode === "semantic" && !text && !type;
+  const isSourceIdle = searchMode === "source" && !text;
+
+  if (isSemanticIdle || isSourceIdle) {
+    state.results = [];
+    state.searching = false;
+    return { state, cleanup: undefined };
+  }
 
   void (async () => {
     try {
-      const entries = await indexer.query(indexQuery);
+      const entries = searchMode === "semantic"
+        ? await indexer.query(buildSemanticSearchQuery(text, type))
+        : await indexer.querySourceText({ text });
       if (!cancelled) {
         state.results = entries;
       }
@@ -115,7 +140,7 @@ describe("useSearchIndexer teardown (#478)", () => {
   // because the cleanup only set cancelled=true, which suppressed the finally
   // block that would have reset searching. #478
   it("resets searching to false when cleanup runs during pending query", async () => {
-    const { state, cleanup } = simulateEffect(true, "test", mock.indexer);
+    const { state, cleanup } = simulateEffect(true, "test", "", "semantic", 0, mock.indexer);
     expect(state.searching).toBe(true);
 
     // Simulate panel close (effect cleanup fires before query resolves)
@@ -134,20 +159,20 @@ describe("useSearchIndexer teardown (#478)", () => {
   // Regression: when open becomes false, only results was reset but not
   // searching, leaving a stale loading indicator. #478
   it("resets searching to false when open becomes false", () => {
-    const { state } = simulateEffect(false, "test", mock.indexer);
+    const { state } = simulateEffect(false, "test", "", "semantic", 0, mock.indexer);
     expect(state.searching).toBe(false);
     expect(state.results).toEqual([]);
   });
 
   // Regression: when indexer becomes null, same stuck-searching issue. #478
   it("resets searching to false when indexer is null", () => {
-    const { state } = simulateEffect(true, "test", null);
+    const { state } = simulateEffect(true, "test", "", "semantic", 0, null);
     expect(state.searching).toBe(false);
     expect(state.results).toEqual([]);
   });
 
   it("completes normally when query resolves before cleanup", async () => {
-    const { state, cleanup } = simulateEffect(true, "test", mock.indexer);
+    const { state, cleanup } = simulateEffect(true, "test", "", "semantic", 0, mock.indexer);
     expect(state.searching).toBe(true);
 
     const mockEntry: IndexEntry = {
@@ -171,7 +196,7 @@ describe("useSearchIndexer teardown (#478)", () => {
   });
 
   it("resets results on query error when not cancelled", async () => {
-    const { state } = simulateEffect(true, "test", mock.indexer);
+    const { state } = simulateEffect(true, "test", "", "semantic", 0, mock.indexer);
     expect(state.searching).toBe(true);
 
     mock.reject(new Error("index error"));
@@ -180,5 +205,27 @@ describe("useSearchIndexer teardown (#478)", () => {
       expect(state.searching).toBe(false);
       expect(state.results).toEqual([]);
     });
+  });
+
+  it("uses source-text queries in source mode", async () => {
+    const { state } = simulateEffect(true, " raw_token_785 ", "", "source", 0, mock.indexer);
+    expect(state.searching).toBe(true);
+    expect(mock.querySpy).not.toHaveBeenCalled();
+    expect(mock.querySourceTextSpy).toHaveBeenCalledWith({ text: "raw_token_785" });
+
+    mock.resolve([]);
+
+    await vi.waitFor(() => {
+      expect(state.searching).toBe(false);
+    });
+  });
+
+  it("stays idle for empty source-mode queries", () => {
+    const { state, cleanup } = simulateEffect(true, "   ", "", "source", 0, mock.indexer);
+    expect(state.searching).toBe(false);
+    expect(state.results).toEqual([]);
+    expect(mock.querySpy).not.toHaveBeenCalled();
+    expect(mock.querySourceTextSpy).not.toHaveBeenCalled();
+    expect(cleanup).toBeUndefined();
   });
 });

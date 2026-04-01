@@ -1,17 +1,7 @@
 import { useState, useEffect } from "react";
 import type { BackgroundIndexer } from "../../index/indexer";
-import type { IndexEntry, IndexQuery } from "../../index/query-api";
-
-/** Build an IndexQuery from raw search text and optional type filter. */
-function buildQuery(text: string, type: string | undefined): IndexQuery {
-  // Detect label search: text starting with # or containing : like eq:foo
-  const isLabel = text.startsWith("#") || /^[a-z]+-?\w*:\w/i.test(text);
-  if (isLabel) {
-    const label = text.startsWith("#") ? text.slice(1) : text;
-    return { type, label };
-  }
-  return { type, content: text || undefined };
-}
+import type { IndexEntry } from "../../index/query-api";
+import { buildSemanticSearchQuery, type AppSearchMode } from "../search";
 
 export interface UseSearchIndexerResult {
   results: readonly IndexEntry[];
@@ -27,6 +17,8 @@ export function useSearchIndexer(
   open: boolean,
   query: string,
   typeFilter: string,
+  searchMode: AppSearchMode,
+  indexVersion: number,
   indexer: BackgroundIndexer | null | undefined,
 ): UseSearchIndexerResult {
   const [results, setResults] = useState<readonly IndexEntry[]>([]);
@@ -43,14 +35,23 @@ export function useSearchIndexer(
 
     const text = query.trim();
     const type = typeFilter || undefined;
-    const indexQuery = buildQuery(text, type);
+    const isSemanticIdle = searchMode === "semantic" && !text && !type;
+    const isSourceIdle = searchMode === "source" && !text;
+
+    if (isSemanticIdle || isSourceIdle) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
 
     setSearching(true);
     let cancelled = false;
 
     void (async () => {
       try {
-        const entries = await indexer.query(indexQuery);
+        const entries = searchMode === "semantic"
+          ? await indexer.query(buildSemanticSearchQuery(text, type))
+          : await indexer.querySourceText({ text });
         if (!cancelled) {
           setResults(entries);
         }
@@ -71,7 +72,7 @@ export function useSearchIndexer(
       // in a loading state when the effect is re-fired or torn down. (#478)
       setSearching(false);
     };
-  }, [open, query, typeFilter, indexer]);
+  }, [open, query, typeFilter, searchMode, indexVersion, indexer]);
 
   return { results, searching };
 }

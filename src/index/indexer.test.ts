@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { BackgroundIndexer } from "./indexer";
 import {
   extractFileIndex,
   updateFileInIndex,
@@ -458,5 +459,48 @@ See [@thm-1].`,
     const index = { files };
     const theorems = queryIndex(index, { type: "theorem" });
     expect(theorems).toHaveLength(2);
+  });
+});
+
+describe("BackgroundIndexer", () => {
+  it("replaces removed files on bulkUpdate", async () => {
+    const indexer = new BackgroundIndexer();
+
+    await indexer.bulkUpdate([
+      { file: "a.md", content: "# A" },
+      { file: "b.md", content: "# B" },
+    ]);
+    expect(await indexer.getFileIndex("a.md")).toBeDefined();
+    expect(await indexer.getFileIndex("b.md")).toBeDefined();
+
+    await indexer.bulkUpdate([
+      { file: "b.md", content: "# B" },
+    ]);
+
+    await expect(indexer.getFileIndex("a.md")).resolves.toBeUndefined();
+    await expect(indexer.getFileIndex("b.md")).resolves.toBeDefined();
+  });
+
+  it("supports raw source-text queries", async () => {
+    const indexer = new BackgroundIndexer();
+
+    await indexer.bulkUpdate([
+      {
+        file: "raw.md",
+        content: [
+          "# Notes",
+          "RAW_TOKEN_785 appears here.",
+        ].join("\n"),
+      },
+    ]);
+
+    const results = await indexer.querySourceText({ text: "raw_token_785" });
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      type: "text",
+      file: "raw.md",
+      number: "2",
+      content: "RAW_TOKEN_785 appears here.",
+    });
   });
 });

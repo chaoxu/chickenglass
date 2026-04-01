@@ -48,6 +48,7 @@ declare global {
       openFile: (path: string) => Promise<void>;
       saveFile: () => Promise<void>;
       closeFile: () => void;
+      setSearchOpen: (open: boolean) => void;
       setMode: (mode: EditorMode) => void;
       getMode: () => EditorMode;
     };

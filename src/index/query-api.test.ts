@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { DocumentIndex, FileIndex, IndexEntry, IndexReference } from "./query-api";
-import { queryIndex, resolveLabel, findReferences } from "./query-api";
+import { findReferences, queryIndex, querySourceText, resolveLabel } from "./query-api";
 
 function makeEntry(overrides: Partial<IndexEntry> & { type: string; file: string }): IndexEntry {
   return {
@@ -20,10 +20,15 @@ function makeRef(overrides: Partial<IndexReference> & { ids: readonly string[]; 
   };
 }
 
-function makeIndex(fileIndices: FileIndex[]): DocumentIndex {
+function makeIndex(
+  fileIndices: Array<Omit<FileIndex, "sourceText"> & Partial<Pick<FileIndex, "sourceText">>>,
+): DocumentIndex {
   const files = new Map<string, FileIndex>();
   for (const fi of fileIndices) {
-    files.set(fi.file, fi);
+    files.set(fi.file, {
+      sourceText: fi.sourceText ?? "",
+      ...fi,
+    });
   }
   return { files };
 }
@@ -86,6 +91,50 @@ describe("queryIndex", () => {
   it("returns empty when no entries match", () => {
     const results = queryIndex(index, { type: "lemma" });
     expect(results).toHaveLength(0);
+  });
+});
+
+describe("querySourceText", () => {
+  const index = makeIndex([
+    {
+      file: "chapter1.md",
+      sourceText: [
+        "# Heading",
+        "RAW_TOKEN_785 appears here.",
+        "raw_token_785 appears again.",
+      ].join("\n"),
+      entries: [],
+      references: [],
+    },
+    {
+      file: "chapter2.md",
+      sourceText: "No raw marker here.",
+      entries: [],
+      references: [],
+    },
+  ]);
+
+  it("finds case-insensitive raw-text matches with source positions", () => {
+    const results = querySourceText(index, { text: "raw_token_785" });
+    expect(results).toHaveLength(2);
+    expect(results[0]).toMatchObject({
+      type: "text",
+      file: "chapter1.md",
+      number: "2",
+      content: "RAW_TOKEN_785 appears here.",
+    });
+    expect(results[0].position.from).toBeGreaterThan(0);
+    expect(results[0].position.to).toBeGreaterThan(results[0].position.from);
+    expect(results[1].number).toBe("3");
+  });
+
+  it("respects the file filter", () => {
+    const results = querySourceText(index, { text: "raw_token_785", file: "chapter2.md" });
+    expect(results).toHaveLength(0);
+  });
+
+  it("returns no results for empty text", () => {
+    expect(querySourceText(index, { text: "   " })).toEqual([]);
   });
 });
 
