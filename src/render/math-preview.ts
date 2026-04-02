@@ -13,6 +13,7 @@ import {
   ViewPlugin,
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
+import { autoUpdate, computePosition, offset } from "@floating-ui/dom";
 import { findActiveMath, renderKatex, resolveClickToSourcePos } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { documentAnalysisField } from "../semantics/codemirror-source";
@@ -33,7 +34,8 @@ class MathPreviewPlugin implements PluginValue {
   private isDragging = false;
   private dragOffsetX = 0;
   private dragOffsetY = 0;
-  /** Positions to measure on next requestMeasure cycle. */
+  private cleanupAutoUpdate: (() => void) | null = null;
+  /** Document positions of the active math region, read by the virtual element. */
   private measureFromPos = -1;
   private measureToPos = -1;
 
@@ -90,24 +92,53 @@ class MathPreviewPlugin implements PluginValue {
       this.renderLatex(info.latex, info.isDisplay);
     }
 
-    // Position below the entire math block: left from start, top from end.
+    // Update anchor positions so the virtual element reads fresh values.
     this.measureFromPos = info.from;
     this.measureToPos = info.to;
-    this.view.requestMeasure({
-      key: "cf-math-preview-pos",
-      read: () => {
-        if (this.measureFromPos < 0) return null;
-        const fromCoords = this.view.coordsAtPos(this.measureFromPos);
-        const toCoords = this.view.coordsAtPos(this.measureToPos);
-        if (!fromCoords || !toCoords) return null;
-        return { left: fromCoords.left, bottom: toCoords.bottom };
+
+    // Start auto-positioning if not already running.  autoUpdate
+    // re-invokes computePosition on scroll, resize, and layout shift,
+    // keeping the panel anchored to the math region.
+    if (!this.cleanupAutoUpdate && this.panel) {
+      this.startAutoUpdate();
+    }
+  }
+
+  /**
+   * Set up Floating UI autoUpdate so the panel tracks the math region
+   * through scroll, resize, and layout changes.
+   */
+  private startAutoUpdate(): void {
+    // Virtual element: Floating UI reads getBoundingClientRect() on every
+    // positioning cycle, so it always gets fresh coordsAtPos values.
+    const virtualEl = {
+      getBoundingClientRect: () => {
+        if (this.measureFromPos < 0) return new DOMRect();
+        const from = this.view.coordsAtPos(this.measureFromPos);
+        const to = this.view.coordsAtPos(this.measureToPos);
+        if (!from || !to) return new DOMRect();
+        return new DOMRect(
+          from.left,
+          from.top,
+          to.right - from.left,
+          to.bottom - from.top,
+        );
       },
-      write: (coords) => {
-        if (!coords || !this.panel || this.isDragging) return;
-        this.panel.style.left = `${coords.left}px`;
-        this.panel.style.top = `${coords.bottom + 4}px`;
-      },
-    });
+    };
+
+    const update = () => {
+      if (!this.panel || this.isDragging) return;
+      void computePosition(virtualEl, this.panel, {
+        placement: "bottom-start",
+        middleware: [offset(4)],
+      }).then(({ x, y }) => {
+        if (!this.panel || this.isDragging) return;
+        this.panel.style.left = `${x}px`;
+        this.panel.style.top = `${y}px`;
+      });
+    };
+
+    this.cleanupAutoUpdate = autoUpdate(virtualEl, this.panel!, update);
   }
 
   private createPanel(): void {
@@ -176,6 +207,8 @@ class MathPreviewPlugin implements PluginValue {
 
   private removePanel(): void {
     if (!this.panel) return;
+    this.cleanupAutoUpdate?.();
+    this.cleanupAutoUpdate = null;
     this.cleanupListeners?.();
     this.cleanupListeners = null;
     this.panel.remove();
