@@ -105,6 +105,25 @@ export async function findLine(page, needle) {
  */
 export async function switchToMode(page, mode) {
   const targetLabel = MODE_LABELS[mode] ?? mode;
+
+  const changedViaApp = await page.evaluate((nextMode) => {
+    if (!window.__app?.setMode || !window.__app?.getMode) {
+      return false;
+    }
+    window.__app.setMode(nextMode);
+    return true;
+  }, mode);
+
+  if (changedViaApp) {
+    await page.waitForFunction(
+      (expectedMode) => window.__app.getMode() === expectedMode,
+      mode,
+      { timeout: 5000 },
+    );
+    await sleep(200);
+    return;
+  }
+
   const modeButton = page.getByTestId("mode-button");
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -153,6 +172,79 @@ export async function closeAppSearch(page) {
     () => !document.querySelector('[role="dialog"] input'),
     { timeout: 5000 },
   );
+  await sleep(100);
+}
+
+/**
+ * Wait for the CM6 autocomplete popup to render at least one option.
+ *
+ * @param {import("playwright").Page} page
+ */
+export async function waitForAutocomplete(page) {
+  await page.waitForFunction(
+    () => document.querySelectorAll(".cm-tooltip-autocomplete li").length > 0,
+    { timeout: 5000 },
+  );
+  await sleep(100);
+}
+
+/**
+ * Read the visible CM6 autocomplete labels.
+ *
+ * @param {import("playwright").Page} page
+ */
+export async function readAutocompleteOptions(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll(".cm-tooltip-autocomplete li")]
+      .map((item) => item.textContent?.trim() ?? "")
+      .filter(Boolean),
+  );
+}
+
+/**
+ * Insert text into the active CM6 selection using a typed-input userEvent.
+ *
+ * @param {import("playwright").Page} page
+ * @param {string} text
+ */
+export async function insertEditorText(page, text) {
+  await page.evaluate((insertText) => {
+    const view = window.__cmView;
+    const { from, to } = view.state.selection.main;
+    view.dispatch({
+      changes: { from, to, insert: insertText },
+      selection: { anchor: from + insertText.length },
+      userEvent: "input.type",
+    });
+  }, text);
+  await sleep(100);
+}
+
+/**
+ * Pick a CM6 autocomplete option by substring match.
+ *
+ * @param {import("playwright").Page} page
+ * @param {string} needle
+ */
+export async function pickAutocompleteOption(page, needle) {
+  const picked = await page.evaluate((matchText) => {
+    const option = [...document.querySelectorAll(".cm-tooltip-autocomplete li")]
+      .find((item) => (item.textContent ?? "").includes(matchText));
+    if (!(option instanceof HTMLElement)) {
+      return false;
+    }
+    for (const type of ["mousedown", "mouseup", "click"]) {
+      option.dispatchEvent(new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+      }));
+    }
+    return true;
+  }, needle);
+  if (!picked) {
+    throw new Error(`Failed to pick autocomplete option matching ${JSON.stringify(needle)}`);
+  }
   await sleep(100);
 }
 

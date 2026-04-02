@@ -36,6 +36,7 @@ import { headingFold } from "./heading-fold";
 import { listOutlinerExtension } from "./list-outliner";
 import { treeView } from "@overleaf/codemirror-tree-view";
 import { includeRegionsField } from "../lib/include-regions";
+import { referenceAutocompleteExtension } from "./reference-autocomplete";
 import {
   createMarkdownLanguageExtensions,
   createProjectConfigExtensions,
@@ -254,6 +255,9 @@ export function createEditor(config: EditorConfig): EditorView {
 
       // Core document state (frontmatter, semantics, block plugins, caches)
       ...coreDocumentStateExtensions(),
+
+      // Reference/citation completion from semantic + bibliography state
+      referenceAutocompleteExtension,
 
       // Mode switching (render/editable/modeClass compartments)
       ...renderModeExtensions(),
