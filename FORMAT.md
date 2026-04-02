@@ -30,7 +30,7 @@ blocks:
 | `csl` | string | Path to CSL style file |
 | `numbering` | `"global"` \| `"grouped"` | Block numbering scheme. `global`: all numbered blocks share one counter. `grouped`: each type has its own. |
 | `math` | map | KaTeX macro definitions (`\command: "expansion"`) |
-| `blocks` | map | Custom block type definitions |
+| `blocks` | map | Custom block definitions and overrides (`title`, `numbered`, `counter`, enable/disable) |
 | `imageFolder` | string | Default folder for pasted/dropped images. Also accepts `image-folder`. |
 
 Project-level config in `coflat.yaml` uses the same keys. File frontmatter overrides project config. Math macros merge additively (file adds to project).
@@ -51,7 +51,7 @@ Backtick-quoted text (`` `...` ``) renders as plain monospace — no background 
 
 ## Headings
 
-ATX headings (`#` through `######`). Auto-numbered unless marked unnumbered.
+ATX headings (`#` through `######`). Auto-numbered unless marked unnumbered. Explicit heading IDs are supported via trailing Pandoc attributes and can be cross-referenced.
 
 ```markdown
 # Numbered Heading              --> "1. Numbered Heading"
@@ -60,9 +60,10 @@ ATX headings (`#` through `######`). Auto-numbered unless marked unnumbered.
 
 # Unnumbered Heading {-}        --> no number
 ## Also Unnumbered {.unnumbered} --> no number
+## Background {#sec:background} --> cross-ref target "Section 1.1"
 ```
 
-Trailing `{-}` or `{.unnumbered}` suppresses numbering. These attributes are hidden when the cursor is outside the heading.
+Trailing Pandoc attribute blocks are supported on headings. The editor currently uses them primarily for `#id`, `{-}`, and `{.unnumbered}`. These attributes are hidden when the cursor is outside the heading.
 
 ## Math
 
@@ -91,7 +92,7 @@ Display math can interrupt a paragraph (no blank line required before `$$` or `\
 
 ### Equation labels
 
-Append `{#eq:label}` after the closing `$$`:
+Append `{#eq:label}` after the closing `$$` or `\]`:
 
 ```
 $$
@@ -133,13 +134,15 @@ Statement of the theorem with $math$.
 :::
 ```
 
-The title text after `}` supports full inline markdown (bold, italic, math, code). In rendered mode, the title appears parenthesized after the block label: **Theorem 1** (Main Result).
+The title text after `}` supports full inline markdown (bold, italic, math, code). For standard above-header blocks, the title appears parenthesized after the block label: **Theorem 1** (Main Result). For `figure` and `table` blocks, the title/caption is rendered below the content.
 
 Attributes inside `{...}`:
 - `.classname` -- block type (required, first class is the primary type)
 - `#id` -- cross-reference ID
 - `key="value"` -- key-value attributes (e.g., `title="Alternative Title"`)
 - Multiple classes: `{.theorem .important}` (first is the block type)
+
+If no inline title text is present after `}`, `title="..."` acts as an attribute-only title fallback. If both are present, the inline title wins.
 
 ### Short form
 
@@ -192,7 +195,9 @@ The inner block must use fewer colons than the outer. The parser uses a generati
 | `remark` | -- (unnumbered) | normal | -- |
 | `proof` | -- (unnumbered) | normal | QED tombstone at end |
 | `algorithm` | algorithm | normal | -- |
-| `blockquote` | -- (unnumbered) | italic | header label hidden |
+| `figure` | figure | normal | caption rendered below content |
+| `table` | table | normal | caption rendered below content |
+| `blockquote` | -- (unnumbered) | normal | header label hidden |
 | `embed` | -- | -- | renders iframe |
 | `iframe` | -- | -- | renders iframe |
 | `youtube` | -- | -- | YouTube embed |
@@ -200,6 +205,20 @@ The inner block must use fewer colons than the outer. The parser uses a generati
 | `include` | -- | -- | file inclusion (special, not a plugin) |
 
 Counter groups: blocks sharing a counter group are numbered together. E.g., Theorem 1, Lemma 2, Corollary 3 all share the "theorem" counter.
+
+Typical numbered figure/table usage:
+
+```markdown
+::: {.figure #fig:architecture} System overview
+![System overview](architecture.png)
+:::
+
+::: {.table #tbl:runtime} Running times
+| Algorithm | Time |
+|-----------|------|
+| Quicksort | $O(n \log n)$ |
+:::
+```
 
 ### Custom block types
 
@@ -215,15 +234,25 @@ blocks:
     counter: axiom      # own counter group
 ```
 
+`blocks:` entries can be:
+- `false` -- disable a built-in block type for this document
+- `true` -- explicitly enable an existing block type
+- an object with:
+  - `title` -- override the rendered label
+  - `numbered` -- enable/disable numbering for that block type
+  - `counter` -- shared counter group name
+  - `counter: null` -- remove an inherited shared group and use the block's own counter
+
 ## Cross-References
 
-Reference any block or equation by its `#id` attribute.
+Reference any fenced block, heading, or equation by its `#id` attribute.
 
 ### Bracketed (rendered inline)
 
 ```markdown
 See [@thm:main] for the proof.     --> "See Theorem 1 for the proof."
 By [@eq:einstein], energy is...     --> "By Eq. (1), energy is..."
+See [@sec:background].             --> "See Section 1.1."
 ```
 
 ### Narrative (bare @)
@@ -232,7 +261,16 @@ By [@eq:einstein], energy is...     --> "By Eq. (1), energy is..."
 @thm:main shows that...             --> "Theorem 1 shows that..."
 ```
 
-Resolution order: blocks (by fenced div `#id`) -> equations (by `{#eq:id}`) -> citations (by bib key). If an ID matches a block, it takes priority over a citation with the same key.
+### Clusters
+
+Multiple references can be clustered with `;`. Each item is resolved independently, so mixed cross-reference/citation clusters are supported:
+
+```markdown
+[@thm:main; @eq:einstein]
+[@eq:einstein; @karger2000]
+```
+
+Resolution order: fenced blocks (by fenced div `#id`) -> equations (by `{#eq:id}`) -> headings (by heading `#id`) -> citations (by bib key). If an ID matches a fenced block, it takes priority over a citation with the same key.
 
 ## Citations
 
@@ -359,6 +397,8 @@ These standard markdown features are **intentionally disabled**:
 |---------|--------|-------------|
 | Indented code blocks | Conflicts with fenced div content indentation | Use fenced code blocks (```) |
 | `>` blockquotes | Limited (no math, no nesting with fenced divs) | Use `::: Blockquote` fenced divs |
+
+The read/export pipeline still parses standard `>` blockquotes for compatibility with imported markdown, but the editor authoring format does not use them.
 
 ## Horizontal Rules
 
