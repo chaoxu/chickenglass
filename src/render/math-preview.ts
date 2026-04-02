@@ -13,7 +13,7 @@ import {
   ViewPlugin,
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
-import { autoUpdate, computePosition, offset } from "@floating-ui/dom";
+import { autoUpdate, computePosition, offset, type VirtualElement } from "@floating-ui/dom";
 import { findActiveMath, renderKatex, resolveClickToSourcePos } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { documentAnalysisField } from "../semantics/codemirror-source";
@@ -29,21 +29,40 @@ class MathPreviewPlugin implements PluginValue {
   private panel: HTMLElement | null = null;
   private contentEl: HTMLElement | null = null;
   private cleanupListeners: (() => void) | null = null;
+  private cleanupAutoUpdate: (() => void) | null = null;
   private lastRaw = "";
   private lastRegion: MathRegionSnapshot | null = null;
   private isDragging = false;
   private dragOffsetX = 0;
   private dragOffsetY = 0;
-  private cleanupAutoUpdate: (() => void) | null = null;
-  /** Document positions of the active math region, read by the virtual element. */
-  private measureFromPos = -1;
-  private measureToPos = -1;
+  private manualPosition: { left: number; top: number } | null = null;
+  private anchorFromPos = -1;
+  private anchorToPos = -1;
+  private positionRequestId = 0;
+  private readonly autoUpdateAnchor: VirtualElement;
 
   constructor(private view: EditorView) {
+    const plugin = this;
+    this.autoUpdateAnchor = {
+      getBoundingClientRect: () => plugin.getAnchorRect() ?? {
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+      },
+      get contextElement() {
+        return plugin.view.scrollDOM;
+      },
+    };
     this.scheduleCheck();
   }
 
   update(update: ViewUpdate): void {
+    this.view = update.view;
     if (
       update.docChanged ||
       update.selectionSet ||
@@ -51,8 +70,7 @@ class MathPreviewPlugin implements PluginValue {
       update.state.field(documentAnalysisField).mathRegions !==
         update.startState.field(documentAnalysisField).mathRegions
     ) {
-      this.view = update.view;
-      this.scheduleCheck();
+      this.scheduleCheck({ resetManualPosition: true });
     }
   }
 
@@ -60,8 +78,7 @@ class MathPreviewPlugin implements PluginValue {
     this.removePanel();
   }
 
-  /** Schedule a check after the update cycle completes (layout reads are safe). */
-  private scheduleCheck(): void {
+  private scheduleCheck(options: { resetManualPosition?: boolean } = {}): void {
     if (!this.view.hasFocus) {
       this.removePanel();
       return;
@@ -81,6 +98,10 @@ class MathPreviewPlugin implements PluginValue {
       this.createPanel();
     }
 
+    if (options.resetManualPosition) {
+      this.manualPosition = null;
+    }
+
     if (raw !== this.lastRaw) {
       this.lastRaw = raw;
       this.lastRegion = {
@@ -92,53 +113,10 @@ class MathPreviewPlugin implements PluginValue {
       this.renderLatex(info.latex, info.isDisplay);
     }
 
-    // Update anchor positions so the virtual element reads fresh values.
-    this.measureFromPos = info.from;
-    this.measureToPos = info.to;
-
-    // Start auto-positioning if not already running.  autoUpdate
-    // re-invokes computePosition on scroll, resize, and layout shift,
-    // keeping the panel anchored to the math region.
-    if (!this.cleanupAutoUpdate && this.panel) {
-      this.startAutoUpdate();
-    }
-  }
-
-  /**
-   * Set up Floating UI autoUpdate so the panel tracks the math region
-   * through scroll, resize, and layout changes.
-   */
-  private startAutoUpdate(): void {
-    // Virtual element: Floating UI reads getBoundingClientRect() on every
-    // positioning cycle, so it always gets fresh coordsAtPos values.
-    const virtualEl = {
-      getBoundingClientRect: () => {
-        if (this.measureFromPos < 0) return new DOMRect();
-        const from = this.view.coordsAtPos(this.measureFromPos);
-        const to = this.view.coordsAtPos(this.measureToPos);
-        if (!from || !to) return new DOMRect();
-        return new DOMRect(
-          from.left,
-          from.top,
-          to.right - from.left,
-          to.bottom - from.top,
-        );
-      },
-    };
-
-    const update = () => {
-      if (!this.panel || this.isDragging) return;
-      void computePosition(virtualEl, this.panel, {
-        placement: "bottom-start",
-        middleware: [offset(4)],
-      }).then(({ x, y }) => {
-        if (!this.panel || this.isDragging) return;
-        this.panel.style.left = `${x}px`;
-        this.panel.style.top = `${y}px`;
-      });
-    };
-
-    this.cleanupAutoUpdate = autoUpdate(virtualEl, this.panel!, update);
+    this.anchorFromPos = info.from;
+    this.anchorToPos = info.to;
+    this.startAutoUpdate();
+    this.updatePosition();
   }
 
   private createPanel(): void {
@@ -156,8 +134,11 @@ class MathPreviewPlugin implements PluginValue {
 
     const onMouseMove = (e: MouseEvent) => {
       if (!this.isDragging || !this.panel) return;
-      this.panel.style.left = `${e.clientX - this.dragOffsetX}px`;
-      this.panel.style.top = `${e.clientY - this.dragOffsetY}px`;
+      const left = e.clientX - this.dragOffsetX;
+      const top = e.clientY - this.dragOffsetY;
+      this.manualPosition = { left, top };
+      this.panel.style.left = `${left}px`;
+      this.panel.style.top = `${top}px`;
     };
 
     const onMouseUp = () => {
@@ -199,6 +180,72 @@ class MathPreviewPlugin implements PluginValue {
     this.view.dom.appendChild(panel);
   }
 
+  private startAutoUpdate(): void {
+    if (!this.panel || this.cleanupAutoUpdate) return;
+    this.cleanupAutoUpdate = autoUpdate(this.autoUpdateAnchor, this.panel, () => {
+      this.updatePosition();
+    });
+  }
+
+  private getAnchorRect(): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  } | null {
+    if (this.anchorFromPos < 0 || this.anchorToPos < 0) return null;
+    const fromCoords = this.view.coordsAtPos(this.anchorFromPos);
+    const toCoords = this.view.coordsAtPos(this.anchorToPos);
+    if (!fromCoords || !toCoords) return null;
+
+    return {
+      x: fromCoords.left,
+      y: fromCoords.top,
+      width: 0,
+      height: Math.max(toCoords.bottom - fromCoords.top, 0),
+      top: fromCoords.top,
+      right: fromCoords.left,
+      bottom: toCoords.bottom,
+      left: fromCoords.left,
+    };
+  }
+
+  private updatePosition(): void {
+    if (!this.panel || this.isDragging || this.manualPosition) return;
+
+    const anchorRect = this.getAnchorRect();
+    if (!anchorRect) return;
+
+    const panel = this.panel;
+    const requestId = ++this.positionRequestId;
+    const anchor: VirtualElement = {
+      contextElement: this.view.scrollDOM,
+      getBoundingClientRect: () => anchorRect,
+    };
+
+    void computePosition(anchor, panel, {
+      placement: "bottom-start",
+      strategy: "fixed",
+      middleware: [offset(4)],
+    }).then(({ x, y }) => {
+      if (
+        requestId !== this.positionRequestId ||
+        panel !== this.panel ||
+        this.isDragging ||
+        this.manualPosition
+      ) {
+        return;
+      }
+
+      panel.style.left = `${x}px`;
+      panel.style.top = `${y}px`;
+    });
+  }
+
   private renderLatex(latex: string, isDisplay: boolean): void {
     if (!this.contentEl) return;
     const macros = this.view.state.field(mathMacrosField);
@@ -206,18 +253,20 @@ class MathPreviewPlugin implements PluginValue {
   }
 
   private removePanel(): void {
-    if (!this.panel) return;
+    this.positionRequestId += 1;
     this.cleanupAutoUpdate?.();
     this.cleanupAutoUpdate = null;
     this.cleanupListeners?.();
     this.cleanupListeners = null;
+    if (!this.panel) return;
     this.panel.remove();
     this.panel = null;
     this.contentEl = null;
     this.lastRaw = "";
     this.lastRegion = null;
-    this.measureFromPos = -1;
-    this.measureToPos = -1;
+    this.manualPosition = null;
+    this.anchorFromPos = -1;
+    this.anchorToPos = -1;
   }
 }
 
