@@ -1,0 +1,223 @@
+import {
+  CompletionContext,
+  currentCompletions,
+  startCompletion,
+} from "@codemirror/autocomplete";
+import { EditorState } from "@codemirror/state";
+import { describe, expect, it } from "vitest";
+import { CslProcessor } from "../citations/csl-processor";
+import { bibDataEffect, bibDataField } from "../citations/citation-render";
+import {
+  blockCounterField,
+  createPluginRegistryField,
+  defaultPlugins,
+} from "../plugins";
+import { documentAnalysisField } from "../semantics/codemirror-source";
+import { CSL_FIXTURES, makeBibStore } from "../test-utils";
+import {
+  createMarkdownLanguageExtensions,
+  sharedDocumentStateExtensions,
+} from "./base-editor-extensions";
+import { createEditor } from "./editor";
+import {
+  collectReferenceCompletionCandidates,
+  findReferenceCompletionMatch,
+  referenceCompletionSource,
+} from "./reference-autocomplete";
+
+async function waitForCompletionLabels(
+  readLabels: () => readonly string[],
+): Promise<readonly string[]> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const labels = readLabels();
+    if (labels.length > 0) {
+      return labels;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return readLabels();
+}
+
+function createReferenceState(doc: string): EditorState {
+  return EditorState.create({
+    doc,
+    selection: { anchor: doc.length },
+    extensions: [
+      ...createMarkdownLanguageExtensions(),
+      ...sharedDocumentStateExtensions,
+      documentAnalysisField,
+      createPluginRegistryField(defaultPlugins),
+      blockCounterField,
+      bibDataField,
+    ],
+  });
+}
+
+describe("findReferenceCompletionMatch", () => {
+  it("detects bracketed references at [@", () => {
+    const state = createReferenceState("See [@thm");
+    expect(findReferenceCompletionMatch(state, state.doc.length)).toEqual({
+      kind: "bracketed",
+      from: 6,
+      to: 9,
+      query: "thm",
+    });
+  });
+
+  it("detects the active slot inside clustered bracketed references", () => {
+    const state = createReferenceState("See [@eq:one; @thm");
+    expect(findReferenceCompletionMatch(state, state.doc.length)).toEqual({
+      kind: "bracketed",
+      from: 15,
+      to: 18,
+      query: "thm",
+    });
+  });
+
+  it("detects narrative references at @", () => {
+    const state = createReferenceState("As @thm");
+    expect(findReferenceCompletionMatch(state, state.doc.length)).toEqual({
+      kind: "narrative",
+      from: 4,
+      to: 7,
+      query: "thm",
+    });
+  });
+
+  it("does not trigger inside locators", () => {
+    const state = createReferenceState("See [@thm:main, p. 10]");
+    expect(findReferenceCompletionMatch(state, "See [@thm:main, p.".length)).toBeNull();
+  });
+
+  it("does not trigger inside email addresses", () => {
+    const state = createReferenceState("Contact test@example.com");
+    expect(findReferenceCompletionMatch(state, state.doc.length)).toBeNull();
+  });
+
+  it("does not trigger inside inline code", () => {
+    const state = createReferenceState("`@thm`");
+    expect(findReferenceCompletionMatch(state, 5)).toBeNull();
+  });
+});
+
+describe("collectReferenceCompletionCandidates", () => {
+  it("collects blocks, equations, headings, and citations with semantic precedence", () => {
+    const state = createReferenceState(
+      [
+        "# Background {#sec:background}",
+        "",
+        "::: {#thm:main .theorem} Fundamental theorem",
+        "Statement.",
+        ":::",
+        "",
+        "$$",
+        "E = mc^2",
+        "$$ {#eq:energy}",
+      ].join("\n"),
+    ).update({
+      effects: bibDataEffect.of({
+        store: makeBibStore([
+          CSL_FIXTURES.karger,
+          { ...CSL_FIXTURES.stein, id: "thm:main" },
+        ]),
+        cslProcessor: new CslProcessor([CSL_FIXTURES.karger]),
+      }),
+    }).state;
+
+    const byId = new Map(
+      collectReferenceCompletionCandidates(state).map((candidate) => [candidate.id, candidate]),
+    );
+
+    expect(byId.get("thm:main")).toMatchObject({
+      kind: "block",
+      detail: "Theorem 1",
+      info: "Fundamental theorem",
+    });
+    expect(byId.get("eq:energy")).toMatchObject({
+      kind: "equation",
+      detail: "Eq. (1)",
+    });
+    expect(byId.get("sec:background")).toMatchObject({
+      kind: "heading",
+      detail: "Section 1",
+      info: "Background",
+    });
+    expect(byId.get("karger2000")).toMatchObject({
+      kind: "citation",
+      detail: "Karger 2000",
+    });
+    expect(byId.size).toBe(4);
+  });
+});
+
+describe("referenceCompletionSource", () => {
+  it("offers semantic and bibliography ids after [@", async () => {
+    const state = createReferenceState(
+      [
+        "# Background {#sec:background}",
+        "",
+        "::: {#thm:main .theorem}",
+        "Statement.",
+        ":::",
+        "",
+        "See [@",
+      ].join("\n"),
+    ).update({
+      effects: bibDataEffect.of({
+        store: makeBibStore([CSL_FIXTURES.karger]),
+        cslProcessor: new CslProcessor([CSL_FIXTURES.karger]),
+      }),
+    }).state;
+
+    const result = await referenceCompletionSource(
+      // explicit completion mirrors Mod-Space and direct test invocation
+      new CompletionContext(state, state.doc.length, true),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.from).toBe(state.doc.length);
+    const labels = result ? result.options.map((option) => option.label) : [];
+    expect(labels).toEqual(
+      expect.arrayContaining(["thm:main", "sec:background", "karger2000"]),
+    );
+  });
+});
+
+describe("reference autocomplete integration", () => {
+  it("is wired into createEditor for semantic and bibliography ids", async () => {
+    const doc = [
+      "# Background {#sec:background}",
+      "",
+      "::: {#thm:main .theorem}",
+      "Statement.",
+      ":::",
+      "",
+      "See [@",
+    ].join("\n");
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = createEditor({ parent, doc });
+    view.focus();
+
+    view.dispatch({
+      effects: bibDataEffect.of({
+        store: makeBibStore([CSL_FIXTURES.karger]),
+        cslProcessor: new CslProcessor([CSL_FIXTURES.karger]),
+      }),
+    });
+    view.dispatch({
+      selection: { anchor: view.state.doc.length },
+    });
+
+    expect(startCompletion(view)).toBe(true);
+    const labels = await waitForCompletionLabels(() =>
+      currentCompletions(view.state).map((completion) => completion.label),
+    );
+    expect(labels).toEqual(
+      expect.arrayContaining(["thm:main", "sec:background", "karger2000"]),
+    );
+
+    view.destroy();
+    parent.remove();
+  });
+});
