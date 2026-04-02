@@ -399,9 +399,9 @@ function findFocusedActiveMath(state: EditorState): MathSemantics | undefined {
  * from both a ViewPlugin (EditorView path) and a StateField (EditorState path).
  * collectNodeRangesExcludingCursor requires an EditorView for visible ranges and
  * focus-guarded cursor checks. Additionally, when shouldSkip returns true the
- * callback adds Decoration.mark items (cf-math-source) rather than skipping —
- * this dual-path logic cannot be expressed as a simple "exclude and push widget"
- * callback.
+ * callback adds source-mark decorations (cf-source-delimiter / cf-math-source)
+ * rather than skipping - this dual-path logic cannot be expressed as a simple
+ * "exclude and push widget" callback.
  */
 function buildMathItems(
   state: EditorState,
