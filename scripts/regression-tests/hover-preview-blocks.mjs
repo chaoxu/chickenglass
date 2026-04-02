@@ -11,10 +11,11 @@
 import {
   hideHoverPreview,
   openFile,
+  readHoverPreviewState,
   scrollToText,
   showHoverPreview,
-  sleep,
   switchToMode,
+  waitForHoverPreviewState,
 } from "../test-helpers.mjs";
 
 export const name = "hover-preview-blocks";
@@ -23,41 +24,13 @@ const TABLE_REF = '.cf-crossref[aria-label="[@tbl:hover]"]';
 const FIGURE_REF = '.cf-crossref[aria-label="[@fig:hover]"]';
 const MISSING_FIGURE_REF = '.cf-crossref[aria-label="[@fig:missing]"]';
 
-async function readTooltipState(page) {
-  return page.evaluate(() => {
-    const tooltip = document.querySelector(".cf-hover-preview-tooltip");
-    if (!(tooltip instanceof HTMLElement) || tooltip.style.display === "none") {
-      return null;
-    }
-    return {
-      text: tooltip.textContent ?? "",
-      hasTable: Boolean(tooltip.querySelector(".cf-block-table table")),
-      hasCaption: Boolean(tooltip.querySelector(".cf-block-caption")),
-      captionText: tooltip.querySelector(".cf-block-caption")?.textContent ?? "",
-      imageSrc: tooltip.querySelector(".cf-block-figure img")?.getAttribute("src") ?? null,
-    };
-  });
-}
-
-async function waitForTooltipState(page, predicate, timeoutMs = 5000) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const tooltip = await readTooltipState(page);
-    if (tooltip && predicate(tooltip)) {
-      return tooltip;
-    }
-    await sleep(200);
-  }
-  return await readTooltipState(page);
-}
-
 export async function run(page) {
   await openFile(page, "cogirth/hover-preview.md");
   await switchToMode(page, "rich");
   await scrollToText(page, "See [@tbl:hover], [@fig:hover], and [@fig:missing].");
 
   await showHoverPreview(page, TABLE_REF);
-  const tableTooltip = await readTooltipState(page);
+  const tableTooltip = await readHoverPreviewState(page);
   await hideHoverPreview(page, TABLE_REF);
 
   if (!tableTooltip?.hasTable) {
@@ -68,7 +41,7 @@ export async function run(page) {
   }
 
   await showHoverPreview(page, FIGURE_REF);
-  const figureTooltip = await waitForTooltipState(
+  const figureTooltip = await waitForHoverPreviewState(
     page,
     (tooltip) => tooltip.imageSrc?.startsWith("data:image/") === true,
   );
@@ -82,7 +55,7 @@ export async function run(page) {
   }
 
   await showHoverPreview(page, MISSING_FIGURE_REF);
-  const missingTooltip = await waitForTooltipState(
+  const missingTooltip = await waitForHoverPreviewState(
     page,
     (tooltip) => tooltip.text.includes("Preview unavailable: missing-preview.pdf"),
   );

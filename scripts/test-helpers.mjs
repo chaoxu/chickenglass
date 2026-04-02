@@ -46,6 +46,41 @@ export async function connectEditor(port = DEFAULT_PORT) {
 }
 
 /**
+ * Focus the editor and place the selection at the end of the document.
+ *
+ * @param {import("playwright").Page} page
+ */
+export async function focusEditorEnd(page) {
+  await page.evaluate(() => {
+    const view = window.__cmView;
+    view.focus();
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+  });
+  await sleep(100);
+}
+
+/**
+ * Read the full raw editor document text.
+ *
+ * @param {import("playwright").Page} page
+ */
+export async function readEditorText(page) {
+  return page.evaluate(() => window.__cmView.state.doc.toString());
+}
+
+/**
+ * Save the current document through the app debug bridge.
+ *
+ * @param {import("playwright").Page} page
+ */
+export async function saveCurrentFile(page) {
+  await page.evaluate(async () => {
+    await window.__app.saveFile();
+  });
+  await sleep(150);
+}
+
+/**
  * Open a file by path (e.g. "posts/2014-11-04-isotonic-....md").
  * Uses the app's real openFile function via window.__app.
  */
@@ -154,6 +189,28 @@ export async function openAppSearch(page) {
 }
 
 /**
+ * Click the first visible search-dialog result button containing `needle`.
+ *
+ * @param {import("playwright").Page} page
+ * @param {string} needle
+ */
+export async function clickSearchDialogResult(page, needle) {
+  const clicked = await page.evaluate((text) => {
+    const button = [...document.querySelectorAll('[role="dialog"] button')].find((candidate) =>
+      (candidate.textContent ?? "").includes(text));
+    if (!(button instanceof HTMLButtonElement)) {
+      return false;
+    }
+    button.click();
+    return true;
+  }, needle);
+
+  if (!clicked) {
+    throw new Error(`failed to click search result containing ${JSON.stringify(needle)}`);
+  }
+}
+
+/**
  * Close the app-level search panel if it is open.
  *
  * @param {import("playwright").Page} page
@@ -218,6 +275,65 @@ export async function insertEditorText(page, text) {
     });
   }, text);
   await sleep(100);
+}
+
+/**
+ * Replace the full editor document text and place the cursor at the end.
+ *
+ * @param {import("playwright").Page} page
+ * @param {string} text
+ */
+export async function replaceEditorText(page, text) {
+  await page.evaluate((nextText) => {
+    const view = window.__cmView;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: nextText },
+      selection: { anchor: nextText.length },
+      userEvent: "input.type",
+    });
+  }, text);
+  await sleep(100);
+}
+
+/**
+ * Run a block that mutates a fixture document, then restore the fixture in a
+ * `finally` block so later browser regressions see pristine demo content.
+ *
+ * @param {import("playwright").Page} page
+ * @param {{ path: string, content: string }} fixture
+ * @param {() => Promise<unknown>} run
+ */
+export async function withRestoredFixture(page, fixture, run) {
+  let result;
+  let runError = null;
+
+  try {
+    result = await run();
+  } catch (error) {
+    runError = error;
+  }
+
+  try {
+    await openFile(page, fixture.path);
+    await switchToMode(page, "source");
+    await replaceEditorText(page, fixture.content);
+    await saveCurrentFile(page);
+  } catch (restoreError) {
+    if (runError instanceof Error) {
+      throw new Error(
+        `${runError.message}\nfixture restore failed for ${fixture.path}: ${
+          restoreError instanceof Error ? restoreError.message : String(restoreError)
+        }`,
+      );
+    }
+    throw restoreError;
+  }
+
+  if (runError) {
+    throw runError;
+  }
+
+  return result;
 }
 
 /**
@@ -325,6 +441,52 @@ export async function hideHoverPreview(page, selector) {
 }
 
 /**
+ * Read the currently visible hover-preview tooltip state.
+ *
+ * @param {import("playwright").Page} page
+ */
+export async function readHoverPreviewState(page) {
+  return page.evaluate(() => {
+    const tooltip = document.querySelector(".cf-hover-preview-tooltip");
+    if (!(tooltip instanceof HTMLElement) || tooltip.style.display === "none") {
+      return null;
+    }
+    return {
+      text: tooltip.textContent ?? "",
+      hasTable: Boolean(tooltip.querySelector(".cf-block-table table")),
+      hasCaption: Boolean(tooltip.querySelector(".cf-block-caption")),
+      captionText: tooltip.querySelector(".cf-block-caption")?.textContent ?? "",
+      imageSrc: tooltip.querySelector(".cf-block-figure img")?.getAttribute("src") ?? null,
+    };
+  });
+}
+
+/**
+ * Poll until the visible hover-preview tooltip satisfies `predicate`.
+ *
+ * @param {import("playwright").Page} page
+ * @param {(state: {
+ *   text: string,
+ *   hasTable: boolean,
+ *   hasCaption: boolean,
+ *   captionText: string,
+ *   imageSrc: string | null,
+ * }) => boolean} predicate
+ * @param {number} [timeoutMs=5000]
+ */
+export async function waitForHoverPreviewState(page, predicate, timeoutMs = 5000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const tooltip = await readHoverPreviewState(page);
+    if (tooltip && predicate(tooltip)) {
+      return tooltip;
+    }
+    await sleep(200);
+  }
+  return readHoverPreviewState(page);
+}
+
+/**
  * Return FencedDiv nodes from the current Lezer syntax tree.
  * Requires `__cmDebug` to be wired up (see use-editor.ts).
  */
@@ -400,6 +562,199 @@ export async function scrollToText(page, needle) {
   return line;
 }
 
+function issueMatches(text, patterns) {
+  return patterns.some((pattern) =>
+    typeof pattern === "string" ? text.includes(pattern) : pattern.test(text));
+}
+
+/**
+ * Capture runtime issues emitted during a browser scenario.
+ *
+ * Collects `console.error(...)` messages and uncaught page errors while the
+ * callback runs, then returns both the callback result and any captured issues.
+ *
+ * @param {import("playwright").Page} page
+ * @param {() => Promise<unknown>} run
+ * @param {{
+ *   ignoreConsole?: Array<string | RegExp>,
+ *   ignorePageErrors?: Array<string | RegExp>,
+ * }} [options]
+ */
+export async function withRuntimeIssueCapture(page, run, options = {}) {
+  const issues = [];
+  const ignoreConsole = options.ignoreConsole ?? [];
+  const ignorePageErrors = options.ignorePageErrors ?? [];
+
+  const onConsole = (msg) => {
+    if (msg.type() !== "error") return;
+    const text = msg.text();
+    if (issueMatches(text, ignoreConsole)) return;
+    issues.push({ source: "console", text });
+  };
+
+  const onPageError = (error) => {
+    const text = error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : String(error);
+    if (issueMatches(text, ignorePageErrors)) return;
+    issues.push({ source: "pageerror", text });
+  };
+
+  page.on("console", onConsole);
+  page.on("pageerror", onPageError);
+
+  try {
+    const value = await run();
+    await sleep(100);
+    return { value, issues };
+  } finally {
+    page.off("console", onConsole);
+    page.off("pageerror", onPageError);
+  }
+}
+
+/**
+ * Summarize a list of captured runtime issues for regression-test output.
+ *
+ * @param {Array<{ source: string, text: string }>} issues
+ * @param {number} [limit=3]
+ */
+export function formatRuntimeIssues(issues, limit = 3) {
+  if (issues.length === 0) return "none";
+  return issues
+    .slice(0, limit)
+    .map((issue) => `[${issue.source}] ${issue.text}`)
+    .join(" | ");
+}
+
+/**
+ * Collect a generic editor/app health snapshot after a scenario step.
+ *
+ * The goal is to catch session-level breakage: invalid selection bounds,
+ * missing debug bridge globals, duplicate transient UI surfaces, or malformed
+ * semantic revision info after real user flows.
+ *
+ * @param {import("playwright").Page} page
+ * @param {{
+ *   maxVisibleDialogs?: number,
+ *   maxVisibleHoverPreviews?: number,
+ *   maxAutocompleteTooltips?: number,
+ * }} [options]
+ */
+async function collectEditorHealth(page, options = {}) {
+  const {
+    maxVisibleDialogs = 0,
+    maxVisibleHoverPreviews = 1,
+    maxAutocompleteTooltips = 1,
+  } = options;
+
+  return page.evaluate((limits) => {
+    const issues = [];
+    const modeLabels = new Set(["rich", "source", "read"]);
+
+    const isVisible = (el) => {
+      if (!(el instanceof HTMLElement)) return false;
+      const style = window.getComputedStyle(el);
+      return style.display !== "none" && style.visibility !== "hidden";
+    };
+
+    const visibleCount = (selector) =>
+      [...document.querySelectorAll(selector)].filter((el) => isVisible(el)).length;
+
+    if (!window.__app) issues.push("missing window.__app");
+    if (!window.__cmView) issues.push("missing window.__cmView");
+    if (!window.__cmDebug) issues.push("missing window.__cmDebug");
+    if (!window.__cfDebug) issues.push("missing window.__cfDebug");
+
+    const view = window.__cmView;
+    const mode = window.__app?.getMode?.() ?? null;
+    const docLength = view?.state?.doc?.length ?? -1;
+    const selection = view?.state?.selection?.main
+      ? {
+          anchor: view.state.selection.main.anchor,
+          head: view.state.selection.main.head,
+        }
+      : null;
+    const semantics = window.__cmDebug?.semantics?.() ?? null;
+    const treeString = window.__cmDebug?.treeString?.() ?? "";
+    const dialogCount = visibleCount('[role="dialog"]');
+    const hoverPreviewCount = visibleCount(".cf-hover-preview-tooltip");
+    const autocompleteCount = visibleCount(".cm-tooltip-autocomplete");
+
+    if (!modeLabels.has(mode)) {
+      issues.push(`invalid mode: ${String(mode)}`);
+    }
+    if (docLength < 0) {
+      issues.push(`invalid doc length: ${docLength}`);
+    }
+    if (selection) {
+      if (selection.anchor < 0 || selection.anchor > docLength) {
+        issues.push(`selection.anchor out of bounds: ${selection.anchor}/${docLength}`);
+      }
+      if (selection.head < 0 || selection.head > docLength) {
+        issues.push(`selection.head out of bounds: ${selection.head}/${docLength}`);
+      }
+    } else {
+      issues.push("missing main selection");
+    }
+
+    if (!semantics || typeof semantics.revision !== "number" || Number.isNaN(semantics.revision)) {
+      issues.push("invalid semantic revision info");
+    }
+    if (typeof treeString !== "string" || treeString.length === 0) {
+      issues.push("missing syntax tree string");
+    }
+    if (dialogCount > limits.maxVisibleDialogs) {
+      issues.push(`too many visible dialogs: ${dialogCount}/${limits.maxVisibleDialogs}`);
+    }
+    if (hoverPreviewCount > limits.maxVisibleHoverPreviews) {
+      issues.push(
+        `too many visible hover previews: ${hoverPreviewCount}/${limits.maxVisibleHoverPreviews}`,
+      );
+    }
+    if (autocompleteCount > limits.maxAutocompleteTooltips) {
+      issues.push(
+        `too many autocomplete tooltips: ${autocompleteCount}/${limits.maxAutocompleteTooltips}`,
+      );
+    }
+
+    return {
+      mode,
+      docLength,
+      selection,
+      semantics,
+      treeErrorNodeCount: typeof treeString === "string" ? (treeString.match(/⚠/g) ?? []).length : 0,
+      dialogCount,
+      hoverPreviewCount,
+      autocompleteCount,
+      issues,
+    };
+  }, {
+    maxVisibleDialogs,
+    maxVisibleHoverPreviews,
+    maxAutocompleteTooltips,
+  });
+}
+
+/**
+ * Assert that the generic editor/app health snapshot is clean.
+ *
+ * @param {import("playwright").Page} page
+ * @param {string} label
+ * @param {{
+ *   maxVisibleDialogs?: number,
+ *   maxVisibleHoverPreviews?: number,
+ *   maxAutocompleteTooltips?: number,
+ * }} [options]
+ */
+export async function assertEditorHealth(page, label, options = {}) {
+  const health = await collectEditorHealth(page, options);
+  if (health.issues.length > 0) {
+    throw new Error(`${label}: ${health.issues.join("; ")}`);
+  }
+  return health;
+}
+
 /**
  * Create a flag-value parser for CLI arguments.
  *
@@ -435,6 +790,10 @@ export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
 
 /**
  * Reset the editor to rich mode with a baseline regression document loaded.
+ *
+ * Browser regressions that intentionally save fixture edits must restore those
+ * files before they finish, so the shared in-memory demo filesystem remains
+ * clean across tests.
  *
  * @param {import("playwright").Page} page
  */
