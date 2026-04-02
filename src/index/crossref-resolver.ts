@@ -38,6 +38,8 @@ export interface ResolvedCrossref {
   readonly label: string;
   /** The assigned number, if applicable. */
   readonly number?: number;
+  /** The full heading title, for heading cross-references. */
+  readonly title?: string;
 }
 
 /** Equation label entry found in the syntax tree. */
@@ -57,6 +59,7 @@ function formatHeadingCrossrefLabel(
     return {
       kind: "block",
       label: heading.number ? `Section ${heading.number}` : heading.text,
+      title: heading.text,
     };
   }
   return undefined;

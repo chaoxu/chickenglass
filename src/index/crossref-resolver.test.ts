@@ -187,6 +187,7 @@ describe("resolveCrossref", () => {
 
     expect(result.kind).toBe("block");
     expect(result.label).toBe("Section 1.1");
+    expect(result.title).toBe("Min-Cost Circulation");
   });
 
   it("falls back to heading text for unnumbered heading references", () => {
@@ -202,6 +203,7 @@ describe("resolveCrossref", () => {
 
     expect(result.kind).toBe("block");
     expect(result.label).toBe("Appendix");
+    expect(result.title).toBe("Appendix");
   });
 
   it("returns citation for unknown id", () => {
