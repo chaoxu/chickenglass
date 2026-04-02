@@ -359,7 +359,11 @@ function appendCrossrefItem(
   macros: Record<string, string>,
 ): void {
   if (resolved.kind === "block") {
-    container.appendChild(createHeader(resolved.label, macros));
+    const headerText =
+      resolved.title && resolved.title !== resolved.label
+        ? `${resolved.label} ${resolved.title}`
+        : resolved.label;
+    container.appendChild(createHeader(headerText, macros));
 
     const counterState = view.state.field(blockCounterField, false);
     const block = counterState?.byId.get(id);
