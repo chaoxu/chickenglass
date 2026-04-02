@@ -162,6 +162,9 @@ export const CSS = {
   /** Math error (KaTeX rendering failure). */
   mathError: "cf-math-error",
 
+  /** Source delimiter (revealed **, *, ~~, ==, $, \(, etc. — reduced metrics). */
+  sourceDelimiter: "cf-source-delimiter",
+
   /** Math source (delimiter visible when cursor on math). */
   mathSource: "cf-math-source",
 

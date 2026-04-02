@@ -24,6 +24,13 @@ function countSourceMarks(ranges: ReturnType<typeof collectMathRanges>): number 
   return ranges.filter((r) => r.value.spec.class === CSS.mathSource).length;
 }
 
+function countMarksWithClass(
+  ranges: ReturnType<typeof collectMathRanges>,
+  className: string,
+): number {
+  return ranges.filter((r) => r.value.spec.class === className).length;
+}
+
 /** Create an EditorView with math parser extensions at the given cursor position. */
 function createMathView(doc: string, cursorPos?: number): EditorView {
   return createTestView(doc, {
@@ -438,6 +445,20 @@ describe("collectMathRanges", () => {
     expect(countWidgets(ranges)).toBe(0);
   });
 
+  it("styles inline $ delimiters with cf-source-delimiter (#789)", () => {
+    view = createMathView("text $x^2$ more", 7);
+    const ranges = collectMathRanges(view);
+    expect(countMarksWithClass(ranges, CSS.sourceDelimiter)).toBe(2);
+    expect(countMarksWithClass(ranges, CSS.mathSource)).toBe(1);
+  });
+
+  it("styles inline \\( \\) delimiters with cf-source-delimiter (#789)", () => {
+    view = createMathView("text \\(x^2\\) more", 8);
+    const ranges = collectMathRanges(view);
+    expect(countMarksWithClass(ranges, CSS.sourceDelimiter)).toBe(2);
+    expect(countMarksWithClass(ranges, CSS.mathSource)).toBe(1);
+  });
+
   it("collects display math with dollar-dollar syntax", () => {
     const doc = "before\n\n$$x^2$$\n\nafter";
     view = createMathView(doc, doc.length);
@@ -467,6 +488,15 @@ describe("collectMathRanges", () => {
     const ranges = collectMathRanges(view);
     expect(countWidgets(ranges)).toBe(1);
     expect(countSourceMarks(ranges)).toBeGreaterThan(1);
+  });
+
+  it("keeps display-math label/body on cf-math-source but delimiters on cf-source-delimiter (#789)", () => {
+    const doc = "before\n\n$$\nx^2\n$$ {#eq:test}\n\nafter";
+    view = createMathView(doc, 11);
+    const ranges = collectMathRanges(view);
+    expect(countWidgets(ranges)).toBe(1);
+    expect(countMarksWithClass(ranges, CSS.sourceDelimiter)).toBe(2);
+    expect(countMarksWithClass(ranges, CSS.mathSource)).toBe(2);
   });
 
   it("collects multiple math expressions", () => {

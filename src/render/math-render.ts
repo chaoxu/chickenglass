@@ -399,9 +399,9 @@ function findFocusedActiveMath(state: EditorState): MathSemantics | undefined {
  * from both a ViewPlugin (EditorView path) and a StateField (EditorState path).
  * collectNodeRangesExcludingCursor requires an EditorView for visible ranges and
  * focus-guarded cursor checks. Additionally, when shouldSkip returns true the
- * callback adds Decoration.mark items (cf-math-source) rather than skipping —
- * this dual-path logic cannot be expressed as a simple "exclude and push widget"
- * callback.
+ * callback adds source-mark decorations (cf-source-delimiter / cf-math-source)
+ * rather than skipping - this dual-path logic cannot be expressed as a simple
+ * "exclude and push widget" callback.
  */
 function buildMathItems(
   state: EditorState,
@@ -413,10 +413,11 @@ function buildMathItems(
 
   for (const region of regions) {
     if (shouldSkip(region.from, region.to)) {
-      // Opening delimiter
+      // Opening delimiter — uses cf-source-delimiter so it doesn't push
+      // the line box taller than the body content (#789)
       if (region.contentFrom > region.from) {
         items.push(
-          Decoration.mark({ class: "cf-math-source" }).range(region.from, region.contentFrom),
+          Decoration.mark({ class: "cf-source-delimiter" }).range(region.from, region.contentFrom),
         );
       }
       if (region.contentFrom < region.contentTo) {
@@ -424,13 +425,13 @@ function buildMathItems(
           Decoration.mark({ class: "cf-math-source" }).range(region.contentFrom, region.contentTo),
         );
       }
-      // Closing delimiter (stop before label for labeled display math)
+      // Closing delimiter — same source-delimiter treatment as opening
       const delimClose = region.isDisplay && region.labelFrom !== undefined
         ? region.labelFrom
         : region.to;
       if (delimClose > region.contentTo) {
         items.push(
-          Decoration.mark({ class: "cf-math-source" }).range(region.contentTo, delimClose),
+          Decoration.mark({ class: "cf-source-delimiter" }).range(region.contentTo, delimClose),
         );
       }
       if (region.isDisplay && region.labelFrom !== undefined && region.to > region.labelFrom) {

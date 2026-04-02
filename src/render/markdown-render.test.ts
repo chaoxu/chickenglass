@@ -1,7 +1,7 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { Decoration, EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
-import { markdownRenderPlugin, cursorContextKey, markdownShouldUpdate } from "./markdown-render";
+import { markdownRenderPlugin, cursorContextKey, markdownShouldUpdate, _collectMarkdownItemsForTest as collectMarkdownItems } from "./markdown-render";
 import { cursorInRange, createSimpleViewPlugin } from "./render-utils";
 import { createEditorState, createTestView } from "../test-utils";
 
@@ -154,6 +154,53 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
     // With cursor inside, no decorations should be applied
     // (the tree walk returns false, skipping marker hiding)
     expect(view.state.doc.toString()).toBe(doc);
+  });
+
+  describe("source-delimiter decorations (#789)", () => {
+    /** Collect decorations with class "cf-source-delimiter" for the full doc range. */
+    function getSourceDelimiters(v: EditorView) {
+      const items = collectMarkdownItems(
+        v,
+        [{ from: 0, to: v.state.doc.length }],
+        () => false,
+      );
+      return items.filter((r) => r.value.spec.class === "cf-source-delimiter");
+    }
+
+    it("applies cf-source-delimiter to bold markers when cursor is inside", () => {
+      view = createView("**bold**", 4);
+      const delims = getSourceDelimiters(view);
+      expect(delims.length).toBeGreaterThan(0);
+    });
+
+    it("applies cf-source-delimiter to italic markers when cursor is inside", () => {
+      view = createView("*italic*", 3);
+      const delims = getSourceDelimiters(view);
+      expect(delims.length).toBeGreaterThan(0);
+    });
+
+    it("decorates marks at ALL nesting levels in ***x*** (#789 regression)", () => {
+      // ***x*** parses as Emphasis > StrongEmphasis (or vice versa).
+      // The outer handler must not short-circuit inner marks.
+      view = createView("***x***", 3);
+      const delims = getSourceDelimiters(view);
+      // 4 EmphasisMark nodes: outer pair + inner pair — all must be decorated.
+      expect(delims.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it("decorates inner italic marks in **a *b* c** (#789 regression)", () => {
+      // StrongEmphasis wraps Emphasis; both levels have delimiter marks.
+      view = createView("**a *b* c**", 5);
+      const delims = getSourceDelimiters(view);
+      // Outer ** (×2) + inner * (×2) = at least 4 decorated ranges
+      expect(delims.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it("does not apply cf-source-delimiter when cursor is outside", () => {
+      view = createView("**bold** rest", 12);
+      const delims = getSourceDelimiters(view);
+      expect(delims.length).toBe(0);
+    });
   });
 
   describe("negative / edge-case", () => {

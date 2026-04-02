@@ -5,7 +5,7 @@ import {
 } from "@codemirror/view";
 import { type EditorState, type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import type { SyntaxNodeRef } from "@lezer/common";
+import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
 import { type VisibleRange, cursorInRange, decorationHidden, addMarkerReplacement, createCursorSensitiveViewPlugin } from "./render-utils";
 import { findTrailingHeadingAttributes } from "../semantics/heading-ancestry";
 import { isSafeUrl } from "../lib/url-utils";
@@ -46,6 +46,31 @@ const boldDecoration = Decoration.mark({ class: "cf-bold" });
 const italicDecoration = Decoration.mark({ class: "cf-italic" });
 const strikethroughDecoration = Decoration.mark({ class: "cf-strikethrough" });
 const inlineCodeDecoration = Decoration.mark({ class: "cf-inline-code" });
+
+/** Source-delimiter decoration: reduced-size metrics so visible delimiters
+ *  don't push the line box taller than surrounding content (#789). */
+const sourceDelimiterDecoration = Decoration.mark({ class: "cf-source-delimiter" });
+
+/** Mark node types whose visible delimiters need source-delimiter styling.
+ *  CodeMark is excluded — cf-inline-code already wraps the entire InlineCode range. */
+const SOURCE_DELIMITER_MARKS = new Set(["EmphasisMark", "StrikethroughMark", "HighlightMark"]);
+
+/**
+ * Recursively walk a subtree and add source-delimiter decorations to all
+ * matching mark nodes. Handles nested inline elements (e.g. `***x***` where
+ * Emphasis wraps StrongEmphasis) that the main tree walk won't visit because
+ * the outer handler returns false (#789).
+ */
+function addSourceDelimitersInSubtree(node: SyntaxNode, items: Range<Decoration>[]): void {
+  let child = node.firstChild;
+  while (child) {
+    if (SOURCE_DELIMITER_MARKS.has(child.name)) {
+      items.push(sourceDelimiterDecoration.range(child.from, child.to));
+    }
+    addSourceDelimitersInSubtree(child, items);
+    child = child.nextSibling;
+  }
+}
 
 /** Decoration to style bullet list markers. */
 const bulletListDecoration = Decoration.mark({ class: "cf-list-bullet" });
@@ -142,6 +167,7 @@ function handleHeaderMark(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): voi
 function handleHighlight(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
   ctx.items.push(highlightDecoration.range(node.from, node.to));
   if (cursorInRange(ctx.view, node.from, node.to)) {
+    addSourceDelimitersInSubtree(node.node, ctx.items);
     return false as const; // keep highlight style, show markers
   }
   // Walk children to hide HighlightMark
@@ -194,8 +220,11 @@ function handleElement(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
     items.push(styleDeco.range(node.from, node.to));
   }
 
-  // If cursor is inside: skip hiding markers (show source) but keep style
+  // If cursor is inside: skip hiding markers (show source) but keep style.
+  // Recursively decorate all mark nodes in the subtree so nested inline
+  // elements (e.g. ***x***, **a *b* c**) also get reduced metrics (#789).
   if (cursorInRange(view, node.from, node.to)) {
+    addSourceDelimitersInSubtree(node.node, items);
     return false as const;
   }
   // Cursor outside: walk children to hide markers
@@ -367,6 +396,8 @@ function collectMarkdownItems(
 
   return ctx.items;
 }
+
+export { collectMarkdownItems as _collectMarkdownItemsForTest };
 
 /** CM6 extension that provides Typora-style rendering for standard markdown. */
 export const markdownRenderPlugin: Extension = createCursorSensitiveViewPlugin(

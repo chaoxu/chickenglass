@@ -132,6 +132,16 @@ export const typographyThemeStyles = {
     fontFamily: contentFont,
   },
 
+  /* Source delimiters (**, *, ~~, ==, $, \(, \), etc.) — uses reduced
+   * metrics so revealed delimiters don't push the line box taller than
+   * surrounding content. lineHeight: "0" follows the same pattern as
+   * heading markers (.tok-heading.tok-meta). */
+  ".cf-source-delimiter": {
+    fontFamily: monoFont,
+    fontSize: "0.85em",
+    lineHeight: "0",
+  },
+
   /* Math source content — LaTeX between $ delimiters when editing */
   ".cf-math-source": {
     fontFamily: monoFont,
