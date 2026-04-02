@@ -26,9 +26,13 @@ import { renderKatex } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { renderBlockContentToDom, renderDocumentFragmentToDom, type BlockContentOptions } from "../document-surfaces";
 import { getPlugin, pluginRegistryField } from "../plugins";
-import type { BlockCounterEntry } from "../lib/types";
+import { documentPathFacet, type BlockCounterEntry } from "../lib/types";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { HOVER_DELAY_MS } from "../constants";
+import { collectImageTargets } from "../app/pdf-image-previews";
+import { imageUrlField } from "./image-url-cache";
+import { resolveLocalMediaPreview } from "./media-preview";
+import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 
 // ── Singleton tooltip element ───────────────────────────────────────────────
 
@@ -152,6 +156,13 @@ function extractBlockContent(
   return view.state.doc.sliceString(contentFrom, contentTo).trim();
 }
 
+function extractBlockSource(
+  view: EditorView,
+  block: NumberedBlock,
+): string {
+  return view.state.doc.sliceString(block.from, block.to).trim();
+}
+
 /** Create a header div for the tooltip. */
 function createHeader(
   text: string,
@@ -191,7 +202,55 @@ function findEquationSource(view: EditorView, id: string): string | undefined {
  * inside hover preview bodies (e.g. `[@cormen2009]` or `[@thm:foo]`
  * within a theorem body).
  */
-function buildBlockContentOptions(view: EditorView, macros: Record<string, string>): BlockContentOptions {
+function buildImageUrlOverrides(
+  view: EditorView,
+  text: string,
+): {
+  overrides?: ReadonlyMap<string, string>;
+  loadingLocalMedia: string[];
+  unavailableLocalMedia: string[];
+} {
+  const overrides = new Map<string, string>();
+  const loadingLocalMedia: string[] = [];
+  const unavailableLocalMedia: string[] = [];
+
+  for (const src of collectImageTargets(text)) {
+    const preview = resolveLocalMediaPreview(view, src);
+    if (!preview) continue;
+
+    if (preview.kind === "image") {
+      overrides.set(preview.resolvedPath, preview.dataUrl);
+      continue;
+    }
+
+    if (preview.kind === "pdf-canvas") {
+      const dataUrl = getPdfCanvas(preview.resolvedPath)?.toDataURL("image/png");
+      if (typeof dataUrl === "string" && dataUrl.length > 0) {
+        overrides.set(preview.resolvedPath, dataUrl);
+        continue;
+      }
+    }
+
+    if (preview.kind === "loading") {
+      loadingLocalMedia.push(src);
+      continue;
+    }
+
+    unavailableLocalMedia.push(src);
+  }
+
+  return {
+    overrides: overrides.size > 0 ? overrides : undefined,
+    loadingLocalMedia,
+    unavailableLocalMedia,
+  };
+}
+
+function buildBlockContentOptions(
+  view: EditorView,
+  macros: Record<string, string>,
+  imageUrlOverrides?: ReadonlyMap<string, string>,
+): BlockContentOptions {
   const { store, cslProcessor } = view.state.field(bibDataField);
   const counterState = view.state.field(blockCounterField, false);
   const registry = view.state.field(pluginRegistryField, false);
@@ -217,7 +276,75 @@ function buildBlockContentOptions(view: EditorView, macros: Record<string, strin
     bibliography: store.size > 0 ? store : undefined,
     cslProcessor: store.size > 0 ? cslProcessor : undefined,
     blockCounters,
+    documentPath: view.state.facet(documentPathFacet),
+    imageUrlOverrides,
   };
+}
+
+function appendMediaFallback(
+  body: HTMLElement,
+  loadingLocalMedia: readonly string[],
+  unavailableLocalMedia: readonly string[],
+): void {
+  if (loadingLocalMedia.length === 0 && unavailableLocalMedia.length === 0) return;
+
+  for (const img of body.querySelectorAll("img")) {
+    const src = img.getAttribute("src");
+    if (src && (loadingLocalMedia.includes(src) || unavailableLocalMedia.includes(src))) {
+      img.remove();
+    }
+  }
+
+  if (loadingLocalMedia.length > 0) {
+    const loading = document.createElement("div");
+    loading.className = "cf-hover-preview-unresolved";
+    loading.textContent = `Loading preview: ${loadingLocalMedia
+      .map((src) => src.split("/").pop() ?? src)
+      .join(", ")}`;
+    body.appendChild(loading);
+  }
+
+  if (unavailableLocalMedia.length > 0) {
+    const fallback = document.createElement("div");
+    fallback.className = "cf-hover-preview-unresolved";
+    fallback.textContent = `Preview unavailable: ${unavailableLocalMedia
+      .map((src) => src.split("/").pop() ?? src)
+      .join(", ")}`;
+    body.appendChild(fallback);
+  }
+}
+
+function buildBlockPreviewBody(
+  view: EditorView,
+  block: NumberedBlock,
+  useFullBlockSource: boolean,
+  macros: Record<string, string>,
+): HTMLElement | null {
+  const text = useFullBlockSource
+    ? extractBlockSource(view, block)
+    : extractBlockContent(view, block);
+  if (!text) return null;
+
+  const body = document.createElement("div");
+  body.className = "cf-hover-preview-body";
+  const {
+    overrides,
+    loadingLocalMedia,
+    unavailableLocalMedia,
+  } = buildImageUrlOverrides(view, text);
+  renderBlockContentToDom(body, text, buildBlockContentOptions(view, macros, overrides));
+  appendMediaFallback(body, loadingLocalMedia, unavailableLocalMedia);
+  return body;
+}
+
+export function buildBlockPreviewBodyForTest(
+  view: EditorView,
+  block: NumberedBlock,
+): HTMLElement | null {
+  const macros = view.state.field(mathMacrosField);
+  const registry = view.state.field(pluginRegistryField, false);
+  const plugin = registry ? getPlugin(registry, block.type) : undefined;
+  return buildBlockPreviewBody(view, block, plugin?.captionPosition === "below", macros);
 }
 
 /**
@@ -237,11 +364,15 @@ function appendCrossrefItem(
     const counterState = view.state.field(blockCounterField, false);
     const block = counterState?.byId.get(id);
     if (block) {
-      const content = extractBlockContent(view, block);
-      if (content) {
-        const body = document.createElement("div");
-        body.className = "cf-hover-preview-body";
-        renderBlockContentToDom(body, content, buildBlockContentOptions(view, macros));
+      const registry = view.state.field(pluginRegistryField, false);
+      const plugin = registry ? getPlugin(registry, block.type) : undefined;
+      const body = buildBlockPreviewBody(
+        view,
+        block,
+        plugin?.captionPosition === "below",
+        macros,
+      );
+      if (body) {
         container.appendChild(body);
       }
     }
@@ -516,11 +647,45 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
     hideFloatingTooltip();
   };
 
+  const refreshOpenTooltip = () => {
+    if (!currentTarget) return;
+    if (!currentTarget.isConnected) {
+      currentTarget = null;
+      hideFloatingTooltip();
+      return;
+    }
+    if (!tooltipEl || tooltipEl.style.display === "none") return;
+
+    const content = buildTooltipForElement(view, currentTarget);
+    if (!content) {
+      hideFloatingTooltip();
+      return;
+    }
+
+    showFloatingTooltip(currentTarget, content);
+  };
+
   const scroller = view.scrollDOM;
   scroller.addEventListener("mouseover", onMouseOver);
   scroller.addEventListener("mouseout", onMouseOut);
 
   return {
+    update(update) {
+      const imageCacheChanged =
+        update.startState.field(imageUrlField, false) !== update.state.field(imageUrlField, false);
+      const pdfCacheChanged =
+        update.startState.field(pdfPreviewField, false) !== update.state.field(pdfPreviewField, false);
+
+      if (imageCacheChanged || pdfCacheChanged) {
+        refreshOpenTooltip();
+        return;
+      }
+
+      if (currentTarget && !currentTarget.isConnected) {
+        currentTarget = null;
+        hideFloatingTooltip();
+      }
+    },
     destroy() {
       scroller.removeEventListener("mouseover", onMouseOver);
       scroller.removeEventListener("mouseout", onMouseOut);

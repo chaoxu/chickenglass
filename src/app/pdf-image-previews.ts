@@ -8,7 +8,7 @@ import { rasterizePdfPage1 } from "../render/pdf-rasterizer";
 
 const previewParser = baseParser.configure(htmlRenderExtensions);
 
-function collectImageTargets(content: string): string[] {
+export function collectImageTargets(content: string): string[] {
   const targets: string[] = [];
   const seen = new Set<string>();
   const tree = previewParser.parse(content);
