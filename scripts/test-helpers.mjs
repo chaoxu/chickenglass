@@ -209,7 +209,6 @@ export async function clickSearchDialogResult(page, needle) {
     throw new Error(`failed to click search result containing ${JSON.stringify(needle)}`);
   }
 }
-
 /**
  * Close the app-level search panel if it is open.
  *
@@ -335,7 +334,6 @@ export async function withRestoredFixture(page, fixture, run) {
 
   return result;
 }
-
 /**
  * Pick a CM6 autocomplete option by substring match.
  *
@@ -485,7 +483,6 @@ export async function waitForHoverPreviewState(page, predicate, timeoutMs = 5000
   }
   return readHoverPreviewState(page);
 }
-
 /**
  * Return FencedDiv nodes from the current Lezer syntax tree.
  * Requires `__cmDebug` to be wired up (see use-editor.ts).

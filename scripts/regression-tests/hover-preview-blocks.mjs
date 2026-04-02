@@ -23,7 +23,6 @@ export const name = "hover-preview-blocks";
 const TABLE_REF = '.cf-crossref[aria-label="[@tbl:hover]"]';
 const FIGURE_REF = '.cf-crossref[aria-label="[@fig:hover]"]';
 const MISSING_FIGURE_REF = '.cf-crossref[aria-label="[@fig:missing]"]';
-
 export async function run(page) {
   await openFile(page, "cogirth/hover-preview.md");
   await switchToMode(page, "rich");
