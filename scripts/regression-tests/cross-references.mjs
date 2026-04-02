@@ -7,12 +7,12 @@
 
 /* global window */
 
-import { scrollToText } from "../test-helpers.mjs";
+import { openRegressionDocument, scrollToText } from "../test-helpers.mjs";
 
 export const name = "cross-references";
 
 export async function run(page) {
-  await page.evaluate(() => window.__app.openFile("index.md"));
+  const openedPath = await openRegressionDocument(page);
   await new Promise((r) => setTimeout(r, 800));
 
   // Ensure rich mode for rendered widgets
@@ -51,11 +51,15 @@ export async function run(page) {
     // Document doesn't have crossrefs — test is inconclusive but not a failure
     return {
       pass: true,
-      message: "No crossref syntax found in index.md (test skipped — add [@...] to exercise)",
+      message: `No crossref syntax found in ${openedPath} (test skipped — add [@...] to exercise)`,
     };
   }
 
   await scrollToText(page, "# Citations");
+  await page.waitForFunction(
+    () => window.__cmView.dom.querySelectorAll(".cf-citation").length > 0,
+    { timeout: 5000 },
+  ).catch(() => {});
 
   const citationCount = await page.evaluate(() => {
     const editor = window.__cmView.dom;

@@ -1,16 +1,18 @@
 /**
  * Regression test: KaTeX math rendering works.
  *
- * Verifies that `.katex` elements exist in the editor DOM, meaning inline
- * and/or display math has been rendered by KaTeX.
+ * Verifies that `.katex` elements exist in the regression document DOM,
+ * meaning inline and/or display math has been rendered by KaTeX.
  */
 
 /* global window */
 
+import { openRegressionDocument } from "../test-helpers.mjs";
+
 export const name = "math-render";
 
 export async function run(page) {
-  await page.evaluate(() => window.__app.openFile("index.md"));
+  await openRegressionDocument(page);
   await new Promise((r) => setTimeout(r, 800));
 
   // Check for rendered KaTeX elements

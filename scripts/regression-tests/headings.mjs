@@ -1,17 +1,18 @@
 /**
  * Regression test: ATX headings parse and render correctly.
  *
- * Opens index.md and verifies the Lezer syntax tree contains ATXHeading nodes.
+ * Opens the stable regression fixture and verifies the Lezer syntax tree
+ * contains ATXHeading nodes.
  */
 
 /* global window */
 
-import { scrollToText } from "../test-helpers.mjs";
+import { openRegressionDocument, scrollToText } from "../test-helpers.mjs";
 
 export const name = "headings";
 
 export async function run(page) {
-  await page.evaluate(() => window.__app.openFile("index.md"));
+  await openRegressionDocument(page);
   await new Promise((r) => setTimeout(r, 800));
 
   const tree = await page.evaluate(() => window.__cmDebug.treeString());

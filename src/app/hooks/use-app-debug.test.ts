@@ -35,7 +35,7 @@ const { useAppDebug } = await import("./use-app-debug");
 const openProject = vi.fn(async (_path: string) => true);
 const openFile = vi.fn(async (_path: string) => {});
 const saveFile = vi.fn(async () => {});
-const closeFile = vi.fn(() => {});
+const closeFile = vi.fn(async (_options?: { discard?: boolean }) => true);
 const setSearchOpen = vi.fn((_open: boolean) => {});
 const requestNativeClose = vi.fn(async () => {});
 const setMode = vi.fn((_mode: "rich" | "source" | "read") => {});

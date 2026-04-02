@@ -81,6 +81,22 @@ export async function saveCurrentFile(page) {
 }
 
 /**
+ * Discard the currently open document without prompting.
+ *
+ * @param {import("playwright").Page} page
+ */
+export async function discardCurrentFile(page) {
+  const discarded = await page.evaluate(async () => {
+    if (!window.__app?.closeFile) {
+      return false;
+    }
+    return window.__app.closeFile({ discard: true });
+  });
+  await sleep(150);
+  return discarded;
+}
+
+/**
  * Open a file by path (e.g. "posts/2014-11-04-isotonic-....md").
  * Uses the app's real openFile function via window.__app.
  */
@@ -90,31 +106,15 @@ export async function openFile(page, path) {
 }
 
 /**
- * Open a stable baseline document for browser regression tests.
+ * Open a stable fixture for browser regression tests.
  *
- * The dev fixture set varies between workspaces, so tests should not hard-code
- * a single file like index.md. Try a small ordered set of known demo docs and
- * use the first one that exists.
+ * Older regressions used whichever demo file happened to be the default open
+ * document, which made the suite drift whenever demo content changed. Default
+ * to the dedicated regression fixture instead.
  */
-export async function openRegressionDocument(page) {
-  const candidates = ["index.md", "main.md", "cogirth/main2.md", "FORMAT.md"];
-
-  for (const path of candidates) {
-    const opened = await page.evaluate(async (candidate) => {
-      try {
-        await window.__app.openFile(candidate);
-        return true;
-      } catch {
-        return false;
-      }
-    }, path);
-    if (opened) {
-      await sleep(500);
-      return path;
-    }
-  }
-
-  throw new Error(`Failed to open a regression document. Tried: ${candidates.join(", ")}`);
+export async function openRegressionDocument(page, path = "cogirth/regression-suite.md") {
+  await openFile(page, path);
+  return path;
 }
 
 /**
@@ -799,13 +799,23 @@ export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
  */
 export async function resetEditorState(page) {
   await page.evaluate(() => {
+    window.__app?.setSearchOpen?.(false);
+  }).catch(() => {});
+  const discarded = await discardCurrentFile(page).catch(() => false);
+  if (!discarded) {
+    throw new Error("Failed to discard the current document during reset");
+  }
+  await page.evaluate(() => {
     window.__app.setMode("rich");
   });
   await openRegressionDocument(page);
   await page.waitForFunction(
-    () => window.__cmView?.state?.doc?.length > 100,
+    () => {
+      const doc = window.__cmView?.state?.doc?.toString() ?? "";
+      return doc.includes("# Math") && doc.includes("function isPrime");
+    },
     { timeout: 5000 },
-  ).catch(() => {});
+  );
 }
 
 /**

@@ -35,49 +35,60 @@ export async function run(page) {
     };
 
     const view = window.__cmView;
-    const before = readClusterSnapshot("[@thm-a; @def-b]");
-
     const originalDoc = view.state.doc.toString();
-    const titleStart = originalDoc.indexOf("title: AB");
-    const numberingStart = originalDoc.indexOf("numbering: global");
-    if (titleStart < 0 || numberingStart < 0) {
-      return { before, afterRenumber: null, partial: null, error: "missing frontmatter fields" };
-    }
 
-    view.dispatch({
-      changes: [
-        {
-          from: titleStart + "title: ".length,
-          to: titleStart + "title: AB".length,
-          insert: "A",
+    try {
+      const before = readClusterSnapshot("[@thm-a; @def-b]");
+
+      const titleStart = originalDoc.indexOf("title: AB");
+      const numberingStart = originalDoc.indexOf("numbering: global");
+      if (titleStart < 0 || numberingStart < 0) {
+        return { before, afterRenumber: null, partial: null, error: "missing frontmatter fields" };
+      }
+
+      view.dispatch({
+        changes: [
+          {
+            from: titleStart + "title: ".length,
+            to: titleStart + "title: AB".length,
+            insert: "A",
+          },
+          {
+            from: numberingStart + "numbering: ".length,
+            to: numberingStart + "numbering: global".length,
+            insert: "grouped",
+          },
+        ],
+        selection: { anchor: 0 },
+      });
+      const afterRenumber = readClusterSnapshot("[@thm-a; @def-b]");
+
+      const renumberedDoc = view.state.doc.toString();
+      const clusterStart = renumberedDoc.indexOf("[@thm-a; @def-b]");
+      if (clusterStart < 0) {
+        return { before, afterRenumber, partial: null, error: "missing clustered reference after renumbering" };
+      }
+
+      view.dispatch({
+        changes: {
+          from: clusterStart + "[@thm-a; @".length,
+          to: clusterStart + "[@thm-a; @def-b".length,
+          insert: "missing",
         },
-        {
-          from: numberingStart + "numbering: ".length,
-          to: numberingStart + "numbering: global".length,
-          insert: "grouped",
-        },
-      ],
-      selection: { anchor: 0 },
-    });
-    const afterRenumber = readClusterSnapshot("[@thm-a; @def-b]");
+        selection: { anchor: 0 },
+      });
+      const partial = readClusterSnapshot("[@thm-a; @missing]");
 
-    const renumberedDoc = view.state.doc.toString();
-    const clusterStart = renumberedDoc.indexOf("[@thm-a; @def-b]");
-    if (clusterStart < 0) {
-      return { before, afterRenumber, partial: null, error: "missing clustered reference after renumbering" };
+      return { before, afterRenumber, partial, error: null };
+    } finally {
+      const currentDoc = view.state.doc.toString();
+      if (currentDoc !== originalDoc) {
+        view.dispatch({
+          changes: { from: 0, to: currentDoc.length, insert: originalDoc },
+          selection: { anchor: 0 },
+        });
+      }
     }
-
-    view.dispatch({
-      changes: {
-        from: clusterStart + "[@thm-a; @".length,
-        to: clusterStart + "[@thm-a; @def-b".length,
-        insert: "missing",
-      },
-      selection: { anchor: 0 },
-    });
-    const partial = readClusterSnapshot("[@thm-a; @missing]");
-
-    return { before, afterRenumber, partial, error: null };
   });
 
   if (result.error) {

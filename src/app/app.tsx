@@ -99,9 +99,7 @@ function AppInner() {
     openProject: (path) => fileDialogs.openProjectInCurrentWindow(path),
     openFile: editor.openFile,
     saveFile: editor.saveFile,
-    closeFile: () => {
-      void editor.closeCurrentFile();
-    },
+    closeFile: (options) => editor.closeCurrentFile(options),
     setSearchOpen: dialogs.setSearchOpen,
     requestNativeClose: fileDialogs.handleQuitRequest,
     setMode: editor.handleModeChange,

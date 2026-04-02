@@ -39,7 +39,7 @@ interface AppDebugDeps {
   openProject: (path: string) => Promise<boolean>;
   openFile: (path: string) => Promise<void>;
   saveFile: () => Promise<void>;
-  closeFile: () => void;
+  closeFile: (options?: { discard?: boolean }) => Promise<boolean>;
   setSearchOpen: (open: boolean) => void;
   requestNativeClose: () => Promise<void>;
   setMode: (mode: EditorMode) => void;

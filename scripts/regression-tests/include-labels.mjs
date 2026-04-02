@@ -7,15 +7,20 @@
 
 /* global window */
 
-import { scrollToText } from "../test-helpers.mjs";
+import { openRegressionDocument, scrollToText } from "../test-helpers.mjs";
 
 export const name = "include-labels";
+const expectedLabel = "include-labels-section.md";
 
 export async function run(page) {
-  await page.evaluate(() => window.__app.openFile("index.md"));
+  const openedPath = await openRegressionDocument(page, "cogirth/include-labels.md");
   await new Promise((r) => setTimeout(r, 800));
   await page.evaluate(() => window.__app.setMode("rich"));
   await new Promise((r) => setTimeout(r, 300));
+  await page.waitForFunction(
+    () => (window.__cfSourceMap?.regions.length ?? 0) > 0,
+    { timeout: 5000 },
+  );
 
   await scrollToText(page, "# Introduction");
 
@@ -36,7 +41,7 @@ export async function run(page) {
   if (beforeCycle.sourceMapRegions === 0) {
     return {
       pass: false,
-      message: "Expanded index.md has no source-map regions to drive include labels",
+      message: `Expanded ${openedPath} has no source-map regions to drive include labels`,
     };
   }
 
@@ -44,6 +49,12 @@ export async function run(page) {
     return {
       pass: false,
       message: "Include source-map regions exist but no include labels/regions are visible before mode cycling",
+    };
+  }
+  if (!beforeCycle.labels.includes(expectedLabel)) {
+    return {
+      pass: false,
+      message: `Expected include label ${expectedLabel} before mode cycling, got ${JSON.stringify(beforeCycle.labels)}`,
     };
   }
 
@@ -91,6 +102,12 @@ export async function run(page) {
     return {
       pass: false,
       message: "Include labels/regions did not return after switching back to rich mode",
+    };
+  }
+  if (!afterCycle.labels.includes(expectedLabel)) {
+    return {
+      pass: false,
+      message: `Expected include label ${expectedLabel} after mode cycling, got ${JSON.stringify(afterCycle.labels)}`,
     };
   }
 

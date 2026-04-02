@@ -7,12 +7,12 @@
 
 /* global window */
 
-import { scrollToText } from "../test-helpers.mjs";
+import { openRegressionDocument, scrollToText } from "../test-helpers.mjs";
 
 export const name = "footnotes";
 
 export async function run(page) {
-  await page.evaluate(() => window.__app.openFile("index.md"));
+  const openedPath = await openRegressionDocument(page);
   await new Promise((r) => setTimeout(r, 800));
 
   // Ensure rich mode
@@ -30,7 +30,7 @@ export async function run(page) {
   if (!hasFootnoteSyntax) {
     return {
       pass: true,
-      message: "No footnote syntax found in index.md (test skipped — add [^id] to exercise)",
+      message: `No footnote syntax found in ${openedPath} (test skipped — add [^id] to exercise)`,
     };
   }
 

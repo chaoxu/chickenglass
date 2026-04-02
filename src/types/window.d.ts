@@ -47,7 +47,7 @@ declare global {
     __app?: {
       openFile: (path: string) => Promise<void>;
       saveFile: () => Promise<void>;
-      closeFile: () => void;
+      closeFile: (options?: { discard?: boolean }) => Promise<boolean>;
       setSearchOpen: (open: boolean) => void;
       setMode: (mode: EditorMode) => void;
       getMode: () => EditorMode;

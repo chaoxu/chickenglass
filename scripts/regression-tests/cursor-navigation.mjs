@@ -8,10 +8,12 @@
 
 /* global window */
 
+import { openRegressionDocument } from "../test-helpers.mjs";
+
 export const name = "cursor-navigation";
 
 export async function run(page) {
-  await page.evaluate(() => window.__app.openFile("index.md"));
+  await openRegressionDocument(page);
   await new Promise((r) => setTimeout(r, 800));
 
   // Ensure rich mode (fences are hidden here)
