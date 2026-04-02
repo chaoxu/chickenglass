@@ -223,6 +223,35 @@ describe("CslProcessor corporate authors", () => {
 });
 
 describe("CslProcessor ordering", () => {
+  it("keeps citation engines isolated across processors with the same style", async () => {
+    const alpha: CslJsonItem = {
+      id: "alpha2020",
+      type: "article-journal",
+      author: [{ family: "Alpha" }],
+      issued: { "date-parts": [[2020]] },
+      title: "Alpha paper",
+    };
+    const beta: CslJsonItem = {
+      id: "beta2021",
+      type: "article-journal",
+      author: [{ family: "Beta" }],
+      issued: { "date-parts": [[2021]] },
+      title: "Beta paper",
+    };
+
+    const first = await CslProcessor.create([alpha]);
+    first.registerCitations([{ ids: ["alpha2020"] }]);
+    expect(first.cite(["alpha2020"])).toBe("[1]");
+
+    const second = await CslProcessor.create([beta]);
+    second.registerCitations([{ ids: ["beta2021"] }]);
+    expect(second.cite(["beta2021"])).toBe("[1]");
+
+    // Regression (#788): a second processor must not overwrite the first
+    // processor's retrieveItem callback and force raw-key fallback output.
+    expect(first.cite(["alpha2020"])).toBe("[1]");
+  });
+
   it("does not register a failed citation cluster as prior context", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const processor = CslProcessor.empty() as unknown as {

@@ -114,8 +114,11 @@ function buildCitationItems(
   });
 }
 
-/** Unique template name used to register the active CSL style with citation-js. */
-const STYLE_NAME = "coflat-active";
+let nextProcessorId = 0;
+
+function getStyleName(processorId: number, styleGeneration: number): string {
+  return `coflat-${processorId}-${styleGeneration}`;
+}
 
 function formatNarrativeAuthor(item: CslJsonItem): string {
   const authors = item.author ?? [];
@@ -144,6 +147,8 @@ export class CslProcessor {
   private styleXml: string;
   private engineRevision = 0;
   private initPromise: Promise<void> | null = null;
+  private readonly processorId = nextProcessorId++;
+  private styleGeneration = 0;
 
   constructor(entries: CslJsonItem[], styleXml?: string) {
     this.items = new Map();
@@ -190,6 +195,7 @@ export class CslProcessor {
   /** Reinitialize the citeproc engine with a new style. */
   async setStyle(styleXml: string): Promise<void> {
     this.styleXml = styleXml;
+    this.styleGeneration += 1;
     this.initPromise = this.initEngine();
     await this.initPromise;
   }
@@ -326,18 +332,33 @@ export class CslProcessor {
   }
 
   private async initEngine(): Promise<void> {
+    const styleGeneration = this.styleGeneration;
+    const styleName = getStyleName(this.processorId, styleGeneration);
+    const styleXml = this.styleXml;
+
     try {
       const { plugins } = await loadCitationJs();
       const cslConfig = plugins.config.get("@csl");
-      cslConfig.templates.add(STYLE_NAME, this.styleXml);
+      // citation-js caches engines by style name + locale and mutates the
+      // shared engine's retrieveItem callback on reuse. Use a processor- and
+      // style-generation-specific key so processors cannot overwrite each
+      // other's item lookup state, and style changes always force a new engine.
+      cslConfig.templates.add(styleName, styleXml);
       const data = [...this.items.values()];
-      this.engine = cslConfig.engine(data, STYLE_NAME, "en-US", "html");
+      const engine = cslConfig.engine(data, styleName, "en-US", "html");
+      if (styleGeneration === this.styleGeneration) {
+        this.engine = engine;
+      }
     } catch (e: unknown) {
       // Invalid or unsupported CSL style XML -- disable engine, fall back to simple formatting
       console.warn("[csl] initEngine() failed, falling back to simple formatting", e);
-      this.engine = null;
+      if (styleGeneration === this.styleGeneration) {
+        this.engine = null;
+      }
     } finally {
-      this.engineRevision += 1;
+      if (styleGeneration === this.styleGeneration) {
+        this.engineRevision += 1;
+      }
     }
   }
 }
