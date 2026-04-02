@@ -249,6 +249,82 @@ export async function pickAutocompleteOption(page, needle) {
 }
 
 /**
+ * Trigger a hover-preview tooltip for a rendered reference/citation selector.
+ *
+ * @param {import("playwright").Page} page
+ * @param {string} selector
+ */
+export async function showHoverPreview(page, selector) {
+  const found = await page.evaluate((css) => {
+    const target = document.querySelector(css);
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+    target.dispatchEvent(new MouseEvent("mouseover", {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+    }));
+    return true;
+  }, selector);
+
+  if (!found) {
+    throw new Error(`Failed to find hover target for selector ${JSON.stringify(selector)}`);
+  }
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const visible = await page.evaluate(() => {
+      const tooltip = document.querySelector(".cf-hover-preview-tooltip");
+      return tooltip instanceof HTMLElement &&
+        tooltip.style.display !== "none" &&
+        tooltip.childElementCount > 0;
+    });
+    if (visible) {
+      await sleep(100);
+      return;
+    }
+    await sleep(250);
+  }
+
+  throw new Error(`Timed out waiting for hover preview for selector ${JSON.stringify(selector)}`);
+}
+
+/**
+ * Hide the hover-preview tooltip by dispatching mouseout on the same selector.
+ *
+ * @param {import("playwright").Page} page
+ * @param {string} selector
+ */
+export async function hideHoverPreview(page, selector) {
+  await page.evaluate((css) => {
+    const target = document.querySelector(css);
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    target.dispatchEvent(new MouseEvent("mouseout", {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      relatedTarget: null,
+    }));
+  }, selector);
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const hidden = await page.evaluate(() => {
+      const tooltip = document.querySelector(".cf-hover-preview-tooltip");
+      return !(tooltip instanceof HTMLElement) || tooltip.style.display === "none";
+    });
+    if (hidden) {
+      await sleep(100);
+      return;
+    }
+    await sleep(100);
+  }
+
+  throw new Error(`Timed out hiding hover preview for selector ${JSON.stringify(selector)}`);
+}
+
+/**
  * Return FencedDiv nodes from the current Lezer syntax tree.
  * Requires `__cmDebug` to be wired up (see use-editor.ts).
  */
