@@ -47,6 +47,14 @@ const italicDecoration = Decoration.mark({ class: "cf-italic" });
 const strikethroughDecoration = Decoration.mark({ class: "cf-strikethrough" });
 const inlineCodeDecoration = Decoration.mark({ class: "cf-inline-code" });
 
+/** Source-delimiter decoration: reduced-size metrics so visible delimiters
+ *  don't push the line box taller than surrounding content (#789). */
+const sourceDelimiterDecoration = Decoration.mark({ class: "cf-source-delimiter" });
+
+/** Mark node types whose visible delimiters need source-delimiter styling.
+ *  CodeMark is excluded — cf-inline-code already wraps the entire InlineCode range. */
+const SOURCE_DELIMITER_MARKS = new Set(["EmphasisMark", "StrikethroughMark", "HighlightMark"]);
+
 /** Decoration to style bullet list markers. */
 const bulletListDecoration = Decoration.mark({ class: "cf-list-bullet" });
 
@@ -142,6 +150,14 @@ function handleHeaderMark(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): voi
 function handleHighlight(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
   ctx.items.push(highlightDecoration.range(node.from, node.to));
   if (cursorInRange(ctx.view, node.from, node.to)) {
+    // Apply source-delimiter decoration to visible HighlightMark nodes (#789)
+    let child = node.node.firstChild;
+    while (child) {
+      if (child.name === "HighlightMark") {
+        ctx.items.push(sourceDelimiterDecoration.range(child.from, child.to));
+      }
+      child = child.nextSibling;
+    }
     return false as const; // keep highlight style, show markers
   }
   // Walk children to hide HighlightMark
@@ -194,8 +210,17 @@ function handleElement(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
     items.push(styleDeco.range(node.from, node.to));
   }
 
-  // If cursor is inside: skip hiding markers (show source) but keep style
+  // If cursor is inside: skip hiding markers (show source) but keep style.
+  // Apply source-delimiter decoration to visible mark nodes so they use
+  // reduced metrics instead of falling back to generic .tok-meta (#789).
   if (cursorInRange(view, node.from, node.to)) {
+    let child = node.node.firstChild;
+    while (child) {
+      if (SOURCE_DELIMITER_MARKS.has(child.name)) {
+        items.push(sourceDelimiterDecoration.range(child.from, child.to));
+      }
+      child = child.nextSibling;
+    }
     return false as const;
   }
   // Cursor outside: walk children to hide markers
