@@ -48,12 +48,25 @@ describe("findPipePositions", () => {
     expect(findPipePositions("| a \\| b | c |")).toEqual([0, 9, 13]);
   });
 
-  it("ignores pipes inside $…$ math spans", () => {
-    expect(findPipePositions("| $O(r \\cdot |E| \\cdot T)$ | No |")).toEqual([0, 27, 32]);
+  it("ignores escaped pipes inside $…$ math spans", () => {
+    expect(findPipePositions("| $O(r \\cdot \\|E\\| \\cdot T)$ | No |")).toEqual([0, 29, 34]);
   });
 
-  it("ignores pipes inside \\(…\\) math spans", () => {
-    expect(findPipePositions("| \\(a | b\\) | No |")).toEqual([0, 12, 17]);
+  it("treats unescaped pipe inside $…$ as a cell separator", () => {
+    expect(findPipePositions("| $a | b$ | c |")).toEqual([0, 5, 10, 14]);
+  });
+
+  it("does not let trailing $ match opening $ in the next cell", () => {
+    expect(findPipePositions("| Quicksort | $O(n \\log n)$$ | $O(\\log n)$ |"))
+      .toEqual([0, 12, 29, 43]);
+  });
+
+  it("ignores escaped pipes inside \\(…\\) math spans", () => {
+    expect(findPipePositions("| \\(a \\| b\\) | No |")).toEqual([0, 13, 18]);
+  });
+
+  it("treats unescaped pipe inside \\(…\\) as a cell separator", () => {
+    expect(findPipePositions("| \\(a | b\\) | c |")).toEqual([0, 6, 12, 16]);
   });
 
   it("ignores pipes inside single-backtick code spans", () => {

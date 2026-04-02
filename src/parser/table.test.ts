@@ -44,10 +44,10 @@ describe("tableExtension — basic structure", () => {
   });
 });
 
-describe("tableExtension — pipes inside $…$ math", () => {
-  const doc = "| A | B |\n| --- | --- |\n| $O(r \\cdot |E| \\cdot T)$ | No |";
+describe("tableExtension — escaped pipes inside $…$ math", () => {
+  const doc = "| A | B |\n| --- | --- |\n| $O(r \\cdot \\|E\\| \\cdot T)$ | No |";
 
-  it("produces exactly one data TableRow (not split on math-internal pipes)", () => {
+  it("produces exactly one data TableRow (not split on math-internal escaped pipes)", () => {
     expect(findNodes(doc, "TableRow")).toHaveLength(1);
   });
 
@@ -57,12 +57,12 @@ describe("tableExtension — pipes inside $…$ math", () => {
     expect(cells).toHaveLength(4);
   });
 
-  it("the first data cell spans the entire math expression including internal pipes", () => {
+  it("the first data cell spans the entire math expression including escaped pipes", () => {
     const cells = findNodes(doc, "TableCell");
     // header cells are first; data cells are last 2
     const dataCell0 = cells[2];
     const text = nodeText(doc, dataCell0).trim();
-    expect(text).toBe("$O(r \\cdot |E| \\cdot T)$");
+    expect(text).toBe("$O(r \\cdot \\|E\\| \\cdot T)$");
   });
 });
 
@@ -97,11 +97,17 @@ describe("tableExtension — InlineMath nodes inside cells", () => {
     expect(findNodes(doc, "InlineMath")).toHaveLength(1);
   });
 
-  it("produces InlineMath for the full math expression when it contains pipes", () => {
-    const doc = "| A | B |\n| --- | --- |\n| $a | b$ | c |";
+  it("produces InlineMath for the full math expression when it contains escaped pipes", () => {
+    const doc = "| A | B |\n| --- | --- |\n| $a \\| b$ | c |";
     const mathNodes = findNodes(doc, "InlineMath");
     expect(mathNodes).toHaveLength(1);
-    expect(nodeText(doc, mathNodes[0])).toBe("$a | b$");
+    expect(nodeText(doc, mathNodes[0])).toBe("$a \\| b$");
+  });
+
+  it("does not produce cross-cell InlineMath when $ hits a pipe separator", () => {
+    const doc = "| A | B | C |\n| --- | --- | --- |\n| $a | b$ | c |";
+    const mathNodes = findNodes(doc, "InlineMath");
+    expect(mathNodes).toHaveLength(0);
   });
 });
 

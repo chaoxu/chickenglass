@@ -19,6 +19,8 @@ const BACKSLASH = 92;
 const DOLLAR = 36;
 const BACKTICK = 96;
 const OPEN_PAREN = 40;
+const CLOSE_PAREN = 41;
+const PIPE = 124;
 
 export function scanTableInlineSpan(text: string, start: number): number | null {
   const ch = text.charCodeAt(start);
@@ -27,8 +29,18 @@ export function scanTableInlineSpan(text: string, start: number): number | null 
     if (start + 1 >= text.length) return start + 1;
 
     if (text.charCodeAt(start + 1) === OPEN_PAREN) {
-      const close = text.indexOf("\\)", start + 2);
-      return close >= 0 ? close + 2 : start + 2;
+      let j = start + 2;
+      while (j < text.length) {
+        const jch = text.charCodeAt(j);
+        if (jch === BACKSLASH && j + 1 < text.length) {
+          if (text.charCodeAt(j + 1) === CLOSE_PAREN) return j + 2;
+          j += 2;
+          continue;
+        }
+        if (jch === PIPE) return start + 2;
+        j++;
+      }
+      return start + 2;
     }
 
     return Math.min(start + 2, text.length);
@@ -73,6 +85,7 @@ export function scanTableInlineSpan(text: string, start: number): number | null 
         i += 2;
         continue;
       }
+      if (next === PIPE) return start + 1;
       i++;
     }
 
