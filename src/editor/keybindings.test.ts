@@ -2,6 +2,7 @@ import { describe, expect, it, afterEach } from "vitest";
 import { markdown } from "@codemirror/lang-markdown";
 import type { EditorView } from "@codemirror/view";
 import { markdownExtensions } from "../parser";
+import { fenceProtectionExtension } from "../plugins/fence-protection";
 import { createPluginRegistryField } from "../plugins/plugin-registry";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import {
@@ -47,6 +48,7 @@ function makeFencedView(
       frontmatterField,
       documentSemanticsField,
       createPluginRegistryField(plugins),
+      fenceProtectionExtension,
     ],
   });
 }
