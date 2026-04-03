@@ -28,9 +28,9 @@ export const Diagnostics = memo(function Diagnostics({
         {errorCount > 0 && warningCount > 0 && <span> &middot; </span>}
         {warningCount > 0 && <span>{warningCount} warning{warningCount !== 1 ? "s" : ""}</span>}
       </div>
-      {diagnostics.map((diag, i) => (
+      {diagnostics.map((diag) => (
         <button
-          key={i}
+          key={`${diag.severity}-${diag.from}-${diag.to}-${diag.message}`}
           className="flex items-baseline gap-1.5 w-full text-left px-3 py-[2px] text-sm hover:bg-[var(--cf-hover)] transition-colors duration-[var(--cf-transition,0.15s)] cursor-pointer"
           onClick={() => onSelect(diag.from)}
         >
