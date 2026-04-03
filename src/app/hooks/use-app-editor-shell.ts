@@ -17,6 +17,7 @@ import { useEditorSession, type UseEditorSessionReturn } from "./use-editor-sess
 import { useEditorNavigation } from "./use-editor-navigation";
 import type { FileSystem } from "../file-manager";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
+import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
 import type { Settings } from "../lib/types";
 import type { SearchNavigationTarget } from "../search";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
@@ -73,6 +74,8 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
    * and the breadcrumb bar.
    */
   headings: HeadingEntry[];
+  /** Diagnostic entries for the active document (errors and warnings). */
+  diagnostics: DiagnosticEntry[];
   /**
    * Called by the `<Editor>` component each time the CM6 view is (re-)mounted
    * or updated. Updates `editorState` and `headings`, and forwards the view
@@ -85,6 +88,8 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
    * parsing regions beyond the initial viewport).
    */
   handleHeadingsChange: (headings: HeadingEntry[]) => void;
+  /** Called when the diagnostics slice needs updating from a CM6 extension. */
+  handleDiagnosticsChange: (diagnostics: DiagnosticEntry[]) => void;
   /** Called after `useEditor` has applied the current document/path to the live CM6 view. */
   handleEditorDocumentReady: (view: EditorView, docPath: string | undefined) => void;
 
@@ -192,6 +197,7 @@ export function useAppEditorShell({
 
   const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
 
   const navigation = useEditorNavigation({ openFile, isPathOpen, currentPath });
   const {
@@ -208,13 +214,19 @@ export function useAppEditorShell({
 
     if (state.view) {
       setHeadings(extractHeadings(state.view.state));
+      setDiagnostics(extractDiagnostics(state.view.state));
     } else {
       setHeadings([]);
+      setDiagnostics([]);
     }
   }, [syncView]);
 
   const handleHeadingsChange = useCallback((h: HeadingEntry[]) => {
     setHeadings(h);
+  }, []);
+
+  const handleDiagnosticsChange = useCallback((d: DiagnosticEntry[]) => {
+    setDiagnostics(d);
   }, []);
 
   useEffect(() => {
@@ -350,8 +362,10 @@ export function useAppEditorShell({
     saveFile,
     editorState,
     headings,
+    diagnostics,
     handleEditorStateChange,
     handleHeadingsChange,
+    handleDiagnosticsChange,
     handleEditorDocumentReady,
     handleOutlineSelect,
     handleGotoLine,

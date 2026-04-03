@@ -8,9 +8,18 @@ import { frontmatterField } from "../editor/frontmatter-state";
 import { createPluginRegistryField } from "../plugins/plugin-registry";
 import { blockCounterField } from "../plugins/block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
+import { bibDataEffect, bibDataField } from "../citations/citation-render";
+import { CslProcessor } from "../citations/csl-processor";
 import type { BlockPlugin } from "../plugins/plugin-types";
-import { createEditorState, makeBlockPlugin } from "../test-utils";
 import {
+  CSL_FIXTURES,
+  applyStateEffects,
+  createEditorState,
+  makeBibStore,
+  makeBlockPlugin,
+} from "../test-utils";
+import {
+  classifyReference,
   collectEquationLabels,
   resolveCrossref,
   findCrossrefs,
@@ -34,6 +43,7 @@ function createState(doc: string): EditorState {
       documentSemanticsField,
       createPluginRegistryField(testPlugins),
       blockCounterField,
+      bibDataField,
     ],
   });
 }
@@ -45,8 +55,16 @@ function createMathState(doc: string): EditorState {
       markdown({
         extensions: [mathExtension, equationLabelExtension],
       }),
+      bibDataField,
     ],
   });
+}
+
+function withBibliography(state: EditorState): EditorState {
+  return applyStateEffects(state, bibDataEffect.of({
+    store: makeBibStore([CSL_FIXTURES.karger]),
+    cslProcessor: new CslProcessor([CSL_FIXTURES.karger]),
+  }));
 }
 
 describe("collectEquationLabels", () => {
@@ -236,6 +254,61 @@ describe("resolveCrossref", () => {
 
     expect(result.kind).toBe("equation");
     expect(result.label).toBe("Eq. (1)");
+  });
+});
+
+describe("classifyReference", () => {
+  it("prefers citations for bracketed refs when a local target shares the same id", () => {
+    const doc = [
+      "::: {.theorem #karger2000}",
+      "A theorem with a citation-like id.",
+      ":::",
+      "",
+      "See [@karger2000].",
+    ].join("\n");
+    const state = withBibliography(createState(doc));
+
+    const result = classifyReference(state, "karger2000", {
+      bibliography: state.field(bibDataField).store,
+      preferCitation: true,
+    });
+
+    expect(result.kind).toBe("citation");
+  });
+
+  it("prefers local crossrefs for narrative refs when a citation shares the same id", () => {
+    const doc = [
+      "::: {.theorem #karger2000}",
+      "A theorem with a citation-like id.",
+      ":::",
+      "",
+      "See @karger2000.",
+    ].join("\n");
+    const state = withBibliography(createState(doc));
+
+    const result = classifyReference(state, "karger2000", {
+      bibliography: state.field(bibDataField).store,
+    });
+
+    expect(result.kind).toBe("crossref");
+    if (result.kind !== "crossref") {
+      throw new Error("expected a crossref result");
+    }
+    expect(result.resolved.label).toBe("Theorem 1");
+  });
+
+  it("returns unresolved when an id matches neither bibliography nor local targets", () => {
+    const state = createState("See [@thm:missing].");
+
+    const result = classifyReference(state, "thm:missing", {
+      bibliography: state.field(bibDataField).store,
+      preferCitation: true,
+    });
+
+    expect(result).toEqual({
+      kind: "unresolved",
+      id: "thm:missing",
+    });
   });
 });
 

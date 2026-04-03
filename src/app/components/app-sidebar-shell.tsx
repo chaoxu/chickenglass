@@ -1,3 +1,4 @@
+import { Diagnostics } from "./diagnostics";
 import { FileTree } from "./file-tree";
 import { Outline } from "./outline";
 import {
@@ -22,7 +23,7 @@ interface AppSidebarShellProps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "openFile" | "handleRename" | "handleDelete" | "createFile" | "createDirectory" | "headings" | "handleOutlineSelect" | "editorState"
+    "currentPath" | "openFile" | "handleRename" | "handleDelete" | "createFile" | "createDirectory" | "headings" | "diagnostics" | "handleOutlineSelect" | "editorState"
   >;
 }
 
@@ -49,6 +50,7 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
           <TabsList className="flex shrink-0 border-b border-[var(--cf-border)]">
             <TabsTrigger value="files">Files</TabsTrigger>
             <TabsTrigger value="outline">Outline</TabsTrigger>
+            <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
           </TabsList>
 
           <SidebarContent>
@@ -68,6 +70,9 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
             </TabsContent>
             <TabsContent value="outline" className="min-h-full">
               <Outline headings={editor.headings} onSelect={editor.handleOutlineSelect} />
+            </TabsContent>
+            <TabsContent value="diagnostics" className="min-h-full">
+              <Diagnostics diagnostics={editor.diagnostics} onSelect={editor.handleOutlineSelect} />
             </TabsContent>
           </SidebarContent>
         </Tabs>
