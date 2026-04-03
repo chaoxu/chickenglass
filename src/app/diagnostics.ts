@@ -2,10 +2,7 @@ import type { EditorState } from "@codemirror/state";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { blockCounterField } from "../plugins/block-counter";
 import { bibDataField } from "../citations/citation-render";
-import {
-  resolveCrossref,
-  collectEquationLabels,
-} from "../index/crossref-resolver";
+import { resolveCrossref } from "../index/crossref-resolver";
 
 export type DiagnosticSeverity = "error" | "warning";
 
@@ -74,34 +71,31 @@ export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
   }
 
   // ── Warnings: unresolved references & citations ──────────────────────
-  const equationLabels = collectEquationLabels(state);
-  let bibStore: ReadonlyMap<string, unknown> | undefined;
-  try {
-    bibStore = state.field(bibDataField).store;
-  } catch {
-    // Bibliography field not present in this editor configuration.
-  }
+  // Uses the same classification logic as the inline renderer
+  // (reference-render.ts → planReferenceRendering): check the bib store
+  // first to identify citations, then use resolveCrossref() only for the
+  // crossref path.  This avoids the pitfall where resolveCrossref() falls
+  // through to kind:"citation" for every unknown id.
+  const equationLabels = analysis.equationById;
+  const bibState = state.field(bibDataField, false);
+  const bibStore = bibState?.store;
 
   for (const ref of analysis.references) {
     for (const id of ref.ids) {
+      // 1. Known citation → resolved, skip.
+      if (bibStore?.has(id)) continue;
+
+      // 2. Resolved crossref (block or equation label, heading) → skip.
       const resolved = resolveCrossref(state, id, equationLabels);
-      if (resolved.kind === "citation") {
-        if (bibStore && !bibStore.has(id)) {
-          diagnostics.push({
-            severity: "warning",
-            message: `Unresolved citation "@${id}"`,
-            from: ref.from,
-            to: ref.to,
-          });
-        }
-      } else if (resolved.kind === "unresolved") {
-        diagnostics.push({
-          severity: "warning",
-          message: `Unresolved reference "@${id}"`,
-          from: ref.from,
-          to: ref.to,
-        });
-      }
+      if (resolved.kind === "block" || resolved.kind === "equation") continue;
+
+      // 3. Unresolved — neither a known citation nor a resolved crossref.
+      diagnostics.push({
+        severity: "warning",
+        message: `Unresolved reference "@${id}"`,
+        from: ref.from,
+        to: ref.to,
+      });
     }
   }
 
