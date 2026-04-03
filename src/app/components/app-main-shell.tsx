@@ -15,7 +15,7 @@ interface AppMainShellProps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "editorDoc" | "pluginManager" | "handleDocChange" | "handleProgrammaticDocChange" | "setDocumentSourceMap" | "handleEditorStateChange" | "handleHeadingsChange" | "handleEditorDocumentReady" | "editorMode" | "handleModeChange" | "docTextForStats" | "isMarkdownFile"
+    "currentPath" | "editorDoc" | "pluginManager" | "handleDocChange" | "handleProgrammaticDocChange" | "setDocumentSourceMap" | "handleEditorStateChange" | "handleHeadingsChange" | "handleDiagnosticsChange" | "handleEditorDocumentReady" | "editorMode" | "handleModeChange" | "docTextForStats" | "isMarkdownFile"
   >;
   onOpenPalette: () => void;
 }
@@ -51,6 +51,7 @@ export function AppMainShell({
           }}
           onStateChange={editor.handleEditorStateChange}
           onHeadingsChange={editor.handleHeadingsChange}
+          onDiagnosticsChange={editor.handleDiagnosticsChange}
           onDocumentReady={editor.handleEditorDocumentReady}
           editorMode={editor.editorMode}
         />

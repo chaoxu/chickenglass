@@ -8,8 +8,10 @@ import { useFootnoteTooltip } from "../hooks/use-footnote-tooltip";
 import { Breadcrumbs } from "./breadcrumbs";
 import { SidenoteMargin } from "./sidenote-margin";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
+import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
 import {
   documentSemanticsField,
+  getDocumentAnalysisRevision,
   getDocumentAnalysisSliceRevision,
 } from "../../semantics/codemirror-source";
 import { bibDataField } from "../../citations/citation-render";
@@ -27,6 +29,8 @@ export interface EditorPaneProps extends UseEditorOptions {
   onDocumentReady?: (view: EditorView, docPath: string | undefined) => void;
   /** Called when the document heading list changes (e.g. after async parse completes). */
   onHeadingsChange?: (headings: HeadingEntry[]) => void;
+  /** Called when the document diagnostics change. */
+  onDiagnosticsChange?: (diagnostics: DiagnosticEntry[]) => void;
   /** Current editor mode — "read" shows the HTML renderer instead of CM6. */
   editorMode?: EditorMode;
 }
@@ -37,6 +41,7 @@ export function EditorPane({
   sidenotesCollapsed,
   onSidenotesCollapsedChange,
   onHeadingsChange,
+  onDiagnosticsChange,
   editorMode,
   ...editorOptions
 }: EditorPaneProps) {
@@ -47,6 +52,9 @@ export function EditorPane({
   // without forcing an editor re-creation.
   const onHeadingsChangeRef = useRef(onHeadingsChange);
   useEffect(() => { onHeadingsChangeRef.current = onHeadingsChange; }, [onHeadingsChange]);
+
+  const onDiagnosticsChangeRef = useRef(onDiagnosticsChange);
+  useEffect(() => { onDiagnosticsChangeRef.current = onDiagnosticsChange; }, [onDiagnosticsChange]);
 
   // CM6 extension that detects heading-slice revision changes and
   // pushes fresh headings into React.  Created once (stable reference)
@@ -63,9 +71,27 @@ export function EditorPane({
     });
   }, []);
 
+  // CM6 extension that detects semantic or bibliography changes and
+  // pushes fresh diagnostics into React.
+  const diagnosticTrackingExtension = useMemo(() => {
+    let lastAnalysisRev: number | undefined;
+    let lastBibRev: number | undefined;
+    return EditorView.updateListener.of((update) => {
+      const analysis = update.state.field(documentSemanticsField, false);
+      if (!analysis) return;
+      const analysisRev = getDocumentAnalysisRevision(analysis);
+      const bibState = update.state.field(bibDataField, false);
+      const bibRev = bibState?.processorRevision;
+      if (analysisRev === lastAnalysisRev && bibRev === lastBibRev) return;
+      lastAnalysisRev = analysisRev;
+      lastBibRev = bibRev;
+      onDiagnosticsChangeRef.current?.(extractDiagnostics(update.state));
+    });
+  }, []);
+
   const extensions = useMemo(
-    () => [...(editorOptions.extensions ?? []), headingTrackingExtension],
-    [editorOptions.extensions, headingTrackingExtension],
+    () => [...(editorOptions.extensions ?? []), headingTrackingExtension, diagnosticTrackingExtension],
+    [editorOptions.extensions, headingTrackingExtension, diagnosticTrackingExtension],
   );
 
   const editorState = useEditor(containerRef, {
