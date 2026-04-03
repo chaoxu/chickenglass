@@ -9,6 +9,7 @@ import { EditorSelection, type EditorState, Prec, type Extension } from "@codemi
 import { type EditorView, keymap } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { MODE_CHANGE_EVENT, OPEN_FILE_EVENT } from "../constants/events";
+import { getClosingFenceRanges } from "../plugins/fence-protection";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
 import { editorModeField, markdownEditorModes, setEditorMode } from "./editor";
@@ -255,9 +256,76 @@ const toggleStrikethrough = (view: EditorView): boolean =>
 const toggleHighlight = (view: EditorView): boolean =>
   toggleInlineMarker(view, "==");
 
+function isRichMode(view: EditorView): boolean {
+  return (view.state.field(editorModeField, false) ?? "rich") === "rich";
+}
+
+function closingFenceLineStarts(state: EditorState): Set<number> {
+  return new Set(
+    getClosingFenceRanges(state).map((range) => state.doc.lineAt(range.from).from),
+  );
+}
+
+/**
+ * Preserve parent-level insertion points when ArrowDown exits nested blocks.
+ *
+ * Hidden closing fences are atomic, so CM6's default vertical motion can jump
+ * from the last visible child line to after every adjacent closing fence at
+ * once. When consecutive hidden closing fences exist, stop on the next outer
+ * closing-fence line start so the user can keep typing inside the parent.
+ */
+export function moveDownAcrossNestedClosingFences(view: EditorView): boolean {
+  if (!isRichMode(view)) return false;
+
+  const range = view.state.selection.main;
+  if (!range.empty) return false;
+
+  const closingStarts = closingFenceLineStarts(view.state);
+  if (closingStarts.size === 0) return false;
+
+  const currentLine = view.state.doc.lineAt(range.head);
+  const currentLineIsClosing = closingStarts.has(currentLine.from);
+
+  // Repeated ArrowDown presses from an existing hidden closing-fence position
+  // should advance one structural level at a time across consecutive closers.
+  if (currentLineIsClosing) {
+    if (currentLine.number >= view.state.doc.lines) return false;
+    const nextLine = view.state.doc.line(currentLine.number + 1);
+    if (!closingStarts.has(nextLine.from)) return false;
+    view.dispatch({
+      selection: { anchor: nextLine.from },
+      scrollIntoView: true,
+      userEvent: "select",
+    });
+    return true;
+  }
+
+  if (range.head !== currentLine.to || currentLine.number >= view.state.doc.lines - 1) {
+    return false;
+  }
+
+  const firstClosingLine = view.state.doc.line(currentLine.number + 1);
+  if (!closingStarts.has(firstClosingLine.from)) return false;
+
+  const targetLine = view.state.doc.line(currentLine.number + 2);
+  if (!closingStarts.has(targetLine.from)) return false;
+
+  view.dispatch({
+    selection: { anchor: targetLine.from },
+    scrollIntoView: true,
+    userEvent: "select",
+  });
+  return true;
+}
+
 /** Default keybindings for the editor. */
 export const editorKeybindings: Extension = [
   history(),
+  Prec.high(
+    keymap.of([
+      { key: "ArrowDown", run: moveDownAcrossNestedClosingFences },
+    ]),
+  ),
   keymap.of([
     ...defaultKeymap,
     ...historyKeymap,
