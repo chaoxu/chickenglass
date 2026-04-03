@@ -120,11 +120,20 @@ export const themeTypographyTokens = [
   "--cf-h6-style",
 ] as const;
 
+export const themePreviewTokens = [
+  "--cf-preview-surface-max-width",
+  "--cf-preview-surface-max-height",
+  "--cf-preview-surface-padding-block",
+  "--cf-preview-surface-padding-inline",
+  "--cf-preview-surface-font-size",
+] as const;
+
 export const themeTokenNames = [
   ...themeFoundationTokens,
   ...themeBlockTokens,
   ...themeTableTokens,
   ...themeTypographyTokens,
+  ...themePreviewTokens,
 ] as const;
 
 export type ThemeTokenName = (typeof themeTokenNames)[number];
@@ -224,6 +233,11 @@ export const themeSurfaceTokenMap = {
     "--cf-fg",
     "--cf-muted",
     "--cf-border",
+    "--cf-preview-surface-max-width",
+    "--cf-preview-surface-max-height",
+    "--cf-preview-surface-padding-block",
+    "--cf-preview-surface-padding-inline",
+    "--cf-preview-surface-font-size",
   ],
   export: [...themeTokenNames],
 } as const satisfies Record<string, readonly ThemeTokenName[]>;
@@ -337,4 +351,10 @@ export const exportThemeTokenDefaults: Record<ThemeTokenName, string> = {
   "--cf-h6-size": "0.95em",
   "--cf-h6-weight": "600",
   "--cf-h6-style": "normal",
+  // Preview surfaces
+  "--cf-preview-surface-max-width": "400px",
+  "--cf-preview-surface-max-height": "300px",
+  "--cf-preview-surface-padding-block": "var(--cf-spacing-md)",
+  "--cf-preview-surface-padding-inline": "var(--cf-spacing-lg)",
+  "--cf-preview-surface-font-size": "0.9em",
 };

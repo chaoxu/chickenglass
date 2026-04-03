@@ -10,21 +10,6 @@ import {
  * content), math preview panel, and hover preview tooltips.
  */
 export const marginThemeStyles = {
-  /* Math preview floating panel */
-  ".cf-math-preview": {
-    position: "fixed",
-    zIndex: "1000",
-    backgroundColor: "var(--cf-bg)",
-    border: "var(--cf-border-width) solid var(--cf-border)",
-    borderRadius: "var(--cf-border-radius)",
-    width: "fit-content",
-    cursor: "grab",
-  },
-  ".cf-math-preview-content": {
-    padding: "var(--cf-spacing-md) var(--cf-spacing-lg)",
-    lineHeight: "1.6",
-  },
-
   /* Sidenote reference: superscript number */
   ".cf-sidenote-ref": {
     fontSize: "0.75em",

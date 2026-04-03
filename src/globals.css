@@ -271,7 +271,7 @@ body {
 
   /* Hide sidenote margin and hover tooltips */
   .cf-sidenote-portal,
-  .cf-hover-preview-tooltip {
+  .cf-preview-surface-shell {
     display: none !important;
   }
 

@@ -28,6 +28,7 @@ Token families:
 - block/document tokens
 - table/error tokens
 - typography tokens
+- preview/tooltip tokens
 
 ## Surface map
 

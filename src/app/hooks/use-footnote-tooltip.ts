@@ -1,8 +1,14 @@
 import { useEffect, useCallback } from "react";
 import { EditorView } from "@codemirror/view";
 import { computePosition, flip, shift, offset } from "@floating-ui/dom";
+import { CSS } from "../../constants";
 import { collectFootnotes, mathMacrosField } from "../../render";
 import { renderDocumentFragmentToDom } from "../../document-surfaces";
+import {
+  createPreviewSurfaceBody,
+  createPreviewSurfaceContent,
+  createPreviewSurfaceShell,
+} from "../../preview-surface";
 
 /**
  * Hover tooltip for sidenote refs when the margin is collapsed.
@@ -38,17 +44,17 @@ export function useFootnoteTooltip(
       if (!content) return;
 
       if (!tooltip) {
-        tooltip = document.createElement("div");
-        tooltip.className = "cf-hover-preview-tooltip";
+        tooltip = createPreviewSurfaceShell(CSS.hoverPreviewTooltip);
         tooltip.setAttribute("data-visible", "false");
         document.body.appendChild(tooltip);
       }
       tooltip.innerHTML = "";
-      const contentEl = document.createElement("div");
-      contentEl.className = "cf-hover-preview";
-      tooltip.appendChild(contentEl);
+      const contentEl = createPreviewSurfaceContent(CSS.hoverPreview);
+      const bodyEl = createPreviewSurfaceBody(CSS.hoverPreviewBody);
       const macros = view.state.field(mathMacrosField);
-      renderDocumentFragmentToDom(contentEl, { kind: "footnote", text: content, macros });
+      renderDocumentFragmentToDom(bodyEl, { kind: "footnote", text: content, macros });
+      contentEl.appendChild(bodyEl);
+      tooltip.appendChild(contentEl);
 
       const el = tooltip;
       void computePosition(target, el, {

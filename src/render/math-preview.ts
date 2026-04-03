@@ -14,8 +14,13 @@ import {
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
 import { autoUpdate, type VirtualElement } from "@floating-ui/dom";
+import { CSS } from "../constants";
 import { findActiveMath, renderKatex, resolveClickToSourcePos } from "./math-render";
 import { mathMacrosField } from "./math-macros";
+import {
+  createPreviewSurfaceContent,
+  createPreviewSurfaceShell,
+} from "../preview-surface";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 
 interface MathRegionSnapshot {
@@ -141,8 +146,7 @@ class MathPreviewPlugin implements PluginValue {
   }
 
   private createPanel(): void {
-    const panel = document.createElement("div");
-    panel.className = "cf-math-preview";
+    const panel = createPreviewSurfaceShell(CSS.mathPreview);
 
     // Panel itself is draggable
     panel.addEventListener("mousedown", (e) => {
@@ -174,8 +178,7 @@ class MathPreviewPlugin implements PluginValue {
     document.addEventListener("mouseup", onMouseUp);
 
     // Clicking rendered math in the preview navigates to the source position
-    const content = document.createElement("div");
-    content.className = "cf-math-preview-content";
+    const content = createPreviewSurfaceContent(CSS.mathPreviewContent);
     content.style.cursor = "pointer";
     content.addEventListener("mousedown", (e) => {
       e.stopPropagation();

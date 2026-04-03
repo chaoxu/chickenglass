@@ -14,6 +14,7 @@
 import { type Extension } from "@codemirror/state";
 import { type EditorView, ViewPlugin } from "@codemirror/view";
 import { autoUpdate, computePosition, flip, shift, offset } from "@floating-ui/dom";
+import { CSS, HOVER_DELAY_MS } from "../constants";
 import {
   classifyReference,
   type ReferenceClassification,
@@ -26,10 +27,15 @@ import { buildCitationPreviewContentFromEntry } from "../citations/citation-prev
 import { renderKatex } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { renderBlockContentToDom, renderDocumentFragmentToDom, type BlockContentOptions } from "../document-surfaces";
+import {
+  createPreviewSurfaceBody,
+  createPreviewSurfaceContent,
+  createPreviewSurfaceHeader,
+  createPreviewSurfaceShell,
+} from "../preview-surface";
 import { getPlugin, pluginRegistryField } from "../plugins";
 import { documentPathFacet, type BlockCounterEntry } from "../lib/types";
 import { documentAnalysisField } from "../semantics/codemirror-source";
-import { HOVER_DELAY_MS } from "../constants";
 import { collectImageTargets } from "../app/pdf-image-previews";
 import { imageUrlField } from "./image-url-cache";
 import { resolveLocalMediaPreview } from "./media-preview";
@@ -43,8 +49,7 @@ const HOVER_PREVIEW_CODE_BLOCK_CLASS = "cf-hover-preview-code-block";
 
 function getTooltipEl(): HTMLDivElement {
   if (!tooltipEl) {
-    tooltipEl = document.createElement("div");
-    tooltipEl.className = "cf-hover-preview-tooltip";
+    tooltipEl = createPreviewSurfaceShell(CSS.hoverPreviewTooltip);
     tooltipEl.style.display = "none";
     document.body.appendChild(tooltipEl);
   }
@@ -172,10 +177,7 @@ function createHeader(
   macros: Record<string, string> = {},
   extraClass?: string,
 ): HTMLElement {
-  const header = document.createElement("div");
-  header.className = extraClass
-    ? `cf-hover-preview-header ${extraClass}`
-    : "cf-hover-preview-header";
+  const header = createPreviewSurfaceHeader(CSS.hoverPreviewHeader, extraClass);
   renderDocumentFragmentToDom(header, {
     kind: "title",
     text,
@@ -299,8 +301,7 @@ function appendMediaFallback(
   }
 
   if (loadingLocalMedia.length > 0) {
-    const loading = document.createElement("div");
-    loading.className = "cf-hover-preview-unresolved";
+    const loading = createPreviewSurfaceBody(CSS.hoverPreviewUnresolved);
     loading.textContent = `Loading preview: ${loadingLocalMedia
       .map((src) => src.split("/").pop() ?? src)
       .join(", ")}`;
@@ -308,8 +309,7 @@ function appendMediaFallback(
   }
 
   if (unavailableLocalMedia.length > 0) {
-    const fallback = document.createElement("div");
-    fallback.className = "cf-hover-preview-unresolved";
+    const fallback = createPreviewSurfaceBody(CSS.hoverPreviewUnresolved);
     fallback.textContent = `Preview unavailable: ${unavailableLocalMedia
       .map((src) => src.split("/").pop() ?? src)
       .join(", ")}`;
@@ -348,8 +348,7 @@ function buildBlockPreviewBody(
     : extractBlockContent(view, block);
   if (!text) return null;
 
-  const body = document.createElement("div");
-  body.className = "cf-hover-preview-body";
+  const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
   const {
     overrides,
     loadingLocalMedia,
@@ -409,14 +408,13 @@ function appendCrossrefItem(
 
     const eqContent = findEquationSource(view, id);
     if (eqContent) {
-      const body = document.createElement("div");
-      body.className = "cf-hover-preview-body";
+      const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
       renderKatex(body, eqContent, true, macros);
       container.appendChild(body);
     }
   } else {
     container.appendChild(
-      createHeader(`Unresolved: ${id}`, macros, "cf-hover-preview-unresolved"),
+      createHeader(`Unresolved: ${id}`, macros, CSS.hoverPreviewUnresolved),
     );
   }
 }
@@ -431,8 +429,7 @@ function buildCrossrefTooltip(
   resolved: ResolvedCrossref,
 ): HTMLElement {
   const macros = view.state.field(mathMacrosField);
-  const container = document.createElement("div");
-  container.className = "cf-hover-preview";
+  const container = createPreviewSurfaceContent(CSS.hoverPreview);
   appendCrossrefItem(container, view, ref.ids[0], resolved, macros);
   return container;
 }
@@ -444,22 +441,20 @@ function buildCitationTooltip(
   ids: readonly string[],
   store: BibStore,
 ): HTMLElement {
-  const container = document.createElement("div");
-  container.className = "cf-hover-preview";
+  const container = createPreviewSurfaceContent(CSS.hoverPreview);
 
   for (const id of ids) {
     const entry = store.get(id);
     if (!entry) continue;
 
-    const item = document.createElement("div");
-    item.className = "cf-hover-preview-citation";
+    const item = createPreviewSurfaceBody(CSS.hoverPreviewCitation);
     item.appendChild(buildCitationPreviewContentFromEntry(entry));
     container.appendChild(item);
   }
 
   if (container.children.length === 0) {
     container.appendChild(
-      createHeader(`Unknown citation: ${ids.join(", ")}`, {}, "cf-hover-preview-unresolved"),
+      createHeader(`Unknown citation: ${ids.join(", ")}`, {}, CSS.hoverPreviewUnresolved),
     );
   }
 
@@ -476,26 +471,24 @@ function buildSingleItemTooltip(
   store: BibStore,
 ): HTMLElement {
   const macros = view.state.field(mathMacrosField);
-  const container = document.createElement("div");
-  container.className = "cf-hover-preview";
+  const container = createPreviewSurfaceContent(CSS.hoverPreview);
 
   if (resolved.kind === "citation") {
     const entry = store.get(id);
     if (entry) {
-      const item = document.createElement("div");
-      item.className = "cf-hover-preview-citation";
+      const item = createPreviewSurfaceBody(CSS.hoverPreviewCitation);
       item.appendChild(buildCitationPreviewContentFromEntry(entry));
       container.appendChild(item);
     } else {
       container.appendChild(
-        createHeader(`Unknown: @${id}`, macros, "cf-hover-preview-unresolved"),
+        createHeader(`Unknown: @${id}`, macros, CSS.hoverPreviewUnresolved),
       );
     }
   } else if (resolved.kind === "crossref") {
     appendCrossrefItem(container, view, id, resolved.resolved, macros);
   } else {
     container.appendChild(
-      createHeader(`Unresolved: ${id}`, macros, "cf-hover-preview-unresolved"),
+      createHeader(`Unresolved: ${id}`, macros, CSS.hoverPreviewUnresolved),
     );
   }
 
