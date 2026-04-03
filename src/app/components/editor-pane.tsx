@@ -9,6 +9,7 @@ import { Breadcrumbs } from "./breadcrumbs";
 import { SidenoteMargin } from "./sidenote-margin";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
+import { blockCounterField } from "../../plugins/block-counter";
 import {
   documentSemanticsField,
   getDocumentAnalysisRevision,
@@ -82,7 +83,10 @@ export function EditorPane({
       const analysisRev = getDocumentAnalysisRevision(analysis);
       const bibState = update.state.field(bibDataField, false);
       const bibRev = bibState?.processorRevision;
-      if (analysisRev === lastAnalysisRev && bibRev === lastBibRev) return;
+      const blockCountersChanged =
+        update.startState.field(blockCounterField, false)
+        !== update.state.field(blockCounterField, false);
+      if (analysisRev === lastAnalysisRev && bibRev === lastBibRev && !blockCountersChanged) return;
       lastAnalysisRev = analysisRev;
       lastBibRev = bibRev;
       onDiagnosticsChangeRef.current?.(extractDiagnostics(update.state));

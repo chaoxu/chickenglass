@@ -18,7 +18,10 @@ import {
 } from "@codemirror/view";
 import { type EditorSelection, type EditorState, type Extension, type Range } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
-import { type ResolvedCrossref, resolveCrossref } from "../index/crossref-resolver";
+import {
+  classifyReference,
+  type ResolvedCrossref,
+} from "../index/crossref-resolver";
 import {
   type BibStore,
   bibDataEffect,
@@ -225,12 +228,6 @@ function stripOuterParens(text: string): string {
     : text;
 }
 
-function isResolvedCrossref(
-  resolved: ResolvedCrossref,
-): resolved is ResolvedCrossref & { kind: "block" | "equation" } {
-  return resolved.kind === "block" || resolved.kind === "equation";
-}
-
 // ── Render-plan types ──────────────────────────────────────────────
 
 /** A planned reference rendering before widget emission. */
@@ -277,9 +274,17 @@ export function planReferenceRendering(
       continue;
     }
 
+    const classifications = ref.ids.map((id) =>
+      classifyReference(view.state, id, {
+        bibliography: store,
+        equationLabels,
+        preferCitation: ref.bracketed,
+      }),
+    );
+
     if (ref.bracketed) {
-      const hasCitation = ref.ids.some((id) => store.has(id));
-      const allCitations = hasCitation && ref.ids.every((id) => store.has(id));
+      const hasCitation = classifications.some((classification) => classification.kind === "citation");
+      const allCitations = hasCitation && classifications.every((classification) => classification.kind === "citation");
 
       if (allCitations) {
         const rendered = processor.cite([...ref.ids], [...ref.locators]);
@@ -287,34 +292,33 @@ export function planReferenceRendering(
       } else if (hasCitation) {
         const raw = view.state.sliceDoc(ref.from, ref.to);
         const parts: MixedClusterPart[] = ref.ids.map((id, index) => {
-          if (store.has(id)) {
+          const classification = classifications[index];
+          if (classification.kind === "citation") {
             const rendered = processor.cite([id], ref.locators ? [ref.locators[index]] : undefined);
             const stripped = stripOuterParens(rendered);
             return { kind: "citation" as const, id, text: stripped };
           }
-          const resolved = resolveCrossref(view.state, id, equationLabels);
-          const label = resolved.kind === "block" || resolved.kind === "equation"
-            ? resolved.label
+          const label = classification.kind === "crossref"
+            ? classification.resolved.label
             : id;
           return { kind: "crossref" as const, id, text: label };
         });
         items.push({ kind: "mixed-cluster", from: ref.from, to: ref.to, parts, raw });
       } else if (ref.ids.length === 1) {
-        const resolved = resolveCrossref(view.state, ref.ids[0], equationLabels);
+        const resolved = classifications[0];
         const raw = view.state.sliceDoc(ref.from, ref.to);
-        if (resolved.kind === "block" || resolved.kind === "equation") {
-          items.push({ kind: "crossref", from: ref.from, to: ref.to, resolved, raw });
+        if (resolved.kind === "crossref") {
+          items.push({ kind: "crossref", from: ref.from, to: ref.to, resolved: resolved.resolved, raw });
         } else {
           items.push({ kind: "unresolved", from: ref.from, to: ref.to, raw });
         }
       } else {
-        const resolvedItems = ref.ids.map((id) => resolveCrossref(view.state, id, equationLabels));
         const raw = view.state.sliceDoc(ref.from, ref.to);
-        const parts = resolvedItems.map((resolved, index) => {
-          if (isResolvedCrossref(resolved)) {
+        const parts = classifications.map((resolved, index) => {
+          if (resolved.kind === "crossref") {
             return {
               id: ref.ids[index],
-              text: resolved.label,
+              text: resolved.resolved.label,
             };
           }
           return {
@@ -330,11 +334,11 @@ export function planReferenceRendering(
         }
       }
     } else {
-      const resolved = resolveCrossref(view.state, ref.ids[0], equationLabels);
-      if (resolved.kind === "block" || resolved.kind === "equation") {
+      const resolved = classifications[0];
+      if (resolved.kind === "crossref") {
         const raw = view.state.sliceDoc(ref.from, ref.to);
-        items.push({ kind: "crossref", from: ref.from, to: ref.to, resolved, raw });
-      } else if (store.has(ref.ids[0])) {
+        items.push({ kind: "crossref", from: ref.from, to: ref.to, resolved: resolved.resolved, raw });
+      } else if (resolved.kind === "citation") {
         const rendered = processor.citeNarrative(ref.ids[0]);
         items.push({ kind: "citation", from: ref.from, to: ref.to, rendered, ids: ref.ids, narrative: true });
       }

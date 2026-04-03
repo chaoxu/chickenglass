@@ -2,7 +2,7 @@ import type { EditorState } from "@codemirror/state";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { blockCounterField } from "../plugins/block-counter";
 import { bibDataField } from "../citations/citation-render";
-import { resolveCrossref } from "../index/crossref-resolver";
+import { classifyReference } from "../index/crossref-resolver";
 
 export type DiagnosticSeverity = "error" | "warning";
 
@@ -15,87 +15,117 @@ export interface DiagnosticEntry {
   readonly to: number;
 }
 
+function pushDuplicateIdDiagnostics(
+  diagnostics: DiagnosticEntry[],
+  state: EditorState,
+): void {
+  const analysis = state.field(documentAnalysisField);
+  const counters = state.field(blockCounterField, false);
+  const blockIds = new Set<string>();
+  const equationIds = new Set<string>();
+  const seenBlockIds = new Set<string>();
+  const seenEquationIds = new Set<string>();
+  const seenHeadingIds = new Set<string>();
+
+  for (const block of counters?.blocks ?? []) {
+    if (block.id) {
+      blockIds.add(block.id);
+    }
+  }
+
+  for (const equation of analysis.equations) {
+    if (equation.id) {
+      equationIds.add(equation.id);
+    }
+  }
+
+  for (const block of counters?.blocks ?? []) {
+    if (!block.id) continue;
+    if (seenBlockIds.has(block.id)) {
+      diagnostics.push({
+        severity: "error",
+        message: `Duplicate block ID "${block.id}"`,
+        from: block.from,
+        to: block.to,
+      });
+      continue;
+    }
+    seenBlockIds.add(block.id);
+  }
+
+  for (const equation of analysis.equations) {
+    if (!equation.id) continue;
+    if (blockIds.has(equation.id)) {
+      diagnostics.push({
+        severity: "error",
+        message: `Duplicate local target ID "${equation.id}"`,
+        from: equation.labelFrom,
+        to: equation.labelTo,
+      });
+      continue;
+    }
+    if (seenEquationIds.has(equation.id)) {
+      diagnostics.push({
+        severity: "error",
+        message: `Duplicate equation label "${equation.id}"`,
+        from: equation.labelFrom,
+        to: equation.labelTo,
+      });
+      continue;
+    }
+    seenEquationIds.add(equation.id);
+  }
+
+  for (const heading of analysis.headings) {
+    if (!heading.id) continue;
+    if (blockIds.has(heading.id) || equationIds.has(heading.id)) {
+      diagnostics.push({
+        severity: "error",
+        message: `Duplicate local target ID "${heading.id}"`,
+        from: heading.from,
+        to: heading.to,
+      });
+      continue;
+    }
+    if (seenHeadingIds.has(heading.id)) {
+      diagnostics.push({
+        severity: "error",
+        message: `Duplicate heading ID "${heading.id}"`,
+        from: heading.from,
+        to: heading.to,
+      });
+      continue;
+    }
+    seenHeadingIds.add(heading.id);
+  }
+}
+
 export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
   const diagnostics: DiagnosticEntry[] = [];
   const analysis = state.field(documentAnalysisField);
-
-  // ── Errors: duplicate block IDs ──────────────────────────────────────
-  const counters = state.field(blockCounterField, false);
-  if (counters) {
-    const seenBlockIds = new Set<string>();
-    for (const block of counters.blocks) {
-      if (!block.id) continue;
-      if (seenBlockIds.has(block.id)) {
-        diagnostics.push({
-          severity: "error",
-          message: `Duplicate block ID "${block.id}"`,
-          from: block.from,
-          to: block.to,
-        });
-      } else {
-        seenBlockIds.add(block.id);
-      }
-    }
-  }
-
-  // ── Errors: duplicate equation labels ────────────────────────────────
-  const seenEqIds = new Set<string>();
-  for (const eq of analysis.equations) {
-    if (!eq.id) continue;
-    if (seenEqIds.has(eq.id)) {
-      diagnostics.push({
-        severity: "error",
-        message: `Duplicate equation label "${eq.id}"`,
-        from: eq.labelFrom,
-        to: eq.labelTo,
-      });
-    } else {
-      seenEqIds.add(eq.id);
-    }
-  }
-
-  // ── Errors: duplicate heading IDs ────────────────────────────────────
-  const seenHeadingIds = new Set<string>();
-  for (const h of analysis.headings) {
-    if (!h.id) continue;
-    if (seenHeadingIds.has(h.id)) {
-      diagnostics.push({
-        severity: "error",
-        message: `Duplicate heading ID "${h.id}"`,
-        from: h.from,
-        to: h.to,
-      });
-    } else {
-      seenHeadingIds.add(h.id);
-    }
-  }
+  pushDuplicateIdDiagnostics(diagnostics, state);
 
   // ── Warnings: unresolved references & citations ──────────────────────
-  // Uses the same classification logic as the inline renderer
-  // (reference-render.ts → planReferenceRendering): check the bib store
-  // first to identify citations, then use resolveCrossref() only for the
-  // crossref path.  This avoids the pitfall where resolveCrossref() falls
-  // through to kind:"citation" for every unknown id.
+  // Uses the same per-id classification helper as the inline renderer.
   const equationLabels = analysis.equationById;
   const bibState = state.field(bibDataField, false);
   const bibStore = bibState?.store;
 
   for (const ref of analysis.references) {
     for (const id of ref.ids) {
-      // 1. Known citation → resolved, skip.
-      if (bibStore?.has(id)) continue;
-
-      // 2. Resolved crossref (block or equation label, heading) → skip.
-      const resolved = resolveCrossref(state, id, equationLabels);
-      if (resolved.kind === "block" || resolved.kind === "equation") continue;
-
-      // 3. Unresolved — neither a known citation nor a resolved crossref.
-      diagnostics.push({
-        severity: "warning",
-        message: `Unresolved reference "@${id}"`,
-        from: ref.from,
-        to: ref.to,
+      const classification = classifyReference(state, id, {
+        bibliography: bibStore,
+        equationLabels,
+        preferCitation: ref.bracketed,
       });
+      if (classification.kind === "unresolved") {
+        diagnostics.push({
+          severity: "warning",
+          message: `Unresolved reference "@${id}"`,
+          from: ref.from,
+          to: ref.to,
+        });
+      }
     }
   }
 

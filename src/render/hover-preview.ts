@@ -15,8 +15,9 @@ import { type Extension } from "@codemirror/state";
 import { type EditorView, ViewPlugin } from "@codemirror/view";
 import { autoUpdate, computePosition, flip, shift, offset } from "@floating-ui/dom";
 import {
+  classifyReference,
+  type ReferenceClassification,
   type ResolvedCrossref,
-  resolveCrossref,
 } from "../index/crossref-resolver";
 import type { ReferenceSemantics } from "../semantics/document";
 import { blockCounterField, type NumberedBlock } from "../plugins";
@@ -448,7 +449,7 @@ function buildCitationTooltip(
 function buildSingleItemTooltip(
   view: EditorView,
   id: string,
-  resolved: ResolvedCrossref,
+  resolved: ReferenceClassification,
   store: BibStore,
 ): HTMLElement {
   const macros = view.state.field(mathMacrosField);
@@ -467,8 +468,12 @@ function buildSingleItemTooltip(
         createHeader(`Unknown: @${id}`, macros, "cf-hover-preview-unresolved"),
       );
     }
+  } else if (resolved.kind === "crossref") {
+    appendCrossrefItem(container, view, id, resolved.resolved, macros);
   } else {
-    appendCrossrefItem(container, view, id, resolved, macros);
+    container.appendChild(
+      createHeader(`Unresolved: ${id}`, macros, "cf-hover-preview-unresolved"),
+    );
   }
 
   return container;
@@ -537,14 +542,19 @@ function buildTooltipForElement(
   const ref = findRefAt(view, pos);
   if (!ref) return null;
 
-  const resolutions = ref.ids.map((id) =>
-    resolveCrossref(view.state, id, equationLabels),
+  const { store } = view.state.field(bibDataField);
+  const classifications = ref.ids.map((id) =>
+    classifyReference(view.state, id, {
+      bibliography: store,
+      equationLabels,
+      preferCitation: ref.bracketed,
+    }),
   );
-  const hasCrossref = resolutions.some((r) => r.kind !== "citation");
+  const hasCrossref = classifications.some((classification) => classification.kind === "crossref");
 
   // Single-id crossref
-  if (ref.ids.length === 1 && hasCrossref) {
-    return buildCrossrefTooltip(view, ref, resolutions[0]);
+  if (ref.ids.length === 1 && classifications[0].kind === "crossref") {
+    return buildCrossrefTooltip(view, ref, classifications[0].resolved);
   }
 
   // Multi-id cluster — per-item targeting via data-ref-id
@@ -552,17 +562,15 @@ function buildTooltipForElement(
     if (!refId) return null; // Hovering on separator — no tooltip
     const itemIndex = ref.ids.indexOf(refId);
     if (itemIndex < 0) return null;
-    const { store } = view.state.field(bibDataField);
-    return buildSingleItemTooltip(view, refId, resolutions[itemIndex], store);
+    return buildSingleItemTooltip(view, refId, classifications[itemIndex], store);
   }
 
   // Pure citation cluster
-  const { store } = view.state.field(bibDataField);
-  if (store.size > 0 && ref.ids.some((id) => store.has(id))) {
+  if (classifications.some((classification) => classification.kind === "citation")) {
     // If we have a specific ref-id in the cluster, show single item
     if (refId && ref.ids.includes(refId)) {
       const itemIndex = ref.ids.indexOf(refId);
-      return buildSingleItemTooltip(view, refId, resolutions[itemIndex], store);
+      return buildSingleItemTooltip(view, refId, classifications[itemIndex], store);
     }
     return buildCitationTooltip(ref.ids, store);
   }

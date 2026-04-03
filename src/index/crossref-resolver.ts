@@ -50,6 +50,25 @@ export interface EquationEntry {
   readonly number: number;
 }
 
+type ReferenceLookup = Pick<ReadonlyMap<string, unknown>, "has">;
+
+export type ReferenceClassification =
+  | { readonly kind: "crossref"; readonly resolved: ResolvedCrossref }
+  | { readonly kind: "citation"; readonly id: string }
+  | { readonly kind: "unresolved"; readonly id: string };
+
+export interface ReferenceClassificationOptions {
+  /** Known bibliography ids for citation routing. */
+  readonly bibliography?: ReferenceLookup;
+  /** Precomputed equation labels to avoid redundant analysis work. */
+  readonly equationLabels?: ReadonlyMap<string, EquationEntry>;
+  /**
+   * Bracketed refs prefer bibliography hits before local crossrefs; narrative
+   * refs do the opposite.
+   */
+  readonly preferCitation?: boolean;
+}
+
 function formatHeadingCrossrefLabel(
   analysis: DocumentAnalysis,
   id: string,
@@ -138,6 +157,34 @@ export function resolveCrossref(
     kind: "citation",
     label: id,
   };
+}
+
+export function classifyReference(
+  state: EditorState,
+  id: string,
+  options: ReferenceClassificationOptions = {},
+): ReferenceClassification {
+  const {
+    bibliography,
+    equationLabels,
+    preferCitation = false,
+  } = options;
+  const hasCitation = bibliography?.has(id) ?? false;
+
+  if (preferCitation && hasCitation) {
+    return { kind: "citation", id };
+  }
+
+  const resolved = resolveCrossref(state, id, equationLabels);
+  if (resolved.kind === "block" || resolved.kind === "equation") {
+    return { kind: "crossref", resolved };
+  }
+
+  if (hasCitation) {
+    return { kind: "citation", id };
+  }
+
+  return { kind: "unresolved", id };
 }
 
 /** A cross-reference occurrence found in the document text. */
