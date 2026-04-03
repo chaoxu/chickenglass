@@ -1,8 +1,17 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { markdown } from "@codemirror/lang-markdown";
 import type { EditorView } from "@codemirror/view";
-import { toggleInlineMarker, toggleLink } from "./keybindings";
-import { createTestView } from "../test-utils";
+import { markdownExtensions } from "../parser";
+import { fenceProtectionExtension } from "../plugins/fence-protection";
+import { createPluginRegistryField } from "../plugins/plugin-registry";
+import { documentSemanticsField } from "../semantics/codemirror-source";
+import {
+  moveDownAcrossNestedClosingFences,
+  toggleInlineMarker,
+  toggleLink,
+} from "./keybindings";
+import { frontmatterField } from "./frontmatter-state";
+import { createTestView, makeBlockPlugin } from "../test-utils";
 
 /**
  * Create a minimal EditorView with the given doc and selection.
@@ -20,6 +29,27 @@ function makeView(
   return createTestView(doc, {
     cursorPos: from,
     extensions: opts.withMarkdown ? [markdown()] : [],
+  });
+}
+
+function makeFencedView(
+  doc: string,
+  cursorPos: number,
+  plugins = [
+    makeBlockPlugin({ name: "theorem" }),
+    makeBlockPlugin({ name: "definition" }),
+    makeBlockPlugin({ name: "proof" }),
+  ],
+): EditorView {
+  return createTestView(doc, {
+    cursorPos,
+    extensions: [
+      markdown({ extensions: markdownExtensions }),
+      frontmatterField,
+      documentSemanticsField,
+      createPluginRegistryField(plugins),
+      fenceProtectionExtension,
+    ],
   });
 }
 
@@ -55,6 +85,45 @@ describe("edge cases", () => {
     expect(view.state.doc.toString()).toBe("****text");
     expect(view.state.selection.main.head).toBe(2);
     view.destroy();
+  });
+});
+
+describe("moveDownAcrossNestedClosingFences", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
+  it("lands on the parent insertion point when nested closing fences are consecutive", () => {
+    const doc = `:::: {.theorem}\nOuter intro\n\n::: {.proof}\nInner last line\n:::\n::::`;
+    const innerLineEnd = doc.indexOf("Inner last line") + "Inner last line".length;
+    view = makeFencedView(doc, innerLineEnd);
+
+    expect(moveDownAcrossNestedClosingFences(view)).toBe(true);
+    expect(view.state.selection.main.head).toBe(view.state.doc.line(7).from);
+  });
+
+  it("steps outward one structural level at a time across deeper consecutive closers", () => {
+    const doc = `::::: {.theorem}\n:::: {.definition}\n::: {.proof}\nDeep\n:::\n::::\n:::::`;
+    const deepLineEnd = doc.indexOf("Deep") + "Deep".length;
+    view = makeFencedView(doc, deepLineEnd);
+
+    expect(moveDownAcrossNestedClosingFences(view)).toBe(true);
+    expect(view.state.selection.main.head).toBe(view.state.doc.line(6).from);
+
+    expect(moveDownAcrossNestedClosingFences(view)).toBe(true);
+    expect(view.state.selection.main.head).toBe(view.state.doc.line(7).from);
+  });
+
+  it("does not intercept when the parent still has visible content after the nested block", () => {
+    const doc = `:::: {.theorem}\n::: {.proof}\nInner last line\n:::\nParent tail\n::::`;
+    const innerLineEnd = doc.indexOf("Inner last line") + "Inner last line".length;
+    view = makeFencedView(doc, innerLineEnd);
+
+    expect(moveDownAcrossNestedClosingFences(view)).toBe(false);
+    expect(view.state.selection.main.head).toBe(innerLineEnd);
   });
 });
 
