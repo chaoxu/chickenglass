@@ -41,6 +41,7 @@ export {
 } from "./container-attributes";
 export {
   codeBlockRenderPlugin,
+  codeBlockStructureField,
   collectCodeBlocks,
   type CodeBlockInfo,
 } from "./code-block-render";
