@@ -3,7 +3,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{
+    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind,
+};
+use serde::Serialize;
 use tauri::{AppHandle, Emitter, State, WebviewWindow, command};
 
 use super::perf::measure_command;
@@ -34,6 +37,38 @@ fn should_emit_debounced_event(
 
     last_events.insert(path.to_path_buf(), now);
     true
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FileChangedEvent {
+    path: String,
+    tree_changed: bool,
+}
+
+fn event_changes_tree(kind: &EventKind) -> bool {
+    matches!(
+        kind,
+        EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(ModifyKind::Name(_))
+    )
+}
+
+fn normalize_relative_event_path(root: &Path, path: &Path, tree_changed: bool) -> Option<String> {
+    if path.is_dir() && !tree_changed {
+        return None;
+    }
+
+    let relative = path
+        .strip_prefix(root)
+        .ok()?
+        .to_string_lossy()
+        .replace('\\', "/");
+
+    if should_ignore_relative_path(&relative) {
+        return None;
+    }
+
+    Some(relative)
 }
 
 fn reserve_watcher_slot(
@@ -121,12 +156,7 @@ pub fn watch_directory(
             let window_label = window.label().to_string();
             {
                 let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
-                if !reserve_watcher_slot(
-                    &mut lock,
-                    &window_label,
-                    watch_path.clone(),
-                    generation,
-                ) {
+                if !reserve_watcher_slot(&mut lock, &window_label, watch_path.clone(), generation) {
                     return Ok(false);
                 }
             }
@@ -153,19 +183,14 @@ pub fn watch_directory(
                         return;
                     }
 
+                    let tree_changed = event_changes_tree(&event.kind);
+
                     for path in &event.paths {
-                        if path.is_dir() {
+                        let Some(relative) =
+                            normalize_relative_event_path(&root_for_closure, path, tree_changed)
+                        else {
                             continue;
-                        }
-
-                        let relative = match path.strip_prefix(&root_for_closure) {
-                            Ok(relative) => relative.to_string_lossy().replace('\\', "/"),
-                            Err(_) => continue,
                         };
-
-                        if should_ignore_relative_path(&relative) {
-                            continue;
-                        }
 
                         {
                             let mut map = match last_events_clone.lock() {
@@ -178,10 +203,15 @@ pub fn watch_directory(
                             }
                         }
 
+                        let payload = FileChangedEvent {
+                            path: relative,
+                            tree_changed,
+                        };
+
                         let _ = app_for_closure.emit_to(
                             window_label_for_closure.as_str(),
                             "file-changed",
-                            &relative,
+                            &payload,
                         );
                     }
                 },
@@ -207,15 +237,18 @@ pub fn watch_directory(
 #[cfg(test)]
 mod tests {
     use super::{
-        remove_watcher_generation,
-        reserve_watcher_slot,
-        should_emit_debounced_event,
-        should_ignore_relative_path,
+        event_changes_tree, normalize_relative_event_path, remove_watcher_generation,
+        reserve_watcher_slot, should_emit_debounced_event, should_ignore_relative_path,
     };
     use crate::commands::state::FileWatcherEntry;
+    use notify::{
+        EventKind,
+        event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
+    };
     use std::collections::HashMap;
+    use std::fs;
     use std::path::{Path, PathBuf};
-    use std::time::{Duration, Instant};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     #[test]
     fn ignores_hidden_and_generated_relative_paths() {
@@ -233,8 +266,12 @@ mod tests {
         let stale_instant = now - Duration::from_secs(5);
         let mut last_events = HashMap::from([(PathBuf::from("old.md"), stale_instant)]);
 
-        let should_emit =
-            should_emit_debounced_event(&mut last_events, Path::new("new.md"), now, debounce_window);
+        let should_emit = should_emit_debounced_event(
+            &mut last_events,
+            Path::new("new.md"),
+            now,
+            debounce_window,
+        );
 
         assert!(should_emit);
         assert_eq!(last_events.len(), 1);
@@ -249,7 +286,12 @@ mod tests {
         let mut last_events = HashMap::new();
         let path = Path::new("notes/index.md");
 
-        assert!(should_emit_debounced_event(&mut last_events, path, now, debounce_window));
+        assert!(should_emit_debounced_event(
+            &mut last_events,
+            path,
+            now,
+            debounce_window
+        ));
         assert!(!should_emit_debounced_event(
             &mut last_events,
             path,
@@ -265,13 +307,49 @@ mod tests {
         let mut last_events = HashMap::new();
         let path = Path::new("notes/index.md");
 
-        assert!(should_emit_debounced_event(&mut last_events, path, now, debounce_window));
+        assert!(should_emit_debounced_event(
+            &mut last_events,
+            path,
+            now,
+            debounce_window
+        ));
         assert!(should_emit_debounced_event(
             &mut last_events,
             path,
             now + Duration::from_millis(750),
             debounce_window,
         ));
+    }
+
+    #[test]
+    fn structural_events_mark_tree_changes() {
+        assert!(event_changes_tree(&EventKind::Create(CreateKind::File)));
+        assert!(event_changes_tree(&EventKind::Remove(RemoveKind::File)));
+        assert!(event_changes_tree(&EventKind::Modify(ModifyKind::Name(
+            RenameMode::Both
+        ))));
+        assert!(!event_changes_tree(&EventKind::Modify(ModifyKind::Data(
+            notify::event::DataChange::Content,
+        ))));
+    }
+
+    #[test]
+    fn includes_directory_paths_for_tree_changes_only() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("coflat-watch-test-{unique}"));
+        let dir = root.join("docs/new-subdir");
+        fs::create_dir_all(&dir).expect("create test directory");
+
+        assert_eq!(
+            normalize_relative_event_path(&root, &dir, true),
+            Some("docs/new-subdir".to_string()),
+        );
+        assert_eq!(normalize_relative_event_path(&root, &dir, false), None);
+
+        fs::remove_dir_all(&root).expect("remove test directory");
     }
 
     #[test]
@@ -285,12 +363,8 @@ mod tests {
             },
         )]);
 
-        let reserved = reserve_watcher_slot(
-            &mut watchers,
-            "main",
-            PathBuf::from("/tmp/project-a"),
-            6,
-        );
+        let reserved =
+            reserve_watcher_slot(&mut watchers, "main", PathBuf::from("/tmp/project-a"), 6);
 
         assert!(!reserved);
         assert_eq!(

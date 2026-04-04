@@ -109,7 +109,8 @@ export function useAppDebug({
             lastFocusedWindow: nativeState.last_focused_window,
           };
         },
-        simulateExternalChange: (relativePath: string) => debugEmitFileChangedCommand(relativePath),
+        simulateExternalChange: (relativePath: string, treeChanged?: boolean) =>
+          debugEmitFileChangedCommand(relativePath, treeChanged),
       };
     } else {
       delete window.__tauriSmoke;

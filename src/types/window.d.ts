@@ -88,7 +88,7 @@ declare global {
         watcherActive: boolean;
         lastFocusedWindow: string | null;
       }>;
-      simulateExternalChange: (relativePath: string) => Promise<void>;
+      simulateExternalChange: (relativePath: string, treeChanged?: boolean) => Promise<void>;
     };
   }
 }

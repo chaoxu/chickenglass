@@ -62,6 +62,7 @@ interface HarnessProps {
 
 const isPathOpen = () => true;
 const isPathDirty = () => false;
+const refreshTree = async () => {};
 const reloadFile = async () => {};
 
 const Harness: FC<HarnessProps> = ({ projectRoot }) => {
@@ -71,6 +72,7 @@ const Harness: FC<HarnessProps> = ({ projectRoot }) => {
     containerRef,
     isPathOpen,
     isPathDirty,
+    refreshTree,
     reloadFile,
   });
   return createElement("div", { ref: containerRef });

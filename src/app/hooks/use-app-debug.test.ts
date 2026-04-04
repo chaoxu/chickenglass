@@ -12,7 +12,7 @@ const nativeDebugMockState = vi.hoisted(() => ({
     watcher_active: true,
     last_focused_window: "main",
   })),
-  debugEmitFileChanged: vi.fn(async (_relativePath: string) => {}),
+  debugEmitFileChanged: vi.fn(async (_relativePath: string, _treeChanged?: boolean) => {}),
   reset() {
     this.debugListWindows.mockClear();
     this.debugGetNativeState.mockClear();
@@ -117,8 +117,8 @@ describe("useAppDebug", () => {
       lastFocusedWindow: "main",
     });
 
-    await window.__tauriSmoke?.simulateExternalChange("notes.md");
-    expect(nativeDebugMockState.debugEmitFileChanged).toHaveBeenCalledWith("notes.md");
+    await window.__tauriSmoke?.simulateExternalChange("notes.md", true);
+    expect(nativeDebugMockState.debugEmitFileChanged).toHaveBeenCalledWith("notes.md", true);
 
     await expect(window.__tauriSmoke?.listWindows()).resolves.toEqual([
       { label: "main", focused: true },

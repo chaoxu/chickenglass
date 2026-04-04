@@ -16,4 +16,7 @@ export interface NativeDebugState {
 
 export const debugListWindowsCommand = tauriCommand<NativeWindowDebugInfo[]>("debug_list_windows");
 export const debugGetNativeStateCommand = tauriCommand<NativeDebugState>("debug_get_native_state");
-export const debugEmitFileChangedCommand = tauriArgs<undefined>("debug_emit_file_changed")((relativePath: string) => ({ relativePath }));
+export const debugEmitFileChangedCommand = tauriArgs<undefined>("debug_emit_file_changed")(
+  (relativePath: string, treeChanged?: boolean) =>
+    treeChanged === undefined ? { relativePath } : { relativePath, treeChanged },
+);

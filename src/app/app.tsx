@@ -76,6 +76,7 @@ function AppInner() {
     containerRef: appContainerRef,
     isPathOpen: editor.isPathOpen,
     isPathDirty: editor.isPathDirty,
+    refreshTree: workspace.refreshTree,
     reloadFile: editor.reloadFile,
     isSelfChange,
   });
