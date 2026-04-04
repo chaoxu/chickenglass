@@ -36,6 +36,8 @@ export interface EditorPaneProps extends UseEditorOptions {
   onDiagnosticsChange?: (diagnostics: DiagnosticEntry[]) => void;
   /** Current editor mode — "read" shows the HTML renderer instead of CM6. */
   editorMode?: EditorMode;
+  /** Monotonic active-document revision used to refresh read mode lazily. */
+  docRevision?: number;
 }
 
 export function EditorPane({
@@ -46,6 +48,7 @@ export function EditorPane({
   onHeadingsChange,
   onDiagnosticsChange,
   editorMode,
+  docRevision,
   ...editorOptions
 }: EditorPaneProps) {
   const isReadMode = editorMode === "read";
@@ -152,7 +155,12 @@ export function EditorPane({
   const headings = view ? extractHeadings(view.state) : [];
 
   // Get the live document content, frontmatter config, and bibliography for ReadModeView
-  const readModeContent = view ? view.state.doc.toString() : editorOptions.doc;
+  const readModeContent = useMemo(() => {
+    if (!isReadMode) {
+      return editorOptions.doc;
+    }
+    return view ? view.state.doc.toString() : editorOptions.doc;
+  }, [docRevision, editorOptions.doc, isReadMode, view]);
   const fmState = view ? view.state.field(frontmatterField, false) : undefined;
   const frontmatterConfig = fmState?.config ?? {};
   const bibData = view ? view.state.field(bibDataField, false) : undefined;

@@ -14,7 +14,7 @@
  */
 
 import { useRef, useEffect, useState, useMemo, type RefObject } from "react";
-import { EditorView } from "@codemirror/view";
+import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { Compartment, type Extension } from "@codemirror/state";
 
 import {
@@ -38,6 +38,7 @@ import { useEditorThemeSync } from "./use-editor-theme-sync";
 import { measureSync } from "../perf";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 import type { SourceMap } from "../source-map";
+import type { EditorDocumentChange } from "../editor-doc-change";
 
 /** Resolved theme for the CM6 dark/light base extension. */
 export type ResolvedTheme = "light" | "dark";
@@ -62,8 +63,8 @@ export interface UseEditorOptions {
    * Used to resolve relative bibliography and include paths.
    */
   docPath?: string;
-  /** Called with the full document string whenever it changes. */
-  onDocChange?: (doc: string) => void;
+  /** Called with the user edit spans whenever the document changes. */
+  onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
   /** Called when an annotated document replacement updates the live editor text. */
   onProgrammaticDocChange?: (doc: string) => void;
   /** Called with the cursor head position (char offset) whenever the selection changes. */
@@ -97,6 +98,18 @@ function useLatest<T>(value: T) {
   const ref = useRef(value);
   ref.current = value;
   return ref;
+}
+
+function collectDocumentChanges(update: ViewUpdate): EditorDocumentChange[] {
+  const changes: EditorDocumentChange[] = [];
+  update.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    changes.push({
+      from: fromA,
+      to: toA,
+      insert: inserted.toString(),
+    });
+  });
+  return changes;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -206,11 +219,12 @@ export function useEditor(
       }
 
       if (update.docChanged) {
-        const docStr = update.state.doc.toString();
         if (!programmaticDocChange) {
           window.__cfSourceMap?.mapThrough(update.changes);
-          onDocChangeRef.current?.(docStr);
+          onDocChangeRef.current?.(collectDocumentChanges(update));
         } else {
+          const docStr = update.state.doc.toString();
+          lastLoadedDocRef.current = docStr;
           onProgrammaticDocChangeRef.current?.(docStr);
         }
 
@@ -219,6 +233,7 @@ export function useEditor(
           clearTimeout(wordCountTimerRef.current);
         }
         wordCountTimerRef.current = setTimeout(() => {
+          const docStr = update.state.doc.toString();
           const { words, chars } = computeLiveStats(docStr);
           useEditorTelemetryStore.getState().setLiveCounts(words, chars);
           wordCountTimerRef.current = null;
@@ -281,7 +296,7 @@ export function useEditor(
     if (!view) return;
 
     const pathChanged = docPath !== lastLoadedPathRef.current;
-    const docChangedExternally = doc !== view.state.doc.toString();
+    const docChangedExternally = doc !== lastLoadedDocRef.current;
     if (!pathChanged && !docChangedExternally) {
       return;
     }
