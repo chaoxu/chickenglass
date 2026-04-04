@@ -44,8 +44,11 @@ export function useFootnoteTooltip(
         document.body.appendChild(tooltip);
       }
       tooltip.innerHTML = "";
+      const contentEl = document.createElement("div");
+      contentEl.className = "cf-hover-preview";
+      tooltip.appendChild(contentEl);
       const macros = view.state.field(mathMacrosField);
-      renderDocumentFragmentToDom(tooltip, { kind: "footnote", text: content, macros });
+      renderDocumentFragmentToDom(contentEl, { kind: "footnote", text: content, macros });
 
       const el = tooltip;
       void computePosition(target, el, {

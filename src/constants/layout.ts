@@ -79,20 +79,6 @@ export const CONTENT_PADDING_Y = "24px";
 export const CONTENT_PADDING_X = "48px";
 
 /**
- * Maximum width of the hover-preview tooltip.
- * 400 px is wide enough to show a full theorem statement or equation without
- * overflowing the typical editor column width.
- */
-export const HOVER_PREVIEW_MAX_WIDTH = "400px";
-
-/**
- * Maximum height of the hover-preview tooltip.
- * 300 px caps tall previews (e.g., long definitions) so they do not push below
- * the viewport fold; overflow is handled with scroll.
- */
-export const HOVER_PREVIEW_MAX_HEIGHT = "300px";
-
-/**
  * Right margin gap on the sidenote number label.
  * 3 px provides a tight but visible separation between the superscript number
  * and the start of the sidenote text.

@@ -112,6 +112,9 @@
   --cf-table-font-size: 0.9em;
   --cf-table-line-height: 1.5;
   --cf-embed-border: var(--cf-border);
+  --cf-hover-preview-max-width: 400px;
+  --cf-hover-preview-max-height: 300px;
+  --cf-hover-preview-font-size: 0.9em;
 
   /* Border radius */
   --cf-border-radius: 2px;
@@ -323,12 +326,11 @@
   border-radius: 8px;
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   pointer-events: none;
-  max-width: 350px;
-  padding: var(--cf-spacing-md) var(--cf-spacing-lg);
-  font-size: 0.85em;
-  line-height: 1.5;
-  color: var(--cf-fg);
-  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
+  max-width: min(var(--cf-hover-preview-max-width), calc(100vw - 10px));
+  max-height: min(var(--cf-hover-preview-max-height), calc(100vh - 10px));
+  overflow: hidden;
+  padding: 0;
+  box-sizing: border-box;
   /* Enter/exit animation (respects prefers-reduced-motion via --cf-transition) */
   opacity: 0;
   transform: translateY(2px);
@@ -338,6 +340,127 @@
 .cf-hover-preview-tooltip[data-visible="true"] {
   opacity: 1;
   transform: translateY(0);
+}
+
+.cf-hover-preview {
+  display: block;
+  max-width: min(var(--cf-hover-preview-max-width), calc(100vw - 10px));
+  max-height: min(var(--cf-hover-preview-max-height), calc(100vh - 10px));
+  overflow: auto;
+  padding: var(--cf-spacing-md) var(--cf-spacing-lg);
+  font-size: var(--cf-hover-preview-font-size);
+  line-height: 1.5;
+  color: var(--cf-fg);
+  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
+  box-sizing: border-box;
+}
+
+.cf-hover-preview-header {
+  font-weight: 700;
+  margin-bottom: var(--cf-spacing-xs);
+  color: var(--cf-fg);
+}
+
+.cf-hover-preview-body {
+  color: var(--cf-muted);
+  overflow-wrap: break-word;
+}
+
+.cf-hover-preview-body p {
+  margin: 0.25em 0;
+}
+
+.cf-hover-preview-body p:first-child {
+  margin-top: 0;
+}
+
+.cf-hover-preview-body p:last-child {
+  margin-bottom: 0;
+}
+
+.cf-hover-preview-body .cf-math-display {
+  margin: 0;
+  text-align: center;
+}
+
+.cf-hover-preview-unresolved {
+  color: var(--cf-muted);
+  font-style: italic;
+}
+
+.cf-citation-preview {
+  white-space: normal;
+}
+
+.cf-hover-preview-citation {
+  color: var(--cf-muted);
+  margin-bottom: var(--cf-spacing-xs);
+}
+
+.cf-hover-preview-citation:last-child {
+  margin-bottom: 0;
+}
+
+.cf-hover-preview-separator {
+  border: none;
+  border-top: 1px solid var(--cf-border);
+  margin: var(--cf-spacing-xs) 0;
+}
+
+.cf-hover-preview-code-block {
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  background: var(--cf-hover);
+  border: 1px solid var(--cf-border);
+  padding: 0.5em 0.75em;
+  border-radius: 0;
+  overflow-x: auto;
+  margin: 0.75em 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.cf-hover-preview-body code {
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: 0.85em;
+  background: var(--cf-hover);
+  padding: 0.15em 0.35em;
+  border-radius: var(--cf-border-radius);
+}
+
+.cf-hover-preview-code-block code {
+  background: none;
+  padding: 0;
+  font-size: 1em;
+}
+
+.cf-hover-preview-table-scroll {
+  margin: 0.75em 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.cf-hover-preview-table-scroll table {
+  border-collapse: collapse;
+  font-size: var(--cf-table-font-size, 0.9em);
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
+.cf-hover-preview-table-scroll th,
+.cf-hover-preview-table-scroll td {
+  border: 1px solid var(--cf-table-border);
+  padding: var(--cf-table-cell-padding);
+  text-align: left;
+  line-height: var(--cf-table-line-height, 1.5);
+}
+
+.cf-hover-preview-table-scroll th {
+  font-weight: 600;
+  border-bottom: 2px solid var(--cf-table-header-border);
+  background: var(--cf-subtle);
 }
 
 /* ── Block type picker (appended to document.body) ─────────────────────────
