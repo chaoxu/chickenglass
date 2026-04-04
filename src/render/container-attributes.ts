@@ -240,6 +240,7 @@ function dirtyRegionsEqual(
   a: DirtyRegion | null,
   b: DirtyRegion | null,
 ): boolean {
+  if (a === b) return true;
   return a?.filterFrom === b?.filterFrom && a?.filterTo === b?.filterTo;
 }
 
@@ -515,5 +516,4 @@ export const containerAttributesPlugin: Extension = [
 
 export {
   computeContainerDirtyRegion as _computeContainerDirtyRegionForTest,
-  incrementalContainerUpdate as _incrementalContainerUpdateForTest,
 };
