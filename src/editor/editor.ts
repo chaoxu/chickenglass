@@ -37,6 +37,7 @@ import { listOutlinerExtension } from "./list-outliner";
 import { treeView } from "@overleaf/codemirror-tree-view";
 import { includeRegionsField } from "../lib/include-regions";
 import { referenceAutocompleteExtension } from "./reference-autocomplete";
+import { richClipboardOutputFilter } from "./rich-clipboard";
 import {
   createMarkdownLanguageExtensions,
   createProjectConfigExtensions,
@@ -120,6 +121,7 @@ const renderingExtensions: Extension[] = [
   codeBlockRenderPlugin,
   bibliographyPlugin,
   containerAttributesPlugin,
+  richClipboardOutputFilter,
   ...tableGridExtension, // decoration-based CSS grid tables (#407)
   checkboxRenderPlugin,
   mathPreviewPlugin,
