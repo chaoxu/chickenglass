@@ -92,12 +92,16 @@ pub fn debug_emit_file_changed(
     app: AppHandle,
     window: WebviewWindow,
     relative_path: String,
+    tree_changed: Option<bool>,
 ) -> Result<(), String> {
     ensure_debug_build()?;
     app.emit_to(
         window.label(),
         "file-changed",
-        &json!({ "path": relative_path, "treeChanged": false }),
+        &json!({
+            "path": relative_path,
+            "treeChanged": tree_changed.unwrap_or(false),
+        }),
     )
     .map_err(|e| e.to_string())
 }
