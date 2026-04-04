@@ -16,6 +16,7 @@ export interface ImageUrlUpdate {
 }
 
 export const imageUrlEffect = StateEffect.define<ImageUrlUpdate>();
+export const imageUrlRemoveEffect = StateEffect.define<string>();
 
 export const imageUrlField = StateField.define<
   ReadonlyMap<string, ImageUrlEntry>
@@ -26,24 +27,48 @@ export const imageUrlField = StateField.define<
   update(value, tr) {
     let updated: Map<string, ImageUrlEntry> | null = null;
     for (const effect of tr.effects) {
-      if (!effect.is(imageUrlEffect)) continue;
-      if (!updated) updated = new Map(value);
-      updated.set(effect.value.path, effect.value.entry);
+      if (effect.is(imageUrlEffect)) {
+        if (!updated) updated = new Map(value);
+        updated.set(effect.value.path, effect.value.entry);
+      } else if (effect.is(imageUrlRemoveEffect)) {
+        const source = updated ?? value;
+        if (!source.has(effect.value)) continue;
+        if (!updated) updated = new Map(value);
+        updated.delete(effect.value);
+      }
     }
     return updated ?? value;
   },
 });
 
 const dataUrlCache = new Map<string, string>();
-const pendingPaths = new Set<string>();
+const pendingPaths = new Map<string, number>();
+const pathGenerations = new Map<string, number>();
 
 export function getImageDataUrl(path: string): string | undefined {
   return dataUrlCache.get(path);
 }
 
 export function _resetImageUrlCache(): void {
-  pendingPaths.clear();
   dataUrlCache.clear();
+  pendingPaths.clear();
+  pathGenerations.clear();
+}
+
+export function invalidateImageDataUrl(view: EditorView, path: string): void {
+  const hadCache = dataUrlCache.delete(path);
+  const hadEntry = view.state.field(imageUrlField).has(path);
+  const hadPending = pendingPaths.has(path);
+
+  if (!hadCache && !hadEntry && !hadPending) {
+    return;
+  }
+
+  pathGenerations.set(path, (pathGenerations.get(path) ?? 0) + 1);
+
+  if (hadEntry) {
+    safeRemove(view, path);
+  }
 }
 
 export async function requestImageDataUrl(
@@ -52,6 +77,7 @@ export async function requestImageDataUrl(
   fs: FileSystem,
 ): Promise<void> {
   const existing = view.state.field(imageUrlField).get(path);
+  const generation = pathGenerations.get(path) ?? 0;
 
   if (existing) {
     // Ready with cached data URL — nothing to do
@@ -68,13 +94,14 @@ export async function requestImageDataUrl(
     if (existing.status === "loading") return;
   }
 
-  if (pendingPaths.has(path)) return;
-  pendingPaths.add(path);
+  if (pendingPaths.get(path) === generation) return;
+  pendingPaths.set(path, generation);
 
   safeDispatch(view, { path, entry: { status: "loading" } });
 
   try {
     const dataUrl = await readImageFileAsDataUrl(path, fs);
+    if (!isCurrentGeneration(path, generation)) return;
     if (!dataUrl) {
       safeDispatch(view, { path, entry: { status: "error", errorTime: Date.now() } });
       return;
@@ -83,9 +110,12 @@ export async function requestImageDataUrl(
     dataUrlCache.set(path, dataUrl);
     safeDispatch(view, { path, entry: { status: "ready" } });
   } catch {
+    if (!isCurrentGeneration(path, generation)) return;
     safeDispatch(view, { path, entry: { status: "error", errorTime: Date.now() } });
   } finally {
-    pendingPaths.delete(path);
+    if (pendingPaths.get(path) === generation) {
+      pendingPaths.delete(path);
+    }
   }
 }
 
@@ -96,4 +126,17 @@ function safeDispatch(view: EditorView, update: ImageUrlUpdate): void {
   } catch {
     // View disconnected between guard and dispatch.
   }
+}
+
+function safeRemove(view: EditorView, path: string): void {
+  if (!view.dom.isConnected) return;
+  try {
+    view.dispatch({ effects: imageUrlRemoveEffect.of(path) });
+  } catch {
+    // View disconnected between guard and dispatch.
+  }
+}
+
+function isCurrentGeneration(path: string, generation: number): boolean {
+  return pendingPaths.get(path) === generation && (pathGenerations.get(path) ?? 0) === generation;
 }

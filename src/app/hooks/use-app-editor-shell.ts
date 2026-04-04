@@ -21,6 +21,7 @@ import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
 import type { Settings } from "../lib/types";
 import type { SearchNavigationTarget } from "../search";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
+import { invalidateImageDataUrl } from "../../render/image-url-cache";
 
 interface PendingModeOverride {
   path: string;
@@ -148,6 +149,8 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
   docTextForStats: string;
   /** True when the current document has unsaved changes (used for window-close guard). */
   hasDirtyDocument: boolean;
+  /** React to watched filesystem changes that should invalidate editor-side caches. */
+  handleWatchedPathChange: (path: string) => void;
 
   // --- Drag-and-drop ---
 
@@ -198,6 +201,7 @@ export function useAppEditorShell({
   const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
+  const editorViewRef = useRef<EditorView | null>(null);
 
   const navigation = useEditorNavigation({ openFile, isPathOpen, currentPath });
   const {
@@ -210,6 +214,7 @@ export function useAppEditorShell({
 
   const handleEditorStateChange = useCallback((state: UseEditorReturn) => {
     setEditorState(state);
+    editorViewRef.current = state.view;
     syncView(state.view);
 
     if (state.view) {
@@ -227,6 +232,12 @@ export function useAppEditorShell({
 
   const handleDiagnosticsChange = useCallback((d: DiagnosticEntry[]) => {
     setDiagnostics(d);
+  }, []);
+
+  const handleWatchedPathChange = useCallback((path: string) => {
+    const view = editorViewRef.current;
+    if (!view) return;
+    invalidateImageDataUrl(view, path);
   }, []);
 
   useEffect(() => {
@@ -376,6 +387,7 @@ export function useAppEditorShell({
     isMarkdownFile,
     docTextForStats,
     hasDirtyDocument,
+    handleWatchedPathChange,
     handleDragOver,
     handleDrop,
   };
