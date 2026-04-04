@@ -38,6 +38,7 @@ interface TauriSmokeWindowState {
 interface AppDebugDeps {
   openProject: (path: string) => Promise<boolean>;
   openFile: (path: string) => Promise<void>;
+  openFileWithContent: (name: string, content: string) => Promise<void>;
   saveFile: () => Promise<void>;
   closeFile: (options?: { discard?: boolean }) => Promise<boolean>;
   setSearchOpen: (open: boolean) => void;
@@ -54,6 +55,7 @@ interface AppDebugDeps {
 export function useAppDebug({
   openProject,
   openFile,
+  openFileWithContent,
   saveFile,
   closeFile,
   setSearchOpen,
@@ -73,6 +75,7 @@ export function useAppDebug({
   useEffect(() => {
     window.__app = {
       openFile,
+      openFileWithContent,
       saveFile,
       closeFile,
       setSearchOpen,
@@ -125,6 +128,7 @@ export function useAppDebug({
   }, [
     openProject,
     openFile,
+    openFileWithContent,
     saveFile,
     closeFile,
     setSearchOpen,
