@@ -33,6 +33,16 @@ function table(from: number, to: number): TableRange {
   };
 }
 
+function makeDiscoveryState(doc: string): EditorState {
+  return EditorState.create({
+    doc,
+    extensions: [
+      markdown({ extensions: markdownExtensions }),
+      tableDiscoveryField,
+    ],
+  });
+}
+
 describe("findPipePositions", () => {
   it("ignores escaped pipes", () => {
     expect(findPipePositions("| a \\| b | c |")).toEqual([0, 9, 13]);
@@ -99,17 +109,11 @@ describe("table range helpers", () => {
   });
 
   it("reuses the cached table discovery result across selection-only updates", () => {
-    const state = EditorState.create({
-      doc: [
-        "| A | B |",
-        "| --- | --- |",
-        "| 1 | 2 |",
-      ].join("\n"),
-      extensions: [
-        markdown({ extensions: markdownExtensions }),
-        tableDiscoveryField,
-      ],
-    });
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+    ].join("\n"));
 
     const initialTables = state.field(tableDiscoveryField);
     expect(findTablesInState(state)).toBe(initialTables);
@@ -123,22 +127,111 @@ describe("table range helpers", () => {
     expect(changedState.field(tableDiscoveryField)).not.toBe(initialTables);
   });
 
+  it("reuses the full cached result when a doc change happens after all tables", () => {
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "after",
+    ].join("\n"));
+
+    const initialTables = state.field(tableDiscoveryField);
+    const changedState = state.update({
+      changes: { from: state.doc.length, insert: " more" },
+    }).state;
+
+    expect(changedState.field(tableDiscoveryField)).toBe(initialTables);
+  });
+
+  it("preserves untouched table objects when prose between tables changes", () => {
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "between",
+      "",
+      "| C | D |",
+      "| --- | --- |",
+      "| 3 | 4 |",
+    ].join("\n"));
+
+    const initialTables = state.field(tableDiscoveryField);
+    const changedState = state.update({
+      changes: { from: state.doc.line(5).to, insert: " prose" },
+    }).state;
+    const changedTables = changedState.field(tableDiscoveryField);
+
+    expect(changedTables).not.toBe(initialTables);
+    expect(changedTables[0]).toBe(initialTables[0]);
+    expect(changedTables[1]).not.toBe(initialTables[1]);
+    expect(changedTables[1].startLineNumber).toBe(initialTables[1].startLineNumber);
+    expect(changedTables[1].from).toBeGreaterThan(initialTables[1].from);
+  });
+
+  it("rebuilds only the touched table when a cell edit stays within one table", () => {
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "| C | D |",
+      "| --- | --- |",
+      "| 3 | 4 |",
+    ].join("\n"));
+
+    const initialTables = state.field(tableDiscoveryField);
+    const changedState = state.update({
+      changes: {
+        from: state.doc.line(3).from + 2,
+        to: state.doc.line(3).from + 3,
+        insert: "9",
+      },
+    }).state;
+    const changedTables = changedState.field(tableDiscoveryField);
+
+    expect(changedTables[0]).not.toBe(initialTables[0]);
+    expect(changedTables[0].lines[2]).toContain("9");
+    expect(changedTables[1]).toBe(initialTables[1]);
+  });
+
+  it("drops only the invalidated table when its separator row stops parsing", () => {
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "| C | D |",
+      "| --- | --- |",
+      "| 3 | 4 |",
+    ].join("\n"));
+
+    const initialTables = state.field(tableDiscoveryField);
+    const separatorLine = state.doc.line(2);
+    const changedState = state.update({
+      changes: {
+        from: separatorLine.from,
+        to: separatorLine.to,
+        insert: "| abc | def |",
+      },
+    }).state;
+    const changedTables = changedState.field(tableDiscoveryField);
+
+    expect(changedTables).toHaveLength(1);
+    expect(changedTables[0]).toBe(initialTables[1]);
+  });
+
   it("filters view tables from the cached state-level discovery", () => {
-    const state = EditorState.create({
-      doc: [
-        "| A | B |",
-        "| --- | --- |",
-        "| 1 | 2 |",
-        "",
-        "| C | D |",
-        "| --- | --- |",
-        "| 3 | 4 |",
-      ].join("\n"),
-      extensions: [
-        markdown({ extensions: markdownExtensions }),
-        tableDiscoveryField,
-      ],
-    });
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "| C | D |",
+      "| --- | --- |",
+      "| 3 | 4 |",
+    ].join("\n"));
 
     const tables = state.field(tableDiscoveryField);
     const visibleTables = findTablesInView({
