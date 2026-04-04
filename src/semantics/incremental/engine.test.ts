@@ -512,4 +512,54 @@ describe("incremental document analysis engine", () => {
       expect(after.equations[i]).toEqual(rebuilt.equations[i]);
     }
   });
+
+  it("rebuilds the full paragraph when inline math delimiters re-pair later spans (#813)", () => {
+    const doc = "Lead $a$ text $b$ more $c$ tail $d$ done.";
+    const beforeState = createState(doc);
+    const before = analyze(beforeState);
+    const beforeB = doc.indexOf("$b$");
+
+    const tr1 = beforeState.update({
+      changes: { from: beforeB, insert: "$" },
+    });
+    const after1 = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr1.state),
+      fullTree(tr1.state),
+      buildSemanticDelta(tr1),
+    );
+
+    const tr2 = tr1.state.update({
+      changes: { from: beforeB + 1, insert: "x" },
+    });
+    const after2 = updateDocumentAnalysis(
+      after1,
+      editorStateTextSource(tr2.state),
+      fullTree(tr2.state),
+      buildSemanticDelta(tr2),
+    );
+
+    const tr3 = tr2.state.update({
+      changes: { from: beforeB + 2, insert: "$" },
+    });
+    const after3 = updateDocumentAnalysis(
+      after2,
+      editorStateTextSource(tr3.state),
+      fullTree(tr3.state),
+      buildSemanticDelta(tr3),
+    );
+
+    const rebuilt = analyze(tr3.state);
+    expect(after3.mathRegions.map((region) => region.latex)).toEqual([
+      "a",
+      "x",
+      "b",
+      "c",
+      "d",
+    ]);
+    expect(after3.mathRegions.length).toBe(rebuilt.mathRegions.length);
+    for (let i = 0; i < rebuilt.mathRegions.length; i++) {
+      expect(after3.mathRegions[i]).toEqual(rebuilt.mathRegions[i]);
+    }
+  });
 });

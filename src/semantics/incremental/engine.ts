@@ -28,6 +28,7 @@ import { deriveIncludeSlice } from "./slices/include-slice";
 import {
   buildMathSlice,
   computeMathOverhangRanges,
+  expandDirtyMathExtractions,
   mergeMathSlice,
   type MathSlice,
 } from "./slices/math-slice";
@@ -473,10 +474,17 @@ export function updateDocumentAnalysis(
   const includeSlice = includes === previousState.includeSlice.includes
     ? previousState.includeSlice
     : createIncludeSlice(includes);
-  const mathSlice = mergeMathSlice(
+  const mathDirtyExtractions = expandDirtyMathExtractions(
     previousState.mathSlice,
     delta,
     dirtyExtractions,
+    doc,
+    tree,
+  );
+  const mathSlice = mergeMathSlice(
+    previousState.mathSlice,
+    delta,
+    mathDirtyExtractions,
     doc,
     tree,
   );
@@ -487,7 +495,7 @@ export function updateDocumentAnalysis(
   const mathOverhangRanges = computeMathOverhangRanges(
     previousState.mathSlice,
     delta,
-    dirtyExtractions.map(e => e.window),
+    dirtyExtractions.map((e) => e.window),
   );
   const equationDirtyExtractions = mathOverhangRanges.length === 0
     ? dirtyExtractions
