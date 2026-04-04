@@ -38,6 +38,21 @@ async function waitForCompletionLabels(
   return readLabels();
 }
 
+async function waitForCompletionItem(
+  predicate: (item: HTMLLIElement) => boolean,
+): Promise<HTMLLIElement | undefined> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const item = [...document.querySelectorAll<HTMLLIElement>(".cm-tooltip-autocomplete li")]
+      .find(predicate);
+    if (item) {
+      return item;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return [...document.querySelectorAll<HTMLLIElement>(".cm-tooltip-autocomplete li")]
+    .find(predicate);
+}
+
 function createReferenceState(doc: string): EditorState {
   return EditorState.create({
     doc,
@@ -145,6 +160,7 @@ describe("collectReferenceCompletionCandidates", () => {
     expect(byId.get("karger2000")).toMatchObject({
       kind: "citation",
       detail: "Karger 2000",
+      preview: "Karger, David R.. Minimum cuts in near-linear time. JACM, 47(1), 46-76. 2000.",
     });
     expect(byId.size).toBe(4);
   });
@@ -216,6 +232,46 @@ describe("reference autocomplete integration", () => {
     expect(labels).toEqual(
       expect.arrayContaining(["thm:main", "sec:background", "karger2000"]),
     );
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it("renders citation completions as preview cards without detached info tooltips", async () => {
+    const doc = "See [@";
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = createEditor({ parent, doc });
+    view.focus();
+
+    view.dispatch({
+      effects: bibDataEffect.of({
+        store: makeBibStore([CSL_FIXTURES.karger]),
+        cslProcessor: new CslProcessor([CSL_FIXTURES.karger]),
+      }),
+    });
+    view.dispatch({
+      selection: { anchor: view.state.doc.length },
+    });
+
+    expect(startCompletion(view)).toBe(true);
+    await waitForCompletionLabels(() =>
+      currentCompletions(view.state).map((candidate) => candidate.label),
+    );
+    const [completion] = currentCompletions(view.state);
+    expect(completion?.label).toBe("karger2000");
+    expect(completion?.info).toBeUndefined();
+
+    const item = await waitForCompletionItem((candidate) =>
+      candidate.textContent?.includes("karger2000") ?? false,
+    );
+    expect(item).toBeTruthy();
+    expect(item?.className).toContain("cf-reference-completion-citation");
+    expect(item?.querySelector(".cm-completionLabel")?.textContent).toBe("karger2000");
+    expect(item?.querySelector(".cf-citation-preview")?.textContent).toContain(
+      "Minimum cuts in near-linear time. JACM, 47(1), 46-76. 2000.",
+    );
+    expect(document.querySelector(".cm-completionInfo")).toBeNull();
 
     view.destroy();
     parent.remove();

@@ -22,7 +22,7 @@ import {
 import type { ReferenceSemantics } from "../semantics/document";
 import { blockCounterField, type NumberedBlock } from "../plugins";
 import { bibDataField, type BibStore } from "../citations/citation-render";
-import { formatBibEntry } from "../citations/bibliography";
+import { buildCitationPreviewContentFromEntry } from "../citations/citation-preview";
 import { renderKatex } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { renderBlockContentToDom, renderDocumentFragmentToDom, type BlockContentOptions } from "../document-surfaces";
@@ -430,7 +430,7 @@ function buildCitationTooltip(
 
     const item = document.createElement("div");
     item.className = "cf-hover-preview-citation";
-    item.textContent = formatBibEntry(entry);
+    item.appendChild(buildCitationPreviewContentFromEntry(entry));
     container.appendChild(item);
   }
 
@@ -461,7 +461,7 @@ function buildSingleItemTooltip(
     if (entry) {
       const item = document.createElement("div");
       item.className = "cf-hover-preview-citation";
-      item.textContent = formatBibEntry(entry);
+      item.appendChild(buildCitationPreviewContentFromEntry(entry));
       container.appendChild(item);
     } else {
       container.appendChild(

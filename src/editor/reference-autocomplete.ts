@@ -8,7 +8,12 @@ import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 import type { EditorState, Extension } from "@codemirror/state";
 import type { CslJsonItem } from "../citations/bibtex-parser";
+import {
+  buildCitationPreviewContent,
+  formatCitationPreview,
+} from "../citations/citation-preview";
 import { bibDataField } from "../citations/citation-render";
+import { CSS } from "../constants/css-classes";
 import {
   blockCounterField,
   getPlugin,
@@ -50,6 +55,12 @@ export interface ReferenceCompletionCandidate {
   readonly kind: ReferenceCompletionKind;
   readonly detail?: string;
   readonly info?: string;
+  readonly preview?: string;
+}
+
+interface ReferenceAutocompleteCompletion extends Completion {
+  readonly referenceCompletionKind: ReferenceCompletionKind;
+  readonly citationPreview?: string;
 }
 
 function isReferenceIdChar(ch: string | undefined): boolean {
@@ -192,14 +203,27 @@ function formatCitationDetail(item: CslJsonItem): string {
   return year ? `${author} ${year}` : author;
 }
 
-function formatCitationInfo(item: CslJsonItem): string | undefined {
-  const title = typeof item.title === "string" ? item.title : undefined;
-  const container =
-    typeof item["container-title"] === "string" ? item["container-title"] : undefined;
-  if (title && container) {
-    return `${title} - ${container}`;
-  }
-  return title ?? container;
+function isCitationCompletion(
+  completion: Completion,
+): completion is ReferenceAutocompleteCompletion & {
+  readonly referenceCompletionKind: "citation";
+  readonly citationPreview: string;
+} {
+  const referenceCompletion = completion as Partial<ReferenceAutocompleteCompletion>;
+  return referenceCompletion.referenceCompletionKind === "citation"
+    && typeof referenceCompletion.citationPreview === "string";
+}
+
+function renderCitationCompletionPreview(completion: Completion): Node | null {
+  return isCitationCompletion(completion)
+    ? buildCitationPreviewContent(completion.citationPreview)
+    : null;
+}
+
+function referenceCompletionOptionClass(completion: Completion): string {
+  return isCitationCompletion(completion)
+    ? CSS.referenceCompletionCitation
+    : "";
 }
 
 export function collectReferenceCompletionCandidates(
@@ -255,7 +279,7 @@ export function collectReferenceCompletionCandidates(
         id: item.id,
         kind: "citation",
         detail: formatCitationDetail(item),
-        info: formatCitationInfo(item),
+        preview: formatCitationPreview(item),
       });
     }
   }
@@ -265,13 +289,14 @@ export function collectReferenceCompletionCandidates(
 
 function candidateToCompletion(
   candidate: ReferenceCompletionCandidate,
-): Completion {
+): ReferenceAutocompleteCompletion {
   switch (candidate.kind) {
     case "block":
       return {
         label: candidate.id,
         detail: candidate.detail,
         info: candidate.info,
+        referenceCompletionKind: "block",
         section: CROSSREF_SECTION,
         sortText: `0-${candidate.id}`,
         type: "constant",
@@ -281,6 +306,7 @@ function candidateToCompletion(
         label: candidate.id,
         detail: candidate.detail,
         info: candidate.info,
+        referenceCompletionKind: "equation",
         section: CROSSREF_SECTION,
         sortText: `1-${candidate.id}`,
         type: "constant",
@@ -290,15 +316,16 @@ function candidateToCompletion(
         label: candidate.id,
         detail: candidate.detail,
         info: candidate.info,
+        referenceCompletionKind: "heading",
         section: CROSSREF_SECTION,
         sortText: `2-${candidate.id}`,
         type: "namespace",
       };
     case "citation":
       return {
+        citationPreview: candidate.preview,
         label: candidate.id,
-        detail: candidate.detail,
-        info: candidate.info,
+        referenceCompletionKind: "citation",
         section: CITATION_SECTION,
         sortText: `3-${candidate.id}`,
         type: "variable",
@@ -330,5 +357,8 @@ export const referenceCompletionSource: CompletionSource = (
 export const referenceAutocompleteExtension: Extension = autocompletion({
   activateOnTyping: true,
   activateOnTypingDelay: 0,
+  addToOptions: [{ render: renderCitationCompletionPreview, position: 90 }],
+  optionClass: referenceCompletionOptionClass,
   override: [referenceCompletionSource],
+  tooltipClass: () => CSS.referenceCompletionTooltip,
 });
