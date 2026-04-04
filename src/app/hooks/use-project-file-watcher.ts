@@ -10,6 +10,7 @@ interface UseProjectFileWatcherOptions {
   isPathDirty: (path: string) => boolean;
   refreshTree: (changedPath?: string) => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
+  handleWatchedPathChange?: (path: string) => void | Promise<void>;
   isSelfChange?: (path: string) => Promise<boolean>;
 }
 
@@ -20,6 +21,7 @@ export function useProjectFileWatcher({
   isPathDirty,
   refreshTree,
   reloadFile,
+  handleWatchedPathChange,
   isSelfChange,
 }: UseProjectFileWatcherOptions): void {
   useEffect(() => {
@@ -33,6 +35,7 @@ export function useProjectFileWatcher({
       isFileDirty: isPathDirty,
       refreshTree,
       reloadFile,
+      handleWatchedPathChange,
       isSelfChange,
       container,
     });
@@ -58,5 +61,14 @@ export function useProjectFileWatcher({
       cancelled = true;
       void stopWatcher();
     };
-  }, [containerRef, isPathDirty, isPathOpen, isSelfChange, projectRoot, refreshTree, reloadFile]);
+  }, [
+    containerRef,
+    handleWatchedPathChange,
+    isPathDirty,
+    isPathOpen,
+    isSelfChange,
+    projectRoot,
+    refreshTree,
+    reloadFile,
+  ]);
 }

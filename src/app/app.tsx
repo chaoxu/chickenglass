@@ -78,6 +78,7 @@ function AppInner() {
     isPathDirty: editor.isPathDirty,
     refreshTree: workspace.refreshTree,
     reloadFile: editor.reloadFile,
+    handleWatchedPathChange: editor.handleWatchedPathChange,
     isSelfChange,
   });
 

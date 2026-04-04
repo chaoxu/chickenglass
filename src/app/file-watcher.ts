@@ -25,6 +25,9 @@ export type ReloadFileFn = (path: string) => Promise<void>;
 /** Callback to refresh the sidebar tree after structural filesystem changes. */
 export type RefreshTreeFn = (changedPath?: string) => Promise<void>;
 
+/** Callback fired for any watched path change, even when the file is not open. */
+export type HandleWatchedPathChangeFn = (path: string) => void | Promise<void>;
+
 /**
  * Callback to check whether a file-changed event was caused by the app's
  * own save. Receives the path and returns a promise that resolves to true
@@ -42,6 +45,8 @@ export interface FileWatcherConfig {
   refreshTree: RefreshTreeFn;
   /** Reload a file from disk into the editor. */
   reloadFile: ReloadFileFn;
+  /** Handle non-document side effects for any changed watched path. */
+  handleWatchedPathChange?: HandleWatchedPathChangeFn;
   /** Check whether a change event was caused by the app's own save. */
   isSelfChange?: IsSelfChangeFn;
   /** Container element for the notification bar. */
@@ -167,6 +172,12 @@ export class FileWatcher {
         detail: relativePath,
       }).catch((e: unknown) => {
         console.error("[file-watcher] tree refresh failed", relativePath, e);
+      });
+    }
+
+    if (this.config.handleWatchedPathChange) {
+      void Promise.resolve(this.config.handleWatchedPathChange(relativePath)).catch((e: unknown) => {
+        console.error("[file-watcher] watched-path handler failed", relativePath, e);
       });
     }
 

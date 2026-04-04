@@ -49,6 +49,7 @@ function createWatcher(
     isFileDirty?: (path: string) => boolean;
     refreshTree?: (path?: string) => Promise<void>;
     reloadFile?: (path: string) => Promise<void>;
+    handleWatchedPathChange?: (path: string) => void | Promise<void>;
   } = {},
 ) {
   const container = document.createElement("div");
@@ -56,15 +57,18 @@ function createWatcher(
     options.refreshTree ?? vi.fn(async (_path?: string) => {});
   const reloadFile =
     options.reloadFile ?? vi.fn(async (_path: string) => {});
+  const handleWatchedPathChange =
+    options.handleWatchedPathChange ?? vi.fn();
   const watcher = new FileWatcher({
     isFileOpen: options.isFileOpen ?? (() => true),
     isFileDirty: options.isFileDirty ?? (() => true),
     refreshTree,
     reloadFile,
+    handleWatchedPathChange,
     container,
   });
 
-  return { container, watcher, refreshTree, reloadFile };
+  return { container, watcher, refreshTree, reloadFile, handleWatchedPathChange };
 }
 
 describe("FileWatcher", () => {
@@ -256,5 +260,25 @@ describe("FileWatcher", () => {
     await handleFileChanged({ path: "docs/a.md", treeChanged: false });
 
     expect(refreshTreeSpy).not.toHaveBeenCalled();
+  });
+
+  it("runs the watched-path handler even when the changed file is not open", async () => {
+    const handleWatchedPathChange = vi.fn();
+    const { watcher } = createWatcher({
+      isFileOpen: () => false,
+      isFileDirty: () => false,
+      handleWatchedPathChange,
+    });
+    const handleFileChanged = (
+      watcher as unknown as {
+        handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+      }
+    ).handleFileChanged.bind(watcher as unknown as {
+      handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+    });
+
+    await handleFileChanged({ path: "assets/diagram.png", treeChanged: false });
+
+    expect(handleWatchedPathChange).toHaveBeenCalledWith("assets/diagram.png");
   });
 });
