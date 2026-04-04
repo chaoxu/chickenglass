@@ -35,15 +35,20 @@ import {
   EditorState,
   type Extension,
   RangeSet,
+  StateField,
 } from "@codemirror/state";
+import { syntaxTree } from "@codemirror/language";
 import { Decoration, EditorView } from "@codemirror/view";
 import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
 import type { FencedBlockInfo } from "../render/fenced-block-core";
 import {
   type FencedDivSemantics,
 } from "../semantics/document";
-import { documentSemanticsField } from "../semantics/codemirror-source";
-import { collectCodeBlocks } from "../render/code-block-render";
+import {
+  documentSemanticsField,
+  getDocumentAnalysisSliceRevision,
+} from "../semantics/codemirror-source";
+import { collectCodeBlocks, type CodeBlockInfo } from "../render/code-block-render";
 import { countColons } from "../parser";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 import { programmaticDocumentChangeAnnotation } from "../editor/programmatic-document-change";
@@ -56,6 +61,23 @@ import { programmaticDocumentChangeAnnotation } from "../editor/programmatic-doc
 export interface FencedDivInfo extends FencedBlockInfo, FencedDivSemantics {
   readonly className: string;
 }
+
+export interface FenceRange {
+  readonly from: number;
+  readonly to: number;
+}
+
+interface FenceProtectionCache {
+  readonly allFencedBlocks: readonly FencedBlockInfo[];
+  readonly protectedDivs: readonly FencedDivInfo[];
+  readonly closingFenceRanges: readonly FenceRange[];
+  readonly openingFenceColonRanges: readonly FenceRange[];
+  readonly openingFenceBacktickRanges: readonly FenceRange[];
+  readonly openingMathDelimiterRanges: readonly FenceRange[];
+  readonly closingFenceAtomicRanges: RangeSet<Decoration>;
+}
+
+const closingFenceAtomicMark = Decoration.mark({});
 
 /**
  * Extract info about FencedDiv nodes from the shared semantics field.
@@ -127,17 +149,212 @@ function collectDisplayMathBlocks(state: EditorState): FencedBlockInfo[] {
   return results;
 }
 
+function filterProtectedDivs(
+  state: EditorState,
+  divs: readonly FencedDivInfo[],
+): FencedDivInfo[] {
+  const registry = state.field(pluginRegistryField, false);
+  return divs.filter((div) => {
+    if (div.singleLine) return false;
+    if (EXCLUDED_FROM_FALLBACK.has(div.className)) return false;
+    if (registry && !getPluginOrFallback(registry, div.className)) return false;
+    return true;
+  });
+}
+
+function buildClosingFenceRanges(
+  state: EditorState,
+  protectedDivs: readonly FencedDivInfo[],
+  codeBlocks: readonly CodeBlockInfo[],
+  displayMathBlocks: readonly FencedBlockInfo[],
+): FenceRange[] {
+  const ranges: FenceRange[] = [];
+  const seen = new Set<number>();
+
+  for (const div of protectedDivs) {
+    if (div.closeFenceFrom < 0) continue;
+    const line = state.doc.lineAt(div.closeFenceFrom);
+    if (!seen.has(line.from)) {
+      seen.add(line.from);
+      ranges.push({ from: line.from, to: line.to });
+    }
+  }
+
+  for (const block of codeBlocks) {
+    if (block.singleLine || block.closeFenceFrom < 0) continue;
+    const line = state.doc.lineAt(block.closeFenceFrom);
+    if (!seen.has(line.from)) {
+      seen.add(line.from);
+      ranges.push({ from: line.from, to: line.to });
+    }
+  }
+
+  for (const block of displayMathBlocks) {
+    const line = state.doc.lineAt(block.closeFenceFrom);
+    if (!seen.has(line.from)) {
+      seen.add(line.from);
+      ranges.push({ from: line.from, to: line.to });
+    }
+  }
+
+  return ranges;
+}
+
+function buildOpeningFenceColonRanges(
+  state: EditorState,
+  protectedDivs: readonly FencedDivInfo[],
+): FenceRange[] {
+  const ranges: FenceRange[] = [];
+  const seen = new Set<number>();
+  for (const div of protectedDivs) {
+    if (seen.has(div.openFenceFrom)) continue;
+    seen.add(div.openFenceFrom);
+    const text = state.sliceDoc(div.openFenceFrom, div.openFenceTo);
+    const colonLen = countColons(text, 0);
+    if (colonLen >= 3) {
+      ranges.push({ from: div.openFenceFrom, to: div.openFenceFrom + colonLen });
+    }
+  }
+  return ranges;
+}
+
+function buildOpeningFenceBacktickRanges(
+  state: EditorState,
+  codeBlocks: readonly CodeBlockInfo[],
+): FenceRange[] {
+  const ranges: FenceRange[] = [];
+  const seen = new Set<number>();
+  for (const block of codeBlocks) {
+    if (block.singleLine) continue;
+    if (seen.has(block.openFenceFrom)) continue;
+    seen.add(block.openFenceFrom);
+    const text = state.sliceDoc(block.openFenceFrom, block.openFenceTo);
+    const match = /^`{3,}/.exec(text);
+    if (match) {
+      ranges.push({
+        from: block.openFenceFrom,
+        to: block.openFenceFrom + match[0].length,
+      });
+    }
+  }
+  return ranges;
+}
+
+function buildOpeningMathDelimiterRanges(
+  state: EditorState,
+  displayMathBlocks: readonly FencedBlockInfo[],
+): FenceRange[] {
+  const ranges: FenceRange[] = [];
+  const seen = new Set<number>();
+  for (const block of displayMathBlocks) {
+    if (seen.has(block.openFenceFrom)) continue;
+    seen.add(block.openFenceFrom);
+    const text = state.sliceDoc(block.openFenceFrom, block.openFenceTo);
+    const trimmed = text.trimStart();
+    const indent = text.length - trimmed.length;
+    let delimLen = 0;
+    if (trimmed.startsWith("$$")) delimLen = 2;
+    else if (trimmed.startsWith("\\[")) delimLen = 2;
+    if (delimLen > 0) {
+      ranges.push({
+        from: block.openFenceFrom + indent,
+        to: block.openFenceFrom + indent + delimLen,
+      });
+    }
+  }
+  return ranges;
+}
+
+function buildClosingFenceAtomicRanges(
+  state: EditorState,
+  fenceRanges: readonly FenceRange[],
+): RangeSet<Decoration> {
+  if (fenceRanges.length === 0) return Decoration.none;
+
+  const ranges: Range<Decoration>[] = [];
+  for (const fence of fenceRanges) {
+    const atomicFrom = fence.from > 0 ? fence.from - 1 : fence.from;
+    const atomicTo = fence.to < state.doc.length ? fence.to + 1 : fence.to;
+    ranges.push(closingFenceAtomicMark.range(atomicFrom, atomicTo));
+  }
+  return RangeSet.of(ranges, true);
+}
+
+function buildFenceProtectionCache(state: EditorState): FenceProtectionCache {
+  const fencedDivs = collectFencedDivs(state);
+  const protectedDivs = filterProtectedDivs(state, fencedDivs);
+  const codeBlocks = collectCodeBlocks(state);
+  const displayMathBlocks = collectDisplayMathBlocks(state);
+  const closingFenceRanges = buildClosingFenceRanges(
+    state,
+    protectedDivs,
+    codeBlocks,
+    displayMathBlocks,
+  );
+
+  return {
+    allFencedBlocks: [...fencedDivs, ...codeBlocks, ...displayMathBlocks],
+    protectedDivs,
+    closingFenceRanges,
+    openingFenceColonRanges: buildOpeningFenceColonRanges(state, protectedDivs),
+    openingFenceBacktickRanges: buildOpeningFenceBacktickRanges(state, codeBlocks),
+    openingMathDelimiterRanges: buildOpeningMathDelimiterRanges(state, displayMathBlocks),
+    closingFenceAtomicRanges: buildClosingFenceAtomicRanges(state, closingFenceRanges),
+  };
+}
+
+function didSemanticsSliceChange(
+  startState: EditorState,
+  nextState: EditorState,
+  slice: "fencedDivs" | "mathRegions",
+): boolean {
+  const startSemantics = startState.field(documentSemanticsField, false);
+  const nextSemantics = nextState.field(documentSemanticsField, false);
+  if (!startSemantics || !nextSemantics) return startSemantics !== nextSemantics;
+  return getDocumentAnalysisSliceRevision(startSemantics, slice)
+    !== getDocumentAnalysisSliceRevision(nextSemantics, slice);
+}
+
+function shouldRecomputeFenceProtectionCache(
+  startState: EditorState,
+  nextState: EditorState,
+  docChanged: boolean,
+): boolean {
+  if (docChanged) return true;
+  if (startState.field(pluginRegistryField, false) !== nextState.field(pluginRegistryField, false)) {
+    return true;
+  }
+  if (syntaxTree(startState) !== syntaxTree(nextState)) return true;
+  if (didSemanticsSliceChange(startState, nextState, "fencedDivs")) return true;
+  if (didSemanticsSliceChange(startState, nextState, "mathRegions")) return true;
+  return false;
+}
+
+const fenceProtectionCacheField = StateField.define<FenceProtectionCache>({
+  create(state) {
+    return buildFenceProtectionCache(state);
+  },
+
+  update(value, tr) {
+    if (!shouldRecomputeFenceProtectionCache(tr.startState, tr.state, tr.docChanged)) {
+      return value;
+    }
+    return buildFenceProtectionCache(tr.state);
+  },
+});
+
+function getFenceProtectionCache(state: EditorState): FenceProtectionCache {
+  return state.field(fenceProtectionCacheField, false) ?? buildFenceProtectionCache(state);
+}
+
 /**
  * Collect all fenced blocks (fenced divs, code blocks, and display math) for
- * opening-fence deletion cleanup. Uses collectFencedDivs + collectCodeBlocks
- * + collectDisplayMathBlocks directly (not getProtectedDivs) because cleanup
- * should apply to ALL fenced blocks, including unregistered/custom types.
+ * opening-fence deletion cleanup. Uses the shared fence-protection cache
+ * (not getProtectedDivs) because cleanup should apply to ALL fenced blocks,
+ * including unregistered/custom types.
  */
-function collectAllFencedBlocks(state: EditorState): FencedBlockInfo[] {
-  const divs: FencedBlockInfo[] = collectFencedDivs(state);
-  const codeBlocks: FencedBlockInfo[] = collectCodeBlocks(state);
-  const mathBlocks: FencedBlockInfo[] = collectDisplayMathBlocks(state);
-  return [...divs, ...codeBlocks, ...mathBlocks];
+function collectAllFencedBlocks(state: EditorState): readonly FencedBlockInfo[] {
+  return getFenceProtectionCache(state).allFencedBlocks;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,15 +370,8 @@ export const fenceOperationAnnotation = Annotation.define<true>();
  * unregistered block types. Shared by all fence range collectors
  * to avoid repeated collectFencedDivs + filtering per transaction.
  */
-export function getProtectedDivs(state: EditorState): FencedDivInfo[] {
-  const divs = collectFencedDivs(state);
-  const registry = state.field(pluginRegistryField, false);
-  return divs.filter((div) => {
-    if (div.singleLine) return false;
-    if (EXCLUDED_FROM_FALLBACK.has(div.className)) return false;
-    if (registry && !getPluginOrFallback(registry, div.className)) return false;
-    return true;
-  });
+export function getProtectedDivs(state: EditorState): readonly FencedDivInfo[] {
+  return getFenceProtectionCache(state).protectedDivs;
 }
 
 /**
@@ -170,76 +380,18 @@ export function getProtectedDivs(state: EditorState): FencedDivInfo[] {
  * display math blocks are protected unconditionally (they have no
  * registry/class filtering like divs).
  */
-export function getClosingFenceRanges(state: EditorState): { from: number; to: number }[] {
-  const ranges: { from: number; to: number }[] = [];
-  const seen = new Set<number>();
-
-  // Fenced div closing fences (filtered by registry/class)
-  for (const div of getProtectedDivs(state)) {
-    if (div.closeFenceFrom < 0) continue;
-    const line = state.doc.lineAt(div.closeFenceFrom);
-    if (!seen.has(line.from)) {
-      seen.add(line.from);
-      ranges.push({ from: line.from, to: line.to });
-    }
-  }
-
-  // Code block closing fences (all multi-line code blocks)
-  for (const block of collectCodeBlocks(state)) {
-    if (block.singleLine || block.closeFenceFrom < 0) continue;
-    const line = state.doc.lineAt(block.closeFenceFrom);
-    if (!seen.has(line.from)) {
-      seen.add(line.from);
-      ranges.push({ from: line.from, to: line.to });
-    }
-  }
-
-  // Display math closing fences (all multi-line display math)
-  for (const block of collectDisplayMathBlocks(state)) {
-    const line = state.doc.lineAt(block.closeFenceFrom);
-    if (!seen.has(line.from)) {
-      seen.add(line.from);
-      ranges.push({ from: line.from, to: line.to });
-    }
-  }
-
-  return ranges;
+export function getClosingFenceRanges(state: EditorState): readonly FenceRange[] {
+  return getFenceProtectionCache(state).closingFenceRanges;
 }
 
 /** Collect opening fence colon-prefix ranges for protection (fenced divs only). */
-export function getOpeningFenceColonRanges(state: EditorState): { from: number; to: number }[] {
-  const ranges: { from: number; to: number }[] = [];
-  const seen = new Set<number>();
-  for (const div of getProtectedDivs(state)) {
-    if (seen.has(div.openFenceFrom)) continue;
-    seen.add(div.openFenceFrom);
-    const text = state.sliceDoc(div.openFenceFrom, div.openFenceTo);
-    const colonLen = countColons(text, 0);
-    if (colonLen >= 3) {
-      ranges.push({ from: div.openFenceFrom, to: div.openFenceFrom + colonLen });
-    }
-  }
-  return ranges;
+export function getOpeningFenceColonRanges(state: EditorState): readonly FenceRange[] {
+  return getFenceProtectionCache(state).openingFenceColonRanges;
 }
 
 /** Collect opening fence backtick-prefix ranges for protection (code blocks only). */
-export function getOpeningFenceBacktickRanges(state: EditorState): { from: number; to: number }[] {
-  const ranges: { from: number; to: number }[] = [];
-  const seen = new Set<number>();
-  for (const block of collectCodeBlocks(state)) {
-    if (block.singleLine) continue;
-    if (seen.has(block.openFenceFrom)) continue;
-    seen.add(block.openFenceFrom);
-    const text = state.sliceDoc(block.openFenceFrom, block.openFenceTo);
-    const match = /^`{3,}/.exec(text);
-    if (match) {
-      ranges.push({
-        from: block.openFenceFrom,
-        to: block.openFenceFrom + match[0].length,
-      });
-    }
-  }
-  return ranges;
+export function getOpeningFenceBacktickRanges(state: EditorState): readonly FenceRange[] {
+  return getFenceProtectionCache(state).openingFenceBacktickRanges;
 }
 
 /**
@@ -467,26 +619,8 @@ export const openingFenceBacktickProtection = EditorState.transactionFilter.of((
 });
 
 /** Collect opening math delimiter ranges for protection (display math only). */
-export function getOpeningMathDelimiterRanges(state: EditorState): { from: number; to: number }[] {
-  const ranges: { from: number; to: number }[] = [];
-  const seen = new Set<number>();
-  for (const block of collectDisplayMathBlocks(state)) {
-    if (seen.has(block.openFenceFrom)) continue;
-    seen.add(block.openFenceFrom);
-    const text = state.sliceDoc(block.openFenceFrom, block.openFenceTo);
-    const trimmed = text.trimStart();
-    const indent = text.length - trimmed.length;
-    let delimLen = 0;
-    if (trimmed.startsWith("$$")) delimLen = 2;
-    else if (trimmed.startsWith("\\[")) delimLen = 2;
-    if (delimLen > 0) {
-      ranges.push({
-        from: block.openFenceFrom + indent,
-        to: block.openFenceFrom + indent + delimLen,
-      });
-    }
-  }
-  return ranges;
+export function getOpeningMathDelimiterRanges(state: EditorState): readonly FenceRange[] {
+  return getFenceProtectionCache(state).openingMathDelimiterRanges;
 }
 
 /**
@@ -538,16 +672,7 @@ export const openingFenceMathProtection = EditorState.transactionFilter.of((tr) 
  * without stopping on the fence.
  */
 export const closingFenceAtomicRanges = EditorView.atomicRanges.of((view) => {
-  const ranges: Range<Decoration>[] = [];
-  const fenceRanges = getClosingFenceRanges(view.state);
-  const mark = Decoration.mark({});
-  for (const fence of fenceRanges) {
-    // Include the newline before the fence to make cursor skip the whole line
-    const atomicFrom = fence.from > 0 ? fence.from - 1 : fence.from;
-    const atomicTo = fence.to < view.state.doc.length ? fence.to + 1 : fence.to;
-    ranges.push(mark.range(atomicFrom, atomicTo));
-  }
-  return RangeSet.of(ranges, true);
+  return getFenceProtectionCache(view.state).closingFenceAtomicRanges;
 });
 
 /**
@@ -702,6 +827,7 @@ export const emptyMathBlockBackspaceCleanup = EditorState.transactionFilter.of((
  * (registered first) executes AFTER protections have already passed/blocked.
  */
 export const fenceProtectionExtension: Extension = [
+  fenceProtectionCacheField,
   openingFenceDeletionCleanup,
   emptyMathBlockBackspaceCleanup,
   closingFenceProtection,
