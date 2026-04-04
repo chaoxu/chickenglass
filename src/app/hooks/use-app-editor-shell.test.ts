@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MemoryFileSystem } from "../file-manager";
+import type { EditorDocumentChange } from "../editor-doc-change";
 import type { Settings } from "../lib/types";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 
@@ -77,6 +78,14 @@ function createHarness(
   };
 
   return { Harness, ref };
+}
+
+function replaceCurrentDoc(
+  ref: HarnessRef,
+  nextDoc: string,
+): readonly EditorDocumentChange[] {
+  const currentDoc = ref.result.getCurrentDocText();
+  return [{ from: 0, to: currentDoc.length, insert: nextDoc }];
 }
 
 describe("useAppEditorShell", () => {
@@ -191,7 +200,7 @@ describe("useAppEditorShell", () => {
 
     act(() => {
       ref.result.handleModeChange("source");
-      ref.result.handleDocChange("# A changed\n");
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A changed\n"));
     });
 
     requestUnsavedChangesDecision.mockResolvedValueOnce("cancel");

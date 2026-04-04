@@ -21,6 +21,10 @@ import type {
   UnsavedChangesDecision,
   UnsavedChangesRequest,
 } from "../unsaved-changes";
+import {
+  applyEditorDocumentChanges,
+  type EditorDocumentChange,
+} from "../editor-doc-change";
 import { useEditorSessionPersistence } from "./use-editor-session-persistence";
 
 export interface EditorSessionDeps {
@@ -38,14 +42,16 @@ export interface UseEditorSessionReturn {
   currentDocument: SessionDocument | null;
   currentPath: string | null;
   editorDoc: string;
+  docRevision: number;
   setEditorDoc: React.Dispatch<React.SetStateAction<string>>;
   buffers: React.RefObject<Map<string, string>>;
   liveDocs: React.RefObject<Map<string, string>>;
   pipeline: SavePipeline;
+  getCurrentDocText: () => string;
   isPathOpen: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
   cancelPendingOpenFile: () => void;
-  handleDocChange: (doc: string) => void;
+  handleDocChange: (changes: readonly EditorDocumentChange[]) => void;
   handleProgrammaticDocChange: (path: string, doc: string) => void;
   setDocumentSourceMap: (path: string, sourceMap: SourceMap | null) => void;
   openFile: (path: string) => Promise<void>;
@@ -96,6 +102,7 @@ export function useEditorSession({
     () => createEditorSessionState(),
   );
   const [editorDoc, setEditorDoc] = useState("");
+  const [docRevision, setDocRevision] = useState(0);
   const buffers = useRef<Map<string, string>>(new Map());
   const liveDocs = useRef<Map<string, string>>(new Map());
   const sourceMaps = useRef<Map<string, SourceMap>>(new Map());
@@ -121,11 +128,13 @@ export function useEditorSession({
 
     if (options !== undefined && "editorDoc" in options) {
       setEditorDoc(options?.editorDoc ?? "");
+      setDocRevision((value) => value + 1);
       return;
     }
 
     if (options?.syncEditorDoc) {
       setEditorDoc(documentForPath(nextState.currentDocument?.path ?? null, liveDocs, buffers));
+      setDocRevision((value) => value + 1);
     }
   }, []);
 
@@ -208,13 +217,19 @@ export function useEditorSession({
     openFileRequestRef.current += 1;
   }, []);
 
-  const handleDocChange = useCallback((doc: string) => {
+  const getCurrentDocText = useCallback(() => {
+    return documentForPath(stateRef.current.currentDocument?.path ?? null, liveDocs, buffers);
+  }, []);
+
+  const handleDocChange = useCallback((changes: readonly EditorDocumentChange[]) => {
     const currentPath = stateRef.current.currentDocument?.path;
     if (!currentPath) return;
 
-    setEditorDoc(doc);
+    const previousDoc = documentForPath(currentPath, liveDocs, buffers);
+    const doc = applyEditorDocumentChanges(previousDoc, changes);
     liveDocs.current.set(currentPath, doc);
     pipeline.bumpRevision(currentPath);
+    setDocRevision((value) => value + 1);
 
     const isDirty = doc !== (buffers.current.get(currentPath) ?? "");
     const nextState = markSessionDocumentDirty(stateRef.current, currentPath, isDirty);
@@ -421,10 +436,12 @@ export function useEditorSession({
     currentDocument: sessionState.currentDocument,
     currentPath: sessionState.currentDocument?.path ?? null,
     editorDoc,
+    docRevision,
     setEditorDoc,
     buffers,
     liveDocs,
     pipeline,
+    getCurrentDocText,
     isPathOpen,
     isPathDirty,
     cancelPendingOpenFile,

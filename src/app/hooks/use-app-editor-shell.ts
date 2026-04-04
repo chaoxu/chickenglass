@@ -141,12 +141,10 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
 
   // --- Stats ---
 
-  /**
-   * Raw text of the active document used for word-count and reading-time
-   * calculations. Reads from `liveDocs` (reflects unsaved changes) rather than
-   * the saved buffer so stats stay current while typing.
-   */
-  docTextForStats: string;
+  /** Monotonic signal that the active document content changed. */
+  docRevision: number;
+  /** Returns the latest active-document text, including unsaved edits. */
+  getCurrentDocText: () => string;
   /** True when the current document has unsaved changes (used for window-close guard). */
   hasDirtyDocument: boolean;
   /** React to watched filesystem changes that should invalidate editor-side caches. */
@@ -187,7 +185,8 @@ export function useAppEditorShell({
   const {
     currentDocument,
     currentPath,
-    liveDocs,
+    docRevision,
+    getCurrentDocText,
     openFile,
     isPathOpen,
     openFileWithContent,
@@ -346,8 +345,6 @@ export function useAppEditorShell({
     });
   }, [handleSearchResultNavigation]);
 
-  const docTextForStats = currentPath ? (liveDocs.current.get(currentPath) ?? "") : "";
-
   const hasDirtyDocument = currentDocument?.dirty ?? false;
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -385,7 +382,8 @@ export function useAppEditorShell({
     editorMode,
     handleModeChange,
     isMarkdownFile,
-    docTextForStats,
+    docRevision,
+    getCurrentDocText,
     hasDirtyDocument,
     handleWatchedPathChange,
     handleDragOver,

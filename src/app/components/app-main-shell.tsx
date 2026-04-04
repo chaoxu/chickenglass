@@ -15,7 +15,7 @@ interface AppMainShellProps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "editorDoc" | "pluginManager" | "handleDocChange" | "handleProgrammaticDocChange" | "setDocumentSourceMap" | "handleEditorStateChange" | "handleHeadingsChange" | "handleDiagnosticsChange" | "handleEditorDocumentReady" | "editorMode" | "handleModeChange" | "docTextForStats" | "isMarkdownFile"
+    "currentPath" | "editorDoc" | "docRevision" | "getCurrentDocText" | "pluginManager" | "handleDocChange" | "handleProgrammaticDocChange" | "setDocumentSourceMap" | "handleEditorStateChange" | "handleHeadingsChange" | "handleDiagnosticsChange" | "handleEditorDocumentReady" | "editorMode" | "handleModeChange" | "isMarkdownFile"
   >;
   onOpenPalette: () => void;
 }
@@ -54,6 +54,7 @@ export function AppMainShell({
           onDiagnosticsChange={editor.handleDiagnosticsChange}
           onDocumentReady={editor.handleEditorDocumentReady}
           editorMode={editor.editorMode}
+          docRevision={editor.docRevision}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center select-none text-sm text-[var(--cf-muted)]">
@@ -65,7 +66,8 @@ export function AppMainShell({
         editorMode={editor.editorMode}
         onModeChange={editor.handleModeChange}
         onOpenPalette={onOpenPalette}
-        docText={editor.docTextForStats}
+        docRevision={editor.docRevision}
+        getDocText={editor.getCurrentDocText}
         isMarkdown={editor.isMarkdownFile}
       />
     </SidebarInset>

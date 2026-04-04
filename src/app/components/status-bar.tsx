@@ -16,8 +16,10 @@ export interface StatusBarProps {
   editorMode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
   onOpenPalette?: () => void;
-  /** Raw document text — used to compute the stats popover. */
-  docText?: string;
+  /** Monotonic active-document revision used to refresh lazily computed stats. */
+  docRevision?: number;
+  /** Returns the latest active-document text on demand. */
+  getDocText?: () => string;
   /** Whether the active file is markdown (non-md files are Source-only). */
   isMarkdown?: boolean;
 }
@@ -134,7 +136,8 @@ export function StatusBar({
   editorMode,
   onModeChange,
   onOpenPalette,
-  docText = "",
+  docRevision = 0,
+  getDocText,
   isMarkdown = true,
 }: StatusBarProps) {
   const wordCount = useEditorTelemetry((s) => s.wordCount);
@@ -146,8 +149,8 @@ export function StatusBar({
 
   // Full stats only when the popover is open — keeps sentence segmentation off the edit hot path.
   const stats = useMemo<DocStats | null>(
-    () => (popoverOpen ? computeDocStats(docText) : null),
-    [popoverOpen, docText],
+    () => (popoverOpen ? computeDocStats(getDocText?.() ?? "") : null),
+    [docRevision, getDocText, popoverOpen],
   );
 
   const cycleMode = useCallback(() => {

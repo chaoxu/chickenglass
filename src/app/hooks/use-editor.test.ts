@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileSystem } from "../file-manager";
 import { MemoryFileSystem } from "../file-manager";
+import type { EditorDocumentChange } from "../editor-doc-change";
 import type { UseEditorReturn } from "./use-editor";
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
 import type { SourceMap } from "../source-map";
@@ -18,7 +19,7 @@ interface HarnessProps {
   doc: string;
   docPath: string;
   fs?: FileSystem;
-  onDocChange?: (doc: string) => void;
+  onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
   onProgrammaticDocChange?: (doc: string) => void;
   onSourceMapChange?: (sourceMap: SourceMap | null) => void;
 }
@@ -142,6 +143,37 @@ describe("useEditor", () => {
 
     expect(ref.state.view?.state.doc.toString()).toBe("# Second");
     expect(onDocChange).not.toHaveBeenCalled();
+  });
+
+  it("does not replay a stale external doc prop after a user edit rerender", () => {
+    const ref: HarnessRef = {
+      state: null as unknown as UseEditorReturn,
+    };
+    const Harness = createHarness(ref);
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc: "hello",
+        docPath: "draft.md",
+      }));
+    });
+
+    act(() => {
+      ref.state.view?.dispatch({
+        changes: { from: 5, to: 5, insert: "!" },
+      });
+    });
+
+    expect(ref.state.view?.state.doc.toString()).toBe("hello!");
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc: "hello",
+        docPath: "draft.md",
+      }));
+    });
+
+    expect(ref.state.view?.state.doc.toString()).toBe("hello!");
   });
 
   it("remaps include source regions through user edits", async () => {

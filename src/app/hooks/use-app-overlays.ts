@@ -30,7 +30,7 @@ interface AppOverlayDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "liveDocs" | "docTextForStats" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
+    "currentPath" | "docRevision" | "getCurrentDocText" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
   >;
   onOpenFile: () => void;
   onQuit: () => void;
@@ -117,11 +117,14 @@ export function useAppOverlays({
   const [indexer] = useState(() => new BackgroundIndexer());
   const [searchVersion, setSearchVersion] = useState(0);
   const [labelBacklinks, setLabelBacklinks] = useState<DocumentLabelBacklinksResult | null>(null);
-  const activeSearchDoc = editor.currentPath ? editor.docTextForStats : "";
+  const activeSearchDoc = useMemo(
+    () => (editor.currentPath ? editor.getCurrentDocText() : ""),
+    [editor.currentPath, editor.docRevision, editor.getCurrentDocText],
+  );
 
   useEffect(() => {
     setLabelBacklinks(null);
-  }, [editor.currentPath, editor.docTextForStats]);
+  }, [editor.currentPath, editor.docRevision]);
 
   useEffect(() => {
     if (!dialogs.searchOpen) {
@@ -183,7 +186,7 @@ export function useAppOverlays({
   const handleExportHtml = useCallback(() => {
     const currentPath = editor.currentPath;
     if (!currentPath) return;
-    const doc = editor.liveDocs.current.get(currentPath) ?? "";
+    const doc = editor.getCurrentDocText();
     void (async () => {
       try {
         const outputPath = await exportDocument(doc, "html", currentPath, fs);
@@ -192,7 +195,7 @@ export function useAppOverlays({
         window.alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     })();
-  }, [editor.currentPath, editor.liveDocs, fs]);
+  }, [editor.currentPath, editor.getCurrentDocText, fs]);
 
   const handleBatchExportHtml = useCallback(() => {
     if (!workspace.fileTree) return;

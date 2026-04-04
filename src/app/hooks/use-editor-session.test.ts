@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileSystem } from "../file-manager";
+import type { EditorDocumentChange } from "../editor-doc-change";
 import { MemoryFileSystem } from "../file-manager";
 import { SourceMap } from "../source-map";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
@@ -148,6 +149,14 @@ function createHybridFileSystem(
   };
 }
 
+function replaceCurrentDoc(
+  ref: HarnessRef,
+  nextDoc: string,
+): readonly EditorDocumentChange[] {
+  const currentDoc = ref.result.getCurrentDocText();
+  return [{ from: 0, to: currentDoc.length, insert: nextDoc }];
+}
+
 describe("useEditorSession", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -164,7 +173,7 @@ describe("useEditorSession", () => {
     container.remove();
   });
 
-  it("keeps editorDoc and dirty state in sync while typing", async () => {
+  it("keeps liveDocs, dirty state, and docRevision in sync while typing", async () => {
     const fs = new MemoryFileSystem({ "draft.md": "hello" });
     const { Harness, ref } = createHarness(fs);
 
@@ -174,14 +183,18 @@ describe("useEditorSession", () => {
     });
 
     expect(ref.result.editorDoc).toBe("hello");
+    expect(ref.result.docRevision).toBeGreaterThan(0);
     expect(ref.result.currentDocument?.dirty).toBe(false);
+    const initialRevision = ref.result.docRevision;
 
     act(() => {
-      ref.result.handleDocChange("hello!");
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "hello!"));
     });
 
-    expect(ref.result.editorDoc).toBe("hello!");
+    expect(ref.result.editorDoc).toBe("hello");
+    expect(ref.result.docRevision).toBe(initialRevision + 1);
     expect(ref.result.currentDocument?.dirty).toBe(true);
+    expect(ref.result.getCurrentDocText()).toBe("hello!");
     expect(ref.result.liveDocs.current.get("draft.md")).toBe("hello!");
   });
 
@@ -334,7 +347,7 @@ describe("useEditorSession", () => {
     act(() => {
       ref.result.setDocumentSourceMap("main.md", sourceMap);
       ref.result.handleProgrammaticDocChange("main.md", expanded);
-      ref.result.handleDocChange(edited);
+      ref.result.handleDocChange(replaceCurrentDoc(ref, edited));
     });
 
     expect(ref.result.currentDocument?.dirty).toBe(true);
@@ -366,7 +379,7 @@ describe("useEditorSession", () => {
     });
 
     act(() => {
-      ref.result.handleDocChange("hello!");
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "hello!"));
     });
 
     await act(async () => {
@@ -385,7 +398,8 @@ describe("useEditorSession", () => {
       },
     });
     expect(ref.result.currentPath).toBe("draft.md");
-    expect(ref.result.editorDoc).toBe("hello!");
+    expect(ref.result.editorDoc).toBe("hello");
+    expect(ref.result.getCurrentDocText()).toBe("hello!");
     expect(ref.result.currentDocument?.dirty).toBe(true);
   });
 
