@@ -8,10 +8,16 @@ use commands::state::{FileWatcherState, LastFocusedWindow, PerfState, ProjectRoo
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::{Manager, WindowEvent};
+use tauri_plugin_log::TimezoneStrategy;
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .timezone_strategy(TimezoneStrategy::UseLocal)
+                .build(),
+        )
         .manage(ProjectRoot(Mutex::new(HashMap::new())))
         .manage(FileWatcherState(Mutex::new(HashMap::new())))
         .manage(LastFocusedWindow(Mutex::new(None)))

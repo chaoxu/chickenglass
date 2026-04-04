@@ -5,7 +5,7 @@
  * Uses the shared app dialog primitives for escape, focus trap, and overlay.
  */
 
-import type { MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
 import {
   Dialog,
   DialogBody,
@@ -17,7 +17,9 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { openExternalUrl } from "../../lib/open-link";
+import { isTauri } from "../../lib/tauri";
 import coflatLogoUrl from "../../assets/coflat-logo.svg";
+import { getDesktopLogDirectory } from "../runtime-logger";
 
 const GITHUB_URL = "https://github.com/chaoxu/coflat";
 
@@ -45,6 +47,32 @@ interface AboutDialogProps {
 }
 
 export function AboutDialog({ open, onClose }: AboutDialogProps) {
+  const [logDirectory, setLogDirectory] = useState<string | null>(null);
+  const [logDirectoryLoading, setLogDirectoryLoading] = useState(false);
+  const desktopRuntime = isTauri();
+
+  useEffect(() => {
+    if (!open || !desktopRuntime) return;
+
+    let cancelled = false;
+    setLogDirectoryLoading(true);
+    void getDesktopLogDirectory()
+      .then((path) => {
+        if (!cancelled) setLogDirectory(path);
+      })
+      .catch((error: unknown) => {
+        console.error("[about] failed to resolve desktop log directory", error);
+        if (!cancelled) setLogDirectory(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLogDirectoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [desktopRuntime, open]);
+
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) onClose();
   };
@@ -96,6 +124,35 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
               ))}
             </ul>
           </div>
+          {desktopRuntime && (
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-[var(--cf-muted)]">
+                Desktop logs
+              </p>
+              <p className="text-sm text-[var(--cf-muted)] break-all">
+                {logDirectory
+                  ? logDirectory
+                  : logDirectoryLoading
+                    ? "Resolving app log directory..."
+                    : "App log directory unavailable"}
+              </p>
+              {logDirectory && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void import("../tauri-fs")
+                      .then(({ revealInFinder }) => revealInFinder(logDirectory))
+                      .catch((error: unknown) => {
+                        console.error("[about] failed to reveal desktop log directory", error);
+                      });
+                  }}
+                  className="mt-2 text-sm text-[var(--cf-fg)] underline transition-opacity duration-[var(--cf-transition,0.15s)] hover:opacity-60"
+                >
+                  Reveal Log Folder
+                </button>
+              )}
+            </div>
+          )}
         </DialogBody>
 
         <DialogFooter className="justify-start px-10">
