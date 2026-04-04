@@ -17,6 +17,7 @@ import {
 } from "../render";
 import { searchHighlightPlugin } from "../render/search-highlight";
 import { referenceRenderPlugin } from "../render/reference-render";
+import { codeBlockStructureField } from "../render/code-block-render";
 import {
   createPluginRegistryField,
   blockCounterField,
@@ -116,6 +117,7 @@ const renderingExtensions: Extension[] = [
   frontmatterDecoration,
   ...sharedInlineRenderExtensions,
   imageRenderPlugin,
+  codeBlockStructureField,
   blockRenderPlugin,
   referenceRenderPlugin,
   codeBlockRenderPlugin,

@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
-import { ensureSyntaxTree } from "@codemirror/language";
+import * as language from "@codemirror/language";
 import { CSS } from "../constants/css-classes";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import { editorFocusField, focusEffect } from "./render-utils";
 import {
+  collectCodeBlocks,
   _codeBlockDecorationFieldForTest as codeBlockDecorationField,
+  _codeBlockStructureFieldForTest as codeBlockStructureField,
   _computeCodeBlockDirtyRegionForTest as computeCodeBlockDirtyRegion,
   _incrementalCodeBlockUpdateForTest as incrementalCodeBlockUpdate,
 } from "./code-block-render";
@@ -24,6 +26,7 @@ function createTestState(doc: string, cursorPos = 0, focused = false) {
     extensions: [
       markdown({ extensions: markdownExtensions }),
       editorFocusField,
+      codeBlockStructureField,
       codeBlockDecorationField,
     ],
   });
@@ -90,6 +93,36 @@ describe("edge cases", () => {
 });
 
 describe("codeBlockDecorationField", () => {
+  it("reads code blocks from the shared cache without rescanning the tree", () => {
+    const state = createEditorState(TWO_BLOCKS, {
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        codeBlockStructureField,
+      ],
+    });
+    const cachedBlocks = state.field(codeBlockStructureField);
+
+    // A fresh syntax-tree scan would allocate a new array. The public helper
+    // must hand back the shared field value directly so rich-mode consumers
+    // reuse the cached block structure instead of rediscovering it.
+    expect(collectCodeBlocks(state)).toBe(cachedBlocks);
+  });
+
+  it("reuses the cached block structure on selection-only updates", () => {
+    const state = createEditorState(TWO_BLOCKS, {
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        codeBlockStructureField,
+      ],
+    });
+    const initialBlocks = state.field(codeBlockStructureField);
+    const movedState = state.update({
+      selection: { anchor: TWO_BLOCKS.indexOf("print") },
+    }).state;
+
+    expect(movedState.field(codeBlockStructureField)).toBe(initialBlocks);
+  });
+
   it("keeps code blocks rendered when cursor is inside the body", () => {
     const bodyPos = TWO_BLOCKS.indexOf("console.log");
     const state = createTestState(TWO_BLOCKS, bodyPos, true);
@@ -222,10 +255,11 @@ function createParsedState(doc: string, cursorPos = 0) {
     extensions: [
       markdown({ extensions: markdownExtensions }),
       editorFocusField,
+      codeBlockStructureField,
       codeBlockDecorationField,
     ],
   });
-  ensureSyntaxTree(state, state.doc.length, 5000);
+  language.ensureSyntaxTree(state, state.doc.length, 5000);
   return state;
 }
 
@@ -236,7 +270,7 @@ describe("computeCodeBlockDirtyRegion (#723)", () => {
 
     // Delete the opening fence markers (```)
     const tr = state.update({ changes: { from: 0, to: 3, insert: "" } });
-    ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
+    language.ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
 
     const dirty = computeCodeBlockDirtyRegion(tr);
     expect(dirty).not.toBeNull();
@@ -256,7 +290,7 @@ describe("computeCodeBlockDirtyRegion (#723)", () => {
     const tr = state.update({
       changes: { from: 0, to: 0, insert: "```py\n" },
     });
-    ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
+    language.ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
 
     const dirty = computeCodeBlockDirtyRegion(tr);
     expect(dirty).not.toBeNull();
@@ -272,7 +306,7 @@ describe("computeCodeBlockDirtyRegion (#723)", () => {
     const tr = state.update({
       changes: { from: 0, to: 5, insert: "hi" },
     });
-    ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
+    language.ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
 
     const dirty = computeCodeBlockDirtyRegion(tr);
     // The changed range [0,2] doesn't overlap any FencedCode node,
@@ -298,7 +332,7 @@ describe("incrementalCodeBlockUpdate (#723)", () => {
 
     // Delete all 3 backticks from the opening fence
     const tr = state.update({ changes: { from: 0, to: 3, insert: "" } });
-    ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
+    language.ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
 
     // Directly invoke the incremental update function
     const result = incrementalCodeBlockUpdate(initialDecos, tr);
@@ -349,7 +383,7 @@ describe("incrementalCodeBlockUpdate (#723)", () => {
         insert: "different text",
       },
     });
-    ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
+    language.ensureSyntaxTree(tr.state, tr.state.doc.length, 5000);
 
     const result = incrementalCodeBlockUpdate(initialDecos, tr);
     const specsAfter = getDecorationSpecs(result);

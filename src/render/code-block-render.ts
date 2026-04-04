@@ -140,7 +140,7 @@ export interface CodeBlockInfo extends FencedBlockInfo {
 }
 
 /** Extract info about FencedCode nodes from the syntax tree. */
-export function collectCodeBlocks(state: EditorState): CodeBlockInfo[] {
+function scanCodeBlocks(state: EditorState): readonly CodeBlockInfo[] {
   const results: CodeBlockInfo[] = [];
   const tree = syntaxTree(state);
 
@@ -179,6 +179,39 @@ export function collectCodeBlocks(state: EditorState): CodeBlockInfo[] {
   });
 
   return results;
+}
+
+/**
+ * Shared code-block structure cache for the current document/tree.
+ *
+ * Rich-mode consumers should read this field via collectCodeBlocks() instead
+ * of rewalking the full syntax tree on cursor, hover, or handler-only updates.
+ */
+export const codeBlockStructureField = StateField.define<readonly CodeBlockInfo[]>({
+  create(state) {
+    return scanCodeBlocks(state);
+  },
+
+  update(value, tr) {
+    if (tr.docChanged) {
+      return scanCodeBlocks(tr.state);
+    }
+    if (
+      syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
+      syntaxTreeAvailable(tr.state, tr.state.doc.length)
+    ) {
+      return scanCodeBlocks(tr.state);
+    }
+    return value;
+  },
+});
+
+/**
+ * Return code-block structure from the shared cache when present, and fall back
+ * to a one-off tree walk in isolated test states that don't install the field.
+ */
+export function collectCodeBlocks(state: EditorState): readonly CodeBlockInfo[] {
+  return state.field(codeBlockStructureField, false) ?? scanCodeBlocks(state);
 }
 
 /** Decoration callback for a single code block. Shared by full and incremental paths. */
@@ -315,40 +348,14 @@ function buildCodeBlockItemsInRange(
 ): Range<Decoration>[] {
   const focused = state.field(editorFocusField, false) ?? false;
   const items: Range<Decoration>[] = [];
-  const tree = syntaxTree(state);
-
-  tree.iterate({
-    from: rangeFrom,
-    to: rangeTo,
-    enter(node) {
-      if (node.type.name !== "FencedCode") return;
-
-      const openLine = state.doc.lineAt(node.from);
-      const closeLine = state.doc.lineAt(node.to);
-
-      let language = "";
-      const codeInfoNode = node.node.getChild("CodeInfo");
-      if (codeInfoNode) {
-        language = state.doc.sliceString(codeInfoNode.from, codeInfoNode.to).trim();
-      }
-
-      const block: CodeBlockInfo = {
-        from: node.from,
-        to: node.to,
-        openFenceFrom: openLine.from,
-        openFenceTo: openLine.to,
-        closeFenceFrom: closeLine.from,
-        closeFenceTo: closeLine.to,
-        singleLine: closeLine.from === openLine.from,
-        language,
-      };
-
-      decorateCodeBlock(
-        getFencedBlockRenderContext(state, block, focused),
-        items,
-      );
-    },
-  });
+  for (const block of collectCodeBlocks(state)) {
+    if (block.to < rangeFrom) continue;
+    if (block.from > rangeTo) break;
+    decorateCodeBlock(
+      getFencedBlockRenderContext(state, block, focused),
+      items,
+    );
+  }
 
   return items;
 }
@@ -384,7 +391,7 @@ class CodeBlockHoverPlugin {
    * Cached code-block list, rebuilt only when the state changes.
    * Avoids a full syntax-tree scan on every mousemove event.
    */
-  private cachedBlocks: CodeBlockInfo[] = [];
+  private cachedBlocks: readonly CodeBlockInfo[] = [];
   private cachedBlocksState: EditorState | null = null;
 
   constructor(private readonly view: EditorView) {
@@ -547,6 +554,7 @@ const codeBlockDecorationField = StateField.define<DecorationSet>({
 /** Exported for unit testing decoration logic without a browser. */
 export {
   codeBlockDecorationField as _codeBlockDecorationFieldForTest,
+  codeBlockStructureField as _codeBlockStructureFieldForTest,
   computeCodeBlockDirtyRegion as _computeCodeBlockDirtyRegionForTest,
   incrementalCodeBlockUpdate as _incrementalCodeBlockUpdateForTest,
 };
