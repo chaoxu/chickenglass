@@ -1,4 +1,5 @@
 use serde::Serialize;
+use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow, command};
 
 use super::state::{FileWatcherState, LastFocusedWindow, ProjectRoot};
@@ -93,6 +94,10 @@ pub fn debug_emit_file_changed(
     relative_path: String,
 ) -> Result<(), String> {
     ensure_debug_build()?;
-    app.emit_to(window.label(), "file-changed", &relative_path)
-        .map_err(|e| e.to_string())
+    app.emit_to(
+        window.label(),
+        "file-changed",
+        &json!({ "path": relative_path, "treeChanged": false }),
+    )
+    .map_err(|e| e.to_string())
 }

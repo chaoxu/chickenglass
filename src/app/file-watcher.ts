@@ -1,8 +1,9 @@
 /**
  * File watcher for detecting external changes in Tauri mode.
  *
- * Listens for `file-changed` events emitted by the Rust backend and either
- * silently reloads clean files or shows a notification bar for dirty files.
+ * Listens for `file-changed` events emitted by the Rust backend, refreshes
+ * the sidebar tree for structural changes, and either silently reloads clean
+ * open files or shows a notification bar for dirty ones.
  */
 
 import type { UnlistenFn } from "@tauri-apps/api/event";
@@ -21,6 +22,9 @@ export type IsFileDirtyFn = (path: string) => boolean;
 /** Callback to reload a file's content from disk. */
 export type ReloadFileFn = (path: string) => Promise<void>;
 
+/** Callback to refresh the sidebar tree after structural filesystem changes. */
+export type RefreshTreeFn = (changedPath?: string) => Promise<void>;
+
 /**
  * Callback to check whether a file-changed event was caused by the app's
  * own save. Receives the path and returns a promise that resolves to true
@@ -34,6 +38,8 @@ export interface FileWatcherConfig {
   isFileOpen: IsFileOpenFn;
   /** Check whether a file has unsaved changes. */
   isFileDirty: IsFileDirtyFn;
+  /** Refresh the sidebar tree after structural changes. */
+  refreshTree: RefreshTreeFn;
   /** Reload a file from disk into the editor. */
   reloadFile: ReloadFileFn;
   /** Check whether a change event was caused by the app's own save. */
@@ -42,13 +48,28 @@ export interface FileWatcherConfig {
   container: HTMLElement;
 }
 
+export interface FileChangedEvent {
+  path: string;
+  treeChanged: boolean;
+}
+
+type FileChangedPayload = FileChangedEvent | string;
+
+function normalizeFileChangedEvent(payload: FileChangedPayload): FileChangedEvent {
+  if (typeof payload === "string") {
+    return { path: payload, treeChanged: false };
+  }
+  return payload;
+}
+
 /**
  * Watches for external file changes in Tauri mode.
  *
  * When a watched file changes:
+ * - If the change can affect directory contents: refresh the sidebar tree
  * - If the file is open and clean: reload silently
  * - If the file is open and dirty: show a notification bar
- * - If the file is not open: ignore
+ * - If the file is not open: skip editor reload/notification handling
  */
 export class FileWatcher {
   private readonly config: FileWatcherConfig;
@@ -95,8 +116,10 @@ export class FileWatcher {
     // Listen for file-changed events from the backend.
     // Lazy-import to keep @tauri-apps/api/event out of the browser bundle (#446).
     const { listen } = await import("@tauri-apps/api/event");
-    const unlisten = await listen<string>("file-changed", (event) => {
-      this.handleFileChanged(event.payload);
+    const unlisten = await listen<FileChangedPayload>("file-changed", (event) => {
+      void this.handleFileChanged(event.payload).catch((e: unknown) => {
+        console.error("[file-watcher] handleFileChanged failed", event.payload, e);
+      });
     });
 
     if (this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
@@ -135,7 +158,18 @@ export class FileWatcher {
   }
 
   /** Handle a file-changed event from the backend. */
-  private async handleFileChanged(relativePath: string): Promise<void> {
+  private async handleFileChanged(payload: FileChangedPayload): Promise<void> {
+    const { path: relativePath, treeChanged } = normalizeFileChangedEvent(payload);
+
+    if (treeChanged) {
+      void measureAsync("watch.refresh_tree", () => this.config.refreshTree(relativePath), {
+        category: "watch",
+        detail: relativePath,
+      }).catch((e: unknown) => {
+        console.error("[file-watcher] tree refresh failed", relativePath, e);
+      });
+    }
+
     if (!this.config.isFileOpen(relativePath)) {
       return;
     }

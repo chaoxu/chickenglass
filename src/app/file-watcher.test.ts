@@ -44,17 +44,27 @@ vi.mock("./tauri-client/watch", () => ({
 import { FileWatcher } from "./file-watcher";
 
 function createWatcher(
-  reloadFile: ((path: string) => Promise<void>) = vi.fn(async (_path: string) => {}),
+  options: {
+    isFileOpen?: (path: string) => boolean;
+    isFileDirty?: (path: string) => boolean;
+    refreshTree?: (path?: string) => Promise<void>;
+    reloadFile?: (path: string) => Promise<void>;
+  } = {},
 ) {
   const container = document.createElement("div");
+  const refreshTree =
+    options.refreshTree ?? vi.fn(async (_path?: string) => {});
+  const reloadFile =
+    options.reloadFile ?? vi.fn(async (_path: string) => {});
   const watcher = new FileWatcher({
-    isFileOpen: () => true,
-    isFileDirty: () => true,
+    isFileOpen: options.isFileOpen ?? (() => true),
+    isFileDirty: options.isFileDirty ?? (() => true),
+    refreshTree,
     reloadFile,
     container,
   });
 
-  return { container, watcher, reloadFile };
+  return { container, watcher, refreshTree, reloadFile };
 }
 
 describe("FileWatcher", () => {
@@ -163,7 +173,7 @@ describe("FileWatcher", () => {
 
   it("reloads the current file and advances to the next pending notification", async () => {
     const reloadFile = vi.fn(async () => {});
-    const { container, watcher } = createWatcher(reloadFile);
+    const { container, watcher } = createWatcher({ reloadFile });
     const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => void })
       .handleFileChanged
       .bind(watcher as unknown as { handleFileChanged: (path: string) => void });
@@ -186,7 +196,7 @@ describe("FileWatcher", () => {
     const reloadFile = vi.fn<(_: string) => Promise<void>>(() => {
       throw new Error("boom");
     });
-    const { container, watcher } = createWatcher(reloadFile);
+    const { container, watcher } = createWatcher({ reloadFile });
     const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => void })
       .handleFileChanged
       .bind(watcher as unknown as { handleFileChanged: (path: string) => void });
@@ -206,5 +216,45 @@ describe("FileWatcher", () => {
     );
     expect(container.textContent).toContain("\"b.md\" changed externally. Reload?");
     consoleError.mockRestore();
+  });
+
+  it("refreshes the tree for structural changes even when the path is not open", async () => {
+    const refreshTree = vi.fn(async (_path?: string) => {});
+    const { watcher, refreshTree: refreshTreeSpy } = createWatcher({
+      isFileOpen: () => false,
+      isFileDirty: () => false,
+      refreshTree,
+    });
+    const handleFileChanged = (
+      watcher as unknown as {
+        handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+      }
+    ).handleFileChanged.bind(watcher as unknown as {
+      handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+    });
+
+    await handleFileChanged({ path: "docs/new-subdir", treeChanged: true });
+
+    expect(refreshTreeSpy).toHaveBeenCalledWith("docs/new-subdir");
+  });
+
+  it("does not refresh the tree for non-structural file modifications", async () => {
+    const refreshTree = vi.fn(async (_path?: string) => {});
+    const { watcher, refreshTree: refreshTreeSpy } = createWatcher({
+      isFileOpen: () => false,
+      isFileDirty: () => false,
+      refreshTree,
+    });
+    const handleFileChanged = (
+      watcher as unknown as {
+        handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+      }
+    ).handleFileChanged.bind(watcher as unknown as {
+      handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+    });
+
+    await handleFileChanged({ path: "docs/a.md", treeChanged: false });
+
+    expect(refreshTreeSpy).not.toHaveBeenCalled();
   });
 });
