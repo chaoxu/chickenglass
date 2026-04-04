@@ -159,6 +159,8 @@ export function EditorPane({
     if (!isReadMode) {
       return editorOptions.doc;
     }
+    // `docRevision` is only an invalidation signal here. In rich/source mode we
+    // avoid materializing the full document string on each render.
     return view ? view.state.doc.toString() : editorOptions.doc;
   }, [docRevision, editorOptions.doc, isReadMode, view]);
   const fmState = view ? view.state.field(frontmatterField, false) : undefined;

@@ -16,6 +16,12 @@ export function applyEditorDocumentChanges(
   let cursor = 0;
 
   for (const change of changes) {
+    if (
+      import.meta.env.DEV
+      && (change.from < cursor || change.to < change.from)
+    ) {
+      throw new Error("Editor document changes must be sorted, non-overlapping, and valid.");
+    }
     nextDoc += doc.slice(cursor, change.from);
     nextDoc += change.insert;
     cursor = change.to;
