@@ -16,12 +16,9 @@ import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import {
   fenceOperationAnnotation,
-  openingFenceDeletionCleanup,
-  closingFenceProtection,
-  openingFenceColonProtection,
-  openingFenceBacktickProtection,
-  openingFenceMathProtection,
-  emptyMathBlockBackspaceCleanup,
+  fenceProtectionExtension,
+  getClosingFenceRanges,
+  getOpeningMathDelimiterRanges,
 } from "./fence-protection";
 import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
@@ -52,9 +49,7 @@ function createProtectedState(
       blockCounterField,
       editorFocusField,
       blockDecorationField,
-      openingFenceDeletionCleanup,
-      closingFenceProtection,
-      openingFenceColonProtection,
+      fenceProtectionExtension,
     ],
   });
 }
@@ -300,9 +295,7 @@ function createCodeBlockProtectedState(doc: string) {
   return createEditorState(doc, {
     extensions: [
       markdown({ extensions: markdownExtensions }),
-      openingFenceDeletionCleanup,
-      closingFenceProtection,
-      openingFenceBacktickProtection,
+      fenceProtectionExtension,
     ],
   });
 }
@@ -465,13 +458,46 @@ function createMathProtectedState(doc: string) {
       frontmatterField,
       documentSemanticsField,
       mathMacrosField,
-      openingFenceDeletionCleanup,
-      emptyMathBlockBackspaceCleanup,
-      closingFenceProtection,
-      openingFenceMathProtection,
+      fenceProtectionExtension,
     ],
   });
 }
+
+describe("fenceProtection cache", () => {
+  it("reuses closing-fence ranges across selection-only transactions", () => {
+    const state = createProtectedState(`::: {.theorem}\ncontent\n:::`);
+    const initialRanges = getClosingFenceRanges(state);
+    expect(getClosingFenceRanges(state)).toBe(initialRanges);
+
+    const afterSelection = state.update({ selection: { anchor: state.doc.length } }).state;
+    expect(getClosingFenceRanges(afterSelection)).toBe(initialRanges);
+  });
+
+  it("invalidates closing-fence ranges on doc changes", () => {
+    const state = createCodeBlockProtectedState("```js\nconsole.log('x')\n```");
+    const initialRanges = getClosingFenceRanges(state);
+
+    const nextState = state.update({
+      changes: { from: 3, to: 5, insert: "ts" },
+    }).state;
+
+    expect(getClosingFenceRanges(nextState)).not.toBe(initialRanges);
+  });
+
+  it("reuses math delimiter ranges on selection changes and invalidates on edits", () => {
+    const state = createMathProtectedState("$$\nx^2\n$$");
+    const initialRanges = getOpeningMathDelimiterRanges(state);
+    expect(getOpeningMathDelimiterRanges(state)).toBe(initialRanges);
+
+    const afterSelection = state.update({ selection: { anchor: state.doc.length } }).state;
+    expect(getOpeningMathDelimiterRanges(afterSelection)).toBe(initialRanges);
+
+    const afterEdit = afterSelection.update({
+      changes: { from: 3, to: 6, insert: "x^3" },
+    }).state;
+    expect(getOpeningMathDelimiterRanges(afterEdit)).not.toBe(initialRanges);
+  });
+});
 
 describe("openingFenceMathProtection ($$)", () => {
   const doc = "$$\nx^2\n$$";
