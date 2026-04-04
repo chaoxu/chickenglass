@@ -1,11 +1,26 @@
-import { Decoration } from "@codemirror/view";
+import {
+  Decoration,
+  type DecorationSet,
+  EditorView,
+  ViewPlugin,
+  type ViewUpdate,
+} from "@codemirror/view";
 import {
   type EditorState,
   type Extension,
-  RangeSetBuilder,
+  type Range,
+  StateField,
+  type Text,
+  type Transaction,
 } from "@codemirror/state";
-import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
-import { createDecorationsField } from "./render-utils";
+import {
+  forceParsing,
+  syntaxParserRunning,
+  syntaxTree,
+  syntaxTreeAvailable,
+} from "@codemirror/language";
+import { documentSemanticsField } from "../semantics/codemirror-source";
+import { buildDecorations } from "./render-utils";
 
 /**
  * Maps Lezer syntax node type names to HTML tag names.
@@ -27,6 +42,168 @@ const TAG_NAME_MAP: Readonly<Record<string, string>> = {
   Paragraph: "p",
 };
 
+const TREE_ONLY_TAG_NAME_MAP: Readonly<Record<string, string>> = {
+  BulletList: "ul",
+  OrderedList: "ol",
+  FencedCode: "code",
+  HorizontalRule: "hr",
+  Paragraph: "p",
+};
+
+const CONTAINER_NODE_TYPES = new Set(Object.keys(TAG_NAME_MAP));
+const HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"] as const;
+const LINE_DECORATION_BY_TAG = Object.freeze(Object.fromEntries(
+  [...HEADING_TAGS, "ul", "ol", "code", "hr", "div", "p"].map((tag) => [
+    tag,
+    Decoration.line({ attributes: { "data-tag-name": tag } }),
+  ]),
+) as Record<string, Decoration>);
+
+function clampDocPos(doc: Text, pos: number): number {
+  return Math.max(0, Math.min(pos, doc.length));
+}
+
+function expandRangeToLineBounds(
+  doc: Text,
+  from: number,
+  to: number,
+): { from: number; to: number } {
+  if (doc.length === 0) {
+    return { from: 0, to: 0 };
+  }
+
+  const clampedFrom = clampDocPos(doc, from);
+  const clampedTo = clampDocPos(doc, Math.max(from, to));
+
+  return {
+    from: doc.lineAt(clampedFrom).from,
+    to: doc.lineAt(clampedTo).to,
+  };
+}
+
+function expandChangeQueryRange(
+  doc: Text,
+  from: number,
+  to: number,
+): { from: number; to: number } {
+  if (doc.length === 0) {
+    return { from: 0, to: 0 };
+  }
+
+  return expandRangeToLineBounds(
+    doc,
+    from > 0 ? from - 1 : from,
+    to < doc.length ? to + 1 : to,
+  );
+}
+
+function rangesOverlap(
+  valueFrom: number,
+  valueTo: number,
+  rangeFrom: number,
+  rangeTo: number,
+): boolean {
+  return valueFrom <= rangeTo && rangeFrom <= valueTo;
+}
+
+function assignLineTag(
+  lineTagMap: Map<number, string>,
+  state: EditorState,
+  from: number,
+  to: number,
+  tagName: string,
+  rangeFrom: number,
+  rangeTo: number,
+): void {
+  if (!rangesOverlap(from, to, rangeFrom, rangeTo)) return;
+
+  let lineStart = state.doc.lineAt(Math.max(from, rangeFrom)).from;
+  const nodeEnd = Math.min(to, rangeTo);
+
+  while (lineStart <= nodeEnd) {
+    lineTagMap.set(lineStart, tagName);
+    const line = state.doc.lineAt(lineStart);
+    if (line.to >= nodeEnd) break;
+    lineStart = line.to + 1;
+  }
+}
+
+function collectLineTagsInRange(
+  state: EditorState,
+  rangeFrom: number,
+  rangeTo: number,
+): Map<number, string> {
+  const lineTagMap = new Map<number, string>();
+  const semantics = state.field(documentSemanticsField, false);
+
+  if (semantics) {
+    for (const heading of semantics.headings) {
+      const tagName = HEADING_TAGS[heading.level - 1];
+      if (!tagName) continue;
+      assignLineTag(
+        lineTagMap,
+        state,
+        heading.from,
+        heading.to,
+        tagName,
+        rangeFrom,
+        rangeTo,
+      );
+    }
+
+    for (const div of semantics.fencedDivs) {
+      assignLineTag(
+        lineTagMap,
+        state,
+        div.from,
+        div.to,
+        "div",
+        rangeFrom,
+        rangeTo,
+      );
+    }
+  }
+
+  const treeTagMap = semantics ? TREE_ONLY_TAG_NAME_MAP : TAG_NAME_MAP;
+  syntaxTree(state).iterate({
+    from: rangeFrom,
+    to: rangeTo,
+    enter(node) {
+      const tagName = treeTagMap[node.type.name];
+      if (!tagName) return;
+      assignLineTag(
+        lineTagMap,
+        state,
+        node.from,
+        node.to,
+        tagName,
+        rangeFrom,
+        rangeTo,
+      );
+    },
+  });
+
+  return lineTagMap;
+}
+
+function buildContainerItemsInRange(
+  state: EditorState,
+  rangeFrom: number,
+  rangeTo: number,
+): Range<Decoration>[] {
+  const lineTagMap = collectLineTagsInRange(state, rangeFrom, rangeTo);
+  const items: Range<Decoration>[] = [];
+  const sortedPositions = [...lineTagMap.keys()].sort((a, b) => a - b);
+
+  for (const pos of sortedPositions) {
+    const tagName = lineTagMap.get(pos);
+    if (!tagName) continue;
+    items.push(LINE_DECORATION_BY_TAG[tagName].range(pos));
+  }
+
+  return items;
+}
+
 /**
  * Build a DecorationSet of `Decoration.line` decorations that add
  * `data-tag-name` attributes to each `cm-line` element covered by a
@@ -36,70 +213,307 @@ const TAG_NAME_MAP: Readonly<Record<string, string>> = {
  * We iterate over every line that falls within each matching node and
  * apply the decoration to each line's start.
  */
-function buildContainerDecorations(state: EditorState) {
-  const builder = new RangeSetBuilder<Decoration>();
-
-  // Collect (lineStart, tagName) pairs, deduplicated by position.
-  // A line may be covered by multiple nodes (e.g. Paragraph inside FencedDiv).
-  // We want the most-specific (innermost) node's tag, so we collect all and
-  // sort by node depth — but since we iterate depth-first we need to track
-  // which positions we've already assigned.
-  const lineTagMap = new Map<number, string>();
-
-  const c = syntaxTree(state).cursor();
-  do {
-    const tagName = TAG_NAME_MAP[c.name];
-    if (!tagName) continue;
-
-    // Walk every line that this node spans and assign the tag.
-    // Inner nodes will override outer ones because the tree is iterated
-    // in document order (outer before inner). We overwrite on each entry,
-    // so the last (innermost) assignment wins.
-    let lineStart = state.doc.lineAt(c.from).from;
-    const nodeEnd = c.to;
-
-    while (lineStart <= nodeEnd) {
-      lineTagMap.set(lineStart, tagName);
-      const line = state.doc.lineAt(lineStart);
-      if (line.to >= nodeEnd) break;
-      lineStart = line.to + 1; // next line start
-    }
-  } while (c.next());
-
-  // Sort positions and build the RangeSet (builder requires sorted order).
-  const sortedPositions = [...lineTagMap.keys()].sort((a, b) => a - b);
-  for (const pos of sortedPositions) {
-    const tagName = lineTagMap.get(pos);
-    if (tagName === undefined) continue;
-    builder.add(
-      pos,
-      pos,
-      Decoration.line({ attributes: { "data-tag-name": tagName } }),
-    );
-  }
-
-  return builder.finish();
+function buildContainerDecorations(state: EditorState): DecorationSet {
+  return buildDecorations(
+    buildContainerItemsInRange(state, 0, state.doc.length),
+  );
 }
+
+interface DirtyRegion {
+  readonly filterFrom: number;
+  readonly filterTo: number;
+}
+
+function mergeDirtyRegions(
+  a: DirtyRegion | null,
+  b: DirtyRegion | null,
+): DirtyRegion | null {
+  if (!a) return b;
+  if (!b) return a;
+  return {
+    filterFrom: Math.min(a.filterFrom, b.filterFrom),
+    filterTo: Math.max(a.filterTo, b.filterTo),
+  };
+}
+
+function dirtyRegionsEqual(
+  a: DirtyRegion | null,
+  b: DirtyRegion | null,
+): boolean {
+  if (a === b) return true;
+  return a?.filterFrom === b?.filterFrom && a?.filterTo === b?.filterTo;
+}
+
+function mapDirtyRegion(region: DirtyRegion, tr: Transaction): DirtyRegion {
+  const mappedFrom = clampDocPos(tr.state.doc, tr.changes.mapPos(region.filterFrom, 1));
+  const mappedTo = clampDocPos(
+    tr.state.doc,
+    Math.max(mappedFrom, tr.changes.mapPos(region.filterTo, -1)),
+  );
+  const mappedWindow = expandRangeToLineBounds(tr.state.doc, mappedFrom, mappedTo);
+  return {
+    filterFrom: mappedWindow.from,
+    filterTo: mappedWindow.to,
+  };
+}
+
+function computePendingDirtyRegion(
+  tr: Transaction,
+): DirtyRegion | null {
+  let filterFrom = Number.POSITIVE_INFINITY;
+  let filterTo = Number.NEGATIVE_INFINITY;
+
+  tr.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
+    const newWindow = expandChangeQueryRange(tr.state.doc, fromB, toB);
+    filterFrom = Math.min(filterFrom, newWindow.from);
+    filterTo = Math.max(filterTo, newWindow.to);
+  }, true);
+
+  if (filterFrom > filterTo) return null;
+  return { filterFrom, filterTo };
+}
+
+function expandDirtyRegionWithTree(
+  state: EditorState,
+  dirty: DirtyRegion,
+): DirtyRegion {
+  let filterFrom = dirty.filterFrom;
+  let filterTo = dirty.filterTo;
+
+  syntaxTree(state).iterate({
+    from: dirty.filterFrom,
+    to: dirty.filterTo,
+    enter(node) {
+      if (!CONTAINER_NODE_TYPES.has(node.type.name)) return;
+      const nodeWindow = expandRangeToLineBounds(state.doc, node.from, node.to);
+      filterFrom = Math.min(filterFrom, nodeWindow.from);
+      filterTo = Math.max(filterTo, nodeWindow.to);
+    },
+  });
+
+  return { filterFrom, filterTo };
+}
+
+function computeContainerDirtyRegion(
+  tr: Transaction,
+): DirtyRegion | null {
+  let filterFrom = Number.POSITIVE_INFINITY;
+  let filterTo = Number.NEGATIVE_INFINITY;
+
+  const oldTree = syntaxTree(tr.startState);
+  const newTree = syntaxTree(tr.state);
+
+  tr.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    const oldWindow = expandChangeQueryRange(tr.startState.doc, fromA, toA);
+    const newWindow = expandChangeQueryRange(tr.state.doc, fromB, toB);
+
+    filterFrom = Math.min(filterFrom, newWindow.from);
+    filterTo = Math.max(filterTo, newWindow.to);
+
+    oldTree.iterate({
+      from: oldWindow.from,
+      to: oldWindow.to,
+      enter(node) {
+        if (!CONTAINER_NODE_TYPES.has(node.type.name)) return;
+
+        const mappedFrom = clampDocPos(tr.state.doc, tr.changes.mapPos(node.from, 1));
+        const mappedTo = clampDocPos(
+          tr.state.doc,
+          Math.max(mappedFrom, tr.changes.mapPos(node.to, -1)),
+        );
+        const mappedWindow = expandRangeToLineBounds(
+          tr.state.doc,
+          mappedFrom,
+          mappedTo,
+        );
+        filterFrom = Math.min(filterFrom, mappedWindow.from);
+        filterTo = Math.max(filterTo, mappedWindow.to);
+      },
+    });
+
+    newTree.iterate({
+      from: newWindow.from,
+      to: newWindow.to,
+      enter(node) {
+        if (!CONTAINER_NODE_TYPES.has(node.type.name)) return;
+
+        const nodeWindow = expandRangeToLineBounds(
+          tr.state.doc,
+          node.from,
+          node.to,
+        );
+        filterFrom = Math.min(filterFrom, nodeWindow.from);
+        filterTo = Math.max(filterTo, nodeWindow.to);
+      },
+    });
+  }, true);
+
+  if (filterFrom > filterTo) return null;
+  return { filterFrom, filterTo };
+}
+
+function replaceContainerDecorationsInRange(
+  value: DecorationSet,
+  state: EditorState,
+  dirty: DirtyRegion,
+): DecorationSet {
+  const { filterFrom, filterTo } = dirty;
+  const newItems = buildContainerItemsInRange(state, filterFrom, filterTo);
+
+  return value.update({
+    filterFrom,
+    filterTo,
+    filter: () => false,
+    add: newItems,
+    sort: true,
+  });
+}
+
+function incrementalContainerUpdate(
+  value: DecorationSet,
+  tr: Transaction,
+): DecorationSet {
+  const mapped = value.map(tr.changes);
+  const dirty = computeContainerDirtyRegion(tr);
+  if (!dirty) return mapped;
+
+  return replaceContainerDecorationsInRange(mapped, tr.state, dirty);
+}
+
+const containerAttributePendingDirtyRegionField = StateField.define<DirtyRegion | null>({
+  create() {
+    return null;
+  },
+
+  update(value, tr) {
+    const treeChanged = syntaxTree(tr.state) !== syntaxTree(tr.startState);
+    const treeReady = !treeChanged || syntaxTreeAvailable(tr.state, tr.state.doc.length);
+    const pendingDirtyRegion = tr.docChanged && value
+      ? mapDirtyRegion(value, tr)
+      : value;
+
+    if (tr.docChanged) {
+      if (treeChanged && treeReady) {
+        return null;
+      }
+
+      return mergeDirtyRegions(
+        pendingDirtyRegion,
+        computePendingDirtyRegion(tr),
+      );
+    }
+
+    if (treeChanged && treeReady) {
+      return null;
+    }
+
+    return pendingDirtyRegion;
+  },
+
+  compare(a, b) {
+    return dirtyRegionsEqual(a, b);
+  },
+});
 
 /**
  * StateField that maintains a DecorationSet of `Decoration.line`
  * decorations for all block-level nodes, adding `data-tag-name`
  * attributes to the corresponding `cm-line` DOM elements.
  *
- * Uses `mapOnDocChanged` so that text edits preserving the syntax tree
- * map decoration positions via `value.map(tr.changes)` instead of a
- * full rebuild — enabling CM6's shared-chunk RangeSet shortcut (#718).
+ * Uses mapped decoration updates for text edits and only rebuilds the
+ * container-tag decorations inside the dirty structural span. This keeps
+ * typing in large documents from paying a broad full-document rebuild cost
+ * while still updating far-reaching block-boundary edits correctly.
  *
  * This enables CSS targeting such as:
  *   `.cm-line[data-tag-name="h1"] { ... }`
  */
-export const containerAttributesField = createDecorationsField(
-  buildContainerDecorations,
-  (tr) =>
-    syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
-    syntaxTreeAvailable(tr.state, tr.state.doc.length),
-  true, // mapOnDocChanged
-);
+export const containerAttributesField = StateField.define<DecorationSet>({
+  create(state) {
+    return buildContainerDecorations(state);
+  },
+
+  update(value, tr) {
+    const treeChanged = syntaxTree(tr.state) !== syntaxTree(tr.startState);
+    const treeReady = !treeChanged || syntaxTreeAvailable(tr.state, tr.state.doc.length);
+    const pendingDirtyRegion = tr.startState.field(
+      containerAttributePendingDirtyRegionField,
+      false,
+    );
+
+    if (tr.docChanged) {
+      if (treeChanged && treeReady) {
+        return incrementalContainerUpdate(value, tr);
+      }
+
+      return value.map(tr.changes);
+    }
+
+    if (treeChanged && treeReady) {
+      if (pendingDirtyRegion) {
+        return replaceContainerDecorationsInRange(
+          value,
+          tr.state,
+          expandDirtyRegionWithTree(tr.state, pendingDirtyRegion),
+        );
+      }
+
+      return buildContainerDecorations(tr.state);
+    }
+
+    return value;
+  },
+
+  provide(field) {
+    return EditorView.decorations.from(field);
+  },
+});
+
+class ContainerAttributeParsePlugin {
+  private scheduled: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(private readonly view: EditorView) {}
+
+  update(_update: ViewUpdate): void {
+    if (this.view.state.field(containerAttributePendingDirtyRegionField, false)) {
+      this.schedule();
+    }
+  }
+
+  destroy(): void {
+    if (this.scheduled !== null) {
+      clearTimeout(this.scheduled);
+      this.scheduled = null;
+    }
+  }
+
+  private schedule(): void {
+    if (this.scheduled !== null) return;
+    if (!this.view.state.field(containerAttributePendingDirtyRegionField, false)) return;
+    if (syntaxTreeAvailable(this.view.state, this.view.state.doc.length)) return;
+
+    this.scheduled = setTimeout(() => {
+      this.scheduled = null;
+      if (!this.view.state.field(containerAttributePendingDirtyRegionField, false)) return;
+      forceParsing(this.view, this.view.state.doc.length, 25);
+      if (
+        this.view.state.field(containerAttributePendingDirtyRegionField, false) &&
+        !syntaxTreeAvailable(this.view.state, this.view.state.doc.length) &&
+        syntaxParserRunning(this.view)
+      ) {
+        this.schedule();
+      }
+    }, 0);
+  }
+}
 
 /** CM6 extension that adds `data-tag-name` attributes to `cm-line` elements. */
-export const containerAttributesPlugin: Extension = containerAttributesField;
+export const containerAttributesPlugin: Extension = [
+  containerAttributePendingDirtyRegionField,
+  containerAttributesField,
+  ViewPlugin.fromClass(ContainerAttributeParsePlugin),
+];
+
+export {
+  computeContainerDirtyRegion as _computeContainerDirtyRegionForTest,
+};
