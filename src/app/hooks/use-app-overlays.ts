@@ -1,6 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { BackgroundIndexer } from "../../index";
 import { dispatchFormatEvent } from "../../constants/events";
+import {
+  resolveDocumentLabelBacklinks,
+  type DocumentLabelBacklinksResult,
+} from "../../semantics/document-label-backlinks";
 import { toggleFpsMeter } from "../fps-meter";
 import { batchExport, exportDocument } from "../export";
 import type { FileSystem } from "../file-manager";
@@ -26,7 +30,7 @@ interface AppOverlayDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "liveDocs" | "docTextForStats" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
+    "currentPath" | "liveDocs" | "docTextForStats" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
   >;
   onOpenFile: () => void;
   onQuit: () => void;
@@ -37,6 +41,8 @@ export interface AppOverlayController {
   indexer: BackgroundIndexer;
   searchVersion: number;
   openPalette: () => void;
+  labelBacklinks: DocumentLabelBacklinksResult | null;
+  closeLabelBacklinks: () => void;
 }
 
 // ── Command registry ─────────────────────────────────────────────────────────
@@ -110,7 +116,12 @@ export function useAppOverlays({
 }: AppOverlayDeps): AppOverlayController {
   const [indexer] = useState(() => new BackgroundIndexer());
   const [searchVersion, setSearchVersion] = useState(0);
+  const [labelBacklinks, setLabelBacklinks] = useState<DocumentLabelBacklinksResult | null>(null);
   const activeSearchDoc = editor.currentPath ? editor.docTextForStats : "";
+
+  useEffect(() => {
+    setLabelBacklinks(null);
+  }, [editor.currentPath, editor.docTextForStats]);
 
   useEffect(() => {
     if (!dialogs.searchOpen) {
@@ -211,6 +222,29 @@ export function useAppOverlays({
     });
   }, [editor]);
 
+  const handleShowLabelBacklinks = useCallback(() => {
+    const view = editor.editorState?.view;
+    if (!view || !editor.currentPath?.endsWith(".md")) {
+      window.alert("Place the cursor on a local label definition or reference in the current document.");
+      return;
+    }
+
+    const lookup = resolveDocumentLabelBacklinks(view.state);
+    if (lookup.kind === "ready") {
+      setLabelBacklinks(lookup.result);
+      return;
+    }
+
+    if (lookup.kind === "duplicate") {
+      window.alert(
+        `Local label "${lookup.id}" is defined more than once in this document. Resolve the duplicate label before showing references.`,
+      );
+      return;
+    }
+
+    window.alert("Place the cursor on a local label definition or reference in the current document.");
+  }, [editor.currentPath, editor.editorState?.view]);
+
   // ── Single command registry ──────────────────────────────────────────────
   // Each command is defined once. Palette entries, hotkey bindings, and
   // Tauri menu handlers are all derived from this array.
@@ -237,6 +271,7 @@ export function useAppOverlays({
     { id: "nav.show-outline", label: "Show Outline Panel", category: "Navigation", action: () => { workspace.setSidebarCollapsed(false); workspace.setSidebarTab("outline"); } },
     { id: "nav.show-diagnostics", label: "Show Diagnostics Panel", category: "Navigation", action: () => { workspace.setSidebarCollapsed(false); workspace.setSidebarTab("diagnostics"); } },
     { id: "nav.search", label: "Find in Files", category: "Navigation", shortcut: `${modKey}+Shift+F`, hotkey: "mod+shift+f", menuId: "edit_find", action: () => dialogs.setSearchOpen(true), hotkeyAction: () => dialogs.setSearchOpen((value) => !value) },
+    { id: "nav.show-label-references", label: "Show References to Label", category: "Navigation", action: handleShowLabelBacklinks },
     { id: "nav.settings", label: "Settings", category: "Navigation", shortcut: `${modKey}+,`, hotkey: "mod+,", action: () => dialogs.setSettingsOpen(true), hotkeyAction: () => dialogs.setSettingsOpen((value) => !value) },
 
     // ── View ──────────────────────────────────────────────────────────────
@@ -263,7 +298,7 @@ export function useAppOverlays({
       category: "File",
       action: () => { void editor.openFile(path); },
     })),
-  ], [dialogs, editor, workspace, handleExportHtml, handleBatchExportHtml, handleSaveAs, onOpenFile, onQuit]);
+  ], [dialogs, editor, workspace, handleExportHtml, handleBatchExportHtml, handleSaveAs, handleShowLabelBacklinks, onOpenFile, onQuit]);
 
   // ── Derive palette commands, hotkeys, and menu handlers ────────────────
   const commands = useMemo(() => toPaletteCommands(commandDefs), [commandDefs]);
@@ -293,5 +328,7 @@ export function useAppOverlays({
     indexer,
     searchVersion,
     openPalette: () => dialogs.setPaletteOpen(true),
+    labelBacklinks,
+    closeLabelBacklinks: () => setLabelBacklinks(null),
   };
 }

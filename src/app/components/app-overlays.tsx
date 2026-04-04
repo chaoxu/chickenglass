@@ -1,5 +1,6 @@
 import { AboutDialog } from "./about-dialog";
 import { CommandPalette } from "./command-palette";
+import { DocumentLabelBacklinksDialog } from "./document-label-backlinks-dialog";
 import { GotoLineDialog } from "./goto-line-dialog";
 import { SearchPanel } from "./search-panel";
 import { SettingsDialog } from "./settings-dialog";
@@ -21,7 +22,7 @@ interface AppOverlaysProps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "handleSearchResult" | "pluginManager" | "handleGotoLine" | "editorMode"
+    "handleSearchResult" | "pluginManager" | "handleGotoLine" | "handleOutlineSelect" | "editorMode"
   >;
   dialogs: UseDialogsReturn;
   overlays: AppOverlayController;
@@ -43,6 +44,18 @@ export function AppOverlays({
         open={dialogs.paletteOpen}
         onOpenChange={dialogs.setPaletteOpen}
         commands={overlays.commands}
+      />
+      <DocumentLabelBacklinksDialog
+        result={overlays.labelBacklinks}
+        onOpenChange={(open) => {
+          if (!open) {
+            overlays.closeLabelBacklinks();
+          }
+        }}
+        onSelect={(item) => {
+          editor.handleOutlineSelect(item.from);
+          overlays.closeLabelBacklinks();
+        }}
       />
       <SearchPanel
         open={dialogs.searchOpen}
