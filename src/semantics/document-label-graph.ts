@@ -1,5 +1,10 @@
 import { syntaxTree } from "@codemirror/language";
-import { type EditorState, StateField, type Transaction } from "@codemirror/state";
+import {
+  type EditorState,
+  StateField,
+  type Text,
+  type Transaction,
+} from "@codemirror/state";
 import { isIdentChar, isSpaceTab } from "../parser/char-utils";
 import { readBracedLabelId } from "../parser/label-utils";
 import { formatBlockHeader } from "../plugins/block-render";
@@ -288,13 +293,17 @@ function buildReferencesByTarget(
 
 function buildHeadingDefinitions(
   analysis: DocumentAnalysis,
-  doc: string,
+  doc: Text,
 ): DocumentLabelDefinition[] {
   const definitions: DocumentLabelDefinition[] = [];
 
   for (const heading of analysis.headings) {
     if (!heading.id) continue;
-    const span = findHeadingIdSpan(doc.slice(heading.from, heading.to), heading.from, heading.id);
+    const span = findHeadingIdSpan(
+      doc.sliceString(heading.from, heading.to),
+      heading.from,
+      heading.id,
+    );
     if (!span) continue;
     definitions.push({
       id: heading.id,
@@ -316,13 +325,13 @@ function buildHeadingDefinitions(
 
 function buildEquationDefinitions(
   analysis: DocumentAnalysis,
-  doc: string,
+  doc: Text,
 ): DocumentLabelDefinition[] {
   const definitions: DocumentLabelDefinition[] = [];
 
   for (const equation of analysis.equations) {
     const span = findEquationLabelSpan(
-      doc.slice(equation.labelFrom, equation.labelTo),
+      doc.sliceString(equation.labelFrom, equation.labelTo),
       equation.labelFrom,
       equation.id,
     );
@@ -349,7 +358,7 @@ function buildEquationDefinitions(
 function buildBlockDefinitions(
   state: EditorState,
   analysis: DocumentAnalysis,
-  doc: string,
+  doc: Text,
 ): DocumentLabelDefinition[] {
   const counters = state.field(blockCounterField, false);
   if (!counters) return [];
@@ -363,7 +372,7 @@ function buildBlockDefinitions(
     if (!div || div.attrFrom === undefined || div.attrTo === undefined) continue;
 
     const span = findAttributeIdSpan(
-      doc.slice(div.attrFrom, div.attrTo),
+      doc.sliceString(div.attrFrom, div.attrTo),
       div.attrFrom,
       block.id,
     );
@@ -401,7 +410,7 @@ function buildBlockDefinitions(
 function buildDefinitions(
   state: EditorState,
   analysis: DocumentAnalysis,
-  doc: string,
+  doc: Text,
 ): DocumentLabelDefinition[] {
   const definitions = [
     ...buildHeadingDefinitions(analysis, doc),
@@ -414,7 +423,7 @@ function buildDefinitions(
 
 function buildReferences(
   analysis: DocumentAnalysis,
-  doc: string,
+  doc: Text,
   definitionsById: ReadonlyMap<string, readonly DocumentLabelDefinition[]>,
 ): DocumentLabelReference[] {
   const references: DocumentLabelReference[] = [];
@@ -438,7 +447,7 @@ function buildReferences(
       continue;
     }
 
-    const raw = doc.slice(ref.from, ref.to);
+    const raw = doc.sliceString(ref.from, ref.to);
     let searchFrom = 0;
     for (let index = 0; index < ref.ids.length; index += 1) {
       const id = ref.ids[index];
@@ -480,7 +489,7 @@ export function isValidDocumentLabelId(id: string): boolean {
 
 export function buildDocumentLabelGraph(state: EditorState): DocumentLabelGraph {
   const analysis = getAnalysisOrRecompute(state);
-  const doc = state.doc.toString();
+  const doc = state.doc;
   const definitions = buildDefinitions(state, analysis, doc);
   const definitionsById = buildDefinitionsById(definitions);
   const references = buildReferences(analysis, doc, definitionsById);
