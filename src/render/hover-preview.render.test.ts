@@ -22,7 +22,7 @@ vi.mock("./media-preview", () => ({
     resolveLocalMediaPreviewMock(view, src),
 }));
 
-const { buildBlockPreviewBodyForTest } = await import("./hover-preview");
+const { buildBlockPreviewBodyForTest, normalizeWidePreviewContentForTest } = await import("./hover-preview");
 
 function createPreviewView(
   doc: string,
@@ -74,10 +74,18 @@ describe("hover preview block rendering", () => {
     );
 
     const body = buildBlockPreviewBodyForTest(view, getNumberedBlock(view, "tbl:main"));
-    expect(body?.querySelector(".cf-block-table table")).toBeTruthy();
+    expect(body?.querySelector(".cf-hover-preview-table-scroll")).toBeTruthy();
+    expect(body?.querySelector(".cf-hover-preview-table-scroll table")).toBeTruthy();
     expect(body?.querySelector(".cf-block-caption")?.textContent).toContain("Results table");
 
     view.destroy();
+  });
+
+  it("marks fenced code blocks with the explicit preview overflow class", () => {
+    const body = document.createElement("div");
+    body.innerHTML = '<pre><code class="language-typescript">const veryLongIdentifierWithoutAnyBreaks = "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz";</code></pre>';
+    normalizeWidePreviewContentForTest(body);
+    expect(body?.querySelector("pre.cf-hover-preview-code-block > code.language-typescript")).toBeTruthy();
   });
 
   it("uses resolved local media overrides for figure previews", () => {

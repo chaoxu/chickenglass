@@ -38,6 +38,8 @@ import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 // ── Singleton tooltip element ───────────────────────────────────────────────
 
 let tooltipEl: HTMLDivElement | null = null;
+const HOVER_PREVIEW_TABLE_SCROLL_CLASS = "cf-hover-preview-table-scroll";
+const HOVER_PREVIEW_CODE_BLOCK_CLASS = "cf-hover-preview-code-block";
 
 function getTooltipEl(): HTMLDivElement {
   if (!tooltipEl) {
@@ -315,6 +317,26 @@ function appendMediaFallback(
   }
 }
 
+function normalizeWidePreviewContent(body: HTMLElement): void {
+  for (const table of body.querySelectorAll("table")) {
+    const parent = table.parentElement;
+    if (!parent || parent.classList.contains(HOVER_PREVIEW_TABLE_SCROLL_CLASS)) continue;
+
+    const scroll = document.createElement("div");
+    scroll.className = HOVER_PREVIEW_TABLE_SCROLL_CLASS;
+    parent.insertBefore(scroll, table);
+    scroll.appendChild(table);
+  }
+
+  for (const pre of body.querySelectorAll("pre")) {
+    pre.classList.add(HOVER_PREVIEW_CODE_BLOCK_CLASS);
+  }
+}
+
+export function normalizeWidePreviewContentForTest(body: HTMLElement): void {
+  normalizeWidePreviewContent(body);
+}
+
 function buildBlockPreviewBody(
   view: EditorView,
   block: NumberedBlock,
@@ -334,6 +356,7 @@ function buildBlockPreviewBody(
     unavailableLocalMedia,
   } = buildImageUrlOverrides(view, text);
   renderBlockContentToDom(body, text, buildBlockContentOptions(view, macros, overrides));
+  normalizeWidePreviewContent(body);
   appendMediaFallback(body, loadingLocalMedia, unavailableLocalMedia);
   return body;
 }

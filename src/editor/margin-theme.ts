@@ -1,7 +1,5 @@
-import { contentFont, monoFont } from "../constants/editor-constants";
+import { monoFont } from "../constants/editor-constants";
 import {
-  HOVER_PREVIEW_MAX_HEIGHT,
-  HOVER_PREVIEW_MAX_WIDTH,
   SIDENOTE_NUMBER_MARGIN_RIGHT,
   SIDENOTE_OFFSET,
   SIDENOTE_WIDTH,
@@ -91,53 +89,6 @@ export const marginThemeStyles = {
     marginRight: "2px",
   },
 
-  /* Hover preview tooltip for cross-references and citations */
-  ".cf-hover-preview": {
-    maxWidth: HOVER_PREVIEW_MAX_WIDTH,
-    maxHeight: HOVER_PREVIEW_MAX_HEIGHT,
-    overflow: "auto",
-    padding: "var(--cf-spacing-sm) var(--cf-spacing-md)",
-    fontSize: "0.9em",
-    lineHeight: "1.5",
-    fontFamily: contentFont,
-  },
-  ".cf-hover-preview-header": {
-    fontWeight: "700",
-    marginBottom: "var(--cf-spacing-xs)",
-    color: "var(--cf-fg)",
-  },
-  ".cf-hover-preview-body": {
-    color: "var(--cf-muted)",
-  },
-  /* Block-rendered content inside hover previews needs paragraph spacing */
-  ".cf-hover-preview-body p": {
-    margin: "0.25em 0",
-  },
-  ".cf-hover-preview-body p:first-child": {
-    marginTop: "0",
-  },
-  ".cf-hover-preview-body p:last-child": {
-    marginBottom: "0",
-  },
-  /* Display math inside hover previews — uses cf-math-display from markdownToHtml */
-  ".cf-hover-preview-body .cf-math-display": {
-    margin: "0",
-    textAlign: "center",
-  },
-  ".cf-hover-preview-unresolved": {
-    color: "var(--cf-muted)",
-    fontStyle: "italic",
-  },
-  ".cf-citation-preview": {
-    whiteSpace: "normal",
-  },
-  ".cf-hover-preview-citation": {
-    color: "var(--cf-muted)",
-    marginBottom: "var(--cf-spacing-xs)",
-  },
-  ".cf-hover-preview-citation:last-child": {
-    marginBottom: "0",
-  },
   ".cf-reference-completion-tooltip > ul": {
     maxHeight: "18em",
   },
@@ -165,10 +116,5 @@ export const marginThemeStyles = {
     gridColumn: "2",
     fontSize: "0.9em",
     lineHeight: "1.45",
-  },
-  ".cf-hover-preview-separator": {
-    border: "none",
-    borderTop: "1px solid var(--cf-border)",
-    margin: "var(--cf-spacing-xs) 0",
   },
 };
