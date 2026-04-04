@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, lazy, Suspense } from "react";
+import { useRef, useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { EditorView } from "@codemirror/view";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
@@ -17,6 +17,8 @@ import {
 } from "../../semantics/codemirror-source";
 import { bibDataField } from "../../citations/citation-render";
 import { frontmatterField, type EditorMode } from "../../editor";
+import { mathMacrosField } from "../../render";
+import { serializeMacros } from "../../render/render-core";
 
 /** Lazy-loaded read-mode view — kept out of the startup bundle (read mode is deferred). */
 const ReadModeView = lazy(() =>
@@ -48,6 +50,7 @@ export function EditorPane({
 }: EditorPaneProps) {
   const isReadMode = editorMode === "read";
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [sidenoteRevision, setSidenoteRevision] = useState(0);
 
   // Stable ref so the CM6 listener always sees the latest callback
   // without forcing an editor re-creation.
@@ -56,6 +59,12 @@ export function EditorPane({
 
   const onDiagnosticsChangeRef = useRef(onDiagnosticsChange);
   useEffect(() => { onDiagnosticsChangeRef.current = onDiagnosticsChange; }, [onDiagnosticsChange]);
+
+  const sidenotesCollapsedRef = useRef(sidenotesCollapsed);
+  useEffect(() => { sidenotesCollapsedRef.current = sidenotesCollapsed; }, [sidenotesCollapsed]);
+
+  const isReadModeRef = useRef(isReadMode);
+  useEffect(() => { isReadModeRef.current = isReadMode; }, [isReadMode]);
 
   // CM6 extension that detects heading-slice revision changes and
   // pushes fresh headings into React.  Created once (stable reference)
@@ -93,9 +102,38 @@ export function EditorPane({
     });
   }, []);
 
+  const sidenoteTrackingExtension = useMemo(() => {
+    let lastFootnoteRev: number | undefined;
+    let lastMacrosKey: string | undefined;
+
+    return EditorView.updateListener.of((update) => {
+      if (isReadModeRef.current || sidenotesCollapsedRef.current) return;
+
+      const analysis = update.state.field(documentSemanticsField, false);
+      if (!analysis) return;
+
+      const footnoteRev = getDocumentAnalysisSliceRevision(analysis, "footnotes");
+      const macros = update.state.field(mathMacrosField, false) ?? {};
+      const macrosKey = serializeMacros(macros);
+      const footnotesChanged = footnoteRev !== lastFootnoteRev;
+      const macrosChanged = macrosKey !== lastMacrosKey;
+
+      lastFootnoteRev = footnoteRev;
+      lastMacrosKey = macrosKey;
+
+      if (!footnotesChanged && !macrosChanged && !update.geometryChanged) return;
+      setSidenoteRevision((value) => value + 1);
+    });
+  }, []);
+
   const extensions = useMemo(
-    () => [...(editorOptions.extensions ?? []), headingTrackingExtension, diagnosticTrackingExtension],
-    [editorOptions.extensions, headingTrackingExtension, diagnosticTrackingExtension],
+    () => [
+      ...(editorOptions.extensions ?? []),
+      headingTrackingExtension,
+      diagnosticTrackingExtension,
+      sidenoteTrackingExtension,
+    ],
+    [editorOptions.extensions, headingTrackingExtension, diagnosticTrackingExtension, sidenoteTrackingExtension],
   );
 
   const editorState = useEditor(containerRef, {
@@ -148,7 +186,7 @@ export function EditorPane({
         </Suspense>
       )}
       {/* Portal target — SidenoteMargin renders into the CM6 scroller via DOM portal */}
-      {!isReadMode && !sidenotesCollapsed && <SidenoteMargin view={view} />}
+      {!isReadMode && !sidenotesCollapsed && <SidenoteMargin view={view} revision={sidenoteRevision} />}
     </div>
   );
 }
