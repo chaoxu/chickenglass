@@ -3,9 +3,12 @@ import { createRoot } from "react-dom/client";
 import { AppShell } from "./app.tsx";
 import { isTauri } from "../lib/tauri";
 import { configureExternalUrlOpener } from "../lib/open-link";
+import { installDesktopRuntimeLogging } from "./runtime-logger";
 import "../globals.css";
 
 async function bootstrap(): Promise<void> {
+  await installDesktopRuntimeLogging();
+
   const rootEl = document.getElementById("app");
   if (!rootEl) {
     throw new Error("Missing #app element");
