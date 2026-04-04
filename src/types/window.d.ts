@@ -46,6 +46,7 @@ declare global {
      */
     __app?: {
       openFile: (path: string) => Promise<void>;
+      openFileWithContent: (name: string, content: string) => Promise<void>;
       saveFile: () => Promise<void>;
       closeFile: (options?: { discard?: boolean }) => Promise<boolean>;
       setSearchOpen: (open: boolean) => void;

@@ -3,9 +3,10 @@
 /* global window */
 
 import console from "node:console";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import {
   PERF_REPORT_VERSION,
   buildPerfRegressionReport,
@@ -14,33 +15,66 @@ import {
 import { connectEditor, openFile, switchToMode, sleep, createArgParser, waitForDebugBridge, disconnectBrowser } from "./test-helpers.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
 
-const argv = process.argv.slice(2);
-const hasExplicitCommand = argv[0] === "capture" || argv[0] === "compare";
-const command = hasExplicitCommand ? argv[0] : "capture";
-const options = hasExplicitCommand ? argv.slice(1) : argv;
-const chromeArgs = parseChromeArgs(options);
-const { getFlag, getIntFlag } = createArgParser(options);
-
 function ensureDir(path) {
   mkdirSync(dirname(path), { recursive: true });
 }
 
+async function evaluateStep(page, label, callback, arg) {
+  try {
+    return await page.evaluate(callback, arg);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${label}: ${message}`);
+  }
+}
+
 async function clearPerf(page) {
-  await page.evaluate(async () => {
+  await evaluateStep(page, "clearPerf", async () => {
     await window.__cfDebug.clearPerf();
   });
 }
 
 async function getPerfSnapshot(page) {
-  return page.evaluate(async () => window.__cfDebug.perfSummary());
+  return evaluateStep(page, "getPerfSnapshot", async () => window.__cfDebug.perfSummary());
 }
 
 async function getSemanticRevisionInfo(page) {
   return page.evaluate(() => window.__cmDebug.semantics());
 }
 
+async function discardDirtyPerfState(page) {
+  try {
+    await page.evaluate(async () => {
+      const app = window.__app;
+      if (!app?.closeFile) {
+        return;
+      }
+      try {
+        await app.closeFile({ discard: true });
+      } catch {
+        // Ignore cleanup failures — the next run will reload from scratch.
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes("Execution context was destroyed")) {
+      throw error;
+    }
+  }
+}
+
 const SCROLL_STEP_SIZE = 30;
 const SCROLL_FIXTURE = "cogirth/main2.md";
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(SCRIPT_DIR, "..");
+const TYPING_BURST_EXTERNAL_DEMO_ROOT = "/Users/chaoxu/playground/coflat/demo";
+
+export const TYPING_BURST_REQUIRED_METRICS = [
+  "typing.wall_ms",
+  "typing.dispatch_mean_ms",
+  "typing.dispatch_max_ms",
+  "typing.settle_ms",
+];
 
 async function runSteppedScroll(page) {
   return page.evaluate(async (stepSize) => {
@@ -74,9 +108,25 @@ function steppedScrollMetrics(result) {
   ];
 }
 
-const TYPING_BURST_CASES = [
-  { key: "index", path: "index.md" },
-  { key: "rankdecrease", path: "rankdecrease/main.md" },
+export const TYPING_BURST_CASES = [
+  {
+    key: "index",
+    displayPath: "demo/index.md",
+    virtualPath: "index.md",
+    candidates: [
+      resolve(REPO_ROOT, "demo/index.md"),
+      resolve(TYPING_BURST_EXTERNAL_DEMO_ROOT, "index.md"),
+    ],
+  },
+  {
+    key: "rankdecrease",
+    displayPath: "demo/rankdecrease/main.md",
+    virtualPath: "rankdecrease/main.md",
+    candidates: [
+      resolve(REPO_ROOT, "demo/rankdecrease/main.md"),
+      resolve(TYPING_BURST_EXTERNAL_DEMO_ROOT, "rankdecrease/main.md"),
+    ],
+  },
 ];
 const TYPING_BURST_INSERT_COUNT = 100;
 
@@ -118,7 +168,7 @@ function pickAnchor(line) {
   return line.from + Math.min(base + 8, Math.max(line.text.length - 1, 0));
 }
 
-function findTypingBurstPositions(text) {
+export function findTypingBurstPositions(text) {
   const lines = splitLinesWithOffsets(text);
   const frontmatterEnd = findFrontmatterEnd(lines);
 
@@ -143,7 +193,7 @@ function findTypingBurstPositions(text) {
   }
 
   return {
-    top_after_frontmatter: {
+    after_frontmatter: {
       line: topLine.number,
       anchor: pickAnchor(topLine),
     },
@@ -154,27 +204,43 @@ function findTypingBurstPositions(text) {
   };
 }
 
-async function openCleanRichFile(page, path) {
-  await page.evaluate(async () => {
-    await window.__app?.closeFile?.({ discard: true }).catch?.(() => false);
-    window.__app.setMode("rich");
-  });
-  await openFile(page, path);
-  return page.evaluate(() => window.__cmView.state.doc.toString());
+function resolveTypingBurstFixture(caseDef) {
+  const resolvedPath = caseDef.candidates.find((candidate) => existsSync(candidate));
+  if (!resolvedPath) {
+    throw new Error(
+      `Missing typing benchmark fixture for ${caseDef.displayPath}. Tried: ${caseDef.candidates.join(", ")}`,
+    );
+  }
+
+  return {
+    ...caseDef,
+    content: readFileSync(resolvedPath, "utf8"),
+  };
+}
+
+async function openCleanRichDocument(page, path, content) {
+  const docText = await evaluateStep(page, "openCleanRichDocument", async ({ nextPath, nextContent }) => {
+    const app = window.__app;
+    if (!app?.openFileWithContent) {
+      throw new Error("window.__app.openFileWithContent is unavailable.");
+    }
+    if (app.closeFile) {
+      try {
+        await app.closeFile({ discard: true });
+      } catch {
+        // Ignore stale close failures between perf reps.
+      }
+    }
+    app.setMode("rich");
+    await app.openFileWithContent(nextPath, nextContent);
+    return window.__cmView.state.doc.toString();
+  }, { nextPath: path, nextContent: content });
+  await sleep(200);
+  return docText;
 }
 
 async function measureTypingBurst(page, anchor, insertCount) {
-  return page.evaluate(async ({ nextAnchor, count }) => {
-    const percentile = (values, p) => {
-      if (values.length === 0) return 0;
-      const sorted = [...values].sort((a, b) => a - b);
-      const index = Math.min(
-        sorted.length - 1,
-        Math.max(0, Math.ceil((p / 100) * sorted.length) - 1),
-      );
-      return sorted[index];
-    };
-
+  return evaluateStep(page, "measureTypingBurst", async ({ nextAnchor, count }) => {
     const mean = (values) =>
       values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
 
@@ -183,9 +249,8 @@ async function measureTypingBurst(page, anchor, insertCount) {
     view.focus();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-    const before = window.__cmDebug.semantics();
     const timings = [];
-    const totalStart = performance.now();
+    const wallStart = performance.now();
     for (let i = 0; i < count; i += 1) {
       const pos = view.state.selection.main.anchor;
       const t0 = performance.now();
@@ -195,50 +260,39 @@ async function measureTypingBurst(page, anchor, insertCount) {
       });
       timings.push(performance.now() - t0);
     }
-    const totalMs = performance.now() - totalStart;
+    const wallMs = performance.now() - wallStart;
     const settleStart = performance.now();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const settleMs = performance.now() - settleStart;
-    const after = window.__cmDebug.semantics();
 
     return {
-      totalMs,
+      wallMs,
       meanDispatchMs: mean(timings),
-      p95DispatchMs: percentile(timings, 95),
       maxDispatchMs: Math.max(...timings, 0),
       settleMs,
-      semanticRevisionDelta: after.revision - before.revision,
-      changedSliceCount: Object.entries(after.slices)
-        .filter(([name, value]) => value !== before.slices[name])
-        .map(([name]) => name)
-        .length,
     };
   }, { nextAnchor: anchor, count: insertCount });
 }
 
-function typingBurstMetrics(caseKey, positionKey, result, line) {
-  const prefix = `typing.${caseKey}.${positionKey}`;
+export function typingBurstMetrics(caseKey, positionKey, result) {
+  const withContext = (name) => `${name}.${caseKey}.${positionKey}`;
   return [
-    { name: `${prefix}.line`, unit: "count", value: line },
-    { name: `${prefix}.total_ms`, unit: "ms", value: result.totalMs },
-    { name: `${prefix}.mean_dispatch_ms`, unit: "ms", value: result.meanDispatchMs },
-    { name: `${prefix}.p95_dispatch_ms`, unit: "ms", value: result.p95DispatchMs },
-    { name: `${prefix}.max_dispatch_ms`, unit: "ms", value: result.maxDispatchMs },
-    { name: `${prefix}.settle_ms`, unit: "ms", value: result.settleMs },
+    { name: withContext("typing.wall_ms"), unit: "ms", value: result.wallMs },
     {
-      name: `${prefix}.semantic_revision_delta`,
-      unit: "count",
-      value: result.semanticRevisionDelta,
+      name: withContext("typing.dispatch_mean_ms"),
+      unit: "ms",
+      value: result.meanDispatchMs,
     },
     {
-      name: `${prefix}.changed_slice_count`,
-      unit: "count",
-      value: result.changedSliceCount,
+      name: withContext("typing.dispatch_max_ms"),
+      unit: "ms",
+      value: result.maxDispatchMs,
     },
+    { name: withContext("typing.settle_ms"), unit: "ms", value: result.settleMs },
   ];
 }
 
-const scenarios = {
+export const scenarios = {
   "open-index": {
     description: "Reload the app and open demo/index.md in Rich mode.",
     defaultSettleMs: 400,
@@ -343,15 +397,17 @@ const scenarios = {
     defaultSettleMs: 200,
     run: async (page) => {
       const metrics = [];
-      for (const testCase of TYPING_BURST_CASES) {
-        const originalText = await openCleanRichFile(page, testCase.path);
+      for (const testCase of TYPING_BURST_CASES.map(resolveTypingBurstFixture)) {
+        const originalText = await openCleanRichDocument(
+          page,
+          testCase.virtualPath,
+          testCase.content,
+        );
         const positions = findTypingBurstPositions(originalText);
         for (const [positionKey, position] of Object.entries(positions)) {
-          await openCleanRichFile(page, testCase.path);
+          await openCleanRichDocument(page, testCase.virtualPath, testCase.content);
           const result = await measureTypingBurst(page, position.anchor, TYPING_BURST_INSERT_COUNT);
-          metrics.push(
-            ...typingBurstMetrics(testCase.key, positionKey, result, position.line),
-          );
+          metrics.push(...typingBurstMetrics(testCase.key, positionKey, result));
         }
       }
       return { metrics };
@@ -447,6 +503,19 @@ Options:
 `);
 }
 
+function parseCliArgs(argv = process.argv.slice(2)) {
+  const hasExplicitCommand = argv[0] === "capture" || argv[0] === "compare";
+  const command = hasExplicitCommand ? argv[0] : "capture";
+  const options = hasExplicitCommand ? argv.slice(1) : argv;
+
+  return {
+    command,
+    options,
+    chromeArgs: parseChromeArgs(options),
+    ...createArgParser(options),
+  };
+}
+
 async function runScenarioSamples(page, scenarioName, iterations, warmup, settleMs, appUrl) {
   const scenario = scenarios[scenarioName];
   if (!scenario) {
@@ -457,6 +526,7 @@ async function runScenarioSamples(page, scenarioName, iterations, warmup, settle
   const totalRuns = warmup + iterations;
 
   for (let runIndex = 0; runIndex < totalRuns; runIndex += 1) {
+    await discardDirtyPerfState(page);
     await page.goto(appUrl, { waitUntil: "domcontentloaded" });
     await waitForDebugBridge(page);
     await clearPerf(page);
@@ -469,6 +539,7 @@ async function runScenarioSamples(page, scenarioName, iterations, warmup, settle
         metrics: scenarioResult?.metrics ?? [],
       });
     }
+    await discardDirtyPerfState(page);
   }
 
   return snapshots;
@@ -550,7 +621,8 @@ function printComparison(result) {
   console.table([...spanRegressions, ...metricRegressions]);
 }
 
-async function main() {
+export async function main(argv = process.argv.slice(2)) {
+  const { command, options, chromeArgs, getFlag, getIntFlag } = parseCliArgs(argv);
   if (options.includes("--help") || options.includes("-h")) {
     printUsage();
     return;
@@ -626,11 +698,14 @@ async function main() {
 
     throw new Error(`Unknown command "${command}"`);
   } finally {
+    await discardDirtyPerfState(page);
     await disconnectBrowser(page);
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === new URL(process.argv[1], "file:").href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}

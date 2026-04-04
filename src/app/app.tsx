@@ -100,6 +100,7 @@ function AppInner() {
   useAppDebug({
     openProject: (path) => fileDialogs.openProjectInCurrentWindow(path),
     openFile: editor.openFile,
+    openFileWithContent: editor.openFileWithContent,
     saveFile: editor.saveFile,
     closeFile: (options) => editor.closeCurrentFile(options),
     setSearchOpen: dialogs.setSearchOpen,

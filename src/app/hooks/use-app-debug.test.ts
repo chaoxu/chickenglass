@@ -34,6 +34,7 @@ const { useAppDebug } = await import("./use-app-debug");
 
 const openProject = vi.fn(async (_path: string) => true);
 const openFile = vi.fn(async (_path: string) => {});
+const openFileWithContent = vi.fn(async (_name: string, _content: string) => {});
 const saveFile = vi.fn(async () => {});
 const closeFile = vi.fn(async (_options?: { discard?: boolean }) => true);
 const setSearchOpen = vi.fn((_open: boolean) => {});
@@ -45,6 +46,7 @@ const Harness: FC = () => {
   useAppDebug({
     openProject,
     openFile,
+    openFileWithContent,
     saveFile,
     closeFile,
     setSearchOpen,
@@ -72,6 +74,7 @@ describe("useAppDebug", () => {
     nativeDebugMockState.reset();
     openProject.mockClear();
     openFile.mockClear();
+    openFileWithContent.mockClear();
     saveFile.mockClear();
     closeFile.mockClear();
     setSearchOpen.mockClear();
@@ -94,6 +97,7 @@ describe("useAppDebug", () => {
       root.render(createElement(Harness));
     });
 
+    expect(window.__app?.openFileWithContent).toBeDefined();
     expect(window.__tauriSmoke).toBeDefined();
 
     const snapshot = await window.__tauriSmoke?.getWindowState();
