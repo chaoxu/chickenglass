@@ -1,14 +1,19 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { EditorView } from "@codemirror/view";
+import { markdown } from "@codemirror/lang-markdown";
 import { CSS } from "../constants/css-classes";
 import {
   ImageLoadingWidget,
   ImageWidget,
   PdfLoadingWidget,
   cursorImageRelationChanged,
+  imageRenderPlugin,
   trackedCacheChanged,
 } from "./image-render";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
+import { createTestView } from "../test-utils";
+import * as mediaPreview from "./media-preview";
 
 describe("ImageWidget", () => {
   describe("createDOM", () => {
@@ -480,5 +485,110 @@ describe("trackedCacheChanged", () => {
     const imgCache = new Map<string, unknown>();
     const paths = new Set(["a.pdf"]);
     expect(trackedCacheChanged(paths, oldPdf, newPdf, imgCache, imgCache)).toBe(false);
+  });
+});
+
+describe("ImageRenderPlugin incremental docChanged (#824)", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+    vi.restoreAllMocks();
+  });
+
+  function createImageView(doc: string): EditorView {
+    view = createTestView(doc, {
+      cursorPos: doc.length,
+      extensions: [markdown(), imageRenderPlugin],
+    });
+    return view;
+  }
+
+  it("does not rescan unchanged images when typing ordinary prose away from images", () => {
+    const doc = [
+      "![first](https://example.com/a.png)",
+      "",
+      "ordinary prose between the figures",
+      "",
+      "![second](https://example.com/b.png)",
+      "",
+      "tail text",
+    ].join("\n");
+    const proseStart = doc.indexOf("ordinary prose");
+    const resolvePreview = vi.spyOn(mediaPreview, "resolveLocalMediaPreview");
+
+    const view = createImageView(doc);
+    expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(2);
+
+    resolvePreview.mockClear();
+    view.dispatch({
+      changes: {
+        from: proseStart + "ordinary ".length,
+        insert: "fast ",
+      },
+    });
+
+    expect(resolvePreview).not.toHaveBeenCalled();
+    expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(2);
+  });
+
+  it("rebuilds only the dirty image node when image syntax changes", () => {
+    const doc = [
+      "![first](https://example.com/a.png)",
+      "",
+      "middle prose",
+      "",
+      "![second](https://example.com/b.png)",
+      "",
+      "tail text",
+    ].join("\n");
+    const oldUrl = "https://example.com/a.png";
+    const nextUrl = "https://example.com/updated.png";
+    const resolvePreview = vi.spyOn(mediaPreview, "resolveLocalMediaPreview");
+
+    const view = createImageView(doc);
+    resolvePreview.mockClear();
+
+    view.dispatch({
+      changes: {
+        from: doc.indexOf(oldUrl),
+        to: doc.indexOf(oldUrl) + oldUrl.length,
+        insert: nextUrl,
+      },
+    });
+
+    expect(resolvePreview).toHaveBeenCalledTimes(1);
+    expect(resolvePreview.mock.calls[0]?.[1]).toBe(nextUrl);
+
+    const renderedSources = [...view.dom.querySelectorAll(`.${CSS.imageWrapper} img`)]
+      .map((img) => img.getAttribute("src"));
+    expect(renderedSources.some((src) => src?.includes("updated.png"))).toBe(true);
+    expect(renderedSources.some((src) => src?.includes("b.png"))).toBe(true);
+  });
+
+  it("removes stale widgets when an image node is destroyed", () => {
+    const doc = [
+      "![first](https://example.com/a.png)",
+      "",
+      "middle prose",
+      "",
+      "![second](https://example.com/b.png)",
+      "",
+      "tail text",
+    ].join("\n");
+
+    const view = createImageView(doc);
+    expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(2);
+
+    view.dispatch({
+      changes: { from: 0, to: 1, insert: "" },
+    });
+
+    const renderedSources = [...view.dom.querySelectorAll(`.${CSS.imageWrapper} img`)]
+      .map((img) => img.getAttribute("src"));
+    expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(1);
+    expect(renderedSources).toHaveLength(1);
+    expect(renderedSources[0]).toContain("b.png");
   });
 });
