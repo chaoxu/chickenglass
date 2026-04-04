@@ -24,26 +24,87 @@ import {
   foldEffect,
   unfoldEffect,
   foldedRanges,
-  syntaxTree,
 } from "@codemirror/language";
 import { buildDecorations, RenderWidget } from "../render/render-core";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import {
+  documentSemanticsField,
+  getDocumentAnalysisSliceRevision,
+} from "../semantics/codemirror-source";
 
-/** Extract heading level (1–6) from a node name, or 0 if not a heading. */
-function headingLevel(name: string): number {
-  const m = /^ATXHeading(\d)$/.exec(name);
-  return m ? Number(m[1]) : 0;
+interface HeadingFoldSection {
+  readonly headingFrom: number;
+  readonly foldFrom: number;
+  readonly foldTo: number;
+  readonly level: number;
 }
 
-/**
- * Cheap fingerprint of heading structure: "level@line,level@line,...".
- * Changes only when headings are added, removed, or change level.
- * Used to skip the expensive nested tree walk in buildFoldToggles (#514).
- */
-function headingFingerprint(state: EditorState): string {
-  return state.field(documentSemanticsField).headings
-    .map((heading) => String(heading.level))
-    .join(",");
+interface HeadingFoldState {
+  readonly sections: readonly HeadingFoldSection[];
+  readonly sectionByHeadingFrom: ReadonlyMap<number, HeadingFoldSection>;
+  readonly decorations: DecorationSet;
+}
+
+function buildSectionByHeadingFrom(
+  sections: readonly HeadingFoldSection[],
+): ReadonlyMap<number, HeadingFoldSection> {
+  return new Map(sections.map((section) => [section.headingFrom, section]));
+}
+
+function foldToBeforeHeading(state: EditorState, headingFrom: number): number {
+  const line = state.doc.lineAt(headingFrom);
+  return line.from > 0 ? line.from - 1 : line.from;
+}
+
+function buildHeadingFoldSections(
+  state: EditorState,
+): readonly HeadingFoldSection[] {
+  const { headings } = state.field(documentSemanticsField);
+  if (headings.length === 0) return [];
+
+  const nextHeadingIndexByLevel: Array<number | undefined> = [
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  ];
+  const sections: HeadingFoldSection[] = [];
+
+  for (let index = headings.length - 1; index >= 0; index--) {
+    const heading = headings[index];
+    let nextBoundaryIndex: number | undefined;
+
+    for (let level = 1; level <= heading.level; level++) {
+      const candidate = nextHeadingIndexByLevel[level];
+      if (candidate !== undefined && (
+        nextBoundaryIndex === undefined || candidate < nextBoundaryIndex
+      )) {
+        nextBoundaryIndex = candidate;
+      }
+    }
+
+    const line = state.doc.lineAt(heading.to);
+    const foldFrom = line.to;
+    const foldTo = nextBoundaryIndex === undefined
+      ? state.doc.length
+      : foldToBeforeHeading(state, headings[nextBoundaryIndex].from);
+
+    if (foldTo > foldFrom) {
+      sections.push({
+        headingFrom: heading.from,
+        foldFrom,
+        foldTo,
+        level: heading.level,
+      });
+    }
+
+    nextHeadingIndexByLevel[heading.level] = index;
+  }
+
+  sections.reverse();
+  return sections;
 }
 
 /**
@@ -53,40 +114,9 @@ function headingFingerprint(state: EditorState): string {
  * heading line to just before the next heading of level <= N (or end of doc).
  */
 const headingFoldService = foldService.of((state, lineStart, _lineEnd) => {
-  const tree = syntaxTree(state);
-  let headingNode: { from: number; to: number; level: number } | null = null;
-
-  tree.iterate({
-    from: lineStart,
-    to: lineStart + 1,
-    enter(node) {
-      const level = headingLevel(node.name);
-      if (level > 0 && node.from === lineStart) {
-        headingNode = { from: node.from, to: node.to, level };
-      }
-    },
-  });
-
-  if (!headingNode) return null;
-  const { level, to: headingEnd } = headingNode;
-
-  const line = state.doc.lineAt(headingEnd);
-  let foldEnd = state.doc.length;
-
-  tree.iterate({
-    from: line.to + 1,
-    enter(node) {
-      const nl = headingLevel(node.name);
-      if (nl > 0 && nl <= level) {
-        const prevLine = state.doc.lineAt(node.from);
-        foldEnd = prevLine.from > 0 ? prevLine.from - 1 : prevLine.from;
-        return false;
-      }
-    },
-  });
-
-  if (foldEnd <= line.to) return null;
-  return { from: line.to, to: foldEnd };
+  const foldState = state.field(headingFoldField, false);
+  const section = foldState?.sectionByHeadingFrom.get(lineStart);
+  return section ? { from: section.foldFrom, to: section.foldTo } : null;
 });
 
 /** Widget that renders a fold/unfold toggle inline with a heading. */
@@ -146,88 +176,72 @@ class FoldToggleWidget extends RenderWidget {
 }
 
 /** Build fold toggle decorations for all foldable headings. */
-function buildFoldToggles(state: EditorState): DecorationSet {
-  const tree = syntaxTree(state);
+function buildFoldToggles(
+  state: EditorState,
+  sections: readonly HeadingFoldSection[],
+): DecorationSet {
+  if (sections.length === 0) return Decoration.none;
+
   const items: Range<Decoration>[] = [];
   const folded = foldedRanges(state);
 
-  tree.iterate({
-    enter(node) {
-      const level = headingLevel(node.name);
-      if (level === 0) return;
+  for (const section of sections) {
+    let isFolded = false;
+    folded.between(section.foldFrom, section.foldFrom + 1, () => {
+      isFolded = true;
+    });
 
-      const line = state.doc.lineAt(node.from);
-      // Check if this heading has a foldable range
-      let foldEnd = state.doc.length;
-
-      tree.iterate({
-        from: line.to + 1,
-        enter(n) {
-          const nl = headingLevel(n.name);
-          if (nl > 0 && nl <= level) {
-            const prevLine = state.doc.lineAt(n.from);
-            foldEnd = prevLine.from > 0 ? prevLine.from - 1 : prevLine.from;
-            return false;
-          }
-        },
-      });
-
-      const hasFoldRange = foldEnd > line.to;
-      if (!hasFoldRange) return;
-
-      // Check if currently folded
-      let isFolded = false;
-      folded.between(line.to, line.to + 1, () => {
-        isFolded = true;
-      });
-
-      const widget = new FoldToggleWidget(node.from, isFolded, level);
-      // Line class for position:relative context
-      items.push(
-        Decoration.line({ class: "cf-fold-line" }).range(node.from),
-      );
-      items.push(
-        Decoration.widget({ widget, side: -1 }).range(node.from),
-      );
-    },
-  });
+    const widget = new FoldToggleWidget(
+      section.headingFrom,
+      isFolded,
+      section.level,
+    );
+    items.push(
+      Decoration.line({ class: "cf-fold-line" }).range(section.headingFrom),
+    );
+    items.push(
+      Decoration.widget({ widget, side: -1 }).range(section.headingFrom),
+    );
+  }
 
   return buildDecorations(items);
 }
 
-// Cache fold toggles: most edits don't add/remove headings, so we can
-// map positions instead of rebuilding the nested tree walk (~1.7ms).
-let _foldHeadingKey = "";
-let _foldDecos: DecorationSet = Decoration.none;
+function createHeadingFoldState(state: EditorState): HeadingFoldState {
+  const sections = buildHeadingFoldSections(state);
+  return {
+    sections,
+    sectionByHeadingFrom: buildSectionByHeadingFrom(sections),
+    decorations: buildFoldToggles(state, sections),
+  };
+}
 
-const foldToggleField = StateField.define<DecorationSet>({
-  create(state) {
-    _foldDecos = buildFoldToggles(state);
-    _foldHeadingKey = headingFingerprint(state);
-    return _foldDecos;
-  },
+const headingFoldField = StateField.define<HeadingFoldState>({
+  create: createHeadingFoldState,
   update(value, tr) {
-    // Fold/unfold effects always need a full rebuild (fold state changed)
+    const before = tr.startState.field(documentSemanticsField);
+    const after = tr.state.field(documentSemanticsField);
+    const headingsChanged = getDocumentAnalysisSliceRevision(before, "headings")
+      !== getDocumentAnalysisSliceRevision(after, "headings");
+
+    if (tr.docChanged || headingsChanged) {
+      return createHeadingFoldState(tr.state);
+    }
+
     if (tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect))) {
-      _foldDecos = buildFoldToggles(tr.state);
-      _foldHeadingKey = headingFingerprint(tr.state);
-      return _foldDecos;
+      return {
+        ...value,
+        decorations: buildFoldToggles(tr.state, value.sections),
+      };
     }
-    if (tr.docChanged) {
-      const key = headingFingerprint(tr.state);
-      if (key === _foldHeadingKey) {
-        // Heading structure unchanged — just shift positions
-        _foldDecos = _foldDecos.map(tr.changes);
-        return _foldDecos;
-      }
-      _foldHeadingKey = key;
-      _foldDecos = buildFoldToggles(tr.state);
-      return _foldDecos;
-    }
+
     return value;
   },
+  compare(a, b) {
+    return a.sections === b.sections && a.decorations === b.decorations;
+  },
   provide(field) {
-    return EditorView.decorations.from(field);
+    return EditorView.decorations.from(field, (value) => value.decorations);
   },
 });
 
@@ -235,6 +249,6 @@ const foldToggleField = StateField.define<DecorationSet>({
 export const headingFold: Extension = [
   documentSemanticsField,
   headingFoldService,
-  foldToggleField,
+  headingFoldField,
   keymap.of(foldKeymap),
 ];
