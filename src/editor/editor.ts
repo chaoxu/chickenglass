@@ -43,6 +43,7 @@ import {
   sharedDocumentStateExtensions,
   sharedInlineRenderExtensions,
 } from "./base-editor-extensions";
+import { documentLabelGraphField } from "../semantics/document-label-graph";
 
 const fallbackDocument = "# Untitled\n";
 
@@ -157,6 +158,7 @@ function coreDocumentStateExtensions(): Extension[] {
     // Block plugin system
     createPluginRegistryField(defaultPlugins),
     blockCounterField,
+    documentLabelGraphField,
 
     // Bibliography state (must come before citation plugins)
     bibDataField,
