@@ -128,12 +128,43 @@ export const marginThemeStyles = {
     color: "var(--cf-muted)",
     fontStyle: "italic",
   },
+  ".cf-citation-preview": {
+    whiteSpace: "normal",
+  },
   ".cf-hover-preview-citation": {
     color: "var(--cf-muted)",
     marginBottom: "var(--cf-spacing-xs)",
   },
   ".cf-hover-preview-citation:last-child": {
     marginBottom: "0",
+  },
+  ".cf-reference-completion-tooltip > ul": {
+    maxHeight: "18em",
+  },
+  ".cf-reference-completion-citation": {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    columnGap: "var(--cf-spacing-sm)",
+    rowGap: "2px",
+    alignItems: "start",
+    paddingTop: "var(--cf-spacing-xs)",
+    paddingBottom: "var(--cf-spacing-xs)",
+  },
+  ".cf-reference-completion-citation .cm-completionIcon": {
+    gridColumn: "1",
+    gridRow: "1 / span 2",
+    marginTop: "2px",
+    paddingRight: "0",
+  },
+  ".cf-reference-completion-citation .cm-completionLabel": {
+    gridColumn: "2",
+    fontWeight: "600",
+    whiteSpace: "normal",
+  },
+  ".cf-reference-completion-citation .cf-citation-preview": {
+    gridColumn: "2",
+    fontSize: "0.9em",
+    lineHeight: "1.45",
   },
   ".cf-hover-preview-separator": {
     border: "none",

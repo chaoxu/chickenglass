@@ -113,6 +113,7 @@ export const CSS = {
 
   /** Citation. */
   citation: "cf-citation",
+  citationPreview: "cf-citation-preview",
 
   /** Hover preview. */
   hoverPreview: "cf-hover-preview",
@@ -121,6 +122,10 @@ export const CSS = {
   hoverPreviewUnresolved: "cf-hover-preview-unresolved",
   hoverPreviewCitation: "cf-hover-preview-citation",
   hoverPreviewSeparator: "cf-hover-preview-separator",
+
+  /** Reference autocomplete. */
+  referenceCompletionTooltip: "cf-reference-completion-tooltip",
+  referenceCompletionCitation: "cf-reference-completion-citation",
 
   /** Document title from frontmatter. */
   docTitle: "cf-doc-title",
