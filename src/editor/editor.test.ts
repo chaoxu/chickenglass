@@ -8,6 +8,7 @@ import {
 } from "./editor";
 import { frontmatterField } from "./frontmatter-state";
 import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentLabelGraphField } from "../semantics/document-label-graph";
 import { blockCounterField } from "../plugins/block-counter";
 import { bibDataField } from "../citations/citation-render";
 import { includeRegionsField } from "../lib/include-regions";
@@ -91,6 +92,7 @@ describe("extension bundle composition", () => {
     expect(view.state.field(includeRegionsField)).toBeDefined();
     expect(view.state.field(documentSemanticsField)).toBeDefined();
     expect(view.state.field(blockCounterField)).toBeDefined();
+    expect(view.state.field(documentLabelGraphField)).toBeDefined();
     expect(view.state.field(bibDataField)).toBeDefined();
     expect(view.state.field(pdfPreviewField)).toBeDefined();
     expect(view.state.field(imageUrlField)).toBeDefined();
