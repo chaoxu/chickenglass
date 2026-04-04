@@ -141,6 +141,9 @@ export function balanceHiddenFenceClipboardText(text: string, state: EditorState
 
   const literal = serializeLiteralCopiedText(state, ranges);
   const balanced = serializeBalancedCopiedText(state, ranges, blocks);
+  // Rich mode currently has no earlier clipboard-output filters, so when a
+  // rebalance is needed we can safely rebuild from document state instead of
+  // patching the incoming `text`.
   return balanced === literal ? text : balanced;
 }
 
