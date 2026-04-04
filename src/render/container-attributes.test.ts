@@ -1,15 +1,38 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
+import {
+  forceParsing,
+  syntaxTreeAvailable,
+} from "@codemirror/language";
 import type { Decoration } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
-import { containerAttributesField } from "./container-attributes";
+import { documentSemanticsField } from "../semantics/codemirror-source";
+import {
+  _computeContainerDirtyRegionForTest,
+  containerAttributesField,
+  containerAttributesPlugin,
+} from "./container-attributes";
 
 /** Create an EditorState with the markdown parser and containerAttributesField. */
 function createState(doc: string): EditorState {
   return EditorState.create({
     doc,
-    extensions: [markdown(), containerAttributesField],
+    extensions: [markdown(), documentSemanticsField, containerAttributesField],
   });
+}
+
+function createView(doc: string): { view: EditorView; parent: HTMLElement } {
+  const parent = document.createElement("div");
+  document.body.appendChild(parent);
+  const view = new EditorView({
+    state: EditorState.create({
+      doc,
+      extensions: [markdown(), documentSemanticsField, containerAttributesPlugin],
+    }),
+    parent,
+  });
+  return { view, parent };
 }
 
 /** Extract (lineStart, tagName) pairs from the field's DecorationSet. */
@@ -187,6 +210,80 @@ describe("containerAttributesField", () => {
       for (const t of after) {
         const line = edited.doc.lineAt(t.pos);
         expect(line.from).toBe(t.pos);
+      }
+    });
+  });
+
+  describe("incremental invalidation", () => {
+    it("limits plain prose edits to the affected paragraph", () => {
+      const state = createState([
+        "# Title",
+        "",
+        "First paragraph",
+        "",
+        "Second paragraph",
+      ].join("\n"));
+      const insertPos = state.doc.toString().indexOf("paragraph");
+      const tr = state.update({
+        changes: { from: insertPos, insert: "updated " },
+      });
+
+      expect(_computeContainerDirtyRegionForTest(tr)).toEqual({
+        filterFrom: tr.state.doc.line(3).from,
+        filterTo: tr.state.doc.line(3).to,
+      });
+    });
+
+    it("retags lines past the literal edit when a closing fence is inserted", () => {
+      const state = createState([
+        "```",
+        "code line",
+        "still code",
+        "plain text",
+      ].join("\n"));
+      expect(extractTagNames(state)).toEqual(["code", "code", "code", "code"]);
+
+      const insertPos = state.doc.toString().indexOf("plain text");
+      const edited = state.update({
+        changes: { from: insertPos, insert: "```\n" },
+      }).state;
+
+      expect(extractTags(edited)).toEqual([
+        { pos: edited.doc.line(1).from, tag: "code" },
+        { pos: edited.doc.line(2).from, tag: "code" },
+        { pos: edited.doc.line(3).from, tag: "code" },
+        { pos: edited.doc.line(4).from, tag: "code" },
+        { pos: edited.doc.line(5).from, tag: "p" },
+      ]);
+    });
+
+    it("refreshes pending dirty lines after parse completion in a live view", async () => {
+      const doc = [
+        "```",
+        ...Array.from({ length: 800 }, (_, index) => `code ${index}`),
+        "plain text",
+      ].join("\n");
+      const { view, parent } = createView(doc);
+
+      try {
+        forceParsing(view, view.viewport.to, 5);
+
+        const insertPos = view.state.doc.toString().lastIndexOf("plain text");
+        view.dispatch({
+          changes: { from: insertPos, insert: "```\n" },
+        });
+
+        expect(syntaxTreeAvailable(view.state, view.state.doc.length)).toBe(false);
+
+        await vi.waitFor(() => {
+          expect(extractTags(view.state).at(-1)).toEqual({
+            pos: view.state.doc.line(view.state.doc.lines).from,
+            tag: "p",
+          });
+        }, { timeout: 3000 });
+      } finally {
+        view.destroy();
+        parent.remove();
       }
     });
   });
