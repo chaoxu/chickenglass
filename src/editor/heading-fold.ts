@@ -27,6 +27,7 @@ import {
   syntaxTree,
 } from "@codemirror/language";
 import { buildDecorations, RenderWidget } from "../render/render-core";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 
 /** Extract heading level (1–6) from a node name, or 0 if not a heading. */
 function headingLevel(name: string): number {
@@ -40,16 +41,9 @@ function headingLevel(name: string): number {
  * Used to skip the expensive nested tree walk in buildFoldToggles (#514).
  */
 function headingFingerprint(state: EditorState): string {
-  const parts: string[] = [];
-  syntaxTree(state).iterate({
-    enter(node) {
-      const level = headingLevel(node.name);
-      if (level > 0) {
-        parts.push(`${level}@${state.doc.lineAt(node.from).number}`);
-      }
-    },
-  });
-  return parts.join(",");
+  return state.field(documentSemanticsField).headings
+    .map((heading) => String(heading.level))
+    .join(",");
 }
 
 /**
@@ -239,6 +233,7 @@ const foldToggleField = StateField.define<DecorationSet>({
 
 /** CM6 extension for heading-based folding with inline toggles. */
 export const headingFold: Extension = [
+  documentSemanticsField,
   headingFoldService,
   foldToggleField,
   keymap.of(foldKeymap),

@@ -258,46 +258,42 @@ function collectImageRangesTracked(
   const effectiveRanges = ranges ?? view.visibleRanges;
 
   for (const { from, to } of effectiveRanges) {
-    const c = tree.cursor();
-    scan: for (;;) {
-      let descend = false;
-      if (c.from <= to && c.to >= from) {
-        descend = true;
-        if (c.name === "Image") {
-          nodeRanges.push({ from: c.from, to: c.to });
+    tree.iterate({
+      from,
+      to,
+      enter(node) {
+        if (node.name !== "Image") return;
 
-          if (skip?.(c.from) || cursorInRange(view, c.from, c.to)) {
-            descend = false;
-          } else {
-            const parsed = readImageContent(view, c.node);
-            if (parsed) {
-              const preview = resolveLocalMediaPreview(view, parsed.src);
-              if (preview) {
-                trackedPaths.add(preview.resolvedPath);
-                pushWidgetDecoration(
-                  items,
-                  mediaPreviewWidget(parsed.alt, preview),
-                  c.from,
-                  c.to,
-                );
-              } else {
-                pushWidgetDecoration(
-                  items,
-                  new ImageWidget(parsed.alt, parsed.src),
-                  c.from,
-                  c.to,
-                );
-              }
-            }
-          }
+        nodeRanges.push({ from: node.from, to: node.to });
+
+        if (skip?.(node.from) || cursorInRange(view, node.from, node.to)) {
+          return false;
         }
-      }
-      if (descend && c.firstChild()) continue;
-      for (;;) {
-        if (c.nextSibling()) break;
-        if (!c.parent()) break scan;
-      }
-    }
+
+        const parsed = readImageContent(view, node.node);
+        if (!parsed) return false;
+
+        const preview = resolveLocalMediaPreview(view, parsed.src);
+        if (preview) {
+          trackedPaths.add(preview.resolvedPath);
+          pushWidgetDecoration(
+            items,
+            mediaPreviewWidget(parsed.alt, preview),
+            node.from,
+            node.to,
+          );
+          return false;
+        }
+
+        pushWidgetDecoration(
+          items,
+          new ImageWidget(parsed.alt, parsed.src),
+          node.from,
+          node.to,
+        );
+        return false;
+      },
+    });
   }
 
   return { items, nodeRanges, trackedPaths };

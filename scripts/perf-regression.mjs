@@ -74,6 +74,170 @@ function steppedScrollMetrics(result) {
   ];
 }
 
+const TYPING_BURST_CASES = [
+  { key: "index", path: "index.md" },
+  { key: "rankdecrease", path: "rankdecrease/main.md" },
+];
+const TYPING_BURST_INSERT_COUNT = 100;
+
+function splitLinesWithOffsets(text) {
+  const lines = text.split("\n");
+  const result = [];
+  let offset = 0;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    result.push({
+      number: i + 1,
+      text: line,
+      from: offset,
+      to: offset + line.length,
+    });
+    offset += line.length + 1;
+  }
+  return result;
+}
+
+function isPlainProseLine(line) {
+  const text = line.text.trim();
+  if (!text) return false;
+  if (/^(---|:::|```|~~~|\$\$|\\\[|\\\]|#|>|[-*+]\s|\d+\.\s|\|)/.test(text)) return false;
+  return /[A-Za-z]/.test(text[0] ?? text);
+}
+
+function findFrontmatterEnd(lines) {
+  if ((lines[0]?.text ?? "") !== "---") return 0;
+  for (let i = 1; i < lines.length; i += 1) {
+    if (lines[i].text === "---") return i + 1;
+  }
+  return 0;
+}
+
+function pickAnchor(line) {
+  const firstLetter = line.text.search(/[A-Za-z]/);
+  const base = firstLetter >= 0 ? firstLetter : 0;
+  return line.from + Math.min(base + 8, Math.max(line.text.length - 1, 0));
+}
+
+function findTypingBurstPositions(text) {
+  const lines = splitLinesWithOffsets(text);
+  const frontmatterEnd = findFrontmatterEnd(lines);
+
+  let topLine = null;
+  for (let i = frontmatterEnd; i < lines.length; i += 1) {
+    if (isPlainProseLine(lines[i])) {
+      topLine = lines[i];
+      break;
+    }
+  }
+
+  let endLine = null;
+  for (let i = lines.length - 1; i >= frontmatterEnd; i -= 1) {
+    if (isPlainProseLine(lines[i])) {
+      endLine = lines[i];
+      break;
+    }
+  }
+
+  if (!topLine || !endLine) {
+    throw new Error("Failed to find typing benchmark positions.");
+  }
+
+  return {
+    top_after_frontmatter: {
+      line: topLine.number,
+      anchor: pickAnchor(topLine),
+    },
+    near_end: {
+      line: endLine.number,
+      anchor: pickAnchor(endLine),
+    },
+  };
+}
+
+async function openCleanRichFile(page, path) {
+  await page.evaluate(async () => {
+    await window.__app?.closeFile?.({ discard: true }).catch?.(() => false);
+    window.__app.setMode("rich");
+  });
+  await openFile(page, path);
+  return page.evaluate(() => window.__cmView.state.doc.toString());
+}
+
+async function measureTypingBurst(page, anchor, insertCount) {
+  return page.evaluate(async ({ nextAnchor, count }) => {
+    const percentile = (values, p) => {
+      if (values.length === 0) return 0;
+      const sorted = [...values].sort((a, b) => a - b);
+      const index = Math.min(
+        sorted.length - 1,
+        Math.max(0, Math.ceil((p / 100) * sorted.length) - 1),
+      );
+      return sorted[index];
+    };
+
+    const mean = (values) =>
+      values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
+
+    const view = window.__cmView;
+    view.dispatch({ selection: { anchor: nextAnchor }, scrollIntoView: true });
+    view.focus();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const before = window.__cmDebug.semantics();
+    const timings = [];
+    const totalStart = performance.now();
+    for (let i = 0; i < count; i += 1) {
+      const pos = view.state.selection.main.anchor;
+      const t0 = performance.now();
+      view.dispatch({
+        changes: { from: pos, to: pos, insert: "1" },
+        selection: { anchor: pos + 1 },
+      });
+      timings.push(performance.now() - t0);
+    }
+    const totalMs = performance.now() - totalStart;
+    const settleStart = performance.now();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const settleMs = performance.now() - settleStart;
+    const after = window.__cmDebug.semantics();
+
+    return {
+      totalMs,
+      meanDispatchMs: mean(timings),
+      p95DispatchMs: percentile(timings, 95),
+      maxDispatchMs: Math.max(...timings, 0),
+      settleMs,
+      semanticRevisionDelta: after.revision - before.revision,
+      changedSliceCount: Object.entries(after.slices)
+        .filter(([name, value]) => value !== before.slices[name])
+        .map(([name]) => name)
+        .length,
+    };
+  }, { nextAnchor: anchor, count: insertCount });
+}
+
+function typingBurstMetrics(caseKey, positionKey, result, line) {
+  const prefix = `typing.${caseKey}.${positionKey}`;
+  return [
+    { name: `${prefix}.line`, unit: "count", value: line },
+    { name: `${prefix}.total_ms`, unit: "ms", value: result.totalMs },
+    { name: `${prefix}.mean_dispatch_ms`, unit: "ms", value: result.meanDispatchMs },
+    { name: `${prefix}.p95_dispatch_ms`, unit: "ms", value: result.p95DispatchMs },
+    { name: `${prefix}.max_dispatch_ms`, unit: "ms", value: result.maxDispatchMs },
+    { name: `${prefix}.settle_ms`, unit: "ms", value: result.settleMs },
+    {
+      name: `${prefix}.semantic_revision_delta`,
+      unit: "count",
+      value: result.semanticRevisionDelta,
+    },
+    {
+      name: `${prefix}.changed_slice_count`,
+      unit: "count",
+      value: result.changedSliceCount,
+    },
+  ];
+}
+
 const scenarios = {
   "open-index": {
     description: "Reload the app and open demo/index.md in Rich mode.",
@@ -174,6 +338,25 @@ const scenarios = {
       };
     },
   },
+  "typing-rich-burst": {
+    description: "Measure rich-mode typing bursts on small and large documents at top and near-end positions.",
+    defaultSettleMs: 200,
+    run: async (page) => {
+      const metrics = [];
+      for (const testCase of TYPING_BURST_CASES) {
+        const originalText = await openCleanRichFile(page, testCase.path);
+        const positions = findTypingBurstPositions(originalText);
+        for (const [positionKey, position] of Object.entries(positions)) {
+          await openCleanRichFile(page, testCase.path);
+          const result = await measureTypingBurst(page, position.anchor, TYPING_BURST_INSERT_COUNT);
+          metrics.push(
+            ...typingBurstMetrics(testCase.key, positionKey, result, position.line),
+          );
+        }
+      }
+      return { metrics };
+    },
+  },
   "scroll-step-rich": {
     description: `Open ${SCROLL_FIXTURE} in Rich mode, scroll step-by-step (${SCROLL_STEP_SIZE} lines/step).`,
     defaultSettleMs: 400,
@@ -264,7 +447,7 @@ Options:
 `);
 }
 
-async function runScenarioSamples(page, scenarioName, iterations, warmup, settleMs) {
+async function runScenarioSamples(page, scenarioName, iterations, warmup, settleMs, appUrl) {
   const scenario = scenarios[scenarioName];
   if (!scenario) {
     throw new Error(`Unknown scenario "${scenarioName}".`);
@@ -274,7 +457,7 @@ async function runScenarioSamples(page, scenarioName, iterations, warmup, settle
   const totalRuns = warmup + iterations;
 
   for (let runIndex = 0; runIndex < totalRuns; runIndex += 1) {
-    await page.goto(chromeArgs.url, { waitUntil: "domcontentloaded" });
+    await page.goto(appUrl, { waitUntil: "domcontentloaded" });
     await waitForDebugBridge(page);
     await clearPerf(page);
     const scenarioResult = await scenario.run(page);
@@ -386,14 +569,15 @@ async function main() {
 
   const page = await connectEditor(chromeArgs.port);
   try {
-    const snapshots = await runScenarioSamples(page, scenarioName, iterations, warmup, settleMs);
+    const appUrl = getFlag("--url") ?? page.url();
+    const snapshots = await runScenarioSamples(page, scenarioName, iterations, warmup, settleMs, appUrl);
     const report = buildPerfRegressionReport({
       scenario: scenarioName,
       iterations,
       warmup,
       settleMs,
       chromePort: chromeArgs.port,
-      appUrl: chromeArgs.url,
+      appUrl,
       snapshots,
     });
 

@@ -32,6 +32,7 @@ import {
   focusEffect,
   focusTracker,
 } from "./render-utils";
+import { documentSemanticsField } from "../semantics/codemirror-source";
 
 interface FencedDivRange {
   from: number;
@@ -40,15 +41,10 @@ interface FencedDivRange {
 
 /** Collect all FencedDiv ranges from the syntax tree. */
 function collectFencedDivRanges(state: EditorState): FencedDivRange[] {
-  const ranges: FencedDivRange[] = [];
-  syntaxTree(state).iterate({
-    enter(node) {
-      if (node.name === "FencedDiv") {
-        ranges.push({ from: node.from, to: node.to });
-      }
-    },
-  });
-  return ranges;
+  return state.field(documentSemanticsField).fencedDivs.map((div) => ({
+    from: div.from,
+    to: div.to,
+  }));
 }
 
 /**
@@ -212,6 +208,7 @@ const fenceGuideField = StateField.define<FenceGuideState>({
 
 /** CM6 extension that draws vertical nesting guides for fenced divs (editing only). */
 export const fenceGuidePlugin: Extension = [
+  documentSemanticsField,
   editorFocusField,
   focusTracker,
   fenceGuideField,

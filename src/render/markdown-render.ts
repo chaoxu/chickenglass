@@ -377,21 +377,17 @@ function collectMarkdownItems(
   _skip: (nodeFrom: number) => boolean,
 ): Range<Decoration>[] {
   const ctx: MarkdownHandlerContext = { view, items: [], cursorInHeading: false };
+  const tree = syntaxTree(view.state);
 
   for (const { from, to } of ranges) {
-    const c = syntaxTree(view.state).cursor();
-    scan: for (;;) {
-      let descend = false;
-      if (c.from <= to && c.to >= from) {
-        const handler = MARKDOWN_HANDLERS.get(c.name);
-        descend = handler ? handler.handle(c, ctx) !== false : true;
-      }
-      if (descend && c.firstChild()) continue;
-      for (;;) {
-        if (c.nextSibling()) break;
-        if (!c.parent()) break scan;
-      }
-    }
+    tree.iterate({
+      from,
+      to,
+      enter(node) {
+        const handler = MARKDOWN_HANDLERS.get(node.name);
+        return handler ? handler.handle(node, ctx) : undefined;
+      },
+    });
   }
 
   return ctx.items;

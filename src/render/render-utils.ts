@@ -813,24 +813,17 @@ export function collectNodeRangesExcludingCursor(
   const skip = options?.skip;
 
   for (const { from, to } of ranges) {
-    const c = tree.cursor();
-    scan: for (;;) {
-      let descend = false;
-      if (c.from <= to && c.to >= from) {
-        if (!nodeTypes.has(c.name)) {
-          descend = true;
-        } else if (cursorInRange(view, c.from, c.to) || skip?.(c.from)) {
-          // cursor inside or already processed — skip children
-        } else {
-          descend = buildItem(c, items) !== false;
+    tree.iterate({
+      from,
+      to,
+      enter(node) {
+        if (!nodeTypes.has(node.name)) return;
+        if (cursorInRange(view, node.from, node.to) || skip?.(node.from)) {
+          return false;
         }
-      }
-      if (descend && c.firstChild()) continue;
-      for (;;) {
-        if (c.nextSibling()) break;
-        if (!c.parent()) break scan;
-      }
-    }
+        return buildItem(node, items);
+      },
+    });
   }
 
   return items;
