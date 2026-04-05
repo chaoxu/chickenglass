@@ -178,7 +178,16 @@ describe("markdownToHtml", () => {
   it("renders display math with equation labels", () => {
     const html = markdownToHtml("$$\nx^2\n$$ {#eq:foo}");
     expect(html).toContain(`class="${CSS.mathDisplay}"`);
+    expect(html).toContain(`class="${CSS.mathDisplayNumber}"`);
     expect(html).toContain("katex");
+    expect(html).toContain("(1)");
+  });
+
+  it("renders sequential equation numbers for multiple labeled equations", () => {
+    const html = markdownToHtml("$$x^2$$ {#eq:first}\n\n$$y^2$$ {#eq:second}");
+    expect(html).toContain(`class="${CSS.mathDisplayNumber}"`);
+    expect(html).toContain("(1)");
+    expect(html).toContain("(2)");
   });
 
   it("renders fenced divs with class", () => {

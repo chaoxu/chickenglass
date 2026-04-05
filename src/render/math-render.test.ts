@@ -198,6 +198,12 @@ describe("MathWidget (display)", () => {
     expect((content as HTMLElement).classList.contains(CSS.mathDisplayContent)).toBe(true);
   });
 
+  it("renders an equation number when provided", () => {
+    const widget = new MathWidget("x^2", "$$x^2$$", true, {}, 0, 7);
+    const el = widget.toDOM();
+    expect(el.querySelector(`.${CSS.mathDisplayNumber}`)?.textContent).toBe("(7)");
+  });
+
   it("shows error for invalid LaTeX", () => {
     const widget = new MathWidget("\\bad{", "$$\\bad{$$", true);
     const el = widget.toDOM();
@@ -213,6 +219,12 @@ describe("MathWidget (display)", () => {
   it("eq returns false for different raw content", () => {
     const a = new MathWidget("x", "$$x$$", true);
     const b = new MathWidget("y", "$$y$$", true);
+    expect(a.eq(b)).toBe(false);
+  });
+
+  it("eq returns false when equation numbers differ", () => {
+    const a = new MathWidget("x", "$$x$$", true, {}, 0, 1);
+    const b = new MathWidget("x", "$$x$$", true, {}, 0, 2);
     expect(a.eq(b)).toBe(false);
   });
 
@@ -391,6 +403,17 @@ describe("MathWidget.updateDOM", () => {
     expect(dom.dataset.sourceTo).toBe("117");
     expect(dom.getAttribute("aria-label")).toBe("y^2");
     expect(dom.querySelector(".katex-display")).not.toBeNull();
+  });
+
+  it("updates display math equation numbers without rebuilding the DOM node", () => {
+    const oldWidget = new MathWidget("x^2", "$$x^2$$", true, {}, 0, 1);
+    const dom = oldWidget.toDOM();
+
+    const newWidget = new MathWidget("x^2", "$$x^2$$", true, {}, 0, 2);
+    const result = newWidget.updateDOM(dom);
+
+    expect(result).toBe(true);
+    expect(dom.querySelector(`.${CSS.mathDisplayNumber}`)?.textContent).toBe("(2)");
   });
 
   it("preserves DOM node identity (no destroy/recreate)", () => {
@@ -930,6 +953,12 @@ function getFirstWidget(ranges: ReturnType<typeof collectMathRanges>): MathWidge
   return widgetRange.value.spec.widget as MathWidget;
 }
 
+function getWidgets(ranges: ReturnType<typeof collectMathRanges>): MathWidget[] {
+  return ranges
+    .filter((range) => range.value.spec.widget)
+    .map((range) => range.value.spec.widget as MathWidget);
+}
+
 describe("stripMathDelimiters with contentTo", () => {
   it("strips $$ delimiters when contentTo slices at closing $$", () => {
     // "$$x^2$$ {#eq:foo}" — contentTo = 7 (end of closing $$)
@@ -1064,12 +1093,23 @@ describe("display math with equation labels", () => {
     expect(el.textContent).not.toContain("#eq:");
   });
 
+  it("renders equation numbers from document semantics", () => {
+    const doc = "$$x^2$$ {#eq:first}\n\n$$y^2$$ {#eq:second}";
+    view = createMathViewWithLabels(doc, doc.length);
+    const widgets = getWidgets(collectMathRanges(view));
+
+    expect(widgets).toHaveLength(2);
+    expect(widgets[0].toDOM().querySelector(`.${CSS.mathDisplayNumber}`)?.textContent).toBe("(1)");
+    expect(widgets[1].toDOM().querySelector(`.${CSS.mathDisplayNumber}`)?.textContent).toBe("(2)");
+  });
+
   it("unlabeled display math still renders correctly", () => {
     const doc = "$$x^2$$";
     view = createMathViewWithLabels(doc, doc.length);
     const ranges = collectMathRanges(view);
     const el = getFirstWidget(ranges).toDOM();
     expect(el.querySelector(".katex-display")).not.toBeNull();
+    expect(el.querySelector(`.${CSS.mathDisplayNumber}`)).toBeNull();
   });
 });
 

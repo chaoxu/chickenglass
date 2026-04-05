@@ -23,7 +23,7 @@ import {
 } from "./render-utils";
 import { mathMacrosField } from "./math-macros";
 import { documentAnalysisField } from "../semantics/codemirror-source";
-import type { MathSemantics } from "../semantics/document";
+import type { EquationSemantics, MathSemantics } from "../semantics/document";
 import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
 
 export { renderKatexToHtml } from "./inline-shared";
@@ -310,6 +310,24 @@ function findMathRoot(el: HTMLElement): HTMLElement {
   return el.closest<HTMLElement>(`.${CSS.mathInline}, .${CSS.mathDisplay}`) ?? el;
 }
 
+function buildEquationNumbersByFrom(
+  equationById: ReadonlyMap<string, EquationSemantics>,
+): ReadonlyMap<number, number> {
+  const numbers = new Map<number, number>();
+  for (const equation of equationById.values()) {
+    numbers.set(equation.from, equation.number);
+  }
+  return numbers;
+}
+
+function getDisplayEquationNumber(
+  region: MathSemantics,
+  equationNumbersByFrom: ReadonlyMap<number, number>,
+): number | undefined {
+  if (!region.isDisplay || region.labelFrom === undefined) return undefined;
+  return equationNumbersByFrom.get(region.from);
+}
+
 /** Unified widget that renders both inline and display math via KaTeX. */
 export class MathWidget extends MacroAwareWidget {
   constructor(
@@ -318,8 +336,32 @@ export class MathWidget extends MacroAwareWidget {
     private readonly isDisplay: boolean,
     private readonly macros: Record<string, string> = {},
     private readonly contentOffset = 0,
+    private readonly equationNumber?: number,
   ) {
     super(macros);
+  }
+
+  private syncDisplayEquationNumber(el: HTMLElement): void {
+    const selector = `.${CSS.mathDisplayNumber}`;
+    const numberText = this.equationNumber !== undefined
+      ? `(${this.equationNumber})`
+      : undefined;
+    const numberEl = el.querySelector<HTMLElement>(selector);
+
+    if (!numberText) {
+      numberEl?.remove();
+      return;
+    }
+
+    if (numberEl) {
+      numberEl.textContent = numberText;
+      return;
+    }
+
+    const nextNumberEl = document.createElement("span");
+    nextNumberEl.className = CSS.mathDisplayNumber;
+    nextNumberEl.textContent = numberText;
+    el.appendChild(nextNumberEl);
   }
 
   protected override bindSourceReveal(
@@ -364,8 +406,9 @@ export class MathWidget extends MacroAwareWidget {
         const content = document.createElement("div");
         renderKatex(content, this.latex, this.isDisplay, this.macros);
         // Shrink-wrap the rendered equation so only visible math is clickable.
-        content.classList.add(CSS.mathDisplayContent);
+        content.className = CSS.mathDisplayContent;
         el.appendChild(content);
+        this.syncDisplayEquationNumber(el);
         return el;
       }
       renderKatex(el, this.latex, this.isDisplay, this.macros);
@@ -400,7 +443,8 @@ export class MathWidget extends MacroAwareWidget {
     return (
       this.raw === other.raw &&
       this.isDisplay === other.isDisplay &&
-      this.macrosKey === other.macrosKey
+      this.macrosKey === other.macrosKey &&
+      this.equationNumber === other.equationNumber
     );
   }
 
@@ -419,6 +463,7 @@ export class MathWidget extends MacroAwareWidget {
       if (!content) return false;
       content.className = CSS.mathDisplayContent;
       renderKatex(content, this.latex, true, this.macros);
+      this.syncDisplayEquationNumber(dom);
     } else {
       renderKatex(dom, this.latex, false, this.macros);
     }
@@ -491,7 +536,9 @@ function buildMathItems(
   shouldSkip: (from: number, to: number) => boolean,
 ): Range<Decoration>[] {
   const macros = state.field(mathMacrosField);
-  const regions = state.field(documentAnalysisField).mathRegions;
+  const analysis = state.field(documentAnalysisField);
+  const regions = analysis.mathRegions;
+  const equationNumbersByFrom = buildEquationNumbersByFrom(analysis.equationById);
   const items: Range<Decoration>[] = [];
 
   for (const region of regions) {
@@ -530,6 +577,7 @@ function buildMathItems(
           true,
           macros,
           region.contentFrom - region.from,
+          getDisplayEquationNumber(region, equationNumbersByFrom),
         );
         widget.sourceFrom = region.from;
         widget.sourceTo = region.to;
@@ -551,6 +599,7 @@ function buildMathItems(
         region.isDisplay,
         macros,
         region.contentFrom - region.from,
+        getDisplayEquationNumber(region, equationNumbersByFrom),
       ),
       region.from,
       region.to,
@@ -595,6 +644,8 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
 function mathContentUnchanged(
   before: readonly MathSemantics[],
   after: readonly MathSemantics[],
+  beforeEquationNumbersByFrom: ReadonlyMap<number, number>,
+  afterEquationNumbersByFrom: ReadonlyMap<number, number>,
 ): boolean {
   if (before.length !== after.length) return false;
   for (let i = 0; i < before.length; i++) {
@@ -604,6 +655,8 @@ function mathContentUnchanged(
       b.latex !== a.latex
       || b.isDisplay !== a.isDisplay
       || (b.to - b.from) !== (a.to - a.from)
+      || getDisplayEquationNumber(b, beforeEquationNumbersByFrom)
+        !== getDisplayEquationNumber(a, afterEquationNumbersByFrom)
     ) {
       return false;
     }
@@ -690,8 +743,10 @@ const mathDecorationField = StateField.define<DecorationSet>({
       return rebuildMathDecorations(tr.state);
     }
 
-    const regionsBefore = tr.startState.field(documentAnalysisField).mathRegions;
-    const regionsAfter = tr.state.field(documentAnalysisField).mathRegions;
+    const analysisBefore = tr.startState.field(documentAnalysisField);
+    const analysisAfter = tr.state.field(documentAnalysisField);
+    const regionsBefore = analysisBefore.mathRegions;
+    const regionsAfter = analysisAfter.mathRegions;
 
     if (regionsBefore !== regionsAfter) {
       // Regions changed.  When the doc changed and only positions shifted
@@ -702,7 +757,12 @@ const mathDecorationField = StateField.define<DecorationSet>({
         tr.docChanged
         && tr.selection === undefined
         && !tr.effects.some((e) => e.is(focusEffect))
-        && mathContentUnchanged(regionsBefore, regionsAfter)
+        && mathContentUnchanged(
+          regionsBefore,
+          regionsAfter,
+          buildEquationNumbersByFrom(analysisBefore.equationById),
+          buildEquationNumbersByFrom(analysisAfter.equationById),
+        )
       ) {
         const mapped = value.map(tr.changes);
         // Patch sourceFrom/sourceTo on reused widgets so click-to-edit

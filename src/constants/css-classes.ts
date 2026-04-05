@@ -76,6 +76,7 @@ export const CSS = {
   /** Display math wrapper. */
   mathDisplay: "cf-math-display",
   mathDisplayContent: "cf-math-display-content",
+  mathDisplayNumber: "cf-math-display-number",
 
   /** Code block decorations. */
   codeblockHeader: "cf-codeblock-header",
