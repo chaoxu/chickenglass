@@ -200,6 +200,8 @@ function findPatternPosition(lines, frontmatterEnd, positionKey, pattern, option
 
   for (let i = frontmatterEnd; i < lines.length; i += 1) {
     const line = lines[i];
+    // Callers pass non-global regexes here. `RegExp.prototype.exec()` would be
+    // stateful across lines only if the pattern used the `g` flag.
     const match = pattern.exec(line.text);
     if (!match || match.index < 0) {
       continue;
