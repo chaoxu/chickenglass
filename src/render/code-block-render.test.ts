@@ -1,12 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { EditorState } from "@codemirror/state";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { EditorState, type Extension } from "@codemirror/state";
 import * as language from "@codemirror/language";
+import { EditorView } from "@codemirror/view";
+import { COPY_RESET_MS } from "../constants";
 import { CSS } from "../constants/css-classes";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import { editorFocusField, focusEffect } from "./render-utils";
 import {
   collectCodeBlocks,
+  codeBlockRenderPlugin,
   _codeBlockDecorationFieldForTest as codeBlockDecorationField,
   _codeBlockStructureFieldForTest as codeBlockStructureField,
   _computeCodeBlockDirtyRegionForTest as computeCodeBlockDirtyRegion,
@@ -38,6 +41,33 @@ function getDecoSpecs(state: EditorState) {
   return getDecorationSpecs(state.field(codeBlockDecorationField));
 }
 
+function createCodeBlockView(
+  doc: string,
+  options: {
+    cursorPos?: number;
+    extensions?: readonly Extension[];
+  } = {},
+): EditorView {
+  const { cursorPos = 0, extensions = [] } = options;
+  const parent = document.createElement("div");
+  document.body.appendChild(parent);
+  const view = new EditorView({
+    state: EditorState.create({
+      doc,
+      selection: { anchor: cursorPos },
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        editorFocusField,
+        codeBlockRenderPlugin,
+        ...extensions,
+      ],
+    }),
+    parent,
+  });
+  view.dispatch({ effects: focusEffect.of(true) });
+  return view;
+}
+
 const TWO_BLOCKS = [
   "```js",
   "console.log('x')",
@@ -47,6 +77,11 @@ const TWO_BLOCKS = [
   "print('y')",
   "```",
 ].join("\n");
+
+afterEach(() => {
+  document.body.innerHTML = "";
+  vi.useRealTimers();
+});
 
 describe("edge cases", () => {
   it("does NOT show source when cursor is in the body (body stays rendered)", () => {
@@ -219,6 +254,52 @@ describe("codeBlockDecorationField", () => {
     expect(hasLineClassAt(specs, state.doc.line(5).from, CSS.codeblockSourceOpen)).toBe(false);
     // Closing fence always hidden (#429)
     expect(hasLineClassAt(specs, state.doc.line(7).from, CSS.blockClosingFence)).toBe(true);
+  });
+});
+
+describe("copy button widget", () => {
+  it("ignores stale async copy reset callbacks after the widget is detached", async () => {
+    vi.useFakeTimers();
+    const clipboardWrite = vi.fn().mockResolvedValue(undefined);
+    const originalClipboard = navigator.clipboard;
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: clipboardWrite },
+      configurable: true,
+    });
+
+    const view = createCodeBlockView("```js\nconsole.log('x')\n```", {
+      cursorPos: 8,
+    });
+
+    try {
+      const button = view.dom.querySelector<HTMLButtonElement>(".cf-codeblock-copy");
+      expect(button).not.toBeNull();
+      if (!button) {
+        throw new Error("expected copy button");
+      }
+      const replaceChildrenSpy = vi.spyOn(button, "replaceChildren");
+
+      button.dispatchEvent(new MouseEvent("mousedown", {
+        bubbles: true,
+        cancelable: true,
+      }));
+
+      await Promise.resolve();
+
+      expect(button.getAttribute("aria-label")).toBe("Copied");
+      expect(replaceChildrenSpy).toHaveBeenCalledTimes(1);
+
+      view.destroy();
+      await vi.advanceTimersByTimeAsync(COPY_RESET_MS);
+
+      expect(clipboardWrite).toHaveBeenCalledWith("console.log('x')");
+      expect(replaceChildrenSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        value: originalClipboard,
+        configurable: true,
+      });
+    }
   });
 });
 

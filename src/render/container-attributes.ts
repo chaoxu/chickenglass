@@ -611,32 +611,37 @@ export const containerAttributesField = StateField.define<DecorationSet>({
 
 class ContainerAttributeParsePlugin {
   private scheduled: ReturnType<typeof setTimeout> | null = null;
+  private destroyed = false;
 
   constructor(private readonly view: EditorView) {}
 
   update(_update: ViewUpdate): void {
+    if (this.destroyed) return;
     if (this.view.state.field(containerAttributePendingDirtyRegionField, false)) {
       this.schedule();
     }
   }
 
   destroy(): void {
-    if (this.scheduled !== null) {
-      clearTimeout(this.scheduled);
-      this.scheduled = null;
-    }
+    this.destroyed = true;
+    const scheduled = this.scheduled;
+    this.scheduled = null;
+    if (scheduled !== null) clearTimeout(scheduled);
   }
 
   private schedule(): void {
+    if (this.destroyed) return;
     if (this.scheduled !== null) return;
     if (!this.view.state.field(containerAttributePendingDirtyRegionField, false)) return;
     if (syntaxTreeAvailable(this.view.state, this.view.state.doc.length)) return;
 
     this.scheduled = setTimeout(() => {
       this.scheduled = null;
+      if (this.destroyed) return;
       if (!this.view.state.field(containerAttributePendingDirtyRegionField, false)) return;
       forceParsing(this.view, this.view.state.doc.length, 25);
       if (
+        !this.destroyed &&
         this.view.state.field(containerAttributePendingDirtyRegionField, false) &&
         !syntaxTreeAvailable(this.view.state, this.view.state.doc.length) &&
         syntaxParserRunning(this.view)

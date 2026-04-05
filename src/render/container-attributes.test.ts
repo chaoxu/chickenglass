@@ -1,9 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
-import {
-  forceParsing,
-  syntaxTreeAvailable,
-} from "@codemirror/language";
+import * as language from "@codemirror/language";
 import type { Decoration } from "@codemirror/view";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
@@ -58,6 +55,11 @@ function extractTags(state: EditorState): Array<{ pos: number; tag: string }> {
 function extractTagNames(state: EditorState): string[] {
   return extractTags(state).map((t) => t.tag);
 }
+
+afterEach(() => {
+  document.body.innerHTML = "";
+  vi.useRealTimers();
+});
 
 describe("containerAttributes overlap helpers", () => {
   it("returns only overlapping heading ranges from an ordered slice", () => {
@@ -307,14 +309,14 @@ describe("containerAttributesField", () => {
       const { view, parent } = createView(doc);
 
       try {
-        forceParsing(view, view.viewport.to, 5);
+        language.forceParsing(view, view.viewport.to, 5);
 
         const insertPos = view.state.doc.toString().lastIndexOf("plain text");
         view.dispatch({
           changes: { from: insertPos, insert: "```\n" },
         });
 
-        expect(syntaxTreeAvailable(view.state, view.state.doc.length)).toBe(false);
+        expect(language.syntaxTreeAvailable(view.state, view.state.doc.length)).toBe(false);
 
         await vi.waitFor(() => {
           expect(extractTags(view.state).at(-1)).toEqual({
@@ -325,6 +327,53 @@ describe("containerAttributesField", () => {
       } finally {
         view.destroy();
         parent.remove();
+      }
+    });
+
+    it("ignores a queued parse retry after the plugin is destroyed", () => {
+      vi.useFakeTimers();
+      const pendingTimeouts: Array<() => void> = [];
+      let nextTimerId = 1;
+      const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation((handler) => {
+        if (typeof handler !== "function") {
+          throw new Error("expected function timeout handler");
+        }
+        if (handler.toString().includes("forceParsing")) {
+          pendingTimeouts.push(handler);
+        }
+        return nextTimerId++ as unknown as ReturnType<typeof setTimeout>;
+      });
+      const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
+
+      const doc = [
+        "```",
+        ...Array.from({ length: 800 }, (_, index) => `code ${index}`),
+        "plain text",
+      ].join("\n");
+      const { view, parent } = createView(doc);
+
+      try {
+        language.forceParsing(view, view.viewport.to, 5);
+
+        const insertPos = view.state.doc.toString().lastIndexOf("plain text");
+        view.dispatch({
+          changes: { from: insertPos, insert: "```\n" },
+        });
+
+        expect(pendingTimeouts.length).toBeGreaterThan(0);
+
+        view.destroy();
+        parent.remove();
+        const stateSpy = vi.spyOn(view, "state", "get").mockImplementation(() => {
+          throw new Error("stale timeout accessed destroyed view state");
+        });
+
+        expect(() => pendingTimeouts[0]()).not.toThrow();
+        expect(clearTimeoutSpy).toHaveBeenCalled();
+        stateSpy.mockRestore();
+      } finally {
+        setTimeoutSpy.mockRestore();
+        clearTimeoutSpy.mockRestore();
       }
     });
   });

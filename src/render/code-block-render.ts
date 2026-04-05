@@ -88,9 +88,22 @@ function createLucideIcon(iconNode: IconNode): SVGSVGElement {
 /** Widget that renders a copy-to-clipboard button in the code block header. */
 class CopyButtonWidget extends RenderWidget {
   private resetTimer: ReturnType<typeof setTimeout> | null = null;
+  private buttonEl: HTMLButtonElement | null = null;
 
   constructor(private readonly code: string) {
     super();
+  }
+
+  private clearResetTimer(): void {
+    const timer = this.resetTimer;
+    this.resetTimer = null;
+    if (timer !== null) clearTimeout(timer);
+  }
+
+  private getLiveButton(expected: HTMLButtonElement): HTMLButtonElement | null {
+    const button = this.buttonEl;
+    if (!button || button !== expected || !button.isConnected) return null;
+    return button;
   }
 
   toDOM(): HTMLElement {
@@ -99,17 +112,22 @@ class CopyButtonWidget extends RenderWidget {
     btn.type = "button";
     btn.setAttribute("aria-label", "Copy code to clipboard");
     btn.appendChild(createLucideIcon(copyIconNode));
+    this.buttonEl = btn;
     btn.addEventListener("mousedown", (e) => {
       e.preventDefault();
       e.stopPropagation();
       void navigator.clipboard.writeText(this.code).then(() => {
-        btn.replaceChildren(createLucideIcon(checkIconNode));
-        btn.setAttribute("aria-label", "Copied");
-        if (this.resetTimer !== null) clearTimeout(this.resetTimer);
+        const button = this.getLiveButton(btn);
+        if (!button) return;
+        button.replaceChildren(createLucideIcon(checkIconNode));
+        button.setAttribute("aria-label", "Copied");
+        this.clearResetTimer();
         this.resetTimer = setTimeout(() => {
           this.resetTimer = null;
-          btn.replaceChildren(createLucideIcon(copyIconNode));
-          btn.setAttribute("aria-label", "Copy code to clipboard");
+          const liveButton = this.getLiveButton(btn);
+          if (!liveButton) return;
+          liveButton.replaceChildren(createLucideIcon(copyIconNode));
+          liveButton.setAttribute("aria-label", "Copy code to clipboard");
         }, COPY_RESET_MS);
       }).catch((e: unknown) => {
         console.error("[code-block] clipboard write failed", e);
@@ -119,10 +137,8 @@ class CopyButtonWidget extends RenderWidget {
   }
 
   destroy(): void {
-    if (this.resetTimer !== null) {
-      clearTimeout(this.resetTimer);
-      this.resetTimer = null;
-    }
+    this.clearResetTimer();
+    this.buttonEl = null;
   }
 
   eq(other: CopyButtonWidget): boolean {
