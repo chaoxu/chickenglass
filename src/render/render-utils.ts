@@ -779,13 +779,16 @@ export function createCursorSensitiveViewPlugin(
 
       if (update.docChanged) {
         const docDirtyRanges = options?.docChangeRanges?.(update);
-        const dirtyRanges = docDirtyRanges === undefined
-          ? undefined
-          : contextDirtyRanges === undefined || docDirtyRanges === null
-            ? docDirtyRanges
-            : contextDirtyRanges === null
-              ? null
-              : mergeRanges([...docDirtyRanges, ...contextDirtyRanges]);
+        let dirtyRanges: readonly VisibleRange[] | null | undefined;
+        if (docDirtyRanges === undefined) {
+          dirtyRanges = undefined;
+        } else if (contextDirtyRanges === undefined || docDirtyRanges === null) {
+          dirtyRanges = docDirtyRanges;
+        } else if (contextDirtyRanges === null) {
+          dirtyRanges = null;
+        } else {
+          dirtyRanges = mergeRanges([...docDirtyRanges, ...contextDirtyRanges]);
+        }
         const needsFullRebuild =
           selectionNeedsRebuild ||
           (contextDirtyRanges === undefined && update.focusChanged) ||
