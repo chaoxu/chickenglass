@@ -10,6 +10,7 @@
 import createDOMPurify from "dompurify";
 import katex from "katex";
 import { buildKatexOptions } from "../lib/katex-options";
+import { isSafeUrl } from "../lib/url-utils";
 
 // Re-export from canonical shared locations
 export { buildKatexOptions } from "../lib/katex-options";
@@ -69,6 +70,42 @@ export function clearKatexHtmlCache(): void {
   katexHtmlCache.clear();
 }
 
+const KATEX_PURIFY_EXTRA_TAGS = ["semantics", "annotation"] as const;
+const KATEX_PURIFY_EXTRA_ATTRIBUTES = ["encoding"] as const;
+const KATEX_PURIFY_FORBID_TAGS = ["img"] as const;
+
+let katexPurify: ReturnType<typeof createDOMPurify> | null = null;
+
+function getKatexPurify(): ReturnType<typeof createDOMPurify> {
+  if (katexPurify) {
+    return katexPurify;
+  }
+  if (typeof window === "undefined") {
+    throw new Error("sanitizeKatexHtml requires a browser-like window");
+  }
+
+  const purify = createDOMPurify(window);
+  purify.addHook("afterSanitizeAttributes", (node) => {
+    if (node.hasAttribute("href")) {
+      const href = node.getAttribute("href") ?? "";
+      if (!isSafeUrl(href)) {
+        node.removeAttribute("href");
+      }
+    }
+  });
+  katexPurify = purify;
+  return purify;
+}
+
+function sanitizeKatexHtml(raw: string): string {
+  return getKatexPurify().sanitize(raw, {
+    USE_PROFILES: { html: true, svg: true, mathMl: true },
+    ADD_TAGS: [...KATEX_PURIFY_EXTRA_TAGS],
+    ADD_ATTR: [...KATEX_PURIFY_EXTRA_ATTRIBUTES],
+    FORBID_TAGS: [...KATEX_PURIFY_FORBID_TAGS],
+  });
+}
+
 export function renderKatexToHtml(
   latex: string,
   isDisplay: boolean,
@@ -84,17 +121,15 @@ export function renderKatexToHtml(
     ...buildKatexOptions(isDisplay, macros),
     output: "htmlAndMathml",
   });
+  const sanitized = sanitizeKatexHtml(html);
   if (katexHtmlCache.size >= MAX_KATEX_CACHE_ENTRIES) {
     katexHtmlCache.clear();
   }
-  katexHtmlCache.set(key, html);
-  return html;
+  katexHtmlCache.set(key, sanitized);
+  return sanitized;
 }
 
 // ── CSL HTML sanitizer ──────────────────────────────────────────────────────
-
-// Import isSafeUrl for local use in the DOMPurify hook
-import { isSafeUrl } from "../lib/url-utils";
 
 /**
  * Allowlist of HTML element names safe for CSL-formatted bibliography output.
