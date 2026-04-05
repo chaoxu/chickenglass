@@ -116,4 +116,72 @@ describe("measureSidenotePositions", () => {
 
     expect(measureSidenotePositions(entries, itemRefs, [10, 38], 0)).toEqual([10, 58]);
   });
+
+  it("batches height reads before running placement math", () => {
+    const events: string[] = [];
+    const entries = [
+      {
+        id: "a",
+        number: 1,
+        content: "Footnote",
+        refFrom: 1,
+        get anchorY() {
+          events.push("anchor:a");
+          return 10;
+        },
+        defFrom: 10,
+      },
+      {
+        id: "b",
+        number: 2,
+        content: "Footnote",
+        refFrom: 2,
+        get anchorY() {
+          events.push("anchor:b");
+          return 60;
+        },
+        defFrom: 20,
+      },
+      {
+        id: "c",
+        number: 3,
+        content: "Footnote",
+        refFrom: 3,
+        get anchorY() {
+          events.push("anchor:c");
+          return 70;
+        },
+        defFrom: 30,
+      },
+    ];
+    const itemRefs = new Map([
+      ["a", {
+        get offsetHeight() {
+          events.push("height:a");
+          return 20;
+        },
+      }],
+      ["b", {
+        get offsetHeight() {
+          events.push("height:b");
+          return 30;
+        },
+      }],
+      ["c", {
+        get offsetHeight() {
+          events.push("height:c");
+          return 25;
+        },
+      }],
+    ]);
+
+    expect(measureSidenotePositions(entries, itemRefs, [10, 60, 90], 1)).toEqual([10, 60, 98]);
+    expect(events).toEqual([
+      "height:a",
+      "height:b",
+      "height:c",
+      "anchor:b",
+      "anchor:c",
+    ]);
+  });
 });
