@@ -259,22 +259,36 @@ function tryResizeIframe(
  * same-origin or sandbox allows access). If cross-origin blocks access,
  * stops immediately. Otherwise polls until content is ready.
  */
-function autoResizeGistIframe(iframe: HTMLIFrameElement): void {
+function autoResizeGistIframe(iframe: HTMLIFrameElement): () => void {
   const result = tryResizeIframe(iframe);
-  if (result !== "unavailable") return;
+  if (result !== "unavailable") {
+    return () => {};
+  }
 
   // Content not ready yet — poll until it loads or we give up
   let attempts = 0;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let cancelled = false;
 
   const poll = (): void => {
+    if (cancelled) return;
     attempts++;
     const r = tryResizeIframe(iframe);
     if (r === "unavailable" && attempts < IFRAME_MAX_ATTEMPTS) {
-      setTimeout(poll, IFRAME_POLL_INTERVAL_MS);
+      timer = setTimeout(poll, IFRAME_POLL_INTERVAL_MS);
+    } else {
+      timer = null;
     }
   };
 
-  setTimeout(poll, IFRAME_POLL_INTERVAL_MS);
+  timer = setTimeout(poll, IFRAME_POLL_INTERVAL_MS);
+  return () => {
+    cancelled = true;
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
 }
 
 export function embedSandboxPermissions(embedType: string): string {
@@ -286,6 +300,15 @@ export function embedSandboxPermissions(embedType: string): string {
 
 /** Widget that renders an iframe for embed blocks. */
 class EmbedWidget extends RenderWidget {
+  private readonly gistCleanup = new WeakMap<
+    HTMLElement,
+    {
+      readonly iframe: HTMLIFrameElement;
+      readonly handleLoad: () => void;
+      readonly cancelResize: () => void;
+    }
+  >();
+
   constructor(
     private readonly src: string,
     private readonly embedType: string,
@@ -313,13 +336,31 @@ class EmbedWidget extends RenderWidget {
 
     // Gist embeds: auto-resize iframe to match content height
     if (this.embedType === "gist") {
-      iframe.addEventListener("load", () => {
-        autoResizeGistIframe(iframe);
+      let cancelResize = () => {};
+      const handleLoad = (): void => {
+        cancelResize();
+        cancelResize = autoResizeGistIframe(iframe);
+      };
+      iframe.addEventListener("load", handleLoad, { once: true });
+      this.gistCleanup.set(wrapper, {
+        iframe,
+        handleLoad,
+        cancelResize: () => {
+          cancelResize();
+        },
       });
     }
 
     wrapper.appendChild(iframe);
     return wrapper;
+  }
+
+  override destroy(dom: HTMLElement): void {
+    const cleanup = this.gistCleanup.get(dom);
+    if (!cleanup) return;
+    cleanup.iframe.removeEventListener("load", cleanup.handleLoad);
+    cleanup.cancelResize();
+    this.gistCleanup.delete(dom);
   }
 
   eq(other: EmbedWidget): boolean {

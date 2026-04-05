@@ -6,6 +6,7 @@ import { bibDataEffect, bibDataField } from "./citation-render";
 import { CslProcessor } from "./csl-processor";
 import { CSS } from "../constants/css-classes";
 import {
+  createMockEditorView,
   createTestView,
   createEditorState,
   getDecorationSpecs,
@@ -267,6 +268,36 @@ describe("BibliographyWidget", () => {
     expect(backlink).not.toBeNull();
     expect(backlink?.getAttribute("href")).toBe("#cite-ref-1");
     expect(backlink?.textContent).toBe("↩1");
+  });
+
+  it("removes backlink handlers when the widget is destroyed", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new BibliographyWidget(
+      [karger],
+      [],
+      new Map([["karger2000", [{ occurrence: 1, from: 4, to: 17 }]]]),
+    );
+
+    const el = widget.toDOM(view);
+    const backlink = el.querySelector<HTMLElement>(`.${CSS.bibliographyBacklink}`);
+    backlink?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(dispatch).toHaveBeenCalledWith({
+      selection: { anchor: 4 },
+      scrollIntoView: true,
+    });
+    expect(focus).toHaveBeenCalledTimes(1);
+
+    dispatch.mockClear();
+    focus.mockClear();
+
+    widget.destroy(el);
+    backlink?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(focus).not.toHaveBeenCalled();
   });
 
   it("preserves citeproc left/right wrappers for numeric bibliography entries", () => {

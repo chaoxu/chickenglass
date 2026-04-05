@@ -6,7 +6,7 @@
  * to check which decorations are applied for a given document + cursor position.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
@@ -21,6 +21,8 @@ import { documentSemanticsField } from "../semantics/codemirror-source";
 import { editorFocusField, focusEffect, mathMacrosField } from "../render/render-core";
 import { widgetSourceMap } from "../render/render-utils";
 import { frontmatterField } from "../editor/frontmatter-state";
+import { defaultPlugins } from "./default-plugins";
+import { IFRAME_POLL_INTERVAL_MS } from "../constants/timing";
 import {
   applyStateEffects,
   createEditorState,
@@ -83,6 +85,22 @@ function createTestStateWithPlugins(
 function getDecoSpecs(state: EditorState) {
   return getDecorationSpecs(state.field(blockDecorationField));
 }
+
+function getWidgetFromDecorations<T>(state: EditorState, widgetClass: string): T {
+  const cursor = state.field(blockDecorationField).iter();
+  while (cursor.value) {
+    const widget = cursor.value.spec.widget;
+    if (widget?.constructor?.name === widgetClass) {
+      return widget as T;
+    }
+    cursor.next();
+  }
+  throw new Error(`expected widget ${widgetClass}`);
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const TWO_BLOCKS = [
   "::: {.theorem} Title",
@@ -488,6 +506,84 @@ describe("BlockHeaderWidget.updateDOM", () => {
     newWidget.updateDOM(dom);
 
     expect(dom).toBe(domRef);
+  });
+});
+
+describe("EmbedWidget cleanup", () => {
+  function createEmbedState(doc: string): EditorState {
+    return createEditorState(doc, {
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        frontmatterField,
+        documentSemanticsField,
+        mathMacrosField,
+        createPluginRegistryField(defaultPlugins),
+        blockCounterField,
+        editorFocusField,
+        blockDecorationField,
+      ],
+    });
+  }
+
+  it("removes the gist load handler when the widget is destroyed before load", () => {
+    vi.useFakeTimers();
+
+    const state = createEmbedState("::: {.gist}\nhttps://gist.github.com/user/abc123\n:::");
+    const widget = getWidgetFromDecorations<{
+      toDOM(): HTMLElement;
+      destroy(dom: HTMLElement): void;
+    }>(state, "EmbedWidget");
+    const dom = widget.toDOM();
+    const iframe = dom.querySelector<HTMLIFrameElement>("iframe");
+    expect(iframe).not.toBeNull();
+
+    let contentDocumentReads = 0;
+    Object.defineProperty(iframe!, "contentDocument", {
+      configurable: true,
+      get() {
+        contentDocumentReads++;
+        return { body: null } as unknown as Document;
+      },
+    });
+
+    widget.destroy(dom);
+    iframe!.dispatchEvent(new Event("load"));
+    vi.runOnlyPendingTimers();
+
+    expect(contentDocumentReads).toBe(0);
+  });
+
+  it("cancels gist resize polling when the widget is destroyed", () => {
+    vi.useFakeTimers();
+
+    const state = createEmbedState("::: {.gist}\nhttps://gist.github.com/user/abc123\n:::");
+    const widget = getWidgetFromDecorations<{
+      toDOM(): HTMLElement;
+      destroy(dom: HTMLElement): void;
+    }>(state, "EmbedWidget");
+    const dom = widget.toDOM();
+    const iframe = dom.querySelector<HTMLIFrameElement>("iframe");
+    expect(iframe).not.toBeNull();
+
+    let contentDocumentReads = 0;
+    Object.defineProperty(iframe!, "contentDocument", {
+      configurable: true,
+      get() {
+        contentDocumentReads++;
+        return { body: null } as unknown as Document;
+      },
+    });
+
+    iframe!.dispatchEvent(new Event("load"));
+    expect(contentDocumentReads).toBe(1);
+
+    vi.advanceTimersByTime(IFRAME_POLL_INTERVAL_MS);
+    expect(contentDocumentReads).toBe(2);
+
+    widget.destroy(dom);
+    vi.advanceTimersByTime(IFRAME_POLL_INTERVAL_MS * 4);
+
+    expect(contentDocumentReads).toBe(2);
   });
 });
 
