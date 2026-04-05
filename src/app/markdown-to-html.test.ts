@@ -172,12 +172,13 @@ describe("markdownToHtml", () => {
   it("renders display math", () => {
     const html = markdownToHtml("$$\nx^2 + y^2 = z^2\n$$");
     expect(html).toContain(`class="${CSS.mathDisplay}"`);
+    expect(html).not.toContain(CSS.mathDisplayNumbered);
     expect(html).toContain("katex");
   });
 
   it("renders display math with equation labels", () => {
     const html = markdownToHtml("$$\nx^2\n$$ {#eq:foo}");
-    expect(html).toContain(`class="${CSS.mathDisplay}"`);
+    expect(html).toContain(`class="${CSS.mathDisplay} ${CSS.mathDisplayNumbered}"`);
     expect(html).toContain(`class="${CSS.mathDisplayNumber}"`);
     expect(html).toContain("katex");
     expect(html).toContain("(1)");

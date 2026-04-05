@@ -600,12 +600,12 @@ function renderDisplayMath(node: SyntaxNode, ctx: WalkContext): string {
   const equationNumber = equationId
     ? ctx.semantics.equationById.get(equationId)?.number
     : undefined;
-  const equationNumberHtml = equationNumber !== undefined
-    ? `<span class="${CSS.mathDisplayNumber}">(${equationNumber})</span>`
-    : "";
-
   const mathHtml = renderMath(latex, true, ctx.macros);
-  return `<div class="${CSS.mathDisplay}"><div class="${CSS.mathDisplayContent}">${mathHtml}</div>${equationNumberHtml}</div>`;
+  if (equationNumber === undefined) {
+    return `<div class="${CSS.mathDisplay}">${mathHtml}</div>`;
+  }
+
+  return `<div class="${CSS.mathDisplay} ${CSS.mathDisplayNumbered}"><div class="${CSS.mathDisplayContent}">${mathHtml}</div><span class="${CSS.mathDisplayNumber}">(${equationNumber})</span></div>`;
 }
 
 /** Render a FootnoteDef node. */

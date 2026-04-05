@@ -192,13 +192,19 @@ ${themeTokens}
       border-radius: var(--cf-border-radius);
     }
     .cf-math-display {
+      margin: 0;
+      text-align: center;
+    }
+    .cf-math-display-numbered {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
       align-items: center;
-      margin: 0;
+      text-align: initial;
     }
     .cf-math-display-content {
       display: inline-block;
+    }
+    .cf-math-display-numbered > .cf-math-display-content {
       grid-column: 2;
     }
     .cf-math-display-number {

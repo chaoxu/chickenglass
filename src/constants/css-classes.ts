@@ -75,6 +75,7 @@ export const CSS = {
 
   /** Display math wrapper. */
   mathDisplay: "cf-math-display",
+  mathDisplayNumbered: "cf-math-display-numbered",
   mathDisplayContent: "cf-math-display-content",
   mathDisplayNumber: "cf-math-display-number",
 

@@ -313,10 +313,14 @@ function findMathRoot(el: HTMLElement): HTMLElement {
 function buildEquationNumbersByFrom(
   equationById: ReadonlyMap<string, EquationSemantics>,
 ): ReadonlyMap<number, number> {
+  const cached = equationNumbersByFromCache.get(equationById);
+  if (cached) return cached;
+
   const numbers = new Map<number, number>();
   for (const equation of equationById.values()) {
     numbers.set(equation.from, equation.number);
   }
+  equationNumbersByFromCache.set(equationById, numbers);
   return numbers;
 }
 
@@ -327,6 +331,11 @@ function getDisplayEquationNumber(
   if (!region.isDisplay || region.labelFrom === undefined) return undefined;
   return equationNumbersByFrom.get(region.from);
 }
+
+const equationNumbersByFromCache = new WeakMap<
+  ReadonlyMap<string, EquationSemantics>,
+  ReadonlyMap<number, number>
+>();
 
 /** Unified widget that renders both inline and display math via KaTeX. */
 export class MathWidget extends MacroAwareWidget {
@@ -339,6 +348,13 @@ export class MathWidget extends MacroAwareWidget {
     private readonly equationNumber?: number,
   ) {
     super(macros);
+  }
+
+  private syncDisplayLayout(el: HTMLElement): void {
+    el.classList.toggle(
+      CSS.mathDisplayNumbered,
+      this.equationNumber !== undefined,
+    );
   }
 
   private syncDisplayEquationNumber(el: HTMLElement): void {
@@ -408,6 +424,7 @@ export class MathWidget extends MacroAwareWidget {
         // Shrink-wrap the rendered equation so only visible math is clickable.
         content.className = CSS.mathDisplayContent;
         el.appendChild(content);
+        this.syncDisplayLayout(el);
         this.syncDisplayEquationNumber(el);
         return el;
       }
@@ -463,6 +480,7 @@ export class MathWidget extends MacroAwareWidget {
       if (!content) return false;
       content.className = CSS.mathDisplayContent;
       renderKatex(content, this.latex, true, this.macros);
+      this.syncDisplayLayout(dom);
       this.syncDisplayEquationNumber(dom);
     } else {
       renderKatex(dom, this.latex, false, this.macros);
@@ -747,6 +765,8 @@ const mathDecorationField = StateField.define<DecorationSet>({
     const analysisAfter = tr.state.field(documentAnalysisField);
     const regionsBefore = analysisBefore.mathRegions;
     const regionsAfter = analysisAfter.mathRegions;
+    const equationNumbersBefore = buildEquationNumbersByFrom(analysisBefore.equationById);
+    const equationNumbersAfter = buildEquationNumbersByFrom(analysisAfter.equationById);
 
     if (regionsBefore !== regionsAfter) {
       // Regions changed.  When the doc changed and only positions shifted
@@ -760,8 +780,8 @@ const mathDecorationField = StateField.define<DecorationSet>({
         && mathContentUnchanged(
           regionsBefore,
           regionsAfter,
-          buildEquationNumbersByFrom(analysisBefore.equationById),
-          buildEquationNumbersByFrom(analysisAfter.equationById),
+          equationNumbersBefore,
+          equationNumbersAfter,
         )
       ) {
         const mapped = value.map(tr.changes);

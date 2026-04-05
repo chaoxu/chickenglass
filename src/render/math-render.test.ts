@@ -201,7 +201,14 @@ describe("MathWidget (display)", () => {
   it("renders an equation number when provided", () => {
     const widget = new MathWidget("x^2", "$$x^2$$", true, {}, 0, 7);
     const el = widget.toDOM();
+    expect(el.classList.contains(CSS.mathDisplayNumbered)).toBe(true);
     expect(el.querySelector(`.${CSS.mathDisplayNumber}`)?.textContent).toBe("(7)");
+  });
+
+  it("does not apply numbered layout classes to unlabeled display math", () => {
+    const widget = new MathWidget("x^2", "$$x^2$$", true);
+    const el = widget.toDOM();
+    expect(el.classList.contains(CSS.mathDisplayNumbered)).toBe(false);
   });
 
   it("shows error for invalid LaTeX", () => {
