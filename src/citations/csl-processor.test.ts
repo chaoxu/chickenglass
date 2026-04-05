@@ -252,6 +252,37 @@ describe("CslProcessor ordering", () => {
     expect(first.cite(["alpha2020"])).toBe("[1]");
   });
 
+  it("tracks citation registration state across shared render surfaces", async () => {
+    const alpha: CslJsonItem = {
+      id: "alpha2020",
+      type: "article-journal",
+      author: [{ family: "Alpha" }],
+      issued: { "date-parts": [[2020]] },
+      title: "Alpha paper",
+    };
+    const beta: CslJsonItem = {
+      id: "beta2021",
+      type: "article-journal",
+      author: [{ family: "Beta" }],
+      issued: { "date-parts": [[2021]] },
+      title: "Beta paper",
+    };
+
+    const processor = await CslProcessor.create([alpha, beta]);
+
+    expect(processor.citationRegistrationKey).toBeNull();
+
+    processor.registerCitations([{ ids: ["alpha2020"] }, { ids: ["beta2021"] }]);
+    const fullDocumentKey = processor.citationRegistrationKey;
+    expect(fullDocumentKey).toBeTruthy();
+
+    processor.registerCitations([{ ids: ["alpha2020"] }]);
+    expect(processor.citationRegistrationKey).not.toBe(fullDocumentKey);
+
+    await processor.setStyle("<style>invalid</style>");
+    expect(processor.citationRegistrationKey).toBeNull();
+  });
+
   it("does not register a failed citation cluster as prior context", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const processor = CslProcessor.empty() as unknown as {

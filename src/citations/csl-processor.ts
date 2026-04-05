@@ -114,6 +114,24 @@ function buildCitationItems(
   });
 }
 
+function serializeKeyPart(value: string | undefined): string {
+  return value ?? "";
+}
+
+export interface CitationCluster {
+  readonly ids: readonly string[];
+  readonly locators?: readonly (string | undefined)[];
+}
+
+export function getCitationRegistrationKey(
+  clusters: readonly CitationCluster[],
+): string {
+  return clusters
+    .map((cluster) => cluster.ids.map((id, index) =>
+      `${id}\0${serializeKeyPart(cluster.locators?.[index])}`).join("\u0001"))
+    .join("\u0002");
+}
+
 let nextProcessorId = 0;
 
 function getStyleName(processorId: number, styleGeneration: number): string {
@@ -146,6 +164,9 @@ export class CslProcessor {
   private engine: CiteprocEngine | null = null;
   private styleXml: string;
   private engineRevision = 0;
+  // Registration state is shared across rich mode, read mode, and preview
+  // surfaces that reuse the same processor instance.
+  private registeredCitationKey: string | null = null;
   private initPromise: Promise<void> | null = null;
   private readonly processorId = nextProcessorId++;
   private styleGeneration = 0;
@@ -204,8 +225,11 @@ export class CslProcessor {
    * Register all citations in order so numeric styles can assign numbers.
    * Call this once with every citation cluster before calling cite().
    */
-  registerCitations(clusters: Array<{ ids: string[]; locators?: (string | undefined)[] }>): void {
+  registerCitations(clusters: CitationCluster[]): void {
+    this.registeredCitationKey = null;
     if (!this.engine) return;
+
+    const registrationKey = getCitationRegistrationKey(clusters);
     this.engine.updateItems([]);
     const allIds = new Set<string>();
     for (const cluster of clusters) {
@@ -231,6 +255,8 @@ export class CslProcessor {
         console.warn("[csl] cluster error for cite-" + i, e);
       }
     }
+
+    this.registeredCitationKey = registrationKey;
   }
 
   /** Format a parenthetical citation for the given ids, with optional locators. */
@@ -331,6 +357,10 @@ export class CslProcessor {
     return this.engineRevision;
   }
 
+  get citationRegistrationKey(): string | null {
+    return this.registeredCitationKey;
+  }
+
   private async initEngine(): Promise<void> {
     const styleGeneration = this.styleGeneration;
     const styleName = getStyleName(this.processorId, styleGeneration);
@@ -348,12 +378,14 @@ export class CslProcessor {
       const engine = cslConfig.engine(data, styleName, "en-US", "html");
       if (styleGeneration === this.styleGeneration) {
         this.engine = engine;
+        this.registeredCitationKey = null;
       }
     } catch (e: unknown) {
       // Invalid or unsupported CSL style XML -- disable engine, fall back to simple formatting
       console.warn("[csl] initEngine() failed, falling back to simple formatting", e);
       if (styleGeneration === this.styleGeneration) {
         this.engine = null;
+        this.registeredCitationKey = null;
       }
     } finally {
       if (styleGeneration === this.styleGeneration) {

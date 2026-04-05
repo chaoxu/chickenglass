@@ -13,6 +13,7 @@ import type { BlockPlugin } from "../plugins/plugin-types";
 import type { CslJsonItem } from "../citations/bibtex-parser";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CslProcessor } from "../citations/csl-processor";
+import { markdownToHtml } from "../app/markdown-to-html";
 import { CSS } from "../constants/css-classes";
 import { createTestView, makeBlockPlugin, makeBibStore } from "../test-utils";
 import {
@@ -400,6 +401,33 @@ describe("collectReferenceRanges", () => {
     expect(ref).toBeDefined();
     if (!ref) return;
     expect(widgetClass(ref)).toBe("MixedClusterWidget");
+  });
+
+  it("re-registers shared processors after snippet rendering mutates citation order (#788)", async () => {
+    const doc = "See [@karger2000] and [@stein2001].";
+    const processor = await CslProcessor.create([karger, stein]);
+    view = createView(doc, doc.length);
+    view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: processor }) });
+
+    collectReferenceRanges(view, store);
+
+    markdownToHtml("Preview [@karger2000].", {
+      bibliography: store,
+      cslProcessor: processor,
+    });
+
+    const ranges = collectReferenceRanges(view, store);
+    const steinRange = ranges.find(
+      (range) => view.state.sliceDoc(range.from, range.to) === "[@stein2001]",
+    );
+    expect(steinRange).toBeDefined();
+    if (!steinRange) return;
+
+    const widget = steinRange.value.spec.widget;
+    expect(widget).toBeDefined();
+    if (!widget) return;
+
+    expect((widget.toDOM() as HTMLElement).textContent).toBe("[2]");
   });
 
   // Regression (#397): mixed cluster must have per-item spans with data-ref-id
