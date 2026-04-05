@@ -163,6 +163,11 @@ describe("math preview positioning", () => {
     if (!panel) {
       throw new Error("expected math preview panel");
     }
+    const content = panel.querySelector<HTMLElement>(".cf-math-preview-content");
+    expect(content).not.toBeNull();
+    if (!content) {
+      throw new Error("expected math preview content");
+    }
 
     panel.getBoundingClientRect = () => ({
       x: 200,
@@ -238,6 +243,11 @@ describe("math preview positioning", () => {
     if (!panel) {
       throw new Error("expected math preview panel");
     }
+    const content = panel.querySelector<HTMLElement>(".cf-math-preview-content");
+    expect(content).not.toBeNull();
+    if (!content) {
+      throw new Error("expected math preview content");
+    }
 
     const mouseMoveCall = addEventListenerSpy.mock.calls.find(([type]) => type === "mousemove");
     const mouseUpCall = addEventListenerSpy.mock.calls.find(([type]) => type === "mouseup");
@@ -256,6 +266,15 @@ describe("math preview positioning", () => {
     });
     panel.dispatchEvent(staleMouseDown);
     expect(staleMouseDown.defaultPrevented).toBe(false);
+
+    const staleContentMouseDown = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 215,
+      clientY: 134,
+    });
+    content.dispatchEvent(staleContentMouseDown);
+    expect(staleContentMouseDown.defaultPrevented).toBe(false);
 
     addEventListenerSpy.mockRestore();
   });

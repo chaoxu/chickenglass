@@ -188,7 +188,7 @@ class MathPreviewPlugin implements PluginValue {
       );
       this.view.focus();
       this.view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
-    });
+    }, listenerOptions);
     panel.appendChild(content);
 
     this.contentEl = content;
