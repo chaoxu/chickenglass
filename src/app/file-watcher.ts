@@ -7,6 +7,7 @@
  */
 
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { logCatchError } from "./lib/log-catch-error";
 import { basename } from "./lib/utils";
 import { measureAsync } from "./perf";
 import { watchDirectoryCommand, unwatchDirectoryCommand } from "./tauri-client/watch";
@@ -122,9 +123,9 @@ export class FileWatcher {
     // Lazy-import to keep @tauri-apps/api/event out of the browser bundle (#446).
     const { listen } = await import("@tauri-apps/api/event");
     const unlisten = await listen<FileChangedPayload>("file-changed", (event) => {
-      void this.handleFileChanged(event.payload).catch((e: unknown) => {
-        console.error("[file-watcher] handleFileChanged failed", event.payload, e);
-      });
+      void this.handleFileChanged(event.payload).catch(
+        logCatchError("[file-watcher] handleFileChanged failed", event.payload),
+      );
     });
 
     if (this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
@@ -170,15 +171,13 @@ export class FileWatcher {
       void measureAsync("watch.refresh_tree", () => this.config.refreshTree(relativePath), {
         category: "watch",
         detail: relativePath,
-      }).catch((e: unknown) => {
-        console.error("[file-watcher] tree refresh failed", relativePath, e);
-      });
+      }).catch(logCatchError("[file-watcher] tree refresh failed", relativePath));
     }
 
     if (this.config.handleWatchedPathChange) {
-      void Promise.resolve(this.config.handleWatchedPathChange(relativePath)).catch((e: unknown) => {
-        console.error("[file-watcher] watched-path handler failed", relativePath, e);
-      });
+      void Promise.resolve(this.config.handleWatchedPathChange(relativePath)).catch(
+        logCatchError("[file-watcher] watched-path handler failed", relativePath),
+      );
     }
 
     if (!this.config.isFileOpen(relativePath)) {
@@ -201,9 +200,7 @@ export class FileWatcher {
       void measureAsync("watch.reload_clean_file", () => this.config.reloadFile(relativePath), {
         category: "watch",
         detail: relativePath,
-      }).catch((e: unknown) => {
-        console.error("[file-watcher] silent reload failed", relativePath, e);
-      });
+      }).catch(logCatchError("[file-watcher] silent reload failed", relativePath));
       return;
     }
 
@@ -241,14 +238,12 @@ export class FileWatcher {
     yesBtn.addEventListener("click", () => {
       try {
         void this.config.reloadFile(path)
-          .catch((e: unknown) => {
-            console.error("[file-watcher] reloadFile failed", path, e);
-          })
+          .catch(logCatchError("[file-watcher] reloadFile failed", path))
           .finally(() => {
             this.resolveNotification(path);
           });
       } catch (e: unknown) {
-        console.error("[file-watcher] reload button handler failed", path, e);
+        logCatchError("[file-watcher] reload button handler failed", path)(e);
         this.resolveNotification(path);
       }
     });
@@ -261,7 +256,7 @@ export class FileWatcher {
       try {
         this.resolveNotification(path);
       } catch (e: unknown) {
-        console.error("[file-watcher] dismiss button handler failed", path, e);
+        logCatchError("[file-watcher] dismiss button handler failed", path)(e);
       }
     });
     bar.appendChild(noBtn);

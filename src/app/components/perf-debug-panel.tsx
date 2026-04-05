@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { logCatchError } from "../lib/log-catch-error";
 import {
   clearCombinedPerf,
   getCombinedPerfSnapshot,
@@ -22,9 +23,9 @@ export function PerfDebugPanel() {
     const toggle = () => setOpen((value) => !value);
     const refresh = () => {
       if (!open) return;
-      void getCombinedPerfSnapshot().then(setSnapshot).catch((e: unknown) => {
-        console.error("[perf] failed to refresh snapshot", e);
-      });
+      void getCombinedPerfSnapshot().then(setSnapshot).catch(
+        logCatchError("[perf] failed to refresh snapshot"),
+      );
     };
 
     window.addEventListener(toggleEvent, toggle);
@@ -39,9 +40,9 @@ export function PerfDebugPanel() {
     if (!open) return;
 
     const load = () => {
-      void getCombinedPerfSnapshot().then(setSnapshot).catch((e: unknown) => {
-        console.error("[perf] failed to load snapshot", e);
-      });
+      void getCombinedPerfSnapshot().then(setSnapshot).catch(
+        logCatchError("[perf] failed to load snapshot"),
+      );
     };
 
     load();
@@ -68,9 +69,9 @@ export function PerfDebugPanel() {
           <button
             type="button"
             onClick={() => {
-              void getCombinedPerfSnapshot().then(setSnapshot).catch((e: unknown) => {
-                console.error("[perf] failed to refresh snapshot", e);
-              });
+              void getCombinedPerfSnapshot().then(setSnapshot).catch(
+                logCatchError("[perf] failed to refresh snapshot"),
+              );
             }}
             className="rounded border border-[var(--cf-border)] px-2 py-1 text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]"
           >
@@ -82,9 +83,7 @@ export function PerfDebugPanel() {
               void clearCombinedPerf()
                 .then(() => getCombinedPerfSnapshot())
                 .then(setSnapshot)
-                .catch((e: unknown) => {
-                  console.error("[perf] failed to clear/refresh snapshot", e);
-                });
+                .catch(logCatchError("[perf] failed to clear/refresh snapshot"));
             }}
             className="rounded border border-[var(--cf-border)] px-2 py-1 text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]"
           >
