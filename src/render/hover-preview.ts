@@ -23,7 +23,10 @@ import {
 import type { ReferenceSemantics } from "../semantics/document";
 import { blockCounterField, type NumberedBlock } from "../plugins";
 import { bibDataField, type BibStore } from "../citations/citation-render";
-import { buildCitationPreviewContentFromEntry } from "../citations/citation-preview";
+import {
+  buildCitationPreviewContent,
+  formatCitationPreview,
+} from "../citations/citation-preview";
 import { renderKatex } from "./math-render";
 import { mathMacrosField } from "./math-macros";
 import { renderBlockContentToDom, renderDocumentFragmentToDom, type BlockContentOptions } from "../document-surfaces";
@@ -35,6 +38,7 @@ import {
 } from "../preview-surface";
 import { getPlugin, pluginRegistryField } from "../plugins";
 import { documentPathFacet, type BlockCounterEntry } from "../lib/types";
+import { isPdfTarget } from "../lib/pdf-target";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { collectImageTargets } from "../app/pdf-image-previews";
 import { imageUrlField } from "./image-url-cache";
@@ -46,6 +50,40 @@ import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 let tooltipEl: HTMLDivElement | null = null;
 const HOVER_PREVIEW_TABLE_SCROLL_CLASS = "cf-hover-preview-table-scroll";
 const HOVER_PREVIEW_CODE_BLOCK_CLASS = "cf-hover-preview-code-block";
+
+interface PdfCanvasReplacement {
+  readonly resolvedPath: string;
+  readonly src: string;
+}
+
+interface BlockPreviewMediaState {
+  readonly imageUrlOverrides?: ReadonlyMap<string, string>;
+  readonly key: string;
+  readonly loadingLocalMedia: readonly string[];
+  readonly readyPdfPreviews: readonly PdfCanvasReplacement[];
+  readonly trackedImagePaths: ReadonlySet<string>;
+  readonly trackedPdfPaths: ReadonlySet<string>;
+  readonly unavailableLocalMedia: readonly string[];
+}
+
+interface BlockPreviewPlan {
+  readonly buildBody: () => HTMLElement | null;
+  readonly key: string;
+  readonly trackedImagePaths: ReadonlySet<string>;
+  readonly trackedPdfPaths: ReadonlySet<string>;
+}
+
+interface TooltipPlan {
+  readonly buildContent: () => HTMLElement;
+  readonly dependsOnBibliography: boolean;
+  readonly dependsOnMacros: boolean;
+  readonly key: string;
+  readonly trackedImagePaths: ReadonlySet<string>;
+  readonly trackedPdfPaths: ReadonlySet<string>;
+}
+
+const EMPTY_TRACKED_PATHS: ReadonlySet<string> = new Set();
+const EMPTY_MEDIA_CACHE: ReadonlyMap<string, unknown> = new Map();
 
 function getTooltipEl(): HTMLDivElement {
   if (!tooltipEl) {
@@ -62,6 +100,8 @@ function getTooltipEl(): HTMLDivElement {
  * can tear it down.
  */
 let cleanupAutoUpdate: (() => void) | null = null;
+let currentFloatingAnchor: HTMLElement | null = null;
+let refreshFloatingPosition: (() => void) | null = null;
 
 /**
  * Monotonic generation counter. Incremented on every `showFloatingTooltip`
@@ -78,48 +118,62 @@ let showGeneration = 0;
  * and layout shift — preventing the drift reported in #474.
  */
 function showFloatingTooltip(anchor: HTMLElement, content: HTMLElement): void {
-  // Tear down any previous auto-update listener before starting a new one.
-  if (cleanupAutoUpdate) {
-    cleanupAutoUpdate();
-    cleanupAutoUpdate = null;
+  const el = getTooltipEl();
+  const anchorChanged = anchor !== currentFloatingAnchor;
+
+  if (anchorChanged) {
+    if (cleanupAutoUpdate) {
+      cleanupAutoUpdate();
+      cleanupAutoUpdate = null;
+    }
+
+    currentFloatingAnchor = anchor;
+    const gen = ++showGeneration;
+
+    const updatePosition = () => {
+      void computePosition(anchor, el, {
+        placement: "top",
+        middleware: [offset(6), flip(), shift({ padding: 5 })],
+      }).then(({ x, y }) => {
+        // Stale guard: if a newer show cycle started before this promise
+        // resolved, discard the result so we don't overwrite the new
+        // tooltip's position with coordinates for the old anchor. (#474)
+        if (gen !== showGeneration) return;
+
+        Object.assign(el.style, {
+          left: `${x}px`,
+          top: `${y}px`,
+        });
+      });
+    };
+
+    refreshFloatingPosition = updatePosition;
+
+    // `autoUpdate` calls `updatePosition` immediately, then again whenever
+    // the anchor or floating element moves (scroll, resize, layout shift).
+    cleanupAutoUpdate = autoUpdate(anchor, el, updatePosition);
   }
 
-  const el = getTooltipEl();
-  el.innerHTML = "";
-  el.appendChild(content);
+  el.replaceChildren(content);
+
+  const wasHidden = el.style.display === "none";
   el.style.display = "";
-  el.setAttribute("data-visible", "false");
+  if (wasHidden) {
+    el.setAttribute("data-visible", "false");
+  }
 
-  const gen = ++showGeneration;
+  refreshFloatingPosition?.();
 
-  const updatePosition = () => {
-    void computePosition(anchor, el, {
-      placement: "top",
-      middleware: [offset(6), flip(), shift({ padding: 5 })],
-    }).then(({ x, y }) => {
-      // Stale guard: if a newer show cycle started before this promise
-      // resolved, discard the result so we don't overwrite the new
-      // tooltip's position with coordinates for the old anchor. (#474)
-      if (gen !== showGeneration) return;
-
-      Object.assign(el.style, {
-        left: `${x}px`,
-        top: `${y}px`,
-      });
-      // Trigger enter animation after initial positioning
-      if (el.getAttribute("data-visible") !== "true") {
-        requestAnimationFrame(() => {
-          if (gen === showGeneration) {
-            el.setAttribute("data-visible", "true");
-          }
-        });
+  if (wasHidden) {
+    const visibleGeneration = showGeneration;
+    requestAnimationFrame(() => {
+      if (visibleGeneration === showGeneration) {
+        el.setAttribute("data-visible", "true");
       }
     });
-  };
-
-  // `autoUpdate` calls `updatePosition` immediately, then again whenever
-  // the anchor or floating element moves (scroll, resize, layout shift).
-  cleanupAutoUpdate = autoUpdate(anchor, el, updatePosition);
+  } else {
+    el.setAttribute("data-visible", "true");
+  }
 }
 
 /** Hide and clear the singleton tooltip. */
@@ -128,10 +182,13 @@ function hideFloatingTooltip(): void {
     cleanupAutoUpdate();
     cleanupAutoUpdate = null;
   }
+  currentFloatingAnchor = null;
+  refreshFloatingPosition = null;
+  showGeneration += 1;
   if (tooltipEl) {
     tooltipEl.setAttribute("data-visible", "false");
     tooltipEl.style.display = "none";
-    tooltipEl.innerHTML = "";
+    tooltipEl.replaceChildren();
   }
 }
 
@@ -207,46 +264,67 @@ function findEquationSource(view: EditorView, id: string): string | undefined {
  * inside hover preview bodies (e.g. `[@cormen2009]` or `[@thm:foo]`
  * within a theorem body).
  */
-function buildImageUrlOverrides(
+function buildBlockPreviewMediaState(
   view: EditorView,
   text: string,
-): {
-  overrides?: ReadonlyMap<string, string>;
-  loadingLocalMedia: string[];
-  unavailableLocalMedia: string[];
-} {
-  const overrides = new Map<string, string>();
+): BlockPreviewMediaState {
+  const imageUrlOverrides = new Map<string, string>();
+  const readyPdfPreviews: PdfCanvasReplacement[] = [];
   const loadingLocalMedia: string[] = [];
+  const trackedImagePaths = new Set<string>();
+  const trackedPdfPaths = new Set<string>();
   const unavailableLocalMedia: string[] = [];
+  const keyParts: string[] = [];
 
   for (const src of collectImageTargets(text)) {
     const preview = resolveLocalMediaPreview(view, src);
     if (!preview) continue;
 
     if (preview.kind === "image") {
-      overrides.set(preview.resolvedPath, preview.dataUrl);
+      imageUrlOverrides.set(preview.resolvedPath, preview.dataUrl);
+      trackedImagePaths.add(preview.resolvedPath);
+      keyParts.push(`image:${preview.resolvedPath}:ready`);
       continue;
     }
 
     if (preview.kind === "pdf-canvas") {
-      const dataUrl = getPdfCanvas(preview.resolvedPath)?.toDataURL("image/png");
-      if (typeof dataUrl === "string" && dataUrl.length > 0) {
-        overrides.set(preview.resolvedPath, dataUrl);
-        continue;
-      }
+      readyPdfPreviews.push({
+        resolvedPath: preview.resolvedPath,
+        src,
+      });
+      trackedPdfPaths.add(preview.resolvedPath);
+      keyParts.push(`pdf:${preview.resolvedPath}:ready`);
+      continue;
     }
 
     if (preview.kind === "loading") {
+      if (preview.isPdf) {
+        trackedPdfPaths.add(preview.resolvedPath);
+      } else {
+        trackedImagePaths.add(preview.resolvedPath);
+      }
+      keyParts.push(`${preview.isPdf ? "pdf" : "image"}:${preview.resolvedPath}:loading`);
       loadingLocalMedia.push(src);
       continue;
     }
 
+    if (isPdfTarget(src)) {
+      trackedPdfPaths.add(preview.resolvedPath);
+      keyParts.push(`pdf:${preview.resolvedPath}:error`);
+    } else {
+      trackedImagePaths.add(preview.resolvedPath);
+      keyParts.push(`image:${preview.resolvedPath}:error`);
+    }
     unavailableLocalMedia.push(src);
   }
 
   return {
-    overrides: overrides.size > 0 ? overrides : undefined,
+    imageUrlOverrides: imageUrlOverrides.size > 0 ? imageUrlOverrides : undefined,
+    key: keyParts.join("\0"),
     loadingLocalMedia,
+    readyPdfPreviews,
+    trackedImagePaths,
+    trackedPdfPaths,
     unavailableLocalMedia,
   };
 }
@@ -337,27 +415,94 @@ export function normalizeWidePreviewContentForTest(body: HTMLElement): void {
   normalizeWidePreviewContent(body);
 }
 
-function buildBlockPreviewBody(
+function clonePdfCanvasForHoverPreview(
+  source: HTMLCanvasElement,
+  alt: string,
+): HTMLCanvasElement {
+  const clone = document.createElement("canvas");
+  clone.width = source.width;
+  clone.height = source.height;
+  clone.style.display = "block";
+  clone.style.marginInline = "auto";
+  clone.style.maxWidth = "100%";
+  clone.style.height = "auto";
+  clone.setAttribute("role", "img");
+  clone.setAttribute("aria-label", alt || "PDF preview");
+
+  const ctx = clone.getContext("2d");
+  if (ctx) {
+    ctx.drawImage(source, 0, 0);
+  }
+
+  return clone;
+}
+
+function replacePdfPreviewImages(
+  body: HTMLElement,
+  readyPdfPreviews: readonly PdfCanvasReplacement[],
+): void {
+  if (readyPdfPreviews.length === 0) return;
+
+  const replacementBySrc = new Map(
+    readyPdfPreviews.map((preview) => [preview.src, preview.resolvedPath] as const),
+  );
+
+  for (const img of body.querySelectorAll("img")) {
+    const src = img.getAttribute("src");
+    if (!src) continue;
+
+    const resolvedPath = replacementBySrc.get(src);
+    if (!resolvedPath) continue;
+
+    const sourceCanvas = getPdfCanvas(resolvedPath);
+    if (!sourceCanvas) continue;
+
+    img.replaceWith(
+      clonePdfCanvasForHoverPreview(sourceCanvas, img.getAttribute("alt") ?? ""),
+    );
+  }
+}
+
+function buildBlockPreviewPlan(
   view: EditorView,
   block: NumberedBlock,
   useFullBlockSource: boolean,
   macros: Record<string, string>,
-): HTMLElement | null {
+): BlockPreviewPlan {
   const text = useFullBlockSource
     ? extractBlockSource(view, block)
     : extractBlockContent(view, block);
-  if (!text) return null;
+  if (!text) {
+    return {
+      buildBody: () => null,
+      key: `${useFullBlockSource ? "full" : "inner"}\0empty`,
+      trackedImagePaths: new Set<string>(),
+      trackedPdfPaths: new Set<string>(),
+    };
+  }
 
-  const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
-  const {
-    overrides,
-    loadingLocalMedia,
-    unavailableLocalMedia,
-  } = buildImageUrlOverrides(view, text);
-  renderBlockContentToDom(body, text, buildBlockContentOptions(view, macros, overrides));
-  normalizeWidePreviewContent(body);
-  appendMediaFallback(body, loadingLocalMedia, unavailableLocalMedia);
-  return body;
+  const mediaState = buildBlockPreviewMediaState(view, text);
+  return {
+    buildBody: () => {
+      const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
+      renderBlockContentToDom(
+        body,
+        text,
+        buildBlockContentOptions(view, macros, mediaState.imageUrlOverrides),
+      );
+      replacePdfPreviewImages(body, mediaState.readyPdfPreviews);
+      normalizeWidePreviewContent(body);
+      appendMediaFallback(
+        body,
+        mediaState.loadingLocalMedia,
+        mediaState.unavailableLocalMedia,
+      );
+      return body;
+    },
+    key: `${useFullBlockSource ? "full" : "inner"}\0${text}\0${mediaState.key}`,
+    trackedImagePaths: mediaState.trackedImagePaths,
+    trackedPdfPaths: mediaState.trackedPdfPaths,
+  };
 }
 
 export function buildBlockPreviewBodyForTest(
@@ -367,132 +512,200 @@ export function buildBlockPreviewBodyForTest(
   const macros = view.state.field(mathMacrosField);
   const registry = view.state.field(pluginRegistryField, false);
   const plugin = registry ? getPlugin(registry, block.type) : undefined;
-  return buildBlockPreviewBody(view, block, plugin?.captionPosition === "below", macros);
+  return buildBlockPreviewPlan(
+    view,
+    block,
+    plugin?.captionPosition === "below",
+    macros,
+  ).buildBody();
 }
 
 /**
- * Append the preview content for a single cross-reference id to a container.
- * Reused by both single-id and clustered tooltip builders.
+ * Build the tooltip plan for a cross-reference hover preview.
+ * Accepts pre-resolved data to avoid redundant resolution.
  */
-function appendCrossrefItem(
-  container: HTMLElement,
+function buildCrossrefTooltipPlan(
   view: EditorView,
   id: string,
   resolved: ResolvedCrossref,
-  macros: Record<string, string>,
-): void {
+): TooltipPlan {
+  const macros = view.state.field(mathMacrosField);
+
   if (resolved.kind === "block") {
     const headerText =
       resolved.title && resolved.title !== resolved.label
         ? `${resolved.label} ${resolved.title}`
         : resolved.label;
-    container.appendChild(createHeader(headerText, macros));
 
     const counterState = view.state.field(blockCounterField, false);
     const block = counterState?.byId.get(id);
-    if (block) {
-      const registry = view.state.field(pluginRegistryField, false);
-      const plugin = registry ? getPlugin(registry, block.type) : undefined;
-      const body = buildBlockPreviewBody(
-        view,
-        block,
-        plugin?.captionPosition === "below",
-        macros,
-      );
-      if (body) {
-        container.appendChild(body);
-      }
-    }
-  } else if (resolved.kind === "equation") {
-    container.appendChild(createHeader(resolved.label, macros));
+    const registry = view.state.field(pluginRegistryField, false);
+    const plugin = block && registry ? getPlugin(registry, block.type) : undefined;
+    const bodyPlan = block
+      ? buildBlockPreviewPlan(view, block, plugin?.captionPosition === "below", macros)
+      : null;
 
-    const eqContent = findEquationSource(view, id);
-    if (eqContent) {
-      const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
-      renderKatex(body, eqContent, true, macros);
-      container.appendChild(body);
-    }
-  } else {
-    container.appendChild(
-      createHeader(`Unresolved: ${id}`, macros, CSS.hoverPreviewUnresolved),
-    );
+    return {
+      buildContent: () => {
+        const container = createPreviewSurfaceContent(CSS.hoverPreview);
+        container.appendChild(createHeader(headerText, macros));
+        const body = bodyPlan?.buildBody();
+        if (body) {
+          container.appendChild(body);
+        }
+        return container;
+      },
+      dependsOnBibliography: true,
+      dependsOnMacros: true,
+      key: `crossref:block\0${id}\0${headerText}\0${bodyPlan?.key ?? "missing"}`,
+      trackedImagePaths: bodyPlan?.trackedImagePaths ?? new Set<string>(),
+      trackedPdfPaths: bodyPlan?.trackedPdfPaths ?? new Set<string>(),
+    };
   }
+
+  if (resolved.kind === "equation") {
+    const eqContent = findEquationSource(view, id);
+    return {
+      buildContent: () => {
+        const container = createPreviewSurfaceContent(CSS.hoverPreview);
+        container.appendChild(createHeader(resolved.label, macros));
+        if (eqContent) {
+          const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
+          renderKatex(body, eqContent, true, macros);
+          container.appendChild(body);
+        }
+        return container;
+      },
+      dependsOnBibliography: false,
+      dependsOnMacros: true,
+      key: `crossref:equation\0${id}\0${resolved.label}\0${eqContent ?? ""}`,
+      trackedImagePaths: new Set<string>(),
+      trackedPdfPaths: new Set<string>(),
+    };
+  }
+
+  return {
+    buildContent: () => {
+      const container = createPreviewSurfaceContent(CSS.hoverPreview);
+      container.appendChild(
+        createHeader(`Unresolved: ${id}`, macros, CSS.hoverPreviewUnresolved),
+      );
+      return container;
+    },
+    dependsOnBibliography: false,
+    dependsOnMacros: true,
+    key: `crossref:unresolved\0${id}`,
+    trackedImagePaths: new Set<string>(),
+    trackedPdfPaths: new Set<string>(),
+  };
 }
 
 /**
- * Build the tooltip DOM for a cross-reference hover preview.
- * Accepts pre-resolved data to avoid redundant resolution.
+ * Build the tooltip plan for a citation hover preview.
  */
-function buildCrossrefTooltip(
-  view: EditorView,
-  ref: ReferenceSemantics,
-  resolved: ResolvedCrossref,
-): HTMLElement {
-  const macros = view.state.field(mathMacrosField);
-  const container = createPreviewSurfaceContent(CSS.hoverPreview);
-  appendCrossrefItem(container, view, ref.ids[0], resolved, macros);
-  return container;
-}
-
-/**
- * Build the tooltip DOM for a citation hover preview.
- */
-function buildCitationTooltip(
+function buildCitationTooltipPlan(
   ids: readonly string[],
   store: BibStore,
-): HTMLElement {
-  const container = createPreviewSurfaceContent(CSS.hoverPreview);
+): TooltipPlan {
+  const previews = ids
+    .map((id) => {
+      const entry = store.get(id);
+      if (!entry) return null;
+      return { id, preview: formatCitationPreview(entry) };
+    })
+    .filter((item): item is { id: string; preview: string } => item !== null);
 
-  for (const id of ids) {
-    const entry = store.get(id);
-    if (!entry) continue;
+  return {
+    buildContent: () => {
+      const container = createPreviewSurfaceContent(CSS.hoverPreview);
 
-    const item = createPreviewSurfaceBody(CSS.hoverPreviewCitation);
-    item.appendChild(buildCitationPreviewContentFromEntry(entry));
-    container.appendChild(item);
-  }
+      for (const itemPreview of previews) {
+        const item = createPreviewSurfaceBody(CSS.hoverPreviewCitation);
+        item.appendChild(buildCitationPreviewContent(itemPreview.preview));
+        container.appendChild(item);
+      }
 
-  if (container.children.length === 0) {
-    container.appendChild(
-      createHeader(`Unknown citation: ${ids.join(", ")}`, {}, CSS.hoverPreviewUnresolved),
-    );
-  }
+      if (container.children.length === 0) {
+        container.appendChild(
+          createHeader(`Unknown citation: ${ids.join(", ")}`, {}, CSS.hoverPreviewUnresolved),
+        );
+      }
 
-  return container;
+      return container;
+    },
+    dependsOnBibliography: true,
+    dependsOnMacros: false,
+    key: `citation:cluster\0${ids.join("\0")}\0${previews.map((item) => `${item.id}:${item.preview}`).join("\0")}`,
+    trackedImagePaths: new Set<string>(),
+    trackedPdfPaths: new Set<string>(),
+  };
 }
 
 /**
- * Build a single-item tooltip for a specific id within a cluster.
+ * Build the tooltip plan for a specific id within a mixed cluster.
  */
-function buildSingleItemTooltip(
+function buildSingleItemTooltipPlan(
   view: EditorView,
   id: string,
   resolved: ReferenceClassification,
   store: BibStore,
-): HTMLElement {
+): TooltipPlan {
   const macros = view.state.field(mathMacrosField);
-  const container = createPreviewSurfaceContent(CSS.hoverPreview);
 
   if (resolved.kind === "citation") {
     const entry = store.get(id);
     if (entry) {
-      const item = createPreviewSurfaceBody(CSS.hoverPreviewCitation);
-      item.appendChild(buildCitationPreviewContentFromEntry(entry));
-      container.appendChild(item);
-    } else {
-      container.appendChild(
-        createHeader(`Unknown: @${id}`, macros, CSS.hoverPreviewUnresolved),
-      );
+      const preview = formatCitationPreview(entry);
+      return {
+        buildContent: () => {
+          const container = createPreviewSurfaceContent(CSS.hoverPreview);
+          const item = createPreviewSurfaceBody(CSS.hoverPreviewCitation);
+          item.appendChild(buildCitationPreviewContent(preview));
+          container.appendChild(item);
+          return container;
+        },
+        dependsOnBibliography: true,
+        dependsOnMacros: false,
+        key: `citation:item\0${id}\0${preview}`,
+        trackedImagePaths: new Set<string>(),
+        trackedPdfPaths: new Set<string>(),
+      };
     }
-  } else if (resolved.kind === "crossref") {
-    appendCrossrefItem(container, view, id, resolved.resolved, macros);
-  } else {
-    container.appendChild(
-      createHeader(`Unresolved: ${id}`, macros, CSS.hoverPreviewUnresolved),
-    );
+
+    return {
+      buildContent: () => {
+        const container = createPreviewSurfaceContent(CSS.hoverPreview);
+        container.appendChild(
+          createHeader(`Unknown: @${id}`, macros, CSS.hoverPreviewUnresolved),
+        );
+        return container;
+      },
+      dependsOnBibliography: true,
+      dependsOnMacros: false,
+      key: `citation:item\0${id}\0unknown`,
+      trackedImagePaths: new Set<string>(),
+      trackedPdfPaths: new Set<string>(),
+    };
   }
 
-  return container;
+  if (resolved.kind === "crossref") {
+    return buildCrossrefTooltipPlan(view, id, resolved.resolved);
+  }
+
+  return {
+    buildContent: () => {
+      const container = createPreviewSurfaceContent(CSS.hoverPreview);
+      container.appendChild(
+        createHeader(`Unresolved: ${id}`, macros, CSS.hoverPreviewUnresolved),
+      );
+      return container;
+    },
+    dependsOnBibliography: false,
+    dependsOnMacros: true,
+    key: `mixed:unresolved\0${id}`,
+    trackedImagePaths: new Set<string>(),
+    trackedPdfPaths: new Set<string>(),
+  };
 }
 
 // ── DOM walk helper ─────────────────────────────────────────────────────────
@@ -529,13 +742,13 @@ function findRefAt(view: EditorView, pos: number): ReferenceSemantics | undefine
  * Determine tooltip content for a hovered element that belongs to a
  * cross-reference or citation widget.
  *
- * Returns the tooltip content element, or null if no tooltip should show
+ * Returns a lazy tooltip plan, or null if no tooltip should show
  * (e.g., hovering on a separator text node).
  */
-function buildTooltipForElement(
+function buildTooltipPlanForElement(
   view: EditorView,
   target: HTMLElement,
-): HTMLElement | null {
+): TooltipPlan | null {
   const analysis = view.state.field(documentAnalysisField);
   const equationLabels = analysis.equationById;
 
@@ -570,7 +783,7 @@ function buildTooltipForElement(
 
   // Single-id crossref
   if (ref.ids.length === 1 && classifications[0].kind === "crossref") {
-    return buildCrossrefTooltip(view, ref, classifications[0].resolved);
+    return buildCrossrefTooltipPlan(view, ref.ids[0], classifications[0].resolved);
   }
 
   // Multi-id cluster — per-item targeting via data-ref-id
@@ -578,7 +791,7 @@ function buildTooltipForElement(
     if (!refId) return null; // Hovering on separator — no tooltip
     const itemIndex = ref.ids.indexOf(refId);
     if (itemIndex < 0) return null;
-    return buildSingleItemTooltip(view, refId, classifications[itemIndex], store);
+    return buildSingleItemTooltipPlan(view, refId, classifications[itemIndex], store);
   }
 
   // Pure citation cluster
@@ -586,12 +799,28 @@ function buildTooltipForElement(
     // If we have a specific ref-id in the cluster, show single item
     if (refId && ref.ids.includes(refId)) {
       const itemIndex = ref.ids.indexOf(refId);
-      return buildSingleItemTooltip(view, refId, classifications[itemIndex], store);
+      return buildSingleItemTooltipPlan(view, refId, classifications[itemIndex], store);
     }
-    return buildCitationTooltip(ref.ids, store);
+    return buildCitationTooltipPlan(ref.ids, store);
   }
 
   return null;
+}
+
+function cacheEntriesChanged<T>(
+  paths: ReadonlySet<string>,
+  oldCache: ReadonlyMap<string, T>,
+  newCache: ReadonlyMap<string, T>,
+): boolean {
+  if (paths.size === 0 || oldCache === newCache) return false;
+
+  for (const path of paths) {
+    if (oldCache.get(path) !== newCache.get(path)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // ── ViewPlugin: event delegation on scrollDOM ───────────────────────────────
@@ -608,6 +837,7 @@ function buildTooltipForElement(
 const hoverPreviewPlugin = ViewPlugin.define((view) => {
   let hoverTimer: ReturnType<typeof setTimeout> | null = null;
   let currentTarget: HTMLElement | null = null;
+  let currentPlan: TooltipPlan | null = null;
 
   const clearTimer = () => {
     if (hoverTimer !== null) {
@@ -631,6 +861,7 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
       if (currentTarget) {
         clearTimer();
         currentTarget = null;
+        currentPlan = null;
         hideFloatingTooltip();
       }
       return;
@@ -642,15 +873,17 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
     // Different anchor — start new hover delay
     clearTimer();
     currentTarget = anchor;
+    currentPlan = null;
     hideFloatingTooltip();
 
     hoverTimer = setTimeout(() => {
       // Guard: view must still be connected
       if (!view.dom.ownerDocument) return;
 
-      const content = buildTooltipForElement(view, anchor);
-      if (content) {
-        showFloatingTooltip(anchor, content);
+      const plan = buildTooltipPlanForElement(view, anchor);
+      if (plan) {
+        currentPlan = plan;
+        showFloatingTooltip(anchor, plan.buildContent());
       }
     }, HOVER_DELAY_MS);
   };
@@ -672,25 +905,34 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
 
     clearTimer();
     currentTarget = null;
+    currentPlan = null;
     hideFloatingTooltip();
   };
 
-  const refreshOpenTooltip = () => {
+  const refreshOpenTooltip = (forceRebuild = false) => {
     if (!currentTarget) return;
     if (!currentTarget.isConnected) {
       currentTarget = null;
+      currentPlan = null;
       hideFloatingTooltip();
       return;
     }
     if (!tooltipEl || tooltipEl.style.display === "none") return;
 
-    const content = buildTooltipForElement(view, currentTarget);
-    if (!content) {
+    const nextPlan = buildTooltipPlanForElement(view, currentTarget);
+    if (!nextPlan) {
+      currentPlan = null;
       hideFloatingTooltip();
       return;
     }
 
-    showFloatingTooltip(currentTarget, content);
+    if (!forceRebuild && currentPlan && nextPlan.key === currentPlan.key) {
+      currentPlan = nextPlan;
+      return;
+    }
+
+    currentPlan = nextPlan;
+    showFloatingTooltip(currentTarget, nextPlan.buildContent());
   };
 
   const scroller = view.scrollDOM;
@@ -699,18 +941,43 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
 
   return {
     update(update) {
-      const imageCacheChanged =
-        update.startState.field(imageUrlField, false) !== update.state.field(imageUrlField, false);
-      const pdfCacheChanged =
-        update.startState.field(pdfPreviewField, false) !== update.state.field(pdfPreviewField, false);
+      const imageCacheChanged = cacheEntriesChanged(
+        currentPlan?.trackedImagePaths ?? EMPTY_TRACKED_PATHS,
+        update.startState.field(imageUrlField, false) || EMPTY_MEDIA_CACHE,
+        update.state.field(imageUrlField, false) || EMPTY_MEDIA_CACHE,
+      );
+      const pdfCacheChanged = cacheEntriesChanged(
+        currentPlan?.trackedPdfPaths ?? EMPTY_TRACKED_PATHS,
+        update.startState.field(pdfPreviewField, false) || EMPTY_MEDIA_CACHE,
+        update.state.field(pdfPreviewField, false) || EMPTY_MEDIA_CACHE,
+      );
+      const analysisChanged =
+        update.startState.field(documentAnalysisField) !== update.state.field(documentAnalysisField);
+      const blockCountersChanged =
+        update.startState.field(blockCounterField, false) !== update.state.field(blockCounterField, false);
+      const bibliographyChanged =
+        update.startState.field(bibDataField) !== update.state.field(bibDataField);
+      const macrosChanged =
+        update.startState.field(mathMacrosField) !== update.state.field(mathMacrosField);
+      const forceRebuild =
+        (bibliographyChanged && currentPlan?.dependsOnBibliography === true) ||
+        (macrosChanged && currentPlan?.dependsOnMacros === true);
 
-      if (imageCacheChanged || pdfCacheChanged) {
-        refreshOpenTooltip();
+      if (
+        imageCacheChanged ||
+        pdfCacheChanged ||
+        forceRebuild ||
+        update.docChanged ||
+        analysisChanged ||
+        blockCountersChanged
+      ) {
+        refreshOpenTooltip(forceRebuild);
         return;
       }
 
       if (currentTarget && !currentTarget.isConnected) {
         currentTarget = null;
+        currentPlan = null;
         hideFloatingTooltip();
       }
     },
@@ -718,6 +985,7 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
       scroller.removeEventListener("mouseover", onMouseOver);
       scroller.removeEventListener("mouseout", onMouseOut);
       clearTimer();
+      currentPlan = null;
       hideFloatingTooltip();
     },
   };
