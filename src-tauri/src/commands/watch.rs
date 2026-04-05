@@ -4,10 +4,10 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use notify::{
-    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind,
+    event::ModifyKind, Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State, WebviewWindow, command};
+use tauri::{command, AppHandle, Emitter, State, WebviewWindow};
 
 use super::perf::measure_command;
 use super::state::{FileWatcherEntry, FileWatcherState, PerfState};
@@ -116,19 +116,22 @@ fn spawn_debounced_event_worker(
     app: AppHandle,
     window_label: String,
     debounce_window: Duration,
-) -> mpsc::Sender<WatchEventMessage> {
+) -> Result<mpsc::Sender<WatchEventMessage>, String> {
     let (sender, receiver) = mpsc::channel();
 
-    std::thread::spawn(move || {
-        let mut dispatcher = DebouncedEventDispatcher::new(debounce_window);
-        while let Ok(message) = receiver.recv() {
-            dispatcher.handle_message(message, &mut |payload| {
-                let _ = app.emit_to(window_label.as_str(), "file-changed", payload);
-            });
-        }
-    });
+    std::thread::Builder::new()
+        .name("file-watcher-debounce".to_string())
+        .spawn(move || {
+            let mut dispatcher = DebouncedEventDispatcher::new(debounce_window);
+            while let Ok(message) = receiver.recv() {
+                dispatcher.handle_message(message, &mut |payload| {
+                    let _ = app.emit_to(window_label.as_str(), "file-changed", payload);
+                });
+            }
+        })
+        .map_err(|e| format!("Failed to start file watcher debounce worker: {}", e))?;
 
-    sender
+    Ok(sender)
 }
 
 fn event_changes_tree(kind: &EventKind) -> bool {
@@ -249,7 +252,7 @@ pub fn watch_directory(
             let root_for_closure = watch_path.clone();
             let debounce_ms = Duration::from_millis(500);
             let event_sender =
-                spawn_debounced_event_worker(app.clone(), window_label.clone(), debounce_ms);
+                spawn_debounced_event_worker(app.clone(), window_label.clone(), debounce_ms)?;
             let event_sender_for_closure = event_sender.clone();
 
             let mut watcher = RecommendedWatcher::new(
@@ -313,14 +316,14 @@ pub fn watch_directory(
 #[cfg(test)]
 mod tests {
     use super::{
-        DebouncedEventDispatcher, FileChangedEvent, QueuedFileChangedEvent, WatchEventMessage,
         event_changes_tree, normalize_relative_event_path, remove_watcher_generation,
         reserve_watcher_slot, should_emit_debounced_event, should_ignore_relative_path,
+        DebouncedEventDispatcher, FileChangedEvent, QueuedFileChangedEvent, WatchEventMessage,
     };
     use crate::commands::state::FileWatcherEntry;
     use notify::{
-        EventKind,
         event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
+        EventKind,
     };
     use std::collections::HashMap;
     use std::fs;
