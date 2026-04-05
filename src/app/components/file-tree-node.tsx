@@ -23,7 +23,16 @@ function FileTreeNodeInner(props: FileTreeNodeProps) {
   if (props.entry.isDirectory) {
     return <FileTreeNodeFolder {...props} />;
   }
-  return <FileTreeNodeFile {...props} />;
+  return (
+    <FileTreeNodeFile
+      item={props.item}
+      entry={props.entry}
+      depth={props.depth}
+      isActive={props.isActive}
+      isFocused={props.isFocused}
+      rowProps={props.rowProps}
+    />
+  );
 }
 
 function areFileTreeNodePropsEqual(
