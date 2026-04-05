@@ -176,6 +176,54 @@ describe("useEditor", () => {
     expect(ref.state.view?.state.doc.toString()).toBe("hello!");
   });
 
+  it("preserves selection and scroll when a save sync rerender matches the live editor doc", () => {
+    const ref: HarnessRef = {
+      state: null as unknown as UseEditorReturn,
+    };
+    const Harness = createHarness(ref);
+    const initialDoc = [
+      "# Draft",
+      "",
+      "Line one",
+      "Line two",
+      "Line three",
+      "Line four",
+    ].join("\n");
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc: initialDoc,
+        docPath: "draft.md",
+      }));
+    });
+
+    act(() => {
+      ref.state.view?.dispatch({
+        changes: { from: ref.state.view.state.doc.length, to: ref.state.view.state.doc.length, insert: "\nSaved line" },
+      });
+      ref.state.view?.dispatch({ selection: { anchor: 18 } });
+      if (ref.state.view) {
+        ref.state.view.scrollDOM.scrollTop = 240;
+      }
+    });
+
+    const liveDoc = ref.state.view?.state.doc.toString();
+    expect(liveDoc).toBe(`${initialDoc}\nSaved line`);
+    expect(ref.state.view?.state.selection.main.head).toBe(18);
+    expect(ref.state.view?.scrollDOM.scrollTop).toBe(240);
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc: liveDoc ?? "",
+        docPath: "draft.md",
+      }));
+    });
+
+    expect(ref.state.view?.state.doc.toString()).toBe(liveDoc);
+    expect(ref.state.view?.state.selection.main.head).toBe(18);
+    expect(ref.state.view?.scrollDOM.scrollTop).toBe(240);
+  });
+
   it("remaps include source regions through user edits", async () => {
     const ref: HarnessRef = {
       state: null as unknown as UseEditorReturn,
