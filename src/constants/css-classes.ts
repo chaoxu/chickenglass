@@ -115,6 +115,12 @@ export const CSS = {
   citation: "cf-citation",
   citationPreview: "cf-citation-preview",
 
+  /** Shared preview surfaces. */
+  previewSurfaceShell: "cf-preview-surface-shell",
+  previewSurfaceContent: "cf-preview-surface-content",
+  previewSurfaceHeader: "cf-preview-surface-header",
+  previewSurfaceBody: "cf-preview-surface-body",
+
   /** Hover preview. */
   hoverPreview: "cf-hover-preview",
   hoverPreviewBody: "cf-hover-preview-body",
