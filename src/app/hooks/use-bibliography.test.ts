@@ -176,4 +176,29 @@ describe("useBibliography", () => {
     });
     expect(getDispatchedStoreIds(dispatch2)).toEqual(["new2001"]);
   });
+
+  it("warns and dispatches empty bibliography data when the bib file cannot be read", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fs = {
+      readFile: vi.fn(() => Promise.reject(new Error("missing"))),
+    } as unknown as FileSystem;
+    const { view, dispatch } = createView();
+    const { loadInitial } = useBibliography({
+      fs,
+      docPath: "notes/doc.md",
+    });
+
+    loadInitial("refs.bib", "styles/custom.csl", view);
+
+    await vi.waitFor(() => {
+      expect(dispatch).toHaveBeenCalledTimes(1);
+    });
+    expect(getDispatchedStoreIds(dispatch)).toEqual([]);
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "[bibliography] failed to load bibliography, using empty data",
+      { bibPath: "refs.bib", cslPath: "styles/custom.csl" },
+      expect.any(Error),
+    );
+    consoleWarn.mockRestore();
+  });
 });

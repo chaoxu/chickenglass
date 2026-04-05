@@ -220,8 +220,9 @@ export function parseFrontmatter(doc: string): FrontmatterResult {
   let parsed: unknown;
   try {
     parsed = parseYaml(extracted.raw);
-  } catch {
-    // Malformed YAML — degrade gracefully to empty config.
+  } catch (_error: unknown) {
+    // Frontmatter is parsed on every keystroke, so malformed YAML is expected
+    // while editing. Degrade to empty config without noisy console warnings.
     return { config: {}, end: extracted.end };
   }
 
