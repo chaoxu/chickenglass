@@ -217,9 +217,13 @@ const bibParseCache = new Map<string, CslJsonItem[]>();
 const BIB_PARSE_CACHE_MAX = 4;
 
 function cacheBibParseResult(content: string, result: CslJsonItem[]): void {
-  if (bibParseCache.size >= BIB_PARSE_CACHE_MAX) {
-    const oldest = bibParseCache.keys().next().value;
-    if (oldest !== undefined) bibParseCache.delete(oldest);
+  while (bibParseCache.size >= BIB_PARSE_CACHE_MAX) {
+    const oldest = bibParseCache.keys().next();
+    if (oldest.done) {
+      bibParseCache.clear();
+      break;
+    }
+    bibParseCache.delete(oldest.value);
   }
   bibParseCache.set(content, result);
 }

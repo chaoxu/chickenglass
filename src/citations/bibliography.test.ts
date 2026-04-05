@@ -5,6 +5,7 @@ import { type CslJsonItem } from "./bibtex-parser";
 import { bibDataEffect, bibDataField } from "./citation-render";
 import { CslProcessor } from "./csl-processor";
 import { CSS } from "../constants/css-classes";
+import defaultCslStyle from "./ieee.csl?raw";
 import {
   createMockEditorView,
   createTestView,
@@ -429,6 +430,29 @@ describe("bibliographyPlugin integration", () => {
 
       expect(secondSpy).toHaveBeenCalledTimes(1);
       expect(view.dom.querySelector(`.${CSS.bibliographyEntry}`)?.textContent).toContain("Second processor");
+    });
+
+    it("refreshes bibliography when the installed processor changes style", async () => {
+      const doc = "See [@karger2000].";
+      const processor = await CslProcessor.create([karger, stein, alpha]);
+
+      view = createBibView(doc, false);
+      view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: processor }) });
+      expect(view.dom.querySelector(`.${CSS.bibliographyEntry} .csl-left-margin`)?.textContent).toBe("[1]");
+
+      await processor.setStyle("<style>invalid</style>");
+      view.dispatch({ selection: { anchor: 1 } });
+
+      expect(view.state.field(bibDataField).processorRevision).toBe(processor.revision);
+      const fallbackEntry = view.dom.querySelector(`.${CSS.bibliographyEntry}`);
+      expect(fallbackEntry?.querySelector(".csl-left-margin")).toBeNull();
+      expect(fallbackEntry?.textContent).toContain("[1] Karger, David R..");
+
+      await processor.setStyle(defaultCslStyle);
+      view.dispatch({ selection: { anchor: 0 } });
+
+      expect(view.state.field(bibDataField).processorRevision).toBe(processor.revision);
+      expect(view.dom.querySelector(`.${CSS.bibliographyEntry} .csl-left-margin`)?.textContent).toBe("[1]");
     });
   });
 });

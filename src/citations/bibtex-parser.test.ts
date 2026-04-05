@@ -200,6 +200,23 @@ describe("parseBibTeX", () => {
       expect(second).not.toBe(first);
       expect(second[0].id).toBe("b2021");
     });
+
+    it("evicts the oldest cached parse when the FIFO cache reaches capacity", () => {
+      const bibs = Array.from({ length: 5 }, (_, index) => `@article{entry${index},
+  author = {Author, ${index}},
+  title = {Paper ${index}},
+  year = {20${index}0}
+}`);
+
+      const cached = bibs.map((bib) => parseBibTeX(bib));
+
+      expect(parseBibTeX(bibs[1])).toBe(cached[1]);
+      expect(parseBibTeX(bibs[4])).toBe(cached[4]);
+
+      const reparsedFirst = parseBibTeX(bibs[0]);
+      expect(reparsedFirst).not.toBe(cached[0]);
+      expect(reparsedFirst[0].id).toBe("entry0");
+    });
   });
 });
 
