@@ -11,6 +11,7 @@ import {
   type Extension,
   type Range,
   StateField,
+  type Transaction,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -26,6 +27,7 @@ import {
   foldedRanges,
 } from "@codemirror/language";
 import { buildDecorations, RenderWidget } from "../render/render-core";
+import type { HeadingSemantics } from "../semantics/document";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
@@ -39,7 +41,9 @@ interface HeadingFoldSection {
 }
 
 interface HeadingFoldState {
-  readonly sections: readonly HeadingFoldSection[];
+  readonly headings: readonly HeadingSemantics[];
+  readonly boundaryIndices: readonly (number | null)[];
+  readonly sectionsByHeadingIndex: readonly (HeadingFoldSection | null)[];
   readonly sectionByHeadingFrom: ReadonlyMap<number, HeadingFoldSection>;
   readonly decorations: DecorationSet;
 }
@@ -57,10 +61,26 @@ function foldToBeforeHeading(state: EditorState, headingFrom: number): number {
 
 function buildHeadingFoldSections(
   state: EditorState,
-): readonly HeadingFoldSection[] {
-  const { headings } = state.field(documentSemanticsField);
+  headings: readonly HeadingSemantics[],
+  boundaryIndices: readonly (number | null)[],
+): readonly (HeadingFoldSection | null)[] {
   if (headings.length === 0) return [];
+  return headings.map((_, index) =>
+    createHeadingFoldSection(state, headings, boundaryIndices[index], index)
+  );
+}
 
+function collectSections(
+  sectionsByHeadingIndex: readonly (HeadingFoldSection | null)[],
+): readonly HeadingFoldSection[] {
+  return sectionsByHeadingIndex.filter(
+    (section): section is HeadingFoldSection => section !== null,
+  );
+}
+
+function buildHeadingBoundaryIndices(
+  headings: readonly HeadingSemantics[],
+): readonly (number | null)[] {
   const nextHeadingIndexByLevel: Array<number | undefined> = [
     undefined,
     undefined,
@@ -70,41 +90,115 @@ function buildHeadingFoldSections(
     undefined,
     undefined,
   ];
-  const sections: HeadingFoldSection[] = [];
+  const boundaryIndices: Array<number | null> = new Array(headings.length);
 
   for (let index = headings.length - 1; index >= 0; index--) {
     const heading = headings[index];
-    let nextBoundaryIndex: number | undefined;
+    let nextBoundaryIndex: number | null = null;
 
     for (let level = 1; level <= heading.level; level++) {
       const candidate = nextHeadingIndexByLevel[level];
       if (candidate !== undefined && (
-        nextBoundaryIndex === undefined || candidate < nextBoundaryIndex
+        nextBoundaryIndex === null || candidate < nextBoundaryIndex
       )) {
         nextBoundaryIndex = candidate;
       }
     }
 
-    const line = state.doc.lineAt(heading.to);
-    const foldFrom = line.to;
-    const foldTo = nextBoundaryIndex === undefined
-      ? state.doc.length
-      : foldToBeforeHeading(state, headings[nextBoundaryIndex].from);
+    boundaryIndices[index] = nextBoundaryIndex;
+    nextHeadingIndexByLevel[heading.level] = index;
+  }
 
-    if (foldTo > foldFrom) {
-      sections.push({
+  return boundaryIndices;
+}
+
+function createHeadingFoldSection(
+  state: EditorState,
+  headings: readonly HeadingSemantics[],
+  boundaryIndex: number | null,
+  headingIndex: number,
+): HeadingFoldSection | null {
+  const heading = headings[headingIndex];
+  const line = state.doc.lineAt(heading.to);
+  const foldFrom = line.to;
+  const foldTo = boundaryIndex === null
+    ? state.doc.length
+    : foldToBeforeHeading(state, headings[boundaryIndex].from);
+
+  return foldTo > foldFrom
+    ? {
         headingFrom: heading.from,
         foldFrom,
         foldTo,
         level: heading.level,
-      });
-    }
+      }
+    : null;
+}
 
-    nextHeadingIndexByLevel[heading.level] = index;
+function sameHeadingTopology(
+  before: readonly HeadingSemantics[],
+  after: readonly HeadingSemantics[],
+): boolean {
+  if (before.length !== after.length) return false;
+  for (let index = 0; index < before.length; index++) {
+    if (before[index].level !== after[index].level) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function findChangedHeadingIndices(
+  before: readonly HeadingSemantics[],
+  after: readonly HeadingSemantics[],
+): readonly number[] {
+  const changed: number[] = [];
+  for (let index = 0; index < before.length; index++) {
+    if (
+      before[index].from !== after[index].from
+      || before[index].to !== after[index].to
+    ) {
+      changed.push(index);
+    }
+  }
+  return changed;
+}
+
+function findAffectedHeadingIndices(
+  boundaryIndices: readonly (number | null)[],
+  changedHeadingIndices: readonly number[],
+  docLengthChanged: boolean,
+): readonly number[] {
+  if (boundaryIndices.length === 0) return [];
+
+  const changed = new Set(changedHeadingIndices);
+  const affected: number[] = [];
+
+  for (let index = 0; index < boundaryIndices.length; index++) {
+    const boundaryIndex = boundaryIndices[index];
+    if (
+      changed.has(index)
+      || (boundaryIndex === null ? docLengthChanged : changed.has(boundaryIndex))
+    ) {
+      affected.push(index);
+    }
   }
 
-  sections.reverse();
-  return sections;
+  return affected;
+}
+
+function sameHeadingFoldSection(
+  left: HeadingFoldSection | null,
+  right: HeadingFoldSection | null,
+): boolean {
+  return left === right || (
+    left !== null
+    && right !== null
+    && left.headingFrom === right.headingFrom
+    && left.foldFrom === right.foldFrom
+    && left.foldTo === right.foldTo
+    && left.level === right.level
+  );
 }
 
 /**
@@ -176,12 +270,10 @@ class FoldToggleWidget extends RenderWidget {
 }
 
 /** Build fold toggle decorations for all foldable headings. */
-function buildFoldToggles(
+function buildFoldToggleItems(
   state: EditorState,
   sections: readonly HeadingFoldSection[],
-): DecorationSet {
-  if (sections.length === 0) return Decoration.none;
-
+): Range<Decoration>[] {
   const items: Range<Decoration>[] = [];
   const folded = foldedRanges(state);
 
@@ -204,16 +296,79 @@ function buildFoldToggles(
     );
   }
 
+  return items;
+}
+
+function buildFoldToggles(
+  state: EditorState,
+  sections: readonly HeadingFoldSection[],
+): DecorationSet {
+  if (sections.length === 0) return Decoration.none;
+  const items = buildFoldToggleItems(state, sections);
   return buildDecorations(items);
 }
 
 function createHeadingFoldState(state: EditorState): HeadingFoldState {
-  const sections = buildHeadingFoldSections(state);
+  const headings = state.field(documentSemanticsField).headings;
+  const boundaryIndices = buildHeadingBoundaryIndices(headings);
+  const sectionsByHeadingIndex = buildHeadingFoldSections(
+    state,
+    headings,
+    boundaryIndices,
+  );
+  const sections = collectSections(sectionsByHeadingIndex);
   return {
-    sections,
+    headings,
+    boundaryIndices,
+    sectionsByHeadingIndex,
     sectionByHeadingFrom: buildSectionByHeadingFrom(sections),
     decorations: buildFoldToggles(state, sections),
   };
+}
+
+function updateFoldToggles(
+  tr: Transaction,
+  previousDecorations: DecorationSet,
+  previousSectionsByHeadingIndex: readonly (HeadingFoldSection | null)[],
+  nextSectionsByHeadingIndex: readonly (HeadingFoldSection | null)[],
+  affectedHeadingIndices: readonly number[],
+): DecorationSet {
+  let decorations = previousDecorations.map(tr.changes);
+  const affectedPositions = new Set<number>();
+  const nextSections: HeadingFoldSection[] = [];
+
+  for (const index of affectedHeadingIndices) {
+    const previousSection = previousSectionsByHeadingIndex[index];
+    if (previousSection) {
+      affectedPositions.add(tr.changes.mapPos(previousSection.headingFrom, -1));
+    }
+
+    const nextSection = nextSectionsByHeadingIndex[index];
+    if (nextSection) {
+      affectedPositions.add(nextSection.headingFrom);
+      nextSections.push(nextSection);
+    }
+  }
+
+  if (affectedPositions.size > 0) {
+    const positions = [...affectedPositions];
+    const filterFrom = Math.min(...positions);
+    const filterTo = Math.max(...positions) + 1;
+    decorations = decorations.update({
+      filterFrom,
+      filterTo,
+      filter: (from) => !affectedPositions.has(from),
+    });
+  }
+
+  if (nextSections.length > 0) {
+    decorations = decorations.update({
+      add: buildFoldToggleItems(tr.state, nextSections),
+      sort: true,
+    });
+  }
+
+  return decorations;
 }
 
 const headingFoldField = StateField.define<HeadingFoldState>({
@@ -225,20 +380,84 @@ const headingFoldField = StateField.define<HeadingFoldState>({
       !== getDocumentAnalysisSliceRevision(after, "headings");
 
     if (tr.docChanged || headingsChanged) {
-      return createHeadingFoldState(tr.state);
+      const nextHeadings = after.headings;
+      if (!sameHeadingTopology(value.headings, nextHeadings)) {
+        return createHeadingFoldState(tr.state);
+      }
+
+      const changedHeadingIndices = findChangedHeadingIndices(
+        value.headings,
+        nextHeadings,
+      );
+      const affectedHeadingIndices = findAffectedHeadingIndices(
+        value.boundaryIndices,
+        changedHeadingIndices,
+        tr.startState.doc.length !== tr.state.doc.length,
+      );
+
+      if (affectedHeadingIndices.length === 0) {
+        return value.headings === nextHeadings ? value : { ...value, headings: nextHeadings };
+      }
+
+      const sectionsByHeadingIndex = [...value.sectionsByHeadingIndex];
+      const sectionByHeadingFrom = new Map(value.sectionByHeadingFrom);
+      let sectionsChanged = false;
+
+      for (const index of affectedHeadingIndices) {
+        const previousSection = sectionsByHeadingIndex[index];
+        const nextSection = createHeadingFoldSection(
+          tr.state,
+          nextHeadings,
+          value.boundaryIndices[index],
+          index,
+        );
+        if (sameHeadingFoldSection(previousSection, nextSection)) {
+          continue;
+        }
+        sectionsByHeadingIndex[index] = nextSection;
+        if (previousSection) {
+          sectionByHeadingFrom.delete(previousSection.headingFrom);
+        }
+        if (nextSection) {
+          sectionByHeadingFrom.set(nextSection.headingFrom, nextSection);
+        }
+        sectionsChanged = true;
+      }
+
+      if (!sectionsChanged) {
+        return value.headings === nextHeadings ? value : { ...value, headings: nextHeadings };
+      }
+
+      return {
+        headings: nextHeadings,
+        boundaryIndices: value.boundaryIndices,
+        sectionsByHeadingIndex,
+        sectionByHeadingFrom,
+        decorations: updateFoldToggles(
+          tr,
+          value.decorations,
+          value.sectionsByHeadingIndex,
+          sectionsByHeadingIndex,
+          affectedHeadingIndices,
+        ),
+      };
     }
 
     if (tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect))) {
       return {
         ...value,
-        decorations: buildFoldToggles(tr.state, value.sections),
+        decorations: buildFoldToggles(
+          tr.state,
+          collectSections(value.sectionsByHeadingIndex),
+        ),
       };
     }
 
     return value;
   },
   compare(a, b) {
-    return a.sections === b.sections && a.decorations === b.decorations;
+    return a.sectionsByHeadingIndex === b.sectionsByHeadingIndex
+      && a.decorations === b.decorations;
   },
   provide(field) {
     return EditorView.decorations.from(field, (value) => value.decorations);
@@ -252,3 +471,5 @@ export const headingFold: Extension = [
   headingFoldField,
   keymap.of(foldKeymap),
 ];
+
+export { headingFoldField as _headingFoldFieldForTest };
