@@ -1,13 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use notify::{
-    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind,
+    event::ModifyKind, Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State, WebviewWindow, command};
+use tauri::{command, AppHandle, Emitter, State, WebviewWindow};
 
 use super::perf::measure_command;
 use super::state::{FileWatcherEntry, FileWatcherState, PerfState};
@@ -39,11 +39,99 @@ fn should_emit_debounced_event(
     true
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct FileChangedEvent {
     path: String,
     tree_changed: bool,
+}
+
+enum WatchEventMessage {
+    Attached,
+    FileChanged(QueuedFileChangedEvent),
+}
+
+struct QueuedFileChangedEvent {
+    absolute_path: PathBuf,
+    observed_at: Instant,
+    payload: FileChangedEvent,
+}
+
+struct DebouncedEventDispatcher {
+    attached: bool,
+    debounce_window: Duration,
+    buffered: VecDeque<QueuedFileChangedEvent>,
+    last_events: HashMap<PathBuf, Instant>,
+}
+
+impl DebouncedEventDispatcher {
+    fn new(debounce_window: Duration) -> Self {
+        Self {
+            attached: false,
+            debounce_window,
+            buffered: VecDeque::new(),
+            last_events: HashMap::new(),
+        }
+    }
+
+    fn handle_message<F>(&mut self, message: WatchEventMessage, emit: &mut F)
+    where
+        F: FnMut(&FileChangedEvent),
+    {
+        match message {
+            WatchEventMessage::Attached => {
+                self.attached = true;
+                while let Some(event) = self.buffered.pop_front() {
+                    self.emit_if_ready(event, emit);
+                }
+            }
+            WatchEventMessage::FileChanged(event) => {
+                if self.attached {
+                    self.emit_if_ready(event, emit);
+                } else {
+                    self.buffered.push_back(event);
+                }
+            }
+        }
+    }
+
+    fn emit_if_ready<F>(&mut self, event: QueuedFileChangedEvent, emit: &mut F)
+    where
+        F: FnMut(&FileChangedEvent),
+    {
+        if !should_emit_debounced_event(
+            &mut self.last_events,
+            &event.absolute_path,
+            event.observed_at,
+            self.debounce_window,
+        ) {
+            return;
+        }
+
+        emit(&event.payload);
+    }
+}
+
+fn spawn_debounced_event_worker(
+    app: AppHandle,
+    window_label: String,
+    debounce_window: Duration,
+) -> Result<mpsc::Sender<WatchEventMessage>, String> {
+    let (sender, receiver) = mpsc::channel();
+
+    std::thread::Builder::new()
+        .name("file-watcher-debounce".to_string())
+        .spawn(move || {
+            let mut dispatcher = DebouncedEventDispatcher::new(debounce_window);
+            while let Ok(message) = receiver.recv() {
+                dispatcher.handle_message(message, &mut |payload| {
+                    let _ = app.emit_to(window_label.as_str(), "file-changed", payload);
+                });
+            }
+        })
+        .map_err(|e| format!("Failed to start file watcher debounce worker: {}", e))?;
+
+    Ok(sender)
 }
 
 fn event_changes_tree(kind: &EventKind) -> bool {
@@ -162,12 +250,10 @@ pub fn watch_directory(
             }
 
             let root_for_closure = watch_path.clone();
-            let app_for_closure = app.clone();
-            let window_label_for_closure = window_label.clone();
             let debounce_ms = Duration::from_millis(500);
-            let last_events: std::sync::Arc<Mutex<HashMap<PathBuf, Instant>>> =
-                std::sync::Arc::new(Mutex::new(HashMap::new()));
-            let last_events_clone = last_events.clone();
+            let event_sender =
+                spawn_debounced_event_worker(app.clone(), window_label.clone(), debounce_ms)?;
+            let event_sender_for_closure = event_sender.clone();
 
             let mut watcher = RecommendedWatcher::new(
                 move |result: Result<Event, notify::Error>| {
@@ -192,27 +278,18 @@ pub fn watch_directory(
                             continue;
                         };
 
-                        {
-                            let mut map = match last_events_clone.lock() {
-                                Ok(map) => map,
-                                Err(_) => continue,
-                            };
-                            let now = Instant::now();
-                            if !should_emit_debounced_event(&mut map, path, now, debounce_ms) {
-                                continue;
-                            }
-                        }
-
                         let payload = FileChangedEvent {
                             path: relative,
                             tree_changed,
                         };
 
-                        let _ = app_for_closure.emit_to(
-                            window_label_for_closure.as_str(),
-                            "file-changed",
-                            &payload,
-                        );
+                        let _ = event_sender_for_closure.send(WatchEventMessage::FileChanged(
+                            QueuedFileChangedEvent {
+                                absolute_path: path.to_path_buf(),
+                                observed_at: Instant::now(),
+                                payload,
+                            },
+                        ));
                     }
                 },
                 Config::default(),
@@ -224,12 +301,14 @@ pub fn watch_directory(
                 .map_err(|e| format!("Failed to watch directory: {}", e))?;
 
             let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
-            Ok(attach_watcher(
-                &mut lock,
-                &window_label,
-                generation,
-                watcher,
-            ))
+            let attached = attach_watcher(&mut lock, &window_label, generation, watcher);
+            drop(lock);
+
+            if attached {
+                let _ = event_sender.send(WatchEventMessage::Attached);
+            }
+
+            Ok(attached)
         },
     )
 }
@@ -239,11 +318,12 @@ mod tests {
     use super::{
         event_changes_tree, normalize_relative_event_path, remove_watcher_generation,
         reserve_watcher_slot, should_emit_debounced_event, should_ignore_relative_path,
+        DebouncedEventDispatcher, FileChangedEvent, QueuedFileChangedEvent, WatchEventMessage,
     };
     use crate::commands::state::FileWatcherEntry;
     use notify::{
-        EventKind,
         event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
+        EventKind,
     };
     use std::collections::HashMap;
     use std::fs;
@@ -298,6 +378,81 @@ mod tests {
             now + Duration::from_millis(200),
             debounce_window,
         ));
+    }
+
+    #[test]
+    fn buffers_events_until_the_watcher_is_attached() {
+        let now = Instant::now();
+        let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
+        let mut emitted = Vec::new();
+
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(QueuedFileChangedEvent {
+                absolute_path: PathBuf::from("notes/index.md"),
+                observed_at: now,
+                payload: FileChangedEvent {
+                    path: "notes/index.md".to_string(),
+                    tree_changed: false,
+                },
+            }),
+            &mut |payload| emitted.push(payload.clone()),
+        );
+
+        assert!(emitted.is_empty());
+
+        dispatcher.handle_message(WatchEventMessage::Attached, &mut |payload| {
+            emitted.push(payload.clone())
+        });
+
+        assert_eq!(
+            emitted,
+            vec![FileChangedEvent {
+                path: "notes/index.md".to_string(),
+                tree_changed: false,
+            }],
+        );
+    }
+
+    #[test]
+    fn suppresses_buffered_duplicates_when_attachment_flushes_them() {
+        let now = Instant::now();
+        let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
+        let mut emitted = Vec::new();
+
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(QueuedFileChangedEvent {
+                absolute_path: PathBuf::from("notes/index.md"),
+                observed_at: now,
+                payload: FileChangedEvent {
+                    path: "notes/index.md".to_string(),
+                    tree_changed: false,
+                },
+            }),
+            &mut |payload| emitted.push(payload.clone()),
+        );
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(QueuedFileChangedEvent {
+                absolute_path: PathBuf::from("notes/index.md"),
+                observed_at: now + Duration::from_millis(200),
+                payload: FileChangedEvent {
+                    path: "notes/index.md".to_string(),
+                    tree_changed: false,
+                },
+            }),
+            &mut |payload| emitted.push(payload.clone()),
+        );
+
+        dispatcher.handle_message(WatchEventMessage::Attached, &mut |payload| {
+            emitted.push(payload.clone())
+        });
+
+        assert_eq!(
+            emitted,
+            vec![FileChangedEvent {
+                path: "notes/index.md".to_string(),
+                tree_changed: false,
+            }],
+        );
     }
 
     #[test]
