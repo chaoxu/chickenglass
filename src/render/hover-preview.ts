@@ -429,6 +429,8 @@ function clonePdfCanvasForHoverPreview(
   clone.setAttribute("role", "img");
   clone.setAttribute("aria-label", alt || "PDF preview");
 
+  // The tooltip owns this clone. When the singleton tooltip replaces or
+  // clears its children, the cloned canvas becomes unreachable as well.
   const ctx = clone.getContext("2d");
   if (ctx) {
     ctx.drawImage(source, 0, 0);
