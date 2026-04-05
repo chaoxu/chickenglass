@@ -224,22 +224,30 @@ interface OpeningFenceInfo {
  */
 let parseGeneration = 0;
 
+const PACKED_COLON_BITS = 8;
+const PACKED_COLON_MASK = (1 << PACKED_COLON_BITS) - 1;
+const PACKED_GENERATION_BITS = 16;
+const PACKED_GENERATION_SHIFT = PACKED_COLON_BITS;
+const PACKED_GENERATION_MASK = (1 << PACKED_GENERATION_BITS) - 1;
+
 /** Pack colon count + generation into the composite value. */
 function packValue(colonCount: number): number {
-  return (colonCount & 0xFF) | ((parseGeneration & 0xFFFF) << 8);
+  return (colonCount & PACKED_COLON_MASK)
+    | ((parseGeneration & PACKED_GENERATION_MASK) << PACKED_GENERATION_SHIFT);
 }
 
 /** Extract the colon count from a packed composite value. */
 function unpackColonCount(value: number): number {
-  return value & 0xFF;
+  return value & PACKED_COLON_MASK;
 }
 
 /**
  * Composite callback for FencedDiv. Called on each new line to decide
  * if the block continues. Returns `true` to continue, `false` to end.
  *
- * The `value` parameter packs the colon count (bits 0–7) and starting
- * position (bits 8–31) to ensure unique hashes per block instance.
+ * The `value` parameter packs the colon count (bits 0–7) and current
+ * parse generation (bits 8–23). Self-closing blocks negate that value
+ * so the composite callback can terminate immediately.
  */
 function fencedDivComposite(
   cx: BlockContext,
@@ -290,7 +298,7 @@ const fencedDivBlockParser: BlockParser = {
 
     // Increment parse generation to prevent incremental parser from
     // reusing old tree fragments inside this composite block.
-    parseGeneration = (parseGeneration + 1) & 0xFFFF;
+    parseGeneration = (parseGeneration + 1) & PACKED_GENERATION_MASK;
     fencedDivLog(`OPEN at ${fenceStart} colons=${info.colonCount} gen=${parseGeneration}`);
 
     // Start the composite block. Negative value signals self-closing
