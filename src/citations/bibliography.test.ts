@@ -53,6 +53,12 @@ const alpha: CslJsonItem = {
 };
 
 const store = makeBibStore([karger, stein, alpha]);
+const ieeeCslEntryHtml = [
+  '<div class="csl-entry">',
+  '<div class="csl-left-margin">[1]</div>',
+  '<div class="csl-right-inline">D. R. Karger, <i>JACM</i>, 2000.</div>',
+  "</div>",
+].join("");
 
 describe("collectCitedIds", () => {
   it("collects ids from parenthetical citations", () => {
@@ -261,6 +267,16 @@ describe("BibliographyWidget", () => {
     expect(backlink).not.toBeNull();
     expect(backlink?.getAttribute("href")).toBe("#cite-ref-1");
     expect(backlink?.textContent).toBe("↩1");
+  });
+
+  it("preserves citeproc left/right wrappers for numeric bibliography entries", () => {
+    const widget = new BibliographyWidget([karger], [ieeeCslEntryHtml], new Map());
+    const el = widget.toDOM();
+    const entry = el.querySelector(`.${CSS.bibliographyEntry}`);
+
+    expect(entry?.querySelector(".csl-entry")).not.toBeNull();
+    expect(entry?.querySelector(".csl-left-margin")?.textContent).toBe("[1]");
+    expect(entry?.querySelector(".csl-right-inline")?.textContent).toContain("Karger");
   });
 });
 

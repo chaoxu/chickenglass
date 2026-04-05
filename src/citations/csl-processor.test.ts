@@ -338,4 +338,24 @@ describe("CslProcessor ordering", () => {
     expect(entries).toEqual(['<span class="csl-entry">[1] Entry</span>']);
     expect(updateItems).not.toHaveBeenCalled();
   });
+
+  it("emits citeproc bibliography wrappers for default IEEE output", async () => {
+    const processor = await CslProcessor.create([
+      {
+        id: "karger2000",
+        type: "article-journal",
+        author: [{ family: "Karger", given: "David R." }],
+        title: "Minimum cuts in near-linear time",
+        issued: { "date-parts": [[2000]] },
+        "container-title": "JACM",
+      },
+    ]);
+    processor.registerCitations([{ ids: ["karger2000"] }]);
+
+    const [entry] = processor.bibliography(["karger2000"]);
+
+    expect(entry).toContain('<div class="csl-entry">');
+    expect(entry).toContain('<div class="csl-left-margin">[1]</div>');
+    expect(entry).toContain('<div class="csl-right-inline">');
+  });
 });
