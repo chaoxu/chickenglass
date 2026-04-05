@@ -161,4 +161,38 @@ describe("TableWidget cross-widget editor ownership", () => {
 
     widgetB.destroy(domB);
   });
+
+  it("clears an active editor before reusing DOM via updateDOM", () => {
+    const tableText = "| A |\n|---|\n| old |";
+    const view = makeRootView(10, tableText);
+    const inlineA = makeInlineEditor("edited A");
+    createInlineEditorMock.mockReturnValueOnce(inlineA);
+
+    const oldWidget = new TableWidget(makeTable(), tableText, 10, { "\\A": "\\alpha" });
+    const dom = oldWidget.toDOM(view);
+    const cell = dom.querySelector("td");
+    if (!cell) {
+      throw new Error("expected table cell to exist");
+    }
+
+    renderInlineMarkdownMock.mockClear();
+
+    cell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    const updatedTable: ParsedTable = {
+      header: { cells: [{ content: "A" }] },
+      alignments: ["none"],
+      rows: [{ cells: [{ content: "new" }] }],
+    };
+    const newWidget = new TableWidget(updatedTable, "| A |\n|---|\n| new |", 10, { "\\A": "\\alpha" });
+
+    expect(newWidget.updateDOM(dom, view, oldWidget)).toBe(true);
+    expect(inlineA.destroy).toHaveBeenCalledTimes(1);
+    expect(renderInlineMarkdownMock).not.toHaveBeenCalledWith(cell, "edited A", {
+      "\\A": "\\alpha",
+    });
+    expect(dom.querySelector("td")?.textContent).toBe("new");
+
+    newWidget.destroy(dom);
+  });
 });

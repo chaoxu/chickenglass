@@ -562,6 +562,9 @@ export class TableWidget extends RenderWidget {
   updateDOM(dom: HTMLElement, view: EditorView, from: TableWidget): boolean {
     if (dom.tagName !== "DIV") return false;
 
+    if (activeInlineEditor?.owner === from) {
+      destroyActiveInlineEditor();
+    }
     from.resizeObserver?.disconnect();
     from.resizeObserver = null;
     from.editorView = null;
