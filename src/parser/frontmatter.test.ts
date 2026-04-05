@@ -317,30 +317,30 @@ describe("parseFrontmatter", () => {
   });
 
   /**
-   * REGRESSION: non-boolean block config values must not be silently dropped.
+   * REGRESSION: invalid `blocks:` scalars must not be accepted as enabled.
    *
-   * Before the fix, `blocks: { theorem: "yes" }` silently coerced
-   * `parseScalar("yes") === true` to `false`, hiding the author's intent.
-   * Now it logs a warning and coerces truthy strings to `true` so the block
-   * is at least enabled, and the author is alerted to fix their frontmatter.
+   * Non-boolean scalars are invalid for `blocks:` entries. Parsing them as
+   * `true` unexpectedly overrides built-in or project-level plugin settings.
+   * The parser should warn and ignore the invalid entry instead.
    */
-  describe("non-boolean block values (REGRESSION: silent drop)", () => {
-    it("coerces non-boolean scalar to true and warns", () => {
+  describe("non-boolean block values (REGRESSION: invalid scalar coercion)", () => {
+    it("ignores non-boolean scalar and warns", () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const doc = "---\nblocks:\n  theorem: yes\n---\n";
       const { config } = parseFrontmatter(doc);
-      expect(config.blocks?.["theorem"]).toBe(true);
+      expect(config.blocks?.["theorem"]).toBeUndefined();
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("expected boolean"),
+        expect.stringContaining("expected boolean or mapping"),
       );
       warnSpy.mockRestore();
     });
 
-    it("coerces arbitrary string to true with warning", () => {
+    it("keeps valid entries while ignoring invalid ones", () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const doc = "---\nblocks:\n  proof: enabled\n---\n";
+      const doc = "---\nblocks:\n  theorem: true\n  proof: enabled\n---\n";
       const { config } = parseFrontmatter(doc);
-      expect(config.blocks?.["proof"]).toBe(true);
+      expect(config.blocks?.["theorem"]).toBe(true);
+      expect(config.blocks?.["proof"]).toBeUndefined();
       expect(warnSpy).toHaveBeenCalled();
       warnSpy.mockRestore();
     });

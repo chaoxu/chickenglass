@@ -22,7 +22,7 @@ function isFencedDivClose(text: string, pos: number): boolean {
 }
 
 /** Regex to validate that a braced string is an equation label: {#eq:...} */
-const LABEL_RE = /^\{#eq:[^}\s]+\}$/;
+const LABEL_RE = /^\{#eq:[A-Za-z0-9_][\w.-]*\}$/;
 
 /**
  * Try to extract an equation label from text following a closing math delimiter.
