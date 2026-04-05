@@ -4,15 +4,16 @@
  * Tests the pure-logic functions: entry filtering (getPickerEntries),
  * block insertion with ancestor fence upgrades (insertBlock), and
  * ancestor fence collection from the Lezer tree (collectAncestorFences).
- *
- * Picker UI (showPicker, hidePicker, renderPicker) is DOM-heavy and not
- * covered here.
+ * Also covers the picker UI trigger path at a light integration level.
  */
 
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach, vi } from "vitest";
 import { markdown } from "@codemirror/lang-markdown";
+import { EditorView } from "@codemirror/view";
 import { markdownExtensions } from "../parser";
 import {
+  blockTypePickerExtension,
+  isPickerVisible,
   _getPickerEntriesForTest as getPickerEntries,
   _insertBlockForTest as insertBlock,
   _collectAncestorFencesForTest as collectAncestorFences,
@@ -24,6 +25,25 @@ import {
 } from "../plugins";
 import { frontmatterField } from "./frontmatter-state";
 import { createTestView, makeBlockPlugin } from "../test-utils";
+
+vi.mock("@floating-ui/dom", async () => {
+  const actual = await vi.importActual<typeof import("@floating-ui/dom")>("@floating-ui/dom");
+  return {
+    ...actual,
+    computePosition: vi.fn(async () => ({ x: 12, y: 34 })),
+  };
+});
+
+class ResizeObserverStub {
+  disconnect = vi.fn();
+  observe() {}
+  unobserve() {}
+}
+vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+  value: vi.fn(),
+  configurable: true,
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,6 +75,52 @@ function makeView(doc: string, plugins = standardPlugins) {
   });
   views.push(view);
   return view;
+}
+
+function makePickerUiView(doc: string, plugins = standardPlugins) {
+  const view = createTestView(doc, {
+    extensions: [...pickerExtensions(plugins), blockTypePickerExtension],
+  });
+  views.push(view);
+  return view;
+}
+
+function stubCoordsAtPos(view: EditorView): void {
+  const rect = {
+    x: 24,
+    y: 48,
+    width: 0,
+    height: 18,
+    top: 48,
+    right: 24,
+    bottom: 66,
+    left: 24,
+    toJSON() {
+      return this;
+    },
+  } satisfies DOMRect;
+  view.coordsAtPos = () => rect;
+}
+
+function triggerThirdColon(view: EditorView): boolean {
+  const endPos = view.state.doc.length;
+  view.dispatch({
+    changes: { from: endPos, insert: "\n::" },
+    selection: { anchor: endPos + 3 },
+  });
+
+  const from = view.state.selection.main.head;
+  const handlers = view.state.facet(EditorView.inputHandler);
+  const defaultInsert = () => view.state.update({
+    changes: { from, to: from, insert: ":" },
+    selection: { anchor: from + 1 },
+    userEvent: "input.type",
+  });
+  const handled = handlers.some((handler) => handler(view, from, from, ":", defaultInsert));
+  if (!handled) {
+    view.dispatch(defaultInsert());
+  }
+  return handled;
 }
 
 afterEach(() => {
@@ -141,9 +207,8 @@ describe("getPickerEntries", () => {
     ]);
 
     const entries = getPickerEntries(registry);
-    const theorem = entries.find((e) => e.name === "theorem");
-    expect(theorem).toBeDefined();
-    expect(theorem!.title).toBe("Theorem");
+    const theoremTitle = entries.find((e) => e.name === "theorem")?.title;
+    expect(theoremTitle).toBe("Theorem");
   });
 
   it("does not duplicate entries when a plugin matches both manifest and registry", () => {
@@ -367,5 +432,39 @@ describe("collectAncestorFences", () => {
       expect(fences[0].closeFrom).toBe(-1);
       expect(fences[0].closeTo).toBe(-1);
     }
+  });
+});
+
+// ===================================================================
+// picker UI
+// ===================================================================
+
+describe("picker UI", () => {
+  it("opens a cmdk picker on ::: trigger and dismisses on Escape", async () => {
+    const view = makePickerUiView("");
+    stubCoordsAtPos(view);
+
+    const handled = triggerThirdColon(view);
+    expect(handled).toBe(true);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(isPickerVisible()).toBe(true);
+    const picker = document.querySelector(".cf-block-picker");
+    expect(picker).not.toBeNull();
+    expect(picker?.querySelector("[cmdk-root]")).not.toBeNull();
+    expect(picker?.querySelectorAll(".cf-block-picker-item").length).toBeGreaterThan(0);
+
+    const input = picker?.querySelector(".cf-block-picker-input") as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+    input?.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    }));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(isPickerVisible()).toBe(false);
   });
 });
