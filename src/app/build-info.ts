@@ -53,7 +53,7 @@ export function resolveBuildInfo(
     hash,
     commitTime,
     label: `${hash} · ${formattedCommitTime}`,
-    title: `${hash} · ${commitTime}`,
+    title: `${hash} - ${commitTime}`,
   };
 }
 

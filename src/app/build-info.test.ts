@@ -15,7 +15,7 @@ describe("build info formatting", () => {
       hash: "00f0789",
       commitTime: "2026-04-05T12:31:00Z",
       label: "00f0789 · Apr 5 12:31",
-      title: "00f0789 · 2026-04-05T12:31:00Z",
+      title: "00f0789 - 2026-04-05T12:31:00Z",
     });
   });
 
