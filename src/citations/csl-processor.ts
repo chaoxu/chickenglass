@@ -382,6 +382,7 @@ export class CslProcessor {
 
     try {
       const { plugins } = await loadCitationJs();
+      if (styleGeneration !== this.styleGeneration) return;
       const cslConfig = plugins.config.get("@csl");
       // citation-js caches engines by style name + locale and mutates the
       // shared engine's retrieveItem callback on reuse. Use a processor- and
