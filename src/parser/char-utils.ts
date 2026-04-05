@@ -93,8 +93,11 @@ export function findMatchingBrace(text: string, pos: number): number {
       // Skip everything until the matching closing quote
       i++;
       while (i < text.length && text.charCodeAt(i) !== DOUBLE_QUOTE) i++;
-      // Move past the closing quote (or stay at end if unterminated)
-    } else if (ch === OPEN_BRACE) {
+      if (i >= text.length) break;
+      i++;
+      continue;
+    }
+    if (ch === OPEN_BRACE) {
       depth++;
     } else if (ch === CLOSE_BRACE) {
       depth--;

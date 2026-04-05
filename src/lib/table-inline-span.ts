@@ -29,6 +29,10 @@ function isSpaceTab(ch: number): boolean {
   return ch === SPACE || ch === TAB;
 }
 
+function clampSpanEnd(text: string, end: number): number {
+  return Math.min(end, text.length);
+}
+
 function canOpenDollarMath(text: string, start: number): boolean {
   if (start + 1 >= text.length) return false;
   const next = text.charCodeAt(start + 1);
@@ -67,27 +71,28 @@ export function scanTableInlineSpan(
   text: string,
   start: number,
 ): number | null {
+  if (start >= text.length) return null;
   const ch = text.charCodeAt(start);
 
   if (ch === BACKSLASH) {
-    if (start + 1 >= text.length) return start + 1;
+    if (start + 1 >= text.length) return clampSpanEnd(text, start + 1);
 
     if (text.charCodeAt(start + 1) === OPEN_PAREN) {
       let j = start + 2;
       while (j < text.length) {
         const jch = text.charCodeAt(j);
         if (jch === BACKSLASH && j + 1 < text.length) {
-          if (text.charCodeAt(j + 1) === CLOSE_PAREN) return j + 2;
+          if (text.charCodeAt(j + 1) === CLOSE_PAREN) return clampSpanEnd(text, j + 2);
           j += 2;
           continue;
         }
-        if (jch === PIPE) return start + 2;
+        if (jch === PIPE) return clampSpanEnd(text, start + 2);
         j++;
       }
-      return start + 2;
+      return clampSpanEnd(text, start + 2);
     }
 
-    return Math.min(start + 2, text.length);
+    return clampSpanEnd(text, start + 2);
   }
 
   if (ch === BACKTICK) {
@@ -108,12 +113,12 @@ export function scanTableInlineSpan(
         closeCount++;
       }
       if (closeCount === tickCount) {
-        return i + tickCount;
+        return clampSpanEnd(text, i + tickCount);
       }
       i += closeCount;
     }
 
-    return start + tickCount;
+    return clampSpanEnd(text, start + tickCount);
   }
 
   if (ch === DOLLAR) {
@@ -121,13 +126,13 @@ export function scanTableInlineSpan(
       return null;
     }
     if (!canOpenDollarMath(text, start)) {
-      return start + 1;
+      return clampSpanEnd(text, start + 1);
     }
 
     let i = start + 1;
     while (i < text.length) {
       const next = text.charCodeAt(i);
-      if (next === DOLLAR && canCloseDollarMath(text, i)) return i + 1;
+      if (next === DOLLAR && canCloseDollarMath(text, i)) return clampSpanEnd(text, i + 1);
       if (next === BACKSLASH && i + 1 < text.length) {
         i += 2;
         continue;
@@ -135,7 +140,7 @@ export function scanTableInlineSpan(
       i++;
     }
 
-    return start + 1;
+    return clampSpanEnd(text, start + 1);
   }
 
   return null;
