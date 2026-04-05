@@ -4,6 +4,7 @@ const invokeMock = vi.fn<(command: string, args?: unknown) => Promise<void>>();
 const getName = vi.fn<() => Promise<string>>();
 const getVersion = vi.fn<() => Promise<string>>();
 const appLogDir = vi.fn<() => Promise<string>>();
+const RUNTIME_LOGGER_STATE_KEY = Symbol.for("coflat.runtime-logger.state");
 
 vi.mock("@tauri-apps/api/app", () => ({
   getName,
@@ -44,6 +45,7 @@ describe("runtime logger", () => {
     delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     const { clearRuntimeLogs } = await import("./runtime-logger");
     clearRuntimeLogs();
+    delete (globalThis as Record<PropertyKey, unknown>)[RUNTIME_LOGGER_STATE_KEY];
     vi.clearAllMocks();
     vi.resetModules();
   });

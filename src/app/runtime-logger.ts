@@ -325,17 +325,11 @@ async function logRuntimeEntry(
   }
 }
 
-function isRuntimeLoggingInstalled(state: RuntimeLoggerState): boolean {
-  return state.installedConsoleError === console.error
-    && state.installedOnError === window.onerror
-    && state.installedOnUnhandledRejection === window.onunhandledrejection;
-}
-
 export async function installRuntimeLogging(): Promise<void> {
   if (!shouldInstallRuntimeLogging()) return;
 
   const state = getRuntimeLoggerState();
-  if (state.installPromise && isRuntimeLoggingInstalled(state)) {
+  if (state.installPromise) {
     return state.installPromise;
   }
 
