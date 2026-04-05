@@ -177,12 +177,12 @@ function validateBlocks(
     } else if (isRecord(value)) {
       blocks[name] = toBlockConfig(value);
     } else {
-      // Non-boolean scalar in blocks section — coerce to true
-      // and warn so authors can fix their frontmatter.
+      // Invalid scalar in blocks section — warn and ignore it so malformed
+      // frontmatter cannot silently enable or override a block.
+      const valueType = value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
       console.warn(
-        `[frontmatter] blocks.${name}: expected boolean, got "${String(value)}". Treating as true.`,
+        `[frontmatter] blocks.${name}: expected boolean or mapping, got ${valueType}. Ignoring entry.`,
       );
-      blocks[name] = true;
     }
   }
   return blocks;

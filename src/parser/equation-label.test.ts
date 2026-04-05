@@ -305,6 +305,16 @@ describe("equation label edge cases", () => {
     expect(labels).toHaveLength(0);
   });
 
+  it("does not create label when the local id contains another colon", () => {
+    const text = "$$x$$ {#eq:eq:system}";
+    const labels = findNodes(text, "EquationLabel");
+    expect(labels).toHaveLength(0);
+
+    const display = findNodes(text, "DisplayMath");
+    expect(display).toHaveLength(1);
+    expect(display[0].to).toBe("$$x$$".length);
+  });
+
   it("inline math is unaffected by equation label extension", () => {
     const text = "hello $x^2$ world";
     const nodes = findNodes(text, "InlineMath");
