@@ -285,7 +285,7 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     whiteSpace: "nowrap",
     letterSpacing: INCLUDE_LABEL_LETTER_SPACING,
     lineHeight: "1",
-    zIndex: "1",
+    zIndex: "var(--cf-layer-inline-chrome)",
   },
 
   ".cf-include-label-active": {

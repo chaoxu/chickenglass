@@ -52,6 +52,11 @@
   --cf-bg-overlay: rgba(255, 255, 255, 0.82);
   --cf-border-overlay: rgba(228, 228, 231, 0.6);
 
+  /* Layer system — inline editor chrome stays below body-level popups. */
+  --cf-layer-inline-chrome: 1;
+  --cf-layer-preview-surface: 1000;
+  --cf-layer-block-picker: 1010;
+
   /* Theme-owned special surfaces */
   --cf-block-header-accent: var(--cf-fg);
   --cf-block-header-border-width: 0px;
@@ -209,7 +214,7 @@
   height: 0;
   overflow: visible;
   pointer-events: none;
-  z-index: 1;
+  z-index: var(--cf-layer-inline-chrome);
   box-sizing: border-box;
 }
 
@@ -370,7 +375,7 @@
  */
 .cf-preview-surface-shell {
   position: fixed;
-  z-index: 1000;
+  z-index: var(--cf-layer-preview-surface);
   background: var(--cf-bg);
   border: 1px solid var(--cf-border);
   border-radius: 8px;
@@ -563,7 +568,7 @@
  * Lists available block types for insertion. */
 .cf-block-picker {
   position: fixed;
-  z-index: 1000;
+  z-index: var(--cf-layer-block-picker);
   background: var(--cf-bg);
   border: 1px solid var(--cf-border);
   border-radius: 8px;
