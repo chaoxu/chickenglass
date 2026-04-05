@@ -43,6 +43,8 @@
 
   /* Highlight (==text==) background — shared between editor and read mode */
   --cf-mark-bg: rgba(255, 255, 0, 0.2);
+  --cf-math-error-fg: #c00;
+  --cf-math-error-bg: rgba(255, 0, 0, 0.05);
 
   /* Accent — black, one color */
   --cf-accent: #18181b;
@@ -162,6 +164,8 @@
   --cf-hover: rgba(255, 255, 255, 0.10);
   --cf-active: rgba(255, 255, 255, 0.15);
   --cf-mark-bg: rgba(255, 255, 0, 0.15);
+  --cf-math-error-fg: #fca5a5;
+  --cf-math-error-bg: rgba(239, 68, 68, 0.18);
   --cf-accent: #fafafa;
   --cf-accent-fg: #09090b;
   --cf-bg-overlay: rgba(10, 10, 10, 0.82);
@@ -781,10 +785,10 @@
  * cf-citation-narrative — narrative variant, e.g. "Author (2024)". Also
  * intentionally unstyled; appears as inline prose. */
 
-/* Math rendering error — red text on light red background */
+/* Math rendering error — theme-provided error colors */
 .cf-math-error {
-  color: var(--cf-math-error-fg, #c00);
-  background: var(--cf-math-error-bg, rgba(255, 0, 0, 0.05));
+  color: var(--cf-math-error-fg);
+  background: var(--cf-math-error-bg);
   border-radius: var(--cf-border-radius);
   padding: 1px 4px;
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);

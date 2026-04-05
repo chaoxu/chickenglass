@@ -759,6 +759,36 @@ describe("#910 — centralized layer tokens", () => {
   });
 });
 
+describe("#911 — dark-mode-safe color fallbacks", () => {
+  it("keeps math errors, grid tables, and the app error boundary token-driven", () => {
+    const css = fileText("src/editor-theme.css");
+    const tableGrid = fileText("src/render/table-grid.ts");
+    const boundary = fileText("src/app/components/error-boundary.tsx");
+
+    expect((css.match(/--cf-math-error-fg:/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect((css.match(/--cf-math-error-bg:/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(css).toContain("color: var(--cf-math-error-fg);");
+    expect(css).toContain("background: var(--cf-math-error-bg);");
+    expect(css).not.toContain("color: var(--cf-math-error-fg, #c00);");
+    expect(css).not.toContain("background: var(--cf-math-error-bg, rgba(255, 0, 0, 0.05));");
+
+    expect(tableGrid).toContain('backgroundColor: "var(--cf-bg-secondary)"');
+    expect(tableGrid).toContain('borderBottom: "2px solid var(--cf-border)"');
+    expect(tableGrid).not.toContain("#f5f5f5");
+    expect(tableGrid).not.toContain("#ddd");
+    expect(tableGrid).not.toContain("#ccc");
+
+    expect(boundary).toContain('color: "var(--cf-fg)"');
+    expect(boundary).toContain('background: "var(--cf-bg)"');
+    expect(boundary).toContain('color: "var(--cf-muted)"');
+    expect(boundary).toContain('border: "1px solid var(--cf-border)"');
+    expect(boundary).not.toContain("#1a1a1a");
+    expect(boundary).not.toContain("#fff");
+    expect(boundary).not.toContain("#666");
+    expect(boundary).not.toContain("#ccc");
+  });
+});
+
 describe("#287 — Chrome for Testing app facility", () => {
   it("shared Chrome launcher helper exists", () => {
     expect(fileExists("scripts/chrome-common.mjs")).toBe(true);
