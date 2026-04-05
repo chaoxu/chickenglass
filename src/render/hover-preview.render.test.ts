@@ -16,11 +16,22 @@ import { documentAnalysisField } from "../semantics/codemirror-source";
 import { mathMacrosField } from "./math-macros";
 
 const resolveLocalMediaPreviewMock = vi.fn();
+const { getPdfCanvasMock } = vi.hoisted(() => ({
+  getPdfCanvasMock: vi.fn(),
+}));
 
 vi.mock("./media-preview", () => ({
   resolveLocalMediaPreview: (view: EditorView, src: string) =>
     resolveLocalMediaPreviewMock(view, src),
 }));
+
+vi.mock("./pdf-preview-cache", async () => {
+  const actual = await vi.importActual<typeof import("./pdf-preview-cache")>("./pdf-preview-cache");
+  return {
+    ...actual,
+    getPdfCanvas: (path: string) => getPdfCanvasMock(path),
+  };
+});
 
 const { buildBlockPreviewBodyForTest, normalizeWidePreviewContentForTest } = await import("./hover-preview");
 
@@ -59,6 +70,7 @@ describe("hover preview block rendering", () => {
   beforeEach(() => {
     resolveLocalMediaPreviewMock.mockReset();
     resolveLocalMediaPreviewMock.mockReturnValue(null);
+    getPdfCanvasMock.mockReset();
   });
 
   it("renders full table block structure with caption wrapper", () => {
@@ -134,6 +146,41 @@ describe("hover preview block rendering", () => {
     expect(body?.querySelector(".cf-block-caption")?.textContent).toContain("Figure caption");
     expect(body?.querySelector(".cf-block-figure img")).toBeNull();
     expect(body?.textContent).toContain("Preview unavailable: fig.pdf");
+
+    view.destroy();
+  });
+
+  it("renders cached PDF figure previews as canvases without PNG re-encoding", () => {
+    const cachedCanvas = document.createElement("canvas");
+    const toDataUrl = vi.fn(() => "data:image/png;base64,SHOULD_NOT_BE_USED");
+    Object.defineProperty(cachedCanvas, "toDataURL", {
+      configurable: true,
+      value: toDataUrl,
+    });
+
+    resolveLocalMediaPreviewMock.mockReturnValue({
+      kind: "pdf-canvas",
+      resolvedPath: "notes/fig.pdf",
+    });
+    getPdfCanvasMock.mockReturnValue(cachedCanvas);
+
+    const view = createPreviewView(
+      [
+        "::: {#fig:main .figure} Figure caption",
+        "",
+        "![Preview PDF](fig.pdf)",
+        ":::",
+      ].join("\n"),
+      [documentPathFacet.of("notes/main.md")],
+    );
+
+    const body = buildBlockPreviewBodyForTest(view, getNumberedBlock(view, "fig:main"));
+    const pdfCanvas = body?.querySelector(".cf-block-figure canvas");
+
+    expect(pdfCanvas).toBeTruthy();
+    expect(pdfCanvas?.getAttribute("aria-label")).toBe("Preview PDF");
+    expect(body?.querySelector(".cf-block-figure img")).toBeNull();
+    expect(toDataUrl).not.toHaveBeenCalled();
 
     view.destroy();
   });
