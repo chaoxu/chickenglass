@@ -800,6 +800,10 @@ export function createCursorSensitiveViewPlugin(
           this.rebuild(update.view);
           return;
         }
+        if (dirtyRanges === null || dirtyRanges === undefined) {
+          this.rebuild(update.view);
+          return;
+        }
 
         this.incrementalDocUpdate(update, dirtyRanges);
         return;
