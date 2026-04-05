@@ -163,6 +163,11 @@ describe("math preview positioning", () => {
     if (!panel) {
       throw new Error("expected math preview panel");
     }
+    const content = panel.querySelector<HTMLElement>(".cf-math-preview-content");
+    expect(content).not.toBeNull();
+    if (!content) {
+      throw new Error("expected math preview content");
+    }
 
     panel.getBoundingClientRect = () => ({
       x: 200,
@@ -223,6 +228,55 @@ describe("math preview positioning", () => {
 
     view.destroy();
     setIntervalSpy.mockRestore();
+  });
+
+  it("tears down drag listeners with a shared abort signal when destroyed", async () => {
+    const addEventListenerSpy = vi.spyOn(document, "addEventListener");
+    coordsByPos.set(mathFrom, makeCoords(200, 80, 100));
+    coordsByPos.set(mathTo, makeCoords(240, 80, 120));
+
+    const view = createPreviewView(doc, mathFrom + 1);
+    await flushScheduledMeasures();
+
+    const panel = view.dom.querySelector<HTMLElement>(".cf-math-preview");
+    expect(panel).not.toBeNull();
+    if (!panel) {
+      throw new Error("expected math preview panel");
+    }
+    const content = panel.querySelector<HTMLElement>(".cf-math-preview-content");
+    expect(content).not.toBeNull();
+    if (!content) {
+      throw new Error("expected math preview content");
+    }
+
+    const mouseMoveCall = addEventListenerSpy.mock.calls.find(([type]) => type === "mousemove");
+    const mouseUpCall = addEventListenerSpy.mock.calls.find(([type]) => type === "mouseup");
+    const dragSignal = (mouseMoveCall?.[2] as AddEventListenerOptions | undefined)?.signal;
+
+    expect(dragSignal).toBeInstanceOf(AbortSignal);
+    expect((mouseUpCall?.[2] as AddEventListenerOptions | undefined)?.signal).toBe(dragSignal);
+
+    view.destroy();
+
+    const staleMouseDown = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 215,
+      clientY: 134,
+    });
+    panel.dispatchEvent(staleMouseDown);
+    expect(staleMouseDown.defaultPrevented).toBe(false);
+
+    const staleContentMouseDown = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 215,
+      clientY: 134,
+    });
+    content.dispatchEvent(staleContentMouseDown);
+    expect(staleContentMouseDown.defaultPrevented).toBe(false);
+
+    addEventListenerSpy.mockRestore();
   });
 
   it("repositions after inline math edits through the editor update path", async () => {

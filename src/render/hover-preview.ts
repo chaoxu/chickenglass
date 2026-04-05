@@ -48,6 +48,7 @@ import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 // ── Singleton tooltip element ───────────────────────────────────────────────
 
 let tooltipEl: HTMLDivElement | null = null;
+let hoverPreviewInstanceCount = 0;
 const HOVER_PREVIEW_TABLE_SCROLL_CLASS = "cf-hover-preview-table-scroll";
 const HOVER_PREVIEW_CODE_BLOCK_CLASS = "cf-hover-preview-code-block";
 
@@ -190,6 +191,20 @@ function hideFloatingTooltip(): void {
     tooltipEl.style.display = "none";
     tooltipEl.replaceChildren();
   }
+}
+
+function destroyFloatingTooltip(): void {
+  hideFloatingTooltip();
+  tooltipEl?.remove();
+  tooltipEl = null;
+}
+
+export function ensureHoverPreviewTooltipForTest(): HTMLDivElement {
+  return getTooltipEl();
+}
+
+export function destroyHoverPreviewTooltipForTest(): void {
+  destroyFloatingTooltip();
 }
 
 // ── Content extraction helpers ──────────────────────────────────────────────
@@ -837,6 +852,7 @@ function cacheEntriesChanged<T>(
  * that CM6's hoverTooltip could not handle.
  */
 const hoverPreviewPlugin = ViewPlugin.define((view) => {
+  hoverPreviewInstanceCount += 1;
   let hoverTimer: ReturnType<typeof setTimeout> | null = null;
   let currentTarget: HTMLElement | null = null;
   let currentPlan: TooltipPlan | null = null;
@@ -988,6 +1004,11 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
       scroller.removeEventListener("mouseout", onMouseOut);
       clearTimer();
       currentPlan = null;
+      hoverPreviewInstanceCount = Math.max(hoverPreviewInstanceCount - 1, 0);
+      if (hoverPreviewInstanceCount === 0) {
+        destroyFloatingTooltip();
+        return;
+      }
       hideFloatingTooltip();
     },
   };
