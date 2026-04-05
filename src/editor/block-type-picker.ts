@@ -8,16 +8,26 @@
  *
  * Only active in rich mode — source mode is unaffected.
  *
- * Uses a capture-phase keydown listener so picker navigation (ArrowUp/Down,
- * Enter, Escape) is handled before CM6's keymap processing, which would
- * otherwise consume ArrowDown/Enter for cursor movement/newline insertion.
+ * The CodeMirror extension still owns trigger detection, fence upgrades,
+ * insertion, and lifecycle cleanup. The popup UI itself is delegated to
+ * `cmdk` so filtering, keyboard navigation, and ARIA behavior come from the
+ * shared command-menu library instead of custom DOM code.
  */
 
 import { type Extension } from "@codemirror/state";
 import { EditorView, ViewPlugin } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
+import { Command as CommandPrimitive } from "cmdk";
 import { computePosition, flip, shift, offset } from "@floating-ui/dom";
+import {
+  createElement,
+  useLayoutEffect,
+  useRef,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
+import { flushSync } from "react-dom";
+import { createRoot, type Root } from "react-dom/client";
 import { pluginRegistryField, type PluginRegistryState, fenceOperationAnnotation } from "../plugins";
 import { editorModeField } from "./editor";
 import { BLOCK_MANIFEST_ENTRIES } from "../constants/block-manifest";
@@ -112,17 +122,13 @@ function getPickerEntries(registry: PluginRegistryState): PickerEntry[] {
 
 /** Singleton picker element. */
 let pickerEl: HTMLDivElement | null = null;
+let pickerRoot: Root | null = null;
+let nextPickerRequestId = 1;
 
 let activePicker: {
+  requestId: number;
   view: EditorView;
-  lineFrom: number;
-  lineTo: number;
-  selectedIndex: number;
-  allEntries: PickerEntry[];
-  filteredEntries: PickerEntry[];
-  filter: string;
   ancestorFences: AncestorFence[];
-  onDismiss: () => void;
 } | null = null;
 
 function getPickerEl(): HTMLDivElement {
@@ -130,59 +136,94 @@ function getPickerEl(): HTMLDivElement {
     pickerEl = document.createElement("div");
     pickerEl.className = "cf-block-picker";
     pickerEl.style.display = "none";
-    pickerEl.setAttribute("role", "listbox");
     document.body.appendChild(pickerEl);
   }
   return pickerEl;
 }
 
-/** Render picker with search input and filtered items. */
-function renderPicker(
-  allEntries: PickerEntry[],
-  filter: string,
-  selectedIndex: number,
-): PickerEntry[] {
-  const el = getPickerEl();
-
-  // Ensure search input exists
-  let input = el.querySelector(".cf-block-picker-input") as HTMLInputElement | null;
-  if (!input) {
-    el.innerHTML = "";
-    input = document.createElement("input");
-    input.className = "cf-block-picker-input";
-    input.type = "text";
-    input.placeholder = "Block type...";
-    input.setAttribute("autocomplete", "off");
-    input.setAttribute("spellcheck", "false");
-    el.appendChild(input);
+function getPickerRoot(): Root {
+  if (!pickerRoot) {
+    pickerRoot = createRoot(getPickerEl());
   }
-  input.value = filter;
+  return pickerRoot;
+}
 
-  // Filter entries
-  const lower = filter.toLowerCase();
-  const filtered = lower
-    ? allEntries.filter(e => e.name.includes(lower) || e.title.toLowerCase().includes(lower))
-    : allEntries;
+interface BlockPickerMenuProps {
+  readonly entries: readonly PickerEntry[];
+  readonly onSelect: (blockType: string) => void;
+  readonly onClose: () => void;
+}
 
-  // Remove old items (keep input)
-  const oldItems = el.querySelectorAll(".cf-block-picker-item");
-  for (const item of oldItems) item.remove();
+function BlockPickerMenu({
+  entries,
+  onSelect,
+  onClose,
+}: BlockPickerMenuProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Render filtered items
-  for (let i = 0; i < filtered.length; i++) {
-    const item = document.createElement("div");
-    item.className = "cf-block-picker-item";
-    if (i === selectedIndex) {
-      item.classList.add("cf-block-picker-item-selected");
-      item.setAttribute("aria-selected", "true");
+  useLayoutEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const onInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+      return;
     }
-    item.setAttribute("role", "option");
-    item.dataset.index = String(i);
-    item.textContent = filtered[i].title;
-    el.appendChild(item);
-  }
+    if (event.key === "Backspace" && event.currentTarget.value === "") {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    }
+  };
 
-  return filtered;
+  return createElement(
+    CommandPrimitive,
+    {
+      label: "Block type picker",
+      loop: true,
+      className: "cf-block-picker-command",
+    },
+    createElement(CommandPrimitive.Input, {
+      ref: inputRef,
+      className: "cf-block-picker-input",
+      placeholder: "Block type...",
+      autoComplete: "off",
+      spellCheck: false,
+      onKeyDown: onInputKeyDown,
+    }),
+    createElement(
+      CommandPrimitive.List,
+      { className: "cf-block-picker-list" },
+      createElement(
+        CommandPrimitive.Empty,
+        { className: "cf-block-picker-empty" },
+        "No block types found.",
+      ),
+      ...entries.map((entry) =>
+        createElement(
+          CommandPrimitive.Item,
+          {
+            key: entry.name,
+            value: entry.name,
+            keywords: [entry.title],
+            className: "cf-block-picker-item",
+            onSelect: () => onSelect(entry.name),
+          },
+          entry.title,
+        ),
+      ),
+    ),
+  );
+}
+
+function renderPickerMenu(props: BlockPickerMenuProps | null): void {
+  if (!pickerRoot && props === null) return;
+  flushSync(() => {
+    getPickerRoot().render(props === null ? null : createElement(BlockPickerMenu, props));
+  });
 }
 
 /**
@@ -202,12 +243,25 @@ function showPicker(
   hidePicker();
 
   const el = getPickerEl();
-  const selectedIndex = 0;
-  const filter = "";
-
-  const filteredEntries = renderPicker(entries, filter, selectedIndex);
   el.style.display = "";
   el.setAttribute("data-visible", "false");
+  const requestId = nextPickerRequestId++;
+  activePicker = {
+    requestId,
+    view,
+    ancestorFences,
+  };
+  renderPickerMenu({
+    entries,
+    onSelect: (blockType) => {
+      insertBlock(view, lineFrom, lineTo, blockType, ancestorFences);
+      hidePicker();
+    },
+    onClose: () => {
+      hidePicker();
+      view.focus();
+    },
+  });
 
   // Position using a virtual anchor at the cursor position
   const coords = view.coordsAtPos(lineFrom);
@@ -233,66 +287,25 @@ function showPicker(
     placement: "bottom-start",
     middleware: [offset(4), flip(), shift({ padding: 8 })],
   }).then(({ x, y }) => {
+    if (activePicker?.requestId !== requestId) return;
     Object.assign(el.style, {
       left: `${x}px`,
       top: `${y}px`,
     });
     requestAnimationFrame(() => {
+      if (activePicker?.requestId !== requestId) return;
       el.setAttribute("data-visible", "true");
     });
-  });
-
-  // Set up click handler for picker items
-  const onClick = (e: MouseEvent) => {
-    const target = (e.target as HTMLElement).closest(".cf-block-picker-item") as HTMLElement | null;
-    if (!target || !activePicker) return;
-    const idx = Number(target.dataset.index);
-    if (Number.isFinite(idx) && idx >= 0 && idx < activePicker.filteredEntries.length) {
-      insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, activePicker.filteredEntries[idx].name, activePicker.ancestorFences);
-      hidePicker();
-    }
-  };
-  el.addEventListener("click", onClick);
-
-  // Keydown handler on the picker itself (for when input has focus)
-  const onPickerKeyDown = (e: KeyboardEvent) => {
-    handlePickerKey(e);
-  };
-  el.addEventListener("keydown", onPickerKeyDown);
-
-  activePicker = {
-    view,
-    lineFrom,
-    lineTo,
-    selectedIndex,
-    allEntries: entries,
-    filteredEntries,
-    filter,
-    ancestorFences,
-    onDismiss: () => {
-      el.removeEventListener("click", onClick);
-      el.removeEventListener("keydown", onPickerKeyDown);
-    },
-  };
-
-  // Focus the input after positioning
-  requestAnimationFrame(() => {
-    const input = el.querySelector(".cf-block-picker-input") as HTMLInputElement | null;
-    input?.focus();
   });
 }
 
 /** Hide the picker and clean up. */
 function hidePicker(): void {
-  if (pickerEl) {
-    pickerEl.setAttribute("data-visible", "false");
-    pickerEl.style.display = "none";
-    pickerEl.innerHTML = "";
-  }
-  if (activePicker) {
-    activePicker.onDismiss();
-    activePicker = null;
-  }
+  activePicker = null;
+  renderPickerMenu(null);
+  if (!pickerEl) return;
+  pickerEl.setAttribute("data-visible", "false");
+  pickerEl.style.display = "none";
 }
 
 /** Whether the picker is currently visible. */
@@ -366,132 +379,29 @@ function insertBlock(
 }
 
 // ---------------------------------------------------------------------------
-// Keyboard navigation (capture-phase listener)
+// Lifecycle
 // ---------------------------------------------------------------------------
 
 /**
- * Handle keyboard events while the picker is visible.
- *
- * Called from a capture-phase keydown listener on the editor DOM so it
- * runs before CM6's keymap processing. Without capture phase, CM6 would
- * handle ArrowDown (cursor move) and Enter (newline) before we see them.
+ * ViewPlugin that dismisses the picker on outside clicks and when the owning
+ * editor view is destroyed.
  */
-function handlePickerKey(e: KeyboardEvent): void {
-  if (!activePicker) return;
-
-  switch (e.key) {
-    case "ArrowDown": {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (activePicker.filteredEntries.length > 0) {
-        activePicker.selectedIndex = (activePicker.selectedIndex + 1) % activePicker.filteredEntries.length;
-        renderPicker(activePicker.allEntries, activePicker.filter, activePicker.selectedIndex);
-        scrollSelectedIntoView();
-      }
-      break;
-    }
-    case "ArrowUp": {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (activePicker.filteredEntries.length > 0) {
-        const len = activePicker.filteredEntries.length;
-        activePicker.selectedIndex = (activePicker.selectedIndex - 1 + len) % len;
-        renderPicker(activePicker.allEntries, activePicker.filter, activePicker.selectedIndex);
-        scrollSelectedIntoView();
-      }
-      break;
-    }
-    case "Enter": {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (activePicker.filteredEntries.length > 0) {
-        const entry = activePicker.filteredEntries[activePicker.selectedIndex];
-        insertBlock(activePicker.view, activePicker.lineFrom, activePicker.lineTo, entry.name, activePicker.ancestorFences);
-      }
-      hidePicker();
-      break;
-    }
-    case "Escape": {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const { view: escView } = activePicker;
-      hidePicker();
-      escView.focus();
-      break;
-    }
-    case "Backspace": {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (activePicker.filter.length > 0) {
-        activePicker.filter = activePicker.filter.slice(0, -1);
-        activePicker.selectedIndex = 0;
-        activePicker.filteredEntries = renderPicker(activePicker.allEntries, activePicker.filter, 0);
-      } else {
-        const { view: bsView } = activePicker;
-        hidePicker();
-        bsView.focus();
-      }
-      break;
-    }
-    default: {
-      // Printable character — add to filter
-      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        activePicker.filter += e.key;
-        activePicker.selectedIndex = 0;
-        activePicker.filteredEntries = renderPicker(activePicker.allEntries, activePicker.filter, 0);
-      }
-      break;
-    }
-  }
-}
-
-/** Scroll the selected picker item into view. */
-function scrollSelectedIntoView(): void {
-  const el = getPickerEl();
-  const selected = el.querySelector(".cf-block-picker-item-selected");
-  if (selected) {
-    selected.scrollIntoView({ block: "nearest" });
-  }
-}
-
-// ---------------------------------------------------------------------------
-// CM6 Extension
-// ---------------------------------------------------------------------------
-
-/**
- * ViewPlugin that attaches a capture-phase keydown listener for picker
- * navigation. The capture phase is essential because CM6's keymap
- * processes keydown in the bubble phase — without capture, ArrowDown
- * and Enter would be consumed by the default keymap before we see them.
- */
-const pickerKeyPlugin = ViewPlugin.define((view) => {
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (activePicker) {
-      handlePickerKey(e);
-    }
-  };
-
+const pickerLifecyclePlugin = ViewPlugin.define((view) => {
   const onMouseDown = (e: MouseEvent) => {
-    if (activePicker) {
-      const target = e.target as HTMLElement;
-      if (!pickerEl?.contains(target)) {
-        // The `::` was already removed when the picker appeared.
-        // Just dismiss the picker on outside click.
-        hidePicker();
-        view.focus();
-      }
+    if (activePicker?.view !== view) return;
+    const target = e.target as HTMLElement;
+    if (!pickerEl?.contains(target)) {
+      // The `::` was already removed when the picker appeared.
+      // Just dismiss the picker on outside click.
+      hidePicker();
+      view.focus();
     }
   };
 
-  // Attach to the editor's root DOM in capture phase
-  view.dom.addEventListener("keydown", onKeyDown, true);
   document.addEventListener("mousedown", onMouseDown);
 
   return {
     destroy() {
-      view.dom.removeEventListener("keydown", onKeyDown, true);
       document.removeEventListener("mousedown", onMouseDown);
       // Only dismiss if this view owns the picker (multi-view safety)
       if (activePicker?.view === view) hidePicker();
@@ -562,8 +472,7 @@ export const blockTypePickerExtension: Extension = [
     return true;
   }),
 
-  // Capture-phase key handler for picker navigation
-  pickerKeyPlugin,
+  pickerLifecyclePlugin,
 ];
 
 // ---------------------------------------------------------------------------
