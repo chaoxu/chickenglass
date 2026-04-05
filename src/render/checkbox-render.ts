@@ -8,8 +8,13 @@
 
 import {
   type EditorView,
+  type ViewUpdate,
 } from "@codemirror/view";
-import { type Extension } from "@codemirror/state";
+import {
+  type EditorState,
+  type Extension,
+} from "@codemirror/state";
+import { syntaxTree } from "@codemirror/language";
 import {
   type VisibleRange,
   collectNodeRangesExcludingCursor,
@@ -59,6 +64,42 @@ export class CheckboxWidget extends RenderWidget {
 
 const TASK_MARKER_TYPES = new Set(["TaskMarker"]);
 
+/**
+ * Only TaskMarker boundaries matter here: checkbox widgets are hidden when the
+ * selection is inside a TaskMarker, so tracking the parent Task would rebuild
+ * unnecessarily while the cursor moves through task text.
+ */
+function checkboxCursorContextKey(state: EditorState): string {
+  const { from, to } = state.selection.main;
+  const tree = syntaxTree(state);
+  const seen = new Set<string>();
+  const positions = from === to ? [from] : [from, to];
+
+  for (const pos of positions) {
+    const clampedPos = Math.max(0, Math.min(pos, state.doc.length));
+    for (const side of [1, -1] as const) {
+      let node = tree.resolveInner(clampedPos, side);
+      while (true) {
+        if (node.name === "TaskMarker" && from >= node.from && to <= node.to) {
+          seen.add(`TaskMarker:${node.from}:${node.to}`);
+          break;
+        }
+        const parent = node.parent;
+        if (!parent) break;
+        node = parent;
+      }
+    }
+  }
+
+  if (seen.size === 0) return "";
+  if (seen.size === 1) return seen.values().next().value!;
+  return [...seen].sort().join("|");
+}
+
+function checkboxCursorContextChanged(update: ViewUpdate): boolean {
+  return checkboxCursorContextKey(update.state) !== checkboxCursorContextKey(update.startState);
+}
+
 /** Collect checkbox decoration ranges for task list markers. */
 function collectCheckboxItems(
   view: EditorView,
@@ -76,4 +117,7 @@ function collectCheckboxItems(
 /** CM6 extension that renders task list checkboxes with toggle support. */
 export const checkboxRenderPlugin: Extension = createCursorSensitiveViewPlugin(
   collectCheckboxItems,
+  {
+    selectionCheck: checkboxCursorContextChanged,
+  },
 );
