@@ -8,14 +8,21 @@ import {
 } from "./perf-regression.mjs";
 
 describe("perf regression scenarios", () => {
-  it("registers typing-rich-burst with the expected benchmark docs", () => {
+  it("registers typing-rich-burst with the expected benchmark docs and required metrics", () => {
     expect(scenarios["typing-rich-burst"]).toMatchObject({
       defaultSettleMs: 200,
     });
     expect(TYPING_BURST_CASES.map(({ key, displayPath }) => ({ key, displayPath }))).toEqual([
       { key: "index", displayPath: "demo/index.md" },
       { key: "rankdecrease", displayPath: "demo/rankdecrease/main.md" },
+      { key: "cogirth_main2", displayPath: "demo/cogirth/main2.md" },
     ]);
+    expect(scenarios["typing-rich-burst"].requiredMetrics).toContain(
+      "typing.wall_ms.cogirth_main2.inline_math",
+    );
+    expect(scenarios["typing-rich-burst"].requiredMetrics).toContain(
+      "typing.settle_ms.cogirth_main2.citation_ref",
+    );
   });
 
   it("emits the required typing metrics for each document position", () => {
@@ -37,7 +44,7 @@ describe("perf regression scenarios", () => {
     );
   });
 
-  it("picks the first prose line after frontmatter and a prose line near the end", () => {
+  it("picks prose and semantic hotspot typing positions deterministically", () => {
     const positions = findTypingBurstPositions(`---
 title: Demo
 summary: Metadata should not be benchmarked
@@ -47,14 +54,26 @@ summary: Metadata should not be benchmarked
 
 First prose paragraph.
 
-- list item
+Equation line with $x^2$ inline math.
+
+See [@thm:sample] for the theorem.
 
 Final prose line.
-`);
+`, ["after_frontmatter", "inline_math", "citation_ref", "near_end"]);
 
     expect(positions.after_frontmatter.line).toBe(8);
-    expect(positions.near_end.line).toBe(12);
+    expect(positions.inline_math.line).toBe(10);
+    expect(positions.citation_ref.line).toBe(12);
+    expect(positions.near_end.line).toBe(14);
     expect(positions.after_frontmatter.anchor).toBeGreaterThan(0);
-    expect(positions.near_end.anchor).toBeGreaterThan(positions.after_frontmatter.anchor);
+    expect(positions.inline_math.anchor).toBeGreaterThan(positions.after_frontmatter.anchor);
+    expect(positions.citation_ref.anchor).toBeGreaterThan(positions.inline_math.anchor);
+    expect(positions.near_end.anchor).toBeGreaterThan(positions.citation_ref.anchor);
+  });
+
+  it("fails fast when a requested semantic hotspot is missing", () => {
+    expect(() => findTypingBurstPositions("Plain prose only.\n", ["inline_math"])).toThrow(
+      "Failed to find inline_math typing benchmark position.",
+    );
   });
 });

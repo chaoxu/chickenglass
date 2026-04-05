@@ -8,7 +8,9 @@ Coflat already records frontend spans in `src/app/perf.ts` and backend spans in 
 - reloads the app between iterations so each run starts from the same state
 - clears frontend + backend perf counters before each measured run
 - runs a built-in scenario
+- asserts basic editor/semantics health after the scenario settles
 - captures the aggregated perf snapshot from `window.__cfDebug.perfSummary()`
+- validates any scenario-required metrics before writing or comparing a report
 - saves a baseline JSON or compares a new run against a baseline
 
 ## Prerequisites
@@ -54,6 +56,8 @@ If the current run exceeds the configured thresholds, the command exits non-zero
   Reload app, open `index.md`, then cycle `Source -> Read -> Rich`.
 - `local-edit-index`
   Reload app, open `index.md`, then apply a local inline-math edit and report semantic revision churn.
+- `typing-rich-burst`
+  Reload rich documents and measure typing bursts across deterministic anchors. The suite keeps the existing plain-prose positions in `demo/index.md` and `demo/rankdecrease/main.md`, and explicitly adds semantic hotspots plus the canonical heavy fixture `demo/cogirth/main2.md` (`inline_math`, `citation_ref`, and prose positions). If any required typing metric disappears or is emitted for fewer than the measured iterations, the benchmark fails immediately.
 - `scroll-step-rich`
   Reload app, open `cogirth/main2.md` in Rich mode, then scroll step-by-step (30 lines per step). Reports per-step timing metrics (`scroll.mean_step_ms`, `scroll.max_step_ms`).
 - `scroll-jump-rich`
@@ -81,6 +85,12 @@ npm run perf:compare -- \
 For `local-edit-index`, the report also prints "Scenario metrics" with semantic
 revision deltas and per-slice churn counts. That is the verification path for
 edit-locality after the incremental semantics rollout.
+
+All perf scenarios now run the shared `assertEditorHealth()` check from
+`scripts/test-helpers.mjs` after settling and before the perf snapshot is
+captured. That keeps the perf lane from passing when the editor is fast but the
+debug bridge, selection bounds, syntax tree, or semantic revision info are
+broken.
 
 ## Scroll Scenarios
 
@@ -120,5 +130,5 @@ Per-step timing uses `performance.now()` around each synchronous `view.dispatch(
 ## Notes
 
 - Reloading between iterations is intentional. It avoids “second open just activates an existing tab” noise.
-- The baseline format is versioned. If the report format changes, old baselines will fail fast instead of comparing garbage.
+- The baseline format is versioned. If the report format or required-metric contract changes, old baselines will fail fast instead of comparing garbage.
 - This is meant for trend detection, not absolute benchmarking. Keep the same machine, browser profile, port, and scenario when comparing results.

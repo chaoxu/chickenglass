@@ -12,7 +12,16 @@ import {
   buildPerfRegressionReport,
   comparePerfRegressionReports,
 } from "./perf-regression-lib.mjs";
-import { connectEditor, openFile, switchToMode, sleep, createArgParser, waitForDebugBridge, disconnectBrowser } from "./test-helpers.mjs";
+import {
+  assertEditorHealth,
+  connectEditor,
+  openFile,
+  switchToMode,
+  sleep,
+  createArgParser,
+  waitForDebugBridge,
+  disconnectBrowser,
+} from "./test-helpers.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
 
 function ensureDir(path) {
@@ -76,6 +85,8 @@ export const TYPING_BURST_REQUIRED_METRICS = [
   "typing.settle_ms",
 ];
 
+const DEFAULT_TYPING_BURST_POSITION_KEYS = ["after_frontmatter", "near_end"];
+
 async function runSteppedScroll(page) {
   return page.evaluate(async (stepSize) => {
     const view = window.__cmView;
@@ -113,6 +124,7 @@ export const TYPING_BURST_CASES = [
     key: "index",
     displayPath: "demo/index.md",
     virtualPath: "index.md",
+    positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
     candidates: [
       resolve(REPO_ROOT, "demo/index.md"),
       resolve(TYPING_BURST_EXTERNAL_DEMO_ROOT, "index.md"),
@@ -122,9 +134,23 @@ export const TYPING_BURST_CASES = [
     key: "rankdecrease",
     displayPath: "demo/rankdecrease/main.md",
     virtualPath: "rankdecrease/main.md",
+    positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
     candidates: [
       resolve(REPO_ROOT, "demo/rankdecrease/main.md"),
       resolve(TYPING_BURST_EXTERNAL_DEMO_ROOT, "rankdecrease/main.md"),
+    ],
+  },
+  {
+    key: "cogirth_main2",
+    displayPath: "demo/cogirth/main2.md",
+    virtualPath: "cogirth/main2.md",
+    positionKeys: [
+      ...DEFAULT_TYPING_BURST_POSITION_KEYS,
+      "inline_math",
+      "citation_ref",
+    ],
+    candidates: [
+      resolve(REPO_ROOT, "demo/cogirth/main2.md"),
     ],
   },
 ];
@@ -168,40 +194,90 @@ function pickAnchor(line) {
   return line.from + Math.min(base + 8, Math.max(line.text.length - 1, 0));
 }
 
-export function findTypingBurstPositions(text) {
+function findPatternPosition(lines, frontmatterEnd, positionKey, pattern, options = {}) {
+  const groupIndex = options.groupIndex ?? 0;
+  const charPattern = options.charPattern ?? /[A-Za-z0-9]/;
+
+  for (let i = frontmatterEnd; i < lines.length; i += 1) {
+    const line = lines[i];
+    // Callers pass non-global regexes here. `RegExp.prototype.exec()` would be
+    // stateful across lines only if the pattern used the `g` flag.
+    const match = pattern.exec(line.text);
+    if (!match || match.index < 0) {
+      continue;
+    }
+
+    const anchorText = match[groupIndex] ?? match[0];
+    const groupOffset = groupIndex > 0 ? match[0].indexOf(anchorText) : 0;
+    const charOffset = anchorText.search(charPattern);
+    return {
+      line: line.number,
+      anchor: line.from + match.index + groupOffset + (charOffset >= 0 ? charOffset : 0),
+    };
+  }
+
+  throw new Error(`Failed to find ${positionKey} typing benchmark position.`);
+}
+
+const TYPING_BURST_POSITION_RESOLVERS = {
+  after_frontmatter: ({ lines, frontmatterEnd }) => {
+    for (let i = frontmatterEnd; i < lines.length; i += 1) {
+      if (isPlainProseLine(lines[i])) {
+        return {
+          line: lines[i].number,
+          anchor: pickAnchor(lines[i]),
+        };
+      }
+    }
+    throw new Error("Failed to find after_frontmatter typing benchmark position.");
+  },
+  near_end: ({ lines, frontmatterEnd }) => {
+    for (let i = lines.length - 1; i >= frontmatterEnd; i -= 1) {
+      if (isPlainProseLine(lines[i])) {
+        return {
+          line: lines[i].number,
+          anchor: pickAnchor(lines[i]),
+        };
+      }
+    }
+    throw new Error("Failed to find near_end typing benchmark position.");
+  },
+  inline_math: ({ lines, frontmatterEnd }) =>
+    findPatternPosition(
+      lines,
+      frontmatterEnd,
+      "inline_math",
+      /\$([^$\n]+)\$/,
+      { groupIndex: 1, charPattern: /[A-Za-z0-9\\]/ },
+    ),
+  citation_ref: ({ lines, frontmatterEnd }) =>
+    findPatternPosition(
+      lines,
+      frontmatterEnd,
+      "citation_ref",
+      /\[@([^\]]+)\]/,
+      { groupIndex: 1, charPattern: /[A-Za-z0-9:_-]/ },
+    ),
+};
+
+export function findTypingBurstPositions(text, positionKeys = DEFAULT_TYPING_BURST_POSITION_KEYS) {
   const lines = splitLinesWithOffsets(text);
   const frontmatterEnd = findFrontmatterEnd(lines);
-
-  let topLine = null;
-  for (let i = frontmatterEnd; i < lines.length; i += 1) {
-    if (isPlainProseLine(lines[i])) {
-      topLine = lines[i];
-      break;
-    }
-  }
-
-  let endLine = null;
-  for (let i = lines.length - 1; i >= frontmatterEnd; i -= 1) {
-    if (isPlainProseLine(lines[i])) {
-      endLine = lines[i];
-      break;
-    }
-  }
-
-  if (!topLine || !endLine) {
-    throw new Error("Failed to find typing benchmark positions.");
-  }
-
-  return {
-    after_frontmatter: {
-      line: topLine.number,
-      anchor: pickAnchor(topLine),
-    },
-    near_end: {
-      line: endLine.number,
-      anchor: pickAnchor(endLine),
-    },
+  const context = {
+    lines,
+    frontmatterEnd,
   };
+  const positions = {};
+
+  for (const positionKey of positionKeys) {
+    const resolver = TYPING_BURST_POSITION_RESOLVERS[positionKey];
+    if (!resolver) {
+      throw new Error(`Unknown typing benchmark position "${positionKey}".`);
+    }
+    positions[positionKey] = resolver(context);
+  }
+
+  return positions;
 }
 
 function resolveTypingBurstFixture(caseDef) {
@@ -290,6 +366,18 @@ export function typingBurstMetrics(caseKey, positionKey, result) {
     },
     { name: withContext("typing.settle_ms"), unit: "ms", value: result.settleMs },
   ];
+}
+
+function typingBurstRequiredMetricNames(caseDefinitions = TYPING_BURST_CASES) {
+  const metricNames = [];
+  for (const caseDef of caseDefinitions) {
+    for (const positionKey of caseDef.positionKeys ?? DEFAULT_TYPING_BURST_POSITION_KEYS) {
+      for (const metricName of TYPING_BURST_REQUIRED_METRICS) {
+        metricNames.push(`${metricName}.${caseDef.key}.${positionKey}`);
+      }
+    }
+  }
+  return metricNames;
 }
 
 export const scenarios = {
@@ -393,8 +481,9 @@ export const scenarios = {
     },
   },
   "typing-rich-burst": {
-    description: "Measure rich-mode typing bursts on small and large documents at top and near-end positions.",
+    description: "Measure rich-mode typing bursts across prose, inline math, and citation/ref hotspots, including the canonical heavy fixture.",
     defaultSettleMs: 200,
+    requiredMetrics: typingBurstRequiredMetricNames(),
     run: async (page) => {
       const metrics = [];
       for (const testCase of TYPING_BURST_CASES.map(resolveTypingBurstFixture)) {
@@ -403,7 +492,10 @@ export const scenarios = {
           testCase.virtualPath,
           testCase.content,
         );
-        const positions = findTypingBurstPositions(originalText);
+        const positions = findTypingBurstPositions(
+          originalText,
+          testCase.positionKeys,
+        );
         for (const [positionKey, position] of Object.entries(positions)) {
           await openCleanRichDocument(page, testCase.virtualPath, testCase.content);
           const result = await measureTypingBurst(page, position.anchor, TYPING_BURST_INSERT_COUNT);
@@ -532,6 +624,7 @@ async function runScenarioSamples(page, scenarioName, iterations, warmup, settle
     await clearPerf(page);
     const scenarioResult = await scenario.run(page);
     await sleep(settleMs);
+    await assertEditorHealth(page, `${scenarioName} run ${runIndex + 1}`);
     const snapshot = await getPerfSnapshot(page);
     if (runIndex >= warmup) {
       snapshots.push({
@@ -648,6 +741,7 @@ export async function main(argv = process.argv.slice(2)) {
       iterations,
       warmup,
       settleMs,
+      requiredMetrics: scenario.requiredMetrics ?? [],
       chromePort: chromeArgs.port,
       appUrl,
       snapshots,
