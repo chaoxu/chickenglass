@@ -104,6 +104,8 @@ export function sortBibEntries(entries: CslJsonItem[]): CslJsonItem[] {
 
 /** Widget that renders the full bibliography section. */
 export class BibliographyWidget extends RenderWidget {
+  private readonly mouseDownHandlers = new WeakMap<HTMLElement, (event: MouseEvent) => void>();
+
   constructor(
     private readonly entries: readonly CslJsonItem[],
     private readonly cslHtml: readonly string[],
@@ -155,19 +157,37 @@ export class BibliographyWidget extends RenderWidget {
   override toDOM(view?: EditorView): HTMLElement {
     const section = this.createDOM();
     if (!view) return section;
-    for (const link of section.querySelectorAll<HTMLElement>(`.${CSS.bibliographyBacklink}`)) {
+
+    const handleMouseDown = (event: MouseEvent): void => {
+      const target = event.target;
+      const origin = target instanceof Element
+        ? target
+        : target instanceof Node
+          ? target.parentElement
+          : null;
+      const link = origin?.closest<HTMLElement>(`.${CSS.bibliographyBacklink}`);
+      if (!link || !section.contains(link)) return;
+
       const from = Number(link.dataset.sourceFrom ?? "-1");
-      link.addEventListener("mousedown", (event) => {
-        event.preventDefault();
-        if (from < 0) return;
-        view.focus();
-        view.dispatch({
-          selection: { anchor: from },
-          scrollIntoView: true,
-        });
+      event.preventDefault();
+      if (from < 0) return;
+      view.focus();
+      view.dispatch({
+        selection: { anchor: from },
+        scrollIntoView: true,
       });
-    }
+    };
+
+    this.mouseDownHandlers.set(section, handleMouseDown);
+    section.addEventListener("mousedown", handleMouseDown);
     return section;
+  }
+
+  override destroy(dom: HTMLElement): void {
+    const handleMouseDown = this.mouseDownHandlers.get(dom);
+    if (!handleMouseDown) return;
+    dom.removeEventListener("mousedown", handleMouseDown);
+    this.mouseDownHandlers.delete(dom);
   }
 
   eq(other: BibliographyWidget): boolean {

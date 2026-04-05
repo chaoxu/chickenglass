@@ -338,6 +338,8 @@ class FootnoteDefLabelWidget extends SimpleTextRenderWidget {
  * behavior places the cursor on the ref source.
  */
 class FootnoteRefWidget extends SimpleTextRenderWidget {
+  private readonly mouseDownHandlers = new WeakMap<HTMLElement, (event: MouseEvent) => void>();
+
   constructor(
     private readonly number: number,
     private readonly id: string,
@@ -367,7 +369,7 @@ class FootnoteRefWidget extends SimpleTextRenderWidget {
       const id = this.id;
       const defFrom = this.defFrom;
       const inlineExpanded = this.inlineExpanded;
-      el.addEventListener("mousedown", (e) => {
+      const handleMouseDown = (e: MouseEvent): void => {
         e.preventDefault();
         const collapsed = view.state.field(sidenotesCollapsedField, false) ?? false;
         if (collapsed) {
@@ -380,12 +382,21 @@ class FootnoteRefWidget extends SimpleTextRenderWidget {
           view.focus();
           view.dispatch({ selection: { anchor: defFrom }, scrollIntoView: true });
         }
-      });
+      };
+      this.mouseDownHandlers.set(el, handleMouseDown);
+      el.addEventListener("mousedown", handleMouseDown);
     } else if (view && this.sourceFrom >= 0) {
       this.bindSourceReveal(el, view);
     }
 
     return el;
+  }
+
+  override destroy(dom: HTMLElement): void {
+    const handleMouseDown = this.mouseDownHandlers.get(dom);
+    if (!handleMouseDown) return;
+    dom.removeEventListener("mousedown", handleMouseDown);
+    this.mouseDownHandlers.delete(dom);
   }
 
   eq(other: FootnoteRefWidget): boolean {
@@ -411,6 +422,7 @@ class FootnoteRefWidget extends SimpleTextRenderWidget {
 export class FootnoteInlineWidget extends WidgetType {
   private readonly macrosKey: string;
   private cachedDOM: HTMLElement | null = null;
+  private readonly mouseDownHandlers = new WeakMap<HTMLElement, (event: MouseEvent) => void>();
 
   constructor(
     private readonly number: number,
@@ -462,12 +474,18 @@ export class FootnoteInlineWidget extends WidgetType {
 
   toDOM(view: EditorView): HTMLElement {
     const wrapper = this.createCachedDOM();
-    const editBtn = wrapper.querySelector<HTMLButtonElement>(".cf-footnote-inline-edit");
-    if (!editBtn) return wrapper;
-
     const defFrom = this.defFrom;
     const id = this.id;
-    editBtn.addEventListener("mousedown", (e) => {
+    const handleMouseDown = (e: MouseEvent): void => {
+      const target = e.target;
+      const origin = target instanceof Element
+        ? target
+        : target instanceof Node
+          ? target.parentElement
+          : null;
+      const editBtn = origin?.closest<HTMLButtonElement>(".cf-footnote-inline-edit");
+      if (!editBtn || !wrapper.contains(editBtn)) return;
+
       e.preventDefault();
       e.stopPropagation();
       // Uncollapse sidenotes and navigate to definition
@@ -480,8 +498,17 @@ export class FootnoteInlineWidget extends WidgetType {
         scrollIntoView: true,
       });
       view.focus();
-    });
+    };
+    this.mouseDownHandlers.set(wrapper, handleMouseDown);
+    wrapper.addEventListener("mousedown", handleMouseDown);
     return wrapper;
+  }
+
+  override destroy(dom: HTMLElement): void {
+    const handleMouseDown = this.mouseDownHandlers.get(dom);
+    if (!handleMouseDown) return;
+    dom.removeEventListener("mousedown", handleMouseDown);
+    this.mouseDownHandlers.delete(dom);
   }
 
   eq(other: FootnoteInlineWidget): boolean {

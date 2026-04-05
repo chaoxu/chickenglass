@@ -78,6 +78,18 @@ function createDecoratedState(doc: string, cursorPos = 0): EditorState {
   });
 }
 
+function getWidgetFromDecorations<T>(decorations: DecorationSet, widgetClass: string): T {
+  const cursor = decorations.iter();
+  while (cursor.value) {
+    const widget = cursor.value.spec.widget;
+    if (widget?.constructor?.name === widgetClass) {
+      return widget as T;
+    }
+    cursor.next();
+  }
+  throw new Error(`expected widget ${widgetClass}`);
+}
+
 function focusState(state: EditorState): EditorState {
   return state.update({ effects: focusEffect.of(true) }).state;
 }
@@ -859,5 +871,70 @@ describe("FootnoteInlineWidget", () => {
       scrollIntoView: true,
     });
     expect(focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes the edit handler when the widget is destroyed", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new FootnoteInlineWidget(1, "note", "Content", {}, 10);
+
+    const dom = widget.toDOM(view);
+    const editBtn = dom.querySelector<HTMLButtonElement>(".cf-footnote-inline-edit");
+    editBtn?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(focus).toHaveBeenCalledTimes(1);
+
+    dispatch.mockClear();
+    focus.mockClear();
+
+    widget.destroy(dom);
+    editBtn?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(focus).not.toHaveBeenCalled();
+  });
+});
+
+describe("FootnoteRefWidget", () => {
+  it("removes the ref click handler when the widget is destroyed", () => {
+    let state = createFullState("Text [^1] end\n\n[^1]: Note");
+    state = state.update({
+      effects: sidenotesCollapsedEffect.of(true),
+    }).state;
+
+    const widget = getWidgetFromDecorations<{
+      toDOM(view?: EditorView): HTMLElement;
+      destroy(dom: HTMLElement): void;
+    }>(buildSidenoteDecorations(state, true), "FootnoteRefWidget");
+
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({
+      focus,
+      dispatch,
+      state: {
+        field(requestedField: unknown, fallback: unknown) {
+          return requestedField === sidenotesCollapsedField ? true : fallback;
+        },
+      },
+    });
+
+    const dom = widget.toDOM(view);
+    dom.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(dispatch).toHaveBeenCalledWith({
+      effects: footnoteInlineToggleEffect.of({ id: "1", expanded: true }),
+    });
+
+    dispatch.mockClear();
+    focus.mockClear();
+
+    widget.destroy(dom);
+    dom.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(focus).not.toHaveBeenCalled();
   });
 });
