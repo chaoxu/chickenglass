@@ -243,17 +243,19 @@ class MathPreviewPlugin implements PluginValue {
     if (this.anchorFromPos < 0 || this.anchorToPos < 0) return null;
 
     try {
-      const fromCoords = this.view.coordsAtPos(this.anchorFromPos);
-      const toCoords = this.view.coordsAtPos(this.anchorToPos);
+      // Anchor to the inline math span itself on both edges. Leaving the side
+      // implicit lets coordsAtPos fall back to adjacent content at boundaries.
+      const fromCoords = this.view.coordsAtPos(this.anchorFromPos, 1);
+      const toCoords = this.view.coordsAtPos(this.anchorToPos, -1);
       if (!fromCoords || !toCoords) return null;
 
       return {
         x: fromCoords.left,
         y: fromCoords.top,
-        width: 0,
+        width: Math.max(toCoords.right - fromCoords.left, 0),
         height: Math.max(toCoords.bottom - fromCoords.top, 0),
         top: fromCoords.top,
-        right: fromCoords.left,
+        right: toCoords.right,
         bottom: toCoords.bottom,
         left: fromCoords.left,
       };
