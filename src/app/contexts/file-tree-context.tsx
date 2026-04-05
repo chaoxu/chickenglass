@@ -1,7 +1,6 @@
 import { createContext, useContext } from "react";
 
 export interface FileTreeContextValue {
-  activePath: string | null;
   onSelect: (path: string) => void;
   onDoubleClick?: (path: string) => void;
   onRename: (oldPath: string, newPath: string) => Promise<void>;

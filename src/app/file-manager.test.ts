@@ -106,6 +106,57 @@ describe("MemoryFileSystem", () => {
     expect(tree.children?.[1].name).toBe("z.md");
     expect(tree.children?.[1].isDirectory).toBe(false);
   });
+
+  it("lists only immediate children while including implicit directories", async () => {
+    const fs = new MemoryFileSystem({
+      "chapters/intro.md": "",
+      "chapters/notes/todo.md": "",
+      "z.md": "",
+    });
+
+    await expect(fs.listChildren("")).resolves.toEqual([
+      { name: "chapters", path: "chapters", isDirectory: true },
+      { name: "z.md", path: "z.md", isDirectory: false },
+    ]);
+
+    await expect(fs.listChildren("chapters")).resolves.toEqual([
+      { name: "notes", path: "chapters/notes", isDirectory: true },
+      { name: "intro.md", path: "chapters/intro.md", isDirectory: false },
+    ]);
+  });
+
+  it("refreshes cached child listings after structural changes", async () => {
+    const fs = new MemoryFileSystem({ "docs/a.md": "" });
+    await expect(fs.listChildren("docs")).resolves.toEqual([
+      { name: "a.md", path: "docs/a.md", isDirectory: false },
+    ]);
+
+    await fs.createFile("docs/b.md");
+    await expect(fs.listChildren("docs")).resolves.toEqual([
+      { name: "a.md", path: "docs/a.md", isDirectory: false },
+      { name: "b.md", path: "docs/b.md", isDirectory: false },
+    ]);
+
+    await fs.renameFile("docs/b.md", "docs/c.md");
+    await expect(fs.listChildren("docs")).resolves.toEqual([
+      { name: "a.md", path: "docs/a.md", isDirectory: false },
+      { name: "c.md", path: "docs/c.md", isDirectory: false },
+    ]);
+
+    await fs.deleteFile("docs/a.md");
+    await expect(fs.listChildren("docs")).resolves.toEqual([
+      { name: "c.md", path: "docs/c.md", isDirectory: false },
+    ]);
+  });
+
+  it("keeps explicit empty directories addressable in cached child listings", async () => {
+    const fs = new MemoryFileSystem();
+    await fs.createDirectory("docs");
+    await expect(fs.listChildren("")).resolves.toEqual([
+      { name: "docs", path: "docs", isDirectory: true },
+    ]);
+    await expect(fs.listChildren("docs")).resolves.toEqual([]);
+  });
 });
 
 describe("createDemoFileSystem", () => {

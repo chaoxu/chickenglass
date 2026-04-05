@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   hotkeysCoreFeature,
+  propMemoizationFeature,
   syncDataLoaderFeature,
   type ItemInstance,
   type TreeConfig,
@@ -377,6 +378,7 @@ export function useFileTreeController({
     features: [
       syncDataLoaderFeature,
       hotkeysCoreFeature,
+      propMemoizationFeature,
     ],
   });
 

@@ -1,4 +1,9 @@
-import { base64ToUint8Array, uint8ArrayToBase64 } from "./lib/utils";
+import {
+  base64ToUint8Array,
+  basename,
+  dirname,
+  uint8ArrayToBase64,
+} from "./lib/utils";
 import { getBlogFiles } from "./demo-blog";
 import { normalizeProjectPath } from "../lib/project-paths";
 
@@ -34,10 +39,75 @@ export class MemoryFileSystem implements FileSystem {
   private readonly files: Map<string, string>;
   /** Tracks explicitly created directories (not just inferred from file paths). */
   private readonly dirs: Set<string>;
+  private immediateChildrenCache: Map<string, readonly FileEntry[]> | null = null;
 
   constructor(initialFiles?: Record<string, string>) {
     this.files = new Map(Object.entries(initialFiles ?? {}));
     this.dirs = new Set();
+  }
+
+  private invalidateImmediateChildrenCache(): void {
+    this.immediateChildrenCache = null;
+  }
+
+  private getImmediateChildrenCache(): Map<string, readonly FileEntry[]> {
+    if (this.immediateChildrenCache) {
+      return this.immediateChildrenCache;
+    }
+
+    const entriesByParent = new Map<string, Map<string, FileEntry>>();
+
+    const ensureParent = (path: string): Map<string, FileEntry> => {
+      let entries = entriesByParent.get(path);
+      if (!entries) {
+        entries = new Map();
+        entriesByParent.set(path, entries);
+      }
+      return entries;
+    };
+
+    const addEntry = (parentPath: string, entry: FileEntry) => {
+      ensureParent(parentPath).set(entry.path, entry);
+    };
+
+    const addDirectoryChain = (path: string) => {
+      ensureParent(path);
+      let current = path;
+      while (current !== "") {
+        const parentPath = dirname(current);
+        addEntry(parentPath, {
+          name: basename(current),
+          path: current,
+          isDirectory: true,
+        });
+        ensureParent(parentPath);
+        current = parentPath;
+      }
+    };
+
+    ensureParent("");
+
+    for (const dirPath of this.dirs) {
+      addDirectoryChain(dirPath);
+    }
+
+    for (const filePath of this.files.keys()) {
+      const parentPath = dirname(filePath);
+      addDirectoryChain(parentPath);
+      addEntry(parentPath, {
+        name: basename(filePath),
+        path: filePath,
+        isDirectory: false,
+      });
+    }
+
+    const cache = new Map<string, readonly FileEntry[]>();
+    for (const [path, entries] of entriesByParent) {
+      cache.set(path, [...entries.values()].sort(compareFileEntries));
+    }
+
+    this.immediateChildrenCache = cache;
+    return cache;
   }
 
   async listTree(): Promise<FileEntry> {
@@ -94,36 +164,7 @@ export class MemoryFileSystem implements FileSystem {
   }
 
   async listChildren(path: string): Promise<FileEntry[]> {
-    const prefix = path === "" ? "" : `${path}/`;
-    const entries = new Map<string, FileEntry>();
-
-    for (const dirPath of this.dirs) {
-      const rest = prefix === "" ? dirPath : (dirPath.startsWith(prefix) ? dirPath.slice(prefix.length) : null);
-      if (rest === null || rest === "" || rest.includes("/")) continue;
-      entries.set(dirPath, { name: rest, path: dirPath, isDirectory: true });
-    }
-
-    for (const filePath of this.files.keys()) {
-      const rest = prefix === "" ? filePath : (filePath.startsWith(prefix) ? filePath.slice(prefix.length) : null);
-      if (rest === null || rest === "") continue;
-      const slashIdx = rest.indexOf("/");
-      if (slashIdx === -1) {
-        entries.set(filePath, { name: rest, path: filePath, isDirectory: false });
-      } else {
-        const dirName = rest.substring(0, slashIdx);
-        const dirFullPath = prefix + dirName;
-        if (!entries.has(dirFullPath)) {
-          entries.set(dirFullPath, { name: dirName, path: dirFullPath, isDirectory: true });
-        }
-      }
-    }
-
-    const result = [...entries.values()];
-    result.sort((a, b) => {
-      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-    return result;
+    return (this.getImmediateChildrenCache().get(path) ?? []).map((entry) => ({ ...entry }));
   }
 
   async readFile(path: string): Promise<string> {
@@ -146,6 +187,7 @@ export class MemoryFileSystem implements FileSystem {
       throw new Error(`File already exists: ${path}`);
     }
     this.files.set(path, content ?? "");
+    this.invalidateImmediateChildrenCache();
   }
 
   async exists(path: string): Promise<boolean> {
@@ -169,6 +211,7 @@ export class MemoryFileSystem implements FileSystem {
     }
     this.files.delete(oldPath);
     this.files.set(newPath, content);
+    this.invalidateImmediateChildrenCache();
   }
 
   async createDirectory(path: string): Promise<void> {
@@ -183,6 +226,7 @@ export class MemoryFileSystem implements FileSystem {
       }
     }
     this.dirs.add(path);
+    this.invalidateImmediateChildrenCache();
   }
 
   async writeFileBinary(path: string, data: Uint8Array): Promise<void> {
@@ -196,6 +240,7 @@ export class MemoryFileSystem implements FileSystem {
       }
     }
     this.files.set(path, uint8ArrayToBase64(data));
+    this.invalidateImmediateChildrenCache();
   }
 
   async readFileBinary(path: string): Promise<Uint8Array> {
@@ -224,6 +269,7 @@ export class MemoryFileSystem implements FileSystem {
     // Check if it's a file first
     if (this.files.has(path)) {
       this.files.delete(path);
+      this.invalidateImmediateChildrenCache();
       return;
     }
 
@@ -251,18 +297,21 @@ export class MemoryFileSystem implements FileSystem {
     for (const key of [...this.files.keys()]) {
       if (key.startsWith(prefix)) this.files.delete(key);
     }
+    this.invalidateImmediateChildrenCache();
   }
+}
+
+function compareFileEntries(a: FileEntry, b: FileEntry): number {
+  if (a.isDirectory !== b.isDirectory) {
+    return a.isDirectory ? -1 : 1;
+  }
+  return a.name.localeCompare(b.name);
 }
 
 /** Sort a file tree: directories first, then alphabetical. */
 function sortTree(entry: FileEntry): void {
   if (!entry.children) return;
-  entry.children.sort((a, b) => {
-    if (a.isDirectory !== b.isDirectory) {
-      return a.isDirectory ? -1 : 1;
-    }
-    return a.name.localeCompare(b.name);
-  });
+  entry.children.sort(compareFileEntries);
   for (const child of entry.children) {
     sortTree(child);
   }

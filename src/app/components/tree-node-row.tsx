@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { ReactNode, MouseEvent as ReactMouseEvent, KeyboardEvent } from "react";
 import {
   ContextMenu,
@@ -6,11 +7,15 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "./ui/context-menu";
-import type { MenuItem } from "../hooks/use-tree-node-row";
+import {
+  areHeadlessTreeRowPropsEqual,
+  type HeadlessTreeRowProps,
+  type MenuItem,
+} from "../hooks/use-tree-node-row";
 
 interface TreeNodeRowProps {
   /** Props from headless-tree (data-testid, role, etc.) */
-  rowProps: Record<string, unknown>;
+  rowProps: HeadlessTreeRowProps;
   /** Merged ref that combines local and headless-tree refs */
   mergedRef: (el: HTMLDivElement | null) => void;
   /** Horizontal indentation in pixels */
@@ -35,7 +40,7 @@ interface TreeNodeRowProps {
   onDoubleClick?: (event: ReactMouseEvent<HTMLDivElement>) => void;
 }
 
-export function TreeNodeRow({
+function TreeNodeRowInner({
   rowProps,
   mergedRef,
   indent,
@@ -83,3 +88,25 @@ export function TreeNodeRow({
     </ContextMenu>
   );
 }
+
+function areTreeNodeRowPropsEqual(
+  prev: TreeNodeRowProps,
+  next: TreeNodeRowProps,
+): boolean {
+  return (
+    areHeadlessTreeRowPropsEqual(prev.rowProps, next.rowProps) &&
+    prev.mergedRef === next.mergedRef &&
+    prev.indent === next.indent &&
+    prev.isActive === next.isActive &&
+    prev.isFocused === next.isFocused &&
+    prev.icon === next.icon &&
+    prev.children === next.children &&
+    prev.menuItems === next.menuItems &&
+    prev.onRowClick === next.onRowClick &&
+    prev.onContextSelection === next.onContextSelection &&
+    prev.onRowKeyDown === next.onRowKeyDown &&
+    prev.onDoubleClick === next.onDoubleClick
+  );
+}
+
+export const TreeNodeRow = memo(TreeNodeRowInner, areTreeNodeRowPropsEqual);
