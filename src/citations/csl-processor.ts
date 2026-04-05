@@ -208,17 +208,21 @@ export class CslProcessor {
    * dispatching the processor into synchronous render paths.
    */
   async ensureReady(): Promise<void> {
-    if (this.initPromise) {
-      await this.initPromise;
-    }
+    await this.waitForLatestInit(this.initPromise);
   }
 
   /** Reinitialize the citeproc engine with a new style. */
   async setStyle(styleXml: string): Promise<void> {
     this.styleXml = styleXml;
     this.styleGeneration += 1;
-    this.initPromise = this.initEngine();
-    await this.initPromise;
+    const styleGeneration = this.styleGeneration;
+    const previousInit = this.initPromise ?? Promise.resolve();
+    const initPromise = previousInit.catch(() => undefined).then(async () => {
+      if (styleGeneration !== this.styleGeneration) return;
+      await this.initEngine(styleGeneration, styleXml);
+    });
+    this.initPromise = initPromise;
+    await this.waitForLatestInit(initPromise);
   }
 
   /**
@@ -361,13 +365,24 @@ export class CslProcessor {
     return this.registeredCitationKey;
   }
 
-  private async initEngine(): Promise<void> {
-    const styleGeneration = this.styleGeneration;
+  private async waitForLatestInit(initPromise: Promise<void> | null): Promise<void> {
+    let pending = initPromise;
+    while (pending) {
+      await pending;
+      if (pending === this.initPromise) return;
+      pending = this.initPromise;
+    }
+  }
+
+  private async initEngine(
+    styleGeneration: number = this.styleGeneration,
+    styleXml: string = this.styleXml,
+  ): Promise<void> {
     const styleName = getStyleName(this.processorId, styleGeneration);
-    const styleXml = this.styleXml;
 
     try {
       const { plugins } = await loadCitationJs();
+      if (styleGeneration !== this.styleGeneration) return;
       const cslConfig = plugins.config.get("@csl");
       // citation-js caches engines by style name + locale and mutates the
       // shared engine's retrieveItem callback on reuse. Use a processor- and
