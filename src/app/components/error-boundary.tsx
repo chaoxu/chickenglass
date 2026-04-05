@@ -47,12 +47,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             height: "100vh",
             padding: "2rem",
             fontFamily: "sans-serif",
-            color: "var(--cf-fg, #1a1a1a)",
-            background: "var(--cf-bg, #fff)",
+            color: "var(--cf-fg)",
+            background: "var(--cf-bg)",
           }}
         >
           <h2 style={{ marginBottom: "0.5rem" }}>Something went wrong</h2>
-          <p style={{ color: "var(--cf-muted, #666)", marginBottom: "1rem" }}>
+          <p style={{ color: "var(--cf-muted)", marginBottom: "1rem" }}>
             {error.message}
           </p>
           <button
@@ -60,7 +60,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             onClick={() => this.setState({ error: null })}
             style={{
               padding: "0.4rem 1rem",
-              border: "1px solid var(--cf-border, #ccc)",
+              border: "1px solid var(--cf-border)",
               borderRadius: "4px",
               cursor: "pointer",
               background: "transparent",
