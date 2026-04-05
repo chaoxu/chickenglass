@@ -13,10 +13,11 @@
  */
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   destroyHoverPreviewTooltipForTest,
   ensureHoverPreviewTooltipForTest,
+  getCachedTooltipContentForTest,
   hoverPreviewExtension,
   refIdFromElement,
 } from "./hover-preview";
@@ -89,13 +90,10 @@ describe("refIdFromElement", () => {
     const { container } = createClusterDOM([
       { id: "thm-a", label: "Theorem 1" },
     ]);
-    // The container itself has no data-ref-id
     expect(refIdFromElement(container)).toBeNull();
   });
 
   it("walks up from nested child to find data-ref-id on ancestor", () => {
-    // Simulate a mouseenter event landing on a deeply nested element
-    // inside a data-ref-id span (e.g. a <em> or <strong> inside the label)
     const outer = document.createElement("span");
     outer.setAttribute("data-ref-id", "thm-deep");
     const inner = document.createElement("em");
@@ -127,16 +125,12 @@ describe("refIdFromElement", () => {
     parent.appendChild(child);
     grandparent.appendChild(parent);
 
-    // Should find "close" first, not "far"
     expect(refIdFromElement(child)).toBe("close");
   });
 });
 
 describe("per-item targeting invariants (#397 regression)", () => {
   it("different items in a cluster resolve to different ref ids", () => {
-    // Regression (#397, reopened 3x): CM6's hoverTooltip returned the same
-    // tooltip for all items because it collapsed widget positions to one pos.
-    // With DOM event delegation + refIdFromElement, each item span is distinct.
     const { spans } = createClusterDOM([
       { id: "eq:alpha", label: "Eq. (1)" },
       { id: "eq:beta", label: "Eq. (2)" },
@@ -147,7 +141,6 @@ describe("per-item targeting invariants (#397 regression)", () => {
 
     expect(resultA).toBe("eq:alpha");
     expect(resultB).toBe("eq:beta");
-    // Key invariant: they MUST be different
     expect(resultA).not.toBe(resultB);
   });
 
@@ -164,22 +157,15 @@ describe("per-item targeting invariants (#397 regression)", () => {
   });
 
   it("separator text node (converted to parent) yields null", () => {
-    // When a mouseenter fires on a text node, the browser reports the parent
-    // element as the target. For separator text nodes, the parent is the
-    // container which has no data-ref-id — so no tooltip should show.
     const { container } = createClusterDOM([
       { id: "thm-a", label: "Theorem 1" },
       { id: "thm-b", label: "Theorem 2" },
     ]);
 
-    // The container element (parent of separator text nodes) has no
-    // data-ref-id attribute, so refIdFromElement should return null.
     expect(refIdFromElement(container)).toBeNull();
   });
 
   it("MixedClusterWidget structure: parens wrapper has no data-ref-id", () => {
-    // MixedClusterWidget wraps content in parens. The outer container
-    // should not have data-ref-id.
     const container = document.createElement("span");
     container.className = "cf-citation";
     container.appendChild(document.createTextNode("("));
@@ -198,10 +184,8 @@ describe("per-item targeting invariants (#397 regression)", () => {
 
     container.appendChild(document.createTextNode(")"));
 
-    // Items should resolve correctly
     expect(refIdFromElement(span1)).toBe("eq:a");
     expect(refIdFromElement(span2)).toBe("smith");
-    // Container should not resolve
     expect(refIdFromElement(container)).toBeNull();
   });
 });
@@ -219,5 +203,67 @@ describe("tooltip lifecycle", () => {
 
     const recreatedTooltip = ensureHoverPreviewTooltipForTest();
     expect(recreatedTooltip).not.toBe(tooltip);
+  });
+});
+
+describe("tooltip content cache", () => {
+  it("reuses the same DOM subtree for the same state scope and plan key", () => {
+    const cacheScope = {};
+    const buildContent = vi.fn(() => {
+      const content = document.createElement("div");
+      content.textContent = "Theorem 1";
+      return content;
+    });
+
+    const first = getCachedTooltipContentForTest(
+      cacheScope,
+      "crossref:block\0thm:main",
+      buildContent,
+    );
+    const second = getCachedTooltipContentForTest(
+      cacheScope,
+      "crossref:block\0thm:main",
+      buildContent,
+    );
+
+    expect(second).toBe(first);
+    expect(buildContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("rebuilds content when the editor state scope changes", () => {
+    const buildContent = vi.fn(() => document.createElement("div"));
+
+    const first = getCachedTooltipContentForTest(
+      {},
+      "crossref:block\0thm:main",
+      buildContent,
+    );
+    const second = getCachedTooltipContentForTest(
+      {},
+      "crossref:block\0thm:main",
+      buildContent,
+    );
+
+    expect(second).not.toBe(first);
+    expect(buildContent).toHaveBeenCalledTimes(2);
+  });
+
+  it("rebuilds content for a different plan key within the same state scope", () => {
+    const cacheScope = {};
+    const buildContent = vi.fn(() => document.createElement("div"));
+
+    const first = getCachedTooltipContentForTest(
+      cacheScope,
+      "crossref:block\0thm:one",
+      buildContent,
+    );
+    const second = getCachedTooltipContentForTest(
+      cacheScope,
+      "crossref:block\0thm:two",
+      buildContent,
+    );
+
+    expect(second).not.toBe(first);
+    expect(buildContent).toHaveBeenCalledTimes(2);
   });
 });

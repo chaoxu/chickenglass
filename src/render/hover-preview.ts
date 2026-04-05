@@ -76,6 +76,7 @@ interface BlockPreviewPlan {
 
 interface TooltipPlan {
   readonly buildContent: () => HTMLElement;
+  readonly cacheScope: object;
   readonly dependsOnBibliography: boolean;
   readonly dependsOnMacros: boolean;
   readonly key: string;
@@ -85,6 +86,53 @@ interface TooltipPlan {
 
 const EMPTY_TRACKED_PATHS: ReadonlySet<string> = new Set();
 const EMPTY_MEDIA_CACHE: ReadonlyMap<string, unknown> = new Map();
+const TOOLTIP_CONTENT_CACHE_LIMIT = 8;
+// Reuse preview DOM within the same immutable state/dependency object without
+// carrying stale content across later editor updates.
+const tooltipContentCache = new WeakMap<object, Map<string, HTMLElement>>();
+
+function getTooltipContentCache(cacheScope: object): Map<string, HTMLElement> {
+  let cache = tooltipContentCache.get(cacheScope);
+  if (!cache) {
+    cache = new Map<string, HTMLElement>();
+    tooltipContentCache.set(cacheScope, cache);
+  }
+  return cache;
+}
+
+function getTooltipContent(plan: TooltipPlan): HTMLElement {
+  const cache = getTooltipContentCache(plan.cacheScope);
+  const cached = cache.get(plan.key);
+  if (cached) {
+    cache.delete(plan.key);
+    cache.set(plan.key, cached);
+    return cached;
+  }
+
+  const content = plan.buildContent();
+  cache.set(plan.key, content);
+  if (cache.size > TOOLTIP_CONTENT_CACHE_LIMIT) {
+    const oldestKey = cache.keys().next().value as string;
+    cache.delete(oldestKey);
+  }
+  return content;
+}
+
+export function getCachedTooltipContentForTest(
+  cacheScope: object,
+  key: string,
+  buildContent: () => HTMLElement,
+): HTMLElement {
+  return getTooltipContent({
+    buildContent,
+    cacheScope,
+    dependsOnBibliography: false,
+    dependsOnMacros: false,
+    key,
+    trackedImagePaths: EMPTY_TRACKED_PATHS,
+    trackedPdfPaths: EMPTY_TRACKED_PATHS,
+  });
+}
 
 function getTooltipEl(): HTMLDivElement {
   if (!tooltipEl) {
@@ -118,8 +166,9 @@ let showGeneration = 0;
  * Uses `autoUpdate` so the tooltip tracks the anchor on scroll, resize,
  * and layout shift — preventing the drift reported in #474.
  */
-function showFloatingTooltip(anchor: HTMLElement, content: HTMLElement): void {
+function showFloatingTooltip(anchor: HTMLElement, plan: TooltipPlan): void {
   const el = getTooltipEl();
+  const content = getTooltipContent(plan);
   const anchorChanged = anchor !== currentFloatingAnchor;
 
   if (anchorChanged) {
@@ -155,7 +204,9 @@ function showFloatingTooltip(anchor: HTMLElement, content: HTMLElement): void {
     cleanupAutoUpdate = autoUpdate(anchor, el, updatePosition);
   }
 
-  el.replaceChildren(content);
+  if (el.firstElementChild !== content) {
+    el.replaceChildren(content);
+  }
 
   const wasHidden = el.style.display === "none";
   el.style.display = "";
@@ -189,7 +240,6 @@ function hideFloatingTooltip(): void {
   if (tooltipEl) {
     tooltipEl.setAttribute("data-visible", "false");
     tooltipEl.style.display = "none";
-    tooltipEl.replaceChildren();
   }
 }
 
@@ -572,6 +622,7 @@ function buildCrossrefTooltipPlan(
         }
         return container;
       },
+      cacheScope: view.state,
       dependsOnBibliography: true,
       dependsOnMacros: true,
       key: `crossref:block\0${id}\0${headerText}\0${bodyPlan?.key ?? "missing"}`,
@@ -593,6 +644,7 @@ function buildCrossrefTooltipPlan(
         }
         return container;
       },
+      cacheScope: view.state,
       dependsOnBibliography: false,
       dependsOnMacros: true,
       key: `crossref:equation\0${id}\0${resolved.label}\0${eqContent ?? ""}`,
@@ -609,6 +661,7 @@ function buildCrossrefTooltipPlan(
       );
       return container;
     },
+    cacheScope: view.state,
     dependsOnBibliography: false,
     dependsOnMacros: true,
     key: `crossref:unresolved\0${id}`,
@@ -650,6 +703,7 @@ function buildCitationTooltipPlan(
 
       return container;
     },
+    cacheScope: store,
     dependsOnBibliography: true,
     dependsOnMacros: false,
     key: `citation:cluster\0${ids.join("\0")}\0${previews.map((item) => `${item.id}:${item.preview}`).join("\0")}`,
@@ -681,6 +735,7 @@ function buildSingleItemTooltipPlan(
           container.appendChild(item);
           return container;
         },
+        cacheScope: store,
         dependsOnBibliography: true,
         dependsOnMacros: false,
         key: `citation:item\0${id}\0${preview}`,
@@ -697,6 +752,7 @@ function buildSingleItemTooltipPlan(
         );
         return container;
       },
+      cacheScope: store,
       dependsOnBibliography: true,
       dependsOnMacros: false,
       key: `citation:item\0${id}\0unknown`,
@@ -717,6 +773,7 @@ function buildSingleItemTooltipPlan(
       );
       return container;
     },
+    cacheScope: view.state,
     dependsOnBibliography: false,
     dependsOnMacros: true,
     key: `mixed:unresolved\0${id}`,
@@ -901,7 +958,7 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
       const plan = buildTooltipPlanForElement(view, anchor);
       if (plan) {
         currentPlan = plan;
-        showFloatingTooltip(anchor, plan.buildContent());
+        showFloatingTooltip(anchor, plan);
       }
     }, HOVER_DELAY_MS);
   };
@@ -950,7 +1007,7 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
     }
 
     currentPlan = nextPlan;
-    showFloatingTooltip(currentTarget, nextPlan.buildContent());
+    showFloatingTooltip(currentTarget, nextPlan);
   };
 
   const scroller = view.scrollDOM;
