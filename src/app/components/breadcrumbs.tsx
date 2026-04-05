@@ -16,6 +16,7 @@ import { Fragment, useState, useEffect, useRef, useCallback } from "react";
 import { headingAncestryAt, type HeadingEntry } from "../heading-ancestry";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 import { HeadingLabel } from "./heading-chrome";
+import { CSS } from "../../constants/css-classes";
 import {
   Breadcrumb,
   BreadcrumbButton,
@@ -49,13 +50,11 @@ export function ancestryEqual(a: HeadingEntry[], b: HeadingEntry[]): boolean {
   return true;
 }
 
-/** Apply visibility styles directly to the container element (no React). */
-function applyVisibility(el: HTMLDivElement, visible: boolean, instant: boolean): void {
-  el.style.transition = instant ? "none" : "opacity var(--cf-transition, 0.15s)";
-  el.style.opacity = visible ? "1" : "0";
-  el.style.pointerEvents = visible ? "auto" : "";
-  el.style.height = visible ? "" : "4px";
-  el.style.overflow = visible ? "" : "hidden";
+/** Apply visibility classes directly to the container element (no React). */
+export function applyBreadcrumbVisibility(el: HTMLDivElement, visible: boolean, instant: boolean): void {
+  el.classList.toggle(CSS.breadcrumbsVisible, visible);
+  el.classList.toggle(CSS.breadcrumbsHidden, !visible);
+  el.classList.toggle(CSS.breadcrumbsInstant, instant);
 }
 
 export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
@@ -86,7 +85,7 @@ export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
       const el = containerRef.current;
       if (el && !hoveredRef.current) {
         visibleRef.current = false;
-        applyVisibility(el, false, false);
+        applyBreadcrumbVisibility(el, false, false);
       }
     }, FADE_DELAY_MS);
   }, [clearTimer]);
@@ -130,12 +129,12 @@ export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
       if (ancestryLenRef.current === 0) {
         clearTimer();
         visibleRef.current = false;
-        applyVisibility(el, false, true);
+        applyBreadcrumbVisibility(el, false, true);
         return;
       }
 
       visibleRef.current = true;
-      applyVisibility(el, true, false);
+      applyBreadcrumbVisibility(el, true, false);
       if (!hoveredRef.current) scheduleHide();
     });
 
@@ -155,7 +154,7 @@ export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
     const el = containerRef.current;
     if (!el) return;
     visibleRef.current = true;
-    applyVisibility(el, true, false);
+    applyBreadcrumbVisibility(el, true, false);
     if (!hoveredRef.current) scheduleHide();
   }, [ancestry, scheduleHide]);
 
@@ -165,7 +164,7 @@ export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
     const el = containerRef.current;
     if (el && ancestryLenRef.current > 0) {
       visibleRef.current = true;
-      applyVisibility(el, true, false);
+      applyBreadcrumbVisibility(el, true, false);
     }
   }, [clearTimer]);
 
@@ -183,14 +182,11 @@ export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
   return (
     <div
       ref={containerRef}
-      className="absolute top-0 left-0 z-[100]"
-      style={{
-        opacity: visibleRef.current ? 1 : 0,
-        pointerEvents: visibleRef.current ? "auto" : undefined,
-        height: visibleRef.current ? undefined : "4px",
-        overflow: visibleRef.current ? undefined : "hidden",
-        transition: "opacity var(--cf-transition, 0.15s)",
-      }}
+      className={[
+        "absolute top-0 left-0 z-[100]",
+        CSS.breadcrumbs,
+        visibleRef.current ? CSS.breadcrumbsVisible : CSS.breadcrumbsHidden,
+      ].join(" ")}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >

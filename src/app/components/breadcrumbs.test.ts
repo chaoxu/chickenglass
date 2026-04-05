@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { ancestryEqual } from "./breadcrumbs";
+import { ancestryEqual, applyBreadcrumbVisibility } from "./breadcrumbs";
 import type { HeadingEntry } from "../heading-ancestry";
+import { CSS } from "../../constants/css-classes";
 
 describe("ancestryEqual", () => {
   const entry = (overrides: Partial<HeadingEntry> = {}): HeadingEntry => ({
@@ -54,5 +55,24 @@ describe("ancestryEqual", () => {
     const a = [entry({ level: 1, pos: 0 }), entry({ level: 2, pos: 10 })];
     const b = [entry({ level: 1, pos: 0 }), entry({ level: 2, pos: 10, text: "Renamed" })];
     expect(ancestryEqual(a, b)).toBe(false);
+  });
+});
+
+describe("applyBreadcrumbVisibility", () => {
+  it("toggles breadcrumb visibility classes without inline styles", () => {
+    const el = document.createElement("div");
+    el.className = CSS.breadcrumbs;
+
+    applyBreadcrumbVisibility(el, false, true);
+    expect(el.classList.contains(CSS.breadcrumbsHidden)).toBe(true);
+    expect(el.classList.contains(CSS.breadcrumbsVisible)).toBe(false);
+    expect(el.classList.contains(CSS.breadcrumbsInstant)).toBe(true);
+    expect(el.getAttribute("style")).toBeNull();
+
+    applyBreadcrumbVisibility(el, true, false);
+    expect(el.classList.contains(CSS.breadcrumbsHidden)).toBe(false);
+    expect(el.classList.contains(CSS.breadcrumbsVisible)).toBe(true);
+    expect(el.classList.contains(CSS.breadcrumbsInstant)).toBe(false);
+    expect(el.getAttribute("style")).toBeNull();
   });
 });

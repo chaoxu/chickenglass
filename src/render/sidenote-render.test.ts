@@ -660,6 +660,23 @@ describe("FootnoteSectionWidget", () => {
       scrollIntoView: true,
     });
   });
+
+  it("uses CSS classes instead of inline styles for footnote section chrome", () => {
+    const widget = new FootnoteSectionWidget(
+      [{ num: 1, id: "note-1", content: "Body", defFrom: 24 }],
+      {},
+    );
+
+    const dom = widget.createDOM();
+    const section = dom as HTMLElement;
+    const entry = dom.querySelector<HTMLElement>(`.${CSS.bibliographyEntry}`);
+    const number = dom.querySelector<HTMLElement>(`.${CSS.bibliographyEntryNumber}`);
+
+    expect(section?.classList.contains(CSS.bibliographyFootnotes)).toBe(true);
+    expect(section?.getAttribute("style")).toBeNull();
+    expect(entry?.getAttribute("style")).toBeNull();
+    expect(number?.getAttribute("style")).toBeNull();
+  });
 });
 
 describe("tooltip inline rendering", () => {

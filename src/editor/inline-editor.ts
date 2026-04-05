@@ -19,6 +19,7 @@ import {
 import { type BibData, bibDataEffect, bibDataField } from "../citations/citation-render";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { referenceRenderPlugin } from "../render/reference-render";
+import { CSS } from "../constants/css-classes";
 
 /** Options for creating a lightweight inline editor. */
 export interface InlineEditorOptions {
@@ -38,51 +39,6 @@ export interface InlineEditorOptions {
   /** Called on keydown; return true to prevent default handling. */
   onKeydown?: (event: KeyboardEvent) => boolean;
 }
-
-/** Theme for inline editors: transparent, no chrome, inherits parent font.
- *  Uses !important to override the outer (parent) editor's scoped theme
- *  rules, which cascade into nested CM6 instances sharing the same
- *  generated scope classes (e.g. ͼ1, ͼ2). Without !important, the outer
- *  editor's .cm-content { padding: 24px 48px; max-width: 800px } wins. */
-const inlineEditorTheme = EditorView.theme({
-  "&": {
-    backgroundColor: "transparent !important",
-    fontFamily: "inherit !important",
-    fontSize: "inherit !important",
-    lineHeight: "inherit !important",
-    padding: "0 !important",
-    margin: "0 !important",
-    border: "none !important",
-    minHeight: "auto !important",
-  },
-  "&.cm-focused": {
-    outline: "none !important",
-  },
-  ".cm-gutters": {
-    display: "none !important",
-  },
-  ".cm-scroller": {
-    overflow: "visible !important",
-    lineHeight: "inherit !important",
-    fontFamily: "inherit !important",
-    fontSize: "inherit !important",
-  },
-  ".cm-content": {
-    padding: "0 !important",
-    margin: "0 !important",
-    minHeight: "auto !important",
-    maxWidth: "none !important",
-    fontFamily: "inherit !important",
-    fontSize: "inherit !important",
-    lineHeight: "inherit !important",
-  },
-  ".cm-line": {
-    padding: "0 !important",
-  },
-  ".cm-cursor": {
-    borderLeftColor: "currentColor",
-  },
-});
 
 /**
  * Create a lightweight CM6 EditorView with inline-level rendering.
@@ -118,7 +74,7 @@ export function createInlineEditor(opts: InlineEditorOptions): EditorView {
     referenceRenderPlugin,
 
     // Theme: transparent, no gutters, inherit font
-    inlineEditorTheme,
+    EditorView.editorAttributes.of({ class: CSS.inlineEditor }),
     EditorView.lineWrapping,
 
     // Callbacks

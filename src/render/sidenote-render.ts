@@ -68,6 +68,7 @@ import {
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
+import { CSS } from "../constants/css-classes";
 
 /** StateEffect to toggle sidenote margin visibility. */
 export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
@@ -350,7 +351,7 @@ class FootnoteRefWidget extends SimpleTextRenderWidget {
   ) {
     super({
       tagName: "sup",
-      className: "cf-sidenote-ref",
+      className: CSS.sidenoteRef,
       text: String(number),
       attrs: { "data-footnote-id": id, "aria-label": `Footnote ${id}` },
     });
@@ -361,11 +362,10 @@ class FootnoteRefWidget extends SimpleTextRenderWidget {
     this.setSourceRangeAttrs(el);
 
     if (this.inlineExpanded) {
-      el.classList.add("cf-sidenote-ref-expanded");
+      el.classList.add(CSS.sidenoteRefExpanded);
     }
 
     if (view && this.defFrom >= 0) {
-      el.style.cursor = "pointer";
       const id = this.id;
       const defFrom = this.defFrom;
       const inlineExpanded = this.inlineExpanded;
@@ -661,29 +661,23 @@ export class FootnoteSectionWidget extends RenderWidget {
   createDOM(): HTMLElement {
     return this.createCachedDOM(() => {
       const section = document.createElement("div");
-      section.className = "cf-bibliography";
-      section.style.marginTop = "2em";
+      section.className = `${CSS.bibliography} ${CSS.bibliographyFootnotes}`;
 
       const heading = document.createElement("h2");
-      heading.className = "cf-bibliography-heading";
+      heading.className = CSS.bibliographyHeading;
       heading.textContent = "Footnotes";
       section.appendChild(heading);
 
       const list = document.createElement("div");
-      list.className = "cf-bibliography-list";
+      list.className = CSS.bibliographyList;
 
       for (const entry of this.entries) {
         const div = document.createElement("div");
-        div.className = "cf-bibliography-entry";
+        div.className = CSS.bibliographyEntry;
         div.dataset.defFrom = String(entry.defFrom);
-        div.style.cursor = "pointer";
-        div.style.fontSize = "0.85em";
-        div.style.lineHeight = "1.6";
-        div.style.marginBottom = "4px";
 
         const num = document.createElement("sup");
-        num.style.fontWeight = "600";
-        num.style.marginRight = "4px";
+        num.className = CSS.bibliographyEntryNumber;
         num.textContent = String(entry.num);
         div.appendChild(num);
 
@@ -705,7 +699,7 @@ export class FootnoteSectionWidget extends RenderWidget {
 
   toDOM(view: EditorView): HTMLElement {
     const section = this.createDOM();
-    for (const div of section.querySelectorAll<HTMLElement>(".cf-bibliography-entry")) {
+    for (const div of section.querySelectorAll<HTMLElement>(`.${CSS.bibliographyEntry}`)) {
       const defFrom = Number(div.dataset.defFrom ?? "-1");
       div.addEventListener("mousedown", (e) => {
         e.preventDefault();
