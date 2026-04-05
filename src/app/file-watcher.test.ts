@@ -50,6 +50,7 @@ function createWatcher(
     refreshTree?: (path?: string) => Promise<void>;
     reloadFile?: (path: string) => Promise<void>;
     handleWatchedPathChange?: (path: string) => void | Promise<void>;
+    isSelfChange?: (path: string) => Promise<boolean>;
   } = {},
 ) {
   const container = document.createElement("div");
@@ -65,6 +66,7 @@ function createWatcher(
     refreshTree,
     reloadFile,
     handleWatchedPathChange,
+    isSelfChange: options.isSelfChange,
     container,
   });
 
@@ -142,6 +144,26 @@ describe("FileWatcher", () => {
     expect(
       unwatchCalls.some((call) => call[0] === secondToken),
     ).toBe(false);
+  });
+
+  it("warns when backend unwatch fails during teardown but still resolves", async () => {
+    watcherBackendState.reset();
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    watcherBackendState.listen.mockResolvedValue(vi.fn());
+    watcherBackendState.unwatchDirectoryCommand.mockRejectedValueOnce(new Error("backend stopped"));
+    const { watcher } = createWatcher();
+
+    await watcher.watch("/tmp/project-a");
+    const [watchCall = [] as unknown[]] = watcherBackendState.watchDirectoryCommand.mock.calls;
+    const watchToken = watchCall[1];
+    await expect(watcher.unwatch()).resolves.toBeUndefined();
+
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "[file-watcher] failed to stop backend watcher during teardown",
+      watchToken,
+      expect.any(Error),
+    );
+    consoleWarn.mockRestore();
   });
 
   it("queues dirty-file notifications instead of dropping earlier ones", () => {
@@ -280,5 +302,31 @@ describe("FileWatcher", () => {
     await handleFileChanged({ path: "assets/diagram.png", treeChanged: false });
 
     expect(handleWatchedPathChange).toHaveBeenCalledWith("assets/diagram.png");
+  });
+
+  it("warns when self-change detection fails and still handles the change", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { container, watcher } = createWatcher({
+      isSelfChange: async () => {
+        throw new Error("probe failed");
+      },
+    });
+    const handleFileChanged = (
+      watcher as unknown as {
+        handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+      }
+    ).handleFileChanged.bind(watcher as unknown as {
+      handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+    });
+
+    await handleFileChanged({ path: "a.md", treeChanged: false });
+
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "[file-watcher] isSelfChange check failed; treating change as external",
+      "a.md",
+      expect.any(Error),
+    );
+    expect(container.textContent).toContain("\"a.md\" changed externally. Reload?");
+    consoleWarn.mockRestore();
   });
 });

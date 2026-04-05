@@ -172,6 +172,14 @@ describe("parseFrontmatter", () => {
     expect(config).toEqual({});
   });
 
+  it("returns empty config for malformed YAML while preserving the frontmatter end", () => {
+    const doc = "---\ntitle: [unterminated\n---\nBody";
+    const { config, end } = parseFrontmatter(doc);
+    expect(config).toEqual({});
+    expect(end).toBeGreaterThan(0);
+    expect(doc.slice(end)).toBe("Body");
+  });
+
   it("handles block with false value", () => {
     const doc = "---\nblocks:\n  theorem: false\n---\n";
     const { config } = parseFrontmatter(doc);

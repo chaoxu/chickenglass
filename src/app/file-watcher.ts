@@ -103,8 +103,8 @@ export class FileWatcher {
     if (previousWatchToken !== null) {
       try {
         await unwatchDirectoryCommand(previousWatchToken);
-      } catch {
-        // best-effort: backend may already be stopped during teardown
+      } catch (error: unknown) {
+        console.warn("[file-watcher] failed to unwatch previous backend watcher during handoff", previousWatchToken, error);
       }
     }
 
@@ -112,8 +112,8 @@ export class FileWatcher {
     if (!watchApplied || this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
       try {
         await unwatchDirectoryCommand(watchToken);
-      } catch {
-        // best-effort: a stale backend watcher may already have been rejected
+      } catch (error: unknown) {
+        console.warn("[file-watcher] failed to clean up stale backend watcher after watch handoff", watchToken, error);
       }
       return;
     }
@@ -131,8 +131,8 @@ export class FileWatcher {
       unlisten();
       try {
         await unwatchDirectoryCommand(watchToken);
-      } catch {
-        // best-effort: backend may already be stopped during teardown
+      } catch (error: unknown) {
+        console.warn("[file-watcher] failed to clean up late backend watcher listener", watchToken, error);
       }
       return;
     }
@@ -152,8 +152,8 @@ export class FileWatcher {
     if (watchToken !== null) {
       try {
         await unwatchDirectoryCommand(watchToken);
-      } catch {
-        // best-effort: backend may already be stopped during teardown
+      } catch (error: unknown) {
+        console.warn("[file-watcher] failed to stop backend watcher during teardown", watchToken, error);
       }
     }
 
@@ -191,8 +191,8 @@ export class FileWatcher {
         if (await this.config.isSelfChange(relativePath)) {
           return;
         }
-      } catch {
-        // If the check fails, fall through to normal handling.
+      } catch (error: unknown) {
+        console.warn("[file-watcher] isSelfChange check failed; treating change as external", relativePath, error);
       }
     }
 

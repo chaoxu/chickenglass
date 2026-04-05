@@ -112,9 +112,9 @@ export async function loadBibliography(
         { effects: bibDataEffect.of({ store, cslProcessor }) },
         { context: "Bibliography dispatch error:" },
       );
-    } catch (error) {
-      void error;
+    } catch (error: unknown) {
       if (isCurrent && !isCurrent()) return;
+      console.warn("[bibliography] failed to load bibliography, using empty data", { bibPath, cslPath }, error);
       dispatchIfConnected(
         view,
         { effects: bibDataEffect.of({ store: new Map(), cslProcessor: CslProcessor.empty() }) },
