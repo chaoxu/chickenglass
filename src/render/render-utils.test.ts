@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { Decoration, type DecorationSet } from "@codemirror/view";
+import { Decoration, type DecorationSet, type ViewPlugin } from "@codemirror/view";
 import type { Range, EditorState } from "@codemirror/state";
 import { StateEffect } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
@@ -1055,6 +1055,47 @@ describe("diffVisibleRanges", () => {
 describe("createCursorSensitiveViewPlugin", () => {
   let view: EditorView | undefined;
 
+  interface CursorSensitivePluginProbe {
+    decorations: DecorationSet;
+    coveredRanges: readonly { from: number; to: number }[];
+    rebuild(view: EditorView): void;
+    update(update: ViewUpdate): void;
+    incrementalDocUpdate(
+      update: ViewUpdate,
+      dirtyRanges: readonly { from: number; to: number }[],
+    ): void;
+  }
+
+  function getPluginProbe(ext: ReturnType<typeof createCursorSensitiveViewPlugin>): CursorSensitivePluginProbe {
+    const plugin = view?.plugin(ext as unknown as ViewPlugin<CursorSensitivePluginProbe>);
+    expect(plugin).toBeTruthy();
+    if (!plugin) throw new Error("expected cursor-sensitive plugin instance");
+    return plugin;
+  }
+
+  function setVisibleRanges(
+    ranges: readonly { from: number; to: number }[],
+  ): (next: readonly { from: number; to: number }[]) => void {
+    let current = ranges;
+    Object.defineProperty(view!, "visibleRanges", {
+      configurable: true,
+      get: () => current,
+    });
+    return (next) => { current = next; };
+  }
+
+  function mockViewportUpdate(): ViewUpdate {
+    return {
+      docChanged: false,
+      selectionSet: false,
+      focusChanged: false,
+      viewportChanged: true,
+      state: view!.state,
+      startState: view!.state,
+      view: view!,
+    } as unknown as ViewUpdate;
+  }
+
   afterEach(() => {
     view?.destroy();
     view = undefined;
@@ -1110,6 +1151,89 @@ describe("createCursorSensitiveViewPlugin", () => {
     receivedRanges = [];
     view.dispatch({ changes: { from: 6, to: 11, insert: "friend" } });
     expect(receivedRanges).toEqual([{ from: 6, to: 12 }]);
+  });
+
+  it("evicts offscreen decorations and avoids duplicates when scrolling back", () => {
+    const trackedNodes = [
+      { from: 10, to: 20 },
+      { from: 80, to: 120 },
+      { from: 150, to: 170 },
+    ];
+    const ext = createCursorSensitiveViewPlugin((_view, ranges, skip) => {
+      const items = [];
+      for (const node of trackedNodes) {
+        if (!ranges.some((range) => node.from < range.to && node.to > range.from)) continue;
+        if (skip(node.from)) continue;
+        items.push(Decoration.mark({ class: `node-${node.from}` }).range(node.from, node.to));
+      }
+      return items;
+    });
+    view = createTestView("x".repeat(300), { extensions: [markdown(), ext] });
+    const plugin = getPluginProbe(ext);
+    const setRanges = setVisibleRanges([{ from: 0, to: 100 }]);
+    plugin.rebuild(view);
+
+    const specKeys = () => getDecorationSpecs(plugin.decorations)
+      .map((spec) => `${spec.class}:${spec.from}-${spec.to}`)
+      .sort();
+
+    expect(specKeys()).toEqual([
+      "node-10:10-20",
+      "node-80:80-120",
+    ]);
+    expect(plugin.coveredRanges).toEqual([{ from: 0, to: 100 }]);
+
+    setRanges([{ from: 90, to: 190 }]);
+    plugin.update(mockViewportUpdate());
+    expect(specKeys()).toEqual([
+      "node-150:150-170",
+      "node-80:80-120",
+    ]);
+    expect(plugin.coveredRanges).toEqual([{ from: 90, to: 190 }]);
+
+    setRanges([{ from: 0, to: 100 }]);
+    plugin.update(mockViewportUpdate());
+    expect(specKeys()).toEqual([
+      "node-10:10-20",
+      "node-80:80-120",
+    ]);
+    expect(getDecorationSpecs(plugin.decorations).filter((spec) => spec.from === 80)).toHaveLength(1);
+    expect(plugin.coveredRanges).toEqual([{ from: 0, to: 100 }]);
+  });
+
+  it("filters only the dirty visible fragment on incremental doc updates", () => {
+    const ext = createCursorSensitiveViewPlugin(() => []);
+    view = createTestView("x".repeat(300), { extensions: [markdown(), ext] });
+    const plugin = getPluginProbe(ext);
+    setVisibleRanges([{ from: 0, to: 120 }]);
+    plugin.rebuild(view);
+
+    const updateSpy = vi.spyOn(Object.getPrototypeOf(plugin.decorations), "update");
+    const tr = view.state.update({ changes: { from: 25, insert: "!" } });
+
+    try {
+      plugin.incrementalDocUpdate({
+        changes: tr.changes,
+        docChanged: true,
+        selectionSet: false,
+        focusChanged: false,
+        viewportChanged: false,
+        state: tr.state,
+        startState: view.state,
+        view,
+      } as unknown as ViewUpdate, [{ from: 25, to: 26 }]);
+
+      const filterCalls = updateSpy.mock.calls
+        .map(([spec]) => spec as { filterFrom?: number; filterTo?: number; filter?: unknown })
+        .filter((spec) => spec.filter !== undefined);
+
+      expect(filterCalls.some((spec) => spec.filterFrom === 25 && spec.filterTo === 26)).toBe(true);
+      expect(
+        filterCalls.some((spec) => spec.filterFrom === 0 && spec.filterTo === tr.state.doc.length),
+      ).toBe(false);
+    } finally {
+      updateSpy.mockRestore();
+    }
   });
 
   it("falls back to a full rebuild when docChangeRanges returns null", () => {
