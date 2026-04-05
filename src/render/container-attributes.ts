@@ -59,6 +59,22 @@ const LINE_DECORATION_BY_TAG = Object.freeze(Object.fromEntries(
   ]),
 ) as Record<string, Decoration>);
 
+interface OrderedRange {
+  readonly from: number;
+  readonly to: number;
+}
+
+// Semantic slices are immutable arrays, so a WeakMap lets local dirty-window
+// rebuilds reuse overlap-query metadata until the slice revision changes.
+const orderedRangePrefixMaxToCache = new WeakMap<
+  readonly OrderedRange[],
+  readonly number[]
+>();
+const mergedRangeCoverageCache = new WeakMap<
+  readonly OrderedRange[],
+  readonly OrderedRange[]
+>();
+
 function clampDocPos(doc: Text, pos: number): number {
   return Math.max(0, Math.min(pos, doc.length));
 }
@@ -106,6 +122,118 @@ function rangesOverlap(
   return valueFrom <= rangeTo && rangeFrom <= valueTo;
 }
 
+function getOrderedRangePrefixMaxTo(
+  values: readonly OrderedRange[],
+): readonly number[] {
+  const cached = orderedRangePrefixMaxToCache.get(values);
+  if (cached) return cached;
+
+  const prefixMaxTo = new Array<number>(values.length);
+  let maxTo = Number.NEGATIVE_INFINITY;
+
+  for (let index = 0; index < values.length; index++) {
+    maxTo = Math.max(maxTo, values[index].to);
+    prefixMaxTo[index] = maxTo;
+  }
+
+  orderedRangePrefixMaxToCache.set(values, prefixMaxTo);
+  return prefixMaxTo;
+}
+
+function firstPotentialOverlapIndex(
+  values: readonly OrderedRange[],
+  rangeFrom: number,
+): number {
+  if (values.length === 0) {
+    return -1;
+  }
+
+  const prefixMaxTo = getOrderedRangePrefixMaxTo(values);
+  let lo = 0;
+  let hi = prefixMaxTo.length;
+
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (prefixMaxTo[mid] < rangeFrom) lo = mid + 1;
+    else hi = mid;
+  }
+
+  return lo < values.length ? lo : -1;
+}
+
+function forEachOverlappingOrderedRange<T extends OrderedRange>(
+  values: readonly T[],
+  rangeFrom: number,
+  rangeTo: number,
+  visit: (value: T) => void,
+): void {
+  const startIndex = firstPotentialOverlapIndex(values, rangeFrom);
+  if (startIndex === -1) {
+    return;
+  }
+
+  for (let index = startIndex; index < values.length; index++) {
+    const value = values[index];
+    if (value.from > rangeTo) {
+      break;
+    }
+    if (!rangesOverlap(value.from, value.to, rangeFrom, rangeTo)) {
+      continue;
+    }
+    visit(value);
+  }
+}
+
+function getMergedRangeCoverage(
+  values: readonly OrderedRange[],
+): readonly OrderedRange[] {
+  const cached = mergedRangeCoverageCache.get(values);
+  if (cached) return cached;
+  if (values.length === 0) {
+    return values;
+  }
+
+  const coverage: OrderedRange[] = [];
+  let currentFrom = values[0].from;
+  let currentTo = values[0].to;
+
+  // Fenced divs all map to the same `div` line tag, so nested spans can be
+  // queried as merged coverage rather than as individual semantic entries.
+  for (let index = 1; index < values.length; index++) {
+    const value = values[index];
+    if (value.from <= currentTo) {
+      currentTo = Math.max(currentTo, value.to);
+      continue;
+    }
+
+    coverage.push({ from: currentFrom, to: currentTo });
+    currentFrom = value.from;
+    currentTo = value.to;
+  }
+
+  coverage.push({ from: currentFrom, to: currentTo });
+  mergedRangeCoverageCache.set(values, coverage);
+  return coverage;
+}
+
+function collectOverlappingOrderedRangesForTest<T extends OrderedRange>(
+  values: readonly T[],
+  rangeFrom: number,
+  rangeTo: number,
+): readonly T[] {
+  const overlaps: T[] = [];
+  forEachOverlappingOrderedRange(values, rangeFrom, rangeTo, (value) => {
+    overlaps.push(value);
+  });
+  return overlaps;
+}
+
+function getMergedRangeCoverageForTest(
+  values: readonly OrderedRange[],
+): readonly OrderedRange[] {
+  return getMergedRangeCoverage(values);
+}
+
 function assignLineTag(
   lineTagMap: Map<number, string>,
   state: EditorState,
@@ -137,31 +265,43 @@ function collectLineTagsInRange(
   const semantics = state.field(documentSemanticsField, false);
 
   if (semantics) {
-    for (const heading of semantics.headings) {
-      const tagName = HEADING_TAGS[heading.level - 1];
-      if (!tagName) continue;
-      assignLineTag(
-        lineTagMap,
-        state,
-        heading.from,
-        heading.to,
-        tagName,
-        rangeFrom,
-        rangeTo,
-      );
-    }
+    forEachOverlappingOrderedRange(
+      semantics.headings,
+      rangeFrom,
+      rangeTo,
+      (heading) => {
+        const tagName = HEADING_TAGS[heading.level - 1];
+        if (!tagName) {
+          return;
+        }
+        assignLineTag(
+          lineTagMap,
+          state,
+          heading.from,
+          heading.to,
+          tagName,
+          rangeFrom,
+          rangeTo,
+        );
+      },
+    );
 
-    for (const div of semantics.fencedDivs) {
-      assignLineTag(
-        lineTagMap,
-        state,
-        div.from,
-        div.to,
-        "div",
-        rangeFrom,
-        rangeTo,
-      );
-    }
+    forEachOverlappingOrderedRange(
+      getMergedRangeCoverage(semantics.fencedDivs),
+      rangeFrom,
+      rangeTo,
+      (div) => {
+        assignLineTag(
+          lineTagMap,
+          state,
+          div.from,
+          div.to,
+          "div",
+          rangeFrom,
+          rangeTo,
+        );
+      },
+    );
   }
 
   const treeTagMap = semantics ? TREE_ONLY_TAG_NAME_MAP : TAG_NAME_MAP;
@@ -515,5 +655,7 @@ export const containerAttributesPlugin: Extension = [
 ];
 
 export {
+  collectOverlappingOrderedRangesForTest as _collectOverlappingOrderedRangesForTest,
+  getMergedRangeCoverageForTest as _getMergedRangeCoverageForTest,
   computeContainerDirtyRegion as _computeContainerDirtyRegionForTest,
 };
