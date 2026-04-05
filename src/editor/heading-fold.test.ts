@@ -1,9 +1,17 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { markdown } from "@codemirror/lang-markdown";
-import { codeFolding, foldEffect, foldService } from "@codemirror/language";
+import {
+  codeFolding,
+  foldEffect,
+  foldedRanges,
+  foldService,
+} from "@codemirror/language";
 import type { EditorView } from "@codemirror/view";
 import { createTestView } from "../test-utils";
-import { headingFold } from "./heading-fold";
+import {
+  _headingFoldFieldForTest as headingFoldField,
+  headingFold,
+} from "./heading-fold";
 
 function getFoldRange(
   view: EditorView,
@@ -21,6 +29,21 @@ function getFoldRange(
 
 function getFoldToggles(view: EditorView): HTMLElement[] {
   return [...view.dom.querySelectorAll<HTMLElement>(".cf-fold-toggle")];
+}
+
+function getFoldState(view: EditorView) {
+  return view.state.field(headingFoldField);
+}
+
+function isRangeFolded(
+  view: EditorView,
+  range: { from: number; to: number },
+): boolean {
+  let folded = false;
+  foldedRanges(view.state).between(range.from, range.from + 1, () => {
+    folded = true;
+  });
+  return folded;
 }
 
 describe("headingFold", () => {
@@ -111,5 +134,88 @@ describe("headingFold", () => {
     const toggle = getFoldToggles(view)[0];
     expect(toggle?.classList.contains("cf-fold-toggle-folded")).toBe(true);
     expect(toggle?.textContent).toBe("▶");
+  });
+
+  it("reuses the existing fold state when body edits do not move headings", () => {
+    const doc = [
+      "# One",
+      "body",
+      "# Two",
+      "tail",
+    ].join("\n");
+
+    view = createTestView(doc, {
+      extensions: [markdown(), codeFolding(), headingFold],
+    });
+
+    const before = getFoldState(view);
+    const replaceFrom = doc.indexOf("body");
+    view.dispatch({
+      changes: { from: replaceFrom, to: replaceFrom + 4, insert: "text" },
+    });
+
+    expect(getFoldState(view)).toBe(before);
+  });
+
+  it("reuses unaffected prefix sections when body edits only move a later suffix", () => {
+    const doc = [
+      "# One",
+      "one body",
+      "# Two",
+      "two body",
+      "## Three",
+      "three body",
+      "# Four",
+      "four body",
+    ].join("\n");
+
+    view = createTestView(doc, {
+      extensions: [markdown(), codeFolding(), headingFold],
+    });
+
+    const before = getFoldState(view);
+    view.dispatch({
+      changes: { from: doc.indexOf("## Three"), insert: "two extra\n" },
+    });
+    const after = getFoldState(view);
+
+    expect(after.sectionsByHeadingIndex[0]).toBe(before.sectionsByHeadingIndex[0]);
+    expect(after.sectionsByHeadingIndex[1]).not.toBe(before.sectionsByHeadingIndex[1]);
+    expect(after.sectionsByHeadingIndex[2]).not.toBe(before.sectionsByHeadingIndex[2]);
+    expect(after.sectionsByHeadingIndex[3]).not.toBe(before.sectionsByHeadingIndex[3]);
+  });
+
+  it("keeps moved fold toggles targeting the updated heading position", () => {
+    const doc = [
+      "# One",
+      "one body",
+      "# Two",
+      "two body",
+    ].join("\n");
+
+    view = createTestView(doc, {
+      extensions: [markdown(), codeFolding(), headingFold],
+    });
+
+    view.dispatch({
+      changes: { from: doc.indexOf("# Two"), insert: "lead\n" },
+    });
+
+    const range = getFoldRange(view, 4);
+    expect(range).toEqual({
+      from: view.state.doc.line(4).to,
+      to: view.state.doc.length,
+    });
+
+    if (!range) {
+      throw new Error("expected moved heading to stay foldable");
+    }
+
+    getFoldToggles(view)[1]?.dispatchEvent(
+      new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+    );
+
+    expect(isRangeFolded(view, range)).toBe(true);
+    expect(getFoldToggles(view)[1]?.textContent).toBe("▶");
   });
 });
