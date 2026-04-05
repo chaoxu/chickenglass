@@ -53,6 +53,7 @@ const boldDecoration = Decoration.mark({ class: "cf-bold" });
 const italicDecoration = Decoration.mark({ class: "cf-italic" });
 const strikethroughDecoration = Decoration.mark({ class: "cf-strikethrough" });
 const inlineCodeDecoration = Decoration.mark({ class: "cf-inline-code" });
+const linkDecorationCache = new Map<string, Decoration>();
 
 /** Source-delimiter decoration: reduced-size metrics so visible delimiters
  *  don't push the line box taller than surrounding content (#789). */
@@ -208,10 +209,14 @@ function handleLink(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
     const textFrom = marks[0].to;
     const textTo = marks[1].from;
     if (textFrom < textTo) {
-      const linkDeco = Decoration.mark({
-        class: "cf-link-rendered",
-        attributes: { "data-url": url },
-      });
+      let linkDeco = linkDecorationCache.get(url);
+      if (!linkDeco) {
+        linkDeco = Decoration.mark({
+          class: "cf-link-rendered",
+          attributes: { "data-url": url },
+        });
+        linkDecorationCache.set(url, linkDeco);
+      }
       items.push(linkDeco.range(textFrom, textTo));
     }
   }
@@ -382,8 +387,104 @@ function collectMarkdownDirtyRangesInState(
   }
 }
 
+interface CursorContextEntry extends VisibleRange {
+  readonly key: string;
+}
+
+interface CursorContextSnapshot {
+  readonly key: string;
+  readonly entries: readonly CursorContextEntry[];
+}
+
+function collectCursorContextSnapshot(
+  state: EditorState,
+  focused = true,
+): CursorContextSnapshot {
+  if (!focused) {
+    return { key: "", entries: [] };
+  }
+
+  const { from, to } = state.selection.main;
+  const tree = syntaxTree(state);
+  const entriesByKey = new Map<string, CursorContextEntry>();
+
+  const positions = from === to ? [from] : [from, to];
+  for (const pos of positions) {
+    for (const side of [1, -1] as const) {
+      let node = tree.resolveInner(pos, side);
+      while (node.parent) {
+        if (CURSOR_SENSITIVE_NODES.has(node.name) && from >= node.from && to <= node.to) {
+          const key = `${node.name}:${node.from}:${node.to}`;
+          if (!entriesByKey.has(key)) {
+            entriesByKey.set(key, { key, from: node.from, to: node.to });
+          }
+        }
+        node = node.parent;
+      }
+    }
+  }
+
+  const entries = [...entriesByKey.values()].sort((a, b) =>
+    a.from - b.from || a.to - b.to || a.key.localeCompare(b.key)
+  );
+  return {
+    key: entries.length === 0
+      ? ""
+      : entries.length === 1
+        ? entries[0].key
+        : entries.map((entry) => entry.key).join("|"),
+    entries,
+  };
+}
+
+const cursorChangeRangeCache = new WeakMap<ViewUpdate, readonly VisibleRange[]>();
+
+function focusStates(update: ViewUpdate): { readonly startFocused: boolean; readonly endFocused: boolean } {
+  const endFocused = update.view.hasFocus;
+  return {
+    startFocused: update.focusChanged ? !endFocused : endFocused,
+    endFocused,
+  };
+}
+
+export function computeMarkdownContextChangeRanges(
+  update: ViewUpdate,
+): readonly VisibleRange[] {
+  const cached = cursorChangeRangeCache.get(update);
+  if (cached) return cached;
+
+  const { startFocused, endFocused } = focusStates(update);
+  const startContext = collectCursorContextSnapshot(update.startState, startFocused);
+  const endContext = collectCursorContextSnapshot(update.state, endFocused);
+
+  if (startContext.key === endContext.key) {
+    cursorChangeRangeCache.set(update, []);
+    return [];
+  }
+
+  const nextEntries = new Map(endContext.entries.map((entry) => [entry.key, entry] as const));
+  const dirtyRanges: VisibleRange[] = [];
+
+  for (const entry of startContext.entries) {
+    if (!nextEntries.has(entry.key)) {
+      dirtyRanges.push(mapNodeRange(update, entry.from, entry.to));
+    }
+  }
+
+  const previousKeys = new Set(startContext.entries.map((entry) => entry.key));
+  for (const entry of endContext.entries) {
+    if (!previousKeys.has(entry.key)) {
+      dirtyRanges.push(normalizeDirtyRange(entry.from, entry.to, update.state.doc.length));
+    }
+  }
+
+  const mergedDirtyRanges = mergeRanges(dirtyRanges);
+  cursorChangeRangeCache.set(update, mergedDirtyRanges);
+  return mergedDirtyRanges;
+}
+
 function markdownCursorContextChanged(update: ViewUpdate): boolean {
-  return cursorContextKey(update.state) !== cursorContextKey(update.startState);
+  return computeMarkdownContextChangeRanges(update).length > 0;
 }
 
 /**
@@ -395,47 +496,28 @@ function markdownCursorContextChanged(update: ViewUpdate): boolean {
  * inclusive-end boundaries (cursorInRange uses pos <= node.to).
  */
 export function cursorContextKey(state: EditorState): string {
-  const { from, to } = state.selection.main;
-  const tree = syntaxTree(state);
-  const seen = new Set<string>();
-
-  const positions = from === to ? [from] : [from, to];
-  for (const pos of positions) {
-    for (const side of [1, -1] as const) {
-      let node = tree.resolveInner(pos, side);
-      while (node.parent) {
-        if (CURSOR_SENSITIVE_NODES.has(node.name) && from >= node.from && to <= node.to) {
-          seen.add(`${node.name}:${node.from}:${node.to}`);
-        }
-        node = node.parent;
-      }
-    }
-  }
-
-  if (seen.size === 0) return "";
-  if (seen.size === 1) return seen.values().next().value!;
-  return [...seen].sort().join("|");
+  return collectCursorContextSnapshot(state).key;
 }
 
 /**
  * Narrowed shouldUpdate for markdown-render (#579).
  *
- * Rebuilds on structural changes (doc, tree, viewport, focus) unconditionally.
- * For selection-only changes, only rebuilds when the cursor crosses a
- * cursor-sensitive node boundary — i.e., moved into, out of, or between
- * nodes that toggle marker visibility.
+ * Rebuilds on structural changes (doc, tree, viewport) unconditionally.
+ * For selection/focus changes, only rebuilds when the cursor context crosses
+ * a cursor-sensitive node boundary — i.e., moved into, out of, or between
+ * nodes that toggle marker visibility, or when focus changes whether those
+ * nodes should render as source.
  */
 export function markdownShouldUpdate(update: ViewUpdate): boolean {
   if (
     update.docChanged ||
-    update.focusChanged ||
     update.viewportChanged ||
     syntaxTree(update.state) !== syntaxTree(update.startState)
   ) {
     return true;
   }
 
-  if (update.selectionSet) {
+  if (update.selectionSet || update.focusChanged) {
     return markdownCursorContextChanged(update);
   }
 
@@ -447,16 +529,13 @@ export function markdownShouldUpdate(update: ViewUpdate): boolean {
  *
  * Expands literal edits to any markdown-rendered nodes that overlap the change
  * in the old or new tree so mapped decorations outside those fragments stay
- * valid. Cursor-context changes still force a full rebuild.
+ * valid, and merges in any local cursor/focus context changes for the same
+ * transaction.
  */
 export function computeMarkdownDocChangeRanges(
   update: ViewUpdate,
 ): readonly VisibleRange[] | null {
-  if (markdownCursorContextChanged(update)) {
-    return null;
-  }
-
-  const dirtyRanges: VisibleRange[] = [];
+  const dirtyRanges = [...computeMarkdownContextChangeRanges(update)];
   const pushRange = (from: number, to: number) => {
     dirtyRanges.push(normalizeDirtyRange(from, to, update.state.doc.length));
   };
@@ -479,17 +558,19 @@ export function computeMarkdownDocChangeRanges(
  * Each handler has per-type semantics: some always apply styles, some
  * toggle marker visibility, some skip children entirely.
  *
- * The `_skip` parameter is accepted for CursorSensitiveCollectFn conformance
- * but intentionally unused: markdown decorations are marks / lines / hidden-
- * marks, so duplicates from boundary-straddling nodes are visually harmless.
+ * Incremental callers pass `skip(node.from)` for retained boundary nodes.
+ * Markdown applies that only to the node itself and still walks children so
+ * local rebuilds can update nested dirty descendants without duplicating the
+ * parent decorations.
  */
 function collectMarkdownItems(
   view: EditorView,
   ranges: readonly VisibleRange[],
-  _skip: (nodeFrom: number) => boolean,
+  skip: (nodeFrom: number) => boolean,
 ): Range<Decoration>[] {
   const ctx: MarkdownHandlerContext = { view, items: [], cursorInHeading: false };
   const tree = syntaxTree(view.state);
+  const seenNodes = new Set<string>();
 
   for (const { from, to } of ranges) {
     tree.iterate({
@@ -497,7 +578,16 @@ function collectMarkdownItems(
       to,
       enter(node) {
         const handler = MARKDOWN_HANDLERS.get(node.name);
-        return handler ? handler.handle(node, ctx) : undefined;
+        if (!handler) return undefined;
+        const nodeKey = `${node.name}:${node.from}:${node.to}`;
+        if (seenNodes.has(nodeKey)) {
+          return undefined;
+        }
+        seenNodes.add(nodeKey);
+        if (skip(node.from) && node.from < from) {
+          return undefined;
+        }
+        return handler.handle(node, ctx);
       },
     });
   }
@@ -511,7 +601,7 @@ export { collectMarkdownItems as _collectMarkdownItemsForTest };
 export const markdownRenderPlugin: Extension = createCursorSensitiveViewPlugin(
   collectMarkdownItems,
   {
-    selectionCheck: markdownCursorContextChanged,
+    contextChangeRanges: computeMarkdownContextChangeRanges,
     docChangeRanges: computeMarkdownDocChangeRanges,
     pluginSpec: {
       eventHandlers: {

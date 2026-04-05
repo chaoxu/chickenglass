@@ -2,6 +2,7 @@ import { describe, expect, it, afterEach } from "vitest";
 import { Decoration, EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import {
+  computeMarkdownContextChangeRanges,
   computeMarkdownDocChangeRanges,
   markdownRenderPlugin,
   cursorContextKey,
@@ -17,6 +18,7 @@ import {
   createEditorState,
   createTestView,
   getDecorationSpecs,
+  hasLineClassAt,
   hasMarkClassInRange,
 } from "../test-utils";
 
@@ -220,6 +222,54 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
       view = createView("**bold** rest", 12);
       const delims = getSourceDelimiters(view);
       expect(delims.length).toBe(0);
+    });
+  });
+
+  describe("incremental collection", () => {
+    it("skips retained parent nodes without swallowing dirty nested descendants", () => {
+      const doc = "# Hello **bold**";
+      const boldFrom = doc.indexOf("**bold**");
+      const boldTo = boldFrom + "**bold**".length;
+      view = createView(doc, 1);
+
+      const items = collectMarkdownItems(
+        view,
+        [{ from: boldFrom, to: boldTo }],
+        (nodeFrom) => nodeFrom === 0,
+      );
+
+      expect(items.some((item) =>
+        item.from === boldFrom &&
+        item.to === boldTo &&
+        item.value.spec.class === "cf-bold"
+      )).toBe(true);
+      expect(items.some((item) => item.value.spec.class?.startsWith("cf-heading"))).toBe(false);
+    });
+
+    it("does not duplicate boundary-straddling markdown decorations across disjoint ranges", () => {
+      view = createView("**bold** tail", 12);
+      const items = collectMarkdownItems(
+        view,
+        [{ from: 0, to: 2 }, { from: 6, to: 8 }],
+        () => false,
+      );
+
+      expect(items.filter((item) => item.value.spec.class === "cf-bold")).toHaveLength(1);
+    });
+
+    it("reuses link decorations for identical URLs", () => {
+      const doc = "[one](https://example.com) [two](https://example.com) tail";
+      view = createView(doc, doc.length);
+
+      const items = collectMarkdownItems(
+        view,
+        [{ from: 0, to: doc.length }],
+        () => false,
+      );
+      const linkItems = items.filter((item) => item.value.spec.class === "cf-link-rendered");
+
+      expect(linkItems).toHaveLength(2);
+      expect(linkItems[0].value).toBe(linkItems[1].value);
     });
   });
 
@@ -435,6 +485,26 @@ describe("computeMarkdownDocChangeRanges (#823)", () => {
     return { getRanges: () => receivedRanges };
   }
 
+  function createContextRangeView(doc: string, cursorPos = 0) {
+    let receivedRanges: readonly { from: number; to: number }[] = [];
+    const ext = createCursorSensitiveViewPlugin(
+      (_view, ranges) => {
+        receivedRanges = ranges;
+        return [];
+      },
+      {
+        contextChangeRanges: computeMarkdownContextChangeRanges,
+      },
+    );
+    view = createTestView(doc, {
+      cursorPos,
+      extensions: [markdown(), ext],
+    });
+    view.dispatch({ selection: { anchor: cursorPos } });
+    receivedRanges = [];
+    return { getRanges: () => receivedRanges };
+  }
+
   it("keeps prose typing scoped to the dirty fragment", () => {
     const { getRanges } = createDocRangeView("intro text\n\n**bold** tail", 5);
     view.dispatch({ changes: { from: 2, insert: "X" } });
@@ -448,6 +518,28 @@ describe("computeMarkdownDocChangeRanges (#823)", () => {
     const { getRanges } = createDocRangeView(doc, doc.length);
     view.dispatch({ changes: { from: boldFrom + 4, insert: "!" } });
     expect(getRanges()).toEqual([{ from: boldFrom, to: boldTo + 1 }]);
+  });
+
+  it("rebuilds only the entered markdown region on selection changes", () => {
+    const doc = "plain **bold** tail";
+    const boldFrom = doc.indexOf("**bold**");
+    const boldTo = boldFrom + "**bold**".length;
+    const { getRanges } = createContextRangeView(doc, 2);
+
+    view.dispatch({ selection: { anchor: boldFrom + 3 } });
+
+    expect(getRanges()).toEqual([{ from: boldFrom, to: boldTo }]);
+  });
+
+  it("rebuilds only the nested inline region when the outer heading context is unchanged", () => {
+    const doc = "# Hello **bold**";
+    const boldFrom = doc.indexOf("**bold**");
+    const boldTo = boldFrom + "**bold**".length;
+    const { getRanges } = createContextRangeView(doc, 2);
+
+    view.dispatch({ selection: { anchor: boldFrom + 3 } });
+
+    expect(getRanges()).toEqual([{ from: boldFrom, to: boldTo }]);
   });
 });
 
@@ -468,5 +560,17 @@ describe("markdownRenderPlugin doc-change invalidation (#823)", () => {
     const after = getAllDecorationSpecs(view);
     expect(view.state.doc.toString()).toBe("**bold tail");
     expect(hasMarkClassInRange(after, 0, 2, "cf-hidden")).toBe(false);
+  });
+
+  it("replaces stale heading line decorations when the heading level changes", () => {
+    view = createView("# Heading", 1);
+    expect(hasLineClassAt(getAllDecorationSpecs(view), 0, "cf-heading-line-1")).toBe(true);
+
+    view.dispatch({ changes: { from: 0, to: 1, insert: "##" } });
+
+    const after = getAllDecorationSpecs(view);
+    expect(view.state.doc.toString()).toBe("## Heading");
+    expect(hasLineClassAt(after, 0, "cf-heading-line-1")).toBe(false);
+    expect(hasLineClassAt(after, 0, "cf-heading-line-2")).toBe(true);
   });
 });

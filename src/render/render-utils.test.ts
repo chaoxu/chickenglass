@@ -1153,6 +1153,61 @@ describe("createCursorSensitiveViewPlugin", () => {
     expect(receivedRanges).toEqual([{ from: 6, to: 12 }]);
   });
 
+  it("rebuilds only local context ranges when contextChangeRanges opts in", () => {
+    let receivedRanges: readonly { from: number; to: number }[] = [];
+    const ext = createCursorSensitiveViewPlugin(
+      (_v, ranges) => {
+        receivedRanges = ranges;
+        return [];
+      },
+      {
+        contextChangeRanges: (update) =>
+          update.selectionSet ? [{ from: 4, to: 7 }] : [],
+      },
+    );
+    view = createTestView("hello world", { extensions: [markdown(), ext] });
+    view.dispatch({ selection: { anchor: 0 } });
+    receivedRanges = [];
+
+    view.dispatch({ selection: { anchor: 5 } });
+
+    expect(receivedRanges).toEqual([{ from: 4, to: 7 }]);
+  });
+
+  it("combines local context ranges with newly visible fragments", () => {
+    let receivedRanges: readonly { from: number; to: number }[] = [];
+    const ext = createCursorSensitiveViewPlugin(
+      (_v, ranges) => {
+        receivedRanges = ranges;
+        return [];
+      },
+      {
+        contextChangeRanges: () => [{ from: 60, to: 70 }],
+      },
+    );
+    view = createTestView("x".repeat(300), { extensions: [markdown(), ext] });
+    const plugin = getPluginProbe(ext);
+    const setRanges = setVisibleRanges([{ from: 0, to: 100 }]);
+    plugin.rebuild(view);
+    receivedRanges = [];
+
+    setRanges([{ from: 50, to: 150 }]);
+    plugin.update({
+      docChanged: false,
+      selectionSet: true,
+      focusChanged: false,
+      viewportChanged: true,
+      state: view.state,
+      startState: view.state,
+      view,
+    } as unknown as ViewUpdate);
+
+    expect(receivedRanges).toEqual([
+      { from: 60, to: 70 },
+      { from: 100, to: 150 },
+    ]);
+  });
+
   it("evicts offscreen decorations and avoids duplicates when scrolling back", () => {
     const trackedNodes = [
       { from: 10, to: 20 },
