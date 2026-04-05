@@ -230,4 +230,50 @@ describe("math preview positioning", () => {
 
     view.destroy();
   });
+
+  it("anchors to the inline math boundaries instead of cursor-sensitive boundary fallbacks", async () => {
+    coordsAtPosSpy.mockImplementation(function (
+      this: EditorView,
+      pos: number,
+      side?: -1 | 1,
+    ) {
+      const cursor = this.state.selection.main.from;
+
+      if (pos === mathFrom) {
+        if (side === 1) return makeCoords(200, 80, 100);
+        return cursor === mathFrom + 1
+          ? makeCoords(198, 80, 100)
+          : makeCoords(204, 80, 100);
+      }
+
+      if (pos === mathTo) {
+        if (side === -1) return makeCoords(240, 80, 120);
+        return cursor === mathFrom + 1
+          ? makeCoords(240, 80, 118)
+          : makeCoords(240, 80, 126);
+      }
+
+      return null;
+    });
+
+    const view = createPreviewView(doc, mathFrom + 1);
+    await flushScheduledMeasures();
+
+    const panel = view.dom.querySelector<HTMLElement>(".cf-math-preview");
+    expect(panel).not.toBeNull();
+    expect(panel?.style.left).toBe("200px");
+    expect(panel?.style.top).toBe("124px");
+    expect(coordsAtPosSpy.mock.calls.slice(0, 2)).toEqual([
+      [mathFrom, 1],
+      [mathTo, -1],
+    ]);
+
+    view.dispatch({ selection: { anchor: mathTo - 1 } });
+    await flushScheduledMeasures();
+
+    expect(panel?.style.left).toBe("200px");
+    expect(panel?.style.top).toBe("124px");
+
+    view.destroy();
+  });
 });
