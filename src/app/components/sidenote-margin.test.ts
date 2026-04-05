@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  findFirstSidenoteLayoutChange,
+  findFirstAffectedSidenote,
+  findFirstSidenoteAnchorChange,
+  findFirstSidenoteEntryChange,
+  findFirstSidenotePlacementChange,
   measureSidenotePositions,
 } from "./sidenote-margin";
 
@@ -8,6 +11,7 @@ function entry(overrides: Partial<{
   id: string;
   number: number;
   content: string;
+  refFrom: number;
   anchorY: number;
   defFrom: number;
 }> = {}) {
@@ -15,35 +19,59 @@ function entry(overrides: Partial<{
     id: overrides.id ?? "note-1",
     number: overrides.number ?? 1,
     content: overrides.content ?? "Footnote",
+    refFrom: overrides.refFrom ?? 1,
     anchorY: overrides.anchorY ?? 0,
-    defFrom: overrides.defFrom ?? 1,
+    defFrom: overrides.defFrom ?? 10,
   };
 }
 
-describe("findFirstSidenoteLayoutChange", () => {
-  it("returns -1 when sidenote layout inputs are unchanged", () => {
-    const entries = [
-      entry({ id: "a", anchorY: 12 }),
-      entry({ id: "b", number: 2, anchorY: 48, defFrom: 20 }),
+describe("sidenote invalidation boundaries", () => {
+  it("tracks metadata-only definition moves without treating them as placement changes", () => {
+    const previous = [
+      entry({ id: "a", refFrom: 5, anchorY: 12, defFrom: 40 }),
+      entry({ id: "b", number: 2, refFrom: 15, anchorY: 48, defFrom: 80 }),
+    ];
+    const next = [
+      previous[0],
+      entry({ id: "b", number: 2, refFrom: 15, anchorY: 48, defFrom: 92 }),
     ];
 
-    expect(findFirstSidenoteLayoutChange(entries, [...entries])).toBe(-1);
+    expect(findFirstSidenoteEntryChange(previous, next)).toBe(1);
+    expect(findFirstSidenoteAnchorChange(previous, next)).toBe(-1);
+    expect(findFirstSidenotePlacementChange(previous, next)).toBe(-1);
   });
 
-  it("returns the first changed index for anchor, content, or length changes", () => {
+  it("treats ref moves and content changes as placement changes", () => {
     const previous = [
-      entry({ id: "a", anchorY: 12 }),
-      entry({ id: "b", number: 2, anchorY: 48, defFrom: 20 }),
-      entry({ id: "c", number: 3, anchorY: 90, defFrom: 40 }),
+      entry({ id: "a", refFrom: 5, anchorY: 12 }),
+      entry({ id: "b", number: 2, refFrom: 15, anchorY: 48, defFrom: 20 }),
+      entry({ id: "c", number: 3, refFrom: 25, anchorY: 90, defFrom: 40 }),
     ];
 
-    expect(findFirstSidenoteLayoutChange(previous, [
+    expect(findFirstSidenoteAnchorChange(previous, [
       previous[0],
-      entry({ id: "b", number: 2, anchorY: 60, defFrom: 20 }),
+      entry({ id: "b", number: 2, refFrom: 18, anchorY: 48, defFrom: 20 }),
       previous[2],
     ])).toBe(1);
 
-    expect(findFirstSidenoteLayoutChange(previous, previous.slice(0, 2))).toBe(2);
+    expect(findFirstSidenotePlacementChange(previous, [
+      previous[0],
+      entry({ id: "b", number: 2, refFrom: 15, anchorY: 48, content: "Updated", defFrom: 20 }),
+      previous[2],
+    ])).toBe(1);
+
+    expect(findFirstSidenotePlacementChange(previous, previous.slice(0, 2))).toBe(2);
+  });
+
+  it("finds the first sidenote whose anchor can move after a local layout edit", () => {
+    const entries = [
+      entry({ id: "a", refFrom: 5 }),
+      entry({ id: "b", refFrom: 25, number: 2 }),
+      entry({ id: "c", refFrom: 55, number: 3 }),
+    ];
+
+    expect(findFirstAffectedSidenote(entries, 20)).toBe(1);
+    expect(findFirstAffectedSidenote(entries, 60)).toBe(-1);
   });
 });
 
