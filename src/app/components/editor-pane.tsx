@@ -6,7 +6,7 @@ import { useEditorStateTracking } from "../hooks/use-editor-state-tracking";
 import { useSidenotesAutoCollapse } from "../hooks/use-sidenotes-auto-collapse";
 import { useFootnoteTooltip } from "../hooks/use-footnote-tooltip";
 import { Breadcrumbs } from "./breadcrumbs";
-import { SidenoteMargin } from "./sidenote-margin";
+import { SidenoteMargin, type SidenoteInvalidation } from "./sidenote-margin";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
 import { blockCounterField } from "../../plugins/block-counter";
@@ -24,6 +24,15 @@ import { serializeMacros } from "../../render/render-core";
 const ReadModeView = lazy(() =>
   import("./read-mode-view").then((m) => ({ default: m.ReadModeView })),
 );
+
+const EMPTY_MACROS: Record<string, string> = {};
+const EMPTY_SIDENOTE_INVALIDATION: SidenoteInvalidation = {
+  revision: 0,
+  footnotesChanged: false,
+  macrosChanged: false,
+  globalLayoutChanged: false,
+  layoutChangeFrom: -1,
+};
 
 export interface EditorPaneProps extends UseEditorOptions {
   sidenotesCollapsed?: boolean;
@@ -53,7 +62,9 @@ export function EditorPane({
 }: EditorPaneProps) {
   const isReadMode = editorMode === "read";
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [sidenoteRevision, setSidenoteRevision] = useState(0);
+  const [sidenoteInvalidation, setSidenoteInvalidation] = useState<SidenoteInvalidation>(
+    EMPTY_SIDENOTE_INVALIDATION,
+  );
 
   // Stable ref so the CM6 listener always sees the latest callback
   // without forcing an editor re-creation.
@@ -106,26 +117,37 @@ export function EditorPane({
   }, []);
 
   const sidenoteTrackingExtension = useMemo(() => {
-    let lastFootnoteRev: number | undefined;
-    let lastMacrosKey: string | undefined;
-
     return EditorView.updateListener.of((update) => {
       if (isReadModeRef.current || sidenotesCollapsedRef.current) return;
 
-      const analysis = update.state.field(documentSemanticsField, false);
-      if (!analysis) return;
+      const beforeAnalysis = update.startState.field(documentSemanticsField, false);
+      const afterAnalysis = update.state.field(documentSemanticsField, false);
+      if (!afterAnalysis) return;
 
-      const footnoteRev = getDocumentAnalysisSliceRevision(analysis, "footnotes");
-      const macros = update.state.field(mathMacrosField, false) ?? {};
-      const macrosKey = serializeMacros(macros);
-      const footnotesChanged = footnoteRev !== lastFootnoteRev;
-      const macrosChanged = macrosKey !== lastMacrosKey;
+      const footnotesChanged = beforeAnalysis?.footnotes !== afterAnalysis.footnotes;
+      const beforeMacros = update.startState.field(mathMacrosField, false) ?? EMPTY_MACROS;
+      const afterMacros = update.state.field(mathMacrosField, false) ?? EMPTY_MACROS;
+      const macrosChanged = beforeMacros !== afterMacros
+        && serializeMacros(beforeMacros) !== serializeMacros(afterMacros);
+      let layoutChangeFrom = -1;
+      if (update.docChanged) {
+        update.changes.iterChangedRanges((_fromA, _toA, fromB) => {
+          if (layoutChangeFrom === -1 || fromB < layoutChangeFrom) {
+            layoutChangeFrom = fromB;
+          }
+        });
+      }
+      const globalLayoutChanged = !update.docChanged && update.heightChanged;
 
-      lastFootnoteRev = footnoteRev;
-      lastMacrosKey = macrosKey;
+      if (!footnotesChanged && !macrosChanged && layoutChangeFrom === -1 && !globalLayoutChanged) return;
 
-      if (!footnotesChanged && !macrosChanged && !update.geometryChanged) return;
-      setSidenoteRevision((value) => value + 1);
+      setSidenoteInvalidation((previous) => ({
+        revision: previous.revision + 1,
+        footnotesChanged,
+        macrosChanged,
+        globalLayoutChanged,
+        layoutChangeFrom,
+      }));
     });
   }, []);
 
@@ -196,7 +218,9 @@ export function EditorPane({
         </Suspense>
       )}
       {/* Portal target — SidenoteMargin renders into the CM6 scroller via DOM portal */}
-      {!isReadMode && !sidenotesCollapsed && <SidenoteMargin view={view} revision={sidenoteRevision} />}
+      {!isReadMode && !sidenotesCollapsed && (
+        <SidenoteMargin view={view} invalidation={sidenoteInvalidation} />
+      )}
     </div>
   );
 }
