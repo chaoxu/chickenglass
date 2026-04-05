@@ -296,12 +296,12 @@ export function useEditor(
     if (!view) return;
 
     const pathChanged = docPath !== lastLoadedPathRef.current;
-    const currentViewDoc = view.state.doc.toString();
+    const docMatchesLastLoaded = doc === lastLoadedDocRef.current;
     // Saving updates the external doc prop to match the already-live CM6 text.
     // Treat that sync as a no-op so cursor and scroll state stay intact.
     const docChangedExternally =
-      doc !== lastLoadedDocRef.current
-      && doc !== currentViewDoc;
+      !docMatchesLastLoaded
+      && doc !== view.state.doc.toString();
     if (!pathChanged && !docChangedExternally) {
       return;
     }
