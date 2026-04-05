@@ -22,6 +22,7 @@ import type { Settings } from "../lib/types";
 import type { SearchNavigationTarget } from "../search";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 import { invalidateImageDataUrl } from "../../render/image-url-cache";
+import type { ActiveDocumentSignal } from "../active-document-signal";
 
 interface PendingModeOverride {
   path: string;
@@ -141,8 +142,8 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
 
   // --- Stats ---
 
-  /** Monotonic signal that the active document content changed. */
-  docRevision: number;
+  /** External signal used by leaf UI surfaces that need live active-document updates. */
+  activeDocumentSignal: ActiveDocumentSignal;
   /** Returns the latest active-document text, including unsaved edits. */
   getCurrentDocText: () => string;
   /** True when the current document has unsaved changes (used for window-close guard). */
@@ -185,7 +186,7 @@ export function useAppEditorShell({
   const {
     currentDocument,
     currentPath,
-    docRevision,
+    activeDocumentSignal,
     getCurrentDocText,
     openFile,
     isPathOpen,
@@ -382,7 +383,7 @@ export function useAppEditorShell({
     editorMode,
     handleModeChange,
     isMarkdownFile,
-    docRevision,
+    activeDocumentSignal,
     getCurrentDocText,
     hasDirtyDocument,
     handleWatchedPathChange,

@@ -29,6 +29,10 @@ import {
   type EditorDocumentChange,
   type EditorDocumentText,
 } from "../editor-doc-change";
+import {
+  createActiveDocumentSignal,
+  type ActiveDocumentSignal,
+} from "../active-document-signal";
 import { useEditorSessionPersistence } from "./use-editor-session-persistence";
 
 export interface EditorSessionDeps {
@@ -46,7 +50,7 @@ export interface UseEditorSessionReturn {
   currentDocument: SessionDocument | null;
   currentPath: string | null;
   editorDoc: string;
-  docRevision: number;
+  activeDocumentSignal: ActiveDocumentSignal;
   setEditorDoc: React.Dispatch<React.SetStateAction<string>>;
   buffers: React.RefObject<Map<string, EditorDocumentText>>;
   liveDocs: React.RefObject<Map<string, EditorDocumentText>>;
@@ -119,10 +123,10 @@ export function useEditorSession({
     () => createEditorSessionState(),
   );
   const [editorDoc, setEditorDoc] = useState("");
-  const [docRevision, setDocRevision] = useState(0);
   const buffers = useRef<Map<string, EditorDocumentText>>(new Map());
   const liveDocs = useRef<Map<string, EditorDocumentText>>(new Map());
   const sourceMaps = useRef<Map<string, SourceMap>>(new Map());
+  const activeDocumentSignal = useRef(createActiveDocumentSignal()).current;
   const stateRef = useRef<EditorSessionState>(sessionState);
   const openFileRequestRef = useRef(0);
   const writeDocumentSnapshotRef = useRef<
@@ -145,15 +149,15 @@ export function useEditorSession({
 
     if (options !== undefined && "editorDoc" in options) {
       setEditorDoc(options?.editorDoc ?? "");
-      setDocRevision((value) => value + 1);
+      activeDocumentSignal.publish(nextState.currentDocument?.path ?? null);
       return;
     }
 
     if (options?.syncEditorDoc) {
       setEditorDoc(documentForPath(nextState.currentDocument?.path ?? null, liveDocs, buffers));
-      setDocRevision((value) => value + 1);
+      activeDocumentSignal.publish(nextState.currentDocument?.path ?? null);
     }
-  }, []);
+  }, [activeDocumentSignal]);
 
   const getSessionState = useCallback((): EditorSessionState => stateRef.current, []);
   const {
@@ -246,14 +250,14 @@ export function useEditorSession({
     const doc = applyEditorDocumentChanges(previousDoc, changes);
     liveDocs.current.set(currentPath, doc);
     pipeline.bumpRevision(currentPath);
-    setDocRevision((value) => value + 1);
+    activeDocumentSignal.publish(currentPath);
 
     const isDirty = !doc.eq(buffers.current.get(currentPath) ?? emptyEditorDocument);
     const nextState = markSessionDocumentDirty(stateRef.current, currentPath, isDirty);
     if (nextState !== stateRef.current) {
       commitSessionState(nextState);
     }
-  }, [commitSessionState, pipeline]);
+  }, [activeDocumentSignal, commitSessionState, pipeline]);
 
   const handleProgrammaticDocChange = useCallback((path: string, doc: string) => {
     const currentDocument = getCurrentSessionDocument(stateRef.current);
@@ -458,7 +462,7 @@ export function useEditorSession({
     currentDocument: sessionState.currentDocument,
     currentPath: sessionState.currentDocument?.path ?? null,
     editorDoc,
-    docRevision,
+    activeDocumentSignal,
     setEditorDoc,
     buffers,
     liveDocs,

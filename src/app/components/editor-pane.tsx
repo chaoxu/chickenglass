@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { useRef, useEffect, useMemo, useState, lazy, Suspense, useSyncExternalStore, useCallback } from "react";
 import { EditorView } from "@codemirror/view";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
@@ -19,6 +19,11 @@ import { bibDataField } from "../../citations/citation-render";
 import { frontmatterField, type EditorMode } from "../../editor";
 import { mathMacrosField } from "../../render";
 import { serializeMacros } from "../../render/render-core";
+import {
+  EMPTY_ACTIVE_DOCUMENT_SNAPSHOT,
+  unsubscribeNoop,
+  type ActiveDocumentSignal,
+} from "../active-document-signal";
 
 /** Lazy-loaded read-mode view — kept out of the startup bundle (read mode is deferred). */
 const ReadModeView = lazy(() =>
@@ -33,7 +38,6 @@ const EMPTY_SIDENOTE_INVALIDATION: SidenoteInvalidation = {
   globalLayoutChanged: false,
   layoutChangeFrom: -1,
 };
-
 export interface EditorPaneProps extends UseEditorOptions {
   sidenotesCollapsed?: boolean;
   onSidenotesCollapsedChange?: (collapsed: boolean) => void;
@@ -45,8 +49,8 @@ export interface EditorPaneProps extends UseEditorOptions {
   onDiagnosticsChange?: (diagnostics: DiagnosticEntry[]) => void;
   /** Current editor mode — "read" shows the HTML renderer instead of CM6. */
   editorMode?: EditorMode;
-  /** Monotonic active-document revision used to refresh read mode lazily. */
-  docRevision?: number;
+  /** External signal used to refresh read mode without rerendering the shell. */
+  activeDocumentSignal?: ActiveDocumentSignal;
 }
 
 export function EditorPane({
@@ -57,7 +61,7 @@ export function EditorPane({
   onHeadingsChange,
   onDiagnosticsChange,
   editorMode,
-  docRevision,
+  activeDocumentSignal,
   ...editorOptions
 }: EditorPaneProps) {
   const isReadMode = editorMode === "read";
@@ -175,16 +179,33 @@ export function EditorPane({
 
   // Extract headings for breadcrumbs and outline
   const headings = view ? extractHeadings(view.state) : [];
+  const subscribeToActiveDocument = useCallback((onStoreChange: () => void) => {
+    if (!isReadMode || !activeDocumentSignal) {
+      return unsubscribeNoop;
+    }
+    return activeDocumentSignal.subscribe(onStoreChange);
+  }, [activeDocumentSignal, isReadMode]);
+  const getActiveDocumentSnapshot = useCallback(() => {
+    if (!isReadMode || !activeDocumentSignal) {
+      return EMPTY_ACTIVE_DOCUMENT_SNAPSHOT;
+    }
+    return activeDocumentSignal.getSnapshot();
+  }, [activeDocumentSignal, isReadMode]);
+  const activeDocument = useSyncExternalStore(
+    subscribeToActiveDocument,
+    getActiveDocumentSnapshot,
+    getActiveDocumentSnapshot,
+  );
 
   // Get the live document content, frontmatter config, and bibliography for ReadModeView
   const readModeContent = useMemo(() => {
     if (!isReadMode) {
       return editorOptions.doc;
     }
-    // `docRevision` is only an invalidation signal here. In rich/source mode we
-    // avoid materializing the full document string on each render.
+    // Only read mode subscribes to active-document edits so rich/source typing
+    // does not pull the editor pane through a React rerender.
     return view ? view.state.doc.toString() : editorOptions.doc;
-  }, [docRevision, editorOptions.doc, isReadMode, view]);
+  }, [activeDocument.revision, editorOptions.doc, isReadMode, view]);
   const fmState = view ? view.state.field(frontmatterField, false) : undefined;
   const frontmatterConfig = fmState?.config ?? {};
   const bibData = view ? view.state.field(bibDataField, false) : undefined;
