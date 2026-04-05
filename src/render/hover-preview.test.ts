@@ -11,8 +11,15 @@
  * The full integration (tooltip positioning, hover delay) is verified via
  * browser testing since JSDOM does not implement hit-testing or layout.
  */
-import { describe, expect, it } from "vitest";
-import { refIdFromElement } from "./hover-preview";
+import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  destroyHoverPreviewTooltipForTest,
+  ensureHoverPreviewTooltipForTest,
+  hoverPreviewExtension,
+  refIdFromElement,
+} from "./hover-preview";
 
 /**
  * Helper: create a cluster DOM structure mimicking ClusteredCrossrefWidget
@@ -39,6 +46,23 @@ function createClusterDOM(
 
   return { container, spans };
 }
+
+function createHoverPreviewView(): EditorView {
+  const parent = document.createElement("div");
+  document.body.appendChild(parent);
+  return new EditorView({
+    state: EditorState.create({
+      doc: "",
+      extensions: [hoverPreviewExtension],
+    }),
+    parent,
+  });
+}
+
+afterEach(() => {
+  destroyHoverPreviewTooltipForTest();
+  document.body.innerHTML = "";
+});
 
 describe("refIdFromElement", () => {
   it("returns data-ref-id from a direct hit on an item span", () => {
@@ -179,5 +203,21 @@ describe("per-item targeting invariants (#397 regression)", () => {
     expect(refIdFromElement(span2)).toBe("smith");
     // Container should not resolve
     expect(refIdFromElement(container)).toBeNull();
+  });
+});
+
+describe("tooltip lifecycle", () => {
+  it("removes the singleton tooltip element from document.body on destroy", () => {
+    const view = createHoverPreviewView();
+    const tooltip = ensureHoverPreviewTooltipForTest();
+
+    expect(document.body.contains(tooltip)).toBe(true);
+
+    view.destroy();
+
+    expect(document.body.contains(tooltip)).toBe(false);
+
+    const recreatedTooltip = ensureHoverPreviewTooltipForTest();
+    expect(recreatedTooltip).not.toBe(tooltip);
   });
 });

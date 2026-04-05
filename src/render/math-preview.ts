@@ -60,7 +60,7 @@ const EMPTY_ANCHOR_RECT: AnchorRect = {
 class MathPreviewPlugin implements PluginValue {
   private panel: HTMLElement | null = null;
   private contentEl: HTMLElement | null = null;
-  private cleanupListeners: (() => void) | null = null;
+  private dragListenerController: AbortController | null = null;
   private cleanupAutoUpdate: (() => void) | null = null;
   private lastRaw = "";
   private lastRegion: MathRegionSnapshot | null = null;
@@ -145,6 +145,8 @@ class MathPreviewPlugin implements PluginValue {
 
   private createPanel(): void {
     const panel = createPreviewSurfaceShell(CSS.mathPreview);
+    const dragListenerController = new AbortController();
+    const listenerOptions = { signal: dragListenerController.signal };
 
     // Panel itself is draggable
     panel.addEventListener("mousedown", (e) => {
@@ -153,7 +155,7 @@ class MathPreviewPlugin implements PluginValue {
       this.dragOffsetX = e.clientX - rect.left;
       this.dragOffsetY = e.clientY - rect.top;
       e.preventDefault();
-    });
+    }, listenerOptions);
 
     const onMouseMove = (e: MouseEvent) => {
       if (!this.isDragging || !this.panel) return;
@@ -168,8 +170,8 @@ class MathPreviewPlugin implements PluginValue {
       this.isDragging = false;
     };
 
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("mousemove", onMouseMove, listenerOptions);
+    document.addEventListener("mouseup", onMouseUp, listenerOptions);
 
     // Clicking rendered math in the preview navigates to the source position
     const content = createPreviewSurfaceContent(CSS.mathPreviewContent);
@@ -192,12 +194,7 @@ class MathPreviewPlugin implements PluginValue {
     this.contentEl = content;
     this.panel = panel;
     this.lastRaw = "";
-
-    // Store cleanup for document-level listeners
-    this.cleanupListeners = () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
+    this.dragListenerController = dragListenerController;
 
     this.view.dom.appendChild(panel);
   }
@@ -271,8 +268,8 @@ class MathPreviewPlugin implements PluginValue {
     this.lastAnchorRect = EMPTY_ANCHOR_RECT;
     this.cleanupAutoUpdate?.();
     this.cleanupAutoUpdate = null;
-    this.cleanupListeners?.();
-    this.cleanupListeners = null;
+    this.dragListenerController?.abort();
+    this.dragListenerController = null;
     if (!this.panel) return;
     this.panel.remove();
     this.panel = null;
