@@ -7,6 +7,8 @@
  *   | Cell   | Cell   |
  */
 
+import { findTablePipePositions } from "../lib/table-inline-span";
+
 /** Column alignment as detected from the separator row. */
 export type Alignment = "left" | "center" | "right" | "none";
 
@@ -54,25 +56,14 @@ function splitRow(line: string): string[] {
           ? trimmed.slice(0, -1)
           : trimmed;
 
-  // Split on un-escaped pipes
   const cells: string[] = [];
-  let current = "";
-  let escaped = false;
-  for (const ch of inner) {
-    if (escaped) {
-      current += ch;
-      escaped = false;
-    } else if (ch === "\\") {
-      current += ch;
-      escaped = true;
-    } else if (ch === "|") {
-      cells.push(current.trim());
-      current = "";
-    } else {
-      current += ch;
-    }
+  const pipes = findTablePipePositions(inner);
+  let cellStart = 0;
+  for (const pipe of pipes) {
+    cells.push(inner.slice(cellStart, pipe).trim());
+    cellStart = pipe + 1;
   }
-  cells.push(current.trim());
+  cells.push(inner.slice(cellStart).trim());
   return cells;
 }
 

@@ -21,8 +21,51 @@ const BACKTICK = 96;
 const OPEN_PAREN = 40;
 const CLOSE_PAREN = 41;
 const PIPE = 124;
+const SPACE = 32;
+const TAB = 9;
 
-export function scanTableInlineSpan(text: string, start: number): number | null {
+function isSpaceTab(ch: number): boolean {
+  return ch === SPACE || ch === TAB;
+}
+
+function canOpenDollarMath(text: string, start: number): boolean {
+  if (start + 1 >= text.length) return false;
+  const next = text.charCodeAt(start + 1);
+  return next !== DOLLAR && !isSpaceTab(next);
+}
+
+function canCloseDollarMath(text: string, pos: number): boolean {
+  if (pos <= 0) return false;
+  return !isSpaceTab(text.charCodeAt(pos - 1));
+}
+
+function collectPipePositions(
+  text: string,
+): number[] {
+  const pipes: number[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const spanEnd = scanTableInlineSpan(text, i);
+    if (spanEnd !== null) {
+      i = spanEnd;
+    } else if (text.charCodeAt(i) === PIPE) {
+      pipes.push(i);
+      i++;
+    } else {
+      i++;
+    }
+  }
+  return pipes;
+}
+
+export function findTablePipePositions(text: string): number[] {
+  return collectPipePositions(text);
+}
+
+export function scanTableInlineSpan(
+  text: string,
+  start: number,
+): number | null {
   const ch = text.charCodeAt(start);
 
   if (ch === BACKSLASH) {
@@ -37,7 +80,6 @@ export function scanTableInlineSpan(text: string, start: number): number | null 
           j += 2;
           continue;
         }
-        if (jch === PIPE) return start + 2;
         j++;
       }
       return start + 2;
@@ -76,16 +118,18 @@ export function scanTableInlineSpan(text: string, start: number): number | null 
     if (start + 1 < text.length && text.charCodeAt(start + 1) === DOLLAR) {
       return null;
     }
+    if (!canOpenDollarMath(text, start)) {
+      return start + 1;
+    }
 
     let i = start + 1;
     while (i < text.length) {
       const next = text.charCodeAt(i);
-      if (next === DOLLAR) return i + 1;
+      if (next === DOLLAR && canCloseDollarMath(text, i)) return i + 1;
       if (next === BACKSLASH && i + 1 < text.length) {
         i += 2;
         continue;
       }
-      if (next === PIPE) return start + 1;
       i++;
     }
 

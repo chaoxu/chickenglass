@@ -107,6 +107,33 @@ describe("parseTable", () => {
     ]);
     expect(result.rows[0].cells[0].content).toBe("a\\|b");
   });
+
+  it("keeps raw pipes inside same-cell inline math", () => {
+    const result = mustParse([
+      "| Setting | Algorithm | Time | Randomized? |",
+      "| --- | --- | --- | --- |",
+      "| General matroid | [@thm:weighted-matroid] | $O(r \\cdot |E| \\cdot T_{\\text{oracle}})$ | No |",
+    ]);
+    expect(result.rows[0].cells).toEqual([
+      { content: "General matroid" },
+      { content: "[@thm:weighted-matroid]" },
+      { content: "$O(r \\cdot |E| \\cdot T_{\\text{oracle}})$" },
+      { content: "No" },
+    ]);
+  });
+
+  it("keeps a trailing extra $ literal without collapsing the next math cell", () => {
+    const result = mustParse([
+      "| Name | Time | Space |",
+      "| --- | --- | --- |",
+      "| Quicksort | $O(n \\log n)$$ | $O(\\log n)$ |",
+    ]);
+    expect(result.rows[0].cells).toEqual([
+      { content: "Quicksort" },
+      { content: "$O(n \\log n)$$" },
+      { content: "$O(\\log n)$" },
+    ]);
+  });
 });
 
 describe("formatTable", () => {

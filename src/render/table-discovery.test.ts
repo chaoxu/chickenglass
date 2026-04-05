@@ -48,12 +48,12 @@ describe("findPipePositions", () => {
     expect(findPipePositions("| a \\| b | c |")).toEqual([0, 9, 13]);
   });
 
-  it("ignores escaped pipes inside $…$ math spans", () => {
-    expect(findPipePositions("| $O(r \\cdot \\|E\\| \\cdot T)$ | No |")).toEqual([0, 29, 34]);
+  it("ignores pipes inside $…$ math spans", () => {
+    expect(findPipePositions("| $O(r \\cdot |E| \\cdot T)$ | No |")).toEqual([0, 27, 32]);
   });
 
-  it("treats unescaped pipe inside $…$ as a cell separator", () => {
-    expect(findPipePositions("| $a | b$ | c |")).toEqual([0, 5, 10, 14]);
+  it("treats a trailing extra $ as literal so the next cell stays separate", () => {
+    expect(findPipePositions("| $a$$ | $b$ |")).toEqual([0, 7, 13]);
   });
 
   it("does not let trailing $ match opening $ in the next cell", () => {
@@ -61,12 +61,8 @@ describe("findPipePositions", () => {
       .toEqual([0, 12, 29, 43]);
   });
 
-  it("ignores escaped pipes inside \\(…\\) math spans", () => {
-    expect(findPipePositions("| \\(a \\| b\\) | No |")).toEqual([0, 13, 18]);
-  });
-
-  it("treats unescaped pipe inside \\(…\\) as a cell separator", () => {
-    expect(findPipePositions("| \\(a | b\\) | c |")).toEqual([0, 6, 12, 16]);
+  it("ignores pipes inside \\(…\\) math spans", () => {
+    expect(findPipePositions("| \\(a | b\\) | No |")).toEqual([0, 12, 17]);
   });
 
   it("ignores pipes inside single-backtick code spans", () => {
@@ -254,4 +250,5 @@ describe("table range helpers", () => {
 
     expect(visibleTables).toEqual([tables[1]]);
   });
+
 });
