@@ -14,7 +14,6 @@ import {
   buildDecorations,
   cursorInRange,
   diffVisibleRanges,
-  isPositionInRanges,
   mergeRanges,
   pushWidgetDecoration,
   RenderWidget,
@@ -380,8 +379,8 @@ function mediaPreviewWidget(
  * @param view    The editor view.
  * @param ranges  Explicit ranges to scan (defaults to view.visibleRanges).
  * @param skip    Returns true for node start positions already processed in a
- *                previous viewport — prevents duplicate decorations for nodes
- *                straddling the old/new boundary.
+ *                previous viewport — prevents duplicate tracking/decorations
+ *                for nodes straddling the old/new boundary.
  */
 function collectImageRangesTracked(
   view: EditorView,
@@ -399,11 +398,12 @@ function collectImageRangesTracked(
       to,
       enter(node) {
         if (node.name !== "Image") return;
+        if (skip?.(node.from)) return false;
 
         const trackedNode: ImageNodeInfo = { from: node.from, to: node.to };
         nodes.push(trackedNode);
 
-        if (skip?.(node.from) || cursorInRange(view, node.from, node.to)) {
+        if (cursorInRange(view, node.from, node.to)) {
           return false;
         }
 
@@ -521,23 +521,56 @@ class ImageRenderPlugin implements PluginValue {
 
   /** Differential viewport update: only process newly-visible ranges. */
   private incrementalViewportUpdate(update: ViewUpdate): void {
-    const newRanges = update.view.visibleRanges;
-    const newlyVisible = diffVisibleRanges(this.coveredRanges, newRanges);
+    const previousCoveredRanges = this.coveredRanges;
+    const currentVisibleRanges = snapshotRanges(update.view.visibleRanges);
+    const evictedRanges = diffVisibleRanges(currentVisibleRanges, previousCoveredRanges);
+    const newlyVisible = diffVisibleRanges(previousCoveredRanges, currentVisibleRanges);
+
+    if (evictedRanges.length === 0 && newlyVisible.length === 0) {
+      this.coveredRanges = currentVisibleRanges;
+      return;
+    }
+
+    let nextDecorations = this.decorations;
+    const nextImageNodes = evictedRanges.length > 0
+      ? this.imageNodes.filter((node) =>
+          rangeIntersectsRanges(node.from, node.to, currentVisibleRanges)
+        )
+      : [...this.imageNodes];
+
+    if (evictedRanges.length > 0) {
+      for (const range of evictedRanges) {
+        nextDecorations = nextDecorations.update({
+          filterFrom: range.from,
+          filterTo: range.to,
+          filter: (from, to) => rangeIntersectsRanges(from, to, currentVisibleRanges),
+        });
+      }
+    }
 
     if (newlyVisible.length > 0) {
-      const skip = (pos: number) => isPositionInRanges(pos, this.coveredRanges);
-      const result = collectImageRangesTracked(update.view, newlyVisible, skip);
+      const retainedStarts = new Set(nextImageNodes.map((node) => node.from));
+      const result = collectImageRangesTracked(
+        update.view,
+        newlyVisible,
+        (nodeFrom) => retainedStarts.has(nodeFrom),
+      );
       if (result.items.length > 0) {
-        this.decorations = this.decorations.update({
+        nextDecorations = nextDecorations.update({
           add: result.items,
           sort: true,
         });
       }
-      // Append new tracking metadata
-      this.imageNodes = [...this.imageNodes, ...result.nodes];
-      this.trackedPaths = trackedPathsFromNodes(this.imageNodes);
-      this.coveredRanges = mergeRanges([...this.coveredRanges, ...newlyVisible]);
+      if (result.nodes.length > 0) {
+        nextImageNodes.push(...result.nodes);
+        nextImageNodes.sort((a, b) => a.from - b.from || a.to - b.to);
+      }
     }
+
+    this.decorations = nextDecorations;
+    this.imageNodes = nextImageNodes;
+    this.trackedPaths = trackedPathsFromNodes(nextImageNodes);
+    this.coveredRanges = currentVisibleRanges;
   }
 
   private incrementalDocUpdate(update: ViewUpdate): void {

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { EditorView } from "@codemirror/view";
+import type { EditorState } from "@codemirror/state";
+import type { DecorationSet, EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { CSS } from "../constants/css-classes";
 import {
@@ -10,9 +11,11 @@ import {
   imageRenderPlugin,
   trackedCacheChanged,
 } from "./image-render";
+import { imageUrlField } from "./image-url-cache";
+import { pdfPreviewField } from "./pdf-preview-cache";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
-import { createTestView } from "../test-utils";
+import { createTestView, getDecorationSpecs } from "../test-utils";
 import * as mediaPreview from "./media-preview";
 
 describe("ImageWidget", () => {
@@ -590,5 +593,129 @@ describe("ImageRenderPlugin incremental docChanged (#824)", () => {
     expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(1);
     expect(renderedSources).toHaveLength(1);
     expect(renderedSources[0]).toContain("b.png");
+  });
+});
+
+interface ImageRenderPluginProbe {
+  decorations: DecorationSet;
+  imageNodes: Array<{ from: number; to: number; trackedPath?: string }>;
+  trackedPaths: ReadonlySet<string>;
+  coveredRanges: Array<{ from: number; to: number }>;
+  rebuild(view: EditorView): void;
+  update(update: ViewUpdate): void;
+}
+
+describe("ImageRenderPlugin incremental viewportChanged (#875)", () => {
+  let view: EditorView | undefined;
+
+  function getPluginProbe(): ImageRenderPluginProbe {
+    const plugin = view?.plugin(imageRenderPlugin as unknown as ViewPlugin<ImageRenderPluginProbe>);
+    expect(plugin).toBeTruthy();
+    if (!plugin) throw new Error("expected image render plugin instance");
+    return plugin;
+  }
+
+  function setVisibleRanges(
+    ranges: readonly { from: number; to: number }[],
+  ): (next: readonly { from: number; to: number }[]) => void {
+    if (!view) throw new Error("expected test view");
+    let current = ranges;
+    Object.defineProperty(view, "visibleRanges", {
+      configurable: true,
+      get: () => current,
+    });
+    return (next) => {
+      current = next;
+    };
+  }
+
+  function mockViewportUpdate(): ViewUpdate {
+    if (!view) throw new Error("expected test view");
+    const currentView = view;
+    const state = Object.create(currentView.state) as EditorState;
+    Object.defineProperty(state, "field", {
+      configurable: true,
+      value: (field: unknown, require = true) => {
+        if (field === pdfPreviewField || field === imageUrlField) {
+          return currentView.state.field(field as never, false) ?? new Map();
+        }
+        return currentView.state.field(field as never, require as never);
+      },
+    });
+    return {
+      docChanged: false,
+      selectionSet: false,
+      focusChanged: false,
+      viewportChanged: true,
+      state,
+      startState: state,
+      view: currentView,
+    } as unknown as ViewUpdate;
+  }
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+    vi.restoreAllMocks();
+  });
+
+  it("keeps viewport tracking bounded to the current visible images when scrolling", () => {
+    const doc = [
+      "![first](first.png)",
+      "",
+      "x".repeat(70),
+      "",
+      "![second](second.png)",
+      "",
+      "y".repeat(70),
+      "",
+      "![third](third.png)",
+      "",
+      "tail text",
+    ].join("\n");
+    const firstStart = doc.indexOf("![first]");
+    const secondStart = doc.indexOf("![second]");
+    const thirdStart = doc.indexOf("![third]");
+    const resolvePreview = vi.spyOn(mediaPreview, "resolveLocalMediaPreview").mockImplementation(
+      (_view, src) => ({ kind: "image", resolvedPath: src, dataUrl: `data:${src}` }),
+    );
+
+    view = createTestView(doc, {
+      cursorPos: doc.length,
+      extensions: [markdown(), imageRenderPlugin],
+    });
+    const plugin = getPluginProbe();
+    const initialRanges = [{ from: 0, to: secondStart + 5 }];
+    const scrolledRanges = [{ from: secondStart + 2, to: doc.length }];
+    const setRanges = setVisibleRanges(initialRanges);
+
+    plugin.rebuild(view);
+    expect(plugin.imageNodes.map((node) => node.from)).toEqual([firstStart, secondStart]);
+    expect([...plugin.trackedPaths]).toEqual(["first.png", "second.png"]);
+    expect(plugin.coveredRanges).toEqual(initialRanges);
+    expect(getDecorationSpecs(plugin.decorations).filter((spec) => spec.from === secondStart))
+      .toHaveLength(1);
+
+    resolvePreview.mockClear();
+    setRanges(scrolledRanges);
+    plugin.update(mockViewportUpdate());
+    expect(resolvePreview).toHaveBeenCalledTimes(1);
+    expect(resolvePreview.mock.calls[0]?.[1]).toBe("third.png");
+    expect(plugin.imageNodes.map((node) => node.from)).toEqual([secondStart, thirdStart]);
+    expect([...plugin.trackedPaths]).toEqual(["second.png", "third.png"]);
+    expect(plugin.coveredRanges).toEqual(scrolledRanges);
+    expect(getDecorationSpecs(plugin.decorations).filter((spec) => spec.from === secondStart))
+      .toHaveLength(1);
+
+    resolvePreview.mockClear();
+    setRanges(initialRanges);
+    plugin.update(mockViewportUpdate());
+    expect(resolvePreview).toHaveBeenCalledTimes(1);
+    expect(resolvePreview.mock.calls[0]?.[1]).toBe("first.png");
+    expect(plugin.imageNodes.map((node) => node.from)).toEqual([firstStart, secondStart]);
+    expect([...plugin.trackedPaths]).toEqual(["first.png", "second.png"]);
+    expect(plugin.coveredRanges).toEqual(initialRanges);
+    expect(getDecorationSpecs(plugin.decorations).filter((spec) => spec.from === secondStart))
+      .toHaveLength(1);
   });
 });
