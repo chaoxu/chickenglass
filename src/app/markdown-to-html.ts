@@ -26,6 +26,7 @@ import {
   parseInlineFragments,
 } from "../inline-fragments";
 import { htmlRenderExtensions } from "../parser";
+import { readBracedLabelId } from "../parser/label-utils";
 import { buildKatexOptions } from "../lib/katex-options";
 import { isSafeUrl } from "../lib/url-utils";
 import { sanitizeCslHtml } from "../render/inline-shared";
@@ -592,7 +593,19 @@ function renderDisplayMath(node: SyntaxNode, ctx: WalkContext): string {
     latex = ctx.doc.slice(marks[0].to, node.to).trim();
   }
 
-  return `<div class="${CSS.mathDisplay}">${renderMath(latex, true, ctx.macros)}</div>`;
+  const equationLabel = node.getChild("EquationLabel");
+  const equationId = equationLabel
+    ? readBracedLabelId(ctx.doc, equationLabel.from, equationLabel.to, "eq:")
+    : null;
+  const equationNumber = equationId
+    ? ctx.semantics.equationById.get(equationId)?.number
+    : undefined;
+  const mathHtml = renderMath(latex, true, ctx.macros);
+  if (equationNumber === undefined) {
+    return `<div class="${CSS.mathDisplay}">${mathHtml}</div>`;
+  }
+
+  return `<div class="${CSS.mathDisplay} ${CSS.mathDisplayNumbered}"><div class="${CSS.mathDisplayContent}">${mathHtml}</div><span class="${CSS.mathDisplayNumber}">(${equationNumber})</span></div>`;
 }
 
 /** Render a FootnoteDef node. */
