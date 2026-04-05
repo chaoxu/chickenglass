@@ -351,14 +351,14 @@ function updateFoldToggles(
   }
 
   if (affectedPositions.size > 0) {
-    const positions = [...affectedPositions];
-    const filterFrom = Math.min(...positions);
-    const filterTo = Math.max(...positions) + 1;
-    decorations = decorations.update({
-      filterFrom,
-      filterTo,
-      filter: (from) => !affectedPositions.has(from),
-    });
+    const positions = [...affectedPositions].sort((left, right) => right - left);
+    for (const position of positions) {
+      decorations = decorations.update({
+        filterFrom: position,
+        filterTo: position + 1,
+        filter: (from) => from !== position,
+      });
+    }
   }
 
   if (nextSections.length > 0) {
