@@ -19,6 +19,7 @@ import type { FrontmatterConfig } from "../../parser/frontmatter";
 import type { CslProcessor } from "../../citations/csl-processor";
 import type { FileSystem } from "../file-manager";
 import { renderDocumentFragmentToHtml } from "../../document-surfaces";
+import { sanitizeRenderedHtml } from "../../render/inline-shared";
 import { useReadModeHtml } from "../hooks/use-read-mode-html";
 import { useLineBreaking } from "../hooks/use-line-breaking";
 import { useScrollRestore } from "../hooks/use-scroll-restore";
@@ -77,7 +78,10 @@ export function ReadModeView({
     [frontmatterConfig.title, frontmatterConfig.math],
   );
   const bodyHtml = useReadModeHtml(content, frontmatterConfig, bibliography, cslProcessor, docPath, fs);
-  const htmlContent = titleHtml + bodyHtml;
+  const htmlContent = useMemo(
+    () => sanitizeRenderedHtml(titleHtml + bodyHtml),
+    [bodyHtml, titleHtml],
+  );
   useLineBreaking(containerRef, htmlContent);
   useScrollRestore(containerRef, htmlContent, scrollTop);
   useHyphenation(containerRef, htmlContent);
