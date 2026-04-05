@@ -110,7 +110,11 @@ function hasPipe(str: string, start: number): boolean {
   return false;
 }
 
-const delimiterLine = /^\|?(\s*:?-+:?\s*\|)+(\s*:?-+:?\s*)?$/;
+const delimiterLine = /^\|?(\s*:?-+:?\s*\|)+(\s*:?-+:?)?$/;
+
+function isDelimiterLine(text: string): boolean {
+  return delimiterLine.test(text);
+}
 
 class TableParser implements LeafBlockParser {
   // null  = haven't seen the second line yet
@@ -125,7 +129,7 @@ class TableParser implements LeafBlockParser {
       let lineText: string;
       if (
         (line.next === 45 || line.next === 58 || line.next === 124) &&
-        delimiterLine.test((lineText = line.text.slice(line.pos)))
+        isDelimiterLine((lineText = line.text.slice(line.pos)))
       ) {
         const firstRow: Element[] = [];
         const firstCount = parseRow(cx, leaf.content, 0, firstRow, leaf.start);
@@ -205,7 +209,7 @@ export const tableExtension: MarkdownConfig = {
           return false;
         const next = cx.peekLine();
         return (
-          delimiterLine.test(next) &&
+          isDelimiterLine(next) &&
           parseRow(cx, line.text, line.basePos) ===
             parseRow(cx, next, line.basePos)
         );

@@ -202,3 +202,20 @@ describe("tableExtension — incomplete inline spans inside cells", () => {
     expect(nodeText(doc, cells[2]).trim()).toBe("`a");
   });
 });
+
+describe("tableExtension — delimiter row validation", () => {
+  it("rejects a delimiter row with trailing spaces and no final pipe", () => {
+    const doc = "| A | B |\n| --- | ---  \n| 1 | 2 |";
+    expect(findNodes(doc, "Table")).toHaveLength(0);
+  });
+
+  it("rejects a delimiter row without outer pipes when trailing spaces follow the last column", () => {
+    const doc = "A | B\n--- | ---  \n1 | 2";
+    expect(findNodes(doc, "Table")).toHaveLength(0);
+  });
+
+  it("still accepts a delimiter row without outer pipes when it ends at the last dash", () => {
+    const doc = "A | B\n--- | ---\n1 | 2";
+    expect(findNodes(doc, "Table")).toHaveLength(1);
+  });
+});
