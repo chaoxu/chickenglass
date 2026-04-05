@@ -1,9 +1,79 @@
-/**
- * Generic context menu for the editor.
- *
- * No dependency on CM6 or React — safe to import from render/,
- * editor/, and app/.
- */
+import { createElement } from "react";
+import { flushSync } from "react-dom";
+import { createRoot, type Root } from "react-dom/client";
+import {
+  ContextMenu as RadixContextMenu,
+  ContextMenuContent as RadixContextMenuContent,
+  ContextMenuItem as RadixContextMenuItem,
+  ContextMenuSeparator as RadixContextMenuSeparator,
+  ContextMenuTrigger as RadixContextMenuTrigger,
+} from "../app/components/ui/context-menu";
+
+const CONTEXT_MENU_STYLE_ID = "cf-imperative-context-menu-style";
+
+let activeMenu: ContextMenu | null = null;
+
+function ensureContextMenuStyles(): void {
+  if (document.getElementById(CONTEXT_MENU_STYLE_ID)) {
+    return;
+  }
+
+  const style = document.createElement("style");
+  style.id = CONTEXT_MENU_STYLE_ID;
+  style.textContent = `
+    .cf-imperative-context-menu-trigger {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .cf-imperative-context-menu-content {
+      z-index: 10050;
+      min-width: 10rem;
+      overflow: hidden;
+      border: 1px solid var(--cf-border);
+      border-radius: var(--cf-border-radius-lg, 4px);
+      background: var(--cf-bg);
+      color: var(--cf-fg);
+      padding: 4px;
+      box-shadow:
+        0 10px 38px rgba(0, 0, 0, 0.14),
+        0 10px 20px rgba(0, 0, 0, 0.08);
+      font-family: var(--cf-ui-font, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+      font-size: var(--cf-ui-font-size-base, 14px);
+    }
+
+    .cf-imperative-context-menu-item {
+      position: relative;
+      display: flex;
+      align-items: center;
+      border-radius: var(--cf-border-radius, 2px);
+      padding: 6px 8px;
+      outline: none;
+      user-select: none;
+    }
+
+    .cf-imperative-context-menu-item[data-highlighted] {
+      background: var(--cf-hover);
+    }
+
+    .cf-imperative-context-menu-item[data-disabled] {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .cf-imperative-context-menu-separator {
+      height: 1px;
+      margin: 4px 0;
+      background: var(--cf-border);
+    }
+  `;
+
+  (document.head ?? document.body).appendChild(style);
+}
 
 /** A single item in a context menu. */
 export interface ContextMenuItem {
@@ -15,14 +85,79 @@ export interface ContextMenuItem {
   disabled?: boolean;
 }
 
+interface ContextMenuViewProps {
+  items: ContextMenuItem[];
+  x: number;
+  y: number;
+  onDismiss: () => void;
+  setTriggerEl: (node: HTMLSpanElement | null) => void;
+}
+
+function ContextMenuView({
+  items,
+  x,
+  y,
+  onDismiss,
+  setTriggerEl,
+}: ContextMenuViewProps) {
+  return createElement(
+    RadixContextMenu,
+    {
+      onOpenChange: (open: boolean) => {
+        if (!open) {
+          queueMicrotask(onDismiss);
+        }
+      },
+    },
+    createElement(RadixContextMenuTrigger, {
+      ref: setTriggerEl,
+      className: "cf-imperative-context-menu-trigger",
+      style: { left: x, top: y },
+    }),
+    createElement(
+      RadixContextMenuContent,
+      {
+        className: "cf-imperative-context-menu-content",
+        collisionPadding: 8,
+        onCloseAutoFocus: (event: Event) => {
+          event.preventDefault();
+        },
+      },
+      items.map((item, index) => (
+        item.label === "-"
+          ? createElement(RadixContextMenuSeparator, {
+              key: `separator-${index}`,
+              className: "cf-imperative-context-menu-separator",
+            })
+          : createElement(
+              RadixContextMenuItem,
+              {
+                key: `item-${index}-${item.label}`,
+                className: "cf-imperative-context-menu-item",
+                disabled: item.disabled,
+                onSelect: () => {
+                  item.action?.();
+                },
+              },
+              item.label,
+            )
+      )),
+    ),
+  );
+}
+
 /**
- * Generic context menu that renders near the click point.
- * Dismisses on any outside click or Escape key.
+ * Imperative context menu wrapper used by non-React editor and app code.
+ *
+ * The public API stays the same for existing callers, but the rendering and
+ * dismissal behavior are delegated to Radix for accessibility and focus
+ * management.
  */
 export class ContextMenu {
-  private readonly el: HTMLElement;
-  private readonly keydownHandler: (e: KeyboardEvent) => void;
-  private readonly clickHandler: () => void;
+  private readonly host: HTMLElement;
+  private readonly root: Root;
+  private triggerEl: HTMLSpanElement | null = null;
+  private dismissed = false;
 
   /**
    * Create and show a context menu.
@@ -32,74 +167,59 @@ export class ContextMenu {
    * @param y - Client Y coordinate near which to position the menu.
    */
   constructor(items: ContextMenuItem[], x: number, y: number) {
-    this.el = document.createElement("div");
-    this.el.className = "context-menu";
-    this.el.setAttribute("role", "menu");
+    activeMenu?.dismiss();
+    activeMenu = this;
 
-    for (const item of items) {
-      if (item.label === "-") {
-        const sep = document.createElement("div");
-        sep.className = "context-menu-separator";
-        this.el.appendChild(sep);
-        continue;
-      }
+    ensureContextMenuStyles();
 
-      const el = document.createElement("div");
-      el.className = "context-menu-item";
-      el.setAttribute("role", "menuitem");
-      el.textContent = item.label;
+    this.host = document.createElement("div");
+    document.body.appendChild(this.host);
+    this.root = createRoot(this.host);
 
-      if (item.disabled) {
-        el.classList.add("context-menu-item-disabled");
-        el.setAttribute("aria-disabled", "true");
-      } else {
-        el.addEventListener("mousedown", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          this.dismiss();
-          item.action?.();
-        });
-      }
+    flushSync(() => {
+      this.root.render(
+        createElement(ContextMenuView, {
+          items,
+          x,
+          y,
+          onDismiss: () => this.dismiss(),
+          setTriggerEl: (node) => {
+            this.triggerEl = node;
+          },
+        }),
+      );
+    });
 
-      this.el.appendChild(el);
+    if (!this.triggerEl) {
+      this.dismiss();
+      throw new Error("Failed to mount context menu trigger");
     }
 
-    document.body.appendChild(this.el);
-
-    // Position near the click, keeping the menu on-screen.
-    const rect = this.el.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const left = x + rect.width > vw ? Math.max(0, vw - rect.width) : x;
-    const top = y + rect.height > vh ? Math.max(0, vh - rect.height) : y;
-    this.el.style.left = `${left}px`;
-    this.el.style.top = `${top}px`;
-
-    // Prevent the document-level click handler from immediately closing it.
-    this.el.addEventListener("mousedown", (e) => e.stopPropagation());
-
-    // Dismiss on outside click.
-    this.clickHandler = () => this.dismiss();
-    document.addEventListener("mousedown", this.clickHandler);
-
-    // Dismiss on Escape.
-    this.keydownHandler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        this.dismiss();
-      }
-    };
-    document.addEventListener("keydown", this.keydownHandler, { capture: true });
+    this.triggerEl.dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        buttons: 2,
+        clientX: x,
+        clientY: y,
+      }),
+    );
   }
 
-  /** Remove the menu from the DOM and clean up listeners. */
+  /** Remove the menu from the DOM and clean up its mounted React root. */
   dismiss(): void {
-    if (this.el.parentNode) {
-      this.el.remove();
+    if (this.dismissed) {
+      return;
     }
-    document.removeEventListener("mousedown", this.clickHandler);
-    document.removeEventListener("keydown", this.keydownHandler, {
-      capture: true,
-    });
+
+    this.dismissed = true;
+    if (activeMenu === this) {
+      activeMenu = null;
+    }
+
+    this.root.unmount();
+    this.host.remove();
+    this.triggerEl = null;
   }
 }
