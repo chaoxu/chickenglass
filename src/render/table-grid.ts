@@ -28,7 +28,14 @@ import {
   type ViewUpdate,
   keymap,
 } from "@codemirror/view";
-import { Annotation, EditorState, RangeSetBuilder, type RangeSet } from "@codemirror/state";
+import {
+  Annotation,
+  EditorState,
+  RangeSetBuilder,
+  type ChangeDesc,
+  type Range,
+  type RangeSet,
+} from "@codemirror/state";
 import {
   tableDiscoveryField,
   findTablesInState,
@@ -54,6 +61,7 @@ import {
   formatTable,
   type ParsedTable,
 } from "./table-utils";
+import { mergeRanges, type VisibleRange } from "./render-utils";
 
 // ---------------------------------------------------------------------------
 // Bypass annotation — table operations dispatch with this so the
@@ -202,6 +210,11 @@ interface TableGridArtifacts {
   readonly atomicRanges: RangeSet<Decoration>;
 }
 
+interface DirtyTableGridUpdate {
+  readonly dirtyRanges: readonly VisibleRange[];
+  readonly dirtyTables: readonly TableRange[];
+}
+
 /**
  * Build all table grid artifacts from the shared table cache in one pass.
  *
@@ -211,13 +224,16 @@ interface TableGridArtifacts {
  * owns table discovery, so this layer now derives all view artifacts from the
  * cached TableRange array in one linear pass.
  */
-function buildTableGridArtifacts(state: EditorState): TableGridArtifacts {
+function buildTableGridArtifacts(
+  state: EditorState,
+  tables: readonly TableRange[] = findTablesInState(state),
+): TableGridArtifacts {
   const structuralBuilder = new RangeSetBuilder<Decoration>();
   const cellBuilder = new RangeSetBuilder<Decoration>();
   const atomicBuilder = new RangeSetBuilder<Decoration>();
   const doc = state.doc;
 
-  for (const table of findTablesInState(state)) {
+  for (const table of tables) {
     const columns = table.parsed.header.cells.length;
     if (columns < 1) continue;
 
@@ -272,6 +288,209 @@ function buildTableGridArtifacts(state: EditorState): TableGridArtifacts {
     structuralDecorations: structuralBuilder.finish(),
     cellDecorations: cellBuilder.finish(),
     atomicRanges: atomicBuilder.finish(),
+  };
+}
+
+function normalizeDirtyRange(
+  from: number,
+  to: number,
+  docLength: number,
+): VisibleRange {
+  const start = Math.max(0, Math.min(from, docLength));
+  const end = Math.max(0, Math.min(to, docLength));
+  if (start !== end) {
+    return start < end ? { from: start, to: end } : { from: end, to: start };
+  }
+  if (docLength === 0) {
+    return { from: 0, to: 0 };
+  }
+  const windowStart = Math.max(0, Math.min(start, docLength - 1));
+  return { from: windowStart, to: Math.min(docLength, windowStart + 1) };
+}
+
+function mapTableToDirtyRange(
+  table: TableRange,
+  changes: ChangeDesc,
+  docLength: number,
+): VisibleRange {
+  return normalizeDirtyRange(
+    changes.mapPos(table.from, 1),
+    changes.mapPos(table.to, -1),
+    docLength,
+  );
+}
+
+function tableIntersectsDirtyRanges(
+  table: TableRange,
+  dirtyRanges: readonly VisibleRange[],
+): boolean {
+  for (const range of dirtyRanges) {
+    if (table.from < range.to && table.to > range.from) return true;
+    if (range.from >= table.to) break;
+  }
+  return false;
+}
+
+function computeDirtyTableGridUpdate(
+  previousTables: readonly TableRange[],
+  nextTables: readonly TableRange[],
+  changes: ChangeDesc,
+  docLength: number,
+): DirtyTableGridUpdate {
+  const previousByLines = new Map<readonly string[], TableRange>();
+  for (const table of previousTables) {
+    previousByLines.set(table.lines, table);
+  }
+
+  const preservedTables: TableRange[] = [];
+  const retainedLines = new Set<readonly string[]>();
+  const dirtyRanges: VisibleRange[] = [];
+  const dirtyTables: TableRange[] = [];
+
+  for (const table of nextTables) {
+    const previous = previousByLines.get(table.lines);
+    if (previous) {
+      preservedTables.push(table);
+      retainedLines.add(table.lines);
+      continue;
+    }
+    dirtyTables.push(table);
+    dirtyRanges.push(normalizeDirtyRange(table.from, table.to, docLength));
+  }
+
+  for (const table of previousTables) {
+    if (retainedLines.has(table.lines)) continue;
+    dirtyRanges.push(mapTableToDirtyRange(table, changes, docLength));
+  }
+
+  let mergedDirtyRanges = mergeRanges(dirtyRanges);
+  if (mergedDirtyRanges.length > 0) {
+    // A preserved table can shift into a dirty window after an adjacent
+    // table is removed or rebuilt. Rebuild those overlaps to avoid
+    // filtering away their mapped line decorations.
+    for (const table of preservedTables) {
+      if (!tableIntersectsDirtyRanges(table, mergedDirtyRanges)) continue;
+      dirtyTables.push(table);
+      mergedDirtyRanges = mergeRanges([
+        ...mergedDirtyRanges,
+        normalizeDirtyRange(table.from, table.to, docLength),
+      ]);
+    }
+  }
+
+  return {
+    dirtyRanges: mergedDirtyRanges,
+    dirtyTables: [...dirtyTables].sort((left, right) => left.from - right.from),
+  };
+}
+
+function artifactsToRanges(
+  artifacts: TableGridArtifacts,
+  docLength: number,
+): {
+  readonly structuralDecorations: readonly Range<Decoration>[];
+  readonly cellDecorations: readonly Range<Decoration>[];
+  readonly atomicRanges: readonly Range<Decoration>[];
+} {
+  const structuralDecorations: Range<Decoration>[] = [];
+  const cellDecorations: Range<Decoration>[] = [];
+  const atomicRanges: Range<Decoration>[] = [];
+
+  artifacts.structuralDecorations.between(0, docLength, (from, to, value) => {
+    structuralDecorations.push(value.range(from, to));
+  });
+  artifacts.cellDecorations.between(0, docLength, (from, to, value) => {
+    cellDecorations.push(value.range(from, to));
+  });
+  artifacts.atomicRanges.between(0, docLength, (from, to, value) => {
+    atomicRanges.push(value.range(from, to));
+  });
+
+  return {
+    structuralDecorations,
+    cellDecorations,
+    atomicRanges,
+  };
+}
+
+function rangeTouchesDirtyRanges(
+  from: number,
+  to: number,
+  dirtyRanges: readonly VisibleRange[],
+): boolean {
+  for (const range of dirtyRanges) {
+    if (from === to) {
+      if (from >= range.from && from < range.to) return true;
+    } else if (from < range.to && to > range.from) {
+      return true;
+    }
+
+    if (range.from > to) break;
+  }
+  return false;
+}
+
+function updateTableGridArtifacts(
+  artifacts: TableGridArtifacts,
+  previousTables: readonly TableRange[],
+  nextTables: readonly TableRange[],
+  state: EditorState,
+  changes: ChangeDesc,
+): TableGridArtifacts {
+  const mappedArtifacts = {
+    structuralDecorations: artifacts.structuralDecorations.map(changes),
+    cellDecorations: artifacts.cellDecorations.map(changes),
+    atomicRanges: artifacts.atomicRanges.map(changes),
+  } satisfies TableGridArtifacts;
+
+  const dirtyUpdate = computeDirtyTableGridUpdate(
+    previousTables,
+    nextTables,
+    changes,
+    state.doc.length,
+  );
+  if (dirtyUpdate.dirtyRanges.length === 0) {
+    return mappedArtifacts;
+  }
+
+  const replacementArtifacts = buildTableGridArtifacts(state, dirtyUpdate.dirtyTables);
+  const replacementRanges = artifactsToRanges(replacementArtifacts, state.doc.length);
+  const firstDirtyRange = dirtyUpdate.dirtyRanges[0];
+  const lastDirtyRange = dirtyUpdate.dirtyRanges[dirtyUpdate.dirtyRanges.length - 1];
+  if (!firstDirtyRange || !lastDirtyRange) {
+    return mappedArtifacts;
+  }
+
+  const filterFrom = firstDirtyRange.from;
+  const filterTo = lastDirtyRange.to;
+  const keepRange = (from: number, to: number) => !rangeTouchesDirtyRanges(
+    from,
+    to,
+    dirtyUpdate.dirtyRanges,
+  );
+
+  return {
+    structuralDecorations: mappedArtifacts.structuralDecorations.update({
+      filterFrom,
+      filterTo,
+      filter: keepRange,
+      add: replacementRanges.structuralDecorations,
+      sort: true,
+    }),
+    cellDecorations: mappedArtifacts.cellDecorations.update({
+      filterFrom,
+      filterTo,
+      filter: keepRange,
+      add: replacementRanges.cellDecorations,
+      sort: true,
+    }),
+    atomicRanges: mappedArtifacts.atomicRanges.update({
+      filterFrom,
+      filterTo,
+      filter: keepRange,
+      add: replacementRanges.atomicRanges,
+      sort: true,
+    }),
   };
 }
 
@@ -817,18 +1036,32 @@ const tableGridPlugin = ViewPlugin.fromClass(
     decorations: DecorationSet;
     outerDecorations: DecorationSet;
     atomicRanges: RangeSet<Decoration>;
+    tables: readonly TableRange[];
     constructor(view: EditorView) {
-      const artifacts = buildTableGridArtifacts(view.state);
+      this.tables = findTablesInState(view.state);
+      const artifacts = buildTableGridArtifacts(view.state, this.tables);
       this.decorations = artifacts.structuralDecorations;
       this.outerDecorations = artifacts.cellDecorations;
       this.atomicRanges = artifacts.atomicRanges;
     }
     update(update: ViewUpdate) {
       if (tableDiscoveryChanged(update)) {
-        const artifacts = buildTableGridArtifacts(update.state);
+        const nextTables = findTablesInState(update.state);
+        const artifacts = updateTableGridArtifacts(
+          {
+            structuralDecorations: this.decorations,
+            cellDecorations: this.outerDecorations,
+            atomicRanges: this.atomicRanges,
+          },
+          this.tables,
+          nextTables,
+          update.state,
+          update.changes,
+        );
         this.decorations = artifacts.structuralDecorations;
         this.outerDecorations = artifacts.cellDecorations;
         this.atomicRanges = artifacts.atomicRanges;
+        this.tables = nextTables;
       } else if (update.docChanged) {
         this.decorations = this.decorations.map(update.changes);
         this.outerDecorations = this.outerDecorations.map(update.changes);
@@ -849,6 +1082,8 @@ const tableGridPlugin = ViewPlugin.fromClass(
       ],
   },
 );
+
+export const _computeDirtyTableGridUpdateForTest = computeDirtyTableGridUpdate;
 
 const tableGridTheme = EditorView.baseTheme({
   ".cf-grid-pipe": { display: "none" },
