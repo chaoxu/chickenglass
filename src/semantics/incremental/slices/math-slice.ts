@@ -8,6 +8,7 @@ import {
 } from "../merge-utils";
 import type { DirtyWindow, SemanticDelta } from "../types";
 import {
+  expandRangeToParagraphBoundaries,
   extractStructuralWindow,
   type StructuralWindowExtraction,
 } from "../window-extractor";
@@ -20,6 +21,8 @@ export interface DirtyMathWindowExtraction {
   readonly window: Pick<DirtyWindow, "fromNew" | "toNew">;
   readonly structural: Pick<StructuralWindowExtraction, "mathRegions">;
 }
+
+const INLINE_MATH_DELIMITER_RE = /(?:\$|\\\(|\\\))/;
 
 function mapOptionalPos(
   value: number | undefined,
@@ -100,6 +103,79 @@ function findOverhangTo(
     }
   }
   return maxTo;
+}
+
+function rangesTouchOrOverlap(
+  region: Pick<MathSemantics, "from" | "to">,
+  window: Pick<DirtyWindow, "fromNew" | "toNew">,
+): boolean {
+  return region.from <= window.toNew && window.fromNew <= region.to;
+}
+
+function touchesInlineMathRegion(
+  regions: readonly MathSemantics[],
+  window: Pick<DirtyWindow, "fromNew" | "toNew">,
+): boolean {
+  return regions.some((region) =>
+    !region.isDisplay && rangesTouchOrOverlap(region, window)
+  );
+}
+
+function windowTouchesInlineMathDelimiter(
+  doc: TextSource,
+  window: Pick<DirtyWindow, "fromNew" | "toNew">,
+): boolean {
+  const from = Math.max(0, window.fromNew - 1);
+  const to = Math.min(doc.length, window.toNew + 1);
+  return INLINE_MATH_DELIMITER_RE.test(doc.slice(from, to));
+}
+
+function shouldExpandMathWindowToParagraph(
+  mappedPrevious: readonly MathSemantics[],
+  extraction: DirtyMathWindowExtraction,
+  doc: TextSource,
+): boolean {
+  return (
+    windowTouchesInlineMathDelimiter(doc, extraction.window)
+    || touchesInlineMathRegion(mappedPrevious, extraction.window)
+    || touchesInlineMathRegion(extraction.structural.mathRegions, extraction.window)
+  );
+}
+
+export function expandDirtyMathExtractions(
+  previous: MathSlice,
+  delta: Pick<SemanticDelta, "mapOldToNew">,
+  dirtyExtractions: readonly DirtyMathWindowExtraction[],
+  doc: TextSource,
+  tree: Tree,
+): readonly DirtyMathWindowExtraction[] {
+  const mappedPrevious = mapMathRegions(previous.mathRegions, deltaMapper(delta));
+  let changed = false;
+
+  const expanded = dirtyExtractions.map((extraction) => {
+    if (!shouldExpandMathWindowToParagraph(mappedPrevious, extraction, doc)) {
+      return extraction;
+    }
+
+    const range = expandRangeToParagraphBoundaries(doc, {
+      from: extraction.window.fromNew,
+      to: extraction.window.toNew,
+    });
+    if (
+      range.from === extraction.window.fromNew
+      && range.to === extraction.window.toNew
+    ) {
+      return extraction;
+    }
+
+    changed = true;
+    return {
+      window: { fromNew: range.from, toNew: range.to },
+      structural: extractStructuralWindow(doc, tree, range),
+    };
+  });
+
+  return changed ? expanded : dirtyExtractions;
 }
 
 /**

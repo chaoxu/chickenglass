@@ -390,6 +390,16 @@ function paragraphEnd(doc: TextSource, pos: number): number {
   return line.to;
 }
 
+export function expandRangeToParagraphBoundaries(
+  doc: TextSource,
+  range: StructuralWindow,
+): StructuralWindow {
+  return {
+    from: Math.min(range.from, paragraphStart(doc, range.from)),
+    to: Math.max(range.to, paragraphEnd(doc, range.to)),
+  };
+}
+
 /**
  * Compute the narrative-ref extraction range and its fresh excluded ranges.
  *
@@ -407,13 +417,15 @@ export function computeNarrativeExtractionRange(
   windowFrom: number,
   windowTo: number,
 ): { range: StructuralWindow; excludedRanges: readonly ExcludedRange[] } {
-  const from = paragraphStart(doc, windowFrom);
-  const to = paragraphEnd(doc, windowTo);
+  const range = expandRangeToParagraphBoundaries(doc, {
+    from: windowFrom,
+    to: windowTo,
+  });
 
   const excludedRanges: ExcludedRange[] = [];
   const c = tree.cursor();
   scan: for (;;) {
-    if (c.from <= to && c.to >= from) {
+    if (c.from <= range.to && c.to >= range.from) {
       switch (c.name) {
         case "InlineCode":
         case "InlineMath":
@@ -429,7 +441,7 @@ export function computeNarrativeExtractionRange(
     }
   }
 
-  return { range: { from, to }, excludedRanges };
+  return { range, excludedRanges };
 }
 
 export function collectStructuralWindow(
