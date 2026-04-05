@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { createMarkdownLanguageExtensions } from "../editor/base-editor-extensions";
-import { findTablesInState, findPipePositions } from "./table-discovery";
+import { findTablesInState, findPipePositions, tableDiscoveryField } from "./table-discovery";
 import {
+  _computeDirtyTableGridUpdateForTest,
   deleteSelectedTableSelection,
   getTableDeleteRange,
   tableGridExtension,
@@ -28,6 +30,16 @@ afterEach(() => {
 function makeView(doc = DOC): EditorView {
   return createTestView(doc, {
     extensions: [...createMarkdownLanguageExtensions(), tableGridExtension],
+  });
+}
+
+function makeDiscoveryState(doc: string): EditorState {
+  return EditorState.create({
+    doc,
+    extensions: [
+      ...createMarkdownLanguageExtensions(),
+      tableDiscoveryField,
+    ],
   });
 }
 
@@ -144,7 +156,7 @@ describe("gridContextMenuHandler cross-row guard (#696)", () => {
     for (const row of [4, 5]) {
       const cols = colsByRow.get(row);
       expect(cols).toBeDefined();
-      expect(cols!.length).toBeGreaterThanOrEqual(2);
+      expect(cols?.length).toBeGreaterThanOrEqual(2);
     }
   });
 });
@@ -174,6 +186,140 @@ describe("table grid rendering for inline-span edge cases", () => {
     expect(colsByRow.get(1)).toEqual([0, 1, 2, 3]);
     expect(colsByRow.get(3)).toEqual([0, 1, 2, 3]);
     expect(textByRow.get(3)).toEqual(["row", "\\(x", "\\) y", "z"]);
+  });
+});
+
+describe("table-grid dirty table diff (#858)", () => {
+  it("keeps all tables clean when unchanged tables only shift position", () => {
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "between",
+      "",
+      "| C | D |",
+      "| --- | --- |",
+      "| 3 | 4 |",
+    ].join("\n"));
+
+    const initialTables = state.field(tableDiscoveryField);
+    const tr = state.update({
+      changes: { from: state.doc.line(5).to, insert: " prose" },
+    });
+    const changedTables = tr.state.field(tableDiscoveryField);
+    const dirtyUpdate = _computeDirtyTableGridUpdateForTest(
+      initialTables,
+      changedTables,
+      tr.changes,
+      tr.state.doc.length,
+    );
+
+    expect(changedTables[0]).toBe(initialTables[0]);
+    expect(changedTables[1].lines).toBe(initialTables[1].lines);
+    expect(changedTables[1]).not.toBe(initialTables[1]);
+    expect(dirtyUpdate.dirtyTables).toEqual([]);
+    expect(dirtyUpdate.dirtyRanges).toEqual([]);
+  });
+
+  it("rebuilds only the edited table when one table cell changes", () => {
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "| C | D |",
+      "| --- | --- |",
+      "| 3 | 4 |",
+    ].join("\n"));
+
+    const initialTables = state.field(tableDiscoveryField);
+    const tr = state.update({
+      changes: {
+        from: state.doc.line(3).from + 2,
+        to: state.doc.line(3).from + 3,
+        insert: "9",
+      },
+    });
+    const changedTables = tr.state.field(tableDiscoveryField);
+    const dirtyUpdate = _computeDirtyTableGridUpdateForTest(
+      initialTables,
+      changedTables,
+      tr.changes,
+      tr.state.doc.length,
+    );
+
+    expect(dirtyUpdate.dirtyTables).toEqual([changedTables[0]]);
+    expect(changedTables[1]).toBe(initialTables[1]);
+    expect(dirtyUpdate.dirtyRanges).toEqual([
+      { from: changedTables[0].from, to: changedTables[0].to },
+    ]);
+  });
+
+  it("removes stale artifacts when a table stops parsing", () => {
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "| C | D |",
+      "| --- | --- |",
+      "| 3 | 4 |",
+    ].join("\n"));
+
+    const initialTables = state.field(tableDiscoveryField);
+    const separatorLine = state.doc.line(2);
+    const tr = state.update({
+      changes: {
+        from: separatorLine.from,
+        to: separatorLine.to,
+        insert: "| abc | def |",
+      },
+    });
+    const changedTables = tr.state.field(tableDiscoveryField);
+    const dirtyUpdate = _computeDirtyTableGridUpdateForTest(
+      initialTables,
+      changedTables,
+      tr.changes,
+      tr.state.doc.length,
+    );
+
+    expect(changedTables).toEqual([initialTables[1]]);
+    expect(dirtyUpdate.dirtyTables).toEqual([]);
+    expect(dirtyUpdate.dirtyRanges).toHaveLength(1);
+    expect(dirtyUpdate.dirtyRanges[0]?.from).toBe(0);
+    expect(dirtyUpdate.dirtyRanges[0]?.to).toBe(initialTables[0].to);
+  });
+
+  it("rebuilds the remaining table when deleting a leading table", () => {
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "| C | D |",
+      "| --- | --- |",
+      "| 3 | 4 |",
+    ].join("\n"));
+
+    const initialTables = state.field(tableDiscoveryField);
+    const deleteTo = state.doc.line(4).from;
+    const tr = state.update({
+      changes: { from: 0, to: deleteTo, insert: "" },
+    });
+    const changedTables = tr.state.field(tableDiscoveryField);
+    const dirtyUpdate = _computeDirtyTableGridUpdateForTest(
+      initialTables,
+      changedTables,
+      tr.changes,
+      tr.state.doc.length,
+    );
+
+    expect(changedTables).toHaveLength(1);
+    expect(dirtyUpdate.dirtyTables).toEqual(changedTables);
+    expect(dirtyUpdate.dirtyRanges).toEqual([
+      { from: 0, to: changedTables[0].to },
+    ]);
   });
 });
 
