@@ -47,10 +47,20 @@ export function shouldCommitBlurredInlineEditor(
   return snapshot !== null && current === snapshot && snapshot.cell === cell;
 }
 
-export function serializeTableWidgetMacros(macros: Record<string, string>): string {
-  return JSON.stringify(
-    Object.entries(macros).sort(([left], [right]) => left.localeCompare(right)),
-  );
+function areTableWidgetMacrosEqual(
+  left: Record<string, string>,
+  right: Record<string, string>,
+): boolean {
+  if (left === right) {
+    return true;
+  }
+
+  const leftEntries = Object.entries(left);
+  if (leftEntries.length !== Object.keys(right).length) {
+    return false;
+  }
+
+  return leftEntries.every(([key, value]) => right[key] === value);
 }
 
 /**
@@ -82,7 +92,6 @@ export class TableWidget extends RenderWidget {
   /** Reference to the EditorView, stored on first toDOM() call. */
   private editorView: EditorView | null = null;
   private resizeObserver: ResizeObserver | null = null;
-  private readonly macroSignature: string;
 
   constructor(
     private readonly table: ParsedTable,
@@ -91,7 +100,6 @@ export class TableWidget extends RenderWidget {
     private readonly macros: Record<string, string>,
   ) {
     super();
-    this.macroSignature = serializeTableWidgetMacros(macros);
   }
 
   /**
@@ -101,7 +109,7 @@ export class TableWidget extends RenderWidget {
   eq(other: TableWidget): boolean {
     return (
       this.tableText === other.tableText &&
-      this.macroSignature === other.macroSignature
+      areTableWidgetMacrosEqual(this.macros, other.macros)
     );
   }
 

@@ -5,7 +5,6 @@ import { markdown } from "@codemirror/lang-markdown";
 import {
   TableWidget,
   cellEditAnnotation,
-  serializeTableWidgetMacros,
   shouldCommitBlurredInlineEditor,
 } from "./table-widget";
 import { _tableDecorationFieldForTest as tableDecorationField } from "./table-render";
@@ -45,12 +44,17 @@ function makeStubView(): EditorView {
 }
 
 describe("TableWidget source range attributes", () => {
-  it("treats macro order as irrelevant when computing the widget signature", () => {
-    expect(
-      serializeTableWidgetMacros({ "\\A": "1", "\\B": "2" }),
-    ).toBe(
-      serializeTableWidgetMacros({ "\\B": "2", "\\A": "1" }),
-    );
+  it("treats macro order as irrelevant when comparing widget identity", () => {
+    const widgetA = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 0, {
+      "\\A": "1",
+      "\\B": "2",
+    });
+    const widgetB = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 0, {
+      "\\B": "2",
+      "\\A": "1",
+    });
+
+    expect(widgetA.eq(widgetB)).toBe(true);
   });
 
   it("sets data-source-from and data-source-to on the container", () => {
@@ -209,8 +213,10 @@ describe("TableWidget negative / edge-case", () => {
     expect(widgetA.eq(widgetB)).toBe(false);
   });
 
-  it("serializeTableWidgetMacros returns consistent string for empty macros", () => {
-    expect(serializeTableWidgetMacros({})).toBe(serializeTableWidgetMacros({}));
+  it("eq returns true for empty macro sets", () => {
+    const widgetA = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 0, {});
+    const widgetB = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 0, {});
+    expect(widgetA.eq(widgetB)).toBe(true);
   });
 });
 

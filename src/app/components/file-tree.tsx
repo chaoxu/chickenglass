@@ -3,6 +3,7 @@ import type { FileEntry } from "../file-manager";
 import { FileTreeNode } from "./file-tree-node";
 import { FileTreeProvider } from "../contexts/file-tree-context";
 import { useFileTreeController, type PersistentTreeState } from "../hooks/use-file-tree-controller";
+import type { HeadlessTreeRowProps } from "../hooks/use-tree-node-row";
 
 interface FileTreeProps {
   root: FileEntry | null;
@@ -34,6 +35,22 @@ export function FileTree({
   const controller = useFileTreeController({ root, onSelect, persistRef, onLoadChildren });
   const containerRef = useRef<HTMLDivElement | null>(null);
   const saveScrollRef = useRef(controller.saveScrollPosition);
+  const actionsRef = useRef({
+    onSelect,
+    onDoubleClick,
+    onRename,
+    onDelete,
+    onCreateFile,
+    onCreateDir,
+  });
+  actionsRef.current = {
+    onSelect,
+    onDoubleClick,
+    onRename,
+    onDelete,
+    onCreateFile,
+    onCreateDir,
+  };
   saveScrollRef.current = controller.saveScrollPosition;
 
   // Restore scroll position on mount, save on unmount.
@@ -83,6 +100,16 @@ export function FileTree({
     };
   }, [containerProps.ref]);
 
+  const contextValue = useMemo(() => ({
+    onSelect: (path: string) => actionsRef.current.onSelect(path),
+    onDoubleClick: (path: string) => actionsRef.current.onDoubleClick?.(path),
+    onRename: (oldPath: string, newPath: string) =>
+      actionsRef.current.onRename(oldPath, newPath),
+    onDelete: (path: string) => actionsRef.current.onDelete(path),
+    onCreateFile: (path: string) => actionsRef.current.onCreateFile(path),
+    onCreateDir: (path: string) => actionsRef.current.onCreateDir(path),
+  }), []);
+
   if (!root || controller.visibleItems.length === 0) {
     return (
       <div className="px-3 py-2 text-xs text-[var(--cf-muted)] italic">
@@ -93,16 +120,30 @@ export function FileTree({
 
   return (
     <FileTreeProvider
-      value={{ activePath, onSelect, onDoubleClick, onRename, onDelete, onCreateFile, onCreateDir }}
+      value={contextValue}
     >
       <div
         {...containerProps}
         ref={mergedContainerRef}
         className="py-1 outline-none"
       >
-        {controller.visibleItems.map((item) => (
-          <FileTreeNode key={item.getId()} item={item} />
-        ))}
+        {controller.visibleItems.map((item) => {
+          const entry = item.getItemData();
+          const rowProps = item.getProps() as HeadlessTreeRowProps;
+
+          return (
+            <FileTreeNode
+              key={item.getId()}
+              item={item}
+              entry={entry}
+              depth={item.getItemMeta().level}
+              isActive={entry.path === activePath}
+              isFocused={item.isFocused()}
+              isExpanded={item.isFolder() && item.isExpanded()}
+              rowProps={rowProps}
+            />
+          );
+        })}
       </div>
     </FileTreeProvider>
   );
