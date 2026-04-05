@@ -1,9 +1,48 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { EditorView } from "@codemirror/view";
-import { CheckboxWidget } from "./checkbox-render";
-import { createTestView } from "../test-utils";
+import { markdown } from "@codemirror/lang-markdown";
+import {
+  EditorView,
+  type DecorationSet,
+  type ViewPlugin,
+} from "@codemirror/view";
+import {
+  CheckboxWidget,
+  checkboxRenderPlugin,
+} from "./checkbox-render";
+import {
+  createTestView,
+  getDecorationSpecs,
+} from "../test-utils";
+import { markdownExtensions } from "../parser";
 
 let view: EditorView | undefined;
+
+interface CheckboxPluginProbe {
+  decorations: DecorationSet;
+}
+
+function getCheckboxPlugin(): CheckboxPluginProbe {
+  const plugin = view?.plugin(
+    checkboxRenderPlugin as unknown as ViewPlugin<CheckboxPluginProbe>,
+  );
+  expect(plugin).toBeTruthy();
+  if (!plugin) {
+    throw new Error("expected checkbox render plugin instance");
+  }
+  return plugin;
+}
+
+function createCheckboxView(doc: string, cursorPos: number): CheckboxPluginProbe {
+  view = createTestView(doc, {
+    cursorPos,
+    extensions: [markdown({ extensions: markdownExtensions }), checkboxRenderPlugin],
+  });
+  const plugin = getCheckboxPlugin();
+  // Warm up the first dispatch after construction to clear JSDOM's spurious
+  // focusChanged signal before each assertion inspects rebuild behavior.
+  view.dispatch({ selection: { anchor: cursorPos } });
+  return plugin;
+}
 
 afterEach(() => {
   view?.destroy();
@@ -92,5 +131,51 @@ describe("CheckboxWidget", () => {
       const el = widget.toDOM(view) as HTMLInputElement;
       expect(el.checked).toBe(false);
     });
+  });
+});
+
+describe("checkboxRenderPlugin selection narrowing (#874)", () => {
+  it("does not rebuild when the cursor moves through plain prose", () => {
+    const doc = "- [ ] task\n\nplain text";
+    const prosePos = doc.indexOf("plain") + 2;
+    const plugin = createCheckboxView(doc, prosePos);
+    const before = plugin.decorations;
+
+    view!.dispatch({ selection: { anchor: prosePos + 2 } });
+
+    expect(plugin.decorations).toBe(before);
+    expect(getDecorationSpecs(plugin.decorations)).toHaveLength(1);
+  });
+
+  it("does not rebuild when the cursor stays within the same task marker", () => {
+    const plugin = createCheckboxView("- [ ] task", 3);
+    const before = plugin.decorations;
+
+    view!.dispatch({ selection: { anchor: 4 } });
+
+    expect(plugin.decorations).toBe(before);
+    expect(getDecorationSpecs(plugin.decorations)).toHaveLength(0);
+  });
+
+  it("rebuilds when the cursor leaves the marker boundary", () => {
+    const plugin = createCheckboxView("- [ ] task", 5);
+    const before = plugin.decorations;
+
+    view!.dispatch({ selection: { anchor: 6 } });
+
+    expect(plugin.decorations).not.toBe(before);
+    expect(getDecorationSpecs(plugin.decorations)).toHaveLength(1);
+  });
+
+  it("rebuilds when the cursor moves between different task markers", () => {
+    const doc = "- [ ] first\n- [x] second";
+    const secondMarkerPos = doc.lastIndexOf("[") + 1;
+    const plugin = createCheckboxView(doc, 3);
+    const before = plugin.decorations;
+
+    view!.dispatch({ selection: { anchor: secondMarkerPos } });
+
+    expect(plugin.decorations).not.toBe(before);
+    expect(getDecorationSpecs(plugin.decorations)).toHaveLength(1);
   });
 });
