@@ -172,8 +172,8 @@ function findActiveReference(
 
 /**
  * Ensure citations from the current document analysis are registered with the
- * CSL processor. Caches per (analysis, store, revision) triple to avoid
- * redundant re-registration.
+ * CSL processor. Registration state is tracked on the processor itself so
+ * shared render surfaces can reuse one authoritative cache key.
  *
  * Exported so the bibliography plugin can call it before requesting formatted
  * bibliography entries — otherwise `bibliography()` returns [] when it runs
