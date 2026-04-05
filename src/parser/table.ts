@@ -33,7 +33,7 @@ import { scanTableInlineSpan } from "../lib/table-inline-span";
  *
  * Spans handled (pipes inside are not treated as column separators):
  *   \X        escaped character
- *   \(...\)   backslash-paren inline math
+ *   \(...\)   backslash-paren inline math (with `\|` for literal pipes)
  *   $...$     single-dollar inline math
  *   `...`     backtick code span (any run length)
  */

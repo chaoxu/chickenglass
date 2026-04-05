@@ -6,7 +6,8 @@
  *
  * This scanner is intentionally conservative for incomplete syntax while the
  * user is typing:
- * - complete `$...$`, `\(...\)`, and code spans suppress pipe splitting
+ * - complete `$...$`, `\(...\)` with escaped `\|`, and code spans suppress
+ *   pipe splitting
  * - incomplete `$`, `\(`, or backticks are treated as literal cell text and
  *   only consume their own opening characters
  *
@@ -80,6 +81,7 @@ export function scanTableInlineSpan(
           j += 2;
           continue;
         }
+        if (jch === PIPE) return start + 2;
         j++;
       }
       return start + 2;

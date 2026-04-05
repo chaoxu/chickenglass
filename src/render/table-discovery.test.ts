@@ -61,8 +61,20 @@ describe("findPipePositions", () => {
       .toEqual([0, 12, 29, 43]);
   });
 
-  it("ignores pipes inside \\(…\\) math spans", () => {
-    expect(findPipePositions("| \\(a | b\\) | No |")).toEqual([0, 12, 17]);
+  it("ignores escaped pipes inside \\(…\\) math spans", () => {
+    expect(findPipePositions("| \\(a \\| b\\) | No |")).toEqual([0, 13, 18]);
+  });
+
+  it("does not let \\(...\\) match across a real cell separator", () => {
+    expect(findPipePositions("| row | \\(x | \\) y | z |")).toEqual([0, 6, 12, 19, 23]);
+  });
+
+  it("does not let \\(...\\) match across a no-space cell separator", () => {
+    expect(findPipePositions("| row | \\(x|\\) y | z |")).toEqual([0, 6, 11, 17, 21]);
+  });
+
+  it("does not let \\(...\\) match across a separator when the next cell contains text before \\)", () => {
+    expect(findPipePositions("| row | \\(x | text \\) y | z |")).toEqual([0, 6, 12, 24, 28]);
   });
 
   it("ignores pipes inside single-backtick code spans", () => {

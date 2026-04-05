@@ -302,7 +302,7 @@ export const tableDiscoveryField = StateField.define<readonly TableRange[]>({
  * the current position. Pipes inside those spans are invisible to the
  * column splitter. Spans handled:
  *   - `\|`      — escaped pipe (and `\X` for any X)
- *   - `\(...\)` — backslash-paren inline math
+ *   - `\(...\)` — backslash-paren inline math (with `\|` for literal pipes)
  *   - `$...$`   — single-dollar inline math
  *   - `` `...` `` / ` `` `` ``...`` `` `` ` — backtick code spans (any run length)
  *

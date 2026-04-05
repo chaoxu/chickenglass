@@ -122,6 +122,18 @@ describe("parseTable", () => {
     ]);
   });
 
+  it("keeps escaped pipes inside same-cell \\(...\\) math", () => {
+    const result = mustParse([
+      "| A | B |",
+      "| --- | --- |",
+      "| \\(a \\| b\\) | No |",
+    ]);
+    expect(result.rows[0].cells).toEqual([
+      { content: "\\(a \\| b\\)" },
+      { content: "No" },
+    ]);
+  });
+
   it("keeps a trailing extra $ literal without collapsing the next math cell", () => {
     const result = mustParse([
       "| Name | Time | Space |",
@@ -132,6 +144,48 @@ describe("parseTable", () => {
       { content: "Quicksort" },
       { content: "$O(n \\log n)$$" },
       { content: "$O(\\log n)$" },
+    ]);
+  });
+
+  it("does not let \\(...\\) consume a later cell's closing delimiter", () => {
+    const result = mustParse([
+      "| A | B | C | D |",
+      "| --- | --- | --- | --- |",
+      "| row | \\(x | \\) y | z |",
+    ]);
+    expect(result.rows[0].cells).toEqual([
+      { content: "row" },
+      { content: "\\(x" },
+      { content: "\\) y" },
+      { content: "z" },
+    ]);
+  });
+
+  it("does not let \\(...\\) consume a later cell's closing delimiter without padding spaces", () => {
+    const result = mustParse([
+      "| A | B | C | D |",
+      "| --- | --- | --- | --- |",
+      "| row | \\(x|\\) y | z |",
+    ]);
+    expect(result.rows[0].cells).toEqual([
+      { content: "row" },
+      { content: "\\(x" },
+      { content: "\\) y" },
+      { content: "z" },
+    ]);
+  });
+
+  it("does not let \\(...\\) consume text from the next cell before a later closing delimiter", () => {
+    const result = mustParse([
+      "| A | B | C | D |",
+      "| --- | --- | --- | --- |",
+      "| row | \\(x | text \\) y | z |",
+    ]);
+    expect(result.rows[0].cells).toEqual([
+      { content: "row" },
+      { content: "\\(x" },
+      { content: "text \\) y" },
+      { content: "z" },
     ]);
   });
 });
