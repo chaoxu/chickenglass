@@ -5,10 +5,16 @@ import {
   resolveDocumentLabelBacklinks,
   type DocumentLabelBacklinksResult,
 } from "../../semantics/document-label-backlinks";
+import {
+  prepareDocumentLabelRename,
+  resolveDocumentLabelRenameTarget,
+  type DocumentLabelRenameTarget,
+} from "../../semantics/document-label-rename";
 import { toggleFpsMeter } from "../fps-meter";
 import { batchExport, exportDocument } from "../export";
 import type { FileSystem } from "../file-manager";
 import { basename, modKey } from "../lib/utils";
+import { dispatchIfConnected } from "../lib/view-dispatch";
 import type { PaletteCommand } from "../components/command-palette";
 import { collectSearchableMarkdownPaths } from "../search";
 import { useAutoSave } from "./use-auto-save";
@@ -99,6 +105,29 @@ function toMenuHandlers(defs: CommandDef[]): Record<string, () => void> {
     if (d.menuId) map[d.menuId] = d.action;
   }
   return map;
+}
+
+const LABEL_ACTION_MESSAGE =
+  "Place the cursor on a local label definition or reference in the current document.";
+
+function duplicateRenameMessage(id: string): string {
+  return `Local label "${id}" is defined more than once in this document. Resolve the duplicate label before renaming it.`;
+}
+
+function renamePromptMessage(target: DocumentLabelRenameTarget): string {
+  const referenceCount = target.references.length;
+  const referenceWord = referenceCount === 1 ? "reference" : "references";
+  return [
+    `Rename local label "${target.definition.id}" to:`,
+    `This will update 1 definition and ${referenceCount} ${referenceWord} in the current document.`,
+  ].join("\n\n");
+}
+
+function renameValidationMessage(nextId: string): string {
+  return [
+    `Cannot rename label to "${nextId.trim()}".`,
+    "Use a non-empty id with no spaces. Allowed characters: letters, numbers, _, ., :, and -.",
+  ].join("\n\n");
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -228,7 +257,7 @@ export function useAppOverlays({
   const handleShowLabelBacklinks = useCallback(() => {
     const view = editor.editorState?.view;
     if (!view || !editor.currentPath?.endsWith(".md")) {
-      window.alert("Place the cursor on a local label definition or reference in the current document.");
+      window.alert(LABEL_ACTION_MESSAGE);
       return;
     }
 
@@ -245,7 +274,69 @@ export function useAppOverlays({
       return;
     }
 
-    window.alert("Place the cursor on a local label definition or reference in the current document.");
+    window.alert(LABEL_ACTION_MESSAGE);
+  }, [editor.currentPath, editor.editorState?.view]);
+
+  const handleRenameDocumentLabel = useCallback(() => {
+    const view = editor.editorState?.view;
+    if (!view || !editor.currentPath?.endsWith(".md")) {
+      window.alert(LABEL_ACTION_MESSAGE);
+      return;
+    }
+
+    const lookup = resolveDocumentLabelRenameTarget(view.state);
+    if (lookup.kind === "duplicate") {
+      window.alert(duplicateRenameMessage(lookup.id));
+      return;
+    }
+    if (lookup.kind === "none") {
+      window.alert(LABEL_ACTION_MESSAGE);
+      return;
+    }
+
+    const target = lookup.target;
+    const promptedId = window.prompt(
+      renamePromptMessage(target),
+      target.definition.id,
+    );
+    if (promptedId === null || promptedId === target.definition.id) {
+      return;
+    }
+
+    const rename = prepareDocumentLabelRename(view.state, promptedId);
+    if (rename.kind === "ready") {
+      if (rename.changes.length === 0) return;
+      if (dispatchIfConnected(
+        view,
+        { changes: [...rename.changes], scrollIntoView: true },
+        { context: "[rename-label] dispatch failed:" },
+      )) {
+        view.focus();
+        window.requestAnimationFrame(() => {
+          if (view.dom.isConnected) {
+            view.focus();
+          }
+        });
+      }
+      return;
+    }
+
+    if (rename.kind === "duplicate") {
+      window.alert(duplicateRenameMessage(rename.id));
+      return;
+    }
+    if (rename.kind === "invalid") {
+      if (rename.validation.reason === "collision") {
+        window.alert(
+          `Local label "${rename.validation.id}" already exists in this document. Choose a different id.`,
+        );
+      } else {
+        window.alert(renameValidationMessage(promptedId));
+      }
+      return;
+    }
+
+    window.alert(LABEL_ACTION_MESSAGE);
   }, [editor.currentPath, editor.editorState?.view]);
 
   // ── Single command registry ──────────────────────────────────────────────
@@ -267,6 +358,9 @@ export function useAppOverlays({
     { id: "format.heading1", label: "Heading 1", category: "Format", action: () => dispatchFormatEvent("heading", { level: 1 }) },
     { id: "format.heading2", label: "Heading 2", category: "Format", action: () => dispatchFormatEvent("heading", { level: 2 }) },
     { id: "format.heading3", label: "Heading 3", category: "Format", action: () => dispatchFormatEvent("heading", { level: 3 }) },
+
+    // ── Edit ──────────────────────────────────────────────────────────────
+    { id: "edit.rename-local-label", label: "Rename Local Label", category: "Edit", action: handleRenameDocumentLabel },
 
     // ── Navigation ────────────────────────────────────────────────────────
     { id: "nav.go-to-line", label: "Go to Line", category: "Navigation", shortcut: `${modKey}+G`, hotkey: "mod+g", action: () => dialogs.setGotoLineOpen(true), hotkeyAction: () => dialogs.setGotoLineOpen((value) => !value) },
@@ -301,7 +395,7 @@ export function useAppOverlays({
       category: "File",
       action: () => { void editor.openFile(path); },
     })),
-  ], [dialogs, editor, workspace, handleExportHtml, handleBatchExportHtml, handleSaveAs, handleShowLabelBacklinks, onOpenFile, onQuit]);
+  ], [dialogs, editor, workspace, handleExportHtml, handleBatchExportHtml, handleSaveAs, handleShowLabelBacklinks, handleRenameDocumentLabel, onOpenFile, onQuit]);
 
   // ── Derive palette commands, hotkeys, and menu handlers ────────────────
   const commands = useMemo(() => toPaletteCommands(commandDefs), [commandDefs]);
