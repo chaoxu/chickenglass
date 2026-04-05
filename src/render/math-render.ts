@@ -19,6 +19,7 @@ import {
   focusEffect,
   focusTracker,
   serializeMacros,
+  widgetSourceMap,
 } from "./render-utils";
 import { mathMacrosField } from "./math-macros";
 import { documentAnalysisField } from "../semantics/codemirror-source";
@@ -243,6 +244,72 @@ export function resolveClickToSourcePos(
   return sourceFrom;
 }
 
+function findMathRegionAtPos(
+  regions: readonly MathSemantics[],
+  pos: number,
+): MathSemantics | undefined {
+  let lo = 0;
+  let hi = regions.length - 1;
+  let candidate: MathSemantics | undefined;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const region = regions[mid];
+    if (region.from <= pos) {
+      candidate = region;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  return candidate && pos <= candidate.to ? candidate : undefined;
+}
+
+function resolveLiveMathRegion(
+  view: EditorView,
+  el: HTMLElement,
+): MathSemantics | undefined {
+  const field = (view.state as { field?: typeof view.state.field }).field;
+  if (typeof field !== "function") return undefined;
+
+  const regions = view.state.field(documentAnalysisField).mathRegions;
+  const positions: number[] = [];
+  const seen = new Set<number>();
+
+  const addPos = (pos: number): void => {
+    if (!Number.isFinite(pos) || seen.has(pos)) return;
+    seen.add(pos);
+    positions.push(pos);
+  };
+
+  try {
+    addPos(view.posAtDOM(el));
+  } catch {
+    // Ignore stale DOM nodes during transient redraws.
+  }
+
+  const widgetRoot = el.closest<HTMLElement>(`.${CSS.mathInline}, .${CSS.mathDisplay}`);
+  if (widgetRoot && widgetRoot !== el) {
+    try {
+      addPos(view.posAtDOM(widgetRoot));
+    } catch {
+      // Ignore stale DOM nodes during transient redraws.
+    }
+  }
+
+  for (const pos of positions) {
+    const region = findMathRegionAtPos(regions, pos);
+    if (region) return region;
+  }
+
+  return undefined;
+}
+
+function findMathRoot(el: HTMLElement): HTMLElement {
+  return el.closest<HTMLElement>(`.${CSS.mathInline}, .${CSS.mathDisplay}`) ?? el;
+}
+
 /** Unified widget that renders both inline and display math via KaTeX. */
 export class MathWidget extends MacroAwareWidget {
   constructor(
@@ -264,8 +331,24 @@ export class MathWidget extends MacroAwareWidget {
       e.preventDefault();
       view.focus();
 
+      const root = findMathRoot(el);
+      const currentWidget = widgetSourceMap.get(root);
+      const liveWidget = currentWidget instanceof MathWidget ? currentWidget : this;
+      const region = resolveLiveMathRegion(view, root);
+      const sourceFrom = region?.from ?? liveWidget.sourceFrom;
+      const sourceTo = region?.to ?? liveWidget.sourceTo;
+      const contentOffset = region
+        ? region.contentFrom - region.from
+        : liveWidget.contentOffset;
+      const latex = region?.latex ?? liveWidget.latex;
+
       const pos = resolveClickToSourcePos(
-        el, e, this.latex, this.sourceFrom, this.sourceTo, this.contentOffset,
+        el,
+        e,
+        latex,
+        sourceFrom,
+        sourceTo,
+        contentOffset,
       );
       view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
     });
@@ -533,6 +616,59 @@ function rebuildMathDecorations(state: EditorState): DecorationSet {
   return buildMathDecorationsFromState(state, focused);
 }
 
+function clearSourceRangeAttrs(el: HTMLElement): void {
+  delete el.dataset.sourceFrom;
+  delete el.dataset.sourceTo;
+  widgetSourceMap.delete(el);
+}
+
+function collectRenderedMathWidgets(state: EditorState): Map<number, MathWidget> {
+  const widgets = new Map<number, MathWidget>();
+  const cursor = state.field(mathDecorationField).iter();
+  while (cursor.value) {
+    const widget = cursor.value.spec?.widget;
+    if (widget instanceof MathWidget && widget.sourceFrom >= 0) {
+      widgets.set(widget.sourceFrom, widget);
+    }
+    cursor.next();
+  }
+  return widgets;
+}
+
+function isWidgetVisible(
+  widget: MathWidget,
+  visibleRanges: readonly { from: number; to: number }[],
+): boolean {
+  return visibleRanges.some(
+    (range) => widget.sourceFrom < range.to && widget.sourceTo > range.from,
+  );
+}
+
+function collectVisibleRenderedMathWidgets(view: EditorView): MathWidget[] {
+  const widgetsByFrom = collectRenderedMathWidgets(view.state);
+  return [...widgetsByFrom.values()].filter((widget) => isWidgetVisible(widget, view.visibleRanges));
+}
+
+function syncRenderedMathWidgetMetadata(view: EditorView): void {
+  const widgets = collectVisibleRenderedMathWidgets(view);
+  const mathRoots = view.contentDOM.querySelectorAll<HTMLElement>(
+    `.${CSS.mathInline}, .${CSS.mathDisplay}`,
+  );
+  const count = Math.min(mathRoots.length, widgets.length);
+
+  for (let i = 0; i < count; i++) {
+    const el = mathRoots[i];
+    const widget = widgets[i];
+    el.dataset.sourceFrom = String(widget.sourceFrom);
+    el.dataset.sourceTo = String(widget.sourceTo);
+    widgetSourceMap.set(el, widget);
+  }
+
+  for (let i = count; i < mathRoots.length; i++) {
+    clearSourceRangeAttrs(mathRoots[i]);
+  }
+}
+
 /**
  * CM6 StateField that provides math rendering decorations.
  *
@@ -602,6 +738,41 @@ const mathDecorationField = StateField.define<DecorationSet>({
 });
 
 export { mathDecorationField as _mathDecorationFieldForTest };
+
+const mathWidgetMetadataPlugin = ViewPlugin.fromClass(
+  class {
+    private syncScheduled = false;
+
+    constructor(view: EditorView) {
+      this.scheduleSync(view);
+    }
+
+    update(update: ViewUpdate) {
+      if (
+        update.docChanged
+        || update.selectionSet
+        || update.focusChanged
+        || update.viewportChanged
+        || update.state.field(mathDecorationField) !== update.startState.field(mathDecorationField)
+      ) {
+        this.scheduleSync(update.view);
+      }
+    }
+
+    private scheduleSync(view: EditorView): void {
+      if (this.syncScheduled) return;
+      this.syncScheduled = true;
+      view.requestMeasure({
+        read: () => null,
+        write: () => {
+          this.syncScheduled = false;
+          if (!view.dom.isConnected) return;
+          syncRenderedMathWidgetMetadata(view);
+        },
+      });
+    }
+  },
+);
 
 // ── Idle KaTeX prewarm (#625) ──────────────────────────────────────────────
 
@@ -711,4 +882,11 @@ const mathPrewarmPlugin = ViewPlugin.fromClass(
 );
 
 /** CM6 extension that renders math expressions with KaTeX (Typora-style toggle). */
-export const mathRenderPlugin: Extension = [editorFocusField, focusTracker, mathMacrosField, mathDecorationField, mathPrewarmPlugin];
+export const mathRenderPlugin: Extension = [
+  editorFocusField,
+  focusTracker,
+  mathMacrosField,
+  mathDecorationField,
+  mathWidgetMetadataPlugin,
+  mathPrewarmPlugin,
+];
