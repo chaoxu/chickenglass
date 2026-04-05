@@ -18,13 +18,19 @@ import { createMockEditorView, createEditorState, getDecorationSpecs } from "../
 // jsdom lacks ResizeObserver — provide a no-op stub.
 class ResizeObserverStub {
   static instances: ResizeObserverStub[] = [];
+  private readonly callback: ResizeObserverCallback;
 
   observe = vi.fn();
   unobserve = vi.fn();
   disconnect = vi.fn();
 
-  constructor() {
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
     ResizeObserverStub.instances.push(this);
+  }
+
+  trigger(entries: ResizeObserverEntry[] = []): void {
+    this.callback(entries, this as unknown as ResizeObserver);
   }
 }
 vi.stubGlobal("ResizeObserver", ResizeObserverStub);
@@ -41,6 +47,31 @@ function makeTable(): ParsedTable {
 /** Stub EditorView with just enough shape for toDOM(). */
 function makeStubView(): EditorView {
   return createMockEditorView();
+}
+
+function makeMeasureAwareView() {
+  const requestMeasure = vi.fn((spec?: {
+    read?: () => unknown;
+    write?: (value: unknown) => void;
+  }) => {
+    const measured = spec?.read?.();
+    spec?.write?.(measured);
+  });
+
+  const view = createMockEditorView({
+    requestMeasure,
+    state: {
+      doc: { toString: () => "", length: 0 },
+    },
+  });
+
+  Object.assign(view, {
+    scrollDOM: { scrollTop: 0 },
+    lineBlockAtHeight: vi.fn(() => ({ from: 0 })),
+    coordsAtPos: vi.fn(() => ({ top: 0 })),
+  });
+
+  return { view, requestMeasure };
 }
 
 describe("TableWidget source range attributes", () => {
@@ -116,6 +147,46 @@ describe("TableWidget source range attributes", () => {
     expect(observer?.disconnect).toHaveBeenCalledTimes(1);
   });
 
+  it("skips the initial ResizeObserver callback and coalesces later remeasures", () => {
+    ResizeObserverStub.instances.length = 0;
+    let pendingFrame: FrameRequestCallback | null = null;
+    const requestAnimationFrameSpy = vi.spyOn(globalThis, "requestAnimationFrame")
+      .mockImplementation((callback: FrameRequestCallback) => {
+        pendingFrame = callback;
+        return 1;
+      });
+    const cancelAnimationFrameSpy = vi.spyOn(globalThis, "cancelAnimationFrame")
+      .mockImplementation(() => {});
+
+    try {
+      const { view, requestMeasure } = makeMeasureAwareView();
+      const widget = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 0, {});
+      widget.toDOM(view);
+      const observer = ResizeObserverStub.instances.at(-1);
+
+      expect(observer).toBeDefined();
+
+      observer?.trigger();
+      expect(requestMeasure).not.toHaveBeenCalled();
+
+      observer?.trigger();
+      observer?.trigger();
+      expect(requestAnimationFrameSpy).toHaveBeenCalledTimes(1);
+      expect(cancelAnimationFrameSpy).not.toHaveBeenCalled();
+      expect(requestMeasure).not.toHaveBeenCalled();
+
+      const frame = pendingFrame as FrameRequestCallback | null;
+      if (!frame) {
+        throw new Error("expected a pending resize frame");
+      }
+      frame(0);
+      expect(requestMeasure).toHaveBeenCalledTimes(1);
+    } finally {
+      requestAnimationFrameSpy.mockRestore();
+      cancelAnimationFrameSpy.mockRestore();
+    }
+  });
+
   it("disconnects the old ResizeObserver and reattaches on updateDOM reuse", () => {
     ResizeObserverStub.instances.length = 0;
 
@@ -141,6 +212,36 @@ describe("TableWidget source range attributes", () => {
     expect(dom.dataset.tableFrom).toBe("12");
     expect(dom.dataset.sourceFrom).toBe("12");
     expect(dom.querySelector("tbody td")?.textContent).toBe("3");
+  });
+
+  it("cancels a pending resize frame when updateDOM reuses the widget DOM", () => {
+    ResizeObserverStub.instances.length = 0;
+    const requestAnimationFrameSpy = vi.spyOn(globalThis, "requestAnimationFrame")
+      .mockImplementation(() => 7);
+    const cancelAnimationFrameSpy = vi.spyOn(globalThis, "cancelAnimationFrame")
+      .mockImplementation(() => {});
+
+    try {
+      const { view } = makeMeasureAwareView();
+      const oldWidget = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 0, {});
+      const dom = oldWidget.toDOM(view);
+      const oldObserver = ResizeObserverStub.instances.at(-1);
+      oldObserver?.trigger();
+      oldObserver?.trigger();
+
+      const nextTable: ParsedTable = {
+        header: { cells: [{ content: "A" }, { content: "B" }] },
+        alignments: ["none", "none"],
+        rows: [{ cells: [{ content: "3" }, { content: "4" }] }],
+      };
+      const newWidget = new TableWidget(nextTable, "| A | B |\n|---|---|\n| 3 | 4 |", 12, {});
+      newWidget.updateDOM(dom, view, oldWidget);
+
+      expect(cancelAnimationFrameSpy).toHaveBeenCalledWith(7);
+    } finally {
+      requestAnimationFrameSpy.mockRestore();
+      cancelAnimationFrameSpy.mockRestore();
+    }
   });
 });
 

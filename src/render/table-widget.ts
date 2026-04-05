@@ -10,7 +10,7 @@ import {
   findTablesInState,
 } from "./table-discovery";
 import { addRow, formatTable, type ParsedTable } from "./table-utils";
-import { RenderWidget } from "./render-utils";
+import { RenderWidget, requestScrollStabilizedMeasure } from "./render-utils";
 
 /**
  * Annotation attached to transactions dispatched by cell-edit sync.
@@ -47,20 +47,10 @@ export function shouldCommitBlurredInlineEditor(
   return snapshot !== null && current === snapshot && snapshot.cell === cell;
 }
 
-function areTableWidgetMacrosEqual(
-  left: Record<string, string>,
-  right: Record<string, string>,
-): boolean {
-  if (left === right) {
-    return true;
-  }
-
-  const leftEntries = Object.entries(left);
-  if (leftEntries.length !== Object.keys(right).length) {
-    return false;
-  }
-
-  return leftEntries.every(([key, value]) => right[key] === value);
+export function serializeTableWidgetMacros(macros: Record<string, string>): string {
+  return JSON.stringify(
+    Object.entries(macros).sort(([left], [right]) => left.localeCompare(right)),
+  );
 }
 
 /**
@@ -92,6 +82,8 @@ export class TableWidget extends RenderWidget {
   /** Reference to the EditorView, stored on first toDOM() call. */
   private editorView: EditorView | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private resizeMeasureFrame: number | null = null;
+  private readonly macroSignature: string;
 
   constructor(
     private readonly table: ParsedTable,
@@ -100,6 +92,7 @@ export class TableWidget extends RenderWidget {
     private readonly macros: Record<string, string>,
   ) {
     super();
+    this.macroSignature = serializeTableWidgetMacros(macros);
   }
 
   /**
@@ -109,7 +102,7 @@ export class TableWidget extends RenderWidget {
   eq(other: TableWidget): boolean {
     return (
       this.tableText === other.tableText &&
-      areTableWidgetMacrosEqual(this.macros, other.macros)
+      this.macroSignature === other.macroSignature
     );
   }
 
@@ -222,10 +215,28 @@ export class TableWidget extends RenderWidget {
     container.dataset.sourceTo = String(this.tableFrom + this.tableText.length);
   }
 
+  private clearPendingResizeMeasure(): void {
+    if (this.resizeMeasureFrame !== null) {
+      cancelAnimationFrame(this.resizeMeasureFrame);
+      this.resizeMeasureFrame = null;
+    }
+  }
+
   private observeContainer(container: HTMLElement, view: EditorView): void {
+    this.clearPendingResizeMeasure();
     this.resizeObserver?.disconnect();
+
+    let isFirstCallback = true;
     this.resizeObserver = new ResizeObserver(() => {
-      view.requestMeasure();
+      if (isFirstCallback) {
+        isFirstCallback = false;
+        return;
+      }
+      if (this.resizeMeasureFrame !== null) return;
+      this.resizeMeasureFrame = requestAnimationFrame(() => {
+        this.resizeMeasureFrame = null;
+        requestScrollStabilizedMeasure(view);
+      });
     });
     this.resizeObserver.observe(container);
   }
@@ -573,6 +584,7 @@ export class TableWidget extends RenderWidget {
     if (activeInlineEditor?.owner === from) {
       destroyActiveInlineEditor();
     }
+    from.clearPendingResizeMeasure();
     from.resizeObserver?.disconnect();
     from.resizeObserver = null;
     from.editorView = null;
@@ -584,6 +596,7 @@ export class TableWidget extends RenderWidget {
   }
 
   destroy(_dom: HTMLElement): void {
+    this.clearPendingResizeMeasure();
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     if (activeInlineEditor?.owner === this) {
