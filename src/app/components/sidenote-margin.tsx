@@ -16,6 +16,7 @@ import { EditorView } from "@codemirror/view";
 import { collectFootnotes, mathMacrosField } from "../../render";
 import { orderedFootnoteEntries } from "../../semantics/document";
 import { renderDocumentFragmentToDom } from "../../document-surfaces";
+import { CSS } from "../../constants/css-classes";
 
 interface SidenoteEntry {
   id: string;
@@ -273,11 +274,11 @@ export function SidenoteMargin({ view, invalidation }: SidenoteMarginProps) {
     }
 
     const scroller = view.scrollDOM;
-    let container = scroller.querySelector(".cf-sidenote-portal") as HTMLDivElement | null;
+    scroller.classList.add(CSS.sidenoteScroller);
+    let container = scroller.querySelector(`.${CSS.sidenotePortal}`) as HTMLDivElement | null;
     if (!container) {
       container = document.createElement("div");
-      container.className = "cf-sidenote-portal";
-      scroller.style.position = "relative";
+      container.className = CSS.sidenotePortal;
       scroller.appendChild(container);
     }
 
@@ -287,6 +288,7 @@ export function SidenoteMargin({ view, invalidation }: SidenoteMarginProps) {
       if (container && container.parentElement) {
         container.parentElement.removeChild(container);
       }
+      scroller.classList.remove(CSS.sidenoteScroller);
     };
   }, [view]);
 
@@ -418,10 +420,10 @@ export function SidenoteMargin({ view, invalidation }: SidenoteMarginProps) {
                 });
               }
             }}
-            className="cf-sidenote-entry"
+            className={CSS.sidenoteEntry}
             style={{ top: `${docY}px` }}
           >
-            <span className="cf-sidenote-entry-number">
+            <span className={CSS.sidenoteEntryNumber}>
               {entry.number}
             </span>
             <SidenoteContent text={entry.content} macros={macros} />

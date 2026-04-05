@@ -210,6 +210,10 @@
  * CM6 scroller. These are outside CM6's theme scope, so they live here. */
 
 /* Portal container — absolutely positioned to the right of content */
+.cf-sidenote-scroller {
+  position: relative;
+}
+
 .cf-sidenote-portal {
   position: absolute;
   top: 0;
@@ -270,6 +274,22 @@
   -webkit-hyphens: manual;
 }
 
+.cf-bibliography-footnotes {
+  margin-top: 2em;
+}
+
+.cf-bibliography-footnotes .cf-bibliography-entry {
+  cursor: pointer;
+  font-size: 0.85em;
+  line-height: 1.6;
+  margin-bottom: 4px;
+}
+
+.cf-bibliography-entry-number {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
 .cf-bibliography-entry + .cf-bibliography-entry {
   margin-top: 0.15em;
 }
@@ -320,6 +340,72 @@
 
 .cf-math-inline .katex {
   font-size: inherit;
+}
+
+/* ── Breadcrumb overlay ─────────────────────────────────────────────────── */
+
+.cf-breadcrumbs {
+  opacity: 0;
+  transition: opacity var(--cf-transition, 0.15s);
+}
+
+.cf-breadcrumbs-visible {
+  opacity: 1;
+}
+
+.cf-breadcrumbs-hidden {
+  height: 4px;
+  overflow: hidden;
+}
+
+.cf-breadcrumbs-instant {
+  transition: none;
+}
+
+/* ── Lightweight nested inline editors ──────────────────────────────────── */
+
+.cf-inline-editor {
+  background-color: transparent !important;
+  border: none !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  margin: 0 !important;
+  min-height: auto !important;
+  padding: 0 !important;
+}
+
+.cf-inline-editor.cm-focused {
+  outline: none !important;
+}
+
+.cf-inline-editor .cm-gutters {
+  display: none !important;
+}
+
+.cf-inline-editor .cm-scroller {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  overflow: visible !important;
+}
+
+.cf-inline-editor .cm-content {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  margin: 0 !important;
+  max-width: none !important;
+  min-height: auto !important;
+  padding: 0 !important;
+}
+
+.cf-inline-editor .cm-line {
+  padding: 0 !important;
+}
+
+.cf-inline-editor .cm-cursor {
+  border-left-color: currentColor;
 }
 
 /* Display math: centered, no extra margin. Shared between CM6 decorations,

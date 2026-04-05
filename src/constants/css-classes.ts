@@ -104,9 +104,11 @@ export const CSS = {
 
   /** Bibliography. */
   bibliography: "cf-bibliography",
+  bibliographyFootnotes: "cf-bibliography-footnotes",
   bibliographyHeading: "cf-bibliography-heading",
   bibliographyList: "cf-bibliography-list",
   bibliographyEntry: "cf-bibliography-entry",
+  bibliographyEntryNumber: "cf-bibliography-entry-number",
   bibliographyBacklinks: "cf-bibliography-backlinks",
   bibliographyBacklink: "cf-bibliography-backlink",
 
@@ -225,6 +227,7 @@ export const CSS = {
 
   /** Sidenote body rendered in margin. */
   sidenoteBodyRendered: "cf-sidenote-body-rendered",
+  sidenoteScroller: "cf-sidenote-scroller",
   sidenotePortal: "cf-sidenote-portal",
   sidenoteEntry: "cf-sidenote-entry",
   sidenoteEntryNumber: "cf-sidenote-entry-number",
@@ -239,4 +242,13 @@ export const CSS = {
 
   /** Hover preview tooltip container. */
   hoverPreviewTooltip: "cf-hover-preview-tooltip",
+
+  /** Breadcrumb overlay. */
+  breadcrumbs: "cf-breadcrumbs",
+  breadcrumbsVisible: "cf-breadcrumbs-visible",
+  breadcrumbsHidden: "cf-breadcrumbs-hidden",
+  breadcrumbsInstant: "cf-breadcrumbs-instant",
+
+  /** Lightweight nested inline editor. */
+  inlineEditor: "cf-inline-editor",
 } as const;

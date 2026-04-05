@@ -24,6 +24,7 @@ import { createInlineEditor } from "./inline-editor";
 import { bibDataField } from "../citations/citation-render";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { referenceRenderPlugin } from "../render/reference-render";
+import { CSS } from "../constants/css-classes";
 import { CSL_FIXTURES, makeBibStore } from "../test-utils";
 import { CslProcessor } from "../citations/csl-processor";
 
@@ -157,6 +158,21 @@ describe("inline editor parser coverage (#406)", () => {
 });
 
 describe("inline editor decoration rendering (#406)", () => {
+  it("adds a root class for CSS-based inline editor chrome overrides", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = createInlineEditor({
+      parent,
+      doc: "text",
+      macros: {},
+      onChange: () => {},
+    });
+
+    expect(view.dom.classList.contains(CSS.inlineEditor)).toBe(true);
+    view.destroy();
+    parent.remove();
+  });
+
   it("renders bold text with cf-bold mark when cursor is outside", () => {
     const view = createInlineEditorView("**bold** text", {}, 13);
     const classes = getDecorationClasses(view);
