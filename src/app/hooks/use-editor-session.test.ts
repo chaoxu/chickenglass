@@ -67,6 +67,7 @@ const { useEditorSession } = await import("./use-editor-session");
 
 interface HarnessRef {
   result: UseEditorSessionReturn;
+  renderCount: number;
 }
 
 function createHarness(
@@ -77,9 +78,11 @@ function createHarness(
 ): { Harness: FC; ref: HarnessRef } {
   const ref: HarnessRef = {
     result: null as unknown as UseEditorSessionReturn,
+    renderCount: 0,
   };
 
   const Harness: FC = () => {
+    ref.renderCount += 1;
     ref.result = useEditorSession({
       fs,
       refreshTree: async () => {},
@@ -175,7 +178,7 @@ describe("useEditorSession", () => {
     container.remove();
   });
 
-  it("keeps liveDocs, dirty state, and docRevision in sync while typing", async () => {
+  it("keeps liveDocs, dirty state, and the active-document signal in sync while typing", async () => {
     const fs = new MemoryFileSystem({ "draft.md": "hello" });
     const { Harness, ref } = createHarness(fs);
 
@@ -185,19 +188,45 @@ describe("useEditorSession", () => {
     });
 
     expect(ref.result.editorDoc).toBe("hello");
-    expect(ref.result.docRevision).toBeGreaterThan(0);
+    expect(ref.result.activeDocumentSignal.getSnapshot().revision).toBeGreaterThan(0);
     expect(ref.result.currentDocument?.dirty).toBe(false);
-    const initialRevision = ref.result.docRevision;
+    const initialRevision = ref.result.activeDocumentSignal.getSnapshot().revision;
 
     act(() => {
       ref.result.handleDocChange(replaceCurrentDoc(ref, "hello!"));
     });
 
     expect(ref.result.editorDoc).toBe("hello");
-    expect(ref.result.docRevision).toBe(initialRevision + 1);
+    expect(ref.result.activeDocumentSignal.getSnapshot().revision).toBe(initialRevision + 1);
     expect(ref.result.currentDocument?.dirty).toBe(true);
     expect(ref.result.getCurrentDocText()).toBe("hello!");
     expect(editorDocumentToString(ref.result.liveDocs.current.get("draft.md") ?? emptyEditorDocument)).toBe("hello!");
+  });
+
+  it("does not rerender the session hook on repeated edits once the document is already dirty", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "hello" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+    });
+
+    const rendersAfterOpen = ref.renderCount;
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "hello!"));
+    });
+
+    const rendersAfterFirstEdit = ref.renderCount;
+    expect(rendersAfterFirstEdit).toBeGreaterThan(rendersAfterOpen);
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "hello!!"));
+    });
+
+    expect(ref.renderCount).toBe(rendersAfterFirstEdit);
+    expect(ref.result.getCurrentDocText()).toBe("hello!!");
   });
 
   it("keeps typing on the incremental Text model until a caller explicitly needs a flat string", async () => {

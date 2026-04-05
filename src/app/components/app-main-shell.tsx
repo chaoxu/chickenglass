@@ -15,7 +15,7 @@ interface AppMainShellProps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "editorDoc" | "docRevision" | "getCurrentDocText" | "pluginManager" | "handleDocChange" | "handleProgrammaticDocChange" | "setDocumentSourceMap" | "handleEditorStateChange" | "handleHeadingsChange" | "handleDiagnosticsChange" | "handleEditorDocumentReady" | "editorMode" | "handleModeChange" | "isMarkdownFile"
+    "currentPath" | "editorDoc" | "activeDocumentSignal" | "getCurrentDocText" | "pluginManager" | "handleDocChange" | "handleProgrammaticDocChange" | "setDocumentSourceMap" | "handleEditorStateChange" | "handleHeadingsChange" | "handleDiagnosticsChange" | "handleEditorDocumentReady" | "editorMode" | "handleModeChange" | "isMarkdownFile"
   >;
   onOpenPalette: () => void;
 }
@@ -54,7 +54,7 @@ export function AppMainShell({
           onDiagnosticsChange={editor.handleDiagnosticsChange}
           onDocumentReady={editor.handleEditorDocumentReady}
           editorMode={editor.editorMode}
-          docRevision={editor.docRevision}
+          activeDocumentSignal={editor.activeDocumentSignal}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center select-none text-sm text-[var(--cf-muted)]">
@@ -66,7 +66,7 @@ export function AppMainShell({
         editorMode={editor.editorMode}
         onModeChange={editor.handleModeChange}
         onOpenPalette={onOpenPalette}
-        docRevision={editor.docRevision}
+        activeDocumentSignal={editor.activeDocumentSignal}
         getDocText={editor.getCurrentDocText}
         isMarkdown={editor.isMarkdownFile}
       />

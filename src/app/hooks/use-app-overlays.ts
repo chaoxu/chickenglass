@@ -36,7 +36,7 @@ interface AppOverlayDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "docRevision" | "getCurrentDocText" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
+    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
   >;
   onOpenFile: () => void;
   onQuit: () => void;
@@ -144,6 +144,7 @@ export function useAppOverlays({
   onQuit,
 }: AppOverlayDeps): AppOverlayController {
   const [indexer] = useState(() => new BackgroundIndexer());
+  const [searchSyncRevision, setSearchSyncRevision] = useState(0);
   const [searchVersion, setSearchVersion] = useState(0);
   const [labelBacklinks, setLabelBacklinks] = useState<DocumentLabelBacklinksResult | null>(null);
   const activeSearchDoc = useMemo(
@@ -152,12 +153,32 @@ export function useAppOverlays({
         ? editor.getCurrentDocText()
         : ""
     ),
-    [dialogs.searchOpen, editor.currentPath, editor.docRevision, editor.getCurrentDocText],
+    [dialogs.searchOpen, editor.currentPath, searchSyncRevision, editor.getCurrentDocText],
   );
 
   useEffect(() => {
     setLabelBacklinks(null);
-  }, [editor.currentPath, editor.docRevision]);
+  }, [editor.currentPath]);
+
+  useEffect(() => {
+    if (labelBacklinks === null) {
+      return;
+    }
+
+    return editor.activeDocumentSignal.subscribe(() => {
+      setLabelBacklinks(null);
+    });
+  }, [editor.activeDocumentSignal, labelBacklinks]);
+
+  useEffect(() => {
+    if (!dialogs.searchOpen) {
+      return;
+    }
+
+    return editor.activeDocumentSignal.subscribe(() => {
+      setSearchSyncRevision((revision) => revision + 1);
+    });
+  }, [dialogs.searchOpen, editor.activeDocumentSignal]);
 
   useEffect(() => {
     if (!dialogs.searchOpen) {

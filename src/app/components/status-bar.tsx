@@ -5,6 +5,7 @@ import { subscribeFpsMeter, getFpsMeterSnapshot } from "../fps-meter";
 import { cn } from "../lib/utils";
 import { useEditorTelemetry } from "../stores/editor-telemetry-store";
 import { buildInfo } from "../build-info";
+import type { ActiveDocumentSignal, ActiveDocumentSnapshot } from "../active-document-signal";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -17,8 +18,8 @@ export interface StatusBarProps {
   editorMode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
   onOpenPalette?: () => void;
-  /** Monotonic active-document revision used to refresh lazily computed stats. */
-  docRevision?: number;
+  /** External signal used to refresh full stats without rerendering the shell. */
+  activeDocumentSignal?: ActiveDocumentSignal;
   /** Returns the latest active-document text on demand. */
   getDocText?: () => string;
   /** Whether the active file is markdown (non-md files are Source-only). */
@@ -32,6 +33,11 @@ const MODE_LABELS: Record<EditorMode, string> = {
   source: "Source",
   read: "Read",
 };
+const EMPTY_ACTIVE_DOCUMENT_SNAPSHOT: ActiveDocumentSnapshot = {
+  path: null,
+  revision: 0,
+};
+const unsubscribeNoop = () => {};
 
 // ── StatsPopover ───────────────────────────────────────────────────────────────
 
@@ -137,7 +143,7 @@ export function StatusBar({
   editorMode,
   onModeChange,
   onOpenPalette,
-  docRevision = 0,
+  activeDocumentSignal,
   getDocText,
   isMarkdown = true,
 }: StatusBarProps) {
@@ -147,11 +153,28 @@ export function StatusBar({
   const cursorCol = useEditorTelemetry((s) => s.cursorCol);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const wordCountRef = useRef<HTMLButtonElement | null>(null);
+  const subscribeToActiveDocument = useCallback((onStoreChange: () => void) => {
+    if (!popoverOpen || !activeDocumentSignal) {
+      return unsubscribeNoop;
+    }
+    return activeDocumentSignal.subscribe(onStoreChange);
+  }, [activeDocumentSignal, popoverOpen]);
+  const getActiveDocumentSnapshot = useCallback(() => {
+    if (!popoverOpen || !activeDocumentSignal) {
+      return EMPTY_ACTIVE_DOCUMENT_SNAPSHOT;
+    }
+    return activeDocumentSignal.getSnapshot();
+  }, [activeDocumentSignal, popoverOpen]);
+  const activeDocument = useSyncExternalStore(
+    subscribeToActiveDocument,
+    getActiveDocumentSnapshot,
+    getActiveDocumentSnapshot,
+  );
 
   // Full stats only when the popover is open — keeps sentence segmentation off the edit hot path.
   const stats = useMemo<DocStats | null>(
     () => (popoverOpen ? computeDocStats(getDocText?.() ?? "") : null),
-    [docRevision, getDocText, popoverOpen],
+    [activeDocument.revision, getDocText, popoverOpen],
   );
 
   const cycleMode = useCallback(() => {

@@ -21,6 +21,55 @@ const AppOverlays = lazy(() =>
   import("./components/app-overlays").then((m) => ({ default: m.AppOverlays })),
 );
 
+interface ConnectedAppOverlaysProps {
+  fs: FileSystem;
+  dialogs: ReturnType<typeof useDialogs>;
+  workspace: ReturnType<typeof useAppWorkspaceSession>;
+  editor: ReturnType<typeof useAppEditorShell>;
+  unsavedChanges: ReturnType<typeof useUnsavedChangesDialog>;
+  onOpenFile: () => void;
+  onOpenFolder: () => void;
+  onQuit: () => void;
+}
+
+function ConnectedAppOverlays({
+  fs,
+  dialogs,
+  workspace,
+  editor,
+  unsavedChanges,
+  onOpenFile,
+  onOpenFolder,
+  onQuit,
+}: ConnectedAppOverlaysProps) {
+  const overlays = useAppOverlays({
+    fs,
+    dialogs,
+    suspendAutoSave: unsavedChanges.request !== null,
+    suspendAutoSaveRef: unsavedChanges.pendingRef,
+    suspendAutoSaveVersionRef: unsavedChanges.suspensionVersionRef,
+    workspace: {
+      ...workspace,
+      handleOpenFolder: onOpenFolder,
+    },
+    editor,
+    onOpenFile,
+    onQuit,
+  });
+
+  return (
+    <Suspense fallback={null}>
+      <AppOverlays
+        workspace={workspace}
+        editor={editor}
+        dialogs={dialogs}
+        overlays={overlays}
+        unsavedChanges={unsavedChanges}
+      />
+    </Suspense>
+  );
+}
+
 function AppInner() {
   const fs = useFileSystem();
   const appContainerRef = useRef<HTMLDivElement | null>(null);
@@ -82,21 +131,6 @@ function AppInner() {
     isSelfChange,
   });
 
-  const overlays = useAppOverlays({
-    fs,
-    dialogs,
-    suspendAutoSave: unsavedChanges.request !== null,
-    suspendAutoSaveRef: unsavedChanges.pendingRef,
-    suspendAutoSaveVersionRef: unsavedChanges.suspensionVersionRef,
-    workspace: {
-      ...workspace,
-      handleOpenFolder: fileDialogs.handleOpenFolderRequest,
-    },
-    editor,
-    onOpenFile: fileDialogs.handleOpenFileRequest,
-    onQuit: fileDialogs.handleQuitRequest,
-  });
-
   useAppDebug({
     openProject: (path) => fileDialogs.openProjectInCurrentWindow(path),
     openFile: editor.openFile,
@@ -134,17 +168,18 @@ function AppInner() {
           resolvedTheme={workspace.resolvedTheme}
           workspace={workspace}
           editor={editor}
-          onOpenPalette={overlays.openPalette}
+          onOpenPalette={() => dialogs.setPaletteOpen(true)}
         />
-        <Suspense fallback={null}>
-          <AppOverlays
-            workspace={workspace}
-            editor={editor}
-            dialogs={dialogs}
-            overlays={overlays}
-            unsavedChanges={unsavedChanges}
-          />
-        </Suspense>
+        <ConnectedAppOverlays
+          fs={fs}
+          dialogs={dialogs}
+          workspace={workspace}
+          editor={editor}
+          unsavedChanges={unsavedChanges}
+          onOpenFile={fileDialogs.handleOpenFileRequest}
+          onOpenFolder={fileDialogs.handleOpenFolderRequest}
+          onQuit={fileDialogs.handleQuitRequest}
+        />
       </div>
     </SidebarProvider>
   );
