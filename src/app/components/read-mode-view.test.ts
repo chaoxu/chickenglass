@@ -220,4 +220,26 @@ describe("ReadModeView scroll restoration", () => {
     ).toBe(true);
     expect(el.innerHTML).toContain('src="data:image/png;base64,PDFPAGE1"');
   });
+
+  it("sanitizes title and body HTML before insertion", () => {
+    markdownToHtmlMock.mockReturnValue(
+      '<p>Body<script>alert(1)</script><img src="https://example.com/x.png" onerror="alert(1)"></p>',
+    );
+    renderDocumentFragmentToHtmlMock.mockReturnValue(
+      'Title<img src="javascript:alert(1)"><script>alert(1)</script>',
+    );
+
+    const el = render({
+      content: "# Doc",
+      frontmatterConfig: { title: "Unsafe" },
+    });
+
+    expect(el.innerHTML).toContain("Body");
+    expect(el.innerHTML).toContain("Title");
+    expect(el.innerHTML).toContain('src="https://example.com/x.png"');
+    expect(el.innerHTML).not.toContain("<script");
+    expect(el.innerHTML).not.toContain("alert(1)");
+    expect(el.innerHTML).not.toContain("onerror");
+    expect(el.innerHTML).not.toContain('src="javascript:alert(1)"');
+  });
 });

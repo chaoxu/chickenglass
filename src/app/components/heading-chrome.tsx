@@ -1,4 +1,5 @@
 import { renderDocumentFragmentToHtml } from "../../document-surfaces";
+import { sanitizeRenderedHtml } from "../../render/inline-shared";
 
 interface HeadingLabelProps {
   /** Raw heading text (without `#` markers or attribute blocks). */
@@ -13,11 +14,15 @@ interface HeadingLabelProps {
  * identically across all heading chrome UI.
  */
 export function HeadingLabel({ text, className }: HeadingLabelProps) {
+  const html = sanitizeRenderedHtml(
+    renderDocumentFragmentToHtml({ kind: "chrome-label", text }),
+  );
+
   return (
     <span
       className={className}
       dangerouslySetInnerHTML={{
-        __html: renderDocumentFragmentToHtml({ kind: "chrome-label", text }),
+        __html: html,
       }}
     />
   );

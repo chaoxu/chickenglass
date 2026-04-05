@@ -157,6 +157,10 @@ describe("createBlogDemoFileSystem fallback", () => {
 });
 
 describe("MemoryFileSystem.readFileBinary", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("round-trips binary data through write + read", async () => {
     const fs = new MemoryFileSystem();
     const data = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]); // PNG header
@@ -182,6 +186,32 @@ describe("MemoryFileSystem.readFileBinary", () => {
     await fs.writeFileBinary("all-bytes.bin", data);
     const result = await fs.readFileBinary("all-bytes.bin");
     expect(result).toEqual(data);
+  });
+
+  it("fetches missing demo assets through an encoded demo URL", async () => {
+    const bytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const fs = new MemoryFileSystem();
+    const result = await fs.readFileBinary("assets/My Figure 1.png");
+
+    expect(fetchMock).toHaveBeenCalledWith("/demo/assets/My%20Figure%201.png");
+    expect(result).toEqual(bytes);
+  });
+
+  it("rejects demo asset traversal paths before fetch", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const fs = new MemoryFileSystem();
+    await expect(fs.readFileBinary("../secret.png")).rejects.toThrow("File not found");
+    await expect(fs.readFileBinary("/etc/passwd")).rejects.toThrow("File not found");
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

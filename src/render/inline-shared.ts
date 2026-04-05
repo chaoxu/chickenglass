@@ -166,6 +166,13 @@ const SAFE_CSL_ATTRIBUTES: readonly string[] = [
   "class", "id", "href", "title",
 ];
 
+const DANGEROUS_RENDERED_HTML_ELEMENTS: readonly string[] = [
+  "script", "style", "noscript", "template", "iframe", "object", "embed",
+];
+
+const RENDERED_HTML_EXTRA_TAGS = ["semantics", "annotation"] as const;
+const RENDERED_HTML_EXTRA_ATTRIBUTES = ["encoding"] as const;
+
 /**
  * A DOMPurify instance configured for CSL bibliography HTML.
  *
@@ -173,6 +180,7 @@ const SAFE_CSL_ATTRIBUTES: readonly string[] = [
  * do not leak into other call sites.
  */
 let cslPurify: ReturnType<typeof createDOMPurify> | null = null;
+let renderedHtmlPurify: ReturnType<typeof createDOMPurify> | null = null;
 
 function getCslPurify(): ReturnType<typeof createDOMPurify> {
   if (cslPurify) {
@@ -215,5 +223,54 @@ export function sanitizeCslHtml(raw: string): string {
     ALLOWED_TAGS: [...SAFE_CSL_ELEMENTS],
     ALLOWED_ATTR: [...SAFE_CSL_ATTRIBUTES],
     FORBID_CONTENTS: [...DANGEROUS_CSL_ELEMENTS],
+  });
+}
+
+function isSafeImageDataUrl(url: string): boolean {
+  const cleaned = url.replace(/\s/g, "");
+  return /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/]+=*$/i.test(cleaned);
+}
+
+function isSafeRenderedHtmlUrl(
+  attrName: "href" | "src",
+  tagName: string,
+  url: string,
+): boolean {
+  if (attrName === "src" && tagName.toLowerCase() === "img" && isSafeImageDataUrl(url)) {
+    return true;
+  }
+  return isSafeUrl(url);
+}
+
+function getRenderedHtmlPurify(): ReturnType<typeof createDOMPurify> {
+  if (renderedHtmlPurify) {
+    return renderedHtmlPurify;
+  }
+  if (typeof window === "undefined") {
+    throw new Error("sanitizeRenderedHtml requires a browser-like window");
+  }
+
+  const purify = createDOMPurify(window);
+  purify.addHook("afterSanitizeAttributes", (node) => {
+    const href = node.getAttribute("href");
+    if (href && !isSafeRenderedHtmlUrl("href", node.tagName, href)) {
+      node.removeAttribute("href");
+    }
+
+    const src = node.getAttribute("src");
+    if (src && !isSafeRenderedHtmlUrl("src", node.tagName, src)) {
+      node.removeAttribute("src");
+    }
+  });
+  renderedHtmlPurify = purify;
+  return purify;
+}
+
+export function sanitizeRenderedHtml(raw: string): string {
+  return getRenderedHtmlPurify().sanitize(raw, {
+    USE_PROFILES: { html: true, svg: true, mathMl: true },
+    ADD_TAGS: [...RENDERED_HTML_EXTRA_TAGS],
+    ADD_ATTR: [...RENDERED_HTML_EXTRA_ATTRIBUTES],
+    FORBID_CONTENTS: [...DANGEROUS_RENDERED_HTML_ELEMENTS],
   });
 }

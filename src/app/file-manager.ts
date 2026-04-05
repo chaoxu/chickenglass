@@ -1,5 +1,6 @@
 import { base64ToUint8Array, uint8ArrayToBase64 } from "./lib/utils";
 import { getBlogFiles } from "./demo-blog";
+import { normalizeProjectPath } from "../lib/project-paths";
 
 // Re-export canonical types from src/lib/types.ts so that existing
 // `from "./file-manager"` / `from "../file-manager"` imports keep working.
@@ -7,6 +8,26 @@ export type { FileEntry, FileSystem } from "../lib/types";
 
 // Local import for use in this file's implementation.
 import type { FileEntry, FileSystem } from "../lib/types";
+
+function buildDemoAssetUrl(path: string): string | null {
+  const normalized = normalizeProjectPath(path);
+  if (
+    !normalized ||
+    path.startsWith("/") ||
+    path.startsWith("\\") ||
+    path.includes("?") ||
+    path.includes("#")
+  ) {
+    return null;
+  }
+
+  const segments = normalized.split("/");
+  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")) {
+    return null;
+  }
+
+  return `/demo/${segments.map((segment) => encodeURIComponent(segment)).join("/")}`;
+}
 
 /** In-memory filesystem for demo/testing purposes. */
 export class MemoryFileSystem implements FileSystem {
@@ -184,8 +205,12 @@ export class MemoryFileSystem implements FileSystem {
     }
     // Fallback: try fetching as a static asset (e.g., PDF files served by Vite
     // from the demo/ directory that weren't loaded into the in-memory filesystem).
+    const demoAssetUrl = buildDemoAssetUrl(path);
+    if (!demoAssetUrl) {
+      throw new Error(`File not found: ${path}`);
+    }
     try {
-      const resp = await fetch(`/demo/${path}`);
+      const resp = await fetch(demoAssetUrl);
       if (resp.ok) {
         return new Uint8Array(await resp.arrayBuffer());
       }

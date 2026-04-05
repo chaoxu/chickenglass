@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import katex from "katex";
 import { isSafeUrl } from "../lib/url-utils";
 import { buildKatexOptions } from "../lib/katex-options";
-import { MARK_NODES, clearKatexHtmlCache, renderKatexToHtml, sanitizeCslHtml } from "./inline-shared";
+import {
+  MARK_NODES,
+  clearKatexHtmlCache,
+  renderKatexToHtml,
+  sanitizeCslHtml,
+  sanitizeRenderedHtml,
+} from "./inline-shared";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -218,6 +224,31 @@ describe("sanitizeCslHtml", () => {
     const output = sanitizeCslHtml(input);
     expect(output).not.toContain("<article");
     expect(output).toContain("preserved");
+  });
+});
+
+describe("sanitizeRenderedHtml", () => {
+  it("preserves KaTeX mathml metadata and data-image previews", () => {
+    const output = sanitizeRenderedHtml(
+      '<div><img src="data:image/png;base64,QUJD" alt="Preview"><math><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></div>',
+    );
+
+    expect(output).toContain('src="data:image/png;base64,QUJD"');
+    expect(output).toContain("<semantics>");
+    expect(output).toContain('encoding="application/x-tex"');
+  });
+
+  it("strips dangerous elements, event handlers, and unsafe URLs", () => {
+    const output = sanitizeRenderedHtml(
+      '<div><script>alert(1)</script><img src="https://example.com/img.png" onerror="alert(1)"><a href="javascript:alert(1)">bad</a><img src="data:text/html;base64,PHNjcmlwdD4="></div>',
+    );
+
+    expect(output).not.toContain("<script");
+    expect(output).not.toContain("alert(1)");
+    expect(output).not.toContain("onerror");
+    expect(output).not.toContain("javascript:");
+    expect(output).toContain('src="https://example.com/img.png"');
+    expect(output).not.toContain('src="data:text/html;base64,PHNjcmlwdD4="');
   });
 });
 
