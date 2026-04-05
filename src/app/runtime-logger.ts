@@ -1,13 +1,13 @@
 import { isTauri } from "../lib/tauri";
 
-type RuntimeLogSource = "console.error" | "window.onerror" | "unhandledrejection";
+export type RuntimeLogSource = "console.error" | "window.onerror" | "unhandledrejection";
 
 interface AppMetadata {
   readonly name: string | null;
   readonly version: string | null;
 }
 
-interface RuntimeLogEntry {
+interface RuntimeLogPayload {
   readonly channel: "frontend-runtime";
   readonly source: RuntimeLogSource;
   readonly timestamp: string;
@@ -21,15 +21,101 @@ interface RuntimeLogEntry {
   readonly details?: Record<string, unknown>;
 }
 
+export interface RuntimeLogEntry {
+  readonly id: number;
+  readonly source: RuntimeLogSource;
+  readonly timestamp: string;
+  readonly message: string;
+  readonly stack?: string;
+  readonly errorName?: string;
+  readonly details?: Record<string, unknown>;
+}
+
 interface ConsoleMethods {
   readonly error: typeof console.error;
   readonly warn: typeof console.warn;
 }
 
 const INSTALL_WARNING_PREFIX = "[runtime-logger]";
+const MAX_RUNTIME_LOG_ENTRIES = 200;
+const RUNTIME_LOGGER_STATE_KEY = Symbol.for("coflat.runtime-logger.state");
 
-let installPromise: Promise<void> | null = null;
-let metadataPromise: Promise<AppMetadata> | null = null;
+interface RuntimeLoggerState {
+  installPromise: Promise<void> | null;
+  metadataPromise: Promise<AppMetadata> | null;
+  entries: readonly RuntimeLogEntry[];
+  nextEntryId: number;
+  listeners: Set<() => void>;
+  installedConsoleError: typeof console.error | null;
+  installedOnError: OnErrorEventHandler | null;
+  installedOnUnhandledRejection: Window["onunhandledrejection"];
+}
+
+function getRuntimeLoggerState(): RuntimeLoggerState {
+  const host = globalThis as Record<PropertyKey, unknown>;
+  const existing = host[RUNTIME_LOGGER_STATE_KEY];
+  if (existing) {
+    return existing as RuntimeLoggerState;
+  }
+
+  const state: RuntimeLoggerState = {
+    installPromise: null,
+    metadataPromise: null,
+    entries: [],
+    nextEntryId: 1,
+    listeners: new Set(),
+    installedConsoleError: null,
+    installedOnError: null,
+    installedOnUnhandledRejection: null,
+  };
+  host[RUNTIME_LOGGER_STATE_KEY] = state;
+  return state;
+}
+
+function notifyRuntimeLogListeners(state: RuntimeLoggerState): void {
+  for (const listener of state.listeners) {
+    listener();
+  }
+}
+
+export function isRuntimeLogPanelEnabled(): boolean {
+  return import.meta.env.DEV || import.meta.env.MODE === "test";
+}
+
+function shouldInstallRuntimeLogging(): boolean {
+  return isRuntimeLogPanelEnabled() || isTauri();
+}
+
+function appendRuntimeLog(entry: Omit<RuntimeLogEntry, "id">): void {
+  if (!isRuntimeLogPanelEnabled()) return;
+
+  const state = getRuntimeLoggerState();
+  const nextEntry: RuntimeLogEntry = {
+    ...entry,
+    id: state.nextEntryId++,
+  };
+  state.entries = [nextEntry, ...state.entries].slice(0, MAX_RUNTIME_LOG_ENTRIES);
+  notifyRuntimeLogListeners(state);
+}
+
+export function subscribeRuntimeLogs(callback: () => void): () => void {
+  const state = getRuntimeLoggerState();
+  state.listeners.add(callback);
+  return () => {
+    state.listeners.delete(callback);
+  };
+}
+
+export function getRuntimeLogsSnapshot(): readonly RuntimeLogEntry[] {
+  return getRuntimeLoggerState().entries;
+}
+
+export function clearRuntimeLogs(): void {
+  const state = getRuntimeLoggerState();
+  if (state.entries.length === 0) return;
+  state.entries = [];
+  notifyRuntimeLogListeners(state);
+}
 
 function safeJsonStringify(value: unknown): string {
   const seen = new WeakSet<object>();
@@ -174,8 +260,9 @@ function createUnhandledRejectionEntry(reason: unknown): {
 }
 
 async function getAppMetadata(consoleMethods: ConsoleMethods): Promise<AppMetadata> {
-  if (!metadataPromise) {
-    metadataPromise = import("@tauri-apps/api/app")
+  const state = getRuntimeLoggerState();
+  if (!state.metadataPromise) {
+    state.metadataPromise = import("@tauri-apps/api/app")
       .then(async ({ getName, getVersion }) => {
         const [name, version] = await Promise.all([getName(), getVersion()]);
         return { name, version };
@@ -185,7 +272,7 @@ async function getAppMetadata(consoleMethods: ConsoleMethods): Promise<AppMetada
         return { name: null, version: null };
       });
   }
-  return metadataPromise;
+  return state.metadataPromise;
 }
 
 async function logRuntimeEntry(
@@ -198,16 +285,30 @@ async function logRuntimeEntry(
     readonly details?: Record<string, unknown>;
   },
 ): Promise<void> {
+  const timestamp = new Date().toISOString();
+  appendRuntimeLog({
+    source,
+    timestamp,
+    message: entry.message,
+    stack: entry.stack,
+    errorName: entry.errorName,
+    details: entry.details,
+  });
+
+  if (!isTauri()) {
+    return;
+  }
+
   try {
     const [{ error: logError }, metadata] = await Promise.all([
       import("@tauri-apps/plugin-log"),
       getAppMetadata(consoleMethods),
     ]);
 
-    const payload: RuntimeLogEntry = {
+    const payload: RuntimeLogPayload = {
       channel: "frontend-runtime",
       source,
-      timestamp: new Date().toISOString(),
+      timestamp,
       appName: metadata.name,
       appVersion: metadata.version,
       location: window.location.href,
@@ -224,21 +325,31 @@ async function logRuntimeEntry(
   }
 }
 
-export async function installDesktopRuntimeLogging(): Promise<void> {
-  if (!isTauri()) return;
-  if (installPromise) return installPromise;
+export async function installRuntimeLogging(): Promise<void> {
+  if (!shouldInstallRuntimeLogging()) return;
+
+  const state = getRuntimeLoggerState();
+  if (state.installPromise) {
+    return state.installPromise;
+  }
 
   const consoleMethods: ConsoleMethods = {
     error: console.error.bind(console),
     warn: console.warn.bind(console),
   };
 
-  installPromise = (async () => {
-    await import("@tauri-apps/plugin-log");
-    void getAppMetadata(consoleMethods);
+  state.installPromise = (async () => {
+    if (isTauri()) {
+      try {
+        await import("@tauri-apps/plugin-log");
+      } catch (error: unknown) {
+        consoleMethods.warn(`${INSTALL_WARNING_PREFIX} failed to preload desktop logging`, error);
+      }
+      void getAppMetadata(consoleMethods);
+    }
 
     const previousOnError = window.onerror;
-    window.onerror = (message, source, lineno, colno, error) => {
+    const nextOnError: OnErrorEventHandler = (message, source, lineno, colno, error) => {
       void logRuntimeEntry(
         consoleMethods,
         "window.onerror",
@@ -246,9 +357,10 @@ export async function installDesktopRuntimeLogging(): Promise<void> {
       );
       return previousOnError?.call(window, message, source, lineno, colno, error) ?? false;
     };
+    window.onerror = nextOnError;
 
     const previousUnhandledRejection = window.onunhandledrejection;
-    window.onunhandledrejection = (event) => {
+    const nextUnhandledRejection: Window["onunhandledrejection"] = (event) => {
       void logRuntimeEntry(
         consoleMethods,
         "unhandledrejection",
@@ -256,17 +368,27 @@ export async function installDesktopRuntimeLogging(): Promise<void> {
       );
       return previousUnhandledRejection?.call(window, event);
     };
+    window.onunhandledrejection = nextUnhandledRejection;
 
-    console.error = (...args: unknown[]) => {
+    const nextConsoleError: typeof console.error = (...args: unknown[]) => {
       consoleMethods.error(...args);
       void logRuntimeEntry(consoleMethods, "console.error", createConsoleEntry(args));
     };
+    console.error = nextConsoleError;
+
+    state.installedConsoleError = nextConsoleError;
+    state.installedOnError = nextOnError;
+    state.installedOnUnhandledRejection = nextUnhandledRejection;
   })().catch((error: unknown) => {
-    installPromise = null;
-    consoleMethods.warn(`${INSTALL_WARNING_PREFIX} failed to install desktop runtime logging`, error);
+    state.installPromise = null;
+    consoleMethods.warn(`${INSTALL_WARNING_PREFIX} failed to install runtime logging`, error);
   });
 
-  return installPromise;
+  return state.installPromise;
+}
+
+export async function installDesktopRuntimeLogging(): Promise<void> {
+  await installRuntimeLogging();
 }
 
 export async function getDesktopLogDirectory(): Promise<string | null> {

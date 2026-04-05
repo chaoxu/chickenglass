@@ -1,6 +1,7 @@
 import { Diagnostics } from "./diagnostics";
 import { FileTree } from "./file-tree";
 import { Outline } from "./outline";
+import { RuntimeLogs } from "./runtime-logs";
 import {
   Sidebar,
   SidebarContent,
@@ -15,6 +16,7 @@ import type {
   SidebarTab,
 } from "../hooks/use-app-workspace-session";
 import { usePersistentTreeState } from "../hooks/use-file-tree-controller";
+import { isRuntimeLogPanelEnabled } from "../runtime-logger";
 
 interface AppSidebarShellProps {
   workspace: Pick<
@@ -29,6 +31,7 @@ interface AppSidebarShellProps {
 
 export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
   const fileTreePersistRef = usePersistentTreeState();
+  const showRuntimeLogs = isRuntimeLogPanelEnabled();
 
   return (
     <div data-sidebar className="flex shrink-0">
@@ -51,6 +54,7 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
             <TabsTrigger value="files">Files</TabsTrigger>
             <TabsTrigger value="outline">Outline</TabsTrigger>
             <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
+            {showRuntimeLogs ? <TabsTrigger value="runtime">Runtime</TabsTrigger> : null}
           </TabsList>
 
           <SidebarContent>
@@ -74,6 +78,11 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
             <TabsContent value="diagnostics" className="min-h-full">
               <Diagnostics diagnostics={editor.diagnostics} onSelect={editor.handleOutlineSelect} />
             </TabsContent>
+            {showRuntimeLogs ? (
+              <TabsContent value="runtime" className="min-h-full">
+                <RuntimeLogs />
+              </TabsContent>
+            ) : null}
           </SidebarContent>
         </Tabs>
       </Sidebar>

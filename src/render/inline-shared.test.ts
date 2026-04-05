@@ -153,6 +153,23 @@ describe("renderKatexToHtml", () => {
     const html = renderKatexToHtml("\\href{https://example.com}{x}", false, {});
     expect(html).toContain('href="https://example.com"');
   });
+
+  it("logs each KaTeX render failure only once per expression", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(katex, "renderToString").mockImplementation(() => {
+      throw new Error("Bad math");
+    });
+
+    expect(() => renderKatexToHtml("\\bad", false, {})).toThrow("Bad math");
+    expect(() => renderKatexToHtml("\\bad", false, {})).toThrow("Bad math");
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[katex] failed to render math",
+      { latex: "\\bad", isDisplay: false },
+      expect.any(Error),
+    );
+  });
 });
 
 // ── sanitizeCslHtml ────────────────────────────────────────────────────────
