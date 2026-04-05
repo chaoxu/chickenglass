@@ -9,6 +9,7 @@ import {
   WidgetType,
 } from "@codemirror/view";
 import {
+  type ChangeSet,
   type EditorState,
   type Extension,
   type Range,
@@ -544,6 +545,31 @@ export function snapshotRanges(ranges: readonly { from: number; to: number }[]):
   return ranges.map(r => ({ from: r.from, to: r.to }));
 }
 
+function mapVisibleRanges(
+  ranges: readonly VisibleRange[],
+  changes: ChangeSet,
+): VisibleRange[] {
+  return mergeRanges(
+    ranges.map((range) => {
+      const from = changes.mapPos(range.from, 1);
+      const to = changes.mapPos(range.to, -1);
+      return { from, to: Math.max(from, to) };
+    }),
+  );
+}
+
+function rangeIntersectsRanges(
+  from: number,
+  to: number,
+  ranges: readonly VisibleRange[],
+): boolean {
+  for (const range of ranges) {
+    if (from < range.to && to > range.from) return true;
+    if (range.from >= to) break;
+  }
+  return false;
+}
+
 const NO_SKIP = () => false;
 
 /**
@@ -560,6 +586,17 @@ export type CursorSensitiveCollectFn = (
   ranges: readonly VisibleRange[],
   skip: (nodeFrom: number) => boolean,
 ) => Range<Decoration>[];
+
+/**
+ * Optional doc-change invalidation callback for cursor-sensitive view plugins.
+ *
+ * Return dirty ranges in the NEW document when mapped decorations can be
+ * retained outside those fragments. Return `null` to force a full rebuild for
+ * the current update.
+ */
+export type CursorSensitiveDocChangeRangesFn = (
+  update: ViewUpdate,
+) => readonly VisibleRange[] | null;
 
 /**
  * Factory for cursor-sensitive ViewPlugins with differential viewport updates.
@@ -579,6 +616,9 @@ export type CursorSensitiveCollectFn = (
  *     Allows narrowing selection-triggered rebuilds (e.g. only when the cursor
  *     crosses a sensitive node boundary).  Receives the ViewUpdate and should
  *     return true when a full rebuild is needed.
+ *   - docChangeRanges: opt-in incremental doc-change invalidation. Return
+ *     dirty ranges in the new document when mapping retained decorations
+ *     outside those fragments is safe, or `null` to force a full rebuild.
  *   - extraRebuildCheck: additional conditions that trigger a full rebuild
  *     (e.g. cache field changes for the image-render plugin).
  *   - pluginSpec: additional PluginSpec fields (e.g. eventHandlers).
@@ -587,58 +627,121 @@ export function createCursorSensitiveViewPlugin(
   collectFn: CursorSensitiveCollectFn,
   options?: {
     selectionCheck?: (update: ViewUpdate) => boolean;
+    docChangeRanges?: CursorSensitiveDocChangeRangesFn;
     extraRebuildCheck?: (update: ViewUpdate) => boolean;
     pluginSpec?: Omit<PluginSpec<PluginValue>, "decorations">;
   },
 ): Extension {
   class CursorSensitivePlugin implements PluginValue {
-    decorations: DecorationSet;
-    private coveredRanges: VisibleRange[];
+    decorations!: DecorationSet;
+    private coveredRanges!: VisibleRange[];
 
     constructor(view: EditorView) {
+      this.rebuild(view);
+    }
+
+    private rebuild(view: EditorView): void {
       const items = collectFn(view, view.visibleRanges, NO_SKIP);
       this.decorations = buildDecorations(items);
       this.coveredRanges = snapshotRanges(view.visibleRanges);
+    }
+
+    private incrementalViewportUpdate(update: ViewUpdate): void {
+      const newRanges = update.view.visibleRanges;
+      const newlyVisible = diffVisibleRanges(this.coveredRanges, newRanges);
+
+      if (newlyVisible.length > 0) {
+        const skip = (pos: number) => isPositionInRanges(pos, this.coveredRanges);
+        const newItems = collectFn(update.view, newlyVisible, skip);
+        if (newItems.length > 0) {
+          this.decorations = this.decorations.update({
+            add: newItems,
+            sort: true,
+          });
+        }
+        this.coveredRanges = mergeRanges([
+          ...this.coveredRanges,
+          ...newlyVisible,
+        ]);
+      }
+      // No newly-visible ranges → keep existing decorations unchanged.
+    }
+
+    private incrementalDocUpdate(
+      update: ViewUpdate,
+      dirtyRanges: readonly VisibleRange[],
+    ): void {
+      const mappedCoveredRanges = mapVisibleRanges(this.coveredRanges, update.changes);
+      const currentVisibleRanges = snapshotRanges(update.view.visibleRanges);
+      const visibleDirtyRanges = mergeRanges(
+        dirtyRanges.filter((range) =>
+          rangeIntersectsRanges(range.from, range.to, currentVisibleRanges)
+        ),
+      );
+      const missingVisible = diffVisibleRanges(mappedCoveredRanges, currentVisibleRanges);
+      const rebuildRanges = mergeRanges([...visibleDirtyRanges, ...missingVisible]);
+
+      let nextDecorations = this.decorations.map(update.changes).update({
+        filterFrom: 0,
+        filterTo: update.state.doc.length,
+        filter: (from, to) =>
+          rangeIntersectsRanges(from, to, currentVisibleRanges) &&
+          !rangeIntersectsRanges(from, to, visibleDirtyRanges),
+      });
+
+      if (rebuildRanges.length > 0) {
+        const skip = (pos: number) =>
+          isPositionInRanges(pos, mappedCoveredRanges) &&
+          !isPositionInRanges(pos, visibleDirtyRanges);
+        const newItems = collectFn(update.view, rebuildRanges, skip);
+        if (newItems.length > 0) {
+          nextDecorations = nextDecorations.update({
+            add: newItems,
+            sort: true,
+          });
+        }
+      }
+
+      this.decorations = nextDecorations;
+      this.coveredRanges = currentVisibleRanges;
     }
 
     update(update: ViewUpdate): void {
       const selectionNeedsRebuild = options?.selectionCheck
         ? options.selectionCheck(update)
         : update.selectionSet;
+      const extraNeedsRebuild = options?.extraRebuildCheck?.(update) ?? false;
 
-      const needsFullRebuild =
-        update.docChanged ||
+      if (update.docChanged) {
+        const dirtyRanges = options?.docChangeRanges?.(update);
+        const needsFullRebuild =
+          selectionNeedsRebuild ||
+          update.focusChanged ||
+          extraNeedsRebuild ||
+          dirtyRanges === null ||
+          dirtyRanges === undefined;
+
+        if (needsFullRebuild) {
+          this.rebuild(update.view);
+          return;
+        }
+
+        this.incrementalDocUpdate(update, dirtyRanges);
+        return;
+      }
+
+      if (
         selectionNeedsRebuild ||
         update.focusChanged ||
         syntaxTree(update.state) !== syntaxTree(update.startState) ||
-        (options?.extraRebuildCheck?.(update) ?? false);
-
-      if (needsFullRebuild) {
-        const items = collectFn(update.view, update.view.visibleRanges, NO_SKIP);
-        this.decorations = buildDecorations(items);
-        this.coveredRanges = snapshotRanges(update.view.visibleRanges);
+        extraNeedsRebuild
+      ) {
+        this.rebuild(update.view);
         return;
       }
 
       if (update.viewportChanged) {
-        const newRanges = update.view.visibleRanges;
-        const newlyVisible = diffVisibleRanges(this.coveredRanges, newRanges);
-
-        if (newlyVisible.length > 0) {
-          const skip = (pos: number) => isPositionInRanges(pos, this.coveredRanges);
-          const newItems = collectFn(update.view, newlyVisible, skip);
-          if (newItems.length > 0) {
-            this.decorations = this.decorations.update({
-              add: newItems,
-              sort: true,
-            });
-          }
-          this.coveredRanges = mergeRanges([
-            ...this.coveredRanges,
-            ...newlyVisible,
-          ]);
-        }
-        // No newly-visible ranges → keep existing decorations unchanged.
+        this.incrementalViewportUpdate(update);
       }
     }
   }

@@ -1087,6 +1087,50 @@ describe("createCursorSensitiveViewPlugin", () => {
     expect(callCount).toBe(1);
   });
 
+  it("rebuilds only dirty doc ranges when docChangeRanges opts in", () => {
+    let receivedRanges: readonly { from: number; to: number }[] = [];
+    const ext = createCursorSensitiveViewPlugin(
+      (_v, ranges) => {
+        receivedRanges = ranges;
+        return [];
+      },
+      {
+        selectionCheck: () => false,
+        docChangeRanges: (update) => {
+          const dirtyRanges: { from: number; to: number }[] = [];
+          update.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
+            dirtyRanges.push({ from: fromB, to: toB });
+          });
+          return dirtyRanges;
+        },
+      },
+    );
+    view = createTestView("hello world", { extensions: [markdown(), ext] });
+    view.dispatch({ selection: { anchor: 0 } });
+    receivedRanges = [];
+    view.dispatch({ changes: { from: 6, to: 11, insert: "friend" } });
+    expect(receivedRanges).toEqual([{ from: 6, to: 12 }]);
+  });
+
+  it("falls back to a full rebuild when docChangeRanges returns null", () => {
+    let receivedRanges: readonly { from: number; to: number }[] = [];
+    const ext = createCursorSensitiveViewPlugin(
+      (_v, ranges) => {
+        receivedRanges = ranges;
+        return [];
+      },
+      {
+        selectionCheck: () => false,
+        docChangeRanges: () => null,
+      },
+    );
+    view = createTestView("hello world", { extensions: [markdown(), ext] });
+    view.dispatch({ selection: { anchor: 0 } });
+    receivedRanges = [];
+    view.dispatch({ changes: { from: 6, to: 11, insert: "friend" } });
+    expect(receivedRanges).toEqual([{ from: 0, to: view.state.doc.length }]);
+  });
+
   it("calls collectFn on selection change (full rebuild)", () => {
     let callCount = 0;
     const ext = createCursorSensitiveViewPlugin(() => {

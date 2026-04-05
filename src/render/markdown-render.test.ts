@@ -1,9 +1,24 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { Decoration, EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
-import { markdownRenderPlugin, cursorContextKey, markdownShouldUpdate, _collectMarkdownItemsForTest as collectMarkdownItems } from "./markdown-render";
-import { cursorInRange, createSimpleViewPlugin } from "./render-utils";
-import { createEditorState, createTestView } from "../test-utils";
+import {
+  computeMarkdownDocChangeRanges,
+  markdownRenderPlugin,
+  cursorContextKey,
+  markdownShouldUpdate,
+  _collectMarkdownItemsForTest as collectMarkdownItems,
+} from "./markdown-render";
+import {
+  createCursorSensitiveViewPlugin,
+  cursorInRange,
+  createSimpleViewPlugin,
+} from "./render-utils";
+import {
+  createEditorState,
+  createTestView,
+  getDecorationSpecs,
+  hasMarkClassInRange,
+} from "../test-utils";
 
 /** Create an EditorView with the markdown render plugin at the given cursor position. */
 function createView(doc: string, cursorPos?: number): EditorView {
@@ -11,6 +26,11 @@ function createView(doc: string, cursorPos?: number): EditorView {
     cursorPos,
     extensions: [markdown(), markdownRenderPlugin],
   });
+}
+
+function getAllDecorationSpecs(view: EditorView) {
+  return view.state.facet(EditorView.decorations)
+    .flatMap((source) => getDecorationSpecs(typeof source === "function" ? source(view) : source));
 }
 
 describe("cursorInRange", () => {
@@ -382,5 +402,71 @@ describe("markdownShouldUpdate (rebuild narrowing, #579)", () => {
     const { getBuildCount } = createCountingView("# Hello **bold**\n\ntext", 3);
     view.dispatch({ selection: { anchor: 12 } }); // into bold inside heading
     expect(getBuildCount()).toBe(1);
+  });
+});
+
+describe("computeMarkdownDocChangeRanges (#823)", () => {
+  let view: EditorView;
+
+  afterEach(() => {
+    view?.destroy();
+  });
+
+  function createDocRangeView(doc: string, cursorPos = 0) {
+    let receivedRanges: readonly { from: number; to: number }[] = [];
+    const ext = createCursorSensitiveViewPlugin(
+      (_view, ranges) => {
+        receivedRanges = ranges;
+        return [];
+      },
+      {
+        selectionCheck: (update) =>
+          cursorContextKey(update.state) !== cursorContextKey(update.startState),
+        docChangeRanges: computeMarkdownDocChangeRanges,
+      },
+    );
+    view = createTestView(doc, {
+      cursorPos,
+      extensions: [markdown(), ext],
+    });
+    // Warm-up: first dispatch after construction has a spurious focusChanged.
+    view.dispatch({ selection: { anchor: cursorPos } });
+    receivedRanges = [];
+    return { getRanges: () => receivedRanges };
+  }
+
+  it("keeps prose typing scoped to the dirty fragment", () => {
+    const { getRanges } = createDocRangeView("intro text\n\n**bold** tail", 5);
+    view.dispatch({ changes: { from: 2, insert: "X" } });
+    expect(getRanges()).toEqual([{ from: 2, to: 3 }]);
+  });
+
+  it("expands edits inside bold text to the full formatted node", () => {
+    const doc = "plain **bold** tail";
+    const boldFrom = doc.indexOf("**bold**");
+    const boldTo = boldFrom + "**bold**".length;
+    const { getRanges } = createDocRangeView(doc, doc.length);
+    view.dispatch({ changes: { from: boldFrom + 4, insert: "!" } });
+    expect(getRanges()).toEqual([{ from: boldFrom, to: boldTo + 1 }]);
+  });
+});
+
+describe("markdownRenderPlugin doc-change invalidation (#823)", () => {
+  let view: EditorView;
+
+  afterEach(() => {
+    view?.destroy();
+  });
+
+  it("removes stale hidden markers when emphasis syntax is destroyed", () => {
+    view = createView("**bold** tail", 12);
+    const before = getAllDecorationSpecs(view);
+    expect(hasMarkClassInRange(before, 0, 2, "cf-hidden")).toBe(true);
+
+    view.dispatch({ changes: { from: 6, to: 8, insert: "" } });
+
+    const after = getAllDecorationSpecs(view);
+    expect(view.state.doc.toString()).toBe("**bold tail");
+    expect(hasMarkClassInRange(after, 0, 2, "cf-hidden")).toBe(false);
   });
 });
