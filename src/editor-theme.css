@@ -287,6 +287,7 @@
 
 .cf-bibliography-entry > .csl-entry > .csl-right-inline {
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .cf-bibliography-backlinks {
