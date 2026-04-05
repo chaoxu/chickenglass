@@ -115,7 +115,7 @@ describe("math preview positioning", () => {
     }
   }
 
-  it("defers math position measurement out of the update cycle and repositions on editor scroll", async () => {
+  it("defers math position measurement out of the update cycle and repositions from autoUpdate callbacks", async () => {
     coordsByPos.set(mathFrom, makeCoords(200, 80, 100));
     coordsByPos.set(mathTo, makeCoords(240, 80, 120));
 
@@ -138,7 +138,7 @@ describe("math preview positioning", () => {
 
     coordsByPos.set(mathFrom, makeCoords(200, -120, -100));
     coordsByPos.set(mathTo, makeCoords(240, -120, -80));
-    view.scrollDOM.dispatchEvent(new Event("scroll"));
+    autoUpdateCallbacks[0]?.();
     expect(coordsAtPosSpy).toHaveBeenCalledTimes(2);
     expect(positionMeasures.size).toBe(1);
 
@@ -199,7 +199,7 @@ describe("math preview positioning", () => {
     positionMeasures.clear();
     coordsByPos.set(mathFrom, makeCoords(200, -120, -100));
     coordsByPos.set(mathTo, makeCoords(240, -120, -80));
-    view.scrollDOM.dispatchEvent(new Event("scroll"));
+    autoUpdateCallbacks[0]?.();
     await flushScheduledMeasures();
 
     expect(positionMeasures.size).toBe(0);
@@ -209,8 +209,8 @@ describe("math preview positioning", () => {
     view.destroy();
   });
 
-  it("keeps polling the active math anchor when scroll callbacks are unavailable", async () => {
-    vi.useFakeTimers();
+  it("does not start a polling timer while the preview is open", async () => {
+    const setIntervalSpy = vi.spyOn(window, "setInterval");
     coordsByPos.set(mathFrom, makeCoords(200, 80, 100));
     coordsByPos.set(mathTo, makeCoords(240, 80, 120));
 
@@ -219,14 +219,40 @@ describe("math preview positioning", () => {
 
     const panel = view.dom.querySelector<HTMLElement>(".cf-math-preview");
     expect(panel).not.toBeNull();
+    expect(setIntervalSpy).not.toHaveBeenCalled();
 
-    coordsByPos.set(mathFrom, makeCoords(200, -120, -100));
-    coordsByPos.set(mathTo, makeCoords(240, -120, -80));
+    view.destroy();
+    setIntervalSpy.mockRestore();
+  });
 
-    expect(panel?.style.top).toBe("124px");
-    await vi.advanceTimersByTimeAsync(16);
+  it("repositions after inline math edits through the editor update path", async () => {
+    coordsByPos.set(mathFrom, makeCoords(200, 80, 100));
+    coordsByPos.set(mathTo, makeCoords(240, 80, 120));
+
+    const view = createPreviewView(doc, mathFrom + 1);
+    await flushScheduledMeasures();
+
+    const panel = view.dom.querySelector<HTMLElement>(".cf-math-preview");
+    expect(panel).not.toBeNull();
     expect(panel?.style.left).toBe("200px");
-    expect(panel?.style.top).toBe("-76px");
+    expect(panel?.style.top).toBe("124px");
+
+    const newMathTo = mathTo + 2;
+    coordsByPos.delete(mathTo);
+    coordsByPos.set(mathFrom, makeCoords(230, 90, 110));
+    coordsByPos.set(newMathTo, makeCoords(290, 90, 130));
+
+    view.dispatch({
+      changes: { from: mathTo - 1, insert: "yz" },
+      selection: { anchor: newMathTo - 1 },
+    });
+
+    expect(positionMeasures.size).toBe(1);
+    expect(autoUpdateCallbacks).toHaveLength(1);
+    await flushScheduledMeasures();
+
+    expect(panel?.style.left).toBe("230px");
+    expect(panel?.style.top).toBe("134px");
 
     view.destroy();
   });

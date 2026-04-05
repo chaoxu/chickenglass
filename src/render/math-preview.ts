@@ -71,7 +71,6 @@ class MathPreviewPlugin implements PluginValue {
   private anchorFromPos = -1;
   private anchorToPos = -1;
   private positionRequestId = 0;
-  private positionPollId: number | null = null;
   private lastAnchorRect: AnchorRect = EMPTY_ANCHOR_RECT;
   private readonly autoUpdateAnchor: VirtualElement;
 
@@ -142,7 +141,6 @@ class MathPreviewPlugin implements PluginValue {
     this.anchorToPos = info.to;
     this.startAutoUpdate();
     this.requestPositionUpdate();
-    this.startPositionPolling();
   }
 
   private createPanel(): void {
@@ -151,7 +149,6 @@ class MathPreviewPlugin implements PluginValue {
     // Panel itself is draggable
     panel.addEventListener("mousedown", (e) => {
       this.isDragging = true;
-      this.stopPositionPolling();
       const rect = panel.getBoundingClientRect();
       this.dragOffsetX = e.clientX - rect.left;
       this.dragOffsetY = e.clientY - rect.top;
@@ -169,9 +166,6 @@ class MathPreviewPlugin implements PluginValue {
 
     const onMouseUp = () => {
       this.isDragging = false;
-      if (!this.manualPosition) {
-        this.startPositionPolling();
-      }
     };
 
     document.addEventListener("mousemove", onMouseMove);
@@ -210,33 +204,9 @@ class MathPreviewPlugin implements PluginValue {
 
   private startAutoUpdate(): void {
     if (!this.panel || this.cleanupAutoUpdate) return;
-    const onScroll = () => {
-      this.requestPositionUpdate();
-    };
-    this.view.scrollDOM.addEventListener("scroll", onScroll, { passive: true });
-    const cleanupFloating = autoUpdate(this.autoUpdateAnchor, this.panel, () => {
+    this.cleanupAutoUpdate = autoUpdate(this.autoUpdateAnchor, this.panel, () => {
       this.requestPositionUpdate();
     });
-    this.cleanupAutoUpdate = () => {
-      this.view.scrollDOM.removeEventListener("scroll", onScroll);
-      cleanupFloating();
-    };
-  }
-
-  private startPositionPolling(): void {
-    if (!this.panel || this.manualPosition || this.isDragging || this.positionPollId !== null) {
-      return;
-    }
-
-    this.positionPollId = window.setInterval(() => {
-      this.syncPositionFromAnchor();
-    }, 16);
-  }
-
-  private stopPositionPolling(): void {
-    if (this.positionPollId === null) return;
-    window.clearInterval(this.positionPollId);
-    this.positionPollId = null;
   }
 
   private readAnchorRect(): AnchorRect | null {
@@ -262,16 +232,6 @@ class MathPreviewPlugin implements PluginValue {
     } catch {
       return null;
     }
-  }
-
-  private syncPositionFromAnchor(): void {
-    if (!this.panel || this.isDragging || this.manualPosition) return;
-    const rect = this.readAnchorRect();
-    if (!rect) return;
-
-    this.lastAnchorRect = rect;
-    this.panel.style.left = `${rect.left}px`;
-    this.panel.style.top = `${rect.bottom + 4}px`;
   }
 
   private requestPositionUpdate(): void {
@@ -309,7 +269,6 @@ class MathPreviewPlugin implements PluginValue {
   private removePanel(): void {
     this.positionRequestId += 1;
     this.lastAnchorRect = EMPTY_ANCHOR_RECT;
-    this.stopPositionPolling();
     this.cleanupAutoUpdate?.();
     this.cleanupAutoUpdate = null;
     this.cleanupListeners?.();
