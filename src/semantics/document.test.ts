@@ -264,9 +264,9 @@ describe("document semantics analyzers", () => {
     expect(findTrailingHeadingAttributes('Title {key="value"}')).not.toBeNull();
   });
 
-  // --- Regression: #354 — skipped heading levels produce "1.0.1" instead of "1.1" ---
-  it("skips zero-valued intermediate counters for non-sequential heading levels", () => {
-    // `# A` (level 1) then `### C` (level 3) should produce "1.1", not "1.0.1"
+  // --- Regression: #906 — skipped heading levels must preserve zero counters ---
+  it("preserves zero-valued intermediate counters for non-sequential heading levels", () => {
+    // `# A` (level 1) then `### C` (level 3) should preserve the missing h2 slot.
     const doc = "# A\n\n### C\n";
     const tree = parser.parse(doc);
 
@@ -274,17 +274,40 @@ describe("document semantics analyzers", () => {
 
     expect(headings).toHaveLength(2);
     expect(headings[0]).toMatchObject({ level: 1, text: "A", number: "1" });
-    expect(headings[1]).toMatchObject({ level: 3, text: "C", number: "1.1" });
+    expect(headings[1]).toMatchObject({ level: 3, text: "C", number: "1.0.1" });
   });
 
   it("handles multiple skipped levels correctly", () => {
-    // `# A` then `#### D` should produce "1.1"
+    // `# A` then `#### D` should preserve the missing h2 and h3 slots.
     const doc = "# A\n\n#### D\n";
     const tree = parser.parse(doc);
 
     const headings = analyzeHeadings(stringTextSource(doc), tree);
 
-    expect(headings[1]).toMatchObject({ level: 4, text: "D", number: "1.1" });
+    expect(headings[1]).toMatchObject({
+      level: 4,
+      text: "D",
+      number: "1.0.0.1",
+    });
+  });
+
+  it("preserves leading zero counters for orphan headings", () => {
+    const doc = "## Orphan\n\n### Child\n";
+    const tree = parser.parse(doc);
+
+    const headings = analyzeHeadings(stringTextSource(doc), tree);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]).toMatchObject({
+      level: 2,
+      text: "Orphan",
+      number: "0.1",
+    });
+    expect(headings[1]).toMatchObject({
+      level: 3,
+      text: "Child",
+      number: "0.1.1",
+    });
   });
 
   it("sequential heading levels still produce full numbering", () => {

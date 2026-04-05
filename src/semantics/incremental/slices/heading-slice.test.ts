@@ -140,7 +140,7 @@ describe("heading slice", () => {
       text: heading.text,
       number: heading.number,
     }))).toEqual([
-      { level: 2, text: "A", number: "1" },
+      { level: 2, text: "A", number: "0.1" },
       { level: 1, text: "B", number: "1" },
     ]);
   });
@@ -198,5 +198,36 @@ describe("heading slice", () => {
     expect(after).toBe(before);
     expect(after.headings[0]).toBe(before.headings[0]);
     expect(after.headings[1]).toBe(before.headings[1]);
+  });
+
+  it("preserves zero-valued counters when edits orphan a heading subtree", () => {
+    const doc = [
+      "# Intro",
+      "",
+      "## Methods",
+      "",
+      "### Details",
+      "",
+    ].join("\n");
+    const beforeState = createState(doc);
+    const before = analyzeHeadingSlice(beforeState);
+    const tr = beforeState.update({
+      changes: { from: 0, to: doc.indexOf("## Methods") },
+    });
+    const delta = buildSemanticDelta(tr);
+    const after = mergeHeadingSlice(
+      before,
+      delta,
+      extractDirtyHeadingWindows(tr.state, delta),
+    );
+
+    expect(after.headings.map((heading) => ({
+      level: heading.level,
+      text: heading.text,
+      number: heading.number,
+    }))).toEqual([
+      { level: 2, text: "Methods", number: "0.1" },
+      { level: 3, text: "Details", number: "0.1.1" },
+    ]);
   });
 });
