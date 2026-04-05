@@ -20,14 +20,13 @@ import { createMockEditorView, createEditorState, getDecorationSpecs } from "../
 class ResizeObserverStub {
   static instances: ResizeObserverStub[] = [];
 
+  observe = vi.fn();
+  unobserve = vi.fn();
   disconnect = vi.fn();
 
   constructor() {
     ResizeObserverStub.instances.push(this);
   }
-
-  observe() {}
-  unobserve() {}
 }
 vi.stubGlobal("ResizeObserver", ResizeObserverStub);
 
@@ -111,6 +110,33 @@ describe("TableWidget source range attributes", () => {
     widget.destroy(dom);
 
     expect(observer?.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("disconnects the old ResizeObserver and reattaches on updateDOM reuse", () => {
+    ResizeObserverStub.instances.length = 0;
+
+    const oldWidget = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 0, {});
+    const dom = oldWidget.toDOM(makeStubView());
+    const oldObserver = ResizeObserverStub.instances.at(-1);
+
+    const nextTable: ParsedTable = {
+      header: { cells: [{ content: "A" }, { content: "B" }] },
+      alignments: ["none", "none"],
+      rows: [{ cells: [{ content: "3" }, { content: "4" }] }],
+    };
+    const newWidget = new TableWidget(nextTable, "| A | B |\n|---|---|\n| 3 | 4 |", 12, {});
+
+    const result = newWidget.updateDOM(dom, makeStubView(), oldWidget);
+    const newObserver = ResizeObserverStub.instances.at(-1);
+
+    expect(result).toBe(true);
+    expect(oldObserver?.disconnect).toHaveBeenCalledTimes(1);
+    expect(newObserver).toBeDefined();
+    expect(newObserver).not.toBe(oldObserver);
+    expect(newObserver?.observe).toHaveBeenCalledWith(dom);
+    expect(dom.dataset.tableFrom).toBe("12");
+    expect(dom.dataset.sourceFrom).toBe("12");
+    expect(dom.querySelector("tbody td")?.textContent).toBe("3");
   });
 });
 

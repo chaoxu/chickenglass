@@ -206,20 +206,24 @@ export class TableWidget extends RenderWidget {
     this.syncToRoot(section, row, col, content, "commit");
   }
 
-  /**
-   * Render the parsed table as an HTML <table> with thead/tbody.
-   * Each cell gets data attributes for row, column, and section,
-   * and inline markdown rendering. Clicking a cell creates an InlineEditor.
-   */
-  toDOM(view: EditorView): HTMLElement {
-    this.editorView = view;
-
-    const container = document.createElement("div");
+  private syncContainerAttrs(container: HTMLElement): void {
     container.className = "cf-table-widget";
     container.dataset.tableTextHash = this.tableText;
     container.dataset.tableFrom = String(this.tableFrom);
     container.dataset.sourceFrom = String(this.tableFrom);
     container.dataset.sourceTo = String(this.tableFrom + this.tableText.length);
+  }
+
+  private observeContainer(container: HTMLElement, view: EditorView): void {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = new ResizeObserver(() => {
+      view.requestMeasure();
+    });
+    this.resizeObserver.observe(container);
+  }
+
+  private buildTableDOM(view: EditorView): HTMLTableElement {
+    this.editorView = view;
 
     const tableEl = document.createElement("table");
 
@@ -539,24 +543,42 @@ export class TableWidget extends RenderWidget {
       showWidgetContextMenu(view, tableRange, section, row, col, event.clientX, event.clientY);
     });
 
-    container.appendChild(tableEl);
+    return tableEl;
+  }
 
-    this.resizeObserver?.disconnect();
-    this.resizeObserver = new ResizeObserver(() => {
-      view.requestMeasure();
-    });
-    this.resizeObserver.observe(container);
-
+  /**
+   * Render the parsed table as an HTML <table> with thead/tbody.
+   * Each cell gets data attributes for row, column, and section,
+   * and inline markdown rendering. Clicking a cell creates an InlineEditor.
+   */
+  toDOM(view: EditorView): HTMLElement {
+    const container = document.createElement("div");
+    this.syncContainerAttrs(container);
+    container.appendChild(this.buildTableDOM(view));
+    this.observeContainer(container, view);
     return container;
   }
 
-  destroy(dom: HTMLElement): void {
+  updateDOM(dom: HTMLElement, view: EditorView, from: TableWidget): boolean {
+    if (dom.tagName !== "DIV") return false;
+
+    from.resizeObserver?.disconnect();
+    from.resizeObserver = null;
+    from.editorView = null;
+
+    this.syncContainerAttrs(dom);
+    dom.replaceChildren(this.buildTableDOM(view));
+    this.observeContainer(dom, view);
+    return true;
+  }
+
+  destroy(_dom: HTMLElement): void {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
-    this.editorView = null;
-    if (activeInlineEditor?.owner === this && dom.contains(activeInlineEditor.cell)) {
+    if (activeInlineEditor?.owner === this) {
       destroyActiveInlineEditor();
     }
+    this.editorView = null;
   }
 
   /**

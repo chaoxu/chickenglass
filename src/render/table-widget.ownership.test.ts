@@ -121,4 +121,44 @@ describe("TableWidget cross-widget editor ownership", () => {
     widgetB.destroy(domB);
     widgetA.destroy(domA);
   });
+
+  it("clears a detached active editor when the owning widget is destroyed", () => {
+    const tableText = "| A |\n|---|\n| old |";
+    const viewA = makeRootView(10, tableText);
+    const viewB = makeRootView(40, tableText);
+    const inlineA = makeInlineEditor("edited A");
+    const inlineB = makeInlineEditor("edited B");
+    createInlineEditorMock
+      .mockReturnValueOnce(inlineA)
+      .mockReturnValueOnce(inlineB);
+
+    const widgetA = new TableWidget(makeTable(), tableText, 10, { "\\A": "\\alpha" });
+    const widgetB = new TableWidget(makeTable(), tableText, 40, { "\\B": "\\beta" });
+    const domA = widgetA.toDOM(viewA);
+    const domB = widgetB.toDOM(viewB);
+    const cellA = domA.querySelector("td");
+    const cellB = domB.querySelector("td");
+    if (!cellA || !cellB) {
+      throw new Error("expected table cells to exist");
+    }
+
+    renderInlineMarkdownMock.mockClear();
+
+    cellA.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    cellA.remove();
+
+    widgetA.destroy(domA);
+
+    expect(inlineA.destroy).toHaveBeenCalledTimes(1);
+
+    renderInlineMarkdownMock.mockClear();
+
+    cellB.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(createInlineEditorMock).toHaveBeenCalledTimes(2);
+    expect(inlineA.destroy).toHaveBeenCalledTimes(1);
+    expect(renderInlineMarkdownMock).not.toHaveBeenCalled();
+
+    widgetB.destroy(domB);
+  });
 });
