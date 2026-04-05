@@ -7,7 +7,7 @@ import {
 import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import type { EditorView } from "@codemirror/view";
 import { parseTable, type ParsedTable } from "./table-utils";
-import { scanTableInlineSpan } from "../lib/table-inline-span";
+import { findTablePipePositions } from "../lib/table-inline-span";
 
 /** A table found in the document with its source range. */
 export interface TableRange {
@@ -302,7 +302,7 @@ export const tableDiscoveryField = StateField.define<readonly TableRange[]>({
  * the current position. Pipes inside those spans are invisible to the
  * column splitter. Spans handled:
  *   - `\|`      — escaped pipe (and `\X` for any X)
- *   - `\(...\)` — backslash-paren inline math
+ *   - `\(...\)` — backslash-paren inline math (with `\|` for literal pipes)
  *   - `$...$`   — single-dollar inline math
  *   - `` `...` `` / ` `` `` ``...`` `` `` ` — backtick code spans (any run length)
  *
@@ -313,20 +313,7 @@ export const tableDiscoveryField = StateField.define<readonly TableRange[]>({
  * does with its `chunk` combinator.
  */
 export function findPipePositions(text: string): number[] {
-  const pipes: number[] = [];
-  let i = 0;
-  while (i < text.length) {
-    const spanEnd = scanTableInlineSpan(text, i);
-    if (spanEnd !== null) {
-      i = spanEnd;
-    } else if (text[i] === "|") {
-      pipes.push(i);
-      i++;
-    } else {
-      i++;
-    }
-  }
-  return pipes;
+  return findTablePipePositions(text);
 }
 
 /**

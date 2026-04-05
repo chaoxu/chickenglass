@@ -67,11 +67,17 @@ describe("tableExtension — pipes inside $…$ math", () => {
 });
 
 describe("tableExtension — pipes inside \\(…\\) math", () => {
-  const doc = "| A | B |\n| --- | --- |\n| \\(a \\mid b\\) | No |";
+  const doc = "| A | B |\n| --- | --- |\n| \\(a \\| b\\) | No |";
 
   it("produces 2 data cells", () => {
     const cells = findNodes(doc, "TableCell");
     expect(cells).toHaveLength(4); // 2 header + 2 data
+  });
+
+  it("keeps escaped pipes inside the same InlineMath node", () => {
+    const mathNodes = findNodes(doc, "InlineMath");
+    expect(mathNodes).toHaveLength(1);
+    expect(nodeText(doc, mathNodes[0])).toBe("\\(a \\| b\\)");
   });
 });
 
@@ -103,6 +109,20 @@ describe("tableExtension — InlineMath nodes inside cells", () => {
     expect(mathNodes).toHaveLength(1);
     expect(nodeText(doc, mathNodes[0])).toBe("$a | b$");
   });
+
+  it("keeps a trailing extra $ literal without collapsing the next math cell", () => {
+    const doc = [
+      "| Name | Time | Space |",
+      "| --- | --- | --- |",
+      "| Quicksort | $O(n \\log n)$$ | $O(\\log n)$ |",
+    ].join("\n");
+    const cells = findNodes(doc, "TableCell");
+    expect(cells).toHaveLength(6);
+    expect(nodeText(doc, cells[3]).trim()).toBe("Quicksort");
+    expect(nodeText(doc, cells[4]).trim()).toBe("$O(n \\log n)$$");
+    expect(nodeText(doc, cells[5]).trim()).toBe("$O(\\log n)$");
+    expect(findNodes(doc, "InlineMath")).toHaveLength(2);
+  });
 });
 
 describe("tableExtension — incomplete inline spans inside cells", () => {
@@ -119,6 +139,51 @@ describe("tableExtension — incomplete inline spans inside cells", () => {
     const cells = findNodes(doc, "TableCell");
     expect(cells).toHaveLength(4);
     expect(nodeText(doc, cells[2]).trim()).toBe("\\(a");
+    expect(findNodes(doc, "InlineMath")).toHaveLength(0);
+  });
+
+  it("does not let \\(...\\) consume a later cell's closing delimiter", () => {
+    const doc = [
+      "| A | B | C | D |",
+      "| --- | --- | --- | --- |",
+      "| row | \\(x | \\) y | z |",
+    ].join("\n");
+    const cells = findNodes(doc, "TableCell");
+    expect(cells).toHaveLength(8);
+    expect(nodeText(doc, cells[4]).trim()).toBe("row");
+    expect(nodeText(doc, cells[5]).trim()).toBe("\\(x");
+    expect(nodeText(doc, cells[6]).trim()).toBe("\\) y");
+    expect(nodeText(doc, cells[7]).trim()).toBe("z");
+    expect(findNodes(doc, "InlineMath")).toHaveLength(0);
+  });
+
+  it("does not let \\(...\\) consume a later cell's closing delimiter without padding spaces", () => {
+    const doc = [
+      "| A | B | C | D |",
+      "| --- | --- | --- | --- |",
+      "| row | \\(x|\\) y | z |",
+    ].join("\n");
+    const cells = findNodes(doc, "TableCell");
+    expect(cells).toHaveLength(8);
+    expect(nodeText(doc, cells[4]).trim()).toBe("row");
+    expect(nodeText(doc, cells[5]).trim()).toBe("\\(x");
+    expect(nodeText(doc, cells[6]).trim()).toBe("\\) y");
+    expect(nodeText(doc, cells[7]).trim()).toBe("z");
+    expect(findNodes(doc, "InlineMath")).toHaveLength(0);
+  });
+
+  it("does not let \\(...\\) consume text from the next cell before a later closing delimiter", () => {
+    const doc = [
+      "| A | B | C | D |",
+      "| --- | --- | --- | --- |",
+      "| row | \\(x | text \\) y | z |",
+    ].join("\n");
+    const cells = findNodes(doc, "TableCell");
+    expect(cells).toHaveLength(8);
+    expect(nodeText(doc, cells[4]).trim()).toBe("row");
+    expect(nodeText(doc, cells[5]).trim()).toBe("\\(x");
+    expect(nodeText(doc, cells[6]).trim()).toBe("text \\) y");
+    expect(nodeText(doc, cells[7]).trim()).toBe("z");
     expect(findNodes(doc, "InlineMath")).toHaveLength(0);
   });
 

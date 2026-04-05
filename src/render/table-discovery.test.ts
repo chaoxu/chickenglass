@@ -52,8 +52,29 @@ describe("findPipePositions", () => {
     expect(findPipePositions("| $O(r \\cdot |E| \\cdot T)$ | No |")).toEqual([0, 27, 32]);
   });
 
-  it("ignores pipes inside \\(…\\) math spans", () => {
-    expect(findPipePositions("| \\(a | b\\) | No |")).toEqual([0, 12, 17]);
+  it("treats a trailing extra $ as literal so the next cell stays separate", () => {
+    expect(findPipePositions("| $a$$ | $b$ |")).toEqual([0, 7, 13]);
+  });
+
+  it("does not let trailing $ match opening $ in the next cell", () => {
+    expect(findPipePositions("| Quicksort | $O(n \\log n)$$ | $O(\\log n)$ |"))
+      .toEqual([0, 12, 29, 43]);
+  });
+
+  it("ignores escaped pipes inside \\(…\\) math spans", () => {
+    expect(findPipePositions("| \\(a \\| b\\) | No |")).toEqual([0, 13, 18]);
+  });
+
+  it("does not let \\(...\\) match across a real cell separator", () => {
+    expect(findPipePositions("| row | \\(x | \\) y | z |")).toEqual([0, 6, 12, 19, 23]);
+  });
+
+  it("does not let \\(...\\) match across a no-space cell separator", () => {
+    expect(findPipePositions("| row | \\(x|\\) y | z |")).toEqual([0, 6, 11, 17, 21]);
+  });
+
+  it("does not let \\(...\\) match across a separator when the next cell contains text before \\)", () => {
+    expect(findPipePositions("| row | \\(x | text \\) y | z |")).toEqual([0, 6, 12, 24, 28]);
   });
 
   it("ignores pipes inside single-backtick code spans", () => {
@@ -241,4 +262,5 @@ describe("table range helpers", () => {
 
     expect(visibleTables).toEqual([tables[1]]);
   });
+
 });

@@ -149,6 +149,34 @@ describe("gridContextMenuHandler cross-row guard (#696)", () => {
   });
 });
 
+describe("table grid rendering for inline-span edge cases", () => {
+  it("keeps later cells visible when \\(...\\) is opened in one cell and closed in the next", () => {
+    view = makeView([
+      "| A | B | C | D |",
+      "| --- | --- | --- | --- |",
+      "| row | \\(x | \\) y | z |",
+    ].join("\n"));
+
+    const colsByRow = new Map<number, number[]>();
+    const textByRow = new Map<number, string[]>();
+    for (const cell of view.dom.querySelectorAll<HTMLElement>(".cf-grid-cell")) {
+      const pos = view.posAtDOM(cell, 0);
+      const lineNum = view.state.doc.lineAt(pos).number;
+      const cols = colsByRow.get(lineNum) ?? [];
+      cols.push(Number(cell.dataset.col));
+      colsByRow.set(lineNum, cols);
+
+      const texts = textByRow.get(lineNum) ?? [];
+      texts.push(cell.textContent?.trim() ?? "");
+      textByRow.set(lineNum, texts);
+    }
+
+    expect(colsByRow.get(1)).toEqual([0, 1, 2, 3]);
+    expect(colsByRow.get(3)).toEqual([0, 1, 2, 3]);
+    expect(textByRow.get(3)).toEqual(["row", "\\(x", "\\) y", "z"]);
+  });
+});
+
 describe("deleteSelectedTableSelection", () => {
   it("deletes selected body rows while preserving header and separator", () => {
     view = makeView();
