@@ -36,7 +36,10 @@ pub fn resolve_existing_path(root: &Path, relative: &str) -> Result<PathBuf, Str
     // We just need to verify the file actually exists.
     let full = resolve_project_path(root, relative)?;
     if !full.exists() {
-        return Err(format!("Cannot resolve path '{}': No such file or directory", relative));
+        return Err(format!(
+            "Cannot resolve path '{}': No such file or directory",
+            relative
+        ));
     }
     Ok(full)
 }
@@ -45,41 +48,35 @@ pub fn resolve_existing_path(root: &Path, relative: &str) -> Result<PathBuf, Str
 /// Walks up to the deepest existing ancestor, canonicalizes it,
 /// then appends the remaining non-existent segments.
 fn canonicalize_maybe_missing(path: &Path) -> Result<PathBuf, String> {
-    if path.exists() {
-        return path
-            .canonicalize()
-            .map_err(|e| format!("Cannot canonicalize '{}': {}", path.display(), e));
-    }
-
-    // Collect trailing segments that don't exist yet (owned, in reverse order)
     let mut tail_segments: Vec<std::ffi::OsString> = Vec::new();
     let mut ancestor = path.to_path_buf();
     loop {
-        match ancestor.file_name() {
-            Some(name) => {
-                tail_segments.push(name.to_owned());
+        match std::fs::symlink_metadata(&ancestor) {
+            Ok(_) => {
+                let canonical_ancestor = ancestor
+                    .canonicalize()
+                    .map_err(|e| format!("Cannot canonicalize '{}': {}", ancestor.display(), e))?;
+                let mut result = canonical_ancestor;
+                for seg in tail_segments.iter().rev() {
+                    result.push(seg);
+                }
+                return Ok(result);
             }
-            None => {
-                // Reached filesystem root without finding an existing ancestor
-                return Err(format!(
-                    "No existing ancestor for '{}'",
-                    path.display()
-                ));
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => match ancestor.file_name() {
+                Some(name) => {
+                    tail_segments.push(name.to_owned());
+                    ancestor = ancestor
+                        .parent()
+                        .expect("file_name() was Some so parent exists")
+                        .to_path_buf();
+                }
+                None => {
+                    return Err(format!("No existing ancestor for '{}'", path.display()));
+                }
+            },
+            Err(err) => {
+                return Err(format!("Cannot inspect '{}': {}", ancestor.display(), err));
             }
-        }
-        ancestor = ancestor
-            .parent()
-            .expect("file_name() was Some so parent exists")
-            .to_path_buf();
-        if ancestor.exists() {
-            let canonical_ancestor = ancestor
-                .canonicalize()
-                .map_err(|e| format!("Cannot canonicalize '{}': {}", ancestor.display(), e))?;
-            let mut result = canonical_ancestor;
-            for seg in tail_segments.iter().rev() {
-                result.push(seg);
-            }
-            return Ok(result);
         }
     }
 }
@@ -94,9 +91,7 @@ pub fn project_relative_path(root: &Path, candidate: &Path) -> Result<String, St
         .strip_prefix(&canonical_root)
         .map_err(|_| format!("Path '{}' escapes project root", candidate.display()))?;
 
-    Ok(relative
-        .to_string_lossy()
-        .replace('\\', "/"))
+    Ok(relative.to_string_lossy().replace('\\', "/"))
 }
 
 #[command]
@@ -314,5 +309,51 @@ mod tests {
         assert_eq!(result, dir.join("a/b/c.md"));
 
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn resolve_project_path_rejects_dangling_symlink_leaf() {
+        let root = create_temp_dir("dangling-leaf-root");
+        let outside = create_temp_dir("dangling-leaf-outside");
+        let dangling_target = outside.join("escaped.md");
+        let link = root.join("escape.md");
+
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&dangling_target, &link).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(&dangling_target, &link).unwrap();
+
+        let err = resolve_project_path(&root, "escape.md")
+            .expect_err("dangling symlink leaf should be rejected");
+        assert!(
+            err.contains("Cannot resolve path 'escape.md'"),
+            "got: {err}"
+        );
+
+        fs::remove_dir_all(&root).unwrap();
+        fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn resolve_project_path_rejects_dangling_symlink_ancestor() {
+        let root = create_temp_dir("dangling-ancestor-root");
+        let outside = create_temp_dir("dangling-ancestor-outside");
+        let dangling_target = outside.join("missing-dir");
+        let link = root.join("escape");
+
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&dangling_target, &link).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(&dangling_target, &link).unwrap();
+
+        let err = resolve_project_path(&root, "escape/note.md")
+            .expect_err("dangling symlink ancestor should be rejected");
+        assert!(
+            err.contains("Cannot resolve path 'escape/note.md'"),
+            "got: {err}"
+        );
+
+        fs::remove_dir_all(&root).unwrap();
+        fs::remove_dir_all(&outside).unwrap();
     }
 }

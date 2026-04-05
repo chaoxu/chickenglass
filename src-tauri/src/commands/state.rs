@@ -1,6 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use std::time::Instant;
 
 use notify::RecommendedWatcher;
@@ -194,8 +194,20 @@ impl PerfState {
         Self(Mutex::new(PerfStore::new()))
     }
 
+    fn lock_store(&self) -> MutexGuard<'_, PerfStore> {
+        match self.0.lock() {
+            Ok(store) => store,
+            Err(poisoned) => {
+                // Perf telemetry is best-effort; recover instead of permanently
+                // disabling metrics after an unrelated panic while holding the lock.
+                self.0.clear_poison();
+                poisoned.into_inner()
+            }
+        }
+    }
+
     pub fn now_ms(&self) -> Result<f64, String> {
-        let store = self.0.lock().map_err(|e| e.to_string())?;
+        let store = self.lock_store();
         Ok(store.now_ms())
     }
 
@@ -207,7 +219,7 @@ impl PerfState {
         operation_name: Option<&str>,
         detail: Option<&str>,
     ) -> Result<(), String> {
-        let mut store = self.0.lock().map_err(|e| e.to_string())?;
+        let mut store = self.lock_store();
         store.record_span(name, category, duration_ms, operation_name, detail);
         Ok(())
     }
@@ -218,19 +230,52 @@ impl PerfState {
         started_at: f64,
         detail: Option<&str>,
     ) -> Result<(), String> {
-        let mut store = self.0.lock().map_err(|e| e.to_string())?;
+        let mut store = self.lock_store();
         store.record_operation(name, started_at, detail);
         Ok(())
     }
 
     pub fn snapshot(&self) -> Result<PerfSnapshot, String> {
-        let store = self.0.lock().map_err(|e| e.to_string())?;
+        let store = self.lock_store();
         Ok(store.snapshot())
     }
 
     pub fn clear(&self) -> Result<(), String> {
-        let mut store = self.0.lock().map_err(|e| e.to_string())?;
+        let mut store = self.lock_store();
         store.clear();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    use super::PerfState;
+
+    #[test]
+    fn perf_state_recovers_after_mutex_poison() {
+        let perf = PerfState::new();
+
+        let panic_result = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = perf.0.lock().expect("lock perf store");
+            panic!("poison perf store");
+        }));
+        assert!(panic_result.is_err(), "setup should poison the mutex");
+        assert!(
+            perf.0.lock().is_err(),
+            "mutex should be poisoned before recovery"
+        );
+
+        perf.record_span("span", "category", 2.5, Some("operation"), Some("detail"))
+            .expect("recover from poison and record");
+        let snapshot = perf.snapshot().expect("snapshot after recovery");
+
+        assert_eq!(snapshot.recent.len(), 1);
+        assert_eq!(snapshot.recent[0].name, "span");
+        assert!(
+            perf.0.lock().is_ok(),
+            "recovery should clear the poison flag"
+        );
     }
 }
