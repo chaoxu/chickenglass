@@ -100,7 +100,7 @@ describe("codeBlockDecorationField", () => {
         codeBlockStructureField,
       ],
     });
-    const cachedBlocks = state.field(codeBlockStructureField);
+    const cachedBlocks = state.field(codeBlockStructureField).blocks;
 
     // A fresh syntax-tree scan would allocate a new array. The public helper
     // must hand back the shared field value directly so rich-mode consumers
@@ -115,12 +115,56 @@ describe("codeBlockDecorationField", () => {
         codeBlockStructureField,
       ],
     });
-    const initialBlocks = state.field(codeBlockStructureField);
+    const initialStructure = state.field(codeBlockStructureField);
     const movedState = state.update({
       selection: { anchor: TWO_BLOCKS.indexOf("print") },
     }).state;
 
-    expect(movedState.field(codeBlockStructureField)).toBe(initialBlocks);
+    expect(movedState.field(codeBlockStructureField)).toBe(initialStructure);
+  });
+
+  it("maps cached block structure through body edits without bumping the structure revision", () => {
+    const doc = "```js\nconsole.log('x')\n```";
+    const state = createEditorState(doc, {
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        codeBlockStructureField,
+      ],
+    });
+    const initialStructure = state.field(codeBlockStructureField);
+
+    const nextState = state.update({
+      changes: {
+        from: doc.indexOf("console"),
+        to: doc.indexOf("console") + "console".length,
+        insert: "printer ",
+      },
+    }).state;
+    const nextStructure = nextState.field(codeBlockStructureField);
+
+    expect(nextStructure.structureRevision).toBe(initialStructure.structureRevision);
+    expect(nextStructure.blocks).not.toBe(initialStructure.blocks);
+    expect(nextStructure.blocks[0]?.openFenceMarker).toBe("```");
+    expect(nextStructure.blocks[0]?.language).toBe("js");
+  });
+
+  it("invalidates structure when the opening fence marker changes without moving positions", () => {
+    const doc = "```js\nconsole.log('x')\n```";
+    const state = createEditorState(doc, {
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        codeBlockStructureField,
+      ],
+    });
+    const initialStructure = state.field(codeBlockStructureField);
+
+    const nextState = state.update({
+      changes: { from: 0, to: 3, insert: "~~~" },
+    }).state;
+    const nextStructure = nextState.field(codeBlockStructureField);
+
+    expect(nextStructure.structureRevision).toBe(initialStructure.structureRevision + 1);
+    expect(nextStructure.blocks[0]?.openFenceMarker).toBe("~~~");
   });
 
   it("keeps code blocks rendered when cursor is inside the body", () => {
