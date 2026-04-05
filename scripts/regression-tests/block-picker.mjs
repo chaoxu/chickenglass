@@ -49,11 +49,14 @@ export async function run(page) {
         lineText: lineAt.text,
       };
     } finally {
-      view.dom.dispatchEvent(new KeyboardEvent("keydown", {
-        key: "Escape",
-        bubbles: true,
-        cancelable: true,
-      }));
+      const input = document.querySelector(".cf-block-picker-input");
+      if (input instanceof HTMLInputElement) {
+        input.dispatchEvent(new KeyboardEvent("keydown", {
+          key: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }));
+      }
       if (view.state.doc.length > endPos) {
         view.dispatch({
           changes: { from: endPos, to: view.state.doc.length, insert: "" },
