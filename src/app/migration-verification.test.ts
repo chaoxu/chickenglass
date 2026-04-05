@@ -1135,3 +1135,13 @@ describe("#316 — theme contract and surface token map", () => {
     expect(exportFile).toContain("../theme-contract");
   });
 });
+
+describe("#847 — hover preview foreground color", () => {
+  it("uses normal foreground color for shared preview bodies and citation rows", () => {
+    const css = fileText("src/editor-theme.css");
+
+    expect(css).toContain(".cf-preview-surface-body {\n  color: var(--cf-fg);");
+    expect(css).toContain(".cf-hover-preview-citation {\n  color: var(--cf-fg);");
+    expect(css).toContain(".cf-hover-preview-unresolved {\n  color: var(--cf-muted);");
+  });
+});

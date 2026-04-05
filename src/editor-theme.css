@@ -354,7 +354,7 @@
 }
 
 .cf-preview-surface-body {
-  color: var(--cf-muted);
+  color: var(--cf-fg);
   overflow-wrap: break-word;
 }
 
@@ -432,7 +432,7 @@
   white-space: normal;
 }
 .cf-hover-preview-citation {
-  color: var(--cf-muted);
+  color: var(--cf-fg);
   margin-bottom: var(--cf-spacing-xs);
 }
 
