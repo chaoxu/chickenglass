@@ -12,7 +12,6 @@ import {
 export interface DocumentLabelRenameTarget {
   readonly definition: DocumentLabelDefinition;
   readonly references: readonly DocumentLabelReference[];
-  readonly source: "definition" | "reference";
 }
 
 export type DocumentLabelRenameTargetLookup =
@@ -90,14 +89,12 @@ function findMatchingDefinition(
 function readyTarget(
   graph: DocumentLabelGraph,
   definition: DocumentLabelDefinition,
-  source: DocumentLabelRenameTarget["source"],
 ): DocumentLabelRenameTargetLookup {
   return {
     kind: "target",
     target: {
       definition,
       references: findDocumentLabelBacklinks(graph, definition.id),
-      source,
     },
   };
 }
@@ -140,7 +137,7 @@ export function resolveDocumentLabelRenameTarget(
   if (reference) {
     const definition = graph.uniqueDefinitionById.get(reference.id);
     if (definition) {
-      return readyTarget(graph, definition, "reference");
+      return readyTarget(graph, definition);
     }
     if (graph.definitionsById.has(reference.id)) {
       return duplicateTarget(graph, reference.id);
@@ -152,7 +149,7 @@ export function resolveDocumentLabelRenameTarget(
     if (graph.duplicatesById.has(definition.id)) {
       return duplicateTarget(graph, definition.id);
     }
-    return readyTarget(graph, definition, "definition");
+    return readyTarget(graph, definition);
   }
 
   return { kind: "none" };
