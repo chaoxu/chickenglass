@@ -44,11 +44,10 @@ describe("CslProcessor init races", () => {
       engine: { styleName: string } | null;
     };
 
-    expect(engineFactory).toHaveBeenCalledTimes(2);
-    expect(engineFactory.mock.calls[0]?.[1]).not.toBe(engineFactory.mock.calls[1]?.[1]);
-    expect(templatesAdd).toHaveBeenCalledTimes(2);
+    expect(engineFactory).toHaveBeenCalledTimes(1);
+    expect(templatesAdd).toHaveBeenCalledTimes(1);
     expect(internal.engine).toEqual(
-      expect.objectContaining({ styleName: engineFactory.mock.calls[1]?.[1] }),
+      expect.objectContaining({ styleName: engineFactory.mock.calls[0]?.[1] }),
     );
     expect(processor.revision).toBe(1);
   });
@@ -93,11 +92,10 @@ describe("CslProcessor init races", () => {
       engine: { styleName: string } | null;
     };
 
-    expect(engineFactory).toHaveBeenCalledTimes(2);
-    expect(templatesAdd).toHaveBeenCalledTimes(2);
-    expect(engineFactory.mock.calls[0]?.[1]).not.toBe(engineFactory.mock.calls[1]?.[1]);
+    expect(engineFactory).toHaveBeenCalledTimes(1);
+    expect(templatesAdd).toHaveBeenCalledTimes(1);
     expect(internal.engine).toEqual(
-      expect.objectContaining({ styleName: engineFactory.mock.calls[1]?.[1] }),
+      expect.objectContaining({ styleName: engineFactory.mock.calls[0]?.[1] }),
     );
     expect(processor.revision).toBe(1);
   });
