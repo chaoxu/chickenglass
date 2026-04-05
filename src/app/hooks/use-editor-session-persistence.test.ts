@@ -3,6 +3,12 @@ import { act, createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  createEditorDocumentText,
+  editorDocumentToString,
+  emptyEditorDocument,
+  type EditorDocumentText,
+} from "../editor-doc-change";
 import type { FileSystem } from "../file-manager";
 import { MemoryFileSystem } from "../file-manager";
 import { createEditorSessionState, type EditorSessionState, type SessionDocument } from "../editor-session-model";
@@ -51,8 +57,8 @@ interface HarnessRef {
   result: ReturnType<typeof useEditorSessionPersistence>;
   sessionState: EditorSessionState;
   editorDoc: string;
-  buffers: React.RefObject<Map<string, string>>;
-  liveDocs: React.RefObject<Map<string, string>>;
+  buffers: React.RefObject<Map<string, EditorDocumentText>>;
+  liveDocs: React.RefObject<Map<string, EditorDocumentText>>;
   sourceMaps: React.RefObject<Map<string, SourceMap>>;
 }
 
@@ -60,8 +66,8 @@ interface HarnessOptions {
   fs: FileSystem;
   currentDocument: SessionDocument | null;
   editorDoc: string;
-  buffers: Map<string, string>;
-  liveDocs: Map<string, string>;
+  buffers: Map<string, EditorDocumentText>;
+  liveDocs: Map<string, EditorDocumentText>;
   sourceMaps?: Map<string, SourceMap>;
   refreshTree?: () => Promise<void>;
   addRecentFile?: (path: string) => void;
@@ -69,11 +75,15 @@ interface HarnessOptions {
 
 function documentForPath(
   path: string | null,
-  liveDocs: React.RefObject<Map<string, string>>,
-  buffers: React.RefObject<Map<string, string>>,
+  liveDocs: React.RefObject<Map<string, EditorDocumentText>>,
+  buffers: React.RefObject<Map<string, EditorDocumentText>>,
 ): string {
   if (!path) return "";
-  return liveDocs.current.get(path) ?? buffers.current.get(path) ?? "";
+  return editorDocumentToString(
+    liveDocs.current.get(path)
+    ?? buffers.current.get(path)
+    ?? emptyEditorDocument,
+  );
 }
 
 function createHarness({
@@ -90,8 +100,8 @@ function createHarness({
     result: null as unknown as ReturnType<typeof useEditorSessionPersistence>,
     sessionState: createEditorSessionState(currentDocument),
     editorDoc,
-    buffers: null as unknown as React.RefObject<Map<string, string>>,
-    liveDocs: null as unknown as React.RefObject<Map<string, string>>,
+    buffers: null as unknown as React.RefObject<Map<string, EditorDocumentText>>,
+    liveDocs: null as unknown as React.RefObject<Map<string, EditorDocumentText>>,
     sourceMaps: null as unknown as React.RefObject<Map<string, SourceMap>>,
   };
 
@@ -162,6 +172,12 @@ function createHarness({
   return { Harness, ref };
 }
 
+function createDocumentMap(entries: Record<string, string>): Map<string, EditorDocumentText> {
+  return new Map(
+    Object.entries(entries).map(([path, doc]) => [path, createEditorDocumentText(doc)]),
+  );
+}
+
 describe("useEditorSessionPersistence", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -210,8 +226,8 @@ describe("useEditorSessionPersistence", () => {
         dirty: true,
       },
       editorDoc: edited,
-      buffers: new Map([["main.md", expanded]]),
-      liveDocs: new Map([["main.md", edited]]),
+      buffers: createDocumentMap({ "main.md": expanded }),
+      liveDocs: createDocumentMap({ "main.md": edited }),
       sourceMaps: new Map([["main.md", sourceMap]]),
     });
 
@@ -225,8 +241,8 @@ describe("useEditorSessionPersistence", () => {
     await expect(fs.readFile("chapter.md")).resolves.toBe("New chapter\n");
     expect(ref.sessionState.currentDocument?.dirty).toBe(false);
     expect(ref.editorDoc).toBe(edited);
-    expect(ref.buffers.current.get("main.md")).toBe(edited);
-    expect(ref.liveDocs.current.get("main.md")).toBe(edited);
+    expect(editorDocumentToString(ref.buffers.current.get("main.md") ?? emptyEditorDocument)).toBe(edited);
+    expect(editorDocumentToString(ref.liveDocs.current.get("main.md") ?? emptyEditorDocument)).toBe(edited);
   });
 
   it("renames the active document buffers and source map after a successful rename", async () => {
@@ -242,8 +258,8 @@ describe("useEditorSessionPersistence", () => {
         dirty: true,
       },
       editorDoc: "hello",
-      buffers: new Map([["draft.md", "hello"]]),
-      liveDocs: new Map([["draft.md", "hello"]]),
+      buffers: createDocumentMap({ "draft.md": "hello" }),
+      liveDocs: createDocumentMap({ "draft.md": "hello" }),
       sourceMaps: new Map([["draft.md", sourceMap]]),
       refreshTree,
       addRecentFile,
@@ -266,9 +282,9 @@ describe("useEditorSessionPersistence", () => {
     });
     expect(ref.editorDoc).toBe("hello");
     expect(ref.buffers.current.has("draft.md")).toBe(false);
-    expect(ref.buffers.current.get("notes/final.md")).toBe("hello");
+    expect(editorDocumentToString(ref.buffers.current.get("notes/final.md") ?? emptyEditorDocument)).toBe("hello");
     expect(ref.liveDocs.current.has("draft.md")).toBe(false);
-    expect(ref.liveDocs.current.get("notes/final.md")).toBe("hello");
+    expect(editorDocumentToString(ref.liveDocs.current.get("notes/final.md") ?? emptyEditorDocument)).toBe("hello");
     expect(ref.sourceMaps.current.has("draft.md")).toBe(false);
     expect(ref.sourceMaps.current.get("notes/final.md")).toBe(sourceMap);
   });
@@ -284,8 +300,8 @@ describe("useEditorSessionPersistence", () => {
         dirty: false,
       },
       editorDoc: "hello",
-      buffers: new Map([["notes/draft.md", "hello"]]),
-      liveDocs: new Map([["notes/draft.md", "hello"]]),
+      buffers: createDocumentMap({ "notes/draft.md": "hello" }),
+      liveDocs: createDocumentMap({ "notes/draft.md": "hello" }),
       refreshTree,
     });
 
@@ -344,8 +360,8 @@ describe("useEditorSessionPersistence", () => {
         dirty: true,
       },
       editorDoc: edited,
-      buffers: new Map([["main.md", edited]]),
-      liveDocs: new Map([["main.md", edited]]),
+      buffers: createDocumentMap({ "main.md": edited }),
+      liveDocs: createDocumentMap({ "main.md": edited }),
       sourceMaps: new Map([["main.md", sourceMap]]),
       refreshTree,
       addRecentFile,
@@ -368,9 +384,9 @@ describe("useEditorSessionPersistence", () => {
       dirty: false,
     });
     expect(ref.buffers.current.has("main.md")).toBe(false);
-    expect(ref.buffers.current.get("copy.md")).toBe(edited);
+    expect(editorDocumentToString(ref.buffers.current.get("copy.md") ?? emptyEditorDocument)).toBe(edited);
     expect(ref.liveDocs.current.has("main.md")).toBe(false);
-    expect(ref.liveDocs.current.get("copy.md")).toBe(edited);
+    expect(editorDocumentToString(ref.liveDocs.current.get("copy.md") ?? emptyEditorDocument)).toBe(edited);
     expect(ref.sourceMaps.current.has("main.md")).toBe(false);
     expect(ref.sourceMaps.current.get("copy.md")).toBe(sourceMap);
   });

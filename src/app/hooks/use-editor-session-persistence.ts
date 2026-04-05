@@ -10,6 +10,11 @@ import {
   getCurrentSessionDocument,
   type EditorSessionState,
 } from "../editor-session-model";
+import {
+  editorDocumentToString,
+  emptyEditorDocument,
+  type EditorDocumentText,
+} from "../editor-doc-change";
 import { applySaveAsResult } from "../editor-session-save";
 import { buildProjectedWritePlan } from "../editor-session-write-plan";
 import type { FileSystem } from "../file-manager";
@@ -36,8 +41,8 @@ interface UseEditorSessionPersistenceOptions {
   addRecentFile: (path: string) => void;
   /** Lightweight callback fired after every successful save (not tree refresh). */
   onAfterSave?: () => void;
-  buffers: RefObject<Map<string, string>>;
-  liveDocs: RefObject<Map<string, string>>;
+  buffers: RefObject<Map<string, EditorDocumentText>>;
+  liveDocs: RefObject<Map<string, EditorDocumentText>>;
   sourceMaps: RefObject<Map<string, SourceMap>>;
   stateRef: RefObject<EditorSessionState>;
   commitSessionState: CommitSessionState;
@@ -60,11 +65,15 @@ export interface UseEditorSessionPersistenceReturn {
 
 function documentForPath(
   path: string | null,
-  liveDocs: RefObject<Map<string, string>>,
-  buffers: RefObject<Map<string, string>>,
+  liveDocs: RefObject<Map<string, EditorDocumentText>>,
+  buffers: RefObject<Map<string, EditorDocumentText>>,
 ): string {
   if (!path) return "";
-  return liveDocs.current.get(path) ?? buffers.current.get(path) ?? "";
+  return editorDocumentToString(
+    liveDocs.current.get(path)
+    ?? buffers.current.get(path)
+    ?? emptyEditorDocument,
+  );
 }
 
 export function useEditorSessionPersistence({
@@ -118,18 +127,18 @@ export function useEditorSessionPersistence({
     if (!currentPath) return true;
 
     const result = await pipeline.save(currentPath, () => {
-      const doc = liveDocs.current.get(currentPath) ?? "";
+      const doc = liveDocs.current.get(currentPath) ?? emptyEditorDocument;
       const sourceMap = sourceMaps.current.get(currentPath) ?? null;
-      return { content: doc, sourceMap };
+      return { content: editorDocumentToString(doc), sourceMap };
     });
 
     if (result.saved) {
-      const doc = liveDocs.current.get(currentPath) ?? "";
+      const doc = liveDocs.current.get(currentPath) ?? emptyEditorDocument;
       buffers.current.set(currentPath, doc);
       liveDocs.current.set(currentPath, doc);
       commitSessionState(
         markSessionDocumentDirty(getSessionState(), currentPath, false),
-        { editorDoc: doc },
+        { editorDoc: editorDocumentToString(doc) },
       );
       onAfterSave?.();
     }
@@ -168,7 +177,10 @@ export function useEditorSessionPersistence({
     }
 
     pipeline.clear(oldPath);
-    pipeline.initPath(newPath, liveDoc ?? buffered ?? "");
+    pipeline.initPath(
+      newPath,
+      editorDocumentToString(liveDoc ?? buffered ?? emptyEditorDocument),
+    );
 
     commitSessionState(
       renameSessionDocument(stateRef.current, oldPath, newPath, basename(newPath)),
@@ -228,7 +240,8 @@ export function useEditorSessionPersistence({
   const saveAs = useCallback(async () => {
     const currentPath = getSessionState().currentDocument?.path;
     if (!currentPath) return;
-    const doc = liveDocs.current.get(currentPath) ?? "";
+    const liveDoc = liveDocs.current.get(currentPath) ?? emptyEditorDocument;
+    const doc = editorDocumentToString(liveDoc);
     const sourceMap = sourceMaps.current.get(currentPath) ?? null;
 
     if (isTauri()) {
@@ -261,7 +274,7 @@ export function useEditorSessionPersistence({
             liveDocs: liveDocs.current,
             oldPath: currentPath,
             newPath: relativePath,
-            doc,
+            doc: liveDoc,
           }),
           { editorDoc: doc },
         );

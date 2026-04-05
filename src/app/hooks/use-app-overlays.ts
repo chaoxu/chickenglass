@@ -147,8 +147,12 @@ export function useAppOverlays({
   const [searchVersion, setSearchVersion] = useState(0);
   const [labelBacklinks, setLabelBacklinks] = useState<DocumentLabelBacklinksResult | null>(null);
   const activeSearchDoc = useMemo(
-    () => (editor.currentPath ? editor.getCurrentDocText() : ""),
-    [editor.currentPath, editor.docRevision, editor.getCurrentDocText],
+    () => (
+      dialogs.searchOpen && editor.currentPath
+        ? editor.getCurrentDocText()
+        : ""
+    ),
+    [dialogs.searchOpen, editor.currentPath, editor.docRevision, editor.getCurrentDocText],
   );
 
   useEffect(() => {
