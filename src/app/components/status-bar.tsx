@@ -5,7 +5,11 @@ import { subscribeFpsMeter, getFpsMeterSnapshot } from "../fps-meter";
 import { cn } from "../lib/utils";
 import { useEditorTelemetry } from "../stores/editor-telemetry-store";
 import { buildInfo } from "../build-info";
-import type { ActiveDocumentSignal, ActiveDocumentSnapshot } from "../active-document-signal";
+import {
+  EMPTY_ACTIVE_DOCUMENT_SNAPSHOT,
+  unsubscribeNoop,
+  type ActiveDocumentSignal,
+} from "../active-document-signal";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -33,12 +37,6 @@ const MODE_LABELS: Record<EditorMode, string> = {
   source: "Source",
   read: "Read",
 };
-const EMPTY_ACTIVE_DOCUMENT_SNAPSHOT: ActiveDocumentSnapshot = {
-  path: null,
-  revision: 0,
-};
-const unsubscribeNoop = () => {};
-
 // ── StatsPopover ───────────────────────────────────────────────────────────────
 
 interface StatsPopoverProps {

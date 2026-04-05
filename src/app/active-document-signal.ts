@@ -9,13 +9,14 @@ export interface ActiveDocumentSignal {
   publish: (path: string | null) => void;
 }
 
-const INITIAL_SNAPSHOT: ActiveDocumentSnapshot = {
+export const EMPTY_ACTIVE_DOCUMENT_SNAPSHOT: ActiveDocumentSnapshot = {
   path: null,
   revision: 0,
 };
+export const unsubscribeNoop = () => {};
 
 export function createActiveDocumentSignal(): ActiveDocumentSignal {
-  let snapshot = INITIAL_SNAPSHOT;
+  let snapshot = EMPTY_ACTIVE_DOCUMENT_SNAPSHOT;
   const listeners = new Set<() => void>();
 
   return {

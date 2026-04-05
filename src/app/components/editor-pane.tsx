@@ -19,7 +19,11 @@ import { bibDataField } from "../../citations/citation-render";
 import { frontmatterField, type EditorMode } from "../../editor";
 import { mathMacrosField } from "../../render";
 import { serializeMacros } from "../../render/render-core";
-import type { ActiveDocumentSignal, ActiveDocumentSnapshot } from "../active-document-signal";
+import {
+  EMPTY_ACTIVE_DOCUMENT_SNAPSHOT,
+  unsubscribeNoop,
+  type ActiveDocumentSignal,
+} from "../active-document-signal";
 
 /** Lazy-loaded read-mode view — kept out of the startup bundle (read mode is deferred). */
 const ReadModeView = lazy(() =>
@@ -34,12 +38,6 @@ const EMPTY_SIDENOTE_INVALIDATION: SidenoteInvalidation = {
   globalLayoutChanged: false,
   layoutChangeFrom: -1,
 };
-const EMPTY_ACTIVE_DOCUMENT_SNAPSHOT: ActiveDocumentSnapshot = {
-  path: null,
-  revision: 0,
-};
-const unsubscribeNoop = () => {};
-
 export interface EditorPaneProps extends UseEditorOptions {
   sidenotesCollapsed?: boolean;
   onSidenotesCollapsedChange?: (collapsed: boolean) => void;
