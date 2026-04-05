@@ -28,6 +28,12 @@ export const themeFoundationTokens = [
   "--cf-transition",
 ] as const;
 
+export const themeLayerTokens = [
+  "--cf-layer-inline-chrome",
+  "--cf-layer-preview-surface",
+  "--cf-layer-block-picker",
+] as const;
+
 export const themeBlockTokens = [
   "--cf-block-header-accent",
   "--cf-block-header-border-width",
@@ -130,6 +136,7 @@ export const themePreviewTokens = [
 
 export const themeTokenNames = [
   ...themeFoundationTokens,
+  ...themeLayerTokens,
   ...themeBlockTokens,
   ...themeTableTokens,
   ...themeTypographyTokens,
@@ -162,6 +169,9 @@ export const themeSurfaceTokenMap = {
     "--cf-border-width",
     "--cf-border-width-accent",
     "--cf-transition",
+    "--cf-layer-inline-chrome",
+    "--cf-layer-preview-surface",
+    "--cf-layer-block-picker",
   ],
   editorBody: [
     "--cf-bg",
@@ -212,6 +222,7 @@ export const themeSurfaceTokenMap = {
     "--cf-proof-marker",
     "--cf-proof-marker-color",
     "--cf-proof-marker-size",
+    "--cf-layer-inline-chrome",
     "--cf-include-accent",
     "--cf-include-label-color",
     "--cf-include-label-active-color",
@@ -238,6 +249,7 @@ export const themeSurfaceTokenMap = {
     "--cf-preview-surface-padding-block",
     "--cf-preview-surface-padding-inline",
     "--cf-preview-surface-font-size",
+    "--cf-layer-preview-surface",
   ],
   export: [...themeTokenNames],
 } as const satisfies Record<string, readonly ThemeTokenName[]>;
@@ -265,6 +277,9 @@ export const exportThemeTokenDefaults: Record<ThemeTokenName, string> = {
   "--cf-border-width": "1px",
   "--cf-border-width-accent": "2px",
   "--cf-transition": "0.15s ease",
+  "--cf-layer-inline-chrome": "1",
+  "--cf-layer-preview-surface": "1000",
+  "--cf-layer-block-picker": "1010",
   // Block surfaces
   "--cf-block-header-accent": "var(--cf-fg)",
   "--cf-block-header-border-width": "0px",

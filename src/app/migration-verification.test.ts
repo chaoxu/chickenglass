@@ -733,6 +733,32 @@ describe("#277 — first-class theme surface tokens", () => {
   });
 });
 
+describe("#910 — centralized layer tokens", () => {
+  it("defines shared layer tokens in the stylesheet and theme contract", () => {
+    const css = fileText("src/editor-theme.css");
+    const contract = fileText("src/theme-contract.ts");
+
+    expect(css).toContain("--cf-layer-inline-chrome: 1;");
+    expect(css).toContain("--cf-layer-preview-surface: 1000;");
+    expect(css).toContain("--cf-layer-block-picker: 1010;");
+    expect(contract).toContain('export const themeLayerTokens = [');
+    expect(contract).toContain('"--cf-layer-inline-chrome"');
+    expect(contract).toContain('"--cf-layer-preview-surface"');
+    expect(contract).toContain('"--cf-layer-block-picker"');
+    expect(contract).toContain('"--cf-layer-block-picker": "1010"');
+  });
+
+  it("routes editor surfaces through the shared layer tokens", () => {
+    const css = fileText("src/editor-theme.css");
+    const blockTheme = fileText("src/editor/block-theme.ts");
+
+    expect(css).toContain("z-index: var(--cf-layer-inline-chrome);");
+    expect(css).toContain("z-index: var(--cf-layer-preview-surface);");
+    expect(css).toContain("z-index: var(--cf-layer-block-picker);");
+    expect(blockTheme).toContain('zIndex: "var(--cf-layer-inline-chrome)"');
+  });
+});
+
 describe("#287 — Chrome for Testing app facility", () => {
   it("shared Chrome launcher helper exists", () => {
     expect(fileExists("scripts/chrome-common.mjs")).toBe(true);
