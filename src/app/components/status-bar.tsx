@@ -4,6 +4,7 @@ import { computeDocStats, formatReadingTime, type DocStats } from "../writing-st
 import { subscribeFpsMeter, getFpsMeterSnapshot } from "../fps-meter";
 import { cn } from "../lib/utils";
 import { useEditorTelemetry } from "../stores/editor-telemetry-store";
+import { buildInfo } from "../build-info";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -130,7 +131,7 @@ const FpsIndicator = memo(function FpsIndicator() {
  *
  * Left:   word count + character count (clickable — opens stats popover)
  * Center: cursor position Ln/Col
- * Right:  mode indicator (clickable to cycle Rich ↔ Source)
+ * Right:  build info + mode indicator (mode is clickable to cycle Rich ↔ Source)
  */
 export function StatusBar({
   editorMode,
@@ -193,9 +194,17 @@ export function StatusBar({
           </span>
         </div>
 
-        {/* Right: FPS meter + command palette + mode indicator */}
+        {/* Right: FPS meter + build info + command palette + mode indicator */}
         <div className="flex items-center gap-1 pr-1">
           <FpsIndicator />
+          {buildInfo && (
+            <span
+              className="px-1 tabular-nums text-[var(--cf-muted)]"
+              title={buildInfo.title}
+            >
+              {buildInfo.label}
+            </span>
+          )}
           {onOpenPalette && (
             <button
               type="button"
