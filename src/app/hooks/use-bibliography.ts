@@ -12,6 +12,7 @@ import type { CslJsonItem } from "../../citations/bibtex-parser";
 import { bibDataEffect, type BibStore } from "../../citations/citation-render";
 import { CslProcessor } from "../../citations/csl-processor";
 import type { FileSystem } from "../file-manager";
+import { logCatchError } from "../lib/log-catch-error";
 import { projectPathCandidatesFromDocument } from "../lib/project-paths";
 import { dispatchIfConnected } from "../lib/view-dispatch";
 import { measureAsync, withPerfOperation } from "../perf";
@@ -196,9 +197,7 @@ export function useBibliography(options: UseBibliographyOptions): UseBibliograph
           fs,
           view,
           () => loadGenerationRef.current === generation,
-        ).catch((e: unknown) => {
-          console.error("[bibliography] loadBibliography failed", e);
-        });
+        ).catch(logCatchError("[bibliography] loadBibliography failed"));
       }
     },
     [beginLoad, fs, docPath],
@@ -218,9 +217,7 @@ export function useBibliography(options: UseBibliographyOptions): UseBibliograph
           fs,
           view,
           () => loadGenerationRef.current === generation,
-        ).catch((e: unknown) => {
-          console.error("[bibliography] loadBibliography (initial) failed", e);
-        });
+        ).catch(logCatchError("[bibliography] loadBibliography (initial) failed"));
       }
     },
     [beginLoad, fs, docPath],
