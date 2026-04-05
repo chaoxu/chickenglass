@@ -143,12 +143,19 @@ export function findFirstAffectedSidenote(
   entries: readonly SidenoteEntry[],
   lineFrom: number,
 ): number {
-  for (let index = 0; index < entries.length; index += 1) {
-    if (entries[index].refFrom >= lineFrom) {
-      return index;
+  let lo = 0;
+  let hi = entries.length;
+
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (entries[mid].refFrom < lineFrom) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
     }
   }
-  return -1;
+
+  return lo < entries.length ? lo : -1;
 }
 
 export function measureSidenotePositions(
