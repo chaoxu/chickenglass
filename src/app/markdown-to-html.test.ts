@@ -4,6 +4,13 @@ import type { CslJsonItem } from "../citations/bibtex-parser";
 import type { CslProcessor } from "../citations/csl-processor";
 import { CSS } from "../constants/css-classes";
 
+const ieeeCslEntryHtml = [
+  '<div class="csl-entry">',
+  '<div class="csl-left-margin">[1]</div>',
+  '<div class="csl-right-inline">Karger.</div>',
+  "</div>",
+].join("");
+
 describe("renderInline", () => {
   it("renders plain text with HTML escaping", () => {
     expect(renderInline("Hello <world> & 'friends'")).toBe(
@@ -324,7 +331,7 @@ describe("markdownToHtml", () => {
       registerCitations: vi.fn(),
       cite: vi.fn(() => "[1]"),
       citeNarrative: vi.fn(() => "Karger [1]"),
-      bibliography: vi.fn(() => ['<span class="csl-entry">[1] Karger.</span>']),
+      bibliography: vi.fn(() => [ieeeCslEntryHtml]),
     } as unknown as CslProcessor;
 
     const html = markdownToHtml("See [@karger2000].", {
@@ -336,7 +343,7 @@ describe("markdownToHtml", () => {
     expect(fakeCsl.cite).toHaveBeenCalledWith(["karger2000"]);
     expect(fakeCsl.bibliography).toHaveBeenCalledWith(["karger2000"]);
     expect(html).toContain(`id="cite-ref-1" class="${CSS.citation}"`);
-    expect(html).toContain(`<div class="${CSS.bibliographyEntry}" id="bib-karger2000"><span class="csl-entry">[1] Karger.</span> <span class="${CSS.bibliographyBacklinks}">cited at <a class="${CSS.bibliographyBacklink}" href="#cite-ref-1">↩1</a></span></div>`);
+    expect(html).toContain(`<div class="${CSS.bibliographyEntry}" id="bib-karger2000">${ieeeCslEntryHtml} <span class="${CSS.bibliographyBacklinks}">cited at <a class="${CSS.bibliographyBacklink}" href="#cite-ref-1">↩1</a></span></div>`);
   });
 
   // Regression (#482): CSL bibliography HTML must be sanitized before

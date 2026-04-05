@@ -265,6 +265,31 @@
   margin-top: 0.15em;
 }
 
+.cf-bibliography-entry > .csl-entry {
+  margin: 0;
+}
+
+.cf-bibliography-entry > .csl-entry:has(> .csl-left-margin):has(> .csl-right-inline) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.5em;
+  align-items: start;
+}
+
+.cf-bibliography-entry > .csl-entry > .csl-left-margin,
+.cf-bibliography-entry > .csl-entry > .csl-right-inline {
+  margin: 0;
+}
+
+.cf-bibliography-entry > .csl-entry > .csl-left-margin {
+  white-space: nowrap;
+}
+
+.cf-bibliography-entry > .csl-entry > .csl-right-inline {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .cf-bibliography-backlinks {
   margin-left: 0.5em;
   font-size: 0.9em;
