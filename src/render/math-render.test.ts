@@ -78,6 +78,18 @@ function createMathRenderState(doc: string, cursorPos = 0): EditorState {
   });
 }
 
+function createMathRenderView(doc: string, cursorPos = 0): EditorView {
+  return createTestView(doc, {
+    cursorPos,
+    extensions: [
+      markdown({ extensions: [mathExtension, equationLabelExtension] }),
+      frontmatterField,
+      documentSemanticsField,
+      mathRenderPlugin,
+    ],
+  });
+}
+
 describe("MathWidget (inline)", () => {
   it("creates a span with cf-math-inline class", () => {
     const widget = new MathWidget("x^2", "$x^2$", false);
@@ -707,6 +719,94 @@ describe("math decoration invalidation", () => {
     // sourceFrom must reflect the new position (6 + 3 = 9), not the stale 6
     expect(widget!.sourceFrom).toBe(originalMathFrom + 3);
     expect(widget!.sourceTo).toBe(originalMathFrom + 3 + "$x$".length);
+  });
+});
+
+describe("live math widget metadata", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+    clearKatexCache();
+  });
+
+  it("refreshes later widget metadata and click targets after editing earlier inline math", async () => {
+    const initialDoc = "Lead $a$ text $b$ more $c$ tail $d$ done.";
+    view = createMathRenderView(initialDoc);
+    expect(view).toBeDefined();
+    const currentView = view;
+    if (!currentView) throw new Error("expected math render view");
+
+    const insertPos = initialDoc.indexOf("$b$");
+    currentView.dispatch({
+      changes: { from: insertPos, to: insertPos, insert: "$x$ and " },
+    });
+
+    const regions = currentView.state.field(documentSemanticsField).mathRegions;
+    expect(
+      regions.map((region) => ({
+        latex: region.latex,
+        from: region.from,
+        to: region.to,
+      })),
+    ).toEqual([
+      { latex: "a", from: 5, to: 8 },
+      { latex: "x", from: 14, to: 17 },
+      { latex: "b", from: 22, to: 25 },
+      { latex: "c", from: 31, to: 34 },
+      { latex: "d", from: 40, to: 43 },
+    ]);
+
+    await vi.waitFor(() => {
+      const cWidget = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="c"]`);
+      const dWidget = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="d"]`);
+      expect(cWidget).not.toBeNull();
+      expect(dWidget).not.toBeNull();
+
+      expect(cWidget!.dataset.sourceFrom).toBe("31");
+      expect(cWidget!.dataset.sourceTo).toBe("34");
+      expect(widgetSourceMap.get(cWidget!)?.sourceFrom).toBe(31);
+      expect(widgetSourceMap.get(cWidget!)?.sourceTo).toBe(34);
+
+      expect(dWidget!.dataset.sourceFrom).toBe("40");
+      expect(dWidget!.dataset.sourceTo).toBe("43");
+      expect(widgetSourceMap.get(dWidget!)?.sourceFrom).toBe(40);
+      expect(widgetSourceMap.get(dWidget!)?.sourceTo).toBe(43);
+    });
+
+    const dWidget = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="d"]`);
+    expect(dWidget).not.toBeNull();
+    dWidget!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    expect(currentView.state.selection.main.anchor).toBeGreaterThanOrEqual(40);
+    expect(currentView.state.selection.main.anchor).toBeLessThanOrEqual(43);
+  });
+
+  it("refreshes later widget metadata after multi-transaction typing in rich mode", async () => {
+    const initialDoc = "Lead $a$ text $b$ more $c$ tail $d$ done.";
+    view = createMathRenderView(initialDoc, initialDoc.indexOf("$b$"));
+    expect(view).toBeDefined();
+    const currentView = view;
+    if (!currentView) throw new Error("expected math render view");
+
+    for (const ch of "$x$ and ") {
+      const head = currentView.state.selection.main.head;
+      currentView.dispatch({
+        changes: { from: head, to: head, insert: ch },
+        selection: { anchor: head + ch.length },
+      });
+    }
+
+    await vi.waitFor(() => {
+      const cWidget = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="c"]`);
+      const dWidget = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="d"]`);
+      expect(cWidget).not.toBeNull();
+      expect(dWidget).not.toBeNull();
+      expect(cWidget!.dataset.sourceFrom).toBe("31");
+      expect(cWidget!.dataset.sourceTo).toBe("34");
+      expect(dWidget!.dataset.sourceFrom).toBe("40");
+      expect(dWidget!.dataset.sourceTo).toBe("43");
+    });
   });
 });
 
