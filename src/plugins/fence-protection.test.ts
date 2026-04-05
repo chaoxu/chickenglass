@@ -20,6 +20,7 @@ import {
   getClosingFenceRanges,
   getOpeningFenceBacktickRanges,
   getOpeningMathDelimiterRanges,
+  _fenceProtectionCacheFieldForTest as fenceProtectionCacheField,
 } from "./fence-protection";
 import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
@@ -128,6 +129,24 @@ describe("openingFenceColonProtection", () => {
       changes: { from: 0, to: 0, insert: "text\n" },
     });
     expect(tr.state.doc.toString()).toBe(`text\n${doc}`);
+  });
+});
+
+describe("fenceProtectionCacheField", () => {
+  it("reuses the mapped cache on same-length code block body edits that do not move fences", () => {
+    const doc = "```js\nconsole.log('x')\n```";
+    const state = createCodeBlockProtectedState(doc);
+    const initialCache = state.field(fenceProtectionCacheField);
+
+    const nextState = state.update({
+      changes: {
+        from: doc.indexOf("console"),
+        to: doc.indexOf("console") + "console".length,
+        insert: "printer",
+      },
+    }).state;
+
+    expect(nextState.field(fenceProtectionCacheField)).toBe(initialCache);
   });
 });
 

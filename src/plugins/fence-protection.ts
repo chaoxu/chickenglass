@@ -377,6 +377,122 @@ function sameDisplayMathBlocks(
   return true;
 }
 
+function mapSentinelPos(
+  pos: number,
+  tr: Transaction,
+  assoc: number,
+): number {
+  return pos < 0 ? pos : tr.changes.mapPos(pos, assoc);
+}
+
+function mapOptionalPos(
+  pos: number | undefined,
+  tr: Transaction,
+  assoc: number,
+): number | undefined {
+  return pos === undefined ? undefined : tr.changes.mapPos(pos, assoc);
+}
+
+function mapFencedBlockGeometry<T extends FencedBlockInfo>(
+  block: T,
+  tr: Transaction,
+): T {
+  const from = tr.changes.mapPos(block.from, 1);
+  const to = Math.max(from, tr.changes.mapPos(block.to, -1));
+  const openFenceFrom = tr.changes.mapPos(block.openFenceFrom, 1);
+  const openFenceTo = Math.max(openFenceFrom, tr.changes.mapPos(block.openFenceTo, -1));
+  const closeFenceFrom = mapSentinelPos(block.closeFenceFrom, tr, 1);
+  const closeFenceToBase = mapSentinelPos(block.closeFenceTo, tr, -1);
+  const closeFenceTo =
+    closeFenceFrom < 0 || closeFenceToBase < 0
+      ? closeFenceToBase
+      : Math.max(closeFenceFrom, closeFenceToBase);
+
+  if (
+    from === block.from
+    && to === block.to
+    && openFenceFrom === block.openFenceFrom
+    && openFenceTo === block.openFenceTo
+    && closeFenceFrom === block.closeFenceFrom
+    && closeFenceTo === block.closeFenceTo
+  ) {
+    return block;
+  }
+
+  return {
+    ...block,
+    from,
+    to,
+    openFenceFrom,
+    openFenceTo,
+    closeFenceFrom,
+    closeFenceTo,
+  };
+}
+
+function mapFencedBlocks(
+  blocks: readonly FencedBlockInfo[],
+  tr: Transaction,
+): readonly FencedBlockInfo[] {
+  let changed = false;
+  const mapped = blocks.map((block) => {
+    const next = mapFencedBlockGeometry(block, tr);
+    if (next !== block) changed = true;
+    return next;
+  });
+  return changed ? mapped : blocks;
+}
+
+function mapProtectedDiv(
+  div: FencedDivInfo,
+  tr: Transaction,
+): FencedDivInfo {
+  const mappedBlock = mapFencedBlockGeometry(div, tr);
+  const attrFrom = mapOptionalPos(div.attrFrom, tr, 1);
+  const attrToBase = mapOptionalPos(div.attrTo, tr, -1);
+  const attrTo =
+    attrFrom === undefined || attrToBase === undefined
+      ? attrToBase
+      : Math.max(attrFrom, attrToBase);
+  const titleFrom = mapOptionalPos(div.titleFrom, tr, 1);
+  const titleToBase = mapOptionalPos(div.titleTo, tr, -1);
+  const titleTo =
+    titleFrom === undefined || titleToBase === undefined
+      ? titleToBase
+      : Math.max(titleFrom, titleToBase);
+
+  if (
+    mappedBlock === div
+    && attrFrom === div.attrFrom
+    && attrTo === div.attrTo
+    && titleFrom === div.titleFrom
+    && titleTo === div.titleTo
+  ) {
+    return div;
+  }
+
+  return {
+    ...mappedBlock,
+    attrFrom,
+    attrTo,
+    titleFrom,
+    titleTo,
+  };
+}
+
+function mapProtectedDivs(
+  divs: readonly FencedDivInfo[],
+  tr: Transaction,
+): readonly FencedDivInfo[] {
+  let changed = false;
+  const mapped = divs.map((div) => {
+    const next = mapProtectedDiv(div, tr);
+    if (next !== div) changed = true;
+    return next;
+  });
+  return changed ? mapped : divs;
+}
+
 function mapFenceRange(
   range: FenceRange,
   tr: Transaction,
@@ -483,16 +599,37 @@ function shouldRebuildFenceProtectionCache(tr: Transaction): boolean {
 function mapFenceProtectionCache(
   value: FenceProtectionCache,
   tr: Transaction,
-  inputs: FenceProtectionInputs,
 ): FenceProtectionCache {
+  const allFencedBlocks = mapFencedBlocks(value.allFencedBlocks, tr);
+  const protectedDivs = mapProtectedDivs(value.protectedDivs, tr);
+  const closingFenceRanges = mapFenceRanges(value.closingFenceRanges, tr);
+  const openingFenceColonRanges = mapFenceRanges(value.openingFenceColonRanges, tr);
+  const openingFenceBacktickRanges = mapFenceRanges(value.openingFenceBacktickRanges, tr);
+  const openingMathDelimiterRanges = mapFenceRanges(value.openingMathDelimiterRanges, tr);
+  const closingFenceAtomicRanges = closingFenceRanges === value.closingFenceRanges
+    ? value.closingFenceAtomicRanges
+    : value.closingFenceAtomicRanges.map(tr.changes);
+
+  if (
+    allFencedBlocks === value.allFencedBlocks
+    && protectedDivs === value.protectedDivs
+    && closingFenceRanges === value.closingFenceRanges
+    && openingFenceColonRanges === value.openingFenceColonRanges
+    && openingFenceBacktickRanges === value.openingFenceBacktickRanges
+    && openingMathDelimiterRanges === value.openingMathDelimiterRanges
+    && closingFenceAtomicRanges === value.closingFenceAtomicRanges
+  ) {
+    return value;
+  }
+
   return {
-    allFencedBlocks: inputs.allFencedBlocks,
-    protectedDivs: inputs.protectedDivs,
-    closingFenceRanges: mapFenceRanges(value.closingFenceRanges, tr),
-    openingFenceColonRanges: mapFenceRanges(value.openingFenceColonRanges, tr),
-    openingFenceBacktickRanges: mapFenceRanges(value.openingFenceBacktickRanges, tr),
-    openingMathDelimiterRanges: mapFenceRanges(value.openingMathDelimiterRanges, tr),
-    closingFenceAtomicRanges: value.closingFenceAtomicRanges.map(tr.changes),
+    allFencedBlocks,
+    protectedDivs,
+    closingFenceRanges,
+    openingFenceColonRanges,
+    openingFenceBacktickRanges,
+    openingMathDelimiterRanges,
+    closingFenceAtomicRanges,
   };
 }
 
@@ -511,20 +648,7 @@ const fenceProtectionCacheField = StateField.define<FenceProtectionCache>({
       return buildFenceProtectionCache(tr.state);
     }
 
-    const inputs = collectFenceProtectionInputs(tr.state);
-    const mapped = mapFenceProtectionCache(value, tr, inputs);
-    if (
-      mapped.allFencedBlocks === value.allFencedBlocks
-      && mapped.protectedDivs === value.protectedDivs
-      && mapped.closingFenceRanges === value.closingFenceRanges
-      && mapped.openingFenceColonRanges === value.openingFenceColonRanges
-      && mapped.openingFenceBacktickRanges === value.openingFenceBacktickRanges
-      && mapped.openingMathDelimiterRanges === value.openingMathDelimiterRanges
-      && mapped.closingFenceAtomicRanges === value.closingFenceAtomicRanges
-    ) {
-      return value;
-    }
-    return mapped;
+    return mapFenceProtectionCache(value, tr);
   },
 });
 
@@ -1022,3 +1146,5 @@ export const fenceProtectionExtension: Extension = [
   pairedMathEntry,
   closingFenceAtomicRanges,
 ];
+
+export { fenceProtectionCacheField as _fenceProtectionCacheFieldForTest };
