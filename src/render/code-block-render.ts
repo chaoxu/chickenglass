@@ -137,48 +137,282 @@ export interface CodeBlockInfo extends FencedBlockInfo {
   readonly to: number;
   /** Language identifier (empty string if none). */
   readonly language: string;
+  /** Opening fence marker run (` ``` ` or `~~~`). */
+  readonly openFenceMarker: string;
+}
+
+interface CodeBlockStructureCache {
+  readonly blocks: readonly CodeBlockInfo[];
+  readonly structureRevision: number;
+}
+
+interface DirtyRange {
+  readonly from: number;
+  readonly to: number;
+}
+
+function createCodeBlockInfo(
+  state: EditorState,
+  nodeFrom: number,
+  nodeTo: number,
+  language: string,
+): CodeBlockInfo {
+  const openLine = state.doc.lineAt(nodeFrom);
+  const closeLine = state.doc.lineAt(nodeTo);
+  const openFenceText = state.doc.sliceString(openLine.from, openLine.to);
+  const openFenceMarker = /^([`~]{3,})/.exec(openFenceText)?.[1] ?? "";
+
+  return {
+    from: nodeFrom,
+    to: nodeTo,
+    openFenceFrom: openLine.from,
+    openFenceTo: openLine.to,
+    closeFenceFrom: closeLine.from,
+    closeFenceTo: closeLine.to,
+    singleLine: closeLine.from === openLine.from,
+    language,
+    openFenceMarker,
+  };
 }
 
 /** Extract info about FencedCode nodes from the syntax tree. */
-function scanCodeBlocks(state: EditorState): readonly CodeBlockInfo[] {
+function scanCodeBlocks(
+  state: EditorState,
+  ranges?: readonly DirtyRange[],
+): readonly CodeBlockInfo[] {
   const results: CodeBlockInfo[] = [];
+  const seen = new Set<number>();
   const tree = syntaxTree(state);
 
-  tree.iterate({
-    enter(node) {
-      if (node.type.name !== "FencedCode") return;
+  const collectInRange = (from?: number, to?: number) => {
+    tree.iterate({
+      from,
+      to,
+      enter(node) {
+        if (node.type.name !== "FencedCode" || seen.has(node.from)) return;
+        seen.add(node.from);
 
-      // The opening fence line is the first line of the FencedCode node.
-      const openLine = state.doc.lineAt(node.from);
-      const openFenceFrom = openLine.from;
-      const openFenceTo = openLine.to;
+        let language = "";
+        const codeInfoNode = node.node.getChild("CodeInfo");
+        if (codeInfoNode) {
+          language = state.doc.sliceString(codeInfoNode.from, codeInfoNode.to).trim();
+        }
 
-      // The closing fence line is the last line of the FencedCode node.
-      const closeLine = state.doc.lineAt(node.to);
-      const closeFenceFrom = closeLine.from;
-      const closeFenceTo = closeLine.to;
+        results.push(createCodeBlockInfo(state, node.from, node.to, language));
+      },
+    });
+  };
 
-      // Extract language from CodeInfo child node.
-      let language = "";
-      const codeInfoNode = node.node.getChild("CodeInfo");
-      if (codeInfoNode) {
-        language = state.doc.sliceString(codeInfoNode.from, codeInfoNode.to).trim();
-      }
+  if (ranges) {
+    for (const range of ranges) {
+      collectInRange(range.from, range.to);
+    }
+    results.sort((left, right) => left.from - right.from);
+    return results;
+  }
 
-      results.push({
-        from: node.from,
-        to: node.to,
-        openFenceFrom,
-        openFenceTo,
-        closeFenceFrom,
-        closeFenceTo,
-        singleLine: closeFenceFrom === openFenceFrom,
-        language,
-      });
-    },
+  collectInRange();
+  return results;
+}
+
+function rangesOverlap(
+  leftFrom: number,
+  leftTo: number,
+  rightFrom: number,
+  rightTo: number,
+): boolean {
+  return leftFrom <= rightTo && rightFrom <= leftTo;
+}
+
+function sameCodeBlockInfo(
+  left: CodeBlockInfo,
+  right: CodeBlockInfo,
+): boolean {
+  return left.from === right.from
+    && left.to === right.to
+    && left.openFenceFrom === right.openFenceFrom
+    && left.openFenceTo === right.openFenceTo
+    && left.closeFenceFrom === right.closeFenceFrom
+    && left.closeFenceTo === right.closeFenceTo
+    && left.singleLine === right.singleLine
+    && left.language === right.language
+    && left.openFenceMarker === right.openFenceMarker;
+}
+
+function sameCodeBlockLists(
+  left: readonly CodeBlockInfo[],
+  right: readonly CodeBlockInfo[],
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (!sameCodeBlockInfo(left[index], right[index])) return false;
+  }
+  return true;
+}
+
+function mapCodeBlock(
+  block: CodeBlockInfo,
+  tr: Transaction,
+): CodeBlockInfo {
+  const from = tr.changes.mapPos(block.from, 1);
+  const to = Math.max(from, tr.changes.mapPos(block.to, -1));
+  const openFenceFrom = tr.changes.mapPos(block.openFenceFrom, 1);
+  const openFenceTo = Math.max(openFenceFrom, tr.changes.mapPos(block.openFenceTo, -1));
+  const closeFenceFrom = tr.changes.mapPos(block.closeFenceFrom, 1);
+  const closeFenceTo = Math.max(closeFenceFrom, tr.changes.mapPos(block.closeFenceTo, -1));
+  const singleLine = closeFenceFrom === openFenceFrom;
+
+  if (
+    from === block.from
+    && to === block.to
+    && openFenceFrom === block.openFenceFrom
+    && openFenceTo === block.openFenceTo
+    && closeFenceFrom === block.closeFenceFrom
+    && closeFenceTo === block.closeFenceTo
+    && singleLine === block.singleLine
+  ) {
+    return block;
+  }
+
+  return {
+    ...block,
+    from,
+    to,
+    openFenceFrom,
+    openFenceTo,
+    closeFenceFrom,
+    closeFenceTo,
+    singleLine,
+  };
+}
+
+function mapCodeBlocks(
+  blocks: readonly CodeBlockInfo[],
+  tr: Transaction,
+): readonly CodeBlockInfo[] {
+  let changed = false;
+  const mapped = blocks.map((block) => {
+    const next = mapCodeBlock(block, tr);
+    if (next !== block) changed = true;
+    return next;
+  });
+  return changed ? mapped : blocks;
+}
+
+function mergeDirtyRanges(ranges: readonly DirtyRange[]): readonly DirtyRange[] {
+  if (ranges.length <= 1) return ranges;
+
+  const sorted = [...ranges].sort((left, right) => left.from - right.from);
+  const merged: DirtyRange[] = [sorted[0]];
+
+  for (let index = 1; index < sorted.length; index += 1) {
+    const current = sorted[index];
+    const previous = merged[merged.length - 1];
+    if (current.from <= previous.to + 1) {
+      merged[merged.length - 1] = {
+        from: previous.from,
+        to: Math.max(previous.to, current.to),
+      };
+      continue;
+    }
+    merged.push(current);
+  }
+
+  return merged;
+}
+
+function touchesCodeBlockFence(
+  from: number,
+  to: number,
+  block: Pick<CodeBlockInfo, "openFenceFrom" | "openFenceTo" | "closeFenceFrom" | "closeFenceTo" | "singleLine">,
+): boolean {
+  if (rangesOverlap(from, to, block.openFenceFrom, block.openFenceTo)) return true;
+  if (block.singleLine) return false;
+  return rangesOverlap(from, to, block.closeFenceFrom, block.closeFenceTo);
+}
+
+function computeCodeBlockStructureDirtyRanges(
+  blocks: readonly CodeBlockInfo[],
+  tr: Transaction,
+): readonly DirtyRange[] {
+  const dirtyRanges: DirtyRange[] = [];
+
+  tr.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    let dirtyFrom = Number.POSITIVE_INFINITY;
+    let dirtyTo = Number.NEGATIVE_INFINITY;
+
+    for (const block of blocks) {
+      if (block.from > toA) break;
+      if (!touchesCodeBlockFence(fromA, toA, block)) continue;
+      dirtyFrom = Math.min(dirtyFrom, tr.changes.mapPos(block.from, 1));
+      dirtyTo = Math.max(dirtyTo, tr.changes.mapPos(block.to, -1));
+    }
+
+    const newBlocks = scanCodeBlocks(tr.state, [{ from: fromB, to: toB }]);
+    for (const block of newBlocks) {
+      if (!touchesCodeBlockFence(fromB, toB, block)) continue;
+      dirtyFrom = Math.min(dirtyFrom, block.from);
+      dirtyTo = Math.max(dirtyTo, block.to);
+    }
+
+    if (dirtyFrom <= dirtyTo) {
+      dirtyRanges.push({ from: dirtyFrom, to: dirtyTo });
+    }
   });
 
-  return results;
+  return mergeDirtyRanges(dirtyRanges);
+}
+
+function codeBlockOverlapsDirtyRanges(
+  block: CodeBlockInfo,
+  dirtyRanges: readonly DirtyRange[],
+): boolean {
+  for (const range of dirtyRanges) {
+    if (range.to < block.from) continue;
+    if (range.from > block.to) break;
+    if (rangesOverlap(block.from, block.to, range.from, range.to)) return true;
+  }
+  return false;
+}
+
+function buildCodeBlockStructureCache(
+  blocks: readonly CodeBlockInfo[],
+  structureRevision = 0,
+): CodeBlockStructureCache {
+  return { blocks, structureRevision };
+}
+
+function incrementalCodeBlockStructureUpdate(
+  value: CodeBlockStructureCache,
+  tr: Transaction,
+): CodeBlockStructureCache {
+  const mappedBlocks = mapCodeBlocks(value.blocks, tr);
+  const dirtyRanges = computeCodeBlockStructureDirtyRanges(value.blocks, tr);
+  if (dirtyRanges.length === 0) {
+    return mappedBlocks === value.blocks
+      ? value
+      : buildCodeBlockStructureCache(mappedBlocks, value.structureRevision);
+  }
+
+  const rebuiltBlocks = scanCodeBlocks(tr.state, dirtyRanges);
+  const preservedBlocks: CodeBlockInfo[] = [];
+  for (const block of mappedBlocks) {
+    if (codeBlockOverlapsDirtyRanges(block, dirtyRanges)) continue;
+    preservedBlocks.push(block);
+  }
+
+  const nextBlocks = [...preservedBlocks, ...rebuiltBlocks].sort((left, right) => left.from - right.from);
+  if (sameCodeBlockLists(nextBlocks, mappedBlocks)) {
+    return buildCodeBlockStructureCache(mappedBlocks, value.structureRevision);
+  }
+
+  return buildCodeBlockStructureCache(nextBlocks, value.structureRevision + 1);
+}
+
+function getCodeBlockStructureCache(
+  state: EditorState,
+): CodeBlockStructureCache | null {
+  return state.field(codeBlockStructureField, false) ?? null;
 }
 
 /**
@@ -187,31 +421,45 @@ function scanCodeBlocks(state: EditorState): readonly CodeBlockInfo[] {
  * Rich-mode consumers should read this field via collectCodeBlocks() instead
  * of rewalking the full syntax tree on cursor, hover, or handler-only updates.
  */
-export const codeBlockStructureField = StateField.define<readonly CodeBlockInfo[]>({
+export const codeBlockStructureField = StateField.define<CodeBlockStructureCache>({
   create(state) {
-    return scanCodeBlocks(state);
+    return buildCodeBlockStructureCache(scanCodeBlocks(state));
   },
 
   update(value, tr) {
     if (tr.docChanged) {
-      return scanCodeBlocks(tr.state);
+      if (!syntaxTreeAvailable(tr.state, tr.state.doc.length)) {
+        const mappedBlocks = mapCodeBlocks(value.blocks, tr);
+        const blocks = scanCodeBlocks(tr.state);
+        if (sameCodeBlockLists(blocks, mappedBlocks)) {
+          return buildCodeBlockStructureCache(mappedBlocks, value.structureRevision);
+        }
+        return buildCodeBlockStructureCache(blocks, value.structureRevision + 1);
+      }
+      return incrementalCodeBlockStructureUpdate(value, tr);
     }
     if (
       syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
       syntaxTreeAvailable(tr.state, tr.state.doc.length)
     ) {
-      return scanCodeBlocks(tr.state);
+      const blocks = scanCodeBlocks(tr.state);
+      if (sameCodeBlockLists(blocks, value.blocks)) return value;
+      return buildCodeBlockStructureCache(blocks, value.structureRevision + 1);
     }
     return value;
   },
 });
+
+export function getCodeBlockStructureRevision(state: EditorState): number {
+  return getCodeBlockStructureCache(state)?.structureRevision ?? 0;
+}
 
 /**
  * Return code-block structure from the shared cache when present, and fall back
  * to a one-off tree walk in isolated test states that don't install the field.
  */
 export function collectCodeBlocks(state: EditorState): readonly CodeBlockInfo[] {
-  return state.field(codeBlockStructureField, false) ?? scanCodeBlocks(state);
+  return getCodeBlockStructureCache(state)?.blocks ?? scanCodeBlocks(state);
 }
 
 /** Decoration callback for a single code block. Shared by full and incremental paths. */

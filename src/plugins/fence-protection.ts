@@ -34,10 +34,10 @@ import {
   Annotation,
   EditorState,
   type Extension,
+  type Transaction,
   RangeSet,
   StateField,
 } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
 import { Decoration, EditorView } from "@codemirror/view";
 import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
 import type { FencedBlockInfo } from "../render/fenced-block-core";
@@ -48,7 +48,12 @@ import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
-import { collectCodeBlocks, type CodeBlockInfo } from "../render/code-block-render";
+import {
+  codeBlockStructureField,
+  collectCodeBlocks,
+  getCodeBlockStructureRevision,
+  type CodeBlockInfo,
+} from "../render/code-block-render";
 import { countColons } from "../parser";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 import { programmaticDocumentChangeAnnotation } from "../editor/programmatic-document-change";
@@ -75,6 +80,20 @@ interface FenceProtectionCache {
   readonly openingFenceBacktickRanges: readonly FenceRange[];
   readonly openingMathDelimiterRanges: readonly FenceRange[];
   readonly closingFenceAtomicRanges: RangeSet<Decoration>;
+}
+
+interface DisplayMathBlockInfo extends FencedBlockInfo {
+  readonly openDelimiterFrom: number;
+  readonly openingDelimiter: "$$" | "\\[";
+  readonly closingDelimiter: "$$" | "\\]";
+  readonly closeLineTo: number;
+}
+
+interface FenceProtectionInputs {
+  readonly allFencedBlocks: readonly FencedBlockInfo[];
+  readonly protectedDivs: readonly FencedDivInfo[];
+  readonly codeBlocks: readonly CodeBlockInfo[];
+  readonly displayMathBlocks: readonly DisplayMathBlockInfo[];
 }
 
 const closingFenceAtomicMark = Decoration.mark({});
@@ -104,18 +123,37 @@ export function collectFencedDivs(state: EditorState): FencedDivInfo[] {
  * trailing label like `{#eq:energy}`), so that `closingFenceProtection` only
  * blocks edits to the delimiter itself and leaves the label editable.
  */
-function collectDisplayMathBlocks(state: EditorState): FencedBlockInfo[] {
+function collectDisplayMathBlocks(state: EditorState): DisplayMathBlockInfo[] {
   const semantics = state.field(documentSemanticsField, false);
   if (!semantics) return [];
 
-  const results: FencedBlockInfo[] = [];
+  const results: DisplayMathBlockInfo[] = [];
   for (const region of semantics.mathRegions) {
     if (!region.isDisplay) continue;
 
     const openLine = state.doc.lineAt(region.from);
+    const openText = state.sliceDoc(openLine.from, openLine.to);
+    const openTrimmed = openText.trimStart();
+    const openIndent = openText.length - openTrimmed.length;
+    const openingDelimiter = openTrimmed.startsWith("$$")
+      ? "$$"
+      : openTrimmed.startsWith("\\[")
+      ? "\\["
+      : null;
+    if (!openingDelimiter) continue;
+
     // contentTo sits at the start of the closing delimiter mark ($$ or \])
     const closeLine = state.doc.lineAt(region.contentTo);
     if (closeLine.from === openLine.from) continue; // single-line display math
+    const closeText = state.sliceDoc(region.contentTo, closeLine.to);
+    const closeTrimmed = closeText.trimStart();
+    const closeIndent = closeText.length - closeTrimmed.length;
+    const closingDelimiter = closeTrimmed.startsWith("$$")
+      ? "$$"
+      : closeTrimmed.startsWith("\\]")
+      ? "\\]"
+      : null;
+    if (!closingDelimiter) continue;
 
     // Determine the end of the closing delimiter characters ($$  or \]).
     // region.labelFrom is defined when an EquationLabel follows the closing
@@ -126,14 +164,7 @@ function collectDisplayMathBlocks(state: EditorState): FencedBlockInfo[] {
       // labelFrom is the position right after the closing delimiter mark
       closeDelimTo = region.labelFrom;
     } else {
-      // No label: measure $$ or \] length from the closing line text
-      const closeText = state.sliceDoc(region.contentTo, closeLine.to);
-      const trimmed = closeText.trimStart();
-      let delimLen = 0;
-      if (trimmed.startsWith("$$")) delimLen = 2;
-      else if (trimmed.startsWith("\\]")) delimLen = 2;
-      const indent = closeText.length - trimmed.length;
-      closeDelimTo = region.contentTo + indent + delimLen;
+      closeDelimTo = region.contentTo + closeIndent + closingDelimiter.length;
     }
 
     results.push({
@@ -144,6 +175,10 @@ function collectDisplayMathBlocks(state: EditorState): FencedBlockInfo[] {
       closeFenceFrom: closeLine.from,
       closeFenceTo: closeDelimTo,
       singleLine: false,
+      openDelimiterFrom: openLine.from + openIndent,
+      openingDelimiter,
+      closingDelimiter,
+      closeLineTo: closeLine.to,
     });
   }
   return results;
@@ -166,7 +201,7 @@ function buildClosingFenceRanges(
   state: EditorState,
   protectedDivs: readonly FencedDivInfo[],
   codeBlocks: readonly CodeBlockInfo[],
-  displayMathBlocks: readonly FencedBlockInfo[],
+  displayMathBlocks: readonly DisplayMathBlockInfo[],
 ): FenceRange[] {
   const ranges: FenceRange[] = [];
   const seen = new Set<number>();
@@ -219,7 +254,6 @@ function buildOpeningFenceColonRanges(
 }
 
 function buildOpeningFenceBacktickRanges(
-  state: EditorState,
   codeBlocks: readonly CodeBlockInfo[],
 ): FenceRange[] {
   const ranges: FenceRange[] = [];
@@ -228,12 +262,10 @@ function buildOpeningFenceBacktickRanges(
     if (block.singleLine) continue;
     if (seen.has(block.openFenceFrom)) continue;
     seen.add(block.openFenceFrom);
-    const text = state.sliceDoc(block.openFenceFrom, block.openFenceTo);
-    const match = /^`{3,}/.exec(text);
-    if (match) {
+    if (block.openFenceMarker.startsWith("`")) {
       ranges.push({
         from: block.openFenceFrom,
-        to: block.openFenceFrom + match[0].length,
+        to: block.openFenceFrom + block.openFenceMarker.length,
       });
     }
   }
@@ -241,26 +273,17 @@ function buildOpeningFenceBacktickRanges(
 }
 
 function buildOpeningMathDelimiterRanges(
-  state: EditorState,
-  displayMathBlocks: readonly FencedBlockInfo[],
+  displayMathBlocks: readonly DisplayMathBlockInfo[],
 ): FenceRange[] {
   const ranges: FenceRange[] = [];
   const seen = new Set<number>();
   for (const block of displayMathBlocks) {
     if (seen.has(block.openFenceFrom)) continue;
     seen.add(block.openFenceFrom);
-    const text = state.sliceDoc(block.openFenceFrom, block.openFenceTo);
-    const trimmed = text.trimStart();
-    const indent = text.length - trimmed.length;
-    let delimLen = 0;
-    if (trimmed.startsWith("$$")) delimLen = 2;
-    else if (trimmed.startsWith("\\[")) delimLen = 2;
-    if (delimLen > 0) {
-      ranges.push({
-        from: block.openFenceFrom + indent,
-        to: block.openFenceFrom + indent + delimLen,
-      });
-    }
+    ranges.push({
+      from: block.openDelimiterFrom,
+      to: block.openDelimiterFrom + block.openingDelimiter.length,
+    });
   }
   return ranges;
 }
@@ -280,25 +303,37 @@ function buildClosingFenceAtomicRanges(
   return RangeSet.of(ranges, true);
 }
 
-function buildFenceProtectionCache(state: EditorState): FenceProtectionCache {
+function collectFenceProtectionInputs(state: EditorState): FenceProtectionInputs {
   const fencedDivs = collectFencedDivs(state);
   const protectedDivs = filterProtectedDivs(state, fencedDivs);
   const codeBlocks = collectCodeBlocks(state);
   const displayMathBlocks = collectDisplayMathBlocks(state);
-  const closingFenceRanges = buildClosingFenceRanges(
-    state,
-    protectedDivs,
-    codeBlocks,
-    displayMathBlocks,
-  );
-
   return {
     allFencedBlocks: [...fencedDivs, ...codeBlocks, ...displayMathBlocks],
     protectedDivs,
+    codeBlocks,
+    displayMathBlocks,
+  };
+}
+
+function buildFenceProtectionCache(
+  state: EditorState,
+  inputs = collectFenceProtectionInputs(state),
+): FenceProtectionCache {
+  const closingFenceRanges = buildClosingFenceRanges(
+    state,
+    inputs.protectedDivs,
+    inputs.codeBlocks,
+    inputs.displayMathBlocks,
+  );
+
+  return {
+    allFencedBlocks: inputs.allFencedBlocks,
+    protectedDivs: inputs.protectedDivs,
     closingFenceRanges,
-    openingFenceColonRanges: buildOpeningFenceColonRanges(state, protectedDivs),
-    openingFenceBacktickRanges: buildOpeningFenceBacktickRanges(state, codeBlocks),
-    openingMathDelimiterRanges: buildOpeningMathDelimiterRanges(state, displayMathBlocks),
+    openingFenceColonRanges: buildOpeningFenceColonRanges(state, inputs.protectedDivs),
+    openingFenceBacktickRanges: buildOpeningFenceBacktickRanges(inputs.codeBlocks),
+    openingMathDelimiterRanges: buildOpeningMathDelimiterRanges(inputs.displayMathBlocks),
     closingFenceAtomicRanges: buildClosingFenceAtomicRanges(state, closingFenceRanges),
   };
 }
@@ -306,7 +341,7 @@ function buildFenceProtectionCache(state: EditorState): FenceProtectionCache {
 function didSemanticsSliceChange(
   startState: EditorState,
   nextState: EditorState,
-  slice: "fencedDivs" | "mathRegions",
+  slice: "fencedDivs",
 ): boolean {
   const startSemantics = startState.field(documentSemanticsField, false);
   const nextSemantics = nextState.field(documentSemanticsField, false);
@@ -315,19 +350,287 @@ function didSemanticsSliceChange(
     !== getDocumentAnalysisSliceRevision(nextSemantics, slice);
 }
 
-function shouldRecomputeFenceProtectionCache(
-  startState: EditorState,
-  nextState: EditorState,
-  docChanged: boolean,
+function sameDisplayMathBlock(
+  left: DisplayMathBlockInfo,
+  right: DisplayMathBlockInfo,
 ): boolean {
-  if (docChanged) return true;
-  if (startState.field(pluginRegistryField, false) !== nextState.field(pluginRegistryField, false)) {
+  return left.from === right.from
+    && left.to === right.to
+    && left.openFenceFrom === right.openFenceFrom
+    && left.openFenceTo === right.openFenceTo
+    && left.closeFenceFrom === right.closeFenceFrom
+    && left.closeFenceTo === right.closeFenceTo
+    && left.openDelimiterFrom === right.openDelimiterFrom
+    && left.openingDelimiter === right.openingDelimiter
+    && left.closingDelimiter === right.closingDelimiter
+    && left.closeLineTo === right.closeLineTo;
+}
+
+function sameDisplayMathBlocks(
+  left: readonly DisplayMathBlockInfo[],
+  right: readonly DisplayMathBlockInfo[],
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (!sameDisplayMathBlock(left[index], right[index])) return false;
+  }
+  return true;
+}
+
+function mapSentinelPos(
+  pos: number,
+  tr: Transaction,
+  assoc: number,
+): number {
+  return pos < 0 ? pos : tr.changes.mapPos(pos, assoc);
+}
+
+function mapOptionalPos(
+  pos: number | undefined,
+  tr: Transaction,
+  assoc: number,
+): number | undefined {
+  return pos === undefined ? undefined : tr.changes.mapPos(pos, assoc);
+}
+
+function mapFencedBlockGeometry<T extends FencedBlockInfo>(
+  block: T,
+  tr: Transaction,
+): T {
+  const from = tr.changes.mapPos(block.from, 1);
+  const to = Math.max(from, tr.changes.mapPos(block.to, -1));
+  const openFenceFrom = tr.changes.mapPos(block.openFenceFrom, 1);
+  const openFenceTo = Math.max(openFenceFrom, tr.changes.mapPos(block.openFenceTo, -1));
+  const closeFenceFrom = mapSentinelPos(block.closeFenceFrom, tr, 1);
+  const closeFenceToBase = mapSentinelPos(block.closeFenceTo, tr, -1);
+  const closeFenceTo =
+    closeFenceFrom < 0 || closeFenceToBase < 0
+      ? closeFenceToBase
+      : Math.max(closeFenceFrom, closeFenceToBase);
+
+  if (
+    from === block.from
+    && to === block.to
+    && openFenceFrom === block.openFenceFrom
+    && openFenceTo === block.openFenceTo
+    && closeFenceFrom === block.closeFenceFrom
+    && closeFenceTo === block.closeFenceTo
+  ) {
+    return block;
+  }
+
+  return {
+    ...block,
+    from,
+    to,
+    openFenceFrom,
+    openFenceTo,
+    closeFenceFrom,
+    closeFenceTo,
+  };
+}
+
+function mapFencedBlocks(
+  blocks: readonly FencedBlockInfo[],
+  tr: Transaction,
+): readonly FencedBlockInfo[] {
+  let changed = false;
+  const mapped = blocks.map((block) => {
+    const next = mapFencedBlockGeometry(block, tr);
+    if (next !== block) changed = true;
+    return next;
+  });
+  return changed ? mapped : blocks;
+}
+
+function mapProtectedDiv(
+  div: FencedDivInfo,
+  tr: Transaction,
+): FencedDivInfo {
+  const mappedBlock = mapFencedBlockGeometry(div, tr);
+  const attrFrom = mapOptionalPos(div.attrFrom, tr, 1);
+  const attrToBase = mapOptionalPos(div.attrTo, tr, -1);
+  const attrTo =
+    attrFrom === undefined || attrToBase === undefined
+      ? attrToBase
+      : Math.max(attrFrom, attrToBase);
+  const titleFrom = mapOptionalPos(div.titleFrom, tr, 1);
+  const titleToBase = mapOptionalPos(div.titleTo, tr, -1);
+  const titleTo =
+    titleFrom === undefined || titleToBase === undefined
+      ? titleToBase
+      : Math.max(titleFrom, titleToBase);
+
+  if (
+    mappedBlock === div
+    && attrFrom === div.attrFrom
+    && attrTo === div.attrTo
+    && titleFrom === div.titleFrom
+    && titleTo === div.titleTo
+  ) {
+    return div;
+  }
+
+  return {
+    ...mappedBlock,
+    attrFrom,
+    attrTo,
+    titleFrom,
+    titleTo,
+  };
+}
+
+function mapProtectedDivs(
+  divs: readonly FencedDivInfo[],
+  tr: Transaction,
+): readonly FencedDivInfo[] {
+  let changed = false;
+  const mapped = divs.map((div) => {
+    const next = mapProtectedDiv(div, tr);
+    if (next !== div) changed = true;
+    return next;
+  });
+  return changed ? mapped : divs;
+}
+
+function mapFenceRange(
+  range: FenceRange,
+  tr: Transaction,
+): FenceRange {
+  const from = tr.changes.mapPos(range.from, 1);
+  const to = Math.max(from, tr.changes.mapPos(range.to, -1));
+  if (from === range.from && to === range.to) return range;
+  return { from, to };
+}
+
+function mapFenceRanges(
+  ranges: readonly FenceRange[],
+  tr: Transaction,
+): readonly FenceRange[] {
+  let changed = false;
+  const mapped = ranges.map((range) => {
+    const next = mapFenceRange(range, tr);
+    if (next !== range) changed = true;
+    return next;
+  });
+  return changed ? mapped : ranges;
+}
+
+function mapDisplayMathBlock(
+  block: DisplayMathBlockInfo,
+  tr: Transaction,
+): DisplayMathBlockInfo {
+  const from = tr.changes.mapPos(block.from, 1);
+  const to = Math.max(from, tr.changes.mapPos(block.to, -1));
+  const openFenceFrom = tr.changes.mapPos(block.openFenceFrom, 1);
+  const openFenceTo = Math.max(openFenceFrom, tr.changes.mapPos(block.openFenceTo, -1));
+  const closeFenceFrom = tr.changes.mapPos(block.closeFenceFrom, 1);
+  const closeFenceTo = Math.max(closeFenceFrom, tr.changes.mapPos(block.closeFenceTo, -1));
+  const openDelimiterFrom = tr.changes.mapPos(block.openDelimiterFrom, 1);
+  const closeLineTo = Math.max(closeFenceFrom, tr.changes.mapPos(block.closeLineTo, -1));
+
+  if (
+    from === block.from
+    && to === block.to
+    && openFenceFrom === block.openFenceFrom
+    && openFenceTo === block.openFenceTo
+    && closeFenceFrom === block.closeFenceFrom
+    && closeFenceTo === block.closeFenceTo
+    && openDelimiterFrom === block.openDelimiterFrom
+    && closeLineTo === block.closeLineTo
+  ) {
+    return block;
+  }
+
+  return {
+    ...block,
+    from,
+    to,
+    openFenceFrom,
+    openFenceTo,
+    closeFenceFrom,
+    closeFenceTo,
+    openDelimiterFrom,
+    closeLineTo,
+  };
+}
+
+function mapDisplayMathBlocks(
+  blocks: readonly DisplayMathBlockInfo[],
+  tr: Transaction,
+): readonly DisplayMathBlockInfo[] {
+  let changed = false;
+  const mapped = blocks.map((block) => {
+    const next = mapDisplayMathBlock(block, tr);
+    if (next !== block) changed = true;
+    return next;
+  });
+  return changed ? mapped : blocks;
+}
+
+function didCodeBlockFenceStructureChange(tr: Transaction): boolean {
+  const startStructure = tr.startState.field(codeBlockStructureField, false);
+  const nextStructure = tr.state.field(codeBlockStructureField, false);
+  if (!startStructure || !nextStructure) {
+    const before = collectCodeBlocks(tr.startState);
+    if (before.length === 0 && collectCodeBlocks(tr.state).length === 0) return false;
+    return tr.docChanged;
+  }
+  return getCodeBlockStructureRevision(tr.startState) !== getCodeBlockStructureRevision(tr.state);
+}
+
+function didDisplayMathFenceGeometryChange(tr: Transaction): boolean {
+  const before = collectDisplayMathBlocks(tr.startState);
+  const after = collectDisplayMathBlocks(tr.state);
+  if (!tr.docChanged) return !sameDisplayMathBlocks(before, after);
+  return !sameDisplayMathBlocks(mapDisplayMathBlocks(before, tr), after);
+}
+
+function shouldRebuildFenceProtectionCache(tr: Transaction): boolean {
+  if (tr.startState.field(pluginRegistryField, false) !== tr.state.field(pluginRegistryField, false)) {
     return true;
   }
-  if (syntaxTree(startState) !== syntaxTree(nextState)) return true;
-  if (didSemanticsSliceChange(startState, nextState, "fencedDivs")) return true;
-  if (didSemanticsSliceChange(startState, nextState, "mathRegions")) return true;
+  if (didSemanticsSliceChange(tr.startState, tr.state, "fencedDivs")) return true;
+  if (didCodeBlockFenceStructureChange(tr)) return true;
+  if (didDisplayMathFenceGeometryChange(tr)) return true;
   return false;
+}
+
+function mapFenceProtectionCache(
+  value: FenceProtectionCache,
+  tr: Transaction,
+): FenceProtectionCache {
+  const allFencedBlocks = mapFencedBlocks(value.allFencedBlocks, tr);
+  const protectedDivs = mapProtectedDivs(value.protectedDivs, tr);
+  const closingFenceRanges = mapFenceRanges(value.closingFenceRanges, tr);
+  const openingFenceColonRanges = mapFenceRanges(value.openingFenceColonRanges, tr);
+  const openingFenceBacktickRanges = mapFenceRanges(value.openingFenceBacktickRanges, tr);
+  const openingMathDelimiterRanges = mapFenceRanges(value.openingMathDelimiterRanges, tr);
+  const closingFenceAtomicRanges = closingFenceRanges === value.closingFenceRanges
+    ? value.closingFenceAtomicRanges
+    : value.closingFenceAtomicRanges.map(tr.changes);
+
+  if (
+    allFencedBlocks === value.allFencedBlocks
+    && protectedDivs === value.protectedDivs
+    && closingFenceRanges === value.closingFenceRanges
+    && openingFenceColonRanges === value.openingFenceColonRanges
+    && openingFenceBacktickRanges === value.openingFenceBacktickRanges
+    && openingMathDelimiterRanges === value.openingMathDelimiterRanges
+    && closingFenceAtomicRanges === value.closingFenceAtomicRanges
+  ) {
+    return value;
+  }
+
+  return {
+    allFencedBlocks,
+    protectedDivs,
+    closingFenceRanges,
+    openingFenceColonRanges,
+    openingFenceBacktickRanges,
+    openingMathDelimiterRanges,
+    closingFenceAtomicRanges,
+  };
 }
 
 const fenceProtectionCacheField = StateField.define<FenceProtectionCache>({
@@ -336,10 +639,16 @@ const fenceProtectionCacheField = StateField.define<FenceProtectionCache>({
   },
 
   update(value, tr) {
-    if (!shouldRecomputeFenceProtectionCache(tr.startState, tr.state, tr.docChanged)) {
-      return value;
+    if (!tr.docChanged) {
+      if (!shouldRebuildFenceProtectionCache(tr)) return value;
+      return buildFenceProtectionCache(tr.state);
     }
-    return buildFenceProtectionCache(tr.state);
+
+    if (shouldRebuildFenceProtectionCache(tr)) {
+      return buildFenceProtectionCache(tr.state);
+    }
+
+    return mapFenceProtectionCache(value, tr);
   },
 });
 
@@ -837,3 +1146,5 @@ export const fenceProtectionExtension: Extension = [
   pairedMathEntry,
   closingFenceAtomicRanges,
 ];
+
+export { fenceProtectionCacheField as _fenceProtectionCacheFieldForTest };

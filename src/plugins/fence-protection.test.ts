@@ -18,13 +18,16 @@ import {
   fenceOperationAnnotation,
   fenceProtectionExtension,
   getClosingFenceRanges,
+  getOpeningFenceBacktickRanges,
   getOpeningMathDelimiterRanges,
+  _fenceProtectionCacheFieldForTest as fenceProtectionCacheField,
 } from "./fence-protection";
 import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
 import { blockCounterField } from "./block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { editorFocusField, mathMacrosField } from "../render/render-core";
+import { _codeBlockStructureFieldForTest as codeBlockStructureField } from "../render/code-block-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import {
   createEditorState,
@@ -126,6 +129,24 @@ describe("openingFenceColonProtection", () => {
       changes: { from: 0, to: 0, insert: "text\n" },
     });
     expect(tr.state.doc.toString()).toBe(`text\n${doc}`);
+  });
+});
+
+describe("fenceProtectionCacheField", () => {
+  it("reuses the mapped cache on same-length code block body edits that do not move fences", () => {
+    const doc = "```js\nconsole.log('x')\n```";
+    const state = createCodeBlockProtectedState(doc);
+    const initialCache = state.field(fenceProtectionCacheField);
+
+    const nextState = state.update({
+      changes: {
+        from: doc.indexOf("console"),
+        to: doc.indexOf("console") + "console".length,
+        insert: "printer",
+      },
+    }).state;
+
+    expect(nextState.field(fenceProtectionCacheField)).toBe(initialCache);
   });
 });
 
@@ -295,6 +316,7 @@ function createCodeBlockProtectedState(doc: string) {
   return createEditorState(doc, {
     extensions: [
       markdown({ extensions: markdownExtensions }),
+      codeBlockStructureField,
       fenceProtectionExtension,
     ],
   });
@@ -473,18 +495,34 @@ describe("fenceProtection cache", () => {
     expect(getClosingFenceRanges(afterSelection)).toBe(initialRanges);
   });
 
-  it("invalidates closing-fence ranges on doc changes", () => {
+  it("reuses closing-fence ranges on non-structural code-block body edits", () => {
     const state = createCodeBlockProtectedState("```js\nconsole.log('x')\n```");
     const initialRanges = getClosingFenceRanges(state);
 
     const nextState = state.update({
-      changes: { from: 3, to: 5, insert: "ts" },
+      changes: { from: 6, to: 13, insert: "printer" },
     }).state;
 
-    expect(getClosingFenceRanges(nextState)).not.toBe(initialRanges);
+    expect(nextState.doc.toString()).toContain("printer.log");
+    expect(getClosingFenceRanges(nextState)).toBe(initialRanges);
   });
 
-  it("reuses math delimiter ranges on selection changes and invalidates on edits", () => {
+  it("invalidates backtick ranges when the opening fence marker changes with the same width", () => {
+    const doc = "```js\nconsole.log('x')\n```";
+    const state = createCodeBlockProtectedState(doc);
+    const initialRanges = getOpeningFenceBacktickRanges(state);
+
+    const nextState = state.update({
+      changes: { from: 0, to: 3, insert: "~~~" },
+      annotations: fenceOperationAnnotation.of(true),
+    }).state;
+
+    expect(nextState.doc.toString().startsWith("~~~js")).toBe(true);
+    expect(getOpeningFenceBacktickRanges(nextState)).toEqual([]);
+    expect(getOpeningFenceBacktickRanges(nextState)).not.toBe(initialRanges);
+  });
+
+  it("reuses math delimiter ranges on selection changes and non-delimiter edits", () => {
     const state = createMathProtectedState("$$\nx^2\n$$");
     const initialRanges = getOpeningMathDelimiterRanges(state);
     expect(getOpeningMathDelimiterRanges(state)).toBe(initialRanges);
@@ -492,10 +530,16 @@ describe("fenceProtection cache", () => {
     const afterSelection = state.update({ selection: { anchor: state.doc.length } }).state;
     expect(getOpeningMathDelimiterRanges(afterSelection)).toBe(initialRanges);
 
-    const afterEdit = afterSelection.update({
+    const afterBodyEdit = afterSelection.update({
       changes: { from: 3, to: 6, insert: "x^3" },
     }).state;
-    expect(getOpeningMathDelimiterRanges(afterEdit)).not.toBe(initialRanges);
+    expect(getOpeningMathDelimiterRanges(afterBodyEdit)).toBe(initialRanges);
+
+    const afterDelimiterEdit = afterBodyEdit.update({
+      changes: { from: 0, to: 2, insert: "\\[" },
+      annotations: fenceOperationAnnotation.of(true),
+    }).state;
+    expect(getOpeningMathDelimiterRanges(afterDelimiterEdit)).not.toBe(initialRanges);
   });
 });
 
