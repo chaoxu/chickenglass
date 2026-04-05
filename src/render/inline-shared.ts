@@ -38,6 +38,7 @@ export const MARK_NODES: ReadonlySet<string> = new Set([
 // ── Shared KaTeX HTML cache ────────────────────────────────────────────────
 
 const katexHtmlCache = new Map<string, string>();
+const katexErrorLogCache = new Set<string>();
 
 /**
  * Maximum number of entries the KaTeX HTML cache may hold.
@@ -50,6 +51,7 @@ const katexHtmlCache = new Map<string, string>();
  * in bulk.
  */
 const MAX_KATEX_CACHE_ENTRIES = 2000;
+const MAX_KATEX_ERROR_LOG_ENTRIES = 200;
 
 function serializeKatexMacros(macros: Record<string, string>): string {
   const keys = Object.keys(macros);
@@ -68,6 +70,7 @@ function katexCacheKey(
 
 export function clearKatexHtmlCache(): void {
   katexHtmlCache.clear();
+  katexErrorLogCache.clear();
 }
 
 const KATEX_PURIFY_EXTRA_TAGS = ["semantics", "annotation"] as const;
@@ -117,10 +120,25 @@ export function renderKatexToHtml(
     return cached;
   }
 
-  const html = katex.renderToString(latex, {
-    ...buildKatexOptions(isDisplay, macros),
-    output: "htmlAndMathml",
-  });
+  let html: string;
+  try {
+    html = katex.renderToString(latex, {
+      ...buildKatexOptions(isDisplay, macros),
+      output: "htmlAndMathml",
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    const logKey = `${key}\0${message}`;
+    if (!katexErrorLogCache.has(logKey)) {
+      if (katexErrorLogCache.size >= MAX_KATEX_ERROR_LOG_ENTRIES) {
+        katexErrorLogCache.clear();
+      }
+      katexErrorLogCache.add(logKey);
+      console.error("[katex] failed to render math", { latex, isDisplay }, error);
+    }
+    throw error;
+  }
+
   const sanitized = sanitizeKatexHtml(html);
   if (katexHtmlCache.size >= MAX_KATEX_CACHE_ENTRIES) {
     katexHtmlCache.clear();

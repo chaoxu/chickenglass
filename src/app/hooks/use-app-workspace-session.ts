@@ -93,7 +93,7 @@ export function mergeChildrenIntoTree(
   return changed ? { ...tree, children: mapped } : tree;
 }
 
-export type SidebarTab = "files" | "outline" | "diagnostics";
+export type SidebarTab = "files" | "outline" | "diagnostics" | "runtime";
 
 export interface AppWorkspaceSessionController {
   settings: ReturnType<typeof useSettings>["settings"];

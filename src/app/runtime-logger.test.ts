@@ -36,12 +36,14 @@ describe("runtime logger", () => {
     ).__TAURI_INTERNALS__ = { invoke: invokeMock };
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     console.error = originalConsoleError;
     console.warn = originalConsoleWarn;
     window.onerror = originalOnError;
     window.onunhandledrejection = originalOnUnhandledRejection;
     delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    const { clearRuntimeLogs } = await import("./runtime-logger");
+    clearRuntimeLogs();
     vi.clearAllMocks();
     vi.resetModules();
   });
@@ -52,9 +54,12 @@ describe("runtime logger", () => {
     console.error = errorSpy;
     console.warn = warnSpy;
 
-    const { installDesktopRuntimeLogging } = await import("./runtime-logger");
-    await installDesktopRuntimeLogging();
-    await installDesktopRuntimeLogging();
+    const {
+      getRuntimeLogsSnapshot,
+      installRuntimeLogging,
+    } = await import("./runtime-logger");
+    await installRuntimeLogging();
+    await installRuntimeLogging();
 
     const error = new Error("boom");
     console.error("[save] failed", { path: "notes.md" }, error);
@@ -81,11 +86,16 @@ describe("runtime logger", () => {
     expect(entry.details.args).toContain('{"path":"notes.md"}');
     expect(errorSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy).not.toHaveBeenCalled();
+
+    const [runtimeEntry] = getRuntimeLogsSnapshot();
+    expect(runtimeEntry.source).toBe("console.error");
+    expect(runtimeEntry.message).toBe("[save] failed");
+    expect(runtimeEntry.stack).toContain("boom");
   });
 
   it("logs window.onerror and unhandled rejections with structured details", async () => {
-    const { getDesktopLogDirectory, installDesktopRuntimeLogging } = await import("./runtime-logger");
-    await installDesktopRuntimeLogging();
+    const { getDesktopLogDirectory, installRuntimeLogging } = await import("./runtime-logger");
+    await installRuntimeLogging();
 
     const uncaught = new Error("uncaught");
     window.onerror?.("uncaught", "app.tsx", 10, 12, uncaught);
@@ -115,5 +125,24 @@ describe("runtime logger", () => {
     expect(second.details.reason).toBe("Error: rejected");
 
     await expect(getDesktopLogDirectory()).resolves.toBe("/logs/coflat");
+  });
+
+  it("captures browser runtime logs in the in-app store without Tauri", async () => {
+    delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+
+    const {
+      getRuntimeLogsSnapshot,
+      installRuntimeLogging,
+    } = await import("./runtime-logger");
+    await installRuntimeLogging();
+
+    console.error("[browser] failed", new Error("dev-only"));
+    await flushAsyncWork();
+
+    expect(invokeMock).not.toHaveBeenCalled();
+    const [runtimeEntry] = getRuntimeLogsSnapshot();
+    expect(runtimeEntry.source).toBe("console.error");
+    expect(runtimeEntry.message).toBe("[browser] failed");
+    expect(runtimeEntry.stack).toContain("dev-only");
   });
 });
