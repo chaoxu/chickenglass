@@ -1,9 +1,11 @@
 import { act, createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { Text } from "@codemirror/state";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileSystem } from "../file-manager";
 import type { EditorDocumentChange } from "../editor-doc-change";
+import { editorDocumentToString, emptyEditorDocument } from "../editor-doc-change";
 import { MemoryFileSystem } from "../file-manager";
 import { SourceMap } from "../source-map";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
@@ -195,7 +197,28 @@ describe("useEditorSession", () => {
     expect(ref.result.docRevision).toBe(initialRevision + 1);
     expect(ref.result.currentDocument?.dirty).toBe(true);
     expect(ref.result.getCurrentDocText()).toBe("hello!");
-    expect(ref.result.liveDocs.current.get("draft.md")).toBe("hello!");
+    expect(editorDocumentToString(ref.result.liveDocs.current.get("draft.md") ?? emptyEditorDocument)).toBe("hello!");
+  });
+
+  it("keeps typing on the incremental Text model until a caller explicitly needs a flat string", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "hello" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+    });
+
+    const toStringSpy = vi.spyOn(Text.prototype, "toString");
+
+    act(() => {
+      ref.result.handleDocChange([{ from: 5, to: 5, insert: "!" }]);
+    });
+
+    expect(toStringSpy).not.toHaveBeenCalled();
+    expect(ref.result.getCurrentDocText()).toBe("hello!");
+    expect(toStringSpy).toHaveBeenCalledTimes(1);
+    toStringSpy.mockRestore();
   });
 
   it("ignores stale openFile reads when a newer request wins", async () => {

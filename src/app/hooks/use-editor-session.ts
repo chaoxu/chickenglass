@@ -23,7 +23,11 @@ import type {
 } from "../unsaved-changes";
 import {
   applyEditorDocumentChanges,
+  createEditorDocumentText,
+  editorDocumentToString,
+  emptyEditorDocument,
   type EditorDocumentChange,
+  type EditorDocumentText,
 } from "../editor-doc-change";
 import { useEditorSessionPersistence } from "./use-editor-session-persistence";
 
@@ -44,8 +48,8 @@ export interface UseEditorSessionReturn {
   editorDoc: string;
   docRevision: number;
   setEditorDoc: React.Dispatch<React.SetStateAction<string>>;
-  buffers: React.RefObject<Map<string, string>>;
-  liveDocs: React.RefObject<Map<string, string>>;
+  buffers: React.RefObject<Map<string, EditorDocumentText>>;
+  liveDocs: React.RefObject<Map<string, EditorDocumentText>>;
   pipeline: SavePipeline;
   getCurrentDocText: () => string;
   isPathOpen: (path: string) => boolean;
@@ -84,11 +88,24 @@ function makeTransitionRequest(
 
 function documentForPath(
   path: string | null,
-  liveDocs: RefObject<Map<string, string>>,
-  buffers: RefObject<Map<string, string>>,
+  liveDocs: RefObject<Map<string, EditorDocumentText>>,
+  buffers: RefObject<Map<string, EditorDocumentText>>,
 ): string {
   if (!path) return "";
-  return liveDocs.current.get(path) ?? buffers.current.get(path) ?? "";
+  return editorDocumentToString(
+    liveDocs.current.get(path)
+    ?? buffers.current.get(path)
+    ?? emptyEditorDocument,
+  );
+}
+
+function documentTextForPath(
+  path: string | null,
+  liveDocs: RefObject<Map<string, EditorDocumentText>>,
+  buffers: RefObject<Map<string, EditorDocumentText>>,
+): EditorDocumentText {
+  if (!path) return emptyEditorDocument;
+  return liveDocs.current.get(path) ?? buffers.current.get(path) ?? emptyEditorDocument;
 }
 
 export function useEditorSession({
@@ -103,8 +120,8 @@ export function useEditorSession({
   );
   const [editorDoc, setEditorDoc] = useState("");
   const [docRevision, setDocRevision] = useState(0);
-  const buffers = useRef<Map<string, string>>(new Map());
-  const liveDocs = useRef<Map<string, string>>(new Map());
+  const buffers = useRef<Map<string, EditorDocumentText>>(new Map());
+  const liveDocs = useRef<Map<string, EditorDocumentText>>(new Map());
   const sourceMaps = useRef<Map<string, SourceMap>>(new Map());
   const stateRef = useRef<EditorSessionState>(sessionState);
   const openFileRequestRef = useRef(0);
@@ -164,12 +181,12 @@ export function useEditorSession({
     writeDocumentSnapshot(path, content, sourceMap as SourceMap | null);
 
   const discardDocumentChanges = useCallback((path: string) => {
-    const savedDoc = buffers.current.get(path) ?? "";
+    const savedDoc = buffers.current.get(path) ?? emptyEditorDocument;
     liveDocs.current.set(path, savedDoc);
     commitSessionState(
       markSessionDocumentDirty(stateRef.current, path, false),
       stateRef.current.currentDocument?.path === path
-        ? { editorDoc: savedDoc }
+        ? { editorDoc: editorDocumentToString(savedDoc) }
         : undefined,
     );
   }, [commitSessionState]);
@@ -225,13 +242,13 @@ export function useEditorSession({
     const currentPath = stateRef.current.currentDocument?.path;
     if (!currentPath) return;
 
-    const previousDoc = documentForPath(currentPath, liveDocs, buffers);
+    const previousDoc = documentTextForPath(currentPath, liveDocs, buffers);
     const doc = applyEditorDocumentChanges(previousDoc, changes);
     liveDocs.current.set(currentPath, doc);
     pipeline.bumpRevision(currentPath);
     setDocRevision((value) => value + 1);
 
-    const isDirty = doc !== (buffers.current.get(currentPath) ?? "");
+    const isDirty = !doc.eq(buffers.current.get(currentPath) ?? emptyEditorDocument);
     const nextState = markSessionDocumentDirty(stateRef.current, currentPath, isDirty);
     if (nextState !== stateRef.current) {
       commitSessionState(nextState);
@@ -242,10 +259,11 @@ export function useEditorSession({
     const currentDocument = getCurrentSessionDocument(stateRef.current);
     if (currentDocument?.path !== path) return;
 
+    const nextDoc = createEditorDocumentText(doc);
     if (!currentDocument.dirty) {
-      buffers.current.set(path, doc);
+      buffers.current.set(path, nextDoc);
     }
-    liveDocs.current.set(path, doc);
+    liveDocs.current.set(path, nextDoc);
     commitSessionState(
       currentDocument.dirty
         ? stateRef.current
@@ -299,9 +317,10 @@ export function useEditorSession({
           sourceMaps.current.delete(previousPath);
         }
 
+        const documentText = createEditorDocumentText(content);
         sourceMaps.current.delete(path);
-        buffers.current.set(path, content);
-        liveDocs.current.set(path, content);
+        buffers.current.set(path, documentText);
+        liveDocs.current.set(path, documentText);
         pipeline.initPath(path, content);
         commitSessionState(
           setCurrentSessionDocument(stateRef.current, {
@@ -347,9 +366,11 @@ export function useEditorSession({
       sourceMaps.current.delete(previousPath);
     }
 
+    const emptyDoc = emptyEditorDocument;
+    const documentText = createEditorDocumentText(content);
     sourceMaps.current.delete(path);
-    buffers.current.set(path, "");
-    liveDocs.current.set(path, content);
+    buffers.current.set(path, emptyDoc);
+    liveDocs.current.set(path, documentText);
     commitSessionState(
       setCurrentSessionDocument(stateRef.current, {
         path,
@@ -365,9 +386,10 @@ export function useEditorSession({
 
     try {
       const content = await fs.readFile(path);
+      const documentText = createEditorDocumentText(content);
       sourceMaps.current.delete(path);
-      buffers.current.set(path, content);
-      liveDocs.current.set(path, content);
+      buffers.current.set(path, documentText);
+      liveDocs.current.set(path, documentText);
       pipeline.initPath(path, content);
       commitSessionState(
         markSessionDocumentDirty(stateRef.current, path, false),

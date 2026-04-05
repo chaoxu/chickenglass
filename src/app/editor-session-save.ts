@@ -1,4 +1,5 @@
 import { basename } from "./lib/utils";
+import type { EditorDocumentText } from "./editor-doc-change";
 import {
   markSessionDocumentDirty,
   renameSessionDocument,
@@ -7,11 +8,11 @@ import type { EditorSessionState } from "./editor-session-model";
 
 export interface ApplySaveAsResultOptions {
   state: EditorSessionState;
-  buffers: Map<string, string>;
-  liveDocs: Map<string, string>;
+  buffers: Map<string, EditorDocumentText>;
+  liveDocs: Map<string, EditorDocumentText>;
   oldPath: string;
   newPath: string;
-  doc: string;
+  doc: EditorDocumentText;
 }
 
 /**
