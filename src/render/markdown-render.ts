@@ -6,7 +6,14 @@ import {
 import { type EditorState, type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
-import { type VisibleRange, cursorInRange, decorationHidden, addMarkerReplacement, createCursorSensitiveViewPlugin } from "./render-utils";
+import {
+  type VisibleRange,
+  addMarkerReplacement,
+  createCursorSensitiveViewPlugin,
+  cursorInRange,
+  decorationHidden,
+  mergeRanges,
+} from "./render-utils";
 import { findTrailingHeadingAttributes } from "../semantics/heading-ancestry";
 import { isSafeUrl } from "../lib/url-utils";
 import { openExternalUrl } from "../lib/open-link";
@@ -304,6 +311,81 @@ const CURSOR_SENSITIVE_NODES = new Set(
   [...MARKDOWN_HANDLERS].filter(([, h]) => h.cursorSensitive).map(([name]) => name),
 );
 
+function normalizeDirtyRange(
+  from: number,
+  to: number,
+  docLength: number,
+): VisibleRange {
+  const start = Math.max(0, Math.min(from, docLength));
+  const end = Math.max(0, Math.min(to, docLength));
+  if (start !== end) {
+    return start < end ? { from: start, to: end } : { from: end, to: start };
+  }
+  if (docLength === 0) {
+    return { from: 0, to: 0 };
+  }
+  const windowStart = Math.max(0, Math.min(start, docLength - 1));
+  return { from: windowStart, to: Math.min(docLength, windowStart + 1) };
+}
+
+function mapNodeRange(
+  update: ViewUpdate,
+  from: number,
+  to: number,
+): VisibleRange {
+  return normalizeDirtyRange(
+    update.changes.mapPos(from, 1),
+    update.changes.mapPos(to, -1),
+    update.state.doc.length,
+  );
+}
+
+function collectMarkdownDirtyRangesInState(
+  state: EditorState,
+  rangeFrom: number,
+  rangeTo: number,
+  pushRange: (from: number, to: number) => void,
+): void {
+  const tree = syntaxTree(state);
+  const seen = new Set<string>();
+  const pushNodeRange = (from: number, to: number) => {
+    const key = `${from}:${to}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    pushRange(from, to);
+  };
+
+  tree.iterate({
+    from: rangeFrom,
+    to: rangeTo,
+    enter(node) {
+      if (MARKDOWN_HANDLERS.has(node.name)) {
+        pushNodeRange(node.from, node.to);
+      }
+    },
+  });
+
+  const positions = rangeFrom === rangeTo ? [rangeFrom] : [rangeFrom, rangeTo];
+  for (const pos of positions) {
+    const clampedPos = Math.max(0, Math.min(pos, state.doc.length));
+    for (const side of [1, -1] as const) {
+      let node = tree.resolveInner(clampedPos, side);
+      while (true) {
+        if (MARKDOWN_HANDLERS.has(node.name)) {
+          pushNodeRange(node.from, node.to);
+        }
+        const parent = node.parent;
+        if (!parent) break;
+        node = parent;
+      }
+    }
+  }
+}
+
+function markdownCursorContextChanged(update: ViewUpdate): boolean {
+  return cursorContextKey(update.state) !== cursorContextKey(update.startState);
+}
+
 /**
  * Return a key identifying all cursor-sensitive nodes that contain the
  * primary selection. Changes in this key mean the cursor crossed a
@@ -354,10 +436,40 @@ export function markdownShouldUpdate(update: ViewUpdate): boolean {
   }
 
   if (update.selectionSet) {
-    return cursorContextKey(update.state) !== cursorContextKey(update.startState);
+    return markdownCursorContextChanged(update);
   }
 
   return false;
+}
+
+/**
+ * Dirty-range narrowing for markdown doc changes (#823).
+ *
+ * Expands literal edits to any markdown-rendered nodes that overlap the change
+ * in the old or new tree so mapped decorations outside those fragments stay
+ * valid. Cursor-context changes still force a full rebuild.
+ */
+export function computeMarkdownDocChangeRanges(
+  update: ViewUpdate,
+): readonly VisibleRange[] | null {
+  if (markdownCursorContextChanged(update)) {
+    return null;
+  }
+
+  const dirtyRanges: VisibleRange[] = [];
+  const pushRange = (from: number, to: number) => {
+    dirtyRanges.push(normalizeDirtyRange(from, to, update.state.doc.length));
+  };
+
+  update.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    pushRange(fromB, toB);
+    collectMarkdownDirtyRangesInState(update.startState, fromA, toA, (nodeFrom, nodeTo) => {
+      dirtyRanges.push(mapNodeRange(update, nodeFrom, nodeTo));
+    });
+    collectMarkdownDirtyRangesInState(update.state, fromB, toB, pushRange);
+  });
+
+  return mergeRanges(dirtyRanges);
 }
 
 /**
@@ -399,10 +511,8 @@ export { collectMarkdownItems as _collectMarkdownItemsForTest };
 export const markdownRenderPlugin: Extension = createCursorSensitiveViewPlugin(
   collectMarkdownItems,
   {
-    selectionCheck: (update) => {
-      if (!update.selectionSet) return false;
-      return cursorContextKey(update.state) !== cursorContextKey(update.startState);
-    },
+    selectionCheck: markdownCursorContextChanged,
+    docChangeRanges: computeMarkdownDocChangeRanges,
     pluginSpec: {
       eventHandlers: {
         click(event: MouseEvent, _view: EditorView) {
