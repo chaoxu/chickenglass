@@ -1,7 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import katex from "katex";
 import { isSafeUrl } from "../lib/url-utils";
 import { buildKatexOptions } from "../lib/katex-options";
-import { MARK_NODES, sanitizeCslHtml } from "./inline-shared";
+import { MARK_NODES, clearKatexHtmlCache, renderKatexToHtml, sanitizeCslHtml } from "./inline-shared";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  clearKatexHtmlCache();
+});
 
 // ── isSafeUrl ──────────────────────────────────────────────────────────────
 
@@ -118,6 +124,28 @@ describe("buildKatexOptions", () => {
     it("rejects unknown commands", () => {
       expect(trust({ command: "\\input", url: "https://x.com" })).toBe(false);
     });
+  });
+});
+
+describe("renderKatexToHtml", () => {
+  it("sanitizes rendered KaTeX HTML without dropping source-mapping metadata", () => {
+    vi.spyOn(katex, "renderToString").mockReturnValue(
+      '<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi href="javascript:alert(1)">x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><a href="javascript:alert(1)" data-loc-start="0" data-loc-end="1"><span class="mord" data-loc-start="0" data-loc-end="1">x</span></a><img src="x" onerror="alert(1)"></span></span>',
+    );
+
+    const html = renderKatexToHtml("\\text{issue908-inline}", false, {});
+
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("onerror");
+    expect(html).not.toContain('href="javascript:alert(1)"');
+    expect(html).toContain('data-loc-start="0"');
+    expect(html).toContain("<semantics>");
+    expect(html).toContain('<annotation encoding="application/x-tex">x</annotation>');
+  });
+
+  it("preserves safe KaTeX links", () => {
+    const html = renderKatexToHtml("\\href{https://example.com}{x}", false, {});
+    expect(html).toContain('href="https://example.com"');
   });
 });
 

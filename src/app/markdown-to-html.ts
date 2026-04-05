@@ -16,7 +16,6 @@
  * - Footnotes
  */
 
-import katex from "katex";
 import { parser as baseParser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
 import type { InlineRenderSurface } from "../inline-surface";
@@ -27,9 +26,8 @@ import {
 } from "../inline-fragments";
 import { htmlRenderExtensions } from "../parser";
 import { readBracedLabelId } from "../parser/label-utils";
-import { buildKatexOptions } from "../lib/katex-options";
 import { isSafeUrl } from "../lib/url-utils";
-import { sanitizeCslHtml } from "../render/inline-shared";
+import { renderKatexToHtml, sanitizeCslHtml } from "../render/inline-shared";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isRelativeFilePath } from "../lib/pdf-target";
 import { capitalize } from "../lib/utils";
@@ -84,7 +82,7 @@ function renderMath(
   macros?: Record<string, string>,
 ): string {
   try {
-    return katex.renderToString(latex, buildKatexOptions(displayMode, macros));
+    return renderKatexToHtml(latex, displayMode, macros ?? {});
   } catch (_e) {
     // best-effort: KaTeX render failed — show escaped source as error indicator
     const escaped = escapeHtml(latex);

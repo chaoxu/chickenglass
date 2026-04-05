@@ -1,8 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import katex from "katex";
 import { markdownToHtml, renderInline, type BlockCounterEntry } from "./markdown-to-html";
 import type { CslJsonItem } from "../citations/bibtex-parser";
 import type { CslProcessor } from "../citations/csl-processor";
 import { CSS } from "../constants/css-classes";
+import { clearKatexHtmlCache } from "../render/inline-shared";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  clearKatexHtmlCache();
+});
 
 const ieeeCslEntryHtml = [
   '<div class="csl-entry">',
@@ -189,6 +196,21 @@ describe("markdownToHtml", () => {
     expect(html).toContain(`class="${CSS.mathDisplayNumber}"`);
     expect(html).toContain("(1)");
     expect(html).toContain("(2)");
+  });
+
+  it("sanitizes display math HTML before document-surface insertion", () => {
+    vi.spyOn(katex, "renderToString").mockReturnValue(
+      '<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi href="javascript:alert(1)">x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><a href="javascript:alert(1)" data-loc-start="0" data-loc-end="1"><span class="mord" data-loc-start="0" data-loc-end="1">x</span></a><img src="x" onerror="alert(1)"></span></span>',
+    );
+
+    const html = markdownToHtml("$$\n\\text{issue908-block}\n$$");
+
+    expect(html).toContain(`class="${CSS.mathDisplay}"`);
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("onerror");
+    expect(html).not.toContain('href="javascript:alert(1)"');
+    expect(html).toContain('data-loc-start="0"');
+    expect(html).toContain('<annotation encoding="application/x-tex">x</annotation>');
   });
 
   it("renders fenced divs with class", () => {
