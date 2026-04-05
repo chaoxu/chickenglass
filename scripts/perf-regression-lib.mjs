@@ -1,4 +1,4 @@
-export const PERF_REPORT_VERSION = 2;
+export const PERF_REPORT_VERSION = 3;
 
 function roundMs(value) {
   return Number(value.toFixed(3));
@@ -72,6 +72,31 @@ function aggregateMetricEntries(entries) {
     .sort((left, right) => right.meanValue - left.meanValue);
 }
 
+function validateRequiredMetrics(metrics, requiredMetrics, expectedSamples) {
+  const uniqueRequiredMetrics = [...new Set(requiredMetrics)].sort();
+  if (uniqueRequiredMetrics.length === 0) {
+    return;
+  }
+
+  const metricsByName = new Map(metrics.map((entry) => [entry.name, entry]));
+  const failures = [];
+
+  for (const name of uniqueRequiredMetrics) {
+    const metric = metricsByName.get(name);
+    if (!metric) {
+      failures.push(`${name} (missing)`);
+      continue;
+    }
+    if (metric.samples !== expectedSamples) {
+      failures.push(`${name} (samples ${metric.samples}/${expectedSamples})`);
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`Missing required perf metrics: ${failures.join(", ")}`);
+  }
+}
+
 export function buildPerfRegressionReport({
   scenario,
   iterations,
@@ -79,6 +104,7 @@ export function buildPerfRegressionReport({
   settleMs,
   snapshots,
   metrics = [],
+  requiredMetrics = [],
   chromePort,
   appUrl,
 }) {
@@ -92,7 +118,7 @@ export function buildPerfRegressionReport({
     metricEntries.push(...(snapshot.metrics ?? []));
   }
 
-  return {
+  const report = {
     version: PERF_REPORT_VERSION,
     capturedAt: new Date().toISOString(),
     scenario,
@@ -104,7 +130,11 @@ export function buildPerfRegressionReport({
     frontend: aggregateSnapshotEntries(frontendEntries),
     backend: aggregateSnapshotEntries(backendEntries),
     metrics: aggregateMetricEntries([...metricEntries, ...metrics]),
+    requiredMetrics: [...new Set(requiredMetrics)].sort(),
   };
+
+  validateRequiredMetrics(report.metrics, report.requiredMetrics, iterations);
+  return report;
 }
 
 function compareEntrySets(baselineEntries, currentEntries, thresholdPct, minDeltaMs) {

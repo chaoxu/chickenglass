@@ -110,6 +110,42 @@ describe("perf regression reports", () => {
       maxValue: 2,
       samples: 2,
     });
+    expect(report.requiredMetrics).toEqual([]);
+  });
+
+  it("fails fast when required metrics are missing or incomplete", () => {
+    expect(() => buildPerfRegressionReport({
+      scenario: "typing-rich-burst",
+      iterations: 2,
+      warmup: 0,
+      settleMs: 200,
+      chromePort: 9322,
+      appUrl: "http://127.0.0.1:5173",
+      requiredMetrics: [
+        "typing.wall_ms.cogirth_main2.inline_math",
+        "typing.dispatch_mean_ms.cogirth_main2.citation_ref",
+      ],
+      snapshots: [
+        {
+          frontend: { summaries: [] },
+          backend: null,
+          metrics: [
+            {
+              name: "typing.wall_ms.cogirth_main2.inline_math",
+              unit: "ms",
+              value: 10,
+            },
+          ],
+        },
+        {
+          frontend: { summaries: [] },
+          backend: null,
+          metrics: [],
+        },
+      ],
+    })).toThrow(
+      "Missing required perf metrics: typing.dispatch_mean_ms.cogirth_main2.citation_ref (missing), typing.wall_ms.cogirth_main2.inline_math (samples 1/2)",
+    );
   });
 
   it("flags regressions only when both percent and absolute deltas are exceeded", () => {
