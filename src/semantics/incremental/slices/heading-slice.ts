@@ -48,13 +48,7 @@ function nextHeadingNumber(
     counters[level] = 0;
   }
 
-  const parts: number[] = [];
-  for (let level = 1; level <= heading.level; level++) {
-    if (counters[level] !== 0) {
-      parts.push(counters[level]);
-    }
-  }
-  return parts.join(".");
+  return counters.slice(1, heading.level + 1).join(".");
 }
 
 function finalizeHeading(
