@@ -17,6 +17,7 @@
 import {
   type DecorationSet,
   Decoration,
+  type EditorView,
 } from "@codemirror/view";
 import { EditorState, type Extension, type Range } from "@codemirror/state";
 import type { BlockAttrs } from "./plugin-types";
@@ -37,6 +38,7 @@ import {
   createFencedBlockDecorationField,
   mathMacrosField,
 } from "../render/render-core";
+import { mutateWithScrollStabilizedMeasure } from "../render/render-utils";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import {
@@ -235,13 +237,19 @@ function computeEmbedSrc(
  */
 function tryResizeIframe(
   iframe: HTMLIFrameElement,
+  view?: EditorView,
 ): "resized" | "unavailable" | "blocked" {
   try {
     const doc = iframe.contentDocument;
     if (doc?.body) {
       const height = doc.body.scrollHeight;
       if (height > 0) {
-        iframe.style.height = `${height}px`;
+        const nextHeight = `${height}px`;
+        if (iframe.style.height !== nextHeight) {
+          mutateWithScrollStabilizedMeasure(view, () => {
+            iframe.style.height = nextHeight;
+          });
+        }
         return "resized";
       }
     }
@@ -259,8 +267,11 @@ function tryResizeIframe(
  * same-origin or sandbox allows access). If cross-origin blocks access,
  * stops immediately. Otherwise polls until content is ready.
  */
-function autoResizeGistIframe(iframe: HTMLIFrameElement): () => void {
-  const result = tryResizeIframe(iframe);
+function autoResizeGistIframe(
+  iframe: HTMLIFrameElement,
+  view?: EditorView,
+): () => void {
+  const result = tryResizeIframe(iframe, view);
   if (result !== "unavailable") {
     return () => {};
   }
@@ -273,7 +284,7 @@ function autoResizeGistIframe(iframe: HTMLIFrameElement): () => void {
   const poll = (): void => {
     if (cancelled) return;
     attempts++;
-    const r = tryResizeIframe(iframe);
+    const r = tryResizeIframe(iframe, view);
     if (r === "unavailable" && attempts < IFRAME_MAX_ATTEMPTS) {
       timer = setTimeout(poll, IFRAME_POLL_INTERVAL_MS);
     } else {
@@ -316,6 +327,26 @@ class EmbedWidget extends RenderWidget {
     super();
   }
 
+  private attachGistResize(
+    wrapper: HTMLElement,
+    iframe: HTMLIFrameElement,
+    view?: EditorView,
+  ): void {
+    let cancelResize = () => {};
+    const handleLoad = (): void => {
+      cancelResize();
+      cancelResize = autoResizeGistIframe(iframe, view);
+    };
+    iframe.addEventListener("load", handleLoad, { once: true });
+    this.gistCleanup.set(wrapper, {
+      iframe,
+      handleLoad,
+      cancelResize: () => {
+        cancelResize();
+      },
+    });
+  }
+
   createDOM(): HTMLElement {
     const wrapper = document.createElement("div");
     wrapper.className = CSS.embed(this.embedType);
@@ -334,24 +365,24 @@ class EmbedWidget extends RenderWidget {
       iframe.className = CSS.embedIframe;
     }
 
-    // Gist embeds: auto-resize iframe to match content height
-    if (this.embedType === "gist") {
-      let cancelResize = () => {};
-      const handleLoad = (): void => {
-        cancelResize();
-        cancelResize = autoResizeGistIframe(iframe);
-      };
-      iframe.addEventListener("load", handleLoad, { once: true });
-      this.gistCleanup.set(wrapper, {
-        iframe,
-        handleLoad,
-        cancelResize: () => {
-          cancelResize();
-        },
-      });
+    wrapper.appendChild(iframe);
+    return wrapper;
+  }
+
+  override toDOM(view?: EditorView): HTMLElement {
+    const wrapper = this.createDOM();
+    this.setSourceRangeAttrs(wrapper);
+    if (this.sourceFrom >= 0 && view) {
+      this.bindSourceReveal(wrapper, view);
     }
 
-    wrapper.appendChild(iframe);
+    if (this.embedType === "gist") {
+      const iframe = wrapper.querySelector("iframe");
+      if (iframe instanceof HTMLIFrameElement) {
+        this.attachGistResize(wrapper, iframe, view);
+      }
+    }
+
     return wrapper;
   }
 
