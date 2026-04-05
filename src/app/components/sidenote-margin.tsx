@@ -171,11 +171,20 @@ export function measureSidenotePositions(
     return result;
   }
 
+  const heightStartIndex = normalizedStartIndex > 0 ? normalizedStartIndex - 1 : normalizedStartIndex;
+  const measuredHeights = new Array<number>(entries.length);
+  // Batch DOM reads before placement math so we do not force layout in the
+  // collision-resolution loop.
+  for (let index = heightStartIndex; index < entries.length; index += 1) {
+    const entry = entries[index];
+    measuredHeights[index] = itemRefs.get(entry.id)?.offsetHeight ?? ESTIMATED_SIDENOTE_HEIGHT;
+  }
+
   let nextAvailableY = 0;
   if (normalizedStartIndex > 0) {
     const previousEntry = entries[normalizedStartIndex - 1];
     const previousTop = result[normalizedStartIndex - 1] ?? previousEntry.anchorY;
-    const previousHeight = itemRefs.get(previousEntry.id)?.offsetHeight ?? ESTIMATED_SIDENOTE_HEIGHT;
+    const previousHeight = measuredHeights[normalizedStartIndex - 1] ?? ESTIMATED_SIDENOTE_HEIGHT;
     nextAvailableY = previousTop + previousHeight + GAP;
   }
 
@@ -184,7 +193,7 @@ export function measureSidenotePositions(
     const top = Math.max(entry.anchorY, nextAvailableY);
     result[index] = top;
 
-    const height = itemRefs.get(entry.id)?.offsetHeight ?? ESTIMATED_SIDENOTE_HEIGHT;
+    const height = measuredHeights[index] ?? ESTIMATED_SIDENOTE_HEIGHT;
     nextAvailableY = top + height + GAP;
   }
 
