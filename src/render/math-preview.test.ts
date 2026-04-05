@@ -8,13 +8,10 @@ import {
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { mathMacrosField } from "./math-macros";
 
-const computePositionMock = vi.fn();
 const autoUpdateMock = vi.fn();
 
 vi.mock("@floating-ui/dom", () => ({
   autoUpdate: (...args: unknown[]) => autoUpdateMock(...args),
-  computePosition: (...args: unknown[]) => computePositionMock(...args),
-  offset: (value: number) => ({ name: "offset", options: value }),
 }));
 
 const { mathPreviewPlugin } = await import("./math-preview");
@@ -28,6 +25,12 @@ interface PositionRect {
 
 function makeCoords(left: number, top: number, bottom: number): PositionRect {
   return { left, right: left, top, bottom };
+}
+
+interface MeasureRequest {
+  key?: unknown;
+  read?: () => unknown;
+  write?: (value: unknown) => void;
 }
 
 function createPreviewView(
@@ -54,7 +57,6 @@ function createPreviewView(
 
 async function flushPositioning(): Promise<void> {
   await Promise.resolve();
-  await Promise.resolve();
 }
 
 describe("math preview positioning", () => {
@@ -63,28 +65,27 @@ describe("math preview positioning", () => {
   const mathTo = mathFrom + "$x$".length;
   const coordsByPos = new Map<number, PositionRect>();
   const autoUpdateCallbacks: Array<() => void> = [];
+  const positionMeasures = new Map<unknown, MeasureRequest>();
   let cleanupAutoUpdate = vi.fn();
   let hasFocusSpy: ReturnType<typeof vi.spyOn>;
   let coordsAtPosSpy: ReturnType<typeof vi.spyOn>;
+  let requestMeasureSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     coordsByPos.clear();
     autoUpdateCallbacks.length = 0;
+    positionMeasures.clear();
     cleanupAutoUpdate = vi.fn();
-    computePositionMock.mockReset();
     autoUpdateMock.mockReset();
 
     hasFocusSpy = vi.spyOn(EditorView.prototype, "hasFocus", "get").mockReturnValue(true);
     coordsAtPosSpy = vi.spyOn(EditorView.prototype, "coordsAtPos").mockImplementation((pos) => {
       return coordsByPos.get(pos) ?? null;
     });
-
-    computePositionMock.mockImplementation((reference: { getBoundingClientRect: () => PositionRect }) => {
-      const rect = reference.getBoundingClientRect();
-      return Promise.resolve({
-        x: rect.left,
-        y: rect.bottom + 4,
-      });
+    requestMeasureSpy = vi.spyOn(EditorView.prototype, "requestMeasure").mockImplementation((request) => {
+      if (request?.key === "cf-math-preview-pos") {
+        positionMeasures.set(request.key, request as MeasureRequest);
+      }
     });
 
     autoUpdateMock.mockImplementation((_reference: unknown, _floating: unknown, update: () => void) => {
@@ -95,41 +96,56 @@ describe("math preview positioning", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     hasFocusSpy.mockRestore();
     coordsAtPosSpy.mockRestore();
+    requestMeasureSpy.mockRestore();
     document.body.innerHTML = "";
   });
 
-  it("recomputes the preview position from fresh math coords on auto-update", async () => {
+  async function flushScheduledMeasures(): Promise<void> {
+    while (positionMeasures.size > 0) {
+      const pending = [...positionMeasures.values()];
+      positionMeasures.clear();
+      for (const request of pending) {
+        const measurement = request.read?.();
+        request.write?.(measurement);
+      }
+      await flushPositioning();
+    }
+  }
+
+  it("defers math position measurement out of the update cycle and repositions on editor scroll", async () => {
     coordsByPos.set(mathFrom, makeCoords(200, 80, 100));
     coordsByPos.set(mathTo, makeCoords(240, 80, 120));
 
     const view = createPreviewView(doc, mathFrom + 1);
-    await flushPositioning();
-
     const panel = view.dom.querySelector<HTMLElement>(".cf-math-preview");
+
     expect(panel).not.toBeNull();
+    expect(coordsAtPosSpy).not.toHaveBeenCalled();
+    expect(positionMeasures.size).toBe(1);
+    expect(autoUpdateCallbacks).toHaveLength(1);
+
+    const reference = autoUpdateMock.mock.calls[0]?.[0] as { contextElement?: Element };
+    expect(reference.contextElement).toBe(view.contentDOM);
+
+    await flushScheduledMeasures();
+
     expect(panel?.style.left).toBe("200px");
     expect(panel?.style.top).toBe("124px");
-    expect(autoUpdateCallbacks).toHaveLength(1);
-    expect(computePositionMock).toHaveBeenCalled();
-    expect(computePositionMock.mock.calls[0]?.[2]).toMatchObject({
-      placement: "bottom-start",
-      strategy: "fixed",
-    });
+    expect(coordsAtPosSpy).toHaveBeenCalledTimes(2);
 
     coordsByPos.set(mathFrom, makeCoords(200, -120, -100));
     coordsByPos.set(mathTo, makeCoords(240, -120, -80));
-    autoUpdateCallbacks[0]();
-    await flushPositioning();
+    view.scrollDOM.dispatchEvent(new Event("scroll"));
+    expect(coordsAtPosSpy).toHaveBeenCalledTimes(2);
+    expect(positionMeasures.size).toBe(1);
+
+    await flushScheduledMeasures();
 
     expect(panel?.style.left).toBe("200px");
     expect(panel?.style.top).toBe("-76px");
-
-    const latestReference = computePositionMock.mock.calls.at(-1)?.[0] as {
-      getBoundingClientRect: () => PositionRect;
-    };
-    expect(latestReference.getBoundingClientRect().bottom).toBe(-80);
 
     view.destroy();
     expect(cleanupAutoUpdate).toHaveBeenCalledTimes(1);
@@ -140,7 +156,7 @@ describe("math preview positioning", () => {
     coordsByPos.set(mathTo, makeCoords(240, 80, 120));
 
     const view = createPreviewView(doc, mathFrom + 1);
-    await flushPositioning();
+    await flushScheduledMeasures();
 
     const panel = view.dom.querySelector<HTMLElement>(".cf-math-preview");
     expect(panel).not.toBeNull();
@@ -180,15 +196,37 @@ describe("math preview positioning", () => {
     expect(panel.style.left).toBe("300px");
     expect(panel.style.top).toBe("224px");
 
-    const callCountBeforeScroll = computePositionMock.mock.calls.length;
+    positionMeasures.clear();
     coordsByPos.set(mathFrom, makeCoords(200, -120, -100));
     coordsByPos.set(mathTo, makeCoords(240, -120, -80));
-    autoUpdateCallbacks[0]();
-    await flushPositioning();
+    view.scrollDOM.dispatchEvent(new Event("scroll"));
+    await flushScheduledMeasures();
 
-    expect(computePositionMock.mock.calls.length).toBe(callCountBeforeScroll);
+    expect(positionMeasures.size).toBe(0);
     expect(panel.style.left).toBe("300px");
     expect(panel.style.top).toBe("224px");
+
+    view.destroy();
+  });
+
+  it("keeps polling the active math anchor when scroll callbacks are unavailable", async () => {
+    vi.useFakeTimers();
+    coordsByPos.set(mathFrom, makeCoords(200, 80, 100));
+    coordsByPos.set(mathTo, makeCoords(240, 80, 120));
+
+    const view = createPreviewView(doc, mathFrom + 1);
+    await flushScheduledMeasures();
+
+    const panel = view.dom.querySelector<HTMLElement>(".cf-math-preview");
+    expect(panel).not.toBeNull();
+
+    coordsByPos.set(mathFrom, makeCoords(200, -120, -100));
+    coordsByPos.set(mathTo, makeCoords(240, -120, -80));
+
+    expect(panel?.style.top).toBe("124px");
+    await vi.advanceTimersByTimeAsync(16);
+    expect(panel?.style.left).toBe("200px");
+    expect(panel?.style.top).toBe("-76px");
 
     view.destroy();
   });
