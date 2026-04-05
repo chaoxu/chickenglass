@@ -28,7 +28,12 @@ import {
   bibDataField,
   CitationWidget,
 } from "../citations/citation-render";
-import { type CslProcessor, collectCitationMatches, registerCitationsWithProcessor } from "../citations/csl-processor";
+import {
+  type CslProcessor,
+  collectCitationMatches,
+  getCitationRegistrationKey,
+  registerCitationsWithProcessor,
+} from "../citations/csl-processor";
 import {
   CrossrefWidget,
   ClusteredCrossrefWidget,
@@ -45,25 +50,8 @@ import {
 } from "../semantics/codemirror-source";
 import type { DocumentAnalysis, ReferenceSemantics } from "../semantics/document";
 
-interface ReferenceRegistrationCacheEntry {
-  readonly registrationKey: string;
-  readonly store: BibStore;
-  readonly processorRevision: number;
-}
-
-const referenceRegistrationCache = new WeakMap<CslProcessor, ReferenceRegistrationCacheEntry>();
-
 function serializeKeyPart(value: string | undefined): string {
   return value ?? "";
-}
-
-function getCitationRegistrationKey(
-  matches: readonly { ids: string[]; locators: (string | undefined)[] }[],
-): string {
-  return matches
-    .map((match) => match.ids.map((id, index) =>
-      `${id}\0${serializeKeyPart(match.locators[index])}`).join("\u0001"))
-    .join("\u0002");
 }
 
 function getEquationNumberingKey(analysis: DocumentAnalysis): string {
@@ -198,22 +186,14 @@ export function ensureCitationsRegistered(
 ): void {
   const matches = collectCitationMatches(analysis.references, store);
   const registrationKey = getCitationRegistrationKey(matches);
-  const cached = referenceRegistrationCache.get(processor);
-  if (
-    cached?.registrationKey === registrationKey &&
-    cached.store === store &&
-    cached.processorRevision === processor.revision
-  ) {
+  // Shared processors can be re-registered by other surfaces (read mode,
+  // hover previews, HTML export), so the authoritative cache lives on the
+  // processor instead of this view-layer helper.
+  if (processor.citationRegistrationKey === registrationKey) {
     return;
   }
 
   registerCitationsWithProcessor(matches, processor);
-
-  referenceRegistrationCache.set(processor, {
-    registrationKey,
-    store,
-    processorRevision: processor.revision,
-  });
 }
 
 // ── Helper functions ──────────────────────────────────────────────
