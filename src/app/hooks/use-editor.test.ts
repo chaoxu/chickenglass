@@ -224,6 +224,127 @@ describe("useEditor", () => {
     expect(ref.state.view?.scrollDOM.scrollTop).toBe(240);
   });
 
+  it("preserves selection and scroll on same-path external reload and clamps selection to the new doc", () => {
+    const ref: HarnessRef = {
+      state: null as unknown as UseEditorReturn,
+    };
+    const Harness = createHarness(ref);
+    const initialDoc = "0123456789\nabcdefghij";
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc: initialDoc,
+        docPath: "draft.md",
+      }));
+    });
+
+    act(() => {
+      ref.state.view?.dispatch({ selection: { anchor: 15 } });
+      if (ref.state.view) {
+        ref.state.view.scrollDOM.scrollTop = 180;
+      }
+    });
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc: "short",
+        docPath: "draft.md",
+      }));
+    });
+
+    expect(ref.state.view?.state.doc.toString()).toBe("short");
+    expect(ref.state.view?.state.selection.main.head).toBe(5);
+    expect(ref.state.view?.scrollDOM.scrollTop).toBe(180);
+  });
+
+  it("preserves selection and scroll on path-only document changes", () => {
+    const ref: HarnessRef = {
+      state: null as unknown as UseEditorReturn,
+    };
+    const Harness = createHarness(ref);
+    const doc = [
+      "# Draft",
+      "",
+      "Line one",
+      "Line two",
+      "Line three",
+    ].join("\n");
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc,
+        docPath: "draft.md",
+      }));
+    });
+
+    act(() => {
+      ref.state.view?.dispatch({ selection: { anchor: 18 } });
+      if (ref.state.view) {
+        ref.state.view.scrollDOM.scrollTop = 260;
+      }
+    });
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc,
+        docPath: "renamed.md",
+      }));
+    });
+
+    expect(ref.state.view?.state.doc.toString()).toBe(doc);
+    expect(ref.state.view?.state.selection.main.head).toBe(18);
+    expect(ref.state.view?.scrollDOM.scrollTop).toBe(260);
+  });
+
+  it("resets selection and scroll on real document switches", () => {
+    const ref: HarnessRef = {
+      state: null as unknown as UseEditorReturn,
+    };
+    const Harness = createHarness(ref);
+    const firstDoc = [
+      "# First",
+      "",
+      "Alpha",
+      "Beta",
+      "Gamma",
+    ].join("\n");
+    const secondDoc = [
+      "# Second",
+      "",
+      "One",
+      "Two",
+      "Three",
+    ].join("\n");
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc: firstDoc,
+        docPath: "first.md",
+      }));
+    });
+
+    const firstView = ref.state.view;
+
+    act(() => {
+      ref.state.view?.dispatch({ selection: { anchor: 14 } });
+      if (ref.state.view) {
+        ref.state.view.scrollDOM.scrollTop = 320;
+      }
+    });
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc: secondDoc,
+        docPath: "second.md",
+      }));
+    });
+
+    expect(ref.state.view).toBe(firstView);
+    expect(ref.state.view?.state.doc.toString()).toBe(secondDoc);
+    expect(ref.state.view?.state.selection.main.head).toBe(0);
+    expect(ref.state.view?.scrollDOM.scrollTop).toBe(0);
+  });
+
   it("remaps include source regions through user edits", async () => {
     const ref: HarnessRef = {
       state: null as unknown as UseEditorReturn,
