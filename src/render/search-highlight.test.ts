@@ -12,8 +12,8 @@ import {
   searchControllerExtensions,
   setSearchControllerQuery,
 } from "../editor/find-replace";
-import { MathWidget } from "./math-render";
 import { searchHighlightPlugin } from "./search-highlight";
+import { MathWidget } from "./math-widget";
 
 const views: EditorView[] = [];
 

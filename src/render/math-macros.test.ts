@@ -5,10 +5,8 @@ import { mathExtension } from "../parser/math-backslash";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { projectConfigFacet } from "../app/project-config";
 import { getMathMacros, mathMacrosField } from "./math-macros";
-import {
-  MathWidget,
-  collectMathRanges,
-} from "./math-render";
+import { collectMathRanges } from "./math-render";
+import { MathWidget } from "./math-widget";
 import { createTestView } from "../test-utils";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 
