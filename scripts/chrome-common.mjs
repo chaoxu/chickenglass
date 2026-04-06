@@ -8,22 +8,33 @@ import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { chromium } from "playwright";
 
-export function parseChromeArgs(argv = process.argv.slice(2)) {
+export function parseChromeArgs(
+  argv = process.argv.slice(2),
+  defaults = {},
+) {
   const getValue = (flag, fallback) => {
     const index = argv.indexOf(flag);
     return index >= 0 && index + 1 < argv.length ? argv[index + 1] : fallback;
   };
 
   const port = parseInt(getValue("--port", "9322"), 10);
-  const url = getValue("--url", "http://localhost:5173");
-  const profileName = getValue("--profile", "app");
+  const url = getValue("--url", defaults.url ?? "http://localhost:5173");
+  const profileName = getValue("--profile", defaults.profileName ?? "app");
+  const browser = getValue("--browser", defaults.browser ?? "cdp");
   const activate = argv.includes("--no-activate")
     ? false
     : argv.includes("--activate");
+  const headless = argv.includes("--headed")
+    ? false
+    : argv.includes("--headless")
+      ? true
+      : defaults.headless ?? browser === "managed";
 
   return {
     port,
     url,
+    browser,
+    headless,
     activate,
     profileDir: resolve(homedir(), ".codex/tmp/coflat/chrome-testing", profileName),
   };

@@ -2,16 +2,16 @@
 /**
  * Browser regression test runner.
  *
- * Connects to a running Chrome instance via CDP, runs all regression test
- * modules sequentially, and reports pass/fail results.
+ * Runs browser regressions in a Playwright-owned browser by default, with an
+ * optional CDP mode for debugging against a manually managed app window.
  *
  * Prerequisites:
- *   1. npm run dev    — start the Vite dev server
- *   2. npm run chrome — launch Chrome for Testing with CDP on port 9322
+ *   1. pnpm dev       — start the Vite dev server
+ *   2. Optional: pnpm chrome -- --browser cdp
  *
  * Usage:
- *   npm run test:browser
- *   node scripts/test-regression.mjs [--port 9322] [--filter headings,math]
+ *   pnpm test:browser
+ *   node scripts/test-regression.mjs [--browser managed|cdp] [--headed] [--filter headings,math]
  */
 
 import console from "node:console";
@@ -19,7 +19,14 @@ import { readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { connectEditor, createArgParser, waitForDebugBridge, resetEditorState, disconnectBrowser } from "./test-helpers.mjs";
+import { parseChromeArgs } from "./chrome-common.mjs";
+import {
+  connectEditor,
+  createArgParser,
+  disconnectBrowser,
+  resetEditorState,
+  waitForDebugBridge,
+} from "./test-helpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "regression-tests");
@@ -47,31 +54,39 @@ async function loadTests(filter) {
 }
 
 async function main() {
-  const { getFlag, getIntFlag } = createArgParser();
-  const port = getIntFlag("--port", 9322);
-  const url = getFlag("--url");
+  const args = process.argv.slice(2);
+  const chromeArgs = parseChromeArgs(args, { browser: "managed" });
+  const { getFlag } = createArgParser(args);
   const filterArg = getFlag("--filter", "");
   const filter = filterArg ? filterArg.split(",").map((s) => s.trim()) : [];
 
   console.log("Browser Regression Tests");
   console.log("========================\n");
 
-  // Connect to Chrome
+  // Connect to the browser harness
   let page;
   try {
-    page = await connectEditor(port, { url });
+    page = await connectEditor({
+      browser: chromeArgs.browser,
+      headless: chromeArgs.headless,
+      port: chromeArgs.port,
+      url: chromeArgs.url,
+    });
   } catch (err) {
-    console.error("Failed to connect to Chrome via CDP.");
-    console.error("Make sure both are running:");
-    console.error("  1. npm run dev");
-    console.error("  2. npm run chrome");
+    console.error("Failed to open the browser regression harness.");
+    console.error("Make sure the app server is running:");
+    console.error("  1. pnpm dev");
+    console.error("Optional manual browser lane:");
+    console.error("  2. pnpm chrome");
     console.error(`\nError: ${err.message}`);
     process.exit(1);
   }
 
   // Wait for the app to be ready
   try {
-    await page.reload({ waitUntil: "load" });
+    if (chromeArgs.browser === "cdp") {
+      await page.reload({ waitUntil: "load" });
+    }
     await waitForDebugBridge(page);
   } catch {
     console.error("Timed out waiting for debug bridge (__app, __cmView, __cmDebug, __cfDebug).");

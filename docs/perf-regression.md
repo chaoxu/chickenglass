@@ -4,7 +4,7 @@ Coflat already records frontend spans in `src/app/perf.ts` and backend spans in 
 
 ## What It Does
 
-- connects to the existing Chrome for Testing app over CDP
+- launches a Playwright-owned Chromium by default
 - reloads the app between iterations so each run starts from the same state
 - clears frontend + backend perf counters before each measured run
 - runs a built-in scenario
@@ -15,19 +15,18 @@ Coflat already records frontend spans in `src/app/perf.ts` and backend spans in 
 
 ## Prerequisites
 
-Start the app in the usual dev browser lane:
+Start the app server:
 
 ```bash
-npm run dev -- --host 127.0.0.1 --port 5173
-npm run chrome -- --url http://127.0.0.1:5173 --port 9322
+pnpm dev
 ```
 
-The perf script reuses that running Chrome for Testing instance.
+The perf script owns its browser session by default. If you need to compare against the manual app window, pass `--browser cdp` and launch `pnpm chrome` separately.
 
 ## Capture a Baseline
 
 ```bash
-npm run perf:capture -- \
+pnpm perf:capture -- \
   --scenario open-index \
   --iterations 3 \
   --warmup 1 \
@@ -37,7 +36,7 @@ npm run perf:capture -- \
 ## Compare Against a Baseline
 
 ```bash
-npm run perf:compare -- \
+pnpm perf:compare -- \
   --scenario open-index \
   --iterations 3 \
   --warmup 1 \
@@ -75,7 +74,7 @@ Defaults:
 Override them when needed:
 
 ```bash
-npm run perf:compare -- \
+pnpm perf:compare -- \
   --scenario open-heavy-post \
   --baseline output/perf/open-heavy-post.json \
   --threshold-pct 15 \
@@ -99,10 +98,10 @@ The `scroll-step-rich`, `scroll-jump-rich`, and `scroll-step-source` scenarios m
 ### Example: compare Rich vs Source stepped scroll
 
 ```bash
-npm run perf:capture -- --scenario scroll-step-rich \
+pnpm perf:capture -- --scenario scroll-step-rich \
   --output output/perf/scroll-step-rich.json
 
-npm run perf:capture -- --scenario scroll-step-source \
+pnpm perf:capture -- --scenario scroll-step-source \
   --output output/perf/scroll-step-source.json
 ```
 
@@ -110,12 +109,12 @@ npm run perf:capture -- --scenario scroll-step-source \
 
 ```bash
 # Capture baseline on the current build
-npm run perf:capture -- --scenario scroll-step-rich \
+pnpm perf:capture -- --scenario scroll-step-rich \
   --iterations 5 --warmup 2 \
   --output output/perf/scroll-step-rich-baseline.json
 
 # After changes, compare
-npm run perf:compare -- --scenario scroll-step-rich \
+pnpm perf:compare -- --scenario scroll-step-rich \
   --iterations 5 --warmup 2 \
   --baseline output/perf/scroll-step-rich-baseline.json
 ```
@@ -129,6 +128,6 @@ Per-step timing uses `performance.now()` around each synchronous `view.dispatch(
 
 ## Notes
 
-- Reloading between iterations is intentional. It avoids “second open just activates an existing tab” noise.
+- Reloading between iterations is intentional. It avoids state bleed between runs.
 - The baseline format is versioned. If the report format or required-metric contract changes, old baselines will fail fast instead of comparing garbage.
 - This is meant for trend detection, not absolute benchmarking. Keep the same machine, browser profile, port, and scenario when comparing results.

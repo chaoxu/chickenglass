@@ -644,9 +644,26 @@
 
 /* ── Math preview panel ───────────────────────────────────────────────────── */
 
+.cf-math-preview-scroller {
+  position: relative;
+}
+
+.cf-math-preview-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: var(--cf-layer-preview-surface);
+}
+
 .cf-math-preview {
+  position: absolute;
   width: fit-content;
   cursor: grab;
+  pointer-events: auto;
 }
 
 .cf-math-preview-content {

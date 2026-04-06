@@ -590,6 +590,8 @@ Options:
   --baseline <path>        Baseline report to compare against (compare only)
   --threshold-pct <n>      Regression threshold percent (default: 25)
   --min-delta-ms <n>       Minimum absolute delta before flagging (default: 5)
+  --browser <managed|cdp>  Browser lane (default: managed)
+  --headed                 Show the Playwright-owned browser window
   --port <n>               CDP port for Chrome for Testing (default: 9322)
   --url <url>              App URL that Chrome is already running against
 `);
@@ -603,7 +605,7 @@ function parseCliArgs(argv = process.argv.slice(2)) {
   return {
     command,
     options,
-    chromeArgs: parseChromeArgs(options),
+    chromeArgs: parseChromeArgs(options, { browser: "managed" }),
     ...createArgParser(options),
   };
 }
@@ -732,7 +734,12 @@ export async function main(argv = process.argv.slice(2)) {
   const warmup = getIntFlag("--warmup", 1);
   const settleMs = getIntFlag("--settle-ms", scenario.defaultSettleMs);
 
-  const page = await connectEditor(chromeArgs.port, { url: chromeArgs.url });
+  const page = await connectEditor({
+    browser: chromeArgs.browser,
+    headless: chromeArgs.headless,
+    port: chromeArgs.port,
+    url: chromeArgs.url,
+  });
   try {
     const appUrl = getFlag("--url") ?? page.url();
     const snapshots = await runScenarioSamples(page, scenarioName, iterations, warmup, settleMs, appUrl);

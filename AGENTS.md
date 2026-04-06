@@ -37,7 +37,7 @@ src/
   app/           # React shell (hooks, components, file management)
 demo/blog/       # Blog project files (loaded via import.meta.glob)
 src-tauri/       # Rust backend (filesystem commands, Tauri config)
-scripts/         # CDP test helpers, blog import tools
+scripts/         # browser harness, CDP helpers, blog import tools
 ```
 
 ## Commands
@@ -55,7 +55,8 @@ pnpm test            # run tests (Vitest)
 pnpm typecheck       # typecheck only
 pnpm tauri:dev       # launch Tauri desktop app
 pnpm tauri:build     # build production desktop binary
-pnpm chrome          # launch Playwright Chromium with CDP on port 9322
+pnpm test:browser    # stable managed-browser regression harness
+pnpm chrome          # launch Playwright Chromium with CDP on port 9322 (manual debug lane)
 ```
 
 ## Tooling
@@ -142,10 +143,16 @@ Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile(
 
 When asked to start the preview server, prefer `pnpm build && pnpm preview`. The preview script binds `0.0.0.0` so it is reachable over IPv4.
 
-## Browser testing (CDP)
+## Browser testing
 
-**Only ONE dev server and ONE browser at a time.** Kill previous instances before launching. Use `page.reload()` after code changes — never open new browser instances.
+Prefer the managed Playwright harness for automated verification. The manual CDP/app-mode lane is still useful for visual debugging, but it is not the default regression path anymore.
 
+Managed harness:
+1. Start: `pnpm dev`
+2. Run scripts like `pnpm test:browser`, `node scripts/perf-regression.mjs ...`, or `node scripts/cursor-scroll-regression.mjs ...`
+3. Default mode is Playwright-owned Chromium. Use `--browser cdp` only when you intentionally want the manual shared app window.
+
+Manual CDP lane:
 1. Start: `pnpm dev`, then `pnpm chrome` (CDP on port 9322)
 2. Connect: `chromium.connectOverCDP("http://localhost:9322")`
 3. Use `page.evaluate()` + `__cmView`/`__cmDebug`/`__app`. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout(10000)`.
@@ -163,10 +170,10 @@ Do NOT use the Playwright MCP plugin — connect directly via CDP.
 
 ### Runtime regression debugging
 
-- Prefer `scripts/test-helpers.mjs` helpers such as `waitForDebugBridge()` and `assertEditorHealth()` before writing ad hoc CDP snippets.
+- Prefer `scripts/test-helpers.mjs` helpers such as `connectEditor()`, `waitForAppUrl()`, `waitForDebugBridge()`, and `assertEditorHealth()` before writing ad hoc browser snippets.
 - Always target the real localhost app page, not merely “the first page” in the browser context.
 - For bug-specific runtime verification, do a general smoke check on `index.md` and also run the affected fixture. Heavy regressions often require `demo/rankdecrease/main.md` or `demo/cogirth/main2.md`.
-- For cursor/scroll regressions like `#964`, verify with a real long-document runtime repro. If `page.keyboard.press()` is unreliable in the app-mode CDP lane, it is acceptable to drive CM6 movement inside `page.evaluate()` and document the exact command/script used.
+- For cursor/scroll regressions like `#964`, verify with a real long-document runtime repro. Prefer the managed harness first. If `page.keyboard.press()` is unreliable in the manual app-mode CDP lane, it is acceptable to drive CM6 movement inside `page.evaluate()` and document the exact command/script used.
 
 ## Conventions
 

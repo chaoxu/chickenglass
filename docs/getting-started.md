@@ -47,7 +47,14 @@ Pre-commit hooks run `biome lint` on staged files. Pre-push hooks run `typecheck
 
 ```bash
 pnpm dev             # terminal 1
-pnpm chrome          # terminal 2 — launches Chromium with CDP on port 9322
+pnpm test:browser    # terminal 2 — stable managed-browser regression lane
+```
+
+For manual visual debugging, use the CDP/app-mode lane instead:
+
+```bash
+pnpm dev
+pnpm chrome          # launches Chromium with CDP on port 9322
 ```
 
 Use `window.__cmDebug` and `window.__app` in the browser console for editor state introspection. See the debug helpers section in AGENTS.md for the full API.

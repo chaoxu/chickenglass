@@ -205,6 +205,8 @@ export const CSS = {
   focusDimmed: "cf-focus-dimmed",
 
   /** Math preview panel. */
+  mathPreviewScroller: "cf-math-preview-scroller",
+  mathPreviewLayer: "cf-math-preview-layer",
   mathPreview: "cf-math-preview",
   mathPreviewContent: "cf-math-preview-content",
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scorePageCandidate } from "./chrome-common.mjs";
+import { parseChromeArgs, scorePageCandidate } from "./chrome-common.mjs";
 
 describe("chrome common page scoring", () => {
   it("rejects stale chrome and blank pages", () => {
@@ -24,5 +24,18 @@ describe("chrome common page scoring", () => {
 
     expect(exact).toBeGreaterThan(sameOrigin);
     expect(sameOrigin).toBeGreaterThan(otherLocalhost);
+  });
+
+  it("supports a managed browser default for automated harnesses", () => {
+    const args = parseChromeArgs([], { browser: "managed" });
+
+    expect(args.browser).toBe("managed");
+    expect(args.headless).toBe(true);
+    expect(args.url).toBe("http://localhost:5173");
+  });
+
+  it("lets headed/headless flags override the default harness mode", () => {
+    expect(parseChromeArgs(["--headed"], { browser: "managed" }).headless).toBe(false);
+    expect(parseChromeArgs(["--headless"], { browser: "cdp" }).headless).toBe(true);
   });
 });

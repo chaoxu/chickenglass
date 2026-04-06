@@ -155,6 +155,8 @@ function printUsage() {
   node scripts/cursor-scroll-regression.mjs [options]
 
 Options:
+  --browser <managed|cdp>      Browser lane (default: managed)
+  --headed                     Show the Playwright-owned browser window
   --port <n>                  CDP port for Chrome for Testing (default: 9322)
   --url <url>                 App URL Chrome is already running against
   --direction <up|down>       Cursor movement direction (default: up)
@@ -171,7 +173,7 @@ Options:
 }
 
 export async function main(argv = process.argv.slice(2)) {
-  const chromeArgs = parseChromeArgs(argv);
+  const chromeArgs = parseChromeArgs(argv, { browser: "managed" });
   const { getFlag, getIntFlag, hasFlag } = createArgParser(argv);
   if (hasFlag("--help") || hasFlag("-h")) {
     printUsage();
@@ -187,7 +189,12 @@ export async function main(argv = process.argv.slice(2)) {
     throw new Error(`Unsupported direction "${direction}". Use up or down.`);
   }
 
-  const page = await connectEditor(chromeArgs.port, { url: chromeArgs.url });
+  const page = await connectEditor({
+    browser: chromeArgs.browser,
+    headless: chromeArgs.headless,
+    port: chromeArgs.port,
+    url: chromeArgs.url,
+  });
   try {
     await waitForDebugBridge(page);
     await sleep(500);
