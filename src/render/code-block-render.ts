@@ -336,13 +336,15 @@ function mapCodeBlock(
   tr: Transaction,
 ): CodeBlockInfo {
   const mappedBlock = mapFencedBlockInfo(block, tr.changes);
-  if (mappedBlock === block) {
+  const singleLine = mappedBlock.closeFenceFrom === mappedBlock.openFenceFrom;
+
+  if (mappedBlock === block && singleLine === block.singleLine) {
     return block;
   }
 
-  return {
-    ...mappedBlock,
-  };
+  if (singleLine === mappedBlock.singleLine) return mappedBlock;
+
+  return { ...mappedBlock, singleLine };
 }
 
 function mapCodeBlocks(

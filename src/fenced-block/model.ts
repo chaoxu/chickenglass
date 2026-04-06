@@ -154,7 +154,6 @@ export function mapFencedBlockInfo<T extends FencedBlockInfo>(
     closeFenceFrom < 0 || closeFenceToBase < 0
       ? closeFenceToBase
       : Math.max(closeFenceFrom, closeFenceToBase);
-  const singleLine = closeFenceFrom >= 0 && closeFenceFrom === openFenceFrom;
 
   if (
     from === block.from
@@ -163,7 +162,6 @@ export function mapFencedBlockInfo<T extends FencedBlockInfo>(
     && openFenceTo === block.openFenceTo
     && closeFenceFrom === block.closeFenceFrom
     && closeFenceTo === block.closeFenceTo
-    && singleLine === block.singleLine
   ) {
     return block;
   }
@@ -176,7 +174,6 @@ export function mapFencedBlockInfo<T extends FencedBlockInfo>(
     openFenceTo,
     closeFenceFrom,
     closeFenceTo,
-    singleLine,
   };
 }
 

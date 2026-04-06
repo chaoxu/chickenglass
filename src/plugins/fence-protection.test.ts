@@ -258,6 +258,27 @@ describe("openingFenceDeletionCleanup", () => {
     expect(result.endsWith(":::")).toBe(true);
   });
 
+  it("preserves single-line fenced div content after unrelated tail edits", () => {
+    const singleLine = `before\n\n::: {.theorem} Title :::\n\nafter`;
+    const state = createProtectedState(singleLine);
+    const afterTailEdit = state.update({
+      changes: { from: state.doc.length, insert: "\nx" },
+    }).state;
+    const fenceLine = afterTailEdit.doc.line(3);
+    const titleOffset = fenceLine.text.indexOf("Title");
+    expect(titleOffset).toBeGreaterThanOrEqual(0);
+
+    const tr = afterTailEdit.update({
+      changes: {
+        from: fenceLine.from,
+        to: fenceLine.from + titleOffset,
+        insert: "",
+      },
+    });
+
+    expect(tr.state.doc.toString()).toBe(`before\n\nTitle :::\n\nafter\nx`);
+  });
+
   it("preserves content between fences when opening fence is deleted", () => {
     const withContent = `before\n::: {.theorem}\ncontent\n:::\nafter`;
     const state = createProtectedState(withContent);
