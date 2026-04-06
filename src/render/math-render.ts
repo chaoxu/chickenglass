@@ -376,6 +376,18 @@ function collectRenderedInlineMathRanges(state: EditorState): InlineMathSourceRa
   return ranges;
 }
 
+function hasRenderedInlineMath(state: EditorState): boolean {
+  const focused = state.field(editorFocusField, false) ?? false;
+
+  for (const region of state.field(documentAnalysisField).mathRegions) {
+    if (region.isDisplay) continue;
+    if (focused && cursorInRange(state, region.from, region.to)) continue;
+    return true;
+  }
+
+  return false;
+}
+
 function buildPointerSelection(
   start: { pos: number; assoc: number },
   current: { pos: number; assoc: number },
@@ -437,17 +449,14 @@ function snapPointerSelectionOverInlineMath(
 function createInlineMathMouseSelectionStyle(
   view: EditorView,
   startEvent: MouseEvent,
+  initialStartMathRange?: InlineMathSourceRange,
 ) {
   let start = view.posAndSideAtCoords(
     { x: startEvent.clientX, y: startEvent.clientY },
     false,
   );
   const startSelection = view.state.selection;
-  let startMathRange = findInlineMathSourceRangeAtCoords(
-    view,
-    startEvent.clientX,
-    startEvent.clientY,
-  ) ?? findInlineMathSourceRange(startEvent.target);
+  let startMathRange = initialStartMathRange;
 
   return {
     get(currentEvent: MouseEvent) {
@@ -1063,7 +1072,13 @@ const mathWidgetMetadataPlugin = ViewPlugin.fromClass(
 
 const mathMouseSelectionStyle = EditorView.mouseSelectionStyle.of((view, event) => {
   if (!isPlainPrimaryMouseEvent(event) || event.detail !== 1) return null;
-  return createInlineMathMouseSelectionStyle(view, event);
+  const startMathRange = findInlineMathSourceRangeAtCoords(
+    view,
+    event.clientX,
+    event.clientY,
+  ) ?? findInlineMathSourceRange(event.target);
+  if (!startMathRange && !hasRenderedInlineMath(view.state)) return null;
+  return createInlineMathMouseSelectionStyle(view, event, startMathRange);
 });
 
 // ── Idle KaTeX prewarm (#625) ──────────────────────────────────────────────

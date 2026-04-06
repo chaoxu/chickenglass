@@ -995,6 +995,25 @@ describe("inline math mouse selection integration", () => {
       }
     }
   });
+
+  it("falls back to native mouse selection when no inline math is rendered", () => {
+    view = createMathRenderView("plain text", 0);
+    const currentView = view;
+    if (!currentView) throw new Error("expected math render view");
+
+    const startEvent = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 5,
+      clientY: 5,
+      detail: 1,
+    });
+    Object.defineProperty(startEvent, "target", { value: currentView.contentDOM });
+
+    const makeStyle = currentView.state.facet(EditorView.mouseSelectionStyle)[0];
+    expect(makeStyle(currentView, startEvent)).toBeNull();
+  });
 });
 
 describe("cursor toggle behavior", () => {
