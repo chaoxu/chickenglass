@@ -3,36 +3,15 @@ import { WINDOW_STATE_KEY } from "../constants";
 import { buildWindowState, loadWindowState } from "./window-state";
 
 const BASE_PATH = "/";
-const storage = new Map<string, string>();
-const storageMock = {
-  getItem(key: string): string | null {
-    return storage.has(key) ? storage.get(key)! : null;
-  },
-  setItem(key: string, value: string): void {
-    storage.set(key, value);
-  },
-  removeItem(key: string): void {
-    storage.delete(key);
-  },
-};
-
-function resetWindowStateStorage(): void {
-  storage.clear();
-  storage.delete(WINDOW_STATE_KEY);
-}
 
 describe("window-state launch params", () => {
   beforeEach(() => {
-    Object.defineProperty(globalThis, "localStorage", {
-      configurable: true,
-      value: storageMock,
-    });
-    resetWindowStateStorage();
+    localStorage.removeItem(WINDOW_STATE_KEY);
     window.history.replaceState({}, "", BASE_PATH);
   });
 
   afterEach(() => {
-    resetWindowStateStorage();
+    localStorage.removeItem(WINDOW_STATE_KEY);
     window.history.replaceState({}, "", BASE_PATH);
   });
 

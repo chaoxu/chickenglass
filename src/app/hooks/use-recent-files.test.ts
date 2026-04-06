@@ -1,45 +1,15 @@
 /**
- * Tests for the useRecentFiles hook logic.
+ * Tests for the storage-backed recent-files module.
  *
- * The hook is a thin React wrapper over recent-files.ts.  We test the
- * underlying module functions directly (same code paths the hook calls)
- * because the project does not have @testing-library/react.
- *
- * jsdom in this Vitest environment does not provide a working
- * localStorage, so we mock the utils layer with an in-memory store.
+ * The hook is a thin React wrapper over recent-files.ts, so these tests
+ * exercise the underlying module directly through the real storage helpers.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const store = vi.hoisted(() => {
-  const data = new Map<string, string>();
-  return {
-    data,
-    read: <T>(key: string, fallback: T): T => {
-      const raw = data.get(key);
-      if (raw === undefined) return fallback;
-      try {
-        return JSON.parse(raw) as T;
-      } catch {
-        return fallback;
-      }
-    },
-    write: <T>(key: string, value: T): void => {
-      data.set(key, JSON.stringify(value));
-    },
-  };
-});
-
-vi.mock("../lib/utils", async (importOriginal) => {
-  const orig = await importOriginal<Record<string, unknown>>();
-  return {
-    ...orig,
-    readLocalStorage: store.read,
-    writeLocalStorage: store.write,
-  };
-});
+import { describe, expect, it } from "vitest";
 
 import {
+  clearRecentFiles,
+  clearRecentFolders,
   getRecentFileEntries,
   getRecentFiles,
   getRecentFolders,
@@ -47,13 +17,8 @@ import {
   recordRecentFolder,
   removeRecentFile,
   removeRecentEntry,
-  clearRecentFiles,
-  clearRecentFolders,
 } from "../recent-files";
-
-beforeEach(() => {
-  store.data.clear();
-});
+import { RECENT_FILES_KEY, RECENT_FOLDERS_KEY } from "../../constants";
 
 // ── addRecentFile ──────────────────────────────────────────────────
 
@@ -99,6 +64,26 @@ describe("addRecentFile (recordRecentFile)", () => {
     expect(getRecentFiles("/projects/b")).toEqual(["/projects/b/index.md"]);
     expect(getRecentFileEntries()).toHaveLength(3);
   });
+
+  it("migrates legacy string entries and normalizes missing project roots", () => {
+    localStorage.setItem(RECENT_FILES_KEY, JSON.stringify([
+      "/legacy.md",
+      { path: "/scoped.md", projectRoot: "/projects/a" },
+      { path: "/implicit-null.md" },
+      { path: 123, projectRoot: "/projects/a" },
+      null,
+    ]));
+
+    expect(getRecentFileEntries()).toEqual([
+      { path: "/legacy.md", projectRoot: null },
+      { path: "/scoped.md", projectRoot: "/projects/a" },
+      { path: "/implicit-null.md", projectRoot: null },
+    ]);
+    expect(getRecentFiles(null)).toEqual([
+      "/legacy.md",
+      "/implicit-null.md",
+    ]);
+  });
 });
 
 // ── addRecentFolder ────────────────────────────────────────────────
@@ -130,6 +115,17 @@ describe("addRecentFolder (recordRecentFolder)", () => {
     expect(folders).toHaveLength(5);
     expect(folders[0]).toBe("/dir-6");
     expect(folders[4]).toBe("/dir-2");
+  });
+
+  it("filters malformed folder entries from storage", () => {
+    localStorage.setItem(RECENT_FOLDERS_KEY, JSON.stringify([
+      "/docs",
+      42,
+      { path: "/wrong-shape" },
+      "/notes",
+    ]));
+
+    expect(getRecentFolders()).toEqual(["/docs", "/notes"]);
   });
 });
 
@@ -173,6 +169,16 @@ describe("removeRecent (removeRecentEntry)", () => {
 
     expect(getRecentFiles("/projects/a")).toEqual([]);
     expect(getRecentFiles("/projects/b")).toEqual(["/shared.md"]);
+  });
+
+  it("removes matching paths across all projects when no project root is provided", () => {
+    recordRecentFile("/shared.md", "/projects/a");
+    recordRecentFile("/shared.md", "/projects/b");
+
+    removeRecentFile("/shared.md");
+
+    expect(getRecentFiles("/projects/a")).toEqual([]);
+    expect(getRecentFiles("/projects/b")).toEqual([]);
   });
 });
 
