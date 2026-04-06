@@ -25,6 +25,9 @@ export default defineConfig(({ mode }) => {
       GIT_COMMIT_HASH: JSON.stringify(gitBuildInfo.hash),
       GIT_COMMIT_TIME: JSON.stringify(gitBuildInfo.time),
     },
+    optimizeDeps: {
+      include: ["katex", "pdfjs-dist", "citation-js", "@citation-js/core"],
+    },
     build: {
       target: "es2022",
       sourcemap: mode === "development",
