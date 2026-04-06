@@ -9,7 +9,7 @@
  * scroll naturally with no manual sync needed.
  */
 
-import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { useRef, useState, useMemo, useCallback, useLayoutEffect } from "react";
 import type { EditorState } from "@codemirror/state";
 import { createPortal } from "react-dom";
 import { EditorView } from "@codemirror/view";
@@ -243,7 +243,7 @@ function copySidenoteAnchors(
 /** React wrapper around the shared document-surface renderer. */
 function SidenoteContent({ text, macros }: { text: string; macros: Record<string, string> }) {
   const ref = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!ref.current) return;
     ref.current.innerHTML = "";
     renderDocumentFragmentToDom(ref.current, {
@@ -267,7 +267,7 @@ export function SidenoteMargin({ view, invalidation }: SidenoteMarginProps) {
   const measureStartIndexRef = useRef(0);
 
   // Create a container div inside the CM6 scroller for our sidenotes
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!view) {
       setPortalTarget(null);
       return;
@@ -305,7 +305,7 @@ export function SidenoteMargin({ view, invalidation }: SidenoteMarginProps) {
     }
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!view) {
       viewRef.current = null;
       itemRefs.current.clear();
@@ -366,24 +366,20 @@ export function SidenoteMargin({ view, invalidation }: SidenoteMarginProps) {
     setLayoutPassRevision((value) => value + 1);
   }, [view, invalidation]);
 
-  // Recompute positions from the first changed sidenote only. Earlier
-  // entries keep their previous placement and do not need to be remeasured.
-  useEffect(() => {
+  // Recompute positions before paint so CM6 never sees a later
+  // animation-frame height jump from the margin column.
+  useLayoutEffect(() => {
     const currentEntries = entriesRef.current;
     if (currentEntries.length === 0) return;
 
-    const rafId = requestAnimationFrame(() => {
-      const nextPositions = measureSidenotePositions(
-        currentEntries,
-        itemRefs.current,
-        positionsRef.current,
-        measureStartIndexRef.current,
-      );
-      positionsRef.current = nextPositions;
-      setPositions((current) => (samePositions(current, nextPositions) ? current : nextPositions));
-    });
-
-    return () => cancelAnimationFrame(rafId);
+    const nextPositions = measureSidenotePositions(
+      currentEntries,
+      itemRefs.current,
+      positionsRef.current,
+      measureStartIndexRef.current,
+    );
+    positionsRef.current = nextPositions;
+    setPositions((current) => (samePositions(current, nextPositions) ? current : nextPositions));
   }, [layoutPassRevision]);
 
   if (!portalTarget || entries.length === 0) return null;
