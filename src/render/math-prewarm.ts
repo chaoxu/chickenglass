@@ -1,4 +1,4 @@
-import type { EditorState } from "@codemirror/state";
+import type { EditorState, Extension } from "@codemirror/state";
 import { ViewPlugin, type EditorView, type ViewUpdate } from "@codemirror/view";
 import type { MathSemantics } from "../semantics/document";
 import { documentAnalysisField } from "../semantics/codemirror-source";
@@ -20,7 +20,7 @@ const PREWARM_BUDGET_MS = 2;
 /**
  * ViewPlugin that pre-populates the KaTeX HTML string cache during idle time.
  */
-export const mathPrewarmPlugin = ViewPlugin.fromClass(
+export const mathPrewarmPlugin: Extension = ViewPlugin.fromClass(
   class {
     private generation = 0;
     private lastRegions: readonly MathSemantics[] | null = null;
