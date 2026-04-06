@@ -75,6 +75,8 @@ function buildMathItems(
   for (const region of analysis.mathRegions) {
     if (shouldSkip(region.from, region.to)) {
       if (region.contentFrom > region.from) {
+        // Keep delimiters on the lighter source-delimiter class so they
+        // do not make the edited math line taller than the body content. (#789)
         items.push(
           Decoration.mark({ class: CSS.sourceDelimiter }).range(region.from, region.contentFrom),
         );
@@ -101,6 +103,8 @@ function buildMathItems(
         );
       }
       if (region.isDisplay) {
+        // Display math stays rendered even while showing source marks so the
+        // block height and click target remain stable during cursor reveal.
         const widget = new MathWidget(
           region.latex,
           state.sliceDoc(region.from, region.to),

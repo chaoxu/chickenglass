@@ -149,6 +149,8 @@ export class MathWidget extends MacroAwareWidget {
       const root = findMathRoot(el);
       const currentWidget = widgetSourceMap.get(root);
       const liveWidget = currentWidget instanceof MathWidget ? currentWidget : this;
+      // Prefer live semantics when possible so click-to-source stays correct
+      // even if CM6 briefly reuses DOM or widget instances during remapping.
       const region = resolveLiveMathRegion(view, root);
       const sourceFrom = region?.from ?? liveWidget.sourceFrom;
       const sourceTo = region?.to ?? liveWidget.sourceTo;
