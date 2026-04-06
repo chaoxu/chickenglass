@@ -95,6 +95,28 @@ describe("figure plugin", () => {
 
     view.destroy();
   });
+
+  it("clicking a rendered caption moves the cursor to the opening-line caption source", () => {
+    const doc = `::: {.figure #fig-test} A caption line.\n![](image.png)\n:::`;
+    const view = createView(doc, doc.indexOf("!["));
+
+    const caption = view.dom.querySelector<HTMLElement>(".cf-block-caption");
+    expect(caption).not.toBeNull();
+    if (!caption) {
+      view.destroy();
+      throw new Error("expected rendered figure caption");
+    }
+
+    const openLine = view.state.doc.line(1);
+    const titleText = "A caption line.";
+    const titleFrom = openLine.text.indexOf(titleText) + openLine.from;
+
+    caption.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(view.state.selection.main.anchor).toBe(titleFrom);
+
+    view.destroy();
+  });
 });
 
 describe("table block plugin", () => {

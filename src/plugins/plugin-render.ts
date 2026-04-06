@@ -28,6 +28,7 @@ import {
   decorationHidden,
   editorFocusField,
   focusTracker,
+  findFencedBlockAt,
   hideMultiLineClosingFence,
   MacroAwareWidget,
   RenderWidget,
@@ -114,31 +115,61 @@ class BlockCaptionWidget extends MacroAwareWidget {
     super(macros);
   }
 
+  private renderCaptionContent(el: HTMLElement): void {
+    el.textContent = "";
+
+    const headerEl = document.createElement("span");
+    headerEl.className = CSS.blockHeaderRendered;
+    renderDocumentFragmentToDom(headerEl, {
+      kind: "block-title",
+      text: this.header,
+      macros: this.macros,
+    });
+    el.appendChild(headerEl);
+
+    if (!this.title) return;
+
+    const titleEl = document.createElement("span");
+    titleEl.className = "cf-block-caption-text";
+    renderDocumentFragmentToDom(titleEl, {
+      kind: "block-title",
+      text: this.title,
+      macros: this.macros,
+    });
+    el.appendChild(titleEl);
+  }
+
+  protected override bindSourceReveal(
+    el: HTMLElement,
+    view: EditorView,
+  ): void {
+    el.style.cursor = "pointer";
+    el.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      view.focus();
+
+      let blockPos = this.sourceFrom;
+      try {
+        blockPos = view.posAtDOM(el);
+      } catch {
+        // Fall back to the widget's source range if CM6 cannot resolve the DOM.
+      }
+
+      const liveDiv = findFencedBlockAt(collectFencedDivs(view.state), blockPos);
+      const revealPos = liveDiv
+        ? (liveDiv.titleFrom ?? liveDiv.openFenceFrom)
+        : this.sourceFrom;
+      if (revealPos < 0) return;
+
+      view.dispatch({ selection: { anchor: revealPos }, scrollIntoView: false });
+    });
+  }
+
   createDOM(): HTMLElement {
     return this.createCachedDOM(() => {
       const el = document.createElement("div");
       el.className = "cf-block-caption";
-
-      const headerEl = document.createElement("span");
-      headerEl.className = CSS.blockHeaderRendered;
-      renderDocumentFragmentToDom(headerEl, {
-        kind: "block-title",
-        text: this.header,
-        macros: this.macros,
-      });
-      el.appendChild(headerEl);
-
-      if (this.title) {
-        const titleEl = document.createElement("span");
-        titleEl.className = "cf-block-caption-text";
-        renderDocumentFragmentToDom(titleEl, {
-          kind: "block-title",
-          text: this.title,
-          macros: this.macros,
-        });
-        el.appendChild(titleEl);
-      }
-
+      this.renderCaptionContent(el);
       return el;
     });
   }
@@ -149,6 +180,13 @@ class BlockCaptionWidget extends MacroAwareWidget {
       this.title === other.title &&
       this.macrosKey === other.macrosKey
     );
+  }
+
+  updateDOM(dom: HTMLElement): boolean {
+    if (!dom.classList.contains("cf-block-caption")) return false;
+    this.renderCaptionContent(dom);
+    this.setSourceRangeAttrs(dom);
+    return true;
   }
 }
 
@@ -663,8 +701,8 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       if (captionBelow && !cursorOnEitherFence && closeLine.number > openLine.number + 1) {
         const lastBodyLine = state.doc.line(closeLine.number - 1);
         const captionWidget = new BlockCaptionWidget(spec.header, div.title ?? "", macros);
-        captionWidget.sourceFrom = div.openFenceFrom;
-        captionWidget.sourceTo = div.openFenceTo;
+        captionWidget.sourceFrom = div.titleFrom ?? div.openFenceFrom;
+        captionWidget.sourceTo = div.titleTo ?? div.openFenceTo;
         items.push(
           Decoration.widget({
             widget: captionWidget,
