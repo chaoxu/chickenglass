@@ -116,7 +116,7 @@ pub fn read_file(
 ///
 /// Opens the target only if it still resolves to the same file, so a delete or
 /// replacement between path resolution and the actual write cannot recreate or
-/// redirect the write.
+/// redirect the write. This is an in-place write rather than a tmp+rename swap.
 #[command]
 pub fn write_file(
     window: WebviewWindow,
