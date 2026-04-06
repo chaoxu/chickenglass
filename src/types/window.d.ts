@@ -52,6 +52,9 @@ declare global {
       setSearchOpen: (open: boolean) => void;
       setMode: (mode: EditorMode) => void;
       getMode: () => EditorMode;
+      getProjectRoot: () => string | null;
+      getCurrentDocument: () => { path: string; name: string; dirty: boolean } | null;
+      isDirty: () => boolean;
     };
 
     /**

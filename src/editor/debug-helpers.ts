@@ -11,6 +11,7 @@
  */
 
 import { type EditorView } from "@codemirror/view";
+import { undoDepth, redoDepth } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import { toggleTreeView } from "./editor";
 import {
@@ -55,6 +56,16 @@ interface SemanticDebugInfo {
   };
 }
 
+interface SelectionInfo {
+  readonly anchor: number;
+  readonly head: number;
+  readonly from: number;
+  readonly to: number;
+  readonly empty: boolean;
+  readonly line: number;
+  readonly col: number;
+}
+
 export interface DebugHelpers {
   /** Return all FencedDiv nodes from the current syntax tree. */
   tree: () => DivInfo[];
@@ -66,6 +77,10 @@ export interface DebugHelpers {
   line: (lineNum: number) => LineInfo | null;
   /** Return current document-analysis revision info for perf/debug checks. */
   semantics: () => SemanticDebugInfo;
+  /** Return current selection position, range, and line/column. */
+  selection: () => SelectionInfo;
+  /** Return undo/redo history depth. */
+  history: () => { undoDepth: number; redoDepth: number };
   /** Return a combined snapshot of tree + fences + cursor state. */
   dump: () => DebugSnapshot;
   /** Toggle the live Lezer tree-view debug panel. Returns new on/off state. */
@@ -148,6 +163,27 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
       return getDocumentAnalysisRevisionInfo(
         view.state.field(documentAnalysisField),
       );
+    },
+
+    selection() {
+      const sel = view.state.selection.main;
+      const line = view.state.doc.lineAt(sel.head);
+      return {
+        anchor: sel.anchor,
+        head: sel.head,
+        from: sel.from,
+        to: sel.to,
+        empty: sel.empty,
+        line: line.number,
+        col: sel.head - line.from + 1,
+      };
+    },
+
+    history() {
+      return {
+        undoDepth: undoDepth(view.state),
+        redoDepth: redoDepth(view.state),
+      };
     },
 
     dump() {

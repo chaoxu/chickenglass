@@ -81,6 +81,9 @@ export function useAppDebug({
       setSearchOpen,
       setMode,
       getMode,
+      getProjectRoot: () => projectRoot,
+      getCurrentDocument: () => currentDocument,
+      isDirty: () => hasDirtyDocument,
     };
     window.__cfDebug = {
       perfSummary: getCombinedPerfSnapshot,

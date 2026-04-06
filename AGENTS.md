@@ -117,11 +117,16 @@ __cmDebug.tree()             — FencedDiv nodes from the Lezer syntax tree
 __cmDebug.treeString()       — full syntax tree as readable string
 __cmDebug.fences()           — closing fence visibility for all blocks
 __cmDebug.line(73)           — DOM state of a specific line
+__cmDebug.selection()        — current selection (anchor, head, from, to, line, col)
+__cmDebug.history()          — undo/redo depth
 __cmDebug.dump()             — combined snapshot (tree + fences + cursor + focus)
 __cmDebug.toggleTreeView()   — toggle live Lezer tree panel (@overleaf/codemirror-tree-view)
 __app.openFile("posts/x.md") — open any file by path (app's real function)
 __app.setMode("source")      — switch editor mode (rich/source/read)
 __app.saveFile()             — save current file
+__app.getProjectRoot()       — current project root path (or null)
+__app.getCurrentDocument()   — current doc {path, name, dirty} (or null)
+__app.isDirty()              — whether any open document has unsaved changes
 __tauriSmoke.openProject("/abs/path") — dev-only Tauri helper to switch project roots deterministically
 __tauriSmoke.getWindowState()         — dev-only Tauri snapshot: project root, current doc, dirty, backend root, watcher root
 __tauriSmoke.simulateExternalChange("notes.md") — dev-only Tauri helper to emit a file-changed event
