@@ -21,6 +21,13 @@ import {
 } from "@codemirror/view";
 import { EditorState, type Extension, type Range } from "@codemirror/state";
 import type { BlockAttrs } from "./plugin-types";
+import {
+  collectFencedDivs,
+  type FencedDivInfo,
+  getFencedDivRevealFrom,
+  getFencedDivRevealTo,
+  getFencedDivStructuralOpenTo,
+} from "../fenced-block/model";
 import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
 import { blockCounterField, type BlockCounterState } from "./block-counter";
 import {
@@ -51,7 +58,7 @@ import {
 import { CSS } from "../constants/css-classes";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 import { IFRAME_MAX_ATTEMPTS, IFRAME_POLL_INTERVAL_MS } from "../constants/timing";
-import { collectFencedDivs, type FencedDivInfo, fenceProtectionExtension } from "./fence-protection";
+import { fenceProtectionExtension } from "./fence-protection";
 
 /** Pre-created mark decoration for monospace source syntax on fence lines. */
 const blockSourceMark = Decoration.mark({ class: CSS.blockSource });
@@ -157,7 +164,7 @@ class BlockCaptionWidget extends MacroAwareWidget {
 
       const liveDiv = findFencedBlockAt(collectFencedDivs(view.state), blockPos);
       const revealPos = liveDiv
-        ? (liveDiv.titleFrom ?? liveDiv.openFenceFrom)
+        ? getFencedDivRevealFrom(liveDiv)
         : this.sourceFrom;
       if (revealPos < 0) return;
 
@@ -488,7 +495,7 @@ function addHeaderWidgetDecoration(
   // Replace only the fence prefix, leave title text as editable content.
   // No-title case: replaceEnd = openFenceTo (whole fence line, nothing to split).
   // With-title case: replaceEnd = titleFrom (stop before title text).
-  const replaceEnd = div.titleFrom ?? div.openFenceTo;
+  const replaceEnd = getFencedDivStructuralOpenTo(div);
   const widget = header ? new BlockHeaderWidget(header, macros) : null;
   addMarkerReplacement(div.openFenceFrom, replaceEnd, cursorInside, widget, items);
 }
@@ -616,7 +623,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
         : `${spec.className} ${CSS.blockHeaderCollapsed}`;
     items.push(Decoration.line({ class: headerClass }).range(div.from));
     if (cursorOnEitherFence) {
-      const syntaxEnd = div.titleFrom ?? div.openFenceTo;
+      const syntaxEnd = getFencedDivStructuralOpenTo(div);
       if (syntaxEnd > div.openFenceFrom) {
         items.push(blockSourceMark.range(div.openFenceFrom, syntaxEnd));
       }
@@ -701,8 +708,8 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       if (captionBelow && !cursorOnEitherFence && closeLine.number > openLine.number + 1) {
         const lastBodyLine = state.doc.line(closeLine.number - 1);
         const captionWidget = new BlockCaptionWidget(spec.header, div.title ?? "", macros);
-        captionWidget.sourceFrom = div.titleFrom ?? div.openFenceFrom;
-        captionWidget.sourceTo = div.titleTo ?? div.openFenceTo;
+        captionWidget.sourceFrom = getFencedDivRevealFrom(div);
+        captionWidget.sourceTo = getFencedDivRevealTo(div);
         items.push(
           Decoration.widget({
             widget: captionWidget,

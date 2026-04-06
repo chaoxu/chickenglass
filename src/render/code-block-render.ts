@@ -32,6 +32,11 @@ import {
 } from "@codemirror/state";
 import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import {
+  findFencedBlockAt,
+  mapFencedBlockInfo,
+  type FencedBlockInfo,
+} from "../fenced-block/model";
+import {
   RenderWidget,
   editorFocusField,
   focusEffect,
@@ -41,8 +46,6 @@ import {
 } from "./render-utils";
 import {
   buildFencedBlockDecorations,
-  findFencedBlockAt,
-  type FencedBlockInfo,
   type FencedBlockRenderContext,
   getFencedBlockRenderContext,
   getLineElement,
@@ -332,35 +335,13 @@ function mapCodeBlock(
   block: CodeBlockInfo,
   tr: Transaction,
 ): CodeBlockInfo {
-  const from = tr.changes.mapPos(block.from, 1);
-  const to = Math.max(from, tr.changes.mapPos(block.to, -1));
-  const openFenceFrom = tr.changes.mapPos(block.openFenceFrom, 1);
-  const openFenceTo = Math.max(openFenceFrom, tr.changes.mapPos(block.openFenceTo, -1));
-  const closeFenceFrom = tr.changes.mapPos(block.closeFenceFrom, 1);
-  const closeFenceTo = Math.max(closeFenceFrom, tr.changes.mapPos(block.closeFenceTo, -1));
-  const singleLine = closeFenceFrom === openFenceFrom;
-
-  if (
-    from === block.from
-    && to === block.to
-    && openFenceFrom === block.openFenceFrom
-    && openFenceTo === block.openFenceTo
-    && closeFenceFrom === block.closeFenceFrom
-    && closeFenceTo === block.closeFenceTo
-    && singleLine === block.singleLine
-  ) {
+  const mappedBlock = mapFencedBlockInfo(block, tr.changes);
+  if (mappedBlock === block) {
     return block;
   }
 
   return {
-    ...block,
-    from,
-    to,
-    openFenceFrom,
-    openFenceTo,
-    closeFenceFrom,
-    closeFenceTo,
-    singleLine,
+    ...mappedBlock,
   };
 }
 

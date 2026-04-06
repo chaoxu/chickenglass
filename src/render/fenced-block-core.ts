@@ -1,6 +1,7 @@
 import { type EditorState, type Line, type Range, type StateField, type Transaction } from "@codemirror/state";
 import { type DecorationSet, Decoration, EditorView } from "@codemirror/view";
 import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
+import type { FencedBlockInfo } from "../fenced-block/model";
 import {
   buildDecorations,
   createDecorationsField,
@@ -10,16 +11,7 @@ import {
 } from "./render-utils";
 import { CSS } from "../constants/css-classes";
 
-/** Shared document ranges for blocks bounded by an opening and closing fence line. */
-export interface FencedBlockInfo {
-  readonly from: number;
-  readonly to: number;
-  readonly openFenceFrom: number;
-  readonly openFenceTo: number;
-  readonly closeFenceFrom: number;
-  readonly closeFenceTo: number;
-  readonly singleLine: boolean;
-}
+export { findFencedBlockAt, type FencedBlockInfo } from "../fenced-block/model";
 
 /** Shared derived state for rendering a fenced block. */
 export interface FencedBlockRenderContext<T extends FencedBlockInfo> {
@@ -80,17 +72,6 @@ export function getFencedBlockRenderContext<T extends FencedBlockInfo>(
     closeLine,
     bodyLineCount: Math.max(0, closeLine.number - openLine.number - 1),
   };
-}
-
-/** Find the fenced block containing a position. */
-export function findFencedBlockAt<T extends Pick<FencedBlockInfo, "from" | "to">>(
-  blocks: readonly T[],
-  pos: number,
-): T | null {
-  for (const block of blocks) {
-    if (pos >= block.from && pos <= block.to) return block;
-  }
-  return null;
 }
 
 /** Resolve the rendered CM line element containing a document position. */
