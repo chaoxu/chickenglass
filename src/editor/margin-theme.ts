@@ -77,7 +77,7 @@ export const marginThemeStyles = {
   ".cf-reference-completion-tooltip > ul": {
     maxHeight: "18em",
   },
-  ".cf-reference-completion-citation": {
+  ".cf-reference-completion-preview": {
     display: "grid",
     gridTemplateColumns: "auto minmax(0, 1fr)",
     columnGap: "var(--cf-spacing-sm)",
@@ -86,16 +86,21 @@ export const marginThemeStyles = {
     paddingTop: "var(--cf-spacing-xs)",
     paddingBottom: "var(--cf-spacing-xs)",
   },
-  ".cf-reference-completion-citation .cm-completionIcon": {
+  ".cf-reference-completion-preview .cm-completionIcon": {
     gridColumn: "1",
     gridRow: "1 / span 2",
     marginTop: "2px",
     paddingRight: "0",
   },
-  ".cf-reference-completion-citation .cm-completionLabel": {
+  ".cf-reference-completion-preview .cm-completionLabel": {
     gridColumn: "2",
     fontWeight: "600",
     whiteSpace: "normal",
+  },
+  ".cf-reference-completion-crossref .cf-hover-preview": {
+    gridColumn: "2",
+    minWidth: "0",
+    padding: "var(--cf-spacing-xs) 0 0",
   },
   ".cf-reference-completion-citation .cf-citation-preview": {
     gridColumn: "2",

@@ -276,4 +276,80 @@ describe("reference autocomplete integration", () => {
     view.destroy();
     parent.remove();
   });
+
+  it("renders semantic cross-reference completions as inline previews without detached info tooltips", async () => {
+    const doc = [
+      "# Background {#sec:background}",
+      "",
+      "::: {#thm:main .theorem} Fundamental theorem",
+      "Statement with $x^2$ inline math.",
+      ":::",
+      "",
+      "::: {#tbl:results .table} Results table",
+      "",
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      ":::",
+      "",
+      "$$",
+      "E = mc^2",
+      "$$ {#eq:energy}",
+      "",
+      "See [@",
+    ].join("\n");
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = createEditor({ parent, doc });
+    view.focus();
+    view.dispatch({
+      selection: { anchor: view.state.doc.length },
+    });
+
+    expect(startCompletion(view)).toBe(true);
+    await waitForCompletionLabels(() =>
+      currentCompletions(view.state).map((candidate) => candidate.label),
+    );
+
+    const completionByLabel = new Map(
+      currentCompletions(view.state).map((completion) => [completion.label, completion]),
+    );
+    expect(completionByLabel.get("thm:main")?.info).toBeUndefined();
+    expect(completionByLabel.get("tbl:results")?.info).toBeUndefined();
+    expect(completionByLabel.get("eq:energy")?.info).toBeUndefined();
+    expect(completionByLabel.get("sec:background")?.info).toBeUndefined();
+
+    const theoremItem = await waitForCompletionItem((candidate) =>
+      candidate.querySelector(".cm-completionLabel")?.textContent === "thm:main",
+    );
+    expect(theoremItem?.className).toContain("cf-reference-completion-crossref");
+    expect(theoremItem?.querySelector(".cf-hover-preview")).toBeTruthy();
+    expect(theoremItem?.textContent).toContain("Theorem 1");
+    expect(theoremItem?.querySelector(".cf-hover-preview-header")?.textContent).toBe("Theorem 1");
+    expect(theoremItem?.textContent).toContain("Statement with");
+    expect(theoremItem?.querySelector(".katex")).toBeTruthy();
+
+    const tableItem = await waitForCompletionItem((candidate) =>
+      candidate.querySelector(".cm-completionLabel")?.textContent === "tbl:results",
+    );
+    expect(tableItem?.querySelector(".cf-hover-preview-table-scroll table")).toBeTruthy();
+    expect(tableItem?.textContent).toContain("Results table");
+
+    const equationItem = await waitForCompletionItem((candidate) =>
+      candidate.querySelector(".cm-completionLabel")?.textContent === "eq:energy",
+    );
+    expect(equationItem?.textContent).toContain("Eq. (1)");
+    expect(equationItem?.querySelector(".katex-display")).toBeTruthy();
+
+    const headingItem = await waitForCompletionItem((candidate) =>
+      candidate.querySelector(".cm-completionLabel")?.textContent === "sec:background",
+    );
+    expect(headingItem?.textContent).toContain("Section 1 Background");
+    expect(headingItem?.querySelector(".cf-hover-preview-header")).toBeTruthy();
+
+    expect(document.querySelector(".cm-completionInfo")).toBeNull();
+
+    view.destroy();
+    parent.remove();
+  });
 });

@@ -135,7 +135,9 @@ export const CSS = {
 
   /** Reference autocomplete. */
   referenceCompletionTooltip: "cf-reference-completion-tooltip",
+  referenceCompletionPreview: "cf-reference-completion-preview",
   referenceCompletionCitation: "cf-reference-completion-citation",
+  referenceCompletionCrossref: "cf-reference-completion-crossref",
 
   /** Document title from frontmatter. */
   docTitle: "cf-doc-title",
