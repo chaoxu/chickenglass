@@ -2,6 +2,17 @@
 
 Semantic document editor for mathematical writing. Runs as a native desktop app (Tauri) or in the browser for development.
 
+## Shared file
+
+`AGENTS.md` is the canonical shared instructions file for both `AGENTS.md` and `CLAUDE.md`.
+Keep them as one source of truth. If the shared guidance changes, update the canonical file and keep the other path synced in the same change.
+
+## Repo / tooling assumptions
+
+- This repo is hosted on a local Gitea instance at `http://localhost:3001`; see the Gitea / issue tracking section below for `tea` usage.
+- For terminal agents that support it, prefix repo-local shell commands with `rtk`.
+- Prefer repo browser helpers before ad hoc CDP scripts.
+
 ## Stack
 
 - **Language**: TypeScript (strict mode) + Rust (Tauri backend)
@@ -34,16 +45,67 @@ scripts/         # CDP test helpers, blog import tools
 ```bash
 pnpm install         # install dependencies
 pnpm dev             # start dev server (Vite) — browser mode with blog demo content
-pnpm build           # production build (frontend only)
 pnpm preview         # serve the production build on 0.0.0.0 for IPv4 access
-pnpm lint            # ESLint
-pnpm lint:fix        # ESLint autofix
+pnpm dev:worktree -- perf-444 --base origin/main --fetch
+                     # create an isolated worktree under .worktrees/ from a committed base ref
+pnpm build           # production build (frontend only)
+pnpm lint            # Biome lint
+pnpm lint:fix        # Biome lint autofix
 pnpm test            # run tests (Vitest)
 pnpm typecheck       # typecheck only
 pnpm tauri:dev       # launch Tauri desktop app
 pnpm tauri:build     # build production desktop binary
 pnpm chrome          # launch Playwright Chromium with CDP on port 9322
 ```
+
+## Tooling
+
+```bash
+# Dead code / unused exports
+pnpm knip                           # find unused files, exports, dependencies
+
+# Standalone package validation
+pnpm publint                        # validate package.json exports (run after build:editor)
+pnpm size                           # check embed bundle size against limits (run after build:editor)
+
+# Bundle analysis
+pnpm build:analyze                  # build editor bundle + open dist/stats.html treemap
+
+# Rust tests (faster than cargo test)
+cargo nextest run                   # run all Rust tests in parallel
+cargo nextest run --test-threads 4  # with explicit concurrency
+```
+
+### What each tool does
+
+- **knip** — detects unused files, exports, and dependencies. Run after refactors. Config: `knip.config.ts`. The expected unused UI component re-exports are component-library noise; focus on unused files and unlisted deps.
+- **publint** — validates `package.json` exports point to real built files with correct types. Run after `build:editor` before publishing.
+- **size-limit** — enforces bundle size budgets for the standalone editor (`dist/editor.mjs` ≤ 2000 kB, `dist/editor.css` ≤ 100 kB). Config lives in `package.json`.
+- **rollup-plugin-visualizer** — generates `dist/stats.html` treemap of what is actually in the bundle. Activated by `pnpm build:analyze`.
+- **@testing-library/react** (`renderHook`) — for hook-level tests. Setup file: `src/test-setup.ts`.
+- **cargo-nextest** — parallel Rust test runner for the Tauri backend. Faster and cleaner than `cargo test`.
+
+### Hooks (lefthook)
+
+Configured in `lefthook.yml`, installed automatically on `pnpm install` via the `prepare` script.
+
+| Hook | Runs | Commands |
+|---|---|---|
+| `pre-commit` | on every commit (parallel) | `pnpm lint`, `pnpm typecheck` |
+| `pre-push` | on every push | `pnpm test` |
+
+Skip hooks when needed: `git commit --no-verify` / `git push --no-verify`. Only do that intentionally.
+
+### CI (Gitea Actions)
+
+Workflow at `.gitea/workflows/ci.yml`. Runs on push/PR to `main`.
+
+| Job | What it checks |
+|---|---|
+| `lint` | Biome lint + typecheck + knip |
+| `test` | Vitest unit tests |
+| `package` | `build:editor` → publint → size-limit |
+| `rust` | `cargo nextest run` on the Tauri backend |
 
 ## Debug helpers
 
@@ -60,6 +122,9 @@ __cmDebug.toggleTreeView()   — toggle live Lezer tree panel (@overleaf/codemir
 __app.openFile("posts/x.md") — open any file by path (app's real function)
 __app.setMode("source")      — switch editor mode (rich/source/read)
 __app.saveFile()             — save current file
+__tauriSmoke.openProject("/abs/path") — dev-only Tauri helper to switch project roots deterministically
+__tauriSmoke.getWindowState()         — dev-only Tauri snapshot: project root, current doc, dirty, backend root, watcher root
+__tauriSmoke.simulateExternalChange("notes.md") — dev-only Tauri helper to emit a file-changed event
 __fencedDivDebug = true      — toggle fenced div parser tracing
 ```
 
@@ -67,7 +132,8 @@ Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile(
 
 ## Dev mode
 
-`pnpm dev` runs Vite in dev mode. Dev mode skips the dirty-file confirmation dialog when switching files, so testing is faster. Controlled by `Settings.skipDirtyConfirm`.
+`pnpm dev` runs Vite in dev mode (`import.meta.env.DEV === true`). Dev mode differences:
+- **No dirty-file confirmation** — switching files with unsaved changes skips the `window.confirm` dialog for faster testing. Controlled by `Settings.skipDirtyConfirm` (defaults to `true` in dev, `false` in production).
 
 When asked to start the preview server, prefer `pnpm build && pnpm preview`. The preview script binds `0.0.0.0` so it is reachable over IPv4.
 
@@ -78,11 +144,24 @@ When asked to start the preview server, prefer `pnpm build && pnpm preview`. The
 1. Start: `pnpm dev`, then `pnpm chrome` (CDP on port 9322)
 2. Connect: `chromium.connectOverCDP("http://localhost:9322")`
 3. Use `page.evaluate()` + `__cmView`/`__cmDebug`/`__app`. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout(10000)`.
-4. Kill: `kill $(lsof -ti:5173 -ti:5174 -ti:5175) 2>/dev/null; pkill -f "launch-chrome" 2>/dev/null`
+4. Screenshots: use the `screenshot()` helper from `scripts/test-helpers.mjs`, or `node scripts/screenshot.mjs [file] --output path.png`. **Do not call `page.screenshot()` directly** — headed Chrome CDP can hang there.
+5. Kill: `kill $(lsof -ti:5173 -ti:5174 -ti:5175) 2>/dev/null; pkill -f "launch-chrome" 2>/dev/null`
 
 When launching `Google Chrome for Testing` directly in app mode (for example `open -na ... --args --app=URL`), always pass `--disable-infobars` so the Chrome for Testing warning banner does not cover the app UI.
 
 Do NOT use the Playwright MCP plugin — connect directly via CDP.
+
+### Perf benchmarking
+
+- Use the shared perf harness in `scripts/perf-regression.mjs` and the guidance in `docs/perf-regression.md`.
+- `demo/cogirth/main2.md` is the standard heavy fixture for open/edit/scroll performance work.
+
+### Runtime regression debugging
+
+- Prefer `scripts/test-helpers.mjs` helpers such as `waitForDebugBridge()` and `assertEditorHealth()` before writing ad hoc CDP snippets.
+- Always target the real localhost app page, not merely “the first page” in the browser context.
+- For bug-specific runtime verification, do a general smoke check on `index.md` and also run the affected fixture. Heavy regressions often require `demo/rankdecrease/main.md` or `demo/cogirth/main2.md`.
+- For cursor/scroll regressions like `#964`, verify with a real long-document runtime repro. If `page.keyboard.press()` is unreliable in the app-mode CDP lane, it is acceptable to drive CM6 movement inside `page.evaluate()` and document the exact command/script used.
 
 ## Conventions
 
@@ -97,77 +176,58 @@ Do NOT use the Playwright MCP plugin — connect directly via CDP.
 
 Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` for math, fenced divs (`::: {.class #id} Title`), `[@id]` for cross-refs/citations, equation labels `$$ ... $$ {#eq:foo}`. See `FORMAT.md` for the canonical document-format spec. All markdown files in this repo must follow `FORMAT.md`.
 
+## Gitea / issue tracking
+
+This repo is hosted on a local Gitea instance at `http://localhost:3001`. Use the **`tea`** CLI (not `gh`, not raw curl) for all issue/PR interactions:
+
+```bash
+tea issues                             # list open issues (default verb is list)
+tea issues --state closed              # list closed issues
+tea issues --state closed --limit 30
+tea issues create --title "..." --description "..."
+tea pulls                              # list pull requests
+tea pr create --title "..." --base main --head <branch>
+tea logins                             # show configured logins (default: coflat / chaoxu)
+```
+
+`tea` is already logged in. The default login points to `http://localhost:3001` as user `chaoxu`.
+
 ## Workspace hygiene
 
 - Temporary files go in `/tmp/coflat-*` — never in the project directory.
+- For isolated local work, prefer `pnpm dev:worktree -- <name>`.
+  - It creates a new branch + worktree under `.worktrees/<sanitized-name>`.
+  - It links the repo's `node_modules` into the new worktree when available, so verification commands usually work immediately.
+  - It is dirty-tree tolerant: uncommitted changes in the current worktree are NOT copied; only committed history from the chosen base ref is used.
+  - `--base origin/main --fetch` refreshes the requested remote base ref before creating the worktree.
+  - A custom relative `--path` is resolved from the repo root, not the caller's current subdirectory.
 
-## Development rules
+## Performance issue standard
 
-- **Default rigor mode**:
-  - Unless the user explicitly asks for a quick patch, brainstorming only, or issue-only investigation, default to rigorous implementation.
-  - Start with root-cause analysis, not symptom patching.
-  - Prefer the smallest clean fix at the correct architectural layer over local hacks.
-  - Check adjacent cases and duplicated code paths, not just the exact repro.
-  - Add regression coverage for the bug class when feasible, not only the single example.
-  - Run targeted verification before claiming fixed.
-  - Do a self-review/simplification pass before commit.
-  - If the architecture is wrong, say so and fix that instead of preserving a bad shape.
-- **Rigor prompt patterns**:
-  - `Be rigorous. Don't stop at the first fix.`
-  - `Do root-cause analysis first, then implement.`
-  - `Treat this like a refactor, not a patch.`
-  - `I care more about correctness than speed.`
-  - `Review your own change before committing.`
-  - `Add regression tests for the bug class, not just the exact repro.`
-  - `Check for adjacent cases and duplicates in the codebase.`
-  - `If the architecture is wrong, say so and fix that instead.`
-- **Typora-style editing**:
-  - Content keeps its natural font when editing (code stays monospace, prose stays serif).
-  - Opening fence shows as source when cursor is on it; closing fence is always hidden (zero height, protected by transaction filter, cursor skips via atomicRanges).
-  - Rich and Read mode must look the same (same CSS classes/properties).
-  - Never hide source the user is editing.
-  - **Block headers must behave like headings (CRITICAL — regressed 3+ times):**
-    - `Decoration.replace` covers ONLY the fence prefix (`::: {.class}` → `titleFrom`), NOT the title text.
-    - The widget shows only the label ("**Theorem 1.**" + separator), not the title.
-    - Title text (`titleFrom → titleTo`) stays as normal editable document content.
-    - Inline render plugins (math, bold, italic) handle title content naturally — `$x^2$` renders as KaTeX.
-    - When cursor is on either fence: fence prefix becomes source (`::: {.theorem}`), but title text stays rendered. Only direct cursor contact on `$x^2$` makes it source.
-    - When cursor is off both fences: widget replaces fence prefix with rendered label.
-    - NEVER replace the full line (`openFenceFrom → titleTo`) with a single widget — this kills inline rendering in source mode.
-    - No-title case: widget replaces `openFenceFrom → openFenceTo` (nothing to split).
-- **CM6 decoration rules**:
-  - `Decoration.line` for inherited CSS (font-size, line-height). `Decoration.mark` for text-only (font-weight, color).
-  - `Decoration.replace` + `ignoreEvent() { return true }` + mousedown handler dispatching to `sourceFrom` for widgets.
-  - Never extend `Decoration.replace` over user-editable text — edits get swallowed.
-  - Never use `ignoreEvent() { return false }` with custom mousedown handlers.
-- **Lezer parser rules**:
-  - Prefer Lezer tree walking over regex for markdown/document parsing. If the task is really about document structure, syntax, or block boundaries, use the syntax tree.
-  - `endLeaf` callbacks for paragraph interruption (display math after text without blank line).
-  - Fenced div composite blocks use a generation counter in the `value` parameter to prevent incremental parser fragment reuse (see `packValue` in fenced-div.ts).
-  - Block parsers using `cx.nextLine()` inside a composite must check for `:::` closing fences to avoid crossing composite boundaries (see `isFencedDivClose` in equation-label.ts).
-  - Guard `closeFenceNode.from` against out-of-range positions — incomplete trees can have `-1`.
-- **Testing**:
-  - ALWAYS test before claiming fixed. Use `npm run dev` + `npm run chrome` + `__cmDebug.dump()` to verify. Never ask the user to test unless it's something you literally cannot test (e.g., native OS interactions).
-  - Always open `index.md` in the browser to verify rendering. It opens by default on startup. If a feature you changed is not covered by `index.md`, add a test case to it.
-  - Test StateFields without a browser: `EditorState.create({extensions}).update({changes}).state.field(myField)`.
-  - For parser bugs, write a Vitest test with the exact document content first, then check browser for incremental parsing issues.
-- **Shell/CLI text safety**:
-  - Do not inline long natural-language text directly in shell commands when it contains quotes, backticks, or `$`.
-  - For GitHub comments, commit messages, or other multi-sentence CLI text, prefer stdin, a quoted here-doc, or a temp file (`--body-file`, `--comment-file`) over shell interpolation.
-  - Short literal commands can stay inline; human prose should usually go through a file.
-- **Reviewer/simplifier gate before every commit**: Before `git commit`, ALWAYS launch `pr-review-toolkit:code-reviewer` and `pr-review-toolkit:code-simplifier` in parallel on the diff. Apply findings. Then commit once, clean. Not optional. Subagents use `Skill tool` for the same gates and loop until both pass.
-- **Copy what works**: Study existing open-source projects before implementing. Reference repos: [codemirror-rich-markdoc](https://github.com/segphault/codemirror-rich-markdoc), [obsidian-codemirror-options](https://github.com/nothingislost/obsidian-codemirror-options), [advanced-tables-obsidian](https://github.com/tgrosinger/advanced-tables-obsidian).
-- **Use Context7**: Fetch up-to-date API docs before implementing with any library.
-- **Wire features into the app**: Every feature must be connected to the editor entry point, not just exported.
+Every performance issue and PR must include a **before/after measurement** on a large real document (`demo/cogirth/main2.md` is the standard fixture). Without numbers the change is unverifiable.
 
-## Key architecture decisions
+- Run the perf harness: `node scripts/perf-regression.mjs` — or use the relevant `perf.*` span from the in-app telemetry.
+- For targeted micro-optimizations (for example a single function), a focused microbenchmark or Vitest perf test is acceptable instead, but must still report both numbers.
+- The PR description must include the before and after figures. A PR that claims a perf improvement without measurements will not be merged.
+- The fixture `demo/cogirth/main2.md` is the canonical heavy document for local-edit, scroll, and open benchmarks. Use a document with similar characteristics if a different scenario is being measured.
 
-- **Pandoc-free editing loop**: Pandoc is only for export. The editor uses Lezer + CM6 + KaTeX directly.
-- **Read mode = HTML export**: `markdown-to-html.ts` is a standalone Lezer tree walker with no CM6 dependency. Keep it CM6-free — pass data as plain objects (e.g., `BibStore`), not CM6 state fields.
-- **Every block is a plugin**: Plugins register via `createStandardPlugin()` factory. Core knows nothing about "theorem."
-- **Fenced divs are composite blocks**: Content inside `::: ... :::` is parsed as full markdown by re-entering the parser.
-- **FileSystem abstraction**: `MemoryFileSystem` (demo/dev) and `TauriFileSystem` (desktop). Runtime detection via `window.__TAURI__`.
-- **Dual-mode app**: Browser dev mode loads blog demo. Tauri app starts with demo, user can "Open Folder" for real files.
-- **Math macros cached in StateField**: `mathMacrosField` recomputes only when frontmatter changes.
-- **RenderWidget base class**: Default `ignoreEvent() { return true }`, inherited by 7+ widget types.
-- **Knuth-Plass must apply to ALL paragraphs**: Never skip math-containing paragraphs. The proper fix is a custom implementation using the Lezer syntax tree, not a DOM-walking library.
+## Maintenance triggers
+
+- **Large file trigger**: if a change touches a file above roughly 600 lines, or a file that already mixes multiple concerns, explicitly evaluate extraction/splitting before adding more logic.
+- **Neutral owner rule**: if a selector/type/model is used by more than one subsystem, move it into a neutral owner. Do not let renderers depend on protection/event modules for core document selectors.
+- **Debug-bridge sync rule**: if a change touches the browser/debug harness, update `scripts/test-helpers.mjs`, `src/types/window.d.ts`, and this shared file together.
+
+## Development rules & architecture
+
+Detailed rules and architecture decisions are in reference files -- loaded on demand, not always in context:
+
+- **[Development rules](docs/architecture/development-rules.md)** — rigor mode, Typora-style editing, CM6 decorations, Lezer parser rules, testing policy, workflow gates, shell safety. Error handling policy: Never use bare `catch {}` without an explicit reason.
+- **[Architecture decisions](docs/architecture/architecture-decisions.md)** — Pandoc-free editing, plugin system, FileSystem abstraction, Lezer-everywhere philosophy, library preferences
+- **[Subsystem pattern](docs/architecture/subsystem-pattern.md)** — model/controller/render-adapter seam pattern for non-trivial features. One concept should have one clear owner.
+- **[Inline rendering policy](docs/design/inline-rendering-policy.md)** — how inline math, bold, italic rendering works
+- **[Theme contract](docs/architecture/theme-contract.md)** — CSS variable contract between editor and theme
+
+
+## ORC integration
+
+This repo is managed by [orc](http://localhost:3001/orc/orc). Issues with the `ORC` label are picked up automatically by the orc daemon. Do not use labels like `agent`, `working`, `needs-fix`, or `needs-look` — those are deprecated. The single `ORC` label is the only visibility gate.
