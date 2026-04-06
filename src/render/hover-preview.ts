@@ -19,6 +19,7 @@ import {
   classifyReference,
   type ReferenceClassification,
   type ResolvedCrossref,
+  resolveCrossref,
 } from "../index/crossref-resolver";
 import type { ReferenceSemantics } from "../semantics/document";
 import { blockCounterField, type NumberedBlock } from "../plugins";
@@ -668,6 +669,18 @@ function buildCrossrefTooltipPlan(
     trackedImagePaths: new Set<string>(),
     trackedPdfPaths: new Set<string>(),
   };
+}
+
+export function buildCrossrefPreviewContent(
+  view: EditorView,
+  id: string,
+): HTMLElement {
+  const equationLabels = view.state.field(documentAnalysisField).equationById;
+  return buildCrossrefTooltipPlan(
+    view,
+    id,
+    resolveCrossref(view.state, id, equationLabels),
+  ).buildContent();
 }
 
 /**

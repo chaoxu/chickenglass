@@ -7,6 +7,7 @@ import {
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 import type { EditorState, Extension } from "@codemirror/state";
+import type { EditorView } from "@codemirror/view";
 import type { CslJsonItem } from "../citations/bibtex-parser";
 import {
   buildCitationPreviewContent,
@@ -19,6 +20,7 @@ import {
   getPlugin,
   pluginRegistryField,
 } from "../plugins";
+import { buildCrossrefPreviewContent } from "../render/hover-preview";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 
 const CROSSREF_SECTION = { name: "Cross-references", rank: 0 } as const;
@@ -214,15 +216,38 @@ function isCitationCompletion(
     && typeof referenceCompletion.citationPreview === "string";
 }
 
-function renderCitationCompletionPreview(completion: Completion): Node | null {
-  return isCitationCompletion(completion)
-    ? buildCitationPreviewContent(completion.citationPreview)
+function isSemanticReferenceCompletion(
+  completion: Completion,
+): completion is ReferenceAutocompleteCompletion & {
+  readonly referenceCompletionKind: "block" | "equation" | "heading";
+} {
+  const referenceCompletion = completion as Partial<ReferenceAutocompleteCompletion>;
+  return referenceCompletion.referenceCompletionKind === "block"
+    || referenceCompletion.referenceCompletionKind === "equation"
+    || referenceCompletion.referenceCompletionKind === "heading";
+}
+
+function renderReferenceCompletionPreview(
+  completion: Completion,
+  _state: EditorState,
+  view: EditorView,
+): Node | null {
+  if (isCitationCompletion(completion)) {
+    return buildCitationPreviewContent(completion.citationPreview);
+  }
+
+  return isSemanticReferenceCompletion(completion)
+    ? buildCrossrefPreviewContent(view, completion.label)
     : null;
 }
 
 function referenceCompletionOptionClass(completion: Completion): string {
-  return isCitationCompletion(completion)
-    ? CSS.referenceCompletionCitation
+  if (isCitationCompletion(completion)) {
+    return `${CSS.referenceCompletionPreview} ${CSS.referenceCompletionCitation}`;
+  }
+
+  return isSemanticReferenceCompletion(completion)
+    ? `${CSS.referenceCompletionPreview} ${CSS.referenceCompletionCrossref}`
     : "";
 }
 
@@ -294,8 +319,6 @@ function candidateToCompletion(
     case "block":
       return {
         label: candidate.id,
-        detail: candidate.detail,
-        info: candidate.info,
         referenceCompletionKind: "block",
         section: CROSSREF_SECTION,
         sortText: `0-${candidate.id}`,
@@ -304,8 +327,6 @@ function candidateToCompletion(
     case "equation":
       return {
         label: candidate.id,
-        detail: candidate.detail,
-        info: candidate.info,
         referenceCompletionKind: "equation",
         section: CROSSREF_SECTION,
         sortText: `1-${candidate.id}`,
@@ -314,8 +335,6 @@ function candidateToCompletion(
     case "heading":
       return {
         label: candidate.id,
-        detail: candidate.detail,
-        info: candidate.info,
         referenceCompletionKind: "heading",
         section: CROSSREF_SECTION,
         sortText: `2-${candidate.id}`,
@@ -357,7 +376,7 @@ export const referenceCompletionSource: CompletionSource = (
 export const referenceAutocompleteExtension: Extension = autocompletion({
   activateOnTyping: true,
   activateOnTypingDelay: 0,
-  addToOptions: [{ render: renderCitationCompletionPreview, position: 90 }],
+  addToOptions: [{ render: renderReferenceCompletionPreview, position: 90 }],
   optionClass: referenceCompletionOptionClass,
   override: [referenceCompletionSource],
   tooltipClass: () => CSS.referenceCompletionTooltip,
