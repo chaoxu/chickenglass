@@ -48,6 +48,32 @@ interface PositionMeasurement {
   rect: AnchorRect;
 }
 
+function rectToAnchorRect(rect: {
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}): AnchorRect {
+  return {
+    x: rect.x ?? rect.left,
+    y: rect.y ?? rect.top,
+    width: rect.width,
+    height: rect.height,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+    left: rect.left,
+  };
+}
+
+function isVisibleRect(rect: { width: number; height: number }): boolean {
+  return rect.width > 0 || rect.height > 0;
+}
+
 const EMPTY_ANCHOR_RECT: AnchorRect = {
   x: 0,
   y: 0,
@@ -66,6 +92,7 @@ class MathPreviewPlugin implements PluginValue {
   private cleanupAutoUpdate: (() => void) | null = null;
   private lastRaw = "";
   private lastRegion: MathRegionSnapshot | null = null;
+  private lastRegionKey = "";
   private isDragging = false;
   private dragOffsetX = 0;
   private dragOffsetY = 0;
@@ -113,12 +140,15 @@ class MathPreviewPlugin implements PluginValue {
     const regions = this.view.state.field(documentAnalysisField).mathRegions;
     const info = findActiveMath(regions, this.view.state.selection.main);
 
-    if (!info || info.isDisplay) {
+    if (!info) {
       this.removePanel();
       return;
     }
 
     const raw = this.view.state.sliceDoc(info.from, info.to);
+    const regionKey = `${info.from}:${info.to}:${info.isDisplay ? "display" : "inline"}`;
+    const regionChanged = regionKey !== this.lastRegionKey;
+    const rawChanged = raw !== this.lastRaw;
 
     if (!this.panel) {
       this.createPanel();
@@ -128,7 +158,7 @@ class MathPreviewPlugin implements PluginValue {
       this.manualPosition = null;
     }
 
-    if (raw !== this.lastRaw) {
+    if (rawChanged || regionChanged) {
       this.lastRaw = raw;
       this.lastRegion = {
         latex: info.latex,
@@ -141,8 +171,11 @@ class MathPreviewPlugin implements PluginValue {
 
     this.anchorFromPos = info.from;
     this.anchorToPos = info.to;
+    this.lastRegionKey = regionKey;
     this.startAutoUpdate();
-    this.requestPositionUpdate();
+    if (regionChanged || rawChanged || this.lastAnchorRect === EMPTY_ANCHOR_RECT) {
+      this.requestPositionUpdate();
+    }
   }
 
   private createPanel(): void {
@@ -204,33 +237,91 @@ class MathPreviewPlugin implements PluginValue {
   private startAutoUpdate(): void {
     if (!this.panel || this.cleanupAutoUpdate) return;
     this.cleanupAutoUpdate = autoUpdate(this.autoUpdateAnchor, this.panel, () => {
-      this.requestPositionUpdate();
+      if (this.lastAnchorRect === EMPTY_ANCHOR_RECT) {
+        this.requestPositionUpdate();
+        return;
+      }
+      this.refreshPositionFromAnchor();
     });
   }
 
-  private readAnchorRect(): AnchorRect | null {
+  private readAnchorRangeRect(): AnchorRect | null {
     if (this.anchorFromPos < 0 || this.anchorToPos < 0) return null;
 
     try {
-      // Anchor to the inline math span itself on both edges. Leaving the side
-      // implicit lets coordsAtPos fall back to adjacent content at boundaries.
+      const { node: startNode, offset: startOffset } = this.view.domAtPos(this.anchorFromPos);
+      const { node: endNode, offset: endOffset } = this.view.domAtPos(this.anchorToPos);
+      const range = this.view.dom.ownerDocument.createRange();
+      range.setStart(startNode, startOffset);
+      range.setEnd(endNode, endOffset);
+
+      const rects = Array.from(range.getClientRects());
+      if (rects.length > 0) {
+        let left = rects[0].left;
+        let top = rects[0].top;
+        let right = rects[0].right;
+        let bottom = rects[0].bottom;
+
+        for (const rect of rects.slice(1)) {
+          left = Math.min(left, rect.left);
+          top = Math.min(top, rect.top);
+          right = Math.max(right, rect.right);
+          bottom = Math.max(bottom, rect.bottom);
+        }
+
+        return rectToAnchorRect({
+          width: Math.max(right - left, 0),
+          height: Math.max(bottom - top, 0),
+          top,
+          right,
+          bottom,
+          left,
+        });
+      }
+
+      const rect = range.getBoundingClientRect();
+      return isVisibleRect(rect) ? rectToAnchorRect(rect) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private readAnchorRect(): AnchorRect | null {
+    const rangeRect = this.readAnchorRangeRect();
+    if (rangeRect) return rangeRect;
+
+    try {
+      // Fallback to source boundary coordinates when DOM range measurement is
+      // unavailable (for example in lightweight test environments).
       const fromCoords = this.view.coordsAtPos(this.anchorFromPos, 1);
       const toCoords = this.view.coordsAtPos(this.anchorToPos, -1);
       if (!fromCoords || !toCoords) return null;
 
-      return {
-        x: fromCoords.left,
-        y: fromCoords.top,
+      return rectToAnchorRect({
         width: Math.max(toCoords.right - fromCoords.left, 0),
         height: Math.max(toCoords.bottom - fromCoords.top, 0),
         top: fromCoords.top,
         right: toCoords.right,
         bottom: toCoords.bottom,
         left: fromCoords.left,
-      };
+      });
     } catch {
       return null;
     }
+  }
+
+  private applyPosition(rect: AnchorRect): void {
+    if (!this.panel || this.isDragging || this.manualPosition) return;
+    this.lastAnchorRect = rect;
+    this.panel.style.left = `${rect.left}px`;
+    this.panel.style.top = `${rect.bottom + 4}px`;
+  }
+
+  private refreshPositionFromAnchor(): void {
+    if (!this.panel || this.isDragging || this.manualPosition) return;
+    const rect = this.readAnchorRect();
+    if (!rect) return;
+    this.applyPosition(rect);
   }
 
   private requestPositionUpdate(): void {
@@ -252,9 +343,7 @@ class MathPreviewPlugin implements PluginValue {
         if (!measurement || !this.panel || this.isDragging || this.manualPosition) return;
         if (measurement.requestId !== this.positionRequestId) return;
 
-        this.lastAnchorRect = measurement.rect;
-        this.panel.style.left = `${measurement.rect.left}px`;
-        this.panel.style.top = `${measurement.rect.bottom + 4}px`;
+        this.applyPosition(measurement.rect);
       },
     });
   }
@@ -278,6 +367,7 @@ class MathPreviewPlugin implements PluginValue {
     this.contentEl = null;
     this.lastRaw = "";
     this.lastRegion = null;
+    this.lastRegionKey = "";
     this.manualPosition = null;
     this.anchorFromPos = -1;
     this.anchorToPos = -1;

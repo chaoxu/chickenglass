@@ -139,10 +139,8 @@ describe("math preview positioning", () => {
     coordsByPos.set(mathFrom, makeCoords(200, -120, -100));
     coordsByPos.set(mathTo, makeCoords(240, -120, -80));
     autoUpdateCallbacks[0]?.();
-    expect(coordsAtPosSpy).toHaveBeenCalledTimes(2);
-    expect(positionMeasures.size).toBe(1);
-
-    await flushScheduledMeasures();
+    expect(coordsAtPosSpy).toHaveBeenCalledTimes(4);
+    expect(positionMeasures.size).toBe(0);
 
     expect(panel?.style.left).toBe("200px");
     expect(panel?.style.top).toBe("-76px");
@@ -228,6 +226,24 @@ describe("math preview positioning", () => {
 
     view.destroy();
     setIntervalSpy.mockRestore();
+  });
+
+  it("shows the preview for display math and anchors it to the expression", async () => {
+    const displayDoc = "$$\nx\n$$";
+    const displayFrom = 0;
+    const displayTo = displayDoc.length;
+    coordsByPos.set(displayFrom, makeCoords(120, 80, 100));
+    coordsByPos.set(displayTo, makeCoords(180, 120, 140));
+
+    const view = createPreviewView(displayDoc, 3);
+    await flushScheduledMeasures();
+
+    const panel = view.dom.querySelector<HTMLElement>(".cf-math-preview");
+    expect(panel).not.toBeNull();
+    expect(panel?.style.left).toBe("120px");
+    expect(panel?.style.top).toBe("144px");
+
+    view.destroy();
   });
 
   it("tears down drag listeners with a shared abort signal when destroyed", async () => {
@@ -351,6 +367,8 @@ describe("math preview positioning", () => {
     view.dispatch({ selection: { anchor: mathTo - 1 } });
     await flushScheduledMeasures();
 
+    expect(positionMeasures.size).toBe(0);
+    expect(coordsAtPosSpy).toHaveBeenCalledTimes(2);
     expect(panel?.style.left).toBe("200px");
     expect(panel?.style.top).toBe("124px");
 
