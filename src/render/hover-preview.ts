@@ -657,22 +657,24 @@ function buildCrossrefTooltipPlan(
     return {
       buildContent: () => {
         const container = createCrossrefPreviewContainer(variant);
-        if (eqContent) {
-          const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
+        const body = eqContent
+          ? createPreviewSurfaceBody(CSS.hoverPreviewBody)
+          : null;
+
+        if (body && eqContent) {
           renderKatex(body, eqContent, true, macros);
-          if (variant === "completion") {
-            container.appendChild(body);
-            container.appendChild(
-              createHeader(resolved.label, macros, CSS.referenceCompletionMeta),
-            );
-            return container;
-          }
+        }
+
+        if (variant === "completion" && body) {
+          container.appendChild(body);
+          container.appendChild(
+            createHeader(resolved.label, macros, CSS.referenceCompletionMeta),
+          );
+          return container;
         }
 
         container.appendChild(createHeader(resolved.label, macros));
-        if (eqContent) {
-          const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
-          renderKatex(body, eqContent, true, macros);
+        if (body) {
           container.appendChild(body);
         }
         return container;
