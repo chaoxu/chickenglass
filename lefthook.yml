@@ -2,11 +2,13 @@ pre-commit:
   parallel: true
   commands:
     lint:
-      run: pnpm lint
-    typecheck:
-      run: pnpm typecheck
+      glob: "*.{ts,tsx,js,mjs,json}"
+      run: pnpm biome lint {staged_files}
 
 pre-push:
+  parallel: true
   commands:
+    typecheck:
+      run: pnpm typecheck
     test:
       run: pnpm test
