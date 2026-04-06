@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 
 function readGitBuildInfo(): {
@@ -19,7 +20,7 @@ function readGitBuildInfo(): {
 export default defineConfig(({ mode }) => {
   const gitBuildInfo = readGitBuildInfo();
   return {
-    plugins: [tailwindcss()],
+    plugins: [react(), tailwindcss()],
     define: {
       GIT_COMMIT_HASH: JSON.stringify(gitBuildInfo.hash),
       GIT_COMMIT_TIME: JSON.stringify(gitBuildInfo.time),
