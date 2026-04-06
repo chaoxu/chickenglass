@@ -85,6 +85,8 @@ interface TooltipPlan {
   readonly trackedPdfPaths: ReadonlySet<string>;
 }
 
+type CrossrefPreviewVariant = "completion" | "hover";
+
 const EMPTY_TRACKED_PATHS: ReadonlySet<string> = new Set();
 const EMPTY_MEDIA_CACHE: ReadonlyMap<string, unknown> = new Map();
 const TOOLTIP_CONTENT_CACHE_LIMIT = 8;
@@ -307,6 +309,15 @@ function createHeader(
     macros,
   });
   return header;
+}
+
+function createCrossrefPreviewContainer(
+  variant: CrossrefPreviewVariant,
+): HTMLElement {
+  return createPreviewSurfaceContent(
+    CSS.hoverPreview,
+    variant === "completion" ? CSS.referenceCompletionContent : null,
+  );
 }
 
 /**
@@ -596,6 +607,7 @@ function buildCrossrefTooltipPlan(
   view: EditorView,
   id: string,
   resolved: ResolvedCrossref,
+  variant: CrossrefPreviewVariant = "hover",
 ): TooltipPlan {
   const macros = view.state.field(mathMacrosField);
 
@@ -615,9 +627,17 @@ function buildCrossrefTooltipPlan(
 
     return {
       buildContent: () => {
-        const container = createPreviewSurfaceContent(CSS.hoverPreview);
-        container.appendChild(createHeader(headerText, macros));
         const body = bodyPlan?.buildBody();
+        const container = createCrossrefPreviewContainer(variant);
+        if (variant === "completion" && body) {
+          container.appendChild(body);
+          container.appendChild(
+            createHeader(headerText, macros, CSS.referenceCompletionMeta),
+          );
+          return container;
+        }
+
+        container.appendChild(createHeader(headerText, macros));
         if (body) {
           container.appendChild(body);
         }
@@ -626,7 +646,7 @@ function buildCrossrefTooltipPlan(
       cacheScope: view.state,
       dependsOnBibliography: true,
       dependsOnMacros: true,
-      key: `crossref:block\0${id}\0${headerText}\0${bodyPlan?.key ?? "missing"}`,
+      key: `crossref:block\0${variant}\0${id}\0${headerText}\0${bodyPlan?.key ?? "missing"}`,
       trackedImagePaths: bodyPlan?.trackedImagePaths ?? new Set<string>(),
       trackedPdfPaths: bodyPlan?.trackedPdfPaths ?? new Set<string>(),
     };
@@ -636,7 +656,19 @@ function buildCrossrefTooltipPlan(
     const eqContent = findEquationSource(view, id);
     return {
       buildContent: () => {
-        const container = createPreviewSurfaceContent(CSS.hoverPreview);
+        const container = createCrossrefPreviewContainer(variant);
+        if (eqContent) {
+          const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
+          renderKatex(body, eqContent, true, macros);
+          if (variant === "completion") {
+            container.appendChild(body);
+            container.appendChild(
+              createHeader(resolved.label, macros, CSS.referenceCompletionMeta),
+            );
+            return container;
+          }
+        }
+
         container.appendChild(createHeader(resolved.label, macros));
         if (eqContent) {
           const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
@@ -648,7 +680,7 @@ function buildCrossrefTooltipPlan(
       cacheScope: view.state,
       dependsOnBibliography: false,
       dependsOnMacros: true,
-      key: `crossref:equation\0${id}\0${resolved.label}\0${eqContent ?? ""}`,
+      key: `crossref:equation\0${variant}\0${id}\0${resolved.label}\0${eqContent ?? ""}`,
       trackedImagePaths: new Set<string>(),
       trackedPdfPaths: new Set<string>(),
     };
@@ -656,7 +688,7 @@ function buildCrossrefTooltipPlan(
 
   return {
     buildContent: () => {
-      const container = createPreviewSurfaceContent(CSS.hoverPreview);
+      const container = createCrossrefPreviewContainer(variant);
       container.appendChild(
         createHeader(`Unresolved: ${id}`, macros, CSS.hoverPreviewUnresolved),
       );
@@ -665,7 +697,7 @@ function buildCrossrefTooltipPlan(
     cacheScope: view.state,
     dependsOnBibliography: false,
     dependsOnMacros: true,
-    key: `crossref:unresolved\0${id}`,
+    key: `crossref:unresolved\0${variant}\0${id}`,
     trackedImagePaths: new Set<string>(),
     trackedPdfPaths: new Set<string>(),
   };
@@ -680,6 +712,20 @@ export function buildCrossrefPreviewContent(
     view,
     id,
     resolveCrossref(view.state, id, equationLabels),
+    "hover",
+  ).buildContent();
+}
+
+export function buildCrossrefCompletionPreviewContent(
+  view: EditorView,
+  id: string,
+): HTMLElement {
+  const equationLabels = view.state.field(documentAnalysisField).equationById;
+  return buildCrossrefTooltipPlan(
+    view,
+    id,
+    resolveCrossref(view.state, id, equationLabels),
+    "completion",
   ).buildContent();
 }
 

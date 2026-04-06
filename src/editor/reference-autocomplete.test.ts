@@ -235,7 +235,7 @@ describe("reference autocomplete integration", () => {
 
     view.destroy();
     parent.remove();
-  });
+  }, 15_000);
 
   it("renders citation completions as preview cards without detached info tooltips", async () => {
     const doc = "See [@";
@@ -323,27 +323,38 @@ describe("reference autocomplete integration", () => {
       candidate.querySelector(".cm-completionLabel")?.textContent === "thm:main",
     );
     expect(theoremItem?.className).toContain("cf-reference-completion-crossref");
-    expect(theoremItem?.querySelector(".cf-hover-preview")).toBeTruthy();
-    expect(theoremItem?.textContent).toContain("Theorem 1");
-    expect(theoremItem?.querySelector(".cf-hover-preview-header")?.textContent).toBe("Theorem 1");
+    const theoremPreview = theoremItem?.querySelector(".cf-reference-completion-content");
+    expect(theoremPreview).toBeTruthy();
+    expect(theoremPreview?.firstElementChild?.className).toContain("cf-hover-preview-body");
+    expect(theoremPreview?.querySelector(".cf-reference-completion-meta")?.textContent)
+      .toContain("Theorem 1");
     expect(theoremItem?.textContent).toContain("Statement with");
     expect(theoremItem?.querySelector(".katex")).toBeTruthy();
 
     const tableItem = await waitForCompletionItem((candidate) =>
       candidate.querySelector(".cm-completionLabel")?.textContent === "tbl:results",
     );
+    expect(tableItem?.querySelector(".cf-reference-completion-content")?.firstElementChild?.className)
+      .toContain("cf-hover-preview-body");
+    expect(tableItem?.querySelector(".cf-reference-completion-meta")?.textContent).toContain("Table");
     expect(tableItem?.querySelector(".cf-hover-preview-table-scroll table")).toBeTruthy();
     expect(tableItem?.textContent).toContain("Results table");
 
     const equationItem = await waitForCompletionItem((candidate) =>
       candidate.querySelector(".cm-completionLabel")?.textContent === "eq:energy",
     );
-    expect(equationItem?.textContent).toContain("Eq. (1)");
+    const equationPreview = equationItem?.querySelector(".cf-reference-completion-content");
+    expect(equationPreview?.firstElementChild?.className).toContain("cf-hover-preview-body");
+    expect(equationPreview?.querySelector(".cf-reference-completion-meta")?.textContent)
+      .toBe("Eq. (1)");
     expect(equationItem?.querySelector(".katex-display")).toBeTruthy();
 
     const headingItem = await waitForCompletionItem((candidate) =>
       candidate.querySelector(".cm-completionLabel")?.textContent === "sec:background",
     );
+    const headingPreview = headingItem?.querySelector(".cf-reference-completion-content");
+    expect(headingPreview?.firstElementChild?.className).toContain("cf-hover-preview-header");
+    expect(headingPreview?.querySelector(".cf-reference-completion-meta")).toBeNull();
     expect(headingItem?.textContent).toContain("Section 1 Background");
     expect(headingItem?.querySelector(".cf-hover-preview-header")).toBeTruthy();
 

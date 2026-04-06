@@ -137,7 +137,9 @@ export const CSS = {
   referenceCompletionTooltip: "cf-reference-completion-tooltip",
   referenceCompletionPreview: "cf-reference-completion-preview",
   referenceCompletionCitation: "cf-reference-completion-citation",
+  referenceCompletionContent: "cf-reference-completion-content",
   referenceCompletionCrossref: "cf-reference-completion-crossref",
+  referenceCompletionMeta: "cf-reference-completion-meta",
 
   /** Document title from frontmatter. */
   docTitle: "cf-doc-title",
