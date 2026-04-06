@@ -10,6 +10,7 @@ import {
   connectEditor,
   createArgParser,
   disconnectBrowser,
+  EXTERNAL_DEMO_ROOT,
   openFixtureDocument,
   sleep,
   traceVerticalCursorMotion,
@@ -18,7 +19,6 @@ import {
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");
-const EXTERNAL_DEMO_ROOT = "/Users/chaoxu/playground/coflat/demo";
 
 export const RANKDECREASE_CURSOR_FIXTURE = {
   displayPath: "demo/rankdecrease/main.md",

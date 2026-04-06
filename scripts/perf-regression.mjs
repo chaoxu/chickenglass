@@ -15,12 +15,13 @@ import {
 import {
   assertEditorHealth,
   connectEditor,
-  openFile,
-  switchToMode,
-  sleep,
   createArgParser,
-  waitForDebugBridge,
   disconnectBrowser,
+  EXTERNAL_DEMO_ROOT,
+  openFile,
+  sleep,
+  switchToMode,
+  waitForDebugBridge,
 } from "./test-helpers.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
 
@@ -76,7 +77,6 @@ const SCROLL_STEP_SIZE = 30;
 const SCROLL_FIXTURE = "cogirth/main2.md";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");
-const TYPING_BURST_EXTERNAL_DEMO_ROOT = "/Users/chaoxu/playground/coflat/demo";
 
 export const TYPING_BURST_REQUIRED_METRICS = [
   "typing.wall_ms",
@@ -127,7 +127,7 @@ export const TYPING_BURST_CASES = [
     positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
     candidates: [
       resolve(REPO_ROOT, "demo/index.md"),
-      resolve(TYPING_BURST_EXTERNAL_DEMO_ROOT, "index.md"),
+      resolve(EXTERNAL_DEMO_ROOT, "index.md"),
     ],
   },
   {
@@ -137,7 +137,7 @@ export const TYPING_BURST_CASES = [
     positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
     candidates: [
       resolve(REPO_ROOT, "demo/rankdecrease/main.md"),
-      resolve(TYPING_BURST_EXTERNAL_DEMO_ROOT, "rankdecrease/main.md"),
+      resolve(EXTERNAL_DEMO_ROOT, "rankdecrease/main.md"),
     ],
   },
   {

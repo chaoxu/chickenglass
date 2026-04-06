@@ -23,7 +23,7 @@ import { findAppPage, inspectBrowserPages } from "./chrome-common.mjs";
 const DEFAULT_PORT = 9322;
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");
-const EXTERNAL_DEMO_ROOT = "/Users/chaoxu/playground/coflat/demo";
+export const EXTERNAL_DEMO_ROOT = "/Users/chaoxu/playground/coflat/demo";
 const MODE_LABELS = {
   rich: "Rich",
   source: "Source",
