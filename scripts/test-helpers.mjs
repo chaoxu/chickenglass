@@ -12,17 +12,36 @@
  *   console.log(await dump(page));
  */
 
-import { setTimeout as delay } from "node:timers/promises";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import process from "node:process";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { findFirstPage } from "./chrome-common.mjs";
+import { findAppPage, inspectBrowserPages } from "./chrome-common.mjs";
 
 const DEFAULT_PORT = 9322;
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(SCRIPT_DIR, "..");
+const EXTERNAL_DEMO_ROOT = "/Users/chaoxu/playground/coflat/demo";
 const MODE_LABELS = {
   rich: "Rich",
   source: "Source",
   read: "Read",
 };
+
+function formatInspectablePages(pages) {
+  if (pages.length === 0) return "<none>";
+  return pages
+    .map((page) => `[${page.contextIndex}:${page.pageIndex}] ${page.url || "<blank>"} score=${page.score}`)
+    .join(" | ");
+}
+
+async function pageHasDebugBridge(page) {
+  return page.evaluate(
+    () => Boolean(window.__app && window.__cmView && window.__cmDebug && window.__cfDebug),
+  ).catch(() => false);
+}
 
 /** Promise-based sleep. */
 export function sleep(ms) {
@@ -33,14 +52,24 @@ export function sleep(ms) {
  * Connect to a running Chromium instance via CDP and return the page.
  * Requires `npm run chrome` running in another terminal.
  */
-export async function connectEditor(port = DEFAULT_PORT) {
+export async function connectEditor(port = DEFAULT_PORT, options = {}) {
   const browser = await chromium.connectOverCDP(`http://localhost:${port}`);
-  let page = await findFirstPage(browser);
+  const predicate = options.predicate ?? pageHasDebugBridge;
+  let page = await findAppPage(browser, { targetUrl: options.url, predicate });
   if (!page) {
     await sleep(1000);
-    page = await findFirstPage(browser);
+    page = await findAppPage(browser, { targetUrl: options.url, predicate });
   }
-  if (!page) throw new Error("No page found. Is Chrome running with npm run chrome?");
+  if (!page) {
+    const pages = await inspectBrowserPages(browser, {
+      targetUrl: options.url,
+      predicate,
+    });
+    throw new Error(
+      `No app page found over CDP${options.url ? ` for ${options.url}` : ""}. Open pages: ${formatInspectablePages(pages)}`,
+    );
+  }
+  await page.bringToFront().catch(() => {});
   page.setDefaultTimeout(10000);
   return page;
 }
@@ -105,6 +134,144 @@ export async function openFile(page, path) {
   await sleep(500);
 }
 
+function defaultFixtureCandidates(path) {
+  return [
+    resolve(REPO_ROOT, "demo", path),
+    resolve(EXTERNAL_DEMO_ROOT, path),
+  ];
+}
+
+/**
+ * Resolve a browser regression fixture from the repo demo tree or the external
+ * demo root used by the perf harness.
+ *
+ * @param {string | {
+ *   virtualPath: string,
+ *   displayPath?: string,
+ *   candidates?: string[],
+ *   content?: string,
+ * }} fixture
+ */
+export function resolveFixtureDocument(fixture) {
+  const normalized = typeof fixture === "string"
+    ? {
+        virtualPath: fixture,
+        displayPath: `demo/${fixture}`,
+      }
+    : {
+        ...fixture,
+        displayPath: fixture.displayPath ?? `demo/${fixture.virtualPath}`,
+      };
+
+  if (typeof normalized.content === "string") {
+    return {
+      ...normalized,
+      resolvedPath: null,
+      content: normalized.content,
+      candidates: normalized.candidates ?? defaultFixtureCandidates(normalized.virtualPath),
+    };
+  }
+
+  const candidates = normalized.candidates ?? defaultFixtureCandidates(normalized.virtualPath);
+  const resolvedPath = candidates.find((candidate) => existsSync(candidate));
+  if (!resolvedPath) {
+    throw new Error(
+      `Missing fixture for ${normalized.displayPath}. Tried: ${candidates.join(", ")}`,
+    );
+  }
+
+  return {
+    ...normalized,
+    resolvedPath,
+    content: readFileSync(resolvedPath, "utf8"),
+    candidates,
+  };
+}
+
+/**
+ * Open a fixture deterministically. Prefer the app's real `openFile()` path
+ * when it resolves to the expected content, otherwise fall back to
+ * `openFileWithContent()` so heavy external fixtures remain reproducible.
+ *
+ * @param {import("playwright").Page} page
+ * @param {string | {
+ *   virtualPath: string,
+ *   displayPath?: string,
+ *   candidates?: string[],
+ *   content?: string,
+ * }} fixture
+ * @param {{ mode?: "rich" | "source" | "read", discardCurrent?: boolean }} [options]
+ */
+export async function openFixtureDocument(page, fixture, options = {}) {
+  const resolved = resolveFixtureDocument(fixture);
+  const { mode, discardCurrent = true } = options;
+  const preferOpenFile = Boolean(
+    resolved.resolvedPath?.startsWith(resolve(REPO_ROOT, "demo")),
+  );
+  const verificationWindow = 200;
+
+  if (discardCurrent) {
+    await discardCurrentFile(page).catch(() => false);
+  }
+
+  const result = await page.evaluate(
+    async ({ path, expectedContent, tryOpenFileFirst }) => {
+      const app = window.__app;
+      if (!app?.openFile) {
+        throw new Error("window.__app.openFile is unavailable.");
+      }
+
+      if (tryOpenFileFirst) {
+        try {
+          await app.openFile(path);
+          return { method: "openFile" };
+        } catch (error) {
+          if (!app.openFileWithContent) {
+            throw error;
+          }
+        }
+      }
+
+      if (!app.openFileWithContent) {
+        throw new Error(`window.__app.openFileWithContent is unavailable while opening ${path}.`);
+      }
+
+      await app.openFileWithContent(path, expectedContent);
+      return { method: "openFileWithContent" };
+    },
+    {
+      path: resolved.virtualPath,
+      expectedContent: resolved.content,
+      tryOpenFileFirst: preferOpenFile,
+    },
+  );
+
+  await page.waitForFunction(
+    ({ expectedLength, expectedPrefix, expectedSuffix }) => {
+      const text = window.__cmView?.state?.doc?.toString();
+      return typeof text === "string" &&
+        text.length === expectedLength &&
+        text.startsWith(expectedPrefix) &&
+        text.endsWith(expectedSuffix);
+    },
+    {
+      expectedLength: resolved.content.length,
+      expectedPrefix: resolved.content.slice(0, verificationWindow),
+      expectedSuffix: resolved.content.slice(-verificationWindow),
+    },
+    { timeout: 10000 },
+  );
+  if (mode) {
+    await switchToMode(page, mode);
+  }
+  await sleep(200);
+
+  return {
+    ...resolved,
+    method: result.method,
+  };
+}
+
 /**
  * Open a stable fixture for browser regression tests.
  *
@@ -113,8 +280,8 @@ export async function openFile(page, path) {
  * to the dedicated regression fixture instead.
  */
 export async function openRegressionDocument(page, path = "cogirth/regression-suite.md") {
-  await openFile(page, path);
-  return path;
+  const opened = await openFixtureDocument(page, path);
+  return opened.virtualPath;
 }
 
 /**
@@ -141,20 +308,19 @@ export async function findLine(page, needle) {
 export async function switchToMode(page, mode) {
   const targetLabel = MODE_LABELS[mode] ?? mode;
 
-  const changedViaApp = await page.evaluate((nextMode) => {
+  const changedViaApp = await page.evaluate(async (nextMode) => {
     if (!window.__app?.setMode || !window.__app?.getMode) {
-      return false;
+      return null;
     }
     window.__app.setMode(nextMode);
-    return true;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    return window.__app.getMode();
   }, mode);
 
-  if (changedViaApp) {
-    await page.waitForFunction(
-      (expectedMode) => window.__app.getMode() === expectedMode,
-      mode,
-      { timeout: 5000 },
-    );
+  if (changedViaApp !== null) {
+    if (changedViaApp !== mode) {
+      throw new Error(`Failed to switch editor mode to ${mode}; current mode is ${changedViaApp}.`);
+    }
     await sleep(200);
     return;
   }
@@ -559,6 +725,204 @@ export async function scrollToText(page, needle) {
   return line;
 }
 
+/**
+ * Wait for selection-driven layout and scroll effects to settle.
+ *
+ * @param {import("playwright").Page} page
+ * @param {{ frameCount?: number, delayMs?: number }} [options]
+ */
+export async function settleEditorLayout(page, options = {}) {
+  const frameCount = Math.max(1, options.frameCount ?? 2);
+  const delayMs = Math.max(0, options.delayMs ?? 32);
+  await page.evaluate(async ({ nextFrameCount, nextDelayMs }) => {
+    const waitForFrame = () =>
+      new Promise((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+        const timeoutId = setTimeout(finish, 50);
+        requestAnimationFrame(() => {
+          clearTimeout(timeoutId);
+          finish();
+        });
+      });
+    for (let frame = 0; frame < nextFrameCount; frame += 1) {
+      await waitForFrame();
+    }
+    if (nextDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, nextDelayMs));
+    }
+  }, {
+    nextFrameCount: frameCount,
+    nextDelayMs: delayMs,
+  });
+}
+
+/**
+ * Trace repeated vertical cursor movement in the real CM6 view.
+ *
+ * Records logical cursor position, line text, scrollTop, cursor coordinates,
+ * and nearby line context at each step so scroll anomalies can be diagnosed
+ * without ad hoc throwaway scripts.
+ *
+ * @param {import("playwright").Page} page
+ * @param {{
+ *   direction?: "up" | "down",
+ *   steps?: number,
+ *   startLine?: number,
+ *   startColumn?: number,
+ *   startHead?: number,
+ *   settleMs?: number,
+ *   contextRadius?: number,
+ * }} [options]
+ */
+export async function traceVerticalCursorMotion(page, options = {}) {
+  return page.evaluate(async (config) => {
+    const view = window.__cmView;
+    const debug = window.__cmDebug;
+    if (!view || !debug) {
+      throw new Error("window.__cmView or window.__cmDebug is unavailable.");
+    }
+
+    const direction = config.direction === "down" ? "down" : "up";
+    const steps = Math.max(0, config.steps ?? 0);
+    const settleMs = Math.max(0, config.settleMs ?? 32);
+    const contextRadius = Math.max(0, config.contextRadius ?? 2);
+
+    const waitForFrame = () =>
+      new Promise((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+        const timeoutId = setTimeout(finish, 50);
+        requestAnimationFrame(() => {
+          clearTimeout(timeoutId);
+          finish();
+        });
+      });
+
+    const waitForSettle = async (delayOverride = settleMs) => {
+      await waitForFrame();
+      await waitForFrame();
+      if (delayOverride > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayOverride));
+      }
+    };
+
+    const clampLine = (lineNumber) =>
+      Math.max(1, Math.min(lineNumber, view.state.doc.lines));
+    const clampHead = (head) =>
+      Math.max(0, Math.min(head, view.state.doc.length));
+
+    const collectNearbyLines = (lineNumber) => {
+      const lines = [];
+      const fromLine = clampLine(lineNumber - contextRadius);
+      const toLine = clampLine(lineNumber + contextRadius);
+      for (let line = fromLine; line <= toLine; line += 1) {
+        lines.push({
+          line,
+          text: view.state.doc.line(line).text,
+          info: debug.line(line),
+        });
+      }
+      return lines;
+    };
+
+    const collectStep = (step) => {
+      const selection = view.state.selection.main;
+      const line = view.state.doc.lineAt(selection.head);
+      const coords = view.coordsAtPos(selection.head)
+        ?? (selection.head > 0 ? view.coordsAtPos(selection.head - 1, 1) : null)
+        ?? (selection.head < view.state.doc.length ? view.coordsAtPos(selection.head + 1, -1) : null);
+
+      return {
+        step,
+        head: selection.head,
+        anchor: selection.anchor,
+        line: line.number,
+        lineText: line.text,
+        scrollTop: view.scrollDOM.scrollTop,
+        cursorTop: coords?.top ?? null,
+        cursorBottom: coords?.bottom ?? null,
+        lineInfo: debug.line(line.number),
+        nearbyLines: collectNearbyLines(line.number),
+      };
+    };
+
+    const anchorCursorIntoViewport = () => {
+      const head = view.state.selection.main.head;
+      const coords = view.coordsAtPos(head)
+        ?? (head > 0 ? view.coordsAtPos(head - 1, 1) : null)
+        ?? (head < view.state.doc.length ? view.coordsAtPos(head + 1, -1) : null);
+      if (!coords) return;
+      const viewportHeight = view.scrollDOM.clientHeight || 800;
+      if (coords.top < 0 || coords.bottom > viewportHeight) {
+        view.scrollDOM.scrollTop = Math.max(0, coords.top - Math.min(200, viewportHeight / 3));
+      }
+    };
+
+    if (typeof config.startHead === "number") {
+      const head = clampHead(config.startHead);
+      view.focus();
+      view.dispatch({ selection: { anchor: head }, scrollIntoView: true });
+    } else if (typeof config.startLine === "number") {
+      const lineNumber = clampLine(config.startLine);
+      const line = view.state.doc.line(lineNumber);
+      const column = Math.max(0, Math.min(config.startColumn ?? 0, line.text.length));
+      view.focus();
+      view.dispatch({
+        selection: { anchor: Math.min(line.to, line.from + column) },
+        scrollIntoView: true,
+      });
+    } else {
+      view.focus();
+    }
+
+    await waitForSettle(Math.max(settleMs, 200));
+    anchorCursorIntoViewport();
+    await waitForSettle(Math.max(settleMs, 50));
+
+    const trace = [collectStep(0)];
+    let stopReason = null;
+
+    for (let step = 1; step <= steps; step += 1) {
+      const previousRange = view.state.selection.main;
+      const nextRange = view.moveVertically(previousRange, direction === "down");
+      if (
+        nextRange.anchor === previousRange.anchor &&
+        nextRange.head === previousRange.head
+      ) {
+        const currentLine = view.state.doc.lineAt(previousRange.head).number;
+        stopReason = currentLine === 1 && direction === "up"
+          ? "top-boundary"
+          : currentLine === view.state.doc.lines && direction === "down"
+            ? "bottom-boundary"
+            : "stalled";
+        break;
+      }
+
+      view.dispatch({
+        selection: view.state.selection.replaceRange(nextRange),
+        scrollIntoView: true,
+      });
+      await waitForSettle();
+      trace.push(collectStep(step));
+    }
+
+    return {
+      direction,
+      trace,
+      stopReason,
+    };
+  }, options);
+}
+
 function issueMatches(text, patterns) {
   return patterns.some((pattern) =>
     typeof pattern === "string" ? text.includes(pattern) : pattern.test(text));
@@ -779,10 +1143,41 @@ export function createArgParser(argv = process.argv.slice(2)) {
  * @param {number} [options.timeout=15000]
  */
 export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
-  await page.waitForFunction(
-    () => Boolean(window.__app && window.__cmView && window.__cmDebug && window.__cfDebug),
-    { timeout },
-  );
+  try {
+    await page.waitForFunction(
+      () => Boolean(window.__app && window.__cmView && window.__cmDebug && window.__cfDebug),
+      { timeout },
+    );
+  } catch (error) {
+    const title = await page.title().catch(() => "");
+    const diagnostics = await page.evaluate(() => {
+      const globals = {
+        __app: Boolean(window.__app),
+        __cmView: Boolean(window.__cmView),
+        __cmDebug: Boolean(window.__cmDebug),
+        __cfDebug: Boolean(window.__cfDebug),
+      };
+      return {
+        readyState: document.readyState,
+        globals,
+      };
+    }).catch((evaluateError) => ({
+      readyState: "<unavailable>",
+      globals: {},
+      evaluateError: evaluateError instanceof Error ? evaluateError.message : String(evaluateError),
+    }));
+    const browser = page.context().browser();
+    const pages = browser ? await inspectBrowserPages(browser, {}) : [];
+    const missingGlobals = Object.entries(diagnostics.globals)
+      .filter(([, present]) => !present)
+      .map(([name]) => name);
+    const reason = missingGlobals.length > 0
+      ? `missing ${missingGlobals.join(", ")}`
+      : diagnostics.evaluateError ?? (error instanceof Error ? error.message : String(error));
+    throw new Error(
+      `Timed out waiting for debug bridge on ${page.url() || "<blank>"}${title ? ` (${title})` : ""}; readyState=${diagnostics.readyState}; ${reason}. Open pages: ${formatInspectablePages(pages)}`,
+    );
+  }
 }
 
 /**

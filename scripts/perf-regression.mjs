@@ -732,7 +732,7 @@ export async function main(argv = process.argv.slice(2)) {
   const warmup = getIntFlag("--warmup", 1);
   const settleMs = getIntFlag("--settle-ms", scenario.defaultSettleMs);
 
-  const page = await connectEditor(chromeArgs.port);
+  const page = await connectEditor(chromeArgs.port, { url: chromeArgs.url });
   try {
     const appUrl = getFlag("--url") ?? page.url();
     const snapshots = await runScenarioSamples(page, scenarioName, iterations, warmup, settleMs, appUrl);

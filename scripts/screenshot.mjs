@@ -14,6 +14,7 @@ import { connectEditor, openFile, screenshot, createArgParser, disconnectBrowser
 const args = process.argv.slice(2);
 const { getFlag } = createArgParser(args);
 const output = getFlag("--output", `/tmp/coflat-screenshot-${Date.now()}.png`);
+const url = getFlag("--url");
 
 // Get positional arguments (first non-flag arg that isn't a flag value)
 const outputIdx = args.indexOf("--output");
@@ -23,7 +24,7 @@ const file =
 
 let page;
 try {
-  page = await connectEditor();
+  page = await connectEditor(undefined, { url });
 } catch {
   console.error("Cannot connect to CDP.\nMake sure Chrome is running: npm run chrome");
   process.exit(1);
