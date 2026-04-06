@@ -85,7 +85,7 @@
 
 - **Reviewer/simplifier gate before every commit**: Before `git commit`, ALWAYS launch `pr-review-toolkit:code-reviewer` and `pr-review-toolkit:code-simplifier` in parallel on the diff. Apply findings. Then commit once, clean. Not optional. Subagents use `Skill tool` for the same gates and loop until both pass.
 - **Issue tracking uses Gitea** (`tea` CLI). Forge at `http://localhost:3001`, repo `chaoxu/coflat`. Use `tea issue list`, `tea issue close N`, etc. GitHub mirror kept as `github` remote.
-- **Closure gate before every issue close** (`tea issue close` or `gh issue close`): Two PreToolUse hooks enforce this:
+- **Closure gate before every issue close** (`tea issue close`): Two PreToolUse hooks enforce this:
   1. `closure-gate.sh` -- blocks issue close unless `.claude/state/closure-verified-N` exists AND contains valid JSON with `{"verdict": "COMPLETE", "criteria": [...]}`. The marker is consumed on close.
   2. `closure-marker-guard.sh` -- blocks any Bash command that touches `closure-verified` files. Markers can only be created via the Write tool by a completeness review agent.
   - The completeness review agent must write the marker with structured JSON after verifying all acceptance criteria in the actual codebase.
