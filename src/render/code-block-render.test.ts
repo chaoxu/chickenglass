@@ -399,12 +399,13 @@ describe("computeCodeBlockDirtyRegion (#723)", () => {
 
     const dirty = computeCodeBlockDirtyRegion(tr);
     expect(dirty).not.toBeNull();
+    if (!dirty) return;
     // The old block spanned the entire doc (0..22). After deleting 3 chars,
     // the mapped block end is at 19 (= old doc.length - 3). The dirty region
     // must cover this full mapped range so stale body/closing decorations
     // inside it are filtered out.
-    expect(dirty!.filterFrom).toBe(0);
-    expect(dirty!.filterTo).toBeGreaterThanOrEqual(tr.state.doc.length - 1);
+    expect(dirty.filterFrom).toBe(0);
+    expect(dirty.filterTo).toBeGreaterThanOrEqual(tr.state.doc.length - 1);
   });
 
   it("covers a newly created code block", () => {
@@ -420,7 +421,7 @@ describe("computeCodeBlockDirtyRegion (#723)", () => {
     const dirty = computeCodeBlockDirtyRegion(tr);
     expect(dirty).not.toBeNull();
     // The new FencedCode block should be covered
-    expect(dirty!.filterFrom).toBe(0);
+    expect(dirty?.filterFrom).toBe(0);
   });
 
   it("returns null when changes do not affect any code block", () => {
@@ -438,11 +439,60 @@ describe("computeCodeBlockDirtyRegion (#723)", () => {
     // so the dirty region is just the changed range itself, not null
     expect(dirty).not.toBeNull();
     // But the dirty range should NOT extend to the code block
-    expect(dirty!.filterTo).toBeLessThan(tr.state.doc.line(3).from);
+    expect(dirty?.filterTo).toBeLessThan(tr.state.doc.line(3).from);
   });
 });
 
 describe("incrementalCodeBlockUpdate (#723)", () => {
+  it("drops stale code blocks on full document switches", () => {
+    const sourceDoc = [
+      "::: {.theorem #thm:hover-code}",
+      "```typescript",
+      "const veryLongIdentifierWithoutAnyBreaks = \"abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz\";",
+      "```",
+      ":::",
+    ].join("\n");
+    const targetDoc = [
+      "---",
+      "title: AB",
+      "numbering: global",
+      "---",
+      "",
+      "::: {.theorem #thm-a}",
+      "A.",
+      ":::",
+      "",
+      "::: {.definition #def-b}",
+      "B.",
+      ":::",
+      "",
+      "See [@thm-a; @def-b].",
+    ].join("\n");
+
+    const view = createCodeBlockView(sourceDoc, {
+      cursorPos: sourceDoc.indexOf("const"),
+    });
+
+    try {
+      expect(() => {
+        view.dispatch({
+          changes: {
+            from: 0,
+            to: view.state.doc.length,
+            insert: targetDoc,
+          },
+          selection: { anchor: 0 },
+        });
+      }).not.toThrow();
+
+      expect(collectCodeBlocks(view.state)).toHaveLength(0);
+      expect(view.dom.querySelector(`.${CSS.codeblockHeader}`)).toBeNull();
+      expect(view.dom.querySelector(`.${CSS.codeblockLanguage}`)).toBeNull();
+    } finally {
+      view.destroy();
+    }
+  });
+
   it("removes stale decorations when a code block is destroyed", () => {
     // Regression test for PR #736 review: deleting the opening fence of a
     // code block must clear all body/closing-fence decorations, not leave

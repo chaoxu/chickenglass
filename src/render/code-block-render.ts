@@ -167,18 +167,76 @@ interface DirtyRange {
   readonly to: number;
 }
 
+const OPEN_CODE_FENCE_RE = /^\s*([`~]{3,})/;
+
+function isValidCodeBlockInfo(
+  state: EditorState,
+  block: CodeBlockInfo,
+): boolean {
+  if (
+    block.from < 0
+    || block.to <= block.from
+    || block.to > state.doc.length
+    || block.openFenceFrom < 0
+    || block.openFenceTo <= block.openFenceFrom
+    || block.openFenceTo > state.doc.length
+    || block.closeFenceFrom < 0
+    || block.closeFenceTo <= block.closeFenceFrom
+    || block.closeFenceTo > state.doc.length
+    || block.openFenceFrom > block.from
+    || block.closeFenceTo < block.to
+  ) {
+    return false;
+  }
+
+  const openLine = state.doc.lineAt(block.openFenceFrom);
+  if (
+    block.openFenceFrom !== openLine.from
+    || block.openFenceTo !== openLine.to
+  ) {
+    return false;
+  }
+
+  return OPEN_CODE_FENCE_RE.test(openLine.text);
+}
+
+function sanitizeCodeBlocks(
+  state: EditorState,
+  blocks: readonly CodeBlockInfo[],
+): readonly CodeBlockInfo[] {
+  let filtered: CodeBlockInfo[] | null = null;
+
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index];
+    if (isValidCodeBlockInfo(state, block)) {
+      filtered?.push(block);
+      continue;
+    }
+
+    if (filtered === null) {
+      filtered = blocks.slice(0, index);
+    }
+  }
+
+  return filtered ?? blocks;
+}
+
 function createCodeBlockInfo(
   state: EditorState,
   nodeFrom: number,
   nodeTo: number,
   language: string,
-): CodeBlockInfo {
+): CodeBlockInfo | null {
+  if (nodeFrom < 0 || nodeTo <= nodeFrom || nodeTo > state.doc.length) {
+    return null;
+  }
+
   const openLine = state.doc.lineAt(nodeFrom);
   const closeLine = state.doc.lineAt(nodeTo);
   const openFenceText = state.doc.sliceString(openLine.from, openLine.to);
-  const openFenceMarker = /^([`~]{3,})/.exec(openFenceText)?.[1] ?? "";
+  const openFenceMarker = OPEN_CODE_FENCE_RE.exec(openFenceText)?.[1] ?? "";
 
-  return {
+  const block = {
     from: nodeFrom,
     to: nodeTo,
     openFenceFrom: openLine.from,
@@ -189,6 +247,7 @@ function createCodeBlockInfo(
     language,
     openFenceMarker,
   };
+  return isValidCodeBlockInfo(state, block) ? block : null;
 }
 
 /** Extract info about FencedCode nodes from the syntax tree. */
@@ -214,7 +273,10 @@ function scanCodeBlocks(
           language = state.doc.sliceString(codeInfoNode.from, codeInfoNode.to).trim();
         }
 
-        results.push(createCodeBlockInfo(state, node.from, node.to, language));
+        const block = createCodeBlockInfo(state, node.from, node.to, language);
+        if (block) {
+          results.push(block);
+        }
       },
     });
   };
@@ -402,7 +464,7 @@ function incrementalCodeBlockStructureUpdate(
   value: CodeBlockStructureCache,
   tr: Transaction,
 ): CodeBlockStructureCache {
-  const mappedBlocks = mapCodeBlocks(value.blocks, tr);
+  const mappedBlocks = sanitizeCodeBlocks(tr.state, mapCodeBlocks(value.blocks, tr));
   const dirtyRanges = computeCodeBlockStructureDirtyRanges(value.blocks, tr);
   if (dirtyRanges.length === 0) {
     return mappedBlocks === value.blocks
@@ -417,7 +479,10 @@ function incrementalCodeBlockStructureUpdate(
     preservedBlocks.push(block);
   }
 
-  const nextBlocks = [...preservedBlocks, ...rebuiltBlocks].sort((left, right) => left.from - right.from);
+  const nextBlocks = sanitizeCodeBlocks(
+    tr.state,
+    [...preservedBlocks, ...rebuiltBlocks].sort((left, right) => left.from - right.from),
+  );
   if (sameCodeBlockLists(nextBlocks, mappedBlocks)) {
     return buildCodeBlockStructureCache(mappedBlocks, value.structureRevision);
   }
@@ -445,7 +510,7 @@ export const codeBlockStructureField = StateField.define<CodeBlockStructureCache
   update(value, tr) {
     if (tr.docChanged) {
       if (!syntaxTreeAvailable(tr.state, tr.state.doc.length)) {
-        const mappedBlocks = mapCodeBlocks(value.blocks, tr);
+        const mappedBlocks = sanitizeCodeBlocks(tr.state, mapCodeBlocks(value.blocks, tr));
         const blocks = scanCodeBlocks(tr.state);
         if (sameCodeBlockLists(blocks, mappedBlocks)) {
           return buildCodeBlockStructureCache(mappedBlocks, value.structureRevision);
@@ -475,7 +540,11 @@ export function getCodeBlockStructureRevision(state: EditorState): number {
  * to a one-off tree walk in isolated test states that don't install the field.
  */
 export function collectCodeBlocks(state: EditorState): readonly CodeBlockInfo[] {
-  return getCodeBlockStructureCache(state)?.blocks ?? scanCodeBlocks(state);
+  const cachedBlocks = getCodeBlockStructureCache(state)?.blocks;
+  // State-field updates sanitize before caching, but read-side validation is a
+  // deliberate safety net during aggressive file switches if stale mapped
+  // blocks ever survive long enough to be observed by another consumer.
+  return cachedBlocks ? sanitizeCodeBlocks(state, cachedBlocks) : scanCodeBlocks(state);
 }
 
 /** Decoration callback for a single code block. Shared by full and incremental paths. */
