@@ -39,11 +39,17 @@ import {
   StateField,
 } from "@codemirror/state";
 import { Decoration, EditorView } from "@codemirror/view";
-import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
-import type { FencedBlockInfo } from "../render/fenced-block-core";
 import {
-  type FencedDivSemantics,
-} from "../semantics/document";
+  collectDisplayMathBlocks,
+  collectFencedDivs,
+  mapDisplayMathBlockInfo,
+  mapFencedBlockInfo,
+  mapFencedDivInfo,
+  type DisplayMathBlockInfo,
+  type FencedBlockInfo,
+  type FencedDivInfo,
+} from "../fenced-block/model";
+import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
@@ -62,11 +68,6 @@ import { programmaticDocumentChangeAnnotation } from "../editor/programmatic-doc
 // Shared types and helpers
 // ---------------------------------------------------------------------------
 
-/** Full info about a fenced div, combining block geometry and semantics. */
-export interface FencedDivInfo extends FencedBlockInfo, FencedDivSemantics {
-  readonly className: string;
-}
-
 export interface FenceRange {
   readonly from: number;
   readonly to: number;
@@ -82,13 +83,6 @@ interface FenceProtectionCache {
   readonly closingFenceAtomicRanges: RangeSet<Decoration>;
 }
 
-interface DisplayMathBlockInfo extends FencedBlockInfo {
-  readonly openDelimiterFrom: number;
-  readonly openingDelimiter: "$$" | "\\[";
-  readonly closingDelimiter: "$$" | "\\]";
-  readonly closeLineTo: number;
-}
-
 interface FenceProtectionInputs {
   readonly allFencedBlocks: readonly FencedBlockInfo[];
   readonly protectedDivs: readonly FencedDivInfo[];
@@ -97,92 +91,6 @@ interface FenceProtectionInputs {
 }
 
 const closingFenceAtomicMark = Decoration.mark({});
-
-/**
- * Extract info about FencedDiv nodes from the shared semantics field.
- * Returns an empty array if the semantics field is not present in the state
- * (e.g. in minimal test configurations).
- */
-export function collectFencedDivs(state: EditorState): FencedDivInfo[] {
-  const semantics = state.field(documentSemanticsField, false);
-  if (!semantics) return [];
-  return semantics.fencedDivs
-    .filter((div): div is FencedDivSemantics & { primaryClass: string } => Boolean(div.primaryClass))
-    .map((div) => ({
-      ...div,
-      className: div.primaryClass,
-    }));
-}
-
-/**
- * Collect multi-line display math blocks as FencedBlockInfo for protection.
- * Reads from documentSemanticsField.mathRegions, filtering for isDisplay.
- * The opening fence is the $$ or \[ line; the closing fence is the $$ or \] line.
- *
- * `closeFenceTo` is set to the end of the delimiter characters only (not any
- * trailing label like `{#eq:energy}`), so that `closingFenceProtection` only
- * blocks edits to the delimiter itself and leaves the label editable.
- */
-function collectDisplayMathBlocks(state: EditorState): DisplayMathBlockInfo[] {
-  const semantics = state.field(documentSemanticsField, false);
-  if (!semantics) return [];
-
-  const results: DisplayMathBlockInfo[] = [];
-  for (const region of semantics.mathRegions) {
-    if (!region.isDisplay) continue;
-
-    const openLine = state.doc.lineAt(region.from);
-    const openText = state.sliceDoc(openLine.from, openLine.to);
-    const openTrimmed = openText.trimStart();
-    const openIndent = openText.length - openTrimmed.length;
-    const openingDelimiter = openTrimmed.startsWith("$$")
-      ? "$$"
-      : openTrimmed.startsWith("\\[")
-      ? "\\["
-      : null;
-    if (!openingDelimiter) continue;
-
-    // contentTo sits at the start of the closing delimiter mark ($$ or \])
-    const closeLine = state.doc.lineAt(region.contentTo);
-    if (closeLine.from === openLine.from) continue; // single-line display math
-    const closeText = state.sliceDoc(region.contentTo, closeLine.to);
-    const closeTrimmed = closeText.trimStart();
-    const closeIndent = closeText.length - closeTrimmed.length;
-    const closingDelimiter = closeTrimmed.startsWith("$$")
-      ? "$$"
-      : closeTrimmed.startsWith("\\]")
-      ? "\\]"
-      : null;
-    if (!closingDelimiter) continue;
-
-    // Determine the end of the closing delimiter characters ($$  or \]).
-    // region.labelFrom is defined when an EquationLabel follows the closing
-    // delimiter; in that case it points to just after the delimiter mark.
-    // Otherwise we measure the delimiter length from the raw text.
-    let closeDelimTo: number;
-    if (region.labelFrom !== undefined) {
-      // labelFrom is the position right after the closing delimiter mark
-      closeDelimTo = region.labelFrom;
-    } else {
-      closeDelimTo = region.contentTo + closeIndent + closingDelimiter.length;
-    }
-
-    results.push({
-      from: region.from,
-      to: region.to,
-      openFenceFrom: openLine.from,
-      openFenceTo: openLine.to,
-      closeFenceFrom: closeLine.from,
-      closeFenceTo: closeDelimTo,
-      singleLine: false,
-      openDelimiterFrom: openLine.from + openIndent,
-      openingDelimiter,
-      closingDelimiter,
-      closeLineTo: closeLine.to,
-    });
-  }
-  return results;
-}
 
 function filterProtectedDivs(
   state: EditorState,
@@ -377,107 +285,17 @@ function sameDisplayMathBlocks(
   return true;
 }
 
-function mapSentinelPos(
-  pos: number,
-  tr: Transaction,
-  assoc: number,
-): number {
-  return pos < 0 ? pos : tr.changes.mapPos(pos, assoc);
-}
-
-function mapOptionalPos(
-  pos: number | undefined,
-  tr: Transaction,
-  assoc: number,
-): number | undefined {
-  return pos === undefined ? undefined : tr.changes.mapPos(pos, assoc);
-}
-
-function mapFencedBlockGeometry<T extends FencedBlockInfo>(
-  block: T,
-  tr: Transaction,
-): T {
-  const from = tr.changes.mapPos(block.from, 1);
-  const to = Math.max(from, tr.changes.mapPos(block.to, -1));
-  const openFenceFrom = tr.changes.mapPos(block.openFenceFrom, 1);
-  const openFenceTo = Math.max(openFenceFrom, tr.changes.mapPos(block.openFenceTo, -1));
-  const closeFenceFrom = mapSentinelPos(block.closeFenceFrom, tr, 1);
-  const closeFenceToBase = mapSentinelPos(block.closeFenceTo, tr, -1);
-  const closeFenceTo =
-    closeFenceFrom < 0 || closeFenceToBase < 0
-      ? closeFenceToBase
-      : Math.max(closeFenceFrom, closeFenceToBase);
-
-  if (
-    from === block.from
-    && to === block.to
-    && openFenceFrom === block.openFenceFrom
-    && openFenceTo === block.openFenceTo
-    && closeFenceFrom === block.closeFenceFrom
-    && closeFenceTo === block.closeFenceTo
-  ) {
-    return block;
-  }
-
-  return {
-    ...block,
-    from,
-    to,
-    openFenceFrom,
-    openFenceTo,
-    closeFenceFrom,
-    closeFenceTo,
-  };
-}
-
 function mapFencedBlocks(
   blocks: readonly FencedBlockInfo[],
   tr: Transaction,
 ): readonly FencedBlockInfo[] {
   let changed = false;
   const mapped = blocks.map((block) => {
-    const next = mapFencedBlockGeometry(block, tr);
+    const next = mapFencedBlockInfo(block, tr.changes);
     if (next !== block) changed = true;
     return next;
   });
   return changed ? mapped : blocks;
-}
-
-function mapProtectedDiv(
-  div: FencedDivInfo,
-  tr: Transaction,
-): FencedDivInfo {
-  const mappedBlock = mapFencedBlockGeometry(div, tr);
-  const attrFrom = mapOptionalPos(div.attrFrom, tr, 1);
-  const attrToBase = mapOptionalPos(div.attrTo, tr, -1);
-  const attrTo =
-    attrFrom === undefined || attrToBase === undefined
-      ? attrToBase
-      : Math.max(attrFrom, attrToBase);
-  const titleFrom = mapOptionalPos(div.titleFrom, tr, 1);
-  const titleToBase = mapOptionalPos(div.titleTo, tr, -1);
-  const titleTo =
-    titleFrom === undefined || titleToBase === undefined
-      ? titleToBase
-      : Math.max(titleFrom, titleToBase);
-
-  if (
-    mappedBlock === div
-    && attrFrom === div.attrFrom
-    && attrTo === div.attrTo
-    && titleFrom === div.titleFrom
-    && titleTo === div.titleTo
-  ) {
-    return div;
-  }
-
-  return {
-    ...mappedBlock,
-    attrFrom,
-    attrTo,
-    titleFrom,
-    titleTo,
-  };
 }
 
 function mapProtectedDivs(
@@ -486,7 +304,7 @@ function mapProtectedDivs(
 ): readonly FencedDivInfo[] {
   let changed = false;
   const mapped = divs.map((div) => {
-    const next = mapProtectedDiv(div, tr);
+    const next = mapFencedDivInfo(div, tr.changes);
     if (next !== div) changed = true;
     return next;
   });
@@ -516,52 +334,13 @@ function mapFenceRanges(
   return changed ? mapped : ranges;
 }
 
-function mapDisplayMathBlock(
-  block: DisplayMathBlockInfo,
-  tr: Transaction,
-): DisplayMathBlockInfo {
-  const from = tr.changes.mapPos(block.from, 1);
-  const to = Math.max(from, tr.changes.mapPos(block.to, -1));
-  const openFenceFrom = tr.changes.mapPos(block.openFenceFrom, 1);
-  const openFenceTo = Math.max(openFenceFrom, tr.changes.mapPos(block.openFenceTo, -1));
-  const closeFenceFrom = tr.changes.mapPos(block.closeFenceFrom, 1);
-  const closeFenceTo = Math.max(closeFenceFrom, tr.changes.mapPos(block.closeFenceTo, -1));
-  const openDelimiterFrom = tr.changes.mapPos(block.openDelimiterFrom, 1);
-  const closeLineTo = Math.max(closeFenceFrom, tr.changes.mapPos(block.closeLineTo, -1));
-
-  if (
-    from === block.from
-    && to === block.to
-    && openFenceFrom === block.openFenceFrom
-    && openFenceTo === block.openFenceTo
-    && closeFenceFrom === block.closeFenceFrom
-    && closeFenceTo === block.closeFenceTo
-    && openDelimiterFrom === block.openDelimiterFrom
-    && closeLineTo === block.closeLineTo
-  ) {
-    return block;
-  }
-
-  return {
-    ...block,
-    from,
-    to,
-    openFenceFrom,
-    openFenceTo,
-    closeFenceFrom,
-    closeFenceTo,
-    openDelimiterFrom,
-    closeLineTo,
-  };
-}
-
 function mapDisplayMathBlocks(
   blocks: readonly DisplayMathBlockInfo[],
   tr: Transaction,
 ): readonly DisplayMathBlockInfo[] {
   let changed = false;
   const mapped = blocks.map((block) => {
-    const next = mapDisplayMathBlock(block, tr);
+    const next = mapDisplayMathBlockInfo(block, tr.changes);
     if (next !== block) changed = true;
     return next;
   });

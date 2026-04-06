@@ -1,8 +1,8 @@
 import { type EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
+import { collectFencedDivs, getFencedDivStructuralOpenTo } from "../fenced-block/model";
 import { collectCodeBlocks } from "../render/code-block-render";
-import { collectFencedDivs } from "../plugins/fence-protection";
 import { getPluginOrFallback, pluginRegistryField } from "../plugins/plugin-registry";
 
 interface ClipboardRange {
@@ -87,7 +87,7 @@ function collectHiddenFenceBlocks(state: EditorState): HiddenFenceBlock[] {
 
     blocks.push({
       openTokenFrom: div.openFenceFrom,
-      openStructuralTo: div.titleFrom ?? div.openFenceTo,
+      openStructuralTo: getFencedDivStructuralOpenTo(div),
       closeFenceFrom: div.closeFenceFrom,
       closeText,
       multiLine: !div.singleLine,
