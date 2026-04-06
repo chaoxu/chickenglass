@@ -306,13 +306,13 @@ export class CslProcessor {
     // Numeric styles (e.g. IEEE) may throw or return [NO_PRINTED_FORM].
     try {
       const authorOnly = this.engine.makeCitationCluster([
-        { id, "author-only": true } as Record<string, unknown>,
-      ] as unknown as Array<{ id: string }>).trim();
+        { id, "author-only": true },
+      ]).trim();
 
       if (authorOnly && !authorOnly.includes("[NO_PRINTED_FORM]")) {
         const yearPart = this.engine.makeCitationCluster([
-          { id, "suppress-author": true } as Record<string, unknown>,
-        ] as unknown as Array<{ id: string }>).trim();
+          { id, "suppress-author": true },
+        ]).trim();
         if (yearPart) {
           return `${authorOnly} ${yearPart}`;
         }
@@ -325,8 +325,8 @@ export class CslProcessor {
     // Numeric style fallback: author name + suppress-author cite (e.g. "Karger [1]").
     try {
       const suppressed = this.engine.makeCitationCluster([
-        { id, "suppress-author": true } as Record<string, unknown>,
-      ] as unknown as Array<{ id: string }>).trim();
+        { id, "suppress-author": true },
+      ]).trim();
       if (suppressed) {
         return `${author} ${suppressed}`;
       }

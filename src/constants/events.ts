@@ -14,13 +14,51 @@ export const PERF_PANEL_REFRESH_EVENT = "cf:perf-panel-refresh";
 /**
  * Dispatched on `document` when an inline-formatting command (bold, italic,
  * etc.) is triggered from the menu bar.
- * Detail shape: `{ type: string; [extra]: unknown }`.
+ * Detail shape is keyed by the format action type.
  */
 export const FORMAT_EVENT = "cf:format";
 
+export type HeadingFormatLevel = 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface FormatEventDetailMap {
+  bold: { type: "bold" };
+  italic: { type: "italic" };
+  code: { type: "code" };
+  strikethrough: { type: "strikethrough" };
+  highlight: { type: "highlight" };
+  link: { type: "link" };
+  heading: { type: "heading"; level: HeadingFormatLevel };
+}
+
+export type FormatEventType = keyof FormatEventDetailMap;
+export type FormatEventDetail = FormatEventDetailMap[FormatEventType];
+export type SimpleFormatEventType = Exclude<FormatEventType, "heading">;
+
+declare global {
+  interface DocumentEventMap {
+    "cf:format": CustomEvent<FormatEventDetail>;
+  }
+}
+
 /** Dispatch a formatting event to the document for CM6 to handle. */
-export function dispatchFormatEvent(type: string, detail?: Record<string, unknown>): void {
-  document.dispatchEvent(new CustomEvent(FORMAT_EVENT, { detail: { type, ...detail } }));
+export function dispatchFormatEvent(type: SimpleFormatEventType): void;
+export function dispatchFormatEvent(
+  type: "heading",
+  detail: Omit<FormatEventDetailMap["heading"], "type">,
+): void;
+export function dispatchFormatEvent(
+  type: FormatEventType,
+  detail?: Omit<FormatEventDetailMap["heading"], "type">,
+): void {
+  const eventDetail: FormatEventDetail = type === "heading"
+    ? (() => {
+      if (!detail) {
+        throw new Error("[format-event] heading detail requires a level");
+      }
+      return { type, level: detail.level };
+    })()
+    : { type };
+  document.dispatchEvent(new CustomEvent<FormatEventDetail>(FORMAT_EVENT, { detail: eventDetail }));
 }
 
 /**

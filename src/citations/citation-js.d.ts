@@ -26,6 +26,8 @@ declare module "@citation-js/core" {
     id: string;
     locator?: string;
     label?: string;
+    "author-only"?: boolean;
+    "suppress-author"?: boolean;
   }
 
   /** A citation cluster passed to processCitationCluster. */

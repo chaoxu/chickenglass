@@ -39,9 +39,9 @@ import { measureSync } from "../perf";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 import type { SourceMap } from "../source-map";
 import type { EditorDocumentChange } from "../editor-doc-change";
+import type { ResolvedTheme } from "../theme-dom";
 
-/** Resolved theme for the CM6 dark/light base extension. */
-export type ResolvedTheme = "light" | "dark";
+export type { ResolvedTheme } from "../theme-dom";
 
 /** Options accepted by useEditor. */
 export interface UseEditorOptions {
