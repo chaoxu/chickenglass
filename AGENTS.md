@@ -172,6 +172,16 @@ Do NOT use the Playwright MCP plugin — connect directly via CDP.
 - One concept per file; tests next to source (`foo.ts` → `foo.test.ts`)
 - Vitest for testing
 
+## Code quality priorities
+
+This codebase values **architectural cleanliness**. When making changes:
+
+- **No circular dependencies.** Modules must form a clean DAG. If an import would create a cycle, fix the layering — don't work around it with barrel file exclusions or lazy imports.
+- **No duplication.** If the same logic exists in two places, extract it. Don't copy-paste helpers, tree-walking patterns, or state management idioms across files.
+- **One owner per concept.** A state field, a tree traversal, a lifecycle transition — each should have exactly one canonical location. Other modules consume it, not reimplement it.
+- **Explicit over implicit.** Prefer explicit state machines over coordinating through scattered refs and effects. Prefer typed discriminated unions over `Record<string, unknown>`. Prefer context or direct imports over prop drilling through intermediate components.
+- **Small, focused modules.** Split files that mix unrelated concerns. A 1200-line file doing 6 things should be 6 files doing 1 thing each.
+
 ## Document format
 
 Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` for math, fenced divs (`::: {.class #id} Title`), `[@id]` for cross-refs/citations, equation labels `$$ ... $$ {#eq:foo}`. See `FORMAT.md` for the canonical document-format spec. All markdown files in this repo must follow `FORMAT.md`.
