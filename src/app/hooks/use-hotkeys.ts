@@ -61,6 +61,8 @@ function parseKey(combo: string): ParsedKey {
 
 function matchesEvent(parsed: ParsedKey, e: KeyboardEvent): boolean {
   const modPressed = isMac ? e.metaKey : e.ctrlKey;
+  const ctrlDeclared = parsed.ctrl || (!isMac && parsed.mod);
+  const metaDeclared = parsed.meta || (isMac && parsed.mod);
 
   // Each declared modifier must be held.
   if (parsed.mod   && !modPressed) return false;
@@ -70,10 +72,10 @@ function matchesEvent(parsed: ParsedKey, e: KeyboardEvent): boolean {
   if (parsed.meta  && !e.metaKey)  return false;
 
   // Each held modifier must be declared (prevents "s" matching "mod+s").
-  if (!parsed.mod   && modPressed)  return false;
-  if (!parsed.ctrl  && e.ctrlKey && !(isMac && parsed.mod)) return false;
+  if (!ctrlDeclared && e.ctrlKey)   return false;
   if (!parsed.alt   && e.altKey)    return false;
   if (!parsed.shift && e.shiftKey)  return false;
+  if (!metaDeclared && e.metaKey)   return false;
 
   // Key comparison is case-insensitive.
   return e.key.toLowerCase() === parsed.key.toLowerCase();
