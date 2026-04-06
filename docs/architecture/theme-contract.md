@@ -1,54 +1,74 @@
 # Theme Contract
 
-This document describes Coflat's theme contract in four layers:
-
-1. appearance mode
-2. token contract
-3. surface map
-4. theme sources
+Coflat's theme system has four layers: appearance mode, token contract, surface map, and theme sources.
 
 ## Appearance mode
 
-Appearance mode is only:
+Three modes: `light`, `dark`, `system`. `ResolvedTheme` is always `"light" | "dark"` — `"system"` resolves via `matchMedia("(prefers-color-scheme: dark)")`.
 
-- `light`
-- `dark`
-- `system`
-
-State ownership lives in settings. DOM application belongs in
-`src/app/theme-dom.ts`.
+- State ownership: settings
+- DOM application: `src/app/theme-dom.ts` sets `data-theme` on `document.documentElement`
+- Writing theme variables: applied as inline CSS custom properties on root
+- Custom CSS: injected via `<style id="cf-custom-css">` in `<head>`
 
 ## Token contract
 
-The canonical token names live in `src/theme-contract.ts`.
+Canonical token names live in `src/theme-contract.ts`. All tokens are CSS custom properties prefixed `--cf-`.
 
-Token families:
+### Foundation (21 tokens)
 
-- foundation tokens
-- block/document tokens
-- table/error tokens
-- typography tokens
-- preview/tooltip tokens
+`--cf-bg`, `--cf-bg-secondary`, `--cf-fg`, `--cf-muted`, `--cf-border`, `--cf-subtle`, `--cf-hover`, `--cf-active`, `--cf-accent`, `--cf-accent-fg`, `--cf-bg-overlay`, `--cf-border-overlay`, `--cf-border-radius`, `--cf-border-radius-lg`, `--cf-spacing-xs`, `--cf-spacing-sm`, `--cf-spacing-md`, `--cf-spacing-lg`, `--cf-border-width`, `--cf-border-width-accent`, `--cf-transition`
+
+### Layer (3 tokens)
+
+`--cf-layer-inline-chrome`, `--cf-layer-preview-surface`, `--cf-layer-block-picker`
+
+### Block (40 tokens)
+
+Header/title: `--cf-block-header-accent`, `--cf-block-header-border-width`, `--cf-block-title-color`, `--cf-block-title-weight`, `--cf-block-title-display`, `--cf-block-title-separator`, `--cf-block-margin`
+
+Per-type pairs (`-accent` and `-style`): theorem, lemma, corollary, proposition, conjecture, definition, problem, example, remark, proof, algorithm, figure, table
+
+Nesting: `--cf-block-nest-1` through `--cf-block-nest-4`
+
+Proof: `--cf-proof-marker`, `--cf-proof-marker-color`, `--cf-proof-marker-size`
+
+Include: `--cf-include-accent`, `--cf-include-label-color`, `--cf-include-label-active-color`
+
+### Table and misc (12 tokens)
+
+`--cf-blockquote-border`, `--cf-blockquote-color`, `--cf-table-border`, `--cf-table-header-border`, `--cf-table-cell-padding`, `--cf-table-font-size`, `--cf-table-line-height`, `--cf-table-edit-outline`, `--cf-embed-border`, `--cf-mark-bg`, `--cf-math-error-fg`, `--cf-math-error-bg`
+
+### Typography (27 tokens)
+
+Fonts: `--cf-ui-font`, `--cf-content-font`, `--cf-code-font`, `--cf-base-font-size`, `--cf-line-height`, `--cf-content-max-width`, `--cf-sidenote-width`, `--cf-fence-guide-width`, `--cf-ui-font-size-sm`, `--cf-ui-font-size-base`
+
+Headings h1–h6: each has `-size`, `-weight`, `-style` (18 tokens total)
+
+### Preview (5 tokens)
+
+`--cf-preview-surface-max-width`, `--cf-preview-surface-max-height`, `--cf-preview-surface-padding-block`, `--cf-preview-surface-padding-inline`, `--cf-preview-surface-font-size`
 
 ## Surface map
 
-The token-to-surface map is explicit in `themeSurfaceTokenMap`:
+`themeSurfaceTokenMap` in `src/theme-contract.ts` controls which tokens are exposed to each surface:
 
-- app chrome
-- editor body
-- read mode
-- block surfaces
-- tables
-- tooltip / hover surfaces
-- export
+| Surface | What it covers | Key tokens |
+|---|---|---|
+| `appChrome` | Sidebar, toolbar, file tree | Foundation colors, UI font/size, spacing, layer tokens |
+| `editorBody` | Rich/source editing area | `--cf-bg/fg`, content+code fonts, font-size, line-height, content-max-width, sidenote-width, fence-guide-width |
+| `readMode` | Read-only view | Same as editorBody minus sidenote-width and fence-guide-width |
+| `blockSurfaces` | Theorem/proof/definition blocks | `--cf-fg`, all block/title tokens, per-type accents, nest 1-4, proof marker, include tokens |
+| `tables` | Tables and embeds | `--cf-border`, all table tokens, embed-border, code-font |
+| `tooltipAndHover` | Hover previews, crossref tooltips | `--cf-bg-overlay`, border-overlay, fg/muted/border, all preview tokens |
+| `export` | HTML/PDF export | All tokens (full `themeTokenNames` spread) |
 
 ## Theme sources
 
-Theme sources stay distinct from application:
+Theme sources are distinct from application:
 
-- built-in writing themes
-- typography presets
-- custom CSS
+- **Writing themes** — built-in presets (e.g. serif, monospace) that set typography and color tokens
+- **Typography presets** — font family and size overrides
+- **Custom CSS** — user-provided CSS injected at runtime
 
-`useTheme` orchestrates these sources, but token ownership stays in the shared
-contract and DOM mutation stays in `theme-dom`.
+`useTheme` orchestrates these sources. Token ownership stays in `src/theme-contract.ts`; DOM mutation stays in `src/app/theme-dom.ts`.
