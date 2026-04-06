@@ -1,4 +1,12 @@
-import { type EditorState, type Extension, type Range, type SelectionRange, StateField, type Transaction } from "@codemirror/state";
+import {
+  EditorSelection,
+  type EditorState,
+  type Extension,
+  type Range,
+  type SelectionRange,
+  StateField,
+  type Transaction,
+} from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 import {
   Decoration,
@@ -310,6 +318,199 @@ function findMathRoot(el: HTMLElement): HTMLElement {
   return el.closest<HTMLElement>(`.${CSS.mathInline}, .${CSS.mathDisplay}`) ?? el;
 }
 
+interface InlineMathSourceRange {
+  readonly from: number;
+  readonly to: number;
+}
+
+function isPlainPrimaryMouseEvent(event: MouseEvent): boolean {
+  return (
+    event.button === 0 &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  );
+}
+
+function parseInlineMathSourceRange(el: HTMLElement): InlineMathSourceRange | undefined {
+  const from = Number.parseInt(el.dataset.sourceFrom ?? "", 10);
+  const to = Number.parseInt(el.dataset.sourceTo ?? "", 10);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to) return undefined;
+  return { from, to };
+}
+
+function findInlineMathSourceRange(
+  target: EventTarget | null,
+): InlineMathSourceRange | undefined {
+  const element = target instanceof HTMLElement
+    ? target
+    : target instanceof Node
+    ? target.parentElement
+    : null;
+  const root = element?.closest<HTMLElement>(`.${CSS.mathInline}`);
+  return root ? parseInlineMathSourceRange(root) : undefined;
+}
+
+function findInlineMathSourceRangeAtCoords(
+  view: EditorView,
+  clientX: number,
+  clientY: number,
+): InlineMathSourceRange | undefined {
+  const { elementFromPoint } = view.dom.ownerDocument;
+  if (typeof elementFromPoint !== "function") return undefined;
+  const element = elementFromPoint.call(view.dom.ownerDocument, clientX, clientY);
+  return findInlineMathSourceRange(element);
+}
+
+function collectRenderedInlineMathRanges(state: EditorState): InlineMathSourceRange[] {
+  const focused = state.field(editorFocusField, false) ?? false;
+  const ranges: InlineMathSourceRange[] = [];
+
+  for (const region of state.field(documentAnalysisField).mathRegions) {
+    if (region.isDisplay) continue;
+    if (focused && cursorInRange(state, region.from, region.to)) continue;
+    ranges.push({ from: region.from, to: region.to });
+  }
+
+  return ranges;
+}
+
+function buildPointerSelection(
+  start: { pos: number; assoc: number },
+  current: { pos: number; assoc: number },
+): EditorSelection {
+  let range = EditorSelection.cursor(current.pos, current.assoc);
+  if (start.pos !== current.pos) {
+    const startRange = EditorSelection.cursor(start.pos, start.assoc);
+    const from = Math.min(startRange.from, range.from);
+    const to = Math.max(startRange.to, range.to);
+    range = from < range.from
+      ? EditorSelection.range(from, to, range.assoc)
+      : EditorSelection.range(to, from, range.assoc);
+  }
+  return EditorSelection.create([range]);
+}
+
+function snapPointerSelectionOverInlineMath(
+  selection: EditorSelection,
+  mathRanges: readonly InlineMathSourceRange[],
+  hoveredMathRange?: InlineMathSourceRange,
+): EditorSelection {
+  let changed = false;
+
+  const ranges = selection.ranges.map((range) => {
+    if (range.empty) return range;
+
+    const forward = range.head >= range.anchor;
+    let from = Math.min(range.from, range.to);
+    let to = Math.max(range.from, range.to);
+
+    for (const mathRange of mathRanges) {
+      if (to > mathRange.from && from < mathRange.to) {
+        from = Math.min(from, mathRange.from);
+        to = Math.max(to, mathRange.to);
+      }
+    }
+
+    if (hoveredMathRange) {
+      if (forward && from < hoveredMathRange.from && to === hoveredMathRange.from) {
+        to = hoveredMathRange.to;
+      } else if (
+        !forward &&
+        from === hoveredMathRange.to &&
+        to > hoveredMathRange.to
+      ) {
+        from = hoveredMathRange.from;
+      }
+    }
+
+    if (from === range.from && to === range.to) return range;
+
+    changed = true;
+    return forward ? EditorSelection.range(from, to) : EditorSelection.range(to, from);
+  });
+
+  return changed ? EditorSelection.create(ranges, selection.mainIndex) : selection;
+}
+
+function createInlineMathMouseSelectionStyle(
+  view: EditorView,
+  startEvent: MouseEvent,
+) {
+  let start = view.posAndSideAtCoords(
+    { x: startEvent.clientX, y: startEvent.clientY },
+    false,
+  );
+  const startSelection = view.state.selection;
+  let startMathRange = findInlineMathSourceRangeAtCoords(
+    view,
+    startEvent.clientX,
+    startEvent.clientY,
+  ) ?? findInlineMathSourceRange(startEvent.target);
+
+  return {
+    get(currentEvent: MouseEvent) {
+      const current = view.posAndSideAtCoords(
+        { x: currentEvent.clientX, y: currentEvent.clientY },
+        false,
+      );
+      const hoveredMathRange = findInlineMathSourceRangeAtCoords(
+        view,
+        currentEvent.clientX,
+        currentEvent.clientY,
+      ) ?? findInlineMathSourceRange(currentEvent.target);
+      const mathRanges = collectRenderedInlineMathRanges(view.state);
+
+      if (startMathRange) {
+        if (currentEvent === startEvent) return startSelection;
+
+        if (current.pos <= startMathRange.from) {
+          return snapPointerSelectionOverInlineMath(
+            EditorSelection.create([
+              EditorSelection.range(startMathRange.to, current.pos),
+            ]),
+            mathRanges,
+            hoveredMathRange,
+          );
+        }
+        if (current.pos >= startMathRange.to) {
+          return snapPointerSelectionOverInlineMath(
+            EditorSelection.create([
+              EditorSelection.range(startMathRange.from, current.pos),
+            ]),
+            mathRanges,
+            hoveredMathRange,
+          );
+        }
+
+        return startSelection;
+      }
+
+      return snapPointerSelectionOverInlineMath(
+        buildPointerSelection(start, current),
+        mathRanges,
+        hoveredMathRange,
+      );
+    },
+
+    update(update: ViewUpdate) {
+      if (!update.docChanged) return false;
+      start = {
+        pos: update.changes.mapPos(start.pos, start.assoc),
+        assoc: start.assoc,
+      };
+      startMathRange = startMathRange
+        ? {
+            from: update.changes.mapPos(startMathRange.from, -1),
+            to: update.changes.mapPos(startMathRange.to, 1),
+          }
+        : undefined;
+      return false;
+    },
+  };
+}
+
 function buildEquationNumbersByFrom(
   equationById: ReadonlyMap<string, EquationSemantics>,
 ): ReadonlyMap<number, number> {
@@ -385,7 +586,9 @@ export class MathWidget extends MacroAwareWidget {
     view: EditorView,
   ): void {
     el.style.cursor = "pointer";
-    el.addEventListener("mousedown", (e) => {
+    const eventType = this.isDisplay ? "mousedown" : "click";
+    el.addEventListener(eventType, (e) => {
+      if (!isPlainPrimaryMouseEvent(e)) return;
       e.preventDefault();
       view.focus();
 
@@ -489,6 +692,10 @@ export class MathWidget extends MacroAwareWidget {
     // Refresh source-range metadata so search-highlight reads correct positions
     this.setSourceRangeAttrs(dom);
     return true;
+  }
+
+  override ignoreEvent(): boolean {
+    return this.isDisplay;
   }
 }
 
@@ -854,6 +1061,11 @@ const mathWidgetMetadataPlugin = ViewPlugin.fromClass(
   },
 );
 
+const mathMouseSelectionStyle = EditorView.mouseSelectionStyle.of((view, event) => {
+  if (!isPlainPrimaryMouseEvent(event) || event.detail !== 1) return null;
+  return createInlineMathMouseSelectionStyle(view, event);
+});
+
 // ── Idle KaTeX prewarm (#625) ──────────────────────────────────────────────
 
 /**
@@ -967,6 +1179,7 @@ export const mathRenderPlugin: Extension = [
   focusTracker,
   mathMacrosField,
   mathDecorationField,
+  mathMouseSelectionStyle,
   mathWidgetMetadataPlugin,
   mathPrewarmPlugin,
 ];
