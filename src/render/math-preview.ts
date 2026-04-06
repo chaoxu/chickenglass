@@ -15,8 +15,10 @@ import {
 import { type Extension } from "@codemirror/state";
 import { autoUpdate, type VirtualElement } from "@floating-ui/dom";
 import { CSS } from "../constants";
-import { findActiveMath, renderKatex, resolveClickToSourcePos } from "./math-render";
 import { mathMacrosField } from "./math-macros";
+import { resolveClickToSourcePos } from "./math-interactions";
+import { findActiveMath } from "./math-source";
+import { renderKatex } from "./math-widget";
 import {
   createPreviewSurfaceContent,
   createPreviewSurfaceShell,

@@ -28,8 +28,8 @@ import {
   buildCitationPreviewContent,
   formatCitationPreview,
 } from "../citations/citation-preview";
-import { renderKatex } from "./math-render";
 import { mathMacrosField } from "./math-macros";
+import { renderKatex } from "./math-widget";
 import { renderBlockContentToDom, renderDocumentFragmentToDom, type BlockContentOptions } from "../document-surfaces";
 import {
   createPreviewSurfaceBody,

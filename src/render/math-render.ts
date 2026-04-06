@@ -1,743 +1,50 @@
 import {
-  EditorSelection,
   type EditorState,
   type Extension,
   type Range,
-  type SelectionRange,
   StateField,
   type Transaction,
 } from "@codemirror/state";
-import type { SyntaxNode } from "@lezer/common";
 import {
   Decoration,
   type DecorationSet,
   EditorView,
-  ViewPlugin,
-  type ViewUpdate,
 } from "@codemirror/view";
-import katexStyles from "katex/dist/katex.min.css?inline";
 import { CSS } from "../constants/css-classes";
+import { documentAnalysisField } from "../semantics/codemirror-source";
+import type { MathSemantics } from "../semantics/document";
+import { mathMouseSelectionStyle } from "./math-interactions";
+import { mathMacrosField } from "./math-macros";
+import { createMathWidgetMetadataPlugin } from "./math-metadata";
+import { mathPrewarmPlugin } from "./math-prewarm";
 import {
-  cursorInRange,
+  buildEquationNumbersByFrom,
+  findActiveMath,
+  getDisplayEquationNumber,
+} from "./math-source";
+import { MathWidget } from "./math-widget";
+import {
   buildDecorations,
-  pushWidgetDecoration,
-  RenderWidget,
-  MacroAwareWidget,
+  cursorInRange,
   editorFocusField,
   focusEffect,
   focusTracker,
+  pushWidgetDecoration,
   serializeMacros,
-  widgetSourceMap,
 } from "./render-utils";
-import { mathMacrosField } from "./math-macros";
-import { documentAnalysisField } from "../semantics/codemirror-source";
-import type { EquationSemantics, MathSemantics } from "../semantics/document";
-import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
 
 export { renderKatexToHtml } from "./inline-shared";
-
-export const MATH_TYPES = new Set(["InlineMath", "DisplayMath"]);
-
-const KATEX_STYLE_ID = "cf-katex-styles";
-
-function ensureKatexStyles(): void {
-  if (typeof document === "undefined") return;
-  if (document.getElementById(KATEX_STYLE_ID)) return;
-
-  const styleEl = document.createElement("style");
-  styleEl.id = KATEX_STYLE_ID;
-  styleEl.textContent = katexStyles;
-  document.head.appendChild(styleEl);
-}
-
-ensureKatexStyles();
-
-/** A pair of opening and closing delimiters for math expressions. */
-interface MathDelimiterPair {
-  readonly open: string;
-  readonly close: string;
-}
-
-/** Delimiter patterns for extracting LaTeX content from inline math nodes. */
-export const INLINE_DELIMITERS: ReadonlyArray<MathDelimiterPair> = [
-  { open: "\\(", close: "\\)" },
-  { open: "$", close: "$" },
-];
-
-/** Delimiter patterns for extracting LaTeX content from display math nodes. */
-export const DISPLAY_DELIMITERS: ReadonlyArray<MathDelimiterPair> = [
-  { open: "\\[", close: "\\]" },
-  { open: "$$", close: "$$" },
-];
-
-/**
- * Compute the relative content boundary for a display math node that may
- * contain an EquationLabel child.  Returns `undefined` when there is no label,
- * meaning the whole node text is content.
- *
- * The boundary is the offset (relative to the node start) of the end of the
- * closing delimiter mark — everything after that (whitespace + `{#eq:...}`) is
- * the label and must be excluded from the LaTeX passed to KaTeX.
- */
-export function getDisplayMathContentEnd(node: SyntaxNode): number | undefined {
-  if (!node.getChild("EquationLabel")) return undefined;
-  const marks = node.getChildren("DisplayMathMark");
-  if (marks.length >= 2) {
-    return marks[marks.length - 1].to - node.from;
-  }
-  return undefined;
-}
-
-/** Strip math delimiters from raw source. contentTo slices raw to the end of the closing delimiter (excluding any trailing label). */
-export function stripMathDelimiters(raw: string, isDisplay: boolean, contentTo?: number): string {
-  // When a content boundary is provided (display math with EquationLabel child), slice before it
-  const trimmed = contentTo !== undefined ? raw.slice(0, contentTo) : raw;
-  const delimiters = isDisplay ? DISPLAY_DELIMITERS : INLINE_DELIMITERS;
-  for (const { open, close } of delimiters) {
-    if (trimmed.startsWith(open) && trimmed.endsWith(close)) {
-      return trimmed.slice(open.length, trimmed.length - close.length);
-    }
-  }
-  return trimmed;
-}
-
-/** Clear the KaTeX cache. Called when math macros change. */
-export function clearKatexCache(): void {
-  clearKatexHtmlCache();
-}
-
-/**
- * Render LaTeX into an HTML element using KaTeX.
- * Shared helper used by MathWidget and MathPreviewPlugin.
- * Uses a string cache to avoid redundant KaTeX calls on scroll. (#514)
- */
-export function renderKatex(
-  element: HTMLElement,
-  latex: string,
-  isDisplay: boolean,
-  macros: Record<string, string>,
-): void {
-  try {
-    element.innerHTML = renderKatexToHtml(latex, isDisplay, macros);
-  } catch (err: unknown) {
-    element.className = "cf-math-error";
-    element.setAttribute("role", "alert");
-    element.textContent = err instanceof Error ? err.message : "KaTeX error";
-  }
-}
-
-/**
- * Find the best `data-loc-start` value for a click at (clientX, clientY)
- * inside a rendered math container.
- *
- * Picks the smallest element (by area) whose bounding box contains the
- * click point.  Returns undefined if nothing contains it, letting the
- * caller use a proportional fallback instead of snapping to a distant
- * loc'd element (e.g. clicking `(x+y)` in `(x+y)^n`).
- */
-function findLocAtPoint(
-  root: HTMLElement,
-  clientX: number,
-  clientY: number,
-): number | undefined {
-  const candidates = root.querySelectorAll<HTMLElement>("[data-loc-start]");
-  if (candidates.length === 0) return undefined;
-
-  let bestContaining: HTMLElement | null = null;
-  let bestArea = Infinity;
-  for (const el of candidates) {
-    const rect = el.getBoundingClientRect();
-    if (
-      rect.width > 0 &&
-      rect.height > 0 &&
-      clientX >= rect.left &&
-      clientX <= rect.right &&
-      clientY >= rect.top &&
-      clientY <= rect.bottom
-    ) {
-      const area = rect.width * rect.height;
-      if (area < bestArea) {
-        bestArea = area;
-        bestContaining = el;
-      }
-    }
-  }
-
-  if (bestContaining) {
-    const v = Number.parseInt(bestContaining.dataset.locStart ?? "", 10);
-    if (Number.isFinite(v)) return v;
-  }
-
-  // No data-loc element contains the click — let the caller's
-  // proportional fallback handle it rather than snapping to a
-  // distant loc'd element (e.g. clicking (x+y) in (x+y)^n).
-  return undefined;
-}
-
-/**
- * Snap an absolute document position to the nearest LaTeX token boundary
- * so the cursor doesn't land mid-command (e.g. inside `\alpha`).
- *
- * Exported for the math-preview panel which shares the same fallback path.
- * @internal
- */
-export function _snapToTokenBoundary(
-  latex: string,
-  contentFrom: number,
-  absPos: number,
-): number {
-  const rel = absPos - contentFrom;
-  const starts: number[] = [];
-  let i = 0;
-  while (i < latex.length) {
-    starts.push(i);
-    if (latex[i] === "\\") {
-      i++;
-      if (i < latex.length && /[a-zA-Z]/.test(latex[i])) {
-        while (i < latex.length && /[a-zA-Z]/.test(latex[i])) i++;
-      } else if (i < latex.length) {
-        i++;
-      }
-    } else {
-      i++;
-    }
-  }
-  starts.push(latex.length);
-
-  let best = starts[0];
-  let bestDist = Math.abs(rel - best);
-  for (let j = 1; j < starts.length; j++) {
-    const d = Math.abs(rel - starts[j]);
-    if (d < bestDist) {
-      best = starts[j];
-      bestDist = d;
-    } else break;
-  }
-  return contentFrom + best;
-}
-
-/**
- * Resolve a click on rendered math to an absolute document position.
- *
- * First tries `findLocAtPoint` (KaTeX's source-location attributes).
- * Falls back to a proportional X-offset estimate snapped to the nearest
- * LaTeX token boundary.
- */
-export function resolveClickToSourcePos(
-  el: HTMLElement,
-  e: MouseEvent,
-  latex: string,
-  sourceFrom: number,
-  sourceTo: number,
-  contentOffset: number,
-): number {
-  const contentFrom = sourceFrom + contentOffset;
-
-  const locStart = findLocAtPoint(el, e.clientX, e.clientY);
-  if (locStart !== undefined) {
-    return Math.max(sourceFrom, Math.min(sourceTo, contentFrom + locStart));
-  }
-
-  // Proportional fallback with token-boundary snapping
-  const contentLen = sourceTo - contentFrom;
-  if (contentLen > 0) {
-    const rect = el.getBoundingClientRect();
-    const fraction = rect.width > 0
-      ? Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-      : 0;
-    const raw = Math.round(contentFrom + fraction * contentLen);
-    const snapped = _snapToTokenBoundary(latex, contentFrom, raw);
-    return Math.max(sourceFrom, Math.min(sourceTo, snapped));
-  }
-  return sourceFrom;
-}
-
-function findMathRegionAtPos(
-  regions: readonly MathSemantics[],
-  pos: number,
-): MathSemantics | undefined {
-  let lo = 0;
-  let hi = regions.length - 1;
-  let candidate: MathSemantics | undefined;
-
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1;
-    const region = regions[mid];
-    if (region.from <= pos) {
-      candidate = region;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  return candidate && pos <= candidate.to ? candidate : undefined;
-}
-
-function resolveLiveMathRegion(
-  view: EditorView,
-  el: HTMLElement,
-): MathSemantics | undefined {
-  const field = (view.state as { field?: typeof view.state.field }).field;
-  if (typeof field !== "function") return undefined;
-
-  const regions = view.state.field(documentAnalysisField).mathRegions;
-  const positions: number[] = [];
-  const seen = new Set<number>();
-
-  const addPos = (pos: number): void => {
-    if (!Number.isFinite(pos) || seen.has(pos)) return;
-    seen.add(pos);
-    positions.push(pos);
-  };
-
-  try {
-    addPos(view.posAtDOM(el));
-  } catch {
-    // Ignore stale DOM nodes during transient redraws.
-  }
-
-  const widgetRoot = el.closest<HTMLElement>(`.${CSS.mathInline}, .${CSS.mathDisplay}`);
-  if (widgetRoot && widgetRoot !== el) {
-    try {
-      addPos(view.posAtDOM(widgetRoot));
-    } catch {
-      // Ignore stale DOM nodes during transient redraws.
-    }
-  }
-
-  for (const pos of positions) {
-    const region = findMathRegionAtPos(regions, pos);
-    if (region) return region;
-  }
-
-  return undefined;
-}
-
-function findMathRoot(el: HTMLElement): HTMLElement {
-  return el.closest<HTMLElement>(`.${CSS.mathInline}, .${CSS.mathDisplay}`) ?? el;
-}
-
-interface InlineMathSourceRange {
-  readonly from: number;
-  readonly to: number;
-}
-
-function isPlainPrimaryMouseEvent(event: MouseEvent): boolean {
-  return (
-    event.button === 0 &&
-    !event.altKey &&
-    !event.ctrlKey &&
-    !event.metaKey &&
-    !event.shiftKey
-  );
-}
-
-function parseInlineMathSourceRange(el: HTMLElement): InlineMathSourceRange | undefined {
-  const from = Number.parseInt(el.dataset.sourceFrom ?? "", 10);
-  const to = Number.parseInt(el.dataset.sourceTo ?? "", 10);
-  if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to) return undefined;
-  return { from, to };
-}
-
-function findInlineMathSourceRange(
-  target: EventTarget | null,
-): InlineMathSourceRange | undefined {
-  const element = target instanceof HTMLElement
-    ? target
-    : target instanceof Node
-    ? target.parentElement
-    : null;
-  const root = element?.closest<HTMLElement>(`.${CSS.mathInline}`);
-  return root ? parseInlineMathSourceRange(root) : undefined;
-}
-
-function findInlineMathSourceRangeAtCoords(
-  view: EditorView,
-  clientX: number,
-  clientY: number,
-): InlineMathSourceRange | undefined {
-  const { elementFromPoint } = view.dom.ownerDocument;
-  if (typeof elementFromPoint !== "function") return undefined;
-  const element = elementFromPoint.call(view.dom.ownerDocument, clientX, clientY);
-  return findInlineMathSourceRange(element);
-}
-
-function collectRenderedInlineMathRanges(state: EditorState): InlineMathSourceRange[] {
-  const focused = state.field(editorFocusField, false) ?? false;
-  const ranges: InlineMathSourceRange[] = [];
-
-  for (const region of state.field(documentAnalysisField).mathRegions) {
-    if (region.isDisplay) continue;
-    if (focused && cursorInRange(state, region.from, region.to)) continue;
-    ranges.push({ from: region.from, to: region.to });
-  }
-
-  return ranges;
-}
-
-function hasRenderedInlineMath(state: EditorState): boolean {
-  const focused = state.field(editorFocusField, false) ?? false;
-
-  for (const region of state.field(documentAnalysisField).mathRegions) {
-    if (region.isDisplay) continue;
-    if (focused && cursorInRange(state, region.from, region.to)) continue;
-    return true;
-  }
-
-  return false;
-}
-
-function buildPointerSelection(
-  start: { pos: number; assoc: number },
-  current: { pos: number; assoc: number },
-): EditorSelection {
-  let range = EditorSelection.cursor(current.pos, current.assoc);
-  if (start.pos !== current.pos) {
-    const startRange = EditorSelection.cursor(start.pos, start.assoc);
-    const from = Math.min(startRange.from, range.from);
-    const to = Math.max(startRange.to, range.to);
-    range = from < range.from
-      ? EditorSelection.range(from, to, range.assoc)
-      : EditorSelection.range(to, from, range.assoc);
-  }
-  return EditorSelection.create([range]);
-}
-
-function snapPointerSelectionOverInlineMath(
-  selection: EditorSelection,
-  mathRanges: readonly InlineMathSourceRange[],
-  hoveredMathRange?: InlineMathSourceRange,
-): EditorSelection {
-  let changed = false;
-
-  const ranges = selection.ranges.map((range) => {
-    if (range.empty) return range;
-
-    const forward = range.head >= range.anchor;
-    let from = Math.min(range.from, range.to);
-    let to = Math.max(range.from, range.to);
-
-    for (const mathRange of mathRanges) {
-      if (to > mathRange.from && from < mathRange.to) {
-        from = Math.min(from, mathRange.from);
-        to = Math.max(to, mathRange.to);
-      }
-    }
-
-    if (hoveredMathRange) {
-      if (forward && from < hoveredMathRange.from && to === hoveredMathRange.from) {
-        to = hoveredMathRange.to;
-      } else if (
-        !forward &&
-        from === hoveredMathRange.to &&
-        to > hoveredMathRange.to
-      ) {
-        from = hoveredMathRange.from;
-      }
-    }
-
-    if (from === range.from && to === range.to) return range;
-
-    changed = true;
-    return forward ? EditorSelection.range(from, to) : EditorSelection.range(to, from);
-  });
-
-  return changed ? EditorSelection.create(ranges, selection.mainIndex) : selection;
-}
-
-function createInlineMathMouseSelectionStyle(
-  view: EditorView,
-  startEvent: MouseEvent,
-  initialStartMathRange?: InlineMathSourceRange,
-) {
-  let start = view.posAndSideAtCoords(
-    { x: startEvent.clientX, y: startEvent.clientY },
-    false,
-  );
-  const startSelection = view.state.selection;
-  let startMathRange = initialStartMathRange;
-
-  return {
-    get(currentEvent: MouseEvent) {
-      const current = view.posAndSideAtCoords(
-        { x: currentEvent.clientX, y: currentEvent.clientY },
-        false,
-      );
-      const hoveredMathRange = findInlineMathSourceRangeAtCoords(
-        view,
-        currentEvent.clientX,
-        currentEvent.clientY,
-      ) ?? findInlineMathSourceRange(currentEvent.target);
-      const mathRanges = collectRenderedInlineMathRanges(view.state);
-
-      if (startMathRange) {
-        if (currentEvent === startEvent) return startSelection;
-
-        if (current.pos <= startMathRange.from) {
-          return snapPointerSelectionOverInlineMath(
-            EditorSelection.create([
-              EditorSelection.range(startMathRange.to, current.pos),
-            ]),
-            mathRanges,
-            hoveredMathRange,
-          );
-        }
-        if (current.pos >= startMathRange.to) {
-          return snapPointerSelectionOverInlineMath(
-            EditorSelection.create([
-              EditorSelection.range(startMathRange.from, current.pos),
-            ]),
-            mathRanges,
-            hoveredMathRange,
-          );
-        }
-
-        return startSelection;
-      }
-
-      return snapPointerSelectionOverInlineMath(
-        buildPointerSelection(start, current),
-        mathRanges,
-        hoveredMathRange,
-      );
-    },
-
-    update(update: ViewUpdate) {
-      if (!update.docChanged) return false;
-      start = {
-        pos: update.changes.mapPos(start.pos, start.assoc),
-        assoc: start.assoc,
-      };
-      startMathRange = startMathRange
-        ? {
-            from: update.changes.mapPos(startMathRange.from, -1),
-            to: update.changes.mapPos(startMathRange.to, 1),
-          }
-        : undefined;
-      return false;
-    },
-  };
-}
-
-function buildEquationNumbersByFrom(
-  equationById: ReadonlyMap<string, EquationSemantics>,
-): ReadonlyMap<number, number> {
-  const cached = equationNumbersByFromCache.get(equationById);
-  if (cached) return cached;
-
-  const numbers = new Map<number, number>();
-  for (const equation of equationById.values()) {
-    numbers.set(equation.from, equation.number);
-  }
-  equationNumbersByFromCache.set(equationById, numbers);
-  return numbers;
-}
-
-function getDisplayEquationNumber(
-  region: MathSemantics,
-  equationNumbersByFrom: ReadonlyMap<number, number>,
-): number | undefined {
-  if (!region.isDisplay || region.labelFrom === undefined) return undefined;
-  return equationNumbersByFrom.get(region.from);
-}
-
-const equationNumbersByFromCache = new WeakMap<
-  ReadonlyMap<string, EquationSemantics>,
-  ReadonlyMap<number, number>
->();
-
-/** Unified widget that renders both inline and display math via KaTeX. */
-export class MathWidget extends MacroAwareWidget {
-  constructor(
-    private readonly latex: string,
-    private readonly raw: string,
-    private readonly isDisplay: boolean,
-    private readonly macros: Record<string, string> = {},
-    private readonly contentOffset = 0,
-    private readonly equationNumber?: number,
-  ) {
-    super(macros);
-  }
-
-  private syncDisplayLayout(el: HTMLElement): void {
-    el.classList.toggle(
-      CSS.mathDisplayNumbered,
-      this.equationNumber !== undefined,
-    );
-  }
-
-  private syncDisplayEquationNumber(el: HTMLElement): void {
-    const selector = `.${CSS.mathDisplayNumber}`;
-    const numberText = this.equationNumber !== undefined
-      ? `(${this.equationNumber})`
-      : undefined;
-    const numberEl = el.querySelector<HTMLElement>(selector);
-
-    if (!numberText) {
-      numberEl?.remove();
-      return;
-    }
-
-    if (numberEl) {
-      numberEl.textContent = numberText;
-      return;
-    }
-
-    const nextNumberEl = document.createElement("span");
-    nextNumberEl.className = CSS.mathDisplayNumber;
-    nextNumberEl.textContent = numberText;
-    el.appendChild(nextNumberEl);
-  }
-
-  protected override bindSourceReveal(
-    el: HTMLElement,
-    view: EditorView,
-  ): void {
-    el.style.cursor = "pointer";
-    const eventType = this.isDisplay ? "mousedown" : "click";
-    el.addEventListener(eventType, (e) => {
-      if (!isPlainPrimaryMouseEvent(e)) return;
-      e.preventDefault();
-      view.focus();
-
-      const root = findMathRoot(el);
-      const currentWidget = widgetSourceMap.get(root);
-      const liveWidget = currentWidget instanceof MathWidget ? currentWidget : this;
-      const region = resolveLiveMathRegion(view, root);
-      const sourceFrom = region?.from ?? liveWidget.sourceFrom;
-      const sourceTo = region?.to ?? liveWidget.sourceTo;
-      const contentOffset = region
-        ? region.contentFrom - region.from
-        : liveWidget.contentOffset;
-      const latex = region?.latex ?? liveWidget.latex;
-
-      const pos = resolveClickToSourcePos(
-        el,
-        e,
-        latex,
-        sourceFrom,
-        sourceTo,
-        contentOffset,
-      );
-      view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
-    });
-  }
-
-  createDOM(): HTMLElement {
-    return this.createCachedDOM(() => {
-      const el = document.createElement(this.isDisplay ? "div" : "span");
-      el.className = this.isDisplay ? CSS.mathDisplay : CSS.mathInline;
-      el.setAttribute("role", "img");
-      el.setAttribute("aria-label", this.latex);
-      if (this.isDisplay) {
-        const content = document.createElement("div");
-        renderKatex(content, this.latex, this.isDisplay, this.macros);
-        // Shrink-wrap the rendered equation so only visible math is clickable.
-        content.className = CSS.mathDisplayContent;
-        el.appendChild(content);
-        this.syncDisplayLayout(el);
-        this.syncDisplayEquationNumber(el);
-        return el;
-      }
-      renderKatex(el, this.latex, this.isDisplay, this.macros);
-      return el;
-    });
-  }
-
-  override toDOM(view?: EditorView): HTMLElement {
-    if (!this.isDisplay) return super.toDOM(view);
-
-    const el = this.createDOM();
-    this.setSourceRangeAttrs(el);
-
-    if (this.sourceFrom >= 0 && view) {
-      const content = el.querySelector<HTMLElement>(`.${CSS.mathDisplayContent}`);
-      if (content) {
-        this.bindSourceReveal(content, view);
-        el.addEventListener("mousedown", (event) => {
-          if (event.target instanceof Node && content.contains(event.target)) return;
-          event.preventDefault();
-          view.focus();
-        });
-      } else {
-        this.bindSourceReveal(el, view);
-      }
-    }
-
-    return el;
-  }
-
-  eq(other: MathWidget): boolean {
-    return (
-      this.raw === other.raw &&
-      this.isDisplay === other.isDisplay &&
-      this.macrosKey === other.macrosKey &&
-      this.equationNumber === other.equationNumber
-    );
-  }
-
-  updateDOM(dom: HTMLElement): boolean {
-    // Structural mismatch (inline ↔ display) — force full rebuild
-    const expectedTag = this.isDisplay ? "DIV" : "SPAN";
-    if (dom.tagName !== expectedTag) return false;
-
-    // Reset class/role in case previous render hit a KaTeX error
-    dom.className = this.isDisplay ? CSS.mathDisplay : CSS.mathInline;
-    dom.setAttribute("role", "img");
-    dom.setAttribute("aria-label", this.latex);
-
-    if (this.isDisplay) {
-      const content = dom.firstElementChild as HTMLElement | null;
-      if (!content) return false;
-      content.className = CSS.mathDisplayContent;
-      renderKatex(content, this.latex, true, this.macros);
-      this.syncDisplayLayout(dom);
-      this.syncDisplayEquationNumber(dom);
-    } else {
-      renderKatex(dom, this.latex, false, this.macros);
-    }
-
-    // Refresh source-range metadata so search-highlight reads correct positions
-    this.setSourceRangeAttrs(dom);
-    return true;
-  }
-
-  override ignoreEvent(): boolean {
-    return this.isDisplay;
-  }
-}
-
-/**
- * Binary-search the sorted math regions for the one containing the cursor.
- * Returns the matching MathSemantics or undefined if the cursor is outside
- * all math.
- *
- * Shared by both the render path (mathShouldRebuild) and the preview path
- * (MathPreviewPlugin.scheduleCheck).
- */
-export function findActiveMath(
-  regions: readonly MathSemantics[],
-  selection: SelectionRange,
-): MathSemantics | undefined {
-  const { from, to } = selection;
-  let lo = 0;
-  let hi = regions.length - 1;
-  let candidate: MathSemantics | undefined;
-
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1;
-    const region = regions[mid];
-    if (region.from <= from) {
-      candidate = region;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  return candidate && to <= candidate.to ? candidate : undefined;
-}
+export {
+  DISPLAY_DELIMITERS,
+  INLINE_DELIMITERS,
+  MATH_TYPES,
+  _snapToTokenBoundary,
+  getDisplayMathContentEnd,
+  stripMathDelimiters,
+} from "./math-source";
+export { resolveClickToSourcePos } from "./math-interactions";
+export { clearKatexCache, MathWidget, renderKatex } from "./math-widget";
+export { findActiveMath } from "./math-source";
 
 function mathMacrosChanged(tr: Transaction): boolean {
   const before = tr.startState.field(mathMacrosField, false) ?? {};
@@ -754,16 +61,7 @@ function findFocusedActiveMath(state: EditorState): MathSemantics | undefined {
 
 /**
  * Build decoration ranges for math nodes, skipping nodes where
- * `shouldSkip(from, to)` returns true (typically a cursor check).
- *
- * NOTE: collectNodeRangesExcludingCursor() does not apply here.
- * This function operates on EditorState (not EditorView), because it is called
- * from both a ViewPlugin (EditorView path) and a StateField (EditorState path).
- * collectNodeRangesExcludingCursor requires an EditorView for visible ranges and
- * focus-guarded cursor checks. Additionally, when shouldSkip returns true the
- * callback adds source-mark decorations (cf-source-delimiter / cf-math-source)
- * rather than skipping - this dual-path logic cannot be expressed as a simple
- * "exclude and push widget" callback.
+ * `shouldSkip(from, to)` returns true.
  */
 function buildMathItems(
   state: EditorState,
@@ -771,43 +69,45 @@ function buildMathItems(
 ): Range<Decoration>[] {
   const macros = state.field(mathMacrosField);
   const analysis = state.field(documentAnalysisField);
-  const regions = analysis.mathRegions;
   const equationNumbersByFrom = buildEquationNumbersByFrom(analysis.equationById);
   const items: Range<Decoration>[] = [];
 
-  for (const region of regions) {
+  for (const region of analysis.mathRegions) {
     if (shouldSkip(region.from, region.to)) {
-      // Opening delimiter — uses cf-source-delimiter so it doesn't push
-      // the line box taller than the body content (#789)
       if (region.contentFrom > region.from) {
+        // Keep delimiters on the lighter source-delimiter class so they
+        // do not make the edited math line taller than the body content. (#789)
         items.push(
-          Decoration.mark({ class: "cf-source-delimiter" }).range(region.from, region.contentFrom),
+          Decoration.mark({ class: CSS.sourceDelimiter }).range(region.from, region.contentFrom),
         );
       }
       if (region.contentFrom < region.contentTo) {
         items.push(
-          Decoration.mark({ class: "cf-math-source" }).range(region.contentFrom, region.contentTo),
+          Decoration.mark({ class: CSS.mathSource }).range(region.contentFrom, region.contentTo),
         );
       }
-      // Closing delimiter — same source-delimiter treatment as opening
-      const delimClose = region.isDisplay && region.labelFrom !== undefined
+      const closingDelimiterStart = region.isDisplay && region.labelFrom !== undefined
         ? region.labelFrom
         : region.to;
-      if (delimClose > region.contentTo) {
+      if (closingDelimiterStart > region.contentTo) {
         items.push(
-          Decoration.mark({ class: "cf-source-delimiter" }).range(region.contentTo, delimClose),
+          Decoration.mark({ class: CSS.sourceDelimiter }).range(
+            region.contentTo,
+            closingDelimiterStart,
+          ),
         );
       }
       if (region.isDisplay && region.labelFrom !== undefined && region.to > region.labelFrom) {
         items.push(
-          Decoration.mark({ class: "cf-math-source" }).range(region.labelFrom, region.to),
+          Decoration.mark({ class: CSS.mathSource }).range(region.labelFrom, region.to),
         );
       }
       if (region.isDisplay) {
-        const raw = state.sliceDoc(region.from, region.to);
+        // Display math stays rendered even while showing source marks so the
+        // block height and click target remain stable during cursor reveal.
         const widget = new MathWidget(
           region.latex,
-          raw,
+          state.sliceDoc(region.from, region.to),
           true,
           macros,
           region.contentFrom - region.from,
@@ -815,21 +115,16 @@ function buildMathItems(
         );
         widget.sourceFrom = region.from;
         widget.sourceTo = region.to;
-        items.push(
-          Decoration.widget({ widget, block: true, side: 1 }).range(region.to),
-        );
+        items.push(Decoration.widget({ widget, block: true, side: 1 }).range(region.to));
       }
       continue;
     }
 
-    const raw = state.sliceDoc(region.from, region.to);
-
-    // block: true breaks CM6 height tracking for subsequent lines
     pushWidgetDecoration(
       items,
       new MathWidget(
         region.latex,
-        raw,
+        state.sliceDoc(region.from, region.to),
         region.isDisplay,
         macros,
         region.contentFrom - region.from,
@@ -845,19 +140,11 @@ function buildMathItems(
 
 /**
  * Collect decoration ranges for math nodes outside the cursor.
- *
- * Reads macros from the frontmatter state field and passes them
- * to each math widget for KaTeX rendering.
  */
 export function collectMathRanges(view: EditorView): Range<Decoration>[] {
   return buildMathItems(view.state, (from, to) => cursorInRange(view, from, to));
 }
 
-/**
- * Build math decorations from EditorState.
- * Used by the StateField to produce block-safe decorations.
- * When the editor is focused, nodes containing the cursor show source.
- */
 function buildMathDecorationsFromState(state: EditorState, focused: boolean): DecorationSet {
   const items = buildMathItems(
     state,
@@ -866,15 +153,6 @@ function buildMathDecorationsFromState(state: EditorState, focused: boolean): De
   return buildDecorations(items);
 }
 
-/**
- * Check whether math content is semantically unchanged between two region
- * arrays.  Returns true when count, LaTeX content, display mode, and node
- * size all match — meaning only document positions shifted.
- *
- * For position-only shifts the `latex` field is the same string reference
- * (carried via object spread in mapMathSemantics), so each comparison is
- * an O(1) reference check in the common case.
- */
 function mathContentUnchanged(
   before: readonly MathSemantics[],
   after: readonly MathSemantics[],
@@ -883,14 +161,14 @@ function mathContentUnchanged(
 ): boolean {
   if (before.length !== after.length) return false;
   for (let i = 0; i < before.length; i++) {
-    const b = before[i];
-    const a = after[i];
+    const prev = before[i];
+    const next = after[i];
     if (
-      b.latex !== a.latex
-      || b.isDisplay !== a.isDisplay
-      || (b.to - b.from) !== (a.to - a.from)
-      || getDisplayEquationNumber(b, beforeEquationNumbersByFrom)
-        !== getDisplayEquationNumber(a, afterEquationNumbersByFrom)
+      prev.latex !== next.latex
+      || prev.isDisplay !== next.isDisplay
+      || (prev.to - prev.from) !== (next.to - next.from)
+      || getDisplayEquationNumber(prev, beforeEquationNumbersByFrom)
+        !== getDisplayEquationNumber(next, afterEquationNumbersByFrom)
     ) {
       return false;
     }
@@ -903,69 +181,11 @@ function rebuildMathDecorations(state: EditorState): DecorationSet {
   return buildMathDecorationsFromState(state, focused);
 }
 
-function clearSourceRangeAttrs(el: HTMLElement): void {
-  delete el.dataset.sourceFrom;
-  delete el.dataset.sourceTo;
-  widgetSourceMap.delete(el);
-}
-
-function collectRenderedMathWidgets(state: EditorState): Map<number, MathWidget> {
-  const widgets = new Map<number, MathWidget>();
-  const cursor = state.field(mathDecorationField).iter();
-  while (cursor.value) {
-    const widget = cursor.value.spec?.widget;
-    if (widget instanceof MathWidget && widget.sourceFrom >= 0) {
-      widgets.set(widget.sourceFrom, widget);
-    }
-    cursor.next();
-  }
-  return widgets;
-}
-
-function isWidgetVisible(
-  widget: MathWidget,
-  visibleRanges: readonly { from: number; to: number }[],
-): boolean {
-  return visibleRanges.some(
-    (range) => widget.sourceFrom < range.to && widget.sourceTo > range.from,
-  );
-}
-
-function collectVisibleRenderedMathWidgets(view: EditorView): MathWidget[] {
-  const widgetsByFrom = collectRenderedMathWidgets(view.state);
-  return [...widgetsByFrom.values()].filter((widget) => isWidgetVisible(widget, view.visibleRanges));
-}
-
-function syncRenderedMathWidgetMetadata(view: EditorView): void {
-  const widgets = collectVisibleRenderedMathWidgets(view);
-  const mathRoots = view.contentDOM.querySelectorAll<HTMLElement>(
-    `.${CSS.mathInline}, .${CSS.mathDisplay}`,
-  );
-  const count = Math.min(mathRoots.length, widgets.length);
-
-  for (let i = 0; i < count; i++) {
-    const el = mathRoots[i];
-    const widget = widgets[i];
-    el.dataset.sourceFrom = String(widget.sourceFrom);
-    el.dataset.sourceTo = String(widget.sourceTo);
-    widgetSourceMap.set(el, widget);
-  }
-
-  for (let i = count; i < mathRoots.length; i++) {
-    clearSourceRangeAttrs(mathRoots[i]);
-  }
-}
-
 /**
  * CM6 StateField that provides math rendering decorations.
  *
- * Uses a StateField (not ViewPlugin) so that block-level replace decorations
- * for display math (which cross line breaks) are permitted by CM6.
- *
- * On document edits that only shift positions (prose edits outside math),
- * the field maps existing decorations through the changes instead of
- * rebuilding all math widgets — avoiding the dominant cost path of
- * buildMathItems → MathWidget → serializeMacros → KaTeX cache lookups.
+ * Uses a StateField so that block-level replace decorations for display math
+ * are permitted by CM6.
  */
 const mathDecorationField = StateField.define<DecorationSet>({
   create(state) {
@@ -985,14 +205,10 @@ const mathDecorationField = StateField.define<DecorationSet>({
     const equationNumbersAfter = buildEquationNumbersByFrom(analysisAfter.equationById);
 
     if (regionsBefore !== regionsAfter) {
-      // Regions changed.  When the doc changed and only positions shifted
-      // (no content, focus, or explicit selection change), map the existing
-      // decoration set through the changes — O(log n) instead of O(n) widget
-      // construction.
       if (
         tr.docChanged
         && tr.selection === undefined
-        && !tr.effects.some((e) => e.is(focusEffect))
+        && !tr.effects.some((effect) => effect.is(focusEffect))
         && mathContentUnchanged(
           regionsBefore,
           regionsAfter,
@@ -1001,12 +217,10 @@ const mathDecorationField = StateField.define<DecorationSet>({
         )
       ) {
         const mapped = value.map(tr.changes);
-        // Patch sourceFrom/sourceTo on reused widgets so click-to-edit
-        // and search-highlight stay correct after position mapping.
         const cursor = mapped.iter();
         while (cursor.value) {
           const widget = cursor.value.spec?.widget;
-          if (widget instanceof RenderWidget) {
+          if (widget instanceof MathWidget) {
             widget.updateSourceRange(cursor.from, cursor.to);
           }
           cursor.next();
@@ -1016,8 +230,7 @@ const mathDecorationField = StateField.define<DecorationSet>({
       return rebuildMathDecorations(tr.state);
     }
 
-    // Regions unchanged — check if cursor/focus crossed a math boundary.
-    const focusChanged = tr.effects.some((e) => e.is(focusEffect));
+    const focusChanged = tr.effects.some((effect) => effect.is(focusEffect));
     if (tr.selection === undefined && !focusChanged) return value;
 
     const before = findFocusedActiveMath(tr.startState);
@@ -1035,158 +248,7 @@ const mathDecorationField = StateField.define<DecorationSet>({
 
 export { mathDecorationField as _mathDecorationFieldForTest };
 
-const mathWidgetMetadataPlugin = ViewPlugin.fromClass(
-  class {
-    private syncScheduled = false;
-
-    constructor(view: EditorView) {
-      this.scheduleSync(view);
-    }
-
-    update(update: ViewUpdate) {
-      if (
-        update.docChanged
-        || update.selectionSet
-        || update.focusChanged
-        || update.viewportChanged
-        || update.state.field(mathDecorationField) !== update.startState.field(mathDecorationField)
-      ) {
-        this.scheduleSync(update.view);
-      }
-    }
-
-    private scheduleSync(view: EditorView): void {
-      if (this.syncScheduled) return;
-      this.syncScheduled = true;
-      view.requestMeasure({
-        read: () => null,
-        write: () => {
-          this.syncScheduled = false;
-          if (!view.dom.isConnected) return;
-          syncRenderedMathWidgetMetadata(view);
-        },
-      });
-    }
-  },
-);
-
-const mathMouseSelectionStyle = EditorView.mouseSelectionStyle.of((view, event) => {
-  if (!isPlainPrimaryMouseEvent(event) || event.detail !== 1) return null;
-  const startMathRange = findInlineMathSourceRangeAtCoords(
-    view,
-    event.clientX,
-    event.clientY,
-  ) ?? findInlineMathSourceRange(event.target);
-  if (!startMathRange && !hasRenderedInlineMath(view.state)) return null;
-  return createInlineMathMouseSelectionStyle(view, event, startMathRange);
-});
-
-// ── Idle KaTeX prewarm (#625) ──────────────────────────────────────────────
-
-/**
- * Schedule a callback during browser idle time.
- * Falls back to setTimeout in environments without requestIdleCallback.
- */
-function scheduleIdle(callback: (deadline?: IdleDeadline) => void): void {
-  if (typeof requestIdleCallback === "function") {
-    requestIdleCallback(callback);
-  } else {
-    setTimeout(() => callback(undefined), 1);
-  }
-}
-
-/** Maximum time (ms) to spend prewarming per idle chunk when no deadline is available. */
-const PREWARM_BUDGET_MS = 2;
-
-/**
- * ViewPlugin that pre-populates the KaTeX HTML string cache during idle time.
- *
- * After document open or when math regions / macros change, this plugin
- * clears the shared `katexHtmlCache` (evicting stale entries from previous
- * state) and schedules idle callbacks to call `renderKatexToHtml()` for
- * every math region in the document.  Because the result is stored in the
- * shared cache, subsequent `MathWidget.createDOM()` calls hit the cache
- * instead of invoking KaTeX — eliminating the cold-path cost when math
- * first scrolls into view (#625).
- *
- * Eviction strategy:
- * - On region or macro change → clear + re-prewarm (schedulePrewarm)
- * - Safety-net size cap in renderKatexToHtml (MAX_KATEX_CACHE_ENTRIES)
- * Visible widgets are unaffected by clears because they retain their
- * DOM via `createCachedDOM` (render-utils.ts).
- */
-const mathPrewarmPlugin = ViewPlugin.fromClass(
-  class {
-    private generation = 0;
-    private lastRegions: readonly MathSemantics[] | null = null;
-    private lastMacrosKey = "";
-
-    constructor(view: EditorView) {
-      this.schedulePrewarm(view.state);
-    }
-
-    update(update: ViewUpdate) {
-      const regions = update.state.field(documentAnalysisField).mathRegions;
-      const macros = update.state.field(mathMacrosField);
-      const macrosKey = serializeMacros(macros);
-
-      if (regions !== this.lastRegions || macrosKey !== this.lastMacrosKey) {
-        this.schedulePrewarm(update.state);
-      }
-    }
-
-    destroy() {
-      this.generation++;
-    }
-
-    private schedulePrewarm(state: EditorState) {
-      this.generation++;
-      const gen = this.generation;
-
-      const regions = state.field(documentAnalysisField).mathRegions;
-      const macros = state.field(mathMacrosField);
-
-      this.lastRegions = regions;
-      this.lastMacrosKey = serializeMacros(macros);
-
-      // Evict entries from previous document / macro state.  Visible widgets
-      // retain their DOM via createCachedDOM and do not re-query this cache
-      // until their content or macros actually change.
-      clearKatexHtmlCache();
-
-      if (regions.length === 0) return;
-
-      let index = 0;
-
-      const processChunk = (deadline?: IdleDeadline) => {
-        if (this.generation !== gen) return;
-
-        const start = performance.now();
-        while (index < regions.length) {
-          if (
-            deadline
-              ? deadline.timeRemaining() < 1
-              : performance.now() - start > PREWARM_BUDGET_MS
-          ) {
-            break;
-          }
-          const region = regions[index++];
-          try {
-            renderKatexToHtml(region.latex, region.isDisplay, macros);
-          } catch {
-            // KaTeX parse error — skip; the widget will show the error on render.
-          }
-        }
-
-        if (index < regions.length && this.generation === gen) {
-          scheduleIdle(processChunk);
-        }
-      };
-
-      scheduleIdle(processChunk);
-    }
-  },
-);
+const mathWidgetMetadataPlugin = createMathWidgetMetadataPlugin(mathDecorationField);
 
 /** CM6 extension that renders math expressions with KaTeX (Typora-style toggle). */
 export const mathRenderPlugin: Extension = [

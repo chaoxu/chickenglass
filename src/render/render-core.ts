@@ -67,8 +67,8 @@ export {
 // ── math-macros.ts ───────────────────────────────────────────────────────────
 export { getMathMacros, mathMacrosField } from "./math-macros";
 
-// ── math-render.ts (type exports) ────────────────────────────────────────────
-export type { MathWidget } from "./math-render";
+// ── math-widget.ts (type exports) ────────────────────────────────────────────
+export type { MathWidget } from "./math-widget";
 
 // ── table-utils.ts (type exports) ────────────────────────────────────────────
 export {
