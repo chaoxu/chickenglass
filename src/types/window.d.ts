@@ -13,6 +13,7 @@ import type { EditorView } from "@codemirror/view";
 import type { DebugHelpers } from "../editor";
 import type { SourceMap } from "../app/source-map";
 import type { EditorMode } from "../editor";
+import type { DebugDocumentState } from "../app/hooks/use-app-debug";
 
 declare global {
   interface Window {
@@ -53,7 +54,7 @@ declare global {
       setMode: (mode: EditorMode) => void;
       getMode: () => EditorMode;
       getProjectRoot: () => string | null;
-      getCurrentDocument: () => { path: string; name: string; dirty: boolean } | null;
+      getCurrentDocument: () => DebugDocumentState | null;
       isDirty: () => boolean;
     };
 

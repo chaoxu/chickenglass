@@ -112,7 +112,7 @@ export class BackgroundIndexer {
   async bulkUpdate(
     files: ReadonlyArray<{ file: string; content: string }>,
   ): Promise<number> {
-    if (this.disposed) throw new Error("Indexer disposed");
+    if (this.disposed) throw new Error(`Indexer.bulkUpdate(${files.length} files): indexer is disposed`);
     const nextFiles = new Map<string, FileIndex>();
     let totalEntries = 0;
     for (const { file, content } of files) {

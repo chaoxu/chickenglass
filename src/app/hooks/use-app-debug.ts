@@ -14,7 +14,7 @@ import {
   debugListWindowsCommand,
 } from "../tauri-client/debug";
 
-interface DebugDocumentState {
+export interface DebugDocumentState {
   path: string;
   name: string;
   dirty: boolean;
