@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   hotkeysCoreFeature,
+  type ItemInstance,
   propMemoizationFeature,
   syncDataLoaderFeature,
-  type ItemInstance,
   type TreeConfig,
   type TreeInstance,
   type TreeState,
 } from "@headless-tree/core";
 import { useTree } from "@headless-tree/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FileEntry } from "../file-manager";
 
 const ROOT_ITEM_ID = "__cf-file-tree-root__";
@@ -322,9 +322,12 @@ export function useFileTreeController({
   onLoadChildren,
 }: UseFileTreeControllerProps): FileTreeController {
   const index = useMemo(() => buildTreeIndex(root), [root]);
+  const onSelectRef = useRef(onSelect);
   const [state, setState] = useState<Partial<TreeState<FileEntry>>>(
     () => persistRef?.current.treeState ?? { expandedItems: [], focusedItem: null },
   );
+
+  onSelectRef.current = onSelect;
 
   // Sync state back to the persist ref on every change so it survives unmount.
   useEffect(() => {
@@ -357,6 +360,23 @@ export function useFileTreeController({
     }
   }, [state.expandedItems, index, onLoadChildren]);
 
+  // Keep headless-tree callbacks stable while still dispatching to the latest
+  // FileTree prop handler from the current render.
+  const handleSelect = useCallback((path: string) => {
+    onSelectRef.current(path);
+  }, []);
+
+  const handlePrimaryAction = useCallback((item: ItemInstance<FileEntry>) => {
+    if (!item.isFolder()) {
+      handleSelect(item.getId());
+    }
+  }, [handleSelect]);
+
+  const hotkeys = useMemo(
+    () => createFileTreeHotkeys(handleSelect),
+    [handleSelect],
+  );
+
   const tree = useTree<FileEntry>({
     rootItemId: ROOT_ITEM_ID,
     state,
@@ -369,12 +389,8 @@ export function useFileTreeController({
     },
     getItemName: (item) => item.getItemData().name,
     isItemFolder: (item) => item.getItemData().isDirectory,
-    onPrimaryAction: (item) => {
-      if (!item.isFolder()) {
-        onSelect(item.getId());
-      }
-    },
-    hotkeys: createFileTreeHotkeys(onSelect),
+    onPrimaryAction: handlePrimaryAction,
+    hotkeys,
     features: [
       syncDataLoaderFeature,
       hotkeysCoreFeature,
