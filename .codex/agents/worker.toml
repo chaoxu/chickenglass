@@ -1,5 +1,5 @@
 name = "worker"
-description = "Implements a single task in an isolated git clone. Use when the run skill needs to dispatch an implementation task with specific files and done criteria."
+description = "Implements a single task in an isolated git clone. Use when a focused implementation task needs disjoint files and clear done criteria."
 nickname_candidates = ["Builder", "Implementer", "Worker"]
 model_reasoning_effort = "high"
 

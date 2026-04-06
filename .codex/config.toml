@@ -9,12 +9,12 @@ job_max_runtime_seconds = 1800
 
 [agents.worker]
 config_file = "agents/worker.toml"
-description = "Implementation agent with temp-clone isolation for the run skill."
+description = "Implementation agent with temp-clone isolation for focused tasks."
 
 [agents.reviewer]
 config_file = "agents/reviewer.toml"
-description = "Read-only code review agent for the run skill."
+description = "Read-only code review agent for commit and branch review."
 
 [agents.explorer]
 config_file = "agents/explorer.toml"
-description = "Read-only codebase search agent for the run skill."
+description = "Read-only codebase search agent for investigation and planning."
