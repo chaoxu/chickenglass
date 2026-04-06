@@ -2,7 +2,7 @@ import { describe, expect, it, afterEach, vi } from "vitest";
 import katex from "katex";
 import { CSS } from "../constants/css-classes";
 import { EditorState } from "@codemirror/state";
-import type { EditorView } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
@@ -167,12 +167,27 @@ describe("MathWidget (inline)", () => {
     const el = widget.toDOM(view);
     widget.updateSourceRange(411, 416);
 
-    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
 
     expect(dispatch).toHaveBeenCalledWith({
       selection: { anchor: 411 },
       scrollIntoView: false,
     });
+  });
+
+  it("does not reveal inline source on mousedown before a drag gesture is established", () => {
+    const focus = vi.fn();
+    const dispatch = vi.fn();
+    const view = createMockEditorView({ focus, dispatch });
+    const widget = new MathWidget("x^2", "$x^2$", false);
+    widget.sourceFrom = 20;
+    widget.sourceTo = 25;
+
+    const el = widget.toDOM(view);
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(focus).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });
 
@@ -807,7 +822,7 @@ describe("live math widget metadata", () => {
 
     const dWidget = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="d"]`);
     expect(dWidget).not.toBeNull();
-    dWidget!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    dWidget!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     expect(currentView.state.selection.main.anchor).toBeGreaterThanOrEqual(40);
     expect(currentView.state.selection.main.anchor).toBeLessThanOrEqual(43);
   });
@@ -837,6 +852,167 @@ describe("live math widget metadata", () => {
       expect(dWidget!.dataset.sourceFrom).toBe("40");
       expect(dWidget!.dataset.sourceTo).toBe("43");
     });
+  });
+});
+
+describe("inline math mouse selection integration", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+    vi.restoreAllMocks();
+    clearKatexCache();
+  });
+
+  it("defers a selection that starts on rendered inline math until the drag direction is known", () => {
+    const doc = "haha $x^2$, $y^2$";
+    view = createMathRenderView(doc, 0);
+    const currentView = view;
+    if (!currentView) throw new Error("expected math render view");
+
+    const inline = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="x^2"]`);
+    expect(inline).not.toBeNull();
+
+    const sourceFrom = Number.parseInt(inline?.dataset.sourceFrom ?? "", 10);
+    const sourceTo = Number.parseInt(inline?.dataset.sourceTo ?? "", 10);
+    expect(Number.isFinite(sourceFrom)).toBe(true);
+    expect(Number.isFinite(sourceTo)).toBe(true);
+
+    vi.spyOn(currentView, "posAndSideAtCoords").mockImplementation((coords) => {
+      if (coords.x > 10) {
+        return { pos: sourceTo + 1, assoc: 1 } as ReturnType<EditorView["posAndSideAtCoords"]>;
+      }
+      return { pos: sourceFrom - 2, assoc: -1 } as ReturnType<EditorView["posAndSideAtCoords"]>;
+    });
+
+    const startEvent = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 10,
+      clientY: 5,
+      detail: 1,
+    });
+    Object.defineProperty(startEvent, "target", { value: inline });
+
+    const makeStyle = currentView.state.facet(EditorView.mouseSelectionStyle)[0];
+    const style = makeStyle(currentView, startEvent);
+    expect(style).not.toBeNull();
+    if (!style) throw new Error("expected inline math mouse selection style");
+
+    expect(style.get(startEvent, false, false).eq(currentView.state.selection)).toBe(true);
+
+    const moveRight = new MouseEvent("mousemove", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 30,
+      clientY: 5,
+    });
+    const rightSelection = style.get(moveRight, false, false);
+    expect(rightSelection.main.from).toBe(sourceFrom);
+    expect(rightSelection.main.to).toBe(sourceTo + 1);
+
+    const moveLeft = new MouseEvent("mousemove", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 0,
+      clientY: 5,
+    });
+    const leftSelection = style.get(moveLeft, false, false);
+    expect(leftSelection.main.from).toBe(sourceFrom - 2);
+    expect(leftSelection.main.to).toBe(sourceTo);
+  });
+
+  it("snaps a drag crossing rendered inline math to the full source span", () => {
+    const doc = "haha $x^2$, $y^2$";
+    view = createMathRenderView(doc, 0);
+    const currentView = view;
+    if (!currentView) throw new Error("expected math render view");
+
+    const inline = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="x^2"]`);
+    expect(inline).not.toBeNull();
+
+    const sourceFrom = Number.parseInt(inline?.dataset.sourceFrom ?? "", 10);
+    const sourceTo = Number.parseInt(inline?.dataset.sourceTo ?? "", 10);
+    expect(Number.isFinite(sourceFrom)).toBe(true);
+    expect(Number.isFinite(sourceTo)).toBe(true);
+
+    vi.spyOn(currentView, "posAndSideAtCoords").mockImplementation((coords) => {
+      if (coords.x > 10) {
+        return { pos: sourceFrom, assoc: 1 } as ReturnType<EditorView["posAndSideAtCoords"]>;
+      }
+      return { pos: sourceFrom - 4, assoc: -1 } as ReturnType<EditorView["posAndSideAtCoords"]>;
+    });
+
+    const docView = currentView.dom.ownerDocument as Document & {
+      elementFromPoint?: (x: number, y: number) => Element | null;
+    };
+    const originalElementFromPoint = docView.elementFromPoint;
+    Object.defineProperty(docView, "elementFromPoint", {
+      configurable: true,
+      value: (x: number) => (x > 10 ? inline : currentView.contentDOM),
+    });
+
+    const startEvent = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 0,
+      clientY: 5,
+      detail: 1,
+    });
+    Object.defineProperty(startEvent, "target", { value: currentView.contentDOM });
+
+    const makeStyle = currentView.state.facet(EditorView.mouseSelectionStyle)[0];
+    const style = makeStyle(currentView, startEvent);
+    expect(style).not.toBeNull();
+    if (!style) throw new Error("expected inline math mouse selection style");
+
+    const moveIntoMath = new MouseEvent("mousemove", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 20,
+      clientY: 5,
+    });
+    Object.defineProperty(moveIntoMath, "target", { value: inline });
+
+    try {
+      const selection = style.get(moveIntoMath, false, false);
+      expect(selection.main.from).toBe(sourceFrom - 4);
+      expect(selection.main.to).toBe(sourceTo);
+    } finally {
+      if (originalElementFromPoint) {
+        Object.defineProperty(docView, "elementFromPoint", {
+          configurable: true,
+          value: originalElementFromPoint,
+        });
+      } else {
+        Reflect.deleteProperty(docView, "elementFromPoint");
+      }
+    }
+  });
+
+  it("falls back to native mouse selection when no inline math is rendered", () => {
+    view = createMathRenderView("plain text", 0);
+    const currentView = view;
+    if (!currentView) throw new Error("expected math render view");
+
+    const startEvent = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 5,
+      clientY: 5,
+      detail: 1,
+    });
+    Object.defineProperty(startEvent, "target", { value: currentView.contentDOM });
+
+    const makeStyle = currentView.state.facet(EditorView.mouseSelectionStyle)[0];
+    expect(makeStyle(currentView, startEvent)).toBeNull();
   });
 });
 
