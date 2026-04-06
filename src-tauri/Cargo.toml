@@ -14,3 +14,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 notify = "8"
 base64 = "0.22"
+same-file = "1.0"
