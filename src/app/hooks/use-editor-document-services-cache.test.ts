@@ -77,6 +77,7 @@ describe("include expansion cache integration", () => {
   let root: Root;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -88,6 +89,7 @@ describe("include expansion cache integration", () => {
     act(() => root.unmount());
     container.remove();
     window.__cfSourceMap = null;
+    vi.useRealTimers();
   });
 
   it("reuses cached expansion after resetServices (document switch)", async () => {
@@ -107,7 +109,7 @@ describe("include expansion cache integration", () => {
     // First open — cache miss, resolveIncludesFromContent is called.
     ref.result.initializeView(view, undefined, docContent);
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
+      await vi.runAllTimersAsync();
     });
 
     expect(resolveSpy).toHaveBeenCalledTimes(1);
@@ -121,7 +123,7 @@ describe("include expansion cache integration", () => {
     // Reopen same document — cache hit, resolver NOT called.
     ref.result.initializeView(view, undefined, docContent);
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
+      await vi.runAllTimersAsync();
     });
 
     expect(resolveSpy).not.toHaveBeenCalled();
@@ -148,7 +150,7 @@ describe("include expansion cache integration", () => {
     // First open — populates cache.
     ref.result.initializeView(view, undefined, docContent);
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
+      await vi.runAllTimersAsync();
     });
 
     expect(resolveSpy).toHaveBeenCalledTimes(1);
@@ -162,7 +164,7 @@ describe("include expansion cache integration", () => {
     // Reopen — cache validation fails, resolver called again.
     ref.result.initializeView(view, undefined, docContent);
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
+      await vi.runAllTimersAsync();
     });
 
     expect(resolveSpy).toHaveBeenCalledTimes(1);
