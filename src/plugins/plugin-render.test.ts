@@ -12,6 +12,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import {
   _blockDecorationFieldForTest as blockDecorationField,
+  _BlockCaptionWidgetForTest as BlockCaptionWidget,
   _BlockHeaderWidgetForTest as BlockHeaderWidget,
   embedSandboxPermissions,
 } from "./plugin-render";
@@ -465,6 +466,37 @@ describe("disabled blocks show raw fences (issue #356)", () => {
     const captionWidgets = specs.filter((s) => s.widgetClass === "BlockCaptionWidget");
     expect(captionWidgets).toHaveLength(1);
   });
+
+  it("targets the hidden opening-line caption text for below-caption widgets", () => {
+    const doc = `::: {.figure} Caption text\n![alt](img.png)\n:::`;
+    const state = createTestStateWithPlugins(
+      doc,
+      [makeBlockPlugin({ name: "figure", numbered: true, title: "Figure", captionPosition: "below" })],
+    );
+
+    const widget = getWidgetFromDecorations<BlockCaptionWidget>(state, "BlockCaptionWidget");
+    const openLine = state.doc.line(1);
+    const titleText = "Caption text";
+    const titleFrom = openLine.text.indexOf(titleText) + openLine.from;
+    const titleTo = titleFrom + titleText.length;
+
+    expect(widget.sourceFrom).toBe(titleFrom);
+    expect(widget.sourceTo).toBe(titleTo);
+  });
+
+  it("falls back to the opening fence when a below-caption block has no caption text", () => {
+    const doc = `::: {.figure}\n![alt](img.png)\n:::`;
+    const state = createTestStateWithPlugins(
+      doc,
+      [makeBlockPlugin({ name: "figure", numbered: true, title: "Figure", captionPosition: "below" })],
+    );
+
+    const widget = getWidgetFromDecorations<BlockCaptionWidget>(state, "BlockCaptionWidget");
+    const openLine = state.doc.line(1);
+
+    expect(widget.sourceFrom).toBe(openLine.from);
+    expect(widget.sourceTo).toBe(openLine.to);
+  });
 });
 
 describe("BlockHeaderWidget.updateDOM", () => {
@@ -506,6 +538,34 @@ describe("BlockHeaderWidget.updateDOM", () => {
     newWidget.updateDOM(dom);
 
     expect(dom).toBe(domRef);
+  });
+});
+
+describe("BlockCaptionWidget.updateDOM", () => {
+  it("updates content and refreshes source-range metadata", () => {
+    const oldWidget = new BlockCaptionWidget("Figure 1.", "Old caption", {});
+    oldWidget.sourceFrom = 10;
+    oldWidget.sourceTo = 21;
+    const dom = oldWidget.toDOM();
+
+    expect(widgetSourceMap.get(dom)).toBe(oldWidget);
+    expect(dom.dataset.sourceFrom).toBe("10");
+    expect(dom.dataset.sourceTo).toBe("21");
+
+    const newWidget = new BlockCaptionWidget("Figure 2.", "New caption", {});
+    newWidget.sourceFrom = 30;
+    newWidget.sourceTo = 41;
+
+    const result = newWidget.updateDOM(dom);
+    expect(result).toBe(true);
+
+    expect(dom.textContent).toContain("Figure 2.");
+    expect(dom.textContent).toContain("New caption");
+    expect(widgetSourceMap.get(dom)).toBe(newWidget);
+    expect(widgetSourceMap.get(dom)!.sourceFrom).toBe(30);
+    expect(widgetSourceMap.get(dom)!.sourceTo).toBe(41);
+    expect(dom.dataset.sourceFrom).toBe("30");
+    expect(dom.dataset.sourceTo).toBe("41");
   });
 });
 
