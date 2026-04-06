@@ -541,6 +541,9 @@ export function getCodeBlockStructureRevision(state: EditorState): number {
  */
 export function collectCodeBlocks(state: EditorState): readonly CodeBlockInfo[] {
   const cachedBlocks = getCodeBlockStructureCache(state)?.blocks;
+  // State-field updates sanitize before caching, but read-side validation is a
+  // deliberate safety net during aggressive file switches if stale mapped
+  // blocks ever survive long enough to be observed by another consumer.
   return cachedBlocks ? sanitizeCodeBlocks(state, cachedBlocks) : scanCodeBlocks(state);
 }
 
