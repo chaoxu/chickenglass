@@ -15,7 +15,7 @@
 
 import { useRef, useEffect, useState, useMemo, type RefObject } from "react";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
-import { Compartment, type Extension } from "@codemirror/state";
+import { Compartment, EditorSelection, type Extension } from "@codemirror/state";
 
 import {
   createEditor,
@@ -112,6 +112,20 @@ function collectDocumentChanges(update: ViewUpdate): EditorDocumentChange[] {
   return changes;
 }
 
+function clampPosition(pos: number, docLength: number): number {
+  return Math.max(0, Math.min(pos, docLength));
+}
+
+function preserveSelection(selection: EditorSelection, docLength: number): EditorSelection {
+  return EditorSelection.create(
+    selection.ranges.map((range) => EditorSelection.range(
+      clampPosition(range.anchor, docLength),
+      clampPosition(range.head, docLength),
+    )),
+    selection.mainIndex,
+  );
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -176,18 +190,20 @@ export function useEditor(
   const initializeViewRef = useLatest(documentServices.initializeView);
   const resetServicesRef = useLatest(documentServices.resetServices);
 
-  /**
-   * Shared "document became current" lifecycle used by both initial mount
-   * and external document switches. Resets scroll/telemetry, fires frontmatter
-   * and readiness callbacks, and records the loaded doc identity.
-   */
-  function applyDocumentReady(targetView: EditorView, newDoc: string, newPath: string | undefined) {
-    targetView.scrollDOM.scrollTop = 0;
-    resetScroll();
+  function finalizeDocumentSync(
+    targetView: EditorView,
+    newDoc: string,
+    newPath: string | undefined,
+    resetViewport: boolean,
+  ) {
+    if (resetViewport) {
+      targetView.scrollDOM.scrollTop = 0;
+      resetScroll();
+    }
     const telemetry = useEditorTelemetryStore.getState();
     const counts = computeLiveStats(newDoc);
     telemetry.setLiveCounts(counts.words, counts.chars);
-    telemetry.setCursorPos(0, targetView);
+    telemetry.setCursorPos(targetView.state.selection.main.head, targetView);
     const fm = targetView.state.field(frontmatterField, false);
     onFrontmatterChangeRef.current?.(fm);
     initializeViewRef.current(targetView, fm, newDoc);
@@ -268,7 +284,7 @@ export function useEditor(
 
     debugBridge.attachDebugView(newView);
     setView(newView);
-    applyDocumentReady(newView, doc, docPath);
+    finalizeDocumentSync(newView, doc, docPath, true);
 
     return () => {
       if (wordCountTimerRef.current !== null) {
@@ -305,6 +321,7 @@ export function useEditor(
     if (!pathChanged && !docChangedExternally) {
       return;
     }
+    const destructiveActivation = pathChanged && docChangedExternally;
 
     resetServicesRef.current();
 
@@ -324,15 +341,17 @@ export function useEditor(
           to: view.state.doc.length,
           insert: doc,
         },
-        selection: { anchor: 0 },
+        selection: destructiveActivation
+          ? { anchor: 0 }
+          : preserveSelection(view.state.selection, doc.length),
         effects: [setIncludeRegionsEffect.of([]), clearBib],
         annotations: programmaticDocumentChangeAnnotation.of(true),
       });
     } else if (pathChanged) {
-      view.dispatch({ selection: { anchor: 0 }, effects: clearBib });
+      view.dispatch({ effects: clearBib });
     }
 
-    applyDocumentReady(view, doc, docPath);
+    finalizeDocumentSync(view, doc, docPath, destructiveActivation);
   }, [doc, docPath, resetScroll, view]);
 
   return {
