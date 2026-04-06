@@ -279,11 +279,11 @@ interface SearchPanelContext {
   searchInput: HTMLInputElement;
   replaceInput: HTMLInputElement;
   matchInfo: HTMLSpanElement;
-  toggleCase: HTMLButtonElement;
-  toggleRegex: HTMLButtonElement;
-  toggleWord: HTMLButtonElement;
-  replaceRow: HTMLDivElement;
-  toggleReplaceBtn: HTMLButtonElement;
+  toggleCase?: HTMLButtonElement;
+  toggleRegex?: HTMLButtonElement;
+  toggleWord?: HTMLButtonElement;
+  replaceRow?: HTMLDivElement;
+  toggleReplaceBtn?: HTMLButtonElement;
   matchCache: MatchCache | null;
   getToggles(): { caseSensitive: boolean; isRegexp: boolean; wholeWord: boolean };
   commitQuery(): void;
@@ -307,6 +307,32 @@ function serializeQuery(q: ReturnType<typeof getSearchQuery>): string {
   return `${q.search}\0${String(q.caseSensitive)}\0${String(q.regexp)}\0${String(q.wholeWord)}`;
 }
 
+function getSearchPanelControls(ctx: SearchPanelContext): {
+  toggleCase: HTMLButtonElement;
+  toggleRegex: HTMLButtonElement;
+  toggleWord: HTMLButtonElement;
+  replaceRow: HTMLDivElement;
+  toggleReplaceBtn: HTMLButtonElement;
+} {
+  const {
+    toggleCase,
+    toggleRegex,
+    toggleWord,
+    replaceRow,
+    toggleReplaceBtn,
+  } = ctx;
+  if (!toggleCase || !toggleRegex || !toggleWord || !replaceRow || !toggleReplaceBtn) {
+    throw new Error("[find-replace] search panel controls accessed before initialization");
+  }
+  return {
+    toggleCase,
+    toggleRegex,
+    toggleWord,
+    replaceRow,
+    toggleReplaceBtn,
+  };
+}
+
 // ===========================================================================
 // Search row builder
 // ===========================================================================
@@ -318,22 +344,25 @@ function createSearchInputRow(ctx: SearchPanelContext): HTMLDivElement {
   searchRow.className = CSS.searchRow;
 
   const { caseSensitive: initCase, isRegexp: initRegexp, wholeWord: initWord } = ctx.getToggles();
-  ctx.toggleCase = createToggle("Aa", "Match Case", initCase, (v) => {
+  const toggleCase = createToggle("Aa", "Match Case", initCase, (v) => {
     setSearchUiState(view, { caseSensitive: v });
     ctx.commitQuery();
   });
-  ctx.toggleRegex = createToggle(".*", "Use Regular Expression", initRegexp, (v) => {
+  const toggleRegex = createToggle(".*", "Use Regular Expression", initRegexp, (v) => {
     setSearchUiState(view, { isRegexp: v });
     ctx.commitQuery();
   });
-  ctx.toggleWord = createToggle("\\b", "Match Whole Word", initWord, (v) => {
+  const toggleWord = createToggle("\\b", "Match Whole Word", initWord, (v) => {
     setSearchUiState(view, { wholeWord: v });
     ctx.commitQuery();
   });
+  ctx.toggleCase = toggleCase;
+  ctx.toggleRegex = toggleRegex;
+  ctx.toggleWord = toggleWord;
 
   const toggleGroup = document.createElement("div");
   toggleGroup.className = CSS.searchToggles;
-  toggleGroup.append(ctx.toggleCase, ctx.toggleRegex, ctx.toggleWord);
+  toggleGroup.append(toggleCase, toggleRegex, toggleWord);
 
   const navGroup = document.createElement("div");
   navGroup.className = CSS.searchNav;
@@ -461,13 +490,6 @@ function buildSearchPanelContext(
     searchInput,
     replaceInput,
     matchInfo,
-    // Assigned by createSearchInputRow:
-    toggleCase: null as unknown as HTMLButtonElement,
-    toggleRegex: null as unknown as HTMLButtonElement,
-    toggleWord: null as unknown as HTMLButtonElement,
-    // Assigned by assembleSearchPanelDom:
-    replaceRow: null as unknown as HTMLDivElement,
-    toggleReplaceBtn: null as unknown as HTMLButtonElement,
     matchCache: null,
 
     getToggles() {
@@ -513,18 +535,19 @@ function buildSearchPanelContext(
     },
 
     syncPanelState() {
+      const controls = getSearchPanelControls(ctx);
       // Read UI state directly via O(1) state field lookup instead of
       // getSearchControllerState which calls countSearchMatches (O(N)).
       const ui = view.state.field(searchUiStateField);
       const { caseSensitive, isRegexp, wholeWord } = ctx.getToggles();
-      ctx.toggleCase.classList.toggle(CSS.searchToggleActive, caseSensitive);
-      ctx.toggleCase.setAttribute("aria-pressed", String(caseSensitive));
-      ctx.toggleRegex.classList.toggle(CSS.searchToggleActive, isRegexp);
-      ctx.toggleRegex.setAttribute("aria-pressed", String(isRegexp));
-      ctx.toggleWord.classList.toggle(CSS.searchToggleActive, wholeWord);
-      ctx.toggleWord.setAttribute("aria-pressed", String(wholeWord));
-      ctx.replaceRow.style.display = ui.replaceVisible ? "" : "none";
-      ctx.toggleReplaceBtn.textContent = ui.replaceVisible ? "\u25be" : "\u25b8";
+      controls.toggleCase.classList.toggle(CSS.searchToggleActive, caseSensitive);
+      controls.toggleCase.setAttribute("aria-pressed", String(caseSensitive));
+      controls.toggleRegex.classList.toggle(CSS.searchToggleActive, isRegexp);
+      controls.toggleRegex.setAttribute("aria-pressed", String(isRegexp));
+      controls.toggleWord.classList.toggle(CSS.searchToggleActive, wholeWord);
+      controls.toggleWord.setAttribute("aria-pressed", String(wholeWord));
+      controls.replaceRow.style.display = ui.replaceVisible ? "" : "none";
+      controls.toggleReplaceBtn.textContent = ui.replaceVisible ? "\u25be" : "\u25b8";
     },
   };
   return ctx;
@@ -572,7 +595,8 @@ function assembleSearchPanelDom(ctx: SearchPanelContext): HTMLDivElement {
   dom.className = CSS.searchPanel;
 
   const searchRow = createSearchInputRow(ctx);
-  ctx.replaceRow = createReplaceRow(ctx);
+  const replaceRow = createReplaceRow(ctx);
+  ctx.replaceRow = replaceRow;
 
   const toggleReplaceBtn = createAction("\u25b8", "Toggle Replace", () => {
     // Read UI state directly via O(1) state field lookup instead of
@@ -586,7 +610,7 @@ function assembleSearchPanelDom(ctx: SearchPanelContext): HTMLDivElement {
   toggleReplaceBtn.className = CSS.searchToggleReplace;
   ctx.toggleReplaceBtn = toggleReplaceBtn;
 
-  dom.append(toggleReplaceBtn, searchRow, ctx.replaceRow);
+  dom.append(toggleReplaceBtn, searchRow, replaceRow);
   return dom;
 }
 
@@ -610,6 +634,7 @@ function buildPanelCallbacks(
     update(update: ViewUpdate) {
       // Read query and UI state directly via O(1) state field lookups
       // instead of getSearchControllerState which calls countSearchMatches (O(N)).
+      const { replaceRow } = getSearchPanelControls(ctx);
       const q = getSearchQuery(update.state);
       if (q.search !== searchInput.value) searchInput.value = q.search;
       if (q.replace !== replaceInput.value) replaceInput.value = q.replace;
@@ -620,7 +645,7 @@ function buildPanelCallbacks(
         q.caseSensitive !== caseSensitive ||
         q.regexp !== isRegexp ||
         q.wholeWord !== wholeWord ||
-        ui.replaceVisible !== (ctx.replaceRow.style.display !== "none")
+        ui.replaceVisible !== (replaceRow.style.display !== "none")
       ) {
         ctx.syncPanelState();
       }

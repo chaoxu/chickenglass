@@ -17,13 +17,13 @@
 
 import { useEffect, useRef } from "react";
 import { isTauri } from "../../lib/tauri";
-import { dispatchFormatEvent } from "../../constants/events";
+import { dispatchFormatEvent, type SimpleFormatEventType } from "../../constants/events";
 
 /**
  * Map from menu-event IDs that dispatch a cf:format event for CM6.
  * To add a new format action, add an entry here.
  */
-const formatEventMap: Record<string, string> = {
+const formatEventMap: Readonly<Record<string, SimpleFormatEventType>> = {
   format_bold: "bold",
   format_italic: "italic",
   format_code: "code",
