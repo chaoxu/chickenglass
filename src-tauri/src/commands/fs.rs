@@ -1,7 +1,9 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
+use same_file::Handle as FileHandle;
 use serde::Serialize;
 use tauri::{State, WebviewWindow, command};
 
@@ -41,6 +43,31 @@ fn install_project_root(
         },
     );
     true
+}
+
+fn write_existing_file(path: &Path, content: &str) -> std::io::Result<()> {
+    let expected = FileHandle::from_path(path)?;
+    write_existing_file_with_handle(path, &expected, content)
+}
+
+fn write_existing_file_with_handle(
+    path: &Path,
+    expected: &FileHandle,
+    content: &str,
+) -> std::io::Result<()> {
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create(false)
+        .open(path)?;
+    let actual = FileHandle::from_file(file.try_clone()?)?;
+    if &actual != expected {
+        return Err(std::io::Error::other(format!(
+            "File changed before write: {}",
+            path.display()
+        )));
+    }
+    file.set_len(0)?;
+    file.write_all(content.as_bytes())
 }
 
 /// Open a folder dialog and set it as the project root.
@@ -87,9 +114,9 @@ pub fn read_file(
 
 /// Write content to a file (must already exist).
 ///
-/// Uses atomic tmp + rename: writes to `.{name}.coflat-tmp` in the same
-/// directory, then renames over the target. Falls back to direct write if
-/// the rename fails (e.g. cross-device or permission issues).
+/// Opens the target only if it still resolves to the same file, so a delete or
+/// replacement between path resolution and the actual write cannot recreate or
+/// redirect the write.
 #[command]
 pub fn write_file(
     window: WebviewWindow,
@@ -98,35 +125,21 @@ pub fn write_file(
     path: String,
     content: String,
 ) -> Result<(), String> {
-    measure_command(&perf, "tauri.write_file", "tauri.fs.write_file", "tauri", Some(&path), || {
-        let project_root = current_project_root(&root, &window)?;
-        let resolved = resolve_existing_path(&project_root, &path)?;
-        if !resolved.exists() {
-            return Err(format!("File not found: {}", path));
-        }
-
-        // Atomic write: tmp file in the same directory, then rename.
-        let file_name = resolved
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "file".to_string());
-        let tmp_name = format!(".{}.coflat-tmp", file_name);
-        let tmp_path = resolved.with_file_name(&tmp_name);
-
-        if let Err(e) = fs::write(&tmp_path, &content) {
-            return Err(format!("Failed to write tmp file '{}': {}", tmp_name, e));
-        }
-
-        match fs::rename(&tmp_path, &resolved) {
-            Ok(()) => Ok(()),
-            Err(_rename_err) => {
-                // Fallback: direct write (e.g. cross-device edge case).
-                let _ = fs::remove_file(&tmp_path);
-                fs::write(&resolved, &content)
-                    .map_err(|e| format!("Failed to write '{}': {}", path, e))
-            }
-        }
-    })
+    measure_command(
+        &perf,
+        "tauri.write_file",
+        "tauri.fs.write_file",
+        "tauri",
+        Some(&path),
+        || {
+            let project_root = current_project_root(&root, &window)?;
+            let resolved = resolve_existing_path(&project_root, &path)?;
+            write_existing_file(&resolved, &content).map_err(|e| match e.kind() {
+                std::io::ErrorKind::NotFound => format!("File not found: {}", path),
+                _ => format!("Failed to write '{}': {}", path, e),
+            })
+        },
+    )
 }
 
 /// Create a new file with optional content.
@@ -454,10 +467,24 @@ fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, 
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::fs;
     use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::install_project_root;
+    use same_file::Handle as FileHandle;
+
+    use super::{install_project_root, write_existing_file, write_existing_file_with_handle};
     use crate::commands::state::ProjectRootEntry;
+
+    fn create_temp_dir(prefix: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("coflat-{prefix}-{unique}"));
+        fs::create_dir_all(&path).expect("create temp dir");
+        path.canonicalize().expect("canonicalize temp dir")
+    }
 
     #[test]
     fn rejects_stale_project_root_generations() {
@@ -583,5 +610,53 @@ mod tests {
         assert_eq!(result[1].path, "docs/note.md");
 
         let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn write_existing_file_overwrites_existing_content() {
+        let dir = create_temp_dir("write-existing");
+        let file = dir.join("note.md");
+        fs::write(&file, "old").unwrap();
+
+        write_existing_file(&file, "new").unwrap();
+
+        assert_eq!(fs::read_to_string(&file).unwrap(), "new");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_existing_file_does_not_recreate_deleted_target() {
+        let dir = create_temp_dir("write-existing-race");
+        let file = dir.join("note.md");
+        fs::write(&file, "old").unwrap();
+        let expected = FileHandle::from_path(&file).unwrap();
+
+        fs::remove_file(&file).unwrap();
+
+        let err = write_existing_file_with_handle(&file, &expected, "new")
+            .expect_err("should fail for deleted file");
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+        assert!(!file.exists(), "deleted file must not be recreated");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_existing_file_rejects_replaced_target() {
+        let dir = create_temp_dir("write-existing-replaced");
+        let file = dir.join("note.md");
+        fs::write(&file, "old").unwrap();
+        let expected = FileHandle::from_path(&file).unwrap();
+
+        fs::remove_file(&file).unwrap();
+        fs::write(&file, "replacement").unwrap();
+
+        let err = write_existing_file_with_handle(&file, &expected, "new")
+            .expect_err("should fail for replaced file");
+        assert_eq!(err.kind(), std::io::ErrorKind::Other);
+        assert_eq!(fs::read_to_string(&file).unwrap(), "replacement");
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
