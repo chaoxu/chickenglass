@@ -53,50 +53,50 @@ export class BackgroundIndexer {
    * Returns the number of entries found in the file.
    */
   async updateFile(file: string, content: string): Promise<number> {
-    if (this.disposed) throw new Error("Indexer disposed");
+    if (this.disposed) throw new Error(`Indexer.updateFile("${file}"): indexer is disposed`);
     this.files = updateFileInIndex(this.files, file, content);
     return this.files.get(file)?.entries.length ?? 0;
   }
 
   /** Remove a file from the index. */
   async removeFile(file: string): Promise<void> {
-    if (this.disposed) throw new Error("Indexer disposed");
+    if (this.disposed) throw new Error(`Indexer.removeFile("${file}"): indexer is disposed`);
     this.files = removeFileFromIndex(this.files, file);
   }
 
   /** Query the index with the given filters. */
   async query(query: IndexQuery): Promise<readonly IndexEntry[]> {
-    if (this.disposed) throw new Error("Indexer disposed");
+    if (this.disposed) throw new Error("Indexer.query: indexer is disposed");
     return queryIndex(this.getDocumentIndex(), query);
   }
 
   /** Query raw source text across indexed files. */
   async querySourceText(query: SourceTextQuery): Promise<readonly IndexEntry[]> {
-    if (this.disposed) throw new Error("Indexer disposed");
+    if (this.disposed) throw new Error("Indexer.querySourceText: indexer is disposed");
     return querySourceText(this.getDocumentIndex(), query);
   }
 
   /** Resolve a label to its index entry. */
   async resolveLabel(label: string): Promise<IndexEntry | undefined> {
-    if (this.disposed) throw new Error("Indexer disposed");
+    if (this.disposed) throw new Error(`Indexer.resolveLabel("${label}"): indexer is disposed`);
     return resolveLabel(this.getDocumentIndex(), label);
   }
 
   /** Find all references to a label across all files. */
   async findReferences(label: string): Promise<readonly ResolvedReference[]> {
-    if (this.disposed) throw new Error("Indexer disposed");
+    if (this.disposed) throw new Error(`Indexer.findReferences("${label}"): indexer is disposed`);
     return findReferences(this.getDocumentIndex(), label);
   }
 
   /** Get the full index for a specific file. */
   async getFileIndex(file: string): Promise<FileIndex | undefined> {
-    if (this.disposed) throw new Error("Indexer disposed");
+    if (this.disposed) throw new Error(`Indexer.getFileIndex("${file}"): indexer is disposed`);
     return this.files.get(file);
   }
 
   /** Get all labels from all indexed files. */
   async getAllLabels(): Promise<readonly string[]> {
-    if (this.disposed) throw new Error("Indexer disposed");
+    if (this.disposed) throw new Error("Indexer.getAllLabels: indexer is disposed");
     const labels: string[] = [];
     for (const [, fileIndex] of this.files) {
       for (const entry of fileIndex.entries) {
