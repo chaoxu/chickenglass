@@ -1,14 +1,17 @@
-import { describe, expect, it, vi } from "vitest";
+import { act, createElement, type FC } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { findDefaultDocumentPath } from "../default-document-path";
+import { collectMdPaths } from "../export";
 import type { FileEntry } from "../file-manager";
+import { mergeChildrenIntoTree } from "./use-app-workspace-session";
 import {
   buildTreeIndex,
   createFileTreeHotkeys,
   flattenVisibleEntries,
   resolveFileTreeKey,
+  useFileTreeController,
 } from "./use-file-tree-controller";
-import { mergeChildrenIntoTree } from "./use-app-workspace-session";
-import { findDefaultDocumentPath } from "../default-document-path";
-import { collectMdPaths } from "../export";
 
 function file(
   path: string,
@@ -20,6 +23,14 @@ function file(
     isDirectory: Boolean(children),
     children,
   };
+}
+
+function requireController(
+  controller: ReturnType<typeof useFileTreeController> | null,
+  message: string,
+) {
+  if (!controller) throw new Error(message);
+  return controller;
 }
 
 describe("flattenVisibleEntries", () => {
@@ -195,6 +206,72 @@ describe("createFileTreeHotkeys", () => {
     handler(undefined as never, tree as never);
 
     expect(onSelect).not.toHaveBeenCalled();
+  });
+});
+
+describe("useFileTreeController", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it("keeps hotkeys stable while dispatching to the latest onSelect", () => {
+    const initialSelect = vi.fn();
+    const latestSelect = vi.fn();
+    const treeRoot: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "index.md", path: "index.md", isDirectory: false },
+      ],
+    };
+    let controller: ReturnType<typeof useFileTreeController> | null = null;
+
+    const Harness: FC<{ onSelect: (path: string) => void }> = ({ onSelect }) => {
+      controller = useFileTreeController({ root: treeRoot, onSelect });
+      return null;
+    };
+
+    act(() => root.render(createElement(Harness, { onSelect: initialSelect })));
+
+    const firstController = requireController(
+      controller,
+      "controller missing after first render",
+    );
+
+    const firstHotkeys = firstController.tree.getConfig().hotkeys;
+    act(() => {
+      firstController.tree.getItems()[0]?.setFocused();
+    });
+
+    act(() => root.render(createElement(Harness, { onSelect: latestSelect })));
+
+    const latestController = requireController(
+      controller,
+      "controller missing after rerender",
+    );
+
+    const hotkeys = latestController.tree.getConfig().hotkeys;
+    const handler = hotkeys?.customActivateFocusedItem?.handler;
+
+    expect(hotkeys).toBe(firstHotkeys);
+    expect(handler).toBeTypeOf("function");
+    if (!handler) throw new Error("customActivateFocusedItem hotkey missing");
+
+    handler(undefined as never, latestController.tree as never);
+
+    expect(initialSelect).not.toHaveBeenCalled();
+    expect(latestSelect).toHaveBeenCalledWith("index.md");
   });
 });
 
