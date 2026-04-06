@@ -49,6 +49,7 @@ async function loadTests(filter) {
 async function main() {
   const { getFlag, getIntFlag } = createArgParser();
   const port = getIntFlag("--port", 9322);
+  const url = getFlag("--url");
   const filterArg = getFlag("--filter", "");
   const filter = filterArg ? filterArg.split(",").map((s) => s.trim()) : [];
 
@@ -58,7 +59,7 @@ async function main() {
   // Connect to Chrome
   let page;
   try {
-    page = await connectEditor(port);
+    page = await connectEditor(port, { url });
   } catch (err) {
     console.error("Failed to connect to Chrome via CDP.");
     console.error("Make sure both are running:");

@@ -11,10 +11,10 @@
 
 import console from "node:console";
 import process from "node:process";
-import { connectToChrome, findFirstPage, parseChromeArgs } from "./chrome-common.mjs";
+import { connectToChrome, findAppPage, inspectBrowserPages, parseChromeArgs } from "./chrome-common.mjs";
 import { screenshot } from "./test-helpers.mjs";
 
-const { port } = parseChromeArgs();
+const { port, url } = parseChromeArgs();
 
 const browser = await connectToChrome(port);
 if (!browser) {
@@ -23,9 +23,13 @@ if (!browser) {
   process.exit(1);
 }
 
-const page = await findFirstPage(browser);
+const page = await findAppPage(browser, { targetUrl: url });
 if (!page) {
-  console.error("No page found. Is Chrome running with npm run chrome:app?");
+  const pages = await inspectBrowserPages(browser, { targetUrl: url });
+  const summary = pages.length > 0
+    ? pages.map((entry) => `[${entry.contextIndex}:${entry.pageIndex}] ${entry.url || "<blank>"}`).join(" | ")
+    : "<none>";
+  console.error(`No app page found for ${url}. Open pages: ${summary}`);
   await browser.close();
   process.exit(1);
 }
