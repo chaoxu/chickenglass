@@ -20,7 +20,7 @@ import {
   getPlugin,
   pluginRegistryField,
 } from "../plugins";
-import { buildCrossrefPreviewContent } from "../render/hover-preview";
+import { buildCrossrefCompletionPreviewContent } from "../render/hover-preview";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 
 const CROSSREF_SECTION = { name: "Cross-references", rank: 0 } as const;
@@ -237,7 +237,7 @@ function renderReferenceCompletionPreview(
   }
 
   return isSemanticReferenceCompletion(completion)
-    ? buildCrossrefPreviewContent(view, completion.label)
+    ? buildCrossrefCompletionPreviewContent(view, completion.label)
     : null;
 }
 
