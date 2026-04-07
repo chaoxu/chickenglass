@@ -11,7 +11,7 @@ import { type EditorState, StateField, type Transaction } from "@codemirror/stat
 import type { NumberingScheme } from "../parser/frontmatter";
 import type { PluginRegistryState } from "./plugin-registry";
 import { getPluginOrFallback, pluginRegistryField } from "./plugin-registry";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,

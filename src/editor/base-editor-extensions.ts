@@ -5,7 +5,7 @@ import type { Extension } from "@codemirror/state";
 import type { MarkdownExtension } from "@lezer/markdown";
 import { classHighlighter } from "@lezer/highlight";
 
-import { projectConfigFacet, type ProjectConfig } from "./project-config";
+import { projectConfigFacet, type ProjectConfig } from "../project-config";
 import { markdownExtensions } from "../parser";
 import { highlightExtension } from "../parser/highlight";
 import { mathExtension } from "../parser/math-backslash";

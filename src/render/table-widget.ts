@@ -1,7 +1,6 @@
 import { Annotation } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { createInlineEditor } from "../editor";
-import { bibDataField } from "../citations/citation-render";
+import { createInlineEditor } from "../inline-editor";
 import { renderInlineMarkdown } from "./inline-render";
 import { showWidgetContextMenu, applyTableMutation } from "./table-actions";
 import {
@@ -12,6 +11,7 @@ import {
 import { addRow, formatTable, type ParsedTable } from "./table-utils";
 import { requestScrollStabilizedMeasure } from "./scroll-anchor";
 import { RenderWidget } from "./widget-core";
+import { bibDataField } from "../state/bib-data";
 
 /**
  * Annotation attached to transactions dispatched by cell-edit sync.

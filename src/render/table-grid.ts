@@ -49,7 +49,7 @@ import {
 import { createSimpleTextWidget } from "./render-core";
 import { ContextMenu } from "../lib/context-menu";
 import type { ContextMenuItem } from "../lib/context-menu";
-import { programmaticDocumentChangeAnnotation } from "../editor/programmatic-document-change";
+import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 import {
   addRow,
   addColumn,

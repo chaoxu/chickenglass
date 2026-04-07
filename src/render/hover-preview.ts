@@ -22,8 +22,7 @@ import {
   resolveCrossref,
 } from "../index/crossref-resolver";
 import type { ReferenceSemantics } from "../semantics/document";
-import { blockCounterField, type NumberedBlock } from "../plugins";
-import { bibDataField, type BibStore } from "../citations/citation-render";
+import { blockCounterField, type NumberedBlock } from "../plugins/block-counter";
 import {
   buildCitationPreviewContent,
   formatCitationPreview,
@@ -37,7 +36,6 @@ import {
   createPreviewSurfaceHeader,
   createPreviewSurfaceShell,
 } from "../preview-surface";
-import { getPlugin, pluginRegistryField } from "../plugins";
 import { documentPathFacet, type BlockCounterEntry } from "../lib/types";
 import { isPdfTarget } from "../lib/pdf-target";
 import { documentAnalysisField } from "../semantics/codemirror-source";
@@ -45,6 +43,8 @@ import { collectImageTargets } from "../app/pdf-image-previews";
 import { imageUrlField } from "./image-url-cache";
 import { resolveLocalMediaPreview } from "./media-preview";
 import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
+import { getPlugin, pluginRegistryField } from "../plugins/plugin-registry";
+import { type BibStore, bibDataField } from "../state/bib-data";
 
 // ── Singleton tooltip element ───────────────────────────────────────────────
 
