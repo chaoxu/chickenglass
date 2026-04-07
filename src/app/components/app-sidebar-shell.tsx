@@ -10,26 +10,22 @@ import {
   SidebarTrigger,
 } from "./sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import type { AppEditorShellController } from "../hooks/use-app-editor-shell";
-import type {
-  AppWorkspaceSessionController,
-  SidebarTab,
-} from "../hooks/use-app-workspace-session";
+import { useAppEditorController } from "../contexts/app-editor-context";
+import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import { usePersistentTreeState } from "../hooks/use-file-tree-controller";
+import type { SidebarLayoutController, SidebarTab } from "../hooks/use-sidebar-layout";
 import { isRuntimeLogPanelEnabled } from "../runtime-logger";
 
 interface AppSidebarShellProps {
-  workspace: Pick<
-    AppWorkspaceSessionController,
-    "sidebarTab" | "setSidebarTab" | "fileTree" | "loadChildren"
-  >;
-  editor: Pick<
-    AppEditorShellController,
-    "currentPath" | "openFile" | "handleRename" | "handleDelete" | "createFile" | "createDirectory" | "headings" | "diagnostics" | "handleOutlineSelect" | "editorState"
+  sidebarLayout: Pick<
+    SidebarLayoutController,
+    "sidebarTab" | "setSidebarTab"
   >;
 }
 
-export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
+export function AppSidebarShell({ sidebarLayout }: AppSidebarShellProps) {
+  const workspace = useAppWorkspaceController();
+  const editor = useAppEditorController();
   const fileTreePersistRef = usePersistentTreeState();
   const showRuntimeLogs = isRuntimeLogPanelEnabled();
 
@@ -44,9 +40,9 @@ export function AppSidebarShell({ workspace, editor }: AppSidebarShellProps) {
         </SidebarHeader>
 
         <Tabs
-          value={workspace.sidebarTab}
+          value={sidebarLayout.sidebarTab}
           onValueChange={(value) => {
-            workspace.setSidebarTab(value as SidebarTab);
+            sidebarLayout.setSidebarTab(value as SidebarTab);
           }}
           className="flex min-h-0 flex-1 flex-col"
         >

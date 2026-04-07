@@ -7,35 +7,27 @@ import { SettingsDialog } from "./settings-dialog";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 import { PerfDebugPanel } from "./perf-debug-panel";
+import { useAppEditorController } from "../contexts/app-editor-context";
+import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import type { UseDialogsReturn } from "../hooks/use-dialogs";
-import type { AppEditorShellController } from "../hooks/use-app-editor-shell";
 import { useEditorTelemetry } from "../stores/editor-telemetry-store";
 import type { AppOverlayController } from "../hooks/use-app-overlays";
-import type { AppWorkspaceSessionController } from "../hooks/use-app-workspace-session";
 import type { UseUnsavedChangesDialogReturn } from "../hooks/use-unsaved-changes-dialog";
 import { getAppSearchMode } from "../search";
 
 interface AppOverlaysProps {
-  workspace: Pick<
-    AppWorkspaceSessionController,
-    "settings" | "updateSetting" | "theme" | "setTheme"
-  >;
-  editor: Pick<
-    AppEditorShellController,
-    "handleSearchResult" | "pluginManager" | "handleGotoLine" | "handleOutlineSelect" | "editorMode"
-  >;
   dialogs: UseDialogsReturn;
   overlays: AppOverlayController;
   unsavedChanges: UseUnsavedChangesDialogReturn;
 }
 
 export function AppOverlays({
-  workspace,
-  editor,
   dialogs,
   overlays,
   unsavedChanges,
 }: AppOverlaysProps) {
+  const workspace = useAppWorkspaceController();
+  const editor = useAppEditorController();
   const currentLine = useEditorTelemetry((s) => s.cursorLine);
 
   return (

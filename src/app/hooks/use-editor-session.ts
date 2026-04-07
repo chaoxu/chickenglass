@@ -136,6 +136,12 @@ export function useEditorSession({
   const pipeline = useMemo(() => new SavePipeline(
     (path, content, sourceMap) => writeDocumentSnapshotRef.current(path, content, sourceMap),
   ), []);
+  const clearPathBuffers = useCallback((path: string) => {
+    pipeline.clear(path);
+    buffers.current.delete(path);
+    liveDocs.current.delete(path);
+    sourceMaps.current.delete(path);
+  }, [pipeline]);
 
   const commitSessionState = useCallback((
     nextState: EditorSessionState,
@@ -315,10 +321,7 @@ export function useEditorSession({
 
         const previousPath = stateRef.current.currentDocument?.path ?? null;
         if (previousPath && previousPath !== path) {
-          pipeline.clear(previousPath);
-          buffers.current.delete(previousPath);
-          liveDocs.current.delete(previousPath);
-          sourceMaps.current.delete(previousPath);
+          clearPathBuffers(previousPath);
         }
 
         const documentText = createEditorDocumentText(content);
@@ -342,6 +345,7 @@ export function useEditorSession({
     }, path);
   }, [
     addRecentFile,
+    clearPathBuffers,
     commitSessionState,
     fs,
     pipeline,
@@ -364,10 +368,7 @@ export function useEditorSession({
 
     const previousPath = stateRef.current.currentDocument?.path ?? null;
     if (previousPath && previousPath !== path) {
-      pipeline.clear(previousPath);
-      buffers.current.delete(previousPath);
-      liveDocs.current.delete(previousPath);
-      sourceMaps.current.delete(previousPath);
+      clearPathBuffers(previousPath);
     }
 
     const emptyDoc = emptyEditorDocument;
@@ -383,7 +384,7 @@ export function useEditorSession({
       }),
       { editorDoc: content },
     );
-  }, [commitSessionState, pipeline, prepareCurrentDocumentForTransition]);
+  }, [clearPathBuffers, commitSessionState, prepareCurrentDocumentForTransition]);
 
   const reloadFile = useCallback(async (path: string) => {
     if (!hasSessionPath(stateRef.current, path)) return;
@@ -391,7 +392,7 @@ export function useEditorSession({
     try {
       const content = await fs.readFile(path);
       const documentText = createEditorDocumentText(content);
-      sourceMaps.current.delete(path);
+      clearPathBuffers(path);
       buffers.current.set(path, documentText);
       liveDocs.current.set(path, documentText);
       pipeline.initPath(path, content);
@@ -405,7 +406,7 @@ export function useEditorSession({
       console.error("[session] reload failed:", path, e);
       throw e;
     }
-  }, [commitSessionState, fs, pipeline]);
+  }, [clearPathBuffers, commitSessionState, fs, pipeline]);
 
   const createFile = useCallback(async (path: string) => {
     try {
@@ -443,16 +444,13 @@ export function useEditorSession({
       if (!canClose) return false;
     }
 
-    pipeline.clear(currentDocument.path);
-    buffers.current.delete(currentDocument.path);
-    liveDocs.current.delete(currentDocument.path);
-    sourceMaps.current.delete(currentDocument.path);
+    clearPathBuffers(currentDocument.path);
     commitSessionState(
       clearSessionDocument(stateRef.current, currentDocument.path),
       { editorDoc: "" },
     );
     return true;
-  }, [commitSessionState, pipeline, prepareCurrentDocumentForTransition]);
+  }, [clearPathBuffers, commitSessionState, prepareCurrentDocumentForTransition]);
 
   const handleWindowCloseRequest = useCallback(async (): Promise<boolean> => {
     return prepareCurrentDocumentForTransition("close-window");

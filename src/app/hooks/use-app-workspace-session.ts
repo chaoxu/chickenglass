@@ -93,8 +93,6 @@ export function mergeChildrenIntoTree(
   return changed ? { ...tree, children: mapped } : tree;
 }
 
-export type SidebarTab = "files" | "outline" | "diagnostics" | "runtime";
-
 export interface AppWorkspaceSessionController {
   settings: ReturnType<typeof useSettings>["settings"];
   updateSetting: ReturnType<typeof useSettings>["updateSetting"];
@@ -114,14 +112,6 @@ export interface AppWorkspaceSessionController {
   /** Load children for a single directory and merge into the tree. */
   loadChildren: (dirPath: string) => Promise<void>;
   projectConfig: ProjectConfig;
-  sidebarCollapsed: boolean;
-  setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
-  sidebarWidth: number;
-  setSidebarWidth: React.Dispatch<React.SetStateAction<number>>;
-  sidebarTab: SidebarTab;
-  setSidebarTab: React.Dispatch<React.SetStateAction<SidebarTab>>;
-  sidenotesCollapsed: boolean;
-  setSidenotesCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   startupComplete: boolean;
   openProjectRoot: (path: string) => Promise<FileEntry | null>;
   handleOpenFolder: () => void;
@@ -150,10 +140,6 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
 
   const [fileTree, setFileTree] = useState<FileEntry | null>(null);
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>({});
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(224);
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
-  const [sidenotesCollapsed, setSidenotesCollapsed] = useState(true);
   const [startupComplete, setStartupComplete] = useState(false);
   const workspaceRequestRef = useRef(0);
 
@@ -367,14 +353,6 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     refreshTree,
     loadChildren,
     projectConfig,
-    sidebarCollapsed,
-    setSidebarCollapsed,
-    sidebarWidth,
-    setSidebarWidth,
-    sidebarTab,
-    setSidebarTab,
-    sidenotesCollapsed,
-    setSidenotesCollapsed,
     startupComplete,
     openProjectRoot,
     handleOpenFolder,

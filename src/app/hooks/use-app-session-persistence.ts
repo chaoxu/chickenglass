@@ -3,6 +3,7 @@ import type { FileEntry } from "../file-manager";
 import { findDefaultDocumentPath } from "../default-document-path";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
+import type { SidebarLayoutController } from "./use-sidebar-layout";
 
 interface AppSessionPersistenceDeps {
   fileTree: FileEntry | null;
@@ -13,7 +14,11 @@ interface AppSessionPersistenceDeps {
   workspaceRequestRef: { readonly current: number };
   workspace: Pick<
     AppWorkspaceSessionController,
-    "windowState" | "saveWindowState" | "sidebarCollapsed" | "sidebarWidth" | "setSidebarCollapsed" | "setSidebarWidth" | "startupComplete"
+    "windowState" | "saveWindowState" | "startupComplete"
+  >;
+  sidebarLayout: Pick<
+    SidebarLayoutController,
+    "sidebarCollapsed" | "sidebarWidth" | "setSidebarCollapsed" | "setSidebarWidth"
   >;
   editor: Pick<
     AppEditorShellController,
@@ -26,6 +31,7 @@ export function useAppSessionPersistence({
   listChildren,
   workspaceRequestRef,
   workspace,
+  sidebarLayout,
   editor,
 }: AppSessionPersistenceDeps): void {
   const didInitRef = useRef(false);
@@ -33,12 +39,14 @@ export function useAppSessionPersistence({
   const {
     windowState,
     saveWindowState,
+    startupComplete,
+  } = workspace;
+  const {
     sidebarCollapsed,
     sidebarWidth,
     setSidebarCollapsed,
     setSidebarWidth,
-    startupComplete,
-  } = workspace;
+  } = sidebarLayout;
   const {
     currentDocument,
     currentPath,
