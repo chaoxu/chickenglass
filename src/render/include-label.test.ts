@@ -119,6 +119,7 @@ describe("includeLabelPlugin", () => {
         to: from + "intro.md".length,
         insert: "proof.md",
       },
+      selection: { anchor: from },
     });
 
     const afterAnalysis = v.state.field(documentAnalysisField);
