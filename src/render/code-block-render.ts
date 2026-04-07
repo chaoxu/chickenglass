@@ -37,13 +37,15 @@ import {
   type FencedBlockInfo,
 } from "../fenced-block/model";
 import {
-  RenderWidget,
   editorFocusField,
   focusEffect,
   focusTracker,
-  pushWidgetDecoration,
+} from "./focus-state";
+import { pushWidgetDecoration } from "./decoration-core";
+import {
+  RenderWidget,
   SimpleTextRenderWidget,
-} from "./render-utils";
+} from "./widget-core";
 import {
   buildFencedBlockDecorations,
   type FencedBlockRenderContext,

@@ -11,14 +11,13 @@ import {
 import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import {
   type VisibleRange,
-  buildDecorations,
-  cursorInRange,
   diffVisibleRanges,
   mergeRanges,
-  pushWidgetDecoration,
-  RenderWidget,
   snapshotRanges,
-} from "./render-utils";
+} from "./viewport-diff";
+import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
+import { cursorInRange } from "./node-collection";
+import { RenderWidget } from "./widget-core";
 import { imageUrlField } from "./image-url-cache";
 import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 import {

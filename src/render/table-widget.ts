@@ -10,7 +10,8 @@ import {
   findTablesInState,
 } from "./table-discovery";
 import { addRow, formatTable, type ParsedTable } from "./table-utils";
-import { RenderWidget, requestScrollStabilizedMeasure } from "./render-utils";
+import { requestScrollStabilizedMeasure } from "./scroll-anchor";
+import { RenderWidget } from "./widget-core";
 
 /**
  * Annotation attached to transactions dispatched by cell-edit sync.

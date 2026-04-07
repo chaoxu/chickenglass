@@ -42,19 +42,23 @@ import {
 } from "@codemirror/state";
 
 import {
-  buildDecorations,
-  createBooleanToggleField,
-  createDecorationsField,
-  cursorInRange,
-  pushWidgetDecoration,
   addMarkerReplacement,
-  cloneRenderedHTMLElement,
-  serializeMacros,
-  RenderWidget,
-  SimpleTextRenderWidget,
+  buildDecorations,
+  pushWidgetDecoration,
+} from "./decoration-core";
+import { createDecorationsField } from "./decoration-field";
+import {
+  createBooleanToggleField,
   editorFocusField,
   focusTracker,
-} from "./render-utils";
+} from "./focus-state";
+import { cursorInRange } from "./node-collection";
+import {
+  cloneRenderedHTMLElement,
+  RenderWidget,
+  SimpleTextRenderWidget,
+  serializeMacros,
+} from "./widget-core";
 import { mathMacrosField } from "./math-macros";
 import {
   type FootnoteDefinition,

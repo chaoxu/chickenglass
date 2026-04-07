@@ -21,7 +21,8 @@ import {
   StateEffect,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { createBooleanToggleField, createSimpleViewPlugin } from "./render-utils";
+import { createBooleanToggleField } from "./focus-state";
+import { createSimpleViewPlugin } from "./view-plugin-factories";
 
 /** Effect to toggle the debug inspector on/off. */
 const toggleDebugEffect = StateEffect.define<boolean>();

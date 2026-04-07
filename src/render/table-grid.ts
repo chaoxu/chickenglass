@@ -61,7 +61,7 @@ import {
   formatTable,
   type ParsedTable,
 } from "./table-utils";
-import { mergeRanges, type VisibleRange } from "./render-utils";
+import { mergeRanges, type VisibleRange } from "./viewport-diff";
 
 // ---------------------------------------------------------------------------
 // Bypass annotation — table operations dispatch with this so the

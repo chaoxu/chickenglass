@@ -7,7 +7,7 @@ import type { MathSemantics } from "../semantics/document";
 import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
 import { isPlainPrimaryMouseEvent, resolveClickToSourcePos } from "./math-interactions";
 import { findMathRegionAtPos } from "./math-source";
-import { MacroAwareWidget, widgetSourceMap } from "./render-utils";
+import { MacroAwareWidget, widgetSourceMap } from "./widget-core";
 
 const KATEX_STYLE_ID = "cf-katex-styles";
 

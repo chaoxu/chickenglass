@@ -46,7 +46,7 @@ import {
   createFencedBlockDecorationField,
   mathMacrosField,
 } from "../render/render-core";
-import { mutateWithScrollStabilizedMeasure } from "../render/render-utils";
+import { mutateWithScrollStabilizedMeasure } from "../render/scroll-anchor";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import {

@@ -42,7 +42,9 @@ import {
   type ClusteredCrossrefPart,
   type MixedClusterPart,
 } from "./crossref-render";
-import { buildDecorations, cursorInRange, pushWidgetDecoration, createSimpleViewPlugin } from "./render-utils";
+import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
+import { cursorInRange } from "./node-collection";
+import { createSimpleViewPlugin } from "./view-plugin-factories";
 import { blockCounterField, pluginRegistryField } from "../plugins";
 import {
   documentAnalysisField,

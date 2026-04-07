@@ -25,13 +25,15 @@ import {
 import { MathWidget } from "./math-widget";
 import {
   buildDecorations,
-  cursorInRange,
+  pushWidgetDecoration,
+} from "./decoration-core";
+import {
   editorFocusField,
   focusEffect,
   focusTracker,
-  pushWidgetDecoration,
-  serializeMacros,
-} from "./render-utils";
+} from "./focus-state";
+import { cursorInRange } from "./node-collection";
+import { serializeMacros } from "./widget-core";
 
 export { renderKatexToHtml } from "./inline-shared";
 export {

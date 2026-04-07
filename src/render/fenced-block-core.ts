@@ -4,11 +4,10 @@ import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import type { FencedBlockInfo } from "../fenced-block/model";
 import {
   buildDecorations,
-  createDecorationsField,
   decorationHidden,
-  editorFocusField,
-  focusEffect,
-} from "./render-utils";
+} from "./decoration-core";
+import { createDecorationsField } from "./decoration-field";
+import { editorFocusField, focusEffect } from "./focus-state";
 import { CSS } from "../constants/css-classes";
 
 export { findFencedBlockAt, type FencedBlockInfo } from "../fenced-block/model";
