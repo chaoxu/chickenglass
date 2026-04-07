@@ -1,4 +1,3 @@
-import { syntaxTree } from "@codemirror/language";
 import {
   type EditorState,
   StateField,
@@ -7,18 +6,20 @@ import {
 } from "@codemirror/state";
 import { isIdentChar, isSpaceTab } from "../parser/char-utils";
 import { readBracedLabelId } from "../parser/label-utils";
-import { formatBlockHeader } from "../plugins/block-render";
 import {
   blockCounterField,
-  getPluginOrFallback,
   pluginRegistryField,
 } from "../plugins";
-import { documentAnalysisField, editorStateTextSource } from "./codemirror-source";
+import { documentAnalysisField } from "./codemirror-source";
 import {
-  analyzeDocumentSemantics,
   findTrailingHeadingAttributes,
   type DocumentAnalysis,
 } from "./document";
+import {
+  buildEditorDocumentReferenceCatalog,
+  getDocumentAnalysisOrRecompute,
+} from "./editor-reference-catalog";
+import type { DocumentReferenceCatalog } from "./reference-catalog";
 
 const EMPTY_DEFINITIONS: readonly DocumentLabelDefinition[] = [];
 const EMPTY_REFERENCES: readonly DocumentLabelReference[] = [];
@@ -76,13 +77,6 @@ interface TokenSpan {
   readonly tokenTo: number;
   readonly labelFrom: number;
   readonly labelTo: number;
-}
-
-function getAnalysisOrRecompute(state: EditorState): DocumentAnalysis {
-  return (
-    state.field(documentAnalysisField, false)
-    ?? analyzeDocumentSemantics(editorStateTextSource(state), syntaxTree(state))
-  );
 }
 
 function isValidTokenBoundary(text: string, pos: number): boolean {
@@ -292,13 +286,13 @@ function buildReferencesByTarget(
 }
 
 function buildHeadingDefinitions(
-  analysis: DocumentAnalysis,
+  catalog: DocumentReferenceCatalog,
   doc: Text,
 ): DocumentLabelDefinition[] {
   const definitions: DocumentLabelDefinition[] = [];
 
-  for (const heading of analysis.headings) {
-    if (!heading.id) continue;
+  for (const heading of catalog.targets) {
+    if (heading.kind !== "heading" || !heading.id) continue;
     const span = findHeadingIdSpan(
       doc.sliceString(heading.from, heading.to),
       heading.from,
@@ -314,9 +308,9 @@ function buildHeadingDefinitions(
       tokenTo: span.tokenTo,
       labelFrom: span.labelFrom,
       labelTo: span.labelTo,
-      displayLabel: heading.number ? `Section ${heading.number}` : heading.text,
-      number: heading.number || undefined,
-      title: heading.text,
+      displayLabel: heading.displayLabel,
+      number: heading.number,
+      title: heading.title,
     });
   }
 
@@ -324,12 +318,18 @@ function buildHeadingDefinitions(
 }
 
 function buildEquationDefinitions(
+  catalog: DocumentReferenceCatalog,
   analysis: DocumentAnalysis,
   doc: Text,
 ): DocumentLabelDefinition[] {
   const definitions: DocumentLabelDefinition[] = [];
-
   for (const equation of analysis.equations) {
+    const target = catalog.targetsById.get(equation.id)
+      ?.find((candidate) => candidate.kind === "equation" && candidate.from === equation.from)
+      ?? catalog.targetsById.get(equation.id)
+        ?.find((candidate) => candidate.kind === "equation");
+    if (!target) continue;
+
     const span = findEquationLabelSpan(
       doc.sliceString(equation.labelFrom, equation.labelTo),
       equation.labelFrom,
@@ -346,9 +346,9 @@ function buildEquationDefinitions(
       tokenTo: span.tokenTo,
       labelFrom: span.labelFrom,
       labelTo: span.labelTo,
-      displayLabel: `Eq. (${equation.number})`,
-      number: String(equation.number),
-      text: equation.latex,
+      displayLabel: target.displayLabel,
+      number: target.number,
+      text: target.text,
     });
   }
 
@@ -356,18 +356,14 @@ function buildEquationDefinitions(
 }
 
 function buildBlockDefinitions(
-  state: EditorState,
+  catalog: DocumentReferenceCatalog,
   analysis: DocumentAnalysis,
   doc: Text,
 ): DocumentLabelDefinition[] {
-  const counters = state.field(blockCounterField, false);
-  if (!counters) return [];
-
-  const registry = state.field(pluginRegistryField, false);
   const definitions: DocumentLabelDefinition[] = [];
 
-  for (const block of counters.blocks) {
-    if (!block.id) continue;
+  for (const block of catalog.targets) {
+    if (block.kind !== "block" || !block.id) continue;
     const div = analysis.fencedDivByFrom.get(block.from);
     if (!div || div.attrFrom === undefined || div.attrTo === undefined) continue;
 
@@ -378,29 +374,19 @@ function buildBlockDefinitions(
     );
     if (!span) continue;
 
-    const attrs = {
-      type: block.type,
-      id: block.id,
-      title: div.title,
-      number: block.number,
-    };
-    const plugin = registry ? getPluginOrFallback(registry, block.type) : undefined;
-
     definitions.push({
       id: block.id,
       kind: "block",
-      blockType: block.type,
+      blockType: block.blockType,
       from: block.from,
       to: block.to,
       tokenFrom: span.tokenFrom,
       tokenTo: span.tokenTo,
       labelFrom: span.labelFrom,
       labelTo: span.labelTo,
-      displayLabel: plugin
-        ? plugin.render(attrs).header
-        : formatBlockHeader(block.type, attrs),
-      number: String(block.number),
-      title: div.title,
+      displayLabel: block.displayLabel,
+      number: block.number,
+      title: block.title,
     });
   }
 
@@ -408,30 +394,29 @@ function buildBlockDefinitions(
 }
 
 function buildDefinitions(
-  state: EditorState,
+  catalog: DocumentReferenceCatalog,
   analysis: DocumentAnalysis,
   doc: Text,
 ): DocumentLabelDefinition[] {
   const definitions = [
-    ...buildHeadingDefinitions(analysis, doc),
-    ...buildBlockDefinitions(state, analysis, doc),
-    ...buildEquationDefinitions(analysis, doc),
+    ...buildHeadingDefinitions(catalog, doc),
+    ...buildBlockDefinitions(catalog, analysis, doc),
+    ...buildEquationDefinitions(catalog, analysis, doc),
   ];
   definitions.sort((a, b) => (a.from - b.from) || (a.to - b.to));
   return definitions;
 }
 
 function buildReferences(
-  analysis: DocumentAnalysis,
+  catalog: DocumentReferenceCatalog,
   doc: Text,
-  definitionsById: ReadonlyMap<string, readonly DocumentLabelDefinition[]>,
 ): DocumentLabelReference[] {
   const references: DocumentLabelReference[] = [];
 
-  for (const ref of analysis.references) {
+  for (const ref of catalog.references) {
     if (!ref.bracketed) {
       const id = ref.ids[0];
-      if (!id || !definitionsById.has(id)) continue;
+      if (!id || !catalog.targetsById.has(id)) continue;
       references.push({
         id,
         from: ref.from,
@@ -454,7 +439,7 @@ function buildReferences(
       const span = findBracketedOccurrenceSpan(raw, ref.from, id, searchFrom);
       if (!span) continue;
       searchFrom = span.tokenTo - ref.from;
-      if (!definitionsById.has(id)) continue;
+      if (!catalog.targetsById.has(id)) continue;
 
       references.push({
         id,
@@ -488,11 +473,12 @@ export function isValidDocumentLabelId(id: string): boolean {
 }
 
 export function buildDocumentLabelGraph(state: EditorState): DocumentLabelGraph {
-  const analysis = getAnalysisOrRecompute(state);
+  const analysis = getDocumentAnalysisOrRecompute(state);
+  const catalog = buildEditorDocumentReferenceCatalog(state, analysis);
   const doc = state.doc;
-  const definitions = buildDefinitions(state, analysis, doc);
+  const definitions = buildDefinitions(catalog, analysis, doc);
   const definitionsById = buildDefinitionsById(definitions);
-  const references = buildReferences(analysis, doc, definitionsById);
+  const references = buildReferences(catalog, doc);
 
   return {
     definitions,

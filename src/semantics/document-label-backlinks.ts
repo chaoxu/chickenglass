@@ -1,6 +1,6 @@
 import { type EditorState } from "@codemirror/state";
 import {
-  documentLabelGraphField,
+  buildDocumentLabelGraph,
   findDocumentLabelBacklinks,
   type DocumentLabelDefinition,
   type DocumentLabelGraph,
@@ -107,7 +107,7 @@ function readyResult(
   definition: DocumentLabelDefinition,
   source: DocumentLabelBacklinksResult["source"],
 ): DocumentLabelBacklinksLookup {
-  const graph = state.field(documentLabelGraphField);
+  const graph = buildDocumentLabelGraph(state);
   return {
     kind: "ready",
     result: {
@@ -133,7 +133,7 @@ function duplicateResult(
 export function resolveDocumentLabelBacklinks(
   state: EditorState,
 ): DocumentLabelBacklinksLookup {
-  const graph = state.field(documentLabelGraphField);
+  const graph = buildDocumentLabelGraph(state);
   const selection = state.selection.main;
 
   const reference = findMatchingReference(graph, selection.from, selection.to);

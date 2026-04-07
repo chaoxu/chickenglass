@@ -8,6 +8,10 @@ import {
   type FencedDivSemantics,
 } from "../semantics/document";
 import { analyzeMarkdownSemantics } from "../semantics/markdown-analysis";
+import {
+  buildDocumentReferenceCatalog,
+  type DocumentReferenceCatalog,
+} from "../semantics/reference-catalog";
 import type { IndexEntry, IndexReference, FileIndex } from "./query-api";
 
 export function extractFileIndex(
@@ -29,40 +33,78 @@ function extractFromAnalysis(
   entries: IndexEntry[],
   references: IndexReference[],
 ): void {
-  for (const div of analysis.fencedDivs) {
+  const catalog = buildDocumentReferenceCatalog(analysis);
+  appendBlockEntries(content, file, analysis, catalog, entries);
+  appendEquationEntries(file, catalog, entries);
+  appendHeadingEntries(file, catalog, entries);
+  appendReferences(file, catalog, references);
+}
+
+function appendBlockEntries(
+  content: string,
+  file: string,
+  analysis: DocumentSemantics,
+  catalog: DocumentReferenceCatalog,
+  entries: IndexEntry[],
+): void {
+  for (const target of catalog.targets) {
+    if (target.kind !== "block") continue;
+    const div = analysis.fencedDivByFrom.get(target.from);
+    if (!div) continue;
+
     entries.push({
-      type: div.primaryClass ?? "div",
-      label: div.id,
-      title: div.title,
+      type: target.blockType ?? "div",
+      label: target.id,
+      title: target.title,
       file,
-      position: { from: div.from, to: div.to },
+      position: { from: target.from, to: target.to },
       content: extractFencedDivBody(div, content),
     });
   }
+}
 
-  for (const equation of analysis.equations) {
+function appendEquationEntries(
+  file: string,
+  catalog: DocumentReferenceCatalog,
+  entries: IndexEntry[],
+): void {
+  for (const target of catalog.targets) {
+    if (target.kind !== "equation") continue;
     entries.push({
       type: "equation",
-      label: equation.id,
+      label: target.id,
       file,
-      position: { from: equation.from, to: equation.to },
-      content: equation.latex,
+      position: { from: target.from, to: target.to },
+      content: target.text ?? "",
     });
   }
+}
 
-  for (const heading of analysis.headings) {
+function appendHeadingEntries(
+  file: string,
+  catalog: DocumentReferenceCatalog,
+  entries: IndexEntry[],
+): void {
+  for (const target of catalog.targets) {
+    if (target.kind !== "heading") continue;
     entries.push({
       type: "heading",
-      label: heading.id,
-      number: heading.number || undefined,
-      title: heading.text,
+      label: target.id,
+      number: target.number,
+      title: target.title,
       file,
-      position: { from: heading.from, to: heading.to },
-      content: heading.text,
+      position: { from: target.from, to: target.to },
+      content: target.title ?? "",
     });
   }
+}
 
-  for (const ref of analysis.references) {
+function appendReferences(
+  file: string,
+  catalog: DocumentReferenceCatalog,
+  references: IndexReference[],
+): void {
+  for (const ref of catalog.references) {
     references.push({
       bracketed: ref.bracketed,
       ids: ref.ids,

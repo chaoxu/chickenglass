@@ -16,13 +16,8 @@ import {
 } from "../citations/citation-preview";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CSS } from "../constants/css-classes";
-import {
-  blockCounterField,
-  getPlugin,
-  pluginRegistryField,
-} from "../plugins";
 import { buildCrossrefCompletionPreviewContent } from "../render/hover-preview";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { buildEditorDocumentReferenceCatalog } from "../semantics/editor-reference-catalog";
 
 const CROSSREF_SECTION = { name: "Cross-references", rank: 0 } as const;
 const CITATION_SECTION = { name: "Citations", rank: 1 } as const;
@@ -256,44 +251,36 @@ export function collectReferenceCompletionCandidates(
   state: EditorState,
 ): ReferenceCompletionCandidate[] {
   const candidates = new Map<string, ReferenceCompletionCandidate>();
-  const analysis = state.field(documentAnalysisField, false);
-  const counters = state.field(blockCounterField, false);
-  const registry = state.field(pluginRegistryField, false);
+  const catalog = buildEditorDocumentReferenceCatalog(state);
 
-  if (analysis && counters) {
-    for (const block of counters.blocks) {
-      if (!block.id || candidates.has(block.id)) continue;
-      const plugin = registry ? getPlugin(registry, block.type) : undefined;
-      const title = plugin?.title ?? block.type;
-      const blockSemantics = analysis.fencedDivByFrom.get(block.from);
-      candidates.set(block.id, {
-        id: block.id,
-        kind: "block",
-        detail: `${title} ${block.number}`,
-        info: blockSemantics?.title,
-      });
-    }
-  }
+  for (const target of catalog.targets) {
+    if (!target.id || candidates.has(target.id)) continue;
 
-  if (analysis) {
-    for (const equation of analysis.equations) {
-      if (candidates.has(equation.id)) continue;
-      candidates.set(equation.id, {
-        id: equation.id,
-        kind: "equation",
-        detail: `Eq. (${equation.number})`,
-        info: equation.latex,
-      });
-    }
-
-    for (const heading of analysis.headings) {
-      if (!heading.id || candidates.has(heading.id)) continue;
-      candidates.set(heading.id, {
-        id: heading.id,
-        kind: "heading",
-        detail: heading.number ? `Section ${heading.number}` : "Section",
-        info: heading.text,
-      });
+    switch (target.kind) {
+      case "block":
+        candidates.set(target.id, {
+          id: target.id,
+          kind: "block",
+          detail: target.displayLabel,
+          info: target.title,
+        });
+        break;
+      case "equation":
+        candidates.set(target.id, {
+          id: target.id,
+          kind: "equation",
+          detail: target.displayLabel,
+          info: target.text,
+        });
+        break;
+      case "heading":
+        candidates.set(target.id, {
+          id: target.id,
+          kind: "heading",
+          detail: target.displayLabel,
+          info: target.title,
+        });
+        break;
     }
   }
 
