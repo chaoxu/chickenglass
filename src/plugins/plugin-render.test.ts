@@ -14,6 +14,7 @@ import {
   _blockDecorationFieldForTest as blockDecorationField,
   _BlockCaptionWidgetForTest as BlockCaptionWidget,
   _BlockHeaderWidgetForTest as BlockHeaderWidget,
+  _shouldStabilizeCursorDrivenBlockScrollForTest as shouldStabilizeCursorDrivenBlockScroll,
   embedSandboxPermissions,
 } from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
@@ -372,6 +373,47 @@ describe("blockDecorationField", () => {
     // No paren widgets
     const parenWidgets = specs.filter((s) => s.widgetClass === "SimpleTextWidget");
     expect(parenWidgets.length).toBe(0);
+  });
+});
+
+describe("cursor-driven block scroll stabilization", () => {
+  it("stabilizes when the cursor enters or leaves a revealed fence", () => {
+    const doc = `::: {.proof}\nBody\n:::`;
+    const bodyPos = doc.indexOf("Body");
+    const closeFencePos = doc.lastIndexOf(":::");
+
+    const bodyState = createTestState(doc, bodyPos, true);
+    const openFenceState = createTestState(doc, 0, true);
+    const closeFenceState = createTestState(doc, closeFencePos, true);
+
+    expect(shouldStabilizeCursorDrivenBlockScroll(bodyState, openFenceState)).toBe(true);
+    expect(shouldStabilizeCursorDrivenBlockScroll(openFenceState, bodyState)).toBe(true);
+    expect(shouldStabilizeCursorDrivenBlockScroll(openFenceState, closeFenceState)).toBe(false);
+    expect(shouldStabilizeCursorDrivenBlockScroll(bodyState, createTestState(doc, bodyPos + 1, true))).toBe(false);
+  });
+
+  it("stabilizes embed blocks only when cursor-inside source mode toggles", () => {
+    const doc = [
+      "Before",
+      "",
+      "::: {.embed}",
+      "https://example.com",
+      ":::",
+      "",
+      "After",
+    ].join("\n");
+    const plugins = [makeBlockPlugin({ name: "embed", specialBehavior: "embed" })];
+    const outsidePos = doc.indexOf("Before");
+    const insidePos = doc.indexOf("https://example.com");
+    const insideLaterPos = insidePos + 5;
+
+    const outsideState = createTestStateWithPlugins(doc, plugins, outsidePos, true);
+    const insideState = createTestStateWithPlugins(doc, plugins, insidePos, true);
+    const insideLaterState = createTestStateWithPlugins(doc, plugins, insideLaterPos, true);
+
+    expect(shouldStabilizeCursorDrivenBlockScroll(outsideState, insideState)).toBe(true);
+    expect(shouldStabilizeCursorDrivenBlockScroll(insideState, outsideState)).toBe(true);
+    expect(shouldStabilizeCursorDrivenBlockScroll(insideState, insideLaterState)).toBe(false);
   });
 });
 

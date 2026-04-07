@@ -18,6 +18,8 @@ import {
   type DecorationSet,
   Decoration,
   type EditorView,
+  type ViewUpdate,
+  ViewPlugin,
 } from "@codemirror/view";
 import { EditorState, type Extension, type Range } from "@codemirror/state";
 import type { BlockAttrs } from "./plugin-types";
@@ -44,9 +46,14 @@ import {
   addSingleLineClosingFence,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
+  getFencedBlockRenderContext,
   mathMacrosField,
 } from "../render/render-core";
-import { mutateWithScrollStabilizedMeasure } from "../render/scroll-anchor";
+import {
+  captureScrollAnchor,
+  mutateWithScrollStabilizedMeasure,
+  requestScrollStabilizedMeasure,
+} from "../render/scroll-anchor";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import {
@@ -540,6 +547,46 @@ function addQedDecoration(
   }
 }
 
+function activeCursorDrivenBlockLayoutMode(state: EditorState): string | null {
+  const focused = state.field(editorFocusField, false) ?? false;
+  if (!focused) return null;
+
+  const cursorPos = state.selection.main.from;
+  const div = findFencedBlockAt(collectFencedDivs(state), cursorPos);
+  if (!div || EXCLUDED_FROM_FALLBACK.has(div.className)) return null;
+
+  const plugin = getPluginOrFallback(state.field(pluginRegistryField), div.className);
+  if (!plugin) return null;
+
+  if (plugin.specialBehavior === "embed" && cursorPos >= div.from && cursorPos <= div.to) {
+    return `embed:${div.from}`;
+  }
+
+  return getFencedBlockRenderContext(state, div, focused).cursorOnEitherFence
+    ? `fence:${div.from}`
+    : null;
+}
+
+function shouldStabilizeCursorDrivenBlockScroll(
+  startState: EditorState,
+  nextState: EditorState,
+): boolean {
+  return activeCursorDrivenBlockLayoutMode(startState) !== activeCursorDrivenBlockLayoutMode(nextState);
+}
+
+const blockRenderScrollStabilizer = ViewPlugin.fromClass(
+  class {
+    update(update: ViewUpdate): void {
+      if (!update.selectionSet && !update.focusChanged) return;
+      if (!shouldStabilizeCursorDrivenBlockScroll(update.startState, update.state)) return;
+
+      const anchor = captureScrollAnchor(update.view);
+      if (!anchor) return;
+      requestScrollStabilizedMeasure(update.view, anchor);
+    }
+  },
+);
+
 /**
  * Build decorations for all fenced divs using the plugin registry.
  *
@@ -739,6 +786,9 @@ const blockDecorationField = createFencedBlockDecorationField(buildBlockDecorati
 
 /** Exported for unit testing decoration logic without a browser. */
 export { blockDecorationField as _blockDecorationFieldForTest };
+export {
+  shouldStabilizeCursorDrivenBlockScroll as _shouldStabilizeCursorDrivenBlockScrollForTest,
+};
 
 /** CM6 extension that renders fenced divs using the block plugin system. */
 export const blockRenderPlugin: Extension = [
@@ -746,5 +796,6 @@ export const blockRenderPlugin: Extension = [
   editorFocusField,
   focusTracker,
   blockDecorationField,
+  blockRenderScrollStabilizer,
   fenceProtectionExtension,
 ];
