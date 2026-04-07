@@ -1,6 +1,5 @@
 import { syntaxTree } from "@codemirror/language";
 import {
-  type ChangeSet,
   type Extension,
   type Range,
 } from "@codemirror/state";
@@ -17,7 +16,9 @@ import { buildDecorations } from "./decoration-core";
 import {
   diffVisibleRanges,
   isPositionInRanges,
+  mapVisibleRanges,
   mergeRanges,
+  rangeIntersectsRanges,
   snapshotRanges,
   type VisibleRange,
 } from "./viewport-diff";
@@ -48,36 +49,6 @@ export function cursorSensitiveShouldUpdate(update: ViewUpdate): boolean {
     update.viewportChanged ||
     syntaxTree(update.state) !== syntaxTree(update.startState)
   );
-}
-
-function mapVisibleRanges(
-  ranges: readonly VisibleRange[],
-  changes: ChangeSet,
-): VisibleRange[] {
-  return mergeRanges(
-    ranges.map((range) => {
-      const from = changes.mapPos(range.from, 1);
-      const to = changes.mapPos(range.to, -1);
-      return { from, to: Math.max(from, to) };
-    }),
-  );
-}
-
-function rangeIntersectsRanges(
-  from: number,
-  to: number,
-  ranges: readonly VisibleRange[],
-): boolean {
-  for (const range of ranges) {
-    if (from === to) {
-      if (from >= range.from && from < range.to) return true;
-      if (range.from > from) break;
-      continue;
-    }
-    if (from < range.to && to > range.from) return true;
-    if (range.from >= to) break;
-  }
-  return false;
 }
 
 function filterDecorationSetInRanges(

@@ -11,10 +11,11 @@ import {
   imageRenderPlugin,
   trackedCacheChanged,
 } from "./image-render";
-import { imageUrlField } from "./image-url-cache";
+import { imageUrlEffect, imageUrlField } from "./image-url-cache";
 import { pdfPreviewField } from "./pdf-preview-cache";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
+import { documentPathFacet } from "../lib/types";
 import { createTestView, getDecorationSpecs } from "../test-utils";
 import * as mediaPreview from "./media-preview";
 
@@ -510,15 +511,15 @@ describe("ImageRenderPlugin incremental docChanged (#824)", () => {
 
   it("does not rescan unchanged images when typing ordinary prose away from images", () => {
     const doc = [
-      "![first](https://example.com/a.png)",
+      "![first](https://a.co/a.png)",
       "",
-      "ordinary prose between the figures",
+      "middle prose",
       "",
-      "![second](https://example.com/b.png)",
+      "![second](https://a.co/b.png)",
       "",
-      "tail text",
+      "tail",
     ].join("\n");
-    const proseStart = doc.indexOf("ordinary prose");
+    const proseStart = doc.indexOf("middle prose");
     const resolvePreview = vi.spyOn(mediaPreview, "resolveLocalMediaPreview");
 
     const view = createImageView(doc);
@@ -527,7 +528,7 @@ describe("ImageRenderPlugin incremental docChanged (#824)", () => {
     resolvePreview.mockClear();
     view.dispatch({
       changes: {
-        from: proseStart + "ordinary ".length,
+        from: proseStart + "middle ".length,
         insert: "fast ",
       },
     });
@@ -598,8 +599,6 @@ describe("ImageRenderPlugin incremental docChanged (#824)", () => {
 
 interface ImageRenderPluginProbe {
   decorations: DecorationSet;
-  imageNodes: Array<{ from: number; to: number; trackedPath?: string }>;
-  trackedPaths: ReadonlySet<string>;
   coveredRanges: Array<{ from: number; to: number }>;
   rebuild(view: EditorView): void;
   update(update: ViewUpdate): void;
@@ -673,9 +672,7 @@ describe("ImageRenderPlugin incremental viewportChanged (#875)", () => {
       "",
       "tail text",
     ].join("\n");
-    const firstStart = doc.indexOf("![first]");
     const secondStart = doc.indexOf("![second]");
-    const thirdStart = doc.indexOf("![third]");
     const resolvePreview = vi.spyOn(mediaPreview, "resolveLocalMediaPreview").mockImplementation(
       (_view, src) => ({ kind: "image", resolvedPath: src, dataUrl: `data:${src}` }),
     );
@@ -690,8 +687,6 @@ describe("ImageRenderPlugin incremental viewportChanged (#875)", () => {
     const setRanges = setVisibleRanges(initialRanges);
 
     plugin.rebuild(view);
-    expect(plugin.imageNodes.map((node) => node.from)).toEqual([firstStart, secondStart]);
-    expect([...plugin.trackedPaths]).toEqual(["first.png", "second.png"]);
     expect(plugin.coveredRanges).toEqual(initialRanges);
     expect(getDecorationSpecs(plugin.decorations).filter((spec) => spec.from === secondStart))
       .toHaveLength(1);
@@ -701,8 +696,6 @@ describe("ImageRenderPlugin incremental viewportChanged (#875)", () => {
     plugin.update(mockViewportUpdate());
     expect(resolvePreview).toHaveBeenCalledTimes(1);
     expect(resolvePreview.mock.calls[0]?.[1]).toBe("third.png");
-    expect(plugin.imageNodes.map((node) => node.from)).toEqual([secondStart, thirdStart]);
-    expect([...plugin.trackedPaths]).toEqual(["second.png", "third.png"]);
     expect(plugin.coveredRanges).toEqual(scrolledRanges);
     expect(getDecorationSpecs(plugin.decorations).filter((spec) => spec.from === secondStart))
       .toHaveLength(1);
@@ -712,10 +705,46 @@ describe("ImageRenderPlugin incremental viewportChanged (#875)", () => {
     plugin.update(mockViewportUpdate());
     expect(resolvePreview).toHaveBeenCalledTimes(1);
     expect(resolvePreview.mock.calls[0]?.[1]).toBe("first.png");
-    expect(plugin.imageNodes.map((node) => node.from)).toEqual([firstStart, secondStart]);
-    expect([...plugin.trackedPaths]).toEqual(["first.png", "second.png"]);
     expect(plugin.coveredRanges).toEqual(initialRanges);
     expect(getDecorationSpecs(plugin.decorations).filter((spec) => spec.from === secondStart))
       .toHaveLength(1);
+  });
+});
+
+describe("imageRenderPlugin cache-only invalidation", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+    vi.restoreAllMocks();
+  });
+
+  it("rebuilds only the visible local preview whose resolved cache entry changed", () => {
+    const doc = [
+      "![first](../assets/first.png)",
+      "",
+      "![second](../assets/second.png)",
+    ].join("\n");
+    const resolvePreview = vi.spyOn(mediaPreview, "resolveLocalMediaPreview");
+
+    view = createTestView(doc, {
+      cursorPos: doc.length,
+      extensions: [
+        markdown(),
+        documentPathFacet.of("posts/math.md"),
+        imageUrlField,
+        pdfPreviewField,
+        imageRenderPlugin,
+      ],
+    });
+    resolvePreview.mockClear();
+
+    view.dispatch({
+      effects: imageUrlEffect.of({ path: "assets/first.png", entry: { status: "loading" } }),
+    });
+
+    expect(resolvePreview).toHaveBeenCalledTimes(1);
+    expect(resolvePreview.mock.calls[0]?.[1]).toBe("../assets/first.png");
   });
 });

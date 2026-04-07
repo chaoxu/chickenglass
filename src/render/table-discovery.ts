@@ -7,6 +7,7 @@ import {
 import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import type { EditorView } from "@codemirror/view";
 import { parseTable, type ParsedTable } from "./table-utils";
+import { mergeRanges } from "./viewport-diff";
 import { findTablePipePositions } from "../lib/table-inline-span";
 
 /** A table found in the document with its source range. */
@@ -148,30 +149,6 @@ function expandChangedRangeToNearbyLines(
   return { from: expandedStart, to: expandedEnd };
 }
 
-function mergeDirtyRanges(ranges: readonly DirtyRange[]): readonly DirtyRange[] {
-  if (ranges.length <= 1) return ranges;
-
-  const sorted = [...ranges].sort((left, right) => left.from - right.from);
-  const merged: DirtyRange[] = [sorted[0]];
-
-  for (let i = 1; i < sorted.length; i += 1) {
-    const current = sorted[i];
-    const previous = merged[merged.length - 1];
-
-    if (current.from <= previous.to + 1) {
-      merged[merged.length - 1] = {
-        from: previous.from,
-        to: Math.max(previous.to, current.to),
-      };
-      continue;
-    }
-
-    merged.push(current);
-  }
-
-  return merged;
-}
-
 function computeDirtyRanges(
   tables: readonly TableRange[],
   tr: Transaction,
@@ -205,7 +182,7 @@ function computeDirtyRanges(
     dirtyRanges.push({ from: dirtyFrom, to: dirtyTo });
   });
 
-  return mergeDirtyRanges(dirtyRanges);
+  return mergeRanges(dirtyRanges, 1);
 }
 
 function tableOverlapsDirtyRanges(

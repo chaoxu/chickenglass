@@ -61,7 +61,10 @@ export {
 export {
   diffVisibleRanges,
   isPositionInRanges,
+  mapVisibleRanges,
   mergeRanges,
+  normalizeDirtyRange,
+  rangeIntersectsRanges,
   snapshotRanges,
   type VisibleRange,
 } from "./viewport-diff";
