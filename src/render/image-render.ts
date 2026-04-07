@@ -2,20 +2,16 @@ import { type ChangeSet, type EditorState, type Extension, type Range } from "@c
 import type { SyntaxNode } from "@lezer/common";
 import {
   type Decoration,
-  type DecorationSet,
   type EditorView,
-  type PluginValue,
-  ViewPlugin,
   type ViewUpdate,
 } from "@codemirror/view";
 import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import {
   type VisibleRange,
-  diffVisibleRanges,
+  mapVisibleRanges,
   mergeRanges,
-  snapshotRanges,
 } from "./viewport-diff";
-import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
+import { pushWidgetDecoration } from "./decoration-core";
 import { cursorInRange } from "./node-collection";
 import { RenderWidget } from "./widget-core";
 import { imageUrlField } from "./image-url-cache";
@@ -24,7 +20,11 @@ import {
   resolveLocalMediaPreview,
   type MediaPreviewResult,
 } from "./media-preview";
+import { createCursorSensitiveViewPlugin } from "./view-plugin-factories";
 import { CSS } from "../constants/css-classes";
+import { documentPathFacet } from "../lib/types";
+import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
+import { resolveProjectPathFromDocument } from "../lib/project-paths";
 
 // ── Widgets ───────────────────────────────────────────────────────────────────
 
@@ -192,78 +192,28 @@ export function trackedCacheChanged(
   oldImgCache: ReadonlyMap<string, unknown>,
   newImgCache: ReadonlyMap<string, unknown>,
 ): boolean {
-  if (oldPdfCache !== newPdfCache) {
-    for (const path of trackedPaths) {
-      if (oldPdfCache.get(path) !== newPdfCache.get(path)) return true;
-    }
+  if (oldPdfCache === newPdfCache && oldImgCache === newImgCache) {
+    return false;
   }
-  if (oldImgCache !== newImgCache) {
-    for (const path of trackedPaths) {
-      if (oldImgCache.get(path) !== newImgCache.get(path)) return true;
+  for (const path of trackedPaths) {
+    if (cacheEntryChanged(path, oldPdfCache, newPdfCache, oldImgCache, newImgCache)) {
+      return true;
     }
   }
   return false;
 }
 
-// ── Decoration builder ───────────────────────────────────────────────────────
-
-/** Metadata collected during decoration build for targeted invalidation. */
-interface ImageBuildResult {
-  readonly items: Range<Decoration>[];
-  /** Visible Image nodes, with tracked preview path when one is active. */
-  readonly nodes: ReadonlyArray<ImageNodeInfo>;
-}
-
-interface ImageNodeInfo {
-  from: number;
-  to: number;
-  trackedPath?: string;
-}
-
-function trackedPathsFromNodes(
-  nodes: ReadonlyArray<ImageNodeInfo>,
-): ReadonlySet<string> {
-  const trackedPaths = new Set<string>();
-  for (const node of nodes) {
-    if (node.trackedPath) trackedPaths.add(node.trackedPath);
-  }
-  return trackedPaths;
-}
-
-function mapImageNodes(
-  nodes: ReadonlyArray<ImageNodeInfo>,
-  changes: ChangeSet,
-): ImageNodeInfo[] {
-  return nodes.map((node) => ({
-    from: changes.mapPos(node.from, 1),
-    to: changes.mapPos(node.to, -1),
-    trackedPath: node.trackedPath,
-  }));
-}
-
-function mapVisibleRanges(
-  ranges: readonly VisibleRange[],
-  changes: ChangeSet,
-): VisibleRange[] {
-  return mergeRanges(
-    ranges.map((range) => {
-      const from = changes.mapPos(range.from, 1);
-      const to = changes.mapPos(range.to, -1);
-      return { from, to: Math.max(from, to) };
-    }),
-  );
-}
-
-function rangeIntersectsRanges(
-  from: number,
-  to: number,
-  ranges: readonly VisibleRange[],
+function cacheEntryChanged(
+  path: string,
+  oldPdfCache: ReadonlyMap<string, unknown>,
+  newPdfCache: ReadonlyMap<string, unknown>,
+  oldImgCache: ReadonlyMap<string, unknown>,
+  newImgCache: ReadonlyMap<string, unknown>,
 ): boolean {
-  for (const range of ranges) {
-    if (from < range.to && to > range.from) return true;
-    if (range.from >= to) break;
-  }
-  return false;
+  return (
+    oldPdfCache.get(path) !== newPdfCache.get(path) ||
+    oldImgCache.get(path) !== newImgCache.get(path)
+  );
 }
 
 function collectImageRangesInState(
@@ -372,35 +322,22 @@ function mediaPreviewWidget(
   }
 }
 
-/**
- * Collect decoration ranges for images outside the cursor, plus tracking metadata.
- *
- * @param view    The editor view.
- * @param ranges  Explicit ranges to scan (defaults to view.visibleRanges).
- * @param skip    Returns true for node start positions already processed in a
- *                previous viewport — prevents duplicate tracking/decorations
- *                for nodes straddling the old/new boundary.
- */
-function collectImageRangesTracked(
+/** Collect image decorations for visible ranges outside the cursor. */
+function collectImageItems(
   view: EditorView,
-  ranges?: readonly VisibleRange[],
-  skip?: (nodeFrom: number) => boolean,
-): ImageBuildResult {
+  ranges: readonly VisibleRange[],
+  skip: (nodeFrom: number) => boolean,
+): Range<Decoration>[] {
   const items: Range<Decoration>[] = [];
-  const nodes: ImageNodeInfo[] = [];
   const tree = syntaxTree(view.state);
-  const effectiveRanges = ranges ?? view.visibleRanges;
 
-  for (const { from, to } of effectiveRanges) {
+  for (const { from, to } of ranges) {
     tree.iterate({
       from,
       to,
       enter(node) {
         if (node.name !== "Image") return;
-        if (skip?.(node.from)) return false;
-
-        const trackedNode: ImageNodeInfo = { from: node.from, to: node.to };
-        nodes.push(trackedNode);
+        if (skip(node.from)) return false;
 
         if (cursorInRange(view, node.from, node.to)) {
           return false;
@@ -411,7 +348,6 @@ function collectImageRangesTracked(
 
         const preview = resolveLocalMediaPreview(view, parsed.src);
         if (preview) {
-          trackedNode.trackedPath = preview.resolvedPath;
           pushWidgetDecoration(
             items,
             mediaPreviewWidget(parsed.alt, preview),
@@ -432,204 +368,133 @@ function collectImageRangesTracked(
     });
   }
 
-  return { items, nodes };
+  return items;
 }
 
-// ── ViewPlugin ───────────────────────────────────────────────────────────────
-
-/**
- * Custom ViewPlugin that narrows image decoration rebuilds to avoid
- * full visible-range rescans on unrelated edits and cursor moves.
- *
- * Tracks image node positions and referenced cache paths from each rebuild.
- * On update, only rebuilds when:
- * - document changes touch an image node or newly-visible fragment
- * - viewport or syntax tree changes require a rebuild path
- * - cursor moved into/out of an image node (cursor adjacency)
- * - a tracked cache path's entry changed (async preview readiness)
- */
-class ImageRenderPlugin implements PluginValue {
-  decorations: DecorationSet;
-  private imageNodes: ReadonlyArray<ImageNodeInfo>;
-  private trackedPaths: ReadonlySet<string>;
-  /** Ranges already processed — used to skip straddling nodes on scroll. */
-  private coveredRanges: VisibleRange[];
-
-  constructor(view: EditorView) {
-    const result = collectImageRangesTracked(view);
-    this.decorations = buildDecorations(result.items);
-    this.imageNodes = result.nodes;
-    this.trackedPaths = trackedPathsFromNodes(result.nodes);
-    this.coveredRanges = snapshotRanges(view.visibleRanges);
+function resolveTrackedPreviewPath(
+  view: EditorView,
+  src: string,
+): string | null {
+  if (!isPdfTarget(src) && !isRelativeFilePath(src)) {
+    return null;
   }
+  return resolveProjectPathFromDocument(view.state.facet(documentPathFacet), src);
+}
 
-  update(update: ViewUpdate): void {
-    const treeChanged = syntaxTree(update.state) !== syntaxTree(update.startState);
+interface TrackedImageRange extends VisibleRange {
+  readonly trackedPath: string;
+}
 
-    if (update.docChanged) {
-      if (treeChanged && !syntaxTreeAvailable(update.state, update.state.doc.length)) {
-        this.rebuild(update.view);
-      } else {
-        this.incrementalDocUpdate(update);
-      }
-      return;
-    }
+function collectVisibleTrackedPreviewRanges(
+  view: EditorView,
+  ranges: readonly VisibleRange[] = view.visibleRanges,
+): TrackedImageRange[] {
+  const trackedRanges: TrackedImageRange[] = [];
+  const seen = new Set<number>();
 
-    // Structural changes that alter the tree require full rebuild
-    if (treeChanged) {
-      this.rebuild(update.view);
-      return;
-    }
+  for (const { from, to } of ranges) {
+    syntaxTree(view.state).iterate({
+      from,
+      to,
+      enter(node) {
+        if (node.name !== "Image" || seen.has(node.from)) return;
+        seen.add(node.from);
+        if (cursorInRange(view, node.from, node.to)) return false;
 
-    // Viewport-only change (scroll): incremental add for newly visible ranges
-    if (update.viewportChanged) {
-      this.incrementalViewportUpdate(update);
-      // Fall through to check selection/cache
-    }
+        const parsed = readImageContent(view, node.node);
+        if (!parsed) return false;
 
-    // Selection/focus: rebuild only if cursor moved into/out of an image node
-    if (update.selectionSet || update.focusChanged) {
-      const hasFocus = update.view.hasFocus;
-      const hadFocus = update.focusChanged ? !hasFocus : hasFocus;
-      const oldSel = update.startState.selection.main;
-      const newSel = update.state.selection.main;
-      if (
-        cursorImageRelationChanged(
-          this.imageNodes, hadFocus, hasFocus,
-          oldSel.from, oldSel.to, newSel.from, newSel.to,
-        )
-      ) {
-        this.rebuild(update.view);
-        return;
-      }
-    }
+        const trackedPath = resolveTrackedPreviewPath(view, parsed.src);
+        if (!trackedPath) return false;
 
-    // Cache changes: rebuild only if a tracked path's entry changed
-    if (
-      trackedCacheChanged(
-        this.trackedPaths,
-        update.startState.field(pdfPreviewField),
-        update.state.field(pdfPreviewField),
-        update.startState.field(imageUrlField),
-        update.state.field(imageUrlField),
-      )
-    ) {
-      this.rebuild(update.view);
-    }
-  }
-
-  /** Differential viewport update: only process newly-visible ranges. */
-  private incrementalViewportUpdate(update: ViewUpdate): void {
-    const previousCoveredRanges = this.coveredRanges;
-    const currentVisibleRanges = snapshotRanges(update.view.visibleRanges);
-    const evictedRanges = diffVisibleRanges(currentVisibleRanges, previousCoveredRanges);
-    const newlyVisible = diffVisibleRanges(previousCoveredRanges, currentVisibleRanges);
-
-    if (evictedRanges.length === 0 && newlyVisible.length === 0) {
-      this.coveredRanges = currentVisibleRanges;
-      return;
-    }
-
-    let nextDecorations = this.decorations;
-    const nextImageNodes = evictedRanges.length > 0
-      ? this.imageNodes.filter((node) =>
-          rangeIntersectsRanges(node.from, node.to, currentVisibleRanges)
-        )
-      : [...this.imageNodes];
-
-    if (evictedRanges.length > 0) {
-      for (const range of evictedRanges) {
-        nextDecorations = nextDecorations.update({
-          filterFrom: range.from,
-          filterTo: range.to,
-          filter: (from, to) => rangeIntersectsRanges(from, to, currentVisibleRanges),
-        });
-      }
-    }
-
-    if (newlyVisible.length > 0) {
-      const retainedStarts = new Set(nextImageNodes.map((node) => node.from));
-      const result = collectImageRangesTracked(
-        update.view,
-        newlyVisible,
-        (nodeFrom) => retainedStarts.has(nodeFrom),
-      );
-      if (result.items.length > 0) {
-        nextDecorations = nextDecorations.update({
-          add: result.items,
-          sort: true,
-        });
-      }
-      if (result.nodes.length > 0) {
-        nextImageNodes.push(...result.nodes);
-        nextImageNodes.sort((a, b) => a.from - b.from || a.to - b.to);
-      }
-    }
-
-    this.decorations = nextDecorations;
-    this.imageNodes = nextImageNodes;
-    this.trackedPaths = trackedPathsFromNodes(nextImageNodes);
-    this.coveredRanges = currentVisibleRanges;
-  }
-
-  private incrementalDocUpdate(update: ViewUpdate): void {
-    const mappedCoveredRanges = mapVisibleRanges(this.coveredRanges, update.changes);
-    const currentVisibleRanges = snapshotRanges(update.view.visibleRanges);
-    const dirtyRanges = computeDirtyImageRanges(
-      update.startState,
-      update.state,
-      update.changes,
-    ).filter((range) => rangeIntersectsRanges(range.from, range.to, currentVisibleRanges));
-    const missingVisible = diffVisibleRanges(mappedCoveredRanges, currentVisibleRanges);
-    const rebuildRanges = mergeRanges([...dirtyRanges, ...missingVisible]);
-
-    const keptNodes = mapImageNodes(this.imageNodes, update.changes)
-      .filter((node) => rangeIntersectsRanges(node.from, node.to, currentVisibleRanges))
-      .filter((node) => !rangeIntersectsRanges(node.from, node.to, dirtyRanges));
-
-    let nextDecorations = this.decorations.map(update.changes).update({
-      filterFrom: 0,
-      filterTo: update.state.doc.length,
-      filter: (from, to) =>
-        rangeIntersectsRanges(from, to, currentVisibleRanges) &&
-        !rangeIntersectsRanges(from, to, dirtyRanges),
+        trackedRanges.push({ from: node.from, to: node.to, trackedPath });
+        return false;
+      },
     });
-
-    if (rebuildRanges.length > 0) {
-      const retainedStarts = new Set(keptNodes.map((node) => node.from));
-      const result = collectImageRangesTracked(
-        update.view,
-        rebuildRanges,
-        (nodeFrom) => retainedStarts.has(nodeFrom),
-      );
-      if (result.items.length > 0) {
-        nextDecorations = nextDecorations.update({
-          add: result.items,
-          sort: true,
-        });
-      }
-      this.imageNodes = [...keptNodes, ...result.nodes]
-        .sort((a, b) => a.from - b.from || a.to - b.to);
-    } else {
-      this.imageNodes = keptNodes;
-    }
-
-    this.decorations = nextDecorations;
-    this.trackedPaths = trackedPathsFromNodes(this.imageNodes);
-    this.coveredRanges = currentVisibleRanges;
   }
 
-  private rebuild(view: EditorView): void {
-    const result = collectImageRangesTracked(view);
-    this.decorations = buildDecorations(result.items);
-    this.imageNodes = result.nodes;
-    this.trackedPaths = trackedPathsFromNodes(result.nodes);
-    this.coveredRanges = snapshotRanges(view.visibleRanges);
+  return trackedRanges;
+}
+
+function collectSelectionImageContextRanges(
+  state: EditorState,
+  hasFocus: boolean,
+): VisibleRange[] {
+  if (!hasFocus) return [];
+  const ranges: VisibleRange[] = [];
+  collectSelectionImageRanges(state, (from, to) => {
+    ranges.push({ from, to });
+  });
+  return ranges;
+}
+
+function rangesEqual(
+  left: readonly VisibleRange[],
+  right: readonly VisibleRange[],
+): boolean {
+  if (left.length !== right.length) return false;
+  const leftKeys = new Set(left.map((range) => `${range.from}:${range.to}`));
+  if (leftKeys.size !== right.length) return false;
+  return right.every((range) => leftKeys.has(`${range.from}:${range.to}`));
+}
+
+function computeImageSelectionChangeRanges(update: ViewUpdate): VisibleRange[] {
+  if (!update.selectionSet && !update.focusChanged) return [];
+
+  const hasFocus = update.view.hasFocus;
+  const hadFocus = update.focusChanged ? !hasFocus : hasFocus;
+  const previousRanges = collectSelectionImageContextRanges(update.startState, hadFocus);
+  const mappedPreviousRanges = update.docChanged
+    ? mapVisibleRanges(previousRanges, update.changes)
+    : previousRanges;
+  const nextRanges = collectSelectionImageContextRanges(update.state, hasFocus);
+
+  if (rangesEqual(mappedPreviousRanges, nextRanges)) return [];
+  return mergeRanges([...mappedPreviousRanges, ...nextRanges]);
+}
+
+function computeImageCacheChangeRanges(update: ViewUpdate): VisibleRange[] {
+  if (update.docChanged) return [];
+
+  const oldPdfCache = update.startState.field(pdfPreviewField);
+  const newPdfCache = update.state.field(pdfPreviewField);
+  const oldImgCache = update.startState.field(imageUrlField);
+  const newImgCache = update.state.field(imageUrlField);
+  const trackedRanges = collectVisibleTrackedPreviewRanges(update.view);
+
+  if (trackedRanges.length === 0) return [];
+
+  const trackedPaths = new Set(trackedRanges.map((range) => range.trackedPath));
+  if (!trackedCacheChanged(trackedPaths, oldPdfCache, newPdfCache, oldImgCache, newImgCache)) {
+    return [];
   }
+
+  return mergeRanges(
+    trackedRanges
+      .filter((range) =>
+        cacheEntryChanged(range.trackedPath, oldPdfCache, newPdfCache, oldImgCache, newImgCache)
+      )
+      .map(({ from, to }) => ({ from, to })),
+  );
+}
+
+function computeImageContextChangeRanges(update: ViewUpdate): readonly VisibleRange[] {
+  return mergeRanges([
+    ...computeImageSelectionChangeRanges(update),
+    ...computeImageCacheChangeRanges(update),
+  ]);
 }
 
 /** CM6 extension that renders inline images with Typora-style click-to-edit. */
-export const imageRenderPlugin: Extension = ViewPlugin.fromClass(
-  ImageRenderPlugin,
-  { decorations: (v) => v.decorations },
+export const imageRenderPlugin: Extension = createCursorSensitiveViewPlugin(
+  collectImageItems,
+  {
+    contextChangeRanges: computeImageContextChangeRanges,
+    docChangeRanges: (update) =>
+      computeDirtyImageRanges(update.startState, update.state, update.changes),
+    extraRebuildCheck: (update) =>
+      update.docChanged &&
+      syntaxTree(update.state) !== syntaxTree(update.startState) &&
+      !syntaxTreeAvailable(update.state, update.state.doc.length),
+  },
 );
