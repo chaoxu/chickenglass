@@ -118,7 +118,7 @@ export const marginThemeStyles = {
   },
   ".cf-reference-completion-preview": {
     display: "grid",
-    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
     columnGap: "var(--cf-spacing-sm)",
     rowGap: "2px",
     alignItems: "start",
@@ -126,13 +126,10 @@ export const marginThemeStyles = {
     paddingBottom: "var(--cf-spacing-xs)",
   },
   ".cf-reference-completion-preview .cm-completionIcon": {
-    gridColumn: "1",
-    gridRow: "1 / span 2",
-    marginTop: "2px",
-    paddingRight: "0",
+    display: "none",
   },
   ".cf-reference-completion-preview .cm-completionLabel": {
-    gridColumn: "2",
+    gridColumn: "1",
     color: "inherit",
     fontFamily: "var(--cf-ui-font)",
     fontWeight: "600",
@@ -140,8 +137,17 @@ export const marginThemeStyles = {
     overflowWrap: "anywhere",
     whiteSpace: "normal",
   },
-  ".cf-reference-completion-crossref .cf-reference-completion-content": {
+  ".cf-reference-completion-preview .cm-completionDetail": {
     gridColumn: "2",
+    color: "var(--cf-muted)",
+    fontFamily: "var(--cf-ui-font)",
+    fontSize: "0.82em",
+    marginLeft: "0",
+    overflowWrap: "anywhere",
+    whiteSpace: "normal",
+  },
+  ".cf-reference-completion-crossref .cf-reference-completion-content": {
+    gridColumn: "1 / span 2",
     display: "flex",
     flexDirection: "column",
     gap: "var(--cf-spacing-xs)",
@@ -166,7 +172,7 @@ export const marginThemeStyles = {
     fontWeight: "600",
   },
   ".cf-reference-completion-citation .cf-citation-preview": {
-    gridColumn: "2",
+    gridColumn: "1 / span 2",
     fontSize: "0.9em",
     lineHeight: "1.45",
     overflowWrap: "anywhere",

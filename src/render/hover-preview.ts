@@ -436,6 +436,7 @@ function buildBlockContentOptions(
     bibliography: store.size > 0 ? store : undefined,
     cslProcessor: store.size > 0 ? cslProcessor : undefined,
     blockCounters,
+    includeBibliography: false,
     documentPath: view.state.facet(documentPathFacet),
     imageUrlOverrides,
   };

@@ -268,6 +268,7 @@ describe("reference autocomplete integration", () => {
     expect(item).toBeTruthy();
     expect(item?.className).toContain("cf-reference-completion-citation");
     expect(item?.querySelector(".cm-completionLabel")?.textContent).toBe("karger2000");
+    expect(item?.querySelector(".cm-completionDetail")?.textContent).toBe("Karger 2000");
     expect(item?.querySelector(".cf-citation-preview")?.textContent).toContain(
       "Minimum cuts in near-linear time. JACM, 47(1), 46-76. 2000.",
     );
@@ -320,9 +321,10 @@ describe("reference autocomplete integration", () => {
     expect(completionByLabel.get("sec:background")?.info).toBeUndefined();
 
     const theoremItem = await waitForCompletionItem((candidate) =>
-      candidate.querySelector(".cm-completionLabel")?.textContent === "thm:main",
+      candidate.querySelector(".cm-completionDetail")?.textContent === "thm:main",
     );
     expect(theoremItem?.className).toContain("cf-reference-completion-crossref");
+    expect(theoremItem?.querySelector(".cm-completionLabel")?.textContent).toBe("Fundamental theorem");
     const theoremPreview = theoremItem?.querySelector(".cf-reference-completion-content");
     expect(theoremPreview).toBeTruthy();
     expect(theoremPreview?.firstElementChild?.className).toContain("cf-hover-preview-body");
@@ -332,8 +334,9 @@ describe("reference autocomplete integration", () => {
     expect(theoremItem?.querySelector(".katex")).toBeTruthy();
 
     const tableItem = await waitForCompletionItem((candidate) =>
-      candidate.querySelector(".cm-completionLabel")?.textContent === "tbl:results",
+      candidate.querySelector(".cm-completionDetail")?.textContent === "tbl:results",
     );
+    expect(tableItem?.querySelector(".cm-completionLabel")?.textContent).toBe("Results table");
     expect(tableItem?.querySelector(".cf-reference-completion-content")?.firstElementChild?.className)
       .toContain("cf-hover-preview-body");
     expect(tableItem?.querySelector(".cf-reference-completion-meta")?.textContent).toContain("Table");
@@ -341,8 +344,9 @@ describe("reference autocomplete integration", () => {
     expect(tableItem?.textContent).toContain("Results table");
 
     const equationItem = await waitForCompletionItem((candidate) =>
-      candidate.querySelector(".cm-completionLabel")?.textContent === "eq:energy",
+      candidate.querySelector(".cm-completionDetail")?.textContent === "eq:energy",
     );
+    expect(equationItem?.querySelector(".cm-completionLabel")?.textContent).toBe("Eq. (1)");
     const equationPreview = equationItem?.querySelector(".cf-reference-completion-content");
     expect(equationPreview?.firstElementChild?.className).toContain("cf-hover-preview-body");
     expect(equationPreview?.querySelector(".cf-reference-completion-meta")?.textContent)
@@ -350,8 +354,9 @@ describe("reference autocomplete integration", () => {
     expect(equationItem?.querySelector(".katex-display")).toBeTruthy();
 
     const headingItem = await waitForCompletionItem((candidate) =>
-      candidate.querySelector(".cm-completionLabel")?.textContent === "sec:background",
+      candidate.querySelector(".cm-completionDetail")?.textContent === "sec:background",
     );
+    expect(headingItem?.querySelector(".cm-completionLabel")?.textContent).toBe("Background");
     const headingPreview = headingItem?.querySelector(".cf-reference-completion-content");
     expect(headingPreview?.firstElementChild?.className).toContain("cf-hover-preview-header");
     expect(headingPreview?.querySelector(".cf-reference-completion-meta")).toBeNull();
@@ -359,6 +364,46 @@ describe("reference autocomplete integration", () => {
     expect(headingItem?.querySelector(".cf-hover-preview-header")).toBeTruthy();
 
     expect(document.querySelector(".cm-completionInfo")).toBeNull();
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it("keeps nested citations compact inside semantic completion previews", async () => {
+    const doc = [
+      "::: {#thm:main .theorem} Compact theorem",
+      "Statement cites [@karger2000].",
+      ":::",
+      "",
+      "See [@",
+    ].join("\n");
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = createEditor({ parent, doc });
+    view.focus();
+
+    view.dispatch({
+      effects: bibDataEffect.of({
+        store: makeBibStore([CSL_FIXTURES.karger]),
+        cslProcessor: new CslProcessor([CSL_FIXTURES.karger]),
+      }),
+    });
+    view.dispatch({
+      selection: { anchor: view.state.doc.length },
+    });
+
+    expect(startCompletion(view)).toBe(true);
+    await waitForCompletionLabels(() =>
+      currentCompletions(view.state).map((candidate) => candidate.label),
+    );
+
+    const theoremItem = await waitForCompletionItem((candidate) =>
+      candidate.querySelector(".cm-completionDetail")?.textContent === "thm:main",
+    );
+
+    expect(theoremItem?.querySelector(".cf-bibliography")).toBeNull();
+    expect(theoremItem?.textContent).not.toContain("Minimum cuts in near-linear time");
+    expect(theoremItem?.textContent).toContain("Statement cites");
 
     view.destroy();
     parent.remove();

@@ -40,6 +40,7 @@ export interface MarkdownToHtmlOptions {
   bibliography?: BibStore;
   cslProcessor?: CslProcessor;
   blockCounters?: ReadonlyMap<string, BlockCounterEntry>;
+  includeBibliography?: boolean;
   documentPath?: string;
   imageUrlOverrides?: ReadonlyMap<string, string>;
 }
