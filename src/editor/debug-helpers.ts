@@ -4,7 +4,7 @@
  * Usage (browser console or Playwright page.evaluate):
  *   __cmDebug.tree()       — FencedDiv nodes from the Lezer syntax tree
  *   __cmDebug.treeString() — full syntax tree as readable string
- *   __cmDebug.fences()     — closing fence visibility for all fenced divs
+ *   __cmDebug.fences()     — closing fence visibility for protected fenced blocks
  *   __cmDebug.line(73)     — DOM state of a specific line
  *   __cmDebug.dump()       — combined tree + fence status snapshot
  *   __cmDebug.toggleTreeView() — toggle live Lezer tree panel
@@ -18,6 +18,7 @@ import {
   documentAnalysisField,
   getDocumentAnalysisRevisionInfo,
 } from "../semantics/codemirror-source";
+import { getClosingFenceRanges } from "../plugins/fence-protection";
 
 interface DivInfo {
   readonly from: number;
@@ -71,7 +72,7 @@ export interface DebugHelpers {
   tree: () => DivInfo[];
   /** Return full syntax tree as a readable string (built-in CM6 format). */
   treeString: () => string;
-  /** Return closing fence visibility for all fenced div blocks. */
+  /** Return closing fence visibility for all protected fenced blocks. */
   fences: () => FenceStatus[];
   /** Return DOM state (classes, height, hidden) for a specific line number. */
   line: (lineNum: number) => LineInfo | null;
@@ -112,9 +113,6 @@ function inspectLine(view: EditorView, lineNum: number): LineInfo | null {
   };
 }
 
-/** Regex matching a closing fence line: 3+ colons followed by optional whitespace. */
-const CLOSING_FENCE_RE = /^:{3,}\s*$/;
-
 export function createDebugHelpers(view: EditorView): DebugHelpers {
   return {
     tree() {
@@ -140,16 +138,13 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
     },
 
     fences() {
-      const doc = view.state.doc;
       const results: FenceStatus[] = [];
-      for (let i = 1; i <= doc.lines; i++) {
-        const lineText = doc.line(i).text;
-        if (CLOSING_FENCE_RE.test(lineText.trimStart())) {
-          const info = inspectLine(view, i);
-          if (info) {
-            const { line, height, hidden, classes } = info;
-            results.push({ line, height, hidden, classes });
-          }
+      for (const range of getClosingFenceRanges(view.state)) {
+        const lineNumber = view.state.doc.lineAt(range.from).number;
+        const info = inspectLine(view, lineNumber);
+        if (info) {
+          const { line, height, hidden, classes } = info;
+          results.push({ line, height, hidden, classes });
         }
       }
       return results;

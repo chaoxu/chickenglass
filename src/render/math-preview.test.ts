@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CSS } from "../constants";
 import {
   createMarkdownLanguageExtensions,
-  sharedDocumentStateExtensions,
 } from "../editor/base-editor-extensions";
+import { frontmatterField } from "../editor/frontmatter-state";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { mathMacrosField } from "./math-macros";
 
@@ -40,7 +40,7 @@ function createPreviewView(
     selection: { anchor: cursorPos },
     extensions: [
       ...createMarkdownLanguageExtensions(),
-      ...sharedDocumentStateExtensions,
+      frontmatterField,
       documentAnalysisField,
       mathMacrosField,
       mathPreviewPlugin,

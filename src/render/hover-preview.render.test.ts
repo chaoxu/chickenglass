@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { bibDataField } from "../citations/citation-render";
 import {
   createMarkdownLanguageExtensions,
-  sharedDocumentStateExtensions,
 } from "../editor/base-editor-extensions";
+import { frontmatterField } from "../editor/frontmatter-state";
 import { documentPathFacet } from "../lib/types";
 import {
   blockCounterField,
@@ -45,7 +45,7 @@ function createPreviewView(
     doc,
     extensions: [
       ...createMarkdownLanguageExtensions(),
-      ...sharedDocumentStateExtensions,
+      frontmatterField,
       documentAnalysisField,
       bibDataField,
       createPluginRegistryField(defaultPlugins),

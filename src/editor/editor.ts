@@ -42,10 +42,10 @@ import { richClipboardOutputFilter } from "./rich-clipboard";
 import {
   createMarkdownLanguageExtensions,
   createProjectConfigExtensions,
-  sharedDocumentStateExtensions,
   sharedInlineRenderExtensions,
 } from "./base-editor-extensions";
 import { documentLabelGraphField } from "../semantics/document-label-graph";
+import { frontmatterField } from "./frontmatter-state";
 
 const fallbackDocument = "# Untitled\n";
 
@@ -151,7 +151,7 @@ const codeLanguageDescriptions: LanguageDescription[] = [
 function coreDocumentStateExtensions(): Extension[] {
   return [
     // Frontmatter state (always needed — other extensions read it)
-    ...sharedDocumentStateExtensions,
+    frontmatterField,
 
     // Include expansion metadata must survive Rich/Source mode switches.
     includeRegionsField,
@@ -229,18 +229,20 @@ export interface EditorConfig {
   extensions?: Extension[];
 }
 
-let treeViewEnabled = false;
+function hasCompartmentContent(extension: Extension | undefined): boolean {
+  return extension !== undefined && (!Array.isArray(extension) || extension.length > 0);
+}
 
 /**
  * Toggle the Lezer tree-view debug panel.
  * Call from console: `__cmDebug.toggleTreeView()`.
  */
 export function toggleTreeView(view: EditorView): boolean {
-  treeViewEnabled = !treeViewEnabled;
+  const nextEnabled = !hasCompartmentContent(treeViewCompartment.get(view.state));
   view.dispatch({
-    effects: treeViewCompartment.reconfigure(treeViewEnabled ? treeView : []),
+    effects: treeViewCompartment.reconfigure(nextEnabled ? treeView : []),
   });
-  return treeViewEnabled;
+  return nextEnabled;
 }
 
 /** Create and mount a CodeMirror 6 markdown editor. */
