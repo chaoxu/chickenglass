@@ -58,6 +58,7 @@ export function markdownToHtml(
       context.citedIds,
       context.cslProcessor,
       context.citationBacklinks,
+      context.doc,
     );
   }
   return html;
