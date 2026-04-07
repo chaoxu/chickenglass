@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useMemo, useRef } from "react";
+import { lazy, Suspense, useMemo, useRef } from "react";
 import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
 import {
   AppEditorControllerProvider,
@@ -123,24 +123,13 @@ function AppInner() {
     editor,
   });
 
-  const isSelfChange = useCallback(async (path: string): Promise<boolean> => {
-    try {
-      const diskContent = await fs.readFile(path);
-      return editor.pipeline.isSelfChange(path, diskContent);
-    } catch {
-      return false;
-    }
-  }, [editor.pipeline, fs]);
-
   useProjectFileWatcher({
     projectRoot: workspace.projectRoot,
     containerRef: appContainerRef,
-    isPathOpen: editor.isPathOpen,
-    isPathDirty: editor.isPathDirty,
     refreshTree: workspace.refreshTree,
     reloadFile: editor.reloadFile,
     handleWatchedPathChange: editor.handleWatchedPathChange,
-    isSelfChange,
+    syncExternalChange: editor.syncExternalChange,
   });
 
   useAppDebug({

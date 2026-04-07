@@ -7,18 +7,13 @@
  */
 
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import type { ExternalDocumentSyncResult } from "./editor-session-service";
 import { logCatchError } from "./lib/log-catch-error";
 import { basename } from "./lib/utils";
 import { measureAsync } from "./perf";
 import { watchDirectoryCommand, unwatchDirectoryCommand } from "./tauri-client/watch";
 
 let latestFileWatcherToken = 0;
-
-/** Callback to check whether a file is open in a tab. */
-export type IsFileOpenFn = (path: string) => boolean;
-
-/** Callback to check whether a file has unsaved changes. */
-export type IsFileDirtyFn = (path: string) => boolean;
 
 /** Callback to reload a file's content from disk. */
 export type ReloadFileFn = (path: string) => Promise<void>;
@@ -29,27 +24,21 @@ export type RefreshTreeFn = (changedPath?: string) => Promise<void>;
 /** Callback fired for any watched path change, even when the file is not open. */
 export type HandleWatchedPathChangeFn = (path: string) => void | Promise<void>;
 
-/**
- * Callback to check whether a file-changed event was caused by the app's
- * own save. Receives the path and returns a promise that resolves to true
- * if the change should be suppressed.
- */
-export type IsSelfChangeFn = (path: string) => Promise<boolean>;
+/** Callback to resolve the session transition for a watched file change. */
+export type SyncExternalChangeFn = (
+  path: string,
+) => Promise<ExternalDocumentSyncResult>;
 
 /** Configuration for the FileWatcher. */
 export interface FileWatcherConfig {
-  /** Check whether a file is currently open in a tab. */
-  isFileOpen: IsFileOpenFn;
-  /** Check whether a file has unsaved changes. */
-  isFileDirty: IsFileDirtyFn;
   /** Refresh the sidebar tree after structural changes. */
   refreshTree: RefreshTreeFn;
   /** Reload a file from disk into the editor. */
   reloadFile: ReloadFileFn;
   /** Handle non-document side effects for any changed watched path. */
   handleWatchedPathChange?: HandleWatchedPathChangeFn;
-  /** Check whether a change event was caused by the app's own save. */
-  isSelfChange?: IsSelfChangeFn;
+  /** Ask the session layer how this watched change should be handled. */
+  syncExternalChange: SyncExternalChangeFn;
   /** Container element for the notification bar. */
   container: HTMLElement;
 }
@@ -73,9 +62,8 @@ function normalizeFileChangedEvent(payload: FileChangedPayload): FileChangedEven
  *
  * When a watched file changes:
  * - If the change can affect directory contents: refresh the sidebar tree
- * - If the file is open and clean: reload silently
- * - If the file is open and dirty: show a notification bar
- * - If the file is not open: skip editor reload/notification handling
+ * - Ask the session layer whether to ignore, reload, or prompt
+ * - Show a notification bar only when the session says the file is dirty
  */
 export class FileWatcher {
   private readonly config: FileWatcherConfig;
@@ -180,27 +168,8 @@ export class FileWatcher {
       );
     }
 
-    if (!this.config.isFileOpen(relativePath)) {
-      return;
-    }
-
-    // Suppress events caused by the app's own save.
-    if (this.config.isSelfChange) {
-      try {
-        if (await this.config.isSelfChange(relativePath)) {
-          return;
-        }
-      } catch (error: unknown) {
-        console.warn("[file-watcher] isSelfChange check failed; treating change as external", relativePath, error);
-      }
-    }
-
-    if (!this.config.isFileDirty(relativePath)) {
-      // File is clean — reload silently
-      void measureAsync("watch.reload_clean_file", () => this.config.reloadFile(relativePath), {
-        category: "watch",
-        detail: relativePath,
-      }).catch(logCatchError("[file-watcher] silent reload failed", relativePath));
+    const syncResult = await this.config.syncExternalChange(relativePath);
+    if (syncResult === "ignore" || syncResult === "reloaded") {
       return;
     }
 

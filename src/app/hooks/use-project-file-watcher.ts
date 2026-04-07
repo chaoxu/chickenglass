@@ -1,28 +1,25 @@
 import { useEffect } from "react";
 import type { RefObject } from "react";
 import { FileWatcher } from "../file-watcher";
+import type { ExternalDocumentSyncResult } from "../editor-session-service";
 import { isTauri } from "../../lib/tauri";
 
 interface UseProjectFileWatcherOptions {
   projectRoot: string | null;
   containerRef: RefObject<HTMLElement | null>;
-  isPathOpen: (path: string) => boolean;
-  isPathDirty: (path: string) => boolean;
   refreshTree: (changedPath?: string) => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
   handleWatchedPathChange?: (path: string) => void | Promise<void>;
-  isSelfChange?: (path: string) => Promise<boolean>;
+  syncExternalChange: (path: string) => Promise<ExternalDocumentSyncResult>;
 }
 
 export function useProjectFileWatcher({
   projectRoot,
   containerRef,
-  isPathOpen,
-  isPathDirty,
   refreshTree,
   reloadFile,
   handleWatchedPathChange,
-  isSelfChange,
+  syncExternalChange,
 }: UseProjectFileWatcherOptions): void {
   useEffect(() => {
     const container = containerRef.current;
@@ -31,12 +28,10 @@ export function useProjectFileWatcher({
     }
 
     const watcher = new FileWatcher({
-      isFileOpen: isPathOpen,
-      isFileDirty: isPathDirty,
       refreshTree,
       reloadFile,
       handleWatchedPathChange,
-      isSelfChange,
+      syncExternalChange,
       container,
     });
     let cancelled = false;
@@ -64,11 +59,9 @@ export function useProjectFileWatcher({
   }, [
     containerRef,
     handleWatchedPathChange,
-    isPathDirty,
-    isPathOpen,
-    isSelfChange,
     projectRoot,
     refreshTree,
     reloadFile,
+    syncExternalChange,
   ]);
 }

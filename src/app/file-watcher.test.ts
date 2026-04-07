@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ExternalDocumentSyncResult } from "./editor-session-service";
 
 const watcherBackendState = vi.hoisted(() => {
   interface Deferred<T> {
@@ -45,12 +46,10 @@ import { FileWatcher } from "./file-watcher";
 
 function createWatcher(
   options: {
-    isFileOpen?: (path: string) => boolean;
-    isFileDirty?: (path: string) => boolean;
     refreshTree?: (path?: string) => Promise<void>;
     reloadFile?: (path: string) => Promise<void>;
     handleWatchedPathChange?: (path: string) => void | Promise<void>;
-    isSelfChange?: (path: string) => Promise<boolean>;
+    syncExternalChange?: (path: string) => Promise<ExternalDocumentSyncResult>;
   } = {},
 ) {
   const container = document.createElement("div");
@@ -60,17 +59,24 @@ function createWatcher(
     options.reloadFile ?? vi.fn(async (_path: string) => {});
   const handleWatchedPathChange =
     options.handleWatchedPathChange ?? vi.fn();
+  const syncExternalChange =
+    options.syncExternalChange ?? vi.fn(async () => "notify" as const);
   const watcher = new FileWatcher({
-    isFileOpen: options.isFileOpen ?? (() => true),
-    isFileDirty: options.isFileDirty ?? (() => true),
     refreshTree,
     reloadFile,
     handleWatchedPathChange,
-    isSelfChange: options.isSelfChange,
+    syncExternalChange,
     container,
   });
 
-  return { container, watcher, refreshTree, reloadFile, handleWatchedPathChange };
+  return {
+    container,
+    watcher,
+    refreshTree,
+    reloadFile,
+    handleWatchedPathChange,
+    syncExternalChange,
+  };
 }
 
 describe("FileWatcher", () => {
@@ -166,14 +172,14 @@ describe("FileWatcher", () => {
     consoleWarn.mockRestore();
   });
 
-  it("queues dirty-file notifications instead of dropping earlier ones", () => {
+  it("queues dirty-file notifications instead of dropping earlier ones", async () => {
     const { container, watcher } = createWatcher();
-    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => void })
+    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => Promise<void> })
       .handleFileChanged
-      .bind(watcher as unknown as { handleFileChanged: (path: string) => void });
+      .bind(watcher as unknown as { handleFileChanged: (path: string) => Promise<void> });
 
-    handleFileChanged("a.md");
-    handleFileChanged("b.md");
+    await handleFileChanged("a.md");
+    await handleFileChanged("b.md");
 
     expect(container.textContent).toContain("\"a.md\" changed externally. Reload?");
 
@@ -184,14 +190,14 @@ describe("FileWatcher", () => {
     expect(container.textContent).toContain("\"b.md\" changed externally. Reload?");
   });
 
-  it("suppresses duplicate notifications while a file is already pending", () => {
+  it("suppresses duplicate notifications while a file is already pending", async () => {
     const { container, watcher } = createWatcher();
-    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => void })
+    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => Promise<void> })
       .handleFileChanged
-      .bind(watcher as unknown as { handleFileChanged: (path: string) => void });
+      .bind(watcher as unknown as { handleFileChanged: (path: string) => Promise<void> });
 
-    handleFileChanged("a.md");
-    handleFileChanged("a.md");
+    await handleFileChanged("a.md");
+    await handleFileChanged("a.md");
 
     expect(container.querySelectorAll(".file-watcher-notification")).toHaveLength(1);
     expect(container.textContent?.match(/a\.md/g)?.length).toBe(1);
@@ -200,12 +206,12 @@ describe("FileWatcher", () => {
   it("reloads the current file and advances to the next pending notification", async () => {
     const reloadFile = vi.fn(async () => {});
     const { container, watcher } = createWatcher({ reloadFile });
-    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => void })
+    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => Promise<void> })
       .handleFileChanged
-      .bind(watcher as unknown as { handleFileChanged: (path: string) => void });
+      .bind(watcher as unknown as { handleFileChanged: (path: string) => Promise<void> });
 
-    handleFileChanged("a.md");
-    handleFileChanged("b.md");
+    await handleFileChanged("a.md");
+    await handleFileChanged("b.md");
 
     const yesButton = container.querySelector<HTMLButtonElement>(".file-watcher-btn-yes");
     expect(yesButton).not.toBeNull();
@@ -223,12 +229,12 @@ describe("FileWatcher", () => {
       throw new Error("boom");
     });
     const { container, watcher } = createWatcher({ reloadFile });
-    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => void })
+    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => Promise<void> })
       .handleFileChanged
-      .bind(watcher as unknown as { handleFileChanged: (path: string) => void });
+      .bind(watcher as unknown as { handleFileChanged: (path: string) => Promise<void> });
 
-    handleFileChanged("a.md");
-    handleFileChanged("b.md");
+    await handleFileChanged("a.md");
+    await handleFileChanged("b.md");
 
     const yesButton = container.querySelector<HTMLButtonElement>(".file-watcher-btn-yes");
     expect(yesButton).not.toBeNull();
@@ -247,9 +253,8 @@ describe("FileWatcher", () => {
   it("refreshes the tree for structural changes even when the path is not open", async () => {
     const refreshTree = vi.fn(async (_path?: string) => {});
     const { watcher, refreshTree: refreshTreeSpy } = createWatcher({
-      isFileOpen: () => false,
-      isFileDirty: () => false,
       refreshTree,
+      syncExternalChange: async () => "ignore",
     });
     const handleFileChanged = (
       watcher as unknown as {
@@ -267,9 +272,8 @@ describe("FileWatcher", () => {
   it("does not refresh the tree for non-structural file modifications", async () => {
     const refreshTree = vi.fn(async (_path?: string) => {});
     const { watcher, refreshTree: refreshTreeSpy } = createWatcher({
-      isFileOpen: () => false,
-      isFileDirty: () => false,
       refreshTree,
+      syncExternalChange: async () => "ignore",
     });
     const handleFileChanged = (
       watcher as unknown as {
@@ -287,9 +291,8 @@ describe("FileWatcher", () => {
   it("runs the watched-path handler even when the changed file is not open", async () => {
     const handleWatchedPathChange = vi.fn();
     const { watcher } = createWatcher({
-      isFileOpen: () => false,
-      isFileDirty: () => false,
       handleWatchedPathChange,
+      syncExternalChange: async () => "ignore",
     });
     const handleFileChanged = (
       watcher as unknown as {
@@ -304,12 +307,9 @@ describe("FileWatcher", () => {
     expect(handleWatchedPathChange).toHaveBeenCalledWith("assets/diagram.png");
   });
 
-  it("warns when self-change detection fails and still handles the change", async () => {
-    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("does not show a notification when the session already reloaded the clean file", async () => {
     const { container, watcher } = createWatcher({
-      isSelfChange: async () => {
-        throw new Error("probe failed");
-      },
+      syncExternalChange: async () => "reloaded",
     });
     const handleFileChanged = (
       watcher as unknown as {
@@ -321,12 +321,7 @@ describe("FileWatcher", () => {
 
     await handleFileChanged({ path: "a.md", treeChanged: false });
 
-    expect(consoleWarn).toHaveBeenCalledWith(
-      "[file-watcher] isSelfChange check failed; treating change as external",
-      "a.md",
-      expect.any(Error),
-    );
-    expect(container.textContent).toContain("\"a.md\" changed externally. Reload?");
-    consoleWarn.mockRestore();
+    expect(container.querySelector(".file-watcher-notification")).toBeNull();
+    expect(container.textContent).toBe("");
   });
 });

@@ -1,20 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { RefObject } from "react";
 import type { FileSystem } from "../file-manager";
-import { basename } from "../lib/utils";
-import {
-  clearSessionDocument,
-  markSessionDocumentDirty,
-  setCurrentSessionDocument,
-} from "../editor-session-actions";
 import {
   createEditorSessionState,
-  getCurrentSessionDocument,
-  hasSessionPath,
   type EditorSessionState,
   type SessionDocument,
 } from "../editor-session-model";
-import { measureAsync, withPerfOperation } from "../perf";
 import { SavePipeline } from "../save-pipeline";
 import type { SourceMap } from "../source-map";
 import type {
@@ -22,10 +12,6 @@ import type {
   UnsavedChangesRequest,
 } from "../unsaved-changes";
 import {
-  applyEditorDocumentChanges,
-  createEditorDocumentText,
-  editorDocumentToString,
-  emptyEditorDocument,
   type EditorDocumentChange,
   type EditorDocumentText,
 } from "../editor-doc-change";
@@ -33,6 +19,11 @@ import {
   createActiveDocumentSignal,
   type ActiveDocumentSignal,
 } from "../active-document-signal";
+import {
+  createEditorSessionService,
+  documentForPath,
+  type ExternalDocumentSyncResult,
+} from "../editor-session-service";
 import { useEditorSessionPersistence } from "./use-editor-session-persistence";
 
 export interface EditorSessionDeps {
@@ -65,6 +56,7 @@ export interface UseEditorSessionReturn {
   openFile: (path: string) => Promise<void>;
   openFileWithContent: (name: string, content: string) => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
+  syncExternalChange: (path: string) => Promise<ExternalDocumentSyncResult>;
   saveFile: () => Promise<void>;
   createFile: (path: string) => Promise<void>;
   createDirectory: (path: string) => Promise<void>;
@@ -73,43 +65,6 @@ export interface UseEditorSessionReturn {
   handleDelete: (path: string) => Promise<void>;
   saveAs: () => Promise<void>;
   handleWindowCloseRequest: () => Promise<boolean>;
-}
-
-function makeTransitionRequest(
-  currentDocument: SessionDocument,
-  reason: UnsavedChangesRequest["reason"],
-  target?: { path?: string; name: string },
-): UnsavedChangesRequest {
-  return {
-    reason,
-    currentDocument: {
-      path: currentDocument.path,
-      name: currentDocument.name,
-    },
-    target,
-  };
-}
-
-function documentForPath(
-  path: string | null,
-  liveDocs: RefObject<Map<string, EditorDocumentText>>,
-  buffers: RefObject<Map<string, EditorDocumentText>>,
-): string {
-  if (!path) return "";
-  return editorDocumentToString(
-    liveDocs.current.get(path)
-    ?? buffers.current.get(path)
-    ?? emptyEditorDocument,
-  );
-}
-
-function documentTextForPath(
-  path: string | null,
-  liveDocs: RefObject<Map<string, EditorDocumentText>>,
-  buffers: RefObject<Map<string, EditorDocumentText>>,
-): EditorDocumentText {
-  if (!path) return emptyEditorDocument;
-  return liveDocs.current.get(path) ?? buffers.current.get(path) ?? emptyEditorDocument;
 }
 
 export function useEditorSession({
@@ -136,12 +91,6 @@ export function useEditorSession({
   const pipeline = useMemo(() => new SavePipeline(
     (path, content, sourceMap) => writeDocumentSnapshotRef.current(path, content, sourceMap),
   ), []);
-  const clearPathBuffers = useCallback((path: string) => {
-    pipeline.clear(path);
-    buffers.current.delete(path);
-    liveDocs.current.delete(path);
-    sourceMaps.current.delete(path);
-  }, [pipeline]);
 
   const commitSessionState = useCallback((
     nextState: EditorSessionState,
@@ -189,272 +138,30 @@ export function useEditorSession({
 
   writeDocumentSnapshotRef.current = (path, content, sourceMap) =>
     writeDocumentSnapshot(path, content, sourceMap as SourceMap | null);
-
-  const discardDocumentChanges = useCallback((path: string) => {
-    const savedDoc = buffers.current.get(path) ?? emptyEditorDocument;
-    liveDocs.current.set(path, savedDoc);
-    commitSessionState(
-      markSessionDocumentDirty(stateRef.current, path, false),
-      stateRef.current.currentDocument?.path === path
-        ? { editorDoc: editorDocumentToString(savedDoc) }
-        : undefined,
-    );
-  }, [commitSessionState]);
-
-  const prepareCurrentDocumentForTransition = useCallback(async (
-    reason: UnsavedChangesRequest["reason"],
-    target?: { path?: string; name: string },
-  ): Promise<boolean> => {
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
-    if (!currentDocument || !currentDocument.dirty) {
-      return true;
-    }
-
-    const decision = await requestUnsavedChangesDecision(
-      makeTransitionRequest(currentDocument, reason, target),
-    );
-
-    if (decision === "cancel") {
-      return false;
-    }
-
-    if (decision === "save") {
-      return saveCurrentDocument();
-    }
-
-    discardDocumentChanges(currentDocument.path);
-    return true;
-  }, [
-    discardDocumentChanges,
-    requestUnsavedChangesDecision,
-    saveCurrentDocument,
-  ]);
-
-  const isPathOpen = useCallback(
-    (path: string): boolean => hasSessionPath(stateRef.current, path),
-    [],
-  );
-
-  const isPathDirty = useCallback((path: string): boolean => {
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
-    return currentDocument?.path === path && currentDocument.dirty;
-  }, []);
-
-  const cancelPendingOpenFile = useCallback(() => {
-    openFileRequestRef.current += 1;
-  }, []);
-
-  const getCurrentDocText = useCallback(() => {
-    return documentForPath(stateRef.current.currentDocument?.path ?? null, liveDocs, buffers);
-  }, []);
-
-  const handleDocChange = useCallback((changes: readonly EditorDocumentChange[]) => {
-    const currentPath = stateRef.current.currentDocument?.path;
-    if (!currentPath) return;
-
-    const previousDoc = documentTextForPath(currentPath, liveDocs, buffers);
-    const doc = applyEditorDocumentChanges(previousDoc, changes);
-    liveDocs.current.set(currentPath, doc);
-    pipeline.bumpRevision(currentPath);
-    activeDocumentSignal.publish(currentPath);
-
-    const isDirty = !doc.eq(buffers.current.get(currentPath) ?? emptyEditorDocument);
-    const nextState = markSessionDocumentDirty(stateRef.current, currentPath, isDirty);
-    if (nextState !== stateRef.current) {
-      commitSessionState(nextState);
-    }
-  }, [activeDocumentSignal, commitSessionState, pipeline]);
-
-  const handleProgrammaticDocChange = useCallback((path: string, doc: string) => {
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
-    if (currentDocument?.path !== path) return;
-
-    const nextDoc = createEditorDocumentText(doc);
-    if (!currentDocument.dirty) {
-      buffers.current.set(path, nextDoc);
-    }
-    liveDocs.current.set(path, nextDoc);
-    commitSessionState(
-      currentDocument.dirty
-        ? stateRef.current
-        : markSessionDocumentDirty(stateRef.current, path, false),
-      { editorDoc: doc },
-    );
-  }, [commitSessionState]);
-
-  const setDocumentSourceMap = useCallback((path: string, sourceMap: SourceMap | null) => {
-    if (sourceMap) {
-      sourceMaps.current.set(path, sourceMap);
-      return;
-    }
-    sourceMaps.current.delete(path);
-  }, []);
-
-  const openFile = useCallback(async (path: string) => {
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
-    if (currentDocument?.path === path) {
-      addRecentFile(path);
-      return;
-    }
-
-    const requestId = ++openFileRequestRef.current;
-    const targetName = basename(path);
-    const canLeave = await prepareCurrentDocumentForTransition("switch-file", {
-      path,
-      name: targetName,
-    });
-    if (!canLeave || requestId !== openFileRequestRef.current) {
-      return;
-    }
-
-    return withPerfOperation("open_file", async (operation) => {
-      try {
-        const content = await operation.measureAsync(
-          "open_file.read",
-          () => fs.readFile(path),
-          { category: "open_file", detail: path },
-        );
-
-        if (requestId !== openFileRequestRef.current) {
-          return;
-        }
-
-        const previousPath = stateRef.current.currentDocument?.path ?? null;
-        if (previousPath && previousPath !== path) {
-          clearPathBuffers(previousPath);
-        }
-
-        const documentText = createEditorDocumentText(content);
-        sourceMaps.current.delete(path);
-        buffers.current.set(path, documentText);
-        liveDocs.current.set(path, documentText);
-        pipeline.initPath(path, content);
-        commitSessionState(
-          setCurrentSessionDocument(stateRef.current, {
-            path,
-            name: targetName,
-            dirty: false,
-          }),
-          { editorDoc: content },
-        );
-        addRecentFile(path);
-      } catch (e: unknown) {
-        console.error("[session] failed to open file:", path, e);
-        throw e;
-      }
-    }, path);
-  }, [
+  const sessionService = useMemo(() => createEditorSessionService({
+    fs,
+    refreshTree,
     addRecentFile,
-    clearPathBuffers,
+    requestUnsavedChangesDecision,
+    stateRef,
+    buffers,
+    liveDocs,
+    sourceMaps,
+    pipeline,
+    activeDocumentSignal,
+    openFileRequestRef,
+    commitSessionState,
+    saveCurrentDocument,
+  }), [
+    activeDocumentSignal,
+    addRecentFile,
     commitSessionState,
     fs,
     pipeline,
-    prepareCurrentDocumentForTransition,
+    refreshTree,
+    requestUnsavedChangesDecision,
+    saveCurrentDocument,
   ]);
-
-  const openFileWithContent = useCallback(async (name: string, content: string) => {
-    const requestId = ++openFileRequestRef.current;
-    let path = name;
-    let suffix = 1;
-    while (hasSessionPath(stateRef.current, path)) {
-      path = `${name} (${suffix++})`;
-    }
-
-    const canLeave = await prepareCurrentDocumentForTransition("switch-file", {
-      name: basename(path),
-      path,
-    });
-    if (!canLeave || requestId !== openFileRequestRef.current) return;
-
-    const previousPath = stateRef.current.currentDocument?.path ?? null;
-    if (previousPath && previousPath !== path) {
-      clearPathBuffers(previousPath);
-    }
-
-    const emptyDoc = emptyEditorDocument;
-    const documentText = createEditorDocumentText(content);
-    sourceMaps.current.delete(path);
-    buffers.current.set(path, emptyDoc);
-    liveDocs.current.set(path, documentText);
-    commitSessionState(
-      setCurrentSessionDocument(stateRef.current, {
-        path,
-        name: basename(path),
-        dirty: true,
-      }),
-      { editorDoc: content },
-    );
-  }, [clearPathBuffers, commitSessionState, prepareCurrentDocumentForTransition]);
-
-  const reloadFile = useCallback(async (path: string) => {
-    if (!hasSessionPath(stateRef.current, path)) return;
-
-    try {
-      const content = await fs.readFile(path);
-      const documentText = createEditorDocumentText(content);
-      clearPathBuffers(path);
-      buffers.current.set(path, documentText);
-      liveDocs.current.set(path, documentText);
-      pipeline.initPath(path, content);
-      commitSessionState(
-        markSessionDocumentDirty(stateRef.current, path, false),
-        stateRef.current.currentDocument?.path === path
-          ? { editorDoc: content }
-          : undefined,
-      );
-    } catch (e: unknown) {
-      console.error("[session] reload failed:", path, e);
-      throw e;
-    }
-  }, [clearPathBuffers, commitSessionState, fs, pipeline]);
-
-  const createFile = useCallback(async (path: string) => {
-    try {
-      await measureAsync("create_file.write", () => fs.createFile(path, ""), {
-        category: "create_file",
-        detail: path,
-      });
-      await refreshTree(path);
-      await openFile(path);
-    } catch (e: unknown) {
-      console.error("[session] create file failed:", e);
-    }
-  }, [fs, openFile, refreshTree]);
-
-  const createDirectory = useCallback(async (path: string) => {
-    try {
-      await measureAsync("create_directory.write", () => fs.createDirectory(path), {
-        category: "create_directory",
-        detail: path,
-      });
-      await refreshTree(path);
-    } catch (e: unknown) {
-      console.error("[session] create directory failed:", e);
-    }
-  }, [fs, refreshTree]);
-
-  const closeCurrentFile = useCallback(async (
-    options?: { discard?: boolean },
-  ): Promise<boolean> => {
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
-    if (!currentDocument) return true;
-
-    if (!options?.discard) {
-      const canClose = await prepareCurrentDocumentForTransition("close-file");
-      if (!canClose) return false;
-    }
-
-    clearPathBuffers(currentDocument.path);
-    commitSessionState(
-      clearSessionDocument(stateRef.current, currentDocument.path),
-      { editorDoc: "" },
-    );
-    return true;
-  }, [clearPathBuffers, commitSessionState, prepareCurrentDocumentForTransition]);
-
-  const handleWindowCloseRequest = useCallback(async (): Promise<boolean> => {
-    return prepareCurrentDocumentForTransition("close-window");
-  }, [prepareCurrentDocumentForTransition]);
 
   return {
     currentDocument: sessionState.currentDocument,
@@ -465,23 +172,24 @@ export function useEditorSession({
     buffers,
     liveDocs,
     pipeline,
-    getCurrentDocText,
-    isPathOpen,
-    isPathDirty,
-    cancelPendingOpenFile,
-    handleDocChange,
-    handleProgrammaticDocChange,
-    setDocumentSourceMap,
-    openFile,
-    openFileWithContent,
-    reloadFile,
+    getCurrentDocText: sessionService.getCurrentDocText,
+    isPathOpen: sessionService.isPathOpen,
+    isPathDirty: sessionService.isPathDirty,
+    cancelPendingOpenFile: sessionService.cancelPendingOpenFile,
+    handleDocChange: sessionService.handleDocChange,
+    handleProgrammaticDocChange: sessionService.handleProgrammaticDocChange,
+    setDocumentSourceMap: sessionService.setDocumentSourceMap,
+    openFile: sessionService.openFile,
+    openFileWithContent: sessionService.openFileWithContent,
+    reloadFile: sessionService.reloadFile,
+    syncExternalChange: sessionService.syncExternalChange,
     saveFile,
-    createFile,
-    createDirectory,
-    closeCurrentFile,
+    createFile: sessionService.createFile,
+    createDirectory: sessionService.createDirectory,
+    closeCurrentFile: sessionService.closeCurrentFile,
     handleRename,
     handleDelete,
     saveAs,
-    handleWindowCloseRequest,
+    handleWindowCloseRequest: sessionService.handleWindowCloseRequest,
   };
 }

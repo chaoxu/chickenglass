@@ -414,6 +414,70 @@ describe("useEditorSession", () => {
     expect(ref.result.currentDocument?.dirty).toBe(false);
   });
 
+  it("syncExternalChange suppresses watcher events caused by the session's own save", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "hello" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "hello!"));
+    });
+
+    await act(async () => {
+      await ref.result.saveFile();
+    });
+
+    await act(async () => {
+      await expect(ref.result.syncExternalChange("draft.md")).resolves.toBe("ignore");
+    });
+    expect(ref.result.editorDoc).toBe("hello!");
+    expect(ref.result.currentDocument?.dirty).toBe(false);
+  });
+
+  it("syncExternalChange reloads a clean open document from disk", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "hello" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+      await fs.writeFile("draft.md", "updated on disk");
+    });
+
+    await act(async () => {
+      await expect(ref.result.syncExternalChange("draft.md")).resolves.toBe("reloaded");
+    });
+    expect(ref.result.editorDoc).toBe("updated on disk");
+    expect(ref.result.getCurrentDocText()).toBe("updated on disk");
+    expect(ref.result.currentDocument?.dirty).toBe(false);
+  });
+
+  it("syncExternalChange asks the watcher to prompt when the current document is dirty", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "hello" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+      await fs.writeFile("draft.md", "updated on disk");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "local edit"));
+    });
+
+    await act(async () => {
+      await expect(ref.result.syncExternalChange("draft.md")).resolves.toBe("notify");
+    });
+    expect(ref.result.editorDoc).toBe("hello");
+    expect(ref.result.getCurrentDocText()).toBe("local edit");
+    expect(ref.result.currentDocument?.dirty).toBe(true);
+  });
+
   it("cancels file switching when the unsaved-changes prompt says cancel", async () => {
     const fs = new MemoryFileSystem({
       "draft.md": "hello",
