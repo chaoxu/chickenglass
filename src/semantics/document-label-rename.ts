@@ -1,6 +1,6 @@
 import type { ChangeSpec, EditorState } from "@codemirror/state";
 import {
-  documentLabelGraphField,
+  buildDocumentLabelGraph,
   findDocumentLabelBacklinks,
   type DocumentLabelDefinition,
   type DocumentLabelGraph,
@@ -130,7 +130,7 @@ function buildRenameChanges(
 export function resolveDocumentLabelRenameTarget(
   state: EditorState,
 ): DocumentLabelRenameTargetLookup {
-  const graph = state.field(documentLabelGraphField);
+  const graph = buildDocumentLabelGraph(state);
   const selection = state.selection.main;
 
   const reference = findMatchingReference(graph, selection.from, selection.to);
@@ -164,7 +164,7 @@ export function prepareDocumentLabelRename(
     return lookup;
   }
 
-  const graph = state.field(documentLabelGraphField);
+  const graph = buildDocumentLabelGraph(state);
   const { definition, references } = lookup.target;
   const validation = validateDocumentLabelRename(graph, nextId, {
     currentId: definition.id,

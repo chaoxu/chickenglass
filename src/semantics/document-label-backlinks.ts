@@ -1,6 +1,6 @@
 import { type EditorState } from "@codemirror/state";
 import {
-  documentLabelGraphField,
+  buildDocumentLabelGraph,
   findDocumentLabelBacklinks,
   type DocumentLabelDefinition,
   type DocumentLabelGraph,
@@ -103,11 +103,11 @@ function buildBacklinkItem(
 }
 
 function readyResult(
+  graph: DocumentLabelGraph,
   state: EditorState,
   definition: DocumentLabelDefinition,
   source: DocumentLabelBacklinksResult["source"],
 ): DocumentLabelBacklinksLookup {
-  const graph = state.field(documentLabelGraphField);
   return {
     kind: "ready",
     result: {
@@ -133,14 +133,14 @@ function duplicateResult(
 export function resolveDocumentLabelBacklinks(
   state: EditorState,
 ): DocumentLabelBacklinksLookup {
-  const graph = state.field(documentLabelGraphField);
+  const graph = buildDocumentLabelGraph(state);
   const selection = state.selection.main;
 
   const reference = findMatchingReference(graph, selection.from, selection.to);
   if (reference) {
     const definition = graph.uniqueDefinitionById.get(reference.id);
     if (definition) {
-      return readyResult(state, definition, "reference");
+      return readyResult(graph, state, definition, "reference");
     }
     if (graph.definitionsById.has(reference.id)) {
       return duplicateResult(graph, reference.id);
@@ -152,14 +152,14 @@ export function resolveDocumentLabelBacklinks(
     if (graph.duplicatesById.has(definition.id)) {
       return duplicateResult(graph, definition.id);
     }
-    return readyResult(state, definition, "definition");
+    return readyResult(graph, state, definition, "definition");
   }
 
   if (!selection.empty) {
     const id = state.sliceDoc(selection.from, selection.to).trim();
     const selectedDefinition = graph.uniqueDefinitionById.get(id);
     if (selectedDefinition) {
-      return readyResult(state, selectedDefinition, "selection");
+      return readyResult(graph, state, selectedDefinition, "selection");
     }
     if (graph.duplicatesById.has(id)) {
       return duplicateResult(graph, id);

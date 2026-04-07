@@ -1,31 +1,12 @@
-/**
- * Cross-reference resolver.
- *
- * Resolves [@id] and @id references to their targets: block labels
- * (e.g., "Theorem 1"), equation labels (e.g., "Eq. (3)"), citations
- * (deferred to the citation system), or unresolved references.
- *
- * Uses the block counter state and the syntax tree to find targets.
- */
-
 import { type EditorState } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
-import type { BlockCounterState } from "../plugins";
-import { blockCounterField } from "../plugins";
-import { pluginRegistryField, getPlugin } from "../plugins";
-import { analyzeDocumentSemantics, type DocumentAnalysis } from "../semantics/document";
-import { documentAnalysisField, editorStateTextSource } from "../semantics/codemirror-source";
-
-/**
- * Return the cached document analysis from the CM6 field when available,
- * falling back to a full recompute from the syntax tree.
- */
-function getAnalysisOrRecompute(state: EditorState): DocumentAnalysis {
-  return (
-    state.field(documentAnalysisField, false) ??
-    analyzeDocumentSemantics(editorStateTextSource(state), syntaxTree(state))
-  );
-}
+import {
+  buildEditorDocumentReferenceCatalog,
+  getDocumentAnalysisOrRecompute,
+} from "../semantics/editor-reference-catalog";
+import {
+  formatEquationReferenceLabel,
+  getPreferredDocumentReferenceTarget,
+} from "../semantics/reference-catalog";
 
 /** The kind of target a cross-reference resolves to. */
 export type CrossrefKind = "block" | "equation" | "citation" | "unresolved";
@@ -69,31 +50,21 @@ export interface ReferenceClassificationOptions {
   readonly preferCitation?: boolean;
 }
 
-function formatHeadingCrossrefLabel(
-  analysis: DocumentAnalysis,
-  id: string,
-): ResolvedCrossref | undefined {
-  for (const heading of analysis.headings) {
-    if (heading.id !== id) continue;
-    return {
-      kind: "block",
-      label: heading.number ? `Section ${heading.number}` : heading.text,
-      title: heading.text,
-    };
-  }
-  return undefined;
-}
-
 export function collectEquationLabels(
   state: EditorState,
 ): ReadonlyMap<string, EquationEntry> {
-  const equations = getAnalysisOrRecompute(state).equationById;
-  return new Map(
-    [...equations.entries()].map(([id, equation]) => [
-      id,
-      { id, number: equation.number },
-    ]),
-  );
+  const catalog = buildEditorDocumentReferenceCatalog(state);
+  const equations = new Map<string, EquationEntry>();
+  for (const target of catalog.targets) {
+    if (target.kind !== "equation" || !target.id || target.ordinal === undefined) {
+      continue;
+    }
+    equations.set(target.id, {
+      id: target.id,
+      number: target.ordinal,
+    });
+  }
+  return equations;
 }
 
 /**
@@ -110,53 +81,67 @@ export function resolveCrossref(
   id: string,
   equationLabels?: ReadonlyMap<string, EquationEntry>,
 ): ResolvedCrossref {
-  // 1. Check block labels
-  const counterState: BlockCounterState | undefined =
-    state.field(blockCounterField, false) ?? undefined;
+  const catalog = buildEditorDocumentReferenceCatalog(state);
+  const target = getPreferredDocumentReferenceTarget(catalog, id);
 
-  if (counterState) {
-    const block = counterState.byId.get(id);
-    if (block) {
-      const registry = state.field(pluginRegistryField, false);
-      const plugin = registry ? getPlugin(registry, block.type) : undefined;
-      const title = plugin?.title ?? block.type;
-      return {
-        kind: "block",
-        label: `${title} ${block.number}`,
-        number: block.number,
-      };
-    }
+  if (target?.kind === "block") {
+    return {
+      kind: "block",
+      label: target.displayLabel,
+      number: target.ordinal,
+    };
   }
 
-  const analysis = getAnalysisOrRecompute(state);
-
-  // 2. Check equation labels
-  const eqLabels =
-    equationLabels ??
-    analysis.equationById;
-  const eqEntry = eqLabels.get(id);
+  const eqEntry = equationLabels?.get(id)
+    ?? (target?.kind === "equation" && target.ordinal !== undefined
+      ? { id, number: target.ordinal }
+      : undefined);
   if (eqEntry) {
     return {
       kind: "equation",
-      label: `Eq. (${eqEntry.number})`,
+      label: formatEquationReferenceLabel(eqEntry.number),
       number: eqEntry.number,
     };
   }
 
-  // 3. Check heading labels
-  const heading = formatHeadingCrossrefLabel(analysis, id);
-  if (heading) {
-    return heading;
+  if (target?.kind === "heading") {
+    return {
+      kind: "block",
+      label: target.displayLabel,
+      title: target.title,
+    };
   }
 
-  // 4. Assume citation if not found as block, equation, or heading
-  // Citations use identifiers that typically don't have prefixes like "eq:" or "thm-"
-  // But we can't know for sure until the citation system is loaded,
-  // so we mark it as citation (to be verified later by the citation renderer).
+  // Assume citation if not found as block, equation, or heading.
   return {
     kind: "citation",
     label: id,
   };
+}
+
+/** A cross-reference occurrence found in the document text. */
+export interface CrossrefMatch {
+  /** The reference id (without @ or brackets). */
+  readonly id: string;
+  /** Start position in the document. */
+  readonly from: number;
+  /** End position in the document. */
+  readonly to: number;
+  /** Whether this is a bracketed reference [@id] vs narrative @id. */
+  readonly bracketed: boolean;
+}
+
+export function findCrossrefs(state: EditorState): CrossrefMatch[] {
+  const references = getDocumentAnalysisOrRecompute(state).references;
+
+  return references
+    .filter((ref) => ref.ids.length === 1)
+    .map((ref) => ({
+      id: ref.ids[0],
+      from: ref.from,
+      to: ref.to,
+      bracketed: ref.bracketed,
+    }));
 }
 
 export function classifyReference(
@@ -185,29 +170,4 @@ export function classifyReference(
   }
 
   return { kind: "unresolved", id };
-}
-
-/** A cross-reference occurrence found in the document text. */
-export interface CrossrefMatch {
-  /** The reference id (without @ or brackets). */
-  readonly id: string;
-  /** Start position in the document. */
-  readonly from: number;
-  /** End position in the document. */
-  readonly to: number;
-  /** Whether this is a bracketed reference [@id] vs narrative @id. */
-  readonly bracketed: boolean;
-}
-
-export function findCrossrefs(state: EditorState): CrossrefMatch[] {
-  const references = getAnalysisOrRecompute(state).references;
-
-  return references
-    .filter((ref) => ref.ids.length === 1)
-    .map((ref) => ({
-      id: ref.ids[0],
-      from: ref.from,
-      to: ref.to,
-      bracketed: ref.bracketed,
-    }));
 }

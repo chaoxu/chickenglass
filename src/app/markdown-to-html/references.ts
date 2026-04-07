@@ -10,6 +10,11 @@ import type { CitationBacklink } from "../../citations/csl-processor";
 import { sanitizeCslHtml } from "../../render/inline-shared";
 import { CSS } from "../../constants/css-classes";
 import {
+  formatBlockReferenceLabel,
+  formatEquationReferenceLabel,
+  formatHeadingReferenceLabel,
+} from "../../semantics/reference-catalog";
+import {
   type BlockCounterEntry,
   type CitationRenderContext,
   escapeHtml,
@@ -22,16 +27,16 @@ export function resolveCrossrefLabel(
 ): string {
   if (blockCounters) {
     const block = blockCounters.get(id);
-    if (block) return `${block.title} ${block.number}`;
+    if (block) return formatBlockReferenceLabel(block.title, block.number);
   }
   if (!semantics) return id;
 
   const equation = semantics.equationById.get(id);
-  if (equation) return `Eq. (${equation.number})`;
+  if (equation) return formatEquationReferenceLabel(equation.number);
 
   for (const heading of semantics.headings) {
     if (heading.id === id) {
-      return heading.number ? `Section ${heading.number}` : heading.text;
+      return formatHeadingReferenceLabel(heading);
     }
   }
 
