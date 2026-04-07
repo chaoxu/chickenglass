@@ -3,17 +3,18 @@ import {
   type Completion,
   CompletionContext,
   type CompletionSource,
+  startCompletion,
 } from "@codemirror/autocomplete";
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 import type { EditorState, Extension } from "@codemirror/state";
-import type { EditorView } from "@codemirror/view";
+import { EditorView, type ViewUpdate } from "@codemirror/view";
 import type { CslJsonItem } from "../citations/bibtex-parser";
 import {
   buildCitationPreviewContent,
   formatCitationPreview,
 } from "../citations/citation-preview";
-import { bibDataField } from "../citations/citation-render";
+import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CSS } from "../constants/css-classes";
 import {
   blockCounterField,
@@ -395,11 +396,36 @@ export const referenceCompletionSource: CompletionSource = (
   };
 };
 
-export const referenceAutocompleteExtension: Extension = autocompletion({
-  activateOnTyping: true,
-  activateOnTypingDelay: 0,
-  addToOptions: [{ render: renderReferenceCompletionPreview, position: 90 }],
-  optionClass: referenceCompletionOptionClass,
-  override: [referenceCompletionSource],
-  tooltipClass: () => CSS.referenceCompletionTooltip,
+function shouldRefreshReferenceCompletion(update: ViewUpdate): boolean {
+  if (!update.transactions.some((tr) => tr.effects.some((effect) => effect.is(bibDataEffect)))) {
+    return false;
+  }
+
+  const beforeBib = update.startState.field(bibDataField, false);
+  const afterBib = update.state.field(bibDataField, false);
+  if (beforeBib?.store === afterBib?.store) {
+    return false;
+  }
+
+  const selection = update.state.selection.main;
+  return selection.empty && findReferenceCompletionMatch(update.state, selection.head) !== null;
+}
+
+const refreshReferenceCompletionOnBibliographyUpdate = EditorView.updateListener.of((update) => {
+  if (!shouldRefreshReferenceCompletion(update)) {
+    return;
+  }
+  startCompletion(update.view);
 });
+
+export const referenceAutocompleteExtension: Extension = [
+  autocompletion({
+    activateOnTyping: true,
+    activateOnTypingDelay: 0,
+    addToOptions: [{ render: renderReferenceCompletionPreview, position: 90 }],
+    optionClass: referenceCompletionOptionClass,
+    override: [referenceCompletionSource],
+    tooltipClass: () => CSS.referenceCompletionTooltip,
+  }),
+  refreshReferenceCompletionOnBibliographyUpdate,
+];
