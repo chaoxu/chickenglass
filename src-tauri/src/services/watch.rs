@@ -1,0 +1,504 @@
+use std::collections::{HashMap, VecDeque};
+use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
+
+use notify::{
+    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind,
+};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter};
+
+use crate::commands::state::FileWatcherEntry;
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct FileChangedEvent {
+    path: String,
+    tree_changed: bool,
+}
+
+pub enum WatchEventMessage {
+    Attached,
+    FileChanged(QueuedFileChangedEvent),
+}
+
+pub struct QueuedFileChangedEvent {
+    absolute_path: PathBuf,
+    observed_at: Instant,
+    payload: FileChangedEvent,
+}
+
+struct DebouncedEventDispatcher {
+    attached: bool,
+    debounce_window: Duration,
+    buffered: VecDeque<QueuedFileChangedEvent>,
+    last_events: HashMap<PathBuf, Instant>,
+}
+
+impl DebouncedEventDispatcher {
+    fn new(debounce_window: Duration) -> Self {
+        Self {
+            attached: false,
+            debounce_window,
+            buffered: VecDeque::new(),
+            last_events: HashMap::new(),
+        }
+    }
+
+    fn handle_message<F>(&mut self, message: WatchEventMessage, emit: &mut F)
+    where
+        F: FnMut(&FileChangedEvent),
+    {
+        match message {
+            WatchEventMessage::Attached => {
+                self.attached = true;
+                while let Some(event) = self.buffered.pop_front() {
+                    self.emit_if_ready(event, emit);
+                }
+            }
+            WatchEventMessage::FileChanged(event) => {
+                if self.attached {
+                    self.emit_if_ready(event, emit);
+                } else {
+                    self.buffered.push_back(event);
+                }
+            }
+        }
+    }
+
+    fn emit_if_ready<F>(&mut self, event: QueuedFileChangedEvent, emit: &mut F)
+    where
+        F: FnMut(&FileChangedEvent),
+    {
+        if !should_emit_debounced_event(
+            &mut self.last_events,
+            &event.absolute_path,
+            event.observed_at,
+            self.debounce_window,
+        ) {
+            return;
+        }
+
+        emit(&event.payload);
+    }
+}
+
+pub fn spawn_debounced_event_worker(
+    app: AppHandle,
+    window_label: String,
+    debounce_window: Duration,
+) -> Result<mpsc::Sender<WatchEventMessage>, String> {
+    let (sender, receiver) = mpsc::channel();
+
+    std::thread::Builder::new()
+        .name("file-watcher-debounce".to_string())
+        .spawn(move || {
+            let mut dispatcher = DebouncedEventDispatcher::new(debounce_window);
+            while let Ok(message) = receiver.recv() {
+                dispatcher.handle_message(message, &mut |payload| {
+                    let _ = app.emit_to(window_label.as_str(), "file-changed", payload);
+                });
+            }
+        })
+        .map_err(|e| format!("Failed to start file watcher debounce worker: {}", e))?;
+
+    Ok(sender)
+}
+
+pub fn create_directory_watcher(
+    root: PathBuf,
+    event_sender: mpsc::Sender<WatchEventMessage>,
+) -> Result<RecommendedWatcher, String> {
+    let root_for_closure = root.clone();
+    let event_sender_for_closure = event_sender.clone();
+
+    let mut watcher = RecommendedWatcher::new(
+        move |result: Result<Event, notify::Error>| {
+            let event = match result {
+                Ok(event) => event,
+                Err(_) => return,
+            };
+
+            if !matches!(
+                event.kind,
+                EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
+            ) {
+                return;
+            }
+
+            let tree_changed = event_changes_tree(&event.kind);
+
+            for path in &event.paths {
+                let Some(relative) =
+                    normalize_relative_event_path(&root_for_closure, path, tree_changed)
+                else {
+                    continue;
+                };
+
+                let payload = FileChangedEvent {
+                    path: relative,
+                    tree_changed,
+                };
+
+                let _ = event_sender_for_closure.send(WatchEventMessage::FileChanged(
+                    QueuedFileChangedEvent {
+                        absolute_path: path.to_path_buf(),
+                        observed_at: Instant::now(),
+                        payload,
+                    },
+                ));
+            }
+        },
+        Config::default(),
+    )
+    .map_err(|e| format!("Failed to create watcher: {}", e))?;
+
+    watcher
+        .watch(&root, RecursiveMode::Recursive)
+        .map_err(|e| format!("Failed to watch directory: {}", e))?;
+
+    Ok(watcher)
+}
+
+pub fn reserve_watcher_slot(
+    watchers: &mut HashMap<String, FileWatcherEntry>,
+    window_label: &str,
+    root: PathBuf,
+    generation: u64,
+) -> bool {
+    if matches!(
+        watchers.get(window_label),
+        Some(existing) if existing.generation > generation
+    ) {
+        return false;
+    }
+
+    watchers.insert(
+        window_label.to_string(),
+        FileWatcherEntry {
+            generation,
+            root,
+            watcher: None,
+        },
+    );
+    true
+}
+
+pub fn attach_watcher(
+    watchers: &mut HashMap<String, FileWatcherEntry>,
+    window_label: &str,
+    generation: u64,
+    watcher: RecommendedWatcher,
+) -> bool {
+    let Some(entry) = watchers.get_mut(window_label) else {
+        return false;
+    };
+    if entry.generation != generation {
+        return false;
+    }
+
+    entry.watcher = Some(watcher);
+    true
+}
+
+pub fn remove_watcher_generation(
+    watchers: &mut HashMap<String, FileWatcherEntry>,
+    window_label: &str,
+    generation: u64,
+) -> bool {
+    if !matches!(
+        watchers.get(window_label),
+        Some(existing) if existing.generation == generation
+    ) {
+        return false;
+    }
+
+    watchers.remove(window_label);
+    true
+}
+
+fn should_ignore_relative_path(relative: &str) -> bool {
+    relative.starts_with('.')
+        || relative.contains("/.")
+        || relative.starts_with("node_modules")
+        || relative.contains("/node_modules")
+        || relative.starts_with("target")
+        || relative.contains("/target")
+}
+
+fn should_emit_debounced_event(
+    last_events: &mut HashMap<PathBuf, Instant>,
+    path: &Path,
+    now: Instant,
+    debounce_window: Duration,
+) -> bool {
+    last_events.retain(|_, last_seen| now.duration_since(*last_seen) < debounce_window);
+
+    if let Some(last_seen) = last_events.get(path) {
+        if now.duration_since(*last_seen) < debounce_window {
+            return false;
+        }
+    }
+
+    last_events.insert(path.to_path_buf(), now);
+    true
+}
+
+fn event_changes_tree(kind: &EventKind) -> bool {
+    matches!(
+        kind,
+        EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(ModifyKind::Name(_))
+    )
+}
+
+fn normalize_relative_event_path(root: &Path, path: &Path, tree_changed: bool) -> Option<String> {
+    if path.is_dir() && !tree_changed {
+        return None;
+    }
+
+    let relative = path
+        .strip_prefix(root)
+        .ok()?
+        .to_string_lossy()
+        .replace('\\', "/");
+
+    if should_ignore_relative_path(&relative) {
+        return None;
+    }
+
+    Some(relative)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        DebouncedEventDispatcher, FileChangedEvent, QueuedFileChangedEvent, WatchEventMessage,
+        event_changes_tree, normalize_relative_event_path, remove_watcher_generation,
+        reserve_watcher_slot, should_emit_debounced_event, should_ignore_relative_path,
+    };
+    use crate::commands::state::FileWatcherEntry;
+    use notify::{
+        EventKind,
+        event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
+    };
+    use std::collections::HashMap;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn ignores_hidden_and_generated_relative_paths() {
+        assert!(should_ignore_relative_path(".git/config"));
+        assert!(should_ignore_relative_path("nested/.cache/file.txt"));
+        assert!(should_ignore_relative_path("node_modules/pkg/index.js"));
+        assert!(should_ignore_relative_path("target/debug/app"));
+        assert!(!should_ignore_relative_path("notes/index.md"));
+    }
+
+    #[test]
+    fn prunes_stale_entries_before_recording_new_paths() {
+        let debounce_window = Duration::from_millis(500);
+        let now = Instant::now();
+        let stale_instant = now - Duration::from_secs(5);
+        let mut last_events = HashMap::from([(PathBuf::from("old.md"), stale_instant)]);
+
+        let should_emit = should_emit_debounced_event(
+            &mut last_events,
+            Path::new("new.md"),
+            now,
+            debounce_window,
+        );
+
+        assert!(should_emit);
+        assert_eq!(last_events.len(), 1);
+        assert!(last_events.contains_key(Path::new("new.md")));
+        assert!(!last_events.contains_key(Path::new("old.md")));
+    }
+
+    #[test]
+    fn suppresses_duplicate_events_within_the_debounce_window() {
+        let debounce_window = Duration::from_millis(500);
+        let now = Instant::now();
+        let mut last_events = HashMap::new();
+        let path = Path::new("notes/index.md");
+
+        assert!(should_emit_debounced_event(
+            &mut last_events,
+            path,
+            now,
+            debounce_window
+        ));
+        assert!(!should_emit_debounced_event(
+            &mut last_events,
+            path,
+            now + Duration::from_millis(200),
+            debounce_window,
+        ));
+    }
+
+    #[test]
+    fn buffers_events_until_the_watcher_is_attached() {
+        let now = Instant::now();
+        let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
+        let mut emitted = Vec::new();
+
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(QueuedFileChangedEvent {
+                absolute_path: PathBuf::from("notes/index.md"),
+                observed_at: now,
+                payload: FileChangedEvent {
+                    path: "notes/index.md".to_string(),
+                    tree_changed: false,
+                },
+            }),
+            &mut |payload| emitted.push(payload.clone()),
+        );
+
+        assert!(emitted.is_empty());
+
+        dispatcher.handle_message(WatchEventMessage::Attached, &mut |payload| {
+            emitted.push(payload.clone())
+        });
+
+        assert_eq!(
+            emitted,
+            vec![FileChangedEvent {
+                path: "notes/index.md".to_string(),
+                tree_changed: false,
+            }],
+        );
+    }
+
+    #[test]
+    fn suppresses_buffered_duplicates_when_attachment_flushes_them() {
+        let now = Instant::now();
+        let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
+        let mut emitted = Vec::new();
+
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(QueuedFileChangedEvent {
+                absolute_path: PathBuf::from("notes/index.md"),
+                observed_at: now,
+                payload: FileChangedEvent {
+                    path: "notes/index.md".to_string(),
+                    tree_changed: false,
+                },
+            }),
+            &mut |payload| emitted.push(payload.clone()),
+        );
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(QueuedFileChangedEvent {
+                absolute_path: PathBuf::from("notes/index.md"),
+                observed_at: now + Duration::from_millis(200),
+                payload: FileChangedEvent {
+                    path: "notes/index.md".to_string(),
+                    tree_changed: false,
+                },
+            }),
+            &mut |payload| emitted.push(payload.clone()),
+        );
+
+        dispatcher.handle_message(WatchEventMessage::Attached, &mut |payload| {
+            emitted.push(payload.clone())
+        });
+
+        assert_eq!(
+            emitted,
+            vec![FileChangedEvent {
+                path: "notes/index.md".to_string(),
+                tree_changed: false,
+            }],
+        );
+    }
+
+    #[test]
+    fn re_emits_paths_after_the_debounce_window_expires() {
+        let debounce_window = Duration::from_millis(500);
+        let now = Instant::now();
+        let mut last_events = HashMap::new();
+        let path = Path::new("notes/index.md");
+
+        assert!(should_emit_debounced_event(
+            &mut last_events,
+            path,
+            now,
+            debounce_window
+        ));
+        assert!(should_emit_debounced_event(
+            &mut last_events,
+            path,
+            now + Duration::from_millis(750),
+            debounce_window,
+        ));
+    }
+
+    #[test]
+    fn structural_events_mark_tree_changes() {
+        assert!(event_changes_tree(&EventKind::Create(CreateKind::File)));
+        assert!(event_changes_tree(&EventKind::Remove(RemoveKind::File)));
+        assert!(event_changes_tree(&EventKind::Modify(ModifyKind::Name(
+            RenameMode::Both
+        ))));
+        assert!(!event_changes_tree(&EventKind::Modify(ModifyKind::Data(
+            notify::event::DataChange::Content,
+        ))));
+    }
+
+    #[test]
+    fn includes_directory_paths_for_tree_changes_only() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("coflat-watch-test-{unique}"));
+        let dir = root.join("docs/new-subdir");
+        fs::create_dir_all(&dir).expect("create test directory");
+
+        assert_eq!(
+            normalize_relative_event_path(&root, &dir, true),
+            Some("docs/new-subdir".to_string()),
+        );
+        assert_eq!(normalize_relative_event_path(&root, &dir, false), None);
+
+        fs::remove_dir_all(&root).expect("remove test directory");
+    }
+
+    #[test]
+    fn watcher_slots_reject_stale_generations() {
+        let mut watchers = HashMap::from([(
+            "main".to_string(),
+            FileWatcherEntry {
+                generation: 7,
+                root: PathBuf::from("/tmp/project-b"),
+                watcher: None,
+            },
+        )]);
+
+        let reserved =
+            reserve_watcher_slot(&mut watchers, "main", PathBuf::from("/tmp/project-a"), 6);
+
+        assert!(!reserved);
+        assert_eq!(
+            watchers.get("main").map(|entry| entry.root.clone()),
+            Some(PathBuf::from("/tmp/project-b")),
+        );
+    }
+
+    #[test]
+    fn watcher_slots_ignore_stale_unwatch_requests() {
+        let mut watchers = HashMap::from([(
+            "main".to_string(),
+            FileWatcherEntry {
+                generation: 9,
+                root: PathBuf::from("/tmp/project-b"),
+                watcher: None,
+            },
+        )]);
+
+        let removed = remove_watcher_generation(&mut watchers, "main", 8);
+
+        assert!(!removed);
+        assert!(watchers.contains_key("main"));
+    }
+}

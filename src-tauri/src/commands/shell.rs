@@ -2,58 +2,54 @@ use std::process::Command;
 
 use tauri::{State, WebviewWindow, command};
 
-use super::perf::measure_command;
-use super::path::{current_project_root, resolve_existing_path};
+use super::context::{CommandSpec, WindowCommandContext, run_command};
 use super::state::{PerfState, ProjectRoot};
+use crate::services::path::resolve_existing_path;
+
+const OPEN_URL: CommandSpec = CommandSpec::new("tauri.open_url", "tauri.shell.open_url", "tauri");
+const REVEAL_IN_FINDER: CommandSpec = CommandSpec::new(
+    "tauri.reveal_in_finder",
+    "tauri.shell.reveal_in_finder",
+    "tauri",
+);
 
 /// Open a URL in the OS default browser.
 ///
 /// Only `http:` and `https:` URLs are allowed — all other schemes are rejected.
 #[command]
-pub fn open_url(
-    perf: State<'_, PerfState>,
-    url: String,
-) -> Result<(), String> {
-    measure_command(
-        &perf,
-        "tauri.open_url",
-        "tauri.shell.open_url",
-        "tauri",
-        Some(&url),
-        || {
-            // Validate scheme before spawning a process.
-            let lower = url.to_ascii_lowercase();
-            if !lower.starts_with("http://") && !lower.starts_with("https://") {
-                return Err(format!("Blocked non-http(s) URL: {}", url));
-            }
+pub fn open_url(perf: State<'_, PerfState>, url: String) -> Result<(), String> {
+    run_command(&perf, OPEN_URL, Some(&url), || {
+        let lower = url.to_ascii_lowercase();
+        if !lower.starts_with("http://") && !lower.starts_with("https://") {
+            return Err(format!("Blocked non-http(s) URL: {}", url));
+        }
 
-            #[cfg(target_os = "macos")]
-            {
-                Command::new("open")
-                    .arg(&url)
-                    .spawn()
-                    .map_err(|e| format!("Failed to open URL: {}", e))?;
-            }
+        #[cfg(target_os = "macos")]
+        {
+            Command::new("open")
+                .arg(&url)
+                .spawn()
+                .map_err(|e| format!("Failed to open URL: {}", e))?;
+        }
 
-            #[cfg(target_os = "windows")]
-            {
-                Command::new("cmd")
-                    .args(["/C", "start", "", &url])
-                    .spawn()
-                    .map_err(|e| format!("Failed to open URL: {}", e))?;
-            }
+        #[cfg(target_os = "windows")]
+        {
+            Command::new("cmd")
+                .args(["/C", "start", "", &url])
+                .spawn()
+                .map_err(|e| format!("Failed to open URL: {}", e))?;
+        }
 
-            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-            {
-                Command::new("xdg-open")
-                    .arg(&url)
-                    .spawn()
-                    .map_err(|e| format!("Failed to open URL: {}", e))?;
-            }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            Command::new("xdg-open")
+                .arg(&url)
+                .spawn()
+                .map_err(|e| format!("Failed to open URL: {}", e))?;
+        }
 
-            Ok(())
-        },
-    )
+        Ok(())
+    })
 }
 
 /// Reveal a file or directory in the OS file explorer.
@@ -64,14 +60,10 @@ pub fn reveal_in_finder(
     perf: State<'_, PerfState>,
     path: String,
 ) -> Result<(), String> {
-    measure_command(
-        &perf,
-        "tauri.reveal_in_finder",
-        "tauri.shell.reveal_in_finder",
-        "tauri",
+    WindowCommandContext::new(&window, &root, &perf).run(
+        REVEAL_IN_FINDER,
         Some(&path),
-        || {
-            let project_root = current_project_root(&root, &window)?;
+        |project_root| {
             let abs_path = resolve_existing_path(&project_root, &path)?
                 .to_string_lossy()
                 .to_string();
