@@ -60,20 +60,18 @@ interface HarnessProps {
   projectRoot: string | null;
 }
 
-const isPathOpen = () => true;
-const isPathDirty = () => false;
 const refreshTree = async () => {};
 const reloadFile = async () => {};
+const syncExternalChange = async () => "ignore" as const;
 
 const Harness: FC<HarnessProps> = ({ projectRoot }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   useProjectFileWatcher({
     projectRoot,
     containerRef,
-    isPathOpen,
-    isPathDirty,
     refreshTree,
     reloadFile,
+    syncExternalChange,
   });
   return createElement("div", { ref: containerRef });
 };

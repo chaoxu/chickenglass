@@ -17,22 +17,16 @@ import {
 } from "../editor-doc-change";
 import { applySaveAsResult } from "../editor-session-save";
 import { buildProjectedWritePlan } from "../editor-session-write-plan";
+import {
+  documentForPath,
+  type CommitSessionState,
+} from "../editor-session-service";
 import type { FileSystem } from "../file-manager";
 import { basename } from "../lib/utils";
 import { measureAsync } from "../perf";
 import type { SavePipeline } from "../save-pipeline";
 import type { SourceMap } from "../source-map";
 import { confirmAction } from "../confirm-action";
-
-interface CommitSessionStateOptions {
-  editorDoc?: string;
-  syncEditorDoc?: boolean;
-}
-
-type CommitSessionState = (
-  nextState: EditorSessionState,
-  options?: CommitSessionStateOptions,
-) => void;
 
 interface UseEditorSessionPersistenceOptions {
   fs: FileSystem;
@@ -61,19 +55,6 @@ export interface UseEditorSessionPersistenceReturn {
   handleRename: (oldPath: string, newPath: string) => Promise<void>;
   handleDelete: (path: string) => Promise<void>;
   saveAs: () => Promise<void>;
-}
-
-function documentForPath(
-  path: string | null,
-  liveDocs: RefObject<Map<string, EditorDocumentText>>,
-  buffers: RefObject<Map<string, EditorDocumentText>>,
-): string {
-  if (!path) return "";
-  return editorDocumentToString(
-    liveDocs.current.get(path)
-    ?? buffers.current.get(path)
-    ?? emptyEditorDocument,
-  );
 }
 
 export function useEditorSessionPersistence({
