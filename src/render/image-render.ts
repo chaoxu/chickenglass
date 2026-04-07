@@ -16,7 +16,6 @@ import {
   snapshotRanges,
 } from "./viewport-diff";
 import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
-import { cursorInRange } from "./node-collection";
 import { RenderWidget } from "./widget-core";
 import { imageUrlField } from "./image-url-cache";
 import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
@@ -158,29 +157,6 @@ function readImageContent(
 // ── Targeted invalidation helpers ────────────────────────────────────────────
 
 /**
- * Check whether the cursor moved into or out of any image node.
- *
- * Uses the same containment semantics as `cursorInRange` (cursor.from >= from
- * && cursor.to <= to) plus focus state (unfocused => never inside).
- */
-export function cursorImageRelationChanged(
-  nodeRanges: ReadonlyArray<{ readonly from: number; readonly to: number }>,
-  hadFocus: boolean,
-  hasFocus: boolean,
-  oldFrom: number,
-  oldTo: number,
-  newFrom: number,
-  newTo: number,
-): boolean {
-  for (const { from, to } of nodeRanges) {
-    const wasInside = hadFocus && oldFrom >= from && oldTo <= to;
-    const isInside = hasFocus && newFrom >= from && newTo <= to;
-    if (wasInside !== isInside) return true;
-  }
-  return false;
-}
-
-/**
  * Check whether any tracked cache path's entry changed between two state
  * snapshots. Uses reference equality on map entries, so only detects
  * actual state transitions (loading->ready, ready->evicted, etc.).
@@ -239,6 +215,13 @@ function mapImageNodes(
     to: changes.mapPos(node.to, -1),
     trackedPath: node.trackedPath,
   }));
+}
+
+function previewCache(
+  state: EditorState,
+  field: typeof pdfPreviewField | typeof imageUrlField,
+): ReadonlyMap<string, unknown> {
+  return state.field(field, false) ?? new Map<string, unknown>();
 }
 
 function mapVisibleRanges(
@@ -373,7 +356,12 @@ function mediaPreviewWidget(
 }
 
 /**
- * Collect decoration ranges for images outside the cursor, plus tracking metadata.
+ * Collect decoration ranges for visible images, plus tracking metadata.
+ *
+ * In the stable-shell experiment we keep image previews mounted during
+ * ordinary navigation. Entering an image's source range should not flip the
+ * line back to raw markdown; editing image syntax will later become an
+ * explicit structure interaction.
  *
  * @param view    The editor view.
  * @param ranges  Explicit ranges to scan (defaults to view.visibleRanges).
@@ -401,10 +389,6 @@ function collectImageRangesTracked(
 
         const trackedNode: ImageNodeInfo = { from: node.from, to: node.to };
         nodes.push(trackedNode);
-
-        if (cursorInRange(view, node.from, node.to)) {
-          return false;
-        }
 
         const parsed = readImageContent(view, node.node);
         if (!parsed) return false;
@@ -445,7 +429,6 @@ function collectImageRangesTracked(
  * On update, only rebuilds when:
  * - document changes touch an image node or newly-visible fragment
  * - viewport or syntax tree changes require a rebuild path
- * - cursor moved into/out of an image node (cursor adjacency)
  * - a tracked cache path's entry changed (async preview readiness)
  */
 class ImageRenderPlugin implements PluginValue {
@@ -487,31 +470,14 @@ class ImageRenderPlugin implements PluginValue {
       // Fall through to check selection/cache
     }
 
-    // Selection/focus: rebuild only if cursor moved into/out of an image node
-    if (update.selectionSet || update.focusChanged) {
-      const hasFocus = update.view.hasFocus;
-      const hadFocus = update.focusChanged ? !hasFocus : hasFocus;
-      const oldSel = update.startState.selection.main;
-      const newSel = update.state.selection.main;
-      if (
-        cursorImageRelationChanged(
-          this.imageNodes, hadFocus, hasFocus,
-          oldSel.from, oldSel.to, newSel.from, newSel.to,
-        )
-      ) {
-        this.rebuild(update.view);
-        return;
-      }
-    }
-
     // Cache changes: rebuild only if a tracked path's entry changed
     if (
       trackedCacheChanged(
         this.trackedPaths,
-        update.startState.field(pdfPreviewField),
-        update.state.field(pdfPreviewField),
-        update.startState.field(imageUrlField),
-        update.state.field(imageUrlField),
+        previewCache(update.startState, pdfPreviewField),
+        previewCache(update.state, pdfPreviewField),
+        previewCache(update.startState, imageUrlField),
+        previewCache(update.state, imageUrlField),
       )
     ) {
       this.rebuild(update.view);
@@ -628,7 +594,7 @@ class ImageRenderPlugin implements PluginValue {
   }
 }
 
-/** CM6 extension that renders inline images with Typora-style click-to-edit. */
+/** CM6 extension that renders inline images as stable previews in rich mode. */
 export const imageRenderPlugin: Extension = ViewPlugin.fromClass(
   ImageRenderPlugin,
   { decorations: (v) => v.decorations },

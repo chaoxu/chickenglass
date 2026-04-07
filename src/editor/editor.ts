@@ -35,10 +35,13 @@ import { coflatTheme, coflatDarkTheme } from "./theme";
 import { blockTypePickerExtension } from "./block-type-picker";
 import { headingFold } from "./heading-fold";
 import { listOutlinerExtension } from "./list-outliner";
+import { richMouseSelectionStyle } from "./rich-mouse-selection";
 import { treeView } from "@overleaf/codemirror-tree-view";
 import { includeRegionsField } from "../lib/include-regions";
 import { referenceAutocompleteExtension } from "./reference-autocomplete";
 import { richClipboardOutputFilter } from "./rich-clipboard";
+import { debugPanelExtension } from "./debug-panel";
+import { shellSurfaceOverlayExtension } from "./shell-surface-overlay";
 import {
   createMarkdownLanguageExtensions,
   createProjectConfigExtensions,
@@ -46,6 +49,7 @@ import {
 } from "./base-editor-extensions";
 import { documentLabelGraphField } from "../semantics/document-label-graph";
 import { frontmatterField } from "./frontmatter-state";
+import { activeStructureEditField } from "./structure-edit-state";
 
 const fallbackDocument = "# Untitled\n";
 
@@ -153,6 +157,9 @@ function coreDocumentStateExtensions(): Extension[] {
     // Frontmatter state (always needed — other extensions read it)
     frontmatterField,
 
+    // Explicit rich-mode structure editing state (stable-shell experiment)
+    activeStructureEditField,
+
     // Include expansion metadata must survive Rich/Source mode switches.
     includeRegionsField,
 
@@ -205,7 +212,10 @@ function editorChromeExtensions(isDark: boolean): Extension[] {
     headingFold,
     listOutlinerExtension,
     editorKeybindings,
+    richMouseSelectionStyle,
     blockTypePickerExtension,
+    shellSurfaceOverlayExtension,
+    debugPanelExtension,
     coflatTheme,
 
     // Dark/light base theme (wrapped in compartment for live switching)

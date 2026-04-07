@@ -178,7 +178,21 @@ Proof content.
 :::::
 ```
 
-The inner block must use fewer colons than the outer. The parser uses a generation counter to prevent incremental fragment reuse across composite block boundaries.
+The inner block must use fewer colons than the outer.
+
+Same-colon nesting is not supported. For example, this is invalid and will parse incorrectly:
+
+```markdown
+::: {.theorem}
+::: {.proof}
+...
+:::
+:::
+```
+
+Use `::::` for the outer block and `:::` for the inner block instead.
+
+The parser uses a generation counter to prevent incremental fragment reuse across composite block boundaries.
 
 ### Built-in block types
 

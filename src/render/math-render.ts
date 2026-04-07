@@ -19,7 +19,6 @@ import { createMathWidgetMetadataPlugin } from "./math-metadata";
 import { mathPrewarmPlugin } from "./math-prewarm";
 import {
   buildEquationNumbersByFrom,
-  findActiveMath,
   getDisplayEquationNumber,
 } from "./math-source";
 import { MathWidget } from "./math-widget";
@@ -29,11 +28,10 @@ import {
 } from "./decoration-core";
 import {
   editorFocusField,
-  focusEffect,
   focusTracker,
 } from "./focus-state";
-import { cursorInRange } from "./node-collection";
 import { serializeMacros } from "./widget-core";
+import { getActiveStructureEditTarget } from "../editor/structure-edit-state";
 
 export { renderKatexToHtml } from "./inline-shared";
 export {
@@ -54,10 +52,12 @@ function mathMacrosChanged(tr: Transaction): boolean {
   return before !== after && serializeMacros(before) !== serializeMacros(after);
 }
 
-function findFocusedActiveMath(state: EditorState): MathSemantics | undefined {
-  const focused = state.field(editorFocusField, false) ?? false;
-  return focused
-    ? findActiveMath(state.field(documentAnalysisField).mathRegions, state.selection.main)
+function getActiveMathTarget(
+  state: EditorState,
+): Pick<MathSemantics, "from" | "to"> | undefined {
+  const active = getActiveStructureEditTarget(state);
+  return active?.kind === "math"
+    ? { from: active.from, to: active.to }
     : undefined;
 }
 
@@ -144,13 +144,18 @@ function buildMathItems(
  * Collect decoration ranges for math nodes outside the cursor.
  */
 export function collectMathRanges(view: EditorView): Range<Decoration>[] {
-  return buildMathItems(view.state, (from, to) => cursorInRange(view, from, to));
+  const activeMath = getActiveMathTarget(view.state);
+  return buildMathItems(
+    view.state,
+    (from, to) => Boolean(activeMath?.from === from && activeMath?.to === to),
+  );
 }
 
-function buildMathDecorationsFromState(state: EditorState, focused: boolean): DecorationSet {
+function buildMathDecorationsFromState(state: EditorState): DecorationSet {
+  const activeMath = getActiveMathTarget(state);
   const items = buildMathItems(
     state,
-    (from, to) => focused && cursorInRange(state, from, to),
+    (from, to) => Boolean(activeMath?.from === from && activeMath?.to === to),
   );
   return buildDecorations(items);
 }
@@ -179,8 +184,7 @@ function mathContentUnchanged(
 }
 
 function rebuildMathDecorations(state: EditorState): DecorationSet {
-  const focused = state.field(editorFocusField, false) ?? false;
-  return buildMathDecorationsFromState(state, focused);
+  return buildMathDecorationsFromState(state);
 }
 
 /**
@@ -210,7 +214,6 @@ const mathDecorationField = StateField.define<DecorationSet>({
       if (
         tr.docChanged
         && tr.selection === undefined
-        && !tr.effects.some((effect) => effect.is(focusEffect))
         && mathContentUnchanged(
           regionsBefore,
           regionsAfter,
@@ -232,11 +235,8 @@ const mathDecorationField = StateField.define<DecorationSet>({
       return rebuildMathDecorations(tr.state);
     }
 
-    const focusChanged = tr.effects.some((effect) => effect.is(focusEffect));
-    if (tr.selection === undefined && !focusChanged) return value;
-
-    const before = findFocusedActiveMath(tr.startState);
-    const after = findFocusedActiveMath(tr.state);
+    const before = getActiveMathTarget(tr.startState);
+    const after = getActiveMathTarget(tr.state);
     if (before?.from !== after?.from || before?.to !== after?.to) {
       return rebuildMathDecorations(tr.state);
     }

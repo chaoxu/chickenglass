@@ -2,12 +2,17 @@ import type { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import katexStyles from "katex/dist/katex.min.css?inline";
 import { CSS } from "../constants/css-classes";
+import { isPlainPrimaryMouseEvent } from "../editor/mouse-selection-core";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import type { MathSemantics } from "../semantics/document";
 import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
-import { isPlainPrimaryMouseEvent, resolveClickToSourcePos } from "./math-interactions";
+import { resolveClickToSourcePos } from "./math-interactions";
 import { findMathRegionAtPos } from "./math-source";
 import { MacroAwareWidget, widgetSourceMap } from "./widget-core";
+import {
+  activateStructureEditTarget,
+  createStructureEditTargetAt,
+} from "../editor/structure-edit-state";
 
 const KATEX_STYLE_ID = "cf-katex-styles";
 
@@ -167,6 +172,11 @@ export class MathWidget extends MacroAwareWidget {
         sourceTo,
         contentOffset,
       );
+      const target = createStructureEditTargetAt(view.state, sourceFrom);
+      if (target) {
+        activateStructureEditTarget(view, target, pos);
+        return;
+      }
       view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
     });
   }

@@ -1,24 +1,17 @@
 import { EditorSelection, type EditorState } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
+import {
+  buildPointerSelection,
+  isPlainPrimaryMouseEvent,
+} from "../editor/mouse-selection-core";
 import { documentAnalysisField } from "../semantics/codemirror-source";
-import { editorFocusField } from "./focus-state";
-import { cursorInRange } from "./node-collection";
 import { _snapToTokenBoundary } from "./math-source";
+import { isMathStructureEditActive } from "../editor/structure-edit-state";
 
 interface InlineMathSourceRange {
   readonly from: number;
   readonly to: number;
-}
-
-export function isPlainPrimaryMouseEvent(event: MouseEvent): boolean {
-  return (
-    event.button === 0 &&
-    !event.altKey &&
-    !event.ctrlKey &&
-    !event.metaKey &&
-    !event.shiftKey
-  );
 }
 
 function findLocAtPoint(
@@ -116,12 +109,11 @@ function findInlineMathSourceRangeAtCoords(
 }
 
 function collectRenderedInlineMathRanges(state: EditorState): InlineMathSourceRange[] {
-  const focused = state.field(editorFocusField, false) ?? false;
   const ranges: InlineMathSourceRange[] = [];
 
   for (const region of state.field(documentAnalysisField).mathRegions) {
     if (region.isDisplay) continue;
-    if (focused && cursorInRange(state, region.from, region.to)) continue;
+    if (isMathStructureEditActive(state, region)) continue;
     ranges.push({ from: region.from, to: region.to });
   }
 
@@ -129,31 +121,13 @@ function collectRenderedInlineMathRanges(state: EditorState): InlineMathSourceRa
 }
 
 function hasRenderedInlineMath(state: EditorState): boolean {
-  const focused = state.field(editorFocusField, false) ?? false;
-
   for (const region of state.field(documentAnalysisField).mathRegions) {
     if (region.isDisplay) continue;
-    if (focused && cursorInRange(state, region.from, region.to)) continue;
+    if (isMathStructureEditActive(state, region)) continue;
     return true;
   }
 
   return false;
-}
-
-function buildPointerSelection(
-  start: { pos: number; assoc: number },
-  current: { pos: number; assoc: number },
-): EditorSelection {
-  let range = EditorSelection.cursor(current.pos, current.assoc);
-  if (start.pos !== current.pos) {
-    const startRange = EditorSelection.cursor(start.pos, start.assoc);
-    const from = Math.min(startRange.from, range.from);
-    const to = Math.max(startRange.to, range.to);
-    range = from < range.from
-      ? EditorSelection.range(from, to, range.assoc)
-      : EditorSelection.range(to, from, range.assoc);
-  }
-  return EditorSelection.create([range]);
 }
 
 function snapPointerSelectionOverInlineMath(

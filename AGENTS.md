@@ -120,7 +120,13 @@ __cmDebug.fences()           — closing fence visibility for all blocks
 __cmDebug.line(73)           — DOM state of a specific line
 __cmDebug.selection()        — current selection (anchor, head, from, to, line, col)
 __cmDebug.history()          — undo/redo depth
+__cmDebug.structure()        — active explicit structure-edit target (or null)
+__cmDebug.geometry()         — measured visible-line + shell-surface geometry snapshot
+__cmDebug.motionGuards()     — recent vertical-motion guard events
 __cmDebug.dump()             — combined snapshot (tree + fences + cursor + focus)
+__cmDebug.activateStructureAtCursor() — open structure editing at the current cursor
+__cmDebug.clearStructure()   — clear the active structure-edit target
+__cmDebug.clearMotionGuards() — clear recorded vertical-motion guard events
 __cmDebug.moveVertically("up") — rich-mode vertical move with reverse-scroll guard
 __cmDebug.toggleTreeView()   — toggle live Lezer tree panel (@overleaf/codemirror-tree-view)
 __app.openFile("posts/x.md") — open any file by path (app's real function)
@@ -135,7 +141,7 @@ __tauriSmoke.simulateExternalChange("notes.md") — dev-only Tauri helper to emi
 __fencedDivDebug = true      — toggle fenced div parser tracing
 ```
 
-Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile()`, `getTreeDivs()`, `checkFences()`, `dump()`, `setCursor()`, `scrollTo()`.
+Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile()`, `getTreeDivs()`, `checkFences()`, `getGeometrySnapshot()`, `dump()`, `setCursor()`, `scrollTo()`.
 
 ## Dev mode
 

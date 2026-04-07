@@ -17,6 +17,11 @@ import { markdownToHtml } from "../app/markdown-to-html";
 import { CSS } from "../constants/css-classes";
 import { createTestView, makeBlockPlugin, makeBibStore } from "../test-utils";
 import {
+  activeStructureEditField,
+  createStructureEditTargetAt,
+  setStructureEditTargetEffect,
+} from "../editor/structure-edit-state";
+import {
   collectReferenceRanges,
   planReferenceRendering,
   referenceRenderDependenciesChanged,
@@ -57,6 +62,7 @@ function createView(doc: string, cursorPos?: number): EditorView {
         extensions: [fencedDiv, mathExtension, equationLabelExtension],
       }),
       frontmatterField,
+      activeStructureEditField,
       documentSemanticsField,
       createPluginRegistryField(testPlugins),
       blockCounterField,
@@ -75,6 +81,7 @@ function createPluginView(doc: string, cursorPos?: number): EditorView {
         extensions: [fencedDiv, mathExtension, equationLabelExtension],
       }),
       frontmatterField,
+      activeStructureEditField,
       documentSemanticsField,
       createPluginRegistryField(testPlugins),
       blockCounterField,
@@ -88,6 +95,16 @@ function createPluginView(doc: string, cursorPos?: number): EditorView {
 
 function widgetClass(range: { value: { spec: { widget?: { constructor: { name: string } } } } }): string | undefined {
   return range.value.spec.widget?.constructor.name;
+}
+
+function activateReferenceEdit(view: EditorView, pos: number): void {
+  const target = createStructureEditTargetAt(view.state, pos);
+  expect(target?.kind).toBe("reference");
+  if (!target) throw new Error("expected reference structure-edit target");
+  view.dispatch({
+    effects: setStructureEditTargetEffect.of(target),
+    selection: { anchor: pos },
+  });
 }
 
 describe("collectReferenceRanges", () => {
@@ -155,7 +172,7 @@ describe("collectReferenceRanges", () => {
     expect(widgetClass(ref!)).toBe("UnresolvedRefWidget");
   });
 
-  it("applies source mark to reference containing the cursor", () => {
+  it("applies source mark when reference structure edit is active", () => {
     const doc = [
       "::: {.theorem #thm-1}",
       "T1.",
@@ -164,7 +181,8 @@ describe("collectReferenceRanges", () => {
       "See [@thm-1].",
     ].join("\n");
     const refStart = doc.indexOf("[@thm-1]");
-    view = createView(doc, refStart + 3);
+    view = createView(doc, doc.length);
+    activateReferenceEdit(view, refStart + 3);
     const ranges = collectReferenceRanges(view, store);
 
     const ref = ranges.find((r) => r.from === refStart);
@@ -174,7 +192,7 @@ describe("collectReferenceRanges", () => {
     expect(ref!.value.spec.class).toBe(CSS.referenceSource);
   });
 
-  it("collects other references when cursor is inside one", () => {
+  it("collects other references when one reference is in explicit source edit", () => {
     const doc = [
       "::: {.theorem #thm-1}",
       "T1.",
@@ -189,10 +207,11 @@ describe("collectReferenceRanges", () => {
     const thmStart = doc.indexOf("[@thm-1]");
     const defStart = doc.indexOf("[@def-1]");
 
-    view = createView(doc, thmStart + 2);
+    view = createView(doc, doc.length);
+    activateReferenceEdit(view, thmStart + 2);
     const ranges = collectReferenceRanges(view, store);
 
-    // Cursor-in ref gets a source mark (not a widget)
+    // Explicitly edited ref gets a source mark (not a widget)
     const thmRef = ranges.find((r) => r.from === thmStart);
     expect(thmRef).toBeDefined();
     expect(thmRef!.value.spec.class).toBe(CSS.referenceSource);
@@ -541,12 +560,12 @@ describe("collectReferenceRanges", () => {
       expect(widgetClass(ref!)).toBe("UnresolvedRefWidget");
     });
 
-    it("applies source mark when cursor is at its exact start position", () => {
+    it("applies source mark when explicit reference edit starts at the token boundary", () => {
       const doc = "See [@karger2000].";
       const refStart = doc.indexOf("[@karger2000]");
-      view = createView(doc, refStart);
+      view = createView(doc, doc.length);
+      activateReferenceEdit(view, refStart);
       const ranges = collectReferenceRanges(view, store);
-      // Cursor exactly at start is inside the reference — gets source mark
       const ref = ranges.find((r) => r.from === refStart);
       expect(ref).toBeDefined();
       expect(ref!.value.spec.class).toBe(CSS.referenceSource);
@@ -949,8 +968,11 @@ describe("planReferenceRendering", () => {
     view?.destroy();
   });
 
-  function plan(doc: string, cursorPos?: number): ReferenceRenderItem[] {
-    view = createView(doc, cursorPos ?? doc.length);
+  function plan(doc: string, activePos?: number): ReferenceRenderItem[] {
+    view = createView(doc, doc.length);
+    if (activePos !== undefined) {
+      activateReferenceEdit(view, activePos);
+    }
     const { cslProcessor } = view.state.field(bibDataField);
     return planReferenceRendering(view, store, cslProcessor);
   }
@@ -1000,7 +1022,7 @@ describe("planReferenceRendering", () => {
     expect(item!.kind).toBe("unresolved");
   });
 
-  it("routes cursor-in reference to source-mark plan", () => {
+  it("routes explicit reference edit to source-mark plan", () => {
     const doc = [
       "::: {.theorem #thm-1}",
       "T1.",

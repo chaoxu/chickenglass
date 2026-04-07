@@ -35,8 +35,7 @@ export function addMarkerReplacement(
   if (markerFrom >= markerTo) return;
 
   if (widget) {
-    widget.sourceFrom = markerFrom;
-    widget.sourceTo = markerTo;
+    widget.updateSourceRange(markerFrom, markerTo);
     items.push(Decoration.replace({ widget }).range(markerFrom, markerTo));
     return;
   }
@@ -93,7 +92,6 @@ export function pushWidgetDecoration(
   from: number,
   to: number,
 ): void {
-  widget.sourceFrom = from;
-  widget.sourceTo = to;
+  widget.updateSourceRange(from, to);
   items.push(Decoration.replace({ widget }).range(from, to));
 }

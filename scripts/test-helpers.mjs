@@ -764,6 +764,53 @@ export async function dump(page) {
 }
 
 /**
+ * Return the current measured geometry snapshot for visible lines and shell surfaces.
+ */
+export async function getGeometrySnapshot(page) {
+  return page.evaluate(() => window.__cmDebug.geometry());
+}
+
+/**
+ * Return the active explicit structure-edit target, if any.
+ */
+export async function getStructureState(page) {
+  return page.evaluate(() => window.__cmDebug.structure());
+}
+
+/**
+ * Activate structure editing for the block/frontmatter at the current cursor.
+ */
+export async function activateStructureAtCursor(page) {
+  const activated = await page.evaluate(() => window.__cmDebug.activateStructureAtCursor());
+  await sleep(150);
+  return activated;
+}
+
+/**
+ * Clear the active explicit structure-edit target.
+ */
+export async function clearStructure(page) {
+  const cleared = await page.evaluate(() => window.__cmDebug.clearStructure());
+  await sleep(150);
+  return cleared;
+}
+
+/**
+ * Return recent vertical-motion guard events captured by the editor.
+ */
+export async function getMotionGuards(page) {
+  return page.evaluate(() => window.__cmDebug.motionGuards());
+}
+
+/**
+ * Clear recent vertical-motion guard events.
+ */
+export async function clearMotionGuards(page) {
+  await page.evaluate(() => window.__cmDebug.clearMotionGuards());
+  await sleep(50);
+}
+
+/**
  * Place cursor at a specific line and column, with focus.
  */
 export async function setCursor(page, line, col = 0) {

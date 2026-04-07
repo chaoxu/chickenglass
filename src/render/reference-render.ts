@@ -16,7 +16,7 @@ import {
   type EditorView,
   type ViewUpdate,
 } from "@codemirror/view";
-import { type EditorSelection, type EditorState, type Extension, type Range } from "@codemirror/state";
+import { type EditorState, type Extension, type Range } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
 import {
   classifyReference,
@@ -43,7 +43,6 @@ import {
   type MixedClusterPart,
 } from "./crossref-render";
 import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
-import { cursorInRange } from "./node-collection";
 import { createSimpleViewPlugin } from "./view-plugin-factories";
 import { blockCounterField, pluginRegistryField } from "../plugins";
 import {
@@ -51,6 +50,7 @@ import {
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
 import type { DocumentAnalysis, ReferenceSemantics } from "../semantics/document";
+import { getActiveStructureEditTarget } from "../editor/structure-edit-state";
 
 function serializeKeyPart(value: string | undefined): string {
   return value ?? "";
@@ -149,27 +149,12 @@ export function referenceRenderDependenciesChanged(
   );
 }
 
-function findActiveReference(
-  references: readonly ReferenceSemantics[],
-  selection: EditorSelection,
-): ReferenceSemantics | undefined {
-  const { from, to } = selection.main;
-  let lo = 0;
-  let hi = references.length - 1;
-  let candidate: ReferenceSemantics | undefined;
-
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1;
-    const ref = references[mid];
-    if (ref.from <= from) {
-      candidate = ref;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  return candidate && to <= candidate.to ? candidate : undefined;
+function getActiveReferenceTarget(
+  state: EditorState,
+): Pick<ReferenceSemantics, "from" | "to"> | null {
+  const active = getActiveStructureEditTarget(state);
+  if (active?.kind !== "reference") return null;
+  return { from: active.from, to: active.to };
 }
 
 /**
@@ -249,9 +234,10 @@ export function planReferenceRendering(
   const equationLabels = analysis.equationById;
   const allRefs = analysis.references;
   const items: ReferenceRenderItem[] = [];
+  const activeRef = getActiveReferenceTarget(view.state);
 
   for (const ref of allRefs) {
-    if (cursorInRange(view, ref.from, ref.to)) {
+    if (activeRef && activeRef.from === ref.from && activeRef.to === ref.to) {
       items.push({ kind: "source-mark", from: ref.from, to: ref.to });
       continue;
     }
@@ -403,26 +389,9 @@ function referenceShouldUpdate(update: ViewUpdate): boolean {
     return true;
   }
 
-  if (!update.selectionSet && !update.focusChanged) return false;
-
-  const oldFocus = update.focusChanged ? !update.view.hasFocus : update.view.hasFocus;
-  const before = oldFocus
-    ? findActiveReference(
-        update.startState.field(documentAnalysisField).references,
-        update.startState.selection,
-      )
-    : undefined;
-  const after = update.view.hasFocus
-    ? findActiveReference(
-        update.state.field(documentAnalysisField).references,
-        update.state.selection,
-      )
-    : undefined;
-
-  return (
-    before?.from !== after?.from ||
-    before?.to !== after?.to
-  );
+  const before = getActiveReferenceTarget(update.startState);
+  const after = getActiveReferenceTarget(update.state);
+  return before?.from !== after?.from || before?.to !== after?.to;
 }
 
 /** CM6 extension that renders all [@id] and @id references with Typora-style toggle. */

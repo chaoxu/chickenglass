@@ -20,7 +20,27 @@ import {
   getDocumentAnalysisRevisionInfo,
 } from "../semantics/codemirror-source";
 import { getClosingFenceRanges } from "../plugins/fence-protection";
-import { moveVerticallyWithReverseScrollGuard } from "./vertical-motion";
+import {
+  clearVerticalMotionGuardEvents,
+  getVerticalMotionGuardEvents,
+  moveVerticallyWithReverseScrollGuard,
+  type VerticalMotionGuardEvent,
+} from "./vertical-motion";
+import {
+  activateStructureEditAt,
+  clearStructureEditTarget,
+  getActiveStructureEditTarget,
+  type StructureEditTarget,
+} from "./structure-edit-state";
+import {
+  clearDebugTimelineEvents,
+  getDebugTimelineEvents,
+  type DebugTimelineEvent,
+} from "./debug-timeline";
+import {
+  measureShellSurfaceSnapshot,
+  type ShellSurfaceSnapshot,
+} from "./shell-surface-model";
 
 interface DivInfo {
   readonly from: number;
@@ -44,6 +64,10 @@ interface DebugSnapshot {
   readonly cursorLine: number;
   readonly focused: boolean;
   readonly semantics: SemanticDebugInfo;
+  readonly structure: StructureEditTarget | null;
+  readonly geometry: ShellSurfaceSnapshot;
+  readonly motionGuards: readonly VerticalMotionGuardEvent[];
+  readonly timeline: readonly DebugTimelineEvent[];
 }
 
 interface SemanticDebugInfo {
@@ -84,8 +108,26 @@ export interface DebugHelpers {
   selection: () => SelectionInfo;
   /** Return undo/redo history depth. */
   history: () => { undoDepth: number; redoDepth: number };
+  /** Return the active explicit structure-edit target, if any. */
+  structure: () => StructureEditTarget | null;
+  /** Return recent vertical-motion guard events for this editor instance. */
+  motionGuards: () => readonly VerticalMotionGuardEvent[];
+  /** Return recent debug timeline events for this editor instance. */
+  timeline: () => readonly DebugTimelineEvent[];
+  /** Return the current measured geometry snapshot for visible lines and shell surfaces. */
+  geometry: () => ShellSurfaceSnapshot;
   /** Return a combined snapshot of tree + fences + cursor state. */
   dump: () => DebugSnapshot;
+  /** Activate structure editing for the block/frontmatter at a document position. */
+  activateStructureAt: (pos: number) => boolean;
+  /** Activate structure editing at the current selection head. */
+  activateStructureAtCursor: () => boolean;
+  /** Clear the active structure-edit target. */
+  clearStructure: () => boolean;
+  /** Clear recorded vertical-motion guard events. */
+  clearMotionGuards: () => void;
+  /** Clear recorded debug timeline events. */
+  clearTimeline: () => void;
   /** Run rich-mode vertical motion with reverse-scroll guarding. */
   moveVertically: (direction: "up" | "down") => boolean;
   /** Toggle the live Lezer tree-view debug panel. Returns new on/off state. */
@@ -185,6 +227,22 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
       };
     },
 
+    structure() {
+      return getActiveStructureEditTarget(view.state);
+    },
+
+    motionGuards() {
+      return getVerticalMotionGuardEvents(view);
+    },
+
+    timeline() {
+      return getDebugTimelineEvents(view);
+    },
+
+    geometry() {
+      return measureShellSurfaceSnapshot(view);
+    },
+
     dump() {
       const cursor = view.state.selection.main;
       const cursorLine = view.state.doc.lineAt(cursor.from).number;
@@ -194,7 +252,31 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
         cursorLine,
         focused: view.hasFocus,
         semantics: this.semantics(),
+        structure: this.structure(),
+        geometry: this.geometry(),
+        motionGuards: this.motionGuards(),
+        timeline: this.timeline(),
       };
+    },
+
+    activateStructureAt(pos: number) {
+      return activateStructureEditAt(view, pos);
+    },
+
+    activateStructureAtCursor() {
+      return activateStructureEditAt(view, view.state.selection.main.head);
+    },
+
+    clearStructure() {
+      return clearStructureEditTarget(view);
+    },
+
+    clearMotionGuards() {
+      clearVerticalMotionGuardEvents(view);
+    },
+
+    clearTimeline() {
+      clearDebugTimelineEvents(view);
     },
 
     moveVertically(direction: "up" | "down") {

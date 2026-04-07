@@ -1,4 +1,5 @@
 import { type EditorView, WidgetType } from "@codemirror/view";
+import { activateStructureEditAt } from "../editor/structure-edit-state";
 
 /**
  * Serialize macros to a stable string for use in widget equality checks.
@@ -52,6 +53,18 @@ export abstract class RenderWidget extends WidgetType {
   /** Document offset of the end of the source range this widget replaces. */
   sourceTo = -1;
 
+  /**
+   * Whether this widget participates in stable-shell surface measurement.
+   *
+   * Most widgets are ordinary inline/render surfaces and should stay invisible
+   * to shell measurement. Block/frontmatter/code-shell widgets opt in.
+   */
+  includeInShellSurface = false;
+
+  /** Document offset range used by shell-surface measurement for opted-in widgets. */
+  shellSurfaceFrom = -1;
+  shellSurfaceTo = -1;
+
   /** Pristine DOM snapshot used to avoid rebuilding expensive widgets on scroll. */
   private cachedDOM: HTMLElement | null = null;
 
@@ -90,6 +103,12 @@ export abstract class RenderWidget extends WidgetType {
     if (this.sourceTo >= 0) {
       el.dataset.sourceTo = String(this.sourceTo);
     }
+    if (this.includeInShellSurface && this.shellSurfaceFrom >= 0) {
+      el.dataset.shellFrom = String(this.shellSurfaceFrom);
+    }
+    if (this.includeInShellSurface && this.shellSurfaceTo >= 0) {
+      el.dataset.shellTo = String(this.shellSurfaceTo);
+    }
     widgetSourceMap.set(el, this);
   }
 
@@ -102,8 +121,18 @@ export abstract class RenderWidget extends WidgetType {
    * search-highlight remain correct.
    */
   updateSourceRange(from: number, to: number): void {
+    const previousFrom = this.sourceFrom;
+    const previousTo = this.sourceTo;
     this.sourceFrom = from;
     this.sourceTo = to;
+    if (this.includeInShellSurface) {
+      if (this.shellSurfaceFrom === previousFrom || this.shellSurfaceFrom < 0) {
+        this.shellSurfaceFrom = from;
+      }
+      if (this.shellSurfaceTo === previousTo || this.shellSurfaceTo < 0) {
+        this.shellSurfaceTo = to;
+      }
+    }
   }
 
   protected bindSourceReveal(
@@ -114,6 +143,9 @@ export abstract class RenderWidget extends WidgetType {
     el.addEventListener("mousedown", (event) => {
       event.preventDefault();
       view.focus();
+      if (this.sourceFrom >= 0 && activateStructureEditAt(view, this.sourceFrom)) {
+        return;
+      }
       let pos: number;
       try {
         pos = view.posAtDOM(el);

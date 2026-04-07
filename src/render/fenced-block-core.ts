@@ -175,6 +175,13 @@ function cursorSensitiveMappedRebuild(tr: Transaction): boolean {
  * map decoration positions for cheaper DOM reconciliation (#718). */
 export function createFencedBlockDecorationField(
   build: (state: EditorState) => DecorationSet,
+  options?: {
+    extraShouldRebuild?: (tr: Transaction) => boolean;
+  },
 ): StateField<DecorationSet> {
-  return createDecorationsField(build, cursorSensitiveMappedRebuild, true);
+  return createDecorationsField(
+    build,
+    (tr) => cursorSensitiveMappedRebuild(tr) || (options?.extraShouldRebuild?.(tr) ?? false),
+    true,
+  );
 }

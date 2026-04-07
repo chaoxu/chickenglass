@@ -35,7 +35,6 @@ import {
   type EditorState,
   type Extension,
   type Range,
-  type SelectionRange,
   StateEffect,
   StateField,
   type Transaction,
@@ -52,7 +51,6 @@ import {
   editorFocusField,
   focusTracker,
 } from "./focus-state";
-import { cursorInRange } from "./node-collection";
 import {
   cloneRenderedHTMLElement,
   RenderWidget,
@@ -61,8 +59,6 @@ import {
 } from "./widget-core";
 import { mathMacrosField } from "./math-macros";
 import {
-  type FootnoteDefinition,
-  type FootnoteReference,
   type FootnoteSemantics,
   numberFootnotes,
   orderedFootnoteEntries,
@@ -73,6 +69,10 @@ import {
 } from "../semantics/codemirror-source";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import { CSS } from "../constants/css-classes";
+import {
+  getActiveStructureEditTarget,
+  isFootnoteLabelStructureEditActive,
+} from "../editor/structure-edit-state";
 
 /** StateEffect to toggle sidenote margin visibility. */
 export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
@@ -153,69 +153,8 @@ function mathMacrosChanged(
   return before !== after && serializeMacros(before) !== serializeMacros(after);
 }
 
-function hasFootnoteDefinitions(
-  footnotes: FootnoteSemantics,
-): footnotes is FootnoteSemantics & { readonly definitions: readonly FootnoteDefinition[] } {
-  return "definitions" in footnotes;
-}
-
-function getFootnoteDefinitions(
-  footnotes: FootnoteSemantics,
-): readonly FootnoteDefinition[] {
-  return hasFootnoteDefinitions(footnotes)
-    ? footnotes.definitions
-    : [...footnotes.defs.values()].sort((left, right) => left.from - right.from);
-}
-
-function findActiveFootnoteRef(
-  footnotes: FootnoteSemantics,
-  selection: SelectionRange,
-): FootnoteReference | undefined {
-  const { from, to } = selection;
-  let lo = 0;
-  let hi = footnotes.refs.length - 1;
-  let candidate: FootnoteReference | undefined;
-
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1;
-    const ref = footnotes.refs[mid];
-    if (ref.from <= from) {
-      candidate = ref;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  return candidate && to <= candidate.to ? candidate : undefined;
-}
-
-function findActiveFootnoteLabel(
-  footnotes: FootnoteSemantics,
-  selection: SelectionRange,
-): FootnoteDefinition | undefined {
-  const { from, to } = selection;
-  const definitions = getFootnoteDefinitions(footnotes);
-  let lo = 0;
-  let hi = definitions.length - 1;
-  let candidate: FootnoteDefinition | undefined;
-
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1;
-    const def = definitions[mid];
-    if (def.from <= from) {
-      candidate = def;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  return candidate && to <= candidate.labelTo ? candidate : undefined;
-}
-
 interface ActiveSidenoteCursorTarget {
-  readonly kind: "ref" | "label";
+  readonly kind: "label";
   readonly id: string;
   readonly from: number;
   readonly to: number;
@@ -224,30 +163,15 @@ interface ActiveSidenoteCursorTarget {
 function getActiveSidenoteCursorTarget(
   state: EditorState,
 ): ActiveSidenoteCursorTarget | null {
-  const focused = state.field(editorFocusField, false) ?? false;
-  if (!focused) return null;
-
-  const footnotes = collectFootnotes(state);
-  const activeRef = findActiveFootnoteRef(footnotes, state.selection.main);
-  if (activeRef) {
-    return {
-      kind: "ref",
-      id: activeRef.id,
-      from: activeRef.from,
-      to: activeRef.to,
-    };
-  }
-
   const collapsed = state.field(sidenotesCollapsedField, false) ?? false;
   if (collapsed) return null;
-
-  const activeLabel = findActiveFootnoteLabel(footnotes, state.selection.main);
-  return activeLabel
+  const active = getActiveStructureEditTarget(state);
+  return active?.kind === "footnote-label"
     ? {
         kind: "label",
-        id: activeLabel.id,
-        from: activeLabel.from,
-        to: activeLabel.labelTo,
+        id: active.id,
+        from: active.labelFrom,
+        to: active.labelTo,
       }
     : null;
 }
@@ -532,7 +456,7 @@ export class FootnoteInlineWidget extends WidgetType {
 }
 
 /** Build sidenote decorations from editor state. */
-export function buildSidenoteDecorations(state: EditorState, focused: boolean): DecorationSet {
+export function buildSidenoteDecorations(state: EditorState): DecorationSet {
   const collapsed = state.field(sidenotesCollapsedField, false) ?? false;
   const inlineExpanded = state.field(footnoteInlineExpandedField, false) ?? new Set<string>();
 
@@ -546,8 +470,6 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
   // the superscript can navigate directly to the editable definition.
   // In collapsed mode, expanded refs also get an inline widget below the line.
   for (const ref of footnotes.refs) {
-    if (focused && cursorInRange(state, ref.from, ref.to)) continue;
-
     const num = numberMap.get(ref.id) ?? 0;
     const def = footnotes.defs.get(ref.id);
     const isExpanded = inlineExpanded.has(ref.id);
@@ -582,7 +504,7 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
 
     // Expanded mode: body text stays in CM6 as normal editable content.
     // Only the [^id]: label prefix is hidden/shown based on cursor position.
-    const cursorOnLabel = focused && cursorInRange(state, def.from, def.labelTo);
+    const cursorOnLabel = isFootnoteLabelStructureEditActive(state, def);
 
     // Apply line styling for footnote body (smaller font, muted color).
     items.push(
@@ -605,10 +527,7 @@ export function buildSidenoteDecorations(state: EditorState, focused: boolean): 
  * Uses a StateField so that line decorations (Decoration.line) are permitted.
  */
 const sidenoteDecorationField = createDecorationsField(
-  (state) => {
-    const focused = state.field(editorFocusField, false) ?? false;
-    return buildSidenoteDecorations(state, focused);
-  },
+  (state) => buildSidenoteDecorations(state),
   sidenoteDecorationShouldRebuild,
 );
 

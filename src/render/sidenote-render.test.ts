@@ -29,6 +29,11 @@ import {
   footnoteInlineExpandedField,
 } from "./sidenote-render";
 import { editorFocusField, focusEffect } from "./render-utils";
+import {
+  activeStructureEditField,
+  createStructureEditTargetAt,
+  setStructureEditTargetEffect,
+} from "../editor/structure-edit-state";
 import { createMockEditorView, createTestView, getDecorationSpecs } from "../test-utils";
 
 /** Create an EditorState with footnote parsing and all fields needed by sidenote decorations. */
@@ -41,6 +46,7 @@ function createState(doc: string, cursorPos?: number): EditorState {
       frontmatterField,
       mathMacrosField,
       documentSemanticsField,
+      activeStructureEditField,
     ],
   });
 }
@@ -55,6 +61,7 @@ function createFullState(doc: string, cursorPos?: number): EditorState {
       frontmatterField,
       mathMacrosField,
       documentSemanticsField,
+      activeStructureEditField,
       sidenotesCollapsedField,
       footnoteInlineExpandedField,
     ],
@@ -70,6 +77,7 @@ function createDecoratedState(doc: string, cursorPos = 0): EditorState {
       frontmatterField,
       mathMacrosField,
       documentSemanticsField,
+      activeStructureEditField,
       editorFocusField,
       sidenotesCollapsedField,
       footnoteInlineExpandedField,
@@ -92,6 +100,18 @@ function getWidgetFromDecorations<T>(decorations: DecorationSet, widgetClass: st
 
 function focusState(state: EditorState): EditorState {
   return state.update({ effects: focusEffect.of(true) }).state;
+}
+
+function activateFootnoteLabel(state: EditorState, pos: number): EditorState {
+  const target = createStructureEditTargetAt(state, pos);
+  expect(target?.kind).toBe("footnote-label");
+  if (!target || target.kind !== "footnote-label") {
+    throw new Error("expected footnote-label structure target");
+  }
+  return state.update({
+    effects: setStructureEditTargetEffect.of(target),
+    selection: { anchor: target.labelFrom },
+  }).state;
 }
 
 interface FootnoteSectionPluginValue {
@@ -214,7 +234,7 @@ describe("buildSidenoteDecorations — expanded mode (body in CM6)", () => {
     // #430: Body text stays in CM6 document model, styled via Decoration.line.
     // Label is hidden via Decoration.replace with a small label widget.
     const state = createState(doc, 0);
-    const decos = buildSidenoteDecorations(state, true);
+    const decos = buildSidenoteDecorations(state);
     const specs = getDecorationSpecs(decos);
 
     // Should have the body line class (not the old hide class)
@@ -237,8 +257,8 @@ describe("buildSidenoteDecorations — expanded mode (body in CM6)", () => {
   it("shows label as source when cursor is on the label (heading-like pattern)", () => {
     // When cursor is on [^1]:, label should be visible as source text.
     const defStart = doc.indexOf("[^1]:");
-    const state = createState(doc, defStart);
-    const decos = buildSidenoteDecorations(state, true);
+    const state = activateFootnoteLabel(createState(doc, defStart), defStart);
+    const decos = buildSidenoteDecorations(state);
     const specs = getDecorationSpecs(decos);
 
     // Body line class should still be present
@@ -254,7 +274,7 @@ describe("buildSidenoteDecorations — expanded mode (body in CM6)", () => {
     // #430: Cursor in body text — label is hidden, body stays as CM6 content.
     const bodyStart = doc.indexOf("See $x^2$");
     const state = createState(doc, bodyStart);
-    const decos = buildSidenoteDecorations(state, true);
+    const decos = buildSidenoteDecorations(state);
     const specs = getDecorationSpecs(decos);
 
     // Body line class present
@@ -273,7 +293,7 @@ describe("buildSidenoteDecorations — expanded mode (body in CM6)", () => {
   it("hides label with body styling when editor is unfocused", () => {
     // #430: Unfocused editor should show body styling, not collapse line.
     const state = createState(doc, 0);
-    const decos = buildSidenoteDecorations(state, false);
+    const decos = buildSidenoteDecorations(state);
     const specs = getDecorationSpecs(decos);
 
     // Body line class present (footnote text styled)
@@ -291,7 +311,7 @@ describe("buildSidenoteDecorations — expanded mode (body in CM6)", () => {
     const defStart = doc.indexOf("[^1]:");
     const labelEnd = defStart + "[^1]:".length;
     const state = createState(doc, 0);
-    const decos = buildSidenoteDecorations(state, true);
+    const decos = buildSidenoteDecorations(state);
     const specs = getDecorationSpecs(decos);
 
     // The label widget replacement should cover only the label range
@@ -322,7 +342,7 @@ describe("buildSidenoteDecorations — collapsed mode", () => {
     const collapsedState = state.update({
       effects: sidenotesCollapsedEffect.of(true),
     }).state;
-    const decos = buildSidenoteDecorations(collapsedState, true);
+    const decos = buildSidenoteDecorations(collapsedState);
     const specs = getDecorationSpecs(decos);
 
     // Ref should be replaced with a FootnoteRefWidget
@@ -355,7 +375,7 @@ describe("buildSidenoteDecorations — collapsed mode", () => {
     const collapsedState = state.update({
       effects: sidenotesCollapsedEffect.of(true),
     }).state;
-    const decos = buildSidenoteDecorations(collapsedState, true);
+    const decos = buildSidenoteDecorations(collapsedState);
     const specs = getDecorationSpecs(decos);
 
     // The def starts at position 16 ("Text [^1] end\n\n" = 15 chars, def at 16)
@@ -388,7 +408,7 @@ describe("buildSidenoteDecorations — collapsed mode", () => {
     const collapsedState = state.update({
       effects: sidenotesCollapsedEffect.of(true),
     }).state;
-    const decos = buildSidenoteDecorations(collapsedState, true);
+    const decos = buildSidenoteDecorations(collapsedState);
     const specs = getDecorationSpecs(decos);
 
     // Both def lines should have the hide class
@@ -475,23 +495,18 @@ describe("sidenote decoration invalidation", () => {
     expect(next.field(sidenoteDecorationField)).toBe(beforeDecorations);
   });
 
-  it("rebuilds only when selection crosses an active ref or label", () => {
+  it("rebuilds only when the active footnote label target changes", () => {
     const doc = "Text [^1] end\n\n[^1]: Note";
     let state = focusState(createDecoratedState(doc, 0));
-    const refStart = doc.indexOf("[^1]");
-    const refInside = refStart + 2;
     const labelStart = doc.lastIndexOf("[^1]:");
 
     const beforeDecorations = state.field(sidenoteDecorationField);
-    state = state.update({ selection: { anchor: refStart } }).state;
-    const refDecorations = state.field(sidenoteDecorationField);
-    expect(refDecorations).not.toBe(beforeDecorations);
+    state = activateFootnoteLabel(state, labelStart);
+    const activeDecorations = state.field(sidenoteDecorationField);
+    expect(activeDecorations).not.toBe(beforeDecorations);
 
-    state = state.update({ selection: { anchor: refInside } }).state;
-    expect(state.field(sidenoteDecorationField)).toBe(refDecorations);
-
-    state = state.update({ selection: { anchor: labelStart } }).state;
-    expect(state.field(sidenoteDecorationField)).not.toBe(refDecorations);
+    state = state.update({ selection: { anchor: doc.indexOf("Note") } }).state;
+    expect(state.field(sidenoteDecorationField)).not.toBe(activeDecorations);
   });
 
   it("does not rebuild when frontmatter changes but math macros stay the same", () => {
@@ -774,7 +789,7 @@ describe("buildSidenoteDecorations — inline expansion (#458)", () => {
         footnoteInlineToggleEffect.of({ id: "1", expanded: true }),
       ],
     }).state;
-    const decos = buildSidenoteDecorations(state, true);
+    const decos = buildSidenoteDecorations(state);
     const specs = getDecorationSpecs(decos);
 
     // Should have a FootnoteInlineWidget
@@ -794,7 +809,7 @@ describe("buildSidenoteDecorations — inline expansion (#458)", () => {
     state = state.update({
       effects: footnoteInlineToggleEffect.of({ id: "1", expanded: true }),
     }).state;
-    const decos = buildSidenoteDecorations(state, true);
+    const decos = buildSidenoteDecorations(state);
     const specs = getDecorationSpecs(decos);
 
     const inlineWidgets = specs.filter(
@@ -808,7 +823,7 @@ describe("buildSidenoteDecorations — inline expansion (#458)", () => {
     state = state.update({
       effects: sidenotesCollapsedEffect.of(true),
     }).state;
-    const decos = buildSidenoteDecorations(state, true);
+    const decos = buildSidenoteDecorations(state);
     const specs = getDecorationSpecs(decos);
 
     const inlineWidgets = specs.filter(
@@ -827,7 +842,7 @@ describe("buildSidenoteDecorations — inline expansion (#458)", () => {
         footnoteInlineToggleEffect.of({ id: "b", expanded: true }),
       ],
     }).state;
-    const decos = buildSidenoteDecorations(state, true);
+    const decos = buildSidenoteDecorations(state);
     const specs = getDecorationSpecs(decos);
 
     const inlineWidgets = specs.filter(
@@ -924,7 +939,7 @@ describe("FootnoteRefWidget", () => {
     const widget = getWidgetFromDecorations<{
       toDOM(view?: EditorView): HTMLElement;
       destroy(dom: HTMLElement): void;
-    }>(buildSidenoteDecorations(state, true), "FootnoteRefWidget");
+    }>(buildSidenoteDecorations(state), "FootnoteRefWidget");
 
     const focus = vi.fn();
     const dispatch = vi.fn();

@@ -11,6 +11,13 @@ export const CSS = {
   /** Block wrapper: "cf-block cf-block-{type}" */
   block: (type: string) => `cf-block cf-block-${type}`,
 
+  /** Always-on stable-shell debug outline for the active block/frontmatter. */
+  activeShell: "cf-active-shell",
+  activeShellTop: "cf-active-shell-top",
+  activeShellBottom: "cf-active-shell-bottom",
+  activeShellWidget: "cf-active-shell-widget",
+  activeShellFooter: "cf-active-shell-footer",
+
   /** Block header line (rendered mode). */
   blockHeader: "cf-block-header",
 
