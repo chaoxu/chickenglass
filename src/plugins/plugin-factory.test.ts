@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { createStandardPlugin } from "./plugin-factory";
+import { BLOCK_MANIFEST_ENTRIES } from "../constants/block-manifest";
 import { CSS } from "../constants/css-classes";
+import { createStandardPlugin, pluginFromManifest } from "./plugin-factory";
 
 describe("createStandardPlugin", () => {
   it("auto-capitalizes title from name", () => {
@@ -59,6 +60,29 @@ describe("createStandardPlugin", () => {
   it("sets name on the returned plugin", () => {
     const plugin = createStandardPlugin({ name: "conjecture" });
     expect(plugin.name).toBe("conjecture");
+  });
+
+  it("accepts manifest entries directly", () => {
+    const youtube = BLOCK_MANIFEST_ENTRIES.find((entry) => entry.name === "youtube");
+    expect(youtube).toBeDefined();
+    if (!youtube) throw new Error("expected youtube manifest entry");
+
+    const plugin = createStandardPlugin(youtube);
+    expect(plugin.title).toBe("YouTube");
+    expect(plugin.numbered).toBe(false);
+    expect(plugin.specialBehavior).toBe("embed");
+  });
+
+  it("maps manifest counter and metadata through pluginFromManifest", () => {
+    const blockquote = BLOCK_MANIFEST_ENTRIES.find((entry) => entry.name === "blockquote");
+    expect(blockquote).toBeDefined();
+    if (!blockquote) throw new Error("expected blockquote manifest entry");
+
+    const plugin = pluginFromManifest(blockquote);
+    expect(plugin.numbered).toBe(false);
+    expect(plugin.counter).toBeUndefined();
+    expect(plugin.displayHeader).toBe(false);
+    expect(plugin.specialBehavior).toBe("blockquote");
   });
 
   describe("negative / edge-case", () => {

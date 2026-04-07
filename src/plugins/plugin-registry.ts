@@ -16,8 +16,12 @@ import type { BlockPlugin } from "./plugin-types";
 import type { BlockConfig } from "../parser/frontmatter";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { createBlockRender } from "./block-render";
-import { capitalize } from "../lib/utils";
+import { capitalize, pickDefined } from "../lib/utils";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
+import {
+  STANDARD_PLUGIN_METADATA_KEYS,
+  createStandardPlugin,
+} from "./plugin-factory";
 
 /**
  * Immutable snapshot of the registry state.
@@ -183,8 +187,8 @@ export function pluginFromConfig(
   config: BlockConfig,
   existing?: BlockPlugin,
 ): BlockPlugin {
-  const title = config.title ?? existing?.title ?? capitalize(name);
-  const numbered = config.numbered ?? existing?.numbered ?? true;
+  const title = config.title ?? existing?.title;
+  const numbered = config.numbered ?? existing?.numbered;
 
   // Distinguish undefined (inherit) from null (remove group).
   // config.counter === undefined → inherit from existing plugin.
@@ -199,17 +203,13 @@ export function pluginFromConfig(
     counter = config.counter;
   }
 
-  return {
+  return createStandardPlugin({
     name,
-    counter,
-    numbered,
-    title,
-    ...(existing?.displayHeader !== undefined ? { displayHeader: existing.displayHeader } : {}),
-    ...(existing?.specialBehavior !== undefined ? { specialBehavior: existing.specialBehavior } : {}),
-    ...(existing?.captionPosition !== undefined ? { captionPosition: existing.captionPosition } : {}),
-    ...(existing?.headerPosition !== undefined ? { headerPosition: existing.headerPosition } : {}),
-    render: createBlockRender(title),
-  };
+    ...(title !== undefined ? { title } : {}),
+    ...(numbered !== undefined ? { numbered } : {}),
+    ...(counter !== undefined ? { counter } : {}),
+    ...(existing ? pickDefined(existing, STANDARD_PLUGIN_METADATA_KEYS) : {}),
+  });
 }
 
 /**
