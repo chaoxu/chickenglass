@@ -15,6 +15,7 @@ import { imageUrlEffect, imageUrlField } from "./image-url-cache";
 import { pdfPreviewField } from "./pdf-preview-cache";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
+import { documentPathFacet } from "../lib/types";
 import { createTestView, getDecorationSpecs } from "../test-utils";
 import * as mediaPreview from "./media-preview";
 
@@ -719,27 +720,31 @@ describe("imageRenderPlugin cache-only invalidation", () => {
     vi.restoreAllMocks();
   });
 
-  it("rebuilds only the visible local preview whose cache entry changed", () => {
+  it("rebuilds only the visible local preview whose resolved cache entry changed", () => {
     const doc = [
-      "![first](first.png)",
+      "![first](../assets/first.png)",
       "",
-      "![second](second.png)",
+      "![second](../assets/second.png)",
     ].join("\n");
-    const resolvePreview = vi.spyOn(mediaPreview, "resolveLocalMediaPreview").mockImplementation(
-      (_view, src) => ({ kind: "loading", resolvedPath: src, isPdf: false }),
-    );
+    const resolvePreview = vi.spyOn(mediaPreview, "resolveLocalMediaPreview");
 
     view = createTestView(doc, {
       cursorPos: doc.length,
-      extensions: [markdown(), imageUrlField, pdfPreviewField, imageRenderPlugin],
+      extensions: [
+        markdown(),
+        documentPathFacet.of("posts/math.md"),
+        imageUrlField,
+        pdfPreviewField,
+        imageRenderPlugin,
+      ],
     });
     resolvePreview.mockClear();
 
     view.dispatch({
-      effects: imageUrlEffect.of({ path: "first.png", entry: { status: "loading" } }),
+      effects: imageUrlEffect.of({ path: "assets/first.png", entry: { status: "loading" } }),
     });
 
     expect(resolvePreview).toHaveBeenCalledTimes(1);
-    expect(resolvePreview.mock.calls[0]?.[1]).toBe("first.png");
+    expect(resolvePreview.mock.calls[0]?.[1]).toBe("../assets/first.png");
   });
 });

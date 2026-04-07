@@ -17,14 +17,12 @@ import { RenderWidget } from "./widget-core";
 import { imageUrlField } from "./image-url-cache";
 import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 import {
+  resolveLocalMediaPath,
   resolveLocalMediaPreview,
   type MediaPreviewResult,
 } from "./media-preview";
 import { createCursorSensitiveViewPlugin } from "./view-plugin-factories";
 import { CSS } from "../constants/css-classes";
-import { documentPathFacet } from "../lib/types";
-import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
-import { resolveProjectPathFromDocument } from "../lib/project-paths";
 
 // ── Widgets ───────────────────────────────────────────────────────────────────
 
@@ -371,16 +369,6 @@ function collectImageItems(
   return items;
 }
 
-function resolveTrackedPreviewPath(
-  view: EditorView,
-  src: string,
-): string | null {
-  if (!isPdfTarget(src) && !isRelativeFilePath(src)) {
-    return null;
-  }
-  return resolveProjectPathFromDocument(view.state.facet(documentPathFacet), src);
-}
-
 interface TrackedImageRange extends VisibleRange {
   readonly trackedPath: string;
 }
@@ -404,7 +392,7 @@ function collectVisibleTrackedPreviewRanges(
         const parsed = readImageContent(view, node.node);
         if (!parsed) return false;
 
-        const trackedPath = resolveTrackedPreviewPath(view, parsed.src);
+        const trackedPath = resolveLocalMediaPath(view, parsed.src);
         if (!trackedPath) return false;
 
         trackedRanges.push({ from: node.from, to: node.to, trackedPath });
