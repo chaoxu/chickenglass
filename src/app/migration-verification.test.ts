@@ -861,12 +861,14 @@ describe("#298 — canonical document analysis pass", () => {
 
   it("routes high-overlap consumers through shared document analysis", () => {
     const extract = fileText("src/index/extract.ts");
-    const html = fileText("src/app/markdown-to-html.ts");
+    const htmlEntry = fileText("src/app/markdown-to-html.ts");
+    const htmlDocument = fileText("src/app/markdown-to-html/document.ts");
     const crossrefs = fileText("src/index/crossref-resolver.ts");
     const references = fileText("src/render/reference-render.ts");
 
     expect(extract).toContain("analyzeDocumentSemantics");
-    expect(html).toContain("analyzeDocumentSemantics");
+    expect(htmlEntry).toContain('export { markdownToHtml } from "./markdown-to-html/document"');
+    expect(htmlDocument).toContain("analyzeDocumentSemantics");
     expect(crossrefs).toContain("documentAnalysisField");
     expect(references).toContain("documentAnalysisField");
   });
