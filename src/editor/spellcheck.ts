@@ -80,9 +80,12 @@ class SpellcheckPlugin implements PluginValue {
   }
 }
 
-const spellcheckMarkPlugin: Extension = ViewPlugin.fromClass(SpellcheckPlugin, {
+const spellcheckMarkViewPlugin = ViewPlugin.fromClass(SpellcheckPlugin, {
   decorations: (v) => v.decorations,
 });
+const spellcheckMarkPlugin: Extension = spellcheckMarkViewPlugin;
+
+export { spellcheckMarkViewPlugin as _spellcheckMarkViewPluginForTest };
 
 // ---------------------------------------------------------------------------
 // Global spellcheck enable/disable (contentAttributes)
