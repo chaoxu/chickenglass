@@ -78,11 +78,13 @@ function createHarness(deps: {
       workspace: {
         windowState: deps.windowState,
         saveWindowState: vi.fn(),
+        startupComplete: true,
+      },
+      sidebarLayout: {
         sidebarCollapsed: false,
         sidebarWidth: 224,
         setSidebarCollapsed,
         setSidebarWidth,
-        startupComplete: true,
       },
       editor: {
         currentDocument: null,

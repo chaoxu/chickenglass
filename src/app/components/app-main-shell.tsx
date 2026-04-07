@@ -1,33 +1,26 @@
 import { EditorPane } from "./editor-pane";
 import { StatusBar } from "./status-bar";
 import { SidebarInset } from "./sidebar";
-import type { AppEditorShellController } from "../hooks/use-app-editor-shell";
-import type { AppWorkspaceSessionController } from "../hooks/use-app-workspace-session";
-import type { FileSystem } from "../file-manager";
+import { useAppEditorController } from "../contexts/app-editor-context";
+import { useFileSystem } from "../contexts/file-system-context";
+import { useAppWorkspaceController } from "../contexts/app-workspace-context";
+import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
 
 interface AppMainShellProps {
-  fs: FileSystem;
-  projectConfig: AppWorkspaceSessionController["projectConfig"];
-  resolvedTheme: AppWorkspaceSessionController["resolvedTheme"];
-  workspace: Pick<
-    AppWorkspaceSessionController,
+  sidebarLayout: Pick<
+    SidebarLayoutController,
     "sidenotesCollapsed" | "setSidenotesCollapsed"
-  >;
-  editor: Pick<
-    AppEditorShellController,
-    "currentPath" | "editorDoc" | "activeDocumentSignal" | "getCurrentDocText" | "pluginManager" | "handleDocChange" | "handleProgrammaticDocChange" | "setDocumentSourceMap" | "handleEditorStateChange" | "handleHeadingsChange" | "handleDiagnosticsChange" | "handleEditorDocumentReady" | "editorMode" | "handleModeChange" | "isMarkdownFile"
   >;
   onOpenPalette: () => void;
 }
 
 export function AppMainShell({
-  fs,
-  projectConfig,
-  resolvedTheme,
-  workspace,
-  editor,
+  sidebarLayout,
   onOpenPalette,
 }: AppMainShellProps) {
+  const fs = useFileSystem();
+  const workspace = useAppWorkspaceController();
+  const editor = useAppEditorController();
   const currentPath = editor.currentPath;
 
   return (
@@ -36,12 +29,12 @@ export function AppMainShell({
         <EditorPane
           doc={editor.editorDoc}
           docPath={currentPath}
-          projectConfig={projectConfig}
-          theme={resolvedTheme}
+          projectConfig={workspace.projectConfig}
+          theme={workspace.resolvedTheme}
           fs={fs}
           pluginManager={editor.pluginManager}
-          sidenotesCollapsed={workspace.sidenotesCollapsed}
-          onSidenotesCollapsedChange={workspace.setSidenotesCollapsed}
+          sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
+          onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
           onDocChange={editor.handleDocChange}
           onProgrammaticDocChange={(doc) => {
             editor.handleProgrammaticDocChange(currentPath, doc);

@@ -1,5 +1,13 @@
 import { lazy, Suspense, useCallback, useMemo, useRef } from "react";
 import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
+import {
+  AppEditorControllerProvider,
+  useAppEditorController,
+} from "./contexts/app-editor-context";
+import {
+  AppWorkspaceControllerProvider,
+  useAppWorkspaceController,
+} from "./contexts/app-workspace-context";
 import type { FileSystem } from "./file-manager";
 import { SidebarProvider } from "./components/sidebar";
 import { AppMainShell } from "./components/app-main-shell";
@@ -14,6 +22,7 @@ import { useDialogs } from "./hooks/use-dialogs";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
 import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
 import { useAppWorkspaceSession } from "./hooks/use-app-workspace-session";
+import { useSidebarLayout, type SidebarLayoutController } from "./hooks/use-sidebar-layout";
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
 
 /** Lazy-loaded overlay dialogs — not needed until the user opens one. */
@@ -22,10 +31,11 @@ const AppOverlays = lazy(() =>
 );
 
 interface ConnectedAppOverlaysProps {
-  fs: FileSystem;
   dialogs: ReturnType<typeof useDialogs>;
-  workspace: ReturnType<typeof useAppWorkspaceSession>;
-  editor: ReturnType<typeof useAppEditorShell>;
+  sidebarLayout: Pick<
+    SidebarLayoutController,
+    "setSidebarCollapsed" | "setSidebarTab" | "setSidenotesCollapsed"
+  >;
   unsavedChanges: ReturnType<typeof useUnsavedChangesDialog>;
   onOpenFile: () => void;
   onOpenFolder: () => void;
@@ -33,15 +43,16 @@ interface ConnectedAppOverlaysProps {
 }
 
 function ConnectedAppOverlays({
-  fs,
   dialogs,
-  workspace,
-  editor,
+  sidebarLayout,
   unsavedChanges,
   onOpenFile,
   onOpenFolder,
   onQuit,
 }: ConnectedAppOverlaysProps) {
+  const fs = useFileSystem();
+  const workspace = useAppWorkspaceController();
+  const editor = useAppEditorController();
   const overlays = useAppOverlays({
     fs,
     dialogs,
@@ -52,6 +63,7 @@ function ConnectedAppOverlays({
       ...workspace,
       handleOpenFolder: onOpenFolder,
     },
+    sidebarLayout,
     editor,
     onOpenFile,
     onQuit,
@@ -60,8 +72,6 @@ function ConnectedAppOverlays({
   return (
     <Suspense fallback={null}>
       <AppOverlays
-        workspace={workspace}
-        editor={editor}
         dialogs={dialogs}
         overlays={overlays}
         unsavedChanges={unsavedChanges}
@@ -76,6 +86,7 @@ function AppInner() {
   const dialogs = useDialogs();
   const unsavedChanges = useUnsavedChangesDialog();
   const workspace = useAppWorkspaceSession(fs);
+  const sidebarLayout = useSidebarLayout();
 
   const editor = useAppEditorShell({
     fs,
@@ -108,6 +119,7 @@ function AppInner() {
     listChildren: listChildrenStable,
     workspaceRequestRef: workspace.workspaceRequestRef,
     workspace,
+    sidebarLayout,
     editor,
   });
 
@@ -149,39 +161,37 @@ function AppInner() {
   });
 
   return (
-    <SidebarProvider
-      open={!workspace.sidebarCollapsed}
-      onOpenChange={(open) => workspace.setSidebarCollapsed(!open)}
-      width={workspace.sidebarWidth}
-      onWidthChange={workspace.setSidebarWidth}
-    >
-      <div
-        ref={appContainerRef}
-        className="flex h-screen overflow-hidden overscroll-contain"
-        onDragOver={editor.handleDragOver}
-        onDrop={editor.handleDrop}
-      >
-        <AppSidebarShell workspace={workspace} editor={editor} />
-        <AppMainShell
-          fs={fs}
-          projectConfig={workspace.projectConfig}
-          resolvedTheme={workspace.resolvedTheme}
-          workspace={workspace}
-          editor={editor}
-          onOpenPalette={() => dialogs.setPaletteOpen(true)}
-        />
-        <ConnectedAppOverlays
-          fs={fs}
-          dialogs={dialogs}
-          workspace={workspace}
-          editor={editor}
-          unsavedChanges={unsavedChanges}
-          onOpenFile={fileDialogs.handleOpenFileRequest}
-          onOpenFolder={fileDialogs.handleOpenFolderRequest}
-          onQuit={fileDialogs.handleQuitRequest}
-        />
-      </div>
-    </SidebarProvider>
+    <AppWorkspaceControllerProvider value={workspace}>
+      <AppEditorControllerProvider value={editor}>
+        <SidebarProvider
+          open={!sidebarLayout.sidebarCollapsed}
+          onOpenChange={(open) => sidebarLayout.setSidebarCollapsed(!open)}
+          width={sidebarLayout.sidebarWidth}
+          onWidthChange={sidebarLayout.setSidebarWidth}
+        >
+          <div
+            ref={appContainerRef}
+            className="flex h-screen overflow-hidden overscroll-contain"
+            onDragOver={editor.handleDragOver}
+            onDrop={editor.handleDrop}
+          >
+            <AppSidebarShell sidebarLayout={sidebarLayout} />
+            <AppMainShell
+              sidebarLayout={sidebarLayout}
+              onOpenPalette={() => dialogs.setPaletteOpen(true)}
+            />
+            <ConnectedAppOverlays
+              dialogs={dialogs}
+              sidebarLayout={sidebarLayout}
+              unsavedChanges={unsavedChanges}
+              onOpenFile={fileDialogs.handleOpenFileRequest}
+              onOpenFolder={fileDialogs.handleOpenFolderRequest}
+              onQuit={fileDialogs.handleQuitRequest}
+            />
+          </div>
+        </SidebarProvider>
+      </AppEditorControllerProvider>
+    </AppWorkspaceControllerProvider>
   );
 }
 
