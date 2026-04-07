@@ -22,7 +22,8 @@ import {
   type Range,
   StateField,
 } from "@codemirror/state";
-import { buildDecorations, editorFocusField, focusTracker } from "./render-utils";
+import { buildDecorations } from "./decoration-core";
+import { editorFocusField, focusTracker } from "./focus-state";
 import { mathMacrosField } from "./math-macros";
 import {
   tableDiscoveryField,

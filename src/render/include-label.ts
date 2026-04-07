@@ -14,11 +14,9 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import { type Extension, type Range } from "@codemirror/state";
-import {
-  buildDecorations,
-  createSimpleViewPlugin,
-  SimpleTextRenderWidget,
-} from "./render-utils";
+import { buildDecorations } from "./decoration-core";
+import { createSimpleViewPlugin } from "./view-plugin-factories";
+import { SimpleTextRenderWidget } from "./widget-core";
 import { basename } from "../lib/utils";
 import { includeRegionsField, type IncludeRegionState } from "../lib/include-regions";
 import {

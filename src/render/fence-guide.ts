@@ -26,12 +26,12 @@ import {
   StateField,
 } from "@codemirror/state";
 import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
+import { buildDecorations } from "./decoration-core";
 import {
-  buildDecorations,
   editorFocusField,
   focusEffect,
   focusTracker,
-} from "./render-utils";
+} from "./focus-state";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 
 interface FencedDivRange {

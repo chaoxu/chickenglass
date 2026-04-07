@@ -13,7 +13,8 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import { type Extension, StateEffect } from "@codemirror/state";
-import { createBooleanToggleField, createSimpleViewPlugin } from "./render-utils";
+import { createBooleanToggleField } from "./focus-state";
+import { createSimpleViewPlugin } from "./view-plugin-factories";
 
 /** Effect to toggle focus mode on/off. */
 const toggleFocusEffect = StateEffect.define<boolean>();

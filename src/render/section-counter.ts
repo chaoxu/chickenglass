@@ -18,7 +18,8 @@ import {
   type Range,
   type Transaction,
 } from "@codemirror/state";
-import { buildDecorations, createDecorationsField } from "./render-utils";
+import { buildDecorations } from "./decoration-core";
+import { createDecorationsField } from "./decoration-field";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 
 /** Build section-number decorations for all headings in the document. */

@@ -12,38 +12,75 @@
  * plugin-render.ts evaluates its module-level call.
  */
 
-// ── render-utils.ts (all exports) ────────────────────────────────────────────
+// ── node-collection.ts ───────────────────────────────────────────────────────
 export {
   cursorInRange,
   collectNodes,
-  buildDecorations,
-  createBooleanToggleField,
-  createDecorationsField,
-  createSimpleViewPlugin,
-  createSimpleTextWidget,
-  createCursorSensitiveViewPlugin,
-  diffVisibleRanges,
   collectNodeRangesExcludingCursor,
-  makeTextElement,
-  pushWidgetDecoration,
+  type RenderableNode,
+} from "./node-collection";
+
+// ── widget-core.ts ───────────────────────────────────────────────────────────
+export {
   serializeMacros,
-  decorationHidden,
-  addMarkerReplacement,
+  widgetSourceMap,
   RenderWidget,
   SimpleTextRenderWidget,
   MacroAwareWidget,
+  cloneRenderedHTMLElement,
+  makeTextElement,
+  createSimpleTextWidget,
+  type SimpleTextRenderSpec,
+} from "./widget-core";
+
+// ── decoration-core.ts ───────────────────────────────────────────────────────
+export {
+  buildDecorations,
+  decorationHidden,
+  addMarkerReplacement,
+  pushWidgetDecoration,
+} from "./decoration-core";
+
+// ── focus-state.ts ───────────────────────────────────────────────────────────
+export {
+  createBooleanToggleField,
   editorFocusField,
   focusEffect,
   focusTracker,
-  defaultShouldUpdate,
-  defaultShouldRebuild,
-  cursorSensitiveShouldUpdate,
-  cursorSensitiveShouldRebuild,
-  type RenderableNode,
-  type SimpleTextRenderSpec,
+} from "./focus-state";
+
+// ── scroll-anchor.ts ─────────────────────────────────────────────────────────
+export {
+  captureScrollAnchor,
+  restoreScrollAnchor,
+  requestScrollStabilizedMeasure,
+  mutateWithScrollStabilizedMeasure,
+} from "./scroll-anchor";
+
+// ── viewport-diff.ts ─────────────────────────────────────────────────────────
+export {
+  diffVisibleRanges,
+  isPositionInRanges,
+  mergeRanges,
+  snapshotRanges,
   type VisibleRange,
+} from "./viewport-diff";
+
+// ── view-plugin-factories.ts ─────────────────────────────────────────────────
+export {
+  defaultShouldUpdate,
+  cursorSensitiveShouldUpdate,
+  createCursorSensitiveViewPlugin,
+  createSimpleViewPlugin,
   type CursorSensitiveCollectFn,
-} from "./render-utils";
+} from "./view-plugin-factories";
+
+// ── decoration-field.ts ──────────────────────────────────────────────────────
+export {
+  createDecorationsField,
+  defaultShouldRebuild,
+  cursorSensitiveShouldRebuild,
+} from "./decoration-field";
 
 // ── inline-shared.ts ─────────────────────────────────────────────────────────
 export { MARK_NODES, isSafeUrl, buildKatexOptions, sanitizeCslHtml } from "./inline-shared";

@@ -15,13 +15,11 @@ import {
   type Extension,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import {
-  type VisibleRange,
-  collectNodeRangesExcludingCursor,
-  createCursorSensitiveViewPlugin,
-  pushWidgetDecoration,
-  RenderWidget,
-} from "./render-utils";
+import { pushWidgetDecoration } from "./decoration-core";
+import { collectNodeRangesExcludingCursor } from "./node-collection";
+import { type VisibleRange } from "./viewport-diff";
+import { createCursorSensitiveViewPlugin } from "./view-plugin-factories";
+import { RenderWidget } from "./widget-core";
 
 /** Checkbox widget that toggles task marker content on click. */
 export class CheckboxWidget extends RenderWidget {

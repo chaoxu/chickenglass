@@ -20,7 +20,7 @@ import {
   syntaxTreeAvailable,
 } from "@codemirror/language";
 import { documentSemanticsField } from "../semantics/codemirror-source";
-import { buildDecorations } from "./render-utils";
+import { buildDecorations } from "./decoration-core";
 
 /**
  * Maps Lezer syntax node type names to HTML tag names.

@@ -2,7 +2,7 @@ import { type DecorationSet, type EditorView, ViewPlugin, type ViewUpdate } from
 import { type Extension, type StateField } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
 import { MathWidget } from "./math-widget";
-import { widgetSourceMap } from "./render-utils";
+import { widgetSourceMap } from "./widget-core";
 
 function clearSourceRangeAttrs(el: HTMLElement): void {
   delete el.dataset.sourceFrom;

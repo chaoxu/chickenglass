@@ -8,12 +8,14 @@ import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
 import {
   type VisibleRange,
-  addMarkerReplacement,
-  createCursorSensitiveViewPlugin,
-  cursorInRange,
-  decorationHidden,
   mergeRanges,
-} from "./render-utils";
+} from "./viewport-diff";
+import {
+  addMarkerReplacement,
+  decorationHidden,
+} from "./decoration-core";
+import { cursorInRange } from "./node-collection";
+import { createCursorSensitiveViewPlugin } from "./view-plugin-factories";
 import { findTrailingHeadingAttributes } from "../semantics/heading-ancestry";
 import { isSafeUrl } from "../lib/url-utils";
 import { openExternalUrl } from "../lib/open-link";

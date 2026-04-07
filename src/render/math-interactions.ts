@@ -2,7 +2,8 @@ import { EditorSelection, type EditorState } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
 import { documentAnalysisField } from "../semantics/codemirror-source";
-import { cursorInRange, editorFocusField } from "./render-utils";
+import { editorFocusField } from "./focus-state";
+import { cursorInRange } from "./node-collection";
 import { _snapToTokenBoundary } from "./math-source";
 
 interface InlineMathSourceRange {
