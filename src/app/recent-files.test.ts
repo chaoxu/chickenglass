@@ -1,8 +1,8 @@
 /**
- * Tests for the storage-backed recent-files module.
+ * Direct persistence tests for recent-files.ts.
  *
- * The hook is a thin React wrapper over recent-files.ts, so these tests
- * exercise the underlying module directly through the real storage helpers.
+ * These cover the storage helper's localStorage migration, filtering,
+ * scoping, removal, and capping rules without routing through the React hook.
  */
 
 import { describe, expect, it } from "vitest";
@@ -17,18 +17,16 @@ import {
   recordRecentFolder,
   removeRecentFile,
   removeRecentEntry,
-} from "../recent-files";
-import { RECENT_FILES_KEY, RECENT_FOLDERS_KEY } from "../../constants";
+} from "./recent-files";
+import { RECENT_FILES_KEY, RECENT_FOLDERS_KEY } from "../constants";
 
-// ── addRecentFile ──────────────────────────────────────────────────
-
-describe("addRecentFile (recordRecentFile)", () => {
-  it("records a single file", () => {
+describe("recordRecentFile", () => {
+  it("records a single file without a project root", () => {
     recordRecentFile("/a.md");
     expect(getRecentFiles()).toEqual(["/a.md"]);
   });
 
-  it("puts the most-recently-added file first", () => {
+  it("puts the most recently added file first", () => {
     recordRecentFile("/a.md");
     recordRecentFile("/b.md");
     recordRecentFile("/c.md");
@@ -57,15 +55,23 @@ describe("addRecentFile (recordRecentFile)", () => {
     recordRecentFile("/projects/b/index.md", "/projects/b");
     recordRecentFile("/projects/a/notes.md", "/projects/a");
 
+    expect(getRecentFileEntries()).toEqual([
+      { path: "/projects/a/notes.md", projectRoot: "/projects/a" },
+      { path: "/projects/b/index.md", projectRoot: "/projects/b" },
+      { path: "/projects/a/index.md", projectRoot: "/projects/a" },
+    ]);
+    expect(getRecentFileEntries("/projects/a")).toEqual([
+      { path: "/projects/a/notes.md", projectRoot: "/projects/a" },
+      { path: "/projects/a/index.md", projectRoot: "/projects/a" },
+    ]);
     expect(getRecentFiles("/projects/a")).toEqual([
       "/projects/a/notes.md",
       "/projects/a/index.md",
     ]);
     expect(getRecentFiles("/projects/b")).toEqual(["/projects/b/index.md"]);
-    expect(getRecentFileEntries()).toHaveLength(3);
   });
 
-  it("migrates legacy string entries and normalizes missing project roots", () => {
+  it("migrates legacy strings and filters malformed recent-file payloads", () => {
     localStorage.setItem(RECENT_FILES_KEY, JSON.stringify([
       "/legacy.md",
       { path: "/scoped.md", projectRoot: "/projects/a" },
@@ -84,23 +90,28 @@ describe("addRecentFile (recordRecentFile)", () => {
       "/implicit-null.md",
     ]);
   });
+
+  it("returns an empty file list for non-array stored payloads", () => {
+    localStorage.setItem(RECENT_FILES_KEY, JSON.stringify({ path: "/not-an-array.md" }));
+
+    expect(getRecentFileEntries()).toEqual([]);
+    expect(getRecentFiles()).toEqual([]);
+  });
 });
 
-// ── addRecentFolder ────────────────────────────────────────────────
-
-describe("addRecentFolder (recordRecentFolder)", () => {
+describe("recordRecentFolder", () => {
   it("records a single folder", () => {
     recordRecentFolder("/docs");
     expect(getRecentFolders()).toEqual(["/docs"]);
   });
 
-  it("puts the most-recently-added folder first", () => {
+  it("puts the most recently added folder first", () => {
     recordRecentFolder("/a");
     recordRecentFolder("/b");
     expect(getRecentFolders()).toEqual(["/b", "/a"]);
   });
 
-  it("moves an existing entry to the front on re-add", () => {
+  it("moves an existing folder to the front on re-add", () => {
     recordRecentFolder("/a");
     recordRecentFolder("/b");
     recordRecentFolder("/a");
@@ -129,9 +140,7 @@ describe("addRecentFolder (recordRecentFolder)", () => {
   });
 });
 
-// ── removeRecent ───────────────────────────────────────────────────
-
-describe("removeRecent (removeRecentEntry)", () => {
+describe("removeRecentFile and removeRecentEntry", () => {
   it("removes a path from recent files", () => {
     recordRecentFile("/a.md");
     recordRecentFile("/b.md");
@@ -146,7 +155,7 @@ describe("removeRecent (removeRecentEntry)", () => {
     expect(getRecentFolders()).toEqual(["/notes"]);
   });
 
-  it("removes from both lists at once", () => {
+  it("removes a shared path from both lists at once", () => {
     const shared = "/projects/thesis";
     recordRecentFile(shared);
     recordRecentFolder(shared);
@@ -161,7 +170,7 @@ describe("removeRecent (removeRecentEntry)", () => {
     expect(getRecentFiles()).toEqual(["/a.md"]);
   });
 
-  it("removes only the current project's recent file entry", () => {
+  it("removes only the matching project-scoped entry", () => {
     recordRecentFile("/shared.md", "/projects/a");
     recordRecentFile("/shared.md", "/projects/b");
 
@@ -182,52 +191,36 @@ describe("removeRecent (removeRecentEntry)", () => {
   });
 });
 
-// ── clearFiles / clearFolders ──────────────────────────────────────
-
-describe("clearFiles (clearRecentFiles)", () => {
-  it("removes all recent files", () => {
-    recordRecentFile("/a.md");
-    recordRecentFile("/b.md");
-    clearRecentFiles();
-    expect(getRecentFiles()).toEqual([]);
-  });
-
-  it("does not affect recent folders", () => {
+describe("clearRecentFiles and clearRecentFolders", () => {
+  it("clears recent files without affecting recent folders", () => {
     recordRecentFile("/a.md");
     recordRecentFolder("/docs");
     clearRecentFiles();
+
+    expect(getRecentFiles()).toEqual([]);
     expect(getRecentFolders()).toEqual(["/docs"]);
   });
-});
 
-describe("clearFolders (clearRecentFolders)", () => {
-  it("removes all recent folders", () => {
-    recordRecentFolder("/a");
-    recordRecentFolder("/b");
-    clearRecentFolders();
-    expect(getRecentFolders()).toEqual([]);
-  });
-
-  it("does not affect recent files", () => {
+  it("clears recent folders without affecting recent files", () => {
     recordRecentFile("/a.md");
     recordRecentFolder("/docs");
     clearRecentFolders();
+
     expect(getRecentFiles()).toEqual(["/a.md"]);
+    expect(getRecentFolders()).toEqual([]);
   });
 });
 
-// ── ordering ───────────────────────────────────────────────────────
-
-describe("most-recent-first ordering", () => {
+describe("recent-file ordering", () => {
   it("preserves insertion order across interleaved adds", () => {
     recordRecentFile("/x.md");
     recordRecentFile("/y.md");
     recordRecentFile("/z.md");
-    recordRecentFile("/y.md"); // promote y back to front
+    recordRecentFile("/y.md");
     expect(getRecentFiles()).toEqual(["/y.md", "/z.md", "/x.md"]);
   });
 
-  it("maintains order after removing middle entry", () => {
+  it("maintains order after removing a middle entry", () => {
     recordRecentFile("/a.md");
     recordRecentFile("/b.md");
     recordRecentFile("/c.md");
