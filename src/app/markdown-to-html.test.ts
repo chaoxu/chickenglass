@@ -375,7 +375,10 @@ describe("markdownToHtml", () => {
     expect(fakeCsl.cite).toHaveBeenCalledWith(["karger2000"]);
     expect(fakeCsl.bibliography).toHaveBeenCalledWith(["karger2000"]);
     expect(html).toContain(`id="cite-ref-1" class="${CSS.citation}"`);
-    expect(html).toContain(`<div class="${CSS.bibliographyEntry}" id="bib-karger2000">${ieeeCslEntryHtml} <span class="${CSS.bibliographyBacklinks}">cited at <a class="${CSS.bibliographyBacklink}" href="#cite-ref-1">↩1</a></span></div>`);
+    expect(html).toContain(`<div class="${CSS.bibliographyEntry}" id="bib-karger2000">${ieeeCslEntryHtml} <span class="${CSS.bibliographyBacklinks}"><a class="${CSS.bibliographyBacklink}" href="#cite-ref-1"`);
+    expect(html).toContain(`title="Line 1: See [@karger2000]."`);
+    expect(html).not.toContain("cited at");
+    expect(html).not.toContain("↩1");
   });
 
   // Regression (#482): CSL bibliography HTML must be sanitized before
@@ -658,6 +661,8 @@ describe("markdownToHtml", () => {
     expect(html).toContain(`class="${CSS.bibliographyBacklinks}"`);
     expect(html).toContain('href="#cite-ref-1"');
     expect(html).toContain('href="#cite-ref-2"');
+    expect(html).not.toContain("↩1");
+    expect(html).not.toContain("↩2");
   });
 
   it("keeps heading citations in the shared backlink sequence", () => {
@@ -680,7 +685,7 @@ describe("markdownToHtml", () => {
 
     expect(html).toContain('id="cite-ref-1"');
     expect(html).toContain('id="cite-ref-2"');
-    expect(html).toContain(`href="#cite-ref-1">↩1</a> <a class="${CSS.bibliographyBacklink}" href="#cite-ref-2">↩2</a>`);
+    expect(html).toMatch(new RegExp(`href="#cite-ref-1"[^>]*>↩</a> <a class="${CSS.bibliographyBacklink}" href="#cite-ref-2"[^>]*>↩</a>`));
   });
 
   it("keeps fenced-div title citations in the shared backlink sequence", () => {
@@ -703,7 +708,7 @@ describe("markdownToHtml", () => {
 
     expect(html).toContain('id="cite-ref-1"');
     expect(html).toContain('id="cite-ref-2"');
-    expect(html).toContain(`href="#cite-ref-1">↩1</a> <a class="${CSS.bibliographyBacklink}" href="#cite-ref-2">↩2</a>`);
+    expect(html).toMatch(new RegExp(`href="#cite-ref-1"[^>]*>↩</a> <a class="${CSS.bibliographyBacklink}" href="#cite-ref-2"[^>]*>↩</a>`));
   });
 
   it("keeps task-list citations in the shared backlink sequence", () => {
@@ -726,7 +731,7 @@ describe("markdownToHtml", () => {
 
     expect(html).toContain('id="cite-ref-1"');
     expect(html).toContain('id="cite-ref-2"');
-    expect(html).toContain(`href="#cite-ref-1">↩1</a> <a class="${CSS.bibliographyBacklink}" href="#cite-ref-2">↩2</a>`);
+    expect(html).toMatch(new RegExp(`href="#cite-ref-1"[^>]*>↩</a> <a class="${CSS.bibliographyBacklink}" href="#cite-ref-2"[^>]*>↩</a>`));
   });
 
   it("keeps footnote citations in the shared backlink sequence", () => {
@@ -749,7 +754,7 @@ describe("markdownToHtml", () => {
 
     expect(html).toContain('id="cite-ref-1"');
     expect(html).toContain('id="cite-ref-2"');
-    expect(html).toContain(`href="#cite-ref-1">↩1</a> <a class="${CSS.bibliographyBacklink}" href="#cite-ref-2">↩2</a>`);
+    expect(html).toMatch(new RegExp(`href="#cite-ref-1"[^>]*>↩</a> <a class="${CSS.bibliographyBacklink}" href="#cite-ref-2"[^>]*>↩</a>`));
   });
 
   // Regression (#399): existing non-citation, non-block content renders correctly

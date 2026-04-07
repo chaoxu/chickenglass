@@ -1,6 +1,12 @@
 import type { CslJsonItem } from "../../citations/bibtex-parser";
+import {
+  buildCitationBacklinkAriaLabel,
+  buildCitationBacklinkContextFromText,
+  COMPACT_CITATION_BACKLINK_TEXT,
+} from "../../citations/bibliography-backlinks";
 import { formatBibEntry, sortBibEntries } from "../../citations/bibliography";
 import type { BibStore } from "../../citations/citation-render";
+import type { CitationBacklink } from "../../citations/csl-processor";
 import { sanitizeCslHtml } from "../../render/inline-shared";
 import { CSS } from "../../constants/css-classes";
 import {
@@ -139,7 +145,8 @@ export function renderBibliography(
   bibliography: BibStore,
   citedIds: string[],
   cslProcessor?: CitationRenderContext["cslProcessor"],
-  citationBacklinks?: ReadonlyMap<string, readonly { occurrence: number }[]>,
+  citationBacklinks?: ReadonlyMap<string, readonly CitationBacklink[]>,
+  sourceText?: string,
 ): string {
   let cslHtml: string[] = [];
   if (cslProcessor) {
@@ -155,9 +162,9 @@ export function renderBibliography(
 
   const items = cslHtml.length > 0
     ? entries.map((entry, index) =>
-        `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${sanitizeCslHtml(cslHtml[index] ?? "")}${renderBibliographyBacklinks(entry.id, citationBacklinks)}</div>`)
+        `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${sanitizeCslHtml(cslHtml[index] ?? "")}${renderBibliographyBacklinks(entry.id, citationBacklinks, sourceText)}</div>`)
     : entries.map((entry) =>
-        `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${escapeHtml(formatBibEntry(entry))}${renderBibliographyBacklinks(entry.id, citationBacklinks)}</div>`);
+        `<div class="${CSS.bibliographyEntry}" id="bib-${escapeHtml(entry.id)}">${escapeHtml(formatBibEntry(entry))}${renderBibliographyBacklinks(entry.id, citationBacklinks, sourceText)}</div>`);
 
   return [
     "",
@@ -172,12 +179,21 @@ export function renderBibliography(
 
 function renderBibliographyBacklinks(
   id: string,
-  citationBacklinks?: ReadonlyMap<string, readonly { occurrence: number }[]>,
+  citationBacklinks?: ReadonlyMap<string, readonly CitationBacklink[]>,
+  sourceText?: string,
 ): string {
   const backlinks = citationBacklinks?.get(id);
   if (!backlinks || backlinks.length === 0) return "";
 
-  const links = backlinks.map((backlink) =>
-    `<a class="${CSS.bibliographyBacklink}" href="#cite-ref-${backlink.occurrence}">↩${backlink.occurrence}</a>`).join(" ");
-  return ` <span class="${CSS.bibliographyBacklinks}">cited at ${links}</span>`;
+  const links = backlinks.map((backlink) => {
+    const context = sourceText
+      ? buildCitationBacklinkContextFromText(sourceText, backlink)
+      : "";
+    const titleAttr = context.length > 0 ? ` title="${escapeHtml(context)}"` : "";
+    const ariaLabel = context.length > 0
+      ? buildCitationBacklinkAriaLabel(context)
+      : "Jump to citation";
+    return `<a class="${CSS.bibliographyBacklink}" href="#cite-ref-${backlink.occurrence}" aria-label="${escapeHtml(ariaLabel)}"${titleAttr}>${COMPACT_CITATION_BACKLINK_TEXT}</a>`;
+  }).join(" ");
+  return ` <span class="${CSS.bibliographyBacklinks}">${links}</span>`;
 }

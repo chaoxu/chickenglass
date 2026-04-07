@@ -3,7 +3,7 @@ import type { InlineRenderSurface } from "../../inline-surface";
 import { htmlRenderExtensions } from "../../parser";
 import { renderKatexToHtml } from "../../render/inline-shared";
 import type { BibStore } from "../../citations/citation-render";
-import type { CslProcessor } from "../../citations/csl-processor";
+import type { CitationBacklink, CslProcessor } from "../../citations/csl-processor";
 import type { DocumentSemantics } from "../../semantics/document";
 import type { BlockCounterEntry } from "../../lib/types";
 
@@ -70,7 +70,7 @@ export interface WalkContext {
   readonly blockCounters?: ReadonlyMap<string, BlockCounterEntry>;
   readonly surface: "document-body";
   readonly citedIds: string[];
-  readonly citationBacklinks: ReadonlyMap<string, readonly { occurrence: number }[]>;
+  readonly citationBacklinks: ReadonlyMap<string, readonly CitationBacklink[]>;
   readonly nextCitationOccurrence: { value: number };
   readonly documentPath?: string;
   readonly imageUrlOverrides?: ReadonlyMap<string, string>;

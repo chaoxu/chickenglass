@@ -19,6 +19,11 @@ import {
   collectCitationBacklinksFromReferences,
   collectCitedIdsFromReferences,
 } from "./csl-processor";
+import {
+  buildCitationBacklinkAriaLabel,
+  buildCitationBacklinkContextFromDoc,
+  COMPACT_CITATION_BACKLINK_TEXT,
+} from "./bibliography-backlinks";
 import { CSS } from "../constants/css-classes";
 import { RenderWidget, buildDecorations, createDecorationsField, sanitizeCslHtml } from "../render/render-core";
 import { ensureCitationsRegistered } from "../render/reference-render";
@@ -95,7 +100,11 @@ export function sortBibEntries(entries: CslJsonItem[]): CslJsonItem[] {
 
 /** Widget that renders the full bibliography section. */
 export class BibliographyWidget extends RenderWidget {
-  private readonly mouseDownHandlers = new WeakMap<HTMLElement, (event: MouseEvent) => void>();
+  private readonly domEventHandlers = new WeakMap<HTMLElement, {
+    mouseDown: (event: MouseEvent) => void;
+    mouseOver: (event: MouseEvent) => void;
+    focusIn: (event: FocusEvent) => void;
+  }>();
 
   constructor(
     private readonly entries: readonly CslJsonItem[],
@@ -149,16 +158,27 @@ export class BibliographyWidget extends RenderWidget {
     const section = this.createDOM();
     if (!view) return section;
 
-    const handleMouseDown = (event: MouseEvent): void => {
-      const target = event.target;
+    const refreshBacklinkContext = (link: HTMLElement): void => {
+      const from = Number(link.dataset.sourceFrom ?? "-1");
+      if (from < 0) return;
+      const context = buildCitationBacklinkContextFromDoc(view.state.doc, { from });
+      link.title = context;
+      link.setAttribute("aria-label", buildCitationBacklinkAriaLabel(context));
+    };
+
+    const getBacklink = (target: EventTarget | null): HTMLElement | null => {
       const origin = target instanceof Element
         ? target
         : target instanceof Node
           ? target.parentElement
           : null;
       const link = origin?.closest<HTMLElement>(`.${CSS.bibliographyBacklink}`);
-      if (!link || !section.contains(link)) return;
+      return link && section.contains(link) ? link : null;
+    };
 
+    const handleMouseDown = (event: MouseEvent): void => {
+      const link = getBacklink(event.target);
+      if (!link) return;
       const from = Number(link.dataset.sourceFrom ?? "-1");
       event.preventDefault();
       if (from < 0) return;
@@ -169,16 +189,39 @@ export class BibliographyWidget extends RenderWidget {
       });
     };
 
-    this.mouseDownHandlers.set(section, handleMouseDown);
+    const handleMouseOver = (event: MouseEvent): void => {
+      const link = getBacklink(event.target);
+      if (!link) return;
+      refreshBacklinkContext(link);
+    };
+
+    const handleFocusIn = (event: FocusEvent): void => {
+      const link = getBacklink(event.target);
+      if (!link) return;
+      refreshBacklinkContext(link);
+    };
+
+    section.querySelectorAll<HTMLElement>(`.${CSS.bibliographyBacklink}`)
+      .forEach((link) => refreshBacklinkContext(link));
+
+    this.domEventHandlers.set(section, {
+      mouseDown: handleMouseDown,
+      mouseOver: handleMouseOver,
+      focusIn: handleFocusIn,
+    });
     section.addEventListener("mousedown", handleMouseDown);
+    section.addEventListener("mouseover", handleMouseOver);
+    section.addEventListener("focusin", handleFocusIn);
     return section;
   }
 
   override destroy(dom: HTMLElement): void {
-    const handleMouseDown = this.mouseDownHandlers.get(dom);
-    if (!handleMouseDown) return;
-    dom.removeEventListener("mousedown", handleMouseDown);
-    this.mouseDownHandlers.delete(dom);
+    const handlers = this.domEventHandlers.get(dom);
+    if (!handlers) return;
+    dom.removeEventListener("mousedown", handlers.mouseDown);
+    dom.removeEventListener("mouseover", handlers.mouseOver);
+    dom.removeEventListener("focusin", handlers.focusIn);
+    this.domEventHandlers.delete(dom);
   }
 
   eq(other: BibliographyWidget): boolean {
@@ -213,16 +256,15 @@ function appendBacklinks(
 
   const container = document.createElement("span");
   container.className = CSS.bibliographyBacklinks;
-  container.append("cited at ");
 
   for (const backlink of refs) {
     const link = document.createElement("a");
     link.className = CSS.bibliographyBacklink;
     link.href = `#cite-ref-${backlink.occurrence}`;
     link.dataset.sourceFrom = String(backlink.from);
-    link.textContent = `↩${backlink.occurrence}`;
-    link.setAttribute("aria-label", `Jump to citation ${backlink.occurrence}`);
-    if (container.childNodes.length > 1) {
+    link.textContent = COMPACT_CITATION_BACKLINK_TEXT;
+    link.setAttribute("aria-label", "Jump to citation");
+    if (container.childNodes.length > 0) {
       container.append(" ");
     }
     container.appendChild(link);

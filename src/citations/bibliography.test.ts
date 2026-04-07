@@ -258,23 +258,32 @@ describe("BibliographyWidget", () => {
   });
 
   it("renders bibliography backlinks for cited entries", () => {
+    const view = createMockEditorView({
+      state: { doc: createEditorState("See [@karger2000].").doc },
+    });
     const widget = new BibliographyWidget(
       [karger],
       [],
       new Map([["karger2000", [{ occurrence: 1, from: 4, to: 17 }]]]),
     );
-    const el = widget.toDOM();
+    const el = widget.toDOM(view);
 
     const backlink = el.querySelector(`.${CSS.bibliographyBacklink}`);
     expect(backlink).not.toBeNull();
     expect(backlink?.getAttribute("href")).toBe("#cite-ref-1");
-    expect(backlink?.textContent).toBe("↩1");
+    expect(backlink?.textContent).toBe("↩");
+    expect(backlink?.getAttribute("title")).toBe("Line 1: See [@karger2000].");
+    expect(backlink?.getAttribute("aria-label")).toBe("Jump to citation. Line 1: See [@karger2000].");
   });
 
   it("removes backlink handlers when the widget is destroyed", () => {
     const focus = vi.fn();
     const dispatch = vi.fn();
-    const view = createMockEditorView({ focus, dispatch });
+    const view = createMockEditorView({
+      focus,
+      dispatch,
+      state: { doc: createEditorState("See [@karger2000].").doc },
+    });
     const widget = new BibliographyWidget(
       [karger],
       [],

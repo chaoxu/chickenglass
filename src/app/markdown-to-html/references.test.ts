@@ -22,6 +22,7 @@ describe("references module", () => {
   });
 
   it("renders bibliography entries with backlinks", () => {
+    const doc = "A [@karger2000].";
     const entry: CslJsonItem = {
       id: "karger2000",
       type: "article-journal",
@@ -33,12 +34,15 @@ describe("references module", () => {
       new Map([[entry.id, entry]]),
       [entry.id],
       undefined,
-      new Map([[entry.id, [{ occurrence: 1 }, { occurrence: 2 }]]]),
+      new Map([[entry.id, [{ occurrence: 1, from: 2, to: 15 }]]]),
+      doc,
     );
 
     expect(html).toContain(`class="${CSS.bibliography}"`);
     expect(html).toContain(`class="${CSS.bibliographyEntry}"`);
     expect(html).toContain(`href="#cite-ref-1"`);
-    expect(html).toContain(`href="#cite-ref-2"`);
+    expect(html).toContain(`title="Line 1: A [@karger2000]."`);
+    expect(html).not.toContain("cited at");
+    expect(html).not.toContain("↩1");
   });
 });
