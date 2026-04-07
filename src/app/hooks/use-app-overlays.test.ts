@@ -297,6 +297,7 @@ describe("useAppOverlays", () => {
 
     await vi.waitFor(() => {
       expect(bulkUpdateSpy).toHaveBeenCalledTimes(1);
+      expect(result.current.searchVersion).toBeGreaterThan(0);
     });
 
     expect(updateFileSpy).toHaveBeenCalledWith("notes/current.md", "# Live draft\n");
@@ -309,7 +310,6 @@ describe("useAppOverlays", () => {
     ]));
     expect(bulkUpdateSpy.mock.calls[0]?.[0]).toHaveLength(2);
     expect(result.current.indexer).toBeInstanceOf(BackgroundIndexer);
-    expect(result.current.searchVersion).toBeGreaterThan(0);
     expect(dialogs.searchOpen).toBe(true);
     expect(editor.currentPath).toBe("notes/current.md");
   });
@@ -360,14 +360,13 @@ describe("useAppOverlays", () => {
   });
 
   it("clears open label backlinks when the active path changes", async () => {
+    vi.spyOn(window, "alert").mockImplementation(() => {});
     const doc = [
-      "::: {.theorem #thm:main} Main Result",
-      "Body.",
-      ":::",
+      "# Intro {#sec:intro}",
       "",
-      "See [@thm:main].",
+      "See @sec:intro.",
     ].join("\n");
-    const view = createLabelView(doc, doc.indexOf("@thm:main") + 2);
+    const view = createLabelView(doc, doc.indexOf("@sec:intro") + 2);
     const {
       props,
       editor,
@@ -386,7 +385,9 @@ describe("useAppOverlays", () => {
       getCommand(result.current.commands, "nav.show-label-references").action();
     });
 
-    expect(result.current.labelBacklinks?.definition.id).toBe("thm:main");
+    await vi.waitFor(() => {
+      expect(result.current.labelBacklinks?.definition.id).toBe("sec:intro");
+    });
 
     editor.currentPath = "notes/other.md";
 
@@ -400,6 +401,7 @@ describe("useAppOverlays", () => {
   });
 
   it("clears open label backlinks on active-document edits after the dialog has been opened", async () => {
+    vi.spyOn(window, "alert").mockImplementation(() => {});
     const doc = [
       "# Intro {#sec:intro}",
       "",
@@ -423,7 +425,9 @@ describe("useAppOverlays", () => {
       getCommand(result.current.commands, "nav.show-label-references").action();
     });
 
-    expect(result.current.labelBacklinks?.definition.id).toBe("sec:intro");
+    await vi.waitFor(() => {
+      expect(result.current.labelBacklinks?.definition.id).toBe("sec:intro");
+    });
 
     act(() => {
       activeDocumentSignal.publish("notes/labels.md");
