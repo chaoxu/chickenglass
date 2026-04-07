@@ -13,6 +13,7 @@ import { getClosingFenceRanges } from "../plugins/fence-protection";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
 import { editorModeField, markdownEditorModes, setEditorMode } from "./editor";
+import { moveVerticallyWithReverseScrollGuard } from "./vertical-motion";
 
 /** Cycle to the next editor mode. */
 function cycleEditorMode(view: EditorView): boolean {
@@ -318,12 +319,23 @@ export function moveDownAcrossNestedClosingFences(view: EditorView): boolean {
   return true;
 }
 
+function moveUpWithReverseScrollGuard(view: EditorView): boolean {
+  if (!isRichMode(view)) return false;
+  return moveVerticallyWithReverseScrollGuard(view, false);
+}
+
+function moveDownWithReverseScrollGuard(view: EditorView): boolean {
+  if (!isRichMode(view)) return false;
+  return moveDownAcrossNestedClosingFences(view) || moveVerticallyWithReverseScrollGuard(view, true);
+}
+
 /** Default keybindings for the editor. */
 export const editorKeybindings: Extension = [
   history(),
   Prec.high(
     keymap.of([
-      { key: "ArrowDown", run: moveDownAcrossNestedClosingFences },
+      { key: "ArrowUp", run: moveUpWithReverseScrollGuard },
+      { key: "ArrowDown", run: moveDownWithReverseScrollGuard },
     ]),
   ),
   keymap.of([

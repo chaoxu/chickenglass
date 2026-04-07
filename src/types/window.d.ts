@@ -24,7 +24,8 @@ declare global {
     __cmView?: EditorView;
 
     /**
-     * Debug helper functions for the active editor.
+     * Debug helper functions for the active editor, including stable
+     * rich-mode vertical motion used by browser regressions.
      * Set by useEditorDebugBridge; cleared on unmount.
      */
     __cmDebug?: DebugHelpers;

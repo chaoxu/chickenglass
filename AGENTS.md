@@ -121,6 +121,7 @@ __cmDebug.line(73)           — DOM state of a specific line
 __cmDebug.selection()        — current selection (anchor, head, from, to, line, col)
 __cmDebug.history()          — undo/redo depth
 __cmDebug.dump()             — combined snapshot (tree + fences + cursor + focus)
+__cmDebug.moveVertically("up") — rich-mode vertical move with reverse-scroll guard
 __cmDebug.toggleTreeView()   — toggle live Lezer tree panel (@overleaf/codemirror-tree-view)
 __app.openFile("posts/x.md") — open any file by path (app's real function)
 __app.setMode("source")      — switch editor mode (rich/source/read)
@@ -248,4 +249,3 @@ Detailed rules and architecture decisions are in reference files -- loaded on de
 - **[Subsystem pattern](docs/architecture/subsystem-pattern.md)** — model/controller/render-adapter seam pattern for non-trivial features. One concept should have one clear owner.
 - **[Inline rendering policy](docs/design/inline-rendering-policy.md)** — how inline math, bold, italic rendering works
 - **[Theme contract](docs/architecture/theme-contract.md)** — CSS variable contract between editor and theme
-

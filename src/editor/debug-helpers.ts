@@ -7,6 +7,7 @@
  *   __cmDebug.fences()     — closing fence visibility for protected fenced blocks
  *   __cmDebug.line(73)     — DOM state of a specific line
  *   __cmDebug.dump()       — combined tree + fence status snapshot
+ *   __cmDebug.moveVertically("up") — apply rich-mode vertical motion with reverse-scroll guard
  *   __cmDebug.toggleTreeView() — toggle live Lezer tree panel
  */
 
@@ -19,6 +20,7 @@ import {
   getDocumentAnalysisRevisionInfo,
 } from "../semantics/codemirror-source";
 import { getClosingFenceRanges } from "../plugins/fence-protection";
+import { moveVerticallyWithReverseScrollGuard } from "./vertical-motion";
 
 interface DivInfo {
   readonly from: number;
@@ -84,6 +86,8 @@ export interface DebugHelpers {
   history: () => { undoDepth: number; redoDepth: number };
   /** Return a combined snapshot of tree + fences + cursor state. */
   dump: () => DebugSnapshot;
+  /** Run rich-mode vertical motion with reverse-scroll guarding. */
+  moveVertically: (direction: "up" | "down") => boolean;
   /** Toggle the live Lezer tree-view debug panel. Returns new on/off state. */
   toggleTreeView: () => boolean;
 }
@@ -191,6 +195,10 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
         focused: view.hasFocus,
         semantics: this.semantics(),
       };
+    },
+
+    moveVertically(direction: "up" | "down") {
+      return moveVerticallyWithReverseScrollGuard(view, direction === "down");
     },
 
     toggleTreeView() {

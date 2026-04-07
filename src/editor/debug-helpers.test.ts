@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { createDebugHelpers } from "./debug-helpers";
 import { createEditor, toggleTreeView } from "./editor";
@@ -61,5 +62,29 @@ describe("createDebugHelpers", () => {
     const helpers = createDebugHelpers(view);
 
     expect(helpers.fences().map((fence) => fence.line)).toEqual([3, 7, 11]);
+  });
+
+  it("exposes reverse-scroll-guarded vertical motion", () => {
+    const view = createMountedEditor("First\nSecond\nThird\n");
+    const helpers = createDebugHelpers(view);
+
+    view.dispatch({ selection: { anchor: view.state.doc.line(2).from } });
+    Object.defineProperty(view, "moveVertically", {
+      configurable: true,
+      value: () => EditorSelection.cursor(view.state.doc.line(1).from),
+    });
+    Object.defineProperty(view, "requestMeasure", {
+      configurable: true,
+      value: (spec?: {
+        read?: () => unknown;
+        write?: (value: unknown) => void;
+      }) => {
+        const measured = spec?.read?.();
+        spec?.write?.(measured);
+      },
+    });
+
+    expect(helpers.moveVertically("up")).toBe(true);
+    expect(view.state.doc.lineAt(view.state.selection.main.head).number).toBe(1);
   });
 });

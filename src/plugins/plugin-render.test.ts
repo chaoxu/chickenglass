@@ -415,6 +415,7 @@ describe("cursor-driven block scroll stabilization", () => {
     expect(shouldStabilizeCursorDrivenBlockScroll(insideState, outsideState)).toBe(true);
     expect(shouldStabilizeCursorDrivenBlockScroll(insideState, insideLaterState)).toBe(false);
   });
+
 });
 
 describe("disabled blocks show raw fences (issue #356)", () => {

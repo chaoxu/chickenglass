@@ -973,12 +973,26 @@ export async function traceVerticalCursorMotion(page, options = {}) {
     let stopReason = null;
 
     for (let step = 1; step <= steps; step += 1) {
-      const previousRange = view.state.selection.main;
-      const nextRange = view.moveVertically(previousRange, direction === "down");
-      if (
-        nextRange.anchor === previousRange.anchor &&
-        nextRange.head === previousRange.head
-      ) {
+      const moved = typeof debug.moveVertically === "function"
+        ? debug.moveVertically(direction)
+        : (() => {
+            const previousRange = view.state.selection.main;
+            const nextRange = view.moveVertically(previousRange, direction === "down");
+            if (
+              nextRange.anchor === previousRange.anchor &&
+              nextRange.head === previousRange.head
+            ) {
+              return false;
+            }
+            view.dispatch({
+              selection: view.state.selection.replaceRange(nextRange),
+              scrollIntoView: true,
+            });
+            return true;
+          })();
+
+      if (!moved) {
+        const previousRange = view.state.selection.main;
         const currentLine = view.state.doc.lineAt(previousRange.head).number;
         stopReason = currentLine === 1 && direction === "up"
           ? "top-boundary"
@@ -987,11 +1001,6 @@ export async function traceVerticalCursorMotion(page, options = {}) {
             : "stalled";
         break;
       }
-
-      view.dispatch({
-        selection: view.state.selection.replaceRange(nextRange),
-        scrollIntoView: true,
-      });
       await waitForSettle();
       trace.push(collectStep(step));
     }
