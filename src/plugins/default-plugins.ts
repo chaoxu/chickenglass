@@ -13,12 +13,18 @@ import { pluginFromManifest } from "./plugin-factory";
 /** All default block plugins, generated from BLOCK_MANIFEST. */
 export const defaultPlugins: readonly BlockPlugin[] = BLOCK_MANIFEST_ENTRIES.map(pluginFromManifest);
 
+const theoremFamilyNames = new Set(
+  BLOCK_MANIFEST_ENTRIES
+    .filter((entry) => entry.bodyStyle === "italic")
+    .map((entry) => entry.name),
+);
+
 /** Theorem-family plugins (italic body style in manifest). */
 export const theoremFamilyPlugins: readonly BlockPlugin[] = defaultPlugins.filter(
-  (_, i) => BLOCK_MANIFEST_ENTRIES[i].bodyStyle === "italic",
+  (plugin) => theoremFamilyNames.has(plugin.name),
 );
 
 /** Embed-family plugins (embed special behavior in manifest). */
 export const embedFamilyPlugins: readonly BlockPlugin[] = defaultPlugins.filter(
-  (_, i) => BLOCK_MANIFEST_ENTRIES[i].specialBehavior === "embed",
+  (plugin) => plugin.specialBehavior === "embed",
 );

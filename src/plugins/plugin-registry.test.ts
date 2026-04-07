@@ -275,6 +275,30 @@ describe("pluginFromConfig", () => {
     expect(plugin.headerPosition).toBe("inline");
   });
 
+  it("inherits display metadata from existing plugin when partially overridden", () => {
+    const existing = makeBlockPlugin({
+      name: "blockquote",
+      numbered: false,
+      title: "Blockquote",
+      displayHeader: false,
+      specialBehavior: "blockquote",
+    });
+    const plugin = pluginFromConfig("blockquote", { title: "Zitat" }, existing);
+    expect(plugin.displayHeader).toBe(false);
+    expect(plugin.specialBehavior).toBe("blockquote");
+  });
+
+  it("inherits caption metadata from existing plugin when partially overridden", () => {
+    const existing = makeBlockPlugin({
+      name: "figure",
+      title: "Figure",
+      counter: "figure",
+      captionPosition: "below",
+    });
+    const plugin = pluginFromConfig("figure", { title: "Abbildung" }, existing);
+    expect(plugin.captionPosition).toBe("below");
+  });
+
   it("inherits title from existing plugin when config.title is undefined", () => {
     const existing = makeBlockPlugin({ name: "theorem", title: "Theorem", counter: "theorem" });
     const plugin = pluginFromConfig("theorem", { numbered: false }, existing);

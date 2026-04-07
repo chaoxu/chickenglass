@@ -8,7 +8,7 @@
 import type { BlockPlugin } from "./plugin-types";
 import type { BlockManifestEntry, CaptionPosition, HeaderPosition, SpecialBehavior } from "../constants/block-manifest";
 import { createBlockRender } from "./block-render";
-import { capitalize } from "../lib/utils";
+import { capitalize, pickDefined } from "../lib/utils";
 
 /** Options for creating a standard block plugin. */
 export interface StandardPluginOptions {
@@ -47,6 +47,27 @@ export interface StandardPluginOptions {
   readonly headerPosition?: HeaderPosition;
 }
 
+export const STANDARD_PLUGIN_METADATA_KEYS = [
+  "specialBehavior",
+  "displayHeader",
+  "captionPosition",
+  "headerPosition",
+] as const;
+
+type StandardPluginSource = StandardPluginOptions | BlockManifestEntry;
+
+function isBlockManifestEntry(
+  source: StandardPluginSource,
+): source is BlockManifestEntry {
+  return "bodyStyle" in source;
+}
+
+function resolveStandardPluginCounter(
+  source: StandardPluginSource,
+): string | undefined {
+  return isBlockManifestEntry(source) ? source.counterGroup : source.counter;
+}
+
 /**
  * Create a standard block plugin from minimal options.
  *
@@ -69,30 +90,21 @@ export interface StandardPluginOptions {
  * the single source of truth — no per-plugin file needed.
  */
 export function pluginFromManifest(entry: BlockManifestEntry): BlockPlugin {
-  return createStandardPlugin({
-    name: entry.name,
-    ...(entry.title !== undefined ? { title: entry.title } : {}),
-    numbered: entry.numbered,
-    ...(entry.counterGroup !== undefined ? { counter: entry.counterGroup } : {}),
-    ...(entry.specialBehavior !== undefined ? { specialBehavior: entry.specialBehavior } : {}),
-    ...(entry.displayHeader !== undefined ? { displayHeader: entry.displayHeader } : {}),
-    ...(entry.captionPosition !== undefined ? { captionPosition: entry.captionPosition } : {}),
-    ...(entry.headerPosition !== undefined ? { headerPosition: entry.headerPosition } : {}),
-  });
+  return createStandardPlugin(entry);
 }
 
-export function createStandardPlugin(options: StandardPluginOptions): BlockPlugin {
+export function createStandardPlugin(options: StandardPluginOptions): BlockPlugin;
+export function createStandardPlugin(options: BlockManifestEntry): BlockPlugin;
+export function createStandardPlugin(options: StandardPluginSource): BlockPlugin {
   const title = options.title ?? capitalize(options.name);
   const numbered = options.numbered ?? true;
+  const counter = resolveStandardPluginCounter(options);
   return {
     name: options.name,
-    ...(options.counter !== undefined ? { counter: options.counter } : {}),
+    ...(counter !== undefined ? { counter } : {}),
     numbered,
     title,
     render: createBlockRender(title),
-    ...(options.specialBehavior !== undefined ? { specialBehavior: options.specialBehavior } : {}),
-    ...(options.displayHeader !== undefined ? { displayHeader: options.displayHeader } : {}),
-    ...(options.captionPosition !== undefined ? { captionPosition: options.captionPosition } : {}),
-    ...(options.headerPosition !== undefined ? { headerPosition: options.headerPosition } : {}),
+    ...pickDefined(options, STANDARD_PLUGIN_METADATA_KEYS),
   };
 }
