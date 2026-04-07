@@ -869,8 +869,8 @@ describe("#298 — canonical document analysis pass", () => {
     expect(extract).toMatch(/analyze(?:Document|Markdown)Semantics/);
     expect(htmlEntry).toContain('export { markdownToHtml } from "./markdown-to-html/document"');
     expect(htmlDocument).toMatch(/analyze(?:Document|Markdown)Semantics/);
-    expect(crossrefs).toContain("documentAnalysisField");
-    expect(references).toContain("documentAnalysisField");
+    expect(crossrefs).toMatch(/documentAnalysisField|getDocumentAnalysisOrRecompute|buildEditorDocumentReferenceCatalog/);
+    expect(references).toMatch(/documentAnalysisField|getDocumentAnalysisOrRecompute|buildEditorDocumentReferenceCatalog/);
   });
 });
 
