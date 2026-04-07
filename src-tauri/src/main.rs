@@ -3,6 +3,7 @@
 
 mod commands;
 mod menu;
+mod services;
 
 use commands::state::{FileWatcherState, LastFocusedWindow, PerfState, ProjectRoot};
 use std::collections::HashMap;

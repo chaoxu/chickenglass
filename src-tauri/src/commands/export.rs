@@ -4,14 +4,22 @@ use std::process::{Command, Stdio};
 
 use tauri::{State, WebviewWindow, command};
 
-use super::path::{current_project_root, project_relative_path, resolve_project_path};
-use super::perf::measure_command;
+use super::context::{CommandSpec, WindowCommandContext, run_command};
 use super::state::{PerfState, ProjectRoot};
+use crate::services::path::{project_relative_path, resolve_project_path};
+
+const CHECK_PANDOC: CommandSpec =
+    CommandSpec::new("tauri.check_pandoc", "tauri.export.check_pandoc", "tauri");
+const EXPORT_DOCUMENT: CommandSpec = CommandSpec::new(
+    "tauri.export_document",
+    "tauri.export.export_document",
+    "tauri",
+);
 
 /// Check whether Pandoc is installed and return its version string.
 #[command]
 pub fn check_pandoc(perf: State<'_, PerfState>) -> Result<String, String> {
-    measure_command(&perf, "tauri.check_pandoc", "tauri.export.check_pandoc", "tauri", None, || {
+    run_command(&perf, CHECK_PANDOC, None, || {
         let output = Command::new("pandoc")
             .arg("--version")
             .output()
@@ -36,7 +44,10 @@ fn resolve_export_output_path(project_root: &Path, output_path: &str) -> Result<
 
     if let Some(parent) = resolved_path.parent() {
         if !parent.exists() {
-            return Err(format!("Output directory does not exist: {}", parent.display()));
+            return Err(format!(
+                "Output directory does not exist: {}",
+                parent.display()
+            ));
         }
     }
 
@@ -52,14 +63,10 @@ pub fn export_document(
     format: String,
     output_path: String,
 ) -> Result<String, String> {
-    measure_command(
-        &perf,
-        "tauri.export_document",
-        "tauri.export.export_document",
-        "tauri",
+    WindowCommandContext::new(&window, &root, &perf).run(
+        EXPORT_DOCUMENT,
         Some(&output_path),
-        || {
-            let project_root = current_project_root(&root, &window)?;
+        |project_root| {
             let output_path = resolve_export_output_path(&project_root, &output_path)?;
 
             let mut args = vec![
@@ -152,11 +159,9 @@ mod tests {
         let outside_root = create_temp_dir("export-outside");
         let outside_path = outside_root.join("out.pdf");
 
-        let error = resolve_export_output_path(
-            &project_root,
-            outside_path.to_str().expect("utf-8 path"),
-        )
-        .expect_err("absolute path outside root should fail");
+        let error =
+            resolve_export_output_path(&project_root, outside_path.to_str().expect("utf-8 path"))
+                .expect_err("absolute path outside root should fail");
 
         assert!(error.contains("escapes project root"));
 
