@@ -249,7 +249,3 @@ Detailed rules and architecture decisions are in reference files -- loaded on de
 - **[Inline rendering policy](docs/design/inline-rendering-policy.md)** — how inline math, bold, italic rendering works
 - **[Theme contract](docs/architecture/theme-contract.md)** — CSS variable contract between editor and theme
 
-
-## ORC integration
-
-This repo is managed by [orc](http://localhost:3001/orc/orc). Issues with the `ORC` label are picked up automatically by the orc daemon. Do not use labels like `agent`, `working`, `needs-fix`, or `needs-look` — those are deprecated. The single `ORC` label is the only visibility gate.
