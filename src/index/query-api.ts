@@ -165,6 +165,23 @@ export function querySourceText(
 }
 
 /**
+ * Collect all defined labels across indexed files in file/entry iteration order.
+ */
+export function getAllLabels(index: DocumentIndex): readonly string[] {
+  const labels: string[] = [];
+
+  for (const [, fileIndex] of index.files) {
+    for (const entry of fileIndex.entries) {
+      if (entry.label !== undefined) {
+        labels.push(entry.label);
+      }
+    }
+  }
+
+  return labels;
+}
+
+/**
  * Resolve a label to its target entry across all files.
  * Returns the first matching entry, or undefined if not found.
  */

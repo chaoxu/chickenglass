@@ -3,24 +3,18 @@
  * document analysis layer instead of bespoke tree walks.
  */
 
-import { parser } from "@lezer/markdown";
-import { markdownExtensions } from "../parser";
 import {
-  analyzeDocumentSemantics,
-  stringTextSource,
   type DocumentSemantics,
   type FencedDivSemantics,
 } from "../semantics/document";
+import { analyzeMarkdownSemantics } from "../semantics/markdown-analysis";
 import type { IndexEntry, IndexReference, FileIndex } from "./query-api";
-
-const indexParser = parser.configure(markdownExtensions);
 
 export function extractFileIndex(
   content: string,
   file: string,
 ): FileIndex {
-  const tree = indexParser.parse(content);
-  const analysis = analyzeDocumentSemantics(stringTextSource(content), tree);
+  const analysis = analyzeMarkdownSemantics(content);
   const entries: IndexEntry[] = [];
   const references: IndexReference[] = [];
 

@@ -412,6 +412,25 @@ describe("bibliographyPlugin integration", () => {
       expect(bibliographyDependenciesChanged(beforeState, view.state)).toBe(true);
     });
 
+    it("tracks citation edits that keep the same ids", () => {
+      const doc = "See [@karger2000, p. 1].";
+
+      view = createBibView(doc);
+      const beforeState = view.state;
+      const locator = "p. 1";
+      const locatorStart = doc.indexOf(locator);
+
+      view.dispatch({
+        changes: {
+          from: locatorStart,
+          to: locatorStart + locator.length,
+          insert: "pp. 10-11",
+        },
+      });
+
+      expect(bibliographyDependenciesChanged(beforeState, view.state)).toBe(true);
+    });
+
     it("does not reuse cached CSL HTML across different processors", () => {
       const firstProcessor = new CslProcessor([karger, stein, alpha]);
       const secondProcessor = new CslProcessor([karger, stein, alpha]);
