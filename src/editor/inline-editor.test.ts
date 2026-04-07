@@ -17,7 +17,6 @@ import {
   createMarkdownLanguageExtensions,
   createProjectConfigExtensions,
   inlineMarkdownExtensions,
-  sharedDocumentStateExtensions,
   sharedInlineRenderExtensions,
 } from "./base-editor-extensions";
 import { createInlineEditor } from "./inline-editor";
@@ -27,6 +26,7 @@ import { referenceRenderPlugin } from "../render/reference-render";
 import { CSS } from "../constants/css-classes";
 import { CSL_FIXTURES, makeBibStore } from "../test-utils";
 import { CslProcessor } from "../citations/csl-processor";
+import { frontmatterField } from "./frontmatter-state";
 
 // jsdom lacks ResizeObserver — provide a no-op stub.
 class ResizeObserverStub {
@@ -46,7 +46,7 @@ function fullInlineEditorExtensions(macros: Record<string, string> = {}) {
     ...createMarkdownLanguageExtensions({ extensions: inlineMarkdownExtensions }),
     ...createProjectConfigExtensions({ math: macros }),
     ...sharedInlineRenderExtensions,
-    ...sharedDocumentStateExtensions,
+    frontmatterField,
     documentAnalysisField,
     bibDataField,
     referenceRenderPlugin,

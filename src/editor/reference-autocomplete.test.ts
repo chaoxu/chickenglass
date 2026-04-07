@@ -16,9 +16,9 @@ import { documentAnalysisField } from "../semantics/codemirror-source";
 import { CSL_FIXTURES, makeBibStore } from "../test-utils";
 import {
   createMarkdownLanguageExtensions,
-  sharedDocumentStateExtensions,
 } from "./base-editor-extensions";
 import { createEditor } from "./editor";
+import { frontmatterField } from "./frontmatter-state";
 import {
   collectReferenceCompletionCandidates,
   findReferenceCompletionMatch,
@@ -59,7 +59,7 @@ function createReferenceState(doc: string): EditorState {
     selection: { anchor: doc.length },
     extensions: [
       ...createMarkdownLanguageExtensions(),
-      ...sharedDocumentStateExtensions,
+      frontmatterField,
       documentAnalysisField,
       createPluginRegistryField(defaultPlugins),
       blockCounterField,

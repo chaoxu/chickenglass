@@ -12,7 +12,6 @@ import { mathExtension } from "../parser/math-backslash";
 import { strikethroughExtension } from "../parser/strikethrough";
 import { markdownRenderPlugin } from "../render/markdown-render";
 import { mathRenderPlugin } from "../render/math-render";
-import { frontmatterField } from "./frontmatter-state";
 
 export const inlineMarkdownExtensions: MarkdownExtension[] = [
   mathExtension,
@@ -23,10 +22,6 @@ export const inlineMarkdownExtensions: MarkdownExtension[] = [
 export const sharedInlineRenderExtensions: Extension[] = [
   mathRenderPlugin,
   markdownRenderPlugin,
-];
-
-export const sharedDocumentStateExtensions: Extension[] = [
-  frontmatterField,
 ];
 
 export function createProjectConfigExtensions(projectConfig?: ProjectConfig): Extension[] {

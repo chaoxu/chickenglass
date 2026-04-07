@@ -13,13 +13,13 @@ import {
   createMarkdownLanguageExtensions,
   createProjectConfigExtensions,
   inlineMarkdownExtensions,
-  sharedDocumentStateExtensions,
   sharedInlineRenderExtensions,
 } from "./base-editor-extensions";
 import { type BibData, bibDataEffect, bibDataField } from "../citations/citation-render";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { referenceRenderPlugin } from "../render/reference-render";
 import { CSS } from "../constants/css-classes";
+import { frontmatterField } from "./frontmatter-state";
 
 /** Options for creating a lightweight inline editor. */
 export interface InlineEditorOptions {
@@ -62,7 +62,7 @@ export function createInlineEditor(opts: InlineEditorOptions): EditorView {
     ...sharedInlineRenderExtensions,
 
     // Frontmatter state field (reads macros from projectConfigFacet)
-    ...sharedDocumentStateExtensions,
+    frontmatterField,
 
     // Document semantics (reference discovery for citation/crossref rendering)
     documentAnalysisField,
