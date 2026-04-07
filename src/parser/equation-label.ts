@@ -6,23 +6,9 @@ import type {
   Line,
   Element,
 } from "@lezer/markdown";
-import { OPEN_BRACE, CLOSE_BRACE, COLON, skipSpaceTab } from "./char-utils";
-
-/**
- * Check if a line is a fenced div closing fence (3+ colons, then only whitespace).
- * Used to stop display math scanning at composite block boundaries, because
- * cx.nextLine() inside a composite doesn't respect the closing fence.
- */
-function isFencedDivClose(text: string, pos: number): boolean {
-  let count = 0;
-  while (pos + count < text.length && text.charCodeAt(pos + count) === COLON) count++;
-  if (count < 3) return false;
-  const afterColons = skipSpaceTab(text, pos + count);
-  return afterColons >= text.length;
-}
-
-/** Regex to validate that a braced string is an equation label: {#eq:...} */
-const LABEL_RE = /^\{#eq:[A-Za-z0-9_][\w.-]*\}$/;
+import { OPEN_BRACE, CLOSE_BRACE, skipSpaceTab } from "./char-utils";
+import { isClosingFence } from "./fenced-div";
+import { parseBracedId } from "./label-utils";
 
 /**
  * Try to extract an equation label from text following a closing math delimiter.
@@ -43,7 +29,7 @@ function extractLabel(
   if (i >= text.length) return undefined;
 
   const braceEnd = i + 1;
-  if (!LABEL_RE.test(text.slice(braceStart, braceEnd))) return undefined;
+  if (!parseBracedId(text.slice(braceStart, braceEnd), "eq:")) return undefined;
 
   // Ensure nothing meaningful follows the label
   if (text.slice(braceEnd).trim().length > 0) return undefined;
@@ -96,7 +82,7 @@ function scanMultilineClose(
     // Stop at fenced div closing fences — update currentLineEnd BEFORE
     // breaking so the unclosed math block ends at the previous line,
     // not at a stale position from an earlier iteration.
-    if (isFencedDivClose(currentText, line.pos)) {
+    if (isClosingFence(currentText, line.pos) >= 3) {
       currentLineEnd = cx.lineStart;
       break;
     }

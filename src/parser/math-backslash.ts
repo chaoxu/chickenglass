@@ -11,6 +11,20 @@ import {
   OPEN_PAREN,
 } from "./char-utils";
 
+function addInlineMathElement(
+  cx: InlineContext,
+  openStart: number,
+  openEnd: number,
+  closeStart: number,
+  closeEnd: number,
+): number {
+  const openMark = cx.elt("InlineMathMark", openStart, openEnd);
+  const closeMark = cx.elt("InlineMathMark", closeStart, closeEnd);
+  return cx.addElement(
+    cx.elt("InlineMath", openStart, closeEnd, [openMark, closeMark]),
+  );
+}
+
 /**
  * Inline parser for \(...\) math syntax.
  * Produces InlineMath nodes matching the same type as $...$ math.
@@ -27,11 +41,7 @@ const backslashInlineMathParser: InlineParser = {
     while (i < cx.end) {
       const ch = cx.char(i);
       if (ch === BACKSLASH && cx.char(i + 1) === CLOSE_PAREN) {
-        const openMark = cx.elt("InlineMathMark", start, start + 2);
-        const closeMark = cx.elt("InlineMathMark", i, i + 2);
-        return cx.addElement(
-          cx.elt("InlineMath", start, i + 2, [openMark, closeMark]),
-        );
+        return addInlineMathElement(cx, start, start + 2, i, i + 2);
       }
       i++;
     }
@@ -59,11 +69,7 @@ const dollarInlineMathParser: InlineParser = {
     while (i < cx.end) {
       const ch = cx.char(i);
       if (ch === DOLLAR) {
-        const openMark = cx.elt("InlineMathMark", pos, pos + 1);
-        const closeMark = cx.elt("InlineMathMark", i, i + 1);
-        return cx.addElement(
-          cx.elt("InlineMath", pos, i + 1, [openMark, closeMark]),
-        );
+        return addInlineMathElement(cx, pos, pos + 1, i, i + 1);
       }
       // Backslash escapes inside $ math: skip next char
       if (ch === BACKSLASH && i + 1 < cx.end) {

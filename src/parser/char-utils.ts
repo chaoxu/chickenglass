@@ -19,6 +19,7 @@ export const DOUBLE_QUOTE = 34;
 export const DOLLAR = 36;
 export const OPEN_PAREN = 40;
 export const CLOSE_PAREN = 41;
+export const DASH = 45;
 export const COLON = 58;
 export const EQUALS = 61;
 export const OPEN_BRACKET = 91;
@@ -26,6 +27,7 @@ export const BACKSLASH = 92;
 export const CLOSE_BRACKET = 93;
 export const CARET = 94;
 export const OPEN_BRACE = 123;
+export const PIPE = 124;
 export const CLOSE_BRACE = 125;
 export const TILDE = 126;
 
@@ -65,9 +67,9 @@ export function isIdentChar(ch: number): boolean {
     (ch >= 65 && ch <= 90) ||   // A-Z
     (ch >= 97 && ch <= 122) ||  // a-z
     (ch >= 48 && ch <= 57) ||   // 0-9
-    ch === 45 ||                // -
+    ch === DASH ||              // -
     ch === 95 ||                // _
-    ch === 58 ||                // :
+    ch === COLON ||             // :
     ch === 46                   // .
   );
 }

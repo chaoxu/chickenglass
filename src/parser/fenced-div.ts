@@ -50,7 +50,7 @@ export function countColons(text: string, pos: number): number {
  * Check if a line is a closing fence (3+ colons followed by only whitespace).
  * Returns the colon count or -1 if not a closing fence.
  */
-function isClosingFence(text: string, pos: number): number {
+export function isClosingFence(text: string, pos: number): number {
   const colonCount = countColons(text, pos);
   if (colonCount < 3) return -1;
   const afterColons = skipSpaceTab(text, pos + colonCount);

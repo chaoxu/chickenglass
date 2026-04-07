@@ -171,6 +171,12 @@ describe("$$ display math with equation labels", () => {
     expect(labels).toHaveLength(1);
     expect(nodeText(text, labels[0])).toBe("{#eq:my-equation}");
   });
+
+  it("rejects labels whose suffix starts with punctuation", () => {
+    const text = "$$x$$ {#eq:-bad}";
+    const labels = findNodes(text, "EquationLabel");
+    expect(labels).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -57,7 +57,7 @@
 - Prefer Lezer tree walking over regex for markdown/document parsing. If the task is really about document structure, syntax, or block boundaries, use the syntax tree.
 - `endLeaf` callbacks for paragraph interruption (display math after text without blank line).
 - Fenced div composite blocks use a generation counter in the `value` parameter to prevent incremental parser fragment reuse (see `packValue` in fenced-div.ts).
-- Block parsers using `cx.nextLine()` inside a composite must check for `:::` closing fences to avoid crossing composite boundaries (see `isFencedDivClose` in equation-label.ts).
+- Block parsers using `cx.nextLine()` inside a composite must check for `:::` closing fences to avoid crossing composite boundaries (see `isClosingFence` in fenced-div.ts).
 - Guard `closeFenceNode.from` against out-of-range positions -- incomplete trees can have `-1`.
 
 ## Testing

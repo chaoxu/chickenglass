@@ -23,6 +23,7 @@ import {
   type MarkdownConfig,
 } from "@lezer/markdown";
 import { tags as t } from "@lezer/highlight";
+import { BACKSLASH, COLON, DASH, PIPE, SPACE, TAB } from "./char-utils";
 import { scanTableInlineSpan } from "../lib/table-inline-span";
 
 /**
@@ -75,7 +76,7 @@ function parseRow(
     if (spanEnd !== null) {
       markNonWS(i, spanEnd);
       i = spanEnd;
-    } else if (line.charCodeAt(i) === 124 /* '|' */) {
+    } else if (line.charCodeAt(i) === PIPE) {
       if (!first || cellStart > -1) count++;
       first = false;
       if (elts) {
@@ -84,7 +85,7 @@ function parseRow(
       }
       cellStart = cellEnd = -1;
       i++;
-    } else if (line.charCodeAt(i) !== 32 /* ' ' */ && line.charCodeAt(i) !== 9 /* '\t' */) {
+    } else if (line.charCodeAt(i) !== SPACE && line.charCodeAt(i) !== TAB) {
       markNonWS(i, i + 1);
       i++;
     } else {
@@ -104,8 +105,8 @@ function parseRow(
 function hasPipe(str: string, start: number): boolean {
   for (let i = start; i < str.length; i++) {
     const ch = str.charCodeAt(i);
-    if (ch === 124 /* '|' */) return true;
-    if (ch === 92 /* '\\' */) i++;
+    if (ch === PIPE) return true;
+    if (ch === BACKSLASH) i++;
   }
   return false;
 }
@@ -128,7 +129,7 @@ class TableParser implements LeafBlockParser {
       this.rows = false;
       let lineText: string;
       if (
-        (line.next === 45 || line.next === 58 || line.next === 124) &&
+        (line.next === DASH || line.next === COLON || line.next === PIPE) &&
         isDelimiterLine((lineText = line.text.slice(line.pos)))
       ) {
         const firstRow: Element[] = [];
