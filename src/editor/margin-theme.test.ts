@@ -28,6 +28,15 @@ describe("marginThemeStyles reference autocomplete", () => {
   });
 
   it("keeps completion previews readable when rows wrap and render inline math", () => {
+    expect(marginThemeStyles[".cf-reference-completion-preview .cm-completionIcon"]).toMatchObject({
+      display: "none",
+    });
+
+    expect(marginThemeStyles[".cf-reference-completion-preview .cm-completionDetail"]).toMatchObject({
+      color: "var(--cf-muted)",
+      fontFamily: "var(--cf-ui-font)",
+    });
+
     expect(
       marginThemeStyles[".cf-reference-completion-crossref .cf-reference-completion-content"],
     ).toMatchObject({
