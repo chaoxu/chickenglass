@@ -20,6 +20,7 @@ export {
 
 // Background indexer query API (T15)
 export {
+  getAllLabels,
   queryIndex,
   querySourceText,
   resolveLabel,

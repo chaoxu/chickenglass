@@ -22,7 +22,7 @@ import type {
   ResolvedReference,
   SourceTextQuery,
 } from "./query-api";
-import { findReferences, queryIndex, querySourceText, resolveLabel } from "./query-api";
+import { findReferences, getAllLabels, queryIndex, querySourceText, resolveLabel } from "./query-api";
 import { extractFileIndex, updateFileInIndex, removeFileFromIndex } from "./extract";
 
 /**
@@ -49,7 +49,7 @@ export class BackgroundIndexer {
   }
 
   /**
-   * Update or add a file to the index.
+   * Update or add a single file without disturbing other indexed files.
    * Returns the number of entries found in the file.
    */
   async updateFile(file: string, content: string): Promise<number> {
@@ -97,18 +97,14 @@ export class BackgroundIndexer {
   /** Get all labels from all indexed files. */
   async getAllLabels(): Promise<readonly string[]> {
     if (this.disposed) throw new Error("Indexer.getAllLabels: indexer is disposed");
-    const labels: string[] = [];
-    for (const [, fileIndex] of this.files) {
-      for (const entry of fileIndex.entries) {
-        if (entry.label !== undefined) {
-          labels.push(entry.label);
-        }
-      }
-    }
-    return labels;
+    return getAllLabels(this.getDocumentIndex());
   }
 
-  /** Bulk update multiple files at once. Returns total entry count. */
+  /**
+   * Rebuild the index from an exact file snapshot. Files omitted from this
+   * batch are removed; use `updateFile()` / `removeFile()` for incremental sync.
+   * Returns the total entry count in the rebuilt index.
+   */
   async bulkUpdate(
     files: ReadonlyArray<{ file: string; content: string }>,
   ): Promise<number> {

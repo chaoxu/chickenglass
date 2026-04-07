@@ -13,15 +13,10 @@
  */
 import { StateEffect, StateField } from "@codemirror/state";
 import { type WidgetType } from "@codemirror/view";
-import { parser as baseParser } from "@lezer/markdown";
 import { type CslJsonItem } from "./bibtex-parser";
 import { CslProcessor } from "./csl-processor";
 import { SimpleTextRenderWidget } from "../render/render-core";
-import { markdownExtensions } from "../parser";
-import {
-  analyzeDocumentSemantics,
-  stringTextSource,
-} from "../semantics/document";
+import { analyzeMarkdownSemantics } from "../semantics/markdown-analysis";
 
 /** A store of bibliography entries keyed by citation id. */
 export type BibStore = ReadonlyMap<string, CslJsonItem>;
@@ -131,23 +126,18 @@ interface CitationMatch {
   locators: (string | undefined)[];
 }
 
-/** Standalone Lezer parser (same extensions as CM6 editor). */
-const mdParser = baseParser.configure(markdownExtensions);
-
 /**
  * Find all citation matches in the document text.
  * Only includes matches where at least one id exists in the bib store.
  *
- * Parses the text with the standalone Lezer parser internally,
- * then uses `analyzeDocumentSemantics` for reference discovery.
- * This supports CM6-free callers (e.g., `markdownToHtml`, `collectCitedIds`).
+ * Uses the shared standalone markdown semantics helper so CM6-free callers
+ * see the same citation/reference extraction as the editor.
  */
 export function findCitations(
   text: string,
   store: BibStore,
 ): CitationMatch[] {
-  const tree = mdParser.parse(text);
-  const analysis = analyzeDocumentSemantics(stringTextSource(text), tree);
+  const analysis = analyzeMarkdownSemantics(text);
   return analysis.references
     .filter((ref) => ref.ids.some((id) => store.has(id)))
     .map((ref) => ({

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { DocumentIndex, FileIndex, IndexEntry, IndexReference } from "./query-api";
-import { findReferences, queryIndex, querySourceText, resolveLabel } from "./query-api";
+import { findReferences, getAllLabels, queryIndex, querySourceText, resolveLabel } from "./query-api";
 
 function makeEntry(overrides: Partial<IndexEntry> & { type: string; file: string }): IndexEntry {
   return {
@@ -135,6 +135,31 @@ describe("querySourceText", () => {
 
   it("returns no results for empty text", () => {
     expect(querySourceText(index, { text: "   " })).toEqual([]);
+  });
+});
+
+describe("getAllLabels", () => {
+  const index = makeIndex([
+    {
+      file: "chapter1.md",
+      entries: [
+        makeEntry({ type: "theorem", label: "thm-1", file: "chapter1.md" }),
+        makeEntry({ type: "proof", file: "chapter1.md" }),
+        makeEntry({ type: "equation", label: "eq:1", file: "chapter1.md" }),
+      ],
+      references: [],
+    },
+    {
+      file: "chapter2.md",
+      entries: [
+        makeEntry({ type: "heading", label: "sec:appendix", file: "chapter2.md" }),
+      ],
+      references: [],
+    },
+  ]);
+
+  it("returns labels in file and entry order, skipping unlabeled entries", () => {
+    expect(getAllLabels(index)).toEqual(["thm-1", "eq:1", "sec:appendix"]);
   });
 });
 

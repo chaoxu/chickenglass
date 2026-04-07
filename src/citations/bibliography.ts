@@ -12,7 +12,7 @@ import {
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Transaction } from "@codemirror/state";
 import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors } from "./bibtex-parser";
-import { type BibStore, bibDataEffect, bibDataField, findCitations } from "./citation-render";
+import { type BibStore, bibDataEffect, bibDataField } from "./citation-render";
 import {
   type CitationBacklink,
   type CslProcessor,
@@ -22,6 +22,7 @@ import {
 import { CSS } from "../constants/css-classes";
 import { RenderWidget, buildDecorations, createDecorationsField, sanitizeCslHtml } from "../render/render-core";
 import { ensureCitationsRegistered } from "../render/reference-render";
+import { analyzeMarkdownSemantics } from "../semantics/markdown-analysis";
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
@@ -30,22 +31,12 @@ import {
 /**
  * Collect all citation ids referenced in the document text.
  * Returns a deduplicated set of ids in order of first appearance.
+ *
+ * @deprecated Prefer `collectCitedIdsFromReferences(analysis.references, store)`
+ * when document analysis is already available.
  */
 export function collectCitedIds(text: string, store: BibStore): string[] {
-  const matches = findCitations(text, store);
-  const seen = new Set<string>();
-  const ids: string[] = [];
-
-  for (const match of matches) {
-    for (const id of match.ids) {
-      if (!seen.has(id) && store.has(id)) {
-        seen.add(id);
-        ids.push(id);
-      }
-    }
-  }
-
-  return ids;
+  return collectCitedIdsFromReferences(analyzeMarkdownSemantics(text).references, store);
 }
 
 /**
@@ -266,17 +257,6 @@ function getCitedIdsKey(citedIds: readonly string[]): string {
   return citedIds.join("\0");
 }
 
-function getCitationBacklinksKey(
-  references: readonly Parameters<typeof collectCitationBacklinksFromReferences>[0][number][],
-  store: BibStore,
-): string {
-  return [...collectCitationBacklinksFromReferences(references, store).entries()]
-    .map(([id, backlinks]) =>
-      `${id}\0${backlinks.map((backlink) =>
-        `${backlink.occurrence}\0${backlink.from}\0${backlink.to}`).join("\u0001")}`)
-    .join("\u0002");
-}
-
 export function bibliographyDependenciesChanged(
   beforeState: EditorState,
   afterState: EditorState,
@@ -293,18 +273,10 @@ export function bibliographyDependenciesChanged(
 
   const beforeAnalysis = beforeState.field(documentAnalysisField);
   const afterAnalysis = afterState.field(documentAnalysisField);
-  const referenceSliceUnchanged =
-    beforeAnalysis.references === afterAnalysis.references &&
-    beforeAnalysis.referenceByFrom === afterAnalysis.referenceByFrom &&
-    getDocumentAnalysisSliceRevision(beforeAnalysis, "references")
-      === getDocumentAnalysisSliceRevision(afterAnalysis, "references");
-
-  if (referenceSliceUnchanged) {
-    return false;
-  }
-
-  return getCitationBacklinksKey(beforeAnalysis.references, beforeBib.store)
-    !== getCitationBacklinksKey(afterAnalysis.references, afterBib.store);
+  // Bibliography content/backlinks derive entirely from the references slice,
+  // so the slice revision is the canonical invalidation signal.
+  return getDocumentAnalysisSliceRevision(beforeAnalysis, "references")
+    !== getDocumentAnalysisSliceRevision(afterAnalysis, "references");
 }
 
 function bibliographyShouldRebuild(tr: Transaction): boolean {
