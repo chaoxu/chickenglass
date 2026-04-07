@@ -283,6 +283,39 @@ describe("CslProcessor ordering", () => {
     expect(processor.citationRegistrationKey).toBeNull();
   });
 
+  it("renders non-consecutive numeric clusters inside one pair of brackets", async () => {
+    const alpha: CslJsonItem = {
+      id: "alpha2020",
+      type: "article-journal",
+      author: [{ family: "Alpha" }],
+      issued: { "date-parts": [[2020]] },
+      title: "Alpha paper",
+    };
+    const beta: CslJsonItem = {
+      id: "beta2021",
+      type: "article-journal",
+      author: [{ family: "Beta" }],
+      issued: { "date-parts": [[2021]] },
+      title: "Beta paper",
+    };
+    const gamma: CslJsonItem = {
+      id: "gamma2022",
+      type: "article-journal",
+      author: [{ family: "Gamma" }],
+      issued: { "date-parts": [[2022]] },
+      title: "Gamma paper",
+    };
+
+    const processor = await CslProcessor.create([alpha, beta, gamma]);
+    processor.registerCitations([
+      { ids: ["alpha2020"] },
+      { ids: ["beta2021"] },
+      { ids: ["gamma2022"] },
+    ]);
+
+    expect(processor.cite(["alpha2020", "gamma2022"])).toBe("[1, 3]");
+  });
+
   it("does not register a failed citation cluster as prior context", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const processor = CslProcessor.empty() as unknown as {
