@@ -68,6 +68,16 @@ function createReferenceState(doc: string): EditorState {
   });
 }
 
+function typeText(view: ReturnType<typeof createEditor>, text: string): void {
+  const from = view.state.selection.main.from;
+  const to = view.state.selection.main.to;
+  view.dispatch({
+    changes: { from, to, insert: text },
+    selection: { anchor: from + text.length },
+    userEvent: "input.type",
+  });
+}
+
 describe("findReferenceCompletionMatch", () => {
   it("detects bracketed references at [@", () => {
     const state = createReferenceState("See [@thm");
@@ -236,6 +246,66 @@ describe("reference autocomplete integration", () => {
     view.destroy();
     parent.remove();
   }, 15_000);
+
+  it("opens on live bare @ typing when semantic references are available", async () => {
+    const doc = [
+      "# Background {#sec:background}",
+      "",
+      "::: {#thm:main .theorem}",
+      "Statement.",
+      ":::",
+      "",
+      "See ",
+    ].join("\n");
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = createEditor({ parent, doc });
+    view.focus();
+    view.dispatch({
+      selection: { anchor: view.state.doc.length },
+    });
+
+    typeText(view, "@");
+    const labels = await waitForCompletionLabels(() =>
+      currentCompletions(view.state).map((completion) => completion.label),
+    );
+    expect(labels).toEqual(
+      expect.arrayContaining(["thm:main", "sec:background"]),
+    );
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it("reopens bare @ completion when bibliography data arrives after typing", async () => {
+    const doc = "See ";
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = createEditor({ parent, doc });
+    view.focus();
+    view.dispatch({
+      selection: { anchor: view.state.doc.length },
+    });
+
+    typeText(view, "@");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(currentCompletions(view.state)).toHaveLength(0);
+
+    view.dispatch({
+      effects: bibDataEffect.of({
+        store: makeBibStore([CSL_FIXTURES.karger]),
+        cslProcessor: new CslProcessor([CSL_FIXTURES.karger]),
+      }),
+    });
+
+    const labels = await waitForCompletionLabels(() =>
+      currentCompletions(view.state).map((completion) => completion.label),
+    );
+    expect(labels).toContain("karger2000");
+
+    view.destroy();
+    parent.remove();
+  });
 
   it("renders citation completions as preview cards without detached info tooltips", async () => {
     const doc = "See [@";
