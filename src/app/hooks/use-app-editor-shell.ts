@@ -54,8 +54,8 @@ export interface AppEditorShellDeps {
  * Returned by `useAppEditorShell` and consumed by the top-level `App`
  * component (and sub-components via prop-drilling or context).
  *
- * Session-level properties (document state, file operations, buffers, dirty
- * tracking) are inherited from {@link UseEditorSessionReturn}.  Shell-level
+ * Session-level properties (document state, file operations, dirty tracking)
+ * are inherited from {@link UseEditorSessionReturn}. Shell-level
  * additions handle editor state, navigation, insertion, modes, stats, and
  * drag-and-drop.
  */

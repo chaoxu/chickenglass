@@ -979,15 +979,18 @@ describe("#376 — shared text widget primitives", () => {
 });
 
 describe("#386 — async cleanup and parallelization", () => {
-  it("parallelizes the open-folder refresh path and keeps save/create flows on the shared hooks", () => {
+  it("parallelizes the open-folder refresh path and keeps save/create flows on the shared session modules", () => {
     const workspace = fileText("src/app/hooks/use-app-workspace-session.ts");
     const session = fileText("src/app/hooks/use-editor-session.ts");
+    const runtime = fileText("src/app/editor-session-runtime.ts");
     const sessionService = fileText("src/app/editor-session-service.ts");
-    const persistence = fileText("src/app/hooks/use-editor-session-persistence.ts");
+    const persistence = fileText("src/app/editor-session-persistence.ts");
 
     expect(workspace).toContain("const [tree, nextProjectConfig] = await Promise.all([");
     expect(workspace).toContain("return loadWorkspaceContents(requestId)");
-    expect(session).toContain("useEditorSessionPersistence({");
+    expect(session).toContain("createEditorSessionRuntime()");
+    expect(session).toContain("createEditorSessionPersistence({");
+    expect(runtime).toContain("subscribe:");
     expect(sessionService).toContain("await refreshTree(path)");
     expect(sessionService).toContain("await openFile(path)");
     expect(persistence).toContain("await writeDocumentSnapshot(relativePath, doc, sourceMap, {");
@@ -1168,12 +1171,14 @@ describe("#315 — editor session subsystem", () => {
     const appMainShell = fileText("src/app/components/app-main-shell.tsx");
     const sessionHook = fileText("src/app/hooks/use-editor-session.ts");
     const persistence = fileText("src/app/hooks/use-app-session-persistence.ts");
+    const runtime = fileText("src/app/editor-session-runtime.ts");
 
     expect(appMainShell).toContain("currentPath");
     expect(appMainShell).not.toContain("TabBar");
     expect(appMainShell).not.toContain("setOpenTabs");
-    expect(sessionHook).toMatch(/editor-session-(actions|service)/);
-    expect(sessionHook).toMatch(/setCurrentSessionDocument|createEditorSessionService/);
+    expect(sessionHook).toContain("../editor-session-runtime");
+    expect(sessionHook).toContain("createEditorSessionService");
+    expect(runtime).toContain("createEditorSessionRuntime");
     expect(persistence).toContain("currentDocument");
     expect(persistence).not.toContain("switchToTab");
     expect(persistence).not.toContain("setActiveTab");
@@ -1185,12 +1190,24 @@ describe("#967 — document session service", () => {
     const sessionHook = fileText("src/app/hooks/use-editor-session.ts");
     const watcher = fileText("src/app/file-watcher.ts");
     const app = fileText("src/app/app.tsx");
+    const runtime = fileText("src/app/editor-session-runtime.ts");
+    const persistence = fileText("src/app/editor-session-persistence.ts");
 
     expect(fileExists("src/app/editor-session-service.ts")).toBe(true);
+    expect(fileExists("src/app/editor-session-runtime.ts")).toBe(true);
+    expect(fileExists("src/app/editor-session-persistence.ts")).toBe(true);
     expect(sessionHook).toContain("../editor-session-service");
+    expect(sessionHook).toContain("../editor-session-runtime");
+    expect(sessionHook).toContain("../editor-session-persistence");
     expect(sessionHook).toContain("syncExternalChange");
+    expect(sessionHook).not.toContain("buffers:");
+    expect(sessionHook).not.toContain("liveDocs:");
+    expect(sessionHook).not.toContain("pipeline:");
+    expect(sessionHook).not.toContain("setEditorDoc");
     expect(watcher).toContain("syncExternalChange");
     expect(app).toContain("syncExternalChange: editor.syncExternalChange");
+    expect(runtime).toContain("setWriteDocumentSnapshot");
+    expect(persistence).toContain("createEditorSessionPersistence");
   });
 });
 

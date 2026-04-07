@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileSystem } from "../file-manager";
 import type { EditorDocumentChange } from "../editor-doc-change";
-import { editorDocumentToString, emptyEditorDocument } from "../editor-doc-change";
 import { MemoryFileSystem } from "../file-manager";
 import { SourceMap } from "../source-map";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
@@ -178,7 +177,7 @@ describe("useEditorSession", () => {
     container.remove();
   });
 
-  it("keeps liveDocs, dirty state, and the active-document signal in sync while typing", async () => {
+  it("keeps dirty state and the active-document signal in sync while typing", async () => {
     const fs = new MemoryFileSystem({ "draft.md": "hello" });
     const { Harness, ref } = createHarness(fs);
 
@@ -200,7 +199,6 @@ describe("useEditorSession", () => {
     expect(ref.result.activeDocumentSignal.getSnapshot().revision).toBe(initialRevision + 1);
     expect(ref.result.currentDocument?.dirty).toBe(true);
     expect(ref.result.getCurrentDocText()).toBe("hello!");
-    expect(editorDocumentToString(ref.result.liveDocs.current.get("draft.md") ?? emptyEditorDocument)).toBe("hello!");
   });
 
   it("does not rerender the session hook on repeated edits once the document is already dirty", async () => {
@@ -324,7 +322,6 @@ describe("useEditorSession", () => {
 
     expect(ref.result.currentPath).toBe("scratch.md");
     expect(ref.result.editorDoc).toBe("# Scratch");
-    expect(ref.result.buffers.current.has("a.md")).toBe(false);
   });
 
   it("cleans up the actual current document after an async open when the path changed mid-flight", async () => {
@@ -353,7 +350,6 @@ describe("useEditorSession", () => {
     });
 
     expect(ref.result.currentPath).toBe("renamed.md");
-    expect(ref.result.buffers.current.has("renamed.md")).toBe(true);
 
     await act(async () => {
       reads["slow.md"].resolve("Slow");
@@ -361,8 +357,7 @@ describe("useEditorSession", () => {
     });
 
     expect(ref.result.currentPath).toBe("slow.md");
-    expect(ref.result.buffers.current.has("renamed.md")).toBe(false);
-    expect(ref.result.liveDocs.current.has("renamed.md")).toBe(false);
+    expect(ref.result.editorDoc).toBe("Slow");
   });
 
   it("saves expanded include edits back to the owning files", async () => {
