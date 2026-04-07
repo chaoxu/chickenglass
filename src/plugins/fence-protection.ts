@@ -62,7 +62,7 @@ import {
 } from "../render/code-block-render";
 import { countColons } from "../parser";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
-import { programmaticDocumentChangeAnnotation } from "../editor/programmatic-document-change";
+import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 
 // ---------------------------------------------------------------------------
 // Shared types and helpers

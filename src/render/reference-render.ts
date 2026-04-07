@@ -22,17 +22,12 @@ import {
   classifyReference,
   type ResolvedCrossref,
 } from "../index/crossref-resolver";
+import { ensureCitationsRegistered } from "../citations/citation-registration";
 import {
-  type BibStore,
-  bibDataEffect,
-  bibDataField,
   CitationWidget,
 } from "../citations/citation-render";
 import {
   type CslProcessor,
-  collectCitationMatches,
-  getCitationRegistrationKey,
-  registerCitationsWithProcessor,
 } from "../citations/csl-processor";
 import {
   CrossrefWidget,
@@ -45,12 +40,14 @@ import {
 import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
 import { cursorInRange } from "./node-collection";
 import { createSimpleViewPlugin } from "./view-plugin-factories";
-import { blockCounterField, pluginRegistryField } from "../plugins";
+import { blockCounterField } from "../plugins/block-counter";
+import { pluginRegistryField } from "../plugins/plugin-registry";
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
 import type { DocumentAnalysis, ReferenceSemantics } from "../semantics/document";
+import { type BibStore, bibDataEffect, bibDataField } from "../state/bib-data";
 
 function serializeKeyPart(value: string | undefined): string {
   return value ?? "";
@@ -170,32 +167,6 @@ function findActiveReference(
   }
 
   return candidate && to <= candidate.to ? candidate : undefined;
-}
-
-/**
- * Ensure citations from the current document analysis are registered with the
- * CSL processor. Registration state is tracked on the processor itself so
- * shared render surfaces can reuse one authoritative cache key.
- *
- * Exported so the bibliography plugin can call it before requesting formatted
- * bibliography entries — otherwise `bibliography()` returns [] when it runs
- * before the reference render plugin has registered citations. (#466)
- */
-export function ensureCitationsRegistered(
-  analysis: DocumentAnalysis,
-  store: BibStore,
-  processor: CslProcessor,
-): void {
-  const matches = collectCitationMatches(analysis.references, store);
-  const registrationKey = getCitationRegistrationKey(matches);
-  // Shared processors can be re-registered by other surfaces (read mode,
-  // hover previews, HTML export), so the authoritative cache lives on the
-  // processor instead of this view-layer helper.
-  if (processor.citationRegistrationKey === registrationKey) {
-    return;
-  }
-
-  registerCitationsWithProcessor(matches, processor);
 }
 
 // ── Helper functions ──────────────────────────────────────────────

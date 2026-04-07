@@ -18,10 +18,10 @@ export {
   projectConfigFacet,
   parseProjectConfig,
   mergeConfigs,
-} from "../editor";
+} from "../project-config";
 
-import type { ProjectConfig } from "../editor";
-import { PROJECT_CONFIG_FILE, parseProjectConfig } from "../editor";
+import type { ProjectConfig } from "../project-config";
+import { PROJECT_CONFIG_FILE, parseProjectConfig } from "../project-config";
 import type { FileSystem } from "./file-manager";
 
 /**

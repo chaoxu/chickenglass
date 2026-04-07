@@ -1101,12 +1101,14 @@ describe("#308 — shared base editor extensions", () => {
     expect(fileExists("src/editor/base-editor-extensions.ts")).toBe(true);
   });
 
-  it("both editor entry points consume the shared base extension module", () => {
+  it("keeps the shared base extension module behind the inline-editor compatibility shim", () => {
     const editor = fileText("src/editor/editor.ts");
-    const inlineEditor = fileText("src/editor/inline-editor.ts");
+    const inlineEditor = fileText("src/inline-editor.ts");
+    const inlineEditorShim = fileText("src/editor/inline-editor.ts");
 
     expect(editor).toContain("./base-editor-extensions");
-    expect(inlineEditor).toContain("./base-editor-extensions");
+    expect(inlineEditor).toContain("./editor/base-editor-extensions");
+    expect(inlineEditorShim).toContain('../inline-editor');
     expect(inlineEditor).not.toContain("../parser/math-backslash");
     expect(inlineEditor).not.toContain("../parser/highlight");
     expect(inlineEditor).not.toContain("../parser/strikethrough");

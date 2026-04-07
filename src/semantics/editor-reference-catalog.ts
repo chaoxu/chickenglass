@@ -1,10 +1,7 @@
 import { syntaxTree } from "@codemirror/language";
 import type { EditorState } from "@codemirror/state";
-import {
-  blockCounterField,
-  getPluginOrFallback,
-  pluginRegistryField,
-} from "../plugins";
+import { blockCounterField } from "../plugins/block-counter";
+import { getPluginOrFallback, pluginRegistryField } from "../plugins/plugin-registry";
 import { documentAnalysisField, editorStateTextSource } from "./codemirror-source";
 import {
   analyzeDocumentSemantics,

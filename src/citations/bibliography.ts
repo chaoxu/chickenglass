@@ -12,7 +12,7 @@ import {
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Transaction } from "@codemirror/state";
 import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors } from "./bibtex-parser";
-import { type BibStore, bibDataEffect, bibDataField } from "./citation-render";
+import { ensureCitationsRegistered } from "./citation-registration";
 import {
   type CitationBacklink,
   type CslProcessor,
@@ -26,12 +26,12 @@ import {
 } from "./bibliography-backlinks";
 import { CSS } from "../constants/css-classes";
 import { RenderWidget, buildDecorations, createDecorationsField, sanitizeCslHtml } from "../render/render-core";
-import { ensureCitationsRegistered } from "../render/reference-render";
 import { analyzeMarkdownSemantics } from "../semantics/markdown-analysis";
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
+import { type BibStore, bibDataEffect, bibDataField } from "../state/bib-data";
 
 /**
  * Collect all citation ids referenced in the document text.

@@ -20,7 +20,7 @@ const renderInlineMarkdownMock = vi.fn((
   element.textContent = content;
 });
 
-vi.mock("../editor/inline-editor", () => ({
+vi.mock("../inline-editor", () => ({
   createInlineEditor: (options: unknown) => createInlineEditorMock(options),
 }));
 
