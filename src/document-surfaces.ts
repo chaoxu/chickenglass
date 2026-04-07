@@ -58,7 +58,13 @@ export function renderDocumentFragmentToHtml(
  */
 export type BlockContentOptions = Pick<
   MarkdownToHtmlOptions,
-  "macros" | "bibliography" | "cslProcessor" | "blockCounters" | "documentPath" | "imageUrlOverrides"
+  | "macros"
+  | "bibliography"
+  | "cslProcessor"
+  | "blockCounters"
+  | "includeBibliography"
+  | "documentPath"
+  | "imageUrlOverrides"
 >;
 
 /**

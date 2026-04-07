@@ -22,6 +22,7 @@ export function markdownToHtml(
 ): string {
   const tree = mdParser.parse(content);
   const semantics = analyzeDocumentSemantics(stringTextSource(content), tree);
+  const includeBibliography = options?.includeBibliography !== false;
   const cslProcessor = options?.cslProcessor ?? (options?.bibliography
     ? new CslProcessor([...options.bibliography.values()])
     : undefined);
@@ -52,7 +53,7 @@ export function markdownToHtml(
   };
 
   let html = renderNode(tree.topNode, context);
-  if (context.bibliography && context.citedIds.length > 0) {
+  if (includeBibliography && context.bibliography && context.citedIds.length > 0) {
     html += renderBibliography(
       context.bibliography,
       context.citedIds,

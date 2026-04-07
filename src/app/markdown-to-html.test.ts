@@ -381,6 +381,36 @@ describe("markdownToHtml", () => {
     expect(html).not.toContain("↩1");
   });
 
+  it("can suppress appended bibliography while keeping inline citation formatting", () => {
+    const entry: CslJsonItem = {
+      id: "karger2000",
+      type: "article-journal",
+      author: [{ family: "Karger", given: "David R." }],
+      title: "Minimum Cuts in Near-Linear Time",
+      issued: { "date-parts": [[2000]] },
+    };
+    const bibliography = new Map([[entry.id, entry]]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Karger [1]"),
+      bibliography: vi.fn(() => [ieeeCslEntryHtml]),
+    } as unknown as CslProcessor;
+
+    const html = markdownToHtml("See [@karger2000].", {
+      bibliography,
+      cslProcessor: fakeCsl,
+      includeBibliography: false,
+    });
+
+    expect(fakeCsl.registerCitations).toHaveBeenCalled();
+    expect(fakeCsl.cite).toHaveBeenCalledWith(["karger2000"]);
+    expect(fakeCsl.bibliography).not.toHaveBeenCalled();
+    expect(html).toContain(`id="cite-ref-1" class="${CSS.citation}"`);
+    expect(html).not.toContain(`class="${CSS.bibliography}"`);
+    expect(html).not.toContain(ieeeCslEntryHtml);
+  });
+
   // Regression (#482): CSL bibliography HTML must be sanitized before
   // interpolation into the HTML export. A malicious BibTeX entry could
   // inject <script> or event handlers via CSL output.

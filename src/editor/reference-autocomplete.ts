@@ -312,42 +312,64 @@ export function collectReferenceCompletionCandidates(
   return [...candidates.values()];
 }
 
+function candidateDisplayLabel(candidate: ReferenceCompletionCandidate): string {
+  switch (candidate.kind) {
+    case "block":
+      return candidate.info ?? candidate.detail ?? candidate.id;
+    case "equation":
+      return candidate.detail ?? candidate.id;
+    case "heading":
+      return candidate.info ?? candidate.detail ?? candidate.id;
+    case "citation":
+      return candidate.id;
+  }
+}
+
+function candidateCompletionDetail(
+  candidate: ReferenceCompletionCandidate,
+): string | undefined {
+  return candidate.kind === "citation" ? candidate.detail : candidate.id;
+}
+
 function candidateToCompletion(
   candidate: ReferenceCompletionCandidate,
 ): ReferenceAutocompleteCompletion {
+  const displayLabel = candidateDisplayLabel(candidate);
+  const baseCompletion = {
+    detail: candidateCompletionDetail(candidate),
+    label: candidate.id,
+    ...(displayLabel !== candidate.id ? { displayLabel } : {}),
+  } as const;
+
   switch (candidate.kind) {
     case "block":
       return {
-        label: candidate.id,
+        ...baseCompletion,
         referenceCompletionKind: "block",
         section: CROSSREF_SECTION,
         sortText: `0-${candidate.id}`,
-        type: "constant",
       };
     case "equation":
       return {
-        label: candidate.id,
+        ...baseCompletion,
         referenceCompletionKind: "equation",
         section: CROSSREF_SECTION,
         sortText: `1-${candidate.id}`,
-        type: "constant",
       };
     case "heading":
       return {
-        label: candidate.id,
+        ...baseCompletion,
         referenceCompletionKind: "heading",
         section: CROSSREF_SECTION,
         sortText: `2-${candidate.id}`,
-        type: "namespace",
       };
     case "citation":
       return {
+        ...baseCompletion,
         citationPreview: candidate.preview,
-        label: candidate.id,
         referenceCompletionKind: "citation",
         section: CITATION_SECTION,
         sortText: `3-${candidate.id}`,
-        type: "variable",
       };
   }
 }
