@@ -21,7 +21,6 @@ import {
   type ResolvedCrossref,
   resolveCrossref,
 } from "../index/crossref-resolver";
-import type { ReferenceSemantics } from "../semantics/document";
 import { blockCounterField, type NumberedBlock } from "../plugins/block-counter";
 import {
   buildCitationPreviewContent,
@@ -45,6 +44,7 @@ import { resolveLocalMediaPreview } from "./media-preview";
 import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 import { getPlugin, pluginRegistryField } from "../plugins/plugin-registry";
 import { type BibStore, bibDataField } from "../state/bib-data";
+import { findRenderedReference } from "./reference-targeting";
 
 // ── Singleton tooltip element ───────────────────────────────────────────────
 
@@ -867,17 +867,6 @@ export function refIdFromElement(el: Element | null): string | null {
 // ── Hover logic: determine what to show ─────────────────────────────────────
 
 /**
- * Find the ReferenceSemantics at a given document position.
- */
-function findRefAt(view: EditorView, pos: number): ReferenceSemantics | undefined {
-  const analysis = view.state.field(documentAnalysisField, false);
-  if (!analysis) {
-    return undefined;
-  }
-  return analysis.references.find((r) => pos >= r.from && pos <= r.to);
-}
-
-/**
  * Determine tooltip content for a hovered element that belongs to a
  * cross-reference or citation widget.
  *
@@ -899,19 +888,10 @@ function buildTooltipPlanForElement(
   const refId = refIdFromElement(target);
 
   // Find the widget container to determine if this is crossref or citation
-  const widgetEl = target.closest(".cf-crossref, .cf-citation");
+  const widgetEl = target.closest(".cf-crossref, .cf-citation") as HTMLElement | null;
   if (!widgetEl) return null;
 
-  // Find the CM6 widget position — walk up to find the cm-widgetBuffer sibling
-  // or the widget wrapper, then use view.posAtDOM
-  let pos: number;
-  try {
-    pos = view.posAtDOM(widgetEl);
-  } catch {
-    return null;
-  }
-
-  const ref = findRefAt(view, pos);
+  const ref = findRenderedReference(view, widgetEl);
   if (!ref) return null;
 
   const { store } = bibData;
