@@ -1,7 +1,7 @@
 import type { EditorView } from "@codemirror/view";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import type { ReferenceSemantics } from "../semantics/document";
-import { resolveLiveWidgetSourceRange } from "./widget-core";
+import { resolveLiveWidgetSourceRange } from "./source-widget";
 
 /**
  * Resolve the source reference occurrence for a rendered reference widget.
