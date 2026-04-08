@@ -589,7 +589,7 @@ export function buildBlockPreviewBodyForTest(
   view: EditorView,
   block: NumberedBlock,
 ): HTMLElement | null {
-  const macros = view.state.field(mathMacrosField);
+  const macros = view.state.field(mathMacrosField, false) ?? {};
   const registry = view.state.field(pluginRegistryField, false);
   const plugin = registry ? getPlugin(registry, block.type) : undefined;
   return buildBlockPreviewPlan(
@@ -610,7 +610,7 @@ function buildCrossrefTooltipPlan(
   resolved: ResolvedCrossref,
   variant: CrossrefPreviewVariant = "hover",
 ): TooltipPlan {
-  const macros = view.state.field(mathMacrosField);
+  const macros = view.state.field(mathMacrosField, false) ?? {};
 
   if (resolved.kind === "block") {
     const headerText =
@@ -710,11 +710,11 @@ export function buildCrossrefPreviewContent(
   view: EditorView,
   id: string,
 ): HTMLElement {
-  const equationLabels = view.state.field(documentAnalysisField).equationById;
+  const equationLabels = view.state.field(documentAnalysisField, false)?.equationById;
   return buildCrossrefTooltipPlan(
     view,
     id,
-    resolveCrossref(view.state, id, equationLabels),
+    resolveCrossref(view.state, id, equationLabels ?? new Map()),
     "hover",
   ).buildContent();
 }
@@ -723,11 +723,11 @@ export function buildCrossrefCompletionPreviewContent(
   view: EditorView,
   id: string,
 ): HTMLElement {
-  const equationLabels = view.state.field(documentAnalysisField).equationById;
+  const equationLabels = view.state.field(documentAnalysisField, false)?.equationById;
   return buildCrossrefTooltipPlan(
     view,
     id,
-    resolveCrossref(view.state, id, equationLabels),
+    resolveCrossref(view.state, id, equationLabels ?? new Map()),
     "completion",
   ).buildContent();
 }
@@ -783,7 +783,7 @@ function buildSingleItemTooltipPlan(
   resolved: ReferenceClassification,
   store: BibStore,
 ): TooltipPlan {
-  const macros = view.state.field(mathMacrosField);
+  const macros = view.state.field(mathMacrosField, false) ?? {};
 
   if (resolved.kind === "citation") {
     const entry = store.get(id);
@@ -870,7 +870,10 @@ export function refIdFromElement(el: Element | null): string | null {
  * Find the ReferenceSemantics at a given document position.
  */
 function findRefAt(view: EditorView, pos: number): ReferenceSemantics | undefined {
-  const analysis = view.state.field(documentAnalysisField);
+  const analysis = view.state.field(documentAnalysisField, false);
+  if (!analysis) {
+    return undefined;
+  }
   return analysis.references.find((r) => pos >= r.from && pos <= r.to);
 }
 
@@ -885,7 +888,11 @@ function buildTooltipPlanForElement(
   view: EditorView,
   target: HTMLElement,
 ): TooltipPlan | null {
-  const analysis = view.state.field(documentAnalysisField);
+  const analysis = view.state.field(documentAnalysisField, false);
+  const bibData = view.state.field(bibDataField, false);
+  if (!analysis || !bibData) {
+    return null;
+  }
   const equationLabels = analysis.equationById;
 
   // Check if we're hovering a data-ref-id span (cluster item)
@@ -907,7 +914,7 @@ function buildTooltipPlanForElement(
   const ref = findRefAt(view, pos);
   if (!ref) return null;
 
-  const { store } = view.state.field(bibDataField);
+  const { store } = bibData;
   const classifications = ref.ids.map((id) =>
     classifyReference(view.state, id, {
       bibliography: store,
@@ -1078,6 +1085,20 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
 
   return {
     update(update) {
+      const beforeAnalysis = update.startState.field(documentAnalysisField, false);
+      const afterAnalysis = update.state.field(documentAnalysisField, false);
+      const beforeBibData = update.startState.field(bibDataField, false);
+      const afterBibData = update.state.field(bibDataField, false);
+      const beforeMacros = update.startState.field(mathMacrosField, false);
+      const afterMacros = update.state.field(mathMacrosField, false);
+
+      if (!afterAnalysis || !afterBibData) {
+        currentTarget = null;
+        currentPlan = null;
+        hideFloatingTooltip();
+        return;
+      }
+
       const imageCacheChanged = cacheEntriesChanged(
         currentPlan?.trackedImagePaths ?? EMPTY_TRACKED_PATHS,
         update.startState.field(imageUrlField, false) || EMPTY_MEDIA_CACHE,
@@ -1088,14 +1109,11 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
         update.startState.field(pdfPreviewField, false) || EMPTY_MEDIA_CACHE,
         update.state.field(pdfPreviewField, false) || EMPTY_MEDIA_CACHE,
       );
-      const analysisChanged =
-        update.startState.field(documentAnalysisField) !== update.state.field(documentAnalysisField);
+      const analysisChanged = beforeAnalysis !== afterAnalysis;
       const blockCountersChanged =
         update.startState.field(blockCounterField, false) !== update.state.field(blockCounterField, false);
-      const bibliographyChanged =
-        update.startState.field(bibDataField) !== update.state.field(bibDataField);
-      const macrosChanged =
-        update.startState.field(mathMacrosField) !== update.state.field(mathMacrosField);
+      const bibliographyChanged = beforeBibData !== afterBibData;
+      const macrosChanged = beforeMacros !== afterMacros;
       const forceRebuild =
         (bibliographyChanged && currentPlan?.dependsOnBibliography === true) ||
         (macrosChanged && currentPlan?.dependsOnMacros === true);

@@ -12,8 +12,11 @@ import {
   createArgParser,
   disconnectBrowser,
   EXTERNAL_DEMO_ROOT,
+  EXTERNAL_FIXTURE_ROOT,
   getGeometrySnapshot,
   openFixtureDocument,
+  PUBLIC_SHOWCASE_FIXTURE,
+  resolveFixtureDocumentWithFallback,
   scrollTo,
   setCursor,
   settleEditorLayout,
@@ -26,23 +29,28 @@ const REPO_ROOT = resolve(SCRIPT_DIR, "..");
 
 const FIXTURES = {
   rankdecrease: {
-    displayPath: "demo/rankdecrease/main.md",
+    displayPath: "fixtures/rankdecrease/main.md",
     virtualPath: "rankdecrease/main.md",
     candidates: [
-      resolve(REPO_ROOT, "demo/rankdecrease/main.md"),
-      resolve(EXTERNAL_DEMO_ROOT, "rankdecrease/main.md"),
+      resolve(REPO_ROOT, "fixtures/rankdecrease/main.md"),
+      resolve(EXTERNAL_FIXTURE_ROOT, "rankdecrease/main.md"),
     ],
     defaultLine: 900,
   },
   cogirth: {
-    displayPath: "demo/cogirth/main2.md",
+    displayPath: "fixtures/cogirth/main2.md",
     virtualPath: "cogirth/main2.md",
     candidates: [
-      resolve(REPO_ROOT, "demo/cogirth/main2.md"),
-      resolve(EXTERNAL_DEMO_ROOT, "cogirth/main2.md"),
+      resolve(REPO_ROOT, "fixtures/cogirth/main2.md"),
+      resolve(EXTERNAL_FIXTURE_ROOT, "cogirth/main2.md"),
     ],
     defaultLine: 700,
   },
+};
+
+const PUBLIC_GEOMETRY_FALLBACK = {
+  ...PUBLIC_SHOWCASE_FIXTURE,
+  defaultLine: 139,
 };
 
 function printUsage() {
@@ -276,15 +284,19 @@ async function main(argv = process.argv.slice(2)) {
   }
 
   const fixtureKey = getFlag("--fixture", "rankdecrease");
-  const fixture = FIXTURES[fixtureKey];
-  if (!fixture) {
+  const requestedFixture = FIXTURES[fixtureKey];
+  if (!requestedFixture) {
     throw new Error(`Unknown fixture "${fixtureKey}".`);
   }
   const scenario = getFlag("--scenario", "structure");
   if (!["structure", "focus", "scroll", "all"].includes(scenario)) {
     throw new Error(`Unknown scenario "${scenario}".`);
   }
-  const line = getIntFlag("--line", fixture.defaultLine);
+  const fixture = resolveFixtureDocumentWithFallback(
+    requestedFixture,
+    PUBLIC_GEOMETRY_FALLBACK,
+  );
+  const line = getIntFlag("--line", fixture.defaultLine ?? requestedFixture.defaultLine);
   const radius = getIntFlag("--radius", 3);
 
   const page = await connectEditor({

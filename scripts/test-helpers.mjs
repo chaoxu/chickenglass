@@ -12,8 +12,8 @@
  *   console.log(await dump(page));
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, extname, relative, resolve } from "node:path";
 import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -26,12 +26,37 @@ const DEFAULT_BROWSER_MODE = "cdp";
 const DEFAULT_MANAGED_VIEWPORT = { width: 1280, height: 900 };
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");
+const REPO_DEMO_ROOT = resolve(REPO_ROOT, "demo");
+const REPO_FIXTURE_ROOT = resolve(REPO_ROOT, "fixtures");
 export const EXTERNAL_DEMO_ROOT = "/Users/chaoxu/playground/coflat/demo";
+export const EXTERNAL_FIXTURE_ROOT = "/Users/chaoxu/playground/coflat/fixtures";
+export const PUBLIC_SHOWCASE_FIXTURE = {
+  displayPath: "demo/index.md",
+  virtualPath: "index.md",
+  candidates: [
+    resolve(REPO_ROOT, "demo/index.md"),
+    resolve(EXTERNAL_DEMO_ROOT, "index.md"),
+  ],
+};
 const MODE_LABELS = {
   rich: "Rich",
   source: "Source",
   read: "Read",
 };
+const TEXT_FIXTURE_EXTENSIONS = new Set([
+  ".bib",
+  ".csl",
+  ".css",
+  ".html",
+  ".js",
+  ".json",
+  ".md",
+  ".svg",
+  ".ts",
+  ".txt",
+  ".yaml",
+  ".yml",
+]);
 
 function formatInspectablePages(pages) {
   if (pages.length === 0) return "<none>";
@@ -197,10 +222,18 @@ export async function saveCurrentFile(page) {
  */
 export async function discardCurrentFile(page) {
   const discarded = await page.evaluate(async () => {
-    if (!window.__app?.closeFile) {
+    const app = window.__app;
+    if (!app?.closeFile) {
       return false;
     }
-    return window.__app.closeFile({ discard: true });
+    if (!app.getCurrentDocument?.()) {
+      return true;
+    }
+    const closed = await app.closeFile({ discard: true });
+    if (closed) {
+      return true;
+    }
+    return !app.getCurrentDocument?.();
   });
   await sleep(150);
   return discarded;
@@ -217,9 +250,94 @@ export async function openFile(page, path) {
 
 function defaultFixtureCandidates(path) {
   return [
-    resolve(REPO_ROOT, "demo", path),
+    resolve(REPO_DEMO_ROOT, path),
+    resolve(REPO_FIXTURE_ROOT, path),
     resolve(EXTERNAL_DEMO_ROOT, path),
+    resolve(EXTERNAL_FIXTURE_ROOT, path),
   ];
+}
+
+function inferFixtureDisplayPath(virtualPath, resolvedPath) {
+  if (!resolvedPath) return `fixture:${virtualPath}`;
+  if (
+    resolvedPath.startsWith(`${REPO_DEMO_ROOT}/`) ||
+    resolvedPath.startsWith(`${EXTERNAL_DEMO_ROOT}/`)
+  ) {
+    return `demo/${virtualPath}`;
+  }
+  if (
+    resolvedPath.startsWith(`${REPO_FIXTURE_ROOT}/`) ||
+    resolvedPath.startsWith(`${EXTERNAL_FIXTURE_ROOT}/`)
+  ) {
+    return `fixtures/${virtualPath}`;
+  }
+  return `fixture:${virtualPath}`;
+}
+
+function fixtureRootForResolvedPath(resolvedPath) {
+  if (resolvedPath.startsWith(`${REPO_DEMO_ROOT}/`)) return REPO_DEMO_ROOT;
+  if (resolvedPath.startsWith(`${REPO_FIXTURE_ROOT}/`)) return REPO_FIXTURE_ROOT;
+  if (resolvedPath.startsWith(`${EXTERNAL_DEMO_ROOT}/`)) return EXTERNAL_DEMO_ROOT;
+  if (resolvedPath.startsWith(`${EXTERNAL_FIXTURE_ROOT}/`)) return EXTERNAL_FIXTURE_ROOT;
+  return null;
+}
+
+function inferFixtureProjectPrefix(virtualPath) {
+  const slashIndex = virtualPath.indexOf("/");
+  return slashIndex >= 0 ? virtualPath.slice(0, slashIndex) : null;
+}
+
+function buildFixtureProjectFiles(virtualPath, resolvedPath) {
+  const root = fixtureRootForResolvedPath(resolvedPath);
+  const projectPrefix = inferFixtureProjectPrefix(virtualPath);
+  if (!root) {
+    return null;
+  }
+
+  const projectRoot = projectPrefix ? resolve(root, projectPrefix) : root;
+  if (!existsSync(projectRoot) || !statSync(projectRoot).isDirectory()) {
+    return null;
+  }
+
+  /** @type {Array<
+   *   { path: string, kind: "text", content: string } |
+   *   { path: string, kind: "binary", base64: string }
+   * >} */
+  const files = [];
+
+  const visit = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolutePath = resolve(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(absolutePath);
+        continue;
+      }
+
+      const repoRelativePath = relative(root, absolutePath).replace(/\\/g, "/");
+      const extension = extname(entry.name).toLowerCase();
+      if (TEXT_FIXTURE_EXTENSIONS.has(extension)) {
+        files.push({
+          path: repoRelativePath,
+          kind: "text",
+          content: readFileSync(absolutePath, "utf8"),
+        });
+        continue;
+      }
+
+      files.push({
+        path: repoRelativePath,
+        kind: "binary",
+        base64: readFileSync(absolutePath).toString("base64"),
+      });
+    }
+  };
+
+  visit(projectRoot);
+  return files;
+}
+
+function isMissingFixtureError(error) {
+  return error instanceof Error && error.message.startsWith("Missing fixture for ");
 }
 
 /**
@@ -237,16 +355,19 @@ export function resolveFixtureDocument(fixture) {
   const normalized = typeof fixture === "string"
     ? {
         virtualPath: fixture,
-        displayPath: `demo/${fixture}`,
       }
     : {
         ...fixture,
-        displayPath: fixture.displayPath ?? `demo/${fixture.virtualPath}`,
       };
+  const explicitDisplayPath = typeof fixture === "string"
+    ? undefined
+    : fixture.displayPath;
+  const fallbackDisplayPath = explicitDisplayPath ?? `fixture:${normalized.virtualPath}`;
 
   if (typeof normalized.content === "string") {
     return {
       ...normalized,
+      displayPath: fallbackDisplayPath,
       resolvedPath: null,
       content: normalized.content,
       candidates: normalized.candidates ?? defaultFixtureCandidates(normalized.virtualPath),
@@ -257,16 +378,43 @@ export function resolveFixtureDocument(fixture) {
   const resolvedPath = candidates.find((candidate) => existsSync(candidate));
   if (!resolvedPath) {
     throw new Error(
-      `Missing fixture for ${normalized.displayPath}. Tried: ${candidates.join(", ")}`,
+      `Missing fixture for ${fallbackDisplayPath}. Tried: ${candidates.join(", ")}`,
     );
   }
 
   return {
     ...normalized,
+    displayPath: explicitDisplayPath ?? inferFixtureDisplayPath(normalized.virtualPath, resolvedPath),
     resolvedPath,
     content: readFileSync(resolvedPath, "utf8"),
     candidates,
   };
+}
+
+export function hasFixtureDocument(fixture) {
+  try {
+    resolveFixtureDocument(fixture);
+    return true;
+  } catch (error) {
+    if (isMissingFixtureError(error)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+export function resolveFixtureDocumentWithFallback(
+  fixture,
+  fallbackFixture = PUBLIC_SHOWCASE_FIXTURE,
+) {
+  try {
+    return resolveFixtureDocument(fixture);
+  } catch (error) {
+    if (!isMissingFixtureError(error)) {
+      throw error;
+    }
+    return resolveFixtureDocument(fallbackFixture);
+  }
 }
 
 /**
@@ -281,14 +429,21 @@ export function resolveFixtureDocument(fixture) {
  *   candidates?: string[],
  *   content?: string,
  * }} fixture
- * @param {{ mode?: "rich" | "source" | "read", discardCurrent?: boolean }} [options]
+ * @param {{
+ *   mode?: "rich" | "source" | "read",
+ *   discardCurrent?: boolean,
+ *   project?: "single-file" | "full-project",
+ * }} [options]
  */
 export async function openFixtureDocument(page, fixture, options = {}) {
   const resolved = resolveFixtureDocument(fixture);
-  const { mode, discardCurrent = true } = options;
+  const { mode, discardCurrent = true, project = "single-file" } = options;
   const preferOpenFile = Boolean(
     resolved.resolvedPath?.startsWith(resolve(REPO_ROOT, "demo")),
   );
+  const projectFiles = project === "full-project" && resolved.resolvedPath
+    ? buildFixtureProjectFiles(resolved.virtualPath, resolved.resolvedPath)
+    : null;
   const verificationWindow = 200;
 
   if (discardCurrent) {
@@ -296,13 +451,16 @@ export async function openFixtureDocument(page, fixture, options = {}) {
   }
 
   const result = await page.evaluate(
-    async ({ path, expectedContent, tryOpenFileFirst }) => {
+    async ({ path, expectedContent, tryOpenFileFirst, fixtureProjectFiles }) => {
       const app = window.__app;
       if (!app?.openFile) {
         throw new Error("window.__app.openFile is unavailable.");
       }
 
-      if (tryOpenFileFirst) {
+      const canOpenInCurrentProject = tryOpenFileFirst
+        || (fixtureProjectFiles && app.hasFile ? await app.hasFile(path) : false);
+
+      if (canOpenInCurrentProject) {
         try {
           await app.openFile(path);
           return { method: "openFile" };
@@ -311,6 +469,11 @@ export async function openFixtureDocument(page, fixture, options = {}) {
             throw error;
           }
         }
+      }
+
+      if (fixtureProjectFiles && app.loadFixtureProject) {
+        await app.loadFixtureProject(fixtureProjectFiles, path);
+        return { method: "loadFixtureProject" };
       }
 
       if (!app.openFileWithContent) {
@@ -324,18 +487,29 @@ export async function openFixtureDocument(page, fixture, options = {}) {
       path: resolved.virtualPath,
       expectedContent: resolved.content,
       tryOpenFileFirst: preferOpenFile,
+      fixtureProjectFiles: projectFiles,
     },
   );
 
   await page.waitForFunction(
-    ({ expectedLength, expectedPrefix, expectedSuffix }) => {
+    ({ method, path, expectedLength, expectedPrefix, expectedSuffix }) => {
       const text = window.__cmView?.state?.doc?.toString();
-      return typeof text === "string" &&
-        text.length === expectedLength &&
-        text.startsWith(expectedPrefix) &&
-        text.endsWith(expectedSuffix);
+      const currentPath = window.__app?.getCurrentDocument?.()?.path ?? null;
+      if (typeof text !== "string" || currentPath !== path) {
+        return false;
+      }
+
+      if (method === "openFileWithContent") {
+        return text.length === expectedLength &&
+          text.startsWith(expectedPrefix) &&
+          text.endsWith(expectedSuffix);
+      }
+
+      return text.length > 0;
     },
     {
+      method: result.method,
+      path: resolved.virtualPath,
       expectedLength: resolved.content.length,
       expectedPrefix: resolved.content.slice(0, verificationWindow),
       expectedSuffix: resolved.content.slice(-verificationWindow),
@@ -356,12 +530,11 @@ export async function openFixtureDocument(page, fixture, options = {}) {
 /**
  * Open a stable fixture for browser regression tests.
  *
- * Older regressions used whichever demo file happened to be the default open
- * document, which made the suite drift whenever demo content changed. Default
- * to the dedicated regression fixture instead.
+ * Default the shared browser regression lane to the public showcase document.
+ * Private heavy fixtures are loaded explicitly by the tests that need them.
  */
-export async function openRegressionDocument(page, path = "cogirth/regression-suite.md") {
-  const opened = await openFixtureDocument(page, path);
+export async function openRegressionDocument(page, path = "index.md") {
+  const opened = await openFixtureDocument(page, path, { project: "full-project" });
   return opened.virtualPath;
 }
 
@@ -486,6 +659,7 @@ export async function closeAppSearch(page) {
 export async function waitForAutocomplete(page) {
   await page.waitForFunction(
     () => document.querySelectorAll(".cm-tooltip-autocomplete li").length > 0,
+    undefined,
     { timeout: 5000 },
   );
   await sleep(100);
@@ -832,11 +1006,20 @@ export async function setCursor(page, line, col = 0) {
 export async function scrollTo(page, line) {
   await page.evaluate((ln) => {
     const view = window.__cmView;
+    view.focus();
     const lineObj = view.state.doc.line(ln);
     view.dispatch({
       selection: { anchor: lineObj.from },
       scrollIntoView: true,
     });
+    const coords = view.coordsAtPos(lineObj.from, 1) ?? view.coordsAtPos(lineObj.from, -1);
+    if (!coords) return;
+    const rect = view.scrollDOM.getBoundingClientRect();
+    const targetTop = rect.top + Math.min(120, view.scrollDOM.clientHeight / 3);
+    view.scrollDOM.scrollTop = Math.max(
+      0,
+      view.scrollDOM.scrollTop + coords.top - targetTop,
+    );
   }, line);
   await sleep(400);
 }
@@ -1327,6 +1510,8 @@ export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
  * @param {import("playwright").Page} page
  */
 export async function resetEditorState(page) {
+  await page.mouse.move(2, 2).catch(() => {});
+  await sleep(50);
   await page.evaluate(() => {
     window.__app?.setSearchOpen?.(false);
   }).catch(() => {});
@@ -1341,7 +1526,7 @@ export async function resetEditorState(page) {
   await page.waitForFunction(
     () => {
       const doc = window.__cmView?.state?.doc?.toString() ?? "";
-      return doc.includes("# Math") && doc.includes("function isPrime");
+      return doc.includes("Coflat Feature Showcase") && doc.includes("SearchNeedle");
     },
     { timeout: 5000 },
   );

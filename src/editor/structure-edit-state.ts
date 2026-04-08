@@ -26,6 +26,8 @@ import type {
 export interface FencedStructureEditTarget {
   readonly kind: "fenced-opener";
   readonly openFenceFrom: number;
+  readonly editFrom: number;
+  readonly editTo: number;
   readonly revealFrom: number;
   readonly revealTo: number;
   readonly className: string;
@@ -101,6 +103,8 @@ function fencedTargetFromDiv(div: FencedDivInfo): FencedStructureEditTarget {
   return {
     kind: "fenced-opener",
     openFenceFrom: div.openFenceFrom,
+    editFrom: div.openFenceFrom,
+    editTo: getFencedDivRevealTo(div),
     revealFrom: getFencedDivRevealFrom(div),
     revealTo: getFencedDivRevealTo(div),
     className: div.className,
@@ -251,7 +255,7 @@ function selectionWithinStructureTarget(
   if (target.kind === "math" || target.kind === "reference") {
     return from >= target.from && to <= target.to;
   }
-  return from >= target.revealFrom && to <= target.revealTo;
+  return from >= target.editFrom && to <= target.editTo;
 }
 
 function transactionBlurred(tr: Transaction): boolean {
@@ -356,7 +360,7 @@ export function createStructureEditTargetAt(
 
 function structureTargetFrom(target: StructureEditTarget): number {
   if (target.kind === "frontmatter") return target.from;
-  if (target.kind === "fenced-opener") return target.revealFrom;
+  if (target.kind === "fenced-opener") return target.editFrom;
   if (target.kind === "code-fence") return target.openFenceFrom;
   if (target.kind === "footnote-label") return target.labelFrom;
   return target.from;
@@ -364,7 +368,7 @@ function structureTargetFrom(target: StructureEditTarget): number {
 
 function structureTargetTo(target: StructureEditTarget): number {
   if (target.kind === "frontmatter") return target.to;
-  if (target.kind === "fenced-opener") return target.revealTo;
+  if (target.kind === "fenced-opener") return target.editTo;
   if (target.kind === "code-fence") return target.openFenceTo;
   if (target.kind === "footnote-label") return target.labelTo;
   return target.to;
@@ -400,7 +404,7 @@ export function activateStructureEditAt(
         ? target.contentFrom
         : target.kind === "reference"
           ? target.from
-      : target.revealFrom;
+          : Math.max(target.editFrom, Math.min(pos, target.editTo));
   return activateStructureEditTarget(view, target, selectionAnchor);
 }
 

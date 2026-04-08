@@ -15,7 +15,11 @@ function collectRenderedMathWidgets(
   mathDecorationField: StateField<DecorationSet>,
 ): Map<number, MathWidget> {
   const widgets = new Map<number, MathWidget>();
-  const cursor = view.state.field(mathDecorationField).iter();
+  const decorations = view.state.field(mathDecorationField, false);
+  if (!decorations) {
+    return widgets;
+  }
+  const cursor = decorations.iter();
   while (cursor.value) {
     const widget = cursor.value.spec?.widget;
     if (widget instanceof MathWidget && widget.sourceFrom >= 0) {
@@ -81,11 +85,12 @@ export function createMathWidgetMetadataPlugin(
 
       update(update: ViewUpdate) {
         if (
-          update.docChanged
+      update.docChanged
           || update.selectionSet
           || update.focusChanged
           || update.viewportChanged
-          || update.state.field(mathDecorationField) !== update.startState.field(mathDecorationField)
+          || update.state.field(mathDecorationField, false)
+            !== update.startState.field(mathDecorationField, false)
         ) {
           this.scheduleSync(update.view);
         }

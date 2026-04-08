@@ -8,7 +8,7 @@ import {
   AppWorkspaceControllerProvider,
   useAppWorkspaceController,
 } from "./contexts/app-workspace-context";
-import type { FileSystem } from "./file-manager";
+import { MemoryFileSystem, type FileSystem } from "./file-manager";
 import { SidebarProvider } from "./components/sidebar";
 import { AppMainShell } from "./components/app-main-shell";
 import { AppSidebarShell } from "./components/app-sidebar-shell";
@@ -103,6 +103,24 @@ function AppInner() {
     [fs],
   );
 
+  const loadFixtureProject = useMemo(() => {
+    if (!(fs instanceof MemoryFileSystem)) {
+      return undefined;
+    }
+
+    return async (
+      files: readonly import("./hooks/use-app-debug").DebugProjectFile[],
+      initialPath?: string,
+    ) => {
+      await editor.closeCurrentFile({ discard: true });
+      fs.replaceAll(files);
+      await workspace.refreshTree();
+      if (initialPath) {
+        await editor.openFile(initialPath);
+      }
+    };
+  }, [editor, fs, workspace]);
+
   const fileDialogs = useAppFileDialogs({
     editor,
     workspace,
@@ -135,7 +153,9 @@ function AppInner() {
   useAppDebug({
     openProject: (path) => fileDialogs.openProjectInCurrentWindow(path),
     openFile: editor.openFile,
+    hasFile: (path) => fs.exists(path),
     openFileWithContent: editor.openFileWithContent,
+    loadFixtureProject,
     saveFile: editor.saveFile,
     closeFile: (options) => editor.closeCurrentFile(options),
     setSearchOpen: dialogs.setSearchOpen,

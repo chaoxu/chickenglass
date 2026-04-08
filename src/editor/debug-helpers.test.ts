@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { createDebugHelpers } from "./debug-helpers";
 import { createEditor, toggleTreeView } from "./editor";
@@ -69,10 +68,6 @@ describe("createDebugHelpers", () => {
     const helpers = createDebugHelpers(view);
 
     view.dispatch({ selection: { anchor: view.state.doc.line(2).from } });
-    Object.defineProperty(view, "moveVertically", {
-      configurable: true,
-      value: () => EditorSelection.cursor(view.state.doc.line(1).from),
-    });
     Object.defineProperty(view, "requestMeasure", {
       configurable: true,
       value: (spec?: {
@@ -83,6 +78,33 @@ describe("createDebugHelpers", () => {
         spec?.write?.(measured);
       },
     });
+    Object.defineProperty(view, "coordsAtPos", {
+      configurable: true,
+      value: (pos: number) => {
+        const line = view.state.doc.lineAt(pos).number;
+        const top = (line - 1) * 24;
+        return {
+          left: 20,
+          right: 20,
+          top,
+          bottom: top + 24,
+        };
+      },
+    });
+    Object.defineProperty(view.contentDOM, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        right: 400,
+        top: 0,
+        bottom: 300,
+        width: 400,
+        height: 300,
+      }),
+    });
+    for (const line of view.contentDOM.querySelectorAll<HTMLElement>(".cm-line")) {
+      line.style.height = "24px";
+    }
 
     expect(helpers.moveVertically("up")).toBe(true);
     expect(view.state.doc.lineAt(view.state.selection.main.head).number).toBe(1);

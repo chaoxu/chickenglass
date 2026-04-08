@@ -118,7 +118,10 @@ function sourceRangeFromWidget(el: HTMLElement): { from: number; to: number } | 
 function lineContentRect(node: HTMLElement): ShellSurfaceRect | null {
   const range = document.createRange();
   range.selectNodeContents(node);
-  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+  const rawRects = typeof range.getClientRects === "function"
+    ? Array.from(range.getClientRects())
+    : [];
+  const rects = rawRects.filter((rect) => rect.width > 0 && rect.height > 0);
   if (rects.length > 0) {
     return unionClientRects(rects);
   }
@@ -235,6 +238,14 @@ function buildSurface(
   };
 }
 
+function fencedSurfaceLabel(
+  shell: Extract<ReturnType<typeof activeShellPath>[number], { kind: "fenced" }>,
+): string {
+  return shell.block.id
+    ? `${shell.block.className} #${shell.block.id}`
+    : shell.block.className;
+}
+
 export function measureShellSurfaceSnapshot(view: EditorView): ShellSurfaceSnapshot {
   const lineGeometry = collectVisibleLineGeometry(view);
   const entries = [
@@ -280,7 +291,7 @@ export function measureShellSurfaceSnapshot(view: EditorView): ShellSurfaceSnaps
         buildSurface(
           "fenced",
           `fenced:${shell.block.openFenceFrom}`,
-          shell.block.className,
+          fencedSurfaceLabel(shell),
           shell.depth,
           shell.block.from,
           shell.block.to,

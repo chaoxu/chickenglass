@@ -34,6 +34,7 @@ const { useAppDebug } = await import("./use-app-debug");
 
 const openProject = vi.fn(async (_path: string) => true);
 const openFile = vi.fn(async (_path: string) => {});
+const hasFile = vi.fn(async (_path: string) => true);
 const openFileWithContent = vi.fn(async (_name: string, _content: string) => {});
 const saveFile = vi.fn(async () => {});
 const closeFile = vi.fn(async (_options?: { discard?: boolean }) => true);
@@ -46,6 +47,7 @@ const Harness: FC = () => {
   useAppDebug({
     openProject,
     openFile,
+    hasFile,
     openFileWithContent,
     saveFile,
     closeFile,
@@ -74,6 +76,7 @@ describe("useAppDebug", () => {
     nativeDebugMockState.reset();
     openProject.mockClear();
     openFile.mockClear();
+    hasFile.mockClear();
     openFileWithContent.mockClear();
     saveFile.mockClear();
     closeFile.mockClear();

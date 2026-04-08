@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  correctedVisibleLineJump,
   correctedReverseVerticalScrollTop,
   sumTraversedLineHeights,
 } from "./vertical-motion";
@@ -44,27 +43,5 @@ describe("correctedReverseVerticalScrollTop", () => {
       { head: 90, line: 19, scrollTop: 1176 },
       24,
     )).toBeNull();
-  });
-});
-
-describe("correctedVisibleLineJump", () => {
-  it("returns the first visible intervening line when downward motion skips past it", () => {
-    const visible = new Set([9, 10, 11, 12]);
-    expect(
-      correctedVisibleLineJump(8, 16, (line) => visible.has(line)),
-    ).toBe(9);
-  });
-
-  it("returns null when skipped lines are hidden", () => {
-    expect(
-      correctedVisibleLineJump(6, 8, () => false),
-    ).toBeNull();
-  });
-
-  it("returns the nearest visible intervening line on upward skips too", () => {
-    const visible = new Set([5, 6, 7]);
-    expect(
-      correctedVisibleLineJump(10, 4, (line) => visible.has(line)),
-    ).toBe(7);
   });
 });

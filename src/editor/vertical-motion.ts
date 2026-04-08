@@ -144,36 +144,28 @@ export function correctedReverseVerticalScrollTop(
   return null;
 }
 
-export function correctedVisibleLineJump(
-  fromLine: number,
-  toLine: number,
-  isLineVisible: (lineNumber: number) => boolean,
-): number | null {
-  if (fromLine === toLine) return null;
-
-  const direction = Math.sign(toLine - fromLine);
-  for (
-    let line = fromLine + direction;
-    direction > 0 ? line < toLine : line > toLine;
-    line += direction
-  ) {
-    if (isLineVisible(line)) {
-      return line;
-    }
-  }
-
-  return null;
-}
-
 function startCoordsForVerticalMove(
   view: EditorView,
   forward: boolean,
 ): { left: number; top: number; bottom: number } | null {
   const range = view.state.selection.main;
-  return view.coordsAtPos(
+  return safeCoordsAtPos(
+    view,
     range.head,
     range.assoc || ((range.empty ? forward : range.head === range.from) ? 1 : -1),
   );
+}
+
+function safeCoordsAtPos(
+  view: EditorView,
+  pos: number,
+  assoc?: 1 | -1,
+): { left: number; right: number; top: number; bottom: number } | null {
+  try {
+    return view.coordsAtPos(pos, assoc);
+  } catch {
+    return null;
+  }
 }
 
 function goalColumnForVerticalMove(
@@ -211,17 +203,6 @@ function nextVisibleLineNumber(
   return null;
 }
 
-function targetLineMidpointY(
-  view: EditorView,
-  lineNumber: number,
-): number | null {
-  const line = view.state.doc.line(lineNumber);
-  const probePos = line.length === 0 ? line.from : Math.min(line.to, line.from + 1);
-  const coords = view.coordsAtPos(probePos, 1) ?? view.coordsAtPos(probePos, -1);
-  if (!coords) return null;
-  return (coords.top + coords.bottom) / 2;
-}
-
 function closestPositionOnLine(
   view: EditorView,
   lineNumber: number,
@@ -235,7 +216,7 @@ function closestPositionOnLine(
   let best = line.from;
   while (low <= high) {
     const mid = Math.floor((low + high) / 2);
-    const coords = view.coordsAtPos(mid, 1) ?? view.coordsAtPos(mid, -1);
+    const coords = safeCoordsAtPos(view, mid, 1) ?? safeCoordsAtPos(view, mid, -1);
     if (!coords) break;
     if (coords.left <= goalX + 0.5) {
       best = mid;
@@ -255,18 +236,48 @@ function resolveVisibleLineTarget(
   const targetLine = view.state.doc.line(targetLineNumber);
   if (targetLine.length === 0) return targetLine.from;
 
-  const targetY = targetLineMidpointY(view, targetLineNumber);
-  if (targetY != null) {
-    const resolved = view.posAtCoords({ x: goalX, y: targetY }, false);
-    if (resolved != null && view.state.doc.lineAt(resolved).number === targetLineNumber) {
-      return resolved;
-    }
-  }
-
   return closestPositionOnLine(view, targetLineNumber, goalX);
 }
 
-export function moveVerticallyWithReverseScrollGuard(
+function requestSelectionVisibility(
+  view: EditorView,
+): void {
+  if (!view.dom.isConnected) return;
+  const selectionAssoc: 1 | -1 = view.state.selection.main.assoc === -1
+    ? -1
+    : 1;
+
+  view.requestMeasure({
+    read: () => {
+      const coords = safeCoordsAtPos(view, view.state.selection.main.head, selectionAssoc);
+      if (!coords) return null;
+      const scrollerRect = view.scrollDOM.getBoundingClientRect();
+      return {
+        coords,
+        scrollerTop: scrollerRect.top,
+        scrollerBottom: scrollerRect.bottom,
+        scrollTop: view.scrollDOM.scrollTop,
+        viewportHeight: view.scrollDOM.clientHeight,
+      };
+    },
+    write: (measurement) => {
+      if (!measurement) return;
+      const margin = Math.min(64, measurement.viewportHeight / 5);
+      let nextScrollTop = measurement.scrollTop;
+      if (measurement.coords.top < measurement.scrollerTop + margin) {
+        nextScrollTop += measurement.coords.top - (measurement.scrollerTop + margin);
+      } else if (measurement.coords.bottom > measurement.scrollerBottom - margin) {
+        nextScrollTop += measurement.coords.bottom - (measurement.scrollerBottom - margin);
+      }
+      const clampedScrollTop = Math.max(0, nextScrollTop);
+      if (clampedScrollTop !== measurement.scrollTop) {
+        view.scrollDOM.scrollTop = clampedScrollTop;
+      }
+    },
+  });
+}
+
+export function moveVerticallyInRichView(
   view: EditorView,
   forward: boolean,
 ): boolean {
@@ -289,9 +300,10 @@ export function moveVerticallyWithReverseScrollGuard(
 
   view.dispatch({
     selection: EditorSelection.cursor(targetPos, forward ? 1 : -1, undefined, goalColumn),
-    scrollIntoView: true,
+    scrollIntoView: false,
     userEvent: "select",
   });
+  requestSelectionVisibility(view);
 
   const guardId = ++nextReverseScrollGuardId;
   pendingReverseScrollGuardIds.set(view, guardId);

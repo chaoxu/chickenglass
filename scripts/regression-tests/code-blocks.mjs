@@ -23,7 +23,7 @@ export async function run(page) {
     return { pass: false, message: "No FencedCode node found in syntax tree" };
   }
 
-  await scrollToText(page, "function isPrime");
+  await scrollToText(page, "fibonacci :: Int -> Int");
 
   // Check for codeblock header decorations
   const headerCount = await page.evaluate(() => {

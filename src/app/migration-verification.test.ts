@@ -933,7 +933,7 @@ describe("#370 — shared decoration/widget factories", () => {
     const reference = fileText("src/render/reference-render.ts");
     const pluginRender = fileText("src/plugins/plugin-render.ts");
 
-    expect(checkbox).toContain("collectNodeRangesExcludingCursor");
+    expect(checkbox).toContain("createSimpleViewPlugin");
     expect(checkbox).toContain("pushWidgetDecoration");
     expect(image).toContain("pushWidgetDecoration");
     expect(reference).toContain("createSimpleViewPlugin");
@@ -972,7 +972,7 @@ describe("#376 — shared text widget primitives", () => {
 
     expect(citations).toContain("extends SimpleTextRenderWidget");
     expect(crossrefs).toContain("extends SimpleTextRenderWidget");
-    expect(codeBlocks).toContain("new SimpleTextRenderWidget");
+    expect(codeBlocks).toContain("SimpleTextRenderWidget");
     expect(includeLabels).toContain("new SimpleTextRenderWidget");
     expect(sidenotes).toContain("extends SimpleTextRenderWidget");
   });

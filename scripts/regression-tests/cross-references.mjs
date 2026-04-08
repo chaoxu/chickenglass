@@ -55,7 +55,7 @@ export async function run(page) {
     };
   }
 
-  await scrollToText(page, "# Citations");
+  await scrollToText(page, "# Cross-References and Citations");
   await page.waitForFunction(
     () => window.__cmView.dom.querySelectorAll(".cf-citation").length > 0,
     { timeout: 5000 },

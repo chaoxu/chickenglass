@@ -13,7 +13,7 @@ import type { EditorView } from "@codemirror/view";
 import type { DebugHelpers } from "../editor";
 import type { SourceMap } from "../app/source-map";
 import type { EditorMode } from "../editor";
-import type { DebugDocumentState } from "../app/hooks/use-app-debug";
+import type { DebugDocumentState, DebugProjectFile } from "../app/hooks/use-app-debug";
 
 declare global {
   interface Window {
@@ -50,7 +50,12 @@ declare global {
      */
     __app?: {
       openFile: (path: string) => Promise<void>;
+      hasFile: (path: string) => Promise<boolean>;
       openFileWithContent: (name: string, content: string) => Promise<void>;
+      loadFixtureProject?: (
+        files: readonly DebugProjectFile[],
+        initialPath?: string,
+      ) => Promise<void>;
       saveFile: () => Promise<void>;
       closeFile: (options?: { discard?: boolean }) => Promise<boolean>;
       setSearchOpen: (open: boolean) => void;

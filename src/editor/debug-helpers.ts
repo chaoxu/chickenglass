@@ -7,7 +7,7 @@
  *   __cmDebug.fences()     — closing fence visibility for protected fenced blocks
  *   __cmDebug.line(73)     — DOM state of a specific line
  *   __cmDebug.dump()       — combined tree + fence status snapshot
- *   __cmDebug.moveVertically("up") — apply rich-mode vertical motion with reverse-scroll guard
+ *   __cmDebug.moveVertically("up") — apply rich-mode vertical motion with anomaly logging
  *   __cmDebug.toggleTreeView() — toggle live Lezer tree panel
  */
 
@@ -23,7 +23,7 @@ import { getClosingFenceRanges } from "../plugins/fence-protection";
 import {
   clearVerticalMotionGuardEvents,
   getVerticalMotionGuardEvents,
-  moveVerticallyWithReverseScrollGuard,
+  moveVerticallyInRichView,
   type VerticalMotionGuardEvent,
 } from "./vertical-motion";
 import {
@@ -128,7 +128,7 @@ export interface DebugHelpers {
   clearMotionGuards: () => void;
   /** Clear recorded debug timeline events. */
   clearTimeline: () => void;
-  /** Run rich-mode vertical motion with reverse-scroll guarding. */
+  /** Run rich-mode vertical motion with anomaly logging. */
   moveVertically: (direction: "up" | "down") => boolean;
   /** Toggle the live Lezer tree-view debug panel. Returns new on/off state. */
   toggleTreeView: () => boolean;
@@ -136,14 +136,31 @@ export interface DebugHelpers {
 
 function getLineElement(view: EditorView, lineNum: number): HTMLElement | null {
   if (lineNum < 1 || lineNum > view.state.doc.lines) return null;
-  const lineObj = view.state.doc.line(lineNum);
-  const domPos = view.domAtPos(lineObj.from);
-  let el: Node | null = domPos.node;
-  if (el.nodeType === 3) el = el.parentNode;
-  while (el && !(el instanceof HTMLElement && el.classList.contains("cm-line"))) {
-    el = el.parentNode;
+  const lines = view.contentDOM.querySelectorAll<HTMLElement>(".cm-line");
+  for (const el of lines) {
+    try {
+      const pos = view.posAtDOM(el, 0);
+      if (view.state.doc.lineAt(pos).number === lineNum) {
+        return el;
+      }
+    } catch {
+      continue;
+    }
   }
-  return el as HTMLElement | null;
+  try {
+    const lineObj = view.state.doc.line(lineNum);
+    const domPos = view.domAtPos(lineObj.from);
+    let el: Node | null = domPos.node;
+    if (el.nodeType === Node.TEXT_NODE) el = el.parentNode;
+    while (el && !(el instanceof HTMLElement && el.classList.contains("cm-line"))) {
+      el = el.parentNode;
+    }
+    if (!(el instanceof HTMLElement)) return null;
+    const pos = view.posAtDOM(el, 0);
+    return view.state.doc.lineAt(pos).number === lineNum ? el : null;
+  } catch {
+    return null;
+  }
 }
 
 function inspectLine(view: EditorView, lineNum: number): LineInfo | null {
@@ -191,6 +208,13 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
         if (info) {
           const { line, height, hidden, classes } = info;
           results.push({ line, height, hidden, classes });
+        } else {
+          results.push({
+            line: lineNumber,
+            height: "0px",
+            hidden: true,
+            classes: [],
+          });
         }
       }
       return results;
@@ -280,7 +304,7 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
     },
 
     moveVertically(direction: "up" | "down") {
-      return moveVerticallyWithReverseScrollGuard(view, direction === "down");
+      return moveVerticallyInRichView(view, direction === "down");
     },
 
     toggleTreeView() {

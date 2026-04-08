@@ -21,6 +21,10 @@ export interface DebugDocumentState {
   dirty: boolean;
 }
 
+export type DebugProjectFile =
+  | { path: string; kind: "text"; content: string }
+  | { path: string; kind: "binary"; base64: string };
+
 interface TauriSmokeWindowState {
   projectRoot: string | null;
   currentDocument: DebugDocumentState | null;
@@ -39,7 +43,12 @@ interface TauriSmokeWindowState {
 interface AppDebugDeps {
   openProject: (path: string) => Promise<boolean>;
   openFile: (path: string) => Promise<void>;
+  hasFile: (path: string) => Promise<boolean>;
   openFileWithContent: (name: string, content: string) => Promise<void>;
+  loadFixtureProject?: (
+    files: readonly DebugProjectFile[],
+    initialPath?: string,
+  ) => Promise<void>;
   saveFile: () => Promise<void>;
   closeFile: (options?: { discard?: boolean }) => Promise<boolean>;
   setSearchOpen: (open: boolean) => void;
@@ -56,7 +65,9 @@ interface AppDebugDeps {
 export function useAppDebug({
   openProject,
   openFile,
+  hasFile,
   openFileWithContent,
+  loadFixtureProject,
   saveFile,
   closeFile,
   setSearchOpen,
@@ -113,6 +124,7 @@ export function useAppDebug({
         });
         await openFile(path);
       },
+      hasFile: async (path) => hasFile(path),
       openFileWithContent: async (name, content) => {
         recordDebugSessionEvent({
           timestamp: Date.now(),
@@ -126,6 +138,21 @@ export function useAppDebug({
         });
         await openFileWithContent(name, content);
       },
+      loadFixtureProject: loadFixtureProject
+        ? async (files, initialPath) => {
+            recordDebugSessionEvent({
+              timestamp: Date.now(),
+              type: "app",
+              summary: `loadFixtureProject ${initialPath ?? "(no initial file)"}`,
+              detail: {
+                initialPath: initialPath ?? null,
+                fileCount: files.length,
+                files,
+              },
+            });
+            await loadFixtureProject(files, initialPath);
+          }
+        : undefined,
       saveFile: async () => {
         recordDebugSessionEvent({
           timestamp: Date.now(),
@@ -212,7 +239,9 @@ export function useAppDebug({
   }, [
     openProject,
     openFile,
+    hasFile,
     openFileWithContent,
+    loadFixtureProject,
     saveFile,
     closeFile,
     setSearchOpen,

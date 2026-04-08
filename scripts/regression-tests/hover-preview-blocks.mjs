@@ -10,7 +10,7 @@
 
 import {
   hideHoverPreview,
-  openFile,
+  openFixtureDocument,
   readHoverPreviewState,
   scrollToText,
   showHoverPreview,
@@ -24,9 +24,9 @@ const TABLE_REF = '.cf-crossref[aria-label="[@tbl:hover]"]';
 const FIGURE_REF = '.cf-crossref[aria-label="[@fig:hover]"]';
 const MISSING_FIGURE_REF = '.cf-crossref[aria-label="[@fig:missing]"]';
 export async function run(page) {
-  await openFile(page, "cogirth/hover-preview.md");
+  await openFixtureDocument(page, "cogirth/hover-preview.md", { project: "full-project" });
   await switchToMode(page, "rich");
-  await scrollToText(page, "See [@tbl:hover], [@fig:hover], and [@fig:missing].");
+  await scrollToText(page, "See [@tbl:hover], [@tbl:wide], [@thm:hover-code], [@fig:hover], and [@fig:missing].");
 
   await showHoverPreview(page, TABLE_REF);
   const tableTooltip = await readHoverPreviewState(page);

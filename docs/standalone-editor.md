@@ -30,8 +30,8 @@ editor.setMode("source");
 editor.unmount();
 ```
 
-A runnable demo is in [`demo/embed/`](../demo/embed/) — start the dev server
-(`npm run dev`) and open `/demo/embed/`.
+For local manual testing, create a small host page around the Quick Start snippet
+above. The repo does not commit a public standalone fixture page.
 
 ## Import
 

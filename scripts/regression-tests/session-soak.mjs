@@ -17,7 +17,7 @@ import {
   hideHoverPreview,
   insertEditorText,
   openAppSearch,
-  openFile,
+  openFixtureDocument,
   pickAutocompleteOption,
   readHoverPreviewState,
   scrollToText,
@@ -35,11 +35,11 @@ const CYCLES = 2;
 const TABLE_REF = '.cf-crossref[aria-label="[@tbl:hover]"]';
 const FIGURE_REF = '.cf-crossref[aria-label="[@fig:hover]"]';
 const ORIGINAL_MAIN2 = readFileSync(
-  new URL("../../demo/cogirth/main2.md", import.meta.url),
+  new URL("../../fixtures/cogirth/main2.md", import.meta.url),
   "utf8",
 );
 const ORIGINAL_REFERENCE_AUTOCOMPLETE = readFileSync(
-  new URL("../../demo/cogirth/reference-autocomplete.md", import.meta.url),
+  new URL("../../fixtures/cogirth/reference-autocomplete.md", import.meta.url),
   "utf8",
 );
 
@@ -50,7 +50,7 @@ export async function run(page) {
     for (let cycle = 1; cycle <= CYCLES; cycle += 1) {
       const cycleToken = `cycle_token_${cycle}`;
 
-      await openFile(page, "cogirth/main2.md");
+      await openFixtureDocument(page, "cogirth/main2.md", { project: "full-project" });
       await switchToMode(page, "rich");
       await withRestoredFixture(
         page,
@@ -104,7 +104,7 @@ export async function run(page) {
       await assertEditorHealth(page, `cycle ${cycle}: after main2 restore`);
       operations += 1;
 
-      await openFile(page, "cogirth/reference-autocomplete.md");
+      await openFixtureDocument(page, "cogirth/reference-autocomplete.md", { project: "full-project" });
       await switchToMode(page, "rich");
       await withRestoredFixture(
         page,
@@ -124,7 +124,7 @@ export async function run(page) {
       await assertEditorHealth(page, `cycle ${cycle}: after autocomplete restore`);
       operations += 1;
 
-      await openFile(page, "cogirth/hover-preview.md");
+      await openFixtureDocument(page, "cogirth/hover-preview.md", { project: "full-project" });
       await switchToMode(page, "rich");
       await showHoverPreview(page, cycle % 2 === 1 ? TABLE_REF : FIGURE_REF);
       const tooltip = await waitForHoverPreviewState(

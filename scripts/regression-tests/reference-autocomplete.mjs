@@ -4,7 +4,7 @@
 
 import {
   insertEditorText,
-  openFile,
+  openFixtureDocument,
   pickAutocompleteOption,
   readAutocompleteOptions,
   switchToMode,
@@ -28,7 +28,7 @@ async function readDoc(page) {
 }
 
 export async function run(page) {
-  await openFile(page, "cogirth/reference-autocomplete.md");
+  await openFixtureDocument(page, "cogirth/reference-autocomplete.md", { project: "full-project" });
   await focusEditorEnd(page);
 
   await insertEditorText(page, "\n\nRich mode [@");

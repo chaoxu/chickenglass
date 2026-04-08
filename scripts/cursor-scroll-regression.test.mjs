@@ -107,7 +107,7 @@ describe("cursor scroll regression", () => {
 
     const report = formatCursorScrollReport({
       fixture: {
-        displayPath: "demo/rankdecrease/main.md",
+        displayPath: "fixtures/rankdecrease/main.md",
         resolvedPath: "/tmp/rankdecrease/main.md",
         method: "openFileWithContent",
       },
@@ -116,7 +116,7 @@ describe("cursor scroll regression", () => {
       minReverseScrollPx: 120,
     });
 
-    expect(report).toContain("demo/rankdecrease/main.md");
+    expect(report).toContain("fixtures/rankdecrease/main.md");
     expect(report).toContain("Reverse scroll jump detected at step 1");
     expect(report).toContain("scrollTop 21228 -> 21536 (+308px)");
     expect(report).toContain("::: {.proof}");

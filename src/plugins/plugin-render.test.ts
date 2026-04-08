@@ -157,13 +157,15 @@ describe("blockDecorationField", () => {
     const specs = getDecoSpecs(active);
 
     const theoremLine = active.doc.line(1);
-    // cf-block-header stays on the line class for geometry stability (#1015).
-    // Widget replacement also stays active — structure editing uses explicit
-    // mapped state, not raw-text editing of fence syntax.
     expect(hasLineClassAt(specs, theoremLine.from, CSS.blockHeader)).toBe(true);
+    expect(specs.some((spec) =>
+      spec.widgetClass === "BlockHeaderWidget" &&
+      spec.from === theoremLine.from
+    )).toBe(true);
 
     const proofLine = active.doc.line(5).from;
     expect(hasLineClassAt(specs, proofLine, CSS.blockHeader)).toBe(true);
+    expect(hasLineClassAt(specs, proofLine, CSS.blockHeaderCollapsed)).toBe(false);
   });
 
   it("hides closing fence when cursor is not on it", () => {
@@ -197,10 +199,14 @@ describe("blockDecorationField", () => {
     );
     const specs = getDecoSpecs(state);
 
-    // Opening: widget replacement stays active for geometry stability (#1015)
+    // Titled theorem opener stays stable; explicit structure edit does not unmount it.
     const openLine = state.doc.line(1);
     expect(hasLineClassAt(specs, openLine.from, CSS.blockHeader)).toBe(true);
     expect(hasLineClassAt(specs, openLine.from, CSS.blockSource)).toBe(false);
+    expect(specs.some((spec) =>
+      spec.widgetClass === "BlockHeaderWidget" &&
+      spec.from === openLine.from
+    )).toBe(true);
 
     // Closing fence is always hidden — cf-block-closing-fence, not cf-block-source
     const closeFenceLine = state.doc.line(3).from;
@@ -278,7 +284,7 @@ describe("blockDecorationField", () => {
     }
   });
 
-  it("title paren widgets are hidden only during explicit structure edit (REGRESSION)", () => {
+  it("title paren widgets stay visible for titled blocks during explicit structure edit", () => {
     const doc = `::: {.theorem} Main Result\nContent\n:::`;
 
     const rendered = createTestState(doc);
@@ -293,7 +299,7 @@ describe("blockDecorationField", () => {
     );
     const sourceSpecs = getDecoSpecs(source);
     const sourceParens = sourceSpecs.filter((s) => s.widgetClass === "SimpleTextWidget");
-    expect(sourceParens.length).toBe(0);
+    expect(sourceParens.length).toBe(2);
   });
 
   it("structure edit keeps widget replacement for geometry stability (#1015)", () => {
@@ -511,8 +517,10 @@ describe("disabled blocks show raw fences (issue #356)", () => {
 
     const widgets = specs.filter((s) => s.widgetClass === "EmbedWidget");
     expect(widgets).toHaveLength(0);
-    // Widget replacement stays active for geometry stability (#1015)
-    expect(hasMarkClassInRange(specs, state.doc.line(1).from, state.doc.line(1).to, CSS.blockSource)).toBe(false);
+    expect(specs.some((spec) =>
+      spec.widgetClass === "BlockHeaderWidget" &&
+      spec.from === state.doc.line(1).from
+    )).toBe(false);
   });
 
   it("routes inline proof labels back to the hidden opener source", () => {

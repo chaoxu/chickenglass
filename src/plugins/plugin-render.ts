@@ -50,7 +50,7 @@ import {
 } from "../render/scroll-anchor";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import { documentSemanticsField } from "../semantics/codemirror-source";
-import { activeFencedPath } from "../editor/shell-ownership";
+import { activeFencedOpenFenceStarts } from "../editor/shell-ownership";
 import {
   isValidEmbedUrl,
   extractYoutubeId,
@@ -62,7 +62,6 @@ import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 import { IFRAME_MAX_ATTEMPTS, IFRAME_POLL_INTERVAL_MS } from "../constants/timing";
 import { fenceProtectionExtension } from "./fence-protection";
 import {
-  activateStructureEditAt,
   hasStructureEditEffect,
   isFencedStructureEditActive,
 } from "../editor/structure-edit-state";
@@ -116,39 +115,12 @@ class BlockHeaderWidget extends MacroAwareWidget {
     return true;
   }
 
-  protected override bindSourceReveal(
-    el: HTMLElement,
-    view: EditorView,
-  ): void {
-    el.style.cursor = "pointer";
-    el.addEventListener("mousedown", (event) => {
-      event.preventDefault();
-      view.focus();
-      activateStructureEditAt(view, resolveStructureEditWidgetPos(view, el, this.sourceFrom));
-    });
-  }
 }
 
 export { BlockHeaderWidget as _BlockHeaderWidgetForTest };
 
-function resolveStructureEditWidgetPos(
-  view: EditorView,
-  el: HTMLElement,
-  fallbackPos: number,
-): number {
-  try {
-    return view.posAtDOM(el);
-  } catch {
-    return fallbackPos;
-  }
-}
-
 function joinClasses(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");
-}
-
-function activeShellOpenFenceStarts(state: EditorState): ReadonlySet<number> {
-  return new Set(activeFencedPath(state).map((div) => div.openFenceFrom));
 }
 
 class BlockCaptionWidget extends MacroAwareWidget {
@@ -184,18 +156,6 @@ class BlockCaptionWidget extends MacroAwareWidget {
       macros: this.macros,
     });
     el.appendChild(titleEl);
-  }
-
-  protected override bindSourceReveal(
-    el: HTMLElement,
-    view: EditorView,
-  ): void {
-    el.style.cursor = "pointer";
-    el.addEventListener("mousedown", (event) => {
-      event.preventDefault();
-      view.focus();
-      activateStructureEditAt(view, resolveStructureEditWidgetPos(view, el, this.sourceFrom));
-    });
   }
 
   createDOM(): HTMLElement {
@@ -608,7 +568,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const counterState: BlockCounterState | undefined =
     state.field(blockCounterField, false) ?? undefined;
   const macros = state.field(mathMacrosField);
-  const activeShellStarts = activeShellOpenFenceStarts(state);
+  const activeShellStarts = activeFencedOpenFenceStarts(state);
 
   const baseDecos = buildFencedBlockDecorations(state, collectFencedDivs, ({
     state,
@@ -628,7 +588,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
 
     const isEmbed = plugin.specialBehavior === "embed";
     const structureEditActive = isFencedStructureEditActive(state, div);
-    const openerSourceActive = structureEditActive;
     const activeShell = activeShellStarts.has(div.openFenceFrom);
 
     const numberEntry = counterState?.byPosition.get(div.from);
@@ -641,6 +600,12 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     const spec = plugin.render(labelAttrs);
     const captionBelow = plugin.captionPosition === "below";
     const inlineHeader = plugin.headerPosition === "inline";
+    const openerSourceActive = structureEditActive && (
+      captionBelow ||
+      inlineHeader ||
+      div.titleFrom === undefined ||
+      div.titleTo === undefined
+    );
     const hasVisibleBody = closeLine.number > openLine.number + 1;
     const openerLineVisible =
       openerSourceActive || (!captionBelow && !inlineHeader && plugin.displayHeader !== false);
@@ -665,7 +630,11 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // the last body line instead of the opening fence. The opening fence gets
     // collapsed (no label) and the title text becomes the caption, displayed
     // on the opening line without the "Figure 1." prefix.
-    const showHeader = plugin.displayHeader !== false && !captionBelow && !inlineHeader;
+    const showHeader = openerSourceActive || (
+      plugin.displayHeader !== false &&
+      !captionBelow &&
+      !inlineHeader
+    );
     const headerClass = joinClasses(
       spec.className,
       showHeader ? CSS.blockHeader : CSS.blockHeaderCollapsed,
@@ -678,9 +647,9 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // explicit mapped state, not raw-text editing of the fence syntax.
     // Toggling the replacement on/off caused a 1px geometry delta (#1015).
     if (captionBelow || inlineHeader) {
-      addHeaderWidgetDecoration(div, "", false, macros, items);
+      addHeaderWidgetDecoration(div, "", openerSourceActive, macros, items);
     } else {
-      addHeaderWidgetDecoration(div, spec.header, false, macros, items);
+      addHeaderWidgetDecoration(div, spec.header, openerSourceActive, macros, items);
     }
 
     // Title text: wrap in visual parentheses via widget decorations (rendered mode only).
