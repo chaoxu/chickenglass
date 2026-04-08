@@ -7,7 +7,8 @@ import {
 } from "../editor/mouse-selection-core";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { _snapToTokenBoundary } from "./math-source";
-import { isMathStructureEditActive } from "../editor/structure-edit-state";
+import { editorFocusField } from "./focus-state";
+import { isFocusedInlineRevealTarget } from "./inline-reveal-policy";
 
 interface InlineMathSourceRange {
   readonly from: number;
@@ -110,10 +111,11 @@ function findInlineMathSourceRangeAtCoords(
 
 function collectRenderedInlineMathRanges(state: EditorState): InlineMathSourceRange[] {
   const ranges: InlineMathSourceRange[] = [];
+  const focused = state.field(editorFocusField, false) ?? false;
 
   for (const region of state.field(documentAnalysisField).mathRegions) {
     if (region.isDisplay) continue;
-    if (isMathStructureEditActive(state, region)) continue;
+    if (isFocusedInlineRevealTarget(state.selection.main, region, focused)) continue;
     ranges.push({ from: region.from, to: region.to });
   }
 
@@ -121,9 +123,11 @@ function collectRenderedInlineMathRanges(state: EditorState): InlineMathSourceRa
 }
 
 function hasRenderedInlineMath(state: EditorState): boolean {
+  const focused = state.field(editorFocusField, false) ?? false;
+
   for (const region of state.field(documentAnalysisField).mathRegions) {
     if (region.isDisplay) continue;
-    if (isMathStructureEditActive(state, region)) continue;
+    if (isFocusedInlineRevealTarget(state.selection.main, region, focused)) continue;
     return true;
   }
 

@@ -12,16 +12,23 @@ export function selectionTouchesInlineTarget(
   return selection.from >= target.from && selection.to <= target.to;
 }
 
+export function isFocusedInlineRevealTarget(
+  selection: SelectionRange,
+  target: InlineRevealTarget,
+  focused: boolean,
+): boolean {
+  return focused && selectionTouchesInlineTarget(selection, target);
+}
+
 export function findFocusedInlineRevealTarget<T extends InlineRevealTarget>(
   selection: SelectionRange,
   targets: readonly T[],
   focused: boolean,
   matches: (target: T) => boolean = () => true,
 ): T | null {
-  if (!focused) return null;
   for (const target of targets) {
     if (!matches(target)) continue;
-    if (selectionTouchesInlineTarget(selection, target)) {
+    if (isFocusedInlineRevealTarget(selection, target, focused)) {
       return target;
     }
   }

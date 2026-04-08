@@ -47,7 +47,6 @@ import {
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
 import type { DocumentAnalysis, ReferenceSemantics } from "../semantics/document";
-import { getActiveStructureEditTarget } from "../editor/structure-edit-state";
 import { bibDataField } from "../state/bib-data";
 import {
   findFocusedInlineRevealTarget,
@@ -151,24 +150,15 @@ export function referenceRenderDependenciesChanged(
   );
 }
 
-function getExplicitReferenceTarget(
-  state: EditorState,
-): Pick<ReferenceSemantics, "from" | "to"> | null {
-  const active = getActiveStructureEditTarget(state);
-  if (active?.kind !== "reference") return null;
-  return { from: active.from, to: active.to };
-}
-
 function getRevealedReferenceTarget(
   state: EditorState,
   focused: boolean,
 ): Pick<ReferenceSemantics, "from" | "to"> | null {
-  return getExplicitReferenceTarget(state)
-    ?? findFocusedInlineRevealTarget(
-      state.selection.main,
-      state.field(documentAnalysisField).references,
-      focused,
-    );
+  return findFocusedInlineRevealTarget(
+    state.selection.main,
+    state.field(documentAnalysisField).references,
+    focused,
+  );
 }
 
 // ── Helper functions ──────────────────────────────────────────────

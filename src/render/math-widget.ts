@@ -172,10 +172,12 @@ export class MathWidget extends MacroAwareWidget {
         sourceTo,
         contentOffset,
       );
-      const target = createStructureEditTargetAt(view.state, sourceFrom);
-      if (target) {
-        activateStructureEditTarget(view, target, pos);
-        return;
+      if (region?.isDisplay ?? liveWidget.isDisplay) {
+        const target = createStructureEditTargetAt(view.state, sourceFrom);
+        if (target) {
+          activateStructureEditTarget(view, target, pos);
+          return;
+        }
       }
       view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
     });

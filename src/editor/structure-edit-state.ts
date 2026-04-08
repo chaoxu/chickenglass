@@ -19,8 +19,6 @@ import { findCodeShellAt } from "./shell-ownership";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import type {
   FootnoteDefinition,
-  MathSemantics,
-  ReferenceSemantics,
 } from "../semantics/document";
 
 export interface FencedStructureEditTarget {
@@ -62,19 +60,12 @@ export interface FootnoteLabelStructureEditTarget {
   readonly labelTo: number;
 }
 
-export interface MathStructureEditTarget {
-  readonly kind: "math";
+export interface DisplayMathStructureEditTarget {
+  readonly kind: "display-math";
   readonly from: number;
   readonly to: number;
   readonly contentFrom: number;
   readonly contentTo: number;
-  readonly isDisplay: boolean;
-}
-
-export interface ReferenceStructureEditTarget {
-  readonly kind: "reference";
-  readonly from: number;
-  readonly to: number;
 }
 
 export type StructureEditTarget =
@@ -82,14 +73,12 @@ export type StructureEditTarget =
   | FrontmatterStructureEditTarget
   | CodeFenceStructureEditTarget
   | FootnoteLabelStructureEditTarget
-  | MathStructureEditTarget
-  | ReferenceStructureEditTarget;
+  | DisplayMathStructureEditTarget;
 
 export const setStructureEditTargetEffect =
   StateEffect.define<StructureEditTarget | null>();
 
 export const clearStructureEditTargetEffect = StateEffect.define<void>();
-
 
 export function hasStructureEditEffect(tr: Transaction): boolean {
   return tr.effects.some(
@@ -160,41 +149,22 @@ function createFootnoteLabelStructureEditTargetAt(
   return null;
 }
 
-function createMathStructureEditTargetAt(
+function createDisplayMathStructureEditTargetAt(
   state: EditorState,
   pos: number,
-): MathStructureEditTarget | null {
+): DisplayMathStructureEditTarget | null {
   const analysis = state.field(documentAnalysisField, false);
   if (!analysis) return null;
   const regions = analysis.mathRegions;
   for (const region of regions) {
+    if (!region.isDisplay) continue;
     if (pos >= region.from && pos <= region.to) {
       return {
-        kind: "math",
+        kind: "display-math",
         from: region.from,
         to: region.to,
         contentFrom: region.contentFrom,
         contentTo: region.contentTo,
-        isDisplay: region.isDisplay,
-      };
-    }
-  }
-  return null;
-}
-
-function createReferenceStructureEditTargetAt(
-  state: EditorState,
-  pos: number,
-): ReferenceStructureEditTarget | null {
-  const analysis = state.field(documentAnalysisField, false);
-  if (!analysis) return null;
-  const references = analysis.references;
-  for (const ref of references) {
-    if (pos >= ref.from && pos <= ref.to) {
-      return {
-        kind: "reference",
-        from: ref.from,
-        to: ref.to,
       };
     }
   }
@@ -220,14 +190,9 @@ function mapStructureEditTarget(
     return createFootnoteLabelStructureEditTargetAt(state, mappedLabelFrom);
   }
 
-  if (target.kind === "math") {
+  if (target.kind === "display-math") {
     const mappedFrom = mapPos(target.from, 1);
-    return createMathStructureEditTargetAt(state, mappedFrom);
-  }
-
-  if (target.kind === "reference") {
-    const mappedFrom = mapPos(target.from, 1);
-    return createReferenceStructureEditTargetAt(state, mappedFrom);
+    return createDisplayMathStructureEditTargetAt(state, mappedFrom);
   }
 
   const mappedOpenFenceFrom = mapPos(target.openFenceFrom, 1);
@@ -252,7 +217,7 @@ function selectionWithinStructureTarget(
   if (target.kind === "footnote-label") {
     return from >= target.labelFrom && to <= target.labelTo;
   }
-  if (target.kind === "math" || target.kind === "reference") {
+  if (target.kind === "display-math") {
     return from >= target.from && to <= target.to;
   }
   return from >= target.editFrom && to <= target.editTo;
@@ -345,10 +310,8 @@ export function createStructureEditTargetAt(
   if (codeFence) candidates.push(codeFence);
   const footnoteLabel = createFootnoteLabelStructureEditTargetAt(state, pos);
   if (footnoteLabel) candidates.push(footnoteLabel);
-  const math = createMathStructureEditTargetAt(state, pos);
-  if (math) candidates.push(math);
-  const reference = createReferenceStructureEditTargetAt(state, pos);
-  if (reference) candidates.push(reference);
+  const displayMath = createDisplayMathStructureEditTargetAt(state, pos);
+  if (displayMath) candidates.push(displayMath);
   if (candidates.length === 0) return null;
   candidates.sort((left, right) => {
     const leftSpan = structureTargetTo(left) - structureTargetFrom(left);
@@ -396,15 +359,13 @@ export function activateStructureEditAt(
   if (!target) return false;
   const selectionAnchor = target.kind === "frontmatter"
     ? 0
-    : target.kind === "footnote-label"
-      ? target.labelFrom
-    : target.kind === "code-fence"
-      ? target.openFenceFrom
-      : target.kind === "math"
+      : target.kind === "footnote-label"
+        ? target.labelFrom
+      : target.kind === "code-fence"
+        ? target.openFenceFrom
+      : target.kind === "display-math"
         ? target.contentFrom
-        : target.kind === "reference"
-          ? target.from
-          : Math.max(target.editFrom, Math.min(pos, target.editTo));
+        : Math.max(target.editFrom, Math.min(pos, target.editTo));
   return activateStructureEditTarget(view, target, selectionAnchor);
 }
 
@@ -461,29 +422,5 @@ export function isFootnoteLabelStructureEditActive(
   return (
     active?.kind === "footnote-label" &&
     active.labelFrom === def.labelFrom
-  );
-}
-
-export function isMathStructureEditActive(
-  state: EditorState,
-  region: Pick<MathSemantics, "from" | "to">,
-): boolean {
-  const active = getActiveStructureEditTarget(state);
-  return (
-    active?.kind === "math" &&
-    active.from === region.from &&
-    active.to === region.to
-  );
-}
-
-export function isReferenceStructureEditActive(
-  state: EditorState,
-  ref: Pick<ReferenceSemantics, "from" | "to">,
-): boolean {
-  const active = getActiveStructureEditTarget(state);
-  return (
-    active?.kind === "reference" &&
-    active.from === ref.from &&
-    active.to === ref.to
   );
 }
