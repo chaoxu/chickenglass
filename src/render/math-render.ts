@@ -32,6 +32,10 @@ import {
 } from "./focus-state";
 import { serializeMacros } from "./widget-core";
 import { getActiveStructureEditTarget } from "../editor/structure-edit-state";
+import {
+  findFocusedInlineRevealTarget,
+  inlineRevealTargetChanged,
+} from "./inline-reveal-policy";
 
 export { renderKatexToHtml } from "./inline-shared";
 export {
@@ -52,13 +56,32 @@ function mathMacrosChanged(tr: Transaction): boolean {
   return before !== after && serializeMacros(before) !== serializeMacros(after);
 }
 
-function getActiveMathTarget(
+function getExplicitMathTarget(
   state: EditorState,
 ): Pick<MathSemantics, "from" | "to"> | undefined {
   const active = getActiveStructureEditTarget(state);
   return active?.kind === "math"
     ? { from: active.from, to: active.to }
     : undefined;
+}
+
+function getTouchedInlineMathTarget(
+  state: EditorState,
+  focused: boolean,
+): Pick<MathSemantics, "from" | "to"> | null {
+  return findFocusedInlineRevealTarget(
+    state.selection.main,
+    state.field(documentAnalysisField).mathRegions,
+    focused,
+    (region) => !region.isDisplay,
+  );
+}
+
+function getRevealedMathTarget(
+  state: EditorState,
+  focused: boolean,
+): Pick<MathSemantics, "from" | "to"> | undefined {
+  return getExplicitMathTarget(state) ?? getTouchedInlineMathTarget(state, focused) ?? undefined;
 }
 
 /**
@@ -142,10 +165,10 @@ function buildMathItems(
 }
 
 /**
- * Collect decoration ranges for math nodes outside the cursor.
+ * Collect decoration ranges for math nodes outside the current reveal target.
  */
 export function collectMathRanges(view: EditorView): Range<Decoration>[] {
-  const activeMath = getActiveMathTarget(view.state);
+  const activeMath = getRevealedMathTarget(view.state, view.hasFocus);
   return buildMathItems(
     view.state,
     view.state.field(documentAnalysisField).mathRegions,
@@ -154,7 +177,10 @@ export function collectMathRanges(view: EditorView): Range<Decoration>[] {
 }
 
 function buildMathDecorationsFromState(state: EditorState): DecorationSet {
-  const activeMath = getActiveMathTarget(state);
+  const activeMath = getRevealedMathTarget(
+    state,
+    state.field(editorFocusField, false) ?? false,
+  );
   const items = buildMathItems(
     state,
     state.field(documentAnalysisField).mathRegions,
@@ -238,7 +264,10 @@ function buildMathRangesForRegions(
   state: EditorState,
   regions: readonly MathSemantics[],
 ): Range<Decoration>[] {
-  const activeMath = getActiveMathTarget(state);
+  const activeMath = getRevealedMathTarget(
+    state,
+    state.field(editorFocusField, false) ?? false,
+  );
   return buildMathItems(
     state,
     regions,
@@ -293,11 +322,15 @@ const mathDecorationField = StateField.define<DecorationSet>({
     const analysisAfter = tr.state.field(documentAnalysisField);
     const regionsBefore = analysisBefore.mathRegions;
     const regionsAfter = analysisAfter.mathRegions;
-    const beforeActive = getActiveMathTarget(tr.startState);
-    const afterActive = getActiveMathTarget(tr.state);
-    const activeMathChanged =
-      beforeActive?.from !== afterActive?.from ||
-      beforeActive?.to !== afterActive?.to;
+    const beforeActive = getRevealedMathTarget(
+      tr.startState,
+      tr.startState.field(editorFocusField, false) ?? false,
+    );
+    const afterActive = getRevealedMathTarget(
+      tr.state,
+      tr.state.field(editorFocusField, false) ?? false,
+    );
+    const activeMathChanged = inlineRevealTargetChanged(beforeActive, afterActive);
 
     if (regionsBefore !== regionsAfter) {
       if (

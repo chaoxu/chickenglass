@@ -49,6 +49,10 @@ import {
 import type { DocumentAnalysis, ReferenceSemantics } from "../semantics/document";
 import { getActiveStructureEditTarget } from "../editor/structure-edit-state";
 import { bibDataField } from "../state/bib-data";
+import {
+  findFocusedInlineRevealTarget,
+  inlineRevealTargetChanged,
+} from "./inline-reveal-policy";
 
 function serializeKeyPart(value: string | undefined): string {
   return value ?? "";
@@ -147,12 +151,24 @@ export function referenceRenderDependenciesChanged(
   );
 }
 
-function getActiveReferenceTarget(
+function getExplicitReferenceTarget(
   state: EditorState,
 ): Pick<ReferenceSemantics, "from" | "to"> | null {
   const active = getActiveStructureEditTarget(state);
   if (active?.kind !== "reference") return null;
   return { from: active.from, to: active.to };
+}
+
+function getRevealedReferenceTarget(
+  state: EditorState,
+  focused: boolean,
+): Pick<ReferenceSemantics, "from" | "to"> | null {
+  return getExplicitReferenceTarget(state)
+    ?? findFocusedInlineRevealTarget(
+      state.selection.main,
+      state.field(documentAnalysisField).references,
+      focused,
+    );
 }
 
 // ── Helper functions ──────────────────────────────────────────────
@@ -184,7 +200,7 @@ export type ReferenceRenderItem =
  * Classify each reference into a render-plan item.
  *
  * Routing per reference:
- * - Cursor inside → source-mark
+ * - Focused cursor/selection inside → source-mark
  * - Bracketed all-bib cluster → citation (parenthetical)
  * - Bracketed mixed cluster (some bib, some crossref) → mixed-cluster
  * - Bracketed single id, block/equation → crossref
@@ -206,7 +222,7 @@ export function planReferenceRendering(
   const analysis = view.state.field(documentAnalysisField);
   const equationLabels = analysis.equationById;
   const items: ReferenceRenderItem[] = [];
-  const activeRef = getActiveReferenceTarget(view.state);
+  const activeRef = getRevealedReferenceTarget(view.state, view.hasFocus);
 
   for (const ref of references) {
     if (activeRef && activeRef.from === ref.from && activeRef.to === ref.to) {
@@ -479,11 +495,11 @@ class ReferenceRenderViewPlugin {
     const beforeAnalysis = update.startState.field(documentAnalysisField);
     const afterAnalysis = update.state.field(documentAnalysisField);
     const referencesChanged = referenceSliceChanged(beforeAnalysis, afterAnalysis);
-    const beforeActive = getActiveReferenceTarget(update.startState);
-    const afterActive = getActiveReferenceTarget(update.state);
-    const activeChanged =
-      beforeActive?.from !== afterActive?.from ||
-      beforeActive?.to !== afterActive?.to;
+    const endFocused = update.view.hasFocus;
+    const startFocused = update.focusChanged ? !endFocused : endFocused;
+    const beforeActive = getRevealedReferenceTarget(update.startState, startFocused);
+    const afterActive = getRevealedReferenceTarget(update.state, endFocused);
+    const activeChanged = inlineRevealTargetChanged(beforeActive, afterActive);
 
     if (
       bibliographyInputsChanged(update.startState, update.state) ||
