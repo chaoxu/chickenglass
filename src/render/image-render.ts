@@ -12,7 +12,9 @@ import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import {
   type VisibleRange,
   diffVisibleRanges,
+  mapVisibleRanges,
   mergeRanges,
+  rangeIntersectsRanges,
   snapshotRanges,
 } from "./viewport-diff";
 import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
@@ -25,28 +27,21 @@ import {
 } from "./media-preview";
 import { CSS } from "../constants/css-classes";
 
-// ── Image preview state ──────────────────────────────────────────────────────
-
 type ImagePreviewState =
   | { kind: "image"; src: string }
   | { kind: "pdf-canvas"; path: string }
   | { kind: "loading"; isPdf: boolean }
   | { kind: "error"; fallbackSrc: string };
 
-// ── Unified widget ──────────────────────────────────────────────────────────
-
 /**
  * Single widget class for all image preview states.
  *
- * Identity is determined by `alt` + original `src` — when the cache state
- * changes (loading → ready), CM6 calls `updateDOM()` instead of destroying
- * and recreating the DOM element. This keeps the image inside a stable slot
- * and prevents topology-change-driven geometry churn (#1015).
+ * Identity is determined by `alt` + original `src`, so cache transitions such
+ * as loading -> ready update the existing DOM instead of replacing the slot.
  */
 export class ImagePreviewWidget extends RenderWidget {
   constructor(
     readonly alt: string,
-    /** Original markdown src — used as stable identity across state changes. */
     readonly src: string,
     readonly state: ImagePreviewState,
   ) {
@@ -59,7 +54,6 @@ export class ImagePreviewWidget extends RenderWidget {
     return wrapper;
   }
 
-  /** Position-stable identity: same alt+src → updateDOM, not recreate. */
   eq(other: ImagePreviewWidget): boolean {
     return this.alt === other.alt && this.src === other.src;
   }
@@ -129,10 +123,6 @@ export class ImagePreviewWidget extends RenderWidget {
   }
 }
 
-
-// ── Syntax helpers ────────────────────────────────────────────────────────────
-
-/** Read alt/src from an Image syntax node. */
 function readImageContent(
   view: EditorView,
   node: SyntaxNode,
@@ -151,13 +141,6 @@ function readImageContent(
   return { alt, src };
 }
 
-// ── Targeted invalidation helpers ────────────────────────────────────────────
-
-/**
- * Check whether any tracked cache path's entry changed between two state
- * snapshots. Uses reference equality on map entries, so only detects
- * actual state transitions (loading->ready, ready->evicted, etc.).
- */
 export function trackedCacheChanged(
   trackedPaths: ReadonlySet<string>,
   oldPdfCache: ReadonlyMap<string, unknown>,
@@ -165,31 +148,57 @@ export function trackedCacheChanged(
   oldImgCache: ReadonlyMap<string, unknown>,
   newImgCache: ReadonlyMap<string, unknown>,
 ): boolean {
-  if (oldPdfCache !== newPdfCache) {
-    for (const path of trackedPaths) {
-      if (oldPdfCache.get(path) !== newPdfCache.get(path)) return true;
-    }
+  if (oldPdfCache === newPdfCache && oldImgCache === newImgCache) {
+    return false;
   }
-  if (oldImgCache !== newImgCache) {
-    for (const path of trackedPaths) {
-      if (oldImgCache.get(path) !== newImgCache.get(path)) return true;
+  for (const path of trackedPaths) {
+    if (cacheEntryChanged(path, oldPdfCache, newPdfCache, oldImgCache, newImgCache)) {
+      return true;
     }
   }
   return false;
 }
 
-// ── Decoration builder ───────────────────────────────────────────────────────
+function collectChangedTrackedPaths(
+  trackedPaths: ReadonlySet<string>,
+  oldPdfCache: ReadonlyMap<string, unknown>,
+  newPdfCache: ReadonlyMap<string, unknown>,
+  oldImgCache: ReadonlyMap<string, unknown>,
+  newImgCache: ReadonlyMap<string, unknown>,
+): ReadonlySet<string> {
+  if (oldPdfCache === newPdfCache && oldImgCache === newImgCache) {
+    return new Set();
+  }
+  const changedPaths = new Set<string>();
+  for (const path of trackedPaths) {
+    if (cacheEntryChanged(path, oldPdfCache, newPdfCache, oldImgCache, newImgCache)) {
+      changedPaths.add(path);
+    }
+  }
+  return changedPaths;
+}
 
-/** Metadata collected during decoration build for targeted invalidation. */
+function cacheEntryChanged(
+  path: string,
+  oldPdfCache: ReadonlyMap<string, unknown>,
+  newPdfCache: ReadonlyMap<string, unknown>,
+  oldImgCache: ReadonlyMap<string, unknown>,
+  newImgCache: ReadonlyMap<string, unknown>,
+): boolean {
+  return (
+    oldPdfCache.get(path) !== newPdfCache.get(path) ||
+    oldImgCache.get(path) !== newImgCache.get(path)
+  );
+}
+
 interface ImageBuildResult {
   readonly items: Range<Decoration>[];
-  /** Visible Image nodes, with tracked preview path when one is active. */
   readonly nodes: ReadonlyArray<ImageNodeInfo>;
 }
 
 interface ImageNodeInfo {
-  from: number;
-  to: number;
+  readonly from: number;
+  readonly to: number;
   trackedPath?: string;
 }
 
@@ -219,31 +228,6 @@ function previewCache(
   field: typeof pdfPreviewField | typeof imageUrlField,
 ): ReadonlyMap<string, unknown> {
   return state.field(field, false) ?? new Map<string, unknown>();
-}
-
-function mapVisibleRanges(
-  ranges: readonly VisibleRange[],
-  changes: ChangeSet,
-): VisibleRange[] {
-  return mergeRanges(
-    ranges.map((range) => {
-      const from = changes.mapPos(range.from, 1);
-      const to = changes.mapPos(range.to, -1);
-      return { from, to: Math.max(from, to) };
-    }),
-  );
-}
-
-function rangeIntersectsRanges(
-  from: number,
-  to: number,
-  ranges: readonly VisibleRange[],
-): boolean {
-  for (const range of ranges) {
-    if (from < range.to && to > range.from) return true;
-    if (range.from >= to) break;
-  }
-  return false;
 }
 
 function collectImageRangesInState(
@@ -333,7 +317,6 @@ function computeDirtyImageRanges(
   return mergeRanges(dirtyRanges);
 }
 
-/** Map a media preview resolution to the appropriate widget. */
 function mediaPreviewWidget(
   alt: string,
   src: string,
@@ -352,36 +335,27 @@ function mediaPreviewWidget(
 }
 
 /**
- * Collect decoration ranges for visible images, plus tracking metadata.
+ * Collect visible image decorations and the preview paths they depend on.
  *
- * In the stable-shell experiment we keep image previews mounted during
- * ordinary navigation. Entering an image's source range should not flip the
- * line back to raw markdown; editing image syntax will later become an
- * explicit structure interaction.
- *
- * @param view    The editor view.
- * @param ranges  Explicit ranges to scan (defaults to view.visibleRanges).
- * @param skip    Returns true for node start positions already processed in a
- *                previous viewport — prevents duplicate tracking/decorations
- *                for nodes straddling the old/new boundary.
+ * Rich mode keeps image previews mounted during navigation, so there is no
+ * cursor-sensitive hide/show path here. Structure editing is handled elsewhere.
  */
 function collectImageRangesTracked(
   view: EditorView,
-  ranges?: readonly VisibleRange[],
-  skip?: (nodeFrom: number) => boolean,
+  ranges: readonly VisibleRange[] = view.visibleRanges,
+  skip: (nodeFrom: number) => boolean = () => false,
 ): ImageBuildResult {
   const items: Range<Decoration>[] = [];
   const nodes: ImageNodeInfo[] = [];
   const tree = syntaxTree(view.state);
-  const effectiveRanges = ranges ?? view.visibleRanges;
 
-  for (const { from, to } of effectiveRanges) {
+  for (const { from, to } of ranges) {
     tree.iterate({
       from,
       to,
       enter(node) {
         if (node.name !== "Image") return;
-        if (skip?.(node.from)) return false;
+        if (skip(node.from)) return false;
 
         const trackedNode: ImageNodeInfo = { from: node.from, to: node.to };
         nodes.push(trackedNode);
@@ -415,23 +389,16 @@ function collectImageRangesTracked(
   return { items, nodes };
 }
 
-// ── ViewPlugin ───────────────────────────────────────────────────────────────
-
 /**
- * Custom ViewPlugin that narrows image decoration rebuilds to avoid
- * full visible-range rescans on unrelated edits and cursor moves.
+ * Incremental image preview plugin.
  *
- * Tracks image node positions and referenced cache paths from each rebuild.
- * On update, only rebuilds when:
- * - document changes touch an image node or newly-visible fragment
- * - viewport or syntax tree changes require a rebuild path
- * - a tracked cache path's entry changed (async preview readiness)
+ * It owns visible-range tracking and cache-path tracking so ordinary edits and
+ * scrolls do not trigger full rescans of every visible image.
  */
 class ImageRenderPlugin implements PluginValue {
   decorations: DecorationSet;
   private imageNodes: ReadonlyArray<ImageNodeInfo>;
   private trackedPaths: ReadonlySet<string>;
-  /** Ranges already processed — used to skip straddling nodes on scroll. */
   private coveredRanges: VisibleRange[];
 
   constructor(view: EditorView) {
@@ -454,33 +421,27 @@ class ImageRenderPlugin implements PluginValue {
       return;
     }
 
-    // Structural changes that alter the tree require full rebuild
     if (treeChanged) {
       this.rebuild(update.view);
       return;
     }
 
-    // Viewport-only change (scroll): incremental add for newly visible ranges
     if (update.viewportChanged) {
       this.incrementalViewportUpdate(update);
-      // Fall through to check selection/cache
     }
 
-    // Cache changes: rebuild only if a tracked path's entry changed
-    if (
-      trackedCacheChanged(
-        this.trackedPaths,
-        previewCache(update.startState, pdfPreviewField),
-        previewCache(update.state, pdfPreviewField),
-        previewCache(update.startState, imageUrlField),
-        previewCache(update.state, imageUrlField),
-      )
-    ) {
-      this.rebuild(update.view);
+    const changedPaths = collectChangedTrackedPaths(
+      this.trackedPaths,
+      previewCache(update.startState, pdfPreviewField),
+      previewCache(update.state, pdfPreviewField),
+      previewCache(update.startState, imageUrlField),
+      previewCache(update.state, imageUrlField),
+    );
+    if (changedPaths.size > 0) {
+      this.incrementalCacheUpdate(update.view, changedPaths);
     }
   }
 
-  /** Differential viewport update: only process newly-visible ranges. */
   private incrementalViewportUpdate(update: ViewUpdate): void {
     const previousCoveredRanges = this.coveredRanges;
     const currentVisibleRanges = snapshotRanges(update.view.visibleRanges);
@@ -581,7 +542,51 @@ class ImageRenderPlugin implements PluginValue {
     this.coveredRanges = currentVisibleRanges;
   }
 
-  private rebuild(view: EditorView): void {
+  private incrementalCacheUpdate(
+    view: EditorView,
+    changedPaths: ReadonlySet<string>,
+  ): void {
+    const dirtyNodes = this.imageNodes.filter(
+      (node) => node.trackedPath !== undefined && changedPaths.has(node.trackedPath),
+    );
+    if (dirtyNodes.length === 0) return;
+
+    const rebuildRanges = mergeRanges(
+      dirtyNodes.map((node) => ({ from: node.from, to: node.to })),
+    );
+    const keptNodes = this.imageNodes.filter(
+      (node) => node.trackedPath === undefined || !changedPaths.has(node.trackedPath),
+    );
+
+    let nextDecorations = this.decorations;
+    for (const range of rebuildRanges) {
+      nextDecorations = nextDecorations.update({
+        filterFrom: range.from,
+        filterTo: range.to,
+        filter: (from, to) => !rangeIntersectsRanges(from, to, [range]),
+      });
+    }
+
+    const retainedStarts = new Set(keptNodes.map((node) => node.from));
+    const result = collectImageRangesTracked(
+      view,
+      rebuildRanges,
+      (nodeFrom) => retainedStarts.has(nodeFrom),
+    );
+    if (result.items.length > 0) {
+      nextDecorations = nextDecorations.update({
+        add: result.items,
+        sort: true,
+      });
+    }
+
+    this.decorations = nextDecorations;
+    this.imageNodes = [...keptNodes, ...result.nodes]
+      .sort((a, b) => a.from - b.from || a.to - b.to);
+    this.trackedPaths = trackedPathsFromNodes(this.imageNodes);
+  }
+
+  rebuild(view: EditorView): void {
     const result = collectImageRangesTracked(view);
     this.decorations = buildDecorations(result.items);
     this.imageNodes = result.nodes;
@@ -590,8 +595,7 @@ class ImageRenderPlugin implements PluginValue {
   }
 }
 
-/** CM6 extension that renders inline images as stable previews in rich mode. */
 export const imageRenderPlugin: Extension = ViewPlugin.fromClass(
   ImageRenderPlugin,
-  { decorations: (v) => v.decorations },
+  { decorations: (value) => value.decorations },
 );

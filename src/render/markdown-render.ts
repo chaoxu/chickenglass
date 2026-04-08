@@ -7,6 +7,7 @@ import { type EditorState, type Range, type Extension } from "@codemirror/state"
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
 import {
+  normalizeDirtyRange,
   type VisibleRange,
   mergeRanges,
 } from "./viewport-diff";
@@ -317,23 +318,6 @@ MARKDOWN_HANDLERS.set("ListMark", { cursorSensitive: false, handle: handleListMa
 const CURSOR_SENSITIVE_NODES = new Set(
   [...MARKDOWN_HANDLERS].filter(([, h]) => h.cursorSensitive).map(([name]) => name),
 );
-
-function normalizeDirtyRange(
-  from: number,
-  to: number,
-  docLength: number,
-): VisibleRange {
-  const start = Math.max(0, Math.min(from, docLength));
-  const end = Math.max(0, Math.min(to, docLength));
-  if (start !== end) {
-    return start < end ? { from: start, to: end } : { from: end, to: start };
-  }
-  if (docLength === 0) {
-    return { from: 0, to: 0 };
-  }
-  const windowStart = Math.max(0, Math.min(start, docLength - 1));
-  return { from: windowStart, to: Math.min(docLength, windowStart + 1) };
-}
 
 function mapNodeRange(
   update: ViewUpdate,

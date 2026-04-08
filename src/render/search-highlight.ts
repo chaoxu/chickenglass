@@ -13,8 +13,7 @@
 import { getSearchQuery, searchPanelOpen } from "@codemirror/search";
 import { type Extension } from "@codemirror/state";
 import { Decoration, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view";
-// Direct import: barrel would create circular dependency (render/index → search-highlight → editor/index → ... → render/index)
-import { collectVisibleSearchMatches } from "../editor/find-replace";
+import { collectVisibleSearchMatches } from "../search/search-matches";
 import { createSimpleViewPlugin } from "./view-plugin-factories";
 import { resolveLiveWidgetSourceRange } from "./widget-core";
 

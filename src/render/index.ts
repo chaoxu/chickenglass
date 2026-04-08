@@ -17,8 +17,13 @@ export {
   CrossrefWidget,
   UnresolvedRefWidget,
 } from "./crossref-render";
-// reference-render re-exports removed — imports from citations/ would create
-// a cycle through this barrel.  Import from "./reference-render" directly.
+export {
+  referenceRenderDependenciesChanged,
+  planReferenceRendering,
+  collectReferenceRanges,
+  referenceRenderPlugin,
+  type ReferenceRenderItem,
+} from "./reference-render";
 export {
   ImagePreviewWidget,
   imageRenderPlugin,
@@ -52,6 +57,7 @@ export { sectionNumberPlugin } from "./section-counter";
 export { fenceGuidePlugin } from "./fence-guide";
 export { includeLabelPlugin } from "./include-label";
 export { focusModeExtension, toggleFocusMode } from "./focus-mode";
+export { hoverPreviewExtension } from "./hover-preview";
 export {
   sidenoteRenderPlugin,
   collectFootnotes,
@@ -60,10 +66,7 @@ export {
   footnoteInlineToggleEffect,
   footnoteInlineExpandedField,
 } from "./sidenote-render";
-// hover-preview re-export removed — imports from plugins/ and citations/
-// would create a cycle through this barrel.  Import from "./hover-preview" directly.
-// search-highlight re-export removed — imports from editor/find-replace
-// would create a cycle through this barrel.  Import from "./search-highlight" directly.
+export { searchHighlightPlugin } from "./search-highlight";
 export {
   parseTable,
   formatTable,

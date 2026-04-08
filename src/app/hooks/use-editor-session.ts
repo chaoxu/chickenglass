@@ -1,30 +1,19 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import type { FileSystem } from "../file-manager";
-import {
-  createEditorSessionState,
-  type EditorSessionState,
-  type SessionDocument,
-} from "../editor-session-model";
-import { SavePipeline } from "../save-pipeline";
+import { type SessionDocument } from "../editor-session-model";
 import type { SourceMap } from "../source-map";
 import type {
   UnsavedChangesDecision,
   UnsavedChangesRequest,
 } from "../unsaved-changes";
-import {
-  type EditorDocumentChange,
-  type EditorDocumentText,
-} from "../editor-doc-change";
-import {
-  createActiveDocumentSignal,
-  type ActiveDocumentSignal,
-} from "../active-document-signal";
+import { type EditorDocumentChange } from "../editor-doc-change";
+import { type ActiveDocumentSignal } from "../active-document-signal";
 import {
   createEditorSessionService,
-  documentForPath,
   type ExternalDocumentSyncResult,
 } from "../editor-session-service";
-import { useEditorSessionPersistence } from "./use-editor-session-persistence";
+import { createEditorSessionPersistence } from "../editor-session-persistence";
+import { createEditorSessionRuntime } from "../editor-session-runtime";
 
 export interface EditorSessionDeps {
   fs: FileSystem;
@@ -42,10 +31,6 @@ export interface UseEditorSessionReturn {
   currentPath: string | null;
   editorDoc: string;
   activeDocumentSignal: ActiveDocumentSignal;
-  setEditorDoc: React.Dispatch<React.SetStateAction<string>>;
-  buffers: React.RefObject<Map<string, EditorDocumentText>>;
-  liveDocs: React.RefObject<Map<string, EditorDocumentText>>;
-  pipeline: SavePipeline;
   getCurrentDocText: () => string;
   isPathOpen: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
@@ -74,104 +59,50 @@ export function useEditorSession({
   onAfterSave,
   requestUnsavedChangesDecision,
 }: EditorSessionDeps): UseEditorSessionReturn {
-  const [sessionState, setSessionState] = useState<EditorSessionState>(
-    () => createEditorSessionState(),
+  const runtime = useMemo(() => createEditorSessionRuntime(), []);
+  const snapshot = useSyncExternalStore(
+    runtime.subscribe,
+    runtime.getSnapshot,
+    runtime.getSnapshot,
   );
-  const [editorDoc, setEditorDoc] = useState("");
-  const buffers = useRef<Map<string, EditorDocumentText>>(new Map());
-  const liveDocs = useRef<Map<string, EditorDocumentText>>(new Map());
-  const sourceMaps = useRef<Map<string, SourceMap>>(new Map());
-  const activeDocumentSignal = useRef(createActiveDocumentSignal()).current;
-  const stateRef = useRef<EditorSessionState>(sessionState);
-  const openFileRequestRef = useRef(0);
-  const writeDocumentSnapshotRef = useRef<
-    (path: string, content: string, sourceMap: unknown) => Promise<string>
-  >(async () => "");
-
-  const pipeline = useMemo(() => new SavePipeline(
-    (path, content, sourceMap) => writeDocumentSnapshotRef.current(path, content, sourceMap),
-  ), []);
-
-  const commitSessionState = useCallback((
-    nextState: EditorSessionState,
-    options?: {
-      editorDoc?: string;
-      syncEditorDoc?: boolean;
-    },
-  ) => {
-    stateRef.current = nextState;
-    setSessionState(nextState);
-
-    if (options !== undefined && "editorDoc" in options) {
-      setEditorDoc(options?.editorDoc ?? "");
-      activeDocumentSignal.publish(nextState.currentDocument?.path ?? null);
-      return;
-    }
-
-    if (options?.syncEditorDoc) {
-      setEditorDoc(documentForPath(nextState.currentDocument?.path ?? null, liveDocs, buffers));
-      activeDocumentSignal.publish(nextState.currentDocument?.path ?? null);
-    }
-  }, [activeDocumentSignal]);
-
-  const getSessionState = useCallback((): EditorSessionState => stateRef.current, []);
-  const {
-    saveCurrentDocument,
-    saveFile,
-    handleRename,
-    handleDelete,
-    saveAs,
-    writeDocumentSnapshot,
-  } = useEditorSessionPersistence({
+  const sessionPersistence = useMemo(() => createEditorSessionPersistence({
     fs,
-    pipeline,
     refreshTree,
     addRecentFile,
     onAfterSave,
-    buffers,
-    liveDocs,
-    sourceMaps,
-    stateRef,
-    commitSessionState,
-    getSessionState,
-  });
+    runtime,
+  }), [
+    addRecentFile,
+    fs,
+    onAfterSave,
+    refreshTree,
+    runtime,
+  ]);
 
-  writeDocumentSnapshotRef.current = (path, content, sourceMap) =>
-    writeDocumentSnapshot(path, content, sourceMap as SourceMap | null);
+  runtime.setWriteDocumentSnapshot((path, content, sourceMap) =>
+    sessionPersistence.writeDocumentSnapshot(path, content, sourceMap as SourceMap | null),
+  );
   const sessionService = useMemo(() => createEditorSessionService({
     fs,
     refreshTree,
     addRecentFile,
     requestUnsavedChangesDecision,
-    stateRef,
-    buffers,
-    liveDocs,
-    sourceMaps,
-    pipeline,
-    activeDocumentSignal,
-    openFileRequestRef,
-    commitSessionState,
-    saveCurrentDocument,
+    runtime,
+    saveCurrentDocument: sessionPersistence.saveCurrentDocument,
   }), [
-    activeDocumentSignal,
     addRecentFile,
-    commitSessionState,
     fs,
-    pipeline,
     refreshTree,
     requestUnsavedChangesDecision,
-    saveCurrentDocument,
+    runtime,
+    sessionPersistence,
   ]);
 
   return {
-    currentDocument: sessionState.currentDocument,
-    currentPath: sessionState.currentDocument?.path ?? null,
-    editorDoc,
-    activeDocumentSignal,
-    setEditorDoc,
-    buffers,
-    liveDocs,
-    pipeline,
+    currentDocument: snapshot.currentDocument,
+    currentPath: snapshot.currentPath,
+    editorDoc: snapshot.editorDoc,
+    activeDocumentSignal: runtime.activeDocumentSignal,
     getCurrentDocText: sessionService.getCurrentDocText,
     isPathOpen: sessionService.isPathOpen,
     isPathDirty: sessionService.isPathDirty,
@@ -183,13 +114,13 @@ export function useEditorSession({
     openFileWithContent: sessionService.openFileWithContent,
     reloadFile: sessionService.reloadFile,
     syncExternalChange: sessionService.syncExternalChange,
-    saveFile,
+    saveFile: sessionPersistence.saveFile,
     createFile: sessionService.createFile,
     createDirectory: sessionService.createDirectory,
     closeCurrentFile: sessionService.closeCurrentFile,
-    handleRename,
-    handleDelete,
-    saveAs,
+    handleRename: sessionPersistence.handleRename,
+    handleDelete: sessionPersistence.handleDelete,
+    saveAs: sessionPersistence.saveAs,
     handleWindowCloseRequest: sessionService.handleWindowCloseRequest,
   };
 }

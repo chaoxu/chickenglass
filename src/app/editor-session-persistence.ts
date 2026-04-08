@@ -1,49 +1,35 @@
-import { useCallback } from "react";
-import type { RefObject } from "react";
-import { isTauri } from "../../lib/tauri";
+import { isTauri } from "../lib/tauri";
 import {
   clearSessionDocument,
   markSessionDocumentDirty,
   renameSessionDocument,
-} from "../editor-session-actions";
-import {
-  getCurrentSessionDocument,
-  type EditorSessionState,
-} from "../editor-session-model";
+} from "./editor-session-actions";
+import { getCurrentSessionDocument } from "./editor-session-model";
 import {
   editorDocumentToString,
   emptyEditorDocument,
-  type EditorDocumentText,
-} from "../editor-doc-change";
-import { applySaveAsResult } from "../editor-session-save";
-import { buildProjectedWritePlan } from "../editor-session-write-plan";
+} from "./editor-doc-change";
+import { applySaveAsResult } from "./editor-session-save";
+import { buildProjectedWritePlan } from "./editor-session-write-plan";
 import {
-  documentForPath,
-  type CommitSessionState,
-} from "../editor-session-service";
-import type { FileSystem } from "../file-manager";
-import { basename } from "../lib/utils";
-import { measureAsync } from "../perf";
-import type { SavePipeline } from "../save-pipeline";
-import type { SourceMap } from "../source-map";
-import { confirmAction } from "../confirm-action";
+  type EditorSessionRuntime,
+} from "./editor-session-runtime";
+import type { FileSystem } from "./file-manager";
+import { basename } from "./lib/utils";
+import { measureAsync } from "./perf";
+import type { SourceMap } from "./source-map";
+import { confirmAction } from "./confirm-action";
 
-interface UseEditorSessionPersistenceOptions {
+export interface EditorSessionPersistenceOptions {
   fs: FileSystem;
-  pipeline: SavePipeline;
   refreshTree: (changedPath?: string) => Promise<void>;
   addRecentFile: (path: string) => void;
   /** Lightweight callback fired after every successful save (not tree refresh). */
   onAfterSave?: () => void;
-  buffers: RefObject<Map<string, EditorDocumentText>>;
-  liveDocs: RefObject<Map<string, EditorDocumentText>>;
-  sourceMaps: RefObject<Map<string, SourceMap>>;
-  stateRef: RefObject<EditorSessionState>;
-  commitSessionState: CommitSessionState;
-  getSessionState: () => EditorSessionState;
+  runtime: EditorSessionRuntime;
 }
 
-export interface UseEditorSessionPersistenceReturn {
+export interface EditorSessionPersistence {
   saveCurrentDocument: () => Promise<boolean>;
   saveFile: () => Promise<void>;
   writeDocumentSnapshot: (
@@ -57,20 +43,26 @@ export interface UseEditorSessionPersistenceReturn {
   saveAs: () => Promise<void>;
 }
 
-export function useEditorSessionPersistence({
+function currentDocumentText(
+  path: string | null,
+  runtime: EditorSessionRuntime,
+): string {
+  if (!path) return "";
+  return editorDocumentToString(
+    runtime.liveDocs.get(path)
+    ?? runtime.buffers.get(path)
+    ?? emptyEditorDocument,
+  );
+}
+
+export function createEditorSessionPersistence({
   fs,
-  pipeline,
   refreshTree,
   addRecentFile,
   onAfterSave,
-  buffers,
-  liveDocs,
-  sourceMaps,
-  stateRef,
-  commitSessionState,
-  getSessionState,
-}: UseEditorSessionPersistenceOptions): UseEditorSessionPersistenceReturn {
-  const writeDocumentSnapshot = useCallback(async (
+  runtime,
+}: EditorSessionPersistenceOptions): EditorSessionPersistence {
+  const writeDocumentSnapshot = async (
     targetPath: string,
     doc: string,
     sourceMap: SourceMap | null,
@@ -101,77 +93,69 @@ export function useEditorSessionPersistence({
       }
     }
     return mainDiskContent;
-  }, [fs]);
+  };
 
-  const saveCurrentDocument = useCallback(async (): Promise<boolean> => {
-    const currentPath = getSessionState().currentDocument?.path;
+  const saveCurrentDocument = async (): Promise<boolean> => {
+    const currentPath = runtime.getCurrentPath();
     if (!currentPath) return true;
 
-    const result = await pipeline.save(currentPath, () => {
-      const doc = liveDocs.current.get(currentPath) ?? emptyEditorDocument;
-      const sourceMap = sourceMaps.current.get(currentPath) ?? null;
+    const result = await runtime.pipeline.save(currentPath, () => {
+      const doc = runtime.liveDocs.get(currentPath) ?? emptyEditorDocument;
+      const sourceMap = runtime.sourceMaps.get(currentPath) ?? null;
       return { content: editorDocumentToString(doc), sourceMap };
     });
 
     if (result.saved) {
-      const doc = liveDocs.current.get(currentPath) ?? emptyEditorDocument;
-      buffers.current.set(currentPath, doc);
-      liveDocs.current.set(currentPath, doc);
-      commitSessionState(
-        markSessionDocumentDirty(getSessionState(), currentPath, false),
+      const doc = runtime.liveDocs.get(currentPath) ?? emptyEditorDocument;
+      runtime.buffers.set(currentPath, doc);
+      runtime.liveDocs.set(currentPath, doc);
+      runtime.commit(
+        markSessionDocumentDirty(runtime.getState(), currentPath, false),
         { editorDoc: editorDocumentToString(doc) },
       );
       onAfterSave?.();
     }
     return result.saved;
-  }, [
-    buffers,
-    commitSessionState,
-    getSessionState,
-    liveDocs,
-    pipeline,
-    onAfterSave,
-    sourceMaps,
-  ]);
+  };
 
-  const saveFile = useCallback(async (): Promise<void> => {
+  const saveFile = async (): Promise<void> => {
     await saveCurrentDocument();
-  }, [saveCurrentDocument]);
+  };
 
-  const renameBuffers = useCallback((oldPath: string, newPath: string) => {
-    const buffered = buffers.current.get(oldPath);
+  const renameBuffers = (oldPath: string, newPath: string) => {
+    const buffered = runtime.buffers.get(oldPath);
     if (buffered !== undefined) {
-      buffers.current.delete(oldPath);
-      buffers.current.set(newPath, buffered);
+      runtime.buffers.delete(oldPath);
+      runtime.buffers.set(newPath, buffered);
     }
 
-    const liveDoc = liveDocs.current.get(oldPath);
+    const liveDoc = runtime.liveDocs.get(oldPath);
     if (liveDoc !== undefined) {
-      liveDocs.current.delete(oldPath);
-      liveDocs.current.set(newPath, liveDoc);
+      runtime.liveDocs.delete(oldPath);
+      runtime.liveDocs.set(newPath, liveDoc);
     }
 
-    const sourceMap = sourceMaps.current.get(oldPath);
+    const sourceMap = runtime.sourceMaps.get(oldPath);
     if (sourceMap) {
-      sourceMaps.current.delete(oldPath);
-      sourceMaps.current.set(newPath, sourceMap);
+      runtime.sourceMaps.delete(oldPath);
+      runtime.sourceMaps.set(newPath, sourceMap);
     }
 
-    pipeline.clear(oldPath);
-    pipeline.initPath(
+    runtime.pipeline.clear(oldPath);
+    runtime.pipeline.initPath(
       newPath,
       editorDocumentToString(liveDoc ?? buffered ?? emptyEditorDocument),
     );
 
-    commitSessionState(
-      renameSessionDocument(stateRef.current, oldPath, newPath, basename(newPath)),
-      stateRef.current.currentDocument?.path === oldPath
-        ? { editorDoc: documentForPath(newPath, liveDocs, buffers) }
+    runtime.commit(
+      renameSessionDocument(runtime.getState(), oldPath, newPath, basename(newPath)),
+      runtime.getCurrentPath() === oldPath
+        ? { editorDoc: currentDocumentText(newPath, runtime) }
         : undefined,
     );
-  }, [buffers, commitSessionState, liveDocs, pipeline, sourceMaps, stateRef]);
+  };
 
-  const handleRename = useCallback(async (oldPath: string, newPath: string) => {
+  const handleRename = async (oldPath: string, newPath: string) => {
     try {
       await fs.renameFile(oldPath, newPath);
       const oldDir = oldPath.substring(0, Math.max(0, oldPath.lastIndexOf("/")));
@@ -183,9 +167,9 @@ export function useEditorSessionPersistence({
     } catch (e: unknown) {
       console.error("[session] rename failed:", e);
     }
-  }, [addRecentFile, fs, refreshTree, renameBuffers]);
+  };
 
-  const handleDelete = useCallback(async (path: string) => {
+  const handleDelete = async (path: string) => {
     const ok = await confirmAction(`Delete "${basename(path)}"? This cannot be undone.`, {
       kind: "warning",
     });
@@ -201,29 +185,29 @@ export function useEditorSessionPersistence({
       return;
     }
 
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    const currentDocument = getCurrentSessionDocument(runtime.getState());
     if (currentDocument && (
       currentDocument.path === path
       || currentDocument.path.startsWith(`${path}/`)
     )) {
-      buffers.current.delete(currentDocument.path);
-      liveDocs.current.delete(currentDocument.path);
-      sourceMaps.current.delete(currentDocument.path);
-      commitSessionState(
-        clearSessionDocument(stateRef.current, currentDocument.path),
+      runtime.buffers.delete(currentDocument.path);
+      runtime.liveDocs.delete(currentDocument.path);
+      runtime.sourceMaps.delete(currentDocument.path);
+      runtime.commit(
+        clearSessionDocument(runtime.getState(), currentDocument.path),
         { editorDoc: "" },
       );
     }
 
     await refreshTree(path);
-  }, [buffers, commitSessionState, fs, liveDocs, refreshTree, sourceMaps, stateRef]);
+  };
 
-  const saveAs = useCallback(async () => {
-    const currentPath = getSessionState().currentDocument?.path;
+  const saveAs = async () => {
+    const currentPath = runtime.getCurrentPath();
     if (!currentPath) return;
-    const liveDoc = liveDocs.current.get(currentPath) ?? emptyEditorDocument;
+    const liveDoc = runtime.liveDocs.get(currentPath) ?? emptyEditorDocument;
     const doc = editorDocumentToString(liveDoc);
-    const sourceMap = sourceMaps.current.get(currentPath) ?? null;
+    const sourceMap = runtime.sourceMaps.get(currentPath) ?? null;
 
     if (isTauri()) {
       try {
@@ -234,25 +218,25 @@ export function useEditorSessionPersistence({
         });
         if (!savePath) return;
 
-        const { toProjectRelativePathCommand } = await import("../tauri-client/fs");
+        const { toProjectRelativePathCommand } = await import("./tauri-client/fs");
         const relativePath = await toProjectRelativePathCommand(savePath);
         await writeDocumentSnapshot(relativePath, doc, sourceMap, {
           createTargetIfMissing: true,
         });
 
         if (sourceMap && currentPath !== relativePath) {
-          sourceMaps.current.delete(currentPath);
-          sourceMaps.current.set(relativePath, sourceMap);
+          runtime.sourceMaps.delete(currentPath);
+          runtime.sourceMaps.set(relativePath, sourceMap);
         }
 
-        pipeline.clear(currentPath);
-        pipeline.initPath(relativePath, doc);
+        runtime.pipeline.clear(currentPath);
+        runtime.pipeline.initPath(relativePath, doc);
 
-        commitSessionState(
+        runtime.commit(
           applySaveAsResult({
-            state: getSessionState(),
-            buffers: buffers.current,
-            liveDocs: liveDocs.current,
+            state: runtime.getState(),
+            buffers: runtime.buffers,
+            liveDocs: runtime.liveDocs,
             oldPath: currentPath,
             newPath: relativePath,
             doc: liveDoc,
@@ -275,17 +259,7 @@ export function useEditorSessionPersistence({
     anchor.download = basename(currentPath);
     anchor.click();
     URL.revokeObjectURL(url);
-  }, [
-    addRecentFile,
-    buffers,
-    commitSessionState,
-    getSessionState,
-    liveDocs,
-    pipeline,
-    refreshTree,
-    sourceMaps,
-    writeDocumentSnapshot,
-  ]);
+  };
 
   return {
     saveCurrentDocument,

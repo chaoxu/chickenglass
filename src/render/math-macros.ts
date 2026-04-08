@@ -12,7 +12,7 @@
  */
 import { type EditorState, StateField } from "@codemirror/state";
 
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 
 /**
  * Read math macros from the frontmatter state field.

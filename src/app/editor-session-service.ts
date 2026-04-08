@@ -1,4 +1,3 @@
-import type { RefObject } from "react";
 import { basename } from "./lib/utils";
 import {
   clearSessionDocument,
@@ -6,14 +5,10 @@ import {
   setCurrentSessionDocument,
 } from "./editor-session-actions";
 import {
-  getCurrentSessionDocument,
-  hasSessionPath,
-  type EditorSessionState,
   type SessionDocument,
 } from "./editor-session-model";
 import type { FileSystem } from "./file-manager";
 import { measureAsync, withPerfOperation } from "./perf";
-import type { SavePipeline } from "./save-pipeline";
 import type { SourceMap } from "./source-map";
 import type {
   UnsavedChangesDecision,
@@ -25,19 +20,12 @@ import {
   editorDocumentToString,
   emptyEditorDocument,
   type EditorDocumentChange,
-  type EditorDocumentText,
 } from "./editor-doc-change";
-import type { ActiveDocumentSignal } from "./active-document-signal";
-
-export interface CommitSessionStateOptions {
-  editorDoc?: string;
-  syncEditorDoc?: boolean;
-}
-
-export type CommitSessionState = (
-  nextState: EditorSessionState,
-  options?: CommitSessionStateOptions,
-) => void;
+import {
+  documentForPath,
+  documentTextForPath,
+  type EditorSessionRuntime,
+} from "./editor-session-runtime";
 
 export type ExternalDocumentSyncResult = "ignore" | "notify" | "reloaded";
 
@@ -66,14 +54,7 @@ export interface EditorSessionServiceOptions {
   requestUnsavedChangesDecision: (
     request: UnsavedChangesRequest,
   ) => Promise<UnsavedChangesDecision>;
-  stateRef: RefObject<EditorSessionState>;
-  buffers: RefObject<Map<string, EditorDocumentText>>;
-  liveDocs: RefObject<Map<string, EditorDocumentText>>;
-  sourceMaps: RefObject<Map<string, SourceMap>>;
-  pipeline: SavePipeline;
-  activeDocumentSignal: ActiveDocumentSignal;
-  openFileRequestRef: RefObject<number>;
-  commitSessionState: CommitSessionState;
+  runtime: EditorSessionRuntime;
   saveCurrentDocument: () => Promise<boolean>;
 }
 
@@ -92,63 +73,34 @@ function makeTransitionRequest(
   };
 }
 
-export function documentForPath(
-  path: string | null,
-  liveDocs: RefObject<Map<string, EditorDocumentText>>,
-  buffers: RefObject<Map<string, EditorDocumentText>>,
-): string {
-  if (!path) return "";
-  return editorDocumentToString(
-    liveDocs.current.get(path)
-    ?? buffers.current.get(path)
-    ?? emptyEditorDocument,
-  );
-}
-
-export function documentTextForPath(
-  path: string | null,
-  liveDocs: RefObject<Map<string, EditorDocumentText>>,
-  buffers: RefObject<Map<string, EditorDocumentText>>,
-): EditorDocumentText {
-  if (!path) return emptyEditorDocument;
-  return liveDocs.current.get(path) ?? buffers.current.get(path) ?? emptyEditorDocument;
-}
-
 export function createEditorSessionService({
   fs,
   refreshTree,
   addRecentFile,
   requestUnsavedChangesDecision,
-  stateRef,
-  buffers,
-  liveDocs,
-  sourceMaps,
-  pipeline,
-  activeDocumentSignal,
-  openFileRequestRef,
-  commitSessionState,
+  runtime,
   saveCurrentDocument,
 }: EditorSessionServiceOptions): EditorSessionService {
   const clearPathBuffers = (path: string) => {
-    pipeline.clear(path);
-    buffers.current.delete(path);
-    liveDocs.current.delete(path);
-    sourceMaps.current.delete(path);
+    runtime.pipeline.clear(path);
+    runtime.buffers.delete(path);
+    runtime.liveDocs.delete(path);
+    runtime.sourceMaps.delete(path);
   };
 
   const applyReloadedDocument = (path: string, content: string) => {
-    if (!hasSessionPath(stateRef.current, path)) {
+    if (!runtime.hasPath(path)) {
       return false;
     }
 
     const documentText = createEditorDocumentText(content);
     clearPathBuffers(path);
-    buffers.current.set(path, documentText);
-    liveDocs.current.set(path, documentText);
-    pipeline.initPath(path, content);
-    commitSessionState(
-      markSessionDocumentDirty(stateRef.current, path, false),
-      stateRef.current.currentDocument?.path === path
+    runtime.buffers.set(path, documentText);
+    runtime.liveDocs.set(path, documentText);
+    runtime.pipeline.initPath(path, content);
+    runtime.commit(
+      markSessionDocumentDirty(runtime.getState(), path, false),
+      runtime.getCurrentPath() === path
         ? { editorDoc: content }
         : undefined,
     );
@@ -156,11 +108,11 @@ export function createEditorSessionService({
   };
 
   const discardDocumentChanges = (path: string) => {
-    const savedDoc = buffers.current.get(path) ?? emptyEditorDocument;
-    liveDocs.current.set(path, savedDoc);
-    commitSessionState(
-      markSessionDocumentDirty(stateRef.current, path, false),
-      stateRef.current.currentDocument?.path === path
+    const savedDoc = runtime.buffers.get(path) ?? emptyEditorDocument;
+    runtime.liveDocs.set(path, savedDoc);
+    runtime.commit(
+      markSessionDocumentDirty(runtime.getState(), path, false),
+      runtime.getCurrentPath() === path
         ? { editorDoc: editorDocumentToString(savedDoc) }
         : undefined,
     );
@@ -170,7 +122,7 @@ export function createEditorSessionService({
     reason: UnsavedChangesRequest["reason"],
     target?: { path?: string; name: string },
   ): Promise<boolean> => {
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    const currentDocument = runtime.getCurrentDocument();
     if (!currentDocument || !currentDocument.dirty) {
       return true;
     }
@@ -192,75 +144,71 @@ export function createEditorSessionService({
   };
 
   const getCurrentDocText = (): string =>
-    documentForPath(stateRef.current.currentDocument?.path ?? null, liveDocs, buffers);
+    documentForPath(runtime.getCurrentPath(), runtime.liveDocs, runtime.buffers);
 
-  const isPathOpen = (path: string): boolean => hasSessionPath(stateRef.current, path);
+  const isPathOpen = (path: string): boolean => runtime.hasPath(path);
 
-  const isPathDirty = (path: string): boolean => {
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
-    return currentDocument?.path === path && currentDocument.dirty;
-  };
+  const isPathDirty = (path: string): boolean => runtime.isPathDirty(path);
 
-  const cancelPendingOpenFile = () => {
-    openFileRequestRef.current += 1;
-  };
+  const cancelPendingOpenFile = () => runtime.cancelPendingOpenFile();
 
   const handleDocChange = (changes: readonly EditorDocumentChange[]) => {
-    const currentPath = stateRef.current.currentDocument?.path;
+    const currentPath = runtime.getCurrentPath();
     if (!currentPath) return;
 
-    const previousDoc = documentTextForPath(currentPath, liveDocs, buffers);
+    const previousDoc = documentTextForPath(currentPath, runtime.liveDocs, runtime.buffers);
     const doc = applyEditorDocumentChanges(previousDoc, changes);
-    liveDocs.current.set(currentPath, doc);
-    pipeline.bumpRevision(currentPath);
-    activeDocumentSignal.publish(currentPath);
+    runtime.liveDocs.set(currentPath, doc);
+    runtime.pipeline.bumpRevision(currentPath);
+    runtime.activeDocumentSignal.publish(currentPath);
 
-    const isDirty = !doc.eq(buffers.current.get(currentPath) ?? emptyEditorDocument);
-    const nextState = markSessionDocumentDirty(stateRef.current, currentPath, isDirty);
-    if (nextState !== stateRef.current) {
-      commitSessionState(nextState);
-    }
+    const nextState = markSessionDocumentDirty(
+      runtime.getState(),
+      currentPath,
+      !doc.eq(runtime.buffers.get(currentPath) ?? emptyEditorDocument),
+    );
+    runtime.commit(nextState);
   };
 
   const handleProgrammaticDocChange = (path: string, doc: string) => {
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    const currentDocument = runtime.getCurrentDocument();
     if (currentDocument?.path !== path) return;
 
     const nextDoc = createEditorDocumentText(doc);
     if (!currentDocument.dirty) {
-      buffers.current.set(path, nextDoc);
+      runtime.buffers.set(path, nextDoc);
     }
-    liveDocs.current.set(path, nextDoc);
-    commitSessionState(
+    runtime.liveDocs.set(path, nextDoc);
+    runtime.commit(
       currentDocument.dirty
-        ? stateRef.current
-        : markSessionDocumentDirty(stateRef.current, path, false),
+        ? runtime.getState()
+        : markSessionDocumentDirty(runtime.getState(), path, false),
       { editorDoc: doc },
     );
   };
 
   const setDocumentSourceMap = (path: string, sourceMap: SourceMap | null) => {
     if (sourceMap) {
-      sourceMaps.current.set(path, sourceMap);
+      runtime.sourceMaps.set(path, sourceMap);
       return;
     }
-    sourceMaps.current.delete(path);
+    runtime.sourceMaps.delete(path);
   };
 
   const openFile = async (path: string) => {
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    const currentDocument = runtime.getCurrentDocument();
     if (currentDocument?.path === path) {
       addRecentFile(path);
       return;
     }
 
-    const requestId = ++openFileRequestRef.current;
+    const requestId = runtime.nextOpenFileRequest();
     const targetName = basename(path);
     const canLeave = await prepareCurrentDocumentForTransition("switch-file", {
       path,
       name: targetName,
     });
-    if (!canLeave || requestId !== openFileRequestRef.current) {
+    if (!canLeave || !runtime.isLatestOpenFileRequest(requestId)) {
       return;
     }
 
@@ -272,22 +220,22 @@ export function createEditorSessionService({
           { category: "open_file", detail: path },
         );
 
-        if (requestId !== openFileRequestRef.current) {
+        if (!runtime.isLatestOpenFileRequest(requestId)) {
           return;
         }
 
-        const previousPath = stateRef.current.currentDocument?.path ?? null;
+        const previousPath = runtime.getCurrentPath();
         if (previousPath && previousPath !== path) {
           clearPathBuffers(previousPath);
         }
 
         const documentText = createEditorDocumentText(content);
-        sourceMaps.current.delete(path);
-        buffers.current.set(path, documentText);
-        liveDocs.current.set(path, documentText);
-        pipeline.initPath(path, content);
-        commitSessionState(
-          setCurrentSessionDocument(stateRef.current, {
+        runtime.sourceMaps.delete(path);
+        runtime.buffers.set(path, documentText);
+        runtime.liveDocs.set(path, documentText);
+        runtime.pipeline.initPath(path, content);
+        runtime.commit(
+          setCurrentSessionDocument(runtime.getState(), {
             path,
             name: targetName,
             dirty: false,
@@ -303,10 +251,10 @@ export function createEditorSessionService({
   };
 
   const openFileWithContent = async (name: string, content: string) => {
-    const requestId = ++openFileRequestRef.current;
+    const requestId = runtime.nextOpenFileRequest();
     let path = name;
     let suffix = 1;
-    while (hasSessionPath(stateRef.current, path)) {
+    while (runtime.hasPath(path)) {
       path = `${name} (${suffix++})`;
     }
 
@@ -314,18 +262,18 @@ export function createEditorSessionService({
       name: basename(path),
       path,
     });
-    if (!canLeave || requestId !== openFileRequestRef.current) return;
+    if (!canLeave || !runtime.isLatestOpenFileRequest(requestId)) return;
 
-    const previousPath = stateRef.current.currentDocument?.path ?? null;
+    const previousPath = runtime.getCurrentPath();
     if (previousPath && previousPath !== path) {
       clearPathBuffers(previousPath);
     }
 
-    sourceMaps.current.delete(path);
-    buffers.current.set(path, emptyEditorDocument);
-    liveDocs.current.set(path, createEditorDocumentText(content));
-    commitSessionState(
-      setCurrentSessionDocument(stateRef.current, {
+    runtime.sourceMaps.delete(path);
+    runtime.buffers.set(path, emptyEditorDocument);
+    runtime.liveDocs.set(path, createEditorDocumentText(content));
+    runtime.commit(
+      setCurrentSessionDocument(runtime.getState(), {
         path,
         name: basename(path),
         dirty: true,
@@ -335,7 +283,7 @@ export function createEditorSessionService({
   };
 
   const reloadFile = async (path: string) => {
-    if (!hasSessionPath(stateRef.current, path)) return;
+    if (!runtime.hasPath(path)) return;
 
     try {
       const content = await fs.readFile(path);
@@ -347,7 +295,7 @@ export function createEditorSessionService({
   };
 
   const syncExternalChange = async (path: string): Promise<ExternalDocumentSyncResult> => {
-    if (!hasSessionPath(stateRef.current, path)) {
+    if (!runtime.hasPath(path)) {
       return "ignore";
     }
 
@@ -355,21 +303,21 @@ export function createEditorSessionService({
     try {
       content = await fs.readFile(path);
     } catch {
-      const currentDocument = getCurrentSessionDocument(stateRef.current);
+      const currentDocument = runtime.getCurrentDocument();
       return currentDocument?.path === path && currentDocument.dirty
         ? "notify"
         : "ignore";
     }
 
-    if (!hasSessionPath(stateRef.current, path)) {
+    if (!runtime.hasPath(path)) {
       return "ignore";
     }
 
-    if (pipeline.isSelfChange(path, content)) {
+    if (runtime.pipeline.isSelfChange(path, content)) {
       return "ignore";
     }
 
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    const currentDocument = runtime.getCurrentDocument();
     if (currentDocument?.path !== path) {
       return "ignore";
     }
@@ -409,7 +357,7 @@ export function createEditorSessionService({
   const closeCurrentFile = async (
     options?: { discard?: boolean },
   ): Promise<boolean> => {
-    const currentDocument = getCurrentSessionDocument(stateRef.current);
+    const currentDocument = runtime.getCurrentDocument();
     if (!currentDocument) return true;
 
     if (!options?.discard) {
@@ -418,8 +366,8 @@ export function createEditorSessionService({
     }
 
     clearPathBuffers(currentDocument.path);
-    commitSessionState(
-      clearSessionDocument(stateRef.current, currentDocument.path),
+    runtime.commit(
+      clearSessionDocument(runtime.getState(), currentDocument.path),
       { editorDoc: "" },
     );
     return true;

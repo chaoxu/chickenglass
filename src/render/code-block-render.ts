@@ -47,6 +47,7 @@ import {
   focusEffect,
   focusTracker,
 } from "./focus-state";
+import { mergeRanges } from "./viewport-diff";
 import { pushWidgetDecoration } from "./decoration-core";
 import {
   RenderWidget,
@@ -394,28 +395,6 @@ function mapCodeBlocks(
   return changed ? mapped : blocks;
 }
 
-function mergeDirtyRanges(ranges: readonly DirtyRange[]): readonly DirtyRange[] {
-  if (ranges.length <= 1) return ranges;
-
-  const sorted = [...ranges].sort((left, right) => left.from - right.from);
-  const merged: DirtyRange[] = [sorted[0]];
-
-  for (let index = 1; index < sorted.length; index += 1) {
-    const current = sorted[index];
-    const previous = merged[merged.length - 1];
-    if (current.from <= previous.to + 1) {
-      merged[merged.length - 1] = {
-        from: previous.from,
-        to: Math.max(previous.to, current.to),
-      };
-      continue;
-    }
-    merged.push(current);
-  }
-
-  return merged;
-}
-
 function touchesCodeBlockFence(
   from: number,
   to: number,
@@ -455,7 +434,7 @@ function computeCodeBlockStructureDirtyRanges(
     }
   });
 
-  return mergeDirtyRanges(dirtyRanges);
+  return mergeRanges(dirtyRanges, 1);
 }
 
 function codeBlockOverlapsDirtyRanges(

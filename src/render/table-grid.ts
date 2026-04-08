@@ -49,7 +49,7 @@ import {
 import { createSimpleTextWidget } from "./render-core";
 import { ContextMenu } from "../lib/context-menu";
 import type { ContextMenuItem } from "../lib/context-menu";
-import { programmaticDocumentChangeAnnotation } from "../editor/programmatic-document-change";
+import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 import {
   addRow,
   addColumn,
@@ -61,7 +61,11 @@ import {
   formatTable,
   type ParsedTable,
 } from "./table-utils";
-import { mergeRanges, type VisibleRange } from "./viewport-diff";
+import {
+  mergeRanges,
+  normalizeDirtyRange,
+  type VisibleRange,
+} from "./viewport-diff";
 
 // ---------------------------------------------------------------------------
 // Bypass annotation — table operations dispatch with this so the
@@ -289,23 +293,6 @@ function buildTableGridArtifacts(
     cellDecorations: cellBuilder.finish(),
     atomicRanges: atomicBuilder.finish(),
   };
-}
-
-function normalizeDirtyRange(
-  from: number,
-  to: number,
-  docLength: number,
-): VisibleRange {
-  const start = Math.max(0, Math.min(from, docLength));
-  const end = Math.max(0, Math.min(to, docLength));
-  if (start !== end) {
-    return start < end ? { from: start, to: end } : { from: end, to: start };
-  }
-  if (docLength === 0) {
-    return { from: 0, to: 0 };
-  }
-  const windowStart = Math.max(0, Math.min(start, docLength - 1));
-  return { from: windowStart, to: Math.min(docLength, windowStart + 1) };
 }
 
 function mapTableToDirtyRange(

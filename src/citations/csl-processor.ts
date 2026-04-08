@@ -383,7 +383,12 @@ export class CslProcessor {
     try {
       const { plugins } = await loadCitationJs();
       if (styleGeneration !== this.styleGeneration) return;
-      const cslConfig = plugins.config.get("@csl");
+      const cslConfig =
+        plugins.config.get("@csl")
+        ?? plugins.config.get("csl");
+      if (!cslConfig?.templates?.add || !cslConfig.engine) {
+        throw new Error("citation-js CSL config unavailable");
+      }
       // citation-js caches engines by style name + locale and mutates the
       // shared engine's retrieveItem callback on reuse. Use a processor- and
       // style-generation-specific key so processors cannot overwrite each

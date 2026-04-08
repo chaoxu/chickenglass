@@ -37,27 +37,32 @@ export type MediaPreviewResult =
  * Returns `null` for non-local sources (absolute URLs, data URIs, etc.)
  * — callers render those directly with the raw src.
  */
-export function resolveLocalMediaPreview(
+export function resolveLocalMediaPath(
   view: EditorView,
   src: string,
-): MediaPreviewResult | null {
-  if (isPdfTarget(src)) return resolvePdfPreview(view, src);
-  if (isRelativeFilePath(src)) return resolveImagePreview(view, src);
-  return null;
-}
-
-// ── Internal ────────────────────────────────────────────────────────────────
-
-function resolveDocumentRelativePath(view: EditorView, src: string): string {
+): string | null {
+  if (!isPdfTarget(src) && !isRelativeFilePath(src)) return null;
   const docPath = view.state.facet(documentPathFacet);
   return resolveProjectPathFromDocument(docPath, src);
 }
 
+export function resolveLocalMediaPreview(
+  view: EditorView,
+  src: string,
+): MediaPreviewResult | null {
+  const resolvedPath = resolveLocalMediaPath(view, src);
+  if (!resolvedPath) return null;
+  if (isPdfTarget(src)) return resolvePdfPreview(view, src, resolvedPath);
+  return resolveImagePreview(view, src, resolvedPath);
+}
+
+// ── Internal ────────────────────────────────────────────────────────────────
+
 function resolvePdfPreview(
   view: EditorView,
   src: string,
+  resolvedPath: string,
 ): MediaPreviewResult {
-  const resolvedPath = resolveDocumentRelativePath(view, src);
   const entry = view.state.field(pdfPreviewField).get(resolvedPath);
 
   // #473: "ready" with no canvas means the canvas was evicted from the
@@ -82,8 +87,8 @@ function resolvePdfPreview(
 function resolveImagePreview(
   view: EditorView,
   src: string,
+  resolvedPath: string,
 ): MediaPreviewResult {
-  const resolvedPath = resolveDocumentRelativePath(view, src);
   const entry = view.state.field(imageUrlField).get(resolvedPath);
   const dataUrl =
     entry?.status === "ready" ? getImageDataUrl(resolvedPath) : undefined;
