@@ -54,9 +54,10 @@ const stein: CslJsonItem = {
 
 const store = makeBibStore([karger, stein]);
 
-function createView(doc: string, cursorPos?: number): EditorView {
+function createView(doc: string, cursorPos?: number, focus = true): EditorView {
   const view = createTestView(doc, {
     cursorPos,
+    focus,
     extensions: [
       markdown({
         extensions: [fencedDiv, mathExtension, equationLabelExtension],
@@ -73,9 +74,10 @@ function createView(doc: string, cursorPos?: number): EditorView {
   return view;
 }
 
-function createPluginView(doc: string, cursorPos?: number): EditorView {
+function createPluginView(doc: string, cursorPos?: number, focus = true): EditorView {
   const view = createTestView(doc, {
     cursorPos,
+    focus,
     extensions: [
       markdown({
         extensions: [fencedDiv, mathExtension, equationLabelExtension],
@@ -156,6 +158,47 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@karger2000]",
     );
+    expect(ref).toBeDefined();
+    expect(widgetClass(ref!)).toBe("CitationWidget");
+  });
+
+  it("reveals reference source when the focused cursor touches it", () => {
+    const doc = "See [@karger2000] for details.";
+    const refStart = doc.indexOf("[@karger2000]");
+    view = createView(doc, refStart + 3);
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find((r) => r.from === refStart);
+    expect(ref).toBeDefined();
+    expect(ref!.value.spec.widget).toBeUndefined();
+    expect(ref!.value.spec.class).toBe(CSS.referenceSource);
+  });
+
+  it("reveals reference source when the focused selection touches it", () => {
+    const doc = "See [@karger2000] for details.";
+    const refStart = doc.indexOf("[@karger2000]");
+    view = createView(doc, 0);
+    view.dispatch({
+      selection: {
+        anchor: refStart + 2,
+        head: refStart + 8,
+      },
+    });
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find((r) => r.from === refStart);
+    expect(ref).toBeDefined();
+    expect(ref!.value.spec.widget).toBeUndefined();
+    expect(ref!.value.spec.class).toBe(CSS.referenceSource);
+  });
+
+  it("keeps rendered references when unfocused even if the cursor is inside", () => {
+    const doc = "See [@karger2000] for details.";
+    const refStart = doc.indexOf("[@karger2000]");
+    view = createView(doc, refStart + 3, false);
+    const ranges = collectReferenceRanges(view, store);
+
+    const ref = ranges.find((r) => r.from === refStart);
     expect(ref).toBeDefined();
     expect(widgetClass(ref!)).toBe("CitationWidget");
   });
@@ -1085,5 +1128,33 @@ describe("planReferenceRendering", () => {
   it("skips narrative refs that resolve to neither crossref nor citation", () => {
     const items = plan("As @unknown-thing goes.");
     expect(items).toHaveLength(0);
+  });
+});
+
+describe("reference render plugin focus-driven reveal", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
+  it("reveals source when the cursor enters a reference and rerenders when it leaves", () => {
+    const doc = "See [@karger2000] for details.";
+    const refStart = doc.indexOf("[@karger2000]");
+    view = createPluginView(doc, 0);
+
+    expect(view.contentDOM.querySelector(`.${CSS.citation}`)).not.toBeNull();
+    expect(view.contentDOM.querySelector(`.${CSS.referenceSource}`)).toBeNull();
+
+    view.dispatch({ selection: { anchor: refStart + 3 } });
+
+    expect(view.contentDOM.querySelector(`.${CSS.citation}`)).toBeNull();
+    expect(view.contentDOM.querySelector(`.${CSS.referenceSource}`)).not.toBeNull();
+
+    view.dispatch({ selection: { anchor: 0 } });
+
+    expect(view.contentDOM.querySelector(`.${CSS.referenceSource}`)).toBeNull();
+    expect(view.contentDOM.querySelector(`.${CSS.citation}`)).not.toBeNull();
   });
 });

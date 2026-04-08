@@ -87,7 +87,7 @@ function createMathRenderState(doc: string, cursorPos = 0): EditorState {
 }
 
 function createMathRenderView(doc: string, cursorPos = 0): EditorView {
-  return createTestView(doc, {
+  const view = createTestView(doc, {
     cursorPos,
     extensions: [
       markdown({ extensions: [mathExtension, equationLabelExtension] }),
@@ -97,6 +97,8 @@ function createMathRenderView(doc: string, cursorPos = 0): EditorView {
       mathRenderPlugin,
     ],
   });
+  view.dispatch({ effects: focusEffect.of(true) });
+  return view;
 }
 
 function activateMathSourceView(view: EditorView, pos: number): void {
@@ -517,6 +519,34 @@ describe("collectMathRanges", () => {
     expect(ranges[0].to).toBe(12);
   });
 
+  it("reveals inline source when the focused cursor touches inline math", () => {
+    view = createMathView("text $x^2$ more", 7);
+    const ranges = collectMathRanges(view);
+    expect(countWidgets(ranges)).toBe(0);
+    expect(countMarksWithClass(ranges, CSS.sourceDelimiter)).toBe(2);
+    expect(countMarksWithClass(ranges, CSS.mathSource)).toBe(1);
+  });
+
+  it("reveals inline source when the focused selection touches inline math", () => {
+    view = createMathView("text $x^2$ more", 0);
+    view.dispatch({
+      selection: {
+        anchor: 6,
+        head: 9,
+      },
+    });
+    const ranges = collectMathRanges(view);
+    expect(countWidgets(ranges)).toBe(0);
+    expect(countMarksWithClass(ranges, CSS.sourceDelimiter)).toBe(2);
+    expect(countMarksWithClass(ranges, CSS.mathSource)).toBe(1);
+  });
+
+  it("keeps inline math rendered when unfocused even if the cursor is inside", () => {
+    view = createMathViewWithLabels("text $x^2$ more", 7);
+    const ranges = collectMathRanges(view);
+    expect(countWidgets(ranges)).toBe(1);
+  });
+
   it("reveals inline source when math structure edit is active", () => {
     view = createMathView("text $x^2$ more", 0);
     activateMathSourceView(view, 7);
@@ -747,7 +777,7 @@ describe("math decoration invalidation", () => {
     expect(after).toBe(before);
   });
 
-  it("does not rebuild on focus gain alone when no math structure edit is active", () => {
+  it("rebuilds on focus gain when the cursor touches inline math", () => {
     const doc = "aa $x$ bb";
     const insideMath = doc.indexOf("$x$") + 1;
     const state = createMathRenderState(doc, insideMath);
@@ -755,7 +785,7 @@ describe("math decoration invalidation", () => {
 
     const after = state.update({ effects: focusEffect.of(true) }).state.field(mathDecorationField);
 
-    expect(after).toBe(before);
+    expect(after).not.toBe(before);
   });
 
   it("maps decorations instead of rebuilding when prose before math is edited", () => {
@@ -1077,6 +1107,34 @@ describe("explicit math source edit", () => {
     activateMathSourceView(view, 9);
     const ranges = collectMathRanges(view);
     expect(countWidgets(ranges)).toBe(2);
+  });
+});
+
+describe("focused inline math touch reveal", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+    clearKatexCache();
+  });
+
+  it("reveals source when the cursor enters inline math and rerenders when it leaves", () => {
+    const doc = "text $x^2$ more";
+    view = createMathRenderView(doc, 0);
+
+    expect(view.contentDOM.querySelector(`.${CSS.mathInline}`)).not.toBeNull();
+    expect(view.contentDOM.querySelector(`.${CSS.mathSource}`)).toBeNull();
+
+    view.dispatch({ selection: { anchor: 7 } });
+
+    expect(view.contentDOM.querySelector(`.${CSS.mathInline}`)).toBeNull();
+    expect(view.contentDOM.querySelector(`.${CSS.mathSource}`)).not.toBeNull();
+
+    view.dispatch({ selection: { anchor: 0 } });
+
+    expect(view.contentDOM.querySelector(`.${CSS.mathSource}`)).toBeNull();
+    expect(view.contentDOM.querySelector(`.${CSS.mathInline}`)).not.toBeNull();
   });
 });
 
