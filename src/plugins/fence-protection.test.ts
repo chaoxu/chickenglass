@@ -324,6 +324,24 @@ describe("openingFenceDeletionCleanup", () => {
   });
 });
 
+describe("fenceProtectionExtension pipeline", () => {
+  it("blocks the whole transaction when any change is illegal, even if another would trigger cleanup", () => {
+    const doc = `::: {.theorem}\nfirst\n:::\n\n::: {.theorem}\nsecond\n:::`;
+    const state = createProtectedState(doc);
+    const firstOpenLine = state.doc.line(1);
+    const secondClosingLine = state.doc.line(7);
+
+    const tr = state.update({
+      changes: [
+        { from: firstOpenLine.from, to: firstOpenLine.to + 1, insert: "" },
+        { from: secondClosingLine.from, to: secondClosingLine.to, insert: "" },
+      ],
+    });
+
+    expect(tr.state.doc.toString()).toBe(doc);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Code block protection (#441) — unified with fenced div protection
 // ---------------------------------------------------------------------------

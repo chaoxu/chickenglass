@@ -3,8 +3,11 @@ import { markdown } from "@codemirror/lang-markdown";
 import type { EditorView } from "@codemirror/view";
 import { markdownExtensions } from "../parser";
 import { fenceProtectionExtension } from "../plugins/fence-protection";
+import { blockCounterField } from "../plugins/block-counter";
 import { createPluginRegistryField } from "../plugins/plugin-registry";
+import { _blockDecorationFieldForTest as blockDecorationField } from "../plugins/plugin-render";
 import { documentSemanticsField } from "../semantics/codemirror-source";
+import { editorFocusField, mathMacrosField } from "../render/render-core";
 import {
   moveDownAcrossNestedClosingFences,
   toggleInlineMarker,
@@ -41,16 +44,24 @@ function makeFencedView(
     makeBlockPlugin({ name: "proof" }),
   ],
 ): EditorView {
-  return createTestView(doc, {
+  const view = createTestView(doc, {
     cursorPos,
     extensions: [
       markdown({ extensions: markdownExtensions }),
       frontmatterField,
       documentSemanticsField,
+      mathMacrosField,
       createPluginRegistryField(plugins),
+      blockCounterField,
+      editorFocusField,
+      blockDecorationField,
       fenceProtectionExtension,
     ],
   });
+  // Mirror the first no-op selection transaction that happens in real use
+  // before cursor-motion commands run, so fence caches settle consistently.
+  view.dispatch({ selection: { anchor: view.state.selection.main.head } });
+  return view;
 }
 
 describe("edge cases", () => {

@@ -18,15 +18,10 @@
  * - `getOpeningFenceColonRanges` — opening fence colon-prefix ranges (divs only)
  * - `getOpeningFenceBacktickRanges` — opening fence backtick-prefix ranges (code blocks only)
  * - `getOpeningMathDelimiterRanges` — opening math delimiter ranges (display math only)
- * - `openingFenceDeletionCleanup` — auto-remove closing fence on opening delete
- * - `closingFenceProtection` — block edits targeting only the closing fence
- * - `openingFenceColonProtection` — block edits targeting opening fence colons
- * - `openingFenceBacktickProtection` — block edits targeting opening fence backticks
- * - `openingFenceMathProtection` — block edits targeting opening math delimiters
+ * - `fenceProtectionExtension` — unified CM6 extension with one transaction pipeline
+ * - compatibility filter exports used by focused tests and narrow consumers
  * - `pairedMathEntry` — auto-insert closing delimiter when typing $$ or \[
- * - `emptyMathBlockBackspaceCleanup` — remove entire block when backspacing empty paired math
  * - `closingFenceAtomicRanges` — cursor skips over hidden closing fences
- * - `fenceProtectionExtension` — combined CM6 extension
  */
 
 import {
@@ -49,7 +44,21 @@ import {
   type FencedBlockInfo,
   type FencedDivInfo,
 } from "../fenced-block/model";
-import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
+import {
+  type FenceChangeSpec,
+  type FenceRange,
+  collectFenceTransactionChanges,
+  planEmptyMathBlockBackspaceCleanup,
+  planFenceProtectionDecision,
+  planOpeningFenceDeletionCleanup,
+  shouldBlockClosingFenceChanges,
+  shouldBlockOpeningFenceChanges,
+} from "./fence-protection-pipeline";
+import {
+  type PluginRegistryState,
+  pluginRegistryField,
+  getPluginOrFallback,
+} from "./plugin-registry";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
@@ -64,15 +73,6 @@ import { countColons } from "../parser";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 
-// ---------------------------------------------------------------------------
-// Shared types and helpers
-// ---------------------------------------------------------------------------
-
-export interface FenceRange {
-  readonly from: number;
-  readonly to: number;
-}
-
 interface FenceProtectionCache {
   readonly allFencedBlocks: readonly FencedBlockInfo[];
   readonly protectedDivs: readonly FencedDivInfo[];
@@ -81,6 +81,13 @@ interface FenceProtectionCache {
   readonly openingFenceBacktickRanges: readonly FenceRange[];
   readonly openingMathDelimiterRanges: readonly FenceRange[];
   readonly closingFenceAtomicRanges: RangeSet<Decoration>;
+  readonly sourceState: FenceProtectionCacheSourceState;
+}
+
+interface FenceProtectionCacheSourceState {
+  readonly registry: PluginRegistryState | null;
+  readonly fencedDivsRevision: number | null;
+  readonly codeBlockStructureRevision: number | null;
 }
 
 interface FenceProtectionInputs {
@@ -228,6 +235,8 @@ function buildFenceProtectionCache(
   state: EditorState,
   inputs = collectFenceProtectionInputs(state),
 ): FenceProtectionCache {
+  const semantics = state.field(documentSemanticsField, false);
+  const codeBlockStructure = state.field(codeBlockStructureField, false);
   const closingFenceRanges = buildClosingFenceRanges(
     state,
     inputs.protectedDivs,
@@ -243,6 +252,15 @@ function buildFenceProtectionCache(
     openingFenceBacktickRanges: buildOpeningFenceBacktickRanges(inputs.codeBlocks),
     openingMathDelimiterRanges: buildOpeningMathDelimiterRanges(inputs.displayMathBlocks),
     closingFenceAtomicRanges: buildClosingFenceAtomicRanges(state, closingFenceRanges),
+    sourceState: {
+      registry: state.field(pluginRegistryField, false) ?? null,
+      fencedDivsRevision: semantics
+        ? getDocumentAnalysisSliceRevision(semantics, "fencedDivs")
+        : null,
+      codeBlockStructureRevision: codeBlockStructure
+        ? getCodeBlockStructureRevision(state)
+        : null,
+    },
   };
 }
 
@@ -409,6 +427,7 @@ function mapFenceProtectionCache(
     openingFenceBacktickRanges,
     openingMathDelimiterRanges,
     closingFenceAtomicRanges,
+    sourceState: value.sourceState,
   };
 }
 
@@ -431,8 +450,32 @@ const fenceProtectionCacheField = StateField.define<FenceProtectionCache>({
   },
 });
 
+function isFenceProtectionCacheCurrent(
+  state: EditorState,
+  value: FenceProtectionCache,
+): boolean {
+  const semantics = state.field(documentSemanticsField, false);
+  const currentFencedDivsRevision = semantics
+    ? getDocumentAnalysisSliceRevision(semantics, "fencedDivs")
+    : null;
+  if (currentFencedDivsRevision !== value.sourceState.fencedDivsRevision) return false;
+
+  const currentRegistry = state.field(pluginRegistryField, false) ?? null;
+  if (currentRegistry !== value.sourceState.registry) return false;
+
+  const codeBlockStructure = state.field(codeBlockStructureField, false);
+  const currentCodeBlockStructureRevision = codeBlockStructure
+    ? getCodeBlockStructureRevision(state)
+    : null;
+  return currentCodeBlockStructureRevision === value.sourceState.codeBlockStructureRevision;
+}
+
 function getFenceProtectionCache(state: EditorState): FenceProtectionCache {
-  return state.field(fenceProtectionCacheField, false) ?? buildFenceProtectionCache(state);
+  const cached = state.field(fenceProtectionCacheField, false);
+  if (!cached) return buildFenceProtectionCache(state);
+  return isFenceProtectionCacheCurrent(state, cached)
+    ? cached
+    : buildFenceProtectionCache(state);
 }
 
 /**
@@ -451,6 +494,21 @@ function collectAllFencedBlocks(state: EditorState): readonly FencedBlockInfo[] 
 
 /** Annotation to bypass fence protection filters (used by block-type picker). */
 export const fenceOperationAnnotation = Annotation.define<true>();
+
+function shouldBypassFenceProtection(tr: Transaction): boolean {
+  return !tr.docChanged
+    || Boolean(tr.annotation(fenceOperationAnnotation))
+    || Boolean(tr.annotation(programmaticDocumentChangeAnnotation));
+}
+
+function annotateFenceRewrite(
+  changes: FenceChangeSpec | readonly FenceChangeSpec[],
+) {
+  return {
+    changes,
+    annotations: fenceOperationAnnotation.of(true),
+  };
+}
 
 /**
  * Return fenced divs that should have their fences protected.
@@ -484,112 +542,20 @@ export function getOpeningFenceBacktickRanges(state: EditorState): readonly Fenc
 
 /**
  * Transaction filter that auto-removes the closing fence when an opening fence
- * line is fully deleted. Without this, deleting a block's header leaves an
- * orphaned closing fence (`::: ` or ``` ``` ```) in the document.
- *
- * Uses collectAllFencedBlocks (not getProtectedDivs) because cleanup
- * should apply to ALL fenced blocks, including unregistered/custom types.
- *
- * The returned spec carries fenceOperationAnnotation so both protection
- * filters are bypassed for the combined structural deletion.
+ * line is fully deleted. Kept as a compatibility export for focused tests;
+ * `fenceProtectionExtension` runs the unified pipeline instead of stacking
+ * this filter with other independent protections.
  */
 export const openingFenceDeletionCleanup = EditorState.transactionFilter.of((tr) => {
-  if (!tr.docChanged) return tr;
-  if (tr.annotation(fenceOperationAnnotation)) return tr;
-  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
+  if (shouldBypassFenceProtection(tr)) return tr;
 
-  const state = tr.startState;
-  const blocks = collectAllFencedBlocks(state);
-  if (blocks.length === 0) return tr;
-
-  const closingFencesToRemove: { from: number; to: number }[] = [];
-
-  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-    if (inserted.length > 1) return;
-
-    for (const block of blocks) {
-      if (block.singleLine || block.closeFenceFrom < 0) continue;
-
-      const openLine = state.doc.lineAt(block.openFenceFrom);
-
-      // Full opening line deletion
-      const fullLineDeletion = fromA <= openLine.from && toA >= openLine.to;
-
-      // Partial deletion that removes the structural prefix (colons/backticks).
-      // If the prefix is gone the line no longer parses as a fence, so the
-      // closing delimiter must be cleaned up (#766).
-      // Key off the actual prefix position, not the line start — fenced
-      // blocks can be indented inside list items so openFenceFrom may be
-      // past openLine.from, and code blocks set openFenceFrom to the line
-      // start so the text may contain leading whitespace.
-      let prefixBroken = false;
-      if (!fullLineDeletion) {
-        const rawText = state.sliceDoc(block.openFenceFrom, block.openFenceTo);
-        // Skip leading whitespace — code blocks include indentation in
-        // openFenceFrom..openFenceTo; fenced divs report openFenceFrom at
-        // the first colon so indent is 0 for them.
-        const indent = rawText.length - rawText.trimStart().length;
-        const prefixStart = block.openFenceFrom + indent;
-        const text = indent > 0 ? rawText.substring(indent) : rawText;
-        const firstChar = text.charAt(0);
-        let prefixEnd = -1;
-        if (firstChar === ":") {
-          const colonLen = countColons(text, 0);
-          if (colonLen >= 3) prefixEnd = prefixStart + colonLen;
-        } else if (firstChar === "`") {
-          const match = /^`{3,}/.exec(text);
-          if (match) prefixEnd = prefixStart + match[0].length;
-        } else if (firstChar === "$" && text.startsWith("$$")) {
-          prefixEnd = prefixStart + 2;
-        } else if (firstChar === "\\" && text.startsWith("\\[")) {
-          prefixEnd = prefixStart + 2;
-        }
-        if (prefixEnd > 0 && fromA <= prefixStart && toA >= prefixEnd) {
-          prefixBroken = true;
-        }
-      }
-
-      if (fullLineDeletion || prefixBroken) {
-        if (fromA <= block.closeFenceFrom && toA >= block.closeFenceTo) continue;
-
-        // Include the preceding newline so the line is fully removed
-        const closeLine = state.doc.lineAt(block.closeFenceFrom);
-        const removeFrom = closeLine.from > 0 ? closeLine.from - 1 : closeLine.from;
-        const removeTo = closeLine.to < state.doc.length ? closeLine.to + 1 : closeLine.to;
-        closingFencesToRemove.push({ from: removeFrom, to: removeTo });
-      }
-    }
-  });
-
-  if (closingFencesToRemove.length === 0) return tr;
-
-  const changes: { from: number; to: number; insert: string }[] = [];
-  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-    changes.push({ from: fromA, to: toA, insert: inserted.toString() });
-  });
-  for (const c of closingFencesToRemove) {
-    changes.push({ from: c.from, to: c.to, insert: "" });
-  }
-  // CM6 requires changes sorted by position and non-overlapping.
-  // Nested block deletion can produce overlapping closing-fence ranges
-  // (e.g. a parent and child both schedule removal of adjacent/overlapping
-  // fence lines). Merge them so CM6 doesn't crash on overlapping changes.
-  changes.sort((a, b) => a.from - b.from || a.to - b.to);
-  const merged: typeof changes = [];
-  for (const c of changes) {
-    const prev = merged.length > 0 ? merged[merged.length - 1] : null;
-    if (prev && prev.insert === "" && c.insert === "" && c.from <= prev.to) {
-      // Overlapping or adjacent deletion ranges — merge into one
-      prev.to = Math.max(prev.to, c.to);
-    } else {
-      merged.push({ ...c });
-    }
-  }
-
-  return {
-    changes: merged,
-    annotations: fenceOperationAnnotation.of(true),
-  };
+  const changes = collectFenceTransactionChanges(tr);
+  const cleanup = planOpeningFenceDeletionCleanup(
+    tr.startState,
+    changes,
+    collectAllFencedBlocks(tr.startState),
+  );
+  return cleanup ? annotateFenceRewrite(cleanup) : tr;
 });
 
 /**
@@ -600,34 +566,13 @@ export const openingFenceDeletionCleanup = EditorState.transactionFilter.of((tr)
  * the entire fenced block) is still allowed so that Cmd+A + Delete works.
  */
 export const closingFenceProtection = EditorState.transactionFilter.of((tr) => {
-  if (!tr.docChanged) return tr;
-  // Bypass for programmatic fence operations (block-type picker, etc.)
-  if (tr.annotation(fenceOperationAnnotation)) return tr;
-  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
+  if (shouldBypassFenceProtection(tr)) return tr;
 
-  const fenceRanges = getClosingFenceRanges(tr.startState);
-  if (fenceRanges.length === 0) return tr;
-
-  const docLen = tr.startState.doc.length;
-  let blocked = false;
-  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-    if (blocked) return;
-    for (const fence of fenceRanges) {
-      if (fromA <= fence.to && toA >= fence.from) {
-        // Account for document boundaries: start-of-doc counts as "before",
-        // end-of-doc counts as "after".
-        const extendsBeforeFence = fromA < fence.from - 1 || fromA === 0;
-        const extendsAfterFence = toA >= fence.to + 1 || toA >= docLen;
-        if (extendsBeforeFence && extendsAfterFence) continue;
-        // Allow if it's a replacement that includes the fence (structural edit)
-        if (inserted.length > 0 && extendsBeforeFence) continue;
-        // Block: the edit targets only the closing fence
-        blocked = true;
-        return;
-      }
-    }
-  });
-
+  const blocked = shouldBlockClosingFenceChanges(
+    collectFenceTransactionChanges(tr),
+    getClosingFenceRanges(tr.startState),
+    tr.startState.doc.length,
+  );
   return blocked ? [] : tr;
 });
 
@@ -643,31 +588,13 @@ export const closingFenceProtection = EditorState.transactionFilter.of((tr) => {
  * have no colon prefix.
  */
 export const openingFenceColonProtection = EditorState.transactionFilter.of((tr) => {
-  if (!tr.docChanged) return tr;
-  if (tr.annotation(fenceOperationAnnotation)) return tr;
-  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
+  if (shouldBypassFenceProtection(tr)) return tr;
 
-  const colonRanges = getOpeningFenceColonRanges(tr.startState);
-  if (colonRanges.length === 0) return tr;
-
-  let blocked = false;
-  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-    if (blocked) return;
-    for (const colon of colonRanges) {
-      if (fromA <= colon.to && toA >= colon.from) {
-        if (fromA === toA) continue; // pure insertion
-        if (fromA >= colon.to) continue; // editing attrs/title after colons
-        // Whole-block deletion: spans past colons on both sides
-        const atOrBeforeStart = fromA <= colon.from;
-        const pastColonEnd = toA > colon.to;
-        if (atOrBeforeStart && pastColonEnd) continue;
-        if (inserted.length > 0 && fromA < colon.from) continue; // structural replacement
-        blocked = true;
-        return;
-      }
-    }
-  });
-
+  const blocked = shouldBlockOpeningFenceChanges(
+    collectFenceTransactionChanges(tr),
+    getOpeningFenceColonRanges(tr.startState),
+    "colon",
+  );
   return blocked ? [] : tr;
 });
 
@@ -679,30 +606,13 @@ export const openingFenceColonProtection = EditorState.transactionFilter.of((tr)
  * whole-block deletion remain allowed.
  */
 export const openingFenceBacktickProtection = EditorState.transactionFilter.of((tr) => {
-  if (!tr.docChanged) return tr;
-  if (tr.annotation(fenceOperationAnnotation)) return tr;
-  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
+  if (shouldBypassFenceProtection(tr)) return tr;
 
-  const backtickRanges = getOpeningFenceBacktickRanges(tr.startState);
-  if (backtickRanges.length === 0) return tr;
-
-  let blocked = false;
-  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-    if (blocked) return;
-    for (const backticks of backtickRanges) {
-      if (fromA <= backticks.to && toA >= backticks.from) {
-        if (fromA === toA) continue; // pure insertion
-        if (fromA >= backticks.to) continue; // editing language/info string after backticks
-        const atOrBeforeStart = fromA <= backticks.from;
-        const pastBacktickEnd = toA > backticks.to;
-        if (atOrBeforeStart && pastBacktickEnd) continue;
-        if (inserted.length > 0 && fromA < backticks.from) continue; // structural replacement
-        blocked = true;
-        return;
-      }
-    }
-  });
-
+  const blocked = shouldBlockOpeningFenceChanges(
+    collectFenceTransactionChanges(tr),
+    getOpeningFenceBacktickRanges(tr.startState),
+    "backtick",
+  );
   return blocked ? [] : tr;
 });
 
@@ -719,35 +629,13 @@ export function getOpeningMathDelimiterRanges(state: EditorState): readonly Fenc
  * allowed.
  */
 export const openingFenceMathProtection = EditorState.transactionFilter.of((tr) => {
-  if (!tr.docChanged) return tr;
-  if (tr.annotation(fenceOperationAnnotation)) return tr;
-  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
+  if (shouldBypassFenceProtection(tr)) return tr;
 
-  const delimRanges = getOpeningMathDelimiterRanges(tr.startState);
-  if (delimRanges.length === 0) return tr;
-
-  let blocked = false;
-  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-    if (blocked) return;
-    for (const delim of delimRanges) {
-      if (fromA <= delim.to && toA >= delim.from) {
-        if (fromA === toA) continue; // pure insertion
-        if (fromA >= delim.to) continue; // editing after delimiter
-        const atOrBeforeStart = fromA <= delim.from;
-        // Unlike colon/backtick protection (which uses strict >), math
-        // delimiters use >= because the delimiter IS the entire opening
-        // line content — there are no attrs/title after it. Covering the
-        // full delimiter is an intentional deletion that the cleanup
-        // filter should handle.
-        const coversFullDelim = toA >= delim.to;
-        if (atOrBeforeStart && coversFullDelim) continue;
-        if (inserted.length > 0 && fromA < delim.from) continue; // structural replacement
-        blocked = true;
-        return;
-      }
-    }
-  });
-
+  const blocked = shouldBlockOpeningFenceChanges(
+    collectFenceTransactionChanges(tr),
+    getOpeningMathDelimiterRanges(tr.startState),
+    "math",
+  );
   return blocked ? [] : tr;
 });
 
@@ -848,82 +736,51 @@ export const pairedMathEntry = EditorView.inputHandler.of((view, from, to, text)
  * Works for both `$$` and `\[`/`\]` delimiter styles.
  */
 export const emptyMathBlockBackspaceCleanup = EditorState.transactionFilter.of((tr) => {
-  if (!tr.docChanged) return tr;
-  if (tr.annotation(fenceOperationAnnotation)) return tr;
-  if (tr.annotation(programmaticDocumentChangeAnnotation)) return tr;
+  if (shouldBypassFenceProtection(tr)) return tr;
+
+  const cleanup = planEmptyMathBlockBackspaceCleanup(
+    tr.startState,
+    collectFenceTransactionChanges(tr),
+  );
+  return cleanup ? annotateFenceRewrite(cleanup) : tr;
+});
+
+const fenceProtectionTransactionFilter = EditorState.transactionFilter.of((tr) => {
+  if (shouldBypassFenceProtection(tr)) return tr;
 
   const state = tr.startState;
+  const cache = getFenceProtectionCache(state);
+  const decision = planFenceProtectionDecision(
+    state,
+    collectFenceTransactionChanges(tr),
+    {
+      allFencedBlocks: cache.allFencedBlocks,
+      closingFenceRanges: cache.closingFenceRanges,
+      openingFenceColonRanges: cache.openingFenceColonRanges,
+      openingFenceBacktickRanges: cache.openingFenceBacktickRanges,
+      openingMathDelimiterRanges: cache.openingMathDelimiterRanges,
+    },
+  );
 
-  // Only handle single-change, single-character deletions (backspace/delete)
-  let deleteFrom = -1;
-  let deleteTo = -1;
-  let changeCount = 0;
-  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-    changeCount++;
-    if (changeCount === 1 && inserted.length === 0 && toA - fromA === 1) {
-      deleteFrom = fromA;
-      deleteTo = toA;
-    }
-  });
-  if (changeCount !== 1 || deleteFrom < 0) return tr;
-
-  // The line containing deleteFrom should be a math opening delimiter
-  const openLine = state.doc.lineAt(deleteFrom);
-  const openText = openLine.text.trim();
-
-  let closingDelimiter: string;
-  if (openText === "$$") closingDelimiter = "$$";
-  else if (openText === "\\[") closingDelimiter = "\\]";
-  else return tr;
-
-  // The deletion must cross a line boundary (joining the content line up)
-  if (deleteTo <= openLine.to) return tr;
-
-  // The line being joined should be blank (empty content)
-  const contentLine = state.doc.lineAt(deleteTo);
-  if (contentLine.text.trim() !== "") return tr;
-
-  // All lines from contentLine forward must be blank until the closing delimiter
-  let closingLine: { from: number; to: number } | null = null;
-  for (let n = contentLine.number; n <= state.doc.lines; n++) {
-    const l = state.doc.line(n);
-    const trimmed = l.text.trim();
-    if (trimmed === "") continue;
-    if (trimmed === closingDelimiter) closingLine = { from: l.from, to: l.to };
-    break;
-  }
-  if (!closingLine) return tr;
-
-  // Remove the entire block (opening + blank content + closing)
-  let removeFrom = openLine.from;
-  let removeTo = closingLine.to;
-  if (removeTo < state.doc.length) removeTo += 1; // include trailing newline
-  else if (removeFrom > 0) removeFrom -= 1; // include preceding newline
-
-  return {
-    changes: { from: removeFrom, to: removeTo, insert: "" },
-    annotations: fenceOperationAnnotation.of(true),
-  };
+  if (decision.kind === "block") return [];
+  if (decision.kind === "rewrite") return annotateFenceRewrite(decision.changes);
+  return tr;
 });
 
 /**
  * Combined CM6 extension for all fence protection behavior.
  *
  * Covers fenced divs, fenced code blocks (#441), and display math (#777).
- *
- * CM6 runs transactionFilters in reverse registration order, so cleanup
- * (registered first) executes AFTER protections have already passed/blocked.
+ * The transaction filter now runs one explicit decision pipeline:
+ * block illegal edits first, then apply cleanup rewrites, so behavior no
+ * longer depends on a stack of separately registered filters.
  */
 export const fenceProtectionExtension: Extension = [
   fenceProtectionCacheField,
-  openingFenceDeletionCleanup,
-  emptyMathBlockBackspaceCleanup,
-  closingFenceProtection,
-  openingFenceColonProtection,
-  openingFenceBacktickProtection,
-  openingFenceMathProtection,
+  fenceProtectionTransactionFilter,
   pairedMathEntry,
   closingFenceAtomicRanges,
 ];
 
+export type { FenceRange } from "./fence-protection-pipeline";
 export { fenceProtectionCacheField as _fenceProtectionCacheFieldForTest };
