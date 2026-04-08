@@ -14,454 +14,54 @@
  * are permitted by CM6.
  */
 
-import {
-  type DecorationSet,
-  Decoration,
-  type EditorView,
-} from "@codemirror/view";
-import { EditorState, type Extension, type Range } from "@codemirror/state";
 import type { Transaction } from "@codemirror/state";
-import type { BlockAttrs } from "./plugin-types";
+import { EditorState, type Extension, type Range } from "@codemirror/state";
+import {
+  Decoration,
+  type DecorationSet,
+} from "@codemirror/view";
+import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
+import { CSS } from "../constants/css-classes";
+import { activeFencedOpenFenceStarts } from "../editor/shell-ownership";
+import {
+  hasStructureEditEffect,
+  isFencedStructureEditActive,
+} from "../editor/structure-edit-state";
 import {
   collectFencedDivs,
   type FencedDivInfo,
   getFencedDivRevealFrom,
   getFencedDivRevealTo,
-  getFencedDivStructuralOpenTo,
 } from "../fenced-block/model";
-import { pluginRegistryField, getPluginOrFallback } from "./plugin-registry";
-import { blockCounterField, type BlockCounterState } from "./block-counter";
 import {
-  createSimpleTextWidget,
+  addSingleLineClosingFence,
+  buildFencedBlockDecorations,
+  createFencedBlockDecorationField,
   decorationHidden,
   editorFocusField,
   focusTracker,
   hideMultiLineClosingFence,
-  MacroAwareWidget,
-  RenderWidget,
-  addMarkerReplacement,
-  pushWidgetDecoration,
-  addSingleLineClosingFence,
-  buildFencedBlockDecorations,
-  createFencedBlockDecorationField,
   mathMacrosField,
 } from "../render/render-core";
-import {
-  mutateWithScrollStabilizedMeasure,
-} from "../render/scroll-anchor";
-import { renderDocumentFragmentToDom } from "../document-surfaces";
 import { documentSemanticsField } from "../semantics/codemirror-source";
-import { activeFencedOpenFenceStarts } from "../editor/shell-ownership";
-import {
-  isValidEmbedUrl,
-  extractYoutubeId,
-  youtubeEmbedUrl,
-  gistEmbedUrl,
-} from "./embed-plugin";
-import { CSS } from "../constants/css-classes";
-import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
-import { IFRAME_MAX_ATTEMPTS, IFRAME_POLL_INTERVAL_MS } from "../constants/timing";
+import { type BlockCounterState, blockCounterField } from "./block-counter";
 import { fenceProtectionExtension } from "./fence-protection";
+import { getPluginOrFallback, pluginRegistryField } from "./plugin-registry";
 import {
-  hasStructureEditEffect,
-  isFencedStructureEditActive,
-} from "../editor/structure-edit-state";
+  addAttributeTitleDecoration,
+  addHeaderWidgetDecoration,
+  addInlineTitleParenDecorations,
+  BlockCaptionWidget,
+  BlockHeaderWidget,
+} from "./plugin-render-chrome";
+import { addEmbedWidget } from "./plugin-render-embed";
+import type { BlockAttrs } from "./plugin-types";
 
-
-const openParenWidget = Decoration.widget({
-  widget: createSimpleTextWidget("span", CSS.blockTitleParen, "("),
-  side: -1,
-});
-const closeParenWidget = Decoration.widget({
-  widget: createSimpleTextWidget("span", CSS.blockTitleParen, ")"),
-  side: 1,
-});
-
-/** Widget that renders a block header string with inline math/bold/italic. */
-class BlockHeaderWidget extends MacroAwareWidget {
-  constructor(
-    private readonly header: string,
-    private readonly macros: Record<string, string>,
-  ) {
-    super(macros);
-    this.includeInShellSurface = true;
-    this.useLiveSourceRange = false;
-  }
-
-  createDOM(): HTMLElement {
-    return this.createCachedDOM(() => {
-      const el = document.createElement("span");
-      el.className = CSS.blockHeaderRendered;
-      renderDocumentFragmentToDom(el, {
-        kind: "block-title",
-        text: this.header,
-        macros: this.macros,
-      });
-      return el;
-    });
-  }
-
-  eq(other: BlockHeaderWidget): boolean {
-    return this.header === other.header && this.macrosKey === other.macrosKey;
-  }
-
-  updateDOM(dom: HTMLElement): boolean {
-    dom.textContent = "";
-    renderDocumentFragmentToDom(dom, {
-      kind: "block-title",
-      text: this.header,
-      macros: this.macros,
-    });
-    // Refresh source-range metadata so search-highlight reads correct positions
-    this.setSourceRangeAttrs(dom);
-    return true;
-  }
-
-}
-
-export { BlockHeaderWidget as _BlockHeaderWidgetForTest };
+export { BlockCaptionWidget as _BlockCaptionWidgetForTest, BlockHeaderWidget as _BlockHeaderWidgetForTest } from "./plugin-render-chrome";
+export { embedSandboxPermissions } from "./plugin-render-embed";
 
 function joinClasses(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");
-}
-
-class BlockCaptionWidget extends MacroAwareWidget {
-  constructor(
-    private readonly header: string,
-    private readonly title: string,
-    private readonly macros: Record<string, string>,
-    private readonly active: boolean = false,
-  ) {
-    super(macros);
-    this.includeInShellSurface = true;
-    this.useLiveSourceRange = false;
-  }
-
-  private renderCaptionContent(el: HTMLElement): void {
-    el.textContent = "";
-
-    const headerEl = document.createElement("span");
-    headerEl.className = CSS.blockHeaderRendered;
-    renderDocumentFragmentToDom(headerEl, {
-      kind: "block-title",
-      text: this.header,
-      macros: this.macros,
-    });
-    el.appendChild(headerEl);
-
-    if (!this.title) return;
-
-    const titleEl = document.createElement("span");
-    titleEl.className = "cf-block-caption-text";
-    renderDocumentFragmentToDom(titleEl, {
-      kind: "block-title",
-      text: this.title,
-      macros: this.macros,
-    });
-    el.appendChild(titleEl);
-  }
-
-  createDOM(): HTMLElement {
-    return this.createCachedDOM(() => {
-      const el = document.createElement("div");
-      el.className = joinClasses(
-        "cf-block-caption",
-        this.active && CSS.activeShellWidget,
-        this.active && CSS.activeShellFooter,
-      );
-      this.renderCaptionContent(el);
-      return el;
-    });
-  }
-
-  eq(other: BlockCaptionWidget): boolean {
-    return (
-      this.header === other.header &&
-      this.title === other.title &&
-      this.macrosKey === other.macrosKey &&
-      this.active === other.active
-    );
-  }
-
-  updateDOM(dom: HTMLElement): boolean {
-    if (!dom.classList.contains("cf-block-caption")) return false;
-    dom.className = joinClasses(
-      "cf-block-caption",
-      this.active && CSS.activeShellWidget,
-      this.active && CSS.activeShellFooter,
-    );
-    this.renderCaptionContent(dom);
-    this.setSourceRangeAttrs(dom);
-    return true;
-  }
-}
-
-export { BlockCaptionWidget as _BlockCaptionWidgetForTest };
-
-/**
- * Widget that renders an attribute-only title (title="..." in the attributes,
- * no inline title text in the document).
- *
- * Unlike inline titles that stay as editable document content, attribute titles
- * live inside the attribute string and have no document range. They are rendered
- * as a widget with parentheses, matching how inline titles appear visually.
- * Inline formatting (bold, math, etc.) is supported via renderDocumentFragmentToDom.
- */
-class AttributeTitleWidget extends MacroAwareWidget {
-  constructor(
-    private readonly title: string,
-    private readonly macros: Record<string, string>,
-  ) {
-    super(macros);
-    this.includeInShellSurface = true;
-    this.useLiveSourceRange = false;
-  }
-
-  createDOM(): HTMLElement {
-    return this.createCachedDOM(() => {
-      const el = document.createElement("span");
-      el.className = CSS.blockAttrTitle;
-
-      const openParen = document.createElement("span");
-      openParen.className = CSS.blockTitleParen;
-      openParen.textContent = "(";
-      el.appendChild(openParen);
-
-      const titleContent = document.createElement("span");
-      renderDocumentFragmentToDom(titleContent, {
-        kind: "block-title",
-        text: this.title,
-        macros: this.macros,
-      });
-      el.appendChild(titleContent);
-
-      const closeParen = document.createElement("span");
-      closeParen.className = CSS.blockTitleParen;
-      closeParen.textContent = ")";
-      el.appendChild(closeParen);
-
-      return el;
-    });
-  }
-
-  eq(other: AttributeTitleWidget): boolean {
-    return this.title === other.title && this.macrosKey === other.macrosKey;
-  }
-}
-
-/**
- * Compute the iframe src URL for an embed block.
- *
- * Returns undefined if the URL is invalid or cannot be embedded.
- */
-function computeEmbedSrc(
-  embedType: string,
-  rawUrl: string,
-): string | undefined {
-  const url = rawUrl.trim();
-  if (!isValidEmbedUrl(url)) return undefined;
-
-  switch (embedType) {
-    case "youtube": {
-      const videoId = extractYoutubeId(url);
-      return videoId ? youtubeEmbedUrl(videoId) : undefined;
-    }
-    case "gist":
-      return gistEmbedUrl(url);
-    case "embed":
-    case "iframe":
-    default:
-      return url;
-  }
-}
-
-/**
- * Try to read the iframe's content height and apply it.
- *
- * Returns `"resized"` on success, `"unavailable"` if the body isn't ready,
- * or `"blocked"` if cross-origin restrictions prevent access.
- */
-function tryResizeIframe(
-  iframe: HTMLIFrameElement,
-  view?: EditorView,
-): "resized" | "unavailable" | "blocked" {
-  try {
-    const doc = iframe.contentDocument;
-    if (doc?.body) {
-      const height = doc.body.scrollHeight;
-      if (height > 0) {
-        const nextHeight = `${height}px`;
-        if (iframe.style.height !== nextHeight) {
-          mutateWithScrollStabilizedMeasure(view, () => {
-            iframe.style.height = nextHeight;
-          });
-        }
-        return "resized";
-      }
-    }
-    return "unavailable";
-  } catch {
-    // best-effort: cross-origin iframe blocks contentDocument access
-    return "blocked";
-  }
-}
-
-/**
- * Auto-resize a gist iframe to match its content height.
- *
- * Attempts to read `contentDocument.body.scrollHeight` (works when
- * same-origin or sandbox allows access). If cross-origin blocks access,
- * stops immediately. Otherwise polls until content is ready.
- */
-function autoResizeGistIframe(
-  iframe: HTMLIFrameElement,
-  view?: EditorView,
-): () => void {
-  const result = tryResizeIframe(iframe, view);
-  if (result !== "unavailable") {
-    return () => {};
-  }
-
-  // Content not ready yet — poll until it loads or we give up
-  let attempts = 0;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let cancelled = false;
-
-  const poll = (): void => {
-    if (cancelled) return;
-    attempts++;
-    const r = tryResizeIframe(iframe, view);
-    if (r === "unavailable" && attempts < IFRAME_MAX_ATTEMPTS) {
-      timer = setTimeout(poll, IFRAME_POLL_INTERVAL_MS);
-    } else {
-      timer = null;
-    }
-  };
-
-  timer = setTimeout(poll, IFRAME_POLL_INTERVAL_MS);
-  return () => {
-    cancelled = true;
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
-  };
-}
-
-export function embedSandboxPermissions(embedType: string): string {
-  if (embedType === "youtube") {
-    return "allow-scripts allow-presentation";
-  }
-  return "allow-scripts";
-}
-
-/** Widget that renders an iframe for embed blocks. */
-class EmbedWidget extends RenderWidget {
-  private readonly gistCleanup = new WeakMap<
-    HTMLElement,
-    {
-      readonly iframe: HTMLIFrameElement;
-      readonly handleLoad: () => void;
-      readonly cancelResize: () => void;
-    }
-  >();
-
-  constructor(
-    private readonly src: string,
-    private readonly embedType: string,
-    private readonly active: boolean = false,
-  ) {
-    super();
-    this.includeInShellSurface = true;
-    this.useLiveSourceRange = false;
-  }
-
-  private attachGistResize(
-    wrapper: HTMLElement,
-    iframe: HTMLIFrameElement,
-    view?: EditorView,
-  ): void {
-    let cancelResize = () => {};
-    const handleLoad = (): void => {
-      cancelResize();
-      cancelResize = autoResizeGistIframe(iframe, view);
-    };
-    iframe.addEventListener("load", handleLoad, { once: true });
-    this.gistCleanup.set(wrapper, {
-      iframe,
-      handleLoad,
-      cancelResize: () => {
-        cancelResize();
-      },
-    });
-  }
-
-  createDOM(): HTMLElement {
-    const wrapper = document.createElement("div");
-    wrapper.className = joinClasses(
-      CSS.embed(this.embedType),
-      this.active && CSS.activeShellWidget,
-    );
-
-    const iframe = document.createElement("iframe");
-    iframe.src = this.src;
-    iframe.setAttribute("sandbox", embedSandboxPermissions(this.embedType));
-    iframe.setAttribute("loading", "lazy");
-    iframe.setAttribute("referrerpolicy", "no-referrer");
-    iframe.setAttribute("frameborder", "0");
-
-    if (this.embedType === "youtube") {
-      iframe.setAttribute("allowfullscreen", "");
-      iframe.className = CSS.embedYoutubeIframe;
-    } else {
-      iframe.className = CSS.embedIframe;
-    }
-
-    wrapper.appendChild(iframe);
-    return wrapper;
-  }
-
-  override toDOM(view?: EditorView): HTMLElement {
-    const wrapper = this.createDOM();
-    this.setSourceRangeAttrs(wrapper);
-    if (this.sourceFrom >= 0 && view) {
-      this.bindSourceReveal(wrapper, view);
-    }
-
-    if (this.embedType === "gist") {
-      const iframe = wrapper.querySelector("iframe");
-      if (iframe instanceof HTMLIFrameElement) {
-        this.attachGistResize(wrapper, iframe, view);
-      }
-    }
-
-    return wrapper;
-  }
-
-  override destroy(dom: HTMLElement): void {
-    const cleanup = this.gistCleanup.get(dom);
-    if (!cleanup) return;
-    cleanup.iframe.removeEventListener("load", cleanup.handleLoad);
-    cleanup.cancelResize();
-    this.gistCleanup.delete(dom);
-  }
-
-  protected override bindSourceReveal(
-    _el: HTMLElement,
-    _view: EditorView,
-  ): void {
-    // Embed previews remain interactive in stable-shell mode.
-    // Structure editing is entered explicitly from the block header, not by
-    // clicking the iframe surface and teleporting a hidden caret.
-  }
-
-  eq(other: EmbedWidget): boolean {
-    return (
-      this.src === other.src &&
-      this.embedType === other.embedType &&
-      this.active === other.active
-    );
-  }
 }
 
 
@@ -490,55 +90,6 @@ function addIncludeDecorations(
     items.push(
       Decoration.line({ class: CSS.includeFence }).range(div.closeFenceFrom),
     );
-  }
-}
-
-/** Replace the opening fence+attrs with a rendered header widget. */
-/**
- * Add header widget decoration using the heading-like marker replacement pattern.
- *
- * CRITICAL: The widget replaces ONLY the fence prefix ("::: {.class}"), NOT the
- * title text. Title text stays as editable content where inline plugins (math,
- * bold, etc.) render naturally. See addMarkerReplacement() and CLAUDE.md
- * "Block headers must behave like headings."
- *
- * DO NOT change replaceEnd to titleTo — this kills inline rendering and has
- * regressed 3+ times.
- */
-function addHeaderWidgetDecoration(
-  div: FencedDivInfo,
-  header: string,
-  cursorInside: boolean,
-  macros: Record<string, string>,
-  items: Range<Decoration>[],
-): void {
-  // Replace only the fence prefix, leave title text as editable content.
-  // No-title case: replaceEnd = openFenceTo (whole fence line, nothing to split).
-  // With-title case: replaceEnd = titleFrom (stop before title text).
-  const replaceEnd = getFencedDivStructuralOpenTo(div);
-  const widget = header ? new BlockHeaderWidget(header, macros) : null;
-  addMarkerReplacement(div.openFenceFrom, replaceEnd, cursorInside, widget, items);
-}
-
-/** Replace embed block body content with an iframe widget. */
-function addEmbedWidget(
-  state: EditorState,
-  div: FencedDivInfo,
-  openLine: { to: number },
-  items: Range<Decoration>[],
-  active: boolean,
-): void {
-  if (div.singleLine || div.closeFenceFrom < 0) return;
-
-  const bodyFrom = openLine.to + 1; // start of first body line
-  const bodyTo = div.closeFenceFrom - 1; // end of last body line (before newline)
-  if (bodyFrom > bodyTo) return;
-
-  const bodyText = state.sliceDoc(bodyFrom, bodyTo);
-  const rawUrl = bodyText.trim();
-  const src = computeEmbedSrc(div.className, rawUrl);
-  if (src) {
-    pushWidgetDecoration(items, new EmbedWidget(src, div.className, active), bodyFrom, bodyTo);
   }
 }
 
@@ -662,8 +213,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // marks get split around Decoration.replace (math widgets), causing ") $x^2$".
     // For below-caption blocks, title text is the caption — no parens needed.
     if (!openerSourceActive && !captionBelow && !inlineHeader && div.titleFrom !== undefined && div.titleTo !== undefined) {
-      items.push(openParenWidget.range(div.titleFrom));
-      items.push(closeParenWidget.range(div.titleTo));
+      addInlineTitleParenDecorations(div.titleFrom, div.titleTo, items);
     }
 
     if (!openerSourceActive && (captionBelow || inlineHeader) && div.titleFrom !== undefined && div.titleTo !== undefined) {
@@ -678,12 +228,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       div.titleTo === undefined &&
       div.title
     ) {
-      items.push(
-        Decoration.widget({
-          widget: new AttributeTitleWidget(div.title, macros),
-          side: 1,
-        }).range(div.openFenceTo),
-      );
+      addAttributeTitleDecoration(div.openFenceTo, div.title, macros, items);
     }
 
     // --- Closing fence ---
