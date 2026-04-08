@@ -67,8 +67,6 @@ import {
   isFencedStructureEditActive,
 } from "../editor/structure-edit-state";
 
-/** Pre-created mark decoration for monospace source syntax on fence lines. */
-const blockSourceMark = Decoration.mark({ class: CSS.blockSource });
 
 const openParenWidget = Decoration.widget({
   widget: createSimpleTextWidget("span", CSS.blockTitleParen, "("),
@@ -668,41 +666,21 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // collapsed (no label) and the title text becomes the caption, displayed
     // on the opening line without the "Figure 1." prefix.
     const showHeader = plugin.displayHeader !== false && !captionBelow && !inlineHeader;
-    const headerClass = openerSourceActive
-      ? joinClasses(
-        spec.className,
-        activeShell && CSS.activeShell,
-        activeShell && openerLineVisible && CSS.activeShellTop,
-        openerIsBottom && openerLineVisible && CSS.activeShellBottom,
-      )
-      : showHeader
-        ? joinClasses(
-          spec.className,
-          CSS.blockHeader,
-          activeShell && CSS.activeShell,
-          activeShell && openerLineVisible && CSS.activeShellTop,
-          openerIsBottom && openerLineVisible && CSS.activeShellBottom,
-        )
-        : joinClasses(
-          spec.className,
-          CSS.blockHeaderCollapsed,
-          activeShell && CSS.activeShell,
-          activeShell && openerLineVisible && CSS.activeShellTop,
-          openerIsBottom && openerLineVisible && CSS.activeShellBottom,
-        );
+    const headerClass = joinClasses(
+      spec.className,
+      showHeader ? CSS.blockHeader : CSS.blockHeaderCollapsed,
+      activeShell && CSS.activeShell,
+      activeShell && openerLineVisible && CSS.activeShellTop,
+      openerIsBottom && openerLineVisible && CSS.activeShellBottom,
+    );
     items.push(Decoration.line({ class: headerClass }).range(div.from));
-    if (openerSourceActive) {
-      const syntaxEnd = getFencedDivStructuralOpenTo(div);
-      if (syntaxEnd > div.openFenceFrom) {
-        items.push(blockSourceMark.range(div.openFenceFrom, syntaxEnd));
-      }
-    }
+    // Always keep the widget replacement active — structure editing uses
+    // explicit mapped state, not raw-text editing of the fence syntax.
+    // Toggling the replacement on/off caused a 1px geometry delta (#1015).
     if (captionBelow || inlineHeader) {
-      // For below-caption blocks: hide fence prefix but show no label on opening line.
-      // The rendered label is emitted elsewhere in the block.
-      addHeaderWidgetDecoration(div, "", openerSourceActive, macros, items);
+      addHeaderWidgetDecoration(div, "", false, macros, items);
     } else {
-      addHeaderWidgetDecoration(div, spec.header, openerSourceActive, macros, items);
+      addHeaderWidgetDecoration(div, spec.header, false, macros, items);
     }
 
     // Title text: wrap in visual parentheses via widget decorations (rendered mode only).

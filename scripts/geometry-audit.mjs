@@ -104,19 +104,19 @@ function lineMap(snapshot) {
 function diffLines(before, after, centerLine, radius) {
   const beforeMap = lineMap(before);
   const afterMap = lineMap(after);
-  const result = [];
+  const rawDeltas = [];
   for (let line = Math.max(1, centerLine - radius); line <= centerLine + radius; line += 1) {
     const left = beforeMap.get(line);
     const right = afterMap.get(line);
     if (!left || !right) {
-      result.push({
+      rawDeltas.push({
         line,
         before: left ? compactLine(left) : null,
         after: right ? compactLine(right) : null,
       });
       continue;
     }
-    result.push({
+    rawDeltas.push({
       line,
       topDelta: Math.round(right.documentTop - left.documentTop),
       heightDelta: Math.round(right.rect.height - left.rect.height),
@@ -126,7 +126,22 @@ function diffLines(before, after, centerLine, radius) {
       after: compactLine(right),
     });
   }
-  return result;
+
+  // Subtract constant top offset (CM6 viewport virtualization).
+  // A uniform top shift across all lines is not a geometry change.
+  const topDeltas = rawDeltas
+    .filter((d) => d.topDelta !== undefined)
+    .map((d) => d.topDelta);
+  const commonOffset = topDeltas.length > 0 && topDeltas.every((d) => d === topDeltas[0])
+    ? topDeltas[0]
+    : 0;
+  if (commonOffset !== 0) {
+    for (const d of rawDeltas) {
+      if (d.topDelta !== undefined) d.topDelta -= commonOffset;
+    }
+  }
+
+  return rawDeltas;
 }
 
 function summarizeSnapshot(label, snapshot, centerLine, radius) {
@@ -266,7 +281,7 @@ async function main(argv = process.argv.slice(2)) {
     throw new Error(`Unknown fixture "${fixtureKey}".`);
   }
   const scenario = getFlag("--scenario", "structure");
-  if (!["structure", "focus", "scroll"].includes(scenario)) {
+  if (!["structure", "focus", "scroll", "all"].includes(scenario)) {
     throw new Error(`Unknown scenario "${scenario}".`);
   }
   const line = getIntFlag("--line", fixture.defaultLine);
@@ -286,25 +301,46 @@ async function main(argv = process.argv.slice(2)) {
     });
     await sleep(300);
 
-    let result;
-    if (scenario === "structure") {
-      result = await runStructureScenario(page, line, radius);
-    } else if (scenario === "focus") {
-      result = await runFocusScenario(page, line, radius);
-    } else {
-      result = await runScrollScenario(page, line, radius);
+    const scenariosToRun = scenario === "all"
+      ? ["structure", "focus", "scroll"]
+      : [scenario];
+
+    const allResults = [];
+    for (const sc of scenariosToRun) {
+      let result;
+      if (sc === "structure") {
+        result = await runStructureScenario(page, line, radius);
+      } else if (sc === "focus") {
+        result = await runFocusScenario(page, line, radius);
+      } else {
+        result = await runScrollScenario(page, line, radius);
+      }
+      allResults.push({ scenario: sc, result });
     }
 
     if (hasFlag("--json")) {
-      console.log(JSON.stringify({
-        fixture: fixture.displayPath,
-        scenario,
-        line,
-        radius,
-        result,
-      }, null, 2));
+      const output = allResults.length === 1
+        ? { fixture: fixture.displayPath, scenario: allResults[0].scenario, line, radius, result: allResults[0].result }
+        : { fixture: fixture.displayPath, scenarios: allResults.map((r) => ({ scenario: r.scenario, ...r.result })), line, radius };
+      console.log(JSON.stringify(output, null, 2));
     } else {
-      console.log(formatReport({ fixture, scenario, line, radius, result }));
+      for (const { scenario: sc, result } of allResults) {
+        console.log(formatReport({ fixture, scenario: sc, line, radius, result }));
+      }
+    }
+
+    // Summary: report geometry-clean vs geometry-dirty
+    const geometryDirty = allResults.some(({ result }) =>
+      result.deltas?.some((d) =>
+        d.lines?.some((l) =>
+          (l.topDelta !== undefined && l.topDelta !== 0) ||
+          (l.heightDelta !== undefined && l.heightDelta !== 0),
+        ),
+      ),
+    );
+    if (!hasFlag("--json")) {
+      const tag = geometryDirty ? "DIRTY" : "CLEAN";
+      console.log(`\n=== Geometry: ${tag} ===`);
     }
   } finally {
     await disconnectBrowser(page);

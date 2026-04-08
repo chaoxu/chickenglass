@@ -20,8 +20,7 @@ export {
 // reference-render re-exports removed — imports from citations/ would create
 // a cycle through this barrel.  Import from "./reference-render" directly.
 export {
-  ImageWidget,
-  PdfLoadingWidget,
+  ImagePreviewWidget,
   imageRenderPlugin,
 } from "./image-render";
 export { isPdfTarget } from "../lib/pdf-target";

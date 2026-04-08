@@ -4,9 +4,7 @@ import type { DecorationSet, EditorView, ViewPlugin, ViewUpdate } from "@codemir
 import { markdown } from "@codemirror/lang-markdown";
 import { CSS } from "../constants/css-classes";
 import {
-  ImageLoadingWidget,
-  ImageWidget,
-  PdfLoadingWidget,
+  ImagePreviewWidget,
   imageRenderPlugin,
   trackedCacheChanged,
 } from "./image-render";
@@ -17,159 +15,143 @@ import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
 import { createTestView, getDecorationSpecs } from "../test-utils";
 import * as mediaPreview from "./media-preview";
 
-describe("ImageWidget", () => {
+describe("ImagePreviewWidget (image state)", () => {
+  const imageState = (src: string) => ({ kind: "image" as const, src });
+
   describe("createDOM", () => {
     it("produces a span wrapper with cf-image-wrapper class", () => {
-      const widget = new ImageWidget("photo", "photo.png");
+      const widget = new ImagePreviewWidget("photo", "photo.png", imageState("photo.png"));
       const el = widget.createDOM();
       expect(el.tagName).toBe("SPAN");
       expect(el.className).toBe(CSS.imageWrapper);
     });
 
     it("contains an img element with correct src and alt", () => {
-      const widget = new ImageWidget("a cat", "images/cat.jpg");
+      const widget = new ImagePreviewWidget("a cat", "images/cat.jpg", imageState("images/cat.jpg"));
       const el = widget.createDOM();
       const img = el.querySelector("img");
       expect(img).not.toBeNull();
-      expect(img!.src).toContain("images/cat.jpg");
-      expect(img!.alt).toBe("a cat");
+      expect(img?.src).toContain("images/cat.jpg");
+      expect(img?.alt).toBe("a cat");
     });
 
     it("sets cf-image class on the img element", () => {
-      const widget = new ImageWidget("alt", "src.png");
+      const widget = new ImagePreviewWidget("alt", "src.png", imageState("src.png"));
       const el = widget.createDOM();
       const img = el.querySelector("img");
-      expect(img!.className).toBe(CSS.image);
+      expect(img?.className).toBe(CSS.image);
     });
 
     it("handles empty alt text", () => {
-      const widget = new ImageWidget("", "img.png");
+      const widget = new ImagePreviewWidget("", "img.png", imageState("img.png"));
       const el = widget.createDOM();
       const img = el.querySelector("img");
-      expect(img!.alt).toBe("");
+      expect(img?.alt).toBe("");
     });
   });
 
   describe("eq", () => {
-    it("returns true for same alt and src", () => {
-      const a = new ImageWidget("cat", "cat.png");
-      const b = new ImageWidget("cat", "cat.png");
+    it("returns true for same alt and src (regardless of state)", () => {
+      const a = new ImagePreviewWidget("cat", "cat.png", imageState("cat.png"));
+      const b = new ImagePreviewWidget("cat", "cat.png", { kind: "loading", isPdf: false });
       expect(a.eq(b)).toBe(true);
     });
 
     it("returns false when alt differs", () => {
-      const a = new ImageWidget("cat", "photo.png");
-      const b = new ImageWidget("dog", "photo.png");
+      const a = new ImagePreviewWidget("cat", "photo.png", imageState("photo.png"));
+      const b = new ImagePreviewWidget("dog", "photo.png", imageState("photo.png"));
       expect(a.eq(b)).toBe(false);
     });
 
     it("returns false when src differs", () => {
-      const a = new ImageWidget("cat", "cat.png");
-      const b = new ImageWidget("cat", "dog.png");
+      const a = new ImagePreviewWidget("cat", "cat.png", imageState("cat.png"));
+      const b = new ImagePreviewWidget("cat", "dog.png", imageState("dog.png"));
       expect(a.eq(b)).toBe(false);
     });
 
     it("returns false when both alt and src differ", () => {
-      const a = new ImageWidget("cat", "cat.png");
-      const b = new ImageWidget("dog", "dog.png");
+      const a = new ImagePreviewWidget("cat", "cat.png", imageState("cat.png"));
+      const b = new ImagePreviewWidget("dog", "dog.png", imageState("dog.png"));
       expect(a.eq(b)).toBe(false);
     });
   });
 
   describe("error handler", () => {
     it("sets cf-image-error class on load failure", () => {
-      const widget = new ImageWidget("broken", "missing.png");
+      const widget = new ImagePreviewWidget("broken", "missing.png", imageState("missing.png"));
       const el = widget.createDOM();
-      const img = el.querySelector("img")!;
-
-      img.dispatchEvent(new Event("error"));
-
+      const img = el.querySelector("img");
+      img?.dispatchEvent(new Event("error"));
       expect(el.className).toBe(CSS.imageError);
       expect(el.textContent).toBe("[Image: broken]");
     });
 
     it("replaces img element with fallback text on error", () => {
-      const widget = new ImageWidget("fallback alt", "bad.png");
+      const widget = new ImagePreviewWidget("fallback alt", "bad.png", imageState("bad.png"));
       const el = widget.createDOM();
-      const img = el.querySelector("img")!;
-
-      img.dispatchEvent(new Event("error"));
-
+      const img = el.querySelector("img");
+      img?.dispatchEvent(new Event("error"));
       expect(el.querySelector("img")).toBeNull();
+    });
+  });
+
+  describe("updateDOM", () => {
+    it("transitions from loading to image state in-place (#1015)", () => {
+      const loading = new ImagePreviewWidget("fig", "fig.png", { kind: "loading", isPdf: false });
+      const el = loading.createDOM();
+      expect(el.className).toContain(CSS.imageLoading);
+
+      const ready = new ImagePreviewWidget("fig", "fig.png", imageState("data:fig.png"));
+      expect(ready.eq(loading)).toBe(true);
+      expect(ready.updateDOM(el)).toBe(true);
+      expect(el.className).toBe(CSS.imageWrapper);
+      expect(el.querySelector("img")?.src).toContain("data:fig.png");
     });
   });
 });
 
-describe("PdfLoadingWidget", () => {
+describe("ImagePreviewWidget (PDF loading state)", () => {
   describe("createDOM", () => {
     it("produces a span with cf-image-wrapper and cf-image-loading classes", () => {
-      const widget = new PdfLoadingWidget("diagram");
+      const widget = new ImagePreviewWidget("diagram", "diagram.pdf", { kind: "loading", isPdf: true });
       const el = widget.createDOM();
       expect(el.tagName).toBe("SPAN");
       expect(el.className).toBe(`${CSS.imageWrapper} ${CSS.imageLoading}`);
     });
 
     it("shows loading text with alt text", () => {
-      const widget = new PdfLoadingWidget("figure 1");
+      const widget = new ImagePreviewWidget("figure 1", "fig.pdf", { kind: "loading", isPdf: true });
       const el = widget.createDOM();
       expect(el.textContent).toBe("[Loading PDF: figure 1]");
     });
 
     it("shows 'preview' when alt text is empty", () => {
-      const widget = new PdfLoadingWidget("");
+      const widget = new ImagePreviewWidget("", "doc.pdf", { kind: "loading", isPdf: true });
       const el = widget.createDOM();
       expect(el.textContent).toBe("[Loading PDF: preview]");
     });
   });
-
-  describe("eq", () => {
-    it("returns true for same alt text", () => {
-      const a = new PdfLoadingWidget("fig");
-      const b = new PdfLoadingWidget("fig");
-      expect(a.eq(b)).toBe(true);
-    });
-
-    it("returns false when alt text differs", () => {
-      const a = new PdfLoadingWidget("fig1");
-      const b = new PdfLoadingWidget("fig2");
-      expect(a.eq(b)).toBe(false);
-    });
-  });
 });
 
-describe("ImageLoadingWidget", () => {
+describe("ImagePreviewWidget (image loading state)", () => {
   describe("createDOM", () => {
     it("produces a span with cf-image-wrapper and cf-image-loading classes", () => {
-      const widget = new ImageLoadingWidget("diagram");
+      const widget = new ImagePreviewWidget("diagram", "diagram.png", { kind: "loading", isPdf: false });
       const el = widget.createDOM();
       expect(el.tagName).toBe("SPAN");
       expect(el.className).toBe(`${CSS.imageWrapper} ${CSS.imageLoading}`);
     });
 
     it("shows loading text with alt text", () => {
-      const widget = new ImageLoadingWidget("figure 1");
+      const widget = new ImagePreviewWidget("figure 1", "fig.png", { kind: "loading", isPdf: false });
       const el = widget.createDOM();
       expect(el.textContent).toBe("[Loading image: figure 1]");
     });
 
     it("shows 'preview' when alt text is empty", () => {
-      const widget = new ImageLoadingWidget("");
+      const widget = new ImagePreviewWidget("", "img.png", { kind: "loading", isPdf: false });
       const el = widget.createDOM();
       expect(el.textContent).toBe("[Loading image: preview]");
-    });
-  });
-
-  describe("eq", () => {
-    it("returns true for same alt text", () => {
-      const a = new ImageLoadingWidget("fig");
-      const b = new ImageLoadingWidget("fig");
-      expect(a.eq(b)).toBe(true);
-    });
-
-    it("returns false when alt text differs", () => {
-      const a = new ImageLoadingWidget("fig1");
-      const b = new ImageLoadingWidget("fig2");
-      expect(a.eq(b)).toBe(false);
     });
   });
 });

@@ -25,113 +25,110 @@ import {
 } from "./media-preview";
 import { CSS } from "../constants/css-classes";
 
-// ── Widgets ───────────────────────────────────────────────────────────────────
+// ── Image preview state ──────────────────────────────────────────────────────
 
-/** Widget that renders an inline image. */
-export class ImageWidget extends RenderWidget {
+type ImagePreviewState =
+  | { kind: "image"; src: string }
+  | { kind: "pdf-canvas"; path: string }
+  | { kind: "loading"; isPdf: boolean }
+  | { kind: "error"; fallbackSrc: string };
+
+// ── Unified widget ──────────────────────────────────────────────────────────
+
+/**
+ * Single widget class for all image preview states.
+ *
+ * Identity is determined by `alt` + original `src` — when the cache state
+ * changes (loading → ready), CM6 calls `updateDOM()` instead of destroying
+ * and recreating the DOM element. This keeps the image inside a stable slot
+ * and prevents topology-change-driven geometry churn (#1015).
+ */
+export class ImagePreviewWidget extends RenderWidget {
   constructor(
-    private readonly alt: string,
-    private readonly src: string,
+    readonly alt: string,
+    /** Original markdown src — used as stable identity across state changes. */
+    readonly src: string,
+    readonly state: ImagePreviewState,
   ) {
     super();
   }
 
   createDOM(): HTMLElement {
     const wrapper = document.createElement("span");
-    wrapper.className = CSS.imageWrapper;
-
-    const img = document.createElement("img");
-    img.className = CSS.image;
-    img.src = this.src;
-    img.alt = this.alt;
-    img.addEventListener("error", () => {
-      wrapper.textContent = `[Image: ${this.alt}]`;
-      wrapper.className = CSS.imageError;
-    });
-
-    wrapper.appendChild(img);
+    this.renderInto(wrapper);
     return wrapper;
   }
 
-  eq(other: ImageWidget): boolean {
+  /** Position-stable identity: same alt+src → updateDOM, not recreate. */
+  eq(other: ImagePreviewWidget): boolean {
     return this.alt === other.alt && this.src === other.src;
   }
-}
 
-/** Widget that shows a loading placeholder while a local image is loading. */
-export class ImageLoadingWidget extends RenderWidget {
-  constructor(private readonly alt: string) {
-    super();
+  updateDOM(dom: HTMLElement): boolean {
+    dom.textContent = "";
+    this.renderInto(dom);
+    this.setSourceRangeAttrs(dom);
+    return true;
   }
 
-  createDOM(): HTMLElement {
-    const wrapper = document.createElement("span");
-    wrapper.className = `${CSS.imageWrapper} ${CSS.imageLoading}`;
-    wrapper.textContent = `[Loading image: ${this.alt || "preview"}]`;
-    return wrapper;
-  }
-
-  eq(other: ImageLoadingWidget): boolean {
-    return this.alt === other.alt;
-  }
-}
-
-/** Widget that wraps a pre-rendered PDF canvas element directly. */
-export class PdfCanvasWidget extends RenderWidget {
-  constructor(
-    private readonly alt: string,
-    private readonly path: string,
-  ) {
-    super();
-  }
-
-  createDOM(): HTMLElement {
-    const wrapper = document.createElement("span");
-    wrapper.className = CSS.imageWrapper;
-
-    const canvas = getPdfCanvas(this.path);
-    if (canvas) {
-      // Clone the canvas so each widget instance owns its own DOM element
-      const clone = document.createElement("canvas");
-      clone.width = canvas.width;
-      clone.height = canvas.height;
-      clone.style.maxWidth = "100%";
-      clone.style.height = "auto";
-      clone.setAttribute("role", "img");
-      clone.setAttribute("aria-label", this.alt);
-      const ctx = clone.getContext("2d");
-      if (ctx) ctx.drawImage(canvas, 0, 0);
-      wrapper.appendChild(clone);
-    } else {
-      wrapper.textContent = `[Image: ${this.alt}]`;
-      wrapper.className = CSS.imageError;
+  private renderInto(wrapper: HTMLElement): void {
+    switch (this.state.kind) {
+      case "image": {
+        wrapper.className = CSS.imageWrapper;
+        const img = document.createElement("img");
+        img.className = CSS.image;
+        img.src = this.state.src;
+        img.alt = this.alt;
+        img.addEventListener("error", () => {
+          wrapper.textContent = `[Image: ${this.alt}]`;
+          wrapper.className = CSS.imageError;
+        });
+        wrapper.appendChild(img);
+        break;
+      }
+      case "pdf-canvas": {
+        const canvas = getPdfCanvas(this.state.path);
+        if (canvas) {
+          wrapper.className = CSS.imageWrapper;
+          const clone = document.createElement("canvas");
+          clone.width = canvas.width;
+          clone.height = canvas.height;
+          clone.style.maxWidth = "100%";
+          clone.style.height = "auto";
+          clone.setAttribute("role", "img");
+          clone.setAttribute("aria-label", this.alt);
+          const ctx = clone.getContext("2d");
+          if (ctx) ctx.drawImage(canvas, 0, 0);
+          wrapper.appendChild(clone);
+        } else {
+          wrapper.className = CSS.imageError;
+          wrapper.textContent = `[Image: ${this.alt}]`;
+        }
+        break;
+      }
+      case "loading":
+        wrapper.className = `${CSS.imageWrapper} ${CSS.imageLoading}`;
+        wrapper.textContent = this.state.isPdf
+          ? `[Loading PDF: ${this.alt || "preview"}]`
+          : `[Loading image: ${this.alt || "preview"}]`;
+        break;
+      case "error": {
+        wrapper.className = CSS.imageWrapper;
+        const img = document.createElement("img");
+        img.className = CSS.image;
+        img.src = this.state.fallbackSrc;
+        img.alt = this.alt;
+        img.addEventListener("error", () => {
+          wrapper.textContent = `[Image: ${this.alt}]`;
+          wrapper.className = CSS.imageError;
+        });
+        wrapper.appendChild(img);
+        break;
+      }
     }
-
-    return wrapper;
-  }
-
-  eq(other: PdfCanvasWidget): boolean {
-    return this.alt === other.alt && this.path === other.path;
   }
 }
 
-/** Widget that shows a loading placeholder while a PDF preview is rasterizing. */
-export class PdfLoadingWidget extends RenderWidget {
-  constructor(private readonly alt: string) {
-    super();
-  }
-
-  createDOM(): HTMLElement {
-    const wrapper = document.createElement("span");
-    wrapper.className = `${CSS.imageWrapper} ${CSS.imageLoading}`;
-    wrapper.textContent = `[Loading PDF: ${this.alt || "preview"}]`;
-    return wrapper;
-  }
-
-  eq(other: PdfLoadingWidget): boolean {
-    return this.alt === other.alt;
-  }
-}
 
 // ── Syntax helpers ────────────────────────────────────────────────────────────
 
@@ -339,19 +336,18 @@ function computeDirtyImageRanges(
 /** Map a media preview resolution to the appropriate widget. */
 function mediaPreviewWidget(
   alt: string,
+  src: string,
   result: MediaPreviewResult,
 ): RenderWidget {
   switch (result.kind) {
     case "image":
-      return new ImageWidget(alt, result.dataUrl);
+      return new ImagePreviewWidget(alt, src, { kind: "image", src: result.dataUrl });
     case "pdf-canvas":
-      return new PdfCanvasWidget(alt, result.resolvedPath);
+      return new ImagePreviewWidget(alt, src, { kind: "pdf-canvas", path: result.resolvedPath });
     case "loading":
-      return result.isPdf
-        ? new PdfLoadingWidget(alt)
-        : new ImageLoadingWidget(alt);
+      return new ImagePreviewWidget(alt, src, { kind: "loading", isPdf: result.isPdf });
     case "error":
-      return new ImageWidget(alt, result.fallbackSrc);
+      return new ImagePreviewWidget(alt, src, { kind: "error", fallbackSrc: result.fallbackSrc });
   }
 }
 
@@ -398,7 +394,7 @@ function collectImageRangesTracked(
           trackedNode.trackedPath = preview.resolvedPath;
           pushWidgetDecoration(
             items,
-            mediaPreviewWidget(parsed.alt, preview),
+            mediaPreviewWidget(parsed.alt, parsed.src, preview),
             node.from,
             node.to,
           );
@@ -407,7 +403,7 @@ function collectImageRangesTracked(
 
         pushWidgetDecoration(
           items,
-          new ImageWidget(parsed.alt, parsed.src),
+          new ImagePreviewWidget(parsed.alt, parsed.src, { kind: "image", src: parsed.src }),
           node.from,
           node.to,
         );

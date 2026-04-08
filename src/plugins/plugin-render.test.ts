@@ -157,8 +157,10 @@ describe("blockDecorationField", () => {
     const specs = getDecoSpecs(active);
 
     const theoremLine = active.doc.line(1);
-    expect(hasLineClassAt(specs, theoremLine.from, CSS.blockHeader)).toBe(false);
-    expect(hasMarkClassInRange(specs, theoremLine.from, theoremLine.to, CSS.blockSource)).toBe(true);
+    // cf-block-header stays on the line class for geometry stability (#1015).
+    // Widget replacement also stays active — structure editing uses explicit
+    // mapped state, not raw-text editing of fence syntax.
+    expect(hasLineClassAt(specs, theoremLine.from, CSS.blockHeader)).toBe(true);
 
     const proofLine = active.doc.line(5).from;
     expect(hasLineClassAt(specs, proofLine, CSS.blockHeader)).toBe(true);
@@ -195,9 +197,9 @@ describe("blockDecorationField", () => {
     );
     const specs = getDecoSpecs(state);
 
-    // Opening: cf-block-source as mark decoration on syntax portion only
+    // Opening: widget replacement stays active for geometry stability (#1015)
     const openLine = state.doc.line(1);
-    expect(hasMarkClassInRange(specs, openLine.from, openLine.to, CSS.blockSource)).toBe(true);
+    expect(hasLineClassAt(specs, openLine.from, CSS.blockHeader)).toBe(true);
     expect(hasLineClassAt(specs, openLine.from, CSS.blockSource)).toBe(false);
 
     // Closing fence is always hidden — cf-block-closing-fence, not cf-block-source
@@ -294,7 +296,7 @@ describe("blockDecorationField", () => {
     expect(sourceParens.length).toBe(0);
   });
 
-  it("cf-block-source mark covers only fence syntax, not title text during structure edit (#278)", () => {
+  it("structure edit keeps widget replacement for geometry stability (#1015)", () => {
     const doc = `::: {.theorem} Main Result\nContent\n:::`;
     const base = createTestState(doc, 0, true);
     const state = applyStateEffects(
@@ -304,25 +306,13 @@ describe("blockDecorationField", () => {
     const specs = getDecoSpecs(state);
 
     const line1 = state.doc.line(1);
-    const titleText = "Main Result";
-    const titleFrom = line1.text.indexOf(titleText) + line1.from;
-    const titleTo = titleFrom + titleText.length;
-
-    // cf-block-source mark should cover fence syntax (before title)
-    expect(hasMarkClassInRange(specs, line1.from, titleFrom, CSS.blockSource)).toBe(true);
-
-    // cf-block-source mark must NOT cover the title text range
-    const sourceMarksOnTitle = specs.filter(
-      (s) =>
-        s.from !== s.to && // mark decoration
-        s.from < titleTo &&
-        s.to > titleFrom &&
-        s.class?.includes(CSS.blockSource),
-    );
-    expect(sourceMarksOnTitle.length).toBe(0);
+    // Widget replacement stays active — no cf-block-source mark on the line
+    expect(hasMarkClassInRange(specs, line1.from, line1.to, CSS.blockSource)).toBe(false);
+    // Header class present for geometry stability
+    expect(hasLineClassAt(specs, line1.from, CSS.blockHeader)).toBe(true);
   });
 
-  it("no-title block: explicit structure edit reveals the entire opener syntax (#278)", () => {
+  it("no-title block: structure edit keeps widget replacement (#1015)", () => {
     const doc = `::: {.proof}\nContent\n:::`;
     const base = createTestState(doc, 0, true);
     const state = applyStateEffects(
@@ -332,8 +322,8 @@ describe("blockDecorationField", () => {
     const specs = getDecoSpecs(state);
 
     const line1 = state.doc.line(1);
-    // Entire opening fence is syntax — mark should cover it
-    expect(hasMarkClassInRange(specs, line1.from, line1.to, CSS.blockSource)).toBe(true);
+    // Widget replacement stays active — no source mark
+    expect(hasMarkClassInRange(specs, line1.from, line1.to, CSS.blockSource)).toBe(false);
   });
 
   it("does not crash on an incomplete fenced div without a closing fence", () => {
@@ -521,7 +511,8 @@ describe("disabled blocks show raw fences (issue #356)", () => {
 
     const widgets = specs.filter((s) => s.widgetClass === "EmbedWidget");
     expect(widgets).toHaveLength(0);
-    expect(hasMarkClassInRange(specs, state.doc.line(1).from, state.doc.line(1).to, CSS.blockSource)).toBe(true);
+    // Widget replacement stays active for geometry stability (#1015)
+    expect(hasMarkClassInRange(specs, state.doc.line(1).from, state.doc.line(1).to, CSS.blockSource)).toBe(false);
   });
 
   it("routes inline proof labels back to the hidden opener source", () => {

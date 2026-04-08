@@ -88,11 +88,6 @@ export const setStructureEditTargetEffect =
 
 export const clearStructureEditTargetEffect = StateEffect.define<void>();
 
-function canReadStateField(
-  state: EditorState,
-): state is EditorState & { field: EditorState["field"] } {
-  return typeof (state as { field?: unknown }).field === "function";
-}
 
 export function hasStructureEditEffect(tr: Transaction): boolean {
   return tr.effects.some(
@@ -116,7 +111,6 @@ function fencedTargetFromDiv(div: FencedDivInfo): FencedStructureEditTarget {
 function frontmatterTargetFromState(
   state: EditorState,
 ): FrontmatterStructureEditTarget | null {
-  if (!canReadStateField(state)) return null;
   const frontmatter = state.field(frontmatterField, false);
   if (!frontmatter || frontmatter.end <= 0) return null;
   return {
@@ -144,8 +138,9 @@ function createFootnoteLabelStructureEditTargetAt(
   state: EditorState,
   pos: number,
 ): FootnoteLabelStructureEditTarget | null {
-  if (!canReadStateField(state)) return null;
-  const definition = state.field(documentAnalysisField).footnotes.defByFrom;
+  const analysis = state.field(documentAnalysisField, false);
+  if (!analysis) return null;
+  const definition = analysis.footnotes.defByFrom;
   for (const def of definition.values()) {
     if (pos >= def.from && pos <= def.labelTo) {
       return {
@@ -165,8 +160,9 @@ function createMathStructureEditTargetAt(
   state: EditorState,
   pos: number,
 ): MathStructureEditTarget | null {
-  if (!canReadStateField(state)) return null;
-  const regions = state.field(documentAnalysisField).mathRegions;
+  const analysis = state.field(documentAnalysisField, false);
+  if (!analysis) return null;
+  const regions = analysis.mathRegions;
   for (const region of regions) {
     if (pos >= region.from && pos <= region.to) {
       return {
@@ -186,8 +182,9 @@ function createReferenceStructureEditTargetAt(
   state: EditorState,
   pos: number,
 ): ReferenceStructureEditTarget | null {
-  if (!canReadStateField(state)) return null;
-  const references = state.field(documentAnalysisField).references;
+  const analysis = state.field(documentAnalysisField, false);
+  if (!analysis) return null;
+  const references = analysis.references;
   for (const ref of references) {
     if (pos >= ref.from && pos <= ref.to) {
       return {
@@ -332,7 +329,7 @@ export function createStructureEditTargetAt(
   state: EditorState,
   pos: number,
 ): StructureEditTarget | null {
-  if (!canReadStateField(state)) return null;
+  if (typeof state?.field !== "function") return null;
   const frontmatter = frontmatterTargetFromState(state);
   if (frontmatter && pos < frontmatter.to) {
     return frontmatter;
