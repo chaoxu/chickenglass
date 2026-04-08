@@ -153,35 +153,35 @@ export function buildFencedBlockDecorations<T extends FencedBlockInfo>(
   return buildDecorations(items);
 }
 
-/**
- * Cursor-sensitive rebuild predicate excluding docChanged.
- *
- * Used with `mapOnDocChanged: true` so that text edits preserving the
- * syntax tree map decoration positions instead of rebuilding (#718).
- */
-function cursorSensitiveMappedRebuild(tr: Transaction): boolean {
-  return (
-    tr.selection !== undefined ||
-    tr.effects.some((e) => e.is(focusEffect)) ||
-    (syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
-      syntaxTreeAvailable(tr.state, tr.state.doc.length))
-  );
-}
-
 /** Shared StateField wrapper for fenced-block renderers.
- * Uses cursor-sensitive rebuild because fenced blocks show/hide fences
- * based on cursor proximity.
+ * Selection-driven rebuilds are opt-in so stable-shell owners can rebuild
+ * only when the active shell path changes, not on every caret advance.
  * Uses `mapOnDocChanged` so text edits preserving the syntax tree
  * map decoration positions for cheaper DOM reconciliation (#718). */
 export function createFencedBlockDecorationField(
   build: (state: EditorState) => DecorationSet,
   options?: {
     extraShouldRebuild?: (tr: Transaction) => boolean;
+    selectionShouldRebuild?: (tr: Transaction) => boolean;
   },
 ): StateField<DecorationSet> {
   return createDecorationsField(
     build,
-    (tr) => cursorSensitiveMappedRebuild(tr) || (options?.extraShouldRebuild?.(tr) ?? false),
+    (tr) => {
+      const selectionChanged = tr.selection !== undefined;
+      const selectionNeedsRebuild = selectionChanged
+        ? options?.selectionShouldRebuild?.(tr) ?? true
+        : false;
+      return (
+        selectionNeedsRebuild ||
+        tr.effects.some((e) => e.is(focusEffect)) ||
+        (
+          syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
+          syntaxTreeAvailable(tr.state, tr.state.doc.length)
+        ) ||
+        (options?.extraShouldRebuild?.(tr) ?? false)
+      );
+    },
     true,
   );
 }

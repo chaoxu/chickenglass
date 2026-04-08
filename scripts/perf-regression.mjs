@@ -316,7 +316,8 @@ function resolveScrollFixture() {
 }
 
 async function openCleanRichDocument(page, path, content) {
-  const docText = await evaluateStep(page, "openCleanRichDocument", async ({ nextPath, nextContent }) => {
+  const verificationWindow = 200;
+  await evaluateStep(page, "openCleanRichDocument", async ({ nextPath, nextContent }) => {
     const app = window.__app;
     if (!app?.openFileWithContent) {
       throw new Error("window.__app.openFileWithContent is unavailable.");
@@ -330,10 +331,24 @@ async function openCleanRichDocument(page, path, content) {
     }
     app.setMode("rich");
     await app.openFileWithContent(nextPath, nextContent);
-    return window.__cmView.state.doc.toString();
   }, { nextPath: path, nextContent: content });
+  await page.waitForFunction(
+    ({ expectedLength, expectedPrefix, expectedSuffix }) => {
+      const docText = window.__cmView?.state?.doc?.toString();
+      return typeof docText === "string" &&
+        docText.length === expectedLength &&
+        docText.startsWith(expectedPrefix) &&
+        docText.endsWith(expectedSuffix);
+    },
+    {
+      expectedLength: content.length,
+      expectedPrefix: content.slice(0, verificationWindow),
+      expectedSuffix: content.slice(-verificationWindow),
+    },
+    { timeout: 10000 },
+  );
   await sleep(200);
-  return docText;
+  return content;
 }
 
 async function measureTypingBurst(page, anchor, insertCount) {

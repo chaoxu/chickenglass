@@ -48,6 +48,7 @@ import {
   sharedInlineRenderExtensions,
 } from "./base-editor-extensions";
 import { documentLabelGraphField } from "../semantics/document-label-graph";
+import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import { frontmatterField } from "./frontmatter-state";
 import { activeStructureEditField } from "./structure-edit-state";
 
@@ -55,6 +56,7 @@ const fallbackDocument = "# Untitled\n";
 
 /** Compartment for the debug tree-view panel — toggled via window.__cmTreeView(). */
 const treeViewCompartment = new Compartment();
+const debugLaneCompartment = new Compartment();
 
 /** Editor display modes. */
 export type EditorMode = "rich" | "source" | "read";
@@ -169,6 +171,7 @@ function coreDocumentStateExtensions(): Extension[] {
     // Block plugin system
     createPluginRegistryField(defaultPlugins),
     blockCounterField,
+    documentReferenceCatalogField,
     documentLabelGraphField,
 
     // Bibliography state (must come before citation plugins)
@@ -214,8 +217,7 @@ function editorChromeExtensions(isDark: boolean): Extension[] {
     editorKeybindings,
     richMouseSelectionStyle,
     blockTypePickerExtension,
-    shellSurfaceOverlayExtension,
-    debugPanelExtension,
+    debugLaneCompartment.of([]),
     coflatTheme,
 
     // Dark/light base theme (wrapped in compartment for live switching)
@@ -252,6 +254,26 @@ export function toggleTreeView(view: EditorView): boolean {
   view.dispatch({
     effects: treeViewCompartment.reconfigure(nextEnabled ? treeView : []),
   });
+  return nextEnabled;
+}
+
+export function isDebugLaneEnabled(view: EditorView): boolean {
+  return hasCompartmentContent(debugLaneCompartment.get(view.state));
+}
+
+export function setDebugLaneEnabled(view: EditorView, enabled: boolean): boolean {
+  const nextExtensions = enabled
+    ? [shellSurfaceOverlayExtension, debugPanelExtension]
+    : [];
+  view.dispatch({
+    effects: debugLaneCompartment.reconfigure(nextExtensions),
+  });
+  return enabled;
+}
+
+export function toggleDebugLane(view: EditorView): boolean {
+  const nextEnabled = !isDebugLaneEnabled(view);
+  setDebugLaneEnabled(view, nextEnabled);
   return nextEnabled;
 }
 

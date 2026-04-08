@@ -8,13 +8,18 @@
  *   __cmDebug.line(73)     — DOM state of a specific line
  *   __cmDebug.dump()       — combined tree + fence status snapshot
  *   __cmDebug.moveVertically("up") — apply rich-mode vertical motion with anomaly logging
+ *   __cmDebug.toggleDebugLane() — toggle the shell/debug lane (red boxes + sidebar)
  *   __cmDebug.toggleTreeView() — toggle live Lezer tree panel
  */
 
 import { type EditorView } from "@codemirror/view";
 import { undoDepth, redoDepth } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
-import { toggleTreeView } from "./editor";
+import {
+  isDebugLaneEnabled,
+  toggleDebugLane,
+  toggleTreeView,
+} from "./editor";
 import {
   documentAnalysisField,
   getDocumentAnalysisRevisionInfo,
@@ -130,6 +135,10 @@ export interface DebugHelpers {
   clearTimeline: () => void;
   /** Run rich-mode vertical motion with anomaly logging. */
   moveVertically: (direction: "up" | "down") => boolean;
+  /** Whether the shell/debug lane is currently enabled. */
+  debugLaneEnabled: () => boolean;
+  /** Toggle the shell/debug lane. Returns new on/off state. */
+  toggleDebugLane: () => boolean;
   /** Toggle the live Lezer tree-view debug panel. Returns new on/off state. */
   toggleTreeView: () => boolean;
 }
@@ -305,6 +314,14 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
 
     moveVertically(direction: "up" | "down") {
       return moveVerticallyInRichView(view, direction === "down");
+    },
+
+    debugLaneEnabled() {
+      return isDebugLaneEnabled(view);
+    },
+
+    toggleDebugLane() {
+      return toggleDebugLane(view);
     },
 
     toggleTreeView() {

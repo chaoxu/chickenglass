@@ -17,6 +17,21 @@ function scheduleIdle(callback: (deadline?: IdleDeadline) => void): void {
 /** Maximum time (ms) to spend prewarming per idle chunk when no deadline is available. */
 const PREWARM_BUDGET_MS = 2;
 
+function prewarmMathRegionsChanged(
+  before: readonly MathSemantics[] | null,
+  after: readonly MathSemantics[],
+): boolean {
+  if (before == null || before.length !== after.length) return true;
+  for (let i = 0; i < before.length; i += 1) {
+    const previous = before[i];
+    const next = after[i];
+    if (previous.latex !== next.latex || previous.isDisplay !== next.isDisplay) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * ViewPlugin that pre-populates the KaTeX HTML string cache during idle time.
  */
@@ -35,7 +50,10 @@ export const mathPrewarmPlugin: Extension = ViewPlugin.fromClass(
       const macros = update.state.field(mathMacrosField);
       const macrosKey = serializeMacros(macros);
 
-      if (regions !== this.lastRegions || macrosKey !== this.lastMacrosKey) {
+      if (
+        macrosKey !== this.lastMacrosKey ||
+        prewarmMathRegionsChanged(this.lastRegions, regions)
+      ) {
         this.schedulePrewarm(update.state);
       }
     }

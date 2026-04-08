@@ -15,8 +15,9 @@ import {
   type DecorationSet,
   type EditorView,
   type ViewUpdate,
+  ViewPlugin,
 } from "@codemirror/view";
-import { type EditorState, type Extension, type Range } from "@codemirror/state";
+import { type ChangeSet, type EditorState, type Extension, type Range } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
 import {
   classifyReference,
@@ -24,7 +25,6 @@ import {
 } from "../index/crossref-resolver";
 import {
   type BibStore,
-  bibDataEffect,
   bibDataField,
   CitationWidget,
 } from "../citations/citation-render";
@@ -43,7 +43,6 @@ import {
   type MixedClusterPart,
 } from "./crossref-render";
 import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
-import { createSimpleViewPlugin } from "./view-plugin-factories";
 import { blockCounterField, pluginRegistryField } from "../plugins";
 import {
   documentAnalysisField,
@@ -229,14 +228,14 @@ export function planReferenceRendering(
   view: EditorView,
   store: BibStore,
   processor: CslProcessor,
+  references = view.state.field(documentAnalysisField).references,
 ): ReferenceRenderItem[] {
   const analysis = view.state.field(documentAnalysisField);
   const equationLabels = analysis.equationById;
-  const allRefs = analysis.references;
   const items: ReferenceRenderItem[] = [];
   const activeRef = getActiveReferenceTarget(view.state);
 
-  for (const ref of allRefs) {
+  for (const ref of references) {
     if (activeRef && activeRef.from === ref.from && activeRef.to === ref.to) {
       items.push({ kind: "source-mark", from: ref.from, to: ref.to });
       continue;
@@ -360,6 +359,7 @@ export function collectReferenceRanges(
   view: EditorView,
   store: BibStore,
   cslProcessor?: CslProcessor,
+  references = view.state.field(documentAnalysisField).references,
 ): Range<Decoration>[] {
   const processor = cslProcessor ?? view.state.field(bibDataField).cslProcessor;
   const analysis = view.state.field(documentAnalysisField);
@@ -369,7 +369,7 @@ export function collectReferenceRanges(
   // reset and replay every citation cluster.
   ensureCitationsRegistered(analysis, store, processor);
 
-  return emitReferenceDecorations(planReferenceRendering(view, store, processor));
+  return emitReferenceDecorations(planReferenceRendering(view, store, processor, references));
 }
 
 /** Build reference decorations from the view state. */
@@ -378,24 +378,194 @@ function buildReferenceDecorations(view: EditorView): DecorationSet {
   return buildDecorations(collectReferenceRanges(view, store, cslProcessor));
 }
 
-/** Custom update predicate: standard conditions + bibDataEffect. */
-function referenceShouldUpdate(update: ViewUpdate): boolean {
-  if (
-    update.transactions.some((tr) =>
-      tr.effects.some((e) => e.is(bibDataEffect)),
-    ) ||
-    referenceRenderDependenciesChanged(update.startState, update.state)
-  ) {
-    return true;
+interface DirtyRange {
+  readonly from: number;
+  readonly to: number;
+}
+
+function mergeDirtyRanges(ranges: readonly DirtyRange[]): DirtyRange[] {
+  if (ranges.length === 0) return [];
+  const sorted = [...ranges].sort((left, right) => left.from - right.from || left.to - right.to);
+  const merged: DirtyRange[] = [sorted[0]];
+  for (let i = 1; i < sorted.length; i += 1) {
+    const current = sorted[i];
+    const last = merged[merged.length - 1];
+    if (current.from <= last.to) {
+      merged[merged.length - 1] = {
+        from: last.from,
+        to: Math.max(last.to, current.to),
+      };
+      continue;
+    }
+    merged.push(current);
+  }
+  return merged;
+}
+
+function dirtyRangesFromChanges(
+  state: EditorState,
+  changes: ChangeSet,
+): DirtyRange[] {
+  const ranges: DirtyRange[] = [];
+  changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
+    const startLine = state.doc.lineAt(fromB).from;
+    const endAnchor = Math.max(fromB, toB);
+    const endLine = state.doc.lineAt(Math.min(endAnchor, state.doc.length)).to;
+    ranges.push({ from: startLine, to: endLine });
+  });
+  return mergeDirtyRanges(ranges);
+}
+
+function rangeIntersectsDirtyRanges(
+  from: number,
+  to: number,
+  dirtyRanges: readonly DirtyRange[],
+): boolean {
+  for (const range of dirtyRanges) {
+    if (from < range.to && to > range.from) return true;
+    if (range.from >= to) break;
+  }
+  return false;
+}
+
+function collectDirtyReferences(
+  references: readonly ReferenceSemantics[],
+  dirtyRanges: readonly DirtyRange[],
+): ReferenceSemantics[] {
+  if (dirtyRanges.length === 0) return [];
+  const dirty: ReferenceSemantics[] = [];
+  for (const reference of references) {
+    if (rangeIntersectsDirtyRanges(reference.from, reference.to, dirtyRanges)) {
+      dirty.push(reference);
+    }
+  }
+  return dirty;
+}
+
+function mappedDecorationsWithFreshWidgetSources(
+  decorations: DecorationSet,
+  changes: ChangeSet,
+): DecorationSet {
+  return decorations.map(changes);
+}
+
+function mergeDirtyRangesWithActiveReference(
+  dirtyRanges: readonly DirtyRange[],
+  ...references: readonly (Pick<ReferenceSemantics, "from" | "to"> | null)[]
+): DirtyRange[] {
+  const activeRanges = references.flatMap((reference) => (
+    reference ? [{ from: reference.from, to: reference.to }] : []
+  ));
+  if (activeRanges.length === 0) return [...dirtyRanges];
+  return mergeDirtyRanges([...dirtyRanges, ...activeRanges]);
+}
+
+class ReferenceRenderViewPlugin {
+  decorations: DecorationSet;
+
+  constructor(readonly view: EditorView) {
+    this.decorations = buildReferenceDecorations(view);
   }
 
-  const before = getActiveReferenceTarget(update.startState);
-  const after = getActiveReferenceTarget(update.state);
-  return before?.from !== after?.from || before?.to !== after?.to;
+  private rebuildAll(view: EditorView): void {
+    this.decorations = buildReferenceDecorations(view);
+  }
+
+  private updateDirtyRanges(
+    update: ViewUpdate,
+    dirtyRanges: readonly DirtyRange[],
+  ): void {
+    const { store, cslProcessor } = update.state.field(bibDataField);
+    const analysis = update.state.field(documentAnalysisField);
+    const mapped = mappedDecorationsWithFreshWidgetSources(
+      this.decorations,
+      update.changes,
+    );
+
+    let nextDecorations = mapped;
+    for (const range of dirtyRanges) {
+      nextDecorations = nextDecorations.update({
+        filterFrom: range.from,
+        filterTo: range.to,
+        filter: (from, to) => !rangeIntersectsDirtyRanges(from, to, [range]),
+      });
+    }
+
+    const dirtyRefs = collectDirtyReferences(analysis.references, dirtyRanges);
+    if (dirtyRefs.length > 0) {
+      nextDecorations = nextDecorations.update({
+        add: collectReferenceRanges(update.view, store, cslProcessor, dirtyRefs),
+        sort: true,
+      });
+    }
+
+    this.decorations = nextDecorations;
+  }
+
+  update(update: ViewUpdate): void {
+    const beforeAnalysis = update.startState.field(documentAnalysisField);
+    const afterAnalysis = update.state.field(documentAnalysisField);
+    const referencesChanged = referenceSliceChanged(beforeAnalysis, afterAnalysis);
+    const beforeActive = getActiveReferenceTarget(update.startState);
+    const afterActive = getActiveReferenceTarget(update.state);
+    const activeChanged =
+      beforeActive?.from !== afterActive?.from ||
+      beforeActive?.to !== afterActive?.to;
+
+    if (
+      bibliographyInputsChanged(update.startState, update.state) ||
+      blockLabelConfigChanged(update.startState, update.state) ||
+      crossrefNumberingChanged(update.startState, update.state)
+    ) {
+      this.rebuildAll(update.view);
+      return;
+    }
+
+    if (!update.docChanged && referencesChanged) {
+      this.rebuildAll(update.view);
+      return;
+    }
+
+    if (update.docChanged) {
+      if (!referencesChanged && !activeChanged) {
+        this.decorations = mappedDecorationsWithFreshWidgetSources(
+          this.decorations,
+          update.changes,
+        );
+        return;
+      }
+
+      const dirtyRanges = mergeDirtyRangesWithActiveReference(
+        dirtyRangesFromChanges(update.state, update.changes),
+        activeChanged ? beforeActive : null,
+        activeChanged ? afterActive : null,
+      );
+
+      if (dirtyRanges.length === 0) {
+        this.decorations = mappedDecorationsWithFreshWidgetSources(
+          this.decorations,
+          update.changes,
+        );
+        return;
+      }
+
+      this.updateDirtyRanges(update, dirtyRanges);
+      return;
+    }
+
+    if (activeChanged) {
+      this.updateDirtyRanges(
+        update,
+        mergeDirtyRangesWithActiveReference([], beforeActive, afterActive),
+      );
+    }
+  }
 }
 
 /** CM6 extension that renders all [@id] and @id references with Typora-style toggle. */
-export const referenceRenderPlugin: Extension = createSimpleViewPlugin(
-  buildReferenceDecorations,
-  { shouldUpdate: referenceShouldUpdate },
+export const referenceRenderPlugin: Extension = ViewPlugin.fromClass(
+  ReferenceRenderViewPlugin,
+  {
+    decorations: (value) => value.decorations,
+  },
 );

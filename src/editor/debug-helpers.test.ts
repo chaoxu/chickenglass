@@ -41,6 +41,23 @@ describe("toggleTreeView", () => {
 });
 
 describe("createDebugHelpers", () => {
+  it("keeps the debug lane off by default and toggles it per editor instance", () => {
+    const first = createMountedEditor();
+    const second = createMountedEditor();
+    const firstHelpers = createDebugHelpers(first);
+    const secondHelpers = createDebugHelpers(second);
+
+    expect(firstHelpers.debugLaneEnabled()).toBe(false);
+    expect(secondHelpers.debugLaneEnabled()).toBe(false);
+
+    expect(firstHelpers.toggleDebugLane()).toBe(true);
+    expect(firstHelpers.debugLaneEnabled()).toBe(true);
+    expect(secondHelpers.debugLaneEnabled()).toBe(false);
+
+    expect(firstHelpers.toggleDebugLane()).toBe(false);
+    expect(firstHelpers.debugLaneEnabled()).toBe(false);
+  });
+
   it("reports closing fences for divs, code blocks, and display math", () => {
     const view = createMountedEditor(
       [

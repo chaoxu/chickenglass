@@ -20,6 +20,7 @@ import {
   type EditorView,
 } from "@codemirror/view";
 import { EditorState, type Extension, type Range } from "@codemirror/state";
+import type { Transaction } from "@codemirror/state";
 import type { BlockAttrs } from "./plugin-types";
 import {
   collectFencedDivs,
@@ -84,6 +85,7 @@ class BlockHeaderWidget extends MacroAwareWidget {
   ) {
     super(macros);
     this.includeInShellSurface = true;
+    this.useLiveSourceRange = false;
   }
 
   createDOM(): HTMLElement {
@@ -132,6 +134,7 @@ class BlockCaptionWidget extends MacroAwareWidget {
   ) {
     super(macros);
     this.includeInShellSurface = true;
+    this.useLiveSourceRange = false;
   }
 
   private renderCaptionContent(el: HTMLElement): void {
@@ -211,6 +214,7 @@ class AttributeTitleWidget extends MacroAwareWidget {
   ) {
     super(macros);
     this.includeInShellSurface = true;
+    this.useLiveSourceRange = false;
   }
 
   createDOM(): HTMLElement {
@@ -369,6 +373,7 @@ class EmbedWidget extends RenderWidget {
   ) {
     super();
     this.includeInShellSurface = true;
+    this.useLiveSourceRange = false;
   }
 
   private attachGistResize(
@@ -739,8 +744,8 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
         const lastBodyLine = state.doc.line(closeLine.number - 1);
         const captionWidget = new BlockCaptionWidget(spec.header, div.title ?? "", macros, activeShell);
         captionWidget.updateSourceRange(
-          getFencedDivRevealFrom(div),
-          getFencedDivRevealTo(div),
+          div.titleFrom ?? getFencedDivRevealFrom(div),
+          div.titleTo ?? getFencedDivRevealTo(div),
         );
         items.push(
           Decoration.widget({
@@ -761,6 +766,16 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   return baseDecos;
 }
 
+function activeShellStartsChanged(tr: Transaction): boolean {
+  const before = activeFencedOpenFenceStarts(tr.startState);
+  const after = activeFencedOpenFenceStarts(tr.state);
+  if (before.size !== after.size) return true;
+  for (const start of before) {
+    if (!after.has(start)) return true;
+  }
+  return false;
+}
+
 /**
  * CM6 StateField that provides block rendering decorations.
  *
@@ -769,6 +784,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
  */
 const blockDecorationField = createFencedBlockDecorationField(buildBlockDecorations, {
   extraShouldRebuild: hasStructureEditEffect,
+  selectionShouldRebuild: activeShellStartsChanged,
 });
 
 /** Exported for unit testing decoration logic without a browser. */

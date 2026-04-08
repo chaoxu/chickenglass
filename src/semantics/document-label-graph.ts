@@ -16,7 +16,7 @@ import {
   type DocumentAnalysis,
 } from "./document";
 import {
-  buildEditorDocumentReferenceCatalog,
+  getEditorDocumentReferenceCatalog,
   getDocumentAnalysisOrRecompute,
 } from "./editor-reference-catalog";
 import type { DocumentReferenceCatalog } from "./reference-catalog";
@@ -473,8 +473,9 @@ export function isValidDocumentLabelId(id: string): boolean {
 }
 
 export function buildDocumentLabelGraph(state: EditorState): DocumentLabelGraph {
-  const analysis = getDocumentAnalysisOrRecompute(state);
-  const catalog = buildEditorDocumentReferenceCatalog(state, analysis);
+  const analysis = state.field(documentAnalysisField, false)
+    ?? getDocumentAnalysisOrRecompute(state);
+  const catalog = getEditorDocumentReferenceCatalog(state, analysis);
   const doc = state.doc;
   const definitions = buildDefinitions(catalog, analysis, doc);
   const definitionsById = buildDefinitionsById(definitions);

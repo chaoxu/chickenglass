@@ -774,27 +774,22 @@ describe("math decoration invalidation", () => {
     expect(after.size).toBe(before.size);
   });
 
-  it("updates sourceFrom/sourceTo on mapped widgets after position-only edit", () => {
+  it("refreshes visible math metadata after a position-only edit", async () => {
     const doc = "hello $x$ end";
-    const state = createMathRenderState(doc, 0);
+    const currentView = createMathRenderView(doc, 0);
 
-    // Math "$x$" starts at index 6 in the original document
-    const originalMathFrom = doc.indexOf("$x$");
-    expect(originalMathFrom).toBe(6);
-
-    // Insert "abc" at the start — math shifts by 3
-    const after = state.update({
+    currentView.dispatch({
       changes: { from: 0, to: 0, insert: "abc" },
-    }).state.field(mathDecorationField);
+    });
 
-    // Extract widget sourceFrom from the mapped decoration set
-    const cursor = after.iter();
-    expect(cursor.value).not.toBeNull();
-    const widget = cursor.value!.spec?.widget as MathWidget | undefined;
-    expect(widget).toBeInstanceOf(MathWidget);
-    // sourceFrom must reflect the new position (6 + 3 = 9), not the stale 6
-    expect(widget!.sourceFrom).toBe(originalMathFrom + 3);
-    expect(widget!.sourceTo).toBe(originalMathFrom + 3 + "$x$".length);
+    await vi.waitFor(() => {
+      const widgetEl = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="x"]`);
+      expect(widgetEl).not.toBeNull();
+      expect(widgetEl!.dataset.sourceFrom).toBe("9");
+      expect(widgetEl!.dataset.sourceTo).toBe("12");
+      expect(widgetSourceMap.get(widgetEl!)?.sourceFrom).toBe(9);
+      expect(widgetSourceMap.get(widgetEl!)?.sourceTo).toBe(12);
+    });
   });
 });
 
