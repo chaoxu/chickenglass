@@ -7,7 +7,7 @@ import {
   decorationHidden,
   pushWidgetDecoration,
 } from "./decoration-core";
-import { RenderWidget } from "./widget-core";
+import { RenderWidget } from "./source-widget";
 import { getDecorationSpecs } from "../test-utils";
 
 class TestWidget extends RenderWidget {

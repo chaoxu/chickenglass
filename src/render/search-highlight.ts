@@ -15,7 +15,7 @@ import { type Extension } from "@codemirror/state";
 import { Decoration, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view";
 import { collectVisibleSearchMatches } from "../search/search-matches";
 import { createSimpleViewPlugin } from "./view-plugin-factories";
-import { resolveLiveWidgetSourceRange } from "./widget-core";
+import { resolveLiveWidgetSourceRange } from "./source-widget";
 
 const MATCH_CLASS = "cf-search-match";
 const SELECTED_MATCH_CLASS = "cf-search-match-selected";

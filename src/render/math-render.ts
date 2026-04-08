@@ -30,7 +30,7 @@ import {
   editorFocusField,
   focusTracker,
 } from "./focus-state";
-import { serializeMacros } from "./widget-core";
+import { serializeMacros } from "./source-widget";
 import { getActiveStructureEditTarget } from "../editor/structure-edit-state";
 import {
   findFocusedInlineRevealTarget,

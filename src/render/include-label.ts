@@ -16,7 +16,7 @@ import {
 import { type Extension, type Range } from "@codemirror/state";
 import { buildDecorations } from "./decoration-core";
 import { createSimpleViewPlugin } from "./view-plugin-factories";
-import { SimpleTextRenderWidget } from "./widget-core";
+import { SimpleTextRenderWidget } from "./source-widget";
 import { basename } from "../lib/utils";
 import { includeRegionsField, type IncludeRegionState } from "../lib/include-regions";
 import {

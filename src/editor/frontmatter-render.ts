@@ -15,8 +15,7 @@ import {
   createDecorationsField,
   editorFocusField,
   focusTracker,
-  RenderWidget,
-  serializeMacros,
+  ShellMacroAwareWidget,
 } from "../render/render-core";
 import type { Transaction } from "@codemirror/state";
 import {
@@ -27,17 +26,13 @@ import {
 import { isFrontmatterActive } from "./shell-ownership";
 
 /** Widget that renders the document title from frontmatter. */
-class TitleWidget extends RenderWidget {
-  private readonly macrosKey: string;
-
+class TitleWidget extends ShellMacroAwareWidget {
   constructor(
     private readonly title: string,
     private readonly macros: Record<string, string>,
     private readonly active: boolean = false,
   ) {
-    super();
-    this.macrosKey = serializeMacros(macros);
-    this.includeInShellSurface = true;
+    super(macros);
   }
 
   createDOM(): HTMLElement {

@@ -4,7 +4,7 @@ import type { MathSemantics } from "../semantics/document";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
 import { mathMacrosField } from "./math-macros";
-import { serializeMacros } from "./widget-core";
+import { serializeMacros } from "./source-widget";
 
 function scheduleIdle(callback: (deadline?: IdleDeadline) => void): void {
   if (typeof requestIdleCallback === "function") {

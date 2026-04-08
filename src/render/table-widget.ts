@@ -10,7 +10,7 @@ import {
 } from "./table-discovery";
 import { addRow, formatTable, type ParsedTable } from "./table-utils";
 import { requestScrollStabilizedMeasure } from "./scroll-anchor";
-import { RenderWidget } from "./widget-core";
+import { RenderWidget } from "./source-widget";
 import { bibDataField } from "../state/bib-data";
 
 /**

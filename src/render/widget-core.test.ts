@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  BaseRenderWidget,
   cloneRenderedHTMLElement,
-  RenderWidget,
+} from "./widget-core";
+import {
   serializeMacros,
   SimpleTextRenderWidget,
-} from "./widget-core";
+} from "./source-widget";
 
-class CachedTestWidget extends RenderWidget {
+class CachedTestWidget extends BaseRenderWidget {
   buildCount = 0;
 
   constructor(readonly label: string) {

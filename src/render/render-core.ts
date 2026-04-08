@@ -22,16 +22,28 @@ export {
 
 // ── widget-core.ts ───────────────────────────────────────────────────────────
 export {
-  serializeMacros,
-  widgetSourceMap,
-  RenderWidget,
-  SimpleTextRenderWidget,
-  MacroAwareWidget,
+  BaseRenderWidget,
   cloneRenderedHTMLElement,
   makeTextElement,
   createSimpleTextWidget,
-  type SimpleTextRenderSpec,
 } from "./widget-core";
+
+// ── source-widget.ts ─────────────────────────────────────────────────────────
+export {
+  serializeMacros,
+  widgetSourceMap,
+  resolveLiveWidgetSourceRange,
+  RenderWidget,
+  SimpleTextRenderWidget,
+  MacroAwareWidget,
+  type SimpleTextRenderSpec,
+} from "./source-widget";
+
+// ── shell-widget.ts ──────────────────────────────────────────────────────────
+export {
+  ShellWidget,
+  ShellMacroAwareWidget,
+} from "./shell-widget";
 
 // ── decoration-core.ts ───────────────────────────────────────────────────────
 export {

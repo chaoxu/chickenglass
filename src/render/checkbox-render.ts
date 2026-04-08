@@ -19,7 +19,7 @@ import {
 import { syntaxTree } from "@codemirror/language";
 import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
 import { createSimpleViewPlugin } from "./view-plugin-factories";
-import { RenderWidget } from "./widget-core";
+import { RenderWidget } from "./source-widget";
 
 /** Checkbox widget that toggles task marker content on click. */
 export class CheckboxWidget extends RenderWidget {
