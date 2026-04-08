@@ -20,10 +20,14 @@ const { getPdfCanvasMock } = vi.hoisted(() => ({
   getPdfCanvasMock: vi.fn(),
 }));
 
-vi.mock("./media-preview", () => ({
-  resolveLocalMediaPreview: (view: EditorView, src: string) =>
-    resolveLocalMediaPreviewMock(view, src),
-}));
+vi.mock("./media-preview", async () => {
+  const actual = await vi.importActual<typeof import("./media-preview")>("./media-preview");
+  return {
+    ...actual,
+    resolveLocalMediaPreview: (view: EditorView, src: string) =>
+      resolveLocalMediaPreviewMock(view, src),
+  };
+});
 
 vi.mock("./pdf-preview-cache", async () => {
   const actual = await vi.importActual<typeof import("./pdf-preview-cache")>("./pdf-preview-cache");

@@ -36,11 +36,19 @@ import {
   createPreviewSurfaceShell,
 } from "../preview-surface";
 import { documentPathFacet, type BlockCounterEntry } from "../lib/types";
-import { isPdfTarget } from "../lib/pdf-target";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import { collectImageTargets } from "../app/pdf-image-previews";
 import { imageUrlField } from "./image-url-cache";
-import { resolveLocalMediaPreview } from "./media-preview";
+import {
+  createLocalMediaDependencies,
+  EMPTY_LOCAL_MEDIA_DEPENDENCIES,
+  getLocalMediaPreviewDependency,
+  getLocalMediaPreviewDependencyKey,
+  localMediaDependenciesChanged,
+  resolveLocalMediaPreview,
+  trackLocalMediaPreviewDependency,
+  type LocalMediaDependencies,
+} from "./media-preview";
 import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 import { getPlugin, pluginRegistryField } from "../plugins/plugin-registry";
 import { type BibStore, bibDataField } from "../state/bib-data";
@@ -62,17 +70,15 @@ interface BlockPreviewMediaState {
   readonly imageUrlOverrides?: ReadonlyMap<string, string>;
   readonly key: string;
   readonly loadingLocalMedia: readonly string[];
+  readonly mediaDependencies: LocalMediaDependencies;
   readonly readyPdfPreviews: readonly PdfCanvasReplacement[];
-  readonly trackedImagePaths: ReadonlySet<string>;
-  readonly trackedPdfPaths: ReadonlySet<string>;
   readonly unavailableLocalMedia: readonly string[];
 }
 
 interface BlockPreviewPlan {
   readonly buildBody: () => HTMLElement | null;
   readonly key: string;
-  readonly trackedImagePaths: ReadonlySet<string>;
-  readonly trackedPdfPaths: ReadonlySet<string>;
+  readonly mediaDependencies: LocalMediaDependencies;
 }
 
 interface TooltipPlan {
@@ -81,13 +87,10 @@ interface TooltipPlan {
   readonly dependsOnBibliography: boolean;
   readonly dependsOnMacros: boolean;
   readonly key: string;
-  readonly trackedImagePaths: ReadonlySet<string>;
-  readonly trackedPdfPaths: ReadonlySet<string>;
+  readonly mediaDependencies: LocalMediaDependencies;
 }
 
 type CrossrefPreviewVariant = "completion" | "hover";
-
-const EMPTY_TRACKED_PATHS: ReadonlySet<string> = new Set();
 const EMPTY_MEDIA_CACHE: ReadonlyMap<string, unknown> = new Map();
 const TOOLTIP_CONTENT_CACHE_LIMIT = 8;
 // Reuse preview DOM within the same immutable state/dependency object without
@@ -132,8 +135,7 @@ export function getCachedTooltipContentForTest(
     dependsOnBibliography: false,
     dependsOnMacros: false,
     key,
-    trackedImagePaths: EMPTY_TRACKED_PATHS,
-    trackedPdfPaths: EMPTY_TRACKED_PATHS,
+    mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
   });
 }
 
@@ -346,21 +348,21 @@ function buildBlockPreviewMediaState(
   text: string,
 ): BlockPreviewMediaState {
   const imageUrlOverrides = new Map<string, string>();
+  const mediaDependencies = createLocalMediaDependencies();
   const readyPdfPreviews: PdfCanvasReplacement[] = [];
   const loadingLocalMedia: string[] = [];
-  const trackedImagePaths = new Set<string>();
-  const trackedPdfPaths = new Set<string>();
   const unavailableLocalMedia: string[] = [];
   const keyParts: string[] = [];
 
   for (const src of collectImageTargets(text)) {
     const preview = resolveLocalMediaPreview(view, src);
     if (!preview) continue;
+    const dependency = getLocalMediaPreviewDependency(src, preview);
+    trackLocalMediaPreviewDependency(mediaDependencies, dependency);
+    keyParts.push(getLocalMediaPreviewDependencyKey(dependency));
 
     if (preview.kind === "image") {
       imageUrlOverrides.set(preview.resolvedPath, preview.dataUrl);
-      trackedImagePaths.add(preview.resolvedPath);
-      keyParts.push(`image:${preview.resolvedPath}:ready`);
       continue;
     }
 
@@ -369,29 +371,14 @@ function buildBlockPreviewMediaState(
         resolvedPath: preview.resolvedPath,
         src,
       });
-      trackedPdfPaths.add(preview.resolvedPath);
-      keyParts.push(`pdf:${preview.resolvedPath}:ready`);
       continue;
     }
 
     if (preview.kind === "loading") {
-      if (preview.isPdf) {
-        trackedPdfPaths.add(preview.resolvedPath);
-      } else {
-        trackedImagePaths.add(preview.resolvedPath);
-      }
-      keyParts.push(`${preview.isPdf ? "pdf" : "image"}:${preview.resolvedPath}:loading`);
       loadingLocalMedia.push(src);
       continue;
     }
 
-    if (isPdfTarget(src)) {
-      trackedPdfPaths.add(preview.resolvedPath);
-      keyParts.push(`pdf:${preview.resolvedPath}:error`);
-    } else {
-      trackedImagePaths.add(preview.resolvedPath);
-      keyParts.push(`image:${preview.resolvedPath}:error`);
-    }
     unavailableLocalMedia.push(src);
   }
 
@@ -399,9 +386,8 @@ function buildBlockPreviewMediaState(
     imageUrlOverrides: imageUrlOverrides.size > 0 ? imageUrlOverrides : undefined,
     key: keyParts.join("\0"),
     loadingLocalMedia,
+    mediaDependencies,
     readyPdfPreviews,
-    trackedImagePaths,
-    trackedPdfPaths,
     unavailableLocalMedia,
   };
 }
@@ -556,8 +542,7 @@ function buildBlockPreviewPlan(
     return {
       buildBody: () => null,
       key: `${useFullBlockSource ? "full" : "inner"}\0empty`,
-      trackedImagePaths: new Set<string>(),
-      trackedPdfPaths: new Set<string>(),
+      mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
     };
   }
 
@@ -580,8 +565,7 @@ function buildBlockPreviewPlan(
       return body;
     },
     key: `${useFullBlockSource ? "full" : "inner"}\0${text}\0${mediaState.key}`,
-    trackedImagePaths: mediaState.trackedImagePaths,
-    trackedPdfPaths: mediaState.trackedPdfPaths,
+    mediaDependencies: mediaState.mediaDependencies,
   };
 }
 
@@ -648,8 +632,7 @@ function buildCrossrefTooltipPlan(
       dependsOnBibliography: true,
       dependsOnMacros: true,
       key: `crossref:block\0${variant}\0${id}\0${headerText}\0${bodyPlan?.key ?? "missing"}`,
-      trackedImagePaths: bodyPlan?.trackedImagePaths ?? new Set<string>(),
-      trackedPdfPaths: bodyPlan?.trackedPdfPaths ?? new Set<string>(),
+      mediaDependencies: bodyPlan?.mediaDependencies ?? EMPTY_LOCAL_MEDIA_DEPENDENCIES,
     };
   }
 
@@ -684,8 +667,7 @@ function buildCrossrefTooltipPlan(
       dependsOnBibliography: false,
       dependsOnMacros: true,
       key: `crossref:equation\0${variant}\0${id}\0${resolved.label}\0${eqContent ?? ""}`,
-      trackedImagePaths: new Set<string>(),
-      trackedPdfPaths: new Set<string>(),
+      mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
     };
   }
 
@@ -701,8 +683,7 @@ function buildCrossrefTooltipPlan(
     dependsOnBibliography: false,
     dependsOnMacros: true,
     key: `crossref:unresolved\0${variant}\0${id}`,
-    trackedImagePaths: new Set<string>(),
-    trackedPdfPaths: new Set<string>(),
+    mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
   };
 }
 
@@ -769,8 +750,7 @@ function buildCitationTooltipPlan(
     dependsOnBibliography: true,
     dependsOnMacros: false,
     key: `citation:cluster\0${ids.join("\0")}\0${previews.map((item) => `${item.id}:${item.preview}`).join("\0")}`,
-    trackedImagePaths: new Set<string>(),
-    trackedPdfPaths: new Set<string>(),
+    mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
   };
 }
 
@@ -801,8 +781,7 @@ function buildSingleItemTooltipPlan(
         dependsOnBibliography: true,
         dependsOnMacros: false,
         key: `citation:item\0${id}\0${preview}`,
-        trackedImagePaths: new Set<string>(),
-        trackedPdfPaths: new Set<string>(),
+        mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
       };
     }
 
@@ -818,8 +797,7 @@ function buildSingleItemTooltipPlan(
       dependsOnBibliography: true,
       dependsOnMacros: false,
       key: `citation:item\0${id}\0unknown`,
-      trackedImagePaths: new Set<string>(),
-      trackedPdfPaths: new Set<string>(),
+      mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
     };
   }
 
@@ -839,8 +817,7 @@ function buildSingleItemTooltipPlan(
     dependsOnBibliography: false,
     dependsOnMacros: true,
     key: `mixed:unresolved\0${id}`,
-    trackedImagePaths: new Set<string>(),
-    trackedPdfPaths: new Set<string>(),
+    mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
   };
 }
 
@@ -929,23 +906,6 @@ function buildTooltipPlanForElement(
 
   return null;
 }
-
-function cacheEntriesChanged<T>(
-  paths: ReadonlySet<string>,
-  oldCache: ReadonlyMap<string, T>,
-  newCache: ReadonlyMap<string, T>,
-): boolean {
-  if (paths.size === 0 || oldCache === newCache) return false;
-
-  for (const path of paths) {
-    if (oldCache.get(path) !== newCache.get(path)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 // ── ViewPlugin: event delegation on scrollDOM ───────────────────────────────
 
 /**
@@ -1079,15 +1039,12 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
         return;
       }
 
-      const imageCacheChanged = cacheEntriesChanged(
-        currentPlan?.trackedImagePaths ?? EMPTY_TRACKED_PATHS,
-        update.startState.field(imageUrlField, false) || EMPTY_MEDIA_CACHE,
-        update.state.field(imageUrlField, false) || EMPTY_MEDIA_CACHE,
-      );
-      const pdfCacheChanged = cacheEntriesChanged(
-        currentPlan?.trackedPdfPaths ?? EMPTY_TRACKED_PATHS,
+      const localMediaChanged = localMediaDependenciesChanged(
+        currentPlan?.mediaDependencies ?? EMPTY_LOCAL_MEDIA_DEPENDENCIES,
         update.startState.field(pdfPreviewField, false) || EMPTY_MEDIA_CACHE,
         update.state.field(pdfPreviewField, false) || EMPTY_MEDIA_CACHE,
+        update.startState.field(imageUrlField, false) || EMPTY_MEDIA_CACHE,
+        update.state.field(imageUrlField, false) || EMPTY_MEDIA_CACHE,
       );
       const analysisChanged = beforeAnalysis !== afterAnalysis;
       const blockCountersChanged =
@@ -1099,8 +1056,7 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
         (macrosChanged && currentPlan?.dependsOnMacros === true);
 
       if (
-        imageCacheChanged ||
-        pdfCacheChanged ||
+        localMediaChanged ||
         forceRebuild ||
         update.docChanged ||
         analysisChanged ||

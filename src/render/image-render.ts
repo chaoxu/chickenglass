@@ -22,7 +22,13 @@ import { RenderWidget } from "./source-widget";
 import { imageUrlField } from "./image-url-cache";
 import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 import {
+  collectChangedLocalMediaPaths,
+  createLocalMediaDependencies,
+  getLocalMediaPreviewDependency,
   resolveLocalMediaPreview,
+  trackLocalMediaPreviewDependency,
+  type LocalMediaDependencies,
+  type LocalMediaPreviewDependency,
   type MediaPreviewResult,
 } from "./media-preview";
 import { CSS } from "../constants/css-classes";
@@ -141,56 +147,6 @@ function readImageContent(
   return { alt, src };
 }
 
-export function trackedCacheChanged(
-  trackedPaths: ReadonlySet<string>,
-  oldPdfCache: ReadonlyMap<string, unknown>,
-  newPdfCache: ReadonlyMap<string, unknown>,
-  oldImgCache: ReadonlyMap<string, unknown>,
-  newImgCache: ReadonlyMap<string, unknown>,
-): boolean {
-  if (oldPdfCache === newPdfCache && oldImgCache === newImgCache) {
-    return false;
-  }
-  for (const path of trackedPaths) {
-    if (cacheEntryChanged(path, oldPdfCache, newPdfCache, oldImgCache, newImgCache)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function collectChangedTrackedPaths(
-  trackedPaths: ReadonlySet<string>,
-  oldPdfCache: ReadonlyMap<string, unknown>,
-  newPdfCache: ReadonlyMap<string, unknown>,
-  oldImgCache: ReadonlyMap<string, unknown>,
-  newImgCache: ReadonlyMap<string, unknown>,
-): ReadonlySet<string> {
-  if (oldPdfCache === newPdfCache && oldImgCache === newImgCache) {
-    return new Set();
-  }
-  const changedPaths = new Set<string>();
-  for (const path of trackedPaths) {
-    if (cacheEntryChanged(path, oldPdfCache, newPdfCache, oldImgCache, newImgCache)) {
-      changedPaths.add(path);
-    }
-  }
-  return changedPaths;
-}
-
-function cacheEntryChanged(
-  path: string,
-  oldPdfCache: ReadonlyMap<string, unknown>,
-  newPdfCache: ReadonlyMap<string, unknown>,
-  oldImgCache: ReadonlyMap<string, unknown>,
-  newImgCache: ReadonlyMap<string, unknown>,
-): boolean {
-  return (
-    oldPdfCache.get(path) !== newPdfCache.get(path) ||
-    oldImgCache.get(path) !== newImgCache.get(path)
-  );
-}
-
 interface ImageBuildResult {
   readonly items: Range<Decoration>[];
   readonly nodes: ReadonlyArray<ImageNodeInfo>;
@@ -199,17 +155,19 @@ interface ImageBuildResult {
 interface ImageNodeInfo {
   readonly from: number;
   readonly to: number;
-  trackedPath?: string;
+  trackedDependency?: LocalMediaPreviewDependency;
 }
 
-function trackedPathsFromNodes(
+function mediaDependenciesFromNodes(
   nodes: ReadonlyArray<ImageNodeInfo>,
-): ReadonlySet<string> {
-  const trackedPaths = new Set<string>();
+): LocalMediaDependencies {
+  const dependencies = createLocalMediaDependencies();
   for (const node of nodes) {
-    if (node.trackedPath) trackedPaths.add(node.trackedPath);
+    if (node.trackedDependency) {
+      trackLocalMediaPreviewDependency(dependencies, node.trackedDependency);
+    }
   }
-  return trackedPaths;
+  return dependencies;
 }
 
 function mapImageNodes(
@@ -219,7 +177,7 @@ function mapImageNodes(
   return nodes.map((node) => ({
     from: changes.mapPos(node.from, 1),
     to: changes.mapPos(node.to, -1),
-    trackedPath: node.trackedPath,
+    trackedDependency: node.trackedDependency,
   }));
 }
 
@@ -365,7 +323,7 @@ function collectImageRangesTracked(
 
         const preview = resolveLocalMediaPreview(view, parsed.src);
         if (preview) {
-          trackedNode.trackedPath = preview.resolvedPath;
+          trackedNode.trackedDependency = getLocalMediaPreviewDependency(parsed.src, preview);
           pushWidgetDecoration(
             items,
             mediaPreviewWidget(parsed.alt, parsed.src, preview),
@@ -398,14 +356,14 @@ function collectImageRangesTracked(
 class ImageRenderPlugin implements PluginValue {
   decorations: DecorationSet;
   private imageNodes: ReadonlyArray<ImageNodeInfo>;
-  private trackedPaths: ReadonlySet<string>;
+  private mediaDependencies: LocalMediaDependencies;
   private coveredRanges: VisibleRange[];
 
   constructor(view: EditorView) {
     const result = collectImageRangesTracked(view);
     this.decorations = buildDecorations(result.items);
     this.imageNodes = result.nodes;
-    this.trackedPaths = trackedPathsFromNodes(result.nodes);
+    this.mediaDependencies = mediaDependenciesFromNodes(result.nodes);
     this.coveredRanges = snapshotRanges(view.visibleRanges);
   }
 
@@ -430,8 +388,8 @@ class ImageRenderPlugin implements PluginValue {
       this.incrementalViewportUpdate(update);
     }
 
-    const changedPaths = collectChangedTrackedPaths(
-      this.trackedPaths,
+    const changedPaths = collectChangedLocalMediaPaths(
+      this.mediaDependencies,
       previewCache(update.startState, pdfPreviewField),
       previewCache(update.state, pdfPreviewField),
       previewCache(update.startState, imageUrlField),
@@ -491,7 +449,7 @@ class ImageRenderPlugin implements PluginValue {
 
     this.decorations = nextDecorations;
     this.imageNodes = nextImageNodes;
-    this.trackedPaths = trackedPathsFromNodes(nextImageNodes);
+    this.mediaDependencies = mediaDependenciesFromNodes(nextImageNodes);
     this.coveredRanges = currentVisibleRanges;
   }
 
@@ -538,7 +496,7 @@ class ImageRenderPlugin implements PluginValue {
     }
 
     this.decorations = nextDecorations;
-    this.trackedPaths = trackedPathsFromNodes(this.imageNodes);
+    this.mediaDependencies = mediaDependenciesFromNodes(this.imageNodes);
     this.coveredRanges = currentVisibleRanges;
   }
 
@@ -547,7 +505,9 @@ class ImageRenderPlugin implements PluginValue {
     changedPaths: ReadonlySet<string>,
   ): void {
     const dirtyNodes = this.imageNodes.filter(
-      (node) => node.trackedPath !== undefined && changedPaths.has(node.trackedPath),
+      (node) =>
+        node.trackedDependency !== undefined &&
+        changedPaths.has(node.trackedDependency.resolvedPath),
     );
     if (dirtyNodes.length === 0) return;
 
@@ -555,7 +515,9 @@ class ImageRenderPlugin implements PluginValue {
       dirtyNodes.map((node) => ({ from: node.from, to: node.to })),
     );
     const keptNodes = this.imageNodes.filter(
-      (node) => node.trackedPath === undefined || !changedPaths.has(node.trackedPath),
+      (node) =>
+        node.trackedDependency === undefined ||
+        !changedPaths.has(node.trackedDependency.resolvedPath),
     );
 
     let nextDecorations = this.decorations;
@@ -583,14 +545,14 @@ class ImageRenderPlugin implements PluginValue {
     this.decorations = nextDecorations;
     this.imageNodes = [...keptNodes, ...result.nodes]
       .sort((a, b) => a.from - b.from || a.to - b.to);
-    this.trackedPaths = trackedPathsFromNodes(this.imageNodes);
+    this.mediaDependencies = mediaDependenciesFromNodes(this.imageNodes);
   }
 
   rebuild(view: EditorView): void {
     const result = collectImageRangesTracked(view);
     this.decorations = buildDecorations(result.items);
     this.imageNodes = result.nodes;
-    this.trackedPaths = trackedPathsFromNodes(result.nodes);
+    this.mediaDependencies = mediaDependenciesFromNodes(result.nodes);
     this.coveredRanges = snapshotRanges(view.visibleRanges);
   }
 }
