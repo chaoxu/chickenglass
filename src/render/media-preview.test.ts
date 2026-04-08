@@ -13,7 +13,12 @@ vi.mock("./pdf-rasterizer", () => ({
   rasterizePdfPage1: rasterizeMock,
 }));
 
-import { resolveLocalMediaPreview } from "./media-preview";
+import {
+  collectChangedLocalMediaPaths,
+  getLocalMediaPreviewDependency,
+  getLocalMediaPreviewDependencyKey,
+  resolveLocalMediaPreview,
+} from "./media-preview";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -206,5 +211,70 @@ describe("resolveLocalMediaPreview", () => {
       expect(r1!.resolvedPath).toBe("posts/diagram.png");
       expect(r2!.resolvedPath).toBe("notes/diagram.png");
     });
+  });
+});
+
+describe("local media preview dependencies", () => {
+  it("describes ready image previews with the image cache key", () => {
+    const dependency = getLocalMediaPreviewDependency("diagram.png", {
+      kind: "image",
+      resolvedPath: "posts/diagram.png",
+      dataUrl: "data:image/png;base64,AAA",
+    });
+
+    expect(dependency).toEqual({
+      cacheKind: "image",
+      resolvedPath: "posts/diagram.png",
+      status: "ready",
+    });
+    expect(getLocalMediaPreviewDependencyKey(dependency)).toBe(
+      "image:posts/diagram.png:ready",
+    );
+  });
+
+  it("describes loading PDF previews with the PDF cache key", () => {
+    const dependency = getLocalMediaPreviewDependency("diagram.pdf", {
+      kind: "loading",
+      resolvedPath: "posts/diagram.pdf",
+      isPdf: true,
+    });
+
+    expect(dependency).toEqual({
+      cacheKind: "pdf",
+      resolvedPath: "posts/diagram.pdf",
+      status: "loading",
+    });
+    expect(getLocalMediaPreviewDependencyKey(dependency)).toBe(
+      "pdf:posts/diagram.pdf:loading",
+    );
+  });
+
+  it("classifies error previews from the original source type", () => {
+    const dependency = getLocalMediaPreviewDependency("diagram.pdf", {
+      kind: "error",
+      resolvedPath: "posts/diagram.pdf",
+      fallbackSrc: "diagram.pdf",
+    });
+
+    expect(dependency).toEqual({
+      cacheKind: "pdf",
+      resolvedPath: "posts/diagram.pdf",
+      status: "error",
+    });
+  });
+
+  it("collects changed paths across image and PDF caches", () => {
+    const changed = collectChangedLocalMediaPaths(
+      {
+        imagePaths: new Set(["posts/diagram.png"]),
+        pdfPaths: new Set(["posts/diagram.pdf"]),
+      },
+      new Map([["posts/diagram.pdf", { status: "loading" }]]),
+      new Map([["posts/diagram.pdf", { status: "ready" }]]),
+      new Map([["posts/diagram.png", { status: "loading" }]]),
+      new Map([["posts/diagram.png", { status: "ready" }]]),
+    );
+
+    expect(changed).toEqual(new Set(["posts/diagram.pdf", "posts/diagram.png"]));
   });
 });

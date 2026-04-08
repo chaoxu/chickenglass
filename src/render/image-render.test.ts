@@ -6,7 +6,6 @@ import { CSS } from "../constants/css-classes";
 import {
   ImagePreviewWidget,
   imageRenderPlugin,
-  trackedCacheChanged,
 } from "./image-render";
 import { imageUrlEffect, imageUrlField } from "./image-url-cache";
 import { pdfPreviewField } from "./pdf-preview-cache";
@@ -325,17 +324,28 @@ describe("PDF path resolution for cache keys", () => {
   });
 });
 
-describe("trackedCacheChanged", () => {
+describe("localMediaDependenciesChanged", () => {
+  function deps(
+    paths: {
+      image?: readonly string[];
+      pdf?: readonly string[];
+    } = {},
+  ) {
+    return {
+      imagePaths: new Set(paths.image ?? []),
+      pdfPaths: new Set(paths.pdf ?? []),
+    };
+  }
+
   it("returns false when both caches are identity-equal", () => {
     const cache = new Map([["a.pdf", { status: "loading" }]]);
-    const paths = new Set(["a.pdf"]);
-    expect(trackedCacheChanged(paths, cache, cache, cache, cache)).toBe(false);
+    expect(mediaPreview.localMediaDependenciesChanged(deps({ pdf: ["a.pdf"] }), cache, cache, cache, cache)).toBe(false);
   });
 
   it("returns false when tracked paths is empty", () => {
     const old = new Map([["a.pdf", { status: "loading" }]]);
     const updated = new Map([["a.pdf", { status: "ready" }]]);
-    expect(trackedCacheChanged(new Set(), old, updated, old, old)).toBe(false);
+    expect(mediaPreview.localMediaDependenciesChanged(deps(), old, updated, old, old)).toBe(false);
   });
 
   it("detects tracked PDF path entry change (loading->ready)", () => {
@@ -344,8 +354,7 @@ describe("trackedCacheChanged", () => {
     const oldPdf = new Map([["a.pdf", entry1]]);
     const newPdf = new Map([["a.pdf", entry2]]);
     const imgCache = new Map<string, unknown>();
-    const paths = new Set(["a.pdf"]);
-    expect(trackedCacheChanged(paths, oldPdf, newPdf, imgCache, imgCache)).toBe(true);
+    expect(mediaPreview.localMediaDependenciesChanged(deps({ pdf: ["a.pdf"] }), oldPdf, newPdf, imgCache, imgCache)).toBe(true);
   });
 
   it("detects tracked image path entry change (loading->ready)", () => {
@@ -354,8 +363,7 @@ describe("trackedCacheChanged", () => {
     const pdfCache = new Map<string, unknown>();
     const oldImg = new Map([["photo.png", entry1]]);
     const newImg = new Map([["photo.png", entry2]]);
-    const paths = new Set(["photo.png"]);
-    expect(trackedCacheChanged(paths, pdfCache, pdfCache, oldImg, newImg)).toBe(true);
+    expect(mediaPreview.localMediaDependenciesChanged(deps({ image: ["photo.png"] }), pdfCache, pdfCache, oldImg, newImg)).toBe(true);
   });
 
   it("ignores untracked path changes", () => {
@@ -364,8 +372,7 @@ describe("trackedCacheChanged", () => {
     const oldPdf = new Map([["other.pdf", entry1]]);
     const newPdf = new Map([["other.pdf", entry2]]);
     const imgCache = new Map<string, unknown>();
-    const paths = new Set(["a.pdf"]);
-    expect(trackedCacheChanged(paths, oldPdf, newPdf, imgCache, imgCache)).toBe(false);
+    expect(mediaPreview.localMediaDependenciesChanged(deps({ pdf: ["a.pdf"] }), oldPdf, newPdf, imgCache, imgCache)).toBe(false);
   });
 
   it("detects entry removal (eviction)", () => {
@@ -373,8 +380,7 @@ describe("trackedCacheChanged", () => {
     const oldPdf = new Map([["a.pdf", entry]]);
     const newPdf = new Map<string, unknown>();
     const imgCache = new Map<string, unknown>();
-    const paths = new Set(["a.pdf"]);
-    expect(trackedCacheChanged(paths, oldPdf, newPdf, imgCache, imgCache)).toBe(true);
+    expect(mediaPreview.localMediaDependenciesChanged(deps({ pdf: ["a.pdf"] }), oldPdf, newPdf, imgCache, imgCache)).toBe(true);
   });
 
   it("detects entry addition for tracked path", () => {
@@ -382,8 +388,7 @@ describe("trackedCacheChanged", () => {
     const oldPdf = new Map<string, unknown>();
     const newPdf = new Map([["a.pdf", entry]]);
     const imgCache = new Map<string, unknown>();
-    const paths = new Set(["a.pdf"]);
-    expect(trackedCacheChanged(paths, oldPdf, newPdf, imgCache, imgCache)).toBe(true);
+    expect(mediaPreview.localMediaDependenciesChanged(deps({ pdf: ["a.pdf"] }), oldPdf, newPdf, imgCache, imgCache)).toBe(true);
   });
 
   it("returns false when tracked path entry is same reference", () => {
@@ -391,8 +396,7 @@ describe("trackedCacheChanged", () => {
     const oldPdf = new Map([["a.pdf", entry], ["b.pdf", { status: "loading" }]]);
     const newPdf = new Map([["a.pdf", entry], ["b.pdf", { status: "ready" }]]);
     const imgCache = new Map<string, unknown>();
-    const paths = new Set(["a.pdf"]);
-    expect(trackedCacheChanged(paths, oldPdf, newPdf, imgCache, imgCache)).toBe(false);
+    expect(mediaPreview.localMediaDependenciesChanged(deps({ pdf: ["a.pdf"] }), oldPdf, newPdf, imgCache, imgCache)).toBe(false);
   });
 });
 
