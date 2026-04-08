@@ -85,6 +85,22 @@ describe("structure-edit-state", () => {
     expect(mapped.to).toBe(edited.field(frontmatterField).end);
   });
 
+  it("does not create structure-edit targets for inline math or references", () => {
+    const doc = "See $x^2$ and [@karger2000].";
+    const state = createState(doc);
+
+    expect(createStructureEditTargetAt(state, doc.indexOf("$x^2$") + 1)).toBeNull();
+    expect(createStructureEditTargetAt(state, doc.indexOf("[@karger2000]") + 2)).toBeNull();
+  });
+
+  it("creates a structure-edit target for display math", () => {
+    const doc = ["before", "", "$$x^2$$", "", "after"].join("\n");
+    const state = createState(doc);
+    const target = createStructureEditTargetAt(state, doc.indexOf("x^2"));
+
+    expect(target?.kind).toBe("display-math");
+  });
+
   it("clears structure edit when a programmatic document replacement switches files", () => {
     const state = createState(["---", "title: Hello", "---", "Body"].join("\n"));
     const target = createStructureEditTargetAt(state, 0);

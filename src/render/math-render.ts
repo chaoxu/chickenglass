@@ -56,11 +56,11 @@ function mathMacrosChanged(tr: Transaction): boolean {
   return before !== after && serializeMacros(before) !== serializeMacros(after);
 }
 
-function getExplicitMathTarget(
+function getExplicitDisplayMathTarget(
   state: EditorState,
 ): Pick<MathSemantics, "from" | "to"> | undefined {
   const active = getActiveStructureEditTarget(state);
-  return active?.kind === "math"
+  return active?.kind === "display-math"
     ? { from: active.from, to: active.to }
     : undefined;
 }
@@ -81,7 +81,9 @@ function getRevealedMathTarget(
   state: EditorState,
   focused: boolean,
 ): Pick<MathSemantics, "from" | "to"> | undefined {
-  return getExplicitMathTarget(state) ?? getTouchedInlineMathTarget(state, focused) ?? undefined;
+  return getExplicitDisplayMathTarget(state)
+    ?? getTouchedInlineMathTarget(state, focused)
+    ?? undefined;
 }
 
 /**
