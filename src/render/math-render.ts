@@ -30,6 +30,12 @@ import {
   editorFocusField,
   focusTracker,
 } from "./focus-state";
+import {
+  type DirtyRange,
+  dirtyRangesFromChanges,
+  expandChangeRange,
+  rangeIntersectsDirtyRanges,
+} from "./incremental-dirty-ranges";
 import { serializeMacros } from "./source-widget";
 import { getActiveStructureEditTarget } from "../editor/structure-edit-state";
 import {
@@ -191,50 +197,6 @@ function buildMathDecorationsFromState(state: EditorState): DecorationSet {
   return buildDecorations(items);
 }
 
-interface DirtyRange {
-  readonly from: number;
-  readonly to: number;
-}
-
-function mergeDirtyRanges(ranges: readonly DirtyRange[]): DirtyRange[] {
-  if (ranges.length === 0) return [];
-  const sorted = [...ranges].sort((left, right) => left.from - right.from || left.to - right.to);
-  const merged: DirtyRange[] = [sorted[0]];
-  for (let index = 1; index < sorted.length; index += 1) {
-    const current = sorted[index];
-    const last = merged[merged.length - 1];
-    if (current.from <= last.to) {
-      merged[merged.length - 1] = {
-        from: last.from,
-        to: Math.max(last.to, current.to),
-      };
-      continue;
-    }
-    merged.push(current);
-  }
-  return merged;
-}
-
-function dirtyRangesFromChanges(tr: Transaction): DirtyRange[] {
-  const ranges: DirtyRange[] = [];
-  tr.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
-    ranges.push({ from: fromB, to: Math.max(fromB, toB) });
-  });
-  return mergeDirtyRanges(ranges);
-}
-
-function rangeIntersectsDirtyRanges(
-  from: number,
-  to: number,
-  dirtyRanges: readonly DirtyRange[],
-): boolean {
-  for (const range of dirtyRanges) {
-    if (from < range.to && to > range.from) return true;
-    if (range.from >= to) break;
-  }
-  return false;
-}
-
 function collectDirtyMathRegions(
   regions: readonly MathSemantics[],
   dirtyRanges: readonly DirtyRange[],
@@ -356,7 +318,7 @@ const mathDecorationField = StateField.define<DecorationSet>({
           return value.map(tr.changes);
         }
 
-        const dirtyRanges = dirtyRangesFromChanges(tr);
+        const dirtyRanges = dirtyRangesFromChanges(tr.changes, expandChangeRange);
         const mapped = value.map(tr.changes);
         const dirtyRegions = collectDirtyMathRegions(regionsAfter, dirtyRanges);
         let next = mapped;

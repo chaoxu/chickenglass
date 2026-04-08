@@ -49,6 +49,13 @@ import {
 import type { DocumentAnalysis, ReferenceSemantics } from "../semantics/document";
 import { bibDataField } from "../state/bib-data";
 import {
+  type DirtyRange,
+  dirtyRangesFromChanges,
+  expandChangeRangeToLines,
+  mergeDirtyRanges,
+  rangeIntersectsDirtyRanges,
+} from "./incremental-dirty-ranges";
+import {
   findFocusedInlineRevealTarget,
   inlineRevealTargetChanged,
 } from "./inline-reveal-policy";
@@ -357,56 +364,6 @@ function buildReferenceDecorations(view: EditorView): DecorationSet {
   return buildDecorations(collectReferenceRanges(view, store, cslProcessor));
 }
 
-interface DirtyRange {
-  readonly from: number;
-  readonly to: number;
-}
-
-function mergeDirtyRanges(ranges: readonly DirtyRange[]): DirtyRange[] {
-  if (ranges.length === 0) return [];
-  const sorted = [...ranges].sort((left, right) => left.from - right.from || left.to - right.to);
-  const merged: DirtyRange[] = [sorted[0]];
-  for (let i = 1; i < sorted.length; i += 1) {
-    const current = sorted[i];
-    const last = merged[merged.length - 1];
-    if (current.from <= last.to) {
-      merged[merged.length - 1] = {
-        from: last.from,
-        to: Math.max(last.to, current.to),
-      };
-      continue;
-    }
-    merged.push(current);
-  }
-  return merged;
-}
-
-function dirtyRangesFromChanges(
-  state: EditorState,
-  changes: ChangeSet,
-): DirtyRange[] {
-  const ranges: DirtyRange[] = [];
-  changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
-    const startLine = state.doc.lineAt(fromB).from;
-    const endAnchor = Math.max(fromB, toB);
-    const endLine = state.doc.lineAt(Math.min(endAnchor, state.doc.length)).to;
-    ranges.push({ from: startLine, to: endLine });
-  });
-  return mergeDirtyRanges(ranges);
-}
-
-function rangeIntersectsDirtyRanges(
-  from: number,
-  to: number,
-  dirtyRanges: readonly DirtyRange[],
-): boolean {
-  for (const range of dirtyRanges) {
-    if (from < range.to && to > range.from) return true;
-    if (range.from >= to) break;
-  }
-  return false;
-}
-
 function collectDirtyReferences(
   references: readonly ReferenceSemantics[],
   dirtyRanges: readonly DirtyRange[],
@@ -515,7 +472,10 @@ class ReferenceRenderViewPlugin {
       }
 
       const dirtyRanges = mergeDirtyRangesWithActiveReference(
-        dirtyRangesFromChanges(update.state, update.changes),
+        dirtyRangesFromChanges(
+          update.changes,
+          (from, to) => expandChangeRangeToLines(update.state.doc, from, to),
+        ),
         activeChanged ? beforeActive : null,
         activeChanged ? afterActive : null,
       );
