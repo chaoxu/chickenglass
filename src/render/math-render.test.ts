@@ -14,6 +14,11 @@ import { createMockEditorView, createTestView } from "../test-utils";
 import { focusEffect, widgetSourceMap } from "./render-utils";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { renderInlineMarkdown } from "./inline-render";
+import {
+  activeStructureEditField,
+  createStructureEditTargetAt,
+  setStructureEditTargetEffect,
+} from "../editor/structure-edit-state";
 
 /** Count only widget (replace) decorations, ignoring mark decorations like cf-math-source. */
 function countWidgets(ranges: ReturnType<typeof collectMathRanges>): number {
@@ -38,6 +43,7 @@ function createMathView(doc: string, cursorPos?: number): EditorView {
     extensions: [
       markdown({ extensions: [mathExtension, equationLabelExtension] }),
       frontmatterField,
+      activeStructureEditField,
       documentSemanticsField,
       mathMacrosField,
     ],
@@ -59,6 +65,7 @@ function createMathViewWithLabels(doc: string, cursorPos?: number): EditorView {
     extensions: [
       markdown({ extensions: [mathExtension, equationLabelExtension] }),
       frontmatterField,
+      activeStructureEditField,
       documentSemanticsField,
       mathMacrosField,
     ],
@@ -72,6 +79,7 @@ function createMathRenderState(doc: string, cursorPos = 0): EditorState {
     extensions: [
       markdown({ extensions: [mathExtension, equationLabelExtension] }),
       frontmatterField,
+      activeStructureEditField,
       documentSemanticsField,
       mathRenderPlugin,
     ],
@@ -84,10 +92,31 @@ function createMathRenderView(doc: string, cursorPos = 0): EditorView {
     extensions: [
       markdown({ extensions: [mathExtension, equationLabelExtension] }),
       frontmatterField,
+      activeStructureEditField,
       documentSemanticsField,
       mathRenderPlugin,
     ],
   });
+}
+
+function activateMathSourceView(view: EditorView, pos: number): void {
+  const target = createStructureEditTargetAt(view.state, pos);
+  expect(target?.kind).toBe("math");
+  if (!target) throw new Error("expected math structure-edit target");
+  view.dispatch({
+    effects: setStructureEditTargetEffect.of(target),
+    selection: { anchor: pos },
+  });
+}
+
+function activateMathSourceState(state: EditorState, pos: number): EditorState {
+  const target = createStructureEditTargetAt(state, pos);
+  expect(target?.kind).toBe("math");
+  if (!target) throw new Error("expected math structure-edit target");
+  return state.update({
+    effects: setStructureEditTargetEffect.of(target),
+    selection: { anchor: pos },
+  }).state;
 }
 
 describe("MathWidget (inline)", () => {
@@ -488,29 +517,31 @@ describe("collectMathRanges", () => {
     expect(ranges[0].to).toBe(12);
   });
 
-  it("does not collect math when cursor is inside", () => {
-    // Cursor at position 7 is inside "$x^2$" which spans 5..10
-    view = createMathView("text $x^2$ more", 7);
+  it("reveals inline source when math structure edit is active", () => {
+    view = createMathView("text $x^2$ more", 0);
+    activateMathSourceView(view, 7);
     const ranges = collectMathRanges(view);
     expect(countWidgets(ranges)).toBe(0);
   });
 
-  it("does not collect math when cursor is at math boundary", () => {
-    // Cursor at position 5 is at the start of "$x^2$"
-    view = createMathView("text $x^2$ more", 5);
+  it("reveals inline source when structure edit starts at the math boundary", () => {
+    view = createMathView("text $x^2$ more", 0);
+    activateMathSourceView(view, 5);
     const ranges = collectMathRanges(view);
     expect(countWidgets(ranges)).toBe(0);
   });
 
-  it("styles inline $ delimiters with cf-source-delimiter (#789)", () => {
-    view = createMathView("text $x^2$ more", 7);
+  it("styles inline $ delimiters with cf-source-delimiter during structure edit (#789)", () => {
+    view = createMathView("text $x^2$ more", 0);
+    activateMathSourceView(view, 7);
     const ranges = collectMathRanges(view);
     expect(countMarksWithClass(ranges, CSS.sourceDelimiter)).toBe(2);
     expect(countMarksWithClass(ranges, CSS.mathSource)).toBe(1);
   });
 
-  it("styles inline \\( \\) delimiters with cf-source-delimiter (#789)", () => {
-    view = createMathView("text \\(x^2\\) more", 8);
+  it("styles inline \\( \\) delimiters with cf-source-delimiter during structure edit (#789)", () => {
+    view = createMathView("text \\(x^2\\) more", 0);
+    activateMathSourceView(view, 8);
     const ranges = collectMathRanges(view);
     expect(countMarksWithClass(ranges, CSS.sourceDelimiter)).toBe(2);
     expect(countMarksWithClass(ranges, CSS.mathSource)).toBe(1);
@@ -530,26 +561,28 @@ describe("collectMathRanges", () => {
     expect(ranges.length).toBe(1);
   });
 
-  it("keeps rendered display math visible when cursor is inside", () => {
+  it("keeps rendered display math visible when structure edit is active", () => {
     const doc = "before\n\n$$x^2$$\n\nafter";
-    // Cursor inside the $$ block
-    view = createMathView(doc, 10);
+    view = createMathView(doc, 0);
+    activateMathSourceView(view, 10);
     const ranges = collectMathRanges(view);
     expect(countWidgets(ranges)).toBe(1);
     expect(countSourceMarks(ranges)).toBeGreaterThan(0);
   });
 
-  it("keeps rendered labeled display math visible when cursor is inside", () => {
+  it("keeps rendered labeled display math visible when structure edit is active", () => {
     const doc = "before\n\n$$\nx^2\n$$ {#eq:test}\n\nafter";
-    view = createMathView(doc, 11);
+    view = createMathView(doc, 0);
+    activateMathSourceView(view, 11);
     const ranges = collectMathRanges(view);
     expect(countWidgets(ranges)).toBe(1);
     expect(countSourceMarks(ranges)).toBeGreaterThan(1);
   });
 
-  it("keeps display-math label/body on cf-math-source but delimiters on cf-source-delimiter (#789)", () => {
+  it("keeps display-math label/body on cf-math-source but delimiters on cf-source-delimiter during structure edit (#789)", () => {
     const doc = "before\n\n$$\nx^2\n$$ {#eq:test}\n\nafter";
-    view = createMathView(doc, 11);
+    view = createMathView(doc, 0);
+    activateMathSourceView(view, 11);
     const ranges = collectMathRanges(view);
     expect(countWidgets(ranges)).toBe(1);
     expect(countMarksWithClass(ranges, CSS.sourceDelimiter)).toBe(2);
@@ -694,14 +727,12 @@ describe("math decoration invalidation", () => {
     expect(after).toBe(before);
   });
 
-  it("rebuilds when focused selection enters a math region", () => {
+  it("rebuilds when math structure edit activates", () => {
     const doc = "aa $x$ bb";
     const initial = createMathRenderState(doc);
-    const focused = initial.update({ effects: focusEffect.of(true) }).state;
-    const before = focused.field(mathDecorationField);
+    const before = initial.field(mathDecorationField);
     const insideMath = doc.indexOf("$x$") + 1;
-
-    const after = focused.update({ selection: { anchor: insideMath } }).state.field(mathDecorationField);
+    const after = activateMathSourceState(initial, insideMath).field(mathDecorationField);
 
     expect(after).not.toBe(before);
   });
@@ -716,7 +747,7 @@ describe("math decoration invalidation", () => {
     expect(after).toBe(before);
   });
 
-  it("rebuilds on focus gain when the cursor is already inside math", () => {
+  it("does not rebuild on focus gain alone when no math structure edit is active", () => {
     const doc = "aa $x$ bb";
     const insideMath = doc.indexOf("$x$") + 1;
     const state = createMathRenderState(doc, insideMath);
@@ -724,7 +755,7 @@ describe("math decoration invalidation", () => {
 
     const after = state.update({ effects: focusEffect.of(true) }).state.field(mathDecorationField);
 
-    expect(after).not.toBe(before);
+    expect(after).toBe(before);
   });
 
   it("maps decorations instead of rebuilding when prose before math is edited", () => {
@@ -743,27 +774,22 @@ describe("math decoration invalidation", () => {
     expect(after.size).toBe(before.size);
   });
 
-  it("updates sourceFrom/sourceTo on mapped widgets after position-only edit", () => {
+  it("refreshes visible math metadata after a position-only edit", async () => {
     const doc = "hello $x$ end";
-    const state = createMathRenderState(doc, 0);
+    const currentView = createMathRenderView(doc, 0);
 
-    // Math "$x$" starts at index 6 in the original document
-    const originalMathFrom = doc.indexOf("$x$");
-    expect(originalMathFrom).toBe(6);
-
-    // Insert "abc" at the start — math shifts by 3
-    const after = state.update({
+    currentView.dispatch({
       changes: { from: 0, to: 0, insert: "abc" },
-    }).state.field(mathDecorationField);
+    });
 
-    // Extract widget sourceFrom from the mapped decoration set
-    const cursor = after.iter();
-    expect(cursor.value).not.toBeNull();
-    const widget = cursor.value!.spec?.widget as MathWidget | undefined;
-    expect(widget).toBeInstanceOf(MathWidget);
-    // sourceFrom must reflect the new position (6 + 3 = 9), not the stale 6
-    expect(widget!.sourceFrom).toBe(originalMathFrom + 3);
-    expect(widget!.sourceTo).toBe(originalMathFrom + 3 + "$x$".length);
+    await vi.waitFor(() => {
+      const widgetEl = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="x"]`);
+      expect(widgetEl).not.toBeNull();
+      expect(widgetEl!.dataset.sourceFrom).toBe("9");
+      expect(widgetEl!.dataset.sourceTo).toBe("12");
+      expect(widgetSourceMap.get(widgetEl!)?.sourceFrom).toBe(9);
+      expect(widgetSourceMap.get(widgetEl!)?.sourceTo).toBe(12);
+    });
   });
 });
 
@@ -1016,7 +1042,7 @@ describe("inline math mouse selection integration", () => {
   });
 });
 
-describe("cursor toggle behavior", () => {
+describe("explicit math source edit", () => {
   let view: EditorView | undefined;
 
   afterEach(() => {
@@ -1025,33 +1051,30 @@ describe("cursor toggle behavior", () => {
     clearKatexCache();
   });
 
-  it("reveals source when cursor enters math region", () => {
+  it("reveals source when math structure edit activates", () => {
     view = createMathView("text $x^2$ more", 0);
-    // Initially cursor is outside, so math is collected for rendering
     let ranges = collectMathRanges(view);
     expect(ranges.length).toBe(1);
 
-    // Move cursor inside the math
-    view.dispatch({ selection: { anchor: 7 } });
+    activateMathSourceView(view, 7);
     ranges = collectMathRanges(view);
     expect(countWidgets(ranges)).toBe(0);
   });
 
-  it("renders when cursor leaves math region", () => {
-    view = createMathView("text $x^2$ more", 7);
-    // Cursor inside math - no decorations
+  it("renders again when math structure edit clears", () => {
+    view = createMathView("text $x^2$ more", 0);
+    activateMathSourceView(view, 7);
     let ranges = collectMathRanges(view);
     expect(countWidgets(ranges)).toBe(0);
 
-    // Move cursor outside
     view.dispatch({ selection: { anchor: 0 } });
     ranges = collectMathRanges(view);
     expect(ranges.length).toBe(1);
   });
 
-  it("only reveals the math region containing the cursor", () => {
-    view = createMathView("$a$ and $b$ and $c$", 9);
-    // Cursor is inside $b$ (positions 8..10), so $a$ and $c$ should be collected
+  it("only reveals the math region containing the active structure target", () => {
+    view = createMathView("$a$ and $b$ and $c$", 0);
+    activateMathSourceView(view, 9);
     const ranges = collectMathRanges(view);
     expect(countWidgets(ranges)).toBe(2);
   });

@@ -18,10 +18,9 @@ import {
   type DecorationSet,
   Decoration,
   type EditorView,
-  type ViewUpdate,
-  ViewPlugin,
 } from "@codemirror/view";
 import { EditorState, type Extension, type Range } from "@codemirror/state";
+import type { Transaction } from "@codemirror/state";
 import type { BlockAttrs } from "./plugin-types";
 import {
   collectFencedDivs,
@@ -37,7 +36,6 @@ import {
   decorationHidden,
   editorFocusField,
   focusTracker,
-  findFencedBlockAt,
   hideMultiLineClosingFence,
   MacroAwareWidget,
   RenderWidget,
@@ -46,16 +44,14 @@ import {
   addSingleLineClosingFence,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
-  getFencedBlockRenderContext,
   mathMacrosField,
 } from "../render/render-core";
 import {
-  captureScrollAnchor,
   mutateWithScrollStabilizedMeasure,
-  requestScrollStabilizedMeasure,
 } from "../render/scroll-anchor";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import { documentSemanticsField } from "../semantics/codemirror-source";
+import { activeFencedOpenFenceStarts } from "../editor/shell-ownership";
 import {
   isValidEmbedUrl,
   extractYoutubeId,
@@ -66,9 +62,11 @@ import { CSS } from "../constants/css-classes";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 import { IFRAME_MAX_ATTEMPTS, IFRAME_POLL_INTERVAL_MS } from "../constants/timing";
 import { fenceProtectionExtension } from "./fence-protection";
+import {
+  hasStructureEditEffect,
+  isFencedStructureEditActive,
+} from "../editor/structure-edit-state";
 
-/** Pre-created mark decoration for monospace source syntax on fence lines. */
-const blockSourceMark = Decoration.mark({ class: CSS.blockSource });
 
 const openParenWidget = Decoration.widget({
   widget: createSimpleTextWidget("span", CSS.blockTitleParen, "("),
@@ -86,6 +84,8 @@ class BlockHeaderWidget extends MacroAwareWidget {
     private readonly macros: Record<string, string>,
   ) {
     super(macros);
+    this.includeInShellSurface = true;
+    this.useLiveSourceRange = false;
   }
 
   createDOM(): HTMLElement {
@@ -116,17 +116,25 @@ class BlockHeaderWidget extends MacroAwareWidget {
     this.setSourceRangeAttrs(dom);
     return true;
   }
+
 }
 
 export { BlockHeaderWidget as _BlockHeaderWidgetForTest };
+
+function joinClasses(...classes: Array<string | false | null | undefined>): string {
+  return classes.filter(Boolean).join(" ");
+}
 
 class BlockCaptionWidget extends MacroAwareWidget {
   constructor(
     private readonly header: string,
     private readonly title: string,
     private readonly macros: Record<string, string>,
+    private readonly active: boolean = false,
   ) {
     super(macros);
+    this.includeInShellSurface = true;
+    this.useLiveSourceRange = false;
   }
 
   private renderCaptionContent(el: HTMLElement): void {
@@ -153,36 +161,14 @@ class BlockCaptionWidget extends MacroAwareWidget {
     el.appendChild(titleEl);
   }
 
-  protected override bindSourceReveal(
-    el: HTMLElement,
-    view: EditorView,
-  ): void {
-    el.style.cursor = "pointer";
-    el.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      view.focus();
-
-      let blockPos = this.sourceFrom;
-      try {
-        blockPos = view.posAtDOM(el);
-      } catch {
-        // Fall back to the widget's source range if CM6 cannot resolve the DOM.
-      }
-
-      const liveDiv = findFencedBlockAt(collectFencedDivs(view.state), blockPos);
-      const revealPos = liveDiv
-        ? getFencedDivRevealFrom(liveDiv)
-        : this.sourceFrom;
-      if (revealPos < 0) return;
-
-      view.dispatch({ selection: { anchor: revealPos }, scrollIntoView: false });
-    });
-  }
-
   createDOM(): HTMLElement {
     return this.createCachedDOM(() => {
       const el = document.createElement("div");
-      el.className = "cf-block-caption";
+      el.className = joinClasses(
+        "cf-block-caption",
+        this.active && CSS.activeShellWidget,
+        this.active && CSS.activeShellFooter,
+      );
       this.renderCaptionContent(el);
       return el;
     });
@@ -192,12 +178,18 @@ class BlockCaptionWidget extends MacroAwareWidget {
     return (
       this.header === other.header &&
       this.title === other.title &&
-      this.macrosKey === other.macrosKey
+      this.macrosKey === other.macrosKey &&
+      this.active === other.active
     );
   }
 
   updateDOM(dom: HTMLElement): boolean {
     if (!dom.classList.contains("cf-block-caption")) return false;
+    dom.className = joinClasses(
+      "cf-block-caption",
+      this.active && CSS.activeShellWidget,
+      this.active && CSS.activeShellFooter,
+    );
     this.renderCaptionContent(dom);
     this.setSourceRangeAttrs(dom);
     return true;
@@ -221,6 +213,8 @@ class AttributeTitleWidget extends MacroAwareWidget {
     private readonly macros: Record<string, string>,
   ) {
     super(macros);
+    this.includeInShellSurface = true;
+    this.useLiveSourceRange = false;
   }
 
   createDOM(): HTMLElement {
@@ -375,8 +369,11 @@ class EmbedWidget extends RenderWidget {
   constructor(
     private readonly src: string,
     private readonly embedType: string,
+    private readonly active: boolean = false,
   ) {
     super();
+    this.includeInShellSurface = true;
+    this.useLiveSourceRange = false;
   }
 
   private attachGistResize(
@@ -401,7 +398,10 @@ class EmbedWidget extends RenderWidget {
 
   createDOM(): HTMLElement {
     const wrapper = document.createElement("div");
-    wrapper.className = CSS.embed(this.embedType);
+    wrapper.className = joinClasses(
+      CSS.embed(this.embedType),
+      this.active && CSS.activeShellWidget,
+    );
 
     const iframe = document.createElement("iframe");
     iframe.src = this.src;
@@ -446,8 +446,21 @@ class EmbedWidget extends RenderWidget {
     this.gistCleanup.delete(dom);
   }
 
+  protected override bindSourceReveal(
+    _el: HTMLElement,
+    _view: EditorView,
+  ): void {
+    // Embed previews remain interactive in stable-shell mode.
+    // Structure editing is entered explicitly from the block header, not by
+    // clicking the iframe surface and teleporting a hidden caret.
+  }
+
   eq(other: EmbedWidget): boolean {
-    return this.src === other.src && this.embedType === other.embedType;
+    return (
+      this.src === other.src &&
+      this.embedType === other.embedType &&
+      this.active === other.active
+    );
   }
 }
 
@@ -513,6 +526,7 @@ function addEmbedWidget(
   div: FencedDivInfo,
   openLine: { to: number },
   items: Range<Decoration>[],
+  active: boolean,
 ): void {
   if (div.singleLine || div.closeFenceFrom < 0) return;
 
@@ -524,7 +538,7 @@ function addEmbedWidget(
   const rawUrl = bodyText.trim();
   const src = computeEmbedSrc(div.className, rawUrl);
   if (src) {
-    pushWidgetDecoration(items, new EmbedWidget(src, div.className), bodyFrom, bodyTo);
+    pushWidgetDecoration(items, new EmbedWidget(src, div.className, active), bodyFrom, bodyTo);
   }
 }
 
@@ -547,46 +561,6 @@ function addQedDecoration(
   }
 }
 
-function activeCursorDrivenBlockLayoutMode(state: EditorState): string | null {
-  const focused = state.field(editorFocusField, false) ?? false;
-  if (!focused) return null;
-
-  const cursorPos = state.selection.main.from;
-  const div = findFencedBlockAt(collectFencedDivs(state), cursorPos);
-  if (!div || EXCLUDED_FROM_FALLBACK.has(div.className)) return null;
-
-  const plugin = getPluginOrFallback(state.field(pluginRegistryField), div.className);
-  if (!plugin) return null;
-
-  if (plugin.specialBehavior === "embed" && cursorPos >= div.from && cursorPos <= div.to) {
-    return `embed:${div.from}`;
-  }
-
-  return getFencedBlockRenderContext(state, div, focused).cursorOnEitherFence
-    ? `fence:${div.from}`
-    : null;
-}
-
-function shouldStabilizeCursorDrivenBlockScroll(
-  startState: EditorState,
-  nextState: EditorState,
-): boolean {
-  return activeCursorDrivenBlockLayoutMode(startState) !== activeCursorDrivenBlockLayoutMode(nextState);
-}
-
-const blockRenderScrollStabilizer = ViewPlugin.fromClass(
-  class {
-    update(update: ViewUpdate): void {
-      if (!update.selectionSet && !update.focusChanged) return;
-      if (!shouldStabilizeCursorDrivenBlockScroll(update.startState, update.state)) return;
-
-      const anchor = captureScrollAnchor(update.view);
-      if (!anchor) return;
-      requestScrollStabilizedMeasure(update.view, anchor);
-    }
-  },
-);
-
 /**
  * Build decorations for all fenced divs using the plugin registry.
  *
@@ -599,13 +573,13 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   const counterState: BlockCounterState | undefined =
     state.field(blockCounterField, false) ?? undefined;
   const macros = state.field(mathMacrosField);
-  const cursor = state.selection.main;
+  const activeShellStarts = activeFencedOpenFenceStarts(state);
 
   const baseDecos = buildFencedBlockDecorations(state, collectFencedDivs, ({
     state,
     block: div,
-    focused,
-    cursorOnEitherFence,
+    openLine,
+    closeLine,
   }, items) => {
     const plugin = getPluginOrFallback(registry, div.className);
 
@@ -618,20 +592,8 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     if (!plugin) return;
 
     const isEmbed = plugin.specialBehavior === "embed";
-
-    // Embed blocks: cursor inside → full source mode (all fences visible)
-    if (isEmbed) {
-      const cursorInsideBlock =
-        focused && cursor.from >= div.from && cursor.from <= div.to;
-      if (cursorInsideBlock) {
-        items.push(
-          Decoration.line({
-            class: `${plugin.render({ type: div.className }).className} ${CSS.blockSource}`,
-          }).range(div.from),
-        );
-        return;
-      }
-    }
+    const structureEditActive = isFencedStructureEditActive(state, div);
+    const activeShell = activeShellStarts.has(div.openFenceFrom);
 
     const numberEntry = counterState?.byPosition.get(div.from);
     const labelAttrs: BlockAttrs = {
@@ -643,6 +605,17 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     const spec = plugin.render(labelAttrs);
     const captionBelow = plugin.captionPosition === "below";
     const inlineHeader = plugin.headerPosition === "inline";
+    const openerSourceActive = structureEditActive && (
+      captionBelow ||
+      inlineHeader ||
+      div.titleFrom === undefined ||
+      div.titleTo === undefined
+    );
+    const hasVisibleBody = closeLine.number > openLine.number + 1;
+    const openerLineVisible =
+      openerSourceActive || (!captionBelow && !inlineHeader && plugin.displayHeader !== false);
+    const bottomOnCaption = activeShell && captionBelow && !openerSourceActive && hasVisibleBody;
+    const openerIsBottom = activeShell && !hasVisibleBody && !bottomOnCaption;
 
     // --- Opening fence ---
     // Heading-like pattern: ALWAYS apply block styling, toggle marker visibility.
@@ -662,43 +635,44 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // the last body line instead of the opening fence. The opening fence gets
     // collapsed (no label) and the title text becomes the caption, displayed
     // on the opening line without the "Figure 1." prefix.
-    const showHeader = plugin.displayHeader !== false && !captionBelow && !inlineHeader;
-    const headerClass = cursorOnEitherFence
-      ? spec.className
-      : showHeader
-        ? `${spec.className} ${CSS.blockHeader}`
-        : `${spec.className} ${CSS.blockHeaderCollapsed}`;
+    const showHeader = openerSourceActive || (
+      plugin.displayHeader !== false &&
+      !captionBelow &&
+      !inlineHeader
+    );
+    const headerClass = joinClasses(
+      spec.className,
+      showHeader ? CSS.blockHeader : CSS.blockHeaderCollapsed,
+      activeShell && CSS.activeShell,
+      activeShell && openerLineVisible && CSS.activeShellTop,
+      openerIsBottom && openerLineVisible && CSS.activeShellBottom,
+    );
     items.push(Decoration.line({ class: headerClass }).range(div.from));
-    if (cursorOnEitherFence) {
-      const syntaxEnd = getFencedDivStructuralOpenTo(div);
-      if (syntaxEnd > div.openFenceFrom) {
-        items.push(blockSourceMark.range(div.openFenceFrom, syntaxEnd));
-      }
-    }
+    // Always keep the widget replacement active — structure editing uses
+    // explicit mapped state, not raw-text editing of the fence syntax.
+    // Toggling the replacement on/off caused a 1px geometry delta (#1015).
     if (captionBelow || inlineHeader) {
-      // For below-caption blocks: hide fence prefix but show no label on opening line.
-      // The rendered label is emitted elsewhere in the block.
-      addHeaderWidgetDecoration(div, "", cursorOnEitherFence, macros, items);
+      addHeaderWidgetDecoration(div, "", openerSourceActive, macros, items);
     } else {
-      addHeaderWidgetDecoration(div, spec.header, cursorOnEitherFence, macros, items);
+      addHeaderWidgetDecoration(div, spec.header, openerSourceActive, macros, items);
     }
 
     // Title text: wrap in visual parentheses via widget decorations (rendered mode only).
     // Uses Decoration.widget (not Decoration.mark with CSS ::before/::after) because
     // marks get split around Decoration.replace (math widgets), causing ") $x^2$".
     // For below-caption blocks, title text is the caption — no parens needed.
-    if (!cursorOnEitherFence && !captionBelow && !inlineHeader && div.titleFrom !== undefined && div.titleTo !== undefined) {
+    if (!openerSourceActive && !captionBelow && !inlineHeader && div.titleFrom !== undefined && div.titleTo !== undefined) {
       items.push(openParenWidget.range(div.titleFrom));
       items.push(closeParenWidget.range(div.titleTo));
     }
 
-    if (!cursorOnEitherFence && (captionBelow || inlineHeader) && div.titleFrom !== undefined && div.titleTo !== undefined) {
+    if (!openerSourceActive && (captionBelow || inlineHeader) && div.titleFrom !== undefined && div.titleTo !== undefined) {
       items.push(decorationHidden.range(div.titleFrom, div.titleTo));
     }
 
     // Attribute-only title (not used for below-caption blocks — their title is the caption).
     if (
-      !cursorOnEitherFence &&
+      !openerSourceActive &&
       !captionBelow &&
       div.titleFrom === undefined &&
       div.titleTo === undefined &&
@@ -722,9 +696,9 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       hideMultiLineClosingFence(div.closeFenceFrom, div.closeFenceTo, items);
 
       // Embed blocks: replace body content with iframe widget
-      if (isEmbed && !cursorOnEitherFence) {
+      if (isEmbed && !openerSourceActive) {
         const openLine = state.doc.lineAt(div.openFenceFrom);
-        addEmbedWidget(state, div, openLine, items);
+        addEmbedWidget(state, div, openLine, items, activeShell);
       }
     }
 
@@ -735,28 +709,44 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       const closeLine = state.doc.lineAt(closeFrom);
       for (let lineNum = openLine.number + 1; lineNum < closeLine.number; lineNum++) {
         const line = state.doc.line(lineNum);
-        items.push(Decoration.line({ class: spec.className }).range(line.from));
+        items.push(
+          Decoration.line({
+            class: joinClasses(
+              spec.className,
+              activeShell && CSS.activeShell,
+              activeShell && !openerLineVisible && lineNum === openLine.number + 1 && CSS.activeShellTop,
+              activeShell && !bottomOnCaption && lineNum === closeLine.number - 1 && CSS.activeShellBottom,
+            ),
+          }).range(line.from),
+        );
       }
 
-      if (inlineHeader && !cursorOnEitherFence && closeLine.number > openLine.number + 1) {
+      if (inlineHeader && !openerSourceActive && closeLine.number > openLine.number + 1) {
         const firstBodyLine = state.doc.line(openLine.number + 1);
+        const inlineHeaderWidget = new BlockHeaderWidget(spec.header, macros);
+        inlineHeaderWidget.updateSourceRange(
+          getFencedDivRevealFrom(div),
+          getFencedDivRevealTo(div),
+        );
         items.push(
           Decoration.line({ class: `${spec.className} ${CSS.blockHeader}` }).range(firstBodyLine.from),
         );
         items.push(
           Decoration.widget({
-            widget: new BlockHeaderWidget(spec.header, macros),
+            widget: inlineHeaderWidget,
             side: -1,
           }).range(firstBodyLine.from),
         );
       }
 
       // Below-caption label: add a real caption block after the content.
-      if (captionBelow && !cursorOnEitherFence && closeLine.number > openLine.number + 1) {
+      if (captionBelow && !openerSourceActive && closeLine.number > openLine.number + 1) {
         const lastBodyLine = state.doc.line(closeLine.number - 1);
-        const captionWidget = new BlockCaptionWidget(spec.header, div.title ?? "", macros);
-        captionWidget.sourceFrom = getFencedDivRevealFrom(div);
-        captionWidget.sourceTo = getFencedDivRevealTo(div);
+        const captionWidget = new BlockCaptionWidget(spec.header, div.title ?? "", macros, activeShell);
+        captionWidget.updateSourceRange(
+          div.titleFrom ?? getFencedDivRevealFrom(div),
+          div.titleTo ?? getFencedDivRevealTo(div),
+        );
         items.push(
           Decoration.widget({
             widget: captionWidget,
@@ -776,19 +766,29 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   return baseDecos;
 }
 
+function activeShellStartsChanged(tr: Transaction): boolean {
+  const before = activeFencedOpenFenceStarts(tr.startState);
+  const after = activeFencedOpenFenceStarts(tr.state);
+  if (before.size !== after.size) return true;
+  for (const start of before) {
+    if (!after.has(start)) return true;
+  }
+  return false;
+}
+
 /**
  * CM6 StateField that provides block rendering decorations.
  *
  * Uses a StateField so that line decorations (Decoration.line) and
  * mark decorations are permitted by CM6.
  */
-const blockDecorationField = createFencedBlockDecorationField(buildBlockDecorations);
+const blockDecorationField = createFencedBlockDecorationField(buildBlockDecorations, {
+  extraShouldRebuild: hasStructureEditEffect,
+  selectionShouldRebuild: activeShellStartsChanged,
+});
 
 /** Exported for unit testing decoration logic without a browser. */
 export { blockDecorationField as _blockDecorationFieldForTest };
-export {
-  shouldStabilizeCursorDrivenBlockScroll as _shouldStabilizeCursorDrivenBlockScrollForTest,
-};
 
 /** CM6 extension that renders fenced divs using the block plugin system. */
 export const blockRenderPlugin: Extension = [
@@ -796,6 +796,5 @@ export const blockRenderPlugin: Extension = [
   editorFocusField,
   focusTracker,
   blockDecorationField,
-  blockRenderScrollStabilizer,
   fenceProtectionExtension,
 ];

@@ -13,7 +13,14 @@ src-tauri/gen/schemas/
 ~/
 .claude/worktrees/
 .playwright-cli/
+# Public showcase only. Non-generated or regression content belongs in fixtures/.
 demo/*
-!demo/embed/
-!demo/cogirth/
+!demo/index.md
+!demo/coflat.yaml
+!demo/reference.bib
+!demo/showcase/
+!demo/showcase/**
+# Local-only heavy/regression fixtures. Keep the policy note tracked.
+fixtures/*
+!fixtures/README.md
 __pycache__/

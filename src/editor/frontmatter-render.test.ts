@@ -3,11 +3,17 @@ import { describe, expect, it } from "vitest";
 
 import { frontmatterDecoration, frontmatterDecorationField } from "./frontmatter-render";
 import { frontmatterField } from "./frontmatter-state";
+import {
+  activeStructureEditField,
+  createStructureEditTargetAt,
+  setStructureEditTargetEffect,
+} from "./structure-edit-state";
+import { applyStateEffects } from "../test-utils";
 
 function createState(doc: string): EditorState {
   return EditorState.create({
     doc,
-    extensions: [frontmatterField, frontmatterDecoration],
+    extensions: [frontmatterField, activeStructureEditField, frontmatterDecoration],
   });
 }
 
@@ -15,7 +21,10 @@ function getTitleWidget(state: EditorState): { eq(other: unknown): boolean } {
   const iter = state.field(frontmatterDecorationField).iter();
   const widget = iter.value?.spec.widget as { eq(other: unknown): boolean } | undefined;
   expect(widget).toBeDefined();
-  return widget!;
+  if (!widget) {
+    throw new Error("expected frontmatter title widget");
+  }
+  return widget;
 }
 
 describe("frontmatterDecoration", () => {
@@ -69,5 +78,35 @@ describe("frontmatterDecoration", () => {
     const newWidget = getTitleWidget(tr.state);
 
     expect(newWidget).toBe(oldWidget);
+  });
+
+  it("keeps the title shell when the cursor enters frontmatter until structure edit activates", () => {
+    const doc = "---\ntitle: Hello\n---\nContent";
+    const state = EditorState.create({
+      doc,
+      selection: { anchor: 5 },
+      extensions: [frontmatterField, activeStructureEditField, frontmatterDecoration],
+    });
+    const iter = state.field(frontmatterDecorationField).iter();
+
+    expect(iter.value?.spec.widget?.constructor?.name).toBe("TitleWidget");
+  });
+
+  it("reveals raw YAML only when frontmatter structure edit is active", () => {
+    const doc = "---\ntitle: Hello\n---\nContent";
+    const state = createState(doc);
+    const target = createStructureEditTargetAt(state, 0);
+    expect(target).not.toBeNull();
+
+    const active = applyStateEffects(
+      state,
+      setStructureEditTargetEffect.of(target),
+    );
+    const iter = active.field(frontmatterDecorationField).iter();
+
+    expect(iter.value).not.toBeNull();
+    expect(iter.value?.spec.widget).toBeUndefined();
+    expect(iter.from).toBe(0);
+    expect(iter.to).toBe(0);
   });
 });

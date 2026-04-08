@@ -15,7 +15,7 @@ import { type Extension } from "@codemirror/state";
 import { Decoration, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view";
 import { collectVisibleSearchMatches } from "../search/search-matches";
 import { createSimpleViewPlugin } from "./view-plugin-factories";
-import { widgetSourceMap } from "./widget-core";
+import { resolveLiveWidgetSourceRange } from "./widget-core";
 
 const MATCH_CLASS = "cf-search-match";
 const SELECTED_MATCH_CLASS = "cf-search-match-selected";
@@ -71,16 +71,12 @@ function syncHighlights(view: EditorView, hadHighlights: boolean): boolean {
   let anyHighlighted = false;
 
   for (const el of widgets) {
-    // Read positions from the widget instance when available (always
-    // up-to-date after position mapping), falling back to DOM data
-    // attributes for non-RenderWidget elements (e.g. table widgets).
-    const widget = widgetSourceMap.get(el);
-    const sourceFrom = widget ? widget.sourceFrom : Number(el.dataset.sourceFrom);
-    const sourceTo = widget ? widget.sourceTo : Number(el.dataset.sourceTo);
-    if (Number.isNaN(sourceFrom) || Number.isNaN(sourceTo)) {
+    const sourceRange = resolveLiveWidgetSourceRange(view, el);
+    if (!sourceRange) {
       el.classList.remove(MATCH_CLASS, SELECTED_MATCH_CLASS);
       continue;
     }
+    const { from: sourceFrom, to: sourceTo } = sourceRange;
 
     let hasMatch = false;
     let hasSelectedMatch = false;

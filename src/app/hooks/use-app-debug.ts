@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { EditorMode } from "../../editor";
 import { isTauri } from "../../lib/tauri";
+import { recordDebugSessionEvent } from "../../debug/session-recorder";
 import {
   clearCombinedPerf,
   getCombinedPerfSnapshot,
@@ -20,6 +21,10 @@ export interface DebugDocumentState {
   dirty: boolean;
 }
 
+export type DebugProjectFile =
+  | { path: string; kind: "text"; content: string }
+  | { path: string; kind: "binary"; base64: string };
+
 interface TauriSmokeWindowState {
   projectRoot: string | null;
   currentDocument: DebugDocumentState | null;
@@ -38,7 +43,12 @@ interface TauriSmokeWindowState {
 interface AppDebugDeps {
   openProject: (path: string) => Promise<boolean>;
   openFile: (path: string) => Promise<void>;
+  hasFile: (path: string) => Promise<boolean>;
   openFileWithContent: (name: string, content: string) => Promise<void>;
+  loadFixtureProject?: (
+    files: readonly DebugProjectFile[],
+    initialPath?: string,
+  ) => Promise<void>;
   saveFile: () => Promise<void>;
   closeFile: (options?: { discard?: boolean }) => Promise<boolean>;
   setSearchOpen: (open: boolean) => void;
@@ -55,7 +65,9 @@ interface AppDebugDeps {
 export function useAppDebug({
   openProject,
   openFile,
+  hasFile,
   openFileWithContent,
+  loadFixtureProject,
   saveFile,
   closeFile,
   setSearchOpen,
@@ -68,18 +80,114 @@ export function useAppDebug({
   startupComplete,
   restoredProjectRoot,
 }: AppDebugDeps): void {
+  const lastAppStateRef = useRef<string | null>(null);
+  const mode = getMode();
+
   // Stop the FPS rAF loop only on true unmount / HMR — not on every effect
   // refresh caused by dependency changes (openProject, currentDocument, etc.).
   useEffect(() => () => stopFpsMeter(), []);
 
   useEffect(() => {
+    const snapshot = JSON.stringify({
+      projectRoot,
+      currentDocument,
+      dirty: hasDirtyDocument,
+      startupComplete,
+      restoredProjectRoot,
+      mode,
+    });
+    if (snapshot === lastAppStateRef.current) return;
+    lastAppStateRef.current = snapshot;
+    recordDebugSessionEvent({
+      timestamp: Date.now(),
+      type: "app",
+      summary: `app ${currentDocument?.path ?? "(no document)"} ${mode}`,
+      detail: JSON.parse(snapshot) as unknown,
+    });
+  }, [
+    projectRoot,
+    currentDocument,
+    hasDirtyDocument,
+    startupComplete,
+    restoredProjectRoot,
+    mode,
+  ]);
+
+  useEffect(() => {
     window.__app = {
-      openFile,
-      openFileWithContent,
-      saveFile,
-      closeFile,
-      setSearchOpen,
-      setMode,
+      openFile: async (path) => {
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: `openFile ${path}`,
+          detail: { path },
+        });
+        await openFile(path);
+      },
+      hasFile: async (path) => hasFile(path),
+      openFileWithContent: async (name, content) => {
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: `openFileWithContent ${name}`,
+          detail: {
+            name,
+            contentLength: content.length,
+            content,
+          },
+        });
+        await openFileWithContent(name, content);
+      },
+      loadFixtureProject: loadFixtureProject
+        ? async (files, initialPath) => {
+            recordDebugSessionEvent({
+              timestamp: Date.now(),
+              type: "app",
+              summary: `loadFixtureProject ${initialPath ?? "(no initial file)"}`,
+              detail: {
+                initialPath: initialPath ?? null,
+                fileCount: files.length,
+                files,
+              },
+            });
+            await loadFixtureProject(files, initialPath);
+          }
+        : undefined,
+      saveFile: async () => {
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: "saveFile",
+        });
+        await saveFile();
+      },
+      closeFile: async (options) => {
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: "closeFile",
+          detail: options ?? null,
+        });
+        return closeFile(options);
+      },
+      setSearchOpen: (open) => {
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: `setSearchOpen ${open ? "open" : "closed"}`,
+          detail: { open },
+        });
+        setSearchOpen(open);
+      },
+      setMode: (nextMode) => {
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: `setMode ${nextMode}`,
+          detail: { mode: nextMode },
+        });
+        setMode(nextMode);
+      },
       getMode,
       getProjectRoot: () => projectRoot,
       getCurrentDocument: () => currentDocument,
@@ -131,7 +239,9 @@ export function useAppDebug({
   }, [
     openProject,
     openFile,
+    hasFile,
     openFileWithContent,
+    loadFixtureProject,
     saveFile,
     closeFile,
     setSearchOpen,
@@ -143,5 +253,6 @@ export function useAppDebug({
     hasDirtyDocument,
     startupComplete,
     restoredProjectRoot,
+    mode,
   ]);
 }

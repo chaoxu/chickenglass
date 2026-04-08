@@ -4,7 +4,7 @@ import {
   dirname,
   uint8ArrayToBase64,
 } from "./lib/utils";
-import { getBlogFiles } from "./demo-blog";
+import { getDemoFiles } from "./demo-files";
 import { normalizeProjectPath } from "../lib/project-paths";
 
 // Re-export canonical types from src/lib/types.ts so that existing
@@ -13,6 +13,10 @@ export type { FileEntry, FileSystem } from "../lib/types";
 
 // Local import for use in this file's implementation.
 import type { FileEntry, FileSystem } from "../lib/types";
+
+export type MemoryFileSystemEntry =
+  | { path: string; kind: "text"; content: string }
+  | { path: string; kind: "binary"; base64: string };
 
 function buildDemoAssetUrl(path: string): string | null {
   const normalized = normalizeProjectPath(path);
@@ -44,6 +48,21 @@ export class MemoryFileSystem implements FileSystem {
   constructor(initialFiles?: Record<string, string>) {
     this.files = new Map(Object.entries(initialFiles ?? {}));
     this.dirs = new Set();
+  }
+
+  replaceAll(entries: readonly MemoryFileSystemEntry[]): void {
+    this.files.clear();
+    this.dirs.clear();
+
+    for (const entry of entries) {
+      const parts = entry.path.split("/");
+      for (let i = 1; i < parts.length; i += 1) {
+        this.dirs.add(parts.slice(0, i).join("/"));
+      }
+      this.files.set(entry.path, entry.kind === "text" ? entry.content : entry.base64);
+    }
+
+    this.invalidateImmediateChildrenCache();
   }
 
   private invalidateImmediateChildrenCache(): void {
@@ -554,16 +573,16 @@ export function createDemoFileSystem(): MemoryFileSystem {
 
 /** Create a demo filesystem with the imported demo project. */
 export async function createBlogDemoFileSystem(): Promise<MemoryFileSystem> {
-  const blogFiles = await getBlogFiles();
-  const hasLocalBlogProject = Object.keys(blogFiles).some((path) => path !== "FORMAT.md");
+  const demoFiles = await getDemoFiles();
+  const hasLocalBlogProject = Object.keys(demoFiles).some((path) => path !== "FORMAT.md");
 
   if (hasLocalBlogProject) {
-    return new MemoryFileSystem(blogFiles);
+    return new MemoryFileSystem(demoFiles);
   }
 
   return new MemoryFileSystem({
     ...defaultDemoFiles,
-    ...(blogFiles["FORMAT.md"] ? { "FORMAT.md": blogFiles["FORMAT.md"] } : {}),
+    ...(demoFiles["FORMAT.md"] ? { "FORMAT.md": demoFiles["FORMAT.md"] } : {}),
     // Keep browser-only tooling that opens index.md working when the local
     // blog fixture is absent and we fall back to the built-in sample project.
     "index.md": defaultDemoFiles["main.md"],

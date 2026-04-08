@@ -56,7 +56,7 @@ If the current run exceeds the configured thresholds, the command exits non-zero
 - `local-edit-index`
   Reload app, open `index.md`, then apply a local inline-math edit and report semantic revision churn.
 - `typing-rich-burst`
-  Reload rich documents and measure typing bursts across deterministic anchors. The suite keeps the existing plain-prose positions in `demo/index.md` and `demo/rankdecrease/main.md`, and explicitly adds semantic hotspots plus the canonical heavy fixture `demo/cogirth/main2.md` (`inline_math`, `citation_ref`, and prose positions). If any required typing metric disappears or is emitted for fewer than the measured iterations, the benchmark fails immediately.
+  Reload rich documents and measure typing bursts across deterministic anchors. The suite keeps the existing plain-prose positions in `demo/index.md` and, when local private fixtures are available, also measures `fixtures/rankdecrease/main.md` plus semantic hotspots in `fixtures/cogirth/main2.md` (`inline_math`, `citation_ref`, and prose positions). If any required typing metric disappears or is emitted for fewer than the measured iterations, the benchmark fails immediately.
 - `scroll-step-rich`
   Reload app, open `cogirth/main2.md` in Rich mode, then scroll step-by-step (30 lines per step). Reports per-step timing metrics (`scroll.mean_step_ms`, `scroll.max_step_ms`).
 - `scroll-jump-rich`
@@ -93,7 +93,7 @@ broken.
 
 ## Scroll Scenarios
 
-The `scroll-step-rich`, `scroll-jump-rich`, and `scroll-step-source` scenarios measure scroll performance on a heavy mathematical document (`demo/cogirth/main2.md`). This fixture is committed to the repo and loaded via Vite's `import.meta.glob`.
+The `scroll-step-rich`, `scroll-jump-rich`, and `scroll-step-source` scenarios prefer a heavy mathematical document (`fixtures/cogirth/main2.md`) when that local private fixture is available. Otherwise use the public `demo/index.md` baseline and note the limitation.
 
 ### Example: compare Rich vs Source stepped scroll
 

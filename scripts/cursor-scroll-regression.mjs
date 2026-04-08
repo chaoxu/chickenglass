@@ -10,8 +10,10 @@ import {
   connectEditor,
   createArgParser,
   disconnectBrowser,
-  EXTERNAL_DEMO_ROOT,
+  EXTERNAL_FIXTURE_ROOT,
   openFixtureDocument,
+  PUBLIC_SHOWCASE_FIXTURE,
+  resolveFixtureDocumentWithFallback,
   sleep,
   traceVerticalCursorMotion,
   waitForDebugBridge,
@@ -21,12 +23,17 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");
 
 export const RANKDECREASE_CURSOR_FIXTURE = {
-  displayPath: "demo/rankdecrease/main.md",
+  displayPath: "fixtures/rankdecrease/main.md",
   virtualPath: "rankdecrease/main.md",
   candidates: [
-    resolve(REPO_ROOT, "demo/rankdecrease/main.md"),
-    resolve(EXTERNAL_DEMO_ROOT, "rankdecrease/main.md"),
+    resolve(REPO_ROOT, "fixtures/rankdecrease/main.md"),
+    resolve(EXTERNAL_FIXTURE_ROOT, "rankdecrease/main.md"),
   ],
+};
+
+const PUBLIC_CURSOR_FALLBACK = {
+  ...PUBLIC_SHOWCASE_FIXTURE,
+  defaultLine: 139,
 };
 
 function traceWindow(trace, index, radius = 1) {
@@ -123,7 +130,11 @@ ${nearbyLines}`;
 }
 
 export async function runCursorScrollRegression(page, options = {}) {
-  const fixture = await openFixtureDocument(page, RANKDECREASE_CURSOR_FIXTURE, {
+  const requestedFixture = resolveFixtureDocumentWithFallback(
+    RANKDECREASE_CURSOR_FIXTURE,
+    PUBLIC_CURSOR_FALLBACK,
+  );
+  const fixture = await openFixtureDocument(page, requestedFixture, {
     mode: "rich",
   });
   await assertEditorHealth(page, "cursor-scroll-regression: fixture-open", {
@@ -133,7 +144,7 @@ export async function runCursorScrollRegression(page, options = {}) {
   const traceResult = await traceVerticalCursorMotion(page, {
     direction: options.direction ?? "up",
     steps: options.steps ?? 250,
-    startLine: options.startLine ?? 900,
+    startLine: options.startLine ?? requestedFixture.defaultLine ?? 900,
     startColumn: options.startColumn ?? 0,
     settleMs: options.settleMs ?? 150,
     contextRadius: options.contextRadius ?? 2,

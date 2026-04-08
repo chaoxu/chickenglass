@@ -12,14 +12,13 @@ import {
 } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
 import { documentAnalysisField } from "../semantics/codemirror-source";
-import type { MathSemantics } from "../semantics/document";
+import type { DocumentAnalysis, MathSemantics } from "../semantics/document";
 import { mathMouseSelectionStyle } from "./math-interactions";
 import { mathMacrosField } from "./math-macros";
 import { createMathWidgetMetadataPlugin } from "./math-metadata";
 import { mathPrewarmPlugin } from "./math-prewarm";
 import {
   buildEquationNumbersByFrom,
-  findActiveMath,
   getDisplayEquationNumber,
 } from "./math-source";
 import { MathWidget } from "./math-widget";
@@ -29,11 +28,10 @@ import {
 } from "./decoration-core";
 import {
   editorFocusField,
-  focusEffect,
   focusTracker,
 } from "./focus-state";
-import { cursorInRange } from "./node-collection";
 import { serializeMacros } from "./widget-core";
+import { getActiveStructureEditTarget } from "../editor/structure-edit-state";
 
 export { renderKatexToHtml } from "./inline-shared";
 export {
@@ -54,10 +52,12 @@ function mathMacrosChanged(tr: Transaction): boolean {
   return before !== after && serializeMacros(before) !== serializeMacros(after);
 }
 
-function findFocusedActiveMath(state: EditorState): MathSemantics | undefined {
-  const focused = state.field(editorFocusField, false) ?? false;
-  return focused
-    ? findActiveMath(state.field(documentAnalysisField).mathRegions, state.selection.main)
+function getActiveMathTarget(
+  state: EditorState,
+): Pick<MathSemantics, "from" | "to"> | undefined {
+  const active = getActiveStructureEditTarget(state);
+  return active?.kind === "math"
+    ? { from: active.from, to: active.to }
     : undefined;
 }
 
@@ -67,6 +67,7 @@ function findFocusedActiveMath(state: EditorState): MathSemantics | undefined {
  */
 function buildMathItems(
   state: EditorState,
+  regions: readonly MathSemantics[],
   shouldSkip: (from: number, to: number) => boolean,
 ): Range<Decoration>[] {
   const macros = state.field(mathMacrosField);
@@ -74,7 +75,7 @@ function buildMathItems(
   const equationNumbersByFrom = buildEquationNumbersByFrom(analysis.equationById);
   const items: Range<Decoration>[] = [];
 
-  for (const region of analysis.mathRegions) {
+  for (const region of regions) {
     if (shouldSkip(region.from, region.to)) {
       if (region.contentFrom > region.from) {
         // Keep delimiters on the lighter source-delimiter class so they
@@ -144,15 +145,105 @@ function buildMathItems(
  * Collect decoration ranges for math nodes outside the cursor.
  */
 export function collectMathRanges(view: EditorView): Range<Decoration>[] {
-  return buildMathItems(view.state, (from, to) => cursorInRange(view, from, to));
+  const activeMath = getActiveMathTarget(view.state);
+  return buildMathItems(
+    view.state,
+    view.state.field(documentAnalysisField).mathRegions,
+    (from, to) => Boolean(activeMath?.from === from && activeMath?.to === to),
+  );
 }
 
-function buildMathDecorationsFromState(state: EditorState, focused: boolean): DecorationSet {
+function buildMathDecorationsFromState(state: EditorState): DecorationSet {
+  const activeMath = getActiveMathTarget(state);
   const items = buildMathItems(
     state,
-    (from, to) => focused && cursorInRange(state, from, to),
+    state.field(documentAnalysisField).mathRegions,
+    (from, to) => Boolean(activeMath?.from === from && activeMath?.to === to),
   );
   return buildDecorations(items);
+}
+
+interface DirtyRange {
+  readonly from: number;
+  readonly to: number;
+}
+
+function mergeDirtyRanges(ranges: readonly DirtyRange[]): DirtyRange[] {
+  if (ranges.length === 0) return [];
+  const sorted = [...ranges].sort((left, right) => left.from - right.from || left.to - right.to);
+  const merged: DirtyRange[] = [sorted[0]];
+  for (let index = 1; index < sorted.length; index += 1) {
+    const current = sorted[index];
+    const last = merged[merged.length - 1];
+    if (current.from <= last.to) {
+      merged[merged.length - 1] = {
+        from: last.from,
+        to: Math.max(last.to, current.to),
+      };
+      continue;
+    }
+    merged.push(current);
+  }
+  return merged;
+}
+
+function dirtyRangesFromChanges(tr: Transaction): DirtyRange[] {
+  const ranges: DirtyRange[] = [];
+  tr.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
+    ranges.push({ from: fromB, to: Math.max(fromB, toB) });
+  });
+  return mergeDirtyRanges(ranges);
+}
+
+function rangeIntersectsDirtyRanges(
+  from: number,
+  to: number,
+  dirtyRanges: readonly DirtyRange[],
+): boolean {
+  for (const range of dirtyRanges) {
+    if (from < range.to && to > range.from) return true;
+    if (range.from >= to) break;
+  }
+  return false;
+}
+
+function collectDirtyMathRegions(
+  regions: readonly MathSemantics[],
+  dirtyRanges: readonly DirtyRange[],
+): MathSemantics[] {
+  if (dirtyRanges.length === 0) return [];
+  const dirty: MathSemantics[] = [];
+  for (const region of regions) {
+    if (rangeIntersectsDirtyRanges(region.from, region.to, dirtyRanges)) {
+      dirty.push(region);
+    }
+  }
+  return dirty;
+}
+
+function equationNumberingKey(analysis: DocumentAnalysis): string {
+  return analysis.equations
+    .map((equation) => `${equation.id}\0${equation.number}`)
+    .join("\u0001");
+}
+
+function equationNumberingChanged(
+  before: DocumentAnalysis,
+  after: DocumentAnalysis,
+): boolean {
+  return equationNumberingKey(before) !== equationNumberingKey(after);
+}
+
+function buildMathRangesForRegions(
+  state: EditorState,
+  regions: readonly MathSemantics[],
+): Range<Decoration>[] {
+  const activeMath = getActiveMathTarget(state);
+  return buildMathItems(
+    state,
+    regions,
+    (from, to) => Boolean(activeMath?.from === from && activeMath?.to === to),
+  );
 }
 
 function mathContentUnchanged(
@@ -179,8 +270,7 @@ function mathContentUnchanged(
 }
 
 function rebuildMathDecorations(state: EditorState): DecorationSet {
-  const focused = state.field(editorFocusField, false) ?? false;
-  return buildMathDecorationsFromState(state, focused);
+  return buildMathDecorationsFromState(state);
 }
 
 /**
@@ -203,41 +293,57 @@ const mathDecorationField = StateField.define<DecorationSet>({
     const analysisAfter = tr.state.field(documentAnalysisField);
     const regionsBefore = analysisBefore.mathRegions;
     const regionsAfter = analysisAfter.mathRegions;
-    const equationNumbersBefore = buildEquationNumbersByFrom(analysisBefore.equationById);
-    const equationNumbersAfter = buildEquationNumbersByFrom(analysisAfter.equationById);
+    const beforeActive = getActiveMathTarget(tr.startState);
+    const afterActive = getActiveMathTarget(tr.state);
+    const activeMathChanged =
+      beforeActive?.from !== afterActive?.from ||
+      beforeActive?.to !== afterActive?.to;
 
     if (regionsBefore !== regionsAfter) {
       if (
         tr.docChanged
-        && tr.selection === undefined
-        && !tr.effects.some((effect) => effect.is(focusEffect))
-        && mathContentUnchanged(
-          regionsBefore,
-          regionsAfter,
-          equationNumbersBefore,
-          equationNumbersAfter,
-        )
+        && !activeMathChanged
       ) {
-        const mapped = value.map(tr.changes);
-        const cursor = mapped.iter();
-        while (cursor.value) {
-          const widget = cursor.value.spec?.widget;
-          if (widget instanceof MathWidget) {
-            widget.updateSourceRange(cursor.from, cursor.to);
-          }
-          cursor.next();
+        if (equationNumberingChanged(analysisBefore, analysisAfter)) {
+          return rebuildMathDecorations(tr.state);
         }
-        return mapped;
+
+        const equationNumbersBefore = buildEquationNumbersByFrom(analysisBefore.equationById);
+        const equationNumbersAfter = buildEquationNumbersByFrom(analysisAfter.equationById);
+        if (
+          mathContentUnchanged(
+            regionsBefore,
+            regionsAfter,
+            equationNumbersBefore,
+            equationNumbersAfter,
+          )
+        ) {
+          return value.map(tr.changes);
+        }
+
+        const dirtyRanges = dirtyRangesFromChanges(tr);
+        const mapped = value.map(tr.changes);
+        const dirtyRegions = collectDirtyMathRegions(regionsAfter, dirtyRanges);
+        let next = mapped;
+        for (const range of dirtyRanges) {
+          next = next.update({
+            filterFrom: range.from,
+            filterTo: range.to,
+            filter: (from, to) => !rangeIntersectsDirtyRanges(from, to, [range]),
+          });
+        }
+        if (dirtyRegions.length > 0) {
+          next = next.update({
+            add: buildMathRangesForRegions(tr.state, dirtyRegions),
+            sort: true,
+          });
+        }
+        return next;
       }
       return rebuildMathDecorations(tr.state);
     }
 
-    const focusChanged = tr.effects.some((effect) => effect.is(focusEffect));
-    if (tr.selection === undefined && !focusChanged) return value;
-
-    const before = findFocusedActiveMath(tr.startState);
-    const after = findFocusedActiveMath(tr.state);
-    if (before?.from !== after?.from || before?.to !== after?.to) {
+    if (activeMathChanged) {
       return rebuildMathDecorations(tr.state);
     }
     return value;

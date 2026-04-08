@@ -7,20 +7,45 @@
  *   __cmDebug.fences()     — closing fence visibility for protected fenced blocks
  *   __cmDebug.line(73)     — DOM state of a specific line
  *   __cmDebug.dump()       — combined tree + fence status snapshot
- *   __cmDebug.moveVertically("up") — apply rich-mode vertical motion with reverse-scroll guard
+ *   __cmDebug.moveVertically("up") — apply rich-mode vertical motion with anomaly logging
+ *   __cmDebug.toggleDebugLane() — toggle the shell/debug lane (red boxes + sidebar)
  *   __cmDebug.toggleTreeView() — toggle live Lezer tree panel
  */
 
 import { type EditorView } from "@codemirror/view";
 import { undoDepth, redoDepth } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
-import { toggleTreeView } from "./editor";
+import {
+  isDebugLaneEnabled,
+  toggleDebugLane,
+  toggleTreeView,
+} from "./editor";
 import {
   documentAnalysisField,
   getDocumentAnalysisRevisionInfo,
 } from "../semantics/codemirror-source";
 import { getClosingFenceRanges } from "../plugins/fence-protection";
-import { moveVerticallyWithReverseScrollGuard } from "./vertical-motion";
+import {
+  clearVerticalMotionGuardEvents,
+  getVerticalMotionGuardEvents,
+  moveVerticallyInRichView,
+  type VerticalMotionGuardEvent,
+} from "./vertical-motion";
+import {
+  activateStructureEditAt,
+  clearStructureEditTarget,
+  getActiveStructureEditTarget,
+  type StructureEditTarget,
+} from "./structure-edit-state";
+import {
+  clearDebugTimelineEvents,
+  getDebugTimelineEvents,
+  type DebugTimelineEvent,
+} from "./debug-timeline";
+import {
+  measureShellSurfaceSnapshot,
+  type ShellSurfaceSnapshot,
+} from "./shell-surface-model";
 
 interface DivInfo {
   readonly from: number;
@@ -44,6 +69,10 @@ interface DebugSnapshot {
   readonly cursorLine: number;
   readonly focused: boolean;
   readonly semantics: SemanticDebugInfo;
+  readonly structure: StructureEditTarget | null;
+  readonly geometry: ShellSurfaceSnapshot;
+  readonly motionGuards: readonly VerticalMotionGuardEvent[];
+  readonly timeline: readonly DebugTimelineEvent[];
 }
 
 interface SemanticDebugInfo {
@@ -84,24 +113,63 @@ export interface DebugHelpers {
   selection: () => SelectionInfo;
   /** Return undo/redo history depth. */
   history: () => { undoDepth: number; redoDepth: number };
+  /** Return the active explicit structure-edit target, if any. */
+  structure: () => StructureEditTarget | null;
+  /** Return recent vertical-motion guard events for this editor instance. */
+  motionGuards: () => readonly VerticalMotionGuardEvent[];
+  /** Return recent debug timeline events for this editor instance. */
+  timeline: () => readonly DebugTimelineEvent[];
+  /** Return the current measured geometry snapshot for visible lines and shell surfaces. */
+  geometry: () => ShellSurfaceSnapshot;
   /** Return a combined snapshot of tree + fences + cursor state. */
   dump: () => DebugSnapshot;
-  /** Run rich-mode vertical motion with reverse-scroll guarding. */
+  /** Activate structure editing for the block/frontmatter at a document position. */
+  activateStructureAt: (pos: number) => boolean;
+  /** Activate structure editing at the current selection head. */
+  activateStructureAtCursor: () => boolean;
+  /** Clear the active structure-edit target. */
+  clearStructure: () => boolean;
+  /** Clear recorded vertical-motion guard events. */
+  clearMotionGuards: () => void;
+  /** Clear recorded debug timeline events. */
+  clearTimeline: () => void;
+  /** Run rich-mode vertical motion with anomaly logging. */
   moveVertically: (direction: "up" | "down") => boolean;
+  /** Whether the shell/debug lane is currently enabled. */
+  debugLaneEnabled: () => boolean;
+  /** Toggle the shell/debug lane. Returns new on/off state. */
+  toggleDebugLane: () => boolean;
   /** Toggle the live Lezer tree-view debug panel. Returns new on/off state. */
   toggleTreeView: () => boolean;
 }
 
 function getLineElement(view: EditorView, lineNum: number): HTMLElement | null {
   if (lineNum < 1 || lineNum > view.state.doc.lines) return null;
-  const lineObj = view.state.doc.line(lineNum);
-  const domPos = view.domAtPos(lineObj.from);
-  let el: Node | null = domPos.node;
-  if (el.nodeType === 3) el = el.parentNode;
-  while (el && !(el instanceof HTMLElement && el.classList.contains("cm-line"))) {
-    el = el.parentNode;
+  const lines = view.contentDOM.querySelectorAll<HTMLElement>(".cm-line");
+  for (const el of lines) {
+    try {
+      const pos = view.posAtDOM(el, 0);
+      if (view.state.doc.lineAt(pos).number === lineNum) {
+        return el;
+      }
+    } catch {
+      continue;
+    }
   }
-  return el as HTMLElement | null;
+  try {
+    const lineObj = view.state.doc.line(lineNum);
+    const domPos = view.domAtPos(lineObj.from);
+    let el: Node | null = domPos.node;
+    if (el.nodeType === Node.TEXT_NODE) el = el.parentNode;
+    while (el && !(el instanceof HTMLElement && el.classList.contains("cm-line"))) {
+      el = el.parentNode;
+    }
+    if (!(el instanceof HTMLElement)) return null;
+    const pos = view.posAtDOM(el, 0);
+    return view.state.doc.lineAt(pos).number === lineNum ? el : null;
+  } catch {
+    return null;
+  }
 }
 
 function inspectLine(view: EditorView, lineNum: number): LineInfo | null {
@@ -149,6 +217,13 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
         if (info) {
           const { line, height, hidden, classes } = info;
           results.push({ line, height, hidden, classes });
+        } else {
+          results.push({
+            line: lineNumber,
+            height: "0px",
+            hidden: true,
+            classes: [],
+          });
         }
       }
       return results;
@@ -185,6 +260,22 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
       };
     },
 
+    structure() {
+      return getActiveStructureEditTarget(view.state);
+    },
+
+    motionGuards() {
+      return getVerticalMotionGuardEvents(view);
+    },
+
+    timeline() {
+      return getDebugTimelineEvents(view);
+    },
+
+    geometry() {
+      return measureShellSurfaceSnapshot(view);
+    },
+
     dump() {
       const cursor = view.state.selection.main;
       const cursorLine = view.state.doc.lineAt(cursor.from).number;
@@ -194,11 +285,43 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
         cursorLine,
         focused: view.hasFocus,
         semantics: this.semantics(),
+        structure: this.structure(),
+        geometry: this.geometry(),
+        motionGuards: this.motionGuards(),
+        timeline: this.timeline(),
       };
     },
 
+    activateStructureAt(pos: number) {
+      return activateStructureEditAt(view, pos);
+    },
+
+    activateStructureAtCursor() {
+      return activateStructureEditAt(view, view.state.selection.main.head);
+    },
+
+    clearStructure() {
+      return clearStructureEditTarget(view);
+    },
+
+    clearMotionGuards() {
+      clearVerticalMotionGuardEvents(view);
+    },
+
+    clearTimeline() {
+      clearDebugTimelineEvents(view);
+    },
+
     moveVertically(direction: "up" | "down") {
-      return moveVerticallyWithReverseScrollGuard(view, direction === "down");
+      return moveVerticallyInRichView(view, direction === "down");
+    },
+
+    debugLaneEnabled() {
+      return isDebugLaneEnabled(view);
+    },
+
+    toggleDebugLane() {
+      return toggleDebugLane(view);
     },
 
     toggleTreeView() {

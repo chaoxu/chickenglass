@@ -1,0 +1,12 @@
+bibliography: reference.bib
+math:
+  \R: "\\mathbb{R}"
+  \N: "\\mathbb{N}"
+  \Z: "\\mathbb{Z}"
+  \Q: "\\mathbb{Q}"
+  \F: "\\mathbb{F}"
+  \e: "\\varepsilon"
+  \set: "\\left\\{#1\\right\\}"
+  \ceil: "\\left\\lceil#1\\right\\rceil"
+  \floor: "\\left\\lfloor#1\\right\\rfloor"
+  \bm: "\\boldsymbol{#1}"

@@ -19,7 +19,7 @@ export async function run(page) {
   await page.evaluate(() => window.__app.setMode("rich"));
   await new Promise((r) => setTimeout(r, 300));
 
-  await scrollToText(page, "# Sidenotes");
+  await scrollToText(page, "# Footnotes");
 
   // Check if document contains footnote syntax
   const hasFootnoteSyntax = await page.evaluate(() => {

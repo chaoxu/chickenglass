@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  availableTypingBurstCases,
   TYPING_BURST_CASES,
   TYPING_BURST_REQUIRED_METRICS,
   findTypingBurstPositions,
@@ -9,20 +10,31 @@ import {
 
 describe("perf regression scenarios", () => {
   it("registers typing-rich-burst with the expected benchmark docs and required metrics", () => {
+    const availableCases = availableTypingBurstCases().map(({ key, displayPath }) => ({ key, displayPath }));
     expect(scenarios["typing-rich-burst"]).toMatchObject({
       defaultSettleMs: 200,
     });
     expect(TYPING_BURST_CASES.map(({ key, displayPath }) => ({ key, displayPath }))).toEqual([
       { key: "index", displayPath: "demo/index.md" },
-      { key: "rankdecrease", displayPath: "demo/rankdecrease/main.md" },
-      { key: "cogirth_main2", displayPath: "demo/cogirth/main2.md" },
+      { key: "rankdecrease", displayPath: "fixtures/rankdecrease/main.md" },
+      { key: "cogirth_main2", displayPath: "fixtures/cogirth/main2.md" },
     ]);
+    expect(availableCases).toContainEqual({ key: "index", displayPath: "demo/index.md" });
     expect(scenarios["typing-rich-burst"].requiredMetrics).toContain(
-      "typing.wall_ms.cogirth_main2.inline_math",
+      "typing.wall_ms.index.after_frontmatter",
     );
-    expect(scenarios["typing-rich-burst"].requiredMetrics).toContain(
-      "typing.settle_ms.cogirth_main2.citation_ref",
-    );
+    if (availableCases.some(({ key }) => key === "cogirth_main2")) {
+      expect(scenarios["typing-rich-burst"].requiredMetrics).toContain(
+        "typing.wall_ms.cogirth_main2.inline_math",
+      );
+      expect(scenarios["typing-rich-burst"].requiredMetrics).toContain(
+        "typing.settle_ms.cogirth_main2.citation_ref",
+      );
+    } else {
+      expect(scenarios["typing-rich-burst"].requiredMetrics).not.toContain(
+        "typing.wall_ms.cogirth_main2.inline_math",
+      );
+    }
   });
 
   it("emits the required typing metrics for each document position", () => {

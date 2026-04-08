@@ -6,7 +6,7 @@
  * source mode after a cross-file result is opened.
  */
 
-import { closeAppSearch, openAppSearch, openFile } from "../test-helpers.mjs";
+import { closeAppSearch, openAppSearch, openFixtureDocument } from "../test-helpers.mjs";
 
 export const name = "search-mode-awareness";
 
@@ -44,7 +44,7 @@ async function setMode(page, mode) {
 }
 
 export async function run(page) {
-  await openFile(page, "cogirth/search-mode-awareness.md");
+  await openFixtureDocument(page, "cogirth/search-mode-awareness.md", { project: "full-project" });
   await setMode(page, "rich");
 
   await openAppSearch(page);

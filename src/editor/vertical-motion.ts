@@ -1,15 +1,71 @@
+import { EditorSelection } from "@codemirror/state";
 import { type EditorView } from "@codemirror/view";
 import { getLineElement } from "../render/render-core";
+import { appendDebugTimelineEvent } from "./debug-timeline";
 
 const FALLBACK_LINE_HEIGHT_PX = 24;
 const REVERSE_SCROLL_THRESHOLD_PX = 120;
+const MAX_GUARD_EVENTS = 20;
 const pendingReverseScrollGuardIds = new WeakMap<EditorView, number>();
+const verticalMotionGuardEvents = new WeakMap<EditorView, VerticalMotionGuardEvent[]>();
 let nextReverseScrollGuardId = 0;
 
 interface VerticalMotionSnapshot {
   readonly head: number;
   readonly line: number;
   readonly scrollTop: number;
+}
+
+export type VerticalMotionGuardEvent =
+  | {
+      readonly kind: "visible-line-jump";
+      readonly direction: "up" | "down";
+      readonly beforeLine: number;
+      readonly rawTargetLine: number;
+      readonly correctedTargetLine: number;
+      readonly timestamp: number;
+    }
+  | {
+      readonly kind: "reverse-scroll";
+      readonly direction: "up" | "down";
+      readonly beforeLine: number;
+      readonly afterLine: number;
+      readonly beforeScrollTop: number;
+      readonly afterScrollTop: number;
+      readonly correctedScrollTop: number;
+      readonly timestamp: number;
+    };
+
+export function recordVerticalMotionGuardEvent(
+  view: EditorView,
+  event: VerticalMotionGuardEvent,
+): void {
+  const currentEvents = verticalMotionGuardEvents.get(view) ?? [];
+  const nextEvents = [...currentEvents, event];
+  if (nextEvents.length > MAX_GUARD_EVENTS) {
+    nextEvents.splice(0, nextEvents.length - MAX_GUARD_EVENTS);
+  }
+  verticalMotionGuardEvents.set(view, nextEvents);
+  appendDebugTimelineEvent(view, {
+    timestamp: event.timestamp,
+    type: "motion-guard",
+    summary: event.kind === "visible-line-jump"
+      ? `${event.direction} L${event.beforeLine} -> raw L${event.rawTargetLine} -> L${event.correctedTargetLine}`
+      : `${event.direction} L${event.beforeLine} -> L${event.afterLine}, scroll ${Math.round(event.beforeScrollTop)} -> ${Math.round(event.afterScrollTop)} -> ${Math.round(event.correctedScrollTop)}`,
+    detail: event,
+  });
+}
+
+export function getVerticalMotionGuardEvents(
+  view: EditorView,
+): readonly VerticalMotionGuardEvent[] {
+  return verticalMotionGuardEvents.get(view) ?? [];
+}
+
+export function clearVerticalMotionGuardEvents(
+  view: EditorView,
+): void {
+  verticalMotionGuardEvents.delete(view);
 }
 
 function snapshotVerticalMotion(view: EditorView): VerticalMotionSnapshot {
@@ -21,15 +77,30 @@ function snapshotVerticalMotion(view: EditorView): VerticalMotionSnapshot {
   };
 }
 
+function measuredLineHeight(
+  view: EditorView,
+  lineNumber: number,
+): number | null {
+  const lineEl = getLineElement(view, view.state.doc.line(lineNumber).from);
+  if (!lineEl) return null;
+
+  const height = Number.parseFloat(window.getComputedStyle(lineEl).height);
+  return Number.isFinite(height) && height >= 0 ? height : null;
+}
+
 function readLineHeight(
   view: EditorView,
   lineNumber: number,
 ): number {
-  const lineEl = getLineElement(view, view.state.doc.line(lineNumber).from);
-  if (!lineEl) return FALLBACK_LINE_HEIGHT_PX;
+  return measuredLineHeight(view, lineNumber) ?? FALLBACK_LINE_HEIGHT_PX;
+}
 
-  const height = Number.parseFloat(window.getComputedStyle(lineEl).height);
-  return Number.isFinite(height) && height > 0 ? height : FALLBACK_LINE_HEIGHT_PX;
+function isRenderedLineVisible(
+  view: EditorView,
+  lineNumber: number,
+): boolean {
+  const height = measuredLineHeight(view, lineNumber);
+  return height !== null && height > 0;
 }
 
 export function sumTraversedLineHeights(
@@ -73,34 +144,166 @@ export function correctedReverseVerticalScrollTop(
   return null;
 }
 
-/**
- * Preserve expected viewport motion during rich-mode ArrowUp/ArrowDown.
- *
- * CM6's native `scrollIntoView` can jump the viewport in the opposite
- * direction when vertical movement crosses rendered display/math or collapsed
- * structural lines. We let CM6 compute the new selection, then clamp only the
- * pathological reverse-scroll case based on the traversed rendered line
- * heights. This keeps ordinary vertical motion intact while fixing #963.
- */
-export function moveVerticallyWithReverseScrollGuard(
+function startCoordsForVerticalMove(
+  view: EditorView,
+  forward: boolean,
+): { left: number; top: number; bottom: number } | null {
+  const range = view.state.selection.main;
+  return safeCoordsAtPos(
+    view,
+    range.head,
+    range.assoc || ((range.empty ? forward : range.head === range.from) ? 1 : -1),
+  );
+}
+
+function safeCoordsAtPos(
+  view: EditorView,
+  pos: number,
+  assoc?: 1 | -1,
+): { left: number; right: number; top: number; bottom: number } | null {
+  try {
+    return view.coordsAtPos(pos, assoc);
+  } catch {
+    return null;
+  }
+}
+
+function goalColumnForVerticalMove(
+  view: EditorView,
+  forward: boolean,
+): number {
+  const range = view.state.selection.main;
+  if (range.goalColumn != null) return range.goalColumn;
+  const rect = view.contentDOM.getBoundingClientRect();
+  const coords = startCoordsForVerticalMove(view, forward);
+  if (coords) return coords.left - rect.left;
+
+  const line = view.lineBlockAt(range.head);
+  return Math.min(
+    rect.right - rect.left,
+    view.defaultCharacterWidth * (range.head - line.from),
+  );
+}
+
+function nextVisibleLineNumber(
+  view: EditorView,
+  fromLine: number,
+  forward: boolean,
+): number | null {
+  const direction = forward ? 1 : -1;
+  const currentVisible = isRenderedLineVisible(view, fromLine);
+  for (
+    let line = fromLine + (currentVisible ? direction : 0);
+    line >= 1 && line <= view.state.doc.lines;
+    line += direction
+  ) {
+    if (line === fromLine && currentVisible) continue;
+    if (isRenderedLineVisible(view, line)) return line;
+  }
+  return null;
+}
+
+function closestPositionOnLine(
+  view: EditorView,
+  lineNumber: number,
+  goalX: number,
+): number {
+  const line = view.state.doc.line(lineNumber);
+  if (line.length === 0) return line.from;
+
+  let low = line.from;
+  let high = line.to;
+  let best = line.from;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const coords = safeCoordsAtPos(view, mid, 1) ?? safeCoordsAtPos(view, mid, -1);
+    if (!coords) break;
+    if (coords.left <= goalX + 0.5) {
+      best = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return best;
+}
+
+function resolveVisibleLineTarget(
+  view: EditorView,
+  targetLineNumber: number,
+  goalX: number,
+): number {
+  const targetLine = view.state.doc.line(targetLineNumber);
+  if (targetLine.length === 0) return targetLine.from;
+
+  return closestPositionOnLine(view, targetLineNumber, goalX);
+}
+
+function requestSelectionVisibility(
+  view: EditorView,
+): void {
+  if (!view.dom.isConnected) return;
+  const selectionAssoc: 1 | -1 = view.state.selection.main.assoc === -1
+    ? -1
+    : 1;
+
+  view.requestMeasure({
+    read: () => {
+      const coords = safeCoordsAtPos(view, view.state.selection.main.head, selectionAssoc);
+      if (!coords) return null;
+      const scrollerRect = view.scrollDOM.getBoundingClientRect();
+      return {
+        coords,
+        scrollerTop: scrollerRect.top,
+        scrollerBottom: scrollerRect.bottom,
+        scrollTop: view.scrollDOM.scrollTop,
+        viewportHeight: view.scrollDOM.clientHeight,
+      };
+    },
+    write: (measurement) => {
+      if (!measurement) return;
+      const margin = Math.min(64, measurement.viewportHeight / 5);
+      let nextScrollTop = measurement.scrollTop;
+      if (measurement.coords.top < measurement.scrollerTop + margin) {
+        nextScrollTop += measurement.coords.top - (measurement.scrollerTop + margin);
+      } else if (measurement.coords.bottom > measurement.scrollerBottom - margin) {
+        nextScrollTop += measurement.coords.bottom - (measurement.scrollerBottom - margin);
+      }
+      const clampedScrollTop = Math.max(0, nextScrollTop);
+      if (clampedScrollTop !== measurement.scrollTop) {
+        view.scrollDOM.scrollTop = clampedScrollTop;
+      }
+    },
+  });
+}
+
+export function moveVerticallyInRichView(
   view: EditorView,
   forward: boolean,
 ): boolean {
   const range = view.state.selection.main;
   if (!range.empty) return false;
 
-  const nextRange = view.moveVertically(range, forward);
-  if (nextRange.anchor === range.anchor && nextRange.head === range.head) {
-    return false;
+  const before = snapshotVerticalMotion(view);
+  const goalColumn = goalColumnForVerticalMove(view, forward);
+  const nextVisibleLine = nextVisibleLineNumber(view, before.line, forward);
+
+  if (nextVisibleLine === null) {
+    // Consume the key at rich-mode boundaries so CM6's default ArrowUp/Down
+    // handler does not run a second vertical move with different assoc/goal
+    // state and bounce between the terminal blank line and the last content line.
+    return true;
   }
 
-  const before = snapshotVerticalMotion(view);
+  const goalX = view.contentDOM.getBoundingClientRect().left + goalColumn;
+  const targetPos = resolveVisibleLineTarget(view, nextVisibleLine, goalX);
 
   view.dispatch({
-    selection: view.state.selection.replaceRange(nextRange),
-    scrollIntoView: true,
+    selection: EditorSelection.cursor(targetPos, forward ? 1 : -1, undefined, goalColumn),
+    scrollIntoView: false,
     userEvent: "select",
   });
+  requestSelectionVisibility(view);
 
   const guardId = ++nextReverseScrollGuardId;
   pendingReverseScrollGuardIds.set(view, guardId);
@@ -122,7 +325,16 @@ export function moveVerticallyWithReverseScrollGuard(
         traversedHeight,
       );
       if (correctedScrollTop !== null && correctedScrollTop !== view.scrollDOM.scrollTop) {
-        view.scrollDOM.scrollTop = correctedScrollTop;
+        recordVerticalMotionGuardEvent(view, {
+          kind: "reverse-scroll",
+          direction: forward ? "down" : "up",
+          beforeLine: before.line,
+          afterLine: after.line,
+          beforeScrollTop: before.scrollTop,
+          afterScrollTop: after.scrollTop,
+          correctedScrollTop,
+          timestamp: Date.now(),
+        });
       }
     });
   });

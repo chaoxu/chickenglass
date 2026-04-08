@@ -17,7 +17,7 @@ import {
   hideHoverPreview,
   insertEditorText,
   openAppSearch,
-  openFile,
+  openFixtureDocument,
   pickAutocompleteOption,
   readEditorText,
   readHoverPreviewState,
@@ -35,13 +35,13 @@ const RAW_TOKEN = "raw_token_785_only_in_source";
 const TABLE_REF = '.cf-crossref[aria-label="[@tbl:hover]"]';
 const FIGURE_REF = '.cf-crossref[aria-label="[@fig:hover]"]';
 const ORIGINAL_REFERENCE_AUTOCOMPLETE = readFileSync(
-  new URL("../../demo/cogirth/reference-autocomplete.md", import.meta.url),
+  new URL("../../fixtures/cogirth/reference-autocomplete.md", import.meta.url),
   "utf8",
 );
 
 export async function run(page) {
   const { value, issues } = await withRuntimeIssueCapture(page, async () => {
-    await openFile(page, "cogirth/search-mode-awareness.md");
+    await openFixtureDocument(page, "cogirth/search-mode-awareness.md", { project: "full-project" });
     await switchToMode(page, "source");
     await assertEditorHealth(page, "source-search start");
 
@@ -78,7 +78,7 @@ export async function run(page) {
     }
     await assertEditorHealth(page, "after source-search navigation");
 
-    await openFile(page, "cogirth/reference-autocomplete.md");
+    await openFixtureDocument(page, "cogirth/reference-autocomplete.md", { project: "full-project" });
     await switchToMode(page, "rich");
     await withRestoredFixture(
       page,
@@ -110,7 +110,7 @@ export async function run(page) {
     );
     await assertEditorHealth(page, "after autocomplete restore");
 
-    await openFile(page, "cogirth/hover-preview.md");
+    await openFixtureDocument(page, "cogirth/hover-preview.md", { project: "full-project" });
     await switchToMode(page, "rich");
     await assertEditorHealth(page, "hover fixture loaded");
 

@@ -18,7 +18,11 @@ import {
   createArgParser,
   disconnectBrowser,
   EXTERNAL_DEMO_ROOT,
-  openFile,
+  EXTERNAL_FIXTURE_ROOT,
+  hasFixtureDocument,
+  openFixtureDocument,
+  PUBLIC_SHOWCASE_FIXTURE,
+  resolveFixtureDocumentWithFallback,
   sleep,
   switchToMode,
   waitForDebugBridge,
@@ -73,10 +77,18 @@ async function discardDirtyPerfState(page) {
   }
 }
 
-const SCROLL_STEP_SIZE = 30;
-const SCROLL_FIXTURE = "cogirth/main2.md";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");
+const SCROLL_STEP_SIZE = 30;
+const SCROLL_FIXTURE = {
+  displayPath: "fixtures/cogirth/main2.md",
+  virtualPath: "cogirth/main2.md",
+  candidates: [
+    resolve(REPO_ROOT, "fixtures/cogirth/main2.md"),
+    resolve(EXTERNAL_FIXTURE_ROOT, "cogirth/main2.md"),
+  ],
+};
+const PUBLIC_SCROLL_FALLBACK = PUBLIC_SHOWCASE_FIXTURE;
 
 export const TYPING_BURST_REQUIRED_METRICS = [
   "typing.wall_ms",
@@ -132,17 +144,17 @@ export const TYPING_BURST_CASES = [
   },
   {
     key: "rankdecrease",
-    displayPath: "demo/rankdecrease/main.md",
+    displayPath: "fixtures/rankdecrease/main.md",
     virtualPath: "rankdecrease/main.md",
     positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
     candidates: [
-      resolve(REPO_ROOT, "demo/rankdecrease/main.md"),
-      resolve(EXTERNAL_DEMO_ROOT, "rankdecrease/main.md"),
+      resolve(REPO_ROOT, "fixtures/rankdecrease/main.md"),
+      resolve(EXTERNAL_FIXTURE_ROOT, "rankdecrease/main.md"),
     ],
   },
   {
     key: "cogirth_main2",
-    displayPath: "demo/cogirth/main2.md",
+    displayPath: "fixtures/cogirth/main2.md",
     virtualPath: "cogirth/main2.md",
     positionKeys: [
       ...DEFAULT_TYPING_BURST_POSITION_KEYS,
@@ -150,11 +162,16 @@ export const TYPING_BURST_CASES = [
       "citation_ref",
     ],
     candidates: [
-      resolve(REPO_ROOT, "demo/cogirth/main2.md"),
+      resolve(REPO_ROOT, "fixtures/cogirth/main2.md"),
+      resolve(EXTERNAL_FIXTURE_ROOT, "cogirth/main2.md"),
     ],
   },
 ];
 const TYPING_BURST_INSERT_COUNT = 100;
+
+export function availableTypingBurstCases(caseDefinitions = TYPING_BURST_CASES) {
+  return caseDefinitions.filter((caseDef) => hasFixtureDocument(caseDef));
+}
 
 function splitLinesWithOffsets(text) {
   const lines = text.split("\n");
@@ -294,8 +311,13 @@ function resolveTypingBurstFixture(caseDef) {
   };
 }
 
+function resolveScrollFixture() {
+  return resolveFixtureDocumentWithFallback(SCROLL_FIXTURE, PUBLIC_SCROLL_FALLBACK);
+}
+
 async function openCleanRichDocument(page, path, content) {
-  const docText = await evaluateStep(page, "openCleanRichDocument", async ({ nextPath, nextContent }) => {
+  const verificationWindow = 200;
+  await evaluateStep(page, "openCleanRichDocument", async ({ nextPath, nextContent }) => {
     const app = window.__app;
     if (!app?.openFileWithContent) {
       throw new Error("window.__app.openFileWithContent is unavailable.");
@@ -309,10 +331,24 @@ async function openCleanRichDocument(page, path, content) {
     }
     app.setMode("rich");
     await app.openFileWithContent(nextPath, nextContent);
-    return window.__cmView.state.doc.toString();
   }, { nextPath: path, nextContent: content });
+  await page.waitForFunction(
+    ({ expectedLength, expectedPrefix, expectedSuffix }) => {
+      const docText = window.__cmView?.state?.doc?.toString();
+      return typeof docText === "string" &&
+        docText.length === expectedLength &&
+        docText.startsWith(expectedPrefix) &&
+        docText.endsWith(expectedSuffix);
+    },
+    {
+      expectedLength: content.length,
+      expectedPrefix: content.slice(0, verificationWindow),
+      expectedSuffix: content.slice(-verificationWindow),
+    },
+    { timeout: 10000 },
+  );
   await sleep(200);
-  return docText;
+  return content;
 }
 
 async function measureTypingBurst(page, anchor, insertCount) {
@@ -385,24 +421,21 @@ export const scenarios = {
     description: "Reload the app and open demo/index.md in Rich mode.",
     defaultSettleMs: 400,
     run: async (page) => {
-      await page.evaluate(() => window.__app.setMode("rich"));
-      await openFile(page, "index.md");
+      await openFixtureDocument(page, "index.md", { mode: "rich" });
     },
   },
   "open-heavy-post": {
-    description: "Reload the app and open a heavy math/reference demo post.",
+    description: "Reload the app and open a heavy math/reference fixture post.",
     defaultSettleMs: 700,
     run: async (page) => {
-      await page.evaluate(() => window.__app.setMode("rich"));
-      await openFile(page, "posts/2020-07-11-yotta-savings-and-covering-designs.md");
+      await openFixtureDocument(page, "posts/2020-07-11-yotta-savings-and-covering-designs.md", { mode: "rich" });
     },
   },
   "mode-cycle-index": {
     description: "Reload the app, open demo/index.md, then cycle Source/Read/Rich.",
     defaultSettleMs: 500,
     run: async (page) => {
-      await page.evaluate(() => window.__app.setMode("rich"));
-      await openFile(page, "index.md");
+      await openFixtureDocument(page, "index.md", { mode: "rich" });
       await switchToMode(page, "source");
       await switchToMode(page, "read");
       await switchToMode(page, "rich");
@@ -412,8 +445,7 @@ export const scenarios = {
     description: "Reload the app, open demo/index.md, then apply a local inline-math edit.",
     defaultSettleMs: 300,
     run: async (page) => {
-      await page.evaluate(() => window.__app.setMode("rich"));
-      await openFile(page, "index.md");
+      await openFixtureDocument(page, "index.md", { mode: "rich" });
       await page.waitForTimeout(800);
       const before = await getSemanticRevisionInfo(page);
       const after = await page.evaluate((previous) => {
@@ -483,10 +515,10 @@ export const scenarios = {
   "typing-rich-burst": {
     description: "Measure rich-mode typing bursts across prose, inline math, and citation/ref hotspots, including the canonical heavy fixture.",
     defaultSettleMs: 200,
-    requiredMetrics: typingBurstRequiredMetricNames(),
+    requiredMetrics: typingBurstRequiredMetricNames(availableTypingBurstCases()),
     run: async (page) => {
       const metrics = [];
-      for (const testCase of TYPING_BURST_CASES.map(resolveTypingBurstFixture)) {
+      for (const testCase of availableTypingBurstCases().map(resolveTypingBurstFixture)) {
         const originalText = await openCleanRichDocument(
           page,
           testCase.virtualPath,
@@ -506,22 +538,20 @@ export const scenarios = {
     },
   },
   "scroll-step-rich": {
-    description: `Open ${SCROLL_FIXTURE} in Rich mode, scroll step-by-step (${SCROLL_STEP_SIZE} lines/step).`,
+    description: `Open the preferred heavy Rich-mode scroll fixture, falling back to demo/index.md when local private fixtures are unavailable.`,
     defaultSettleMs: 400,
     run: async (page) => {
-      await page.evaluate(() => window.__app.setMode("rich"));
-      await openFile(page, SCROLL_FIXTURE);
+      await openFixtureDocument(page, resolveScrollFixture(), { mode: "rich" });
       await sleep(800);
       const result = await runSteppedScroll(page);
       return { metrics: steppedScrollMetrics(result) };
     },
   },
   "scroll-jump-rich": {
-    description: `Open ${SCROLL_FIXTURE} in Rich mode, perform cold and warm jump scrolls.`,
+    description: "Open the preferred heavy Rich-mode scroll fixture, then perform cold and warm jump scrolls.",
     defaultSettleMs: 400,
     run: async (page) => {
-      await page.evaluate(() => window.__app.setMode("rich"));
-      await openFile(page, SCROLL_FIXTURE);
+      await openFixtureDocument(page, resolveScrollFixture(), { mode: "rich" });
       await sleep(800);
 
       const jumpResult = await page.evaluate(async () => {
@@ -564,11 +594,10 @@ export const scenarios = {
     },
   },
   "scroll-step-source": {
-    description: `Open ${SCROLL_FIXTURE} in Source mode, scroll step-by-step (baseline comparison).`,
+    description: "Open the preferred heavy Source-mode scroll fixture, falling back to demo/index.md when local private fixtures are unavailable.",
     defaultSettleMs: 400,
     run: async (page) => {
-      await page.evaluate(() => window.__app.setMode("source"));
-      await openFile(page, SCROLL_FIXTURE);
+      await openFixtureDocument(page, resolveScrollFixture(), { mode: "source" });
       await sleep(800);
       const result = await runSteppedScroll(page);
       return { metrics: steppedScrollMetrics(result) };

@@ -156,11 +156,19 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     margin: "0",
   },
 
-  /* Inline image preview */
+  /* Inline image preview — stable slot for async loading (#1015) */
   ".cf-image-wrapper": {
     display: "inline-block",
     verticalAlign: "middle",
     maxWidth: "100%",
+  },
+  ".cf-image-loading": {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "100px",
+    color: "var(--cf-muted)",
+    fontSize: "0.85em",
   },
   ".cf-image": {
     display: "block",

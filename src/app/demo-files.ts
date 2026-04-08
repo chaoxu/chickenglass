@@ -1,8 +1,9 @@
 /**
- * Load demo project files at build time via Vite's import.meta.glob.
+ * Load the public demo/showcase project files at build time via
+ * Vite's import.meta.glob.
  *
- * Lazy variant: modules are loaded on first call to getBlogFiles(), not at
- * import time.  This keeps the demo corpus out of the initial bundle chunk.
+ * Lazy variant: modules are loaded on first call to getDemoFiles(), not at
+ * import time. This keeps the showcase corpus out of the initial bundle chunk.
  */
 
 const mdLoaders = import.meta.glob("/demo/**/*.md", {
@@ -50,8 +51,8 @@ function stripPrefix(files: Record<string, string>): Record<string, string> {
   return result;
 }
 
-/** All demo project files as a flat Record<relativePath, content>. */
-export async function getBlogFiles(): Promise<Record<string, string>> {
+/** All public demo project files as a flat Record<relativePath, content>. */
+export async function getDemoFiles(): Promise<Record<string, string>> {
   const [mdFiles, yamlFiles, bibFiles, cslFiles, rootMarkdownFiles] =
     await Promise.all([
       resolveLoaders(mdLoaders),

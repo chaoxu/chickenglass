@@ -221,13 +221,21 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     // Full recursive load so expanded folders keep their children and
     // consumers (export, default-doc) still see the complete tree.
     try {
-      const tree = await measureAsync("sidebar.file_tree", () => fs.listTree(), {
-        category: "sidebar",
-      });
+      const [tree, nextProjectConfig] = await Promise.all([
+        measureAsync("sidebar.file_tree", () => fs.listTree(), {
+          category: "sidebar",
+        }),
+        measureAsync(
+          "startup.project_config",
+          () => loadProjectConfig(fs),
+          { category: "startup" },
+        ),
+      ]);
       if (requestId !== workspaceRequestRef.current) {
         return;
       }
       setFileTree(tree);
+      setProjectConfig(nextProjectConfig);
     } catch (e: unknown) {
       if (requestId !== workspaceRequestRef.current) {
         return;

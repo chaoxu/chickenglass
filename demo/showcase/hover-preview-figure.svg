@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 140" role="img" aria-labelledby="title desc">
+  <title id="title">Generated showcase figure</title>
+  <desc id="desc">A small generated vector illustration for public demo coverage.</desc>
+  <rect width="240" height="140" fill="#fff6f6" />
+  <rect x="14" y="14" width="212" height="112" rx="12" fill="#ffffff" stroke="#d33" stroke-width="4" />
+  <path d="M34 102 C62 58, 82 52, 110 86 S164 122, 206 42" fill="none" stroke="#d33" stroke-width="6" stroke-linecap="round" />
+  <circle cx="66" cy="72" r="10" fill="#ffb3b3" stroke="#d33" stroke-width="3" />
+  <circle cx="150" cy="84" r="8" fill="#ffd8d8" stroke="#d33" stroke-width="3" />
+  <text x="34" y="42" font-size="18" font-family="Georgia, serif" fill="#7a1111">Coflat demo asset</text>
+</svg>

@@ -1,24 +1,30 @@
 /**
  * CM6 extension for Typora-style frontmatter rendering.
  *
- * Reveals raw YAML when the cursor is inside the frontmatter region
- * while the editor is focused; otherwise replaces it with a document
- * title widget (or hides it entirely when there is no title).
+ * Reveals raw YAML only when explicit structure editing is active;
+ * otherwise replaces it with a document title widget (or hides it
+ * entirely when there is no title).
  */
 import { EditorState, type Extension, type Range } from "@codemirror/state";
 import { Decoration, DecorationSet } from "@codemirror/view";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
+import { CSS } from "../constants/css-classes";
 
 import { frontmatterField } from "./frontmatter-state";
 import {
   createDecorationsField,
   editorFocusField,
   focusTracker,
-  focusEffect,
   RenderWidget,
   serializeMacros,
 } from "../render/render-core";
 import type { Transaction } from "@codemirror/state";
+import {
+  activateFrontmatterStructureEdit,
+  hasStructureEditEffect,
+  isFrontmatterStructureEditActive,
+} from "./structure-edit-state";
+import { isFrontmatterActive } from "./shell-ownership";
 
 /** Widget that renders the document title from frontmatter. */
 class TitleWidget extends RenderWidget {
@@ -27,15 +33,17 @@ class TitleWidget extends RenderWidget {
   constructor(
     private readonly title: string,
     private readonly macros: Record<string, string>,
+    private readonly active: boolean = false,
   ) {
     super();
     this.macrosKey = serializeMacros(macros);
+    this.includeInShellSurface = true;
   }
 
   createDOM(): HTMLElement {
     return this.createCachedDOM(() => {
       const el = document.createElement("div");
-      el.className = "cf-doc-title";
+      el.className = this.active ? `${CSS.docTitle} ${CSS.activeShellWidget}` : CSS.docTitle;
       renderDocumentFragmentToDom(el, {
         kind: "title",
         text: this.title,
@@ -46,21 +54,29 @@ class TitleWidget extends RenderWidget {
   }
 
   eq(other: TitleWidget): boolean {
-    return this.title === other.title && this.macrosKey === other.macrosKey;
+    return (
+      this.title === other.title &&
+      this.macrosKey === other.macrosKey &&
+      this.active === other.active
+    );
   }
 
-  /**
-   * Override to return false: CM6 handles click events on the title widget
-   * to place the cursor at position 0, revealing the YAML source for editing.
-   */
-  override ignoreEvent(): boolean {
-    return false;
+  protected override bindSourceReveal(
+    el: HTMLElement,
+    view: import("@codemirror/view").EditorView,
+  ): void {
+    el.style.cursor = "pointer";
+    el.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      view.focus();
+      activateFrontmatterStructureEdit(view);
+    });
   }
 }
 
 /**
  * CM6 StateField that renders frontmatter in Typora style:
- * - Editor focused + cursor inside frontmatter: show raw YAML for editing
+ * - Explicit structure edit active: show raw YAML for editing
  * - Otherwise: replace with a document title widget (if title present)
  *   or hide entirely (if no title)
  */
@@ -89,51 +105,54 @@ export const frontmatterDecoration: Extension = [
   frontmatterDecorationField,
 ];
 
-/** Line decoration applied to each frontmatter line when editing. */
-const frontmatterLineDeco = Decoration.line({ class: "cf-frontmatter-line" });
-
 function shouldShowFrontmatterSource(state: EditorState): boolean {
   const { end } = state.field(frontmatterField);
   if (end <= 0) return false;
-  const focused = state.field(editorFocusField, false) ?? false;
-  return focused && state.selection.main.from < end;
+  return isFrontmatterStructureEditActive(state);
 }
 
 function frontmatterShouldRebuild(tr: Transaction): boolean {
-  if (tr.effects.some((effect) => effect.is(focusEffect))) {
+  if (hasStructureEditEffect(tr)) {
     return true;
   }
   if (tr.state.field(frontmatterField) !== tr.startState.field(frontmatterField)) {
     return true;
   }
-  if (tr.selection === undefined) return false;
-  return shouldShowFrontmatterSource(tr.state) !== shouldShowFrontmatterSource(tr.startState);
+  return isFrontmatterActive(tr.startState) !== isFrontmatterActive(tr.state);
 }
 
 /** Build decorations for the frontmatter region. */
 function buildDecorations(state: EditorState): DecorationSet {
   const { end, config } = state.field(frontmatterField);
   if (end <= 0) return Decoration.none;
+  const active = isFrontmatterActive(state);
 
-  // Only reveal raw YAML when the editor is focused and cursor is inside
   if (shouldShowFrontmatterSource(state)) {
-    // Apply monospace line decorations to all frontmatter lines
     const decos: Range<Decoration>[] = [];
     const doc = state.doc;
     for (let pos = 0; pos < end; ) {
       const line = doc.lineAt(pos);
-      decos.push(frontmatterLineDeco.range(line.from));
+      const isFirst = line.from === 0;
+      const isLast = line.to + 1 >= end;
+      const className = [
+        "cf-frontmatter-line",
+        active ? CSS.activeShell : "",
+        active && isFirst ? CSS.activeShellTop : "",
+        active && isLast ? CSS.activeShellBottom : "",
+      ].filter(Boolean).join(" ");
+      decos.push(Decoration.line({ class: className }).range(line.from));
       pos = line.to + 1;
     }
     return Decoration.set(decos);
   }
 
-  // Otherwise: replace frontmatter with title widget (or hide)
   if (config.title) {
     const macros = config.math ?? {};
+    const widget = new TitleWidget(config.title, macros, active);
+    widget.updateSourceRange(0, end);
     return Decoration.set([
       Decoration.replace({
-        widget: new TitleWidget(config.title, macros),
+        widget,
         block: true,
       }).range(0, end),
     ]);

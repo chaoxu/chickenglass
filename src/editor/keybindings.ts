@@ -13,7 +13,8 @@ import { getClosingFenceRanges } from "../plugins/fence-protection";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
 import { editorModeField, markdownEditorModes, setEditorMode } from "./editor";
-import { moveVerticallyWithReverseScrollGuard } from "./vertical-motion";
+import { clearStructureEditTarget } from "./structure-edit-state";
+import { moveVerticallyInRichView } from "./vertical-motion";
 
 /** Cycle to the next editor mode. */
 function cycleEditorMode(view: EditorView): boolean {
@@ -321,12 +322,16 @@ export function moveDownAcrossNestedClosingFences(view: EditorView): boolean {
 
 function moveUpWithReverseScrollGuard(view: EditorView): boolean {
   if (!isRichMode(view)) return false;
-  return moveVerticallyWithReverseScrollGuard(view, false);
+  return moveVerticallyInRichView(view, false);
 }
 
 function moveDownWithReverseScrollGuard(view: EditorView): boolean {
   if (!isRichMode(view)) return false;
-  return moveDownAcrossNestedClosingFences(view) || moveVerticallyWithReverseScrollGuard(view, true);
+  return moveDownAcrossNestedClosingFences(view) || moveVerticallyInRichView(view, true);
+}
+
+function clearActiveStructureEdit(view: EditorView): boolean {
+  return clearStructureEditTarget(view);
 }
 
 /** Default keybindings for the editor. */
@@ -334,6 +339,7 @@ export const editorKeybindings: Extension = [
   history(),
   Prec.high(
     keymap.of([
+      { key: "Escape", run: clearActiveStructureEdit },
       { key: "ArrowUp", run: moveUpWithReverseScrollGuard },
       { key: "ArrowDown", run: moveDownWithReverseScrollGuard },
     ]),

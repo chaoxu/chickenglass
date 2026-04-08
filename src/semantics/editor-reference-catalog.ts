@@ -1,8 +1,12 @@
 import { syntaxTree } from "@codemirror/language";
-import type { EditorState } from "@codemirror/state";
+import { StateField, type EditorState, type Transaction } from "@codemirror/state";
 import { blockCounterField } from "../plugins/block-counter";
 import { getPluginOrFallback, pluginRegistryField } from "../plugins/plugin-registry";
-import { documentAnalysisField, editorStateTextSource } from "./codemirror-source";
+import {
+  documentAnalysisField,
+  editorStateTextSource,
+  getDocumentAnalysisSliceRevision,
+} from "./codemirror-source";
 import {
   analyzeDocumentSemantics,
   type DocumentAnalysis,
@@ -67,6 +71,10 @@ function chooseFootnotes(
   return recomputedScore > cachedScore ? recomputed : cached;
 }
 
+function currentDocumentAnalysis(state: EditorState): DocumentAnalysis {
+  return state.field(documentAnalysisField, false) ?? getDocumentAnalysisOrRecompute(state);
+}
+
 export function getDocumentAnalysisOrRecompute(
   state: EditorState,
 ): DocumentAnalysis {
@@ -103,7 +111,7 @@ export function getDocumentAnalysisOrRecompute(
 
 export function collectEditorBlockReferenceTargetInputs(
   state: EditorState,
-  analysis = getDocumentAnalysisOrRecompute(state),
+  analysis = currentDocumentAnalysis(state),
 ): readonly BlockReferenceTargetInput[] {
   const counters = state.field(blockCounterField, false);
   if (!counters) return [];
@@ -122,11 +130,56 @@ export function collectEditorBlockReferenceTargetInputs(
   }));
 }
 
-export function buildEditorDocumentReferenceCatalog(
+function computeEditorDocumentReferenceCatalog(
   state: EditorState,
-  analysis = getDocumentAnalysisOrRecompute(state),
+  analysis = currentDocumentAnalysis(state),
 ): DocumentReferenceCatalog {
   return buildDocumentReferenceCatalog(analysis, {
     blocks: collectEditorBlockReferenceTargetInputs(state, analysis),
   });
+}
+
+function referenceCatalogDependenciesChanged(tr: Transaction): boolean {
+  const beforeAnalysis = tr.startState.field(documentAnalysisField);
+  const afterAnalysis = tr.state.field(documentAnalysisField);
+  return (
+    getDocumentAnalysisSliceRevision(beforeAnalysis, "headings")
+      !== getDocumentAnalysisSliceRevision(afterAnalysis, "headings") ||
+    getDocumentAnalysisSliceRevision(beforeAnalysis, "fencedDivs")
+      !== getDocumentAnalysisSliceRevision(afterAnalysis, "fencedDivs") ||
+    getDocumentAnalysisSliceRevision(beforeAnalysis, "equations")
+      !== getDocumentAnalysisSliceRevision(afterAnalysis, "equations") ||
+    getDocumentAnalysisSliceRevision(beforeAnalysis, "references")
+      !== getDocumentAnalysisSliceRevision(afterAnalysis, "references") ||
+    tr.startState.field(blockCounterField, false) !== tr.state.field(blockCounterField, false) ||
+    tr.startState.field(pluginRegistryField, false) !== tr.state.field(pluginRegistryField, false)
+  );
+}
+
+export const documentReferenceCatalogField = StateField.define<DocumentReferenceCatalog>({
+  create(state) {
+    return computeEditorDocumentReferenceCatalog(state);
+  },
+
+  update(value, tr) {
+    if (!referenceCatalogDependenciesChanged(tr)) {
+      return value;
+    }
+    return computeEditorDocumentReferenceCatalog(tr.state);
+  },
+});
+
+export function getEditorDocumentReferenceCatalog(
+  state: EditorState,
+  analysis = currentDocumentAnalysis(state),
+): DocumentReferenceCatalog {
+  return state.field(documentReferenceCatalogField, false)
+    ?? computeEditorDocumentReferenceCatalog(state, analysis);
+}
+
+export function buildEditorDocumentReferenceCatalog(
+  state: EditorState,
+  analysis = currentDocumentAnalysis(state),
+): DocumentReferenceCatalog {
+  return computeEditorDocumentReferenceCatalog(state, analysis);
 }

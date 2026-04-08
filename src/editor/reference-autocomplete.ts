@@ -17,7 +17,7 @@ import {
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CSS } from "../constants/css-classes";
 import { buildCrossrefCompletionPreviewContent } from "../render/hover-preview";
-import { buildEditorDocumentReferenceCatalog } from "../semantics/editor-reference-catalog";
+import { getEditorDocumentReferenceCatalog } from "../semantics/editor-reference-catalog";
 
 const CROSSREF_SECTION = { name: "Cross-references", rank: 0 } as const;
 const CITATION_SECTION = { name: "Citations", rank: 1 } as const;
@@ -251,7 +251,7 @@ export function collectReferenceCompletionCandidates(
   state: EditorState,
 ): ReferenceCompletionCandidate[] {
   const candidates = new Map<string, ReferenceCompletionCandidate>();
-  const catalog = buildEditorDocumentReferenceCatalog(state);
+  const catalog = getEditorDocumentReferenceCatalog(state);
 
   for (const target of catalog.targets) {
     if (!target.id || candidates.has(target.id)) continue;

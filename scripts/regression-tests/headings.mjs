@@ -24,7 +24,7 @@ export async function run(page) {
     return { pass: false, message: "No ATXHeading1 or ATXHeading2 found in syntax tree" };
   }
 
-  await scrollToText(page, "# Math");
+  await scrollToText(page, "# Display Math");
 
   // Verify heading decorations exist in the DOM (line decorations with heading classes)
   const headingCount = await page.evaluate(() => {

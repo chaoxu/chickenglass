@@ -49,6 +49,9 @@
   /* Accent — black, one color */
   --cf-accent: #18181b;
   --cf-accent-fg: #ffffff;
+  --cf-active-shell-border: #dc2626;
+  --cf-active-shell-fill: rgba(220, 38, 38, 0.10);
+  --cf-active-shell-border-width: 2px;
 
   /* Overlay (semi-transparent background for floating bars) */
   --cf-bg-overlay: rgba(255, 255, 255, 0.82);
@@ -168,6 +171,9 @@
   --cf-math-error-bg: rgba(239, 68, 68, 0.18);
   --cf-accent: #fafafa;
   --cf-accent-fg: #09090b;
+  --cf-active-shell-border: #ef4444;
+  --cf-active-shell-fill: rgba(239, 68, 68, 0.16);
+  --cf-active-shell-border-width: 2px;
   --cf-bg-overlay: rgba(10, 10, 10, 0.82);
   --cf-border-overlay: rgba(63, 63, 70, 0.6);
 }
@@ -668,6 +674,160 @@
 
 .cf-math-preview-content {
   cursor: pointer;
+}
+
+/* ── Stable-shell debug lane ─────────────────────────────────────────────── */
+
+.cm-line.cf-active-shell {
+  background: transparent;
+}
+
+.cm-line.cf-active-shell-top {
+  border-top-left-radius: var(--cf-border-radius-lg);
+  border-top-right-radius: var(--cf-border-radius-lg);
+}
+
+.cm-line.cf-active-shell-bottom {
+  border-bottom-left-radius: var(--cf-border-radius-lg);
+  border-bottom-right-radius: var(--cf-border-radius-lg);
+}
+
+.cf-active-shell-widget {
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.cf-shell-surface-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: calc(var(--cf-layer-preview-surface) + 10);
+}
+
+.cf-shell-surface-box {
+  position: fixed;
+  border: var(--cf-active-shell-border-width) solid var(--cf-active-shell-border);
+  border-radius: 8px;
+  background: var(--cf-active-shell-fill);
+  box-sizing: border-box;
+}
+
+.cf-shell-surface-box[data-depth="1"] {
+  border-style: dashed;
+}
+
+.cf-shell-surface-box[data-depth="2"] {
+  border-style: dotted;
+}
+
+.cf-shell-surface-label {
+  position: absolute;
+  top: -18px;
+  left: -1px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--cf-active-shell-border);
+  color: #fff;
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+}
+
+.cf-editor-debug-host {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  height: 100%;
+  min-width: 0;
+}
+
+.cf-editor-debug-host > .cm-editor {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cf-debug-panel {
+  position: relative;
+  flex: 0 0 min(340px, 32vw);
+  width: min(340px, 32vw);
+  min-width: 280px;
+  height: 100%;
+  overflow: auto;
+  padding: 12px 14px 20px;
+  box-sizing: border-box;
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--cf-fg);
+  background: color-mix(in srgb, var(--cf-bg) 86%, transparent);
+  backdrop-filter: blur(10px);
+  border-left: 1px solid var(--cf-border);
+  z-index: calc(var(--cf-layer-preview-surface) + 20);
+}
+
+.cf-debug-panel-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.cf-debug-panel-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cf-debug-panel-button {
+  appearance: none;
+  border: 1px solid var(--cf-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cf-bg) 82%, var(--cf-active-shell-fill));
+  color: var(--cf-fg);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 6px 10px;
+  text-transform: uppercase;
+}
+
+.cf-debug-panel-button:hover {
+  border-color: var(--cf-active-shell-border);
+  background: color-mix(in srgb, var(--cf-bg) 68%, var(--cf-active-shell-fill));
+}
+
+.cf-debug-panel-button:active {
+  background: color-mix(in srgb, var(--cf-bg) 56%, var(--cf-active-shell-fill));
+}
+
+.cf-debug-panel-section + .cf-debug-panel-section {
+  margin-top: 12px;
+}
+
+.cf-debug-panel-label {
+  color: var(--cf-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.cf-debug-panel-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cf-debug-panel-meta {
+  color: var(--cf-muted);
+  margin-top: 4px;
+  word-break: break-word;
 }
 
 /* ── Block type picker (appended to document.body) ─────────────────────────

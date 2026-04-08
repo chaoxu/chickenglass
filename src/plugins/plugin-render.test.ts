@@ -14,7 +14,6 @@ import {
   _blockDecorationFieldForTest as blockDecorationField,
   _BlockCaptionWidgetForTest as BlockCaptionWidget,
   _BlockHeaderWidgetForTest as BlockHeaderWidget,
-  _shouldStabilizeCursorDrivenBlockScrollForTest as shouldStabilizeCursorDrivenBlockScroll,
   embedSandboxPermissions,
 } from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
@@ -23,6 +22,11 @@ import { documentSemanticsField } from "../semantics/codemirror-source";
 import { editorFocusField, focusEffect, mathMacrosField } from "../render/render-core";
 import { widgetSourceMap } from "../render/render-utils";
 import { frontmatterField } from "../editor/frontmatter-state";
+import {
+  activeStructureEditField,
+  createFencedStructureEditTarget,
+  setStructureEditTargetEffect,
+} from "../editor/structure-edit-state";
 import { defaultPlugins } from "./default-plugins";
 import { IFRAME_POLL_INTERVAL_MS } from "../constants/timing";
 import {
@@ -42,6 +46,7 @@ function createTestState(doc: string, cursorPos = 0, focused = false) {
     extensions: [
       markdown({ extensions: markdownExtensions }),
       frontmatterField,
+      activeStructureEditField,
       documentSemanticsField,
       mathMacrosField,
       createPluginRegistryField([]),
@@ -72,6 +77,7 @@ function createTestStateWithPlugins(
     extensions: [
       markdown({ extensions: markdownExtensions }),
       frontmatterField,
+      activeStructureEditField,
       documentSemanticsField,
       mathMacrosField,
       createPluginRegistryField(plugins),
@@ -131,23 +137,35 @@ describe("blockDecorationField", () => {
     expect(widgets.length).toBe(2); // theorem + proof
   });
 
-  it("shows source when cursor is on opening fence (focused)", () => {
+  it("keeps the rendered shell when cursor is on opening fence until structure edit activates", () => {
     const theoremStart = 0;
     const state = createTestState(TWO_BLOCKS, theoremStart, true);
     const specs = getDecoSpecs(state);
 
-    // Opening fence: cf-block-source is a MARK decoration on syntax only, not a line class.
-    // The line should NOT have cf-block-source as a line class (that made the whole line monospace).
     const theoremLine = state.doc.line(1);
     expect(hasLineClassAt(specs, theoremLine.from, CSS.blockSource)).toBe(false);
-    expect(hasLineClassAt(specs, theoremLine.from, CSS.blockHeader)).toBe(false);
-    // But cf-block-source mark should cover the fence syntax range
-    expect(hasMarkClassInRange(specs, theoremLine.from, theoremLine.to, CSS.blockSource)).toBe(true);
+    expect(hasLineClassAt(specs, theoremLine.from, CSS.blockHeader)).toBe(true);
+    expect(hasMarkClassInRange(specs, theoremLine.from, theoremLine.to, CSS.blockSource)).toBe(false);
+  });
 
-    // No header widget for theorem (source mode)
-    // But proof should still have its header widget
-    const proofLine = state.doc.line(5).from;
+  it("shows opener source when structure edit is active for a block", () => {
+    const base = createTestState(TWO_BLOCKS, 0, true);
+    const active = applyStateEffects(
+      base,
+      setStructureEditTargetEffect.of(createFencedStructureEditTarget(base, 0)),
+    );
+    const specs = getDecoSpecs(active);
+
+    const theoremLine = active.doc.line(1);
+    expect(hasLineClassAt(specs, theoremLine.from, CSS.blockHeader)).toBe(true);
+    expect(specs.some((spec) =>
+      spec.widgetClass === "BlockHeaderWidget" &&
+      spec.from === theoremLine.from
+    )).toBe(true);
+
+    const proofLine = active.doc.line(5).from;
     expect(hasLineClassAt(specs, proofLine, CSS.blockHeader)).toBe(true);
+    expect(hasLineClassAt(specs, proofLine, CSS.blockHeaderCollapsed)).toBe(false);
   });
 
   it("hides closing fence when cursor is not on it", () => {
@@ -173,14 +191,22 @@ describe("blockDecorationField", () => {
     expect(hasLineClassAt(specs, closeFenceLine, CSS.blockSource)).toBe(false);
   });
 
-  it("closing fence hidden when cursor is on opening fence (#428)", () => {
-    const state = createTestState(TWO_BLOCKS, 0, true);
+  it("closing fence stays hidden when structure edit is active on the opener (#428)", () => {
+    const base = createTestState(TWO_BLOCKS, 0, true);
+    const state = applyStateEffects(
+      base,
+      setStructureEditTargetEffect.of(createFencedStructureEditTarget(base, 0)),
+    );
     const specs = getDecoSpecs(state);
 
-    // Opening: cf-block-source as mark decoration on syntax portion only
+    // Titled theorem opener stays stable; explicit structure edit does not unmount it.
     const openLine = state.doc.line(1);
-    expect(hasMarkClassInRange(specs, openLine.from, openLine.to, CSS.blockSource)).toBe(true);
+    expect(hasLineClassAt(specs, openLine.from, CSS.blockHeader)).toBe(true);
     expect(hasLineClassAt(specs, openLine.from, CSS.blockSource)).toBe(false);
+    expect(specs.some((spec) =>
+      spec.widgetClass === "BlockHeaderWidget" &&
+      spec.from === openLine.from
+    )).toBe(true);
 
     // Closing fence is always hidden — cf-block-closing-fence, not cf-block-source
     const closeFenceLine = state.doc.line(3).from;
@@ -188,9 +214,12 @@ describe("blockDecorationField", () => {
     expect(hasLineClassAt(specs, closeFenceLine, CSS.blockSource)).toBe(false);
   });
 
-  it("other blocks unaffected when cursor is on one block's fence", () => {
-    // Cursor on theorem opening fence
-    const state = createTestState(TWO_BLOCKS, 0, true);
+  it("other blocks stay rendered when one block has active structure edit", () => {
+    const base = createTestState(TWO_BLOCKS, 0, true);
+    const state = applyStateEffects(
+      base,
+      setStructureEditTargetEffect.of(createFencedStructureEditTarget(base, 0)),
+    );
     const specs = getDecoSpecs(state);
 
     // Proof block should be fully rendered (not in source mode)
@@ -255,54 +284,52 @@ describe("blockDecorationField", () => {
     }
   });
 
-  it("title paren widgets present in rendered mode, absent in source mode (REGRESSION)", () => {
+  it("title paren widgets stay visible for titled blocks during explicit structure edit", () => {
     const doc = `::: {.theorem} Main Result\nContent\n:::`;
 
-    // Rendered mode (unfocused — cursor not on fence)
     const rendered = createTestState(doc);
     const renderedSpecs = getDecoSpecs(rendered);
     const renderedParens = renderedSpecs.filter((s) => s.widgetClass === "SimpleTextWidget");
     expect(renderedParens.length).toBe(2); // ( and )
 
-    // Source mode (cursor on opening fence)
-    const source = createTestState(doc, 0, true);
+    const base = createTestState(doc, 0, true);
+    const source = applyStateEffects(
+      base,
+      setStructureEditTargetEffect.of(createFencedStructureEditTarget(base, 0)),
+    );
     const sourceSpecs = getDecoSpecs(source);
     const sourceParens = sourceSpecs.filter((s) => s.widgetClass === "SimpleTextWidget");
-    expect(sourceParens.length).toBe(0); // no parens in source mode
+    expect(sourceParens.length).toBe(2);
   });
 
-  it("cf-block-source mark covers only fence syntax, not title text (#278)", () => {
+  it("structure edit keeps widget replacement for geometry stability (#1015)", () => {
     const doc = `::: {.theorem} Main Result\nContent\n:::`;
-    const state = createTestState(doc, 0, true);
+    const base = createTestState(doc, 0, true);
+    const state = applyStateEffects(
+      base,
+      setStructureEditTargetEffect.of(createFencedStructureEditTarget(base, 0)),
+    );
     const specs = getDecoSpecs(state);
 
     const line1 = state.doc.line(1);
-    const titleText = "Main Result";
-    const titleFrom = line1.text.indexOf(titleText) + line1.from;
-    const titleTo = titleFrom + titleText.length;
-
-    // cf-block-source mark should cover fence syntax (before title)
-    expect(hasMarkClassInRange(specs, line1.from, titleFrom, CSS.blockSource)).toBe(true);
-
-    // cf-block-source mark must NOT cover the title text range
-    const sourceMarksOnTitle = specs.filter(
-      (s) =>
-        s.from !== s.to && // mark decoration
-        s.from < titleTo &&
-        s.to > titleFrom &&
-        s.class?.includes(CSS.blockSource),
-    );
-    expect(sourceMarksOnTitle.length).toBe(0);
+    // Widget replacement stays active — no cf-block-source mark on the line
+    expect(hasMarkClassInRange(specs, line1.from, line1.to, CSS.blockSource)).toBe(false);
+    // Header class present for geometry stability
+    expect(hasLineClassAt(specs, line1.from, CSS.blockHeader)).toBe(true);
   });
 
-  it("no-title block: cf-block-source mark covers entire fence syntax (#278)", () => {
+  it("no-title block: structure edit keeps widget replacement (#1015)", () => {
     const doc = `::: {.proof}\nContent\n:::`;
-    const state = createTestState(doc, 0, true);
+    const base = createTestState(doc, 0, true);
+    const state = applyStateEffects(
+      base,
+      setStructureEditTargetEffect.of(createFencedStructureEditTarget(base, 0)),
+    );
     const specs = getDecoSpecs(state);
 
     const line1 = state.doc.line(1);
-    // Entire opening fence is syntax — mark should cover it
-    expect(hasMarkClassInRange(specs, line1.from, line1.to, CSS.blockSource)).toBe(true);
+    // Widget replacement stays active — no source mark
+    expect(hasMarkClassInRange(specs, line1.from, line1.to, CSS.blockSource)).toBe(false);
   });
 
   it("does not crash on an incomplete fenced div without a closing fence", () => {
@@ -336,9 +363,13 @@ describe("blockDecorationField", () => {
     expect(parenWidgets.length).toBe(0);
   });
 
-  it("attribute-only title widget absent when cursor is on fence (source mode)", () => {
+  it("attribute-only title widget is hidden only during explicit structure edit", () => {
     const doc = `::: {.theorem title="**3SUM**"}\nContent\n:::`;
-    const state = createTestState(doc, 0, true);
+    const base = createTestState(doc, 0, true);
+    const state = applyStateEffects(
+      base,
+      setStructureEditTargetEffect.of(createFencedStructureEditTarget(base, 0)),
+    );
     const specs = getDecoSpecs(state);
 
     // In source mode: no attribute title widget, no header widget
@@ -374,48 +405,6 @@ describe("blockDecorationField", () => {
     const parenWidgets = specs.filter((s) => s.widgetClass === "SimpleTextWidget");
     expect(parenWidgets.length).toBe(0);
   });
-});
-
-describe("cursor-driven block scroll stabilization", () => {
-  it("stabilizes when the cursor enters or leaves a revealed fence", () => {
-    const doc = `::: {.proof}\nBody\n:::`;
-    const bodyPos = doc.indexOf("Body");
-    const closeFencePos = doc.lastIndexOf(":::");
-
-    const bodyState = createTestState(doc, bodyPos, true);
-    const openFenceState = createTestState(doc, 0, true);
-    const closeFenceState = createTestState(doc, closeFencePos, true);
-
-    expect(shouldStabilizeCursorDrivenBlockScroll(bodyState, openFenceState)).toBe(true);
-    expect(shouldStabilizeCursorDrivenBlockScroll(openFenceState, bodyState)).toBe(true);
-    expect(shouldStabilizeCursorDrivenBlockScroll(openFenceState, closeFenceState)).toBe(false);
-    expect(shouldStabilizeCursorDrivenBlockScroll(bodyState, createTestState(doc, bodyPos + 1, true))).toBe(false);
-  });
-
-  it("stabilizes embed blocks only when cursor-inside source mode toggles", () => {
-    const doc = [
-      "Before",
-      "",
-      "::: {.embed}",
-      "https://example.com",
-      ":::",
-      "",
-      "After",
-    ].join("\n");
-    const plugins = [makeBlockPlugin({ name: "embed", specialBehavior: "embed" })];
-    const outsidePos = doc.indexOf("Before");
-    const insidePos = doc.indexOf("https://example.com");
-    const insideLaterPos = insidePos + 5;
-
-    const outsideState = createTestStateWithPlugins(doc, plugins, outsidePos, true);
-    const insideState = createTestStateWithPlugins(doc, plugins, insidePos, true);
-    const insideLaterState = createTestStateWithPlugins(doc, plugins, insideLaterPos, true);
-
-    expect(shouldStabilizeCursorDrivenBlockScroll(outsideState, insideState)).toBe(true);
-    expect(shouldStabilizeCursorDrivenBlockScroll(insideState, outsideState)).toBe(true);
-    expect(shouldStabilizeCursorDrivenBlockScroll(insideState, insideLaterState)).toBe(false);
-  });
-
 });
 
 describe("disabled blocks show raw fences (issue #356)", () => {
@@ -497,6 +486,57 @@ describe("disabled blocks show raw fences (issue #356)", () => {
     expect(widgets[0]?.from).toBe(state.doc.line(2).from);
   });
 
+  it("keeps embed previews mounted when the cursor enters the block body", () => {
+    const doc = `::: {.embed}\nhttps://example.com/widget\n:::`;
+    const state = createTestStateWithPlugins(
+      doc,
+      [makeBlockPlugin({ name: "embed", specialBehavior: "embed" })],
+      doc.indexOf("https://example.com/widget"),
+      true,
+    );
+    const specs = getDecoSpecs(state);
+
+    const widgets = specs.filter((s) => s.widgetClass === "EmbedWidget");
+    expect(widgets).toHaveLength(1);
+    expect(hasMarkClassInRange(specs, state.doc.line(1).from, state.doc.line(1).to, CSS.blockSource)).toBe(false);
+  });
+
+  it("shows embed source only during explicit structure edit", () => {
+    const doc = `::: {.embed}\nhttps://example.com/widget\n:::`;
+    const base = createTestStateWithPlugins(
+      doc,
+      [makeBlockPlugin({ name: "embed", specialBehavior: "embed" })],
+      doc.indexOf("https://example.com/widget"),
+      true,
+    );
+    const state = applyStateEffects(
+      base,
+      setStructureEditTargetEffect.of(createFencedStructureEditTarget(base, 0)),
+    );
+    const specs = getDecoSpecs(state);
+
+    const widgets = specs.filter((s) => s.widgetClass === "EmbedWidget");
+    expect(widgets).toHaveLength(0);
+    expect(specs.some((spec) =>
+      spec.widgetClass === "BlockHeaderWidget" &&
+      spec.from === state.doc.line(1).from
+    )).toBe(false);
+  });
+
+  it("routes inline proof labels back to the hidden opener source", () => {
+    const doc = `::: {.proof}\nProof text\n:::`;
+    const state = createTestStateWithPlugins(
+      doc,
+      [makeBlockPlugin({ name: "proof", numbered: false, title: "Proof", headerPosition: "inline" })],
+    );
+
+    const widget = getWidgetFromDecorations<BlockHeaderWidget>(state, "BlockHeaderWidget");
+    const openerLine = state.doc.line(1);
+
+    expect(widget.sourceFrom).toBe(openerLine.from);
+    expect(widget.sourceTo).toBe(openerLine.to);
+  });
+
   it("renders figure captions as below-content widgets", () => {
     const doc = `::: {.figure} Caption text\n![alt](img.png)\n:::`;
     const state = createTestStateWithPlugins(
@@ -561,9 +601,10 @@ describe("BlockHeaderWidget.updateDOM", () => {
     expect(result).toBe(true);
 
     // Source-range metadata must be refreshed (reviewer #732 blocking issue)
-    expect(widgetSourceMap.get(dom)).toBe(newWidget);
-    expect(widgetSourceMap.get(dom)!.sourceFrom).toBe(22);
-    expect(widgetSourceMap.get(dom)!.sourceTo).toBe(37);
+    const mappedWidget = widgetSourceMap.get(dom);
+    expect(mappedWidget).toBe(newWidget);
+    expect(mappedWidget?.sourceFrom).toBe(22);
+    expect(mappedWidget?.sourceTo).toBe(37);
     expect(dom.dataset.sourceFrom).toBe("22");
     expect(dom.dataset.sourceTo).toBe("37");
   });
@@ -604,9 +645,10 @@ describe("BlockCaptionWidget.updateDOM", () => {
 
     expect(dom.textContent).toContain("Figure 2.");
     expect(dom.textContent).toContain("New caption");
-    expect(widgetSourceMap.get(dom)).toBe(newWidget);
-    expect(widgetSourceMap.get(dom)!.sourceFrom).toBe(30);
-    expect(widgetSourceMap.get(dom)!.sourceTo).toBe(41);
+    const mappedWidget = widgetSourceMap.get(dom);
+    expect(mappedWidget).toBe(newWidget);
+    expect(mappedWidget?.sourceFrom).toBe(30);
+    expect(mappedWidget?.sourceTo).toBe(41);
     expect(dom.dataset.sourceFrom).toBe("30");
     expect(dom.dataset.sourceTo).toBe("41");
   });
@@ -639,9 +681,12 @@ describe("EmbedWidget cleanup", () => {
     const dom = widget.toDOM();
     const iframe = dom.querySelector<HTMLIFrameElement>("iframe");
     expect(iframe).not.toBeNull();
+    if (!iframe) {
+      throw new Error("expected gist iframe");
+    }
 
     let contentDocumentReads = 0;
-    Object.defineProperty(iframe!, "contentDocument", {
+    Object.defineProperty(iframe, "contentDocument", {
       configurable: true,
       get() {
         contentDocumentReads++;
@@ -650,7 +695,7 @@ describe("EmbedWidget cleanup", () => {
     });
 
     widget.destroy(dom);
-    iframe!.dispatchEvent(new Event("load"));
+    iframe.dispatchEvent(new Event("load"));
     vi.runOnlyPendingTimers();
 
     expect(contentDocumentReads).toBe(0);
@@ -667,9 +712,12 @@ describe("EmbedWidget cleanup", () => {
     const dom = widget.toDOM();
     const iframe = dom.querySelector<HTMLIFrameElement>("iframe");
     expect(iframe).not.toBeNull();
+    if (!iframe) {
+      throw new Error("expected gist iframe");
+    }
 
     let contentDocumentReads = 0;
-    Object.defineProperty(iframe!, "contentDocument", {
+    Object.defineProperty(iframe, "contentDocument", {
       configurable: true,
       get() {
         contentDocumentReads++;
@@ -677,7 +725,7 @@ describe("EmbedWidget cleanup", () => {
       },
     });
 
-    iframe!.dispatchEvent(new Event("load"));
+    iframe.dispatchEvent(new Event("load"));
     expect(contentDocumentReads).toBe(1);
 
     vi.advanceTimersByTime(IFRAME_POLL_INTERVAL_MS);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
@@ -8,6 +8,8 @@ import { frontmatterField } from "../editor/frontmatter-state";
 import { createPluginRegistryField } from "../plugins/plugin-registry";
 import { blockCounterField } from "../plugins/block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
+import * as referenceCatalogModule from "../semantics/reference-catalog";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CslProcessor } from "../citations/csl-processor";
 import type { BlockPlugin } from "../plugins/plugin-types";
@@ -43,6 +45,7 @@ function createState(doc: string): EditorState {
       documentSemanticsField,
       createPluginRegistryField(testPlugins),
       blockCounterField,
+      documentReferenceCatalogField,
       bibDataField,
     ],
   });
@@ -309,6 +312,28 @@ describe("classifyReference", () => {
       kind: "unresolved",
       id: "thm:missing",
     });
+  });
+
+  it("reuses the cached document reference catalog across repeated classifications", () => {
+    const doc = [
+      "::: {.theorem #thm-main}",
+      "Main theorem.",
+      ":::",
+      "",
+      "See [@thm-main].",
+    ].join("\n");
+    const state = createState(doc);
+    const spy = vi.spyOn(referenceCatalogModule, "buildDocumentReferenceCatalog");
+
+    // Initial state-field creation may have already built the catalog once.
+    spy.mockClear();
+
+    for (let i = 0; i < 5; i += 1) {
+      const result = classifyReference(state, "thm-main");
+      expect(result.kind).toBe("crossref");
+    }
+
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 

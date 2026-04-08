@@ -1,8 +1,9 @@
 import { type EditorState } from "@codemirror/state";
 import {
-  buildEditorDocumentReferenceCatalog,
+  getEditorDocumentReferenceCatalog,
   getDocumentAnalysisOrRecompute,
 } from "../semantics/editor-reference-catalog";
+import { documentAnalysisField } from "../semantics/codemirror-source";
 import {
   formatEquationReferenceLabel,
   getPreferredDocumentReferenceTarget,
@@ -53,7 +54,7 @@ export interface ReferenceClassificationOptions {
 export function collectEquationLabels(
   state: EditorState,
 ): ReadonlyMap<string, EquationEntry> {
-  const catalog = buildEditorDocumentReferenceCatalog(state);
+  const catalog = getEditorDocumentReferenceCatalog(state);
   const equations = new Map<string, EquationEntry>();
   for (const target of catalog.targets) {
     if (target.kind !== "equation" || !target.id || target.ordinal === undefined) {
@@ -81,7 +82,7 @@ export function resolveCrossref(
   id: string,
   equationLabels?: ReadonlyMap<string, EquationEntry>,
 ): ResolvedCrossref {
-  const catalog = buildEditorDocumentReferenceCatalog(state);
+  const catalog = getEditorDocumentReferenceCatalog(state);
   const target = getPreferredDocumentReferenceTarget(catalog, id);
 
   if (target?.kind === "block") {
@@ -132,7 +133,10 @@ export interface CrossrefMatch {
 }
 
 export function findCrossrefs(state: EditorState): CrossrefMatch[] {
-  const references = getDocumentAnalysisOrRecompute(state).references;
+  const references = (
+    state.field(documentAnalysisField, false)
+    ?? getDocumentAnalysisOrRecompute(state)
+  ).references;
 
   return references
     .filter((ref) => ref.ids.length === 1)

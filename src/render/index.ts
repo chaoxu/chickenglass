@@ -25,8 +25,7 @@ export {
   type ReferenceRenderItem,
 } from "./reference-render";
 export {
-  ImageWidget,
-  PdfLoadingWidget,
+  ImagePreviewWidget,
   imageRenderPlugin,
 } from "./image-render";
 export { isPdfTarget } from "../lib/pdf-target";

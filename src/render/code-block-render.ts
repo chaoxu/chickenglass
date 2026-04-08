@@ -37,6 +37,12 @@ import {
   type FencedBlockInfo,
 } from "../fenced-block/model";
 import {
+  activateStructureEditAt,
+  hasStructureEditEffect,
+  isCodeFenceStructureEditActive,
+} from "../editor/structure-edit-state";
+import { activeCodeBlockOpenFenceStarts } from "../editor/shell-ownership";
+import {
   editorFocusField,
   focusEffect,
   focusTracker,
@@ -53,8 +59,6 @@ import {
   getFencedBlockRenderContext,
   getLineElement,
   hideMultiLineClosingFence,
-  isCursorOnCloseFence,
-  isCursorOnOpenFence,
 } from "./fenced-block-core";
 import { CSS } from "../constants/css-classes";
 import { __iconNode as copyIconNode } from "lucide-react/dist/esm/icons/copy.js";
@@ -98,6 +102,7 @@ class CopyButtonWidget extends RenderWidget {
 
   constructor(private readonly code: string) {
     super();
+    this.includeInShellSurface = true;
   }
 
   private clearResetTimer(): void {
@@ -149,6 +154,33 @@ class CopyButtonWidget extends RenderWidget {
 
   eq(other: CopyButtonWidget): boolean {
     return this.code === other.code;
+  }
+}
+
+function joinClasses(...classes: Array<string | false | null | undefined>): string {
+  return classes.filter(Boolean).join(" ");
+}
+
+class CodeBlockLanguageWidget extends SimpleTextRenderWidget {
+  constructor(language: string) {
+    super({
+      tagName: "span",
+      className: CSS.codeblockLanguage,
+      text: language,
+    });
+    this.includeInShellSurface = true;
+  }
+
+  protected override bindSourceReveal(
+    el: HTMLElement,
+    view: EditorView,
+  ): void {
+    el.style.cursor = "pointer";
+    el.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      view.focus();
+      activateStructureEditAt(view, this.sourceFrom);
+    });
   }
 }
 
@@ -515,40 +547,54 @@ export function collectCodeBlocks(state: EditorState): readonly CodeBlockInfo[] 
 function decorateCodeBlock(
   context: FencedBlockRenderContext<CodeBlockInfo>,
   items: Range<Decoration>[],
+  activeShellStarts: ReadonlySet<number>,
 ): void {
-  const { state, block, cursorOnEitherFence, openLine, closeLine, bodyLineCount } = context;
+  const { state, block, openLine, closeLine, bodyLineCount } = context;
+  const structureEditActive = isCodeFenceStructureEditActive(state, block);
+  const activeShell = activeShellStarts.has(block.openFenceFrom);
+  const openerIsBottom = activeShell && bodyLineCount === 0;
 
   // --- Opening fence ---
-  if (cursorOnEitherFence) {
+  items.push(
+    Decoration.line({
+      class: joinClasses(
+        CSS.codeblockHeader,
+        structureEditActive && CSS.codeblockSourceOpen,
+        bodyLineCount === 0 && CSS.codeblockLast,
+        activeShell && CSS.activeShell,
+        activeShell && CSS.activeShellTop,
+        openerIsBottom && CSS.activeShellBottom,
+      ),
+    }).range(block.openFenceFrom),
+  );
+
+  const codeText = bodyLineCount > 0
+    ? state.doc.sliceString(
+      state.doc.line(openLine.number + 1).from,
+      state.doc.line(closeLine.number - 1).to,
+    )
+    : "";
+
+  if (structureEditActive) {
     items.push(
-      Decoration.line({ class: CSS.codeblockSourceOpen })
-        .range(block.openFenceFrom),
+      Decoration.mark({ class: CSS.codeblockSource }).range(
+        block.openFenceFrom,
+        block.openFenceTo,
+      ),
     );
   } else {
+    const languageWidget = new CodeBlockLanguageWidget(block.language);
+    languageWidget.updateSourceRange(block.openFenceFrom, block.openFenceTo);
+    pushWidgetDecoration(items, languageWidget, block.openFenceFrom, block.openFenceTo);
+  }
+
+  if (bodyLineCount > 0) {
     items.push(
-      Decoration.line({
-        class: CSS.codeblockHeader,
+      Decoration.widget({
+        widget: new CopyButtonWidget(codeText),
+        side: 1,
       }).range(block.openFenceFrom),
     );
-    const codeText = bodyLineCount > 0
-      ? state.doc.sliceString(
-        state.doc.line(openLine.number + 1).from,
-        state.doc.line(closeLine.number - 1).to,
-      )
-      : "";
-    pushWidgetDecoration(items, new SimpleTextRenderWidget({
-      tagName: "span",
-      className: CSS.codeblockLanguage,
-      text: block.language,
-    }), block.openFenceFrom, block.openFenceTo);
-    if (bodyLineCount > 0) {
-      items.push(
-        Decoration.widget({
-          widget: new CopyButtonWidget(codeText),
-          side: 1,
-        }).range(block.openFenceFrom),
-      );
-    }
   }
 
   // --- Body lines ---
@@ -557,14 +603,12 @@ function decorateCodeBlock(
     const isLast = ln === closeLine.number - 1;
     items.push(
       Decoration.line({
-        class: isLast ? CSS.codeblockLast : CSS.codeblockBody,
+        class: joinClasses(
+          isLast ? CSS.codeblockLast : CSS.codeblockBody,
+          activeShell && CSS.activeShell,
+          activeShell && isLast && CSS.activeShellBottom,
+        ),
       }).range(line.from),
-    );
-  }
-
-  if (bodyLineCount === 0 && !cursorOnEitherFence) {
-    items.push(
-      Decoration.line({ class: CSS.codeblockLast }).range(block.openFenceFrom),
     );
   }
 
@@ -579,7 +623,10 @@ function decorateCodeBlock(
 
 /** Build decorations for all fenced code blocks. */
 function buildCodeBlockDecorations(state: EditorState): DecorationSet {
-  return buildFencedBlockDecorations(state, collectCodeBlocks, decorateCodeBlock);
+  const activeShellStarts = activeCodeBlockOpenFenceStarts(state);
+  return buildFencedBlockDecorations(state, collectCodeBlocks, (context, items) => {
+    decorateCodeBlock(context, items, activeShellStarts);
+  });
 }
 
 // ── Incremental doc-change support ──────────────────────────────────────────
@@ -644,6 +691,7 @@ function buildCodeBlockItemsInRange(
   rangeTo: number,
 ): Range<Decoration>[] {
   const focused = state.field(editorFocusField, false) ?? false;
+  const activeShellStarts = activeCodeBlockOpenFenceStarts(state);
   const items: Range<Decoration>[] = [];
   for (const block of collectCodeBlocks(state)) {
     if (block.to < rangeFrom) continue;
@@ -651,6 +699,7 @@ function buildCodeBlockItemsInRange(
     decorateCodeBlock(
       getFencedBlockRenderContext(state, block, focused),
       items,
+      activeShellStarts,
     );
   }
 
@@ -770,7 +819,7 @@ class CodeBlockHoverPlugin {
     }
 
     const focused = this.view.state.field(editorFocusField, false) ?? false;
-    if (isCursorOnOpenFence(this.view.state, block, focused) || isCursorOnCloseFence(this.view.state, block, focused)) {
+    if (!focused || isCodeFenceStructureEditActive(this.view.state, block)) {
       this.clearHoveredHeader();
       return;
     }
@@ -816,6 +865,10 @@ const codeBlockDecorationField = StateField.define<DecorationSet>({
   update(value, tr) {
     // Focus effect: global cursor-awareness change — full rebuild
     if (tr.effects.some((e) => e.is(focusEffect))) {
+      return buildCodeBlockDecorations(tr.state);
+    }
+
+    if (hasStructureEditEffect(tr)) {
       return buildCodeBlockDecorations(tr.state);
     }
 

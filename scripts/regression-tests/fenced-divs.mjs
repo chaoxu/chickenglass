@@ -22,7 +22,7 @@ export async function run(page) {
     return { pass: false, message: "No FencedDiv nodes found in syntax tree" };
   }
 
-  await scrollToText(page, "Extreme Value Theorem");
+  await scrollToText(page, "Fundamental Theorem");
 
   // Check DOM for rendered block header widgets
   const headerCount = await page.evaluate(() => {

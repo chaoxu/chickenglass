@@ -35,7 +35,8 @@ src/
   index/         # Semantic indexer (Lezer tree-based extraction)
   citations/     # BibTeX/CSL citation system
   app/           # React shell (hooks, components, file management)
-demo/blog/       # Blog project files (loaded via import.meta.glob)
+demo/            # Public showcase project loaded in browser dev mode
+fixtures/        # Private/regression fixtures for heavy docs and script-driven tests
 src-tauri/       # Rust backend (filesystem commands, Tauri config)
 scripts/         # browser harness, CDP helpers, blog import tools
 ```
@@ -120,7 +121,13 @@ __cmDebug.fences()           — closing fence visibility for all blocks
 __cmDebug.line(73)           — DOM state of a specific line
 __cmDebug.selection()        — current selection (anchor, head, from, to, line, col)
 __cmDebug.history()          — undo/redo depth
+__cmDebug.structure()        — active explicit structure-edit target (or null)
+__cmDebug.geometry()         — measured visible-line + shell-surface geometry snapshot
+__cmDebug.motionGuards()     — recent vertical-motion guard events
 __cmDebug.dump()             — combined snapshot (tree + fences + cursor + focus)
+__cmDebug.activateStructureAtCursor() — open structure editing at the current cursor
+__cmDebug.clearStructure()   — clear the active structure-edit target
+__cmDebug.clearMotionGuards() — clear recorded vertical-motion guard events
 __cmDebug.moveVertically("up") — rich-mode vertical move with reverse-scroll guard
 __cmDebug.toggleTreeView()   — toggle live Lezer tree panel (@overleaf/codemirror-tree-view)
 __app.openFile("posts/x.md") — open any file by path (app's real function)
@@ -135,7 +142,7 @@ __tauriSmoke.simulateExternalChange("notes.md") — dev-only Tauri helper to emi
 __fencedDivDebug = true      — toggle fenced div parser tracing
 ```
 
-Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile()`, `getTreeDivs()`, `checkFences()`, `dump()`, `setCursor()`, `scrollTo()`.
+Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile()`, `getTreeDivs()`, `checkFences()`, `getGeometrySnapshot()`, `dump()`, `setCursor()`, `scrollTo()`.
 
 ## Dev mode
 
@@ -167,13 +174,13 @@ Do NOT use the Playwright MCP plugin — connect directly via CDP.
 ### Perf benchmarking
 
 - Use the shared perf harness in `scripts/perf-regression.mjs` and the guidance in `docs/perf-regression.md`.
-- `demo/cogirth/main2.md` is the standard heavy fixture for open/edit/scroll performance work.
+- When local private fixtures are available, `fixtures/cogirth/main2.md` is the preferred heavy fixture for open/edit/scroll performance work. Otherwise use `demo/index.md` and note the limitation.
 
 ### Runtime regression debugging
 
 - Prefer `scripts/test-helpers.mjs` helpers such as `connectEditor()`, `waitForAppUrl()`, `waitForDebugBridge()`, and `assertEditorHealth()` before writing ad hoc browser snippets.
 - Always target the real localhost app page, not merely “the first page” in the browser context.
-- For bug-specific runtime verification, do a general smoke check on `index.md` and also run the affected fixture. Heavy regressions often require `demo/rankdecrease/main.md` or `demo/cogirth/main2.md`.
+- For bug-specific runtime verification, do a general smoke check on `index.md`. When local private fixtures are available, also run the affected heavy fixture such as `fixtures/rankdecrease/main.md` or `fixtures/cogirth/main2.md`.
 - For cursor/scroll regressions like `#964`, verify with a real long-document runtime repro. Prefer the managed harness first. If `page.keyboard.press()` is unreliable in the manual app-mode CDP lane, it is acceptable to drive CM6 movement inside `page.evaluate()` and document the exact command/script used.
 
 ## Conventions
@@ -218,6 +225,7 @@ tea logins                             # show configured logins (default: coflat
 ## Workspace hygiene
 
 - Temporary files go in `/tmp/coflat-*` — never in the project directory.
+- `demo/` is public showcase content only. Unless a file is intentionally generated for the public showcase, do not put it under `demo/`; use `fixtures/` for regression, heavy, or private documents instead.
 - For isolated local work, prefer `pnpm dev:worktree -- <name>`.
   - It creates a new branch + worktree under `.worktrees/<sanitized-name>`.
   - It links the repo's `node_modules` into the new worktree when available, so verification commands usually work immediately.
@@ -227,12 +235,12 @@ tea logins                             # show configured logins (default: coflat
 
 ## Performance issue standard
 
-Every performance issue and PR must include a **before/after measurement** on a large real document (`demo/cogirth/main2.md` is the standard fixture). Without numbers the change is unverifiable.
+Every performance issue and PR must include a **before/after measurement** on a large real document. When local private fixtures are available, `fixtures/cogirth/main2.md` is preferred; otherwise use `demo/index.md` and note the limitation. Without numbers the change is unverifiable.
 
 - Run the perf harness: `node scripts/perf-regression.mjs` — or use the relevant `perf.*` span from the in-app telemetry.
 - For targeted micro-optimizations (for example a single function), a focused microbenchmark or Vitest perf test is acceptable instead, but must still report both numbers.
 - The PR description must include the before and after figures. A PR that claims a perf improvement without measurements will not be merged.
-- The fixture `demo/cogirth/main2.md` is the canonical heavy document for local-edit, scroll, and open benchmarks. Use a document with similar characteristics if a different scenario is being measured.
+- The local private fixture `fixtures/cogirth/main2.md` is the preferred heavy document for local-edit, scroll, and open benchmarks when available. Otherwise use `demo/index.md` or another documented public fixture and note the limitation.
 
 ## Maintenance triggers
 

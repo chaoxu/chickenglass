@@ -1,4 +1,5 @@
 import { type EditorView, WidgetType } from "@codemirror/view";
+import { activateStructureEditAt } from "../editor/structure-edit-state";
 
 /**
  * Serialize macros to a stable string for use in widget equality checks.
@@ -35,6 +36,42 @@ export function serializeMacros(macros: Record<string, string>): string {
  */
 export const widgetSourceMap = new WeakMap<HTMLElement, RenderWidget>();
 
+export interface WidgetSourceRange {
+  readonly from: number;
+  readonly to: number;
+}
+
+export function resolveLiveWidgetSourceRange(
+  view: EditorView,
+  el: HTMLElement,
+): WidgetSourceRange | null {
+  const widget = widgetSourceMap.get(el);
+  const fallbackFrom = widget ? widget.sourceFrom : Number(el.dataset.sourceFrom);
+  const fallbackTo = widget ? widget.sourceTo : Number(el.dataset.sourceTo);
+  if (Number.isNaN(fallbackFrom) || Number.isNaN(fallbackTo) || fallbackFrom < 0 || fallbackTo < fallbackFrom) {
+    return null;
+  }
+
+  if (widget && !widget.useLiveSourceRange) {
+    return { from: fallbackFrom, to: fallbackTo };
+  }
+
+  const sourceLength = fallbackTo - fallbackFrom;
+  try {
+    const liveFrom = view.posAtDOM(el, 0);
+    if (Number.isInteger(liveFrom) && liveFrom >= 0) {
+      return {
+        from: liveFrom,
+        to: Math.min(view.state.doc.length, liveFrom + sourceLength),
+      };
+    }
+  } catch {
+    // Fall through to the last known source range.
+  }
+
+  return { from: fallbackFrom, to: fallbackTo };
+}
+
 /**
  * Base class for render widgets.
  *
@@ -52,8 +89,28 @@ export abstract class RenderWidget extends WidgetType {
   /** Document offset of the end of the source range this widget replaces. */
   sourceTo = -1;
 
+  /**
+   * Whether this widget participates in stable-shell surface measurement.
+   *
+   * Most widgets are ordinary inline/render surfaces and should stay invisible
+   * to shell measurement. Block/frontmatter/code-shell widgets opt in.
+   */
+  includeInShellSurface = false;
+
+  /** Document offset range used by shell-surface measurement for opted-in widgets. */
+  shellSurfaceFrom = -1;
+  shellSurfaceTo = -1;
+
   /** Pristine DOM snapshot used to avoid rebuilding expensive widgets on scroll. */
   private cachedDOM: HTMLElement | null = null;
+
+  /**
+   * Whether live DOM positions should override the declared source range.
+   *
+   * Inline replacement widgets usually want this. Shell widgets rendered away
+   * from their source should turn it off and rely on their declared range.
+   */
+  useLiveSourceRange = true;
 
   /**
    * Subclasses build their DOM element here.
@@ -90,6 +147,12 @@ export abstract class RenderWidget extends WidgetType {
     if (this.sourceTo >= 0) {
       el.dataset.sourceTo = String(this.sourceTo);
     }
+    if (this.includeInShellSurface && this.shellSurfaceFrom >= 0) {
+      el.dataset.shellFrom = String(this.shellSurfaceFrom);
+    }
+    if (this.includeInShellSurface && this.shellSurfaceTo >= 0) {
+      el.dataset.shellTo = String(this.shellSurfaceTo);
+    }
     widgetSourceMap.set(el, this);
   }
 
@@ -102,8 +165,18 @@ export abstract class RenderWidget extends WidgetType {
    * search-highlight remain correct.
    */
   updateSourceRange(from: number, to: number): void {
+    const previousFrom = this.sourceFrom;
+    const previousTo = this.sourceTo;
     this.sourceFrom = from;
     this.sourceTo = to;
+    if (this.includeInShellSurface) {
+      if (this.shellSurfaceFrom === previousFrom || this.shellSurfaceFrom < 0) {
+        this.shellSurfaceFrom = from;
+      }
+      if (this.shellSurfaceTo === previousTo || this.shellSurfaceTo < 0) {
+        this.shellSurfaceTo = to;
+      }
+    }
   }
 
   protected bindSourceReveal(
@@ -114,11 +187,16 @@ export abstract class RenderWidget extends WidgetType {
     el.addEventListener("mousedown", (event) => {
       event.preventDefault();
       view.focus();
-      let pos: number;
+      const liveRange = resolveLiveWidgetSourceRange(view, el);
+      const targetPos = liveRange?.from ?? this.sourceFrom;
+      if (targetPos >= 0 && activateStructureEditAt(view, targetPos)) {
+        return;
+      }
+      let pos = targetPos;
       try {
-        pos = view.posAtDOM(el);
+        pos = view.posAtDOM(el, 0);
       } catch (_error) {
-        pos = this.sourceFrom;
+        pos = targetPos;
       }
       view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
     });

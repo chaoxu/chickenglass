@@ -109,6 +109,7 @@ async function main() {
   const results = [];
   let passed = 0;
   let failed = 0;
+  let skipped = 0;
 
   for (const test of tests) {
     // Reset state before each test
@@ -139,6 +140,12 @@ async function main() {
       results.push({ name: test.name, pass: result.pass, message: result.message, elapsed });
     } catch (err) {
       const elapsed = Date.now() - startTime;
+      if (err.message?.includes("Missing fixture for")) {
+        console.log(`  SKIP  ${test.name} (${elapsed}ms) — ${err.message}`);
+        results.push({ name: test.name, pass: true, skipped: true, message: err.message, elapsed });
+        skipped++;
+        continue;
+      }
       // Detect Chrome disconnection — abort remaining tests
       if (err.message?.includes("Target closed") || err.message?.includes("Protocol error")) {
         console.log(`  FAIL  ${test.name} (${elapsed}ms) — Chrome disconnected`);
@@ -154,7 +161,7 @@ async function main() {
 
   // Summary
   console.log("\n========================");
-  console.log(`Results: ${passed} passed, ${failed} failed, ${results.length} total`);
+  console.log(`Results: ${passed} passed, ${failed} failed, ${skipped} skipped, ${results.length} total`);
 
   if (failed > 0) {
     console.log("\nFailed tests:");

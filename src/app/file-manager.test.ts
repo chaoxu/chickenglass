@@ -5,7 +5,7 @@ import {
   createBlogDemoFileSystem,
   createDemoFileSystem,
 } from "./file-manager";
-import { getBlogFiles } from "./demo-blog";
+import { getDemoFiles } from "./demo-files";
 
 describe("MemoryFileSystem", () => {
   it("reads files that exist", async () => {
@@ -171,8 +171,8 @@ describe("createDemoFileSystem", () => {
 describe("createBlogDemoFileSystem", () => {
   it("loads the checked-in demo project when it is available", async () => {
     const fs = await createBlogDemoFileSystem();
-    const blogFiles = await getBlogFiles();
-    const demoContentPath = Object.keys(blogFiles).find((path) => path !== "FORMAT.md");
+    const demoFiles = await getDemoFiles();
+    const demoContentPath = Object.keys(demoFiles).find((path) => path !== "FORMAT.md");
     expect(await fs.exists("FORMAT.md")).toBe(true);
 
     if (demoContentPath) {
@@ -187,14 +187,14 @@ describe("createBlogDemoFileSystem", () => {
 
 describe("createBlogDemoFileSystem fallback", () => {
   afterEach(() => {
-    vi.doUnmock("./demo-blog");
+    vi.doUnmock("./demo-files");
     vi.resetModules();
   });
 
   it("falls back to the built-in sample project when the demo fixture is absent", async () => {
     vi.resetModules();
-    vi.doMock("./demo-blog", () => ({
-      getBlogFiles: async () => ({ "FORMAT.md": "# Format" }),
+    vi.doMock("./demo-files", () => ({
+      getDemoFiles: async () => ({ "FORMAT.md": "# Format" }),
     }));
 
     const mod = await import("./file-manager");

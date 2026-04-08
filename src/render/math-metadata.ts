@@ -10,16 +10,26 @@ function clearSourceRangeAttrs(el: HTMLElement): void {
   widgetSourceMap.delete(el);
 }
 
+interface RenderedMathWidget {
+  readonly widget: MathWidget;
+  readonly from: number;
+  readonly to: number;
+}
+
 function collectRenderedMathWidgets(
   view: EditorView,
   mathDecorationField: StateField<DecorationSet>,
-): Map<number, MathWidget> {
-  const widgets = new Map<number, MathWidget>();
-  const cursor = view.state.field(mathDecorationField).iter();
+): RenderedMathWidget[] {
+  const widgets: RenderedMathWidget[] = [];
+  const decorations = view.state.field(mathDecorationField, false);
+  if (!decorations) {
+    return widgets;
+  }
+  const cursor = decorations.iter();
   while (cursor.value) {
     const widget = cursor.value.spec?.widget;
-    if (widget instanceof MathWidget && widget.sourceFrom >= 0) {
-      widgets.set(widget.sourceFrom, widget);
+    if (widget instanceof MathWidget) {
+      widgets.push({ widget, from: cursor.from, to: cursor.to });
     }
     cursor.next();
   }
@@ -27,20 +37,20 @@ function collectRenderedMathWidgets(
 }
 
 function isWidgetVisible(
-  widget: MathWidget,
+  renderedWidget: RenderedMathWidget,
   visibleRanges: readonly { from: number; to: number }[],
 ): boolean {
   return visibleRanges.some(
-    (range) => widget.sourceFrom < range.to && widget.sourceTo > range.from,
+    (range) => renderedWidget.from < range.to && renderedWidget.to > range.from,
   );
 }
 
 function collectVisibleRenderedMathWidgets(
   view: EditorView,
   mathDecorationField: StateField<DecorationSet>,
-): MathWidget[] {
-  const widgetsByFrom = collectRenderedMathWidgets(view, mathDecorationField);
-  return [...widgetsByFrom.values()].filter(
+): RenderedMathWidget[] {
+  const widgets = collectRenderedMathWidgets(view, mathDecorationField);
+  return widgets.filter(
     (widget) => isWidgetVisible(widget, view.visibleRanges),
   );
 }
@@ -57,9 +67,10 @@ function syncRenderedMathWidgetMetadata(
 
   for (let i = 0; i < count; i++) {
     const el = mathRoots[i];
-    const widget = widgets[i];
-    el.dataset.sourceFrom = String(widget.sourceFrom);
-    el.dataset.sourceTo = String(widget.sourceTo);
+    const { widget, from, to } = widgets[i];
+    el.dataset.sourceFrom = String(from);
+    el.dataset.sourceTo = String(to);
+    widget.updateSourceRange(from, to);
     widgetSourceMap.set(el, widget);
   }
 
@@ -81,11 +92,12 @@ export function createMathWidgetMetadataPlugin(
 
       update(update: ViewUpdate) {
         if (
-          update.docChanged
+      update.docChanged
           || update.selectionSet
           || update.focusChanged
           || update.viewportChanged
-          || update.state.field(mathDecorationField) !== update.startState.field(mathDecorationField)
+          || update.state.field(mathDecorationField, false)
+            !== update.startState.field(mathDecorationField, false)
         ) {
           this.scheduleSync(update.view);
         }

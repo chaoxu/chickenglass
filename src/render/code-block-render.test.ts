@@ -8,6 +8,11 @@ import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import { editorFocusField, focusEffect } from "./render-utils";
 import {
+  activeStructureEditField,
+  createStructureEditTargetAt,
+  setStructureEditTargetEffect,
+} from "../editor/structure-edit-state";
+import {
   collectCodeBlocks,
   codeBlockRenderPlugin,
   _codeBlockDecorationFieldForTest as codeBlockDecorationField,
@@ -29,6 +34,7 @@ function createTestState(doc: string, cursorPos = 0, focused = false) {
     extensions: [
       markdown({ extensions: markdownExtensions }),
       editorFocusField,
+      activeStructureEditField,
       codeBlockStructureField,
       codeBlockDecorationField,
     ],
@@ -58,6 +64,7 @@ function createCodeBlockView(
       extensions: [
         markdown({ extensions: markdownExtensions }),
         editorFocusField,
+        activeStructureEditField,
         codeBlockRenderPlugin,
         ...extensions,
       ],
@@ -85,9 +92,8 @@ afterEach(() => {
 
 describe("edge cases", () => {
   it("does NOT show source when cursor is in the body (body stays rendered)", () => {
-    // Placing the cursor on the last body line must NOT trigger source mode for
-    // the fences. This is the Typora-style rule: only cursor contact with a
-    // fence line reveals source; body lines never do.
+    // Placing the cursor on the last body line must NOT trigger structure
+    // editing. Body lines stay rendered and the header shell remains stable.
     const bodyPos = TWO_BLOCKS.indexOf("console.log");
     const state = createTestState(TWO_BLOCKS, bodyPos, true);
     const specs = getDecoSpecs(state);
@@ -106,8 +112,8 @@ describe("edge cases", () => {
     const state = createTestState(emptyBlock, 0, true);
     const specs = getDecoSpecs(state);
 
-    // Cursor is on the opening fence — opening fence in source mode
-    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(false);
     // Closing fence is always hidden (#429) — never shows source
     expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.blockClosingFence)).toBe(true);
   });
@@ -213,35 +219,47 @@ describe("codeBlockDecorationField", () => {
     // Closing fence always hidden (#429)
     expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
 
-    const widgets = specs.filter((s) => s.widgetClass === "SimpleTextRenderWidget");
+    const widgets = specs.filter((s) => s.widgetClass === "CodeBlockLanguageWidget");
     expect(widgets.length).toBe(2);
   });
 
-  it("shows opening fence as source when cursor is on it, closing fence stays hidden", () => {
+  it("keeps opening fence rendered when the cursor lands on it", () => {
     const state = createTestState(TWO_BLOCKS, 0, true);
     const specs = getDecoSpecs(state);
 
-    // Opening fence shows as source
-    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(false);
-    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockBody)).toBe(false);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(false);
     expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockLast)).toBe(true);
-    // Closing fence always hidden (#429) — no source mode
     expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
-
-    const widgets = specs.filter((s) => s.widgetClass === "SimpleTextRenderWidget");
-    expect(widgets.length).toBe(1);
   });
 
-  it("closing fence stays hidden even when cursor is on it", () => {
+  it("shows opening fence as source only during explicit structure edit", () => {
+    const baseState = createTestState(TWO_BLOCKS, 0, true);
+    const target = createStructureEditTargetAt(baseState, 0);
+    if (!target || target.kind !== "code-fence") {
+      throw new Error("expected code-fence structure target");
+    }
+    const state = applyStateEffects(
+      baseState,
+      setStructureEditTargetEffect.of(target),
+    );
+    const specs = getDecoSpecs(state);
+
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockLast)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
+  });
+
+  it("closing fence stays hidden even when selection is on it", () => {
     // In practice atomicRanges prevent cursor from landing here, but
     // the decoration must still hide it correctly.
     const closeFencePos = TWO_BLOCKS.indexOf("```\n\n```py");
     const state = createTestState(TWO_BLOCKS, closeFencePos, true);
     const specs = getDecoSpecs(state);
 
-    // Opening fence shows as source (cursorOnEitherFence is true)
-    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(false);
     // Closing fence always hidden (#429)
     expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
   });
@@ -380,6 +398,7 @@ function createParsedState(doc: string, cursorPos = 0) {
     extensions: [
       markdown({ extensions: markdownExtensions }),
       editorFocusField,
+      activeStructureEditField,
       codeBlockStructureField,
       codeBlockDecorationField,
     ],

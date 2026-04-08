@@ -9,6 +9,7 @@ import {
 import { frontmatterField } from "./frontmatter-state";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { documentLabelGraphField } from "../semantics/document-label-graph";
+import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import { blockCounterField } from "../plugins/block-counter";
 import { bibDataField } from "../citations/citation-render";
 import { includeRegionsField } from "../lib/include-regions";
@@ -92,6 +93,7 @@ describe("extension bundle composition", () => {
     expect(view.state.field(includeRegionsField)).toBeDefined();
     expect(view.state.field(documentSemanticsField)).toBeDefined();
     expect(view.state.field(blockCounterField)).toBeDefined();
+    expect(view.state.field(documentReferenceCatalogField)).toBeDefined();
     expect(view.state.field(documentLabelGraphField)).toBeDefined();
     expect(view.state.field(bibDataField)).toBeDefined();
     expect(view.state.field(pdfPreviewField)).toBeDefined();
@@ -109,6 +111,28 @@ describe("extension bundle composition", () => {
       setEditorMode(view, mode);
       expect(view.state.field(editorModeField)).toBe(mode);
     }
+
+    view.destroy();
+  });
+
+  it("keeps the reference catalog stable across unrelated inline-math edits", () => {
+    const parent = document.createElement("div");
+    const doc = [
+      "# Heading {#sec:one}",
+      "",
+      "See [@sec:one] and $x$.",
+      "",
+    ].join("\n");
+    const view = createEditor({ parent, doc });
+    const before = view.state.field(documentReferenceCatalogField);
+    const mathFrom = view.state.doc.toString().indexOf("$x$") + 1;
+
+    view.dispatch({
+      changes: { from: mathFrom, to: mathFrom + 1, insert: "y" },
+      selection: { anchor: mathFrom + 1 },
+    });
+
+    expect(view.state.field(documentReferenceCatalogField)).toBe(before);
 
     view.destroy();
   });

@@ -134,7 +134,7 @@ describe("CheckboxWidget", () => {
   });
 });
 
-describe("checkboxRenderPlugin selection narrowing (#874)", () => {
+describe("checkboxRenderPlugin stable task markers", () => {
   it("does not rebuild when the cursor moves through plain prose", () => {
     const doc = "- [ ] task\n\nplain text";
     const prosePos = doc.indexOf("plain") + 2;
@@ -147,35 +147,20 @@ describe("checkboxRenderPlugin selection narrowing (#874)", () => {
     expect(getDecorationSpecs(plugin.decorations)).toHaveLength(1);
   });
 
-  it("does not rebuild when the cursor stays within the same task marker", () => {
+  it("keeps the checkbox widget rendered when the cursor enters the marker", () => {
     const plugin = createCheckboxView("- [ ] task", 3);
-    const before = plugin.decorations;
-
-    view!.dispatch({ selection: { anchor: 4 } });
-
-    expect(plugin.decorations).toBe(before);
-    expect(getDecorationSpecs(plugin.decorations)).toHaveLength(0);
-  });
-
-  it("rebuilds when the cursor leaves the marker boundary", () => {
-    const plugin = createCheckboxView("- [ ] task", 5);
-    const before = plugin.decorations;
-
     view!.dispatch({ selection: { anchor: 6 } });
 
-    expect(plugin.decorations).not.toBe(before);
     expect(getDecorationSpecs(plugin.decorations)).toHaveLength(1);
   });
 
-  it("rebuilds when the cursor moves between different task markers", () => {
+  it("keeps one widget per task marker when the cursor moves between markers", () => {
     const doc = "- [ ] first\n- [x] second";
     const secondMarkerPos = doc.lastIndexOf("[") + 1;
     const plugin = createCheckboxView(doc, 3);
-    const before = plugin.decorations;
 
     view!.dispatch({ selection: { anchor: secondMarkerPos } });
 
-    expect(plugin.decorations).not.toBe(before);
-    expect(getDecorationSpecs(plugin.decorations)).toHaveLength(1);
+    expect(getDecorationSpecs(plugin.decorations)).toHaveLength(2);
   });
 });
