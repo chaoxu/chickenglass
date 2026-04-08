@@ -43,6 +43,7 @@ export interface LocalMediaDependencies {
 }
 
 const EMPTY_LOCAL_MEDIA_PATHS = new Set<string>();
+const EMPTY_CHANGED_MEDIA_PATHS: ReadonlySet<string> = new Set<string>();
 
 export const EMPTY_LOCAL_MEDIA_DEPENDENCIES: LocalMediaDependencies = {
   imagePaths: EMPTY_LOCAL_MEDIA_PATHS,
@@ -159,6 +160,18 @@ export function collectChangedLocalMediaPaths(
   oldImgCache: MediaCache,
   newImgCache: MediaCache,
 ): ReadonlySet<string> {
+  if (
+    !localMediaDependenciesChanged(
+      dependencies,
+      oldPdfCache,
+      newPdfCache,
+      oldImgCache,
+      newImgCache,
+    )
+  ) {
+    return EMPTY_CHANGED_MEDIA_PATHS;
+  }
+
   const changedPaths = new Set<string>();
   collectChangedPaths(dependencies.pdfPaths, oldPdfCache, newPdfCache, changedPaths);
   collectChangedPaths(dependencies.imagePaths, oldImgCache, newImgCache, changedPaths);
