@@ -5,9 +5,10 @@
  * in the final codebase. These are structural/existence tests, not
  * behavioral tests — they confirm that claimed work is present.
  */
-import { describe, it, expect } from "vitest";
+
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
+import { describe, expect, it } from "vitest";
 
 const ROOT = resolve(__dirname, "../..");
 
@@ -967,13 +968,13 @@ describe("#376 — shared text widget primitives", () => {
   it("routes representative widget families through the shared text helpers", () => {
     const citations = fileText("src/citations/citation-render.ts");
     const crossrefs = fileText("src/render/crossref-render.ts");
-    const codeBlocks = fileText("src/render/code-block-render.ts");
+    const codeBlockDecorations = fileText("src/render/code-block-decorations.ts");
     const includeLabels = fileText("src/render/include-label.ts");
     const sidenotes = fileText("src/render/sidenote-render.ts");
 
     expect(citations).toContain("extends SimpleTextRenderWidget");
     expect(crossrefs).toContain("extends SimpleTextRenderWidget");
-    expect(codeBlocks).toContain("SimpleTextRenderWidget");
+    expect(codeBlockDecorations).toContain("SimpleTextRenderWidget");
     expect(includeLabels).toContain("new SimpleTextRenderWidget");
     expect(sidenotes).toContain("extends SimpleTextRenderWidget");
   });
