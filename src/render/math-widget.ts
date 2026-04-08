@@ -8,7 +8,7 @@ import type { MathSemantics } from "../semantics/document";
 import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
 import { resolveClickToSourcePos } from "./math-interactions";
 import { findMathRegionAtPos } from "./math-source";
-import { MacroAwareWidget, widgetSourceMap } from "./widget-core";
+import { MacroAwareWidget, widgetSourceMap } from "./source-widget";
 import {
   activateStructureEditTarget,
   createStructureEditTargetAt,

@@ -5,7 +5,7 @@ import { IFRAME_MAX_ATTEMPTS, IFRAME_POLL_INTERVAL_MS } from "../constants/timin
 import type { FencedDivInfo } from "../fenced-block/model";
 import {
   pushWidgetDecoration,
-  RenderWidget,
+  ShellWidget,
 } from "../render/render-core";
 import { mutateWithScrollStabilizedMeasure } from "../render/scroll-anchor";
 import {
@@ -122,7 +122,7 @@ export function embedSandboxPermissions(embedType: string): string {
 }
 
 /** Widget that renders an iframe for embed blocks. */
-class EmbedWidget extends RenderWidget {
+class EmbedWidget extends ShellWidget {
   private readonly gistCleanup = new WeakMap<
     HTMLElement,
     {
@@ -138,7 +138,6 @@ class EmbedWidget extends RenderWidget {
     private readonly active: boolean = false,
   ) {
     super();
-    this.includeInShellSurface = true;
     this.useLiveSourceRange = false;
   }
 

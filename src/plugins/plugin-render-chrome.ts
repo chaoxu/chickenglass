@@ -7,7 +7,7 @@ import { getFencedDivStructuralOpenTo } from "../fenced-block/model";
 import {
   addMarkerReplacement,
   createSimpleTextWidget,
-  MacroAwareWidget,
+  ShellMacroAwareWidget,
 } from "../render/render-core";
 
 const openParenWidget = Decoration.widget({
@@ -27,13 +27,12 @@ function captionClassName(active: boolean): string {
 }
 
 /** Widget that renders a block header string with inline math/bold/italic. */
-export class BlockHeaderWidget extends MacroAwareWidget {
+export class BlockHeaderWidget extends ShellMacroAwareWidget {
   constructor(
     private readonly header: string,
     private readonly macros: Record<string, string>,
   ) {
     super(macros);
-    this.includeInShellSurface = true;
     this.useLiveSourceRange = false;
   }
 
@@ -67,7 +66,7 @@ export class BlockHeaderWidget extends MacroAwareWidget {
   }
 }
 
-export class BlockCaptionWidget extends MacroAwareWidget {
+export class BlockCaptionWidget extends ShellMacroAwareWidget {
   constructor(
     private readonly header: string,
     private readonly title: string,
@@ -75,7 +74,6 @@ export class BlockCaptionWidget extends MacroAwareWidget {
     private readonly active: boolean = false,
   ) {
     super(macros);
-    this.includeInShellSurface = true;
     this.useLiveSourceRange = false;
   }
 
@@ -139,13 +137,12 @@ export class BlockCaptionWidget extends MacroAwareWidget {
  * as a widget with parentheses, matching how inline titles appear visually.
  * Inline formatting (bold, math, etc.) is supported via renderDocumentFragmentToDom.
  */
-class AttributeTitleWidget extends MacroAwareWidget {
+class AttributeTitleWidget extends ShellMacroAwareWidget {
   constructor(
     private readonly title: string,
     private readonly macros: Record<string, string>,
   ) {
     super(macros);
-    this.includeInShellSurface = true;
     this.useLiveSourceRange = false;
   }
 

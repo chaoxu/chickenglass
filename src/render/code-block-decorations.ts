@@ -35,10 +35,8 @@ import {
   editorFocusField,
   focusEffect,
 } from "./focus-state";
-import {
-  RenderWidget,
-  SimpleTextRenderWidget,
-} from "./widget-core";
+import { makeTextElement } from "./widget-core";
+import { ShellWidget } from "./shell-widget";
 
 type IconNode = ReadonlyArray<readonly [string, Readonly<Record<string, string>>]>;
 
@@ -71,13 +69,12 @@ function createLucideIcon(iconNode: IconNode): SVGSVGElement {
 }
 
 /** Widget that renders a copy-to-clipboard button in the code block header. */
-class CopyButtonWidget extends RenderWidget {
+class CopyButtonWidget extends ShellWidget {
   private resetTimer: ReturnType<typeof setTimeout> | null = null;
   private buttonEl: HTMLButtonElement | null = null;
 
   constructor(private readonly code: string) {
     super();
-    this.includeInShellSurface = true;
   }
 
   private clearResetTimer(): void {
@@ -136,14 +133,13 @@ function joinClasses(...classes: Array<string | false | null | undefined>): stri
   return classes.filter(Boolean).join(" ");
 }
 
-class CodeBlockLanguageWidget extends SimpleTextRenderWidget {
-  constructor(language: string) {
-    super({
-      tagName: "span",
-      className: CSS.codeblockLanguage,
-      text: language,
-    });
-    this.includeInShellSurface = true;
+class CodeBlockLanguageWidget extends ShellWidget {
+  constructor(private readonly language: string) {
+    super();
+  }
+
+  createDOM(): HTMLElement {
+    return makeTextElement("span", CSS.codeblockLanguage, this.language);
   }
 
   protected override bindSourceReveal(
@@ -156,6 +152,10 @@ class CodeBlockLanguageWidget extends SimpleTextRenderWidget {
       view.focus();
       activateStructureEditAt(view, this.sourceFrom);
     });
+  }
+
+  eq(other: CodeBlockLanguageWidget): boolean {
+    return this.language === other.language;
   }
 }
 

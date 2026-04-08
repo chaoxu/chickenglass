@@ -53,10 +53,12 @@ import {
 } from "./focus-state";
 import {
   cloneRenderedHTMLElement,
+} from "./widget-core";
+import {
   RenderWidget,
   SimpleTextRenderWidget,
   serializeMacros,
-} from "./widget-core";
+} from "./source-widget";
 import { mathMacrosField } from "./math-macros";
 import {
   type FootnoteSemantics,

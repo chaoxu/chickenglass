@@ -18,7 +18,7 @@ import {
   snapshotRanges,
 } from "./viewport-diff";
 import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
-import { RenderWidget } from "./widget-core";
+import { RenderWidget } from "./source-widget";
 import { imageUrlField } from "./image-url-cache";
 import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 import {

@@ -13,7 +13,7 @@ import { CSS } from "../constants/css-classes";
 import {
   RenderWidget,
   SimpleTextRenderWidget,
-} from "./widget-core";
+} from "./source-widget";
 
 /** Widget for a resolved cross-reference (block or equation). */
 export class CrossrefWidget extends SimpleTextRenderWidget {

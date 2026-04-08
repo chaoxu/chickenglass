@@ -6,7 +6,7 @@ import {
   type Range,
   RangeSetBuilder,
 } from "@codemirror/state";
-import { RenderWidget } from "./widget-core";
+import { RenderWidget } from "./source-widget";
 
 /** Shared Decoration.mark that visually hides source markers via CSS while keeping them in the DOM. */
 export const decorationHidden = Decoration.mark({ class: "cf-hidden" });
