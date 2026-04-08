@@ -52,6 +52,14 @@
 - Never extend `Decoration.replace` over user-editable text -- edits get swallowed.
 - Never use `ignoreEvent() { return false }` with custom mousedown handlers.
 
+## Geometry ownership
+
+- CM6 owns the vertical geometry of editor content. Do not use CSS to change `.cm-line` height/flow behind CM6's back.
+- In particular, avoid geometry hacks on CM6-owned lines such as `line-height: 0`, hiding `.cm-widgetBuffer`, negative margins, transforms, or absolute positioning that changes effective block height.
+- If something is visually a block, model it as a CM6 block widget/replacement instead of coercing inline content into block layout with CSS selectors.
+- If a widget's height can change after mount, trigger `requestMeasure()` from the code path that changes it.
+- Style inside the widget is fine. Reinterpreting the surrounding editor line layout in CSS is not.
+
 ## Lezer parser rules
 
 - Prefer Lezer tree walking over regex for markdown/document parsing. If the task is really about document structure, syntax, or block boundaries, use the syntax tree.

@@ -454,17 +454,6 @@
   font-size: inherit;
 }
 
-/* Collapse the cm-line containing a display math widget so it only takes
- * the widget's natural height. Without this, the line's lineHeight and
- * cm-widgetBuffer elements add ~45px of empty space around the equation. */
-.cm-line:has(> .cf-math-display) {
-  line-height: 0;
-}
-
-.cm-line:has(> .cf-math-display) > .cm-widgetBuffer {
-  display: none;
-}
-
 /* ── Shared preview surfaces ────────────────────────────────────────────────
  * Shared shell/content contract for hover preview, footnote tooltip, and
  * math preview. Surface-specific behavior layers on top of these primitives.
