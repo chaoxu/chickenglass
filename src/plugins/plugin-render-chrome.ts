@@ -13,6 +13,7 @@ import {
   createSimpleTextWidget,
   ShellMacroAwareWidget,
 } from "../render/render-core";
+import { syncActiveFenceGuideClasses } from "../render/source-widget";
 
 const openParenWidget = Decoration.widget({
   widget: createSimpleTextWidget("span", CSS.blockTitleParen, "("),
@@ -114,6 +115,17 @@ export class BlockCaptionWidget extends ShellMacroAwareWidget {
     });
   }
 
+  override toDOM(view?: import("@codemirror/view").EditorView): HTMLElement {
+    const el = this.createDOM();
+    this.syncWidgetAttrs(el);
+    el.dataset.activeFenceGuides = "true";
+    syncActiveFenceGuideClasses(el, view, this.sourceFrom, this.sourceTo);
+    if (this.sourceFrom >= 0 && view) {
+      this.bindSourceReveal(el, view);
+    }
+    return el;
+  }
+
   eq(other: BlockCaptionWidget): boolean {
     return (
       this.header === other.header &&
@@ -123,11 +135,16 @@ export class BlockCaptionWidget extends ShellMacroAwareWidget {
     );
   }
 
-  updateDOM(dom: HTMLElement): boolean {
+  updateDOM(
+    dom: HTMLElement,
+    view?: import("@codemirror/view").EditorView,
+  ): boolean {
     if (!dom.classList.contains("cf-block-caption")) return false;
     dom.className = captionClassName(this.active);
     this.renderCaptionContent(dom);
-    this.setSourceRangeAttrs(dom);
+    this.syncWidgetAttrs(dom);
+    dom.dataset.activeFenceGuides = "true";
+    syncActiveFenceGuideClasses(dom, view, this.sourceFrom, this.sourceTo);
     return true;
   }
 }

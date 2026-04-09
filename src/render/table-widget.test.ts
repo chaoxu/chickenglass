@@ -96,6 +96,8 @@ describe("TableWidget source range attributes", () => {
 
     expect(dom.dataset.sourceFrom).toBe("42");
     expect(dom.dataset.sourceTo).toBe(String(42 + tableText.length));
+    expect(dom.dataset.shellFrom).toBe("42");
+    expect(dom.dataset.shellTo).toBe(String(42 + tableText.length));
   });
 
   it("computes sourceTo from tableFrom + tableText.length", () => {

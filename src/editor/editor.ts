@@ -42,6 +42,7 @@ import { referenceAutocompleteExtension } from "./reference-autocomplete";
 import { richClipboardOutputFilter } from "./rich-clipboard";
 import { debugPanelExtension } from "./debug-panel";
 import { shellSurfaceOverlayExtension } from "./shell-surface-overlay";
+import { emitWindowDebugLaneStateChange } from "./debug-lane-state";
 import {
   createMarkdownLanguageExtensions,
   createProjectConfigExtensions,
@@ -57,6 +58,10 @@ const fallbackDocument = "# Untitled\n";
 /** Compartment for the debug tree-view panel — toggled via window.__cmTreeView(). */
 const treeViewCompartment = new Compartment();
 const debugLaneCompartment = new Compartment();
+const defaultDebugLaneExtensions: Extension[] =
+  import.meta.env.DEV || import.meta.env.MODE === "test"
+    ? [shellSurfaceOverlayExtension, debugPanelExtension]
+    : [];
 
 /** Editor display modes. */
 export type EditorMode = "rich" | "source" | "read";
@@ -217,7 +222,7 @@ function editorChromeExtensions(isDark: boolean): Extension[] {
     editorKeybindings,
     richMouseSelectionStyle,
     blockTypePickerExtension,
-    debugLaneCompartment.of([]),
+    debugLaneCompartment.of(defaultDebugLaneExtensions),
     coflatTheme,
 
     // Dark/light base theme (wrapped in compartment for live switching)
@@ -268,6 +273,7 @@ export function setDebugLaneEnabled(view: EditorView, enabled: boolean): boolean
   view.dispatch({
     effects: debugLaneCompartment.reconfigure(nextExtensions),
   });
+  emitWindowDebugLaneStateChange();
   return enabled;
 }
 

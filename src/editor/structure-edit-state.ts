@@ -314,6 +314,11 @@ export function createStructureEditTargetAt(
   if (displayMath) candidates.push(displayMath);
   if (candidates.length === 0) return null;
   candidates.sort((left, right) => {
+    const leftContains = structureTargetContainsPos(left, pos);
+    const rightContains = structureTargetContainsPos(right, pos);
+    if (leftContains !== rightContains) {
+      return leftContains ? -1 : 1;
+    }
     const leftSpan = structureTargetTo(left) - structureTargetFrom(left);
     const rightSpan = structureTargetTo(right) - structureTargetFrom(right);
     return leftSpan - rightSpan || structureTargetFrom(left) - structureTargetFrom(right);
@@ -335,6 +340,13 @@ function structureTargetTo(target: StructureEditTarget): number {
   if (target.kind === "code-fence") return target.openFenceTo;
   if (target.kind === "footnote-label") return target.labelTo;
   return target.to;
+}
+
+function structureTargetContainsPos(
+  target: StructureEditTarget,
+  pos: number,
+): boolean {
+  return pos >= structureTargetFrom(target) && pos <= structureTargetTo(target);
 }
 
 export function activateStructureEditTarget(

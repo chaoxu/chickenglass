@@ -1,7 +1,13 @@
 import { EditorSelection } from "@codemirror/state";
 import { type EditorView } from "@codemirror/view";
 import { warnOnce } from "../lib/warn-once";
+import { CSS } from "../constants/css-classes";
 import { getLineElement } from "../render/render-core";
+import {
+  activateStructureEditAt,
+  activateStructureEditTarget,
+  createStructureEditTargetAt,
+} from "./structure-edit-state";
 import { appendDebugTimelineEvent } from "./debug-timeline";
 
 const FALLBACK_LINE_HEIGHT_PX = 24;
@@ -212,6 +218,146 @@ function nextVisibleLineNumber(
   return null;
 }
 
+interface HiddenWidgetStop {
+  readonly from: number;
+  readonly to: number;
+  readonly element: HTMLElement;
+}
+
+function parseWidgetSourcePos(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function firstHiddenWidgetStopBetweenLines(
+  view: EditorView,
+  fromLine: number,
+  nextVisibleLine: number,
+  forward: boolean,
+): HiddenWidgetStop | null {
+  const hiddenLineStart = Math.min(fromLine, nextVisibleLine) + 1;
+  const hiddenLineEnd = Math.max(fromLine, nextVisibleLine) - 1;
+  if (hiddenLineStart > hiddenLineEnd) return null;
+
+  const seen = new Set<string>();
+  const candidates: Array<HiddenWidgetStop & {
+    readonly startLine: number;
+    readonly endLine: number;
+  }> = [];
+
+  for (const el of view.contentDOM.querySelectorAll<HTMLElement>("[data-source-from][data-source-to]")) {
+    const from = parseWidgetSourcePos(el.dataset.sourceFrom);
+    const to = parseWidgetSourcePos(el.dataset.sourceTo);
+    if (from === null || to === null || from < 0 || to < from) continue;
+
+    const endPos = to > from ? to - 1 : from;
+    const startLine = view.state.doc.lineAt(from).number;
+    const endLine = view.state.doc.lineAt(endPos).number;
+    if (endLine < hiddenLineStart || startLine > hiddenLineEnd) continue;
+
+    const key = `${from}:${to}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({ from, to, startLine, endLine, element: el });
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((left, right) => {
+    if (forward) {
+      if (left.startLine !== right.startLine) return left.startLine - right.startLine;
+      if (left.from !== right.from) return left.from - right.from;
+      return left.to - right.to;
+    }
+    if (left.endLine !== right.endLine) return right.endLine - left.endLine;
+    if (left.to !== right.to) return right.to - left.to;
+    return right.from - left.from;
+  });
+
+  const candidate = candidates[0];
+  return {
+    from: candidate.from,
+    to: candidate.to,
+    element: candidate.element,
+  };
+}
+
+function dispatchPlainMouseDown(target: HTMLElement): void {
+  target.dispatchEvent(new MouseEvent("mousedown", {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    buttons: 1,
+    view: window,
+  }));
+}
+
+function activateHiddenWidgetStop(
+  view: EditorView,
+  stop: HiddenWidgetStop,
+  forward: boolean,
+): number | null {
+  const selectionBefore = view.state.selection.main;
+  const lineForStop = view.state.doc.lineAt(stop.from).number;
+
+  if (stop.element.classList.contains(CSS.tableWidget)) {
+    const firstCell = stop.element.querySelector<HTMLElement>("[data-section][data-row][data-col]");
+    if (firstCell) {
+      dispatchPlainMouseDown(firstCell);
+      const selectionAfter = view.state.selection.main;
+      if (
+        selectionAfter.from !== selectionBefore.from ||
+        selectionAfter.to !== selectionBefore.to
+      ) {
+        return view.state.doc.lineAt(selectionAfter.head).number;
+      }
+      if (
+        stop.element.querySelector(`.${CSS.tableCellEditing} .cm-editor`) ||
+        (document.activeElement instanceof HTMLElement && stop.element.contains(document.activeElement))
+      ) {
+        return lineForStop;
+      }
+    }
+  } else {
+    const mouseTarget = stop.element.classList.contains(CSS.mathDisplay)
+      ? stop.element.querySelector<HTMLElement>(`.${CSS.mathDisplayContent}`) ?? stop.element
+      : stop.element;
+    dispatchPlainMouseDown(mouseTarget);
+    const selectionAfter = view.state.selection.main;
+    if (
+      selectionAfter.from !== selectionBefore.from ||
+      selectionAfter.to !== selectionBefore.to
+    ) {
+      return view.state.doc.lineAt(selectionAfter.head).number;
+    }
+    if (
+      document.activeElement instanceof HTMLElement &&
+      stop.element.contains(document.activeElement)
+    ) {
+      return lineForStop;
+    }
+  }
+
+  const targetPos = forward ? stop.from : Math.max(stop.from, stop.to - 1);
+  const target = createStructureEditTargetAt(view.state, targetPos);
+  if (target?.kind === "display-math") {
+    const anchor = forward ? target.contentFrom : target.contentTo;
+    if (!activateStructureEditTarget(view, target, anchor)) return null;
+    return view.state.doc.lineAt(anchor).number;
+  }
+  if (activateStructureEditAt(view, targetPos)) {
+    return view.state.doc.lineAt(view.state.selection.main.head).number;
+  }
+
+  view.dispatch({
+    selection: EditorSelection.cursor(targetPos, forward ? 1 : -1),
+    scrollIntoView: false,
+    userEvent: "select",
+  });
+  return lineForStop;
+}
+
 function closestPositionOnLine(
   view: EditorView,
   lineNumber: number,
@@ -305,6 +451,28 @@ export function moveVerticallyInRichView(
   }
 
   const goalX = view.contentDOM.getBoundingClientRect().left + goalColumn;
+  const hiddenWidgetStop = firstHiddenWidgetStopBetweenLines(
+    view,
+    before.line,
+    nextVisibleLine,
+    forward,
+  );
+  if (hiddenWidgetStop) {
+    const correctedTargetLine = activateHiddenWidgetStop(view, hiddenWidgetStop, forward);
+    if (correctedTargetLine !== null) {
+      recordVerticalMotionGuardEvent(view, {
+        kind: "visible-line-jump",
+        direction: forward ? "down" : "up",
+        beforeLine: before.line,
+        rawTargetLine: nextVisibleLine,
+        correctedTargetLine,
+        timestamp: Date.now(),
+      });
+      requestSelectionVisibility(view);
+      return true;
+    }
+  }
+
   const targetPos = resolveVisibleLineTarget(view, nextVisibleLine, goalX);
 
   view.dispatch({

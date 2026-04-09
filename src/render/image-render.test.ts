@@ -55,13 +55,28 @@ describe("ImagePreviewWidget (image state)", () => {
       expect(el.tagName).toBe("DIV");
       expect(el.className).toBe(CSS.imageWrapper);
     });
+
+    it("stamps shell-surface attrs for block image widgets only", () => {
+      const blockWidget = new ImagePreviewWidget("photo", "photo.png", imageState("photo.png"), true);
+      blockWidget.updateSourceRange(12, 30);
+      const blockEl = blockWidget.toDOM();
+
+      const inlineWidget = new ImagePreviewWidget("photo", "photo.png", imageState("photo.png"), false);
+      inlineWidget.updateSourceRange(40, 58);
+      const inlineEl = inlineWidget.toDOM();
+
+      expect(blockEl.dataset.shellFrom).toBe("12");
+      expect(blockEl.dataset.shellTo).toBe("30");
+      expect(inlineEl.dataset.shellFrom).toBeUndefined();
+      expect(inlineEl.dataset.shellTo).toBeUndefined();
+    });
   });
 
   describe("eq", () => {
-    it("returns true for same alt and src (regardless of state)", () => {
+    it("returns false when preview state changes for the same alt and src", () => {
       const a = new ImagePreviewWidget("cat", "cat.png", imageState("cat.png"));
       const b = new ImagePreviewWidget("cat", "cat.png", { kind: "loading", isPdf: false });
-      expect(a.eq(b)).toBe(true);
+      expect(a.eq(b)).toBe(false);
     });
 
     it("returns false when alt differs", () => {
@@ -109,7 +124,7 @@ describe("ImagePreviewWidget (image state)", () => {
       expect(el.className).toContain(CSS.imageLoading);
 
       const ready = new ImagePreviewWidget("fig", "fig.png", imageState("data:fig.png"));
-      expect(ready.eq(loading)).toBe(true);
+      expect(ready.eq(loading)).toBe(false);
       expect(ready.updateDOM(el)).toBe(true);
       expect(el.className).toBe(CSS.imageWrapper);
       expect(el.querySelector("img")?.src).toContain("data:fig.png");

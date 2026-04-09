@@ -42,8 +42,8 @@ describe("scroll-stabilized measures", () => {
             }
       )),
       requestMeasure: vi.fn((spec: { read?: () => unknown; write?: (value: unknown) => void }) => {
-        const measured = spec.read?.();
         onMeasure?.();
+        const measured = spec.read?.();
         spec.write?.(measured);
       }),
       setAnchorTop(value: number | null) {

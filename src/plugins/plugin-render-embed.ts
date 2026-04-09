@@ -7,6 +7,7 @@ import {
   pushWidgetDecoration,
   ShellWidget,
 } from "../render/render-core";
+import { syncActiveFenceGuideClasses } from "../render/source-widget";
 import { mutateWithScrollStabilizedMeasure } from "../render/scroll-anchor";
 import {
   extractYoutubeId,
@@ -187,7 +188,9 @@ class EmbedWidget extends ShellWidget {
 
   override toDOM(view?: EditorView): HTMLElement {
     const wrapper = this.createDOM();
-    this.setSourceRangeAttrs(wrapper);
+    this.syncWidgetAttrs(wrapper);
+    wrapper.dataset.activeFenceGuides = "true";
+    syncActiveFenceGuideClasses(wrapper, view, this.sourceFrom, this.sourceTo);
     if (this.sourceFrom >= 0 && view) {
       this.bindSourceReveal(wrapper, view);
     }

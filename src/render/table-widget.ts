@@ -10,7 +10,10 @@ import {
 } from "./table-discovery";
 import { addRow, formatTable, type ParsedTable } from "./table-utils";
 import { requestScrollStabilizedMeasure } from "./scroll-anchor";
-import { RenderWidget } from "./source-widget";
+import {
+  syncActiveFenceGuideClasses,
+} from "./source-widget";
+import { ShellWidget } from "./shell-widget";
 import { bibDataField } from "../state/bib-data";
 
 /**
@@ -79,7 +82,7 @@ function destroyActiveInlineEditor(): DestroyedInlineEditor | null {
  * cursor is not adjacent, and the cell has its own undo/redo stack.
  * Only one cell editor is active at a time.
  */
-export class TableWidget extends RenderWidget {
+export class TableWidget extends ShellWidget {
   /** Reference to the EditorView, stored on first toDOM() call. */
   private editorView: EditorView | null = null;
   private resizeObserver: ResizeObserver | null = null;
@@ -94,6 +97,11 @@ export class TableWidget extends RenderWidget {
   ) {
     super();
     this.macroSignature = serializeTableWidgetMacros(macros);
+  }
+
+  private ensureSourceRange(): void {
+    if (this.sourceFrom >= 0 && this.sourceTo >= this.sourceFrom) return;
+    this.updateSourceRange(this.tableFrom, this.tableFrom + this.tableText.length);
   }
 
   /**
@@ -209,11 +217,18 @@ export class TableWidget extends RenderWidget {
   }
 
   private syncContainerAttrs(container: HTMLElement): void {
+    this.ensureSourceRange();
     container.className = "cf-table-widget";
     container.dataset.tableTextHash = this.tableText;
     container.dataset.tableFrom = String(this.tableFrom);
-    container.dataset.sourceFrom = String(this.tableFrom);
-    container.dataset.sourceTo = String(this.tableFrom + this.tableText.length);
+    this.syncWidgetAttrs(container);
+    container.dataset.activeFenceGuides = "true";
+    syncActiveFenceGuideClasses(
+      container,
+      this.editorView ?? undefined,
+      this.sourceFrom,
+      this.sourceTo,
+    );
   }
 
   private clearPendingResizeMeasure(): void {
@@ -495,13 +510,19 @@ export class TableWidget extends RenderWidget {
         editorView.focus();
 
         if (event.isTrusted) {
-          const pos = editorView.posAtCoords({ x: clickX, y: clickY });
-          if (pos !== null) {
-            editorView.dispatch({ selection: { anchor: pos } });
-          } else {
-            const docLen = editorView.state.doc.length;
-            editorView.dispatch({ selection: { anchor: docLen } });
-          }
+          requestAnimationFrame(() => {
+            if (activeInlineEditor?.view !== editorView) return;
+            const pos = editorView.posAtCoords({ x: clickX, y: clickY });
+            if (pos !== null) {
+              editorView.dispatch({ selection: { anchor: pos } });
+              return;
+            }
+
+            const coarsePos = editorView.posAtCoords({ x: clickX, y: clickY }, false);
+            if (coarsePos !== null) {
+              editorView.dispatch({ selection: { anchor: coarsePos } });
+            }
+          });
         }
         } catch (e: unknown) {
           console.error("[table-widget] mousedown handler failed", e);
@@ -573,6 +594,7 @@ export class TableWidget extends RenderWidget {
    */
   toDOM(view: EditorView): HTMLElement {
     const container = document.createElement("div");
+    this.editorView = view;
     this.syncContainerAttrs(container);
     container.appendChild(this.buildTableDOM(view));
     this.observeContainer(container, view);
@@ -590,6 +612,7 @@ export class TableWidget extends RenderWidget {
     from.resizeObserver = null;
     from.editorView = null;
 
+    this.editorView = view;
     this.syncContainerAttrs(dom);
     dom.replaceChildren(this.buildTableDOM(view));
     this.observeContainer(dom, view);

@@ -86,6 +86,21 @@ export function activeFencedOpenFenceStarts(state: EditorState): ReadonlySet<num
   return new Set(activeFencedPath(state).map((div) => div.openFenceFrom));
 }
 
+export function activeFencedDepthAtRange(
+  state: EditorState,
+  from: number,
+  to: number,
+): number {
+  if (from < 0 || to < from) return 0;
+  let depth = 0;
+  for (const div of activeFencedPath(state)) {
+    if (from >= div.from && to <= div.to) {
+      depth += 1;
+    }
+  }
+  return depth;
+}
+
 export function activeCodeBlock(state: EditorState): CodeShellInfo | null {
   const focused = state.field(editorFocusField, false) ?? false;
   if (!focused) return null;
