@@ -118,6 +118,27 @@ describe("structure-edit-state", () => {
     expect(target?.kind).toBe("display-math");
   });
 
+  it("prefers the innermost fenced block opener in nested fenced divs", () => {
+    const doc = [
+      ":::: {.theorem} Hover Preview Stress Test",
+      "Outer content",
+      "",
+      "::: {.blockquote} Blockquote",
+      "Inner quote body",
+      ":::",
+      "::::",
+    ].join("\n");
+    const state = createState(doc);
+    const target = createStructureEditTargetAt(state, doc.indexOf("Blockquote"));
+
+    expect(target?.kind).toBe("fenced-opener");
+    if (!target || target.kind !== "fenced-opener") {
+      throw new Error("expected nested fenced-opener target");
+    }
+    expect(target.className).toBe("blockquote");
+    expect(target.openFenceFrom).toBe(doc.indexOf("::: {.blockquote}"));
+  });
+
   it("clears structure edit when a programmatic document replacement switches files", () => {
     const state = createState(["---", "title: Hello", "---", "Body"].join("\n"));
     const target = createStructureEditTargetAt(state, 0);
