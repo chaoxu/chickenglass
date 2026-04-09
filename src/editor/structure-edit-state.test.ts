@@ -1,5 +1,5 @@
-import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
+import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 
 import { markdownExtensions } from "../parser";
@@ -60,6 +60,20 @@ describe("structure-edit-state", () => {
     }).state;
 
     expect(getActiveStructureEditTarget(deleted)).toBeNull();
+  });
+
+  it("clears an active target when the nullable structure-edit effect is set to null", () => {
+    const doc = `::: {.proof}\nBody\n:::`;
+    const state = createState(doc);
+    const target = createFencedStructureEditTarget(state, 0);
+    expect(target).not.toBeNull();
+
+    const active = applyStateEffects(state, setStructureEditTargetEffect.of(target));
+    const cleared = active.update({
+      effects: setStructureEditTargetEffect.of(null),
+    }).state;
+
+    expect(getActiveStructureEditTarget(cleared)).toBeNull();
   });
 
   it("re-resolves the frontmatter target against the current frontmatter extent", () => {

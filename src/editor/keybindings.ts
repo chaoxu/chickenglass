@@ -5,7 +5,7 @@ import {
   indentWithTab,
 } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
-import { EditorSelection, type EditorState, Prec, type Extension } from "@codemirror/state";
+import { EditorSelection, type EditorState, type Extension, Prec } from "@codemirror/state";
 import { type EditorView, keymap } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { MODE_CHANGE_EVENT, OPEN_FILE_EVENT } from "../constants/events";
@@ -246,17 +246,17 @@ export function toggleLink(view: EditorView): boolean {
   return true;
 }
 
-// Convenience command wrappers
-const toggleBold = (view: EditorView): boolean =>
-  toggleInlineMarker(view, "**");
-const toggleItalic = (view: EditorView): boolean =>
-  toggleInlineMarker(view, "*");
-const toggleInlineCode = (view: EditorView): boolean =>
-  toggleInlineMarker(view, "`");
-const toggleStrikethrough = (view: EditorView): boolean =>
-  toggleInlineMarker(view, "~~");
-const toggleHighlight = (view: EditorView): boolean =>
-  toggleInlineMarker(view, "==");
+function makeToggleInlineMarkerCommand(
+  marker: string,
+): (view: EditorView) => boolean {
+  return (view) => toggleInlineMarker(view, marker);
+}
+
+const toggleBold = makeToggleInlineMarkerCommand("**");
+const toggleItalic = makeToggleInlineMarkerCommand("*");
+const toggleInlineCode = makeToggleInlineMarkerCommand("`");
+const toggleStrikethrough = makeToggleInlineMarkerCommand("~~");
+const toggleHighlight = makeToggleInlineMarkerCommand("==");
 
 function isRichMode(view: EditorView): boolean {
   return (view.state.field(editorModeField, false) ?? "rich") === "rich";
@@ -320,14 +320,14 @@ export function moveDownAcrossNestedClosingFences(view: EditorView): boolean {
   return true;
 }
 
-function moveUpWithReverseScrollGuard(view: EditorView): boolean {
+function moveWithReverseScrollGuard(
+  view: EditorView,
+  direction: "up" | "down",
+): boolean {
   if (!isRichMode(view)) return false;
-  return moveVerticallyInRichView(view, false);
-}
-
-function moveDownWithReverseScrollGuard(view: EditorView): boolean {
-  if (!isRichMode(view)) return false;
-  return moveDownAcrossNestedClosingFences(view) || moveVerticallyInRichView(view, true);
+  const movingDown = direction === "down";
+  return (movingDown && moveDownAcrossNestedClosingFences(view))
+    || moveVerticallyInRichView(view, movingDown);
 }
 
 function clearActiveStructureEdit(view: EditorView): boolean {
@@ -340,8 +340,8 @@ export const editorKeybindings: Extension = [
   Prec.high(
     keymap.of([
       { key: "Escape", run: clearActiveStructureEdit },
-      { key: "ArrowUp", run: moveUpWithReverseScrollGuard },
-      { key: "ArrowDown", run: moveDownWithReverseScrollGuard },
+      { key: "ArrowUp", run: (view) => moveWithReverseScrollGuard(view, "up") },
+      { key: "ArrowDown", run: (view) => moveWithReverseScrollGuard(view, "down") },
     ]),
   ),
   keymap.of([
