@@ -6,6 +6,7 @@ import {
 } from "@codemirror/view";
 import { isCodeFenceStructureEditActive } from "../editor/structure-edit-state";
 import { findFencedBlockAt } from "../fenced-block/model";
+import { warnOnce } from "../lib/warn-once";
 import {
   type CodeBlockInfo,
   collectCodeBlocks,
@@ -59,8 +60,14 @@ class CodeBlockHoverPlugin {
     let pos: number;
     try {
       pos = this.view.posAtDOM(lineEl, 0);
-    } catch {
-      // DOM node may be detached after a view update; clear the stale hover.
+    } catch (error: unknown) {
+      if (this.view.dom.isConnected && lineEl.isConnected) {
+        warnOnce(
+          "code-block-hover:posAtDOM",
+          "[code-block-hover] posAtDOM failed; clearing stale hover state",
+          error,
+        );
+      }
       this.clearHoveredHeader();
       return;
     }

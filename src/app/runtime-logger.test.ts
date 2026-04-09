@@ -147,4 +147,40 @@ describe("runtime logger", () => {
     expect(runtimeEntry.message).toBe("[browser] failed");
     expect(runtimeEntry.stack).toContain("dev-only");
   });
+
+  it("warns once when runtime log serialization falls back", async () => {
+    delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+
+    const errorSpy = vi.fn();
+    const warnSpy = vi.fn();
+    console.error = errorSpy;
+    console.warn = warnSpy;
+
+    const {
+      getRuntimeLogsSnapshot,
+      installRuntimeLogging,
+    } = await import("./runtime-logger");
+    await installRuntimeLogging();
+
+    const unserializable = {
+      toJSON() {
+        throw new Error("serialize failed");
+      },
+    };
+
+    console.error("[runtime] failed", unserializable);
+    console.error("[runtime] failed again", unserializable);
+    await flushAsyncWork();
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[runtime-logger] failed to serialize runtime log payload; using Object.prototype fallback",
+      "[object Object]",
+      expect.any(Error),
+    );
+
+    const [latestEntry, earlierEntry] = getRuntimeLogsSnapshot();
+    expect(latestEntry.details).toEqual({ args: ["[runtime] failed again", "[object Object]"] });
+    expect(earlierEntry.details).toEqual({ args: ["[runtime] failed", "[object Object]"] });
+  });
 });

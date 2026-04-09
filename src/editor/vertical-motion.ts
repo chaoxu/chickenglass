@@ -1,5 +1,6 @@
 import { EditorSelection } from "@codemirror/state";
 import { type EditorView } from "@codemirror/view";
+import { warnOnce } from "../lib/warn-once";
 import { getLineElement } from "../render/render-core";
 import { appendDebugTimelineEvent } from "./debug-timeline";
 
@@ -163,7 +164,15 @@ function safeCoordsAtPos(
 ): { left: number; right: number; top: number; bottom: number } | null {
   try {
     return view.coordsAtPos(pos, assoc);
-  } catch {
+  } catch (error: unknown) {
+    if (view.dom.isConnected) {
+      warnOnce(
+        "vertical-motion:coordsAtPos",
+        "[vertical-motion] coordsAtPos failed; falling back to rich-mode line geometry",
+        { assoc, pos },
+        error,
+      );
+    }
     return null;
   }
 }

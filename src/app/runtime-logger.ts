@@ -1,4 +1,5 @@
 import { isTauri } from "../lib/tauri";
+import { warnOnce } from "../lib/warn-once";
 
 export type RuntimeLogSource = "console.error" | "window.onerror" | "unhandledrejection";
 
@@ -140,8 +141,15 @@ function safeJsonStringify(value: unknown): string {
       return candidate;
     });
     return serialized ?? "undefined";
-  } catch {
-    return Object.prototype.toString.call(value);
+  } catch (error: unknown) {
+    const fallback = Object.prototype.toString.call(value);
+    warnOnce(
+      "runtime-logger:safeJsonStringify",
+      `${INSTALL_WARNING_PREFIX} failed to serialize runtime log payload; using Object.prototype fallback`,
+      fallback,
+      error,
+    );
+    return fallback;
   }
 }
 

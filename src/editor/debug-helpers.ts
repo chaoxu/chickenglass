@@ -153,6 +153,7 @@ function getLineElement(view: EditorView, lineNum: number): HTMLElement | null {
         return el;
       }
     } catch {
+      // Debug-only helper: skip stale line nodes while CM6 is remapping the DOM.
       continue;
     }
   }
@@ -168,6 +169,7 @@ function getLineElement(view: EditorView, lineNum: number): HTMLElement | null {
     const pos = view.posAtDOM(el, 0);
     return view.state.doc.lineAt(pos).number === lineNum ? el : null;
   } catch {
+    // Debug-only helper: fallback DOM resolution is best-effort in redraws/tests.
     return null;
   }
 }

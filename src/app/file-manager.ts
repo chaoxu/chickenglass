@@ -6,6 +6,7 @@ import {
 } from "./lib/utils";
 import { getDemoFiles } from "./demo-files";
 import { normalizeProjectPath } from "../lib/project-paths";
+import { warnOnce } from "../lib/warn-once";
 
 // Re-export canonical types from src/lib/types.ts so that existing
 // `from "./file-manager"` / `from "../file-manager"` imports keep working.
@@ -278,8 +279,13 @@ export class MemoryFileSystem implements FileSystem {
       if (resp.ok) {
         return new Uint8Array(await resp.arrayBuffer());
       }
-    } catch {
-      // fetch failed — fall through to error
+    } catch (error: unknown) {
+      warnOnce(
+        `file-manager:readFileBinary:${demoAssetUrl}`,
+        "[file-manager] failed to fetch demo asset fallback",
+        { demoAssetUrl, path },
+        error,
+      );
     }
     throw new Error(`File not found: ${path}`);
   }

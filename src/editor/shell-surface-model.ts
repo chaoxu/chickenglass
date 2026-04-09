@@ -1,4 +1,5 @@
 import type { EditorView } from "@codemirror/view";
+import { warnOnce } from "../lib/warn-once";
 import { frontmatterField } from "./frontmatter-state";
 import {
   activeShellPath,
@@ -147,7 +148,14 @@ function collectVisibleLineGeometry(
     let pos: number;
     try {
       pos = view.posAtDOM(node, 0);
-    } catch {
+    } catch (error: unknown) {
+      if (view.dom.isConnected && node.isConnected) {
+        warnOnce(
+          "shell-surface-model:collectVisibleLineGeometry:posAtDOM",
+          "[shell-surface-model] posAtDOM failed while measuring visible lines; skipping stale line",
+          error,
+        );
+      }
       continue;
     }
     const line = view.state.doc.lineAt(pos);
