@@ -889,9 +889,13 @@ describe("#299 — centralized block manifest and CSS registry", () => {
   it("uses the shared registries in block rendering paths", () => {
     const blockTheme = fileText("src/editor/block-theme.ts");
     const pluginRender = fileText("src/plugins/plugin-render.ts");
+    const pluginRenderChrome = fileText("src/plugins/plugin-render-chrome.ts");
 
     expect(blockTheme).toContain("STYLED_BLOCK_NAMES");
-    expect(pluginRender).toContain("CSS.blockHeaderRendered");
+    expect(pluginRender).toContain("getPluginOrFallback");
+    expect(pluginRender).toContain("createFencedBlockDecorationField");
+    expect(pluginRenderChrome).toContain("CSS.blockHeaderRendered");
+    expect(pluginRenderChrome).toContain("renderDocumentFragmentToDom");
     // #374: embed detection is now data-driven via plugin.specialBehavior,
     // not via the EMBED_CLASSES set — this is the correct post-migration state.
     expect(pluginRender).toContain('specialBehavior === "embed"');
@@ -939,7 +943,8 @@ describe("#370 — shared decoration/widget factories", () => {
     expect(image).toContain("pushWidgetDecoration");
     expect(reference).toContain("ViewPlugin.fromClass");
     expect(reference).toContain("pushWidgetDecoration");
-    expect(pluginRender).toContain("pushWidgetDecoration");
+    expect(pluginRender).toContain("buildFencedBlockDecorations");
+    expect(pluginRender).toContain("createFencedBlockDecorationField");
   });
 });
 
@@ -971,12 +976,15 @@ describe("#376 — shared text widget primitives", () => {
     const codeBlockDecorations = fileText("src/render/code-block-decorations.ts");
     const includeLabels = fileText("src/render/include-label.ts");
     const sidenotes = fileText("src/render/sidenote-render.ts");
+    const frontmatterRender = fileText("src/editor/frontmatter-render.ts");
 
     expect(citations).toContain("extends SimpleTextRenderWidget");
     expect(crossrefs).toContain("extends SimpleTextRenderWidget");
-    expect(codeBlockDecorations).toContain("SimpleTextRenderWidget");
+    expect(codeBlockDecorations).toContain("extends ShellWidget");
+    expect(codeBlockDecorations).toContain("makeTextElement");
     expect(includeLabels).toContain("new SimpleTextRenderWidget");
     expect(sidenotes).toContain("extends SimpleTextRenderWidget");
+    expect(frontmatterRender).toContain("ShellMacroAwareWidget");
   });
 });
 
@@ -1152,14 +1160,14 @@ describe("#314 — document surface renderer layer", () => {
     const footnoteTooltip = fileText("src/app/hooks/use-footnote-tooltip.ts");
     const readMode = fileText("src/app/components/read-mode-view.tsx");
     const hoverPreview = fileText("src/render/hover-preview.ts");
-    const pluginRender = fileText("src/plugins/plugin-render.ts");
+    const pluginRenderChrome = fileText("src/plugins/plugin-render-chrome.ts");
     const frontmatterRender = fileText("src/editor/frontmatter-render.ts");
 
     expect(headingChrome).toContain("../../document-surfaces");
     expect(footnoteTooltip).toContain("../../document-surfaces");
     expect(readMode).toContain("../../document-surfaces");
     expect(hoverPreview).toContain("../document-surfaces");
-    expect(pluginRender).toContain("../document-surfaces");
+    expect(pluginRenderChrome).toContain("../document-surfaces");
     expect(frontmatterRender).toContain("../document-surfaces");
   });
 });
