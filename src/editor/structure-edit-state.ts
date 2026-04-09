@@ -101,6 +101,20 @@ function fencedTargetFromDiv(div: FencedDivInfo): FencedStructureEditTarget {
   };
 }
 
+function findInnermostFencedDivAt(
+  state: EditorState,
+  pos: number,
+): FencedDivInfo | null {
+  const divs = collectFencedDivs(state).filter((div) => pos >= div.from && pos <= div.to);
+  if (divs.length === 0) return null;
+  divs.sort((left, right) => {
+    const leftSpan = left.to - left.from;
+    const rightSpan = right.to - right.from;
+    return leftSpan - rightSpan || left.from - right.from;
+  });
+  return divs[0];
+}
+
 function frontmatterTargetFromState(
   state: EditorState,
 ): FrontmatterStructureEditTarget | null {
@@ -290,7 +304,7 @@ export function createFencedStructureEditTarget(
   state: EditorState,
   pos: number,
 ): StructureEditTarget | null {
-  const div = findFencedBlockAt(collectFencedDivs(state), pos);
+  const div = findInnermostFencedDivAt(state, pos);
   return div ? fencedTargetFromDiv(div) : null;
 }
 
@@ -304,7 +318,7 @@ export function createStructureEditTargetAt(
     return frontmatter;
   }
   const candidates: StructureEditTarget[] = [];
-  const fencedDiv = findFencedBlockAt(collectFencedDivs(state), pos);
+  const fencedDiv = findInnermostFencedDivAt(state, pos);
   if (fencedDiv) candidates.push(fencedTargetFromDiv(fencedDiv));
   const codeFence = createCodeFenceStructureEditTargetAt(state, pos);
   if (codeFence) candidates.push(codeFence);
