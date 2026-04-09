@@ -33,6 +33,7 @@ async function getTokenTarget(page, rowLabel, selector) {
       if (!(row instanceof HTMLTableRowElement)) return null;
       const contentCell = row.querySelectorAll("td")[1];
       if (!(contentCell instanceof HTMLElement)) return null;
+      contentCell.scrollIntoView({ block: "center", inline: "nearest" });
       const token = contentCell.querySelector(tokenSelector);
       if (!(token instanceof HTMLElement)) return null;
       const rect = token.getBoundingClientRect();
@@ -53,6 +54,7 @@ async function getPlainTextTarget(page, rowLabel) {
     if (!(row instanceof HTMLTableRowElement)) return null;
     const contentCell = row.querySelectorAll("td")[1];
     if (!(contentCell instanceof HTMLElement)) return null;
+    contentCell.scrollIntoView({ block: "center", inline: "nearest" });
     const walker = document.createTreeWalker(contentCell, NodeFilter.SHOW_TEXT);
     let textNode = null;
     while (walker.nextNode()) {
@@ -84,6 +86,7 @@ async function capturePreviewTokenShot(page, rowLabel, selector) {
       if (!(row instanceof HTMLTableRowElement)) return null;
       const contentCell = row.querySelectorAll("td")[1];
       if (!(contentCell instanceof HTMLElement)) return null;
+      contentCell.scrollIntoView({ block: "center", inline: "nearest" });
       const token = contentCell.querySelector(tokenSelector);
       if (!(token instanceof HTMLElement)) return null;
       return token.getBoundingClientRect().toJSON();
@@ -105,6 +108,7 @@ async function captureActiveTokenShot(page, rowLabel, selector) {
       if (!(contentCell instanceof HTMLElement) || !contentCell.classList.contains("cf-table-cell-editing")) {
         return null;
       }
+      contentCell.scrollIntoView({ block: "center", inline: "nearest" });
       const token = contentCell.querySelector(tokenSelector);
       if (!(token instanceof HTMLElement)) return null;
       return token.getBoundingClientRect().toJSON();
@@ -115,7 +119,50 @@ async function captureActiveTokenShot(page, rowLabel, selector) {
   return page.screenshot({ clip: clip(rect) });
 }
 
-async function checkFirstRichClickStaysPreview(page, rowLabel, selector) {
+async function checkFirstRichClickEntersEditWithParity(page, rowLabel, selector) {
+  const target = await getTokenTarget(page, rowLabel, selector);
+  if (!target) {
+    return `missing first-click target for ${rowLabel} ${selector}`;
+  }
+
+  const beforeShot = await capturePreviewTokenShot(page, rowLabel, selector);
+  if (!beforeShot) {
+    return `missing preview token ${selector} for ${rowLabel}`;
+  }
+
+  await page.mouse.click(target.x, target.y);
+  await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
+
+  const state = await page.evaluate((tokenSelector) => ({
+    activeCellCount: document.querySelectorAll(".cf-table-cell-active").length,
+    editingCellCount: document.querySelectorAll(".cf-table-cell-editing").length,
+    hasToken: Boolean(document.querySelector(`.cf-table-cell-editing ${tokenSelector}`)),
+    hasCursor: Boolean(document.querySelector(".cf-table-cell-editing .cm-cursor")),
+  }), selector);
+
+  if (
+    state.editingCellCount !== 1 ||
+    !state.hasToken ||
+    !state.hasCursor
+  ) {
+    return (
+      `first rich click did not enter edit for ${rowLabel} ${selector} ` +
+      `(active=${state.activeCellCount}, editing=${state.editingCellCount}, token=${state.hasToken}, cursor=${state.hasCursor})`
+    );
+  }
+
+  const afterShot = await captureActiveTokenShot(page, rowLabel, selector);
+  if (!afterShot) {
+    return `missing active token ${selector} for ${rowLabel}`;
+  }
+  if (!beforeShot.equals(afterShot)) {
+    return `pixel mismatch after first rich click for ${rowLabel} ${selector}`;
+  }
+
+  return null;
+}
+
+async function checkFirstRichClickEntersEdit(page, rowLabel, selector) {
   const target = await getTokenTarget(page, rowLabel, selector);
   if (!target) {
     return `missing first-click target for ${rowLabel} ${selector}`;
@@ -125,20 +172,48 @@ async function checkFirstRichClickStaysPreview(page, rowLabel, selector) {
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
   const state = await page.evaluate((tokenSelector) => ({
-    activeCellCount: document.querySelectorAll(".cf-table-cell-active").length,
     editingCellCount: document.querySelectorAll(".cf-table-cell-editing").length,
-    hasToken: Boolean(document.querySelector(`.cf-table-cell-active ${tokenSelector}`)),
+    activeCellCount: document.querySelectorAll(".cf-table-cell-active").length,
+    lineText:
+      document.querySelector(".cf-table-cell-editing .cm-line")?.textContent ?? "",
+    hasRenderedToken: Boolean(document.querySelector(`.cf-table-cell-editing ${tokenSelector}`)),
+    hasCursor: Boolean(document.querySelector(".cf-table-cell-editing .cm-cursor")),
   }), selector);
 
-  if (
-    state.activeCellCount !== 1 ||
-    state.editingCellCount !== 0 ||
-    !state.hasToken
-  ) {
+  if (state.editingCellCount !== 1) {
     return (
-      `first rich click changed rendering for ${rowLabel} ${selector} ` +
-      `(active=${state.activeCellCount}, editing=${state.editingCellCount}, token=${state.hasToken})`
+      `first rich click did not enter edit for ${rowLabel} ${selector} ` +
+      `(active=${state.activeCellCount}, editing=${state.editingCellCount})`
     );
+  }
+
+  if (!state.hasCursor) {
+    return `active editor is missing a visible cursor for ${rowLabel} ${selector}`;
+  }
+
+  if (!state.lineText.trim() && !state.hasRenderedToken) {
+    return `active editor is unexpectedly empty for ${rowLabel} ${selector}`;
+  }
+
+  return null;
+}
+
+async function checkFirstClickTypingWorks(page, rowLabel, selector, text) {
+  const target = await getTokenTarget(page, rowLabel, selector);
+  if (!target) {
+    return `missing typing target for ${rowLabel} ${selector}`;
+  }
+
+  await page.mouse.click(target.x, target.y);
+  await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
+
+  const before = await page.evaluate(() => window.__cmView?.state.doc.toString() ?? "");
+  await page.keyboard.type(text);
+  await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
+  const after = await page.evaluate(() => window.__cmView?.state.doc.toString() ?? "");
+
+  if (before === after) {
+    return `typing did not change the document for ${rowLabel}`;
   }
 
   return null;
@@ -182,8 +257,6 @@ export async function run(page) {
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
   const firstClickChecks = [
-    { rowLabel: "Quicksort", selector: ".katex" },
-    { rowLabel: "Mergesort", selector: ".katex" },
     { rowLabel: "emphasis + math", selector: ".katex" },
     { rowLabel: "code + link", selector: ".cf-inline-code" },
     { rowLabel: "code + link", selector: ".cf-link-rendered" },
@@ -192,7 +265,7 @@ export async function run(page) {
   ];
 
   for (const check of firstClickChecks) {
-    const error = await checkFirstRichClickStaysPreview(
+    const error = await checkFirstRichClickEntersEditWithParity(
       page,
       check.rowLabel,
       check.selector,
@@ -213,23 +286,26 @@ export async function run(page) {
 
   await page.mouse.click(pureMathTarget.x, pureMathTarget.y);
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
-  await page.mouse.click(pureMathTarget.x, pureMathTarget.y);
-  await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
-  const secondClickState = await page.evaluate(() => ({
+  const firstClickState = await page.evaluate(() => ({
     editingCellCount: document.querySelectorAll(".cf-table-cell-editing").length,
     delimiterCount:
       document.querySelector(".cf-table-cell-editing .cm-line")?.querySelectorAll(
         ".cf-source-delimiter",
       ).length ?? 0,
+    hasCursor: Boolean(document.querySelector(".cf-table-cell-editing .cm-cursor")),
   }));
 
-  if (secondClickState.editingCellCount !== 1 || secondClickState.delimiterCount === 0) {
+  if (
+    firstClickState.editingCellCount !== 1 ||
+    firstClickState.delimiterCount === 0 ||
+    !firstClickState.hasCursor
+  ) {
     return {
       pass: false,
       message:
-        `pure math cell second click did not enter explicit edit ` +
-        `(editing=${secondClickState.editingCellCount}, delimiters=${secondClickState.delimiterCount})`,
+        `pure math cell first click did not enter explicit edit ` +
+        `(editing=${firstClickState.editingCellCount}, delimiters=${firstClickState.delimiterCount}, cursor=${firstClickState.hasCursor})`,
     };
   }
 
@@ -273,12 +349,11 @@ export async function run(page) {
     { rowLabel: "caption stays below the media", selector: ".cf-crossref" },
     { rowLabel: "numbered block cross-reference", selector: ".cf-crossref" },
     { rowLabel: "CSL-formatted citation rendering", selector: ".cf-citation" },
-    { rowLabel: "KaTeX inside table cells", selector: ".katex" },
     { rowLabel: "monospace styling inside table cells", selector: ".cf-inline-code" },
   ];
 
   for (const check of featureMatrixFirstClickChecks) {
-    const error = await checkFirstRichClickStaysPreview(
+    const error = await checkFirstRichClickEntersEdit(
       page,
       check.rowLabel,
       check.selector,
@@ -289,9 +364,19 @@ export async function run(page) {
     await clearTableEditing(page);
   }
 
+  const typingError = await checkFirstClickTypingWorks(
+    page,
+    "Quicksort",
+    ".katex",
+    "Z",
+  );
+  if (typingError) {
+    return { pass: false, message: typingError };
+  }
+
   return {
     pass: true,
     message:
-      "table preview/edit rich tokens stay pixel-identical on parity rows and first-click preview stays stable across index tables",
+      "table rich-token clicks enter edit immediately and stay pixel-identical across index tables",
   };
 }

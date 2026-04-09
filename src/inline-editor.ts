@@ -8,7 +8,7 @@
  */
 
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { drawSelection, EditorView } from "@codemirror/view";
 
 import {
   createMarkdownLanguageExtensions,
@@ -81,6 +81,7 @@ export function createInlineEditorController(
     documentAnalysisField,
     bibDataField,
     referenceRenderPlugin,
+    drawSelection(),
     readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
     editableCompartment.of(EditorView.editable.of(!readOnly)),
     EditorView.editorAttributes.of({ class: CSS.inlineEditor }),

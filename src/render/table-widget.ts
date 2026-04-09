@@ -4,7 +4,10 @@ import {
   createInlineEditorController,
   type InlineEditorController,
 } from "../inline-editor";
-import { parseInlineFragments } from "../inline-fragments";
+import {
+  findInlineNeutralAnchor,
+  parseInlineFragments,
+} from "../inline-fragments";
 import { renderInlineMarkdown } from "./inline-render";
 import { showWidgetContextMenu, applyTableMutation } from "./table-actions";
 import {
@@ -408,11 +411,13 @@ export class TableWidget extends ShellWidget {
         placeAtEnd = false,
         clickX = 0,
         clickY = 0,
+        initialAnchor = null,
         useClickPlacement = false,
       }: {
         placeAtEnd?: boolean;
         clickX?: number;
         clickY?: number;
+        initialAnchor?: number | null;
         useClickPlacement?: boolean;
       } = {},
     ): void => {
@@ -604,9 +609,17 @@ export class TableWidget extends ShellWidget {
 
       activeInlineEditor = { controller, view: editorView, cell, owner: this };
 
-      if (placeAtEnd) {
+      const applyInitialSelection = (anchor: number): void => {
+        if (activeInlineEditor?.view !== editorView) return;
+        editorView.dispatch({ selection: { anchor } });
+        editorView.focus();
+      };
+
+      if (typeof initialAnchor === "number") {
+        applyInitialSelection(initialAnchor);
+      } else if (placeAtEnd) {
         const docLen = editorView.state.doc.length;
-        editorView.dispatch({ selection: { anchor: docLen } });
+        applyInitialSelection(docLen);
       }
       editorView.focus();
 
@@ -615,14 +628,17 @@ export class TableWidget extends ShellWidget {
           if (activeInlineEditor?.view !== editorView) return;
           const pos = editorView.posAtCoords({ x: clickX, y: clickY });
           if (pos !== null) {
-            editorView.dispatch({ selection: { anchor: pos } });
+            applyInitialSelection(pos);
             return;
           }
 
           const coarsePos = editorView.posAtCoords({ x: clickX, y: clickY }, false);
           if (coarsePos !== null) {
-            editorView.dispatch({ selection: { anchor: coarsePos } });
+            applyInitialSelection(coarsePos);
+            return;
           }
+
+          editorView.focus();
         });
       }
     };
@@ -710,6 +726,10 @@ export class TableWidget extends ShellWidget {
         const clickX = event.clientX;
         const clickY = event.clientY;
         const placeAtEnd = cell.dataset.placeAtEnd === "true";
+        const clickedRenderedToken = isRenderedInlineTarget(event.target);
+        const initialAnchor = clickedRenderedToken
+          ? findInlineNeutralAnchor(this.getRawCellText(section, row, col))
+          : null;
         delete cell.dataset.placeAtEnd;
 
         if (activeInlineEditor) {
@@ -719,22 +739,13 @@ export class TableWidget extends ShellWidget {
           }
         }
 
-        const deferToSecondClick =
-          event.isTrusted &&
-          !placeAtEnd &&
-          activePreviewCell?.cell !== cell &&
-          isRenderedInlineTarget(event.target);
-
-        if (deferToSecondClick) {
-          setActivePreviewCell(cell, this);
-          return;
-        }
-
         openCellEditor(cell, section, row, col, {
           placeAtEnd,
           clickX,
           clickY,
-          useClickPlacement: event.isTrusted,
+          initialAnchor,
+          useClickPlacement:
+            event.isTrusted && (!clickedRenderedToken || initialAnchor === null),
         });
         } catch (e: unknown) {
           console.error("[table-widget] mousedown handler failed", e);

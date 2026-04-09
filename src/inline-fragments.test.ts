@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseInlineFragments } from "./inline-fragments";
+import { findInlineNeutralAnchor, parseInlineFragments } from "./inline-fragments";
 
 describe("parseInlineFragments", () => {
   it("builds shared fragments for emphasis, math, and code", () => {
@@ -38,5 +38,15 @@ describe("parseInlineFragments", () => {
       },
       { kind: "text", text: " showed." },
     ]);
+  });
+
+  it("finds a neutral plain-text anchor between rich inline fragments", () => {
+    expect(findInlineNeutralAnchor("**Bold** and $x^2$")).toBe(9);
+    expect(findInlineNeutralAnchor("[@cormen2009] and ==highlight==")).toBe(14);
+  });
+
+  it("returns null when inline content has no safe plain-text gap", () => {
+    expect(findInlineNeutralAnchor("$x^2$")).toBeNull();
+    expect(findInlineNeutralAnchor("**Bold**")).toBeNull();
   });
 });
