@@ -12,8 +12,7 @@
  */
 
 import { type Extension } from "@codemirror/state";
-import { type EditorView, ViewPlugin } from "@codemirror/view";
-import { autoUpdate, computePosition, flip, shift, offset } from "@floating-ui/dom";
+import { type EditorView, type ViewUpdate, ViewPlugin } from "@codemirror/view";
 import { CSS, HOVER_DELAY_MS } from "../constants";
 import {
   classifyReference,
@@ -33,7 +32,6 @@ import {
   createPreviewSurfaceBody,
   createPreviewSurfaceContent,
   createPreviewSurfaceHeader,
-  createPreviewSurfaceShell,
 } from "../preview-surface";
 import { documentPathFacet, type BlockCounterEntry } from "../lib/types";
 import { documentAnalysisField } from "../semantics/codemirror-source";
@@ -52,12 +50,9 @@ import {
 import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 import { getPlugin, pluginRegistryField } from "../plugins/plugin-registry";
 import { type BibStore, bibDataField } from "../state/bib-data";
+import { HoverPreviewTooltipManager } from "./hover-preview-tooltip-manager";
 import { findRenderedReference } from "./reference-targeting";
 
-// ── Singleton tooltip element ───────────────────────────────────────────────
-
-let tooltipEl: HTMLDivElement | null = null;
-let hoverPreviewInstanceCount = 0;
 const HOVER_PREVIEW_TABLE_SCROLL_CLASS = "cf-hover-preview-table-scroll";
 const HOVER_PREVIEW_CODE_BLOCK_CLASS = "cf-hover-preview-code-block";
 
@@ -93,21 +88,30 @@ interface TooltipPlan {
 type CrossrefPreviewVariant = "completion" | "hover";
 const EMPTY_MEDIA_CACHE: ReadonlyMap<string, unknown> = new Map();
 const TOOLTIP_CONTENT_CACHE_LIMIT = 8;
-// Reuse preview DOM within the same immutable state/dependency object without
-// carrying stale content across later editor updates.
-const tooltipContentCache = new WeakMap<object, Map<string, HTMLElement>>();
+// Reuse preview DOM within one hover-preview owner and one immutable
+// state/dependency object without carrying stale content across later updates.
+const tooltipContentCache = new WeakMap<object, WeakMap<object, Map<string, HTMLElement>>>();
 
-function getTooltipContentCache(cacheScope: object): Map<string, HTMLElement> {
-  let cache = tooltipContentCache.get(cacheScope);
+function getTooltipContentCache(
+  cacheOwner: object,
+  cacheScope: object,
+): Map<string, HTMLElement> {
+  let ownerCache = tooltipContentCache.get(cacheOwner);
+  if (!ownerCache) {
+    ownerCache = new WeakMap<object, Map<string, HTMLElement>>();
+    tooltipContentCache.set(cacheOwner, ownerCache);
+  }
+
+  let cache = ownerCache.get(cacheScope);
   if (!cache) {
     cache = new Map<string, HTMLElement>();
-    tooltipContentCache.set(cacheScope, cache);
+    ownerCache.set(cacheScope, cache);
   }
   return cache;
 }
 
-function getTooltipContent(plan: TooltipPlan): HTMLElement {
-  const cache = getTooltipContentCache(plan.cacheScope);
+function getTooltipContent(plan: TooltipPlan, cacheOwner: object): HTMLElement {
+  const cache = getTooltipContentCache(cacheOwner, plan.cacheScope);
   const cached = cache.get(plan.key);
   if (cached) {
     cache.delete(plan.key);
@@ -136,130 +140,7 @@ export function getCachedTooltipContentForTest(
     dependsOnMacros: false,
     key,
     mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
-  });
-}
-
-function getTooltipEl(): HTMLDivElement {
-  if (!tooltipEl) {
-    tooltipEl = createPreviewSurfaceShell(CSS.hoverPreviewTooltip);
-    tooltipEl.style.display = "none";
-    document.body.appendChild(tooltipEl);
-  }
-  return tooltipEl;
-}
-
-/**
- * Cleanup function returned by `autoUpdate` — stops the scroll/resize
- * listeners that keep the tooltip anchored. Stored so `hideFloatingTooltip`
- * can tear it down.
- */
-let cleanupAutoUpdate: (() => void) | null = null;
-let currentFloatingAnchor: HTMLElement | null = null;
-let refreshFloatingPosition: (() => void) | null = null;
-
-/**
- * Monotonic generation counter. Incremented on every `showFloatingTooltip`
- * call so that a late-resolving `computePosition` promise from an older
- * show cycle is silently discarded. (#474)
- */
-let showGeneration = 0;
-
-/**
- * Position and show the singleton tooltip near an anchor element using
- * @floating-ui/dom's `computePosition` with flip+shift middleware.
- *
- * Uses `autoUpdate` so the tooltip tracks the anchor on scroll, resize,
- * and layout shift — preventing the drift reported in #474.
- */
-function showFloatingTooltip(anchor: HTMLElement, plan: TooltipPlan): void {
-  const el = getTooltipEl();
-  const content = getTooltipContent(plan);
-  const anchorChanged = anchor !== currentFloatingAnchor;
-
-  if (anchorChanged) {
-    if (cleanupAutoUpdate) {
-      cleanupAutoUpdate();
-      cleanupAutoUpdate = null;
-    }
-
-    currentFloatingAnchor = anchor;
-    const gen = ++showGeneration;
-
-    const updatePosition = () => {
-      void computePosition(anchor, el, {
-        placement: "top",
-        middleware: [offset(6), flip(), shift({ padding: 5 })],
-      }).then(({ x, y }) => {
-        // Stale guard: if a newer show cycle started before this promise
-        // resolved, discard the result so we don't overwrite the new
-        // tooltip's position with coordinates for the old anchor. (#474)
-        if (gen !== showGeneration) return;
-
-        Object.assign(el.style, {
-          left: `${x}px`,
-          top: `${y}px`,
-        });
-      });
-    };
-
-    refreshFloatingPosition = updatePosition;
-
-    // `autoUpdate` calls `updatePosition` immediately, then again whenever
-    // the anchor or floating element moves (scroll, resize, layout shift).
-    cleanupAutoUpdate = autoUpdate(anchor, el, updatePosition);
-  }
-
-  if (el.firstElementChild !== content) {
-    el.replaceChildren(content);
-  }
-
-  const wasHidden = el.style.display === "none";
-  el.style.display = "";
-  if (wasHidden) {
-    el.setAttribute("data-visible", "false");
-  }
-
-  refreshFloatingPosition?.();
-
-  if (wasHidden) {
-    const visibleGeneration = showGeneration;
-    requestAnimationFrame(() => {
-      if (visibleGeneration === showGeneration) {
-        el.setAttribute("data-visible", "true");
-      }
-    });
-  } else {
-    el.setAttribute("data-visible", "true");
-  }
-}
-
-/** Hide and clear the singleton tooltip. */
-function hideFloatingTooltip(): void {
-  if (cleanupAutoUpdate) {
-    cleanupAutoUpdate();
-    cleanupAutoUpdate = null;
-  }
-  currentFloatingAnchor = null;
-  refreshFloatingPosition = null;
-  showGeneration += 1;
-  if (tooltipEl) {
-    tooltipEl.setAttribute("data-visible", "false");
-    tooltipEl.style.display = "none";
-  }
-}
-
-function destroyFloatingTooltip(): void {
-  hideFloatingTooltip();
-  tooltipEl?.remove();
-  tooltipEl = null;
-}
-
-export function ensureHoverPreviewTooltipForTest(): HTMLDivElement {
-  return getTooltipEl();
-}
-
-export function destroyHoverPreviewTooltipForTest(): void {
-  destroyFloatingTooltip();
+  }, cacheScope);
 }
 
 // ── Content extraction helpers ──────────────────────────────────────────────
@@ -493,8 +374,8 @@ function clonePdfCanvasForHoverPreview(
   clone.setAttribute("role", "img");
   clone.setAttribute("aria-label", alt || "PDF preview");
 
-  // The tooltip owns this clone. When the singleton tooltip replaces or
-  // clears its children, the cloned canvas becomes unreachable as well.
+  // The owning tooltip manager replaces or clears this clone together with
+  // the rest of the preview content.
   const ctx = clone.getContext("2d");
   if (ctx) {
     ctx.drawImage(source, 0, 0);
@@ -917,175 +798,175 @@ function buildTooltipPlanForElement(
  * mouseenter/mouseleave, naturally solving the item-switching bug (#397)
  * that CM6's hoverTooltip could not handle.
  */
-const hoverPreviewPlugin = ViewPlugin.define((view) => {
-  hoverPreviewInstanceCount += 1;
-  let hoverTimer: ReturnType<typeof setTimeout> | null = null;
-  let currentTarget: HTMLElement | null = null;
-  let currentPlan: TooltipPlan | null = null;
+class HoverPreviewViewPlugin {
+  public readonly tooltipManager = new HoverPreviewTooltipManager();
 
-  const clearTimer = () => {
-    if (hoverTimer !== null) {
-      clearTimeout(hoverTimer);
-      hoverTimer = null;
+  private hoverTimer: ReturnType<typeof setTimeout> | null = null;
+  private currentTarget: HTMLElement | null = null;
+  private currentPlan: TooltipPlan | null = null;
+
+  public constructor(private readonly view: EditorView) {
+    this.view.scrollDOM.addEventListener("mouseover", this.onMouseOver);
+    this.view.scrollDOM.addEventListener("mouseout", this.onMouseOut);
+  }
+
+  public update(update: ViewUpdate): void {
+    const beforeAnalysis = update.startState.field(documentAnalysisField, false);
+    const afterAnalysis = update.state.field(documentAnalysisField, false);
+    const beforeBibData = update.startState.field(bibDataField, false);
+    const afterBibData = update.state.field(bibDataField, false);
+    const beforeMacros = update.startState.field(mathMacrosField, false);
+    const afterMacros = update.state.field(mathMacrosField, false);
+
+    if (!afterAnalysis || !afterBibData) {
+      this.currentTarget = null;
+      this.currentPlan = null;
+      this.tooltipManager.hide();
+      return;
     }
-  };
 
-  const onMouseOver = (e: Event) => {
+    const localMediaChanged = localMediaDependenciesChanged(
+      this.currentPlan?.mediaDependencies ?? EMPTY_LOCAL_MEDIA_DEPENDENCIES,
+      update.startState.field(pdfPreviewField, false) || EMPTY_MEDIA_CACHE,
+      update.state.field(pdfPreviewField, false) || EMPTY_MEDIA_CACHE,
+      update.startState.field(imageUrlField, false) || EMPTY_MEDIA_CACHE,
+      update.state.field(imageUrlField, false) || EMPTY_MEDIA_CACHE,
+    );
+    const analysisChanged = beforeAnalysis !== afterAnalysis;
+    const blockCountersChanged =
+      update.startState.field(blockCounterField, false) !== update.state.field(blockCounterField, false);
+    const bibliographyChanged = beforeBibData !== afterBibData;
+    const macrosChanged = beforeMacros !== afterMacros;
+    const forceRebuild =
+      (bibliographyChanged && this.currentPlan?.dependsOnBibliography === true) ||
+      (macrosChanged && this.currentPlan?.dependsOnMacros === true);
+
+    if (
+      localMediaChanged ||
+      forceRebuild ||
+      update.docChanged ||
+      analysisChanged ||
+      blockCountersChanged
+    ) {
+      this.refreshOpenTooltip(forceRebuild);
+      return;
+    }
+
+    if (this.currentTarget && !this.currentTarget.isConnected) {
+      this.currentTarget = null;
+      this.currentPlan = null;
+      this.tooltipManager.hide();
+    }
+  }
+
+  public destroy(): void {
+    this.view.scrollDOM.removeEventListener("mouseover", this.onMouseOver);
+    this.view.scrollDOM.removeEventListener("mouseout", this.onMouseOut);
+    this.clearTimer();
+    this.currentPlan = null;
+    this.tooltipManager.destroy();
+  }
+
+  private clearTimer(): void {
+    if (this.hoverTimer === null) return;
+    clearTimeout(this.hoverTimer);
+    this.hoverTimer = null;
+  }
+
+  private readonly onMouseOver = (e: Event): void => {
     const target = e.target as HTMLElement;
-    if (!target || target === currentTarget) return;
+    if (!target || target === this.currentTarget) return;
 
-    // Check if the target (or ancestor) is a crossref/citation widget item
     const widgetItem = target.closest("[data-ref-id]") as HTMLElement | null;
     const widgetContainer = target.closest(".cf-crossref, .cf-citation") as HTMLElement | null;
-
-    // Determine the hover anchor: prefer the specific item span for clusters
     const anchor = widgetItem ?? widgetContainer;
     if (!anchor) {
-      // Mouse moved off any widget — hide tooltip
-      if (currentTarget) {
-        clearTimer();
-        currentTarget = null;
-        currentPlan = null;
-        hideFloatingTooltip();
+      if (this.currentTarget) {
+        this.clearTimer();
+        this.currentTarget = null;
+        this.currentPlan = null;
+        this.tooltipManager.hide();
       }
       return;
     }
 
-    // Same anchor — no change needed
-    if (anchor === currentTarget) return;
+    if (anchor === this.currentTarget) return;
 
-    // Different anchor — start new hover delay
-    clearTimer();
-    currentTarget = anchor;
-    currentPlan = null;
-    hideFloatingTooltip();
+    this.clearTimer();
+    this.currentTarget = anchor;
+    this.currentPlan = null;
+    this.tooltipManager.hide();
 
-    hoverTimer = setTimeout(() => {
-      // Guard: view must still be connected
-      if (!view.dom.ownerDocument) return;
+    this.hoverTimer = setTimeout(() => {
+      if (!this.view.dom.ownerDocument) return;
 
-      const plan = buildTooltipPlanForElement(view, anchor);
-      if (plan) {
-        currentPlan = plan;
-        showFloatingTooltip(anchor, plan);
-      }
+      const plan = buildTooltipPlanForElement(this.view, anchor);
+      if (!plan) return;
+
+      this.currentPlan = plan;
+      this.tooltipManager.show(anchor, getTooltipContent(plan, this));
     }, HOVER_DELAY_MS);
   };
 
-  const onMouseOut = (e: Event) => {
+  private readonly onMouseOut = (e: Event): void => {
     const me = e as MouseEvent;
     const relatedTarget = me.relatedTarget as HTMLElement | null;
 
-    // Check if mouse moved to the tooltip itself — keep it visible
-    if (relatedTarget && tooltipEl?.contains(relatedTarget)) return;
+    if (this.tooltipManager.contains(relatedTarget)) return;
 
-    // Check if mouse moved to another widget item/container
     if (relatedTarget) {
       const stillInWidget = relatedTarget.closest(
         "[data-ref-id], .cf-crossref, .cf-citation",
       );
-      if (stillInWidget) return; // onMouseOver will handle the switch
+      if (stillInWidget) return;
     }
 
-    clearTimer();
-    currentTarget = null;
-    currentPlan = null;
-    hideFloatingTooltip();
+    this.clearTimer();
+    this.currentTarget = null;
+    this.currentPlan = null;
+    this.tooltipManager.hide();
   };
 
-  const refreshOpenTooltip = (forceRebuild = false) => {
-    if (!currentTarget) return;
-    if (!currentTarget.isConnected) {
-      currentTarget = null;
-      currentPlan = null;
-      hideFloatingTooltip();
+  private refreshOpenTooltip(forceRebuild = false): void {
+    if (!this.currentTarget) return;
+    if (!this.currentTarget.isConnected) {
+      this.currentTarget = null;
+      this.currentPlan = null;
+      this.tooltipManager.hide();
       return;
     }
-    if (!tooltipEl || tooltipEl.style.display === "none") return;
+    if (!this.tooltipManager.isVisible()) return;
 
-    const nextPlan = buildTooltipPlanForElement(view, currentTarget);
+    const nextPlan = buildTooltipPlanForElement(this.view, this.currentTarget);
     if (!nextPlan) {
-      currentPlan = null;
-      hideFloatingTooltip();
+      this.currentPlan = null;
+      this.tooltipManager.hide();
       return;
     }
 
-    if (!forceRebuild && currentPlan && nextPlan.key === currentPlan.key) {
-      currentPlan = nextPlan;
+    if (!forceRebuild && this.currentPlan && nextPlan.key === this.currentPlan.key) {
+      this.currentPlan = nextPlan;
       return;
     }
 
-    currentPlan = nextPlan;
-    showFloatingTooltip(currentTarget, nextPlan);
-  };
+    this.currentPlan = nextPlan;
+    this.tooltipManager.show(this.currentTarget, getTooltipContent(nextPlan, this));
+  }
+}
 
-  const scroller = view.scrollDOM;
-  scroller.addEventListener("mouseover", onMouseOver);
-  scroller.addEventListener("mouseout", onMouseOut);
+const hoverPreviewPlugin = ViewPlugin.fromClass(HoverPreviewViewPlugin);
 
-  return {
-    update(update) {
-      const beforeAnalysis = update.startState.field(documentAnalysisField, false);
-      const afterAnalysis = update.state.field(documentAnalysisField, false);
-      const beforeBibData = update.startState.field(bibDataField, false);
-      const afterBibData = update.state.field(bibDataField, false);
-      const beforeMacros = update.startState.field(mathMacrosField, false);
-      const afterMacros = update.state.field(mathMacrosField, false);
+function getHoverPreviewViewPluginForTest(view: EditorView): HoverPreviewViewPlugin {
+  const plugin = view.plugin(hoverPreviewPlugin as never) as HoverPreviewViewPlugin | null;
+  if (!plugin) {
+    throw new Error("Hover preview plugin is not active for this view");
+  }
+  return plugin;
+}
 
-      if (!afterAnalysis || !afterBibData) {
-        currentTarget = null;
-        currentPlan = null;
-        hideFloatingTooltip();
-        return;
-      }
-
-      const localMediaChanged = localMediaDependenciesChanged(
-        currentPlan?.mediaDependencies ?? EMPTY_LOCAL_MEDIA_DEPENDENCIES,
-        update.startState.field(pdfPreviewField, false) || EMPTY_MEDIA_CACHE,
-        update.state.field(pdfPreviewField, false) || EMPTY_MEDIA_CACHE,
-        update.startState.field(imageUrlField, false) || EMPTY_MEDIA_CACHE,
-        update.state.field(imageUrlField, false) || EMPTY_MEDIA_CACHE,
-      );
-      const analysisChanged = beforeAnalysis !== afterAnalysis;
-      const blockCountersChanged =
-        update.startState.field(blockCounterField, false) !== update.state.field(blockCounterField, false);
-      const bibliographyChanged = beforeBibData !== afterBibData;
-      const macrosChanged = beforeMacros !== afterMacros;
-      const forceRebuild =
-        (bibliographyChanged && currentPlan?.dependsOnBibliography === true) ||
-        (macrosChanged && currentPlan?.dependsOnMacros === true);
-
-      if (
-        localMediaChanged ||
-        forceRebuild ||
-        update.docChanged ||
-        analysisChanged ||
-        blockCountersChanged
-      ) {
-        refreshOpenTooltip(forceRebuild);
-        return;
-      }
-
-      if (currentTarget && !currentTarget.isConnected) {
-        currentTarget = null;
-        currentPlan = null;
-        hideFloatingTooltip();
-      }
-    },
-    destroy() {
-      scroller.removeEventListener("mouseover", onMouseOver);
-      scroller.removeEventListener("mouseout", onMouseOut);
-      clearTimer();
-      currentPlan = null;
-      hoverPreviewInstanceCount = Math.max(hoverPreviewInstanceCount - 1, 0);
-      if (hoverPreviewInstanceCount === 0) {
-        destroyFloatingTooltip();
-        return;
-      }
-      hideFloatingTooltip();
-    },
-  };
-});
+export function ensureHoverPreviewTooltipForTest(view: EditorView): HTMLDivElement {
+  return getHoverPreviewViewPluginForTest(view).tooltipManager.ensureTooltipElementForTest();
+}
 
 /**
  * CM6 extension that shows hover previews for cross-references and citations.
