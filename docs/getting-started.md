@@ -13,6 +13,7 @@ pnpm tauri:dev    # desktop app (requires Rust toolchain)
 1. **[DESIGN.md](../DESIGN.md)** — what Coflat is, the editing model, and core concepts
 2. **[AGENTS.md](../AGENTS.md)** — commands, project structure, conventions, and tooling reference
 3. **[FORMAT.md](../FORMAT.md)** — the Pandoc-flavored markdown format the editor understands
+4. **[Feature inventory](feature-inventory.md)** — rebuild-oriented checklist of the full current product surface
 
 ## Architecture docs
 
