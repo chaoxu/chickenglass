@@ -15,6 +15,7 @@ import { __iconNode as copyIconNode } from "lucide-react/dist/esm/icons/copy.js"
 import { COPY_RESET_MS } from "../constants";
 import { CSS } from "../constants/css-classes";
 import { activeCodeBlockOpenFenceStarts } from "../editor/shell-ownership";
+import { isFencedCode } from "../lib/syntax-tree-helpers";
 import {
   activateStructureEditAt,
   hasStructureEditEffect,
@@ -277,7 +278,7 @@ export function computeCodeBlockDirtyRegion(
       from: fromA,
       to: toA,
       enter(node) {
-        if (node.type.name === "FencedCode") {
+        if (isFencedCode(node)) {
           filterFrom = Math.min(filterFrom, tr.changes.mapPos(node.from));
           filterTo = Math.max(filterTo, tr.changes.mapPos(node.to));
           return false;
@@ -290,7 +291,7 @@ export function computeCodeBlockDirtyRegion(
       from: fromB,
       to: toB,
       enter(node) {
-        if (node.type.name === "FencedCode") {
+        if (isFencedCode(node)) {
           filterFrom = Math.min(filterFrom, node.from);
           filterTo = Math.max(filterTo, node.to);
           return false;
