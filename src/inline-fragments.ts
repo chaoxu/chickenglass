@@ -286,3 +286,46 @@ export function parseInlineFragments(text: string): InlineFragment[] {
   }
   return normalizeNarrativeReferences(fragments);
 }
+
+function findNeutralGapAnchor(
+  docText: string,
+  from: number,
+  to: number,
+): number | null {
+  if (to - from < 2) return null;
+
+  for (let pos = from + 1; pos < to; pos++) {
+    if (!/\s/.test(docText[pos] ?? "")) {
+      return pos;
+    }
+  }
+
+  return from + 1 < to ? from + 1 : null;
+}
+
+export function findInlineNeutralAnchor(text: string): number | null {
+  if (!text) return null;
+
+  const tree = inlineParser.parse(text);
+  const doc = tree.topNode;
+  const para = doc.firstChild;
+  if (!para) return null;
+
+  let pos = para.from;
+  let child = para.firstChild;
+
+  while (child) {
+    if (child.from > pos) {
+      const anchor = findNeutralGapAnchor(text, pos, child.from);
+      if (anchor !== null) return anchor;
+    }
+    pos = child.to;
+    child = child.nextSibling;
+  }
+
+  if (pos < para.to) {
+    return findNeutralGapAnchor(text, pos, para.to);
+  }
+
+  return null;
+}

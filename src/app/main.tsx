@@ -3,8 +3,16 @@ import { createRoot } from "react-dom/client";
 import { AppShell } from "./app.tsx";
 import { isTauri } from "../lib/tauri";
 import { configureExternalUrlOpener } from "../lib/open-link";
+import {
+  clearDynamicImportRecoveryFlag,
+  installDynamicImportRecovery,
+} from "./dynamic-import-recovery";
 import { installRuntimeLogging } from "./runtime-logger";
 import "../globals.css";
+
+if (import.meta.env.DEV) {
+  installDynamicImportRecovery();
+}
 
 async function bootstrap(): Promise<void> {
   await installRuntimeLogging();
@@ -31,6 +39,10 @@ async function bootstrap(): Promise<void> {
       <AppShell fs={fs} />
     </StrictMode>,
   );
+
+  if (import.meta.env.DEV) {
+    clearDynamicImportRecoveryFlag();
+  }
 }
 
 void bootstrap();
