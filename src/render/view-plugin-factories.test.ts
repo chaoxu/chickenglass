@@ -195,8 +195,10 @@ describe("createCursorSensitiveViewPlugin", () => {
   function setVisibleRanges(
     ranges: readonly { from: number; to: number }[],
   ): (next: readonly { from: number; to: number }[]) => void {
+    const currentView = view;
+    if (!currentView) throw new Error("expected editor view");
     let current = ranges;
-    Object.defineProperty(view!, "visibleRanges", {
+    Object.defineProperty(currentView, "visibleRanges", {
       configurable: true,
       get: () => current,
     });
@@ -206,14 +208,16 @@ describe("createCursorSensitiveViewPlugin", () => {
   }
 
   function mockViewportUpdate(): ViewUpdate {
+    const currentView = view;
+    if (!currentView) throw new Error("expected editor view");
     return {
       docChanged: false,
       selectionSet: false,
       focusChanged: false,
       viewportChanged: true,
-      state: view!.state,
-      startState: view!.state,
-      view: view!,
+      state: currentView.state,
+      startState: currentView.state,
+      view: currentView,
     } as unknown as ViewUpdate;
   }
 

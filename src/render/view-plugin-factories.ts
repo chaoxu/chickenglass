@@ -52,9 +52,14 @@ export function cursorSensitiveShouldUpdate(update: ViewUpdate): boolean {
   );
 }
 
-function filterDecorationSetInRanges(
+export interface DecorationRangeBounds {
+  readonly from: number;
+  readonly to: number;
+}
+
+export function filterDecorationSetInRanges<T extends DecorationRangeBounds>(
   decorations: DecorationSet,
-  filterRanges: readonly VisibleRange[],
+  filterRanges: readonly T[],
   keep: (from: number, to: number) => boolean,
 ): DecorationSet {
   let nextDecorations = decorations;
@@ -109,6 +114,87 @@ export type CursorSensitiveDocChangeRangesFn = (
 export type CursorSensitiveContextChangeRangesFn = (
   update: ViewUpdate,
 ) => readonly VisibleRange[] | null;
+
+export type IncrementalDecorationsRangeFn<T extends DecorationRangeBounds> = (
+  update: ViewUpdate,
+) => readonly T[] | null;
+
+/**
+ * Factory for ViewPlugins that rebuild only dirty ranges and otherwise map
+ * existing decorations through doc changes.
+ */
+export function createIncrementalDecorationsViewPlugin<
+  T extends DecorationRangeBounds = DecorationRangeBounds,
+>(
+  buildFn: (view: EditorView) => DecorationSet,
+  options: {
+    incrementalRanges: IncrementalDecorationsRangeFn<T>;
+    collectRanges: (view: EditorView, ranges: readonly T[]) => Range<Decoration>[];
+    shouldRebuild?: (update: ViewUpdate) => boolean;
+    mapDecorations?: (
+      decorations: DecorationSet,
+      update: ViewUpdate,
+    ) => DecorationSet;
+    pluginSpec?: Omit<PluginSpec<PluginValue>, "decorations">;
+  },
+): Extension {
+  const mapDecorations = options.mapDecorations
+    ?? ((decorations: DecorationSet, update: ViewUpdate) => (
+      update.docChanged ? decorations.map(update.changes) : decorations
+    ));
+
+  class IncrementalDecorationsViewPlugin implements PluginValue {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildFn(view);
+    }
+
+    update(update: ViewUpdate): void {
+      const programmaticDocRewrite = (update.transactions ?? []).some((tr) =>
+        tr.annotation(programmaticDocumentChangeAnnotation) === true
+      );
+      if (programmaticDocRewrite) {
+        this.decorations = buildFn(update.view);
+        return;
+      }
+
+      if (options.shouldRebuild?.(update)) {
+        this.decorations = buildFn(update.view);
+        return;
+      }
+
+      const dirtyRanges = options.incrementalRanges(update);
+      if (dirtyRanges === null) {
+        this.decorations = buildFn(update.view);
+        return;
+      }
+
+      let nextDecorations = mapDecorations(this.decorations, update);
+      if (dirtyRanges.length > 0) {
+        nextDecorations = filterDecorationSetInRanges(
+          nextDecorations,
+          dirtyRanges,
+          (from, to) => !rangeIntersectsRanges(from, to, dirtyRanges),
+        );
+        const items = options.collectRanges(update.view, dirtyRanges);
+        if (items.length > 0) {
+          nextDecorations = nextDecorations.update({
+            add: items,
+            sort: true,
+          });
+        }
+      }
+
+      this.decorations = nextDecorations;
+    }
+  }
+
+  return ViewPlugin.fromClass(IncrementalDecorationsViewPlugin, {
+    ...options.pluginSpec,
+    decorations: (value) => value.decorations,
+  });
+}
 
 /**
  * Factory for cursor-sensitive ViewPlugins with differential viewport updates.
@@ -253,7 +339,7 @@ export function createCursorSensitiveViewPlugin(
           return;
         }
 
-        this.incrementalDocUpdate(update, dirtyRanges);
+        this.incrementalDocUpdate(update, dirtyRanges as readonly VisibleRange[]);
         return;
       }
 

@@ -170,7 +170,7 @@ function buildEquationNumbersCacheKey(
 export function getEquationNumbersCacheKey(
   analysis: DocumentAnalysis,
 ): string {
-  if (Object.prototype.hasOwnProperty.call(analysis, "equationNumbersCacheKey")) {
+  if (Object.hasOwn(analysis, "equationNumbersCacheKey")) {
     return analysis.equationNumbersCacheKey ?? "";
   }
 
