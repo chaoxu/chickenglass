@@ -14,6 +14,7 @@ import { measureAsync } from "./perf";
 import { watchDirectoryCommand, unwatchDirectoryCommand } from "./tauri-client/watch";
 
 let latestFileWatcherToken = 0;
+const DEFAULT_WATCH_DEBOUNCE_MS = 500;
 
 /** Callback to reload a file's content from disk. */
 export type ReloadFileFn = (path: string) => Promise<void>;
@@ -97,7 +98,11 @@ export class FileWatcher {
       }
     }
 
-    const watchApplied = await watchDirectoryCommand(directoryPath, watchToken);
+    const watchApplied = await watchDirectoryCommand(
+      directoryPath,
+      watchToken,
+      DEFAULT_WATCH_DEBOUNCE_MS,
+    );
     if (!watchApplied || this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
       try {
         await unwatchDirectoryCommand(watchToken);

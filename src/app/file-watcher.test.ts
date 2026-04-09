@@ -90,6 +90,7 @@ describe("FileWatcher", () => {
       expect(watcherBackendState.watchDirectoryCommand).toHaveBeenCalledWith(
         "/tmp/project-a",
         expect.any(Number),
+        500,
       );
     });
 
@@ -133,11 +134,13 @@ describe("FileWatcher", () => {
       1,
       "/tmp/project-a",
       expect.any(Number),
+      500,
     );
     expect(watcherBackendState.watchDirectoryCommand).toHaveBeenNthCalledWith(
       2,
       "/tmp/project-a",
       expect.any(Number),
+      500,
     );
     const [firstCall = [] as unknown[], secondCall = [] as unknown[]] =
       watcherBackendState.watchDirectoryCommand.mock.calls;

@@ -3,8 +3,11 @@ use std::time::Duration;
 
 use tauri::{AppHandle, State, WebviewWindow, command};
 
-use super::context::{CommandSpec, run_command};
 use super::state::{FileWatcherState, PerfState};
+use super::{
+    context::{CommandSpec, run_command},
+    map_err_str,
+};
 use crate::services::watch::{
     WatchEventMessage, attach_watcher, create_directory_watcher, remove_watcher_generation,
     reserve_watcher_slot, spawn_debounced_event_worker,
@@ -20,6 +23,7 @@ const UNWATCH_DIRECTORY: CommandSpec = CommandSpec::new(
     "tauri.watch.unwatch_directory",
     "tauri",
 );
+const DEFAULT_WATCH_DEBOUNCE_MS: u64 = 500;
 
 #[command]
 pub fn watch_directory(
@@ -29,11 +33,14 @@ pub fn watch_directory(
     perf: State<'_, PerfState>,
     path: String,
     generation: u64,
+    debounce_ms: Option<u64>,
 ) -> Result<bool, String> {
     run_command(&perf, WATCH_DIRECTORY, Some(&path), || {
-        let watch_path = PathBuf::from(&path)
-            .canonicalize()
-            .map_err(|e| format!("Cannot resolve path '{}': {}", path, e))?;
+        let watch_path = map_err_str!(
+            PathBuf::from(&path).canonicalize(),
+            "Cannot resolve path '{}': {}",
+            path
+        )?;
 
         if !watch_path.is_dir() {
             return Err(format!("Not a directory: {}", watch_path.display()));
@@ -47,7 +54,7 @@ pub fn watch_directory(
             }
         }
 
-        let debounce_ms = Duration::from_millis(500);
+        let debounce_ms = Duration::from_millis(debounce_ms.unwrap_or(DEFAULT_WATCH_DEBOUNCE_MS));
         let event_sender =
             spawn_debounced_event_worker(app.clone(), window_label.clone(), debounce_ms)?;
         let watcher = create_directory_watcher(watch_path, event_sender.clone())?;
