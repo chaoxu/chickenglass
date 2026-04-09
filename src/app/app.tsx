@@ -56,9 +56,8 @@ function ConnectedAppOverlays({
   const overlays = useAppOverlays({
     fs,
     dialogs,
-    suspendAutoSave: unsavedChanges.request !== null,
-    suspendAutoSaveRef: unsavedChanges.pendingRef,
-    suspendAutoSaveVersionRef: unsavedChanges.suspensionVersionRef,
+    suspendAutoSave: unsavedChanges.status === "pending",
+    suspendAutoSaveVersion: unsavedChanges.suspensionVersion,
     workspace: {
       ...workspace,
       handleOpenFolder: onOpenFolder,
@@ -98,10 +97,13 @@ function AppInner() {
 
   // Stable reference for lazy child loading — used by default-doc search
   // and session persistence so their effects don't re-fire unnecessarily.
-  const listChildrenStable = useMemo(
-    () => fs.listChildren ? (path: string) => fs.listChildren!(path) : undefined,
-    [fs],
-  );
+  const listChildrenStable = useMemo(() => {
+    const { listChildren } = fs;
+    if (!listChildren) {
+      return undefined;
+    }
+    return (path: string) => listChildren(path);
+  }, [fs]);
 
   const loadFixtureProject = useMemo(() => {
     if (!(fs instanceof MemoryFileSystem)) {

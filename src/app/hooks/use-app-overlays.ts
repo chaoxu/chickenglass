@@ -29,8 +29,7 @@ interface AppOverlayDeps {
   fs: FileSystem;
   dialogs: UseDialogsReturn;
   suspendAutoSave: boolean;
-  suspendAutoSaveRef: { current: boolean };
-  suspendAutoSaveVersionRef: { current: number };
+  suspendAutoSaveVersion: number;
   workspace: Pick<
     AppWorkspaceSessionController,
     "settings" | "theme" | "setTheme" | "resolvedTheme" | "recentFiles" | "fileTree" | "handleOpenFolder"
@@ -141,8 +140,7 @@ export function useAppOverlays({
   fs,
   dialogs,
   suspendAutoSave,
-  suspendAutoSaveRef,
-  suspendAutoSaveVersionRef,
+  suspendAutoSaveVersion,
   workspace,
   sidebarLayout,
   editor,
@@ -444,8 +442,7 @@ export function useAppOverlays({
     editor.saveFile,
     workspace.settings.autoSaveInterval,
     suspendAutoSave,
-    suspendAutoSaveRef,
-    suspendAutoSaveVersionRef,
+    suspendAutoSaveVersion,
   );
 
   useHotkeys(hotkeys);

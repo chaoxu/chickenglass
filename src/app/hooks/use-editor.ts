@@ -35,6 +35,7 @@ import { useEditorScroll } from "./use-editor-scroll";
 import { useEditorDebugBridge } from "./use-editor-debug-bridge";
 import { useEditorDocumentServices } from "./use-editor-document-services";
 import { useEditorThemeSync } from "./use-editor-theme-sync";
+import { useLatest } from "./use-latest";
 import { measureSync } from "../perf";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 import type { SourceMap } from "../source-map";
@@ -91,13 +92,6 @@ export interface UseEditorReturn {
   pluginManager: EditorPluginManager;
   /** Image saver callback bound to the current document context. */
   imageSaver: ((file: File) => Promise<string>) | null;
-}
-
-/** Keep a ref always pointing to the latest value of `value`. */
-function useLatest<T>(value: T) {
-  const ref = useRef(value);
-  ref.current = value;
-  return ref;
 }
 
 function collectDocumentChanges(update: ViewUpdate): EditorDocumentChange[] {

@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { ancestryEqual, applyBreadcrumbVisibility } from "./breadcrumbs";
+import {
+  ancestryEqual,
+  INITIAL_BREADCRUMB_VISIBILITY_STATE,
+  reduceBreadcrumbVisibility,
+} from "./breadcrumbs";
 import type { HeadingEntry } from "../heading-ancestry";
-import { CSS } from "../../constants/css-classes";
 
 describe("ancestryEqual", () => {
   const entry = (overrides: Partial<HeadingEntry> = {}): HeadingEntry => ({
@@ -58,21 +61,57 @@ describe("ancestryEqual", () => {
   });
 });
 
-describe("applyBreadcrumbVisibility", () => {
-  it("toggles breadcrumb visibility classes without inline styles", () => {
-    const el = document.createElement("div");
-    el.className = CSS.breadcrumbs;
+describe("reduceBreadcrumbVisibility", () => {
+  it("marks a pending reveal when scroll happens before ancestry exists", () => {
+    expect(
+      reduceBreadcrumbVisibility(INITIAL_BREADCRUMB_VISIBILITY_STATE, {
+        type: "scroll-without-ancestry",
+      }),
+    ).toEqual({
+      visibility: "hidden",
+      instant: true,
+      hovered: false,
+      pendingReveal: true,
+    });
+  });
 
-    applyBreadcrumbVisibility(el, false, true);
-    expect(el.classList.contains(CSS.breadcrumbsHidden)).toBe(true);
-    expect(el.classList.contains(CSS.breadcrumbsVisible)).toBe(false);
-    expect(el.classList.contains(CSS.breadcrumbsInstant)).toBe(true);
-    expect(el.getAttribute("style")).toBeNull();
+  it("reveals after ancestry becomes available for a pending scroll", () => {
+    const pendingState = reduceBreadcrumbVisibility(
+      INITIAL_BREADCRUMB_VISIBILITY_STATE,
+      { type: "scroll-without-ancestry" },
+    );
 
-    applyBreadcrumbVisibility(el, true, false);
-    expect(el.classList.contains(CSS.breadcrumbsHidden)).toBe(false);
-    expect(el.classList.contains(CSS.breadcrumbsVisible)).toBe(true);
-    expect(el.classList.contains(CSS.breadcrumbsInstant)).toBe(false);
-    expect(el.getAttribute("style")).toBeNull();
+    expect(
+      reduceBreadcrumbVisibility(pendingState, { type: "ancestry-available" }),
+    ).toEqual({
+      visibility: "visible",
+      instant: false,
+      hovered: false,
+      pendingReveal: false,
+    });
+  });
+
+  it("keeps the breadcrumb visible while hovered", () => {
+    const hoveredState = reduceBreadcrumbVisibility(
+      INITIAL_BREADCRUMB_VISIBILITY_STATE,
+      { type: "hover-start" },
+    );
+
+    expect(
+      reduceBreadcrumbVisibility(hoveredState, { type: "hide" }),
+    ).toBe(hoveredState);
+  });
+
+  it("hides instantly and clears hover state when ancestry disappears", () => {
+    const visibleState = {
+      visibility: "visible" as const,
+      instant: false,
+      hovered: true,
+      pendingReveal: false,
+    };
+
+    expect(
+      reduceBreadcrumbVisibility(visibleState, { type: "ancestry-cleared" }),
+    ).toEqual(INITIAL_BREADCRUMB_VISIBILITY_STATE);
   });
 });

@@ -1,10 +1,11 @@
-import { useRef, useEffect, useMemo, useState, lazy, Suspense, useSyncExternalStore, useCallback } from "react";
+import { useRef, useMemo, useState, lazy, Suspense, useSyncExternalStore, useCallback } from "react";
 import { EditorView } from "@codemirror/view";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
 import { useEditorStateTracking } from "../hooks/use-editor-state-tracking";
 import { useSidenotesAutoCollapse } from "../hooks/use-sidenotes-auto-collapse";
 import { useFootnoteTooltip } from "../hooks/use-footnote-tooltip";
+import { useLatest } from "../hooks/use-latest";
 import { Breadcrumbs } from "./breadcrumbs";
 import { SidenoteMargin, type SidenoteInvalidation } from "./sidenote-margin";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
@@ -69,20 +70,10 @@ export function EditorPane({
   const [sidenoteInvalidation, setSidenoteInvalidation] = useState<SidenoteInvalidation>(
     EMPTY_SIDENOTE_INVALIDATION,
   );
-
-  // Stable ref so the CM6 listener always sees the latest callback
-  // without forcing an editor re-creation.
-  const onHeadingsChangeRef = useRef(onHeadingsChange);
-  useEffect(() => { onHeadingsChangeRef.current = onHeadingsChange; }, [onHeadingsChange]);
-
-  const onDiagnosticsChangeRef = useRef(onDiagnosticsChange);
-  useEffect(() => { onDiagnosticsChangeRef.current = onDiagnosticsChange; }, [onDiagnosticsChange]);
-
-  const sidenotesCollapsedRef = useRef(sidenotesCollapsed);
-  useEffect(() => { sidenotesCollapsedRef.current = sidenotesCollapsed; }, [sidenotesCollapsed]);
-
-  const isReadModeRef = useRef(isReadMode);
-  useEffect(() => { isReadModeRef.current = isReadMode; }, [isReadMode]);
+  const onHeadingsChangeRef = useLatest(onHeadingsChange);
+  const onDiagnosticsChangeRef = useLatest(onDiagnosticsChange);
+  const sidenotesCollapsedRef = useLatest(sidenotesCollapsed);
+  const isReadModeRef = useLatest(isReadMode);
 
   // CM6 extension that detects heading-slice revision changes and
   // pushes fresh headings into React.  Created once (stable reference)
