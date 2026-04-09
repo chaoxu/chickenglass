@@ -16,8 +16,8 @@ import {
   _BlockHeaderWidgetForTest as BlockHeaderWidget,
   embedSandboxPermissions,
 } from "./plugin-render";
-import { createPluginRegistryField } from "./plugin-registry";
 import { blockCounterField } from "../state/block-counter";
+import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { editorFocusField, focusEffect, mathMacrosField } from "../render/render-core";
 import { widgetSourceMap } from "../render/render-utils";

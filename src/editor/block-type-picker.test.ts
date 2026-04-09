@@ -19,11 +19,11 @@ import {
   _collectAncestorFencesForTest as collectAncestorFences,
 } from "./block-type-picker";
 import {
-  createPluginRegistryField,
   registerPlugins,
   createRegistryState,
 } from "../plugins";
 import { frontmatterField } from "./frontmatter-state";
+import { createPluginRegistryField } from "../state/plugin-registry";
 import { createTestView, makeBlockPlugin } from "../test-utils";
 
 vi.mock("@floating-ui/dom", async () => {

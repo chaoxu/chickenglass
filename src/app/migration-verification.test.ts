@@ -23,8 +23,8 @@ function fileText(relativePath: string): string {
 // ─── Issue #87: Declarative block plugins from YAML ──────────────────────────
 
 describe("#87 — declarative block plugins", () => {
-  it("plugin-registry supports config-based plugin creation", async () => {
-    const mod = await import("../plugins/plugin-registry");
+  it("plugin registry state lives under src/state", async () => {
+    const mod = await import("../state/plugin-registry");
     expect(mod.pluginRegistryField).toBeDefined();
   });
 

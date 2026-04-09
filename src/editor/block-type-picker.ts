@@ -28,9 +28,11 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { pluginRegistryField, type PluginRegistryState, fenceOperationAnnotation } from "../plugins";
+import { fenceOperationAnnotation } from "../plugins";
+import type { PluginRegistryState } from "../plugins/plugin-registry";
 import { editorModeField } from "./editor";
 import { BLOCK_MANIFEST_ENTRIES } from "../constants/block-manifest";
+import { pluginRegistryField } from "../state/plugin-registry";
 
 // ---------------------------------------------------------------------------
 // Ancestor fence collection

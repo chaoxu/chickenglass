@@ -2,8 +2,6 @@ import { Compartment, EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import {
   createRegistryState,
-  createPluginRegistryField,
-  pluginRegistryField,
   registerPlugins,
   unregisterPlugin,
   type PluginRegistryState,
@@ -20,6 +18,10 @@ import {
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
 import { blockCounterField } from "../state/block-counter";
+import {
+  createPluginRegistryField,
+  pluginRegistryField,
+} from "../state/plugin-registry";
 import { createEditorState, makeBlockPlugin } from "../test-utils";
 
 /** Create an EditorState with the fenced div parser and a given document. */

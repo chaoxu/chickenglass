@@ -48,8 +48,9 @@ import {
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
 import { type BlockCounterState, blockCounterField } from "../state/block-counter";
+import { pluginRegistryField } from "../state/plugin-registry";
 import { fenceProtectionExtension } from "./fence-protection";
-import { getPluginOrFallback, pluginRegistryField } from "./plugin-registry";
+import { getPluginOrFallback } from "./plugin-registry";
 import {
   addAttributeTitleDecoration,
   addHeaderWidgetDecoration,

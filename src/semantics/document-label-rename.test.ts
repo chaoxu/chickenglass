@@ -4,12 +4,12 @@ import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { markdownExtensions } from "../parser";
 import {
-  createPluginRegistryField,
   defaultPlugins,
 } from "../plugins";
 import { documentAnalysisField } from "./codemirror-source";
 import { documentLabelGraphField } from "./document-label-graph";
 import { blockCounterField } from "../state/block-counter";
+import { createPluginRegistryField } from "../state/plugin-registry";
 import {
   prepareDocumentLabelRename,
   resolveDocumentLabelRenameTarget,

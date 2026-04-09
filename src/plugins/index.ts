@@ -14,8 +14,6 @@ export {
   getRegisteredNames,
   pluginFromConfig,
   applyFrontmatterBlocks,
-  pluginRegistryField,
-  createPluginRegistryField,
 } from "./plugin-registry";
 export {
   type NumberedBlock,

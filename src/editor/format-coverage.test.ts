@@ -16,8 +16,8 @@ import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import { frontmatterField } from "./frontmatter-state";
 import { documentSemanticsField } from "../semantics/codemirror-source";
-import { createPluginRegistryField } from "../plugins/plugin-registry";
 import { blockCounterField } from "../state/block-counter";
+import { createPluginRegistryField } from "../state/plugin-registry";
 import { editorFocusField, mathMacrosField } from "../render/render-core";
 import {
   resolveCrossref,
