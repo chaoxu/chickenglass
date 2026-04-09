@@ -20,10 +20,10 @@ import { searchHighlightPlugin } from "../render/search-highlight";
 import { referenceRenderPlugin } from "../render/reference-render";
 import {
   createPluginRegistryField,
-  blockCounterField,
   blockRenderPlugin,
   defaultPlugins,
 } from "../plugins";
+import { blockCounterField } from "../state/block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { bibliographyPlugin, bibDataField } from "../citations";
 import { pdfPreviewField } from "../render/pdf-preview-cache";

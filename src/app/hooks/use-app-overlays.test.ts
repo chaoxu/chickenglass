@@ -10,12 +10,12 @@ import { BackgroundIndexer } from "../../index";
 import { frontmatterField } from "../../editor/frontmatter-state";
 import { markdownExtensions } from "../../parser";
 import {
-  blockCounterField,
   createPluginRegistryField,
   defaultPlugins,
 } from "../../plugins";
 import { documentAnalysisField } from "../../semantics/codemirror-source";
 import { documentLabelGraphField } from "../../semantics/document-label-graph";
+import { blockCounterField } from "../../state/block-counter";
 import { createTestView } from "../../test-utils";
 
 const overlayHookState = vi.hoisted(() => ({

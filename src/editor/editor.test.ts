@@ -10,7 +10,7 @@ import { frontmatterField } from "./frontmatter-state";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { documentLabelGraphField } from "../semantics/document-label-graph";
 import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
-import { blockCounterField } from "../plugins/block-counter";
+import { blockCounterField } from "../state/block-counter";
 import { bibDataField } from "../citations/citation-render";
 import { includeRegionsField } from "../lib/include-regions";
 import { pdfPreviewField } from "../render/pdf-preview-cache";

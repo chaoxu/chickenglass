@@ -7,7 +7,7 @@ import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { createPluginRegistryField, pluginRegistryField } from "../plugins/plugin-registry";
-import { blockCounterField } from "../plugins/block-counter";
+import { blockCounterField } from "../state/block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import type { BlockPlugin } from "../plugins/plugin-types";
 import type { CslJsonItem } from "../citations/bibtex-parser";

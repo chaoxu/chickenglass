@@ -4,7 +4,7 @@ import { fencedDiv } from "../parser/fenced-div";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { createPluginRegistryField } from "./plugin-registry";
-import { blockCounterField } from "./block-counter";
+import { blockCounterField } from "../state/block-counter";
 import { blockRenderPlugin } from "./plugin-render";
 import { defaultPlugins } from "./default-plugins";
 import { mathMacrosField } from "../render/render-core";

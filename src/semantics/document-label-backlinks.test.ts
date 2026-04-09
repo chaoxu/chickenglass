@@ -4,13 +4,13 @@ import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { markdownExtensions } from "../parser";
 import {
-  blockCounterField,
   createPluginRegistryField,
   defaultPlugins,
 } from "../plugins";
 import { documentAnalysisField } from "./codemirror-source";
 import { documentLabelGraphField } from "./document-label-graph";
 import { resolveDocumentLabelBacklinks } from "./document-label-backlinks";
+import { blockCounterField } from "../state/block-counter";
 
 function createState(doc: string, anchor: number, head = anchor): EditorState {
   return EditorState.create({

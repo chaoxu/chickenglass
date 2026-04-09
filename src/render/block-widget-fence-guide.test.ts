@@ -13,7 +13,7 @@ import { createTestView } from "../test-utils";
 import { CSS } from "../constants/css-classes";
 import { blockRenderPlugin } from "../plugins/plugin-render";
 import { createPluginRegistryField } from "../plugins/plugin-registry";
-import { blockCounterField } from "../plugins/block-counter";
+import { blockCounterField } from "../state/block-counter";
 import { defaultPlugins } from "../plugins/default-plugins";
 import { mathMacrosField } from "./render-core";
 

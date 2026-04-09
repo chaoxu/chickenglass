@@ -6,10 +6,7 @@ import {
 } from "@codemirror/state";
 import { isIdentChar, isSpaceTab } from "../parser/char-utils";
 import { readBracedLabelId } from "../parser/label-utils";
-import {
-  blockCounterField,
-  pluginRegistryField,
-} from "../plugins";
+import { pluginRegistryField } from "../plugins";
 import { documentAnalysisField } from "./codemirror-source";
 import {
   findTrailingHeadingAttributes,
@@ -19,6 +16,7 @@ import {
   getEditorDocumentReferenceCatalog,
   getDocumentAnalysisOrRecompute,
 } from "./editor-reference-catalog";
+import { blockCounterField } from "../state/block-counter";
 import type { DocumentReferenceCatalog } from "./reference-catalog";
 
 const EMPTY_DEFINITIONS: readonly DocumentLabelDefinition[] = [];

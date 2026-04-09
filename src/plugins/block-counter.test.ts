@@ -9,7 +9,6 @@ import {
   type PluginRegistryState,
 } from "./plugin-registry";
 import {
-  blockCounterField,
   computeBlockNumbers,
   emptyCounterState,
 } from "./block-counter";
@@ -20,6 +19,7 @@ import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
+import { blockCounterField } from "../state/block-counter";
 import { createEditorState, makeBlockPlugin } from "../test-utils";
 
 /** Create an EditorState with the fenced div parser and a given document. */

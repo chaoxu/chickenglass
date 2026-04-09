@@ -1,8 +1,8 @@
 import type { EditorState } from "@codemirror/state";
 import { documentAnalysisField } from "../semantics/codemirror-source";
-import { blockCounterField } from "../plugins/block-counter";
 import { bibDataField } from "../citations/citation-render";
 import { classifyReference } from "../index/crossref-resolver";
+import { blockCounterField } from "../state/block-counter";
 
 export type DiagnosticSeverity = "error" | "warning";
 
