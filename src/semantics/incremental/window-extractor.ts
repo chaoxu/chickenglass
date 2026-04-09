@@ -432,9 +432,9 @@ export function computeNarrativeExtractionRange(
   scan: for (;;) {
     if (c.from <= range.to && c.to >= range.from) {
       switch (c.name) {
-        case "InlineCode":
-        case "InlineMath":
-        case "Link":
+        case NODE.InlineCode:
+        case NODE.InlineMath:
+        case NODE.Link:
           excludedRanges.push({ from: c.from, to: c.to });
           break;
       }
