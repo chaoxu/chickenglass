@@ -28,6 +28,7 @@ type DocumentArtifacts = {
 - `analyzeDocumentArtifacts(doc, tree)` in `src/semantics/document.ts`
 - `analyzeMarkdownDocument(text)` in `src/semantics/markdown-analysis.ts`
 - `treeToIR(tree, text)` in `src/ir/tree-to-ir.ts`
+- The CM6 editor state still exposes `DocumentAnalysis` via `documentAnalysisField`; IR currently stays on the standalone helper path for non-CM6 consumers.
 
 ## Freshness rules
 
