@@ -433,6 +433,10 @@ function focusStates(update: ViewUpdate): { readonly startFocused: boolean; read
   };
 }
 
+function markdownDocChangeNeedsContextMerge(update: ViewUpdate): boolean {
+  return update.focusChanged || !update.state.selection.eq(update.startState.selection);
+}
+
 export function computeMarkdownContextChangeRanges(
   update: ViewUpdate,
 ): readonly VisibleRange[] {
@@ -521,7 +525,9 @@ export function markdownShouldUpdate(update: ViewUpdate): boolean {
 export function computeMarkdownDocChangeRanges(
   update: ViewUpdate,
 ): readonly VisibleRange[] | null {
-  const dirtyRanges = [...computeMarkdownContextChangeRanges(update)];
+  const dirtyRanges = markdownDocChangeNeedsContextMerge(update)
+    ? [...computeMarkdownContextChangeRanges(update)]
+    : [];
   const pushRange = (from: number, to: number) => {
     dirtyRanges.push(normalizeDirtyRange(from, to, update.state.doc.length));
   };
@@ -582,6 +588,7 @@ function collectMarkdownItems(
 }
 
 export { collectMarkdownItems as _collectMarkdownItemsForTest };
+export { markdownDocChangeNeedsContextMerge as _markdownDocChangeNeedsContextMergeForTest };
 
 /** CM6 extension that provides Typora-style rendering for standard markdown. */
 export const markdownRenderPlugin: Extension = createCursorSensitiveViewPlugin(
@@ -589,6 +596,7 @@ export const markdownRenderPlugin: Extension = createCursorSensitiveViewPlugin(
   {
     contextChangeRanges: computeMarkdownContextChangeRanges,
     docChangeRanges: computeMarkdownDocChangeRanges,
+    onViewportOnly: "incremental",
     pluginSpec: {
       eventHandlers: {
         click(event: MouseEvent, _view: EditorView) {

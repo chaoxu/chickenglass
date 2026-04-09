@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { markdownExtensions } from "../../parser";
 import { editorStateTextSource } from "../codemirror-source";
+import { getEquationNumbersCacheKey } from "../document";
 import { buildSemanticDelta } from "./semantic-delta";
 import {
   createDocumentAnalysis,
@@ -427,6 +428,22 @@ describe("incremental document analysis engine", () => {
       "references",
     ]);
     expect("revision" in analysis).toBe(false);
+  });
+
+  it("caches equation numbering keys without exposing them as enumerable state", () => {
+    const analysis = analyze(createState([
+      "$$x$$ {#eq:first}",
+      "",
+      "$$y$$ {#eq:second}",
+    ].join("\n")));
+
+    const cacheKey = getEquationNumbersCacheKey(analysis);
+    const descriptor = Object.getOwnPropertyDescriptor(analysis, "equationNumbersCacheKey");
+
+    expect(getEquationNumbersCacheKey(analysis)).toBe(cacheKey);
+    expect(cacheKey.length).toBeGreaterThan(0);
+    expect(descriptor?.enumerable).toBe(false);
+    expect(Object.keys(analysis)).not.toContain("equationNumbersCacheKey");
   });
 
   it("correctly expands dirty windows with many equations (binary-search regression)", () => {

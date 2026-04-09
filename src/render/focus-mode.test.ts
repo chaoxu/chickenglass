@@ -147,6 +147,43 @@ describe("focus mode", () => {
       expect(dimmed).toContain(1);
       expect(dimmed).toContain(5);
     });
+
+    it("undims newly merged lines when an adjacent blank line becomes content", () => {
+      const doc = "Above\n\nBelow";
+      const cursorPos = doc.indexOf("Below");
+      const v = setup(doc, cursorPos);
+      toggleFocusMode(v);
+
+      expect(getDimmedLineNumbers(v)).toEqual([1, 2]);
+
+      v.dispatch({
+        changes: {
+          from: doc.indexOf("\n\n") + 1,
+          to: doc.indexOf("\n\n") + 1,
+          insert: "Bridge",
+        },
+      });
+
+      expect(getDimmedLineNumbers(v)).toEqual([]);
+    });
+
+    it("dims the old tail when a blank line is inserted into the active paragraph", () => {
+      const doc = "Alpha\nBeta\nGamma";
+      const v = setup(doc, 0);
+      toggleFocusMode(v);
+
+      expect(getDimmedLineNumbers(v)).toEqual([]);
+
+      v.dispatch({
+        changes: {
+          from: doc.indexOf("\n") + 1,
+          to: doc.indexOf("\n") + 1,
+          insert: "\n",
+        },
+      });
+
+      expect(getDimmedLineNumbers(v)).toEqual([2, 3, 4]);
+    });
   });
 
   describe("edge cases", () => {

@@ -12,7 +12,11 @@ import {
 } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
 import { documentAnalysisField } from "../semantics/codemirror-source";
-import type { DocumentAnalysis, MathSemantics } from "../semantics/document";
+import {
+  getEquationNumbersCacheKey,
+  type DocumentAnalysis,
+  type MathSemantics,
+} from "../semantics/document";
 import { mathMouseSelectionStyle } from "./math-interactions";
 import { mathMacrosField } from "./math-macros";
 import { createMathWidgetMetadataPlugin } from "./math-metadata";
@@ -217,17 +221,12 @@ function collectDirtyMathRegions(
   return dirty;
 }
 
-function equationNumberingKey(analysis: DocumentAnalysis): string {
-  return analysis.equations
-    .map((equation) => `${equation.id}\0${equation.number}`)
-    .join("\u0001");
-}
-
 function equationNumberingChanged(
   before: DocumentAnalysis,
   after: DocumentAnalysis,
 ): boolean {
-  return equationNumberingKey(before) !== equationNumberingKey(after);
+  return before.equations !== after.equations
+    && getEquationNumbersCacheKey(before) !== getEquationNumbersCacheKey(after);
 }
 
 function buildMathRangesForRegions(
