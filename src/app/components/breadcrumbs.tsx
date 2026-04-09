@@ -7,12 +7,11 @@
  *
  * Performance: ancestry is derived from viewportFrom via a Zustand
  * subscription and only triggers React re-renders when the heading
- * chain actually changes. Fade/show timing runs off the React render
- * path via direct DOM updates, so ordinary scroll ticks produce no
- * React work.
+ * chain actually changes. Visibility is driven by an explicit reducer
+ * so the hover/scroll policy has one owner.
  */
 
-import { Fragment, useState, useEffect, useRef, useCallback } from "react";
+import { Fragment, useState, useEffect, useRef, useCallback, useReducer } from "react";
 import { headingAncestryAt, type HeadingEntry } from "../heading-ancestry";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 import { HeadingLabel } from "./heading-chrome";
@@ -36,6 +35,29 @@ interface BreadcrumbsProps {
 /** Milliseconds to wait after last scroll before fading out. */
 const FADE_DELAY_MS = 2000;
 
+export interface BreadcrumbVisibilityState {
+  visibility: "hidden" | "visible";
+  instant: boolean;
+  hovered: boolean;
+  pendingReveal: boolean;
+}
+
+export type BreadcrumbVisibilityEvent =
+  | { type: "scroll-with-ancestry" }
+  | { type: "scroll-without-ancestry" }
+  | { type: "ancestry-available" }
+  | { type: "ancestry-cleared" }
+  | { type: "hover-start" }
+  | { type: "hover-end" }
+  | { type: "hide" };
+
+export const INITIAL_BREADCRUMB_VISIBILITY_STATE: BreadcrumbVisibilityState = {
+  visibility: "hidden",
+  instant: true,
+  hovered: false,
+  pendingReveal: false,
+};
+
 /** Compare ancestry arrays by all heading fields (pos, level, text, number). */
 export function ancestryEqual(a: HeadingEntry[], b: HeadingEntry[]): boolean {
   if (a.length !== b.length) return false;
@@ -50,28 +72,96 @@ export function ancestryEqual(a: HeadingEntry[], b: HeadingEntry[]): boolean {
   return true;
 }
 
-/** Apply visibility classes directly to the container element (no React). */
-export function applyBreadcrumbVisibility(el: HTMLDivElement, visible: boolean, instant: boolean): void {
-  el.classList.toggle(CSS.breadcrumbsVisible, visible);
-  el.classList.toggle(CSS.breadcrumbsHidden, !visible);
-  el.classList.toggle(CSS.breadcrumbsInstant, instant);
+export function reduceBreadcrumbVisibility(
+  state: BreadcrumbVisibilityState,
+  event: BreadcrumbVisibilityEvent,
+): BreadcrumbVisibilityState {
+  switch (event.type) {
+    case "scroll-with-ancestry":
+      if (state.visibility === "visible" && !state.instant && !state.pendingReveal) {
+        return state;
+      }
+      return {
+        ...state,
+        visibility: "visible",
+        instant: false,
+        pendingReveal: false,
+      };
+    case "scroll-without-ancestry":
+      if (state.visibility === "hidden" && state.instant && state.pendingReveal) {
+        return state;
+      }
+      return {
+        ...state,
+        visibility: "hidden",
+        instant: true,
+        pendingReveal: true,
+      };
+    case "ancestry-available":
+      if (!state.pendingReveal) {
+        return state;
+      }
+      return {
+        ...state,
+        visibility: "visible",
+        instant: false,
+        pendingReveal: false,
+      };
+    case "ancestry-cleared":
+      if (
+        state.visibility === "hidden"
+        && state.instant
+        && !state.hovered
+        && !state.pendingReveal
+      ) {
+        return state;
+      }
+      return {
+        visibility: "hidden",
+        instant: true,
+        hovered: false,
+        pendingReveal: false,
+      };
+    case "hover-start":
+      if (state.hovered && state.visibility === "visible" && !state.instant) {
+        return state;
+      }
+      return {
+        ...state,
+        hovered: true,
+        visibility: "visible",
+        instant: false,
+        pendingReveal: false,
+      };
+    case "hover-end":
+      if (!state.hovered) {
+        return state;
+      }
+      return {
+        ...state,
+        hovered: false,
+      };
+    case "hide":
+      if (state.hovered || state.visibility === "hidden") {
+        return state;
+      }
+      return {
+        ...state,
+        visibility: "hidden",
+        instant: false,
+        pendingReveal: false,
+      };
+  }
 }
 
-export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
-  // Ancestry: only causes React re-renders when the heading chain changes.
-  const [ancestry, setAncestry] = useState<HeadingEntry[]>([]);
-  const containerRef = useRef<HTMLDivElement>(null);
+function useBreadcrumbVisibility(hasAncestry: boolean) {
+  const [state, dispatch] = useReducer(
+    reduceBreadcrumbVisibility,
+    INITIAL_BREADCRUMB_VISIBILITY_STATE,
+  );
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hoveredRef = useRef(false);
-  // Ref mirrors for use in non-React callbacks.
-  const ancestryLenRef = useRef(0);
-  ancestryLenRef.current = ancestry.length;
-  const visibleRef = useRef(false);
-  // Flag: a scroll event fired but containerRef was null (component was
-  // returning null). The mount-recovery effect picks this up.
-  const pendingShowRef = useRef(false);
 
-  const clearTimer = useCallback(() => {
+  const clearHideTimer = useCallback(() => {
     if (hideTimerRef.current !== null) {
       clearTimeout(hideTimerRef.current);
       hideTimerRef.current = null;
@@ -79,16 +169,75 @@ export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
   }, []);
 
   const scheduleHide = useCallback(() => {
-    clearTimer();
+    clearHideTimer();
     hideTimerRef.current = setTimeout(() => {
       hideTimerRef.current = null;
-      const el = containerRef.current;
-      if (el && !hoveredRef.current) {
-        visibleRef.current = false;
-        applyBreadcrumbVisibility(el, false, false);
-      }
+      dispatch({ type: "hide" });
     }, FADE_DELAY_MS);
-  }, [clearTimer]);
+  }, [clearHideTimer]);
+
+  useEffect(() => {
+    const unsub = useEditorTelemetryStore.subscribe((store, prev) => {
+      if (store.scrollTop === prev.scrollTop) {
+        return;
+      }
+
+      if (!hasAncestry) {
+        clearHideTimer();
+        dispatch({ type: "scroll-without-ancestry" });
+        return;
+      }
+
+      dispatch({ type: "scroll-with-ancestry" });
+      if (!state.hovered) {
+        scheduleHide();
+      }
+    });
+
+    return unsub;
+  }, [clearHideTimer, hasAncestry, scheduleHide, state.hovered]);
+
+  useEffect(() => clearHideTimer, [clearHideTimer]);
+
+  useEffect(() => {
+    if (!hasAncestry) {
+      clearHideTimer();
+      dispatch({ type: "ancestry-cleared" });
+      return;
+    }
+
+    if (!state.pendingReveal) {
+      return;
+    }
+
+    dispatch({ type: "ancestry-available" });
+    if (!state.hovered) {
+      scheduleHide();
+    }
+  }, [clearHideTimer, hasAncestry, scheduleHide, state.hovered, state.pendingReveal]);
+
+  const handleMouseEnter = useCallback(() => {
+    clearHideTimer();
+    dispatch({ type: "hover-start" });
+  }, [clearHideTimer]);
+
+  const handleMouseLeave = useCallback(() => {
+    dispatch({ type: "hover-end" });
+    if (hasAncestry) {
+      scheduleHide();
+    }
+  }, [hasAncestry, scheduleHide]);
+
+  return {
+    visibilityState: state,
+    handleMouseEnter,
+    handleMouseLeave,
+  };
+}
+
+export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
+  // Ancestry: only causes React re-renders when the heading chain changes.
+  const [ancestry, setAncestry] = useState<HeadingEntry[]>([]);
 
   // Ancestry subscription: recompute only when viewportFrom changes,
   // and only update React state when the heading chain differs.
@@ -109,83 +258,23 @@ export function Breadcrumbs({ headings, onSelect }: BreadcrumbsProps) {
     return unsub;
   }, [headings]);
 
-  // Scroll visibility: respond to scrollTop changes via direct DOM
-  // updates — no React state, no re-renders.
-  useEffect(() => {
-    const unsub = useEditorTelemetryStore.subscribe((state, prev) => {
-      if (state.scrollTop === prev.scrollTop) return;
+  const {
+    visibilityState,
+    handleMouseEnter,
+    handleMouseLeave,
+  } = useBreadcrumbVisibility(ancestry.length > 0);
 
-      const el = containerRef.current;
-      if (!el) {
-        // Container not mounted — ancestry may be transitioning from
-        // empty to non-empty. Flag so the mount-recovery effect can
-        // show the breadcrumb after React commits the new ancestry.
-        pendingShowRef.current = true;
-        return;
-      }
-
-      pendingShowRef.current = false;
-
-      if (ancestryLenRef.current === 0) {
-        clearTimer();
-        visibleRef.current = false;
-        applyBreadcrumbVisibility(el, false, true);
-        return;
-      }
-
-      visibleRef.current = true;
-      applyBreadcrumbVisibility(el, true, false);
-      if (!hoveredRef.current) scheduleHide();
-    });
-
-    return () => {
-      unsub();
-      clearTimer();
-    };
-  }, [clearTimer, scheduleHide]);
-
-  // Mount recovery: when ancestry transitions from empty to non-empty,
-  // the scroll subscriber that caused it found containerRef null and
-  // set pendingShowRef. Now that React has committed the container,
-  // make it visible.
-  useEffect(() => {
-    if (ancestry.length === 0 || !pendingShowRef.current) return;
-    pendingShowRef.current = false;
-    const el = containerRef.current;
-    if (!el) return;
-    visibleRef.current = true;
-    applyBreadcrumbVisibility(el, true, false);
-    if (!hoveredRef.current) scheduleHide();
-  }, [ancestry, scheduleHide]);
-
-  const handleMouseEnter = useCallback(() => {
-    hoveredRef.current = true;
-    clearTimer();
-    const el = containerRef.current;
-    if (el && ancestryLenRef.current > 0) {
-      visibleRef.current = true;
-      applyBreadcrumbVisibility(el, true, false);
-    }
-  }, [clearTimer]);
-
-  const handleMouseLeave = useCallback(() => {
-    hoveredRef.current = false;
-    scheduleHide();
-  }, [scheduleHide]);
-
-  // Reset visibility when ancestry empties (component is about to return null).
   if (ancestry.length === 0) {
-    visibleRef.current = false;
     return null;
   }
 
   return (
     <div
-      ref={containerRef}
       className={[
         "absolute top-0 left-0 z-[100]",
         CSS.breadcrumbs,
-        visibleRef.current ? CSS.breadcrumbsVisible : CSS.breadcrumbsHidden,
+        visibilityState.visibility === "visible" ? CSS.breadcrumbsVisible : CSS.breadcrumbsHidden,
+        visibilityState.instant ? CSS.breadcrumbsInstant : null,
       ].join(" ")}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}

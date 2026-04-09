@@ -4,10 +4,12 @@ import type {
   UnsavedChangesRequest,
 } from "../unsaved-changes";
 
+export type UnsavedChangesDialogStatus = "idle" | "pending" | "resolved";
+
 export interface UseUnsavedChangesDialogReturn {
+  status: UnsavedChangesDialogStatus;
   request: UnsavedChangesRequest | null;
-  pendingRef: { current: boolean };
-  suspensionVersionRef: { current: number };
+  suspensionVersion: number;
   requestDecision: (
     request: UnsavedChangesRequest,
   ) => Promise<UnsavedChangesDecision>;
@@ -15,55 +17,85 @@ export interface UseUnsavedChangesDialogReturn {
   cancel: () => void;
 }
 
+interface UnsavedChangesDialogState {
+  status: UnsavedChangesDialogStatus;
+  request: UnsavedChangesRequest | null;
+  suspensionVersion: number;
+}
+
 export function useUnsavedChangesDialog(): UseUnsavedChangesDialogReturn {
-  const [request, setRequest] = useState<UnsavedChangesRequest | null>(null);
-  const pendingRef = useRef(false);
-  const suspensionVersionRef = useRef(0);
+  const [state, setState] = useState<UnsavedChangesDialogState>({
+    status: "idle",
+    request: null,
+    suspensionVersion: 0,
+  });
   const resolverRef = useRef<((decision: UnsavedChangesDecision) => void) | null>(null);
 
-  const resolveDecision = useCallback((decision: UnsavedChangesDecision) => {
+  const finishPendingDecision = useCallback((decision: UnsavedChangesDecision) => {
     const resolve = resolverRef.current;
+    if (!resolve) {
+      return;
+    }
     resolverRef.current = null;
-    pendingRef.current = false;
-    suspensionVersionRef.current += 1;
-    setRequest(null);
-    resolve?.(decision);
+    setState((prev) => (
+      prev.status === "pending"
+        ? {
+          status: "resolved",
+          request: null,
+          suspensionVersion: prev.suspensionVersion + 1,
+        }
+        : prev
+    ));
+    resolve(decision);
   }, []);
 
+  const resolveDecision = useCallback((decision: UnsavedChangesDecision) => {
+    finishPendingDecision(decision);
+  }, [finishPendingDecision]);
+
   const cancel = useCallback(() => {
-    resolveDecision("cancel");
-  }, [resolveDecision]);
+    finishPendingDecision("cancel");
+  }, [finishPendingDecision]);
 
   const requestDecision = useCallback((nextRequest: UnsavedChangesRequest) => {
     return new Promise<UnsavedChangesDecision>((resolve) => {
-      if (resolverRef.current) {
-        resolveDecision("cancel");
+      const previousResolve = resolverRef.current;
+      if (previousResolve) {
+        resolverRef.current = null;
+        setState((prev) => (
+          prev.status === "pending"
+            ? {
+              status: "resolved",
+              request: null,
+              suspensionVersion: prev.suspensionVersion + 1,
+            }
+            : prev
+        ));
+        previousResolve("cancel");
       }
-      suspensionVersionRef.current += 1;
-      pendingRef.current = true;
-      resolverRef.current = (decision) => {
-        pendingRef.current = false;
-        resolve(decision);
-      };
-      setRequest(nextRequest);
+      resolverRef.current = resolve;
+      setState((prev) => ({
+        status: "pending",
+        request: nextRequest,
+        suspensionVersion: prev.suspensionVersion + 1,
+      }));
     });
-  }, [resolveDecision]);
+  }, []);
 
   useEffect(() => {
     return () => {
-      if (resolverRef.current) {
-        pendingRef.current = false;
-        suspensionVersionRef.current += 1;
-        resolverRef.current("cancel");
+      const resolve = resolverRef.current;
+      if (resolve) {
         resolverRef.current = null;
+        resolve("cancel");
       }
     };
   }, []);
 
   return {
-    request,
-    pendingRef,
-    suspensionVersionRef,
+    status: state.status,
+    request: state.request,
+    suspensionVersion: state.suspensionVersion,
     requestDecision,
     resolveDecision,
     cancel,

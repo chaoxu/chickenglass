@@ -8,8 +8,7 @@ interface HarnessProps {
   onSave: () => Promise<void>;
   interval?: number;
   suspended?: boolean;
-  suspendedRef?: { current: boolean };
-  suspendedVersionRef?: { current: number };
+  suspensionVersion?: number;
 }
 
 const Harness: FC<HarnessProps> = ({
@@ -17,10 +16,9 @@ const Harness: FC<HarnessProps> = ({
   onSave,
   interval = 30_000,
   suspended = false,
-  suspendedRef,
-  suspendedVersionRef,
+  suspensionVersion = 0,
 }) => {
-  useAutoSave(isDirty, onSave, interval, suspended, suspendedRef, suspendedVersionRef);
+  useAutoSave(isDirty, onSave, interval, suspended, suspensionVersion);
   return null;
 };
 
@@ -108,8 +106,6 @@ describe("useAutoSave", () => {
 
   it("invalidates a pending Tauri blur save when an unsaved-changes flow opens and resolves quickly", async () => {
     const onSave = vi.fn(async () => {});
-    const suspendedRef = { current: false };
-    const suspendedVersionRef = { current: 0 };
     (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
     document.hasFocus = vi.fn(() => false);
 
@@ -118,8 +114,7 @@ describe("useAutoSave", () => {
         isDirty: true,
         onSave,
         interval: 0,
-        suspendedRef,
-        suspendedVersionRef,
+        suspensionVersion: 0,
       }));
     });
 
@@ -128,10 +123,25 @@ describe("useAutoSave", () => {
       vi.advanceTimersByTime(100);
     });
 
-    suspendedVersionRef.current += 1;
-    suspendedRef.current = true;
-    suspendedRef.current = false;
-    suspendedVersionRef.current += 1;
+    act(() => {
+      root.render(createElement(Harness, {
+        isDirty: true,
+        onSave,
+        interval: 0,
+        suspended: true,
+        suspensionVersion: 1,
+      }));
+    });
+
+    act(() => {
+      root.render(createElement(Harness, {
+        isDirty: true,
+        onSave,
+        interval: 0,
+        suspended: false,
+        suspensionVersion: 2,
+      }));
+    });
 
     await act(async () => {
       vi.advanceTimersByTime(300);
@@ -142,8 +152,6 @@ describe("useAutoSave", () => {
 
   it("invalidates a pending Tauri hidden-window save when an unsaved-changes flow opens and resolves quickly", async () => {
     const onSave = vi.fn(async () => {});
-    const suspendedRef = { current: false };
-    const suspendedVersionRef = { current: 0 };
     (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
     hiddenState = true;
 
@@ -152,8 +160,7 @@ describe("useAutoSave", () => {
         isDirty: true,
         onSave,
         interval: 0,
-        suspendedRef,
-        suspendedVersionRef,
+        suspensionVersion: 0,
       }));
     });
 
@@ -162,10 +169,25 @@ describe("useAutoSave", () => {
       vi.advanceTimersByTime(100);
     });
 
-    suspendedVersionRef.current += 1;
-    suspendedRef.current = true;
-    suspendedRef.current = false;
-    suspendedVersionRef.current += 1;
+    act(() => {
+      root.render(createElement(Harness, {
+        isDirty: true,
+        onSave,
+        interval: 0,
+        suspended: true,
+        suspensionVersion: 1,
+      }));
+    });
+
+    act(() => {
+      root.render(createElement(Harness, {
+        isDirty: true,
+        onSave,
+        interval: 0,
+        suspended: false,
+        suspensionVersion: 2,
+      }));
+    });
 
     await act(async () => {
       vi.advanceTimersByTime(300);

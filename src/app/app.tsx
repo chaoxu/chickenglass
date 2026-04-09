@@ -56,9 +56,8 @@ function ConnectedAppOverlays({
   const overlays = useAppOverlays({
     fs,
     dialogs,
-    suspendAutoSave: unsavedChanges.request !== null,
-    suspendAutoSaveRef: unsavedChanges.pendingRef,
-    suspendAutoSaveVersionRef: unsavedChanges.suspensionVersionRef,
+    suspendAutoSave: unsavedChanges.status === "pending",
+    suspendAutoSaveVersion: unsavedChanges.suspensionVersion,
     workspace: {
       ...workspace,
       handleOpenFolder: onOpenFolder,

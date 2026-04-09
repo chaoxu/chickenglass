@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import type { FileEntry } from "../file-manager";
 import { findDefaultDocumentPath } from "../default-document-path";
 import type { AppEditorShellController } from "./use-app-editor-shell";
@@ -26,6 +26,21 @@ interface AppSessionPersistenceDeps {
   >;
 }
 
+type SessionRestoreState =
+  | { status: "waiting-startup" }
+  | {
+    status: "restore-ui";
+    generation: number;
+    savedDocumentPath: string | null;
+    savedSidebarWidth: number;
+  }
+  | {
+    status: "restore-document";
+    generation: number;
+    savedDocumentPath: string | null;
+  }
+  | { status: "completed" };
+
 export function useAppSessionPersistence({
   fileTree,
   listChildren,
@@ -34,8 +49,9 @@ export function useAppSessionPersistence({
   sidebarLayout,
   editor,
 }: AppSessionPersistenceDeps): void {
-  const didInitRef = useRef(false);
-  const restorePromiseRef = useRef<Promise<void> | null>(null);
+  const [restoreState, setRestoreState] = useState<SessionRestoreState>({
+    status: "waiting-startup",
+  });
   const {
     windowState,
     saveWindowState,
@@ -54,94 +70,128 @@ export function useAppSessionPersistence({
   } = editor;
 
   useEffect(() => {
-    if (!didInitRef.current) return;
+    if (restoreState.status !== "completed") return;
     saveWindowState({
       currentDocument: currentDocument
         ? { path: currentDocument.path, name: currentDocument.name }
         : null,
     });
-  }, [currentDocument, currentPath, saveWindowState]);
+  }, [currentDocument, currentPath, restoreState.status, saveWindowState]);
 
   useEffect(() => {
-    if (!didInitRef.current) return;
+    if (restoreState.status !== "completed") return;
     saveWindowState({
       sidebarWidth: sidebarCollapsed ? 0 : sidebarWidth,
     });
-  }, [saveWindowState, sidebarCollapsed, sidebarWidth]);
+  }, [restoreState.status, saveWindowState, sidebarCollapsed, sidebarWidth]);
 
   useEffect(() => {
-    if (didInitRef.current || restorePromiseRef.current || !startupComplete) return;
+    if (restoreState.status !== "waiting-startup" || !startupComplete) {
+      return;
+    }
 
-    const restore = async () => {
-      // Capture the workspace generation so we can detect a project-switch
-      // that happens while the lazy search is in flight.  The generation
-      // increments *before* the Tauri backend root changes, so it catches
-      // the window where listChildren already reads the new root but
-      // React state still holds the old fileTree.
-      const gen = workspaceRequestRef.current;
-      try {
-        if (windowState.sidebarWidth === 0) {
-          setSidebarCollapsed(true);
-        } else if (windowState.sidebarWidth > 0) {
-          setSidebarWidth(windowState.sidebarWidth);
+    setRestoreState({
+      status: "restore-ui",
+      generation: workspaceRequestRef.current,
+      savedDocumentPath: windowState.currentDocument?.path ?? null,
+      savedSidebarWidth: windowState.sidebarWidth,
+    });
+  }, [
+    restoreState.status,
+    startupComplete,
+    windowState.sidebarWidth,
+    windowState.currentDocument,
+    workspaceRequestRef,
+  ]);
+
+  useEffect(() => {
+    if (restoreState.status !== "restore-ui") {
+      return;
+    }
+
+    if (restoreState.savedSidebarWidth === 0) {
+      setSidebarCollapsed(true);
+    } else if (restoreState.savedSidebarWidth > 0) {
+      setSidebarWidth(restoreState.savedSidebarWidth);
+    }
+
+    setRestoreState({
+      status: "restore-document",
+      generation: restoreState.generation,
+      savedDocumentPath: restoreState.savedDocumentPath,
+    });
+  }, [restoreState, setSidebarCollapsed, setSidebarWidth]);
+
+  useEffect(() => {
+    if (restoreState.status !== "restore-document") {
+      return;
+    }
+
+    const { generation, savedDocumentPath } = restoreState;
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const guardedListChildren = listChildren
+      ? async (path: string): Promise<FileEntry[]> => {
+          if (cancelled || workspaceRequestRef.current !== generation) {
+            controller.abort();
+            return [];
+          }
+          const result = await listChildren(path);
+          if (cancelled || workspaceRequestRef.current !== generation) {
+            controller.abort();
+            return [];
+          }
+          return result;
         }
+      : undefined;
 
+    void (async () => {
+      try {
         if (!fileTree) {
           return;
         }
 
-        if (windowState.currentDocument) {
+        if (savedDocumentPath) {
           try {
-            await openFile(windowState.currentDocument.path);
+            await openFile(savedDocumentPath);
             return;
-          } catch {
+          } catch (_error: unknown) {
             // File may have been deleted or may not exist under the restored root.
           }
         }
 
-        // Wrap listChildren to abort the search when the workspace
-        // generation changes (project switch during lazy search).
-        const controller = new AbortController();
-        const guardedListChildren = listChildren
-          ? async (path: string): Promise<FileEntry[]> => {
-              if (workspaceRequestRef.current !== gen) {
-                controller.abort();
-                return [];
-              }
-              const result = await listChildren(path);
-              if (workspaceRequestRef.current !== gen) {
-                controller.abort();
-                return [];
-              }
-              return result;
-            }
-          : undefined;
-
-        const first = await findDefaultDocumentPath(fileTree, guardedListChildren, controller.signal);
-        // Abort if the project changed during the lazy search — the
-        // returned path may belong to the new project's namespace.
-        if (workspaceRequestRef.current !== gen) return;
+        const first = await findDefaultDocumentPath(
+          fileTree,
+          guardedListChildren,
+          controller.signal,
+        );
+        if (cancelled || workspaceRequestRef.current !== generation) {
+          return;
+        }
         if (first) {
-          await openFile(first).catch(() => {
+          try {
+            await openFile(first);
+          } catch (_error: unknown) {
             // Default file may have disappeared between tree load and open.
-          });
+          }
         }
       } finally {
-        didInitRef.current = true;
+        if (!cancelled) {
+          setRestoreState({ status: "completed" });
+        }
       }
-    };
+    })();
 
-    restorePromiseRef.current = restore().finally(() => {
-      restorePromiseRef.current = null;
-    });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [
     fileTree,
     listChildren,
     openFile,
-    setSidebarCollapsed,
-    setSidebarWidth,
-    startupComplete,
-    windowState.currentDocument,
-    windowState.sidebarWidth,
+    restoreState,
+    workspaceRequestRef,
   ]);
 }

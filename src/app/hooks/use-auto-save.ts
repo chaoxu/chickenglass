@@ -31,8 +31,7 @@ export function useAutoSave(
   onSave: () => Promise<void>,
   interval = 30_000,
   suspended = false,
-  suspendedRef?: { current: boolean },
-  suspendedVersionRef?: { current: number },
+  suspensionVersion = 0,
 ): void {
   // savingRef lives outside the effect so the guard persists across
   // re-registrations that happen when isDirty or onSave change.
@@ -40,8 +39,6 @@ export function useAutoSave(
   const pendingEventSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const isSuspended = () => suspended || suspendedRef?.current === true;
-
     const clearPendingEventSave = () => {
       if (pendingEventSaveRef.current !== null) {
         clearTimeout(pendingEventSaveRef.current);
@@ -49,7 +46,7 @@ export function useAutoSave(
       }
     };
 
-    if (isSuspended()) {
+    if (suspended) {
       clearPendingEventSave();
       return clearPendingEventSave;
     }
@@ -57,7 +54,7 @@ export function useAutoSave(
     /** Save if dirty; guard against concurrent overlapping saves. */
     const trySave = () => {
       clearPendingEventSave();
-      if (isSuspended()) return;
+      if (suspended) return;
       if (!isDirty || savingRef.current) return;
       savingRef.current = true;
       onSave().catch(() => {
@@ -74,11 +71,9 @@ export function useAutoSave(
       }
 
       clearPendingEventSave();
-      const suspendedVersionAtSchedule = suspendedVersionRef?.current ?? 0;
       pendingEventSaveRef.current = setTimeout(() => {
         pendingEventSaveRef.current = null;
-        if ((suspendedVersionRef?.current ?? 0) !== suspendedVersionAtSchedule) return;
-        if (isSuspended()) return;
+        if (suspended) return;
         if (reason === "blur" && document.hasFocus()) return;
         if (reason === "hidden" && !document.hidden) return;
         trySave();
@@ -113,5 +108,5 @@ export function useAutoSave(
       clearPendingEventSave();
       if (timerId !== null) clearInterval(timerId);
     };
-  }, [interval, isDirty, onSave, suspended, suspendedRef, suspendedVersionRef]);
+  }, [interval, isDirty, onSave, suspended, suspensionVersion]);
 }
