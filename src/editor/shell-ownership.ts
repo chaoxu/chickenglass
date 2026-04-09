@@ -4,6 +4,7 @@ import type { SyntaxNode } from "@lezer/common";
 import type { FencedDivInfo } from "../fenced-block/model";
 import { collectFencedDivs } from "../fenced-block/model";
 import { findAncestor, isFencedCode } from "../lib/syntax-tree-helpers";
+import { containsRange } from "../lib/range-helpers";
 import { frontmatterField } from "./frontmatter-state";
 import { editorFocusField } from "../render/focus-state";
 
@@ -77,7 +78,7 @@ export function activeFencedPath(state: EditorState): FencedDivInfo[] {
   if (!focused) return [];
   const selection = currentSelectionRange(state);
   return collectFencedDivs(state)
-    .filter((div) => selection.from >= div.from && selection.to <= div.to)
+    .filter((div) => containsRange(div, selection))
     .sort((a, b) => (a.from - b.from) || (a.to - b.to));
 }
 
@@ -93,7 +94,7 @@ export function activeFencedDepthAtRange(
   if (from < 0 || to < from) return 0;
   let depth = 0;
   for (const div of activeFencedPath(state)) {
-    if (from >= div.from && to <= div.to) {
+    if (containsRange(div, { from, to })) {
       depth += 1;
     }
   }
@@ -106,7 +107,7 @@ export function activeCodeBlock(state: EditorState): CodeShellInfo | null {
   const selection = currentSelectionRange(state);
   const block = findCodeShellAt(state, selection.from) ?? findCodeShellAt(state, selection.to);
   if (!block) return null;
-  return selection.from >= block.from && selection.to <= block.to ? block : null;
+  return containsRange(block, selection) ? block : null;
 }
 
 export function activeCodeBlockOpenFenceStarts(state: EditorState): ReadonlySet<number> {
@@ -137,5 +138,5 @@ export function isFrontmatterActive(state: EditorState): boolean {
   if (!focused) return false;
   const { end } = state.field(frontmatterField);
   const selection = currentSelectionRange(state);
-  return end > 0 && selection.from >= 0 && selection.to <= end;
+  return end > 0 && containsRange({ from: 0, to: end }, selection);
 }

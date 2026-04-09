@@ -4,6 +4,7 @@ import {
   type FencedBlockInfo,
   mapFencedBlockInfo,
 } from "../fenced-block/model";
+import { rangesOverlap } from "../lib/range-helpers";
 import { mergeRanges } from "./viewport-diff";
 
 export interface CodeBlockInfo extends FencedBlockInfo {
@@ -153,15 +154,6 @@ function scanCodeBlocks(
   return results;
 }
 
-function rangesOverlap(
-  leftFrom: number,
-  leftTo: number,
-  rightFrom: number,
-  rightTo: number,
-): boolean {
-  return leftFrom <= rightTo && rightFrom <= leftTo;
-}
-
 function sameCodeBlockInfo(
   left: CodeBlockInfo,
   right: CodeBlockInfo,
@@ -222,9 +214,11 @@ function touchesCodeBlockFence(
   to: number,
   block: Pick<CodeBlockInfo, "openFenceFrom" | "openFenceTo" | "closeFenceFrom" | "closeFenceTo" | "singleLine">,
 ): boolean {
-  if (rangesOverlap(from, to, block.openFenceFrom, block.openFenceTo)) return true;
+  if (rangesOverlap({ from, to }, { from: block.openFenceFrom, to: block.openFenceTo })) {
+    return true;
+  }
   if (block.singleLine) return false;
-  return rangesOverlap(from, to, block.closeFenceFrom, block.closeFenceTo);
+  return rangesOverlap({ from, to }, { from: block.closeFenceFrom, to: block.closeFenceTo });
 }
 
 function computeCodeBlockStructureDirtyRanges(
@@ -266,7 +260,7 @@ function codeBlockOverlapsDirtyRanges(
   for (const range of dirtyRanges) {
     if (range.to < block.from) continue;
     if (range.from > block.to) break;
-    if (rangesOverlap(block.from, block.to, range.from, range.to)) return true;
+    if (rangesOverlap(block, range)) return true;
   }
   return false;
 }

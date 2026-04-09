@@ -49,6 +49,7 @@ import {
 import { createSimpleTextWidget } from "./render-core";
 import { ContextMenu } from "../lib/context-menu";
 import type { ContextMenuItem } from "../lib/context-menu";
+import { containsPos } from "../lib/range-helpers";
 import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 import {
   addRow,
@@ -887,7 +888,7 @@ function guardCrossRowPos(
   if (!cell) return null;
 
   const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-  if (pos !== null && pos >= cell.from && pos <= cell.to) return null;
+  if (pos !== null && containsPos(cell, pos)) return null;
 
   return cell.to;
 }

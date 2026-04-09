@@ -10,7 +10,6 @@ import {
   type Extension,
   type Range,
   StateField,
-  type Text,
   type Transaction,
 } from "@codemirror/state";
 import {
@@ -19,6 +18,14 @@ import {
   syntaxTree,
   syntaxTreeAvailable,
 } from "@codemirror/language";
+import {
+  clampDocPos,
+  expandChangeQueryRange,
+  expandRangeToLineBounds,
+  forEachOverlappingOrderedRange,
+  getMergedRangeCoverage,
+  rangesOverlap,
+} from "../lib/range-helpers";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { buildDecorations } from "./decoration-core";
 
@@ -59,181 +66,6 @@ const LINE_DECORATION_BY_TAG = Object.freeze(Object.fromEntries(
   ]),
 ) as Record<string, Decoration>);
 
-interface OrderedRange {
-  readonly from: number;
-  readonly to: number;
-}
-
-// Semantic slices are immutable arrays, so a WeakMap lets local dirty-window
-// rebuilds reuse overlap-query metadata until the slice revision changes.
-const orderedRangePrefixMaxToCache = new WeakMap<
-  readonly OrderedRange[],
-  readonly number[]
->();
-const mergedRangeCoverageCache = new WeakMap<
-  readonly OrderedRange[],
-  readonly OrderedRange[]
->();
-
-function clampDocPos(doc: Text, pos: number): number {
-  return Math.max(0, Math.min(pos, doc.length));
-}
-
-function expandRangeToLineBounds(
-  doc: Text,
-  from: number,
-  to: number,
-): { from: number; to: number } {
-  if (doc.length === 0) {
-    return { from: 0, to: 0 };
-  }
-
-  const clampedFrom = clampDocPos(doc, from);
-  const clampedTo = clampDocPos(doc, Math.max(from, to));
-
-  return {
-    from: doc.lineAt(clampedFrom).from,
-    to: doc.lineAt(clampedTo).to,
-  };
-}
-
-function expandChangeQueryRange(
-  doc: Text,
-  from: number,
-  to: number,
-): { from: number; to: number } {
-  if (doc.length === 0) {
-    return { from: 0, to: 0 };
-  }
-
-  return expandRangeToLineBounds(
-    doc,
-    from > 0 ? from - 1 : from,
-    to < doc.length ? to + 1 : to,
-  );
-}
-
-function rangesOverlap(
-  valueFrom: number,
-  valueTo: number,
-  rangeFrom: number,
-  rangeTo: number,
-): boolean {
-  return valueFrom <= rangeTo && rangeFrom <= valueTo;
-}
-
-function getOrderedRangePrefixMaxTo(
-  values: readonly OrderedRange[],
-): readonly number[] {
-  const cached = orderedRangePrefixMaxToCache.get(values);
-  if (cached) return cached;
-
-  const prefixMaxTo = new Array<number>(values.length);
-  let maxTo = Number.NEGATIVE_INFINITY;
-
-  for (let index = 0; index < values.length; index++) {
-    maxTo = Math.max(maxTo, values[index].to);
-    prefixMaxTo[index] = maxTo;
-  }
-
-  orderedRangePrefixMaxToCache.set(values, prefixMaxTo);
-  return prefixMaxTo;
-}
-
-function firstPotentialOverlapIndex(
-  values: readonly OrderedRange[],
-  rangeFrom: number,
-): number {
-  if (values.length === 0) {
-    return -1;
-  }
-
-  const prefixMaxTo = getOrderedRangePrefixMaxTo(values);
-  let lo = 0;
-  let hi = prefixMaxTo.length;
-
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (prefixMaxTo[mid] < rangeFrom) lo = mid + 1;
-    else hi = mid;
-  }
-
-  return lo < values.length ? lo : -1;
-}
-
-function forEachOverlappingOrderedRange<T extends OrderedRange>(
-  values: readonly T[],
-  rangeFrom: number,
-  rangeTo: number,
-  visit: (value: T) => void,
-): void {
-  const startIndex = firstPotentialOverlapIndex(values, rangeFrom);
-  if (startIndex === -1) {
-    return;
-  }
-
-  for (let index = startIndex; index < values.length; index++) {
-    const value = values[index];
-    if (value.from > rangeTo) {
-      break;
-    }
-    if (!rangesOverlap(value.from, value.to, rangeFrom, rangeTo)) {
-      continue;
-    }
-    visit(value);
-  }
-}
-
-function getMergedRangeCoverage(
-  values: readonly OrderedRange[],
-): readonly OrderedRange[] {
-  const cached = mergedRangeCoverageCache.get(values);
-  if (cached) return cached;
-  if (values.length === 0) {
-    return values;
-  }
-
-  const coverage: OrderedRange[] = [];
-  let currentFrom = values[0].from;
-  let currentTo = values[0].to;
-
-  // Fenced divs all map to the same `div` line tag, so nested spans can be
-  // queried as merged coverage rather than as individual semantic entries.
-  for (let index = 1; index < values.length; index++) {
-    const value = values[index];
-    if (value.from <= currentTo) {
-      currentTo = Math.max(currentTo, value.to);
-      continue;
-    }
-
-    coverage.push({ from: currentFrom, to: currentTo });
-    currentFrom = value.from;
-    currentTo = value.to;
-  }
-
-  coverage.push({ from: currentFrom, to: currentTo });
-  mergedRangeCoverageCache.set(values, coverage);
-  return coverage;
-}
-
-function collectOverlappingOrderedRangesForTest<T extends OrderedRange>(
-  values: readonly T[],
-  rangeFrom: number,
-  rangeTo: number,
-): readonly T[] {
-  const overlaps: T[] = [];
-  forEachOverlappingOrderedRange(values, rangeFrom, rangeTo, (value) => {
-    overlaps.push(value);
-  });
-  return overlaps;
-}
-
-function getMergedRangeCoverageForTest(
-  values: readonly OrderedRange[],
-): readonly OrderedRange[] {
-  return getMergedRangeCoverage(values);
-}
-
 function assignLineTag(
   lineTagMap: Map<number, string>,
   state: EditorState,
@@ -243,7 +75,7 @@ function assignLineTag(
   rangeFrom: number,
   rangeTo: number,
 ): void {
-  if (!rangesOverlap(from, to, rangeFrom, rangeTo)) return;
+  if (!rangesOverlap({ from, to }, { from: rangeFrom, to: rangeTo })) return;
 
   let lineStart = state.doc.lineAt(Math.max(from, rangeFrom)).from;
   const nodeEnd = Math.min(to, rangeTo);
@@ -263,12 +95,12 @@ function collectLineTagsInRange(
 ): Map<number, string> {
   const lineTagMap = new Map<number, string>();
   const semantics = state.field(documentSemanticsField, false);
+  const range = { from: rangeFrom, to: rangeTo };
 
   if (semantics) {
     forEachOverlappingOrderedRange(
       semantics.headings,
-      rangeFrom,
-      rangeTo,
+      range,
       (heading) => {
         const tagName = HEADING_TAGS[heading.level - 1];
         if (!tagName) {
@@ -288,8 +120,7 @@ function collectLineTagsInRange(
 
     forEachOverlappingOrderedRange(
       getMergedRangeCoverage(semantics.fencedDivs),
-      rangeFrom,
-      rangeTo,
+      range,
       (div) => {
         assignLineTag(
           lineTagMap,
@@ -659,8 +490,4 @@ export const containerAttributesPlugin: Extension = [
   ViewPlugin.fromClass(ContainerAttributeParsePlugin),
 ];
 
-export {
-  collectOverlappingOrderedRangesForTest as _collectOverlappingOrderedRangesForTest,
-  getMergedRangeCoverageForTest as _getMergedRangeCoverageForTest,
-  computeContainerDirtyRegion as _computeContainerDirtyRegionForTest,
-};
+export { computeContainerDirtyRegion as _computeContainerDirtyRegionForTest };

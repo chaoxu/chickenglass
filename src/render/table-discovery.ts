@@ -16,6 +16,7 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import { parseTable, type ParsedTable } from "./table-utils";
+import { rangesOverlap } from "../lib/range-helpers";
 import { mergeRanges } from "./viewport-diff";
 import { findTablePipePositions } from "../lib/table-inline-span";
 
@@ -105,15 +106,6 @@ function collectTables(
   return tables;
 }
 
-function rangesOverlap(
-  leftFrom: number,
-  leftTo: number,
-  rightFrom: number,
-  rightTo: number,
-): boolean {
-  return leftFrom <= rightTo && rightFrom <= leftTo;
-}
-
 function mapTableRange(table: TableRange, tr: Transaction): TableRange {
   const from = tr.changes.mapPos(table.from);
   const to = tr.changes.mapPos(table.to);
@@ -172,7 +164,7 @@ function computeDirtyRanges(
 
     for (const table of tables) {
       if (table.from > toA) break;
-      if (!rangesOverlap(table.from, table.to, fromA, toA)) continue;
+      if (!rangesOverlap(table, { from: fromA, to: toA })) continue;
       dirtyFrom = Math.min(dirtyFrom, tr.changes.mapPos(table.from));
       dirtyTo = Math.max(dirtyTo, tr.changes.mapPos(table.to));
     }
@@ -201,7 +193,7 @@ function tableOverlapsDirtyRanges(
   for (const range of dirtyRanges) {
     if (range.to < table.from) continue;
     if (range.from > table.to) break;
-    if (rangesOverlap(table.from, table.to, range.from, range.to)) return true;
+    if (rangesOverlap(table, range)) return true;
   }
   return false;
 }

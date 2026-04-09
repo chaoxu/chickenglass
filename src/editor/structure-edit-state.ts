@@ -16,6 +16,7 @@ import { frontmatterField } from "./frontmatter-state";
 import { focusEffect } from "../render/focus-state";
 import { programmaticDocumentChangeAnnotation } from "./programmatic-document-change";
 import { findCodeShellAt } from "./shell-ownership";
+import { containsPos } from "../lib/range-helpers";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import type {
   FootnoteDefinition,
@@ -105,7 +106,7 @@ function findInnermostFencedDivAt(
   state: EditorState,
   pos: number,
 ): FencedDivInfo | null {
-  const divs = collectFencedDivs(state).filter((div) => pos >= div.from && pos <= div.to);
+  const divs = collectFencedDivs(state).filter((div) => containsPos(div, pos));
   if (divs.length === 0) return null;
   divs.sort((left, right) => {
     const leftSpan = left.to - left.from;
@@ -149,7 +150,7 @@ function createFootnoteLabelStructureEditTargetAt(
   if (!analysis) return null;
   const definition = analysis.footnotes.defByFrom;
   for (const def of definition.values()) {
-    if (pos >= def.from && pos <= def.labelTo) {
+    if (containsPos({ from: def.from, to: def.labelTo }, pos)) {
       return {
         kind: "footnote-label",
         id: def.id,
@@ -172,7 +173,7 @@ function createDisplayMathStructureEditTargetAt(
   const regions = analysis.mathRegions;
   for (const region of regions) {
     if (!region.isDisplay) continue;
-    if (pos >= region.from && pos <= region.to) {
+    if (containsPos(region, pos)) {
       return {
         kind: "display-math",
         from: region.from,
