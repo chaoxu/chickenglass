@@ -1,4 +1,9 @@
 import type { SyntaxNodeRef, Tree } from "@lezer/common";
+import { NODE } from "../../constants/node-types";
+import {
+  isDisplayMath,
+  isFencedDivFence,
+} from "../../lib/syntax-tree-helpers";
 import { extractDivClass } from "../../parser/fenced-div-attrs";
 import { readBracedLabelId } from "../../parser/label-utils";
 import type {
@@ -95,7 +100,7 @@ function collectHeading(
   level: number,
 ): void {
   const rawText = doc.slice(node.from, node.to);
-  const headerMark = node.node.getChild("HeaderMark");
+  const headerMark = node.node.getChild(NODE.HeaderMark);
   const textFrom = headerMark ? headerMark.to : node.from;
   const rawHeadingText = doc.slice(textFrom, node.to).trim();
   const attrs = findTrailingHeadingAttributes(rawHeadingText);
@@ -162,7 +167,7 @@ function collectFencedDiv(
   let closeFenceFrom = -1;
   let closeFenceTo = -1;
 
-  const fences = divNode.getChildren("FencedDivFence");
+  const fences = divNode.getChildren(NODE.FencedDivFence);
   if (fences.length > 0) {
     openFenceFrom = fences[0].from;
     openFenceTo = fences[0].to;
@@ -171,7 +176,7 @@ function collectFencedDiv(
   let closeFenceNode = fences.length > 1 ? fences[1] : undefined;
   if (!closeFenceNode) {
     const next = divNode.nextSibling;
-    if (next?.type.name === "FencedDivFence") {
+    if (next && isFencedDivFence(next)) {
       closeFenceNode = next;
     }
   }
@@ -196,7 +201,7 @@ function collectFencedDiv(
   }
 
   let keyValueTitle: string | undefined;
-  const attrNode = divNode.getChild("FencedDivAttributes");
+  const attrNode = divNode.getChild(NODE.FencedDivAttributes);
   if (attrNode) {
     const attrs = extractDivClass(doc.slice(attrNode.from, attrNode.to));
     if (attrs) {
@@ -249,10 +254,10 @@ function collectMath(
   node: SyntaxNodeRef,
   result: StructuralWindowExtraction,
 ): void {
-  const isDisplay = node.type.name === "DisplayMath";
+  const isDisplay = isDisplayMath(node);
   const markName = isDisplay ? "DisplayMathMark" : "InlineMathMark";
   const marks = node.node.getChildren(markName);
-  const equationLabel = isDisplay ? node.node.getChild("EquationLabel") : null;
+  const equationLabel = isDisplay ? node.node.getChild(NODE.EquationLabel) : null;
   const contentFrom = marks.length >= 1 ? marks[0].to : node.from;
   const contentTo = marks.length >= 2 ? marks[marks.length - 1].from : node.to;
   const labelFrom =
@@ -427,9 +432,9 @@ export function computeNarrativeExtractionRange(
   scan: for (;;) {
     if (c.from <= range.to && c.to >= range.from) {
       switch (c.name) {
-        case "InlineCode":
-        case "InlineMath":
-        case "Link":
+        case NODE.InlineCode:
+        case NODE.InlineMath:
+        case NODE.Link:
           excludedRanges.push({ from: c.from, to: c.to });
           break;
       }
@@ -462,23 +467,23 @@ export function collectStructuralWindow(
         collectHeading(doc, c, result, Number(headingMatch[1]));
       } else {
         switch (name) {
-          case "FootnoteRef":
+          case NODE.FootnoteRef:
             collectFootnoteRef(doc, c, result);
             break;
-          case "FootnoteDef":
+          case NODE.FootnoteDef:
             collectFootnoteDef(doc, c, result);
             break;
-          case "FencedDiv":
+          case NODE.FencedDiv:
             collectFencedDiv(doc, c, result);
             break;
-          case "InlineMath":
-          case "DisplayMath":
+          case NODE.InlineMath:
+          case NODE.DisplayMath:
             collectMath(doc, c, result);
             break;
-          case "InlineCode":
+          case NODE.InlineCode:
             result.excludedRanges.push({ from: c.from, to: c.to });
             break;
-          case "Link":
+          case NODE.Link:
             collectLink(doc, c, result);
             break;
         }

@@ -16,6 +16,7 @@ import {
 } from "../citations/citation-preview";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CSS } from "../constants/css-classes";
+import { findAncestor } from "../lib/syntax-tree-helpers";
 import { buildCrossrefCompletionPreviewContent } from "../render/hover-preview";
 import { getEditorDocumentReferenceCatalog } from "../semantics/editor-reference-catalog";
 
@@ -78,10 +79,9 @@ function isForbiddenCompletionContext(state: EditorState, pos: number): boolean 
   const safePos = Math.max(0, Math.min(pos, state.doc.length));
 
   for (const bias of [1, -1, 0] as const) {
-    let node: SyntaxNode | null = tree.resolveInner(safePos, bias);
-    while (node) {
-      if (FORBIDDEN_CONTEXT_TYPES.has(node.name)) return true;
-      node = node.parent;
+    const node: SyntaxNode | null = tree.resolveInner(safePos, bias);
+    if (findAncestor(node, (candidate) => FORBIDDEN_CONTEXT_TYPES.has(candidate.name))) {
+      return true;
     }
   }
 

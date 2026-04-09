@@ -35,7 +35,9 @@ import {
   focusTracker,
 } from "./focus-state";
 import { documentSemanticsField } from "../semantics/codemirror-source";
+import { NODE } from "../constants/node-types";
 import { CSS } from "../constants/css-classes";
+import { findAncestorByName } from "../lib/syntax-tree-helpers";
 import {
   clearActiveFenceGuideClasses,
   syncActiveFenceGuideClasses,
@@ -71,14 +73,12 @@ function computeActivePath(state: EditorState): string {
 
   let node = tree.resolveInner(cursor.from);
   for (;;) {
-    if (
-      node.name === "FencedDiv" &&
-      cursor.from >= node.from &&
-      cursor.to <= node.to
-    ) {
-      parts.push(`${node.from}:${node.to}`);
+    const fencedDiv = findAncestorByName(node, NODE.FencedDiv);
+    if (!fencedDiv) break;
+    if (cursor.from >= fencedDiv.from && cursor.to <= fencedDiv.to) {
+      parts.push(`${fencedDiv.from}:${fencedDiv.to}`);
     }
-    const parent = node.parent;
+    const parent = fencedDiv.parent;
     if (!parent) break;
     node = parent;
   }

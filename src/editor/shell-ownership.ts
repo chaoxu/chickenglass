@@ -3,6 +3,7 @@ import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 import type { FencedDivInfo } from "../fenced-block/model";
 import { collectFencedDivs } from "../fenced-block/model";
+import { findAncestor, isFencedCode } from "../lib/syntax-tree-helpers";
 import { frontmatterField } from "./frontmatter-state";
 import { editorFocusField } from "../render/focus-state";
 
@@ -62,12 +63,10 @@ export function findCodeShellAt(
   const clampedPos = Math.max(0, Math.min(pos, state.doc.length));
   const tree = syntaxTree(state);
   for (const side of [1, -1] as const) {
-    let node: SyntaxNode | null = tree.resolveInner(clampedPos, side);
-    while (node) {
-      if (node.name === "FencedCode") {
-        return codeShellInfoFromNode(state, node);
-      }
-      node = node.parent;
+    const node: SyntaxNode | null = tree.resolveInner(clampedPos, side);
+    const codeBlock = findAncestor(node, isFencedCode);
+    if (codeBlock) {
+      return codeShellInfoFromNode(state, codeBlock);
     }
   }
   return null;
