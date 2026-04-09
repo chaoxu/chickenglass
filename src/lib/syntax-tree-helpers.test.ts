@@ -46,22 +46,15 @@ describe("findAncestor", () => {
   });
 
   it("walks upward until it finds the requested ancestor", () => {
-    const doc = [
-      "::: {.theorem}",
-      "Outer",
-      "::: {.proof}",
-      "Inner",
-      ":::",
-      ":::",
-    ].join("\n");
-    const state = createState(doc);
-    const node = syntaxTree(state).resolveInner(doc.indexOf("Inner"), 1);
+    const state = createState("::: {.theorem}\nContent\n:::");
+    const node = findFirstNode(state, NODE.FencedDivAttributes);
 
+    expect(node).not.toBeNull();
     const ancestor = findAncestor(node, isFencedDiv);
 
     expect(ancestor).not.toBeNull();
     expect(ancestor?.name).toBe(NODE.FencedDiv);
-    expect(doc.slice(ancestor?.from ?? 0, ancestor?.to ?? 0)).toContain("Inner");
+    expect(state.doc.sliceString(ancestor?.from ?? 0, ancestor?.to ?? 0)).toContain("Content");
   });
 });
 

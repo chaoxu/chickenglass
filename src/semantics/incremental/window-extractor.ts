@@ -176,7 +176,7 @@ function collectFencedDiv(
   let closeFenceNode = fences.length > 1 ? fences[1] : undefined;
   if (!closeFenceNode) {
     const next = divNode.nextSibling;
-    if (isFencedDivFence(next)) {
+    if (next && isFencedDivFence(next)) {
       closeFenceNode = next;
     }
   }
