@@ -16,8 +16,15 @@ const renderState: DebugRenderState = {
   visibleRawFencedOpeners: [],
 };
 
+const structureState = {
+  kind: "frontmatter",
+  from: 0,
+  to: 24,
+  title: "Demo",
+} as const;
+
 describe("session-recorder capture policy", () => {
-  it("drops heavy render context for scroll events", () => {
+  it("drops heavy render context for scroll events but keeps structure state", () => {
     const compacted = compactDebugContextForEvent("scroll", {
       document: {
         path: "index.md",
@@ -26,9 +33,16 @@ describe("session-recorder capture policy", () => {
       },
       mode: "rich",
       selection: {
+        anchor: 12,
         head: 12,
+        from: 12,
+        to: 12,
+        empty: true,
+        line: 1,
+        col: 13,
       },
       render: renderState,
+      structure: structureState,
       location: "http://localhost:5173/",
     });
 
@@ -41,6 +55,7 @@ describe("session-recorder capture policy", () => {
       mode: "rich",
       selection: null,
       render: null,
+      structure: structureState,
       location: "http://localhost:5173/",
     });
   });
@@ -51,10 +66,40 @@ describe("session-recorder capture policy", () => {
       mode: "rich",
       selection: null,
       render: renderState,
+      structure: structureState,
       location: "http://localhost:5173/",
     });
 
     expect(compacted?.render).toEqual(renderState);
+    expect(compacted?.structure).toEqual(structureState);
+  });
+
+  it("keeps full capture context for snapshot events", () => {
+    const compacted = compactDebugContextForEvent("snapshot", {
+      document: null,
+      mode: "rich",
+      selection: {
+        anchor: 4,
+        head: 7,
+        from: 4,
+        to: 7,
+        empty: false,
+        line: 1,
+        col: 5,
+      },
+      render: renderState,
+      structure: structureState,
+      location: "http://localhost:5173/",
+    });
+
+    expect(compacted).toMatchObject({
+      render: renderState,
+      structure: structureState,
+      selection: {
+        anchor: 4,
+        head: 7,
+      },
+    });
   });
 
   it("trims large doc-change inserts to preview + length", () => {

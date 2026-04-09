@@ -139,13 +139,14 @@ __app.getCurrentDocument()   — current doc {path, name, dirty} (or null)
 __app.isDirty()              — whether any open document has unsaved changes
 __cfDebug.renderState()      — proxy to the current visible rich-render snapshot
 __cfDebug.recorderStatus()   — debug recorder queue/connectivity/capture-mode snapshot
+__cfDebug.captureState("label") — combined selection/render/raw-fence/structure snapshot + recorder event
 __tauriSmoke.openProject("/abs/path") — dev-only Tauri helper to switch project roots deterministically
 __tauriSmoke.getWindowState()         — dev-only Tauri snapshot: project root, current doc, dirty, backend root, watcher root
 __tauriSmoke.simulateExternalChange("notes.md") — dev-only Tauri helper to emit a file-changed event
 __fencedDivDebug = true      — toggle fenced div parser tracing
 ```
 
-Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile()`, `getTreeDivs()`, `checkFences()`, `getGeometrySnapshot()`, `getRenderState()`, `dump()`, `setCursor()`, `scrollTo()`.
+Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile()`, `getTreeDivs()`, `checkFences()`, `getGeometrySnapshot()`, `getRenderState()`, `captureDebugState()`, `dump()`, `setCursor()`, `jumpToTextAnchor()`, `scrollTo()`.
 
 ## Dev mode
 
@@ -160,7 +161,7 @@ Prefer the managed Playwright harness for automated verification. The manual CDP
 
 Managed harness:
 1. Start: `pnpm dev`
-2. Run scripts like `pnpm test:browser`, `node scripts/perf-regression.mjs ...`, or `node scripts/cursor-scroll-regression.mjs ...`
+2. Run scripts like `pnpm test:browser`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`
 3. Default mode is Playwright-owned Chromium. Use `--browser cdp` only when you intentionally want the manual shared app window.
 
 Manual CDP lane:

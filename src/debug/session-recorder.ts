@@ -1,5 +1,9 @@
 import type { DebugDocumentState } from "../app/hooks/use-app-debug";
-import type { DebugRenderState } from "../editor/debug-helpers";
+import type {
+  DebugRenderState,
+  SelectionInfo,
+} from "../editor/debug-helpers";
+import type { StructureEditTarget } from "../editor/structure-edit-state";
 
 const DEBUG_SESSION_STORAGE_KEY = "coflat-debug-session-id";
 const DEBUG_RECORDER_ENDPOINT = "/__coflat/debug-event";
@@ -12,17 +16,34 @@ export interface DebugSessionEvent {
   readonly type: string;
   readonly summary: string;
   readonly detail?: unknown;
-  readonly context?: {
-    readonly document: DebugDocumentState | null;
-    readonly mode: string | null;
-    readonly selection: unknown;
-    readonly render: DebugRenderState | null;
-    readonly location: string;
-  };
+  readonly context?: DebugSessionContext;
 }
 
-type DebugSessionKind = "human" | "webdriver";
-type DebugContextShape = NonNullable<DebugSessionEvent["context"]>;
+export type DebugSessionKind = "human" | "webdriver";
+
+export interface DebugSessionContext {
+  readonly document: DebugDocumentState | null;
+  readonly mode: string | null;
+  readonly selection: SelectionInfo | null;
+  readonly render: DebugRenderState | null;
+  readonly structure: StructureEditTarget | null;
+  readonly location: string;
+}
+
+export interface DebugSessionRecorderStatus {
+  readonly sessionId: string | null;
+  readonly sessionKind: DebugSessionKind;
+  readonly connected: boolean;
+  readonly queued: number;
+  readonly captureMode: "smart";
+}
+
+export interface DebugSessionCapture extends DebugSessionContext {
+  readonly label: string | null;
+  readonly recorder: DebugSessionRecorderStatus;
+}
+
+type DebugContextShape = DebugSessionContext;
 type DebugContextCaptureMode = "none" | "compact" | "full";
 
 interface PendingEvent extends DebugSessionEvent {
@@ -50,6 +71,7 @@ function contextCaptureModeForEvent(type: string): DebugContextCaptureMode {
     case "focus":
     case "structure":
     case "motion-guard":
+    case "snapshot":
       return "full";
     case "scroll":
       return "none";
@@ -68,6 +90,7 @@ function buildCurrentContext(options: {
       mode: null,
       selection: null,
       render: null,
+      structure: null,
       location: "",
     };
   }
@@ -76,6 +99,7 @@ function buildCurrentContext(options: {
     mode: window.__app?.getMode?.() ?? null,
     selection: options.includeSelection ? (window.__cmDebug?.selection?.() ?? null) : null,
     render: options.includeRender ? (window.__cmDebug?.renderState?.() ?? null) : null,
+    structure: window.__cmDebug?.structure?.() ?? null,
     location: window.location.href,
   };
 }
@@ -93,6 +117,7 @@ function compactDebugContextForEvent(
       mode: context.mode,
       selection: null,
       render: null,
+      structure: context.structure,
       location: context.location,
     };
   }
@@ -101,7 +126,21 @@ function compactDebugContextForEvent(
     mode: context.mode,
     selection: context.selection,
     render: null,
+    structure: context.structure,
     location: context.location,
+  };
+}
+
+function contextFromCaptureState(
+  capture: DebugSessionCapture,
+): DebugSessionContext {
+  return {
+    document: capture.document,
+    mode: capture.mode,
+    selection: capture.selection,
+    render: capture.render,
+    structure: capture.structure,
+    location: capture.location,
   };
 }
 
@@ -242,6 +281,14 @@ export function recordDebugSessionEvent(
   scheduleFlush();
 }
 
+function snapshotSummary(capture: DebugSessionCapture): string {
+  const parts = ["snapshot"];
+  if (capture.label) parts.push(capture.label);
+  if (capture.document?.path) parts.push(capture.document.path);
+  if (capture.mode) parts.push(capture.mode);
+  return parts.join(" ");
+}
+
 export async function flushDebugSessionEvents(): Promise<void> {
   if (!isBrowser() || flushInFlight || pendingEvents.length === 0) return;
   flushInFlight = true;
@@ -274,13 +321,7 @@ export async function flushDebugSessionEvents(): Promise<void> {
   }
 }
 
-export function getDebugSessionRecorderStatus(): {
-  readonly sessionId: string | null;
-  readonly sessionKind: DebugSessionKind;
-  readonly connected: boolean;
-  readonly queued: number;
-  readonly captureMode: "smart";
-} {
+export function getDebugSessionRecorderStatus(): DebugSessionRecorderStatus {
   return {
     sessionId: ensureSessionId(),
     sessionKind: sessionKind(),
@@ -288,6 +329,24 @@ export function getDebugSessionRecorderStatus(): {
     queued: pendingEvents.length,
     captureMode: "smart",
   };
+}
+
+export function captureDebugSessionState(
+  label?: string | null,
+): DebugSessionCapture {
+  const capture: DebugSessionCapture = {
+    ...buildCurrentContext({ includeSelection: true, includeRender: true }),
+    label: label ?? null,
+    recorder: getDebugSessionRecorderStatus(),
+  };
+  recordDebugSessionEvent({
+    timestamp: Date.now(),
+    type: "snapshot",
+    summary: snapshotSummary(capture),
+    detail: capture,
+    context: contextFromCaptureState(capture),
+  });
+  return capture;
 }
 
 export {

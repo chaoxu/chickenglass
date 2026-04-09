@@ -554,6 +554,58 @@ export async function findLine(page, needle) {
 }
 
 /**
+ * Jump to the nth line containing `needle`, placing the cursor at the first
+ * match plus an optional character offset.
+ */
+export async function jumpToTextAnchor(
+  page,
+  needle,
+  { occurrence = 1, offset = 0 } = {},
+) {
+  const result = await page.evaluate(({ text, occurrence, offset }) => {
+    const view = window.__cmView;
+    const doc = view.state.doc;
+    let seen = 0;
+
+    for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber += 1) {
+      const line = doc.line(lineNumber);
+      const matchIndex = line.text.indexOf(text);
+      if (matchIndex < 0) {
+        continue;
+      }
+      seen += 1;
+      if (seen !== occurrence) {
+        continue;
+      }
+
+      const anchor = Math.max(
+        line.from,
+        Math.min(line.to, line.from + matchIndex + offset),
+      );
+      view.focus();
+      view.dispatch({
+        selection: { anchor },
+        scrollIntoView: true,
+      });
+      return {
+        line: lineNumber,
+        col: anchor - line.from + 1,
+        anchor,
+      };
+    }
+
+    return null;
+  }, { text: needle, occurrence, offset });
+
+  if (!result) {
+    throw new Error(`Failed to find text anchor ${JSON.stringify(needle)} (occurrence ${occurrence}).`);
+  }
+
+  await sleep(200);
+  return result;
+}
+
+/**
  * Cycle the editor mode button until the requested mode is active.
  *
  * @param {import("playwright").Page} page
@@ -949,6 +1001,13 @@ export async function getRenderState(page) {
  */
 export async function getRecorderStatus(page) {
   return page.evaluate(() => window.__cfDebug.recorderStatus());
+}
+
+/**
+ * Capture the current combined debug state and record it in the session log.
+ */
+export async function captureDebugState(page, label = null) {
+  return page.evaluate((snapshotLabel) => window.__cfDebug.captureState(snapshotLabel), label);
 }
 
 /**
