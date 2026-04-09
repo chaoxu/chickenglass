@@ -1,13 +1,53 @@
 import { describe, expect, it } from "vitest";
-
-import { BackgroundIndexer } from "./indexer";
+import {
+  getCachedDocumentAnalysis,
+  rememberCachedDocumentAnalysis,
+} from "../semantics/incremental/cached-document-analysis";
+import {
+  getDocumentAnalysisRevision,
+  getDocumentAnalysisSliceRevision,
+} from "../semantics/incremental/engine";
 import {
   extractFileIndex,
-  updateFileInIndex,
   removeFileFromIndex,
+  updateFileInIndex,
 } from "./extract";
-import { queryIndex } from "./query-api";
+import { BackgroundIndexer } from "./indexer";
 import type { FileIndex } from "./query-api";
+import { queryIndex } from "./query-api";
+
+describe("cached document analysis", () => {
+  it("reuses the cached entry when the text is unchanged", () => {
+    const cached = getCachedDocumentAnalysis("# Title\n");
+
+    expect(getCachedDocumentAnalysis("# Title\n", cached)).toBe(cached);
+  });
+
+  it("updates analysis incrementally across text edits", () => {
+    const before = getCachedDocumentAnalysis("# Title\n\nParagraph.\n");
+    const after = getCachedDocumentAnalysis("# Title\n\nParagraph with [@ref].\n", before);
+
+    expect(after.version).toBe(before.version + 1);
+    expect(getDocumentAnalysisRevision(after.analysis)).toBe(
+      getDocumentAnalysisRevision(before.analysis) + 1,
+    );
+    expect(getDocumentAnalysisSliceRevision(after.analysis, "references")).toBe(
+      getDocumentAnalysisSliceRevision(before.analysis, "references") + 1,
+    );
+    expect(getDocumentAnalysisSliceRevision(after.analysis, "headings")).toBe(
+      getDocumentAnalysisSliceRevision(before.analysis, "headings"),
+    );
+  });
+
+  it("adopts external analysis without changing the cached version for the same text", () => {
+    const cached = getCachedDocumentAnalysis("# Title\n");
+    const external = getCachedDocumentAnalysis("# Title\n").analysis;
+    const adopted = rememberCachedDocumentAnalysis("# Title\n", external, cached);
+
+    expect(adopted.version).toBe(cached.version);
+    expect(adopted.analysis).toBe(external);
+  });
+});
 
 describe("extractFileIndex", () => {
   describe("fenced divs", () => {
@@ -502,5 +542,18 @@ describe("BackgroundIndexer", () => {
       number: "2",
       content: "RAW_TOKEN_785 appears here.",
     });
+  });
+
+  it("continues incremental indexing after adopting editor-provided analysis", async () => {
+    const indexer = new BackgroundIndexer();
+    const initialContent = "# Title\n\nParagraph.\n";
+    const adoptedAnalysis = getCachedDocumentAnalysis(initialContent).analysis;
+
+    await indexer.updateFile("doc.md", initialContent, adoptedAnalysis);
+    await indexer.updateFile("doc.md", "# Title\n\nParagraph with [@ref].\n");
+
+    const fileIndex = await indexer.getFileIndex("doc.md");
+    expect(fileIndex?.references).toHaveLength(1);
+    expect(fileIndex?.references[0]?.ids).toEqual(["ref"]);
   });
 });

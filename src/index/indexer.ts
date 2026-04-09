@@ -15,6 +15,13 @@
  * find, filter) are pure Map/array lookups that complete in microseconds.
  */
 
+import type { DocumentAnalysis } from "../semantics/document";
+import {
+  type CachedDocumentAnalysis,
+  getCachedDocumentAnalysis,
+  rememberCachedDocumentAnalysis,
+} from "../semantics/incremental/cached-document-analysis";
+import { extractFileIndex, removeFileFromIndex, updateFileInIndex } from "./extract";
 import type {
   FileIndex,
   IndexEntry,
@@ -23,7 +30,6 @@ import type {
   SourceTextQuery,
 } from "./query-api";
 import { findReferences, getAllLabels, queryIndex, querySourceText, resolveLabel } from "./query-api";
-import { extractFileIndex, updateFileInIndex, removeFileFromIndex } from "./extract";
 
 /**
  * Document indexer that runs extraction and queries on the main thread.
@@ -42,19 +48,37 @@ import { extractFileIndex, updateFileInIndex, removeFileFromIndex } from "./extr
  */
 export class BackgroundIndexer {
   private files = new Map<string, FileIndex>();
+  private analyses = new Map<string, CachedDocumentAnalysis>();
   private disposed = false;
 
   private getDocumentIndex(): { files: ReadonlyMap<string, FileIndex> } {
     return { files: this.files };
   }
 
+  private getNextAnalysis(
+    file: string,
+    content: string,
+    analysis?: DocumentAnalysis,
+  ): CachedDocumentAnalysis {
+    const previous = this.analyses.get(file);
+    return analysis
+      ? rememberCachedDocumentAnalysis(content, analysis, previous)
+      : getCachedDocumentAnalysis(content, previous);
+  }
+
   /**
    * Update or add a single file without disturbing other indexed files.
    * Returns the number of entries found in the file.
    */
-  async updateFile(file: string, content: string): Promise<number> {
+  async updateFile(
+    file: string,
+    content: string,
+    analysis?: DocumentAnalysis,
+  ): Promise<number> {
     if (this.disposed) throw new Error(`Indexer.updateFile("${file}"): indexer is disposed`);
-    this.files = updateFileInIndex(this.files, file, content);
+    const nextAnalysis = this.getNextAnalysis(file, content, analysis);
+    this.analyses.set(file, nextAnalysis);
+    this.files = updateFileInIndex(this.files, file, content, nextAnalysis.analysis);
     return this.files.get(file)?.entries.length ?? 0;
   }
 
@@ -62,6 +86,7 @@ export class BackgroundIndexer {
   async removeFile(file: string): Promise<void> {
     if (this.disposed) throw new Error(`Indexer.removeFile("${file}"): indexer is disposed`);
     this.files = removeFileFromIndex(this.files, file);
+    this.analyses.delete(file);
   }
 
   /** Query the index with the given filters. */
@@ -106,17 +131,25 @@ export class BackgroundIndexer {
    * Returns the total entry count in the rebuilt index.
    */
   async bulkUpdate(
-    files: ReadonlyArray<{ file: string; content: string }>,
+    files: ReadonlyArray<{
+      file: string;
+      content: string;
+      analysis?: DocumentAnalysis;
+    }>,
   ): Promise<number> {
     if (this.disposed) throw new Error(`Indexer.bulkUpdate(${files.length} files): indexer is disposed`);
     const nextFiles = new Map<string, FileIndex>();
+    const nextAnalyses = new Map<string, CachedDocumentAnalysis>();
     let totalEntries = 0;
-    for (const { file, content } of files) {
-      const fileIndex = extractFileIndex(content, file);
+    for (const { file, content, analysis } of files) {
+      const nextAnalysis = this.getNextAnalysis(file, content, analysis);
+      nextAnalyses.set(file, nextAnalysis);
+      const fileIndex = extractFileIndex(content, file, nextAnalysis.analysis);
       nextFiles.set(file, fileIndex);
       totalEntries += fileIndex.entries.length;
     }
     this.files = nextFiles;
+    this.analyses = nextAnalyses;
     return totalEntries;
   }
 
@@ -125,5 +158,6 @@ export class BackgroundIndexer {
     if (this.disposed) return;
     this.disposed = true;
     this.files.clear();
+    this.analyses.clear();
   }
 }

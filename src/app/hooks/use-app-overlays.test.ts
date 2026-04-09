@@ -1,13 +1,9 @@
-import { act, renderHook } from "@testing-library/react";
 import { markdown } from "@codemirror/lang-markdown";
 import type { EditorView } from "@codemirror/view";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PaletteCommand } from "../components/command-palette";
-import { createActiveDocumentSignal } from "../active-document-signal";
-import { MemoryFileSystem } from "../file-manager";
-import type { Settings } from "../lib/types";
-import { BackgroundIndexer } from "../../index";
 import { frontmatterField } from "../../editor/frontmatter-state";
+import { BackgroundIndexer } from "../../index";
 import { markdownExtensions } from "../../parser";
 import {
   defaultPlugins,
@@ -17,6 +13,10 @@ import { documentLabelGraphField } from "../../semantics/document-label-graph";
 import { blockCounterField } from "../../state/block-counter";
 import { createPluginRegistryField } from "../../state/plugin-registry";
 import { createTestView } from "../../test-utils";
+import { createActiveDocumentSignal } from "../active-document-signal";
+import type { PaletteCommand } from "../components/command-palette";
+import { MemoryFileSystem } from "../file-manager";
+import type { Settings } from "../lib/types";
 
 const overlayHookState = vi.hoisted(() => ({
   hotkeys: [] as Array<{ key: string; handler: () => void }>,
@@ -148,6 +148,13 @@ function createEditorHarness(
     activeDocumentSignal,
     setCurrentDocText: (nextDoc) => {
       currentDocText = nextDoc;
+      options.view?.dispatch({
+        changes: {
+          from: 0,
+          to: options.view.state.doc.length,
+          insert: nextDoc,
+        },
+      });
     },
   };
 }
@@ -240,6 +247,17 @@ function createLabelView(doc: string, cursorPos: number): EditorView {
   return view;
 }
 
+function createSearchIndexView(doc: string): EditorView {
+  const view = createTestView(doc, {
+    extensions: [
+      markdown({ extensions: markdownExtensions }),
+      documentAnalysisField,
+    ],
+  });
+  createdViews.push(view);
+  return view;
+}
+
 function getCommand(commands: readonly PaletteCommand[], id: string): PaletteCommand {
   const command = commands.find((candidate) => candidate.id === id);
   expect(command, `expected command ${id}`).toBeDefined();
@@ -273,6 +291,8 @@ describe("useAppOverlays", () => {
   it("builds the search index from markdown files, using live editor text for the active file", async () => {
     const bulkUpdateSpy = vi.spyOn(BackgroundIndexer.prototype, "bulkUpdate");
     const updateFileSpy = vi.spyOn(BackgroundIndexer.prototype, "updateFile");
+    const view = createSearchIndexView("# Live draft\n");
+    const activeAnalysis = view.state.field(documentAnalysisField);
     const {
       props,
       dialogs,
@@ -286,6 +306,7 @@ describe("useAppOverlays", () => {
       },
       currentPath: "notes/current.md",
       currentDocText: "# Live draft\n",
+      view,
       dialogs: { searchOpen: true },
     });
     const readFileSpy = vi.spyOn(fs, "readFile");
@@ -299,12 +320,20 @@ describe("useAppOverlays", () => {
       expect(result.current.searchVersion).toBeGreaterThan(0);
     });
 
-    expect(updateFileSpy).toHaveBeenCalledWith("notes/current.md", "# Live draft\n");
+    expect(updateFileSpy).toHaveBeenCalledWith(
+      "notes/current.md",
+      "# Live draft\n",
+      activeAnalysis,
+    );
     expect(readFileSpy).toHaveBeenCalledTimes(1);
     expect(readFileSpy).toHaveBeenCalledWith("notes/other.md");
     expect(readFileSpy).not.toHaveBeenCalledWith("notes/current.md");
     expect(bulkUpdateSpy.mock.calls[0]?.[0]).toEqual(expect.arrayContaining([
-      { file: "notes/current.md", content: "# Live draft\n" },
+      {
+        file: "notes/current.md",
+        content: "# Live draft\n",
+        analysis: activeAnalysis,
+      },
       { file: "notes/other.md", content: "# Other\n" },
     ]));
     expect(bulkUpdateSpy.mock.calls[0]?.[0]).toHaveLength(2);
@@ -315,6 +344,7 @@ describe("useAppOverlays", () => {
 
   it("resyncs the active markdown file and bumps searchVersion on active-document edits while search is open", async () => {
     const updateFileSpy = vi.spyOn(BackgroundIndexer.prototype, "updateFile");
+    const view = createSearchIndexView("# Current\n");
     const {
       props,
       setCurrentDocText,
@@ -326,6 +356,7 @@ describe("useAppOverlays", () => {
       },
       currentPath: "notes/current.md",
       currentDocText: "# Current\n",
+      view,
       dialogs: { searchOpen: true },
     });
 
@@ -352,9 +383,11 @@ describe("useAppOverlays", () => {
       expect(result.current.searchVersion).toBeGreaterThan(initialSearchVersion);
     });
 
+    const updatedAnalysis = view.state.field(documentAnalysisField);
     expect(updateFileSpy.mock.calls.at(-1)).toEqual([
       "notes/current.md",
       "# Updated live draft\n",
+      updatedAnalysis,
     ]);
   });
 

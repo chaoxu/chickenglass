@@ -7,18 +7,18 @@ import {
   type DocumentSemantics,
   type FencedDivSemantics,
 } from "../semantics/document";
-import { analyzeMarkdownSemantics } from "../semantics/markdown-analysis";
+import { getCachedDocumentAnalysis } from "../semantics/incremental/cached-document-analysis";
 import {
   buildDocumentReferenceCatalog,
   type DocumentReferenceCatalog,
 } from "../semantics/reference-catalog";
-import type { IndexEntry, IndexReference, FileIndex } from "./query-api";
+import type { FileIndex, IndexEntry, IndexReference } from "./query-api";
 
 export function extractFileIndex(
   content: string,
   file: string,
+  analysis = getCachedDocumentAnalysis(content).analysis,
 ): FileIndex {
-  const analysis = analyzeMarkdownSemantics(content);
   const entries: IndexEntry[] = [];
   const references: IndexReference[] = [];
 
@@ -140,9 +140,10 @@ export function updateFileInIndex(
   existingFiles: ReadonlyMap<string, FileIndex>,
   file: string,
   content: string,
+  analysis?: DocumentSemantics,
 ): Map<string, FileIndex> {
   const newFiles = new Map(existingFiles);
-  const fileIndex = extractFileIndex(content, file);
+  const fileIndex = extractFileIndex(content, file, analysis);
   newFiles.set(file, fileIndex);
   return newFiles;
 }
