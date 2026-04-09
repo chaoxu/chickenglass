@@ -85,7 +85,9 @@ export {
 export {
   defaultShouldUpdate,
   cursorSensitiveShouldUpdate,
+  filterDecorationSetInRanges,
   createCursorSensitiveViewPlugin,
+  createIncrementalDecorationsViewPlugin,
   createSimpleViewPlugin,
   type CursorSensitiveCollectFn,
 } from "./view-plugin-factories";

@@ -10,6 +10,7 @@ import {
 } from "@codemirror/view";
 import {
   createCursorSensitiveViewPlugin,
+  createIncrementalDecorationsViewPlugin,
   createSimpleViewPlugin,
   cursorSensitiveShouldUpdate,
   defaultShouldUpdate,
@@ -139,6 +140,109 @@ describe("defaultShouldUpdate", () => {
 
   it("returns false when nothing changed", () => {
     expect(defaultShouldUpdate(mockViewUpdate())).toBe(false);
+  });
+});
+
+describe("createIncrementalDecorationsViewPlugin", () => {
+  let view: EditorView | undefined;
+
+  interface IncrementalPluginProbe {
+    decorations: DecorationSet;
+  }
+
+  function getPluginProbe(
+    ext: ReturnType<typeof createIncrementalDecorationsViewPlugin>,
+  ): IncrementalPluginProbe {
+    const plugin = view?.plugin(ext as unknown as ViewPlugin<IncrementalPluginProbe>);
+    expect(plugin).toBeTruthy();
+    if (!plugin) throw new Error("expected incremental decorations plugin instance");
+    return plugin;
+  }
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
+  it("maps existing decorations through doc changes when no dirty ranges are returned", () => {
+    const mark = Decoration.mark({ class: "mapped" });
+    let collectCount = 0;
+    const ext = createIncrementalDecorationsViewPlugin(
+      () => Decoration.set([mark.range(0, 5)], true),
+      {
+        incrementalRanges: () => [],
+        collectRanges: () => {
+          collectCount++;
+          return [];
+        },
+      },
+    );
+
+    view = createTestView("hello", { extensions: [markdown(), ext] });
+    const plugin = getPluginProbe(ext);
+
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+
+    expect(collectCount).toBe(0);
+    expect(getDecorationSpecs(plugin.decorations)).toEqual([
+      expect.objectContaining({ from: 1, to: 6 }),
+    ]);
+  });
+
+  it("recollects dirty ranges without forcing a full rebuild", () => {
+    const dirtyMark = Decoration.mark({ class: "dirty" });
+    let buildCount = 0;
+    let collectCount = 0;
+    const ext = createIncrementalDecorationsViewPlugin(
+      () => {
+        buildCount++;
+        return Decoration.none;
+      },
+      {
+        incrementalRanges: () => [{ from: 1, to: 4 }],
+        collectRanges: (_view, ranges) => {
+          collectCount++;
+          return [dirtyMark.range(ranges[0].from, ranges[0].to)];
+        },
+      },
+    );
+
+    view = createTestView("hello", { extensions: [markdown(), ext] });
+    const plugin = getPluginProbe(ext);
+
+    view.dispatch({ changes: { from: 2, insert: "!" } });
+
+    expect(buildCount).toBe(1);
+    expect(collectCount).toBe(1);
+    expect(getDecorationSpecs(plugin.decorations)).toEqual([
+      expect.objectContaining({ from: 1, to: 4 }),
+    ]);
+  });
+
+  it("rebuilds instead of recollecting when shouldRebuild requests it", () => {
+    let buildCount = 0;
+    let collectCount = 0;
+    const ext = createIncrementalDecorationsViewPlugin(
+      () => {
+        buildCount++;
+        return Decoration.none;
+      },
+      {
+        shouldRebuild: () => true,
+        incrementalRanges: () => [{ from: 0, to: 1 }],
+        collectRanges: () => {
+          collectCount++;
+          return [];
+        },
+      },
+    );
+
+    view = createTestView("hello", { extensions: [markdown(), ext] });
+
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+
+    expect(buildCount).toBe(2);
+    expect(collectCount).toBe(0);
   });
 });
 

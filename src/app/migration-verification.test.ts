@@ -927,6 +927,7 @@ describe("#370 — shared decoration/widget factories", () => {
     const renderUtils = await import("../render/render-utils");
 
     expect(renderUtils.createSimpleViewPlugin).toBeDefined();
+    expect(renderUtils.createIncrementalDecorationsViewPlugin).toBeDefined();
     expect(renderUtils.createDecorationsField).toBeDefined();
     expect(renderUtils.pushWidgetDecoration).toBeDefined();
     expect(renderUtils.collectNodeRangesExcludingCursor).toBeDefined();
@@ -941,7 +942,7 @@ describe("#370 — shared decoration/widget factories", () => {
     expect(checkbox).toContain("createSimpleViewPlugin");
     expect(checkbox).toContain("pushWidgetDecoration");
     expect(image).toContain("pushWidgetDecoration");
-    expect(reference).toContain("ViewPlugin.fromClass");
+    expect(reference).toContain("createIncrementalDecorationsViewPlugin");
     expect(reference).toContain("pushWidgetDecoration");
     expect(pluginRender).toContain("buildFencedBlockDecorations");
     expect(pluginRender).toContain("createFencedBlockDecorationField");
