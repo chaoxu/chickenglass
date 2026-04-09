@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
@@ -95,6 +95,7 @@ function debugSessionSinkPlugin(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const gitBuildInfo = readGitBuildInfo();
+  const linkedNodeModulesRoot = realpathSync(path.join(__dirname, "node_modules"));
   return {
     plugins: [react(), tailwindcss(), debugSessionSinkPlugin()],
     define: {
@@ -107,6 +108,11 @@ export default defineConfig(({ mode }) => {
     build: {
       target: "es2022",
       sourcemap: mode === "development",
+    },
+    server: {
+      fs: {
+        allow: [__dirname, linkedNodeModulesRoot],
+      },
     },
   };
 });

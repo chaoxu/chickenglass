@@ -10,7 +10,7 @@ import { parser as lezerParser } from "@lezer/markdown";
 import { MathWidget, collectMathRanges, stripMathDelimiters, getDisplayMathContentEnd, _mathDecorationFieldForTest as mathDecorationField, mathRenderPlugin, clearKatexCache, renderKatex, renderKatexToHtml, _snapToTokenBoundary } from "./math-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
-import { createMockEditorView, createTestView } from "../test-utils";
+import { createMockEditorView, createTestView, getDecorationSpecs } from "../test-utils";
 import { focusEffect, widgetSourceMap } from "./render-utils";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { renderInlineMarkdown } from "./inline-render";
@@ -381,15 +381,17 @@ describe("MathWidget (display)", () => {
 
     const el = widget.toDOM();
     // After toDOM, widgetSourceMap should point el → widget
-    expect(widgetSourceMap.get(el)).toBe(widget);
-    expect(widgetSourceMap.get(el)!.sourceFrom).toBe(950);
+    const mappedWidget = widgetSourceMap.get(el);
+    expect(mappedWidget).toBe(widget);
+    expect(mappedWidget?.sourceFrom).toBe(950);
 
     // Simulate position mapping
     widget.updateSourceRange(951, 1023);
 
     // widgetSourceMap still points to the same widget, now with updated fields
-    expect(widgetSourceMap.get(el)!.sourceFrom).toBe(951);
-    expect(widgetSourceMap.get(el)!.sourceTo).toBe(1023);
+    const updatedMappedWidget = widgetSourceMap.get(el);
+    expect(updatedMappedWidget?.sourceFrom).toBe(951);
+    expect(updatedMappedWidget?.sourceTo).toBe(1023);
   });
 });
 
@@ -413,9 +415,10 @@ describe("MathWidget.updateDOM", () => {
     expect(result).toBe(true);
 
     // Source-range metadata must be refreshed (reviewer #732 blocking issue)
-    expect(widgetSourceMap.get(dom)).toBe(newWidget);
-    expect(widgetSourceMap.get(dom)!.sourceFrom).toBe(20);
-    expect(widgetSourceMap.get(dom)!.sourceTo).toBe(25);
+    const updatedInlineWidget = widgetSourceMap.get(dom);
+    expect(updatedInlineWidget).toBe(newWidget);
+    expect(updatedInlineWidget?.sourceFrom).toBe(20);
+    expect(updatedInlineWidget?.sourceTo).toBe(25);
     expect(dom.dataset.sourceFrom).toBe("20");
     expect(dom.dataset.sourceTo).toBe("25");
 
@@ -440,8 +443,9 @@ describe("MathWidget.updateDOM", () => {
     const result = newWidget.updateDOM(dom);
     expect(result).toBe(true);
 
-    expect(widgetSourceMap.get(dom)).toBe(newWidget);
-    expect(widgetSourceMap.get(dom)!.sourceFrom).toBe(110);
+    const updatedDisplayWidget = widgetSourceMap.get(dom);
+    expect(updatedDisplayWidget).toBe(newWidget);
+    expect(updatedDisplayWidget?.sourceFrom).toBe(110);
     expect(dom.dataset.sourceFrom).toBe("110");
     expect(dom.dataset.sourceTo).toBe("117");
     expect(dom.getAttribute("aria-label")).toBe("y^2");
@@ -572,6 +576,14 @@ describe("collectMathRanges", () => {
     view = createMathView(doc, doc.length);
     const ranges = collectMathRanges(view);
     expect(ranges.length).toBe(1);
+  });
+
+  it("renders non-active display math as a block replacement", () => {
+    const state = createMathRenderState("before\n\n$$x^2$$\n\nafter");
+    const specs = getDecorationSpecs(state.field(mathDecorationField));
+    const displayWidget = specs.find((spec) => spec.widgetClass === "MathWidget");
+    expect(displayWidget?.block).toBe(true);
+    expect(displayWidget?.from).toBeLessThan(displayWidget?.to ?? 0);
   });
 
   it("collects display math with backslash-bracket syntax", () => {
@@ -806,10 +818,11 @@ describe("math decoration invalidation", () => {
     await vi.waitFor(() => {
       const widgetEl = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="x"]`);
       expect(widgetEl).not.toBeNull();
-      expect(widgetEl!.dataset.sourceFrom).toBe("9");
-      expect(widgetEl!.dataset.sourceTo).toBe("12");
-      expect(widgetSourceMap.get(widgetEl!)?.sourceFrom).toBe(9);
-      expect(widgetSourceMap.get(widgetEl!)?.sourceTo).toBe(12);
+      if (!widgetEl) throw new Error("expected x widget");
+      expect(widgetEl.dataset.sourceFrom).toBe("9");
+      expect(widgetEl.dataset.sourceTo).toBe("12");
+      expect(widgetSourceMap.get(widgetEl)?.sourceFrom).toBe(9);
+      expect(widgetSourceMap.get(widgetEl)?.sourceTo).toBe(12);
     });
   });
 });
@@ -855,21 +868,23 @@ describe("live math widget metadata", () => {
       const dWidget = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="d"]`);
       expect(cWidget).not.toBeNull();
       expect(dWidget).not.toBeNull();
+      if (!cWidget || !dWidget) throw new Error("expected c and d widgets");
 
-      expect(cWidget!.dataset.sourceFrom).toBe("31");
-      expect(cWidget!.dataset.sourceTo).toBe("34");
-      expect(widgetSourceMap.get(cWidget!)?.sourceFrom).toBe(31);
-      expect(widgetSourceMap.get(cWidget!)?.sourceTo).toBe(34);
+      expect(cWidget.dataset.sourceFrom).toBe("31");
+      expect(cWidget.dataset.sourceTo).toBe("34");
+      expect(widgetSourceMap.get(cWidget)?.sourceFrom).toBe(31);
+      expect(widgetSourceMap.get(cWidget)?.sourceTo).toBe(34);
 
-      expect(dWidget!.dataset.sourceFrom).toBe("40");
-      expect(dWidget!.dataset.sourceTo).toBe("43");
-      expect(widgetSourceMap.get(dWidget!)?.sourceFrom).toBe(40);
-      expect(widgetSourceMap.get(dWidget!)?.sourceTo).toBe(43);
+      expect(dWidget.dataset.sourceFrom).toBe("40");
+      expect(dWidget.dataset.sourceTo).toBe("43");
+      expect(widgetSourceMap.get(dWidget)?.sourceFrom).toBe(40);
+      expect(widgetSourceMap.get(dWidget)?.sourceTo).toBe(43);
     });
 
     const dWidget = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="d"]`);
     expect(dWidget).not.toBeNull();
-    dWidget!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    if (!dWidget) throw new Error("expected d widget");
+    dWidget.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     expect(currentView.state.selection.main.anchor).toBeGreaterThanOrEqual(40);
     expect(currentView.state.selection.main.anchor).toBeLessThanOrEqual(43);
   });
@@ -894,10 +909,11 @@ describe("live math widget metadata", () => {
       const dWidget = currentView.contentDOM.querySelector<HTMLElement>(`.${CSS.mathInline}[aria-label="d"]`);
       expect(cWidget).not.toBeNull();
       expect(dWidget).not.toBeNull();
-      expect(cWidget!.dataset.sourceFrom).toBe("31");
-      expect(cWidget!.dataset.sourceTo).toBe("34");
-      expect(dWidget!.dataset.sourceFrom).toBe("40");
-      expect(dWidget!.dataset.sourceTo).toBe("43");
+      if (!cWidget || !dWidget) throw new Error("expected c and d widgets");
+      expect(cWidget.dataset.sourceFrom).toBe("31");
+      expect(cWidget.dataset.sourceTo).toBe("34");
+      expect(dWidget.dataset.sourceFrom).toBe("40");
+      expect(dWidget.dataset.sourceTo).toBe("43");
     });
   });
 });

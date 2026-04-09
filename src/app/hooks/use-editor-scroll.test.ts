@@ -15,7 +15,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createElement, useState, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
-import { useEditorScroll, type UseEditorScrollReturn } from "./use-editor-scroll";
+import {
+  computeScrollGuardPadding,
+  guardReverseScrollRemap,
+  useEditorScroll,
+  type UseEditorScrollReturn,
+} from "./use-editor-scroll";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 
 // ── Minimal EditorView stub ─────────────────────────────────────────────────
@@ -24,14 +29,28 @@ import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 
 interface MockView {
   scrollDOM: HTMLDivElement;
+  contentDOM: HTMLDivElement;
   lineBlockAtHeight: (h: number) => { from: number };
   requestMeasure: () => void;
 }
 
 function createMockView(): MockView {
   const scrollDOM = document.createElement("div");
+  const contentDOM = document.createElement("div");
+  scrollDOM.appendChild(contentDOM);
+  Object.defineProperty(scrollDOM, "scrollHeight", {
+    configurable: true,
+    writable: true,
+    value: 3000,
+  });
+  Object.defineProperty(scrollDOM, "clientHeight", {
+    configurable: true,
+    writable: true,
+    value: 600,
+  });
   return {
     scrollDOM,
+    contentDOM,
     lineBlockAtHeight: vi.fn((h: number) => ({ from: Math.floor(h) })),
     requestMeasure: vi.fn(),
   };
@@ -258,5 +277,87 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     // not three times.
     expect(mockView.lineBlockAtHeight).toHaveBeenCalledTimes(1);
     expect(getStoredScroll().scrollTop).toBe(300);
+  });
+
+  it("guards a wheel-driven reverse remap after a large height correction", () => {
+    const { Harness, ref } = createHarness();
+    const mockView = createMockView();
+
+    act(() => root.render(createElement(Harness)));
+    act(() => ref.setView(mockView));
+
+    mockView.scrollDOM.scrollTop = 1400;
+    act(() => {
+      dispatchScrollAndFlush(mockView.scrollDOM);
+    });
+    expect(getStoredScroll().scrollTop).toBe(1400);
+
+    mockView.scrollDOM.dispatchEvent(new WheelEvent("wheel", { deltaY: 90 }));
+    Object.defineProperty(mockView.scrollDOM, "scrollHeight", {
+      configurable: true,
+      writable: true,
+      value: 2400,
+    });
+    mockView.scrollDOM.scrollTop = 1000;
+    act(() => {
+      dispatchScrollAndFlush(mockView.scrollDOM);
+    });
+
+    expect(mockView.scrollDOM.scrollTop).toBe(1490);
+    expect(getStoredScroll().scrollTop).toBe(1490);
+    expect(mockView.requestMeasure).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("guardReverseScrollRemap", () => {
+  it("returns a corrected forward target plus preserved runway for reversed downward drift", () => {
+    expect(guardReverseScrollRemap({
+      previousTop: 1400,
+      previousHeight: 3000,
+      currentTop: 1000,
+      currentHeight: 2400,
+      clientHeight: 600,
+      wheelDeltaY: 90,
+      wheelAgeMs: 20,
+      preservedMaxScrollTop: null,
+    })).toEqual({
+      correctedTop: 1490,
+      paddingBottom: 600,
+      preservedMaxScrollTop: 2400,
+      observedMaxScrollTop: 1800,
+    });
+  });
+
+  it("returns null for ordinary forward scroll", () => {
+    expect(guardReverseScrollRemap({
+      previousTop: 1400,
+      previousHeight: 3000,
+      currentTop: 1490,
+      currentHeight: 3000,
+      clientHeight: 600,
+      wheelDeltaY: 90,
+      wheelAgeMs: 20,
+      preservedMaxScrollTop: null,
+    })).toBeNull();
+  });
+
+  it("returns null without a large height correction", () => {
+    expect(guardReverseScrollRemap({
+      previousTop: 1400,
+      previousHeight: 3000,
+      currentTop: 1000,
+      currentHeight: 2850,
+      clientHeight: 600,
+      wheelDeltaY: 90,
+      wheelAgeMs: 20,
+      preservedMaxScrollTop: null,
+    })).toBeNull();
+  });
+});
+
+describe("computeScrollGuardPadding", () => {
+  it("preserves prior runway until raw height catches up", () => {
+    expect(computeScrollGuardPadding(2400, 600, 2400)).toBe(600);
+    expect(computeScrollGuardPadding(3000, 600, 2400)).toBe(0);
   });
 });

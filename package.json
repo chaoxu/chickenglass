@@ -68,6 +68,7 @@
       "lefthook"
     ],
     "patchedDependencies": {
+      "@codemirror/view@6.40.0": "patches/@codemirror+view@6.40.0.patch",
       "katex@0.16.38": "patches/katex@0.16.38.patch"
     }
   },

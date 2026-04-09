@@ -24,8 +24,10 @@ import {
 import { MathWidget } from "./math-widget";
 import {
   buildDecorations,
+  pushBlockWidgetDecoration,
   pushWidgetDecoration,
 } from "./decoration-core";
+import { isDebugRenderFlagEnabled } from "./debug-render-flags";
 import {
   editorFocusField,
   focusTracker,
@@ -105,6 +107,8 @@ function buildMathItems(
   const analysis = state.field(documentAnalysisField);
   const equationNumbersByFrom = buildEquationNumbersByFrom(analysis.equationById);
   const items: Range<Decoration>[] = [];
+  const disableInlineMathWidgets = isDebugRenderFlagEnabled("disableInlineMathWidgets");
+  const disableDisplayMathWidgets = isDebugRenderFlagEnabled("disableDisplayMathWidgets");
 
   for (const region of regions) {
     if (shouldSkip(region.from, region.to)) {
@@ -136,7 +140,7 @@ function buildMathItems(
           Decoration.mark({ class: CSS.mathSource }).range(region.labelFrom, region.to),
         );
       }
-      if (region.isDisplay) {
+      if (region.isDisplay && !disableDisplayMathWidgets) {
         // Display math stays rendered even while showing source marks so the
         // block height and click target remain stable during cursor reveal.
         const widget = new MathWidget(
@@ -154,19 +158,20 @@ function buildMathItems(
       continue;
     }
 
-    pushWidgetDecoration(
-      items,
-      new MathWidget(
-        region.latex,
-        state.sliceDoc(region.from, region.to),
-        region.isDisplay,
-        macros,
-        region.contentFrom - region.from,
-        getDisplayEquationNumber(region, equationNumbersByFrom),
-      ),
-      region.from,
-      region.to,
+    const widget = new MathWidget(
+      region.latex,
+      state.sliceDoc(region.from, region.to),
+      region.isDisplay,
+      macros,
+      region.contentFrom - region.from,
+      getDisplayEquationNumber(region, equationNumbersByFrom),
     );
+    if (region.isDisplay) {
+      if (disableDisplayMathWidgets) continue;
+      pushBlockWidgetDecoration(items, widget, region.from, region.to);
+    } else if (!disableInlineMathWidgets) {
+      pushWidgetDecoration(items, widget, region.from, region.to);
+    }
   }
 
   return items;

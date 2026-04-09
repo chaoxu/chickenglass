@@ -59,6 +59,7 @@ import {
   findFocusedInlineRevealTarget,
   inlineRevealTargetChanged,
 } from "./inline-reveal-policy";
+import { isDebugRenderFlagEnabled } from "./debug-render-flags";
 
 function serializeKeyPart(value: string | undefined): string {
   return value ?? "";
@@ -306,6 +307,7 @@ export function planReferenceRendering(
 function emitReferenceDecorations(plan: readonly ReferenceRenderItem[]): Range<Decoration>[] {
   const sourceMarkDecoration = Decoration.mark({ class: CSS.referenceSource });
   const ranges: Range<Decoration>[] = [];
+  const disableReferenceWidgets = isDebugRenderFlagEnabled("disableReferenceWidgets");
 
   for (const item of plan) {
     switch (item.kind) {
@@ -313,19 +315,39 @@ function emitReferenceDecorations(plan: readonly ReferenceRenderItem[]): Range<D
         ranges.push(sourceMarkDecoration.range(item.from, item.to));
         break;
       case "citation":
-        pushWidgetDecoration(ranges, new CitationWidget(item.rendered, item.ids, item.narrative), item.from, item.to);
+        if (!disableReferenceWidgets) {
+          pushWidgetDecoration(
+            ranges,
+            new CitationWidget(item.rendered, item.ids, item.narrative),
+            item.from,
+            item.to,
+          );
+        }
         break;
       case "mixed-cluster":
-        pushWidgetDecoration(ranges, new MixedClusterWidget(item.parts, item.raw), item.from, item.to);
+        if (!disableReferenceWidgets) {
+          pushWidgetDecoration(ranges, new MixedClusterWidget(item.parts, item.raw), item.from, item.to);
+        }
         break;
       case "crossref":
-        pushWidgetDecoration(ranges, new CrossrefWidget(item.resolved, item.raw), item.from, item.to);
+        if (!disableReferenceWidgets) {
+          pushWidgetDecoration(ranges, new CrossrefWidget(item.resolved, item.raw), item.from, item.to);
+        }
         break;
       case "clustered-crossref":
-        pushWidgetDecoration(ranges, new ClusteredCrossrefWidget(item.parts, item.raw), item.from, item.to);
+        if (!disableReferenceWidgets) {
+          pushWidgetDecoration(
+            ranges,
+            new ClusteredCrossrefWidget(item.parts, item.raw),
+            item.from,
+            item.to,
+          );
+        }
         break;
       case "unresolved":
-        pushWidgetDecoration(ranges, new UnresolvedRefWidget(item.raw), item.from, item.to);
+        if (!disableReferenceWidgets) {
+          pushWidgetDecoration(ranges, new UnresolvedRefWidget(item.raw), item.from, item.to);
+        }
         break;
     }
   }

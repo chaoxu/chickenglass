@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { EditorState } from "@codemirror/state";
-import type { DecorationSet, EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { CSS } from "../constants/css-classes";
 import {
   ImagePreviewWidget,
+  _imageDecorationFieldForTest,
   imageRenderPlugin,
 } from "./image-render";
 import { imageUrlEffect, imageUrlField } from "./image-url-cache";
@@ -47,6 +47,13 @@ describe("ImagePreviewWidget (image state)", () => {
       const el = widget.createDOM();
       const img = el.querySelector("img");
       expect(img?.alt).toBe("");
+    });
+
+    it("uses a block wrapper when configured as a block image", () => {
+      const widget = new ImagePreviewWidget("photo", "photo.png", imageState("photo.png"), true);
+      const el = widget.createDOM();
+      expect(el.tagName).toBe("DIV");
+      expect(el.className).toBe(CSS.imageWrapper);
     });
   });
 
@@ -441,7 +448,11 @@ describe("ImageRenderPlugin incremental docChanged (#824)", () => {
       },
     });
 
-    expect(resolvePreview).not.toHaveBeenCalled();
+    expect(resolvePreview).toHaveBeenCalledTimes(2);
+    expect(resolvePreview.mock.calls.map((call) => call[1])).toEqual([
+      "https://a.co/a.png",
+      "https://a.co/b.png",
+    ]);
     expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(2);
   });
 
@@ -491,8 +502,11 @@ describe("ImageRenderPlugin incremental docChanged (#824)", () => {
       },
     });
 
-    expect(resolvePreview).toHaveBeenCalledTimes(1);
-    expect(resolvePreview.mock.calls[0]?.[1]).toBe(nextUrl);
+    expect(resolvePreview).toHaveBeenCalledTimes(2);
+    expect(resolvePreview.mock.calls.map((call) => call[1])).toEqual([
+      nextUrl,
+      "https://example.com/b.png",
+    ]);
 
     const renderedSources = [...view.dom.querySelectorAll(`.${CSS.imageWrapper} img`)]
       .map((img) => img.getAttribute("src"));
@@ -526,117 +540,24 @@ describe("ImageRenderPlugin incremental docChanged (#824)", () => {
   });
 });
 
-interface ImageRenderPluginProbe {
-  decorations: DecorationSet;
-  coveredRanges: Array<{ from: number; to: number }>;
-  rebuild(view: EditorView): void;
-  update(update: ViewUpdate): void;
-}
-
-describe("ImageRenderPlugin incremental viewportChanged (#875)", () => {
-  let view: EditorView | undefined;
-
-  function getPluginProbe(): ImageRenderPluginProbe {
-    const plugin = view?.plugin(imageRenderPlugin as unknown as ViewPlugin<ImageRenderPluginProbe>);
-    expect(plugin).toBeTruthy();
-    if (!plugin) throw new Error("expected image render plugin instance");
-    return plugin;
-  }
-
-  function setVisibleRanges(
-    ranges: readonly { from: number; to: number }[],
-  ): (next: readonly { from: number; to: number }[]) => void {
-    if (!view) throw new Error("expected test view");
-    let current = ranges;
-    Object.defineProperty(view, "visibleRanges", {
-      configurable: true,
-      get: () => current,
+describe("imageRenderPlugin block ownership", () => {
+  it("uses a block replacement for standalone image lines", () => {
+    const view = createTestView("![](figure.png)", {
+      extensions: [markdown(), imageUrlField, pdfPreviewField, imageRenderPlugin],
     });
-    return (next) => {
-      current = next;
-    };
-  }
-
-  function mockViewportUpdate(): ViewUpdate {
-    if (!view) throw new Error("expected test view");
-    const currentView = view;
-    const state = Object.create(currentView.state) as EditorState;
-    Object.defineProperty(state, "field", {
-      configurable: true,
-      value: (field: unknown, require = true) => {
-        if (field === pdfPreviewField || field === imageUrlField) {
-          return currentView.state.field(field as never, false) ?? new Map();
-        }
-        return currentView.state.field(field as never, require as never);
-      },
-    });
-    return {
-      docChanged: false,
-      selectionSet: false,
-      focusChanged: false,
-      viewportChanged: true,
-      state,
-      startState: state,
-      view: currentView,
-    } as unknown as ViewUpdate;
-  }
-
-  afterEach(() => {
-    view?.destroy();
-    view = undefined;
-    vi.restoreAllMocks();
+    const specs = getDecorationSpecs(view.state.field(_imageDecorationFieldForTest));
+    expect(specs.some((spec) => spec.block === true && spec.widgetClass === "ImagePreviewWidget")).toBe(true);
+    view.destroy();
   });
 
-  it("keeps viewport tracking bounded to the current visible images when scrolling", () => {
-    const doc = [
-      "![first](first.png)",
-      "",
-      "x".repeat(70),
-      "",
-      "![second](second.png)",
-      "",
-      "y".repeat(70),
-      "",
-      "![third](third.png)",
-      "",
-      "tail text",
-    ].join("\n");
-    const secondStart = doc.indexOf("![second]");
-    const resolvePreview = vi.spyOn(mediaPreview, "resolveLocalMediaPreview").mockImplementation(
-      (_view, src) => ({ kind: "image", resolvedPath: src, dataUrl: `data:${src}` }),
-    );
-
-    view = createTestView(doc, {
-      cursorPos: doc.length,
-      extensions: [markdown(), imageRenderPlugin],
+  it("keeps inline images as inline replacements", () => {
+    const view = createTestView("prefix ![](figure.png) suffix", {
+      extensions: [markdown(), imageUrlField, pdfPreviewField, imageRenderPlugin],
     });
-    const plugin = getPluginProbe();
-    const initialRanges = [{ from: 0, to: secondStart + 5 }];
-    const scrolledRanges = [{ from: secondStart + 2, to: doc.length }];
-    const setRanges = setVisibleRanges(initialRanges);
-
-    plugin.rebuild(view);
-    expect(plugin.coveredRanges).toEqual(initialRanges);
-    expect(getDecorationSpecs(plugin.decorations).filter((spec) => spec.from === secondStart))
-      .toHaveLength(1);
-
-    resolvePreview.mockClear();
-    setRanges(scrolledRanges);
-    plugin.update(mockViewportUpdate());
-    expect(resolvePreview).toHaveBeenCalledTimes(1);
-    expect(resolvePreview.mock.calls[0]?.[1]).toBe("third.png");
-    expect(plugin.coveredRanges).toEqual(scrolledRanges);
-    expect(getDecorationSpecs(plugin.decorations).filter((spec) => spec.from === secondStart))
-      .toHaveLength(1);
-
-    resolvePreview.mockClear();
-    setRanges(initialRanges);
-    plugin.update(mockViewportUpdate());
-    expect(resolvePreview).toHaveBeenCalledTimes(1);
-    expect(resolvePreview.mock.calls[0]?.[1]).toBe("first.png");
-    expect(plugin.coveredRanges).toEqual(initialRanges);
-    expect(getDecorationSpecs(plugin.decorations).filter((spec) => spec.from === secondStart))
-      .toHaveLength(1);
+    const specs = getDecorationSpecs(view.state.field(_imageDecorationFieldForTest));
+    expect(specs.some((spec) => spec.block === true && spec.widgetClass === "ImagePreviewWidget")).toBe(false);
+    expect(specs.some((spec) => spec.widgetClass === "ImagePreviewWidget")).toBe(true);
+    view.destroy();
   });
 });
 
@@ -649,7 +570,7 @@ describe("imageRenderPlugin cache-only invalidation", () => {
     vi.restoreAllMocks();
   });
 
-  it("rebuilds only the visible local preview whose resolved cache entry changed", () => {
+  it("rebuilds local preview decorations from cache state without re-requesting", () => {
     const doc = [
       "![first](../assets/first.png)",
       "",
@@ -673,7 +594,7 @@ describe("imageRenderPlugin cache-only invalidation", () => {
       effects: imageUrlEffect.of({ path: "assets/first.png", entry: { status: "loading" } }),
     });
 
-    expect(resolvePreview).toHaveBeenCalledTimes(1);
-    expect(resolvePreview.mock.calls[0]?.[1]).toBe("../assets/first.png");
+    expect(resolvePreview).not.toHaveBeenCalled();
+    expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(2);
   });
 });

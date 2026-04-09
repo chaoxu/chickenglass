@@ -95,3 +95,17 @@ export function pushWidgetDecoration(
   widget.updateSourceRange(from, to);
   items.push(Decoration.replace({ widget }).range(from, to));
 }
+
+/**
+ * Push a block widget replacement decoration, setting source range for
+ * click-to-edit.
+ */
+export function pushBlockWidgetDecoration(
+  items: Range<Decoration>[],
+  widget: RenderWidget,
+  from: number,
+  to: number,
+): void {
+  widget.updateSourceRange(from, to);
+  items.push(Decoration.replace({ widget, block: true }).range(from, to));
+}

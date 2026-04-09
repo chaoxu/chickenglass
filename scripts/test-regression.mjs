@@ -35,6 +35,11 @@ const TESTS_DIR = join(__dirname, "regression-tests");
 async function loadTests(filter) {
   const files = readdirSync(TESTS_DIR)
     .filter((f) => f.endsWith(".mjs"))
+    .filter((file) => {
+      if (filter.length === 0) return true;
+      const basename = file.replace(/\.mjs$/, "");
+      return filter.includes(basename);
+    })
     .sort();
 
   const tests = [];

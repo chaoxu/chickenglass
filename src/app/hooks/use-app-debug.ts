@@ -3,6 +3,10 @@ import type { EditorMode } from "../../editor";
 import { isTauri } from "../../lib/tauri";
 import { recordDebugSessionEvent } from "../../debug/session-recorder";
 import {
+  clearScrollGuardEvents,
+  getScrollGuardEvents,
+} from "./use-editor-scroll";
+import {
   clearCombinedPerf,
   getCombinedPerfSnapshot,
   printPerfSummary,
@@ -199,6 +203,8 @@ export function useAppDebug({
       clearPerf: clearCombinedPerf,
       togglePerfPanel,
       toggleFps: toggleFpsMeter,
+      scrollGuards: () => getScrollGuardEvents(),
+      clearScrollGuards: () => clearScrollGuardEvents(),
     };
     if (import.meta.env.DEV && isTauri()) {
       window.__tauriSmoke = {

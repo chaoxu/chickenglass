@@ -5,6 +5,7 @@ import {
   addMarkerReplacement,
   buildDecorations,
   decorationHidden,
+  pushBlockWidgetDecoration,
   pushWidgetDecoration,
 } from "./decoration-core";
 import { RenderWidget } from "./source-widget";
@@ -145,6 +146,29 @@ describe("pushWidgetDecoration", () => {
     const widget = new TestWidget("w");
     pushWidgetDecoration(items, widget, 0, 5);
 
+    expect(items[0].value.spec.widget).toBe(widget);
+  });
+});
+
+describe("pushBlockWidgetDecoration", () => {
+  it("sets sourceFrom and sourceTo on the widget", () => {
+    const items: Range<Decoration>[] = [];
+    const widget = new TestWidget("w");
+    pushBlockWidgetDecoration(items, widget, 10, 20);
+
+    expect(widget.sourceFrom).toBe(10);
+    expect(widget.sourceTo).toBe(20);
+  });
+
+  it("pushes a block Decoration.replace range into the items array", () => {
+    const items: Range<Decoration>[] = [];
+    const widget = new TestWidget("w");
+    pushBlockWidgetDecoration(items, widget, 5, 15);
+
+    expect(items).toHaveLength(1);
+    expect(items[0].from).toBe(5);
+    expect(items[0].to).toBe(15);
+    expect(items[0].value.spec.block).toBe(true);
     expect(items[0].value.spec.widget).toBe(widget);
   });
 });

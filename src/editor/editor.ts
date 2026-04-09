@@ -29,7 +29,7 @@ import { bibliographyPlugin, bibDataField } from "../citations";
 import { pdfPreviewField } from "../render/pdf-preview-cache";
 import { imageUrlField } from "../render/image-url-cache";
 import { type ProjectConfig } from "./project-config";
-import { tableGridExtension } from "../render/table-grid";
+import { tableRenderPlugin } from "../render/table-render";
 import { editorKeybindings } from "./keybindings";
 import { coflatTheme, coflatDarkTheme } from "./theme";
 import { blockTypePickerExtension } from "./block-type-picker";
@@ -130,7 +130,7 @@ const renderingExtensions: Extension[] = [
   bibliographyPlugin,
   containerAttributesPlugin,
   richClipboardOutputFilter,
-  ...tableGridExtension, // decoration-based CSS grid tables (#407)
+  tableRenderPlugin,
   checkboxRenderPlugin,
   mathPreviewPlugin,
   sectionNumberPlugin,

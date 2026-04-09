@@ -4,8 +4,17 @@ import {
   type Text,
   type Transaction,
 } from "@codemirror/state";
-import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
-import type { EditorView } from "@codemirror/view";
+import {
+  forceParsing,
+  syntaxParserRunning,
+  syntaxTree,
+  syntaxTreeAvailable,
+} from "@codemirror/language";
+import {
+  EditorView,
+  ViewPlugin,
+  type ViewUpdate,
+} from "@codemirror/view";
 import { parseTable, type ParsedTable } from "./table-utils";
 import { mergeRanges } from "./viewport-diff";
 import { findTablePipePositions } from "../lib/table-inline-span";
@@ -270,6 +279,49 @@ export const tableDiscoveryField = StateField.define<readonly TableRange[]>({
     return true;
   },
 });
+
+class TableDiscoveryParsePlugin {
+  private scheduled: ReturnType<typeof setTimeout> | null = null;
+  private destroyed = false;
+
+  constructor(private readonly view: EditorView) {
+    this.schedule();
+  }
+
+  update(_update: ViewUpdate): void {
+    if (this.destroyed) return;
+    this.schedule();
+  }
+
+  destroy(): void {
+    this.destroyed = true;
+    const scheduled = this.scheduled;
+    this.scheduled = null;
+    if (scheduled !== null) clearTimeout(scheduled);
+  }
+
+  private schedule(): void {
+    if (this.destroyed) return;
+    if (this.scheduled !== null) return;
+    if (syntaxTreeAvailable(this.view.state, this.view.state.doc.length)) return;
+
+    this.scheduled = setTimeout(() => {
+      this.scheduled = null;
+      if (this.destroyed) return;
+      if (syntaxTreeAvailable(this.view.state, this.view.state.doc.length)) return;
+      forceParsing(this.view, this.view.state.doc.length, 25);
+      if (
+        !this.destroyed &&
+        !syntaxTreeAvailable(this.view.state, this.view.state.doc.length) &&
+        syntaxParserRunning(this.view)
+      ) {
+        this.schedule();
+      }
+    }, 0);
+  }
+}
+
+export const tableDiscoveryParsePlugin = ViewPlugin.fromClass(TableDiscoveryParsePlugin);
 
 /**
  * Find the positions of column-separator pipe characters in a table line.
