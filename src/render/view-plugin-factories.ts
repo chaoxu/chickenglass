@@ -51,22 +51,6 @@ export function cursorSensitiveShouldUpdate(update: ViewUpdate): boolean {
   );
 }
 
-function filterDecorationSetInRanges(
-  decorations: DecorationSet,
-  filterRanges: readonly VisibleRange[],
-  keep: (from: number, to: number) => boolean,
-): DecorationSet {
-  let nextDecorations = decorations;
-  for (const range of filterRanges) {
-    nextDecorations = nextDecorations.update({
-      filterFrom: range.from,
-      filterTo: range.to,
-      filter: (from, to) => keep(from, to),
-    });
-  }
-  return nextDecorations;
-}
-
 function collectDecorationStartsInRanges(
   decorations: DecorationSet,
   ranges: readonly VisibleRange[],
@@ -85,6 +69,11 @@ function collectDecorationStartsInRanges(
 }
 
 const NO_SKIP = () => false;
+
+export interface DecorationRangeBounds {
+  readonly from: number;
+  readonly to: number;
+}
 
 /**
  * Collect function signature for cursor-sensitive view plugins.
@@ -108,6 +97,99 @@ export type CursorSensitiveDocChangeRangesFn = (
 export type CursorSensitiveContextChangeRangesFn = (
   update: ViewUpdate,
 ) => readonly VisibleRange[] | null;
+
+/**
+ * Filter decorations only within the provided ranges, keeping those that
+ * satisfy the predicate.
+ */
+export function filterDecorationSetInRanges<T extends DecorationRangeBounds>(
+  decorations: DecorationSet,
+  filterRanges: readonly T[],
+  keep: (from: number, to: number) => boolean,
+): DecorationSet {
+  let nextDecorations = decorations;
+  for (const range of filterRanges) {
+    nextDecorations = nextDecorations.update({
+      filterFrom: range.from,
+      filterTo: range.to,
+      filter: (from, to) => keep(from, to),
+    });
+  }
+  return nextDecorations;
+}
+
+export type IncrementalDecorationsRangeFn<T extends DecorationRangeBounds> = (
+  update: ViewUpdate,
+) => readonly T[] | null;
+
+/**
+ * Factory for ViewPlugins that rebuild only dirty ranges and otherwise map
+ * existing decorations through doc changes.
+ */
+export function createIncrementalDecorationsViewPlugin<
+  T extends DecorationRangeBounds = DecorationRangeBounds,
+>(
+  buildFn: (view: EditorView) => DecorationSet,
+  options: {
+    incrementalRanges: IncrementalDecorationsRangeFn<T>;
+    collectRanges: (view: EditorView, ranges: readonly T[]) => Range<Decoration>[];
+    shouldRebuild?: (update: ViewUpdate) => boolean;
+    mapDecorations?: (
+      decorations: DecorationSet,
+      update: ViewUpdate,
+    ) => DecorationSet;
+    pluginSpec?: Omit<PluginSpec<PluginValue>, "decorations">;
+  },
+): Extension {
+  const mapDecorations = options.mapDecorations
+    ?? ((decorations: DecorationSet, update: ViewUpdate) => (
+      update.docChanged ? decorations.map(update.changes) : decorations
+    ));
+
+  class IncrementalDecorationsViewPlugin implements PluginValue {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildFn(view);
+    }
+
+    update(update: ViewUpdate): void {
+      if (options.shouldRebuild?.(update)) {
+        this.decorations = buildFn(update.view);
+        return;
+      }
+
+      const dirtyRanges = options.incrementalRanges(update);
+      if (dirtyRanges === null) {
+        this.decorations = buildFn(update.view);
+        return;
+      }
+
+      let nextDecorations = mapDecorations(this.decorations, update);
+      if (dirtyRanges.length > 0) {
+        nextDecorations = filterDecorationSetInRanges(
+          nextDecorations,
+          dirtyRanges,
+          (from, to) => !rangeIntersectsRanges(from, to, dirtyRanges),
+        );
+        const items = options.collectRanges(update.view, dirtyRanges);
+        if (items.length > 0) {
+          nextDecorations = nextDecorations.update({
+            add: items,
+            sort: true,
+          });
+        }
+      }
+
+      this.decorations = nextDecorations;
+    }
+  }
+
+  return ViewPlugin.fromClass(IncrementalDecorationsViewPlugin, {
+    ...options.pluginSpec,
+    decorations: (value) => value.decorations,
+  });
+}
 
 /**
  * Factory for cursor-sensitive ViewPlugins with differential viewport updates.
