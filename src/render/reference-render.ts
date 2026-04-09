@@ -59,6 +59,7 @@ import {
   findFocusedInlineRevealTarget,
   inlineRevealTargetChanged,
 } from "./inline-reveal-policy";
+import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 import { isDebugRenderFlagEnabled } from "./debug-render-flags";
 
 function serializeKeyPart(value: string | undefined): string {
@@ -461,6 +462,15 @@ class ReferenceRenderViewPlugin {
   }
 
   update(update: ViewUpdate): void {
+    if (
+      update.transactions.some((tr) =>
+        tr.annotation(programmaticDocumentChangeAnnotation) === true
+      )
+    ) {
+      this.rebuildAll(update.view);
+      return;
+    }
+
     const beforeAnalysis = update.startState.field(documentAnalysisField);
     const afterAnalysis = update.state.field(documentAnalysisField);
     const referencesChanged = referenceSliceChanged(beforeAnalysis, afterAnalysis);

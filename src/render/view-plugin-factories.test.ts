@@ -19,6 +19,7 @@ import {
   createTestView,
   getDecorationSpecs,
 } from "../test-utils";
+import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 
 /**
  * Build a minimal ViewUpdate stub for testing shouldUpdate predicates.
@@ -454,6 +455,27 @@ describe("createCursorSensitiveViewPlugin", () => {
     view = createTestView("hello", { extensions: [markdown(), ext] });
     callCount = 0;
     view.dispatch({});
+    expect(callCount).toBe(1);
+  });
+
+  it("triggers full rebuild on programmatic document rewrites", () => {
+    let callCount = 0;
+    const ext = createCursorSensitiveViewPlugin(
+      () => {
+        callCount++;
+        return [];
+      },
+      {
+        selectionCheck: () => false,
+        docChangeRanges: () => [],
+      },
+    );
+    view = createTestView("hello", { extensions: [markdown(), ext] });
+    callCount = 0;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: "world" },
+      annotations: programmaticDocumentChangeAnnotation.of(true),
+    });
     expect(callCount).toBe(1);
   });
 
