@@ -1,4 +1,6 @@
 import type { Tree } from "@lezer/common";
+import { buildDocumentIR } from "../../ir/document-ir-builder";
+import type { DocumentIR } from "../../ir/types";
 import type {
   DocumentAnalysis,
   FencedDivSemantics,
@@ -69,6 +71,11 @@ export type DocumentAnalysisSliceName = keyof DocumentAnalysisSliceRevisions;
 export interface DocumentAnalysisRevisionInfo {
   readonly revision: number;
   readonly slices: DocumentAnalysisSliceRevisions;
+}
+
+export interface DocumentArtifacts {
+  readonly analysis: DocumentAnalysis;
+  readonly ir: DocumentIR;
 }
 
 interface FencedDivSlice {
@@ -311,6 +318,29 @@ export function createDocumentAnalysis(
   return finalizeDocumentAnalysis(undefined, slices, excludedRanges);
 }
 
+function buildDocumentArtifacts(
+  analysis: DocumentAnalysis,
+  doc: TextSource,
+  tree: Tree,
+): DocumentArtifacts {
+  return {
+    analysis,
+    ir: buildDocumentIR({
+      analysis,
+      doc,
+      docText: doc.slice(0, doc.length),
+      tree,
+    }),
+  };
+}
+
+export function createDocumentArtifacts(
+  doc: TextSource,
+  tree: Tree,
+): DocumentArtifacts {
+  return buildDocumentArtifacts(createDocumentAnalysis(doc, tree), doc, tree);
+}
+
 function mapExcludedRanges(
   values: readonly ExcludedRange[],
   changes: PositionMapper,
@@ -548,6 +578,19 @@ export function updateDocumentAnalysis(
     referenceSlice,
     includeSlice,
   }, excludedRanges);
+}
+
+export function updateDocumentArtifacts(
+  previous: DocumentArtifacts,
+  doc: TextSource,
+  tree: Tree,
+  delta: SemanticDelta,
+): DocumentArtifacts {
+  return buildDocumentArtifacts(
+    updateDocumentAnalysis(previous.analysis, doc, tree, delta),
+    doc,
+    tree,
+  );
 }
 
 export function getDocumentAnalysisRevisionInfo(

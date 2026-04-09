@@ -1,5 +1,9 @@
 import type { Tree } from "@lezer/common";
-import { createDocumentAnalysis } from "./incremental/engine";
+import {
+  createDocumentAnalysis,
+  createDocumentArtifacts,
+  type DocumentArtifacts,
+} from "./incremental/engine";
 import { extractStructuralWindow } from "./incremental/window-extractor";
 import { buildHeadingSlice } from "./incremental/slices/heading-slice";
 import {
@@ -152,6 +156,7 @@ export interface DocumentAnalysis {
 }
 
 export type DocumentSemantics = DocumentAnalysis;
+export type { DocumentArtifacts };
 
 export interface TrailingHeadingAttributes {
   readonly index: number;
@@ -278,4 +283,11 @@ export function analyzeDocumentSemantics(
   tree: Tree,
 ): DocumentSemantics {
   return createDocumentAnalysis(doc, tree);
+}
+
+export function analyzeDocumentArtifacts(
+  doc: TextSource,
+  tree: Tree,
+): DocumentArtifacts {
+  return createDocumentArtifacts(doc, tree);
 }

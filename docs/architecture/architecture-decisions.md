@@ -25,7 +25,7 @@
 
 ## Future direction
 
-- **AI features must consume structured document data**: Future document QA and AI authoring features should consume a structured document IR derived from Lezer + Coflat semantics, not raw markdown, regex extraction, editor DOM, or ad hoc CM6 view state. The IR should stay plain-data and CM6-free.
+- **AI features must consume structured document data**: Future document QA and AI authoring features should consume a structured document IR derived from Lezer + Coflat semantics, not raw markdown, regex extraction, editor DOM, or ad hoc CM6 view state. The IR should stay plain-data and CM6-free. See [Document IR](./document-ir.md).
 - **Do not re-platform read/export markdown lightly**: Do not treat a full `remark`/`rehype` rewrite as a default cleanup. It is a replatforming project, not a routine library swap. Narrow hardening swaps are preferred first.
 
 ## Library preferences

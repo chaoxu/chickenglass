@@ -1,12 +1,22 @@
 import { parser as baseParser } from "@lezer/markdown";
 import { markdownExtensions } from "../parser";
 import {
-  analyzeDocumentSemantics,
+  analyzeDocumentArtifacts,
+  type DocumentArtifacts,
   stringTextSource,
   type DocumentSemantics,
 } from "./document";
 
 const markdownSemanticsParser = baseParser.configure(markdownExtensions);
+
+/**
+ * Parse markdown with the editor's extension set and return the canonical
+ * plain-data artifacts for non-CM6 consumers.
+ */
+export function analyzeMarkdownDocument(text: string): DocumentArtifacts {
+  const tree = markdownSemanticsParser.parse(text);
+  return analyzeDocumentArtifacts(stringTextSource(text), tree);
+}
 
 /**
  * Parse markdown with the editor's extension set and return semantic analysis.
@@ -15,6 +25,5 @@ const markdownSemanticsParser = baseParser.configure(markdownExtensions);
  * equation, and reference semantics as the editor/indexer.
  */
 export function analyzeMarkdownSemantics(text: string): DocumentSemantics {
-  const tree = markdownSemanticsParser.parse(text);
-  return analyzeDocumentSemantics(stringTextSource(text), tree);
+  return analyzeMarkdownDocument(text).analysis;
 }
