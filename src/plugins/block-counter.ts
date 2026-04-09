@@ -9,6 +9,7 @@
 
 import { type EditorState } from "@codemirror/state";
 import type { NumberingScheme } from "../parser/frontmatter";
+import type { FencedDivSemantics } from "../semantics/document";
 import type { PluginRegistryState } from "./plugin-registry";
 import { getPluginOrFallback } from "./plugin-registry";
 import { documentSemanticsField } from "../semantics/codemirror-source";
@@ -66,8 +67,8 @@ const GLOBAL_COUNTER = "_global";
  * @param numbering - Numbering scheme from frontmatter (`"global"` or
  *   `"grouped"`). Defaults to `"grouped"`.
  */
-export function computeBlockNumbers(
-  state: EditorState,
+export function computeBlockNumbersFromFencedDivs(
+  fencedDivs: readonly FencedDivSemantics[],
   registry: PluginRegistryState,
   numbering: NumberingScheme = "grouped",
 ): BlockCounterState {
@@ -76,7 +77,7 @@ export function computeBlockNumbers(
   const byPosition = new Map<number, NumberedBlock>();
   const counters = new Map<string, number>();
 
-  for (const div of state.field(documentSemanticsField).fencedDivs) {
+  for (const div of fencedDivs) {
     if (!div.primaryClass) continue;
 
     const plugin = getPluginOrFallback(registry, div.primaryClass);
@@ -105,6 +106,18 @@ export function computeBlockNumbers(
   }
 
   return { blocks, byId, byPosition };
+}
+
+export function computeBlockNumbers(
+  state: EditorState,
+  registry: PluginRegistryState,
+  numbering: NumberingScheme = "grouped",
+): BlockCounterState {
+  return computeBlockNumbersFromFencedDivs(
+    state.field(documentSemanticsField).fencedDivs,
+    registry,
+    numbering,
+  );
 }
 
 /** Create an empty counter state. */

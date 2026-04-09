@@ -14,6 +14,7 @@
  */
 
 import { type CslJsonItem } from "./bibtex-parser";
+import type { ReferenceIndexModel } from "../references/model";
 import defaultCslStyle from "./ieee.csl?raw";
 
 /**
@@ -474,6 +475,18 @@ export function collectCitedIdsFromReferences(
         citedIds.push(id);
       }
     }
+  }
+  return citedIds;
+}
+
+export function collectCitedIdsFromReferenceIndex(
+  referenceIndex: ReferenceIndexModel,
+  store: IdLookup,
+): string[] {
+  const citedIds: string[] = [];
+  for (const entry of referenceIndex.values()) {
+    if (entry.type !== "citation" || !store.has(entry.id)) continue;
+    citedIds.push(entry.id);
   }
   return citedIds;
 }

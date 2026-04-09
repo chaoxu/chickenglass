@@ -1,6 +1,6 @@
 import type { EditorState } from "@codemirror/state";
 import { StateField } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import type { TextSource, DocumentAnalysis } from "./document";
 import {
   createDocumentAnalysis,
@@ -32,6 +32,10 @@ export function editorStateTextSource(state: EditorState): TextSource {
   };
 }
 
+function completeSyntaxTree(state: EditorState) {
+  return ensureSyntaxTree(state, state.doc.length, 1000) ?? syntaxTree(state);
+}
+
 /**
  * Shared CM6 StateField that computes document semantics once per
  * document/tree change. All CM6 renderers (section numbers, sidenotes,
@@ -43,7 +47,7 @@ export function editorStateTextSource(state: EditorState): TextSource {
  */
 export const documentAnalysisField = StateField.define<DocumentAnalysis>({
   create(state) {
-    return createDocumentAnalysis(editorStateTextSource(state), syntaxTree(state));
+    return createDocumentAnalysis(editorStateTextSource(state), completeSyntaxTree(state));
   },
 
   update(value, tr) {

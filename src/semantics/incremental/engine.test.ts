@@ -424,6 +424,7 @@ describe("incremental document analysis engine", () => {
       "includeByFrom",
       "includes",
       "mathRegions",
+      "referenceIndex",
       "referenceByFrom",
       "references",
     ]);

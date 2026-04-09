@@ -1,6 +1,8 @@
 import type { Tree } from "@lezer/common";
 import { buildDocumentIR } from "../../ir/document-ir-builder";
 import type { DocumentIR } from "../../ir/types";
+import { classifyReferenceIndex } from "../../references/classifier";
+import type { ReferenceIndexModel } from "../../references/model";
 import type {
   DocumentAnalysis,
   FencedDivSemantics,
@@ -150,6 +152,7 @@ const SLICE_REGISTRY: readonly SliceRegistryEntry[] = [
 interface InternalDocumentAnalysisState extends DocumentAnalysisSlices {
   readonly revisions: DocumentAnalysisRevisionInfo;
   readonly excludedRanges: readonly ExcludedRange[];
+  readonly referenceIndex: ReferenceIndexModel;
 }
 
 const ZERO_SLICE_REVISIONS = Object.freeze(
@@ -283,10 +286,23 @@ function sameSlices(
   );
 }
 
+function sameReferenceIndexInputs(
+  previous: InternalDocumentAnalysisState,
+  next: DocumentAnalysisSlices,
+): boolean {
+  return (
+    previous.headingSlice === next.headingSlice &&
+    previous.fencedDivSlice === next.fencedDivSlice &&
+    previous.equationSlice === next.equationSlice &&
+    previous.referenceSlice === next.referenceSlice
+  );
+}
+
 function finalizeDocumentAnalysis(
   previous: DocumentAnalysis | undefined,
   slices: DocumentAnalysisSlices,
   excludedRanges: readonly ExcludedRange[],
+  doc: TextSource,
 ): DocumentAnalysis {
   const previousState = previous ? getInternalState(previous) : undefined;
   if (
@@ -302,11 +318,16 @@ function finalizeDocumentAnalysis(
   for (const { sliceKey, project } of SLICE_REGISTRY) {
     Object.assign(analysis, project(slices[sliceKey]));
   }
+  analysis.referenceIndex =
+    previousState && sameReferenceIndexInputs(previousState, slices)
+      ? previousState.referenceIndex
+      : classifyReferenceIndex(doc, analysis);
 
   return withInternalState(analysis, {
     ...slices,
     revisions,
     excludedRanges,
+    referenceIndex: analysis.referenceIndex,
   });
 }
 
@@ -315,7 +336,7 @@ export function createDocumentAnalysis(
   tree: Tree,
 ): DocumentAnalysis {
   const { slices, excludedRanges } = buildSlicesAndExcludedRanges(doc, tree);
-  return finalizeDocumentAnalysis(undefined, slices, excludedRanges);
+  return finalizeDocumentAnalysis(undefined, slices, excludedRanges, doc);
 }
 
 function buildDocumentArtifacts(
@@ -434,12 +455,12 @@ export function updateDocumentAnalysis(
       return previous;
     }
     const { slices, excludedRanges } = buildSlicesAndExcludedRanges(doc, tree);
-    return finalizeDocumentAnalysis(previous, slices, excludedRanges);
+    return finalizeDocumentAnalysis(previous, slices, excludedRanges, doc);
   }
 
   if (delta.globalInvalidation || delta.dirtyWindows.length === 0) {
     const { slices, excludedRanges } = buildSlicesAndExcludedRanges(doc, tree);
-    return finalizeDocumentAnalysis(previous, slices, excludedRanges);
+    return finalizeDocumentAnalysis(previous, slices, excludedRanges, doc);
   }
 
   const changes = createPositionMapper(delta);
@@ -577,7 +598,7 @@ export function updateDocumentAnalysis(
     mathSlice,
     referenceSlice,
     includeSlice,
-  }, excludedRanges);
+  }, excludedRanges, doc);
 }
 
 export function updateDocumentArtifacts(

@@ -1,8 +1,21 @@
 import type {
+  CrossrefReferenceEntry,
+  LabelReferenceEntry,
+} from "../references/model";
+export {
+  formatBlockReferenceLabel,
+  formatEquationReferenceLabel,
+  formatHeadingReferenceLabel,
+} from "../references/format";
+import type {
   DocumentAnalysis,
-  HeadingSemantics,
   ReferenceSemantics,
 } from "./document";
+import {
+  formatBlockReferenceLabel,
+  formatEquationReferenceLabel,
+  formatHeadingReferenceLabel,
+} from "../references/format";
 
 export type DocumentReferenceTargetKind = "block" | "equation" | "heading";
 
@@ -41,23 +54,6 @@ export interface DocumentReferenceCatalogOptions {
   readonly blocks?: readonly BlockReferenceTargetInput[];
 }
 
-export function formatBlockReferenceLabel(
-  displayTitle: string,
-  number?: number,
-): string {
-  return number === undefined ? displayTitle : `${displayTitle} ${number}`;
-}
-
-export function formatEquationReferenceLabel(number: number | string): string {
-  return `Eq. (${number})`;
-}
-
-export function formatHeadingReferenceLabel(
-  heading: Pick<HeadingSemantics, "number" | "text">,
-): string {
-  return heading.number ? `Section ${heading.number}` : heading.text;
-}
-
 function buildDefaultBlockReferenceTargetInputs(
   analysis: DocumentAnalysis,
 ): BlockReferenceTargetInput[] {
@@ -73,6 +69,33 @@ function buildDefaultBlockReferenceTargetInputs(
     });
   }
   return blocks;
+}
+
+function getHeadingReferenceEntry(
+  analysis: DocumentAnalysis,
+  id: string,
+): CrossrefReferenceEntry | undefined {
+  const entry = analysis.referenceIndex.get(id);
+  return entry?.type === "crossref" && entry.targetKind === "heading"
+    ? entry
+    : undefined;
+}
+
+function getEquationReferenceEntries(
+  analysis: DocumentAnalysis,
+): LabelReferenceEntry[] {
+  const entries: LabelReferenceEntry[] = [];
+  for (const entry of analysis.referenceIndex.values()) {
+    if (entry.type === "label" && entry.targetKind === "equation") {
+      entries.push(entry);
+    }
+  }
+  entries.sort((left, right) =>
+    (left.target.range?.from ?? left.sourceRange.from)
+      - (right.target.range?.from ?? right.sourceRange.from)
+    || (left.target.range?.to ?? left.sourceRange.to)
+      - (right.target.range?.to ?? right.sourceRange.to));
+  return entries;
 }
 
 function buildBlockTargets(
@@ -97,31 +120,39 @@ function buildBlockTargets(
 function buildEquationTargets(
   analysis: DocumentAnalysis,
 ): DocumentReferenceTarget[] {
-  return analysis.equations.map((equation) => ({
-    id: equation.id,
-    kind: "equation",
-    from: equation.from,
-    to: equation.to,
-    displayLabel: formatEquationReferenceLabel(equation.number),
-    number: String(equation.number),
-    ordinal: equation.number,
-    text: equation.latex,
-  }));
+  return getEquationReferenceEntries(analysis)
+    .flatMap((entry) => {
+      const range = entry.target.range;
+      if (!range) return [];
+      return [{
+        id: entry.id,
+        kind: "equation" as const,
+        from: range.from,
+        to: range.to,
+        displayLabel: entry.display,
+        number: entry.number,
+        ordinal: entry.ordinal,
+        text: entry.text,
+      }];
+    });
 }
 
 function buildHeadingTargets(
   analysis: DocumentAnalysis,
 ): DocumentReferenceTarget[] {
-  return analysis.headings.map((heading) => ({
-    id: heading.id,
-    kind: "heading",
-    from: heading.from,
-    to: heading.to,
-    displayLabel: formatHeadingReferenceLabel(heading),
-    number: heading.number || undefined,
-    title: heading.text,
-    text: heading.text,
-  }));
+  return analysis.headings.map((heading) => {
+    const entry = heading.id ? getHeadingReferenceEntry(analysis, heading.id) : undefined;
+    return {
+      id: heading.id,
+      kind: "heading" as const,
+      from: heading.from,
+      to: heading.to,
+      displayLabel: entry?.display ?? formatHeadingReferenceLabel(heading),
+      number: entry?.number ?? (heading.number || undefined),
+      title: entry?.title ?? heading.text,
+      text: entry?.text ?? heading.text,
+    };
+  });
 }
 
 function buildTargetsById(
