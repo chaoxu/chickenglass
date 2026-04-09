@@ -903,6 +903,44 @@ describe("#299 — centralized block manifest and CSS registry", () => {
   });
 });
 
+describe("#1092 — plugin-owned render adapter seam", () => {
+  it("defines the plugin render contract without reverse imports", async () => {
+    const contract = await import("../plugins/plugin-render-adapter");
+    const contractFile = fileText("src/plugins/plugin-render-adapter.ts");
+
+    expect(contract.addPluginMarkerReplacement).toBeDefined();
+    expect(contract.pushPluginWidgetDecoration).toBeDefined();
+    expect(contractFile).toContain("export interface PluginRenderAdapter");
+    expect(contractFile).toContain("export interface PluginRenderWidget");
+    expect(contractFile).not.toMatch(/from "\.\.\/render\//);
+  });
+
+  it("routes block chrome and embed helpers through the render adapter", () => {
+    const pluginRender = fileText("src/plugins/plugin-render.ts");
+    const chrome = fileText("src/plugins/plugin-render-chrome.ts");
+    const embed = fileText("src/plugins/plugin-render-embed.ts");
+    const bridge = fileText("src/lib/plugin-render-adapter.ts");
+    const renderAdapter = fileText("src/render/plugin-render-adapter.ts");
+
+    expect(renderAdapter).toContain("const codeMirrorPluginRenderAdapter: PluginRenderAdapter");
+    expect(renderAdapter).toContain("createHeaderWidget");
+    expect(renderAdapter).toContain("createEmbedWidget");
+    expect(bridge).toContain('import type { PluginRenderAdapter }');
+    expect(bridge).toContain("codeMirrorPluginRenderAdapter");
+    expect(pluginRender).toContain("pluginRenderAdapter");
+    expect(chrome).toContain("PluginRenderAdapter");
+    expect(chrome).toContain("adapter.createHeaderWidget");
+    expect(embed).toContain("PluginRenderAdapter");
+    expect(embed).toContain("adapter.createEmbedWidget");
+    expect(pluginRender).not.toContain("../render/plugin-render-adapter");
+    expect(chrome).not.toContain("../render/plugin-render-adapter");
+    expect(embed).not.toContain("../render/plugin-render-adapter");
+    expect(chrome).not.toContain("../render/render-core");
+    expect(embed).not.toContain("../render/render-core");
+    expect(embed).not.toContain("../render/source-widget");
+  });
+});
+
 describe("#321 — standardized background dispatch handling", () => {
   it("documents the error-handling policy and exports the dispatch helper", async () => {
     const dispatch = await import("./lib/view-dispatch");
