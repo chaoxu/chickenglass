@@ -148,6 +148,34 @@ describe("math preview positioning", () => {
     expect(view.scrollDOM.classList.contains(CSS.mathPreviewScroller)).toBe(false);
   });
 
+  it("sizes the panel from rendered math width instead of the shared preview-card max width", async () => {
+    coordsByPos.set(mathFrom, makeCoords(200, 80, 100));
+    coordsByPos.set(mathTo, makeCoords(240, 80, 120));
+
+    const view = createPreviewView(doc, mathFrom + 1);
+    view.scrollDOM.getBoundingClientRect = () => makeDomRect(40, 60, 500, 400);
+
+    const panel = view.dom.querySelector<HTMLElement>(".cf-math-preview");
+    const content = view.dom.querySelector<HTMLElement>(".cf-math-preview-content");
+    expect(panel).not.toBeNull();
+    expect(content).not.toBeNull();
+    if (!panel || !content) {
+      throw new Error("expected math preview panel");
+    }
+
+    Object.defineProperty(content, "scrollWidth", {
+      configurable: true,
+      get: () => 320,
+    });
+
+    await flushScheduledMeasures();
+
+    expect(panel.style.maxWidth).toBe("490px");
+    expect(panel.style.width).toBe("320px");
+
+    view.destroy();
+  });
+
   it("preserves a manual drag as an override for later same-region selection updates", async () => {
     coordsByPos.set(mathFrom, makeCoords(200, 80, 100));
     coordsByPos.set(mathTo, makeCoords(240, 80, 120));

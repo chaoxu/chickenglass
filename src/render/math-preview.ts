@@ -44,7 +44,9 @@ interface AnchorRect {
 
 interface PositionMeasurement {
   requestId: number;
-  position: PreviewPosition;
+  position: PreviewPosition | null;
+  maxWidth: number;
+  width: number | null;
 }
 
 interface PreviewPosition {
@@ -324,26 +326,75 @@ class MathPreviewPlugin implements PluginValue {
     this.panel.style.top = `${position.top}px`;
   }
 
+  private readMaxPanelWidth(): number {
+    const scrollerRect = this.view.scrollDOM.getBoundingClientRect();
+    const viewportWidth = Number.isFinite(scrollerRect.width)
+      ? scrollerRect.width
+      : window.innerWidth;
+    return Math.max(0, Math.min(window.innerWidth, viewportWidth) - 10);
+  }
+
+  private readPanelWidth(maxWidth: number): number | null {
+    if (!this.contentEl) return null;
+    const contentWidth = this.contentEl.scrollWidth;
+    if (!Number.isFinite(contentWidth) || contentWidth <= 0) return null;
+
+    const borderWidth = this.panel
+      ? (() => {
+        const panelStyle = getComputedStyle(this.panel);
+        const leftBorder = parseFloat(panelStyle.borderLeftWidth);
+        const rightBorder = parseFloat(panelStyle.borderRightWidth);
+        return (Number.isFinite(leftBorder) ? leftBorder : 0)
+          + (Number.isFinite(rightBorder) ? rightBorder : 0);
+      })()
+      : 0;
+    return Math.min(Math.ceil(contentWidth + borderWidth), maxWidth);
+  }
+
+  private applyWidth(maxWidth: number, width: number | null): void {
+    if (!this.panel) return;
+    this.panel.style.maxWidth = `${maxWidth}px`;
+    if (width === null) {
+      this.panel.style.width = "";
+      return;
+    }
+    this.panel.style.width = `${width}px`;
+  }
+
   private requestPositionUpdate(): void {
-    if (!this.panel || this.isDragging || this.manualPosition) return;
+    if (!this.panel) return;
     const requestId = ++this.positionRequestId;
     this.view.requestMeasure({
       key: "cf-math-preview-pos",
       read: () => {
         if (requestId !== this.positionRequestId) return null;
+        const maxWidth = this.readMaxPanelWidth();
         const position = this.readAnchorPosition();
-        if (!position) return null;
+        const width = this.readPanelWidth(maxWidth);
+        if (!position) {
+          return {
+            requestId,
+            position: null,
+            maxWidth,
+            width,
+          } satisfies PositionMeasurement;
+        }
 
         return {
           requestId,
           position,
+          maxWidth,
+          width,
         } satisfies PositionMeasurement;
       },
       write: (measurement) => {
-        if (!measurement || !this.panel || this.isDragging || this.manualPosition) return;
+        if (!measurement || !this.panel) return;
         if (measurement.requestId !== this.positionRequestId) return;
 
-        this.applyPosition(measurement.position);
+        this.applyWidth(measurement.maxWidth, measurement.width);
+        if (measurement.position) {
+          this.applyPosition(measurement.position);
+        }
       },
     });
   }

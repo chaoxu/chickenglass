@@ -662,6 +662,9 @@
 }
 
 .cf-math-preview-content {
+  display: inline-block;
+  max-width: none;
+  white-space: nowrap;
   cursor: pointer;
 }
 
