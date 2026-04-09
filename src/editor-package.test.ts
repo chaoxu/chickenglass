@@ -11,6 +11,9 @@ interface PackageExport {
 interface PackageManifest {
   readonly exports?: Record<string, PackageExport | string>;
   readonly files?: readonly string[];
+  readonly name?: string;
+  readonly packageManager?: string;
+  readonly scripts?: Record<string, string>;
 }
 
 function readPackageJson(): PackageManifest {
@@ -36,5 +39,16 @@ describe("package editor export", () => {
     const cssExport = packageJson.exports?.["./editor/style.css"];
 
     expect(cssExport).toBe("./dist/editor.css");
+  });
+
+  it("preserves the workflow scripts used by worktrees and push verification", () => {
+    const packageJson = readPackageJson();
+
+    expect(packageJson.name).toBe("coflat");
+    expect(packageJson.packageManager).toBe("pnpm@10.33.0");
+    expect(packageJson.scripts?.["dev:worktree"]).toBe("node scripts/dev-worktree.mjs");
+    expect(packageJson.scripts?.typecheck).toBe("tsc --noEmit");
+    expect(packageJson.scripts?.test).toBe("vitest run");
+    expect(packageJson.scripts?.prepare).toBe("lefthook install");
   });
 });
