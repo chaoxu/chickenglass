@@ -15,7 +15,6 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  destroyHoverPreviewTooltipForTest,
   ensureHoverPreviewTooltipForTest,
   getCachedTooltipContentForTest,
   hoverPreviewExtension,
@@ -48,20 +47,34 @@ function createClusterDOM(
   return { container, spans };
 }
 
+const createdViews: EditorView[] = [];
+
 function createHoverPreviewView(): EditorView {
   const parent = document.createElement("div");
   document.body.appendChild(parent);
-  return new EditorView({
+  const view = new EditorView({
     state: EditorState.create({
       doc: "",
       extensions: [hoverPreviewExtension],
     }),
     parent,
   });
+  createdViews.push(view);
+  return view;
+}
+
+function destroyHoverPreviewView(view: EditorView): void {
+  const index = createdViews.indexOf(view);
+  if (index >= 0) {
+    createdViews.splice(index, 1);
+  }
+  view.destroy();
 }
 
 afterEach(() => {
-  destroyHoverPreviewTooltipForTest();
+  while (createdViews.length > 0) {
+    createdViews.pop()?.destroy();
+  }
   document.body.innerHTML = "";
 });
 
@@ -191,18 +204,35 @@ describe("per-item targeting invariants (#397 regression)", () => {
 });
 
 describe("tooltip lifecycle", () => {
-  it("removes the singleton tooltip element from document.body on destroy", () => {
+  it("removes the owning tooltip element from document.body on destroy", () => {
     const view = createHoverPreviewView();
-    const tooltip = ensureHoverPreviewTooltipForTest();
+    const tooltip = ensureHoverPreviewTooltipForTest(view);
 
     expect(document.body.contains(tooltip)).toBe(true);
 
-    view.destroy();
+    destroyHoverPreviewView(view);
 
     expect(document.body.contains(tooltip)).toBe(false);
 
-    const recreatedTooltip = ensureHoverPreviewTooltipForTest();
+    const nextView = createHoverPreviewView();
+    const recreatedTooltip = ensureHoverPreviewTooltipForTest(nextView);
     expect(recreatedTooltip).not.toBe(tooltip);
+  });
+
+  it("destroying one editor leaves another editor's tooltip intact", () => {
+    const firstView = createHoverPreviewView();
+    const secondView = createHoverPreviewView();
+    const firstTooltip = ensureHoverPreviewTooltipForTest(firstView);
+    const secondTooltip = ensureHoverPreviewTooltipForTest(secondView);
+
+    expect(firstTooltip).not.toBe(secondTooltip);
+    expect(document.body.contains(firstTooltip)).toBe(true);
+    expect(document.body.contains(secondTooltip)).toBe(true);
+
+    destroyHoverPreviewView(firstView);
+
+    expect(document.body.contains(firstTooltip)).toBe(false);
+    expect(document.body.contains(secondTooltip)).toBe(true);
   });
 });
 
