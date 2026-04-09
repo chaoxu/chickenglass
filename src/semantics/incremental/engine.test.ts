@@ -8,8 +8,10 @@ import { editorStateTextSource } from "../codemirror-source";
 import { buildSemanticDelta } from "./semantic-delta";
 import {
   createDocumentAnalysis,
+  createDocumentArtifacts,
   getDocumentAnalysisRevision,
   getDocumentAnalysisSliceRevision,
+  updateDocumentArtifacts,
   updateDocumentAnalysis,
 } from "./engine";
 
@@ -29,6 +31,10 @@ function fullTree(state: EditorState) {
 
 function analyze(state: EditorState) {
   return createDocumentAnalysis(editorStateTextSource(state), fullTree(state));
+}
+
+function analyzeArtifacts(state: EditorState) {
+  return createDocumentArtifacts(editorStateTextSource(state), fullTree(state));
 }
 
 describe("incremental document analysis engine", () => {
@@ -110,6 +116,64 @@ describe("incremental document analysis engine", () => {
     );
     expect(after.headings).toBe(before.headings);
     expect(after.mathRegions[0]).not.toBe(before.mathRegions[0]);
+  });
+
+  it("refreshes IR section ranges when a tail edit reuses the prior analysis", () => {
+    const state = createState([
+      "# Intro",
+      "",
+      "Alpha.",
+    ].join("\n"));
+    const before = analyzeArtifacts(state);
+    const tr = state.update({
+      changes: {
+        from: state.doc.length,
+        insert: "\n\nTail paragraph.",
+      },
+    });
+
+    const after = updateDocumentArtifacts(
+      before,
+      editorStateTextSource(tr.state),
+      fullTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+
+    expect(after.analysis).toBe(before.analysis);
+    expect(before.ir.sections[0]?.range.to).toBe(state.doc.length);
+    expect(after.ir.sections[0]?.range.to).toBe(tr.state.doc.length);
+    expect(after.ir.sections[0]?.range.to).toBeGreaterThan(
+      before.ir.sections[0]?.range.to ?? 0,
+    );
+  });
+
+  it("refreshes IR tables when table edits leave the analysis unchanged", () => {
+    const state = createState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+    ].join("\n"));
+    const before = analyzeArtifacts(state);
+    const cellPos = state.doc.toString().indexOf("1");
+    const tr = state.update({
+      changes: {
+        from: cellPos,
+        to: cellPos + 1,
+        insert: "9",
+      },
+    });
+
+    const after = updateDocumentArtifacts(
+      before,
+      editorStateTextSource(tr.state),
+      fullTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+
+    expect(after.analysis).toBe(before.analysis);
+    expect(before.ir.tables[0]?.rows[0]?.cells[0]?.content).toBe("1");
+    expect(after.ir.tables[0]?.rows[0]?.cells[0]?.content).toBe("9");
   });
 
   it("does not crash when an exclusion-only edit is followed by a second edit", () => {
