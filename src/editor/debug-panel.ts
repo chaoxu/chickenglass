@@ -1,4 +1,4 @@
-import { Transaction, type Extension } from "@codemirror/state";
+import { Transaction, type Extension, type Text } from "@codemirror/state";
 import { type EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import type { FencedDivInfo } from "../fenced-block/model";
 import { frontmatterField } from "./frontmatter-state";
@@ -15,6 +15,10 @@ import {
   clearDebugTimelineEvents,
   getDebugTimelineEvents,
 } from "./debug-timeline";
+
+const MAX_DOC_INSERT_PREVIEW_CHARS = 120;
+const MIN_SCROLL_LOG_DELTA_PX = 48;
+const MIN_SCROLL_LOG_INTERVAL_MS = 120;
 
 function escapeHtml(text: string): string {
   return text
@@ -237,6 +241,7 @@ docLines=${view.state.doc.lines}
 guards=${guards.length}
 session=${recorder.sessionId ?? "(none)"}
 kind=${recorder.sessionKind}
+capture=${recorder.captureMode}
 stream=${recorder.connected ? "connected" : "buffering"}
 queued=${recorder.queued}
 sink=${sessionPath}`;
@@ -304,6 +309,22 @@ focused=${String(view.hasFocus)}</pre>
   `;
 }
 
+function summarizeInsertedText(inserted: Text): {
+  readonly insertedLength: number;
+  readonly insertedPreview: string;
+} {
+  const insertedLength = inserted.length;
+  return {
+    insertedLength,
+    insertedPreview: insertedLength === 0
+      ? ""
+      : inserted.sliceString(
+        0,
+        Math.min(insertedLength, MAX_DOC_INSERT_PREVIEW_CHARS),
+      ),
+  };
+}
+
 class DebugPanelView {
   readonly dom: HTMLElement;
   private view: EditorView;
@@ -314,9 +335,12 @@ class DebugPanelView {
   private readonly handleClick: (event: MouseEvent) => void;
   private readonly handleSurfaceUpdate: () => void;
   private lastScrollTop: number;
+  private lastScrollEventTop: number;
+  private lastScrollEventAt: number;
   private lastSelectionHead: number;
   private lastFocus: boolean;
   private lastStructureSummary: string;
+  private renderFrame: number | null;
 
   constructor(view: EditorView) {
     this.view = view;
@@ -326,23 +350,34 @@ class DebugPanelView {
     this.dom.setAttribute("aria-hidden", "true");
     this.host.classList.add("cf-editor-debug-host");
     this.lastScrollTop = Math.round(view.scrollDOM.scrollTop);
+    this.lastScrollEventTop = this.lastScrollTop;
+    this.lastScrollEventAt = 0;
     this.lastSelectionHead = view.state.selection.main.head;
     this.lastFocus = view.hasFocus;
     this.lastStructureSummary = structureSummary(view);
+    this.renderFrame = null;
     this.handleScroll = () => {
       const nextScrollTop = Math.round(this.view.scrollDOM.scrollTop);
       if (nextScrollTop !== this.lastScrollTop) {
         this.lastScrollTop = nextScrollTop;
-        appendDebugTimelineEvent(this.view, {
-          timestamp: Date.now(),
-          type: "scroll",
-          summary: `scrollTop=${nextScrollTop}`,
-          detail: {
-            scrollTop: nextScrollTop,
-          },
-        });
+        const now = Date.now();
+        if (
+          Math.abs(nextScrollTop - this.lastScrollEventTop) >= MIN_SCROLL_LOG_DELTA_PX ||
+          now - this.lastScrollEventAt >= MIN_SCROLL_LOG_INTERVAL_MS
+        ) {
+          this.lastScrollEventTop = nextScrollTop;
+          this.lastScrollEventAt = now;
+          appendDebugTimelineEvent(this.view, {
+            timestamp: now,
+            type: "scroll",
+            summary: `scrollTop=${nextScrollTop}`,
+            detail: {
+              scrollTop: nextScrollTop,
+            },
+          });
+        }
       }
-      this.render(this.view);
+      this.requestRender();
     };
     this.handleKeyDown = (event) => {
       appendDebugTimelineEvent(this.view, {
@@ -359,7 +394,7 @@ class DebugPanelView {
           head: this.view.state.selection.main.head,
         },
       });
-      this.render(this.view);
+      this.requestRender();
     };
     this.handlePointerDown = (event) => {
       const coords = {
@@ -410,7 +445,7 @@ class DebugPanelView {
       const action = target.dataset.action;
       if (action === "clear-timeline") {
         clearDebugTimelineEvents(this.view);
-        this.render(this.view);
+        this.requestRender();
         return;
       }
       if (action === "copy-timeline") {
@@ -419,7 +454,7 @@ class DebugPanelView {
       }
     };
     this.handleSurfaceUpdate = () => {
-      this.render(this.view);
+      this.requestRender();
     };
     this.host.appendChild(this.dom);
     view.scrollDOM.addEventListener("scroll", this.handleScroll, { passive: true });
@@ -432,7 +467,7 @@ class DebugPanelView {
       type: "focus",
       summary: "debug lane mounted",
     });
-    this.render(view);
+    this.requestRender();
   }
 
   update(update: ViewUpdate): void {
@@ -488,7 +523,8 @@ class DebugPanelView {
                 toA: number;
                 fromB: number;
                 toB: number;
-                inserted: string;
+                insertedLength: number;
+                insertedPreview: string;
               }> = [];
               tr.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
                 changes.push({
@@ -496,7 +532,7 @@ class DebugPanelView {
                   toA,
                   fromB,
                   toB,
-                  inserted: inserted.toString(),
+                  ...summarizeInsertedText(inserted),
                 });
               });
               return changes;
@@ -535,11 +571,15 @@ class DebugPanelView {
       update.geometryChanged ||
       update.transactions.some((tr) => tr.effects.length > 0)
     ) {
-      this.render(update.view);
+      this.requestRender();
     }
   }
 
   destroy(): void {
+    if (this.renderFrame !== null) {
+      cancelAnimationFrame(this.renderFrame);
+      this.renderFrame = null;
+    }
     this.view.scrollDOM.removeEventListener("scroll", this.handleScroll);
     this.view.contentDOM.removeEventListener("keydown", this.handleKeyDown, true);
     this.view.contentDOM.removeEventListener("pointerdown", this.handlePointerDown, true);
@@ -547,6 +587,14 @@ class DebugPanelView {
     this.view.dom.removeEventListener(shellSurfaceUpdateEvent, this.handleSurfaceUpdate);
     this.dom.remove();
     this.host.classList.remove("cf-editor-debug-host");
+  }
+
+  private requestRender(): void {
+    if (this.renderFrame !== null) return;
+    this.renderFrame = requestAnimationFrame(() => {
+      this.renderFrame = null;
+      this.render(this.view);
+    });
   }
 
   private render(view: EditorView): void {

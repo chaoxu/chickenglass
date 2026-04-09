@@ -23,6 +23,7 @@ import {
 import {
   type CodeBlockInfo,
   collectCodeBlocks,
+  getCodeBlockStructureRevision,
 } from "./code-block-structure";
 import { pushWidgetDecoration } from "./decoration-core";
 import {
@@ -131,6 +132,10 @@ class CopyButtonWidget extends ShellWidget {
 
 function joinClasses(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");
+}
+
+function codeBlockStructureRevisionChanged(tr: Transaction): boolean {
+  return getCodeBlockStructureRevision(tr.startState) !== getCodeBlockStructureRevision(tr.state);
 }
 
 class CodeBlockLanguageWidget extends ShellWidget {
@@ -361,11 +366,11 @@ export const codeBlockDecorationField = StateField.define<DecorationSet>({
   },
 
   update(value, tr) {
-    if (tr.effects.some((e) => e.is(focusEffect))) {
-      return buildCodeBlockDecorations(tr.state);
-    }
-
-    if (hasStructureEditEffect(tr)) {
+    if (
+      tr.effects.some((e) => e.is(focusEffect)) ||
+      hasStructureEditEffect(tr) ||
+      codeBlockStructureRevisionChanged(tr)
+    ) {
       return buildCodeBlockDecorations(tr.state);
     }
 

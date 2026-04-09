@@ -13,10 +13,29 @@ export async function run(page) {
     pressed: document.querySelector('[data-testid="debug-lane-button"]')?.getAttribute("aria-pressed"),
   }));
 
-  if (!initialState.enabled || !initialState.panelVisible || initialState.pressed !== "true") {
+  if (initialState.enabled || initialState.panelVisible || initialState.pressed !== "false") {
     return {
       pass: false,
-      message: "debug lane was not enabled by default in dev/test mode",
+      message: "debug lane should start disabled by default",
+    };
+  }
+
+  await button.click();
+  await page.waitForFunction(() => (
+    Boolean(document.querySelector(".cf-debug-panel"))
+      && Boolean(window.__cmDebug?.debugLaneEnabled?.())
+  ));
+
+  const enabledState = await page.evaluate(() => ({
+    enabled: window.__cmDebug?.debugLaneEnabled?.() ?? false,
+    panelVisible: Boolean(document.querySelector(".cf-debug-panel")),
+    pressed: document.querySelector('[data-testid="debug-lane-button"]')?.getAttribute("aria-pressed"),
+  }));
+
+  if (!enabledState.enabled || !enabledState.panelVisible || enabledState.pressed !== "true") {
+    return {
+      pass: false,
+      message: "debug lane did not enable from the status-bar button",
     };
   }
 
@@ -39,27 +58,8 @@ export async function run(page) {
     };
   }
 
-  await button.click();
-  await page.waitForFunction(() => (
-    Boolean(document.querySelector(".cf-debug-panel"))
-      && Boolean(window.__cmDebug?.debugLaneEnabled?.())
-  ));
-
-  const reenabledState = await page.evaluate(() => ({
-    enabled: window.__cmDebug?.debugLaneEnabled?.() ?? false,
-    panelVisible: Boolean(document.querySelector(".cf-debug-panel")),
-    pressed: document.querySelector('[data-testid="debug-lane-button"]')?.getAttribute("aria-pressed"),
-  }));
-
-  if (!reenabledState.enabled || !reenabledState.panelVisible || reenabledState.pressed !== "true") {
-    return {
-      pass: false,
-      message: "debug lane did not re-enable from the status-bar button",
-    };
-  }
-
   return {
     pass: true,
-    message: "debug lane defaults on and the status-bar button toggles it",
+    message: "debug lane defaults off and the status-bar button toggles it",
   };
 }

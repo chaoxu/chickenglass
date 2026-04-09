@@ -26,6 +26,10 @@ import { buildDecorations } from "./decoration-core";
 import { editorFocusField, focusTracker } from "./focus-state";
 import { mathMacrosField } from "./math-macros";
 import {
+  getReferenceRenderDependencySignature,
+  referenceRenderDependenciesChanged,
+} from "./reference-render";
+import {
   tableDiscoveryField,
   findTableAtCursor,
   findTablesInState,
@@ -75,11 +79,18 @@ export function insertTable(
 function buildTableDecorationsFromState(state: EditorState): DecorationSet {
   const tables = findTablesInState(state);
   const macros = state.field(mathMacrosField);
+  const renderSignature = getReferenceRenderDependencySignature(state);
   const items: Range<Decoration>[] = [];
 
   for (const table of tables) {
     const tableText = state.sliceDoc(table.from, table.to);
-    const widget = new TableWidget(table.parsed, tableText, table.from, macros);
+    const widget = new TableWidget(
+      table.parsed,
+      tableText,
+      table.from,
+      macros,
+      renderSignature,
+    );
 
     items.push(
       Decoration.replace({
@@ -115,6 +126,7 @@ const tableDecorationField = StateField.define<DecorationSet>({
 
     if (
       cellEdit === "commit" ||
+      referenceRenderDependenciesChanged(tr.startState, tr.state) ||
       tr.state.field(tableDiscoveryField, false) !== tr.startState.field(tableDiscoveryField, false)
     ) {
       return buildTableDecorationsFromState(tr.state);

@@ -1,7 +1,10 @@
 import { useEffect, useRef } from "react";
 import type { EditorMode } from "../../editor";
 import { isTauri } from "../../lib/tauri";
-import { recordDebugSessionEvent } from "../../debug/session-recorder";
+import {
+  getDebugSessionRecorderStatus,
+  recordDebugSessionEvent,
+} from "../../debug/session-recorder";
 import {
   clearScrollGuardEvents,
   getScrollGuardEvents,
@@ -87,6 +90,19 @@ export function useAppDebug({
   const lastAppStateRef = useRef<string | null>(null);
   const mode = getMode();
 
+  const summarizeDebugProjectFile = (file: DebugProjectFile) =>
+    file.kind === "text"
+      ? {
+          path: file.path,
+          kind: file.kind,
+          contentLength: file.content.length,
+        }
+      : {
+          path: file.path,
+          kind: file.kind,
+          base64Length: file.base64.length,
+        };
+
   // Stop the FPS rAF loop only on true unmount / HMR — not on every effect
   // refresh caused by dependency changes (openProject, currentDocument, etc.).
   useEffect(() => () => stopFpsMeter(), []);
@@ -137,7 +153,7 @@ export function useAppDebug({
           detail: {
             name,
             contentLength: content.length,
-            content,
+            contentPreview: content.slice(0, 120),
           },
         });
         await openFileWithContent(name, content);
@@ -151,7 +167,7 @@ export function useAppDebug({
               detail: {
                 initialPath: initialPath ?? null,
                 fileCount: files.length,
-                files,
+                files: files.map(summarizeDebugProjectFile),
               },
             });
             await loadFixtureProject(files, initialPath);
@@ -205,6 +221,8 @@ export function useAppDebug({
       toggleFps: toggleFpsMeter,
       scrollGuards: () => getScrollGuardEvents(),
       clearScrollGuards: () => clearScrollGuardEvents(),
+      renderState: () => window.__cmDebug?.renderState?.() ?? null,
+      recorderStatus: () => getDebugSessionRecorderStatus(),
     };
     if (import.meta.env.DEV && isTauri()) {
       window.__tauriSmoke = {

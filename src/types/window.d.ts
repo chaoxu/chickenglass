@@ -10,7 +10,7 @@
  */
 
 import type { EditorView } from "@codemirror/view";
-import type { DebugHelpers } from "../editor";
+import type { DebugHelpers, DebugRenderState } from "../editor";
 import type { SourceMap } from "../app/source-map";
 import type { EditorMode } from "../editor";
 import type { DebugDocumentState, DebugProjectFile } from "../app/hooks/use-app-debug";
@@ -79,6 +79,14 @@ declare global {
       toggleFps: () => boolean;
       scrollGuards: () => readonly ScrollGuardEvent[];
       clearScrollGuards: () => void;
+      renderState: () => DebugRenderState | null;
+      recorderStatus: () => {
+        sessionId: string | null;
+        sessionKind: "human" | "webdriver";
+        connected: boolean;
+        queued: number;
+        captureMode: "smart";
+      };
     };
 
     /**

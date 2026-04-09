@@ -41,21 +41,21 @@ describe("toggleTreeView", () => {
 });
 
 describe("createDebugHelpers", () => {
-  it("keeps the debug lane on by default in test mode and toggles it per editor instance", () => {
+  it("keeps the debug lane off by default and toggles it per editor instance", () => {
     const first = createMountedEditor();
     const second = createMountedEditor();
     const firstHelpers = createDebugHelpers(first);
     const secondHelpers = createDebugHelpers(second);
 
-    expect(firstHelpers.debugLaneEnabled()).toBe(true);
-    expect(secondHelpers.debugLaneEnabled()).toBe(true);
-
-    expect(firstHelpers.toggleDebugLane()).toBe(false);
     expect(firstHelpers.debugLaneEnabled()).toBe(false);
-    expect(secondHelpers.debugLaneEnabled()).toBe(true);
+    expect(secondHelpers.debugLaneEnabled()).toBe(false);
 
     expect(firstHelpers.toggleDebugLane()).toBe(true);
     expect(firstHelpers.debugLaneEnabled()).toBe(true);
+    expect(secondHelpers.debugLaneEnabled()).toBe(false);
+
+    expect(firstHelpers.toggleDebugLane()).toBe(false);
+    expect(firstHelpers.debugLaneEnabled()).toBe(false);
   });
 
   it("reports closing fences for divs, code blocks, and display math", () => {
@@ -78,6 +78,32 @@ describe("createDebugHelpers", () => {
     const helpers = createDebugHelpers(view);
 
     expect(helpers.fences().map((fence) => fence.line)).toEqual([3, 7, 11]);
+  });
+
+  it("captures the visible render state snapshot", () => {
+    const view = createMountedEditor(
+      [
+        "::: {.theorem} Render Snapshot",
+        "Statement with $x^2$.",
+        ":::",
+        "",
+        "$$",
+        "x",
+        "$$",
+      ].join("\n"),
+    );
+
+    const helpers = createDebugHelpers(view);
+    const render = helpers.renderState();
+
+    expect(render).toHaveProperty("renderedBlockHeaders");
+    expect(render).toHaveProperty("inlineMath");
+    expect(render).toHaveProperty("displayMath");
+    expect(render).toHaveProperty("citations");
+    expect(render).toHaveProperty("crossrefs");
+    expect(render).toHaveProperty("tables");
+    expect(render).toHaveProperty("figures");
+    expect(Array.isArray(render.visibleRawFencedOpeners)).toBe(true);
   });
 
   it("exposes reverse-scroll-guarded vertical motion", () => {

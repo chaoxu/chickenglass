@@ -95,18 +95,18 @@ describe("renderInlineMarkdown — plain text", () => {
 describe("renderInlineMarkdown — bold", () => {
   it("renders **text** as <strong>", () => {
     const html = render("**bold**");
-    expect(html).toBe("<strong>bold</strong>");
+    expect(html).toBe('<strong class="cf-bold">bold</strong>');
   });
 
   it("renders text before bold correctly", () => {
     const html = render("before **bold**");
     expect(html).toContain("before ");
-    expect(html).toContain("<strong>bold</strong>");
+    expect(html).toContain('<strong class="cf-bold">bold</strong>');
   });
 
   it("renders text after bold correctly", () => {
     const html = render("**bold** after");
-    expect(html).toContain("<strong>bold</strong>");
+    expect(html).toContain('<strong class="cf-bold">bold</strong>');
     expect(html).toContain(" after");
   });
 
@@ -132,12 +132,12 @@ describe("renderInlineMarkdown — bold", () => {
 describe("renderInlineMarkdown — italic", () => {
   it("renders *text* as <em>", () => {
     const html = render("*italic*");
-    expect(html).toBe("<em>italic</em>");
+    expect(html).toBe('<em class="cf-italic">italic</em>');
   });
 
   it("renders text before italic correctly", () => {
     const html = render("before *italic*");
-    expect(html).toContain("<em>italic</em>");
+    expect(html).toContain('<em class="cf-italic">italic</em>');
     expect(html).toContain("before ");
   });
 
@@ -161,13 +161,15 @@ describe("renderInlineMarkdown — italic", () => {
 });
 
 describe("renderInlineMarkdown — inline math", () => {
-  it("renders $math$ as a <span> containing KaTeX output", () => {
+  it("renders $math$ as a cf-math-inline <span> containing KaTeX output", () => {
     const container = document.createElement("div");
     renderInlineMarkdown(container, "$x^2$");
-    const span = container.querySelector("span");
+    const span = container.querySelector("span.cf-math-inline");
     expect(span).not.toBeNull();
     // KaTeX output contains a .katex element
     expect(span?.querySelector(".katex")).not.toBeNull();
+    expect(span?.getAttribute("role")).toBe("img");
+    expect(span?.getAttribute("aria-label")).toBe("x^2");
   });
 
   it("does not include dollar delimiters in rendered output text", () => {
@@ -236,7 +238,7 @@ describe("renderInlineMarkdown — mixed content", () => {
 describe("renderInlineMarkdown — strikethrough", () => {
   it("renders ~~text~~ as <del>", () => {
     const html = render("~~deleted~~");
-    expect(html).toContain("<del>");
+    expect(html).toContain('<del class="cf-strikethrough">');
     expect(html).toContain("deleted");
   });
 });
@@ -244,7 +246,7 @@ describe("renderInlineMarkdown — strikethrough", () => {
 describe("renderInlineMarkdown — highlight", () => {
   it("renders ==text== as <mark>", () => {
     const html = render("==highlighted==");
-    expect(html).toContain("<mark>");
+    expect(html).toContain('<mark class="cf-highlight">');
     expect(html).toContain("highlighted");
   });
 });
@@ -260,13 +262,13 @@ describe("renderInlineMarkdown — inline code", () => {
 describe("renderInlineMarkdown — nested emphasis", () => {
   it("renders bold nested inside italic", () => {
     const html = render("*text with **bold** inside*");
-    expect(html).toContain("<em>");
-    expect(html).toContain("<strong>");
+    expect(html).toContain('<em class="cf-italic">');
+    expect(html).toContain('<strong class="cf-bold">');
   });
 
   it("renders bold inside parentheses (issue #260 scenario)", () => {
     const html = render("Theorem 1 (**3SUM**)");
-    expect(html).toContain("<strong>");
+    expect(html).toContain('<strong class="cf-bold">');
     expect(html).toContain("3SUM");
   });
 });
@@ -282,7 +284,7 @@ describe("renderInlineMarkdown — escape sequences", () => {
 describe("renderInlineMarkdown — surface policies", () => {
   it("renders links as anchors in document-inline", () => {
     const html = render("[text](https://example.com)", {}, "document-inline");
-    expect(html).toBe('<a href="https://example.com">text</a>');
+    expect(html).toBe('<a class="cf-link-rendered" href="https://example.com">text</a>');
   });
 
   it("degrades links to inert text in ui-chrome-inline", () => {

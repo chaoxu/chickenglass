@@ -938,6 +938,20 @@ export async function dump(page) {
 }
 
 /**
+ * Return the compact visible rich-render snapshot.
+ */
+export async function getRenderState(page) {
+  return page.evaluate(() => window.__cmDebug.renderState());
+}
+
+/**
+ * Return the current debug session recorder status.
+ */
+export async function getRecorderStatus(page) {
+  return page.evaluate(() => window.__cfDebug.recorderStatus());
+}
+
+/**
  * Return the current measured geometry snapshot for visible lines and shell surfaces.
  */
 export async function getGeometrySnapshot(page) {

@@ -65,6 +65,18 @@ function serializeKeyPart(value: string | undefined): string {
   return value ?? "";
 }
 
+const objectIdentityIds = new WeakMap<object, number>();
+let nextObjectIdentityId = 1;
+
+function getObjectIdentityId(value: object | null | undefined): number {
+  if (!value) return 0;
+  const existing = objectIdentityIds.get(value);
+  if (existing !== undefined) return existing;
+  const next = nextObjectIdentityId++;
+  objectIdentityIds.set(value, next);
+  return next;
+}
+
 function getEquationNumberingKey(analysis: DocumentAnalysis): string {
   return analysis.equations
     .map((equation) => `${equation.id}\0${equation.number}`)
@@ -123,8 +135,12 @@ function bibliographyInputsChanged(
   beforeState: EditorState,
   afterState: EditorState,
 ): boolean {
-  const beforeBib = beforeState.field(bibDataField);
-  const afterBib = afterState.field(bibDataField);
+  const beforeBib = beforeState.field(bibDataField, false);
+  const afterBib = afterState.field(bibDataField, false);
+
+  if (!beforeBib || !afterBib) {
+    return beforeBib !== afterBib;
+  }
 
   return (
     beforeBib.store !== afterBib.store ||
@@ -141,6 +157,38 @@ function blockLabelConfigChanged(
     beforeState.field(pluginRegistryField, false)
       !== afterState.field(pluginRegistryField, false)
   );
+}
+
+export function getReferenceRenderDependencySignature(
+  state: EditorState,
+): string {
+  const analysis = state.field(documentAnalysisField, false);
+  const bibState = state.field(bibDataField, false);
+  const pluginRegistry = state.field(pluginRegistryField, false);
+  if (!analysis || !bibState) {
+    return [
+      "",
+      "",
+      "",
+      0,
+      0,
+      0,
+      "",
+      getObjectIdentityId(pluginRegistry as object | null | undefined),
+    ].join("\u0001");
+  }
+  const { store, cslProcessor, processorRevision } = bibState;
+
+  return [
+    getDocumentAnalysisSliceRevision(analysis, "references"),
+    getEquationNumberingKey(analysis),
+    getBlockNumberingKey(state),
+    getObjectIdentityId(store as object),
+    getObjectIdentityId(cslProcessor),
+    processorRevision,
+    cslProcessor.citationRegistrationKey ?? "",
+    getObjectIdentityId(pluginRegistry as object | null | undefined),
+  ].join("\u0001");
 }
 
 export function referenceRenderDependenciesChanged(
