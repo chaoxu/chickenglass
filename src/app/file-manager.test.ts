@@ -209,6 +209,7 @@ describe("createBlogDemoFileSystem fallback", () => {
 
 describe("MemoryFileSystem.readFileBinary", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -263,6 +264,28 @@ describe("MemoryFileSystem.readFileBinary", () => {
     await expect(fs.readFileBinary("/etc/passwd")).rejects.toThrow("File not found");
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("logs demo asset fetch failures once before rejecting", async () => {
+    const fetchError = new Error("network down");
+    const fetchMock = vi.fn().mockRejectedValue(fetchError);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("fetch", fetchMock);
+
+    const fs = new MemoryFileSystem();
+    await expect(fs.readFileBinary("assets/missing.png")).rejects.toThrow("File not found");
+    await expect(fs.readFileBinary("assets/missing.png")).rejects.toThrow("File not found");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[file-manager] failed to fetch demo asset fallback",
+      {
+        demoAssetUrl: "/demo/assets/missing.png",
+        path: "assets/missing.png",
+      },
+      fetchError,
+    );
   });
 });
 

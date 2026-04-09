@@ -1,6 +1,7 @@
 import type { EditorSelection } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
+import { warnOnce } from "../lib/warn-once";
 import {
   buildPointerSelection,
   isPlainPrimaryMouseEvent,
@@ -18,7 +19,16 @@ function safePosAtDOM(
 ): number | null {
   try {
     return view.posAtDOM(node, offset);
-  } catch {
+  } catch (error: unknown) {
+    if (!view.dom.isConnected || !node.isConnected) {
+      return null;
+    }
+    warnOnce(
+      "rich-mouse-selection:posAtDOM",
+      "[rich-mouse-selection] posAtDOM failed; falling back to line-edge selection",
+      { offset },
+      error,
+    );
     return null;
   }
 }
