@@ -889,17 +889,18 @@ describe("#299 — centralized block manifest and CSS registry", () => {
   it("uses the shared registries in block rendering paths", () => {
     const blockTheme = fileText("src/editor/block-theme.ts");
     const pluginRender = fileText("src/plugins/plugin-render.ts");
+    const pluginRenderDecorations = fileText("src/plugins/plugin-render-decorations.ts");
     const pluginRenderChrome = fileText("src/plugins/plugin-render-chrome.ts");
 
     expect(blockTheme).toContain("STYLED_BLOCK_NAMES");
-    expect(pluginRender).toContain("getPluginOrFallback");
     expect(pluginRender).toContain("createFencedBlockDecorationField");
+    expect(pluginRenderDecorations).toContain("getPluginOrFallback");
     expect(pluginRenderChrome).toContain("CSS.blockHeaderRendered");
     expect(pluginRenderChrome).toContain("renderDocumentFragmentToDom");
     // #374: embed detection is now data-driven via plugin.specialBehavior,
     // not via the EMBED_CLASSES set — this is the correct post-migration state.
-    expect(pluginRender).toContain('specialBehavior === "embed"');
-    expect(pluginRender).not.toContain("EMBED_CLASSES");
+    expect(pluginRenderDecorations).toContain('specialBehavior === "embed"');
+    expect(pluginRenderDecorations).not.toContain("EMBED_CLASSES");
   });
 });
 
@@ -938,13 +939,14 @@ describe("#370 — shared decoration/widget factories", () => {
     const image = fileText("src/render/image-render.ts");
     const reference = fileText("src/render/reference-render.ts");
     const pluginRender = fileText("src/plugins/plugin-render.ts");
+    const pluginRenderDecorations = fileText("src/plugins/plugin-render-decorations.ts");
 
     expect(checkbox).toContain("createSimpleViewPlugin");
     expect(checkbox).toContain("pushWidgetDecoration");
     expect(image).toContain("pushWidgetDecoration");
     expect(reference).toContain("createIncrementalDecorationsViewPlugin");
     expect(reference).toContain("pushWidgetDecoration");
-    expect(pluginRender).toContain("buildFencedBlockDecorations");
+    expect(pluginRenderDecorations).toContain("buildFencedBlockDecorations");
     expect(pluginRender).toContain("createFencedBlockDecorationField");
   });
 });

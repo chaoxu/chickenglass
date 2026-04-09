@@ -3,7 +3,11 @@ import { Decoration } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import type { FencedDivInfo } from "../fenced-block/model";
-import { getFencedDivStructuralOpenTo } from "../fenced-block/model";
+import {
+  getFencedDivRevealFrom,
+  getFencedDivRevealTo,
+  getFencedDivStructuralOpenTo,
+} from "../fenced-block/model";
 import {
   addMarkerReplacement,
   createSimpleTextWidget,
@@ -224,5 +228,52 @@ export function addAttributeTitleDecoration(
       widget: new AttributeTitleWidget(title, macros),
       side: 1,
     }).range(openFenceTo),
+  );
+}
+
+export function addInlineHeaderDecoration(
+  div: FencedDivInfo,
+  firstBodyLineFrom: number,
+  header: string,
+  className: string,
+  macros: Record<string, string>,
+  items: Range<Decoration>[],
+): void {
+  const inlineHeaderWidget = new BlockHeaderWidget(header, macros);
+  inlineHeaderWidget.updateSourceRange(
+    getFencedDivRevealFrom(div),
+    getFencedDivRevealTo(div),
+  );
+  items.push(
+    Decoration.line({ class: `${className} ${CSS.blockHeader}` }).range(firstBodyLineFrom),
+  );
+  items.push(
+    Decoration.widget({
+      widget: inlineHeaderWidget,
+      side: -1,
+    }).range(firstBodyLineFrom),
+  );
+}
+
+export function addCaptionDecoration(
+  div: FencedDivInfo,
+  lastBodyLineTo: number,
+  header: string,
+  title: string,
+  macros: Record<string, string>,
+  active: boolean,
+  items: Range<Decoration>[],
+): void {
+  const captionWidget = new BlockCaptionWidget(header, title, macros, active);
+  captionWidget.updateSourceRange(
+    div.titleFrom ?? getFencedDivRevealFrom(div),
+    div.titleTo ?? getFencedDivRevealTo(div),
+  );
+  items.push(
+    Decoration.widget({
+      widget: captionWidget,
+      side: 1,
+      block: true,
+    }).range(lastBodyLineTo),
   );
 }
