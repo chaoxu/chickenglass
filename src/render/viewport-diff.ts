@@ -97,7 +97,7 @@ export function mapVisibleRanges(
 export function rangeIntersectsRanges(
   from: number,
   to: number,
-  ranges: readonly VisibleRange[],
+  ranges: readonly Pick<VisibleRange, "from" | "to">[],
 ): boolean {
   for (const range of ranges) {
     if (from === to) {
