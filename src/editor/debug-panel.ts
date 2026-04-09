@@ -35,6 +35,7 @@ function currentLineClasses(view: EditorView): string[] {
     if (!(node instanceof HTMLElement)) return [];
     return Array.from(node.classList).filter((name) => name.startsWith("cf-"));
   } catch {
+    // Debug-only inspector: DOM lookups can race CM6 redraws or lightweight tests.
     return [];
   }
 }
@@ -49,6 +50,7 @@ function caretDetail(view: EditorView, pos: number): {
   try {
     coords = view.coordsAtPos(pos, view.state.selection.main.assoc || 1);
   } catch {
+    // Debug-only inspector: caret geometry is optional when layout APIs are unavailable.
     return null;
   }
   if (!coords) return null;
@@ -68,6 +70,7 @@ function safePosAtDOM(
   try {
     return view.posAtDOM(node, offset);
   } catch {
+    // Debug-only inspector: stale DOM nodes are acceptable and should read as "unknown".
     return null;
   }
 }
