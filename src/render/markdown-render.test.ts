@@ -1,10 +1,11 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { Decoration, EditorView } from "@codemirror/view";
+import { Decoration, EditorView, type ViewUpdate } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import {
   computeMarkdownContextChangeRanges,
   computeMarkdownDocChangeRanges,
   markdownRenderPlugin,
+  _markdownDocChangeNeedsContextMergeForTest as markdownDocChangeNeedsContextMerge,
   cursorContextKey,
   markdownShouldUpdate,
   _collectMarkdownItemsForTest as collectMarkdownItems,
@@ -504,6 +505,52 @@ describe("computeMarkdownDocChangeRanges (#823)", () => {
     receivedRanges = [];
     return { getRanges: () => receivedRanges };
   }
+
+  function mockDocChangeUpdate(
+    startState: ReturnType<typeof createEditorState>,
+    state: ReturnType<typeof createEditorState>,
+    overrides: Partial<Pick<ViewUpdate, "focusChanged">> = {},
+  ): ViewUpdate {
+    return {
+      docChanged: true,
+      selectionSet: false,
+      focusChanged: overrides.focusChanged ?? false,
+      viewportChanged: false,
+      state,
+      startState,
+      view: { hasFocus: true } as EditorView,
+    } as unknown as ViewUpdate;
+  }
+
+  it("skips cursor-context merging when doc changes keep selection and focus stable", () => {
+    const startState = createEditorState("plain **bold** text", {
+      cursorPos: 3,
+      extensions: [markdown()],
+    });
+    const tr = startState.update({
+      changes: { from: startState.doc.length, insert: "x" },
+    });
+
+    expect(markdownDocChangeNeedsContextMerge(mockDocChangeUpdate(startState, tr.state))).toBe(false);
+  });
+
+  it("keeps cursor-context merging enabled when doc changes move selection or focus", () => {
+    const startState = createEditorState("plain **bold** text", {
+      cursorPos: 3,
+      extensions: [markdown()],
+    });
+    const movedSelection = createEditorState("plain **bold** text", {
+      cursorPos: 5,
+      extensions: [markdown()],
+    });
+
+    expect(markdownDocChangeNeedsContextMerge(mockDocChangeUpdate(startState, movedSelection))).toBe(true);
+    expect(
+      markdownDocChangeNeedsContextMerge(
+        mockDocChangeUpdate(startState, startState, { focusChanged: true }),
+      ),
+    ).toBe(true);
+  });
 
   it("keeps prose typing scoped to the dirty fragment", () => {
     const { getRanges } = createDocRangeView("intro text\n\n**bold** tail", 5);

@@ -153,10 +153,33 @@ export interface DocumentAnalysis {
   readonly referenceByFrom: ReadonlyMap<number, ReferenceSemantics>;
   readonly includes: readonly IncludeSemantics[];
   readonly includeByFrom: ReadonlyMap<number, IncludeSemantics>;
+  readonly equationNumbersCacheKey?: string;
 }
 
 export type DocumentSemantics = DocumentAnalysis;
 export type { DocumentArtifacts };
+
+function buildEquationNumbersCacheKey(
+  equations: readonly EquationSemantics[],
+): string {
+  return equations
+    .map((equation) => `${equation.id}\0${equation.number}`)
+    .join("\u0001");
+}
+
+export function getEquationNumbersCacheKey(
+  analysis: DocumentAnalysis,
+): string {
+  if (Object.prototype.hasOwnProperty.call(analysis, "equationNumbersCacheKey")) {
+    return analysis.equationNumbersCacheKey ?? "";
+  }
+
+  const cacheKey = buildEquationNumbersCacheKey(analysis.equations);
+  Object.defineProperty(analysis, "equationNumbersCacheKey", {
+    value: cacheKey,
+  });
+  return cacheKey;
+}
 
 export interface TrailingHeadingAttributes {
   readonly index: number;

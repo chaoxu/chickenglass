@@ -45,7 +45,11 @@ import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
-import type { DocumentAnalysis, ReferenceSemantics } from "../semantics/document";
+import {
+  getEquationNumbersCacheKey,
+  type DocumentAnalysis,
+  type ReferenceSemantics,
+} from "../semantics/document";
 import { blockCounterField } from "../state/block-counter";
 import { bibDataField } from "../state/bib-data";
 import {
@@ -76,12 +80,6 @@ function getObjectIdentityId(value: object | null | undefined): number {
   const next = nextObjectIdentityId++;
   objectIdentityIds.set(value, next);
   return next;
-}
-
-function getEquationNumberingKey(analysis: DocumentAnalysis): string {
-  return analysis.equations
-    .map((equation) => `${equation.id}\0${equation.number}`)
-    .join("\u0001");
 }
 
 function getBlockNumberingKey(state: EditorState): string {
@@ -121,7 +119,7 @@ function crossrefNumberingChanged(
 
   if (
     equationSliceChanged &&
-    getEquationNumberingKey(beforeAnalysis) !== getEquationNumberingKey(afterAnalysis)
+    getEquationNumbersCacheKey(beforeAnalysis) !== getEquationNumbersCacheKey(afterAnalysis)
   ) {
     return true;
   }
@@ -182,7 +180,7 @@ export function getReferenceRenderDependencySignature(
 
   return [
     getDocumentAnalysisSliceRevision(analysis, "references"),
-    getEquationNumberingKey(analysis),
+    getEquationNumbersCacheKey(analysis),
     getBlockNumberingKey(state),
     getObjectIdentityId(store as object),
     getObjectIdentityId(cslProcessor),

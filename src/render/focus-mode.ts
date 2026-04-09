@@ -12,9 +12,16 @@ import {
   type EditorView,
   type ViewUpdate,
 } from "@codemirror/view";
-import { type Extension, StateEffect } from "@codemirror/state";
+import { type EditorState, type Extension, StateEffect } from "@codemirror/state";
+import { CSS } from "../constants/css-classes";
 import { createBooleanToggleField } from "./focus-state";
-import { createSimpleViewPlugin } from "./view-plugin-factories";
+import {
+  dirtyRangesFromChanges,
+  expandChangeRangeToLines,
+  mergeDirtyRanges,
+  type DirtyRange,
+} from "./incremental-dirty-ranges";
+import { createIncrementalDecorationsViewPlugin } from "./view-plugin-factories";
 
 /** Effect to toggle focus mode on/off. */
 const toggleFocusEffect = StateEffect.define<boolean>();
@@ -23,7 +30,14 @@ const toggleFocusEffect = StateEffect.define<boolean>();
 const focusModeField = createBooleanToggleField(toggleFocusEffect);
 
 /** Line decoration that dims content. */
-const dimmedLine = Decoration.line({ class: "cf-focus-dimmed" });
+const dimmedLine = Decoration.line({ class: CSS.focusDimmed });
+
+interface ParagraphRange {
+  readonly lineFrom: number;
+  readonly lineTo: number;
+  readonly from: number;
+  readonly to: number;
+}
 
 /**
  * Find the paragraph block containing the given position.
@@ -55,35 +69,111 @@ function findParagraphRange(
   return { from, to };
 }
 
-/** Build focus-mode decorations that dim lines outside the current paragraph. */
-function buildFocusDecorations(view: EditorView): DecorationSet {
-  const active = view.state.field(focusModeField);
-  if (!active) return Decoration.none;
+function getActiveParagraphRange(state: EditorState): ParagraphRange | null {
+  if (!state.field(focusModeField)) return null;
 
-  const doc = view.state.doc;
-  const cursorPos = view.state.selection.main.head;
+  const doc = state.doc;
+  const cursorPos = state.selection.main.head;
   const cursorLine = doc.lineAt(cursorPos).number;
-  const { from: paraFrom, to: paraTo } = findParagraphRange(doc, cursorLine);
-
-  const decorations: ReturnType<typeof dimmedLine.range>[] = [];
-
-  for (let i = 1; i <= doc.lines; i++) {
-    if (i >= paraFrom && i <= paraTo) continue;
-    const line = doc.line(i);
-    decorations.push(dimmedLine.range(line.from));
-  }
-
-  return Decoration.set(decorations, true);
+  const { from: lineFrom, to: lineTo } = findParagraphRange(doc, cursorLine);
+  return {
+    lineFrom,
+    lineTo,
+    from: doc.line(lineFrom).from,
+    to: doc.line(lineTo).to,
+  };
 }
 
-/** Custom update predicate: doc, selection, or toggle state changed. */
-function focusShouldUpdate(update: ViewUpdate): boolean {
-  return (
-    update.docChanged ||
-    update.selectionSet ||
-    update.startState.field(focusModeField) !==
-      update.state.field(focusModeField)
+function lineNumbersForRange(
+  state: EditorState,
+  range: DirtyRange,
+): { from: number; to: number } {
+  const doc = state.doc;
+  const from = Math.max(0, Math.min(range.from, doc.length));
+  const to = Math.max(from, Math.min(range.to, doc.length));
+  return {
+    from: doc.lineAt(from).number,
+    to: doc.lineAt(to).number,
+  };
+}
+
+function collectDimmedLineDecorations(
+  state: EditorState,
+  ranges: readonly DirtyRange[],
+  activeParagraph = getActiveParagraphRange(state),
+): ReturnType<typeof dimmedLine.range>[] {
+  if (!activeParagraph) return [];
+
+  const decorations: ReturnType<typeof dimmedLine.range>[] = [];
+  const seenLineStarts = new Set<number>();
+
+  for (const range of ranges) {
+    const lines = lineNumbersForRange(state, range);
+    for (let lineNumber = lines.from; lineNumber <= lines.to; lineNumber++) {
+      if (
+        lineNumber >= activeParagraph.lineFrom &&
+        lineNumber <= activeParagraph.lineTo
+      ) {
+        continue;
+      }
+      const line = state.doc.line(lineNumber);
+      if (seenLineStarts.has(line.from)) continue;
+      seenLineStarts.add(line.from);
+      decorations.push(dimmedLine.range(line.from));
+    }
+  }
+
+  return decorations;
+}
+
+/** Build focus-mode decorations that dim lines outside the current paragraph. */
+function buildFocusDecorations(view: EditorView): DecorationSet {
+  if (!view.state.field(focusModeField)) return Decoration.none;
+  return Decoration.set(
+    collectDimmedLineDecorations(view.state, [{ from: 0, to: view.state.doc.length }]),
+    true,
   );
+}
+
+function mapRangeThroughChanges(
+  update: ViewUpdate,
+  range: Pick<ParagraphRange, "from" | "to">,
+): DirtyRange {
+  const from = update.changes.mapPos(range.from, 1);
+  const to = Math.max(from, update.changes.mapPos(range.to, -1));
+  return { from, to };
+}
+
+function focusShouldRebuild(update: ViewUpdate): boolean {
+  return (
+    update.startState.field(focusModeField) !== update.state.field(focusModeField) ||
+    (!update.docChanged && update.selectionSet)
+  );
+}
+
+function focusDirtyRanges(update: ViewUpdate): DirtyRange[] {
+  const wasActive = update.startState.field(focusModeField);
+  const isActive = update.state.field(focusModeField);
+  if (!update.docChanged || (!wasActive && !isActive)) {
+    return [];
+  }
+
+  const dirtyRanges = dirtyRangesFromChanges(
+    update.changes,
+    (from, to) => expandChangeRangeToLines(update.state.doc, from, to),
+  );
+  const beforeParagraph = wasActive ? getActiveParagraphRange(update.startState) : null;
+  const afterParagraph = isActive ? getActiveParagraphRange(update.state) : null;
+  const paragraphRanges: DirtyRange[] = [];
+
+  if (beforeParagraph) {
+    paragraphRanges.push(mapRangeThroughChanges(update, beforeParagraph));
+  }
+  if (afterParagraph) {
+    paragraphRanges.push({ from: afterParagraph.from, to: afterParagraph.to });
+  }
+
+  return mergeDirtyRanges([...dirtyRanges, ...paragraphRanges]);
 }
 
 /** Command that toggles focus mode. */
@@ -96,7 +186,14 @@ export function toggleFocusMode(view: EditorView): boolean {
 /** CM6 extension providing focus mode. */
 export const focusModeExtension: Extension = [
   focusModeField,
-  createSimpleViewPlugin(buildFocusDecorations, {
-    shouldUpdate: focusShouldUpdate,
+  createIncrementalDecorationsViewPlugin(buildFocusDecorations, {
+    shouldRebuild: focusShouldRebuild,
+    incrementalRanges: focusDirtyRanges,
+    collectRanges(view, ranges) {
+      return collectDimmedLineDecorations(view.state, ranges);
+    },
+    mapDecorations(decorations, update) {
+      return update.docChanged ? decorations.map(update.changes) : decorations;
+    },
   }),
 ];
