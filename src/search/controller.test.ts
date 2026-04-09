@@ -91,6 +91,21 @@ describe("search controller", () => {
     });
   });
 
+  it("does not treat astral-plane letters as a whole-word boundary", () => {
+    const state = createState({
+      caseSensitive: true,
+      wholeWord: true,
+      regex: false,
+    });
+
+    expect(setQuery(state, "ana", "𝒜ana ana")).toEqual({
+      query: "ana",
+      options: state.options,
+      matches: [{ from: 6, to: 9, lineNumber: 1 }],
+      activeIndex: 0,
+    });
+  });
+
   it("wraps to the first match when advancing past the end", () => {
     const doc = "alpha beta alpha";
     const state = setQuery(createState(), "alpha", doc);

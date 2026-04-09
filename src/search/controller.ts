@@ -292,13 +292,16 @@ function charBefore(text: string, index: number): string {
   if (index <= 0) {
     return "";
   }
-  const previousCodePoint = text.codePointAt(index - 1);
+  const previousCodeUnitIndex = index - 1;
+  const previousCodeUnit = text.charCodeAt(previousCodeUnitIndex);
+  const codePointIndex = isLowSurrogate(previousCodeUnit) && previousCodeUnitIndex > 0
+    ? previousCodeUnitIndex - 1
+    : previousCodeUnitIndex;
+  const previousCodePoint = text.codePointAt(codePointIndex);
   if (previousCodePoint === undefined) {
     return "";
   }
-  return previousCodePoint > 0xffff && index >= 2
-    ? text.slice(index - 2, index)
-    : text.slice(index - 1, index);
+  return String.fromCodePoint(previousCodePoint);
 }
 
 function charAfter(text: string, index: number): string {
@@ -315,6 +318,10 @@ function advanceStringIndex(text: string, index: number): number {
   }
   const codePoint = text.codePointAt(index);
   return index + (codePoint !== undefined && codePoint > 0xffff ? 2 : 1);
+}
+
+function isLowSurrogate(codeUnit: number): boolean {
+  return codeUnit >= 0xdc00 && codeUnit <= 0xdfff;
 }
 
 function applyEdits(
