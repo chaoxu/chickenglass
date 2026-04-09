@@ -43,7 +43,10 @@ import {
   hideMultiLineClosingFence,
   mathMacrosField,
 } from "../render/render-core";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import {
+  documentSemanticsField,
+  getDocumentAnalysisSliceRevision,
+} from "../semantics/codemirror-source";
 import { type BlockCounterState, blockCounterField } from "./block-counter";
 import { fenceProtectionExtension } from "./fence-protection";
 import { getPluginOrFallback, pluginRegistryField } from "./plugin-registry";
@@ -321,6 +324,28 @@ function activeShellStartsChanged(tr: Transaction): boolean {
   return false;
 }
 
+function fencedDivsRevisionChanged(tr: Transaction): boolean {
+  const before = tr.startState.field(documentSemanticsField, false);
+  const after = tr.state.field(documentSemanticsField, false);
+  if (!before || !after) return false;
+  return (
+    getDocumentAnalysisSliceRevision(before, "fencedDivs")
+    !== getDocumentAnalysisSliceRevision(after, "fencedDivs")
+  );
+}
+
+function blockDecorationInputsChanged(tr: Transaction): boolean {
+  if (hasStructureEditEffect(tr)) return true;
+  if (fencedDivsRevisionChanged(tr)) return true;
+  if (tr.startState.field(pluginRegistryField, false) !== tr.state.field(pluginRegistryField, false)) {
+    return true;
+  }
+  if (tr.startState.field(blockCounterField, false) !== tr.state.field(blockCounterField, false)) {
+    return true;
+  }
+  return tr.startState.field(mathMacrosField, false) !== tr.state.field(mathMacrosField, false);
+}
+
 /**
  * CM6 StateField that provides block rendering decorations.
  *
@@ -328,12 +353,13 @@ function activeShellStartsChanged(tr: Transaction): boolean {
  * mark decorations are permitted by CM6.
  */
 const blockDecorationField = createFencedBlockDecorationField(buildBlockDecorations, {
-  extraShouldRebuild: hasStructureEditEffect,
+  extraShouldRebuild: blockDecorationInputsChanged,
   selectionShouldRebuild: activeShellStartsChanged,
 });
 
 /** Exported for unit testing decoration logic without a browser. */
 export { blockDecorationField as _blockDecorationFieldForTest };
+export { blockDecorationInputsChanged as _blockDecorationInputsChangedForTest };
 
 /** CM6 extension that renders fenced divs using the block plugin system. */
 export const blockRenderPlugin: Extension = [

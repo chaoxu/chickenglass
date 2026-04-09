@@ -7,7 +7,7 @@
  * Used for table cell editing, sidenote editing, and other embedded contexts.
  */
 
-import { EditorState, type Extension } from "@codemirror/state";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 import {
@@ -39,6 +39,17 @@ export interface InlineEditorOptions {
   onBlur?: () => void;
   /** Called on keydown; return true to prevent default handling. */
   onKeydown?: (event: KeyboardEvent) => boolean;
+  /** Render as a read-only preview surface. */
+  readOnly?: boolean;
+}
+
+export interface InlineEditorController {
+  view: EditorView;
+  setReadOnly: (readOnly: boolean) => void;
+  setCallbacks: (
+    callbacks: Pick<InlineEditorOptions, "onChange" | "onBlur" | "onKeydown">,
+  ) => void;
+  destroy: () => void;
 }
 
 /**
@@ -49,7 +60,17 @@ export interface InlineEditorOptions {
  * rendering. No block-level elements (no headings, lists, code blocks,
  * fenced divs, etc.).
  */
-export function createInlineEditor(opts: InlineEditorOptions): EditorView {
+export function createInlineEditorController(
+  opts: InlineEditorOptions,
+): InlineEditorController {
+  const readOnly = opts.readOnly ?? false;
+  const readOnlyCompartment = new Compartment();
+  const editableCompartment = new Compartment();
+  const callbacks = {
+    onChange: opts.onChange,
+    onBlur: opts.onBlur,
+    onKeydown: opts.onKeydown,
+  };
   const extensions: Extension[] = [
     ...createMarkdownLanguageExtensions({
       extensions: inlineMarkdownExtensions,
@@ -60,18 +81,20 @@ export function createInlineEditor(opts: InlineEditorOptions): EditorView {
     documentAnalysisField,
     bibDataField,
     referenceRenderPlugin,
+    readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
+    editableCompartment.of(EditorView.editable.of(!readOnly)),
     EditorView.editorAttributes.of({ class: CSS.inlineEditor }),
     EditorView.lineWrapping,
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
-        opts.onChange(update.state.doc.toString());
+        callbacks.onChange(update.state.doc.toString());
       }
     }),
     EditorView.domEventHandlers({
       blur: () => {
-        opts.onBlur?.();
+        callbacks.onBlur?.();
       },
-      keydown: (event) => opts.onKeydown?.(event) ?? false,
+      keydown: (event) => callbacks.onKeydown?.(event) ?? false,
     }),
   ];
 
@@ -87,5 +110,27 @@ export function createInlineEditor(opts: InlineEditorOptions): EditorView {
     view.dispatch({ effects: bibDataEffect.of(opts.bibData) });
   }
 
-  return view;
+  return {
+    view,
+    setReadOnly(nextReadOnly) {
+      view.dispatch({
+        effects: [
+          readOnlyCompartment.reconfigure(EditorState.readOnly.of(nextReadOnly)),
+          editableCompartment.reconfigure(EditorView.editable.of(!nextReadOnly)),
+        ],
+      });
+    },
+    setCallbacks(nextCallbacks) {
+      callbacks.onChange = nextCallbacks.onChange;
+      callbacks.onBlur = nextCallbacks.onBlur;
+      callbacks.onKeydown = nextCallbacks.onKeydown;
+    },
+    destroy() {
+      view.destroy();
+    },
+  };
+}
+
+export function createInlineEditor(opts: InlineEditorOptions): EditorView {
+  return createInlineEditorController(opts).view;
 }

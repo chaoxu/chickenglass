@@ -1,6 +1,10 @@
 import { Annotation } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { createInlineEditor } from "../inline-editor";
+import {
+  createInlineEditorController,
+  type InlineEditorController,
+} from "../inline-editor";
+import { parseInlineFragments } from "../inline-fragments";
 import { renderInlineMarkdown } from "./inline-render";
 import { showWidgetContextMenu, applyTableMutation } from "./table-actions";
 import {
@@ -29,6 +33,7 @@ import { bibDataField } from "../state/bib-data";
 export const cellEditAnnotation = Annotation.define<"edit" | "commit">();
 
 interface ActiveInlineEditor {
+  controller: InlineEditorController;
   view: EditorView;
   cell: HTMLElement;
   owner: TableWidget;
@@ -38,10 +43,18 @@ interface DestroyedInlineEditor {
   text: string;
   cell: HTMLElement;
   owner: TableWidget;
+  controller: InlineEditorController;
 }
 
 /** Module-level reference to the currently active inline cell editor. */
 let activeInlineEditor: ActiveInlineEditor | null = null;
+
+interface ActivePreviewCell {
+  cell: HTMLElement;
+  owner: TableWidget;
+}
+
+let activePreviewCell: ActivePreviewCell | null = null;
 
 export function shouldCommitBlurredInlineEditor(
   snapshot: typeof activeInlineEditor,
@@ -63,13 +76,57 @@ export function serializeTableWidgetMacros(macros: Record<string, string>): stri
  */
 function destroyActiveInlineEditor(): DestroyedInlineEditor | null {
   if (!activeInlineEditor) return null;
-  const { view: inlineView, cell, owner } = activeInlineEditor;
+  const { controller, view: inlineView, cell, owner } = activeInlineEditor;
   const text = inlineView.state.doc.toString();
-  inlineView.destroy();
   cell.classList.remove("cf-table-cell-editing");
+  controller.destroy();
   cell.innerHTML = "";
   activeInlineEditor = null;
-  return { text, cell, owner };
+  return { text, cell, owner, controller };
+}
+
+function clearActivePreviewCell(): void {
+  if (!activePreviewCell) return;
+  activePreviewCell.cell.classList.remove("cf-table-cell-active");
+  activePreviewCell.cell.removeAttribute("tabindex");
+  activePreviewCell = null;
+}
+
+function setActivePreviewCell(cell: HTMLElement, owner: TableWidget): void {
+  if (activePreviewCell?.cell === cell && activePreviewCell.owner === owner) {
+    cell.focus();
+    return;
+  }
+  clearActivePreviewCell();
+  cell.classList.add("cf-table-cell-active");
+  cell.tabIndex = -1;
+  cell.focus();
+  activePreviewCell = { cell, owner };
+}
+
+function isRenderedInlineTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      [
+        ".katex",
+        ".cf-citation",
+        ".cf-crossref",
+        ".cross-ref",
+        ".cf-link-rendered",
+        ".cf-inline-code",
+        ".cf-highlight",
+        ".cf-bold",
+        ".cf-italic",
+        ".cf-strikethrough",
+        "strong",
+        "em",
+        "del",
+        "mark",
+        "code",
+      ].join(", "),
+    ),
+  );
 }
 
 /**
@@ -87,16 +144,20 @@ export class TableWidget extends ShellWidget {
   private editorView: EditorView | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private resizeMeasureFrame: number | null = null;
+  private readonly previewEditors = new Map<HTMLElement, InlineEditorController>();
   private readonly macroSignature: string;
+  private readonly renderSignature: string;
 
   constructor(
     private readonly table: ParsedTable,
     private readonly tableText: string,
     private tableFrom: number,
     private readonly macros: Record<string, string>,
+    renderSignature = "",
   ) {
     super();
     this.macroSignature = serializeTableWidgetMacros(macros);
+    this.renderSignature = renderSignature;
   }
 
   private ensureSourceRange(): void {
@@ -111,7 +172,8 @@ export class TableWidget extends ShellWidget {
   eq(other: TableWidget): boolean {
     return (
       this.tableText === other.tableText &&
-      this.macroSignature === other.macroSignature
+      this.macroSignature === other.macroSignature &&
+      this.renderSignature === other.renderSignature
     );
   }
 
@@ -170,7 +232,45 @@ export class TableWidget extends ShellWidget {
   }
 
   private restoreRenderedCell(cell: HTMLElement, content: string): void {
+    this.destroyPreviewEditor(cell);
+    if (this.cellNeedsLivePreview(content)) {
+      this.mountPreviewEditor(cell, content);
+      return;
+    }
     renderInlineMarkdown(cell, content, this.macros);
+  }
+
+  private cellNeedsLivePreview(content: string): boolean {
+    return parseInlineFragments(content).some((fragment) => fragment.kind === "reference");
+  }
+
+  private mountPreviewEditor(cell: HTMLElement, content: string): void {
+    const bibData = this.editorView?.state.field?.(bibDataField, false);
+    const controller = createInlineEditorController({
+      parent: cell,
+      doc: content,
+      macros: this.macros,
+      bibData: bibData ?? undefined,
+      readOnly: true,
+      onChange: () => {},
+    });
+    this.previewEditors.set(cell, controller);
+  }
+
+  private destroyPreviewEditor(cell: HTMLElement): void {
+    const controller = this.previewEditors.get(cell);
+    if (!controller) return;
+    controller.destroy();
+    this.previewEditors.delete(cell);
+    cell.innerHTML = "";
+  }
+
+  private destroyPreviewEditors(): void {
+    for (const [cell, controller] of this.previewEditors) {
+      controller.destroy();
+      cell.innerHTML = "";
+    }
+    this.previewEditors.clear();
   }
 
   private syncToRoot(
@@ -242,6 +342,11 @@ export class TableWidget extends ShellWidget {
     this.clearPendingResizeMeasure();
     this.resizeObserver?.disconnect();
 
+    if (typeof ResizeObserver === "undefined") {
+      this.resizeObserver = null;
+      return;
+    }
+
     let isFirstCallback = true;
     this.resizeObserver = new ResizeObserver(() => {
       if (isFirstCallback) {
@@ -262,6 +367,20 @@ export class TableWidget extends ShellWidget {
 
     const tableEl = document.createElement("table");
 
+    const focusTargetCell = (
+      linearRow: number,
+      targetCol: number,
+    ): void => {
+      const targetSection = linearRow === 0 ? "header" : "body";
+      const targetRow = linearRow === 0 ? 0 : linearRow - 1;
+      const target = tableEl.querySelector(
+        `[data-section="${targetSection}"][data-row="${targetRow}"][data-col="${targetCol}"]`,
+      ) as HTMLElement | null;
+      if (target) {
+        setActivePreviewCell(target, this);
+      }
+    };
+
     const activateTargetCell = (
       linearRow: number,
       targetCol: number,
@@ -277,6 +396,234 @@ export class TableWidget extends ShellWidget {
         target.dispatchEvent(
           new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
         );
+      }
+    };
+
+    const openCellEditor = (
+      cell: HTMLElement,
+      section: string,
+      row: number,
+      col: number,
+      {
+        placeAtEnd = false,
+        clickX = 0,
+        clickY = 0,
+        useClickPlacement = false,
+      }: {
+        placeAtEnd?: boolean;
+        clickX?: number;
+        clickY?: number;
+        useClickPlacement?: boolean;
+      } = {},
+    ): void => {
+      clearActivePreviewCell();
+      const rawText = this.getRawCellText(section, row, col);
+      this.destroyPreviewEditor(cell);
+      cell.innerHTML = "";
+      cell.classList.add("cf-table-cell-editing");
+
+      const colCount = this.table.header.cells.length;
+      const bodyRowCount = this.table.rows.length;
+      const currentLinear = section === "header" ? 0 : row + 1;
+      const totalRows = 1 + bodyRowCount;
+      const bibData = this.editorView?.state.field?.(bibDataField, false);
+      const controller = createInlineEditorController({
+        parent: cell,
+        doc: rawText,
+        macros: this.macros,
+        bibData: bibData ?? undefined,
+        onChange: () => {},
+      });
+
+      controller.setCallbacks({
+        onChange: (newDoc) => {
+          this.syncToRoot(section, row, col, newDoc, "edit");
+        },
+        onBlur: () => {
+          const blurredEditor = activeInlineEditor;
+          setTimeout(() => {
+            if (!shouldCommitBlurredInlineEditor(blurredEditor, activeInlineEditor, cell)) return;
+            const destroyed = destroyActiveInlineEditor();
+            if (!destroyed) return;
+
+            destroyed.owner.commitRenderedCell(
+              destroyed.cell,
+              destroyed.text,
+            );
+          }, 0);
+        },
+        onKeydown: (event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            const destroyed = destroyActiveInlineEditor();
+            if (!destroyed) return true;
+            destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+            this.editorView?.focus();
+            return true;
+          }
+
+          if (event.key === "Tab" && !event.shiftKey) {
+            event.preventDefault();
+            let nextCol = col + 1;
+            let nextLinear = currentLinear;
+            if (nextCol >= colCount) {
+              nextCol = 0;
+              nextLinear++;
+            }
+            if (nextLinear >= totalRows) {
+              const destroyed = destroyActiveInlineEditor();
+              if (!destroyed) return true;
+              destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+              const rootView = this.editorView;
+              if (rootView) {
+                const tables = findTablesInState(rootView.state);
+                const matchingTable = findClosestTable(tables, this.tableFrom);
+                if (matchingTable) {
+                  applyTableMutation(rootView, matchingTable, (parsed) => addRow(parsed));
+                }
+                setTimeout(() => {
+                  const closestEl = findClosestWidgetContainer(rootView, this.tableFrom);
+                  if (closestEl) {
+                    const newTarget = closestEl.querySelector(
+                      `[data-section="body"][data-row="${bodyRowCount}"][data-col="0"]`,
+                    ) as HTMLElement | null;
+                    if (newTarget) {
+                      newTarget.dispatchEvent(
+                        new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+                      );
+                    }
+                  }
+                }, 0);
+              }
+            } else {
+              activateTargetCell(nextLinear, nextCol);
+            }
+            return true;
+          }
+
+          if (event.key === "Tab" && event.shiftKey) {
+            event.preventDefault();
+            let prevCol = col - 1;
+            let prevLinear = currentLinear;
+            if (prevCol < 0) {
+              prevCol = colCount - 1;
+              prevLinear--;
+            }
+            if (prevLinear < 0) return true;
+            activateTargetCell(prevLinear, prevCol, true);
+            return true;
+          }
+
+          if (event.key === "Enter") {
+            event.preventDefault();
+            const nextLinear = currentLinear + 1;
+            if (nextLinear >= totalRows) {
+              const destroyed = destroyActiveInlineEditor();
+              if (!destroyed) return true;
+              destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+              const rootView = this.editorView;
+              if (rootView) {
+                const tables = findTablesInState(rootView.state);
+                const matchingTable = findClosestTable(tables, this.tableFrom);
+                if (matchingTable) {
+                  applyTableMutation(rootView, matchingTable, (parsed) => addRow(parsed));
+                }
+                setTimeout(() => {
+                  const closestEl = findClosestWidgetContainer(rootView, this.tableFrom);
+                  if (closestEl) {
+                    const newTarget = closestEl.querySelector(
+                      `[data-section="body"][data-row="${bodyRowCount}"][data-col="${col}"]`,
+                    ) as HTMLElement | null;
+                    if (newTarget) {
+                      newTarget.dispatchEvent(
+                        new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+                      );
+                    }
+                  }
+                }, 0);
+              }
+            } else {
+              activateTargetCell(nextLinear, col);
+            }
+            return true;
+          }
+
+          if (!activeInlineEditor) return false;
+          const pos = activeInlineEditor.view.state.selection.main.head;
+          const len = activeInlineEditor.view.state.doc.length;
+
+          if (event.key === "ArrowLeft" && pos === 0) {
+            event.preventDefault();
+            let prevCol = col - 1;
+            let prevLinear = currentLinear;
+            if (prevCol < 0) {
+              prevCol = colCount - 1;
+              prevLinear--;
+            }
+            if (prevLinear < 0) return true;
+            activateTargetCell(prevLinear, prevCol, true);
+            return true;
+          }
+
+          if (event.key === "ArrowRight" && pos === len) {
+            event.preventDefault();
+            let nextCol = col + 1;
+            let nextLinear = currentLinear;
+            if (nextCol >= colCount) {
+              nextCol = 0;
+              nextLinear++;
+            }
+            if (nextLinear >= totalRows) return true;
+            activateTargetCell(nextLinear, nextCol);
+            return true;
+          }
+
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            const prevLinear = currentLinear - 1;
+            if (prevLinear < 0) return true;
+            activateTargetCell(prevLinear, col);
+            return true;
+          }
+
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            const nextLinear = currentLinear + 1;
+            if (nextLinear >= totalRows) return true;
+            activateTargetCell(nextLinear, col);
+            return true;
+          }
+
+          if (event.key === "Backspace" && pos === 0) return true;
+          if (event.key === "Delete" && pos === len) return true;
+
+          return false;
+        },
+      });
+      const editorView = controller.view;
+
+      activeInlineEditor = { controller, view: editorView, cell, owner: this };
+
+      if (placeAtEnd) {
+        const docLen = editorView.state.doc.length;
+        editorView.dispatch({ selection: { anchor: docLen } });
+      }
+      editorView.focus();
+
+      if (useClickPlacement) {
+        requestAnimationFrame(() => {
+          if (activeInlineEditor?.view !== editorView) return;
+          const pos = editorView.posAtCoords({ x: clickX, y: clickY });
+          if (pos !== null) {
+            editorView.dispatch({ selection: { anchor: pos } });
+            return;
+          }
+
+          const coarsePos = editorView.posAtCoords({ x: clickX, y: clickY }, false);
+          if (coarsePos !== null) {
+            editorView.dispatch({ selection: { anchor: coarsePos } });
+          }
+        });
       }
     };
 
@@ -296,7 +643,62 @@ export class TableWidget extends ShellWidget {
         cell.style.textAlign = align;
       }
 
-      renderInlineMarkdown(cell, content, this.macros);
+      this.restoreRenderedCell(cell, content);
+
+      cell.addEventListener("keydown", (event) => {
+        if (activePreviewCell?.cell !== cell || activePreviewCell.owner !== this) return;
+
+        const currentLinear = section === "header" ? 0 : row + 1;
+
+        if (event.key === "Enter" || event.key === "F2") {
+          event.preventDefault();
+          openCellEditor(cell, section, row, col);
+          return;
+        }
+
+        if (event.key === "Escape") {
+          event.preventDefault();
+          clearActivePreviewCell();
+          this.editorView?.focus();
+          return;
+        }
+
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          const prevCol = col - 1;
+          if (prevCol >= 0) focusTargetCell(currentLinear, prevCol);
+          return;
+        }
+
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          const nextCol = col + 1;
+          if (nextCol < this.table.header.cells.length) focusTargetCell(currentLinear, nextCol);
+          return;
+        }
+
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          const prevLinear = currentLinear - 1;
+          if (prevLinear >= 0) focusTargetCell(prevLinear, col);
+          return;
+        }
+
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          const nextLinear = currentLinear + 1;
+          if (nextLinear < 1 + this.table.rows.length) focusTargetCell(nextLinear, col);
+          return;
+        }
+      });
+
+      cell.addEventListener("blur", () => {
+        setTimeout(() => {
+          if (activePreviewCell?.cell !== cell || activePreviewCell.owner !== this) return;
+          if (document.activeElement === cell) return;
+          clearActivePreviewCell();
+        }, 0);
+      });
 
       cell.addEventListener("mousedown", (event) => {
         try {
@@ -317,216 +719,32 @@ export class TableWidget extends ShellWidget {
           }
         }
 
-        const rawText = this.getRawCellText(section, row, col);
-        cell.innerHTML = "";
-        cell.classList.add("cf-table-cell-editing");
+        const deferToSecondClick =
+          event.isTrusted &&
+          !placeAtEnd &&
+          activePreviewCell?.cell !== cell &&
+          isRenderedInlineTarget(event.target);
 
-        const colCount = this.table.header.cells.length;
-        const bodyRowCount = this.table.rows.length;
-        const currentLinear = section === "header" ? 0 : row + 1;
-        const totalRows = 1 + bodyRowCount;
+        if (deferToSecondClick) {
+          setActivePreviewCell(cell, this);
+          return;
+        }
 
-        // Read bibliography data from the parent editor for citation rendering.
-        // Uses optional chaining on field() for safety in test mocks where
-        // state may be a plain object without the CM6 StateField API.
-        const bibData = this.editorView?.state.field?.(bibDataField, false);
-
-        const editorView = createInlineEditor({
-          parent: cell,
-          doc: rawText,
-          macros: this.macros,
-          bibData: bibData ?? undefined,
-          onChange: (newDoc) => {
-            this.syncToRoot(section, row, col, newDoc, "edit");
-          },
-          onBlur: () => {
-            const blurredEditor = activeInlineEditor;
-            setTimeout(() => {
-              if (!shouldCommitBlurredInlineEditor(blurredEditor, activeInlineEditor, cell)) return;
-              const destroyed = destroyActiveInlineEditor();
-              if (!destroyed) return;
-
-              destroyed.owner.commitRenderedCell(
-                destroyed.cell,
-                destroyed.text,
-              );
-            }, 0);
-          },
-          onKeydown: (event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              const destroyed = destroyActiveInlineEditor();
-              if (!destroyed) return true;
-              destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
-              this.editorView?.focus();
-              return true;
-            }
-
-            if (event.key === "Tab" && !event.shiftKey) {
-              event.preventDefault();
-              let nextCol = col + 1;
-              let nextLinear = currentLinear;
-              if (nextCol >= colCount) {
-                nextCol = 0;
-                nextLinear++;
-              }
-              if (nextLinear >= totalRows) {
-                const destroyed = destroyActiveInlineEditor();
-                if (!destroyed) return true;
-                destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
-                const rootView = this.editorView;
-                if (rootView) {
-                  const tables = findTablesInState(rootView.state);
-                  const matchingTable = findClosestTable(tables, this.tableFrom);
-                  if (matchingTable) {
-                    applyTableMutation(rootView, matchingTable, (parsed) => addRow(parsed));
-                  }
-                  setTimeout(() => {
-                    const closestEl = findClosestWidgetContainer(rootView, this.tableFrom);
-                    if (closestEl) {
-                      const newTarget = closestEl.querySelector(
-                        `[data-section="body"][data-row="${bodyRowCount}"][data-col="0"]`,
-                      ) as HTMLElement | null;
-                      if (newTarget) {
-                        newTarget.dispatchEvent(
-                          new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
-                        );
-                      }
-                    }
-                  }, 0);
-                }
-              } else {
-                activateTargetCell(nextLinear, nextCol);
-              }
-              return true;
-            }
-
-            if (event.key === "Tab" && event.shiftKey) {
-              event.preventDefault();
-              let prevCol = col - 1;
-              let prevLinear = currentLinear;
-              if (prevCol < 0) {
-                prevCol = colCount - 1;
-                prevLinear--;
-              }
-              if (prevLinear < 0) return true;
-              activateTargetCell(prevLinear, prevCol, true);
-              return true;
-            }
-
-            if (event.key === "Enter") {
-              event.preventDefault();
-              const nextLinear = currentLinear + 1;
-              if (nextLinear >= totalRows) {
-                const destroyed = destroyActiveInlineEditor();
-                if (!destroyed) return true;
-                destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
-                const rootView = this.editorView;
-                if (rootView) {
-                  const tables = findTablesInState(rootView.state);
-                  const matchingTable = findClosestTable(tables, this.tableFrom);
-                  if (matchingTable) {
-                    applyTableMutation(rootView, matchingTable, (parsed) => addRow(parsed));
-                  }
-                  setTimeout(() => {
-                    const closestEl = findClosestWidgetContainer(rootView, this.tableFrom);
-                    if (closestEl) {
-                      const newTarget = closestEl.querySelector(
-                        `[data-section="body"][data-row="${bodyRowCount}"][data-col="${col}"]`,
-                      ) as HTMLElement | null;
-                      if (newTarget) {
-                        newTarget.dispatchEvent(
-                          new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
-                        );
-                      }
-                    }
-                  }, 0);
-                }
-              } else {
-                activateTargetCell(nextLinear, col);
-              }
-              return true;
-            }
-
-            if (!activeInlineEditor) return false;
-            const pos = activeInlineEditor.view.state.selection.main.head;
-            const len = activeInlineEditor.view.state.doc.length;
-
-            if (event.key === "ArrowLeft" && pos === 0) {
-              event.preventDefault();
-              let prevCol = col - 1;
-              let prevLinear = currentLinear;
-              if (prevCol < 0) {
-                prevCol = colCount - 1;
-                prevLinear--;
-              }
-              if (prevLinear < 0) return true;
-              activateTargetCell(prevLinear, prevCol, true);
-              return true;
-            }
-
-            if (event.key === "ArrowRight" && pos === len) {
-              event.preventDefault();
-              let nextCol = col + 1;
-              let nextLinear = currentLinear;
-              if (nextCol >= colCount) {
-                nextCol = 0;
-                nextLinear++;
-              }
-              if (nextLinear >= totalRows) return true;
-              activateTargetCell(nextLinear, nextCol);
-              return true;
-            }
-
-            if (event.key === "ArrowUp") {
-              event.preventDefault();
-              const prevLinear = currentLinear - 1;
-              if (prevLinear < 0) return true;
-              activateTargetCell(prevLinear, col);
-              return true;
-            }
-
-            if (event.key === "ArrowDown") {
-              event.preventDefault();
-              const nextLinear = currentLinear + 1;
-              if (nextLinear >= totalRows) return true;
-              activateTargetCell(nextLinear, col);
-              return true;
-            }
-
-            if (event.key === "Backspace" && pos === 0) return true;
-            if (event.key === "Delete" && pos === len) return true;
-
-            return false;
-          },
+        openCellEditor(cell, section, row, col, {
+          placeAtEnd,
+          clickX,
+          clickY,
+          useClickPlacement: event.isTrusted,
         });
-
-        activeInlineEditor = { view: editorView, cell, owner: this };
-
-        if (placeAtEnd) {
-          const docLen = editorView.state.doc.length;
-          editorView.dispatch({ selection: { anchor: docLen } });
-        }
-        editorView.focus();
-
-        if (event.isTrusted) {
-          requestAnimationFrame(() => {
-            if (activeInlineEditor?.view !== editorView) return;
-            const pos = editorView.posAtCoords({ x: clickX, y: clickY });
-            if (pos !== null) {
-              editorView.dispatch({ selection: { anchor: pos } });
-              return;
-            }
-
-            const coarsePos = editorView.posAtCoords({ x: clickX, y: clickY }, false);
-            if (coarsePos !== null) {
-              editorView.dispatch({ selection: { anchor: coarsePos } });
-            }
-          });
-        }
         } catch (e: unknown) {
           console.error("[table-widget] mousedown handler failed", e);
         }
+      });
+
+      cell.addEventListener("click", (event) => {
+        if (activeInlineEditor?.cell === cell) return;
+        event.preventDefault();
+        event.stopPropagation();
       });
     };
 
@@ -607,6 +825,10 @@ export class TableWidget extends ShellWidget {
     if (activeInlineEditor?.owner === from) {
       destroyActiveInlineEditor();
     }
+    if (activePreviewCell?.owner === from) {
+      clearActivePreviewCell();
+    }
+    from.destroyPreviewEditors();
     from.clearPendingResizeMeasure();
     from.resizeObserver?.disconnect();
     from.resizeObserver = null;
@@ -626,6 +848,10 @@ export class TableWidget extends ShellWidget {
     if (activeInlineEditor?.owner === this) {
       destroyActiveInlineEditor();
     }
+    if (activePreviewCell?.owner === this) {
+      clearActivePreviewCell();
+    }
+    this.destroyPreviewEditors();
     this.editorView = null;
   }
 

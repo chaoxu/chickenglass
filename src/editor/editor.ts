@@ -58,10 +58,7 @@ const fallbackDocument = "# Untitled\n";
 /** Compartment for the debug tree-view panel — toggled via window.__cmTreeView(). */
 const treeViewCompartment = new Compartment();
 const debugLaneCompartment = new Compartment();
-const defaultDebugLaneExtensions: Extension[] =
-  import.meta.env.DEV || import.meta.env.MODE === "test"
-    ? [shellSurfaceOverlayExtension, debugPanelExtension]
-    : [];
+const defaultDebugLaneExtensions: Extension[] = [];
 
 /** Editor display modes. */
 export type EditorMode = "rich" | "source" | "read";

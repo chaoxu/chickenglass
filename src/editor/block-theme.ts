@@ -192,10 +192,10 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     verticalAlign: "middle",
   },
 
-  /* HTML table widget styles — shared visual contract with read mode.
-   * Font size, line height, and padding use CSS custom properties so
-   * display mode (renderInlineMarkdown) and edit mode (nested CM6)
-   * produce identical cell dimensions. */
+  /* HTML table widget styles — shared visual contract for the same nested
+   * inline CM6 surface in both preview and active states. Font size,
+   * line height, and padding stay on the cell so focus/edit mode does not
+   * perturb token geometry. */
   ".cf-table-widget": {
     margin: "var(--cf-spacing-sm) 0",
   },
@@ -231,6 +231,12 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
   /* Active cell editing indicator — inherits font-size / line-height / padding
    * from the cell so the inline CM6 editor matches the display rendering. */
   ".cf-table-cell-editing": {
+    outline: "var(--cf-border-width-accent) solid var(--cf-table-edit-outline)",
+    outlineOffset: "calc(-1 * var(--cf-border-width-accent))",
+    backgroundColor: "transparent",
+  },
+
+  ".cf-table-cell-active": {
     outline: "var(--cf-border-width-accent) solid var(--cf-table-edit-outline)",
     outlineOffset: "calc(-1 * var(--cf-border-width-accent))",
     backgroundColor: "transparent",

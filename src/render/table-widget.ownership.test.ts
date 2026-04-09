@@ -11,25 +11,19 @@ class ResizeObserverStub {
 
 vi.stubGlobal("ResizeObserver", ResizeObserverStub);
 
-const createInlineEditorMock = vi.fn();
-const renderInlineMarkdownMock = vi.fn((
-  element: HTMLElement,
-  content: string,
-  _macros: Record<string, string>,
-) => {
-  element.textContent = content;
-});
+interface MockInlineController {
+  readonly view: EditorView;
+  readonly setCallbacks: ReturnType<typeof vi.fn>;
+  readonly destroy: ReturnType<typeof vi.fn>;
+}
+
+const createInlineEditorControllerMock = vi.fn<
+  (options: unknown) => MockInlineController
+>();
 
 vi.mock("../inline-editor", () => ({
-  createInlineEditor: (options: unknown) => createInlineEditorMock(options),
-}));
-
-vi.mock("./inline-render", () => ({
-  renderInlineMarkdown: (
-    element: HTMLElement,
-    content: string,
-    macros: Record<string, string>,
-  ) => renderInlineMarkdownMock(element, content, macros),
+  createInlineEditorController: (options: unknown) =>
+    createInlineEditorControllerMock(options),
 }));
 
 vi.mock("./table-discovery", () => ({
@@ -65,38 +59,41 @@ function makeRootView(tableFrom: number, tableText: string): EditorView {
   });
 }
 
-function makeInlineEditor(docText: string): EditorView {
-  return createMockEditorView({
+function makeInlineController(docText: string): MockInlineController {
+  const view = createMockEditorView({
     state: {
       doc: {
         toString: () => docText,
         length: docText.length,
       },
-      selection: { main: { head: 0 } },
+      selection: { main: { head: 0, from: 0, to: 0 } },
     },
-    destroy: vi.fn(),
     dispatch: vi.fn(),
     focus: vi.fn(),
     posAtCoords: () => null,
   });
-}
 
+  return {
+    view,
+    setCallbacks: vi.fn(),
+    destroy: vi.fn(),
+  };
+}
 
 describe("TableWidget cross-widget editor ownership", () => {
   beforeEach(() => {
-    createInlineEditorMock.mockReset();
-    renderInlineMarkdownMock.mockClear();
+    createInlineEditorControllerMock.mockReset();
   });
 
-  it("commits the previous editor through its owning widget when switching tables", () => {
+  it("creates editors on demand and commits through the owning widget when switching tables", () => {
     const tableText = "| A |\n|---|\n| old |";
     const viewA = makeRootView(10, tableText);
     const viewB = makeRootView(40, tableText);
-    const inlineA = makeInlineEditor("edited A");
-    const inlineB = makeInlineEditor("edited B");
-    createInlineEditorMock
-      .mockReturnValueOnce(inlineA)
-      .mockReturnValueOnce(inlineB);
+    const bodyA = makeInlineController("edited A");
+    const bodyB = makeInlineController("edited B");
+    createInlineEditorControllerMock
+      .mockReturnValueOnce(bodyA)
+      .mockReturnValueOnce(bodyB);
 
     const widgetA = new TableWidget(makeTable(), tableText, 10, { "\\A": "\\alpha" });
     const widgetB = new TableWidget(makeTable(), tableText, 40, { "\\B": "\\beta" });
@@ -108,29 +105,30 @@ describe("TableWidget cross-widget editor ownership", () => {
       throw new Error("expected table cells to exist");
     }
 
+    expect(createInlineEditorControllerMock).toHaveBeenCalledTimes(0);
+
     cellA.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
     cellB.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
 
+    expect(createInlineEditorControllerMock).toHaveBeenCalledTimes(2);
+    expect(bodyA.destroy).toHaveBeenCalledTimes(1);
+    expect(bodyB.destroy).not.toHaveBeenCalled();
     expect(viewA.dispatch).toHaveBeenCalledTimes(1);
     expect(viewB.dispatch).not.toHaveBeenCalled();
-    expect(inlineA.destroy).toHaveBeenCalledTimes(1);
-    expect(renderInlineMarkdownMock).toHaveBeenCalledWith(cellA, "edited A", {
-      "\\A": "\\alpha",
-    });
 
     widgetB.destroy(domB);
     widgetA.destroy(domA);
   });
 
-  it("clears a detached active editor when the owning widget is destroyed", () => {
+  it("destroys the owning controller when an active widget is torn down", () => {
     const tableText = "| A |\n|---|\n| old |";
     const viewA = makeRootView(10, tableText);
     const viewB = makeRootView(40, tableText);
-    const inlineA = makeInlineEditor("edited A");
-    const inlineB = makeInlineEditor("edited B");
-    createInlineEditorMock
-      .mockReturnValueOnce(inlineA)
-      .mockReturnValueOnce(inlineB);
+    const bodyA = makeInlineController("edited A");
+    const bodyB = makeInlineController("edited B");
+    createInlineEditorControllerMock
+      .mockReturnValueOnce(bodyA)
+      .mockReturnValueOnce(bodyB);
 
     const widgetA = new TableWidget(makeTable(), tableText, 10, { "\\A": "\\alpha" });
     const widgetB = new TableWidget(makeTable(), tableText, 40, { "\\B": "\\beta" });
@@ -141,32 +139,29 @@ describe("TableWidget cross-widget editor ownership", () => {
     if (!cellA || !cellB) {
       throw new Error("expected table cells to exist");
     }
-
-    renderInlineMarkdownMock.mockClear();
 
     cellA.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
     cellA.remove();
 
     widgetA.destroy(domA);
 
-    expect(inlineA.destroy).toHaveBeenCalledTimes(1);
-
-    renderInlineMarkdownMock.mockClear();
+    expect(viewA.dispatch).not.toHaveBeenCalled();
+    expect(bodyA.destroy).toHaveBeenCalledTimes(1);
 
     cellB.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
 
-    expect(createInlineEditorMock).toHaveBeenCalledTimes(2);
-    expect(inlineA.destroy).toHaveBeenCalledTimes(1);
-    expect(renderInlineMarkdownMock).not.toHaveBeenCalled();
+    expect(createInlineEditorControllerMock).toHaveBeenCalledTimes(2);
+    expect(bodyB.destroy).not.toHaveBeenCalled();
 
     widgetB.destroy(domB);
   });
 
-  it("clears an active editor before reusing DOM via updateDOM", () => {
+  it("destroys the active controller when updateDOM rebuilds the widget", () => {
     const tableText = "| A |\n|---|\n| old |";
     const view = makeRootView(10, tableText);
-    const inlineA = makeInlineEditor("edited A");
-    createInlineEditorMock.mockReturnValueOnce(inlineA);
+    const oldBody = makeInlineController("edited A");
+    createInlineEditorControllerMock
+      .mockReturnValueOnce(oldBody);
 
     const oldWidget = new TableWidget(makeTable(), tableText, 10, { "\\A": "\\alpha" });
     const dom = oldWidget.toDOM(view);
@@ -174,8 +169,6 @@ describe("TableWidget cross-widget editor ownership", () => {
     if (!cell) {
       throw new Error("expected table cell to exist");
     }
-
-    renderInlineMarkdownMock.mockClear();
 
     cell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
 
@@ -187,11 +180,8 @@ describe("TableWidget cross-widget editor ownership", () => {
     const newWidget = new TableWidget(updatedTable, "| A |\n|---|\n| new |", 10, { "\\A": "\\alpha" });
 
     expect(newWidget.updateDOM(dom, view, oldWidget)).toBe(true);
-    expect(inlineA.destroy).toHaveBeenCalledTimes(1);
-    expect(renderInlineMarkdownMock).not.toHaveBeenCalledWith(cell, "edited A", {
-      "\\A": "\\alpha",
-    });
-    expect(dom.querySelector("td")?.textContent).toBe("new");
+    expect(oldBody.destroy).toHaveBeenCalledTimes(1);
+    expect(createInlineEditorControllerMock).toHaveBeenCalledTimes(1);
 
     newWidget.destroy(dom);
   });

@@ -39,7 +39,11 @@ export {
   parseProjectConfig,
   mergeConfigs,
 } from "./project-config";
-export { createDebugHelpers, type DebugHelpers } from "./debug-helpers";
+export {
+  createDebugHelpers,
+  type DebugHelpers,
+  type DebugRenderState,
+} from "./debug-helpers";
 export {
   type SearchUiState,
   type SearchControllerState,

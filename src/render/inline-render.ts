@@ -6,6 +6,7 @@
  */
 
 import type { InlineRenderSurface } from "../inline-surface";
+import { CSS } from "../constants/css-classes";
 import {
   type InlineFragment,
   parseInlineFragments,
@@ -51,7 +52,14 @@ function renderReference(
     anchor.className = "cross-ref";
     anchor.href = `#${fragment.ids[0]}`;
     anchor.textContent = fragment.ids[0];
-    container.appendChild(anchor);
+    if (fragment.parenthetical) {
+      const span = document.createElement("span");
+      span.className = CSS.citation;
+      span.appendChild(anchor);
+      container.appendChild(span);
+    } else {
+      container.appendChild(anchor);
+    }
     return;
   }
 
@@ -83,6 +91,7 @@ function renderFragment(
 
     case "emphasis": {
       const em = document.createElement("em");
+      em.className = CSS.italic;
       renderFragments(em, fragment.children, macros, surface);
       container.appendChild(em);
       return;
@@ -90,6 +99,7 @@ function renderFragment(
 
     case "strong": {
       const strong = document.createElement("strong");
+      strong.className = CSS.bold;
       renderFragments(strong, fragment.children, macros, surface);
       container.appendChild(strong);
       return;
@@ -97,6 +107,7 @@ function renderFragment(
 
     case "strikethrough": {
       const del = document.createElement("del");
+      del.className = CSS.strikethrough;
       renderFragments(del, fragment.children, macros, surface);
       container.appendChild(del);
       return;
@@ -104,6 +115,7 @@ function renderFragment(
 
     case "highlight": {
       const mark = document.createElement("mark");
+      mark.className = CSS.highlight;
       renderFragments(mark, fragment.children, macros, surface);
       container.appendChild(mark);
       return;
@@ -119,6 +131,9 @@ function renderFragment(
 
     case "math": {
       const span = document.createElement("span");
+      span.className = CSS.mathInline;
+      span.setAttribute("role", "img");
+      span.setAttribute("aria-label", fragment.latex);
       try {
         span.innerHTML = renderKatexToHtml(fragment.latex, false, macros);
       } catch (_e) {
@@ -142,6 +157,7 @@ function renderFragment(
       }
 
       const anchor = document.createElement("a");
+      anchor.className = CSS.linkRendered;
       anchor.href = href;
       renderFragments(anchor, fragment.children, macros, surface);
       container.appendChild(anchor);

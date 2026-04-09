@@ -1,9 +1,11 @@
 import type { DebugDocumentState } from "../app/hooks/use-app-debug";
+import type { DebugRenderState } from "../editor/debug-helpers";
 
 const DEBUG_SESSION_STORAGE_KEY = "coflat-debug-session-id";
 const DEBUG_RECORDER_ENDPOINT = "/__coflat/debug-event";
 const FLUSH_DELAY_MS = 400;
 const MAX_BATCH_SIZE = 100;
+const MAX_TEXT_PREVIEW_CHARS = 120;
 
 export interface DebugSessionEvent {
   readonly timestamp: number;
@@ -14,11 +16,14 @@ export interface DebugSessionEvent {
     readonly document: DebugDocumentState | null;
     readonly mode: string | null;
     readonly selection: unknown;
+    readonly render: DebugRenderState | null;
     readonly location: string;
   };
 }
 
 type DebugSessionKind = "human" | "webdriver";
+type DebugContextShape = NonNullable<DebugSessionEvent["context"]>;
+type DebugContextCaptureMode = "none" | "compact" | "full";
 
 interface PendingEvent extends DebugSessionEvent {
   readonly sessionId: string;
@@ -32,6 +37,144 @@ let flushInFlight = false;
 let connected = false;
 let lifecycleHooksInstalled = false;
 const pendingEvents: PendingEvent[] = [];
+
+function summarizeText(text: string, limit = MAX_TEXT_PREVIEW_CHARS): string {
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 3))}...`;
+}
+
+function contextCaptureModeForEvent(type: string): DebugContextCaptureMode {
+  switch (type) {
+    case "key":
+    case "pointer":
+    case "focus":
+    case "structure":
+    case "motion-guard":
+      return "full";
+    case "scroll":
+      return "none";
+    default:
+      return "compact";
+  }
+}
+
+function buildCurrentContext(options: {
+  readonly includeSelection: boolean;
+  readonly includeRender: boolean;
+}): DebugContextShape {
+  if (!isBrowser()) {
+    return {
+      document: null,
+      mode: null,
+      selection: null,
+      render: null,
+      location: "",
+    };
+  }
+  return {
+    document: window.__app?.getCurrentDocument?.() ?? null,
+    mode: window.__app?.getMode?.() ?? null,
+    selection: options.includeSelection ? (window.__cmDebug?.selection?.() ?? null) : null,
+    render: options.includeRender ? (window.__cmDebug?.renderState?.() ?? null) : null,
+    location: window.location.href,
+  };
+}
+
+function compactDebugContextForEvent(
+  type: string,
+  context: DebugSessionEvent["context"],
+): DebugSessionEvent["context"] {
+  if (!context) return undefined;
+  const mode = contextCaptureModeForEvent(type);
+  if (mode === "full") return context;
+  if (mode === "none") {
+    return {
+      document: context.document,
+      mode: context.mode,
+      selection: null,
+      render: null,
+      location: context.location,
+    };
+  }
+  return {
+    document: context.document,
+    mode: context.mode,
+    selection: context.selection,
+    render: null,
+    location: context.location,
+  };
+}
+
+function sanitizeDocDetail(detail: unknown): unknown {
+  if (!detail || typeof detail !== "object") return detail;
+  const record = detail as {
+    readonly changes?: ReadonlyArray<Record<string, unknown>>;
+  } & Record<string, unknown>;
+  if (!Array.isArray(record.changes)) return detail;
+  return {
+    ...record,
+    changes: record.changes.map((change) => {
+      const inserted = typeof change.inserted === "string" ? change.inserted : "";
+      const nextChange = { ...change } as Record<string, unknown>;
+      delete nextChange.inserted;
+      nextChange.insertedLength = inserted.length;
+      nextChange.insertedPreview = summarizeText(inserted);
+      return nextChange;
+    }),
+  };
+}
+
+function sanitizeAppDetail(detail: unknown): unknown {
+  if (!detail || typeof detail !== "object") return detail;
+  const record = { ...(detail as Record<string, unknown>) };
+  if (typeof record.content === "string") {
+    const content = record.content;
+    delete record.content;
+    record.contentLength = content.length;
+    record.contentPreview = summarizeText(content);
+  }
+  if (Array.isArray(record.files)) {
+    record.files = record.files.map((file) => {
+      if (!file || typeof file !== "object") return file;
+      const nextFile = { ...(file as Record<string, unknown>) };
+      if (typeof nextFile.content === "string") {
+        const content = nextFile.content;
+        delete nextFile.content;
+        nextFile.contentLength = content.length;
+      }
+      if (typeof nextFile.base64 === "string") {
+        const base64 = nextFile.base64;
+        delete nextFile.base64;
+        nextFile.base64Length = base64.length;
+      }
+      return nextFile;
+    });
+  }
+  return record;
+}
+
+function sanitizeDebugEventDetail(type: string, detail: unknown): unknown {
+  if (type === "doc") return sanitizeDocDetail(detail);
+  if (type === "app") return sanitizeAppDetail(detail);
+  return detail;
+}
+
+function contextForEvent(
+  type: string,
+  providedContext?: DebugSessionEvent["context"],
+): DebugSessionEvent["context"] {
+  if (providedContext) {
+    return compactDebugContextForEvent(type, providedContext);
+  }
+  const mode = contextCaptureModeForEvent(type);
+  if (mode === "full") {
+    return buildCurrentContext({ includeSelection: true, includeRender: true });
+  }
+  if (mode === "compact") {
+    return buildCurrentContext({ includeSelection: true, includeRender: false });
+  }
+  return buildCurrentContext({ includeSelection: false, includeRender: false });
+}
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";
@@ -49,23 +192,6 @@ function ensureSessionId(): string | null {
   window.sessionStorage.setItem(DEBUG_SESSION_STORAGE_KEY, generated);
   sessionId = generated;
   return sessionId;
-}
-
-function currentContext(): DebugSessionEvent["context"] {
-  if (!isBrowser()) {
-    return {
-      document: null,
-      mode: null,
-      selection: null,
-      location: "",
-    };
-  }
-  return {
-    document: window.__app?.getCurrentDocument?.() ?? null,
-    mode: window.__app?.getMode?.() ?? null,
-    selection: window.__cmDebug?.selection?.() ?? null,
-    location: window.location.href,
-  };
 }
 
 function sessionKind(): DebugSessionKind {
@@ -103,7 +229,8 @@ export function recordDebugSessionEvent(
 
   pendingEvents.push({
     ...event,
-    context: event.context ?? currentContext(),
+    detail: sanitizeDebugEventDetail(event.type, event.detail),
+    context: contextForEvent(event.type, event.context),
     sessionId: nextSessionId,
     seq: ++nextSequence,
   });
@@ -152,11 +279,18 @@ export function getDebugSessionRecorderStatus(): {
   readonly sessionKind: DebugSessionKind;
   readonly connected: boolean;
   readonly queued: number;
+  readonly captureMode: "smart";
 } {
   return {
     sessionId: ensureSessionId(),
     sessionKind: sessionKind(),
     connected,
     queued: pendingEvents.length,
+    captureMode: "smart",
   };
 }
+
+export {
+  compactDebugContextForEvent as _compactDebugContextForEventForTest,
+  sanitizeDebugEventDetail as _sanitizeDebugEventDetailForTest,
+};

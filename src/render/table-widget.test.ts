@@ -167,6 +167,7 @@ describe("TableWidget source range attributes", () => {
       const observer = ResizeObserverStub.instances.at(-1);
 
       expect(observer).toBeDefined();
+      requestAnimationFrameSpy.mockClear();
 
       observer?.trigger();
       expect(requestMeasure).not.toHaveBeenCalled();
@@ -250,6 +251,12 @@ describe("TableWidget source range attributes", () => {
 describe("table-widget blur ownership", () => {
   function makeEditor(cell: HTMLElement) {
     return {
+      controller: {
+        view: {} as EditorView,
+        setReadOnly: vi.fn(),
+        setCallbacks: vi.fn(),
+        destroy: vi.fn(),
+      },
       view: {} as EditorView,
       cell,
       owner: {} as TableWidget,

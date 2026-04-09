@@ -6,6 +6,7 @@
  *   __cmDebug.treeString() — full syntax tree as readable string
  *   __cmDebug.fences()     — closing fence visibility for protected fenced blocks
  *   __cmDebug.line(73)     — DOM state of a specific line
+ *   __cmDebug.renderState() — compact visible rich-render snapshot
  *   __cmDebug.dump()       — combined tree + fence status snapshot
  *   __cmDebug.moveVertically("up") — apply rich-mode vertical motion with anomaly logging
  *   __cmDebug.toggleDebugLane() — toggle the shell/debug lane (red boxes + sidebar)
@@ -63,6 +64,23 @@ interface LineInfo {
 
 type FenceStatus = Pick<LineInfo, "line" | "height" | "hidden" | "classes">;
 
+export interface VisibleRawFencedOpener {
+  readonly line: number | null;
+  readonly text: string;
+  readonly classes: string[];
+}
+
+export interface DebugRenderState {
+  readonly renderedBlockHeaders: number;
+  readonly inlineMath: number;
+  readonly displayMath: number;
+  readonly citations: number;
+  readonly crossrefs: number;
+  readonly tables: number;
+  readonly figures: number;
+  readonly visibleRawFencedOpeners: readonly VisibleRawFencedOpener[];
+}
+
 interface DebugSnapshot {
   readonly divs: DivInfo[];
   readonly fences: FenceStatus[];
@@ -71,6 +89,7 @@ interface DebugSnapshot {
   readonly semantics: SemanticDebugInfo;
   readonly structure: StructureEditTarget | null;
   readonly geometry: ShellSurfaceSnapshot;
+  readonly render: DebugRenderState;
   readonly motionGuards: readonly VerticalMotionGuardEvent[];
   readonly timeline: readonly DebugTimelineEvent[];
 }
@@ -121,6 +140,8 @@ export interface DebugHelpers {
   timeline: () => readonly DebugTimelineEvent[];
   /** Return the current measured geometry snapshot for visible lines and shell surfaces. */
   geometry: () => ShellSurfaceSnapshot;
+  /** Return a compact snapshot of the visible rich-render state. */
+  renderState: () => DebugRenderState;
   /** Return a combined snapshot of tree + fences + cursor state. */
   dump: () => DebugSnapshot;
   /** Activate structure editing for the block/frontmatter at a document position. */
@@ -182,6 +203,56 @@ function inspectLine(view: EditorView, lineNum: number): LineInfo | null {
     classes: Array.from(el.classList).filter((c) => c.startsWith("cf-")),
     height: cs.height,
     hidden: cs.height === "0px",
+  };
+}
+
+function isElementVisibleInViewport(el: Element): boolean {
+  const rect = el.getBoundingClientRect();
+  return rect.bottom > 0 && rect.top < window.innerHeight;
+}
+
+function lineNumberAtElement(view: EditorView, el: HTMLElement): number | null {
+  try {
+    return view.state.doc.lineAt(view.posAtDOM(el, 0)).number;
+  } catch {
+    return null;
+  }
+}
+
+function collectVisibleRawFencedOpeners(view: EditorView): VisibleRawFencedOpener[] {
+  const result: VisibleRawFencedOpener[] = [];
+  const lines = view.contentDOM.querySelectorAll<HTMLElement>(".cm-line");
+  for (const line of lines) {
+    if (!isElementVisibleInViewport(line)) continue;
+    const visibleText = (line.innerText ?? "").trim();
+    if (!visibleText) continue;
+    if (!/^:{3,}/.test(visibleText)) continue;
+    result.push({
+      line: lineNumberAtElement(view, line),
+      text: visibleText,
+      classes: Array.from(line.classList).filter((name) => name.startsWith("cf-")),
+    });
+  }
+  return result;
+}
+
+function measureRenderState(view: EditorView): DebugRenderState {
+  const inView = (el: Element) => isElementVisibleInViewport(el);
+  return {
+    renderedBlockHeaders: Array.from(
+      view.dom.querySelectorAll(".cf-block-header-rendered"),
+    ).filter(inView).length,
+    inlineMath: Array.from(view.dom.querySelectorAll(".cf-math-inline")).filter(inView).length,
+    displayMath: Array.from(view.dom.querySelectorAll(".cf-math-display")).filter(inView).length,
+    citations: Array.from(view.dom.querySelectorAll(".cf-citation")).filter(inView).length,
+    crossrefs: Array.from(
+      view.dom.querySelectorAll(".cf-crossref, .cross-ref"),
+    ).filter(inView).length,
+    tables: Array.from(view.dom.querySelectorAll(".cf-table-widget")).filter(inView).length,
+    figures: Array.from(
+      view.dom.querySelectorAll(".cf-block-figure, .cf-image-wrapper"),
+    ).filter(inView).length,
+    visibleRawFencedOpeners: collectVisibleRawFencedOpeners(view),
   };
 }
 
@@ -276,6 +347,10 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
       return measureShellSurfaceSnapshot(view);
     },
 
+    renderState() {
+      return measureRenderState(view);
+    },
+
     dump() {
       const cursor = view.state.selection.main;
       const cursorLine = view.state.doc.lineAt(cursor.from).number;
@@ -287,6 +362,7 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
         semantics: this.semantics(),
         structure: this.structure(),
         geometry: this.geometry(),
+        render: this.renderState(),
         motionGuards: this.motionGuards(),
         timeline: this.timeline(),
       };

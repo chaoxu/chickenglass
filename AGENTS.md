@@ -123,6 +123,7 @@ __cmDebug.selection()        — current selection (anchor, head, from, to, line
 __cmDebug.history()          — undo/redo depth
 __cmDebug.structure()        — active explicit structure-edit target (or null)
 __cmDebug.geometry()         — measured visible-line + shell-surface geometry snapshot
+__cmDebug.renderState()      — compact visible rich-render snapshot (raw fenced openers, rendered headers, rich-widget counts)
 __cmDebug.motionGuards()     — recent vertical-motion guard events
 __cmDebug.dump()             — combined snapshot (tree + fences + cursor + focus)
 __cmDebug.activateStructureAtCursor() — open structure editing at the current cursor
@@ -136,13 +137,15 @@ __app.saveFile()             — save current file
 __app.getProjectRoot()       — current project root path (or null)
 __app.getCurrentDocument()   — current doc {path, name, dirty} (or null)
 __app.isDirty()              — whether any open document has unsaved changes
+__cfDebug.renderState()      — proxy to the current visible rich-render snapshot
+__cfDebug.recorderStatus()   — debug recorder queue/connectivity/capture-mode snapshot
 __tauriSmoke.openProject("/abs/path") — dev-only Tauri helper to switch project roots deterministically
 __tauriSmoke.getWindowState()         — dev-only Tauri snapshot: project root, current doc, dirty, backend root, watcher root
 __tauriSmoke.simulateExternalChange("notes.md") — dev-only Tauri helper to emit a file-changed event
 __fencedDivDebug = true      — toggle fenced div parser tracing
 ```
 
-Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile()`, `getTreeDivs()`, `checkFences()`, `getGeometrySnapshot()`, `dump()`, `setCursor()`, `scrollTo()`.
+Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile()`, `getTreeDivs()`, `checkFences()`, `getGeometrySnapshot()`, `getRenderState()`, `dump()`, `setCursor()`, `scrollTo()`.
 
 ## Dev mode
 

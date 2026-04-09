@@ -7,7 +7,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import {
@@ -177,6 +177,58 @@ describe("blockDecorationField", () => {
     // Closing fence line (:::) should have cf-block-closing-fence (collapsed)
     const closeFenceLine = state.doc.line(3).from;
     expect(hasLineClassAt(specs, closeFenceLine, CSS.blockClosingFence)).toBe(true);
+  });
+
+  it("rebuilds when the plugin registry changes without a doc edit", () => {
+    const doc = [
+      "::: {.theorem} Title",
+      "Content",
+      ":::",
+    ].join("\n");
+    const registryCompartment = new Compartment();
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        frontmatterField,
+        activeStructureEditField,
+        documentSemanticsField,
+        mathMacrosField,
+        registryCompartment.of(
+          createPluginRegistryField([
+            makeBlockPlugin({ name: "theorem", title: "Theorem" }),
+          ]),
+        ),
+        blockCounterField,
+        editorFocusField,
+        blockDecorationField,
+      ],
+    });
+
+    const initialSpecs = getDecoSpecs(state);
+    const openerLine = state.doc.line(1).from;
+    expect(hasLineClassAt(initialSpecs, openerLine, CSS.blockHeader)).toBe(true);
+    expect(
+      getWidgetFromDecorations<BlockHeaderWidget>(state, "BlockHeaderWidget")
+        .toDOM()
+        .textContent,
+    ).toContain("Theorem");
+
+    const tr = state.update({
+      effects: registryCompartment.reconfigure(
+        createPluginRegistryField([
+          makeBlockPlugin({
+            name: "theorem",
+            title: "Satz",
+          }),
+        ]),
+      ),
+    });
+    expect(
+      getWidgetFromDecorations<BlockHeaderWidget>(tr.state, "BlockHeaderWidget")
+        .toDOM()
+        .textContent,
+    ).toContain("Satz");
   });
 
   it("closing fence always hidden even when cursor is on closing fence (#428)", () => {
