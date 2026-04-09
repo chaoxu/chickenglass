@@ -22,7 +22,6 @@ export {
   type BlockCounterState,
   computeBlockNumbers,
   emptyCounterState,
-  blockCounterField,
 } from "./block-counter";
 export {
   blockRenderPlugin,

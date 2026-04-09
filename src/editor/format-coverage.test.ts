@@ -17,7 +17,7 @@ import { markdownExtensions } from "../parser";
 import { frontmatterField } from "./frontmatter-state";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { createPluginRegistryField } from "../plugins/plugin-registry";
-import { blockCounterField } from "../plugins/block-counter";
+import { blockCounterField } from "../state/block-counter";
 import { editorFocusField, mathMacrosField } from "../render/render-core";
 import {
   resolveCrossref,

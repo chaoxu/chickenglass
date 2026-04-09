@@ -40,13 +40,13 @@ import {
   type MixedClusterPart,
 } from "./crossref-render";
 import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
-import { blockCounterField } from "../plugins/block-counter";
 import { pluginRegistryField } from "../plugins/plugin-registry";
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
 import type { DocumentAnalysis, ReferenceSemantics } from "../semantics/document";
+import { blockCounterField } from "../state/block-counter";
 import { bibDataField } from "../state/bib-data";
 import {
   type DirtyRange,

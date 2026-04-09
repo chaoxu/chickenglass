@@ -21,7 +21,7 @@ import {
   type ResolvedCrossref,
   resolveCrossref,
 } from "../index/crossref-resolver";
-import { blockCounterField, type NumberedBlock } from "../plugins/block-counter";
+import { blockCounterField, type NumberedBlock } from "../state/block-counter";
 import {
   buildCitationPreviewContent,
   formatCitationPreview,

@@ -9,12 +9,12 @@ import { Breadcrumbs } from "./breadcrumbs";
 import { SidenoteMargin, type SidenoteInvalidation } from "./sidenote-margin";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
-import { blockCounterField } from "../../plugins/block-counter";
 import {
   documentSemanticsField,
   getDocumentAnalysisRevision,
   getDocumentAnalysisSliceRevision,
 } from "../../semantics/codemirror-source";
+import { blockCounterField } from "../../state/block-counter";
 import { bibDataField } from "../../citations/citation-render";
 import { frontmatterField, type EditorMode } from "../../editor";
 import { mathMacrosField } from "../../render";

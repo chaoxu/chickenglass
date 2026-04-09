@@ -24,7 +24,7 @@ import {
 } from "./fence-protection";
 import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
-import { blockCounterField } from "./block-counter";
+import { blockCounterField } from "../state/block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { editorFocusField, mathMacrosField } from "../render/render-core";
 import { _codeBlockStructureFieldForTest as codeBlockStructureField } from "../render/code-block-render";

@@ -17,7 +17,7 @@ import {
   embedSandboxPermissions,
 } from "./plugin-render";
 import { createPluginRegistryField } from "./plugin-registry";
-import { blockCounterField } from "./block-counter";
+import { blockCounterField } from "../state/block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { editorFocusField, focusEffect, mathMacrosField } from "../render/render-core";
 import { widgetSourceMap } from "../render/render-utils";

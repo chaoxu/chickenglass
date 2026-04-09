@@ -47,7 +47,7 @@ import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
-import { type BlockCounterState, blockCounterField } from "./block-counter";
+import { type BlockCounterState, blockCounterField } from "../state/block-counter";
 import { fenceProtectionExtension } from "./fence-protection";
 import { getPluginOrFallback, pluginRegistryField } from "./plugin-registry";
 import {

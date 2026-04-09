@@ -8,11 +8,11 @@ import {
 import { frontmatterField } from "../editor/frontmatter-state";
 import { documentPathFacet } from "../lib/types";
 import {
-  blockCounterField,
   createPluginRegistryField,
   defaultPlugins,
 } from "../plugins";
 import { documentAnalysisField } from "../semantics/codemirror-source";
+import { blockCounterField } from "../state/block-counter";
 import { mathMacrosField } from "./math-macros";
 
 const resolveLocalMediaPreviewMock = vi.fn();

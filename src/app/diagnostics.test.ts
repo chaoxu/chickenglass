@@ -6,7 +6,7 @@ import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { createPluginRegistryField } from "../plugins/plugin-registry";
-import { blockCounterField } from "../plugins/block-counter";
+import { blockCounterField } from "../state/block-counter";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CslProcessor } from "../citations/csl-processor";

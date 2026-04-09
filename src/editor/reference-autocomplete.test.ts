@@ -8,11 +8,11 @@ import { describe, expect, it } from "vitest";
 import { CslProcessor } from "../citations/csl-processor";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import {
-  blockCounterField,
   createPluginRegistryField,
   defaultPlugins,
 } from "../plugins";
 import { documentAnalysisField } from "../semantics/codemirror-source";
+import { blockCounterField } from "../state/block-counter";
 import { CSL_FIXTURES, makeBibStore } from "../test-utils";
 import {
   createMarkdownLanguageExtensions,
