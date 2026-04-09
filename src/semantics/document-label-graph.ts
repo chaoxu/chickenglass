@@ -2,7 +2,6 @@ import {
   type EditorState,
   StateField,
   type Text,
-  type Transaction,
 } from "@codemirror/state";
 import {
   findAttributeIdSpan,
@@ -19,6 +18,7 @@ import {
 import { blockCounterField } from "../state/block-counter";
 import { pluginRegistryField } from "../state/plugin-registry";
 import type { DocumentReferenceCatalog } from "./reference-catalog";
+import { createChangeChecker } from "../state/change-detection";
 
 const EMPTY_DEFINITIONS: readonly DocumentLabelDefinition[] = [];
 const EMPTY_REFERENCES: readonly DocumentLabelReference[] = [];
@@ -299,14 +299,12 @@ function buildReferences(
   return references;
 }
 
-function graphDependenciesChanged(tr: Transaction): boolean {
-  return (
-    tr.docChanged ||
-    tr.startState.field(documentAnalysisField) !== tr.state.field(documentAnalysisField) ||
-    tr.startState.field(blockCounterField, false) !== tr.state.field(blockCounterField, false) ||
-    tr.startState.field(pluginRegistryField, false) !== tr.state.field(pluginRegistryField, false)
-  );
-}
+const graphDependenciesChanged = createChangeChecker(
+  { doc: true },
+  (state) => state.field(documentAnalysisField),
+  (state) => state.field(blockCounterField, false),
+  (state) => state.field(pluginRegistryField, false),
+);
 
 export function isValidDocumentLabelId(id: string): boolean {
   return LOCAL_LABEL_RE.test(id);

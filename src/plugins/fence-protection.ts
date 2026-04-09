@@ -69,6 +69,7 @@ import {
   type PluginRegistryState,
   getPluginOrFallback,
 } from "./plugin-registry";
+import { createChangeChecker } from "../state/change-detection";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
@@ -284,8 +285,12 @@ function didDisplayMathFenceGeometryChange(tr: Transaction): boolean {
   return !sameDisplayMathBlocks(mapDisplayMathBlocks(before, tr), after);
 }
 
+const fenceProtectionRegistryChanged = createChangeChecker(
+  (state) => state.field(pluginRegistryField, false),
+);
+
 function shouldRebuildFenceProtectionCache(tr: Transaction): boolean {
-  if (tr.startState.field(pluginRegistryField, false) !== tr.state.field(pluginRegistryField, false)) {
+  if (fenceProtectionRegistryChanged(tr)) {
     return true;
   }
   if (didSemanticsSliceChange(tr.startState, tr.state, "fencedDivs")) return true;

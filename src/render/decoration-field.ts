@@ -1,4 +1,3 @@
-import { syntaxTree } from "@codemirror/language";
 import {
   type EditorState,
   StateField,
@@ -8,7 +7,10 @@ import {
   type DecorationSet,
   EditorView,
 } from "@codemirror/view";
+import { createChangeChecker } from "../state/change-detection";
 import { focusEffect } from "./focus-state";
+
+const structuralChangeDetected = createChangeChecker({ doc: true, tree: true });
 
 /**
  * Default rebuild predicate for StateField-based decoration providers.
@@ -16,10 +18,7 @@ import { focusEffect } from "./focus-state";
  * Returns true only for structural changes: docChanged or syntaxTree changed.
  */
 export function defaultShouldRebuild(tr: Transaction): boolean {
-  return (
-    tr.docChanged ||
-    syntaxTree(tr.state) !== syntaxTree(tr.startState)
-  );
+  return structuralChangeDetected(tr);
 }
 
 /**
@@ -29,10 +28,9 @@ export function defaultShouldRebuild(tr: Transaction): boolean {
  */
 export function cursorSensitiveShouldRebuild(tr: Transaction): boolean {
   return (
-    tr.docChanged ||
+    defaultShouldRebuild(tr) ||
     tr.selection !== undefined ||
-    tr.effects.some((effect) => effect.is(focusEffect)) ||
-    syntaxTree(tr.state) !== syntaxTree(tr.startState)
+    tr.effects.some((effect) => effect.is(focusEffect))
   );
 }
 

@@ -16,11 +16,11 @@ import {
   type EditorState,
   type Extension,
   type Range,
-  type Transaction,
 } from "@codemirror/state";
 import { buildDecorations } from "./decoration-core";
 import { createDecorationsField } from "./decoration-field";
 import { documentSemanticsField } from "../state/document-analysis";
+import { createChangeChecker } from "../state/change-detection";
 
 /** Build section-number decorations for all headings in the document. */
 export function buildSectionDecorations(state: EditorState): DecorationSet {
@@ -43,9 +43,7 @@ function sectionHeadingFingerprint(state: EditorState): string {
     .join(",");
 }
 
-function sectionShouldRebuild(tr: Transaction): boolean {
-  return sectionHeadingFingerprint(tr.state) !== sectionHeadingFingerprint(tr.startState);
-}
+const sectionShouldRebuild = createChangeChecker(sectionHeadingFingerprint);
 
 const sectionNumberField = createDecorationsField(
   buildSectionDecorations,
