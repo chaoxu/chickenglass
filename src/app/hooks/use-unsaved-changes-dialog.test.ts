@@ -22,7 +22,7 @@ describe("useUnsavedChangesDialog", () => {
     const { result } = renderHook(() => useUnsavedChangesDialog());
     const request = createRequest("next");
 
-    let decisionPromise: Promise<"save" | "discard" | "cancel">;
+    let decisionPromise: Promise<"save" | "discard" | "cancel"> | null = null;
     await act(async () => {
       decisionPromise = result.current.requestDecision(request);
       await Promise.resolve();
@@ -32,13 +32,16 @@ describe("useUnsavedChangesDialog", () => {
     expect(result.current.request).toEqual(request);
     expect(result.current.suspensionVersion).toBe(1);
 
-    let decision: "save" | "discard" | "cancel";
+    let decision: "save" | "discard" | "cancel" | null = null;
     await act(async () => {
       result.current.resolveDecision("save");
+      if (!decisionPromise) {
+        throw new Error("expected pending decision promise");
+      }
       decision = await decisionPromise;
     });
 
-    expect(decision!).toBe("save");
+    expect(decision).toBe("save");
     expect(result.current.status).toBe("resolved");
     expect(result.current.request).toBeNull();
     expect(result.current.suspensionVersion).toBe(2);
@@ -49,30 +52,36 @@ describe("useUnsavedChangesDialog", () => {
     const first = createRequest("first");
     const second = createRequest("second");
 
-    let firstDecision: Promise<"save" | "discard" | "cancel">;
+    let firstDecision: Promise<"save" | "discard" | "cancel"> | null = null;
     await act(async () => {
       firstDecision = result.current.requestDecision(first);
       await Promise.resolve();
     });
 
-    let secondDecision: Promise<"save" | "discard" | "cancel">;
+    let secondDecision: Promise<"save" | "discard" | "cancel"> | null = null;
     await act(async () => {
       secondDecision = result.current.requestDecision(second);
       await Promise.resolve();
     });
 
-    await expect(firstDecision!).resolves.toBe("cancel");
+    if (!firstDecision) {
+      throw new Error("expected first pending decision promise");
+    }
+    await expect(firstDecision).resolves.toBe("cancel");
     expect(result.current.status).toBe("pending");
     expect(result.current.request).toEqual(second);
     expect(result.current.suspensionVersion).toBe(3);
 
-    let finalDecision: "save" | "discard" | "cancel";
+    let finalDecision: "save" | "discard" | "cancel" | null = null;
     await act(async () => {
       result.current.resolveDecision("discard");
+      if (!secondDecision) {
+        throw new Error("expected second pending decision promise");
+      }
       finalDecision = await secondDecision;
     });
 
-    expect(finalDecision!).toBe("discard");
+    expect(finalDecision).toBe("discard");
     expect(result.current.status).toBe("resolved");
     expect(result.current.request).toBeNull();
     expect(result.current.suspensionVersion).toBe(4);
@@ -81,7 +90,7 @@ describe("useUnsavedChangesDialog", () => {
   it("cancels the pending request when the hook unmounts", async () => {
     const { result, unmount } = renderHook(() => useUnsavedChangesDialog());
 
-    let decisionPromise: Promise<"save" | "discard" | "cancel">;
+    let decisionPromise: Promise<"save" | "discard" | "cancel"> | null = null;
     await act(async () => {
       decisionPromise = result.current.requestDecision(createRequest("next"));
       await Promise.resolve();
@@ -89,6 +98,9 @@ describe("useUnsavedChangesDialog", () => {
 
     unmount();
 
-    await expect(decisionPromise!).resolves.toBe("cancel");
+    if (!decisionPromise) {
+      throw new Error("expected pending decision promise");
+    }
+    await expect(decisionPromise).resolves.toBe("cancel");
   });
 });

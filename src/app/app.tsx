@@ -97,10 +97,13 @@ function AppInner() {
 
   // Stable reference for lazy child loading — used by default-doc search
   // and session persistence so their effects don't re-fire unnecessarily.
-  const listChildrenStable = useMemo(
-    () => fs.listChildren ? (path: string) => fs.listChildren!(path) : undefined,
-    [fs],
-  );
+  const listChildrenStable = useMemo(() => {
+    const { listChildren } = fs;
+    if (!listChildren) {
+      return undefined;
+    }
+    return (path: string) => listChildren(path);
+  }, [fs]);
 
   const loadFixtureProject = useMemo(() => {
     if (!(fs instanceof MemoryFileSystem)) {
