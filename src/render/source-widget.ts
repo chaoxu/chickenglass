@@ -1,4 +1,6 @@
 import { type EditorView, WidgetType } from "@codemirror/view";
+import { CSS } from "../constants/css-classes";
+import { activeFencedDepthAtRange } from "../editor/shell-ownership";
 import { activateStructureEditAt } from "../editor/structure-edit-state";
 import {
   BaseRenderWidget,
@@ -43,6 +45,29 @@ export const widgetSourceMap = new WeakMap<HTMLElement, RenderWidget>();
 export interface WidgetSourceRange {
   readonly from: number;
   readonly to: number;
+}
+
+export function clearActiveFenceGuideClasses(el: HTMLElement): void {
+  el.classList.remove("cf-fence-guide");
+  for (const className of Array.from(el.classList)) {
+    if (className.startsWith("cf-fence-d")) {
+      el.classList.remove(className);
+    }
+  }
+}
+
+export function syncActiveFenceGuideClasses(
+  el: HTMLElement,
+  view: EditorView | undefined,
+  from: number,
+  to: number,
+): void {
+  clearActiveFenceGuideClasses(el);
+  if (!view) return;
+  if (typeof view.state?.field !== "function") return;
+  const depth = activeFencedDepthAtRange(view.state, from, to);
+  if (depth <= 0) return;
+  el.classList.add("cf-fence-guide", CSS.fenceDepth(Math.min(depth, 6)));
 }
 
 export function resolveLiveWidgetSourceRange(
@@ -108,6 +133,26 @@ export abstract class RenderWidget extends BaseRenderWidget {
     widgetSourceMap.set(el, this);
   }
 
+  protected syncWidgetAttrs(
+    el: HTMLElement,
+  ): void {
+    this.setSourceRangeAttrs(el);
+  }
+
+  protected syncFenceGuideOptIn(
+    el: HTMLElement,
+    enabled: boolean,
+    view?: EditorView,
+  ): void {
+    if (!enabled) {
+      delete el.dataset.activeFenceGuides;
+      clearActiveFenceGuideClasses(el);
+      return;
+    }
+    el.dataset.activeFenceGuides = "true";
+    syncActiveFenceGuideClasses(el, view, this.sourceFrom, this.sourceTo);
+  }
+
   /**
    * Update the source range after a position-mapping operation.
    *
@@ -146,7 +191,7 @@ export abstract class RenderWidget extends BaseRenderWidget {
 
   override toDOM(view?: EditorView): HTMLElement {
     const el = this.createDOM();
-    this.setSourceRangeAttrs(el);
+    this.syncWidgetAttrs(el);
     if (this.sourceFrom >= 0 && view) {
       this.bindSourceReveal(el, view);
     }

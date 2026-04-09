@@ -2,11 +2,17 @@ import { type DecorationSet, type EditorView, ViewPlugin, type ViewUpdate } from
 import { type Extension, type StateField } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
 import { MathWidget } from "./math-widget";
-import { widgetSourceMap } from "./source-widget";
+import {
+  clearActiveFenceGuideClasses,
+  syncActiveFenceGuideClasses,
+  widgetSourceMap,
+} from "./source-widget";
 
 function clearSourceRangeAttrs(el: HTMLElement): void {
   delete el.dataset.sourceFrom;
   delete el.dataset.sourceTo;
+  delete el.dataset.activeFenceGuides;
+  clearActiveFenceGuideClasses(el);
   widgetSourceMap.delete(el);
 }
 
@@ -36,22 +42,13 @@ function collectRenderedMathWidgets(
   return widgets;
 }
 
-function isWidgetVisible(
-  renderedWidget: RenderedMathWidget,
-  visibleRanges: readonly { from: number; to: number }[],
-): boolean {
-  return visibleRanges.some(
-    (range) => renderedWidget.from < range.to && renderedWidget.to > range.from,
-  );
-}
-
 function collectVisibleRenderedMathWidgets(
   view: EditorView,
   mathDecorationField: StateField<DecorationSet>,
 ): RenderedMathWidget[] {
   const widgets = collectRenderedMathWidgets(view, mathDecorationField);
   return widgets.filter(
-    (widget) => isWidgetVisible(widget, view.visibleRanges),
+    (widget) => widget.from < view.viewport.to && widget.to > view.viewport.from,
   );
 }
 
@@ -60,7 +57,7 @@ function syncRenderedMathWidgetMetadata(
   mathDecorationField: StateField<DecorationSet>,
 ): void {
   const widgets = collectVisibleRenderedMathWidgets(view, mathDecorationField);
-  const mathRoots = view.contentDOM.querySelectorAll<HTMLElement>(
+  const mathRoots = view.dom.querySelectorAll<HTMLElement>(
     `.${CSS.mathInline}, .${CSS.mathDisplay}`,
   );
   const count = Math.min(mathRoots.length, widgets.length);
@@ -70,6 +67,8 @@ function syncRenderedMathWidgetMetadata(
     const { widget, from, to } = widgets[i];
     el.dataset.sourceFrom = String(from);
     el.dataset.sourceTo = String(to);
+    el.dataset.activeFenceGuides = "true";
+    syncActiveFenceGuideClasses(el, view, from, to);
     widget.updateSourceRange(from, to);
     widgetSourceMap.set(el, widget);
   }

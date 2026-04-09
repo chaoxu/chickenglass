@@ -101,6 +101,23 @@ describe("structure-edit-state", () => {
     expect(target?.kind).toBe("display-math");
   });
 
+  it("prefers display math over the surrounding fenced block when both overlap", () => {
+    const doc = [
+      "::: {.proposition}",
+      "1. Item",
+      "2. Display math in fenced div list:",
+      "   \\[",
+      "   x^2 + y^2 = z^2",
+      "   \\]",
+      "3. Next item",
+      ":::",
+    ].join("\n");
+    const state = createState(doc);
+    const target = createStructureEditTargetAt(state, doc.indexOf("x^2"));
+
+    expect(target?.kind).toBe("display-math");
+  });
+
   it("clears structure edit when a programmatic document replacement switches files", () => {
     const state = createState(["---", "title: Hello", "---", "Body"].join("\n"));
     const target = createStructureEditTargetAt(state, 0);

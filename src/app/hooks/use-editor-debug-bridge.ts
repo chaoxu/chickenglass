@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import type { EditorView } from "@codemirror/view";
 import { createDebugHelpers } from "../../editor";
+import { emitWindowDebugLaneStateChange } from "../../editor/debug-lane-state";
 
 export interface EditorDebugBridge {
   attachDebugView: (view: EditorView) => void;
@@ -10,12 +11,14 @@ export interface EditorDebugBridge {
 export function attachDebugView(view: EditorView): void {
   window.__cmView = view;
   window.__cmDebug = createDebugHelpers(view);
+  emitWindowDebugLaneStateChange();
 }
 
 export function clearDebugView(view?: EditorView): void {
   if (!view || window.__cmView === view) {
     window.__cmView = undefined;
     window.__cmDebug = undefined;
+    emitWindowDebugLaneStateChange();
   }
 }
 

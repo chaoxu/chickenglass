@@ -74,6 +74,28 @@ describe("MathWidget (display)", () => {
       scrollIntoView: false,
     });
   });
+
+  it("stamps shell-surface range attributes for display math", () => {
+    const widget = new MathWidget("x^2", "$$x^2$$", true);
+    widget.updateSourceRange(8, 15);
+
+    const el = widget.toDOM();
+
+    expect(el.dataset.shellFrom).toBe("8");
+    expect(el.dataset.shellTo).toBe("15");
+  });
+});
+
+describe("MathWidget shell-surface ownership", () => {
+  it("keeps inline math out of shell-surface widget measurement", () => {
+    const widget = new MathWidget("x^2", "$x^2$", false);
+    widget.updateSourceRange(10, 15);
+
+    const el = widget.toDOM();
+
+    expect(el.dataset.shellFrom).toBeUndefined();
+    expect(el.dataset.shellTo).toBeUndefined();
+  });
 });
 
 describe("MathWidget.updateDOM", () => {

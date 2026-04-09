@@ -1,10 +1,17 @@
 import { memo, useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
+import { Bug } from "lucide-react";
 import { markdownEditorModes, type EditorMode } from "../../editor";
 import { computeDocStats, formatReadingTime, type DocStats } from "../writing-stats";
 import { subscribeFpsMeter, getFpsMeterSnapshot } from "../fps-meter";
 import { cn } from "../lib/utils";
 import { useEditorTelemetry } from "../stores/editor-telemetry-store";
 import { buildInfo } from "../build-info";
+import {
+  readWindowDebugLaneState,
+  subscribeWindowDebugLaneState,
+  toggleWindowDebugLane,
+  type DebugLaneWindowState,
+} from "../../editor/debug-lane-state";
 import {
   EMPTY_ACTIVE_DOCUMENT_SNAPSHOT,
   unsubscribeNoop,
@@ -168,6 +175,10 @@ export function StatusBar({
     getActiveDocumentSnapshot,
     getActiveDocumentSnapshot,
   );
+  const [debugLaneState, setDebugLaneState] = useState<DebugLaneWindowState>(() => (
+    readWindowDebugLaneState()
+  ));
+  const showDebugControls = import.meta.env.DEV;
 
   // Full stats only when the popover is open — keeps sentence segmentation off the edit hot path.
   const stats = useMemo<DocStats | null>(
@@ -182,6 +193,20 @@ export function StatusBar({
   }, [editorMode, onModeChange]);
 
   const closePopover = useCallback(() => setPopoverOpen(false), []);
+  const toggleDebugLane = useCallback(() => {
+    setDebugLaneState(toggleWindowDebugLane());
+  }, []);
+
+  useEffect(() => {
+    if (!showDebugControls) {
+      return;
+    }
+
+    setDebugLaneState(readWindowDebugLaneState());
+    return subscribeWindowDebugLaneState(() => {
+      setDebugLaneState(readWindowDebugLaneState());
+    });
+  }, [showDebugControls]);
 
   const wordLabel = wordCount === 1 ? "1 word" : `${wordCount} words`;
   const charLabel = `${charCount} chars`;
@@ -234,6 +259,30 @@ export function StatusBar({
               className="px-1 rounded hover:bg-[var(--cf-hover)] transition-colors"
             >
               ⌘
+            </button>
+          )}
+          {showDebugControls && (
+            <button
+              type="button"
+              data-testid="debug-lane-button"
+              aria-label={debugLaneState.enabled
+                ? "Debug lane enabled. Click to hide debug lane"
+                : "Debug lane disabled. Click to show debug lane"}
+              aria-pressed={debugLaneState.enabled}
+              title={debugLaneState.available
+                ? (debugLaneState.enabled ? "Hide debug lane" : "Show debug lane")
+                : "Open a document to enable debug tools"}
+              onClick={toggleDebugLane}
+              disabled={!debugLaneState.available}
+              className={cn(
+                "px-1 rounded transition-colors",
+                debugLaneState.enabled
+                  ? "bg-[var(--cf-hover)] text-[var(--cf-fg)]"
+                  : "hover:bg-[var(--cf-hover)]",
+                !debugLaneState.available && "opacity-50 cursor-not-allowed",
+              )}
+            >
+              <Bug className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           )}
           <button

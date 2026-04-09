@@ -15,6 +15,11 @@ import {
   pushWidgetDecoration,
 } from "./decoration-core";
 import { RenderWidget } from "./source-widget";
+import {
+  clearActiveFenceGuideClasses,
+  syncActiveFenceGuideClasses,
+} from "./source-widget";
+import { ShellWidget } from "./shell-widget";
 import { imageUrlField } from "./image-url-cache";
 import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 import {
@@ -41,10 +46,10 @@ const imagePreviewHeightCache = new Map<string, number>();
 /**
  * Single widget class for all image preview states.
  *
- * Identity is determined by `alt` + original `src`, so cache transitions such
- * as loading -> ready update the existing DOM instead of replacing the slot.
+ * Identity includes the preview state so CM6 does not treat a loading widget
+ * as equivalent to its later ready/error version and keep stale DOM mounted.
  */
-export class ImagePreviewWidget extends RenderWidget {
+export class ImagePreviewWidget extends ShellWidget {
   private readonly measuredHeightBinding: BlockWidgetHeightBinding = {
     resizeObserver: null,
     resizeMeasureFrame: null,
@@ -57,6 +62,27 @@ export class ImagePreviewWidget extends RenderWidget {
     readonly isBlock = false,
   ) {
     super();
+  }
+
+  override updateSourceRange(from: number, to: number): void {
+    super.updateSourceRange(from, to);
+    if (!this.isBlock) {
+      this.shellSurfaceFrom = -1;
+      this.shellSurfaceTo = -1;
+    }
+  }
+
+  private stateKey(): string {
+    switch (this.state.kind) {
+      case "image":
+        return `image:${this.state.src}`;
+      case "pdf-canvas":
+        return `pdf-canvas:${this.state.path}`;
+      case "loading":
+        return `loading:${this.state.isPdf ? "pdf" : "image"}`;
+      case "error":
+        return `error:${this.state.fallbackSrc}`;
+    }
   }
 
   createDOM(): HTMLElement {
@@ -87,13 +113,21 @@ export class ImagePreviewWidget extends RenderWidget {
       other instanceof ImagePreviewWidget &&
       this.alt === other.alt &&
       this.src === other.src &&
-      this.isBlock === other.isBlock
+      this.isBlock === other.isBlock &&
+      this.stateKey() === other.stateKey()
     );
   }
 
   override toDOM(view?: EditorView): HTMLElement {
     const el = this.createDOM();
-    this.setSourceRangeAttrs(el);
+    this.syncWidgetAttrs(el);
+    if (this.isBlock) {
+      el.dataset.activeFenceGuides = "true";
+      syncActiveFenceGuideClasses(el, view, this.sourceFrom, this.sourceTo);
+    } else {
+      delete el.dataset.activeFenceGuides;
+      clearActiveFenceGuideClasses(el);
+    }
     if (this.sourceFrom >= 0 && view) {
       this.bindSourceReveal(el, view);
     }
@@ -111,7 +145,14 @@ export class ImagePreviewWidget extends RenderWidget {
     }
     dom.textContent = "";
     this.renderInto(dom);
-    this.setSourceRangeAttrs(dom);
+    this.syncWidgetAttrs(dom);
+    if (this.isBlock) {
+      dom.dataset.activeFenceGuides = "true";
+      syncActiveFenceGuideClasses(dom, view, this.sourceFrom, this.sourceTo);
+    } else {
+      delete dom.dataset.activeFenceGuides;
+      clearActiveFenceGuideClasses(dom);
+    }
     if (view) {
       this.observeMeasuredHeight(dom, view);
     }

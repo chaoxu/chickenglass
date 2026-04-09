@@ -8,7 +8,12 @@ import type { MathSemantics } from "../semantics/document";
 import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
 import { resolveClickToSourcePos } from "./math-interactions";
 import { findMathRegionAtPos } from "./math-source";
-import { MacroAwareWidget, widgetSourceMap } from "./source-widget";
+import { widgetSourceMap } from "./source-widget";
+import { ShellMacroAwareWidget } from "./shell-widget";
+import {
+  clearActiveFenceGuideClasses,
+  syncActiveFenceGuideClasses,
+} from "./source-widget";
 import {
   activateStructureEditTarget,
   createStructureEditTargetAt,
@@ -105,7 +110,7 @@ function resolveLiveMathRegion(
 }
 
 /** Unified widget that renders both inline and display math via KaTeX. */
-export class MathWidget extends MacroAwareWidget {
+export class MathWidget extends ShellMacroAwareWidget {
   private readonly displayHeightBinding: BlockWidgetHeightBinding = {
     resizeObserver: null,
     resizeMeasureFrame: null,
@@ -126,6 +131,14 @@ export class MathWidget extends MacroAwareWidget {
       this.macrosKey,
       this.equationNumber === undefined ? "" : String(this.equationNumber),
     ].join("\u0001");
+  }
+
+  override updateSourceRange(from: number, to: number): void {
+    super.updateSourceRange(from, to);
+    if (!this.isDisplay) {
+      this.shellSurfaceFrom = -1;
+      this.shellSurfaceTo = -1;
+    }
   }
 
   private syncDisplayLayout(el: HTMLElement): void {
@@ -243,7 +256,9 @@ export class MathWidget extends MacroAwareWidget {
     if (!this.isDisplay) return super.toDOM(view);
 
     const el = this.createDOM();
-    this.setSourceRangeAttrs(el);
+    this.syncWidgetAttrs(el);
+    el.dataset.activeFenceGuides = "true";
+    syncActiveFenceGuideClasses(el, view, this.sourceFrom, this.sourceTo);
 
     if (this.sourceFrom >= 0 && view) {
       const content = el.querySelector<HTMLElement>(`.${CSS.mathDisplayContent}`);
@@ -296,7 +311,14 @@ export class MathWidget extends MacroAwareWidget {
       renderKatex(dom, this.latex, false, this.macros);
     }
 
-    this.setSourceRangeAttrs(dom);
+    this.syncWidgetAttrs(dom);
+    if (this.isDisplay) {
+      dom.dataset.activeFenceGuides = "true";
+      syncActiveFenceGuideClasses(dom, view, this.sourceFrom, this.sourceTo);
+    } else {
+      delete dom.dataset.activeFenceGuides;
+      clearActiveFenceGuideClasses(dom);
+    }
     if (this.isDisplay && view) {
       this.observeDisplayHeight(dom, view);
     }

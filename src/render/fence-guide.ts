@@ -18,6 +18,8 @@ import {
   type DecorationSet,
   Decoration,
   EditorView,
+  ViewPlugin,
+  type ViewUpdate,
 } from "@codemirror/view";
 import {
   type EditorState,
@@ -33,6 +35,11 @@ import {
   focusTracker,
 } from "./focus-state";
 import { documentSemanticsField } from "../semantics/codemirror-source";
+import { CSS } from "../constants/css-classes";
+import {
+  clearActiveFenceGuideClasses,
+  syncActiveFenceGuideClasses,
+} from "./source-widget";
 
 interface FencedDivRange {
   from: number;
@@ -141,6 +148,89 @@ function buildFenceGuides(state: EditorState): DecorationSet {
   return buildDecorations(items);
 }
 
+function parseSourcePos(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+const BLOCK_WIDGET_SELECTOR = [
+  `.${CSS.mathDisplay}`,
+  `.${CSS.tableWidget}`,
+  `.${CSS.imageWrapper}`,
+  ".cf-block-caption",
+  ".cf-embed",
+].join(", ");
+
+function syncFenceGuideWidgets(view: EditorView): void {
+  const widgets = view.dom.querySelectorAll<HTMLElement>(BLOCK_WIDGET_SELECTOR);
+  for (const widget of widgets) {
+    if (widget.classList.contains(CSS.imageWrapper) && widget.tagName !== "DIV") {
+      clearActiveFenceGuideClasses(widget);
+      continue;
+    }
+    const from = parseSourcePos(widget.dataset.sourceFrom);
+    const to = parseSourcePos(widget.dataset.sourceTo);
+    if (from === null || to === null || to < from) {
+      clearActiveFenceGuideClasses(widget);
+      continue;
+    }
+    syncActiveFenceGuideClasses(widget, view, from, to);
+  }
+}
+
+const fenceGuideWidgetView = ViewPlugin.fromClass(class {
+  private syncScheduled = false;
+  private frameId: number | null = null;
+
+  constructor(view: EditorView) {
+    syncFenceGuideWidgets(view);
+    this.scheduleSync(view);
+  }
+
+  update(update: ViewUpdate): void {
+    if (
+      update.docChanged ||
+      update.selectionSet ||
+      update.focusChanged ||
+      update.viewportChanged ||
+      update.geometryChanged
+    ) {
+      syncFenceGuideWidgets(update.view);
+      this.scheduleSync(update.view);
+    }
+  }
+
+  private scheduleSync(view: EditorView): void {
+    if (this.syncScheduled) return;
+    this.syncScheduled = true;
+    const run = (): void => {
+      this.frameId = requestAnimationFrame(() => {
+        this.frameId = null;
+        this.syncScheduled = false;
+        if (!view.dom.isConnected) return;
+        syncFenceGuideWidgets(view);
+      });
+    };
+    if (typeof requestAnimationFrame === "function") {
+      run();
+      return;
+    }
+    queueMicrotask(() => {
+      this.syncScheduled = false;
+      if (!view.dom.isConnected) return;
+      syncFenceGuideWidgets(view);
+    });
+  }
+
+  destroy(): void {
+    if (this.frameId !== null) {
+      cancelAnimationFrame(this.frameId);
+      this.frameId = null;
+    }
+  }
+});
+
 // ── StateField with active-path caching ────────────────────────────────────
 
 interface FenceGuideState {
@@ -212,6 +302,7 @@ export const fenceGuidePlugin: Extension = [
   editorFocusField,
   focusTracker,
   fenceGuideField,
+  fenceGuideWidgetView,
 ];
 
 // ── Test exports ───────────────────────────────────────────────────────────
