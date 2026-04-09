@@ -22,6 +22,7 @@ import {
   snapshotRanges,
   type VisibleRange,
 } from "./viewport-diff";
+import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 
 /**
  * Default update predicate for render ViewPlugins.
@@ -154,6 +155,14 @@ export function createIncrementalDecorationsViewPlugin<
     }
 
     update(update: ViewUpdate): void {
+      const programmaticDocRewrite = (update.transactions ?? []).some((tr) =>
+        tr.annotation(programmaticDocumentChangeAnnotation) === true
+      );
+      if (programmaticDocRewrite) {
+        this.decorations = buildFn(update.view);
+        return;
+      }
+
       if (options.shouldRebuild?.(update)) {
         this.decorations = buildFn(update.view);
         return;
@@ -290,6 +299,14 @@ export function createCursorSensitiveViewPlugin(
     }
 
     update(update: ViewUpdate): void {
+      const programmaticDocRewrite = (update.transactions ?? []).some((tr) =>
+        tr.annotation(programmaticDocumentChangeAnnotation) === true
+      );
+      if (programmaticDocRewrite) {
+        this.rebuild(update.view);
+        return;
+      }
+
       const contextDirtyRanges = options?.contextChangeRanges?.(update);
       const selectionNeedsRebuild = contextDirtyRanges === undefined
         ? (options?.selectionCheck ? options.selectionCheck(update) : update.selectionSet)

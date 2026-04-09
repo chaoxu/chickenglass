@@ -44,6 +44,7 @@ import {
   findFocusedInlineRevealTarget,
   inlineRevealTargetChanged,
 } from "./inline-reveal-policy";
+import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 
 export { renderKatexToHtml } from "./inline-shared";
 export {
@@ -283,6 +284,10 @@ const mathDecorationField = StateField.define<DecorationSet>({
   },
 
   update(value, tr) {
+    if (tr.annotation(programmaticDocumentChangeAnnotation) === true) {
+      return rebuildMathDecorations(tr.state);
+    }
+
     if (mathMacrosChanged(tr)) {
       return rebuildMathDecorations(tr.state);
     }
