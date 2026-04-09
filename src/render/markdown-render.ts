@@ -596,6 +596,7 @@ export const markdownRenderPlugin: Extension = createCursorSensitiveViewPlugin(
   {
     contextChangeRanges: computeMarkdownContextChangeRanges,
     docChangeRanges: computeMarkdownDocChangeRanges,
+    onViewportOnly: "incremental",
     pluginSpec: {
       eventHandlers: {
         click(event: MouseEvent, _view: EditorView) {

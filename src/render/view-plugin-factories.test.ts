@@ -377,6 +377,128 @@ describe("createCursorSensitiveViewPlugin", () => {
     expect(plugin.coveredRanges).toEqual([{ from: 0, to: 100 }]);
   });
 
+  it("skips pure viewport updates when onViewportOnly=skip", () => {
+    let callCount = 0;
+    const ext = createCursorSensitiveViewPlugin(
+      () => {
+        callCount++;
+        return [];
+      },
+      {
+        onViewportOnly: "skip",
+      },
+    );
+    view = createTestView("x".repeat(300), { extensions: [markdown(), ext] });
+    const plugin = getPluginProbe(ext);
+    const setRanges = setVisibleRanges([{ from: 0, to: 100 }]);
+    plugin.rebuild(view);
+    const beforeDecorations = plugin.decorations;
+    const beforeCoveredRanges = plugin.coveredRanges;
+    callCount = 0;
+
+    setRanges([{ from: 90, to: 190 }]);
+    plugin.update(mockViewportUpdate());
+
+    expect(callCount).toBe(0);
+    expect(plugin.decorations).toBe(beforeDecorations);
+    expect(plugin.coveredRanges).toEqual(beforeCoveredRanges);
+  });
+
+  it("still applies real context dirty ranges when onViewportOnly=skip", () => {
+    let receivedRanges: readonly { from: number; to: number }[] = [];
+    const ext = createCursorSensitiveViewPlugin(
+      (_view, ranges) => {
+        receivedRanges = ranges;
+        return [];
+      },
+      {
+        onViewportOnly: "skip",
+        contextChangeRanges: () => [{ from: 60, to: 70 }],
+      },
+    );
+    view = createTestView("x".repeat(300), { extensions: [markdown(), ext] });
+    const plugin = getPluginProbe(ext);
+    const setRanges = setVisibleRanges([{ from: 0, to: 100 }]);
+    plugin.rebuild(view);
+    receivedRanges = [];
+
+    setRanges([{ from: 50, to: 150 }]);
+    plugin.update({
+      docChanged: false,
+      selectionSet: true,
+      focusChanged: false,
+      viewportChanged: true,
+      state: view.state,
+      startState: view.state,
+      view,
+    } as unknown as ViewUpdate);
+
+    expect(receivedRanges).toEqual([
+      { from: 60, to: 70 },
+      { from: 100, to: 150 },
+    ]);
+  });
+
+  it("recovers skipped viewport changes on the next incremental doc update", () => {
+    const trackedNodes = [
+      { from: 10, to: 20 },
+      { from: 80, to: 120 },
+      { from: 150, to: 170 },
+    ];
+    const ext = createCursorSensitiveViewPlugin(
+      (_view, ranges, skip) => {
+        const items = [];
+        for (const node of trackedNodes) {
+          if (!ranges.some((range) => node.from < range.to && node.to > range.from)) continue;
+          if (skip(node.from)) continue;
+          items.push(Decoration.mark({ class: `node-${node.from}` }).range(node.from, node.to));
+        }
+        return items;
+      },
+      {
+        onViewportOnly: "skip",
+        selectionCheck: () => false,
+        docChangeRanges: (update) => {
+          const dirtyRanges: { from: number; to: number }[] = [];
+          update.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
+            dirtyRanges.push({ from: fromB, to: toB });
+          });
+          return dirtyRanges;
+        },
+      },
+    );
+    view = createTestView("x".repeat(300), { extensions: [markdown(), ext] });
+    const plugin = getPluginProbe(ext);
+    const setRanges = setVisibleRanges([{ from: 0, to: 100 }]);
+    plugin.rebuild(view);
+
+    const specKeys = () => getDecorationSpecs(plugin.decorations)
+      .map((spec) => `${spec.class}:${spec.from}-${spec.to}`)
+      .sort();
+
+    expect(specKeys()).toEqual([
+      "node-10:10-20",
+      "node-80:80-120",
+    ]);
+
+    setRanges([{ from: 90, to: 190 }]);
+    plugin.update(mockViewportUpdate());
+    expect(specKeys()).toEqual([
+      "node-10:10-20",
+      "node-80:80-120",
+    ]);
+
+    view.dispatch({
+      changes: { from: 95, to: 96, insert: "!" },
+    });
+
+    expect(specKeys()).toEqual([
+      "node-150:150-170",
+      "node-80:80-120",
+    ]);
+    expect(plugin.coveredRanges).toEqual([{ from: 90, to: 190 }]);
+  });
+
   it("filters only the dirty visible fragment on incremental doc updates", () => {
     const ext = createCursorSensitiveViewPlugin(() => []);
     view = createTestView("x".repeat(300), { extensions: [markdown(), ext] });

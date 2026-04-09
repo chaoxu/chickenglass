@@ -119,6 +119,8 @@ export function createCursorSensitiveViewPlugin(
     selectionCheck?: (update: ViewUpdate) => boolean;
     contextChangeRanges?: CursorSensitiveContextChangeRangesFn;
     docChangeRanges?: CursorSensitiveDocChangeRangesFn;
+    /** How to handle viewport-only updates when no doc/context work is needed. */
+    onViewportOnly?: "incremental" | "skip";
     extraRebuildCheck?: (update: ViewUpdate) => boolean;
     pluginSpec?: Omit<PluginSpec<PluginValue>, "decorations">;
   },
@@ -182,6 +184,10 @@ export function createCursorSensitiveViewPlugin(
 
       this.decorations = nextDecorations;
       this.coveredRanges = currentVisibleRanges;
+    }
+
+    private skipViewportOnlyUpdate(): boolean {
+      return options?.onViewportOnly === "skip";
     }
 
     private incrementalViewportUpdate(update: ViewUpdate): void {
@@ -269,7 +275,11 @@ export function createCursorSensitiveViewPlugin(
           this.rebuild(update.view);
           return;
         }
-        if (contextDirtyRanges.length > 0 || update.viewportChanged) {
+        if (contextDirtyRanges.length > 0) {
+          this.incrementalContextUpdate(update, contextDirtyRanges);
+          return;
+        }
+        if (update.viewportChanged && !this.skipViewportOnlyUpdate()) {
           this.incrementalContextUpdate(update, contextDirtyRanges);
         }
         return;
@@ -280,7 +290,7 @@ export function createCursorSensitiveViewPlugin(
         return;
       }
 
-      if (update.viewportChanged) {
+      if (update.viewportChanged && !this.skipViewportOnlyUpdate()) {
         this.incrementalViewportUpdate(update);
       }
     }
