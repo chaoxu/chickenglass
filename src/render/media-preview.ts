@@ -6,6 +6,7 @@
  * needed.  Returns a discriminated result describing the current preview
  * state — the renderer maps this to the correct widget.
  */
+import type { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
@@ -14,11 +15,13 @@ import {
   getImageDataUrl,
   imageUrlField,
   requestImageDataUrl,
+  type ImageUrlEntry,
 } from "./image-url-cache";
 import {
   getPdfCanvas,
   pdfPreviewField,
   requestPdfPreview,
+  type PdfPreviewEntry,
 } from "./pdf-preview-cache";
 
 // ── Result type ─────────────────────────────────────────────────────────────
@@ -64,8 +67,15 @@ export function resolveLocalMediaPath(
   view: EditorView,
   src: string,
 ): string | null {
+  return resolveLocalMediaPathFromState(view.state, src);
+}
+
+export function resolveLocalMediaPathFromState(
+  state: EditorState,
+  src: string,
+): string | null {
   if (!isPdfTarget(src) && !isRelativeFilePath(src)) return null;
-  const docPath = view.state.facet(documentPathFacet);
+  const docPath = state.facet(documentPathFacet);
   return resolveProjectPathFromDocument(docPath, src);
 }
 
@@ -73,10 +83,20 @@ export function resolveLocalMediaPreview(
   view: EditorView,
   src: string,
 ): MediaPreviewResult | null {
-  const resolvedPath = resolveLocalMediaPath(view, src);
+  const resolvedPath = resolveLocalMediaPathFromState(view.state, src);
   if (!resolvedPath) return null;
   if (isPdfTarget(src)) return resolvePdfPreview(view, src, resolvedPath);
   return resolveImagePreview(view, src, resolvedPath);
+}
+
+export function resolveLocalMediaPreviewFromState(
+  state: EditorState,
+  src: string,
+): MediaPreviewResult | null {
+  const resolvedPath = resolveLocalMediaPathFromState(state, src);
+  if (!resolvedPath) return null;
+  if (isPdfTarget(src)) return resolvePdfPreviewFromState(state, src, resolvedPath);
+  return resolveImagePreviewFromState(state, src, resolvedPath);
 }
 
 export function createLocalMediaDependencies(): {
@@ -216,8 +236,31 @@ function resolvePdfPreview(
   src: string,
   resolvedPath: string,
 ): MediaPreviewResult {
-  const entry = view.state.field(pdfPreviewField).get(resolvedPath);
+  const entry = (view.state.field(pdfPreviewField, false) ?? new Map<string, PdfPreviewEntry>())
+    .get(resolvedPath);
+  const current = resolvePdfPreviewEntry(src, resolvedPath, entry);
+  if (current) return current;
 
+  fireRequest(view, resolvedPath, requestPdfPreview);
+  return { kind: "loading", resolvedPath, isPdf: true };
+}
+
+function resolvePdfPreviewFromState(
+  state: EditorState,
+  src: string,
+  resolvedPath: string,
+): MediaPreviewResult {
+  const entry = (state.field(pdfPreviewField, false) ?? new Map<string, PdfPreviewEntry>())
+    .get(resolvedPath);
+  return resolvePdfPreviewEntry(src, resolvedPath, entry)
+    ?? { kind: "loading", resolvedPath, isPdf: true };
+}
+
+function resolvePdfPreviewEntry(
+  src: string,
+  resolvedPath: string,
+  entry: PdfPreviewEntry | undefined,
+): MediaPreviewResult | null {
   // #473: "ready" with no canvas means the canvas was evicted from the
   // module-level cache — treat as a cache miss and re-request.
   if (entry?.status === "ready" && getPdfCanvas(resolvedPath) !== undefined) {
@@ -225,16 +268,9 @@ function resolvePdfPreview(
   }
 
   if (entry?.status === "error") {
-    // #472: re-request so the retry cooldown logic in requestPdfPreview
-    // can decide whether to retry.
-    fireRequest(view, resolvedPath, requestPdfPreview);
     return { kind: "error", resolvedPath, fallbackSrc: src };
   }
-
-  if (!entry || entry.status !== "loading") {
-    fireRequest(view, resolvedPath, requestPdfPreview);
-  }
-  return { kind: "loading", resolvedPath, isPdf: true };
+  return null;
 }
 
 function resolveImagePreview(
@@ -242,7 +278,31 @@ function resolveImagePreview(
   src: string,
   resolvedPath: string,
 ): MediaPreviewResult {
-  const entry = view.state.field(imageUrlField).get(resolvedPath);
+  const entry = (view.state.field(imageUrlField, false) ?? new Map<string, ImageUrlEntry>())
+    .get(resolvedPath);
+  const current = resolveImagePreviewEntry(src, resolvedPath, entry);
+  if (current) return current;
+
+  fireRequest(view, resolvedPath, requestImageDataUrl);
+  return { kind: "loading", resolvedPath, isPdf: false };
+}
+
+function resolveImagePreviewFromState(
+  state: EditorState,
+  src: string,
+  resolvedPath: string,
+): MediaPreviewResult {
+  const entry = (state.field(imageUrlField, false) ?? new Map<string, ImageUrlEntry>())
+    .get(resolvedPath);
+  return resolveImagePreviewEntry(src, resolvedPath, entry)
+    ?? { kind: "loading", resolvedPath, isPdf: false };
+}
+
+function resolveImagePreviewEntry(
+  src: string,
+  resolvedPath: string,
+  entry: ImageUrlEntry | undefined,
+): MediaPreviewResult | null {
   const dataUrl =
     entry?.status === "ready" ? getImageDataUrl(resolvedPath) : undefined;
 
@@ -251,16 +311,9 @@ function resolveImagePreview(
   }
 
   if (entry?.status === "error") {
-    // Re-request so the retry cooldown logic in requestImageDataUrl
-    // can decide whether to retry.
-    fireRequest(view, resolvedPath, requestImageDataUrl);
     return { kind: "error", resolvedPath, fallbackSrc: src };
   }
-
-  if (!entry || entry.status !== "loading") {
-    fireRequest(view, resolvedPath, requestImageDataUrl);
-  }
-  return { kind: "loading", resolvedPath, isPdf: false };
+  return null;
 }
 
 type RequestFn = (

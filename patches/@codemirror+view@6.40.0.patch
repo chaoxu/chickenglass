@@ -1,0 +1,82 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 83313f9b4dbacfd2467b1cf482fb90c2d9d72232..11c55e6740063d21128c76f3a8de3ca530cfbded 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -6365,19 +6365,19 @@ class DocView {
+         // This will divide VP.Margin between the top and the
+         // bottom, depending on the bias (the change in viewport position
+         // since the last update). It'll hold a number between 0 and 1
+-        let marginTop = 0.5 - Math.max(-0.5, Math.min(0.5, bias / 1000 /* VP.Margin */ / 2));
++        let marginTop = 0.5 - Math.max(-0.5, Math.min(0.5, bias / 8000 /* VP.Margin */ / 2));
+         let map = this.heightMap, oracle = this.heightOracle;
+         let { visibleTop, visibleBottom } = this;
+-        let viewport = new Viewport(map.lineAt(visibleTop - marginTop * 1000 /* VP.Margin */, QueryType.ByHeight, oracle, 0, 0).from, map.lineAt(visibleBottom + (1 - marginTop) * 1000 /* VP.Margin */, QueryType.ByHeight, oracle, 0, 0).to);
++        let viewport = new Viewport(map.lineAt(visibleTop - marginTop * 8000 /* VP.Margin */, QueryType.ByHeight, oracle, 0, 0).from, map.lineAt(visibleBottom + (1 - marginTop) * 8000 /* VP.Margin */, QueryType.ByHeight, oracle, 0, 0).to);
+         // If scrollTarget is given, make sure the viewport includes that position
+         if (scrollTarget) {
+             let { head } = scrollTarget.range;
+             if (head < viewport.from || head > viewport.to) {
+                 let viewHeight = Math.min(this.editorHeight, this.pixelViewport.bottom - this.pixelViewport.top);
+                 let block = map.lineAt(head, QueryType.ByPos, oracle, 0, 0), topPos;
+                 if (scrollTarget.y == "center")
+                     topPos = (block.top + block.bottom) / 2 - viewHeight / 2;
+                 else if (scrollTarget.y == "start" || scrollTarget.y == "nearest" && head < viewport.from)
+                     topPos = block.top;
+                 else
+                     topPos = block.bottom - viewHeight;
+-                viewport = new Viewport(map.lineAt(topPos - 1000 /* VP.Margin */ / 2, QueryType.ByHeight, oracle, 0, 0).from, map.lineAt(topPos + viewHeight + 1000 /* VP.Margin */ / 2, QueryType.ByHeight, oracle, 0, 0).to);
++                viewport = new Viewport(map.lineAt(topPos - 8000 /* VP.Margin */ / 2, QueryType.ByHeight, oracle, 0, 0).from, map.lineAt(topPos + viewHeight + 8000 /* VP.Margin */ / 2, QueryType.ByHeight, oracle, 0, 0).to);
+             }
+         }
+         return viewport;
+@@ -6401,7 +6401,7 @@ class DocView {
+         let { visibleTop, visibleBottom } = this;
+         return (from == 0 || top <= visibleTop - Math.max(10 /* VP.MinCoverMargin */, Math.min(-bias, 250 /* VP.MaxCoverMargin */))) &&
+             (to == this.state.doc.length ||
+                 bottom >= visibleBottom + Math.max(10 /* VP.MinCoverMargin */, Math.min(bias, 250 /* VP.MaxCoverMargin */))) &&
+-            (top > visibleTop - 2 * 1000 /* VP.Margin */ && bottom < visibleBottom + 2 * 1000 /* VP.Margin */);
++            (top > visibleTop - 2 * 8000 /* VP.Margin */ && bottom < visibleBottom + 2 * 8000 /* VP.Margin */);
+     }
+     mapLineGaps(gaps, changes) {
+         if (!gaps.length || changes.empty)
+diff --git a/dist/index.js b/dist/index.js
+index f24b2b25d38634e04759a19e28550cf9220aad89..5d4cca8231d30b6d40031ea1ed9120066a7ed9dd 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -6360,19 +6360,19 @@ class DocView {
+         // This will divide VP.Margin between the top and the
+         // bottom, depending on the bias (the change in viewport position
+         // since the last update). It'll hold a number between 0 and 1
+-        let marginTop = 0.5 - Math.max(-0.5, Math.min(0.5, bias / 1000 /* VP.Margin */ / 2));
++        let marginTop = 0.5 - Math.max(-0.5, Math.min(0.5, bias / 8000 /* VP.Margin */ / 2));
+         let map = this.heightMap, oracle = this.heightOracle;
+         let { visibleTop, visibleBottom } = this;
+-        let viewport = new Viewport(map.lineAt(visibleTop - marginTop * 1000 /* VP.Margin */, QueryType.ByHeight, oracle, 0, 0).from, map.lineAt(visibleBottom + (1 - marginTop) * 1000 /* VP.Margin */, QueryType.ByHeight, oracle, 0, 0).to);
++        let viewport = new Viewport(map.lineAt(visibleTop - marginTop * 8000 /* VP.Margin */, QueryType.ByHeight, oracle, 0, 0).from, map.lineAt(visibleBottom + (1 - marginTop) * 8000 /* VP.Margin */, QueryType.ByHeight, oracle, 0, 0).to);
+         // If scrollTarget is given, make sure the viewport includes that position
+         if (scrollTarget) {
+             let { head } = scrollTarget.range;
+             if (head < viewport.from || head > viewport.to) {
+                 let viewHeight = Math.min(this.editorHeight, this.pixelViewport.bottom - this.pixelViewport.top);
+                 let block = map.lineAt(head, QueryType.ByPos, oracle, 0, 0), topPos;
+                 if (scrollTarget.y == "center")
+                     topPos = (block.top + block.bottom) / 2 - viewHeight / 2;
+                 else if (scrollTarget.y == "start" || scrollTarget.y == "nearest" && head < viewport.from)
+                     topPos = block.top;
+                 else
+                     topPos = block.bottom - viewHeight;
+-                viewport = new Viewport(map.lineAt(topPos - 1000 /* VP.Margin */ / 2, QueryType.ByHeight, oracle, 0, 0).from, map.lineAt(topPos + viewHeight + 1000 /* VP.Margin */ / 2, QueryType.ByHeight, oracle, 0, 0).to);
++                viewport = new Viewport(map.lineAt(topPos - 8000 /* VP.Margin */ / 2, QueryType.ByHeight, oracle, 0, 0).from, map.lineAt(topPos + viewHeight + 8000 /* VP.Margin */ / 2, QueryType.ByHeight, oracle, 0, 0).to);
+             }
+         }
+         return viewport;
+@@ -6396,7 +6396,7 @@ class DocView {
+         let { visibleTop, visibleBottom } = this;
+         return (from == 0 || top <= visibleTop - Math.max(10 /* VP.MinCoverMargin */, Math.min(-bias, 250 /* VP.MaxCoverMargin */))) &&
+             (to == this.state.doc.length ||
+                 bottom >= visibleBottom + Math.max(10 /* VP.MinCoverMargin */, Math.min(bias, 250 /* VP.MaxCoverMargin */))) &&
+-            (top > visibleTop - 2 * 1000 /* VP.Margin */ && bottom < visibleBottom + 2 * 1000 /* VP.Margin */);
++            (top > visibleTop - 2 * 8000 /* VP.Margin */ && bottom < visibleBottom + 2 * 8000 /* VP.Margin */);
+     }
+     mapLineGaps(gaps, changes) {
+         if (!gaps.length || changes.empty)

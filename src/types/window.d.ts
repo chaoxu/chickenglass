@@ -14,6 +14,7 @@ import type { DebugHelpers } from "../editor";
 import type { SourceMap } from "../app/source-map";
 import type { EditorMode } from "../editor";
 import type { DebugDocumentState, DebugProjectFile } from "../app/hooks/use-app-debug";
+import type { ScrollGuardEvent } from "../app/hooks/use-editor-scroll";
 
 declare global {
   interface Window {
@@ -76,6 +77,8 @@ declare global {
       clearPerf: () => Promise<void>;
       togglePerfPanel: () => void;
       toggleFps: () => boolean;
+      scrollGuards: () => readonly ScrollGuardEvent[];
+      clearScrollGuards: () => void;
     };
 
     /**

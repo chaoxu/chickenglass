@@ -30,6 +30,7 @@ import {
   findTableAtCursor,
   findTablesInState,
   findTablesInView,
+  tableDiscoveryParsePlugin,
 } from "./table-discovery";
 import { showTableContextMenu } from "./table-actions";
 import { tableKeybindings } from "./table-navigation";
@@ -153,6 +154,7 @@ export const tableRenderPlugin: Extension = [
   focusTracker,
   mathMacrosField,
   tableDiscoveryField,
+  tableDiscoveryParsePlugin,
   tableDecorationField,
   tableContextMenuHandler,
   tableKeybindings,

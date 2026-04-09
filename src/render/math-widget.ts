@@ -1,5 +1,5 @@
 import type { EditorState } from "@codemirror/state";
-import type { EditorView } from "@codemirror/view";
+import { type EditorView, WidgetType } from "@codemirror/view";
 import katexStyles from "katex/dist/katex.min.css?inline";
 import { CSS } from "../constants/css-classes";
 import { isPlainPrimaryMouseEvent } from "../editor/mouse-selection-core";
@@ -13,8 +13,15 @@ import {
   activateStructureEditTarget,
   createStructureEditTargetAt,
 } from "../editor/structure-edit-state";
+import {
+  clearBlockWidgetHeightBinding,
+  estimatedBlockWidgetHeight,
+  observeBlockWidgetHeight,
+  type BlockWidgetHeightBinding,
+} from "./block-widget-height";
 
 const KATEX_STYLE_ID = "cf-katex-styles";
+const displayMathHeightCache = new Map<string, number>();
 
 function ensureKatexStyles(): void {
   if (typeof document === "undefined") return;
@@ -99,6 +106,12 @@ function resolveLiveMathRegion(
 
 /** Unified widget that renders both inline and display math via KaTeX. */
 export class MathWidget extends MacroAwareWidget {
+  private readonly displayHeightBinding: BlockWidgetHeightBinding = {
+    resizeObserver: null,
+    resizeMeasureFrame: null,
+  };
+  private readonly displayMeasurementKey: string;
+
   constructor(
     private readonly latex: string,
     private readonly raw: string,
@@ -108,6 +121,11 @@ export class MathWidget extends MacroAwareWidget {
     private readonly equationNumber?: number,
   ) {
     super(macros);
+    this.displayMeasurementKey = [
+      this.raw,
+      this.macrosKey,
+      this.equationNumber === undefined ? "" : String(this.equationNumber),
+    ].join("\u0001");
   }
 
   private syncDisplayLayout(el: HTMLElement): void {
@@ -203,6 +221,24 @@ export class MathWidget extends MacroAwareWidget {
     });
   }
 
+  private heightBinding(): BlockWidgetHeightBinding {
+    return this.displayHeightBinding;
+  }
+
+  private observeDisplayHeight(
+    el: HTMLElement,
+    view: EditorView,
+  ): void {
+    if (!this.isDisplay) return;
+    observeBlockWidgetHeight(
+      this.heightBinding(),
+      el,
+      view,
+      displayMathHeightCache,
+      this.displayMeasurementKey,
+    );
+  }
+
   override toDOM(view?: EditorView): HTMLElement {
     if (!this.isDisplay) return super.toDOM(view);
 
@@ -221,13 +257,15 @@ export class MathWidget extends MacroAwareWidget {
       } else {
         this.bindSourceReveal(el, view);
       }
+      this.observeDisplayHeight(el, view);
     }
 
     return el;
   }
 
-  eq(other: MathWidget): boolean {
+  eq(other: WidgetType): boolean {
     return (
+      other instanceof MathWidget &&
       this.raw === other.raw &&
       this.isDisplay === other.isDisplay &&
       this.macrosKey === other.macrosKey &&
@@ -235,9 +273,13 @@ export class MathWidget extends MacroAwareWidget {
     );
   }
 
-  updateDOM(dom: HTMLElement): boolean {
+  updateDOM(dom: HTMLElement, view?: EditorView, from?: WidgetType): boolean {
     const expectedTag = this.isDisplay ? "DIV" : "SPAN";
     if (dom.tagName !== expectedTag) return false;
+
+    if (from instanceof MathWidget) {
+      from.clearDisplayHeightMeasurement();
+    }
 
     dom.className = this.isDisplay ? CSS.mathDisplay : CSS.mathInline;
     dom.setAttribute("role", "img");
@@ -255,7 +297,26 @@ export class MathWidget extends MacroAwareWidget {
     }
 
     this.setSourceRangeAttrs(dom);
+    if (this.isDisplay && view) {
+      this.observeDisplayHeight(dom, view);
+    }
     return true;
+  }
+
+  private clearDisplayHeightMeasurement(): void {
+    clearBlockWidgetHeightBinding(this.heightBinding());
+  }
+
+  destroy(_dom?: HTMLElement): void {
+    this.clearDisplayHeightMeasurement();
+  }
+
+  get estimatedHeight(): number {
+    if (!this.isDisplay) return -1;
+    return estimatedBlockWidgetHeight(
+      displayMathHeightCache,
+      this.displayMeasurementKey,
+    );
   }
 
   override ignoreEvent(): boolean {

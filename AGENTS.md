@@ -182,6 +182,8 @@ Do NOT use the Playwright MCP plugin — connect directly via CDP.
 - Always target the real localhost app page, not merely “the first page” in the browser context.
 - For bug-specific runtime verification, do a general smoke check on `index.md`. When local private fixtures are available, also run the affected heavy fixture such as `fixtures/rankdecrease/main.md` or `fixtures/cogirth/main2.md`.
 - For cursor/scroll regressions like `#964`, verify with a real long-document runtime repro. Prefer the managed harness first. If `page.keyboard.press()` is unreliable in the manual app-mode CDP lane, it is acceptable to drive CM6 movement inside `page.evaluate()` and document the exact command/script used.
+- For rich scroll-jump work, use `rtk proxy node scripts/scroll-jump-lab.mjs --fixture rankdecrease/main.md --url http://localhost:5173 --simulate-wheel --step-px 90 --step-count 24` as the primary investigation probe. It also reports `window.__cfDebug.scrollGuards()` so guard activations are quantified, not guessed.
+- If `@codemirror/view` is patched in a worktree, clear that worktree's `node_modules/.vite` cache and restart Vite with `pnpm dev -- --force`; otherwise the browser can keep serving the stale pre-patch bundle.
 
 ## Conventions
 
