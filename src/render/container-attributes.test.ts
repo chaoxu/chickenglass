@@ -296,7 +296,9 @@ describe("containerAttributesField", () => {
           throw new Error("expected function timeout handler");
         }
         if (handler.toString().includes("forceParsing")) {
-          pendingTimeouts.push(handler);
+          pendingTimeouts.push(() => {
+            handler();
+          });
         }
         return nextTimerId++ as unknown as ReturnType<typeof setTimeout>;
       });

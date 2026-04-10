@@ -23,6 +23,12 @@ pnpm dev
 
 The perf script owns its browser session by default. If you need to compare against the manual app window, pass `--browser cdp` and launch `pnpm chrome` separately.
 
+For heavy private fixtures, use the supported heavy-doc mode instead of ad hoc timeout tweaks:
+
+```bash
+pnpm perf:capture:heavy -- --scenario typing-rich-burst --output output/perf/typing-rich-burst-heavy.json
+```
+
 ## Capture a Baseline
 
 ```bash
@@ -44,6 +50,25 @@ pnpm perf:compare -- \
 ```
 
 If the current run exceeds the configured thresholds, the command exits non-zero.
+
+## Supported Heavy-Doc Mode
+
+`typing-rich-burst` and other fixture-heavy scenarios should use `--heavy-doc` (or the `perf:capture:heavy` / `perf:compare:heavy` scripts) for automation. Heavy-doc mode raises:
+
+- debug-bridge timeout to `45000ms`
+- fixture-open verification timeout to `45000ms`
+- post-open settle to `800ms`
+
+Equivalent explicit command:
+
+```bash
+pnpm perf:capture -- \
+  --scenario typing-rich-burst \
+  --heavy-doc \
+  --iterations 3 \
+  --warmup 1 \
+  --output output/perf/typing-rich-burst-heavy.json
+```
 
 ## Built-In Scenarios
 
@@ -125,6 +150,8 @@ The scroll scenarios report custom metrics alongside the usual frontend/backend 
 - **Jump scroll** (`scroll-jump-rich`): `scroll.cold_jump_ms`, `scroll.warm_back_ms`, `scroll.warm_forward_ms`
 
 Per-step timing uses `performance.now()` around each synchronous `view.dispatch()` call, so values measure the CM6 update/render cost directly. A 16 ms `setTimeout` between steps yields the event loop without blocking on `requestAnimationFrame` (which stalls in non-interactive CDP windows). Comparing Rich vs Source isolates rendering overhead. The `--min-delta-ms` threshold applies to ms-valued scroll metrics the same way it applies to frontend/backend spans.
+
+You can override the supported heavy-doc budgets with `--debug-timeout-ms`, `--open-timeout-ms`, and `--post-open-settle-ms` when a fixture needs different automation limits.
 
 ## Notes
 

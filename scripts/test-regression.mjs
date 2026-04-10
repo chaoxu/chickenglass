@@ -87,100 +87,123 @@ async function main() {
     process.exit(1);
   }
 
-  // Wait for the app to be ready
+  let shuttingDown = false;
+  const cleanup = async () => {
+    if (shuttingDown || !page) {
+      return;
+    }
+    shuttingDown = true;
+    await disconnectBrowser(page);
+    page = null;
+  };
+  const onSigint = () => {
+    cleanup().finally(() => process.exit(130));
+  };
+  const onSigterm = () => {
+    cleanup().finally(() => process.exit(143));
+  };
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
+
   try {
-    if (chromeArgs.browser === "cdp") {
-      await page.reload({ waitUntil: "load" });
-    }
-    await waitForDebugBridge(page);
-  } catch {
-    console.error("Timed out waiting for debug bridge (__app, __cmView, __cmDebug, __cfDebug).");
-    console.error("The dev server may not have finished loading.");
-    process.exit(1);
-  }
-
-  // Load test modules
-  const tests = await loadTests(filter);
-  if (tests.length === 0) {
-    console.error("No test modules found.");
-    if (filter.length > 0) {
-      console.error(`Filter: ${filter.join(", ")}`);
-    }
-    process.exit(1);
-  }
-
-  console.log(`Running ${tests.length} test(s)...\n`);
-
-  const results = [];
-  let passed = 0;
-  let failed = 0;
-  let skipped = 0;
-
-  for (const test of tests) {
-    // Reset state before each test
+    // Wait for the app to be ready
     try {
-      await resetEditorState(page);
-    } catch (err) {
-      console.log(`  FAIL  ${test.name} (reset failed: ${err.message})`);
-      results.push({ name: test.name, pass: false, message: `Reset failed: ${err.message}` });
-      failed++;
-      continue;
-    }
-
-    // Run the test
-    const startTime = Date.now();
-    try {
-      const result = await test.run(page);
-      const elapsed = Date.now() - startTime;
-      const suffix = result.message ? ` — ${result.message}` : "";
-
-      if (result.pass) {
-        console.log(`  PASS  ${test.name} (${elapsed}ms)${suffix}`);
-        passed++;
-      } else {
-        console.log(`  FAIL  ${test.name} (${elapsed}ms)${suffix}`);
-        failed++;
+      if (chromeArgs.browser === "cdp") {
+        await page.reload({ waitUntil: "load" });
       }
+      await waitForDebugBridge(page);
+    } catch {
+      console.error("Timed out waiting for debug bridge (__app, __cmView, __cmDebug, __cfDebug).");
+      console.error("The dev server may not have finished loading.");
+      process.exitCode = 1;
+      return;
+    }
 
-      results.push({ name: test.name, pass: result.pass, message: result.message, elapsed });
-    } catch (err) {
-      const elapsed = Date.now() - startTime;
-      if (err.message?.includes("Missing fixture for")) {
-        console.log(`  SKIP  ${test.name} (${elapsed}ms) — ${err.message}`);
-        results.push({ name: test.name, pass: true, skipped: true, message: err.message, elapsed });
-        skipped++;
+    // Load test modules
+    const tests = await loadTests(filter);
+    if (tests.length === 0) {
+      console.error("No test modules found.");
+      if (filter.length > 0) {
+        console.error(`Filter: ${filter.join(", ")}`);
+      }
+      process.exitCode = 1;
+      return;
+    }
+
+    console.log(`Running ${tests.length} test(s)...\n`);
+
+    const results = [];
+    let passed = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    for (const test of tests) {
+      // Reset state before each test
+      try {
+        await resetEditorState(page);
+      } catch (err) {
+        console.log(`  FAIL  ${test.name} (reset failed: ${err.message})`);
+        results.push({ name: test.name, pass: false, message: `Reset failed: ${err.message}` });
+        failed++;
         continue;
       }
-      // Detect Chrome disconnection — abort remaining tests
-      if (err.message?.includes("Target closed") || err.message?.includes("Protocol error")) {
-        console.log(`  FAIL  ${test.name} (${elapsed}ms) — Chrome disconnected`);
-        console.error("\nChrome disconnected mid-test. Aborting remaining tests.");
+
+      // Run the test
+      const startTime = Date.now();
+      try {
+        const result = await test.run(page);
+        const elapsed = Date.now() - startTime;
+        const suffix = result.message ? ` — ${result.message}` : "";
+
+        if (result.pass) {
+          console.log(`  PASS  ${test.name} (${elapsed}ms)${suffix}`);
+          passed++;
+        } else {
+          console.log(`  FAIL  ${test.name} (${elapsed}ms)${suffix}`);
+          failed++;
+        }
+
+        results.push({ name: test.name, pass: result.pass, message: result.message, elapsed });
+      } catch (err) {
+        const elapsed = Date.now() - startTime;
+        if (err.message?.includes("Missing fixture for")) {
+          console.log(`  SKIP  ${test.name} (${elapsed}ms) — ${err.message}`);
+          results.push({ name: test.name, pass: true, skipped: true, message: err.message, elapsed });
+          skipped++;
+          continue;
+        }
+        // Detect Chrome disconnection — abort remaining tests
+        if (err.message?.includes("Target closed") || err.message?.includes("Protocol error")) {
+          console.log(`  FAIL  ${test.name} (${elapsed}ms) — Chrome disconnected`);
+          console.error("\nChrome disconnected mid-test. Aborting remaining tests.");
+          failed++;
+          break;
+        }
+        console.log(`  FAIL  ${test.name} (${elapsed}ms) — Error: ${err.message}`);
+        results.push({ name: test.name, pass: false, message: `Error: ${err.message}`, elapsed });
         failed++;
-        break;
-      }
-      console.log(`  FAIL  ${test.name} (${elapsed}ms) — Error: ${err.message}`);
-      results.push({ name: test.name, pass: false, message: `Error: ${err.message}`, elapsed });
-      failed++;
-    }
-  }
-
-  // Summary
-  console.log("\n========================");
-  console.log(`Results: ${passed} passed, ${failed} failed, ${skipped} skipped, ${results.length} total`);
-
-  if (failed > 0) {
-    console.log("\nFailed tests:");
-    for (const r of results) {
-      if (!r.pass) {
-        console.log(`  - ${r.name}: ${r.message ?? "no message"}`);
       }
     }
+
+    // Summary
+    console.log("\n========================");
+    console.log(`Results: ${passed} passed, ${failed} failed, ${skipped} skipped, ${results.length} total`);
+
+    if (failed > 0) {
+      console.log("\nFailed tests:");
+      for (const r of results) {
+        if (!r.pass) {
+          console.log(`  - ${r.name}: ${r.message ?? "no message"}`);
+        }
+      }
+    }
+
+    process.exitCode = failed > 0 ? 1 : 0;
+  } finally {
+    process.removeListener("SIGINT", onSigint);
+    process.removeListener("SIGTERM", onSigterm);
+    await cleanup();
   }
-
-  // Disconnect
-  await disconnectBrowser(page);
-
-  process.exit(failed > 0 ? 1 : 0);
 }
 
 main().catch((err) => {

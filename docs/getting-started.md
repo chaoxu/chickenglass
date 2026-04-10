@@ -35,10 +35,11 @@ Read these when you're working on a specific area:
 ## Development workflow
 
 ```bash
-pnpm dev             # start dev server
+pnpm dev:show        # stable no-HMR dev server for shared review on localhost:5173
 pnpm test:watch      # run tests in watch mode
-pnpm test:changed    # run only tests affected by your changes
-pnpm typecheck:watch # incremental type checking
+pnpm test:focused -- src/render/reference-render.test.ts
+                     # automation-safe single-worker render/state verification
+pnpm typecheck       # repo-wide baseline typecheck
 pnpm lint:fix        # auto-fix lint issues
 ```
 
@@ -59,3 +60,5 @@ pnpm chrome          # launches Chromium with CDP on port 9322
 ```
 
 Use `window.__cmDebug` and `window.__app` in the browser console for editor state introspection. See the debug helpers section in AGENTS.md for the full API.
+
+For the supported focused-test and heavy-doc perf commands, see [verification-workflows.md](./verification-workflows.md).

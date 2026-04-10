@@ -24,6 +24,8 @@ const DEFAULT_PORT = 9322;
 const DEFAULT_APP_URL = "http://localhost:5173";
 const DEFAULT_BROWSER_MODE = "cdp";
 const DEFAULT_MANAGED_VIEWPORT = { width: 1280, height: 900 };
+const DEFAULT_FIXTURE_OPEN_TIMEOUT_MS = 10000;
+const DEFAULT_FIXTURE_SETTLE_MS = 200;
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");
 const REPO_DEMO_ROOT = resolve(REPO_ROOT, "demo");
@@ -368,7 +370,7 @@ export function resolveFixtureDocument(fixture) {
     return {
       ...normalized,
       displayPath: fallbackDisplayPath,
-      resolvedPath: null,
+      resolvedPath: normalized.resolvedPath ?? null,
       content: normalized.content,
       candidates: normalized.candidates ?? defaultFixtureCandidates(normalized.virtualPath),
     };
@@ -433,11 +435,19 @@ export function resolveFixtureDocumentWithFallback(
  *   mode?: "rich" | "source" | "read",
  *   discardCurrent?: boolean,
  *   project?: "single-file" | "full-project",
+ *   timeoutMs?: number,
+ *   settleMs?: number,
  * }} [options]
  */
 export async function openFixtureDocument(page, fixture, options = {}) {
   const resolved = resolveFixtureDocument(fixture);
-  const { mode, discardCurrent = true, project = "single-file" } = options;
+  const {
+    mode,
+    discardCurrent = true,
+    project = "single-file",
+    timeoutMs = DEFAULT_FIXTURE_OPEN_TIMEOUT_MS,
+    settleMs = DEFAULT_FIXTURE_SETTLE_MS,
+  } = options;
   const preferOpenFile = Boolean(
     resolved.resolvedPath?.startsWith(resolve(REPO_ROOT, "demo")),
   );
@@ -491,35 +501,61 @@ export async function openFixtureDocument(page, fixture, options = {}) {
     },
   );
 
-  await page.waitForFunction(
-    ({ method, path, expectedLength, expectedPrefix, expectedSuffix }) => {
-      const text = window.__cmView?.state?.doc?.toString();
-      const currentPath = window.__app?.getCurrentDocument?.()?.path ?? null;
-      if (typeof text !== "string" || currentPath !== path) {
-        return false;
-      }
+  try {
+    await page.waitForFunction(
+      ({ method, path, expectedLength, expectedPrefix, expectedSuffix }) => {
+        const text = window.__cmView?.state?.doc?.toString();
+        const currentPath = window.__app?.getCurrentDocument?.()?.path ?? null;
+        if (typeof text !== "string" || currentPath !== path) {
+          return false;
+        }
 
-      if (method === "openFileWithContent") {
-        return text.length === expectedLength &&
-          text.startsWith(expectedPrefix) &&
-          text.endsWith(expectedSuffix);
-      }
+        if (method === "openFileWithContent") {
+          return text.length === expectedLength &&
+            text.startsWith(expectedPrefix) &&
+            text.endsWith(expectedSuffix);
+        }
 
-      return text.length > 0;
-    },
-    {
-      method: result.method,
-      path: resolved.virtualPath,
-      expectedLength: resolved.content.length,
-      expectedPrefix: resolved.content.slice(0, verificationWindow),
-      expectedSuffix: resolved.content.slice(-verificationWindow),
-    },
-    { timeout: 10000 },
-  );
+        return text.length > 0;
+      },
+      {
+        method: result.method,
+        path: resolved.virtualPath,
+        expectedLength: resolved.content.length,
+        expectedPrefix: resolved.content.slice(0, verificationWindow),
+        expectedSuffix: resolved.content.slice(-verificationWindow),
+      },
+      { timeout: timeoutMs, polling: 100 },
+    );
+  } catch (error) {
+    const diagnostics = await page.evaluate(
+      ({ expectedPrefix, expectedSuffix }) => {
+        const text = window.__cmView?.state?.doc?.toString();
+        const currentPath = window.__app?.getCurrentDocument?.()?.path ?? null;
+        return {
+          currentPath,
+          docLength: typeof text === "string" ? text.length : null,
+          prefixMatches: typeof text === "string" ? text.startsWith(expectedPrefix) : false,
+          suffixMatches: typeof text === "string" ? text.endsWith(expectedSuffix) : false,
+        };
+      },
+      {
+        expectedPrefix: resolved.content.slice(0, verificationWindow),
+        expectedSuffix: resolved.content.slice(-verificationWindow),
+      },
+    ).catch((evaluateError) => ({
+      evaluateError: evaluateError instanceof Error ? evaluateError.message : String(evaluateError),
+    }));
+
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Timed out opening fixture ${resolved.displayPath} via ${result.method}: ${message}; diagnostics=${JSON.stringify(diagnostics)}`,
+    );
+  }
   if (mode) {
     await switchToMode(page, mode);
   }
-  await sleep(200);
+  await sleep(settleMs);
 
   return {
     ...resolved,
@@ -1576,7 +1612,7 @@ export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
   try {
     await page.waitForFunction(
       () => Boolean(window.__app && window.__cmView && window.__cmDebug && window.__cfDebug),
-      { timeout },
+      { timeout, polling: 100 },
     );
   } catch (error) {
     const title = await page.title().catch(() => "");

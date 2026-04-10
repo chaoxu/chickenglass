@@ -4,6 +4,7 @@ import {
   TYPING_BURST_CASES,
   TYPING_BURST_REQUIRED_METRICS,
   findTypingBurstPositions,
+  resolvePerfRuntimeOptions,
   scenarios,
   typingBurstMetrics,
 } from "./perf-regression.mjs";
@@ -87,5 +88,19 @@ Final prose line.
     expect(() => findTypingBurstPositions("Plain prose only.\n", ["inline_math"])).toThrow(
       "Failed to find inline_math typing benchmark position.",
     );
+  });
+
+  it("expands timeouts in supported heavy-doc mode", () => {
+    expect(
+      resolvePerfRuntimeOptions({
+        getIntFlag: (_flag, fallback) => fallback,
+        hasFlag: (flag) => flag === "--heavy-doc",
+      }),
+    ).toEqual({
+      heavyDoc: true,
+      debugBridgeTimeoutMs: 45000,
+      fixtureOpenTimeoutMs: 45000,
+      postOpenSettleMs: 800,
+    });
   });
 });

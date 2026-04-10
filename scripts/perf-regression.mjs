@@ -80,6 +80,12 @@ async function discardDirtyPerfState(page) {
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");
 const SCROLL_STEP_SIZE = 30;
+const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS = 15000;
+const DEFAULT_FIXTURE_OPEN_TIMEOUT_MS = 10000;
+const DEFAULT_POST_OPEN_SETTLE_MS = 200;
+const HEAVY_DOC_DEBUG_BRIDGE_TIMEOUT_MS = 45000;
+const HEAVY_DOC_FIXTURE_OPEN_TIMEOUT_MS = 45000;
+const HEAVY_DOC_POST_OPEN_SETTLE_MS = 800;
 const SCROLL_FIXTURE = {
   displayPath: "fixtures/cogirth/main2.md",
   virtualPath: "cogirth/main2.md",
@@ -307,6 +313,7 @@ function resolveTypingBurstFixture(caseDef) {
 
   return {
     ...caseDef,
+    resolvedPath,
     content: readFileSync(resolvedPath, "utf8"),
   };
 }
@@ -315,40 +322,36 @@ function resolveScrollFixture() {
   return resolveFixtureDocumentWithFallback(SCROLL_FIXTURE, PUBLIC_SCROLL_FALLBACK);
 }
 
-async function openCleanRichDocument(page, path, content) {
-  const verificationWindow = 200;
-  await evaluateStep(page, "openCleanRichDocument", async ({ nextPath, nextContent }) => {
-    const app = window.__app;
-    if (!app?.openFileWithContent) {
-      throw new Error("window.__app.openFileWithContent is unavailable.");
-    }
-    if (app.closeFile) {
-      try {
-        await app.closeFile({ discard: true });
-      } catch {
-        // Ignore stale close failures between perf reps.
-      }
-    }
-    app.setMode("rich");
-    await app.openFileWithContent(nextPath, nextContent);
-  }, { nextPath: path, nextContent: content });
-  await page.waitForFunction(
-    ({ expectedLength, expectedPrefix, expectedSuffix }) => {
-      const docText = window.__cmView?.state?.doc?.toString();
-      return typeof docText === "string" &&
-        docText.length === expectedLength &&
-        docText.startsWith(expectedPrefix) &&
-        docText.endsWith(expectedSuffix);
-    },
+export function resolvePerfRuntimeOptions({ getIntFlag, hasFlag }) {
+  const heavyDoc = hasFlag("--heavy-doc");
+  return {
+    heavyDoc,
+    debugBridgeTimeoutMs: getIntFlag(
+      "--debug-timeout-ms",
+      heavyDoc ? HEAVY_DOC_DEBUG_BRIDGE_TIMEOUT_MS : DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS,
+    ),
+    fixtureOpenTimeoutMs: getIntFlag(
+      "--open-timeout-ms",
+      heavyDoc ? HEAVY_DOC_FIXTURE_OPEN_TIMEOUT_MS : DEFAULT_FIXTURE_OPEN_TIMEOUT_MS,
+    ),
+    postOpenSettleMs: getIntFlag(
+      "--post-open-settle-ms",
+      heavyDoc ? HEAVY_DOC_POST_OPEN_SETTLE_MS : DEFAULT_POST_OPEN_SETTLE_MS,
+    ),
+  };
+}
+
+async function openCleanRichDocument(page, fixture, runtimeOptions) {
+  await openFixtureDocument(
+    page,
+    fixture,
     {
-      expectedLength: content.length,
-      expectedPrefix: content.slice(0, verificationWindow),
-      expectedSuffix: content.slice(-verificationWindow),
+      mode: "rich",
+      timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+      settleMs: runtimeOptions.postOpenSettleMs,
     },
-    { timeout: 10000 },
   );
-  await sleep(200);
-  return content;
+  return fixture.content;
 }
 
 async function measureTypingBurst(page, anchor, insertCount) {
@@ -420,22 +423,38 @@ export const scenarios = {
   "open-index": {
     description: "Reload the app and open demo/index.md in Rich mode.",
     defaultSettleMs: 400,
-    run: async (page) => {
-      await openFixtureDocument(page, "index.md", { mode: "rich" });
+    run: async (page, runtimeOptions) => {
+      await openFixtureDocument(page, "index.md", {
+        mode: "rich",
+        timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+        settleMs: runtimeOptions.postOpenSettleMs,
+      });
     },
   },
   "open-heavy-post": {
     description: "Reload the app and open a heavy math/reference fixture post.",
     defaultSettleMs: 700,
-    run: async (page) => {
-      await openFixtureDocument(page, "posts/2020-07-11-yotta-savings-and-covering-designs.md", { mode: "rich" });
+    run: async (page, runtimeOptions) => {
+      await openFixtureDocument(
+        page,
+        "posts/2020-07-11-yotta-savings-and-covering-designs.md",
+        {
+          mode: "rich",
+          timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+          settleMs: runtimeOptions.postOpenSettleMs,
+        },
+      );
     },
   },
   "mode-cycle-index": {
     description: "Reload the app, open demo/index.md, then cycle Source/Read/Rich.",
     defaultSettleMs: 500,
-    run: async (page) => {
-      await openFixtureDocument(page, "index.md", { mode: "rich" });
+    run: async (page, runtimeOptions) => {
+      await openFixtureDocument(page, "index.md", {
+        mode: "rich",
+        timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+        settleMs: runtimeOptions.postOpenSettleMs,
+      });
       await switchToMode(page, "source");
       await switchToMode(page, "read");
       await switchToMode(page, "rich");
@@ -444,8 +463,12 @@ export const scenarios = {
   "local-edit-index": {
     description: "Reload the app, open demo/index.md, then apply a local inline-math edit.",
     defaultSettleMs: 300,
-    run: async (page) => {
-      await openFixtureDocument(page, "index.md", { mode: "rich" });
+    run: async (page, runtimeOptions) => {
+      await openFixtureDocument(page, "index.md", {
+        mode: "rich",
+        timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+        settleMs: runtimeOptions.postOpenSettleMs,
+      });
       await page.waitForTimeout(800);
       const before = await getSemanticRevisionInfo(page);
       const after = await page.evaluate((previous) => {
@@ -516,20 +539,24 @@ export const scenarios = {
     description: "Measure rich-mode typing bursts across prose, inline math, and citation/ref hotspots, including the canonical heavy fixture.",
     defaultSettleMs: 200,
     requiredMetrics: typingBurstRequiredMetricNames(availableTypingBurstCases()),
-    run: async (page) => {
+    run: async (page, runtimeOptions) => {
       const metrics = [];
       for (const testCase of availableTypingBurstCases().map(resolveTypingBurstFixture)) {
         const originalText = await openCleanRichDocument(
           page,
-          testCase.virtualPath,
-          testCase.content,
+          testCase,
+          runtimeOptions,
         );
         const positions = findTypingBurstPositions(
           originalText,
           testCase.positionKeys,
         );
         for (const [positionKey, position] of Object.entries(positions)) {
-          await openCleanRichDocument(page, testCase.virtualPath, testCase.content);
+          await openCleanRichDocument(
+            page,
+            testCase,
+            runtimeOptions,
+          );
           const result = await measureTypingBurst(page, position.anchor, TYPING_BURST_INSERT_COUNT);
           metrics.push(...typingBurstMetrics(testCase.key, positionKey, result));
         }
@@ -540,8 +567,12 @@ export const scenarios = {
   "scroll-step-rich": {
     description: `Open the preferred heavy Rich-mode scroll fixture, falling back to demo/index.md when local private fixtures are unavailable.`,
     defaultSettleMs: 400,
-    run: async (page) => {
-      await openFixtureDocument(page, resolveScrollFixture(), { mode: "rich" });
+    run: async (page, runtimeOptions) => {
+      await openFixtureDocument(page, resolveScrollFixture(), {
+        mode: "rich",
+        timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+        settleMs: runtimeOptions.postOpenSettleMs,
+      });
       await sleep(800);
       const result = await runSteppedScroll(page);
       return { metrics: steppedScrollMetrics(result) };
@@ -550,8 +581,12 @@ export const scenarios = {
   "scroll-jump-rich": {
     description: "Open the preferred heavy Rich-mode scroll fixture, then perform cold and warm jump scrolls.",
     defaultSettleMs: 400,
-    run: async (page) => {
-      await openFixtureDocument(page, resolveScrollFixture(), { mode: "rich" });
+    run: async (page, runtimeOptions) => {
+      await openFixtureDocument(page, resolveScrollFixture(), {
+        mode: "rich",
+        timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+        settleMs: runtimeOptions.postOpenSettleMs,
+      });
       await sleep(800);
 
       const jumpResult = await page.evaluate(async () => {
@@ -596,8 +631,12 @@ export const scenarios = {
   "scroll-step-source": {
     description: "Open the preferred heavy Source-mode scroll fixture, falling back to demo/index.md when local private fixtures are unavailable.",
     defaultSettleMs: 400,
-    run: async (page) => {
-      await openFixtureDocument(page, resolveScrollFixture(), { mode: "source" });
+    run: async (page, runtimeOptions) => {
+      await openFixtureDocument(page, resolveScrollFixture(), {
+        mode: "source",
+        timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+        settleMs: runtimeOptions.postOpenSettleMs,
+      });
       await sleep(800);
       const result = await runSteppedScroll(page);
       return { metrics: steppedScrollMetrics(result) };
@@ -619,6 +658,10 @@ Options:
   --baseline <path>        Baseline report to compare against (compare only)
   --threshold-pct <n>      Regression threshold percent (default: 25)
   --min-delta-ms <n>       Minimum absolute delta before flagging (default: 5)
+  --heavy-doc              Use long timeouts/settles for heavy-doc automation
+  --debug-timeout-ms <n>   Override debug-bridge timeout (default: 15000 / 45000 heavy)
+  --open-timeout-ms <n>    Override fixture-open verification timeout (default: 10000 / 45000 heavy)
+  --post-open-settle-ms <n> Extra settle after opening fixtures (default: 200 / 800 heavy)
   --browser <managed|cdp>  Browser lane (default: managed)
   --headed                 Show the Playwright-owned browser window
   --port <n>               CDP port for Chrome for Testing (default: 9322)
@@ -639,7 +682,15 @@ function parseCliArgs(argv = process.argv.slice(2)) {
   };
 }
 
-async function runScenarioSamples(page, scenarioName, iterations, warmup, settleMs, appUrl) {
+async function runScenarioSamples(
+  page,
+  scenarioName,
+  iterations,
+  warmup,
+  settleMs,
+  appUrl,
+  runtimeOptions,
+) {
   const scenario = scenarios[scenarioName];
   if (!scenario) {
     throw new Error(`Unknown scenario "${scenarioName}".`);
@@ -651,9 +702,9 @@ async function runScenarioSamples(page, scenarioName, iterations, warmup, settle
   for (let runIndex = 0; runIndex < totalRuns; runIndex += 1) {
     await discardDirtyPerfState(page);
     await page.goto(appUrl, { waitUntil: "domcontentloaded" });
-    await waitForDebugBridge(page);
+    await waitForDebugBridge(page, { timeout: runtimeOptions.debugBridgeTimeoutMs });
     await clearPerf(page);
-    const scenarioResult = await scenario.run(page);
+    const scenarioResult = await scenario.run(page, runtimeOptions);
     await sleep(settleMs);
     await assertEditorHealth(page, `${scenarioName} run ${runIndex + 1}`);
     const snapshot = await getPerfSnapshot(page);
@@ -762,16 +813,52 @@ export async function main(argv = process.argv.slice(2)) {
   const iterations = getIntFlag("--iterations", 3);
   const warmup = getIntFlag("--warmup", 1);
   const settleMs = getIntFlag("--settle-ms", scenario.defaultSettleMs);
+  const runtimeOptions = resolvePerfRuntimeOptions({
+    getIntFlag,
+    hasFlag: (flag) => options.includes(flag),
+  });
 
-  const page = await connectEditor({
+  let page;
+  let shuttingDown = false;
+  const cleanup = async () => {
+    if (shuttingDown || !page) {
+      return;
+    }
+    shuttingDown = true;
+    try {
+      await discardDirtyPerfState(page);
+    } finally {
+      await disconnectBrowser(page);
+      page = null;
+    }
+  };
+  const onSigint = () => {
+    cleanup().finally(() => process.exit(130));
+  };
+  const onSigterm = () => {
+    cleanup().finally(() => process.exit(143));
+  };
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
+
+  page = await connectEditor({
     browser: chromeArgs.browser,
     headless: chromeArgs.headless,
     port: chromeArgs.port,
+    timeout: runtimeOptions.debugBridgeTimeoutMs,
     url: chromeArgs.url,
   });
   try {
     const appUrl = getFlag("--url") ?? page.url();
-    const snapshots = await runScenarioSamples(page, scenarioName, iterations, warmup, settleMs, appUrl);
+    const snapshots = await runScenarioSamples(
+      page,
+      scenarioName,
+      iterations,
+      warmup,
+      settleMs,
+      appUrl,
+      runtimeOptions,
+    );
     const report = buildPerfRegressionReport({
       scenario: scenarioName,
       iterations,
@@ -828,8 +915,9 @@ export async function main(argv = process.argv.slice(2)) {
 
     throw new Error(`Unknown command "${command}"`);
   } finally {
-    await discardDirtyPerfState(page);
-    await disconnectBrowser(page);
+    process.removeListener("SIGINT", onSigint);
+    process.removeListener("SIGTERM", onSigterm);
+    await cleanup();
   }
 }
 

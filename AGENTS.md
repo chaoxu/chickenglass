@@ -54,10 +54,14 @@ pnpm build           # production build (frontend only)
 pnpm lint            # Biome lint
 pnpm lint:fix        # Biome lint autofix
 pnpm test            # run tests (Vitest)
+pnpm test:focused -- src/render/reference-render.test.ts
+                     # automation-safe single-worker render/state verification
 pnpm typecheck       # typecheck only
 pnpm tauri:dev       # launch Tauri desktop app
 pnpm tauri:build     # build production desktop binary
 pnpm test:browser    # stable managed-browser regression harness
+pnpm perf:capture:heavy -- --scenario typing-rich-burst
+                     # heavy-doc perf lane with longer open/debug budgets
 pnpm chrome          # launch Playwright Chromium with CDP on port 9322 (manual debug lane)
 ```
 
@@ -179,6 +183,8 @@ Do NOT use the Playwright MCP plugin — connect directly via CDP.
 ### Perf benchmarking
 
 - Use the shared perf harness in `scripts/perf-regression.mjs` and the guidance in `docs/perf-regression.md`.
+- For changed-area render/state verification, prefer `pnpm test:focused -- <tests...>` over ad hoc Vitest invocations. It pins Vitest to a single deterministic worker lane and cleans up the child worker process on exit.
+- For fixture-heavy perf scenarios, prefer `pnpm perf:capture:heavy -- --scenario typing-rich-burst ...` or `pnpm perf:compare:heavy -- ...`.
 - When local private fixtures are available, `fixtures/cogirth/main2.md` is the preferred heavy fixture for open/edit/scroll performance work. Otherwise use `demo/index.md` and note the limitation.
 
 ### Runtime regression debugging

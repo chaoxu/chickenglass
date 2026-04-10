@@ -19,9 +19,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const SRC_ROOT = join(__dirname, "..");
+const SRC_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Directories that are part of the standalone editor path. */
 const STANDALONE_DIRS = [

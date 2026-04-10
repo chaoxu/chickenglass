@@ -6,11 +6,12 @@
  * behavioral tests — they confirm that claimed work is present.
  */
 
-import { existsSync, readFileSync } from "fs";
-import { resolve } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const ROOT = resolve(__dirname, "../..");
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function fileExists(relativePath: string): boolean {
   return existsSync(resolve(ROOT, relativePath));
