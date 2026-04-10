@@ -16,11 +16,6 @@
  */
 
 import type { DocumentAnalysis } from "../semantics/document";
-import {
-  type CachedDocumentAnalysis,
-  getCachedDocumentAnalysis,
-  rememberCachedDocumentAnalysis,
-} from "../semantics/incremental/cached-document-analysis";
 import { extractFileIndex, removeFileFromIndex, updateFileInIndex } from "./extract";
 import type {
   FileIndex,
@@ -48,22 +43,10 @@ import { findReferences, getAllLabels, queryIndex, querySourceText, resolveLabel
  */
 export class BackgroundIndexer {
   private files = new Map<string, FileIndex>();
-  private analyses = new Map<string, CachedDocumentAnalysis>();
   private disposed = false;
 
   private getDocumentIndex(): { files: ReadonlyMap<string, FileIndex> } {
     return { files: this.files };
-  }
-
-  private getNextAnalysis(
-    file: string,
-    content: string,
-    analysis?: DocumentAnalysis,
-  ): CachedDocumentAnalysis {
-    const previous = this.analyses.get(file);
-    return analysis
-      ? rememberCachedDocumentAnalysis(content, analysis, previous)
-      : getCachedDocumentAnalysis(content, previous);
   }
 
   /**
@@ -76,9 +59,7 @@ export class BackgroundIndexer {
     analysis?: DocumentAnalysis,
   ): Promise<number> {
     if (this.disposed) throw new Error(`Indexer.updateFile("${file}"): indexer is disposed`);
-    const nextAnalysis = this.getNextAnalysis(file, content, analysis);
-    this.analyses.set(file, nextAnalysis);
-    this.files = updateFileInIndex(this.files, file, content, nextAnalysis.analysis);
+    this.files = updateFileInIndex(this.files, file, content, analysis);
     return this.files.get(file)?.entries.length ?? 0;
   }
 
@@ -86,7 +67,6 @@ export class BackgroundIndexer {
   async removeFile(file: string): Promise<void> {
     if (this.disposed) throw new Error(`Indexer.removeFile("${file}"): indexer is disposed`);
     this.files = removeFileFromIndex(this.files, file);
-    this.analyses.delete(file);
   }
 
   /** Query the index with the given filters. */
@@ -139,17 +119,13 @@ export class BackgroundIndexer {
   ): Promise<number> {
     if (this.disposed) throw new Error(`Indexer.bulkUpdate(${files.length} files): indexer is disposed`);
     const nextFiles = new Map<string, FileIndex>();
-    const nextAnalyses = new Map<string, CachedDocumentAnalysis>();
     let totalEntries = 0;
     for (const { file, content, analysis } of files) {
-      const nextAnalysis = this.getNextAnalysis(file, content, analysis);
-      nextAnalyses.set(file, nextAnalysis);
-      const fileIndex = extractFileIndex(content, file, nextAnalysis.analysis);
+      const fileIndex = extractFileIndex(content, file, analysis, this.files.get(file));
       nextFiles.set(file, fileIndex);
       totalEntries += fileIndex.entries.length;
     }
     this.files = nextFiles;
-    this.analyses = nextAnalyses;
     return totalEntries;
   }
 
@@ -158,6 +134,5 @@ export class BackgroundIndexer {
     if (this.disposed) return;
     this.disposed = true;
     this.files.clear();
-    this.analyses.clear();
   }
 }

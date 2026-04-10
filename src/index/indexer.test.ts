@@ -3,18 +3,29 @@ import {
   getCachedDocumentAnalysis,
   rememberCachedDocumentAnalysis,
 } from "../semantics/incremental/cached-document-analysis";
-import {
-  getDocumentAnalysisRevision,
-  getDocumentAnalysisSliceRevision,
-} from "../semantics/incremental/engine";
+import * as incrementalEngine from "../semantics/incremental/engine";
 import {
   extractFileIndex,
+  getFileIndexAnalysis,
   removeFileFromIndex,
   updateFileInIndex,
 } from "./extract";
 import { BackgroundIndexer } from "./indexer";
 import type { FileIndex } from "./query-api";
 import { queryIndex } from "./query-api";
+
+function requireFileIndex(fileIndex: FileIndex | undefined): FileIndex {
+  expect(fileIndex).toBeDefined();
+  return fileIndex as FileIndex;
+}
+
+function requireFileAnalysis(
+  fileIndex: FileIndex | undefined,
+): NonNullable<ReturnType<typeof getFileIndexAnalysis>> {
+  const analysis = getFileIndexAnalysis(requireFileIndex(fileIndex));
+  expect(analysis).toBeDefined();
+  return analysis as NonNullable<ReturnType<typeof getFileIndexAnalysis>>;
+}
 
 describe("cached document analysis", () => {
   it("reuses the cached entry when the text is unchanged", () => {
@@ -28,14 +39,14 @@ describe("cached document analysis", () => {
     const after = getCachedDocumentAnalysis("# Title\n\nParagraph with [@ref].\n", before);
 
     expect(after.version).toBe(before.version + 1);
-    expect(getDocumentAnalysisRevision(after.analysis)).toBe(
-      getDocumentAnalysisRevision(before.analysis) + 1,
+    expect(incrementalEngine.getDocumentAnalysisRevision(after.analysis)).toBe(
+      incrementalEngine.getDocumentAnalysisRevision(before.analysis) + 1,
     );
-    expect(getDocumentAnalysisSliceRevision(after.analysis, "references")).toBe(
-      getDocumentAnalysisSliceRevision(before.analysis, "references") + 1,
+    expect(incrementalEngine.getDocumentAnalysisSliceRevision(after.analysis, "references")).toBe(
+      incrementalEngine.getDocumentAnalysisSliceRevision(before.analysis, "references") + 1,
     );
-    expect(getDocumentAnalysisSliceRevision(after.analysis, "headings")).toBe(
-      getDocumentAnalysisSliceRevision(before.analysis, "headings"),
+    expect(incrementalEngine.getDocumentAnalysisSliceRevision(after.analysis, "headings")).toBe(
+      incrementalEngine.getDocumentAnalysisSliceRevision(before.analysis, "headings"),
     );
   });
 
@@ -451,6 +462,41 @@ New definition.
     expect(updated.get("doc.md")?.entries[0].type).toBe("definition");
   });
 
+  it("reuses cached analysis across raw file-index updates", () => {
+    const initialContent = "# Title\n\nParagraph.\n";
+    const files = updateFileInIndex(new Map(), "doc.md", initialContent);
+    const beforeAnalysis = requireFileAnalysis(files.get("doc.md"));
+
+    const updated = updateFileInIndex(files, "doc.md", "# Title\n\nParagraph with [@ref].\n");
+    const afterAnalysis = requireFileAnalysis(updated.get("doc.md"));
+
+    expect(incrementalEngine.getDocumentAnalysisRevision(afterAnalysis)).toBe(
+      incrementalEngine.getDocumentAnalysisRevision(beforeAnalysis) + 1,
+    );
+    expect(incrementalEngine.getDocumentAnalysisSliceRevision(afterAnalysis, "references")).toBe(
+      incrementalEngine.getDocumentAnalysisSliceRevision(beforeAnalysis, "references") + 1,
+    );
+    expect(incrementalEngine.getDocumentAnalysisSliceRevision(afterAnalysis, "headings")).toBe(
+      incrementalEngine.getDocumentAnalysisSliceRevision(beforeAnalysis, "headings"),
+    );
+  });
+
+  it("continues cached updates after adopting editor-provided analysis into raw file indices", () => {
+    const initialContent = "# Title\n\nParagraph.\n";
+    const adoptedAnalysis = getCachedDocumentAnalysis(initialContent).analysis;
+    const files = updateFileInIndex(new Map(), "doc.md", initialContent, adoptedAnalysis);
+    const beforeAnalysis = requireFileAnalysis(files.get("doc.md"));
+
+    const updated = updateFileInIndex(files, "doc.md", "# Title\n\nParagraph with [@ref].\n");
+    const afterAnalysis = requireFileAnalysis(updated.get("doc.md"));
+
+    expect(beforeAnalysis).toBe(adoptedAnalysis);
+    expect(incrementalEngine.getDocumentAnalysisRevision(afterAnalysis)).toBe(
+      incrementalEngine.getDocumentAnalysisRevision(beforeAnalysis) + 1,
+    );
+    expect(updated.get("doc.md")?.references[0]?.ids).toEqual(["ref"]);
+  });
+
   it("preserves other files when updating one", () => {
     let files = updateFileInIndex(new Map(), "a.md", `::: {.theorem #a}
 A.
@@ -542,6 +588,23 @@ describe("BackgroundIndexer", () => {
       number: "2",
       content: "RAW_TOKEN_785 appears here.",
     });
+  });
+
+  it("reuses cached analysis for files retained across bulkUpdate snapshots", async () => {
+    const indexer = new BackgroundIndexer();
+    const initialContent = "# Title\n\nParagraph.\n";
+
+    await indexer.bulkUpdate([{ file: "doc.md", content: initialContent }]);
+    const beforeAnalysis = requireFileAnalysis(await indexer.getFileIndex("doc.md"));
+
+    await indexer.bulkUpdate([{ file: "doc.md", content: "# Title\n\nParagraph with [@ref].\n" }]);
+    const afterFileIndex = await indexer.getFileIndex("doc.md");
+    const afterAnalysis = requireFileAnalysis(afterFileIndex);
+
+    expect(incrementalEngine.getDocumentAnalysisRevision(afterAnalysis)).toBe(
+      incrementalEngine.getDocumentAnalysisRevision(beforeAnalysis) + 1,
+    );
+    expect(afterFileIndex?.references[0]?.ids).toEqual(["ref"]);
   });
 
   it("continues incremental indexing after adopting editor-provided analysis", async () => {
