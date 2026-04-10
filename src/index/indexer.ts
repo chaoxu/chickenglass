@@ -15,7 +15,7 @@
  * find, filter) are pure Map/array lookups that complete in microseconds.
  */
 
-import type { DocumentAnalysis } from "../semantics/document";
+import type { DocumentSemantics } from "../semantics/document";
 import { extractFileIndex, removeFileFromIndex, updateFileInIndex } from "./extract";
 import type {
   FileIndex,
@@ -56,7 +56,7 @@ export class BackgroundIndexer {
   async updateFile(
     file: string,
     content: string,
-    analysis?: DocumentAnalysis,
+    analysis?: DocumentSemantics,
   ): Promise<number> {
     if (this.disposed) throw new Error(`Indexer.updateFile("${file}"): indexer is disposed`);
     this.files = updateFileInIndex(this.files, file, content, analysis);
@@ -114,7 +114,7 @@ export class BackgroundIndexer {
     files: ReadonlyArray<{
       file: string;
       content: string;
-      analysis?: DocumentAnalysis;
+      analysis?: DocumentSemantics;
     }>,
   ): Promise<number> {
     if (this.disposed) throw new Error(`Indexer.bulkUpdate(${files.length} files): indexer is disposed`);
