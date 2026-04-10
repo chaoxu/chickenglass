@@ -1,7 +1,7 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { autoUpdate, computePosition, flip, offset, shift, type Placement } from "@floating-ui/dom";
 
-import { SurfacePortal } from "./surface-portal";
 import { useEditorScrollSurface } from "./editor-scroll-surface";
 
 export interface SurfaceFloatingPortalProps {
@@ -54,21 +54,20 @@ export function SurfaceFloatingPortal({
     return null;
   }
 
-  return (
-    <SurfacePortal>
-      <div
-        className={className}
-        data-visible={visible ? "true" : "false"}
-        ref={tooltipRef}
-        style={{
-          ...style,
-          display: visible ? "block" : "none",
-          position: "absolute",
-          zIndex,
-        }}
-      >
-        {children}
-      </div>
-    </SurfacePortal>
+  return createPortal(
+    <div
+      className={className}
+      data-visible={visible ? "true" : "false"}
+      ref={tooltipRef}
+      style={{
+        ...style,
+        display: visible ? "block" : "none",
+        position: "absolute",
+        zIndex,
+      }}
+    >
+      {children}
+    </div>,
+    surface,
   );
 }
