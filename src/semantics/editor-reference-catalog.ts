@@ -1,5 +1,5 @@
 import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
-import { StateField, type EditorState, type Transaction } from "@codemirror/state";
+import { StateField, type EditorState } from "@codemirror/state";
 import type { NumberingScheme } from "../parser/frontmatter";
 import { computeBlockNumbersFromFencedDivs } from "../plugins/block-counter";
 import { getPluginOrFallback } from "../plugins/plugin-registry";
@@ -27,6 +27,7 @@ import {
   type BlockReferenceTargetInput,
   type DocumentReferenceCatalog,
 } from "./reference-catalog";
+import { createChangeChecker } from "../state/change-detection";
 
 type DocumentAnalysisBase = Omit<DocumentAnalysis, "referenceIndex">;
 
@@ -163,22 +164,14 @@ function computeEditorDocumentReferenceCatalog(
   });
 }
 
-function referenceCatalogDependenciesChanged(tr: Transaction): boolean {
-  const beforeAnalysis = tr.startState.field(documentAnalysisField);
-  const afterAnalysis = tr.state.field(documentAnalysisField);
-  return (
-    getDocumentAnalysisSliceRevision(beforeAnalysis, "headings")
-      !== getDocumentAnalysisSliceRevision(afterAnalysis, "headings") ||
-    getDocumentAnalysisSliceRevision(beforeAnalysis, "fencedDivs")
-      !== getDocumentAnalysisSliceRevision(afterAnalysis, "fencedDivs") ||
-    getDocumentAnalysisSliceRevision(beforeAnalysis, "equations")
-      !== getDocumentAnalysisSliceRevision(afterAnalysis, "equations") ||
-    getDocumentAnalysisSliceRevision(beforeAnalysis, "references")
-      !== getDocumentAnalysisSliceRevision(afterAnalysis, "references") ||
-    tr.startState.field(blockCounterField, false) !== tr.state.field(blockCounterField, false) ||
-    tr.startState.field(pluginRegistryField, false) !== tr.state.field(pluginRegistryField, false)
-  );
-}
+const referenceCatalogDependenciesChanged = createChangeChecker(
+  (state) => getDocumentAnalysisSliceRevision(state.field(documentAnalysisField), "headings"),
+  (state) => getDocumentAnalysisSliceRevision(state.field(documentAnalysisField), "fencedDivs"),
+  (state) => getDocumentAnalysisSliceRevision(state.field(documentAnalysisField), "equations"),
+  (state) => getDocumentAnalysisSliceRevision(state.field(documentAnalysisField), "references"),
+  (state) => state.field(blockCounterField, false),
+  (state) => state.field(pluginRegistryField, false),
+);
 
 export const documentReferenceCatalogField = StateField.define<DocumentReferenceCatalog>({
   create(state) {

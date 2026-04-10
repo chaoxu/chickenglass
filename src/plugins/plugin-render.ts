@@ -25,6 +25,7 @@ import {
   hasStructureEditEffect,
   isFencedStructureEditActive,
 } from "../editor/structure-edit-state";
+import { createChangeChecker } from "../state/change-detection";
 import { collectFencedDivs } from "../fenced-block/model";
 import { pluginRenderAdapter } from "../lib/plugin-render-adapter";
 import {
@@ -56,6 +57,16 @@ function joinClasses(...classes: Array<string | false | null | undefined>): stri
   return classes.filter(Boolean).join(" ");
 }
 
+function sameNumberSet(
+  before: ReadonlySet<number>,
+  after: ReadonlySet<number>,
+): boolean {
+  if (before.size !== after.size) return false;
+  for (const value of before) {
+    if (!after.has(value)) return false;
+  }
+  return true;
+}
 /**
  * Build decorations for all fenced divs using the plugin registry.
  *
@@ -252,36 +263,26 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   return baseDecos;
 }
 
-function activeShellStartsChanged(tr: Transaction): boolean {
-  const before = activeFencedOpenFenceStarts(tr.startState);
-  const after = activeFencedOpenFenceStarts(tr.state);
-  if (before.size !== after.size) return true;
-  for (const start of before) {
-    if (!after.has(start)) return true;
-  }
-  return false;
-}
+const activeShellStartsChanged = createChangeChecker({
+  get: activeFencedOpenFenceStarts,
+  equals: sameNumberSet,
+});
 
-function fencedDivsRevisionChanged(tr: Transaction): boolean {
-  const before = tr.startState.field(documentSemanticsField, false);
-  const after = tr.state.field(documentSemanticsField, false);
-  if (!before || !after) return false;
-  return (
-    getDocumentAnalysisSliceRevision(before, "fencedDivs")
-    !== getDocumentAnalysisSliceRevision(after, "fencedDivs")
-  );
-}
+const fencedDivsRevisionChanged = createChangeChecker((state) => {
+  const semantics = state.field(documentSemanticsField, false);
+  return semantics ? getDocumentAnalysisSliceRevision(semantics, "fencedDivs") : null;
+});
+
+const blockDecorationDependencyChanged = createChangeChecker(
+  (state) => state.field(pluginRegistryField, false),
+  (state) => state.field(blockCounterField, false),
+  (state) => state.field(mathMacrosField, false),
+);
 
 function blockDecorationInputsChanged(tr: Transaction): boolean {
-  if (hasStructureEditEffect(tr)) return true;
-  if (fencedDivsRevisionChanged(tr)) return true;
-  if (tr.startState.field(pluginRegistryField, false) !== tr.state.field(pluginRegistryField, false)) {
-    return true;
-  }
-  if (tr.startState.field(blockCounterField, false) !== tr.state.field(blockCounterField, false)) {
-    return true;
-  }
-  return tr.startState.field(mathMacrosField, false) !== tr.state.field(mathMacrosField, false);
+  return hasStructureEditEffect(tr)
+    || fencedDivsRevisionChanged(tr)
+    || blockDecorationDependencyChanged(tr);
 }
 
 /**

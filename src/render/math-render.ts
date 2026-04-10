@@ -3,7 +3,6 @@ import {
   type Extension,
   type Range,
   StateField,
-  type Transaction,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -48,6 +47,7 @@ import {
   findFocusedInlineRevealTarget,
   inlineRevealTargetChanged,
 } from "./inline-reveal-policy";
+import { createChangeChecker } from "../state/change-detection";
 import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 
 export { renderKatexToHtml } from "./inline-shared";
@@ -63,11 +63,19 @@ export { resolveClickToSourcePos } from "./math-interactions";
 export { clearKatexCache, MathWidget, renderKatex } from "./math-widget";
 export { findActiveMath } from "./math-source";
 
-function mathMacrosChanged(tr: Transaction): boolean {
-  const before = tr.startState.field(mathMacrosField, false) ?? {};
-  const after = tr.state.field(mathMacrosField, false) ?? {};
-  return before !== after && serializeMacros(before) !== serializeMacros(after);
+const EMPTY_MACROS: Record<string, string> = {};
+
+function sameSerializedMacros(
+  before: Record<string, string>,
+  after: Record<string, string>,
+): boolean {
+  return before === after || serializeMacros(before) === serializeMacros(after);
 }
+
+const mathMacrosChanged = createChangeChecker({
+  get: (state) => state.field(mathMacrosField, false) ?? EMPTY_MACROS,
+  equals: sameSerializedMacros,
+});
 
 function getExplicitDisplayMathTarget(
   state: EditorState,

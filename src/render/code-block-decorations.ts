@@ -39,6 +39,7 @@ import {
 } from "./focus-state";
 import { makeTextElement } from "./widget-core";
 import { ShellWidget } from "./shell-widget";
+import { createChangeChecker } from "../state/change-detection";
 
 type IconNode = ReadonlyArray<readonly [string, Readonly<Record<string, string>>]>;
 
@@ -135,9 +136,7 @@ function joinClasses(...classes: Array<string | false | null | undefined>): stri
   return classes.filter(Boolean).join(" ");
 }
 
-function codeBlockStructureRevisionChanged(tr: Transaction): boolean {
-  return getCodeBlockStructureRevision(tr.startState) !== getCodeBlockStructureRevision(tr.state);
-}
+const codeBlockStructureRevisionChanged = createChangeChecker(getCodeBlockStructureRevision);
 
 class CodeBlockLanguageWidget extends ShellWidget {
   constructor(private readonly language: string) {

@@ -65,6 +65,7 @@ import {
 } from "./inline-reveal-policy";
 import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 import { isDebugRenderFlagEnabled } from "./debug-render-flags";
+import { createChangeChecker } from "../state/change-detection";
 
 function serializeKeyPart(value: string | undefined): string {
   return value ?? "";
@@ -91,72 +92,67 @@ function getBlockNumberingKey(state: EditorState): string {
     .join("\u0001");
 }
 
-function referenceSliceChanged(
-  before: DocumentAnalysis,
-  after: DocumentAnalysis,
+const referenceSliceChanged = createChangeChecker(
+  (state) => state.field(documentAnalysisField).references,
+  (state) => state.field(documentAnalysisField).referenceByFrom,
+  (state) => getDocumentAnalysisSliceRevision(state.field(documentAnalysisField), "references"),
+);
+
+function getEquationNumberingSnapshot(state: EditorState) {
+  const analysis = state.field(documentAnalysisField);
+  return {
+    equations: analysis.equations,
+    equationById: analysis.equationById,
+    revision: getDocumentAnalysisSliceRevision(analysis, "equations"),
+    key: getEquationNumbersCacheKey(analysis),
+  };
+}
+
+function sameEquationNumberingSnapshot(
+  before: ReturnType<typeof getEquationNumberingSnapshot>,
+  after: ReturnType<typeof getEquationNumberingSnapshot>,
 ): boolean {
-  return (
-    before.references !== after.references ||
-    before.referenceByFrom !== after.referenceByFrom ||
-    getDocumentAnalysisSliceRevision(before, "references")
-      !== getDocumentAnalysisSliceRevision(after, "references")
+  return before.key === after.key || (
+    before.equations === after.equations &&
+    before.equationById === after.equationById &&
+    before.revision === after.revision
   );
 }
 
-function crossrefNumberingChanged(
-  beforeState: EditorState,
-  afterState: EditorState,
-): boolean {
-  const beforeAnalysis = beforeState.field(documentAnalysisField);
-  const afterAnalysis = afterState.field(documentAnalysisField);
-  const beforeCounters = beforeState.field(blockCounterField, false);
-  const afterCounters = afterState.field(blockCounterField, false);
-  const equationSliceChanged =
-    beforeAnalysis.equations !== afterAnalysis.equations ||
-    beforeAnalysis.equationById !== afterAnalysis.equationById ||
-    getDocumentAnalysisSliceRevision(beforeAnalysis, "equations")
-      !== getDocumentAnalysisSliceRevision(afterAnalysis, "equations");
-
-  if (
-    equationSliceChanged &&
-    getEquationNumbersCacheKey(beforeAnalysis) !== getEquationNumbersCacheKey(afterAnalysis)
-  ) {
-    return true;
-  }
-
-  return (
-    beforeCounters !== afterCounters &&
-    getBlockNumberingKey(beforeState) !== getBlockNumberingKey(afterState)
-  );
+function getBlockNumberingSnapshot(state: EditorState) {
+  return {
+    counters: state.field(blockCounterField, false),
+    key: getBlockNumberingKey(state),
+  };
 }
 
-function bibliographyInputsChanged(
-  beforeState: EditorState,
-  afterState: EditorState,
+function sameBlockNumberingSnapshot(
+  before: ReturnType<typeof getBlockNumberingSnapshot>,
+  after: ReturnType<typeof getBlockNumberingSnapshot>,
 ): boolean {
-  const beforeBib = beforeState.field(bibDataField, false);
-  const afterBib = afterState.field(bibDataField, false);
-
-  if (!beforeBib || !afterBib) {
-    return beforeBib !== afterBib;
-  }
-
-  return (
-    beforeBib.store !== afterBib.store ||
-    beforeBib.cslProcessor !== afterBib.cslProcessor ||
-    beforeBib.processorRevision !== afterBib.processorRevision
-  );
+  return before.key === after.key || before.counters === after.counters;
 }
 
-function blockLabelConfigChanged(
-  beforeState: EditorState,
-  afterState: EditorState,
-): boolean {
-  return (
-    beforeState.field(pluginRegistryField, false)
-      !== afterState.field(pluginRegistryField, false)
-  );
-}
+const crossrefNumberingChanged = createChangeChecker(
+  {
+    get: getEquationNumberingSnapshot,
+    equals: sameEquationNumberingSnapshot,
+  },
+  {
+    get: getBlockNumberingSnapshot,
+    equals: sameBlockNumberingSnapshot,
+  },
+);
+
+const bibliographyInputsChanged = createChangeChecker(
+  (state) => state.field(bibDataField, false)?.store ?? null,
+  (state) => state.field(bibDataField, false)?.cslProcessor ?? null,
+  (state) => state.field(bibDataField, false)?.processorRevision ?? null,
+);
+
+const blockLabelConfigChanged = createChangeChecker(
+  (state) => state.field(pluginRegistryField, false),
+);
 
 export function getReferenceRenderDependencySignature(
   state: EditorState,
@@ -194,13 +190,10 @@ export function referenceRenderDependenciesChanged(
   beforeState: EditorState,
   afterState: EditorState,
 ): boolean {
-  const beforeAnalysis = beforeState.field(documentAnalysisField);
-  const afterAnalysis = afterState.field(documentAnalysisField);
-
   return (
     bibliographyInputsChanged(beforeState, afterState) ||
     blockLabelConfigChanged(beforeState, afterState) ||
-    referenceSliceChanged(beforeAnalysis, afterAnalysis) ||
+    referenceSliceChanged(beforeState, afterState) ||
     crossrefNumberingChanged(beforeState, afterState)
   );
 }
@@ -467,7 +460,6 @@ function mergeDirtyRangesWithActiveReference(
 
 class ReferenceRenderViewPlugin {
   decorations: DecorationSet;
-
   constructor(readonly view: EditorView) {
     this.decorations = buildReferenceDecorations(view);
   }
@@ -517,9 +509,7 @@ class ReferenceRenderViewPlugin {
       return;
     }
 
-    const beforeAnalysis = update.startState.field(documentAnalysisField);
-    const afterAnalysis = update.state.field(documentAnalysisField);
-    const referencesChanged = referenceSliceChanged(beforeAnalysis, afterAnalysis);
+    const referencesChanged = referenceSliceChanged(update.startState, update.state);
     const endFocused = update.view.hasFocus;
     const startFocused = update.focusChanged ? !endFocused : endFocused;
     const beforeActive = getRevealedReferenceTarget(update.startState, startFocused);

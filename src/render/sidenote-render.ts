@@ -75,6 +75,7 @@ import {
   getActiveStructureEditTarget,
   isFootnoteLabelStructureEditActive,
 } from "../editor/structure-edit-state";
+import { createChangeChecker } from "../state/change-detection";
 
 /** StateEffect to toggle sidenote margin visibility. */
 export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
@@ -131,29 +132,24 @@ export function collectFootnotes(state: EditorState): FootnoteSemantics {
   return state.field(documentSemanticsField).footnotes;
 }
 
-function footnoteSliceChanged(
-  beforeState: EditorState,
-  afterState: EditorState,
-): boolean {
-  const before = beforeState.field(documentSemanticsField);
-  const after = afterState.field(documentSemanticsField);
+const footnoteSliceChanged = createChangeChecker(
+  (state) => state.field(documentSemanticsField).footnotes,
+  (state) => getDocumentAnalysisSliceRevision(state.field(documentSemanticsField), "footnotes"),
+);
 
-  return (
-    before.footnotes !== after.footnotes
-    || getDocumentAnalysisSliceRevision(before, "footnotes")
-      !== getDocumentAnalysisSliceRevision(after, "footnotes")
-  );
+const EMPTY_MACROS: Record<string, string> = {};
+
+function sameSerializedMacros(
+  before: Record<string, string>,
+  after: Record<string, string>,
+): boolean {
+  return before === after || serializeMacros(before) === serializeMacros(after);
 }
 
-function mathMacrosChanged(
-  beforeState: EditorState,
-  afterState: EditorState,
-): boolean {
-  const before = beforeState.field(mathMacrosField, false) ?? {};
-  const after = afterState.field(mathMacrosField, false) ?? {};
-
-  return before !== after && serializeMacros(before) !== serializeMacros(after);
-}
+const mathMacrosChanged = createChangeChecker({
+  get: (state) => state.field(mathMacrosField, false) ?? EMPTY_MACROS,
+  equals: sameSerializedMacros,
+});
 
 interface ActiveSidenoteCursorTarget {
   readonly kind: "label";
@@ -207,13 +203,13 @@ function sidenoteDecorationShouldRebuild(tr: Transaction): boolean {
     return true;
   }
 
-  if (footnoteSliceChanged(tr.startState, tr.state)) {
+  if (footnoteSliceChanged(tr)) {
     return true;
   }
 
   if (
     (inlineFootnoteMacrosMatter(tr.startState) || inlineFootnoteMacrosMatter(tr.state))
-    && mathMacrosChanged(tr.startState, tr.state)
+    && mathMacrosChanged(tr)
   ) {
     return true;
   }

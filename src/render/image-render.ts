@@ -1,4 +1,4 @@
-import { type EditorState, type Extension, type Range, StateField, type Transaction } from "@codemirror/state";
+import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 import {
   type Decoration,
@@ -34,6 +34,7 @@ import {
   type MediaPreviewResult,
 } from "./media-preview";
 import { CSS } from "../constants/css-classes";
+import { createChangeChecker } from "../state/change-detection";
 
 type ImagePreviewState =
   | { kind: "image"; src: string }
@@ -306,12 +307,11 @@ function buildImageDecorations(state: EditorState): DecorationSet {
   return buildDecorations(items);
 }
 
-function imageDecorationsChanged(tr: Transaction): boolean {
-  return tr.docChanged ||
-    syntaxTree(tr.state) !== syntaxTree(tr.startState) ||
-    tr.state.field(pdfPreviewField, false) !== tr.startState.field(pdfPreviewField, false) ||
-    tr.state.field(imageUrlField, false) !== tr.startState.field(imageUrlField, false);
-}
+const imageDecorationsChanged = createChangeChecker(
+  { doc: true, tree: true },
+  (state) => state.field(pdfPreviewField, false),
+  (state) => state.field(imageUrlField, false),
+);
 
 const imageDecorationField = StateField.define<DecorationSet>({
   create(state) {

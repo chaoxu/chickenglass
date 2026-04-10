@@ -9,6 +9,7 @@ import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
 } from "../state/document-analysis";
+import { createChangeChecker } from "./change-detection";
 import { frontmatterField } from "./frontmatter-state";
 import { pluginRegistryField } from "./plugin-registry";
 
@@ -22,17 +23,21 @@ function getEffectiveNumbering(state: EditorState): NumberingScheme {
   return state.field(frontmatterField).config.numbering ?? "grouped";
 }
 
+const fencedDivsRevisionChanged = createChangeChecker((state) =>
+  getDocumentAnalysisSliceRevision(state.field(documentSemanticsField), "fencedDivs")
+);
+
+const blockCounterConfigChanged = createChangeChecker(
+  (state) => state.field(pluginRegistryField),
+  getEffectiveNumbering,
+);
+
 function shouldRecomputeBlockNumbers(tr: Transaction): boolean {
   // Check fencedDivs first — revision can change from async tree updates
   // (Lezer parse completion), not just doc edits. Without this, block
   // numbers go stale when the parser discovers new fenced divs after the
   // initial partial parse (#752).
-  const startSemantics = tr.startState.field(documentSemanticsField);
-  const nextSemantics = tr.state.field(documentSemanticsField);
-  if (
-    getDocumentAnalysisSliceRevision(startSemantics, "fencedDivs")
-    !== getDocumentAnalysisSliceRevision(nextSemantics, "fencedDivs")
-  ) {
+  if (fencedDivsRevisionChanged(tr)) {
     return true;
   }
 
@@ -40,11 +45,7 @@ function shouldRecomputeBlockNumbers(tr: Transaction): boolean {
     return false;
   }
 
-  if (tr.startState.field(pluginRegistryField) !== tr.state.field(pluginRegistryField)) {
-    return true;
-  }
-
-  return getEffectiveNumbering(tr.startState) !== getEffectiveNumbering(tr.state);
+  return blockCounterConfigChanged(tr);
 }
 
 /**

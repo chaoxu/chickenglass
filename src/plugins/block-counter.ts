@@ -40,7 +40,6 @@ export interface BlockCounterState {
 
 /** Sentinel counter group used when numbering is "global". */
 const GLOBAL_COUNTER = "_global";
-
 /**
  * Walk the semantic fenced-div list and assign sequential numbers to all
  * blocks whose registered plugin has `numbered: true`.
