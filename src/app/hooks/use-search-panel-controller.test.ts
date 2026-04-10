@@ -7,6 +7,15 @@ import { useSearchPanelController } from "./use-search-panel-controller";
 
 type UseSearchPanelControllerProps = Parameters<typeof useSearchPanelController>[0];
 
+function createIndexEntry(
+  overrides: Partial<IndexEntry> & Pick<IndexEntry, "type" | "file" | "position">,
+): IndexEntry {
+  return {
+    content: "",
+    ...overrides,
+  };
+}
+
 function createMockIndexer() {
   let resolveQuery: ((entries: readonly IndexEntry[]) => void) | null = null;
   let rejectQuery: ((error: Error) => void) | null = null;
@@ -87,11 +96,12 @@ describe("useSearchPanelController", () => {
     });
 
     mock.resolve([
-      {
+      createIndexEntry({
         type: "theorem",
         file: "notes.md",
         position: { from: 0, to: 5 },
-      },
+        content: "alpha theorem",
+      }),
     ]);
 
     await waitFor(() => {
@@ -210,13 +220,13 @@ describe("useSearchPanelController", () => {
 
   it("reruns the current search when searchVersion changes", async () => {
     const mock = createMockIndexer();
-    const entry: IndexEntry = {
+    const entry = createIndexEntry({
       type: "heading",
       file: "chapter1.md",
       title: "Alpha",
       position: { from: 12, to: 17 },
       content: "alpha heading",
-    };
+    });
     const { result, rerender } = renderHook(useSearchPanelController, {
       initialProps: createProps(mock.indexer),
     });
