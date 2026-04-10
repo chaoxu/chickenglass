@@ -17,6 +17,7 @@ import {
 } from "./table-discovery";
 import { addRow, formatTable, type ParsedTable } from "./table-utils";
 import { requestScrollStabilizedMeasure } from "./scroll-anchor";
+import { isReferenceWidgetTarget } from "./reference-widget";
 import {
   syncActiveFenceGuideClasses,
 } from "./source-widget";
@@ -109,12 +110,11 @@ function setActivePreviewCell(cell: HTMLElement, owner: TableWidget): void {
 
 function isRenderedInlineTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
+  if (isReferenceWidgetTarget(target)) return true;
   return Boolean(
     target.closest(
       [
         ".katex",
-        ".cf-citation",
-        ".cf-crossref",
         ".cross-ref",
         ".cf-link-rendered",
         ".cf-inline-code",
