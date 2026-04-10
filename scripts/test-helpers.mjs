@@ -554,52 +554,89 @@ export async function findLine(page, needle) {
 }
 
 /**
- * Jump to the nth line containing `needle`, placing the cursor at the first
- * match plus an optional character offset.
+ * Resolve the nth occurrence of `needle` in the document, returning the
+ * document anchor plus 1-based line/column coordinates.
+ */
+export function resolveTextAnchorInDocument(
+  documentText,
+  needle,
+  { occurrence = 1, offset = 0 } = {},
+) {
+  if (typeof needle !== "string" || needle.length === 0) {
+    throw new Error("Text anchor needle must be a non-empty string.");
+  }
+  if (!Number.isInteger(occurrence) || occurrence < 1) {
+    throw new Error(`Text anchor occurrence must be a positive integer; got ${occurrence}.`);
+  }
+  if (!Number.isInteger(offset)) {
+    throw new Error(`Text anchor offset must be an integer; got ${offset}.`);
+  }
+
+  const lines = documentText.split("\n");
+  let lineStart = 0;
+  let seen = 0;
+
+  for (let lineNumber = 1; lineNumber <= lines.length; lineNumber += 1) {
+    const lineText = lines[lineNumber - 1];
+    let searchFrom = 0;
+
+    while (searchFrom <= lineText.length) {
+      const matchIndex = lineText.indexOf(needle, searchFrom);
+      if (matchIndex < 0) {
+        break;
+      }
+
+      seen += 1;
+      if (seen === occurrence) {
+        const lineEnd = lineStart + lineText.length;
+        const anchor = Math.max(
+          lineStart,
+          Math.min(lineEnd, lineStart + matchIndex + offset),
+        );
+
+        return {
+          line: lineNumber,
+          col: anchor - lineStart + 1,
+          anchor,
+        };
+      }
+
+      searchFrom = matchIndex + needle.length;
+    }
+
+    lineStart += lineText.length + 1;
+  }
+
+  return null;
+}
+
+/**
+ * Jump to the nth occurrence of `needle`, placing the cursor at the matched
+ * text plus an optional character offset.
  */
 export async function jumpToTextAnchor(
   page,
   needle,
   { occurrence = 1, offset = 0 } = {},
 ) {
-  const result = await page.evaluate(({ text, occurrence, offset }) => {
-    const view = window.__cmView;
-    const doc = view.state.doc;
-    let seen = 0;
-
-    for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber += 1) {
-      const line = doc.line(lineNumber);
-      const matchIndex = line.text.indexOf(text);
-      if (matchIndex < 0) {
-        continue;
-      }
-      seen += 1;
-      if (seen !== occurrence) {
-        continue;
-      }
-
-      const anchor = Math.max(
-        line.from,
-        Math.min(line.to, line.from + matchIndex + offset),
-      );
-      view.focus();
-      view.dispatch({
-        selection: { anchor },
-        scrollIntoView: true,
-      });
-      return {
-        line: lineNumber,
-        col: anchor - line.from + 1,
-        anchor,
-      };
-    }
-
-    return null;
-  }, { text: needle, occurrence, offset });
+  const documentText = await page.evaluate(() => window.__cmView.state.doc.toString());
+  const result = resolveTextAnchorInDocument(documentText, needle, {
+    occurrence,
+    offset,
+  });
 
   if (!result) {
     throw new Error(`Failed to find text anchor ${JSON.stringify(needle)} (occurrence ${occurrence}).`);
   }
+
+  await page.evaluate(({ anchor }) => {
+    const view = window.__cmView;
+    view.focus();
+    view.dispatch({
+      selection: { anchor },
+      scrollIntoView: true,
+    });
+  }, { anchor: result.anchor });
 
   await sleep(200);
   return result;

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   normalizeConnectEditorOptions,
+  resolveTextAnchorInDocument,
   waitForAppUrl,
 } from "./test-helpers.mjs";
 
@@ -41,5 +42,48 @@ describe("test helpers browser harness", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("text anchors", () => {
+  it("counts repeated matches on the same line as separate occurrences", () => {
+    const documentText = "alpha beta alpha\ngamma alpha";
+
+    expect(resolveTextAnchorInDocument(documentText, "alpha", { occurrence: 1 })).toEqual({
+      line: 1,
+      col: 1,
+      anchor: 0,
+    });
+    expect(resolveTextAnchorInDocument(documentText, "alpha", { occurrence: 2 })).toEqual({
+      line: 1,
+      col: 12,
+      anchor: 11,
+    });
+    expect(resolveTextAnchorInDocument(documentText, "alpha", { occurrence: 3 })).toEqual({
+      line: 2,
+      col: 7,
+      anchor: 23,
+    });
+  });
+
+  it("clamps offsets within the matched line bounds", () => {
+    const documentText = "alpha\nbeta";
+
+    expect(resolveTextAnchorInDocument(documentText, "alpha", { occurrence: 1, offset: -5 })).toEqual({
+      line: 1,
+      col: 1,
+      anchor: 0,
+    });
+    expect(resolveTextAnchorInDocument(documentText, "alpha", { occurrence: 1, offset: 99 })).toEqual({
+      line: 1,
+      col: 6,
+      anchor: 5,
+    });
+  });
+
+  it("rejects non-positive occurrences", () => {
+    expect(() => resolveTextAnchorInDocument("alpha", "alpha", { occurrence: 0 })).toThrow(
+      "Text anchor occurrence must be a positive integer; got 0.",
+    );
   });
 });
