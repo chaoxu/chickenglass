@@ -96,6 +96,7 @@ function debugSessionSinkPlugin(): Plugin {
 export default defineConfig(({ mode }) => {
   const gitBuildInfo = readGitBuildInfo();
   const linkedNodeModulesRoot = realpathSync(path.join(__dirname, "node_modules"));
+  const disableHmr = mode === "show" || process.env.COFLAT_DISABLE_HMR === "1";
   return {
     plugins: [react(), tailwindcss(), debugSessionSinkPlugin()],
     define: {
@@ -110,6 +111,7 @@ export default defineConfig(({ mode }) => {
       sourcemap: mode === "development",
     },
     server: {
+      hmr: disableHmr ? false : undefined,
       fs: {
         allow: [__dirname, linkedNodeModulesRoot],
       },

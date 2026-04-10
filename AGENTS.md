@@ -46,6 +46,7 @@ scripts/         # browser harness, CDP helpers, blog import tools
 ```bash
 pnpm install         # install dependencies
 pnpm dev             # start dev server (Vite) — browser mode with blog demo content
+pnpm dev:show        # start stable no-HMR dev server on localhost:5173 for demos / shared review
 pnpm preview         # serve the production build on 0.0.0.0 for IPv4 access
 pnpm dev:worktree -- perf-444 --base origin/main --fetch
                      # create an isolated worktree under .worktrees/ from a committed base ref
