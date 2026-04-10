@@ -11,6 +11,7 @@ import {
   type TextNode,
 } from "lexical";
 
+import { getInlineTextFormatSpecs } from "../lexical-next";
 import {
   createHeadlessCoflatEditor,
   getLexicalMarkdown,
@@ -27,11 +28,7 @@ export interface InlineFormatSegment {
 }
 
 function hasEditableInlineFormat(node: TextNode): boolean {
-  return node.hasFormat("bold")
-    || node.hasFormat("italic")
-    || node.hasFormat("strikethrough")
-    || node.hasFormat("highlight")
-    || node.hasFormat("code");
+  return getInlineTextFormatSpecs().some((spec) => node.hasFormat(spec.lexicalFormat));
 }
 
 function hasLinkAncestor(node: LexicalNode): boolean {

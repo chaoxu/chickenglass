@@ -32,29 +32,17 @@ import {
   $isInlineFormatSourceNode,
 } from "./nodes/inline-format-source-node";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
+import { getInlineTextFormatSelector, getInlineTextFormatSpecs } from "../lexical-next";
 
-const INLINE_FORMAT_SELECTOR = ".cf-bold, .cf-italic, .cf-strikethrough, .cf-highlight, .cf-inline-code";
+const INLINE_FORMAT_SPECS = getInlineTextFormatSpecs();
+const INLINE_FORMAT_SELECTOR = getInlineTextFormatSelector();
 
 function getInlineFormatDisplayClasses(node: {
   hasFormat: (format: "bold" | "italic" | "strikethrough" | "highlight" | "code") => boolean;
 }): string[] {
-  const classNames: string[] = [];
-  if (node.hasFormat("bold")) {
-    classNames.push("cf-bold");
-  }
-  if (node.hasFormat("italic")) {
-    classNames.push("cf-italic");
-  }
-  if (node.hasFormat("strikethrough")) {
-    classNames.push("cf-strikethrough");
-  }
-  if (node.hasFormat("highlight")) {
-    classNames.push("cf-highlight");
-  }
-  if (node.hasFormat("code")) {
-    classNames.push("cf-inline-code");
-  }
-  return classNames;
+  return INLINE_FORMAT_SPECS
+    .filter((spec) => node.hasFormat(spec.lexicalFormat))
+    .map((spec) => spec.themeClassName);
 }
 
 function normalizeInlineFormatSourceRaw(raw: string): string {

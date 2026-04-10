@@ -22,6 +22,7 @@ import {
   type TextNode,
 } from "lexical";
 
+import { getInlineTextFormatSpecs } from "../lexical-next";
 import {
   $createInlineImageNode,
   $isInlineImageNode,
@@ -411,13 +412,9 @@ export const lexicalMarkdownTheme: EditorThemeClasses = {
   },
   link: "cf-lexical-link",
   code: "cf-lexical-code-block block",
-  text: {
-    bold: "cf-bold",
-    code: "cf-inline-code",
-    highlight: "cf-highlight",
-    italic: "cf-italic",
-    strikethrough: "cf-strikethrough",
-  },
+  text: Object.fromEntries(
+    getInlineTextFormatSpecs().map((spec) => [spec.lexicalFormat, spec.themeClassName]),
+  ) as NonNullable<EditorThemeClasses["text"]>,
 };
 
 export function createLexicalInitialEditorState(markdown: string): InitialEditorStateType {

@@ -10,6 +10,9 @@ export {
 } from "./model/editor-field-kind";
 export {
   getInlineTextFormatSpec,
+  getInlineTextFormatSelector,
+  getInlineTextFormatSpecs,
+  getInlineTextFormatThemeClassNames,
   type InlineTextFormatFamily,
   type InlineTextFormatSpec,
 } from "./model/inline-text-format-family";

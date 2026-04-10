@@ -8,6 +8,7 @@ import {
   type Spread,
 } from "lexical";
 
+import { getInlineTextFormatThemeClassNames } from "../../lexical-next";
 import type { EntrySide } from "../inline-format-source";
 
 export const EMPTY_INLINE_FORMAT_SOURCE_SENTINEL = "\u200b";
@@ -24,14 +25,12 @@ interface InlineFormatSourceNodeOptions {
   readonly initialRaw?: string;
 }
 
-const DISPLAY_CLASS_NAMES = ["cf-bold", "cf-highlight", "cf-inline-code", "cf-italic", "cf-strikethrough"] as const;
-
 function syncInlineFormatSourceDom(
   node: InlineFormatSourceNode,
   dom: HTMLElement,
 ): void {
   dom.classList.add("cf-lexical-inline-format-source");
-  dom.classList.remove(...DISPLAY_CLASS_NAMES);
+  dom.classList.remove(...getInlineTextFormatThemeClassNames());
   for (const className of node.getDisplayClasses()) {
     dom.classList.add(className);
   }
