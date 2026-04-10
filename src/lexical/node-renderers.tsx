@@ -17,6 +17,7 @@ import { useIncludedDocument, useLexicalRenderContext } from "./render-context";
 import { $isRawBlockNode, type RawBlockVariant } from "./nodes/raw-block-node";
 import { StructureSourceEditor } from "./structure-source-editor";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
+import { updateTableBodyCell, updateTableHeaderCell } from "../state/table-edit";
 import {
   type ParsedReferenceToken,
   humanizeBlockType,
@@ -781,23 +782,11 @@ function TableBlockRenderer({
   useEffect(() => () => { flushDraft(); }, [flushDraft]);
 
   const updateHeaderCell = useCallback((columnIndex: number, nextValue: string) => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      return { ...prev, headers: prev.headers.map((cell, i) => (i === columnIndex ? nextValue : cell)) };
-    });
+    setDraft((prev) => prev ? updateTableHeaderCell(prev, columnIndex, nextValue) : prev);
   }, []);
 
   const updateBodyCell = useCallback((rowIndex: number, columnIndex: number, nextValue: string) => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        rows: prev.rows.map((row, ri) =>
-          ri === rowIndex
-            ? row.map((cell, ci) => (ci === columnIndex ? nextValue : cell))
-            : row),
-      };
-    });
+    setDraft((prev) => prev ? updateTableBodyCell(prev, rowIndex, columnIndex, nextValue) : prev);
   }, []);
 
   if (!draft) {
