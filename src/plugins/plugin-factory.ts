@@ -54,7 +54,6 @@ export const STANDARD_PLUGIN_METADATA_KEYS = [
   "displayHeader",
   "captionPosition",
   "headerPosition",
-  "renderDecorations",
 ] as const;
 
 type StandardPluginSource = StandardPluginOptions | BlockManifestEntry;
@@ -102,6 +101,9 @@ export function createStandardPlugin(options: StandardPluginSource): BlockPlugin
   const title = options.title ?? capitalize(options.name);
   const numbered = options.numbered ?? true;
   const counter = resolveStandardPluginCounter(options);
+  const renderDecorations = !isBlockManifestEntry(options)
+    ? options.renderDecorations
+    : undefined;
   return {
     name: options.name,
     ...(counter !== undefined ? { counter } : {}),
@@ -109,5 +111,6 @@ export function createStandardPlugin(options: StandardPluginSource): BlockPlugin
     title,
     render: createBlockRender(title),
     ...pickDefined(options, STANDARD_PLUGIN_METADATA_KEYS),
+    ...(renderDecorations !== undefined ? { renderDecorations } : {}),
   };
 }
