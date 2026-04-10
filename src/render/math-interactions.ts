@@ -5,7 +5,7 @@ import {
   buildPointerSelection,
   isPlainPrimaryMouseEvent,
 } from "../editor/mouse-selection-core";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import { rangesIntersect } from "../lib/range-helpers";
 import { _snapToTokenBoundary } from "./math-source";
 import { editorFocusField } from "./focus-state";

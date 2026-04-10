@@ -7,7 +7,7 @@ import { equationLabelExtension } from "../parser/equation-label";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import * as referenceCatalogModule from "../semantics/reference-catalog";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";

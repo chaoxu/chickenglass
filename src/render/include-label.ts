@@ -23,7 +23,7 @@ import { includeRegionsField, type IncludeRegionState } from "../lib/include-reg
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
-} from "../semantics/codemirror-source";
+} from "../state/document-analysis";
 
 interface IncludeLabelRegion {
   readonly from: number;

@@ -13,7 +13,7 @@ import {
 } from "./citation-render";
 import { CslProcessor } from "./csl-processor";
 import { referenceRenderPlugin } from "../render/reference-render";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 
 const karger: CslJsonItem = {
   id: "karger2000",

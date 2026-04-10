@@ -24,7 +24,7 @@ import {
 import {
   documentAnalysisField,
   getDocumentAnalysisRevisionInfo,
-} from "../semantics/codemirror-source";
+} from "../state/document-analysis";
 import { getClosingFenceRanges } from "../plugins/fence-protection";
 import {
   clearVerticalMotionGuardEvents,

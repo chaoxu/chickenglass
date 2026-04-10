@@ -846,14 +846,14 @@ describe("#279 — shared Lezer document semantics", () => {
   });
 
   it("CodeMirror text-source adapter exists", async () => {
-    const mod = await import("../semantics/codemirror-source");
+    const mod = await import("../state/document-analysis");
     expect(mod.editorStateTextSource).toBeDefined();
   });
 });
 
 describe("#298 — canonical document analysis pass", () => {
   it("defines the shared analysis field and standalone analyzer", async () => {
-    const cmSource = await import("../semantics/codemirror-source");
+    const cmSource = await import("../state/document-analysis");
     const semantics = await import("../semantics/document");
 
     expect(cmSource.documentAnalysisField).toBeDefined();
@@ -874,6 +874,21 @@ describe("#298 — canonical document analysis pass", () => {
     expect(htmlDocument).toMatch(/analyze(?:Document|Markdown)Semantics/);
     expect(crossrefs).toMatch(/documentAnalysisField|getDocumentAnalysisOrRecompute|buildEditorDocumentReferenceCatalog/);
     expect(references).toMatch(/documentAnalysisField|getDocumentAnalysisOrRecompute|buildEditorDocumentReferenceCatalog/);
+  });
+});
+
+describe("#1085 — neutral document analysis state owner", () => {
+  it("owns the CM6 document analysis field under src/state", async () => {
+    const mod = await import("../state/document-analysis");
+
+    expect(fileExists("src/state/document-analysis.ts")).toBe(true);
+    expect(mod.documentAnalysisField).toBeDefined();
+    expect(mod.documentSemanticsField).toBe(mod.documentAnalysisField);
+    expect(mod.editorStateTextSource).toBeDefined();
+  });
+
+  it("removes the old semantics-side owner file", () => {
+    expect(fileExists("src/semantics/codemirror-source.ts")).toBe(false);
   });
 });
 

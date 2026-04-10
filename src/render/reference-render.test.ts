@@ -11,7 +11,7 @@ import {
   createPluginRegistryField,
   pluginRegistryField,
 } from "../state/plugin-registry";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import type { BlockPlugin } from "../plugins/plugin-types";
 import type { CslJsonItem } from "../citations/bibtex-parser";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";

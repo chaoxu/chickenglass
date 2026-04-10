@@ -17,7 +17,7 @@ import { focusEffect } from "../render/focus-state";
 import { programmaticDocumentChangeAnnotation } from "./programmatic-document-change";
 import { findCodeShellAt } from "./shell-ownership";
 import { containsPos, containsRange } from "../lib/range-helpers";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import type {
   FootnoteDefinition,
 } from "../semantics/document";

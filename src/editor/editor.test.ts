@@ -7,7 +7,7 @@ import {
   setEditorMode,
 } from "./editor";
 import { frontmatterField } from "./frontmatter-state";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { documentLabelGraphField } from "../semantics/document-label-graph";
 import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import { blockCounterField } from "../state/block-counter";

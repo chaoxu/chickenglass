@@ -21,7 +21,7 @@ import {
 } from "./base-editor-extensions";
 import { createInlineEditor } from "./inline-editor";
 import { bibDataField } from "../citations/citation-render";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import { referenceRenderPlugin } from "../render/reference-render";
 import { CSS } from "../constants/css-classes";
 import { CSL_FIXTURES, makeBibStore } from "../test-utils";

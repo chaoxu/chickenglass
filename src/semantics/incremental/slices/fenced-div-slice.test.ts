@@ -4,7 +4,7 @@ import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import { describe, expect, it } from "vitest";
 import { markdownExtensions } from "../../../parser";
 import { analyzeFencedDivs } from "../../document";
-import { editorStateTextSource } from "../../codemirror-source";
+import { editorStateTextSource } from "../../../state/document-analysis";
 import { buildSemanticDelta } from "../semantic-delta";
 import {
   extractDirtyFencedDivWindows,

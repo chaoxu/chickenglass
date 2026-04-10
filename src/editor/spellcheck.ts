@@ -22,7 +22,7 @@ import {
   ViewPlugin,
 } from "@codemirror/view";
 import { buildDecorations, collectNodes, createBooleanToggleField, MATH_TYPES } from "../render";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 
 // ---------------------------------------------------------------------------
 // Constants

@@ -3,7 +3,7 @@ import { type EditorView, WidgetType } from "@codemirror/view";
 import katexStyles from "katex/dist/katex.min.css?inline";
 import { CSS } from "../constants/css-classes";
 import { isPlainPrimaryMouseEvent } from "../editor/mouse-selection-core";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import type { MathSemantics } from "../semantics/document";
 import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
 import { resolveClickToSourcePos } from "./math-interactions";

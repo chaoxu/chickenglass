@@ -29,7 +29,7 @@ import { RenderWidget, buildDecorations, createDecorationsField, sanitizeCslHtml
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
-} from "../semantics/codemirror-source";
+} from "../state/document-analysis";
 import { getDocumentAnalysis } from "../semantics/incremental/cached-document-analysis";
 import { type BibStore, bibDataEffect, bibDataField } from "../state/bib-data";
 

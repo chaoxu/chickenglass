@@ -8,7 +8,7 @@ import { mathExtension } from "../parser/math-backslash";
 import { createTestView } from "../test-utils";
 import { mathRenderPlugin } from "./math-render";
 import { clearKatexCache } from "./math-widget";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 
 function createMathRenderView(doc: string, cursorPos = 0): EditorView {
   return createTestView(doc, {

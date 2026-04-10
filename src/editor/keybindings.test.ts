@@ -6,7 +6,7 @@ import { fenceProtectionExtension } from "../plugins/fence-protection";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { _blockDecorationFieldForTest as blockDecorationField } from "../plugins/plugin-render";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { editorFocusField, mathMacrosField } from "../render/render-core";
 import {
   moveDownAcrossNestedClosingFences,

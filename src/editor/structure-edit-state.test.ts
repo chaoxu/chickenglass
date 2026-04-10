@@ -3,7 +3,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { describe, expect, it } from "vitest";
 
 import { markdownExtensions } from "../parser";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { applyStateEffects } from "../test-utils";
 import { frontmatterField } from "./frontmatter-state";
 import { programmaticDocumentChangeAnnotation } from "./programmatic-document-change";

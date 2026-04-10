@@ -4,7 +4,7 @@ import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 
 import { markdownExtensions } from "../../parser";
-import { editorStateTextSource } from "../codemirror-source";
+import { editorStateTextSource } from "../../state/document-analysis";
 import { getEquationNumbersCacheKey } from "../document";
 import { buildSemanticDelta } from "./semantic-delta";
 import {

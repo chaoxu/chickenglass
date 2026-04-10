@@ -22,7 +22,7 @@ import {
   buildBibliographyDecorations,
   bibliographyPlugin,
 } from "./bibliography";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 
 const karger: CslJsonItem = {
   id: "karger2000",

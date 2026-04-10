@@ -6,7 +6,7 @@ import { markdownExtensions } from "../parser";
 import {
   defaultPlugins,
 } from "../plugins";
-import { documentAnalysisField } from "./codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import { documentLabelGraphField } from "./document-label-graph";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";

@@ -3,7 +3,7 @@ import {
   getEditorDocumentReferenceCatalog,
   getDocumentAnalysisOrRecompute,
 } from "../semantics/editor-reference-catalog";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import {
   formatEquationReferenceLabel,
   getPreferredDocumentReferenceTarget,

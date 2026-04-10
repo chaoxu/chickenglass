@@ -1,7 +1,7 @@
-import type { EditorState } from "@codemirror/state";
-import { StateField } from "@codemirror/state";
 import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
-import type { TextSource, DocumentAnalysis } from "./document";
+import { type EditorState, StateField } from "@codemirror/state";
+
+import type { DocumentAnalysis, TextSource } from "../semantics/document";
 import {
   createDocumentAnalysis,
   getDocumentAnalysisRevision,
@@ -11,8 +11,8 @@ import {
   type DocumentAnalysisRevisionInfo,
   type DocumentAnalysisSliceName,
   type DocumentAnalysisSliceRevisions,
-} from "./incremental/engine";
-import { buildSemanticDelta } from "./incremental/semantic-delta";
+} from "../semantics/incremental/engine";
+import { buildSemanticDelta } from "../semantics/incremental/semantic-delta";
 
 export function editorStateTextSource(state: EditorState): TextSource {
   const doc = state.doc;

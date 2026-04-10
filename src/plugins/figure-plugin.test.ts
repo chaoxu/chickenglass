@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
 import { frontmatterField } from "../editor/frontmatter-state";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { blockRenderPlugin } from "./plugin-render";

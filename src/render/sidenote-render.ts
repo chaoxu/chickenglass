@@ -68,7 +68,7 @@ import {
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
-} from "../semantics/codemirror-source";
+} from "../state/document-analysis";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import { CSS } from "../constants/css-classes";
 import {

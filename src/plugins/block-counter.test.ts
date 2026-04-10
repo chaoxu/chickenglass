@@ -16,7 +16,7 @@ import { frontmatterField } from "../editor/frontmatter-state";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
-} from "../semantics/codemirror-source";
+} from "../state/document-analysis";
 import { blockCounterField } from "../state/block-counter";
 import {
   createPluginRegistryField,
