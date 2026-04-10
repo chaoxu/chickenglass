@@ -9,7 +9,7 @@ import { findFencedBlockAt } from "../fenced-block/model";
 import {
   type CodeBlockInfo,
   collectCodeBlocks,
-} from "./code-block-structure";
+} from "../state/code-block-structure";
 import { getLineElement } from "./fenced-block-core";
 import { editorFocusField } from "./focus-state";
 

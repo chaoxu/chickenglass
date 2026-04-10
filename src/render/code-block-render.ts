@@ -16,7 +16,7 @@ import {
   codeBlockStructureField,
   collectCodeBlocks,
   getCodeBlockStructureRevision,
-} from "./code-block-structure";
+} from "../state/code-block-structure";
 import {
   editorFocusField,
   focusTracker,
