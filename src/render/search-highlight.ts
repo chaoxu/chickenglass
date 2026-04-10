@@ -13,7 +13,7 @@
 import { getSearchQuery, searchPanelOpen } from "@codemirror/search";
 import { type Extension } from "@codemirror/state";
 import { Decoration, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view";
-import { collectVisibleSearchMatches } from "../search/search-matches";
+import { collectVisibleSearchState, type VisibleSearchState } from "../search/search-matches";
 import { createSimpleViewPlugin } from "./view-plugin-factories";
 import { resolveLiveWidgetSourceRange } from "./source-widget";
 
@@ -45,8 +45,12 @@ function lowerBound(
  * Uses binary search on sorted matches to find overlapping ranges
  * in O(widgets * log(matches)) instead of O(widgets * matches).
  */
-function syncHighlights(view: EditorView, hadHighlights: boolean): boolean {
-  const matches = collectVisibleSearchMatches(view);
+function syncHighlights(
+  view: EditorView,
+  searchState: VisibleSearchState,
+  hadHighlights: boolean,
+): boolean {
+  const { matches, activeMatch } = searchState;
 
   // Fast path: no matches and nothing to clear — skip DOM query entirely (#6)
   if (matches.length === 0 && !hadHighlights) return false;
@@ -62,11 +66,6 @@ function syncHighlights(view: EditorView, hadHighlights: boolean): boolean {
     return false;
   }
 
-  // Sort matches by `from` for binary search (collectVisibleSearchMatches
-  // already returns matches in document order, but ensure stability).
-  const sorted = matches.slice().sort((a, b) => a.from - b.from || a.to - b.to);
-
-  const selection = view.state.selection.main;
   const widgets = view.contentDOM.querySelectorAll<HTMLElement>("[data-source-from]");
   let anyHighlighted = false;
 
@@ -78,18 +77,20 @@ function syncHighlights(view: EditorView, hadHighlights: boolean): boolean {
     }
     const { from: sourceFrom, to: sourceTo } = sourceRange;
 
-    let hasMatch = false;
-    let hasSelectedMatch = false;
+    const hasSelectedMatch =
+      activeMatch !== null &&
+      activeMatch.from < sourceTo &&
+      activeMatch.to > sourceFrom;
+    let hasMatch = hasSelectedMatch;
 
-    // Binary search: find first match whose `to` > sourceFrom,
-    // then scan forward while match.from < sourceTo.
-    const startIdx = lowerBound(sorted, sourceFrom);
-    for (let i = startIdx; i < sorted.length; i++) {
-      const match = sorted[i];
-      if (match.from >= sourceTo) break; // no more overlaps possible
-      hasMatch = true;
-      if (selection.from === match.from && selection.to === match.to) {
-        hasSelectedMatch = true;
+    if (!hasMatch) {
+      // Binary search: find first match whose `to` > sourceFrom,
+      // then scan forward while match.from < sourceTo.
+      const startIdx = lowerBound(matches, sourceFrom);
+      for (let i = startIdx; i < matches.length; i++) {
+        const match = matches[i];
+        if (match.from >= sourceTo) break; // no more overlaps possible
+        hasMatch = true;
         break;
       }
     }
@@ -112,7 +113,7 @@ function createSearchHighlight(): Extension {
   let hadHighlights = false;
 
   function buildFn(view: EditorView): DecorationSet {
-    hadHighlights = syncHighlights(view, hadHighlights);
+    hadHighlights = syncHighlights(view, collectVisibleSearchState(view), hadHighlights);
     return Decoration.none;
   }
 

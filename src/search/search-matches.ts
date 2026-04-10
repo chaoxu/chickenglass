@@ -8,6 +8,16 @@ export interface SearchMatchRange {
   readonly to: number;
 }
 
+export interface VisibleSearchState {
+  readonly matches: ReadonlyArray<SearchMatchRange>;
+  readonly activeMatch: SearchMatchRange | null;
+}
+
+const EMPTY_VISIBLE_SEARCH_STATE: VisibleSearchState = {
+  matches: [],
+  activeMatch: null,
+};
+
 export function collectVisibleSearchMatches(view: EditorView): SearchMatchRange[] {
   if (!searchPanelOpen(view.state)) return [];
 
@@ -24,4 +34,23 @@ export function collectVisibleSearchMatches(view: EditorView): SearchMatchRange[
     }
   }
   return matches;
+}
+
+export function collectVisibleSearchState(view: EditorView): VisibleSearchState {
+  const matches = collectVisibleSearchMatches(view)
+    .slice()
+    .sort((a, b) => a.from - b.from || a.to - b.to);
+  if (matches.length === 0) {
+    return EMPTY_VISIBLE_SEARCH_STATE;
+  }
+
+  const selection = view.state.selection.main;
+  const activeMatch = matches.find((match) => (
+    selection.from === match.from && selection.to === match.to
+  )) ?? null;
+
+  return {
+    matches,
+    activeMatch,
+  };
 }
