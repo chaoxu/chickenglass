@@ -2,7 +2,6 @@ import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import {
   EditorState,
   type Range,
-  StateField,
   type Transaction,
 } from "@codemirror/state";
 import {
@@ -27,6 +26,7 @@ import {
   getCodeBlockStructureRevision,
 } from "../state/code-block-structure";
 import { pushWidgetDecoration } from "./decoration-core";
+import { createDecorationStateField } from "./decoration-field";
 import {
   buildFencedBlockDecorations,
   type FencedBlockRenderContext,
@@ -360,7 +360,7 @@ export function incrementalCodeBlockUpdate(
  * On doc change without tree change: maps decoration positions only.
  * On cursor/focus/tree-only change: full rebuild.
  */
-export const codeBlockDecorationField = StateField.define<DecorationSet>({
+export const codeBlockDecorationField = createDecorationStateField({
   create(state) {
     return buildCodeBlockDecorations(state);
   },
@@ -393,9 +393,5 @@ export const codeBlockDecorationField = StateField.define<DecorationSet>({
     }
 
     return value;
-  },
-
-  provide(field) {
-    return EditorView.decorations.from(field);
   },
 });

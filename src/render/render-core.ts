@@ -105,6 +105,7 @@ export {
 
 // ── decoration-field.ts ──────────────────────────────────────────────────────
 export {
+  createDecorationStateField,
   createDecorationsField,
   defaultShouldRebuild,
   cursorSensitiveShouldRebuild,

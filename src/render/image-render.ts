@@ -1,4 +1,4 @@
-import { type EditorState, type Extension, type Range, StateField } from "@codemirror/state";
+import { type EditorState, type Extension, type Range } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 import {
   type Decoration,
@@ -14,6 +14,7 @@ import {
   pushBlockWidgetDecoration,
   pushWidgetDecoration,
 } from "./decoration-core";
+import { createDecorationStateField } from "./decoration-field";
 import { RenderWidget } from "./source-widget";
 import {
   clearActiveFenceGuideClasses,
@@ -313,15 +314,12 @@ const imageDecorationsChanged = createChangeChecker(
   (state) => state.field(imageUrlField, false),
 );
 
-const imageDecorationField = StateField.define<DecorationSet>({
+const imageDecorationField = createDecorationStateField({
   create(state) {
     return buildImageDecorations(state);
   },
   update(value, tr) {
     return imageDecorationsChanged(tr) ? buildImageDecorations(tr.state) : value;
-  },
-  provide(field) {
-    return EditorView.decorations.from(field);
   },
 });
 

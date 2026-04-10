@@ -35,6 +35,23 @@ export function cursorSensitiveShouldRebuild(tr: Transaction): boolean {
 }
 
 /**
+ * Factory that creates a CM6 StateField providing DecorationSet from
+ * explicit create/update handlers.
+ */
+export function createDecorationStateField(options: {
+  create: (state: EditorState) => DecorationSet;
+  update: (value: DecorationSet, tr: Transaction) => DecorationSet;
+}): StateField<DecorationSet> {
+  return StateField.define<DecorationSet>({
+    create: options.create,
+    update: options.update,
+    provide(field) {
+      return EditorView.decorations.from(field);
+    },
+  });
+}
+
+/**
  * Factory that creates a CM6 StateField providing DecorationSet.
  */
 export function createDecorationsField(
@@ -44,7 +61,7 @@ export function createDecorationsField(
 ): StateField<DecorationSet> {
   const predicate = shouldRebuild ?? defaultShouldRebuild;
 
-  return StateField.define<DecorationSet>({
+  return createDecorationStateField({
     create(state) {
       return builder(state);
     },
@@ -57,10 +74,6 @@ export function createDecorationsField(
         return value.map(tr.changes);
       }
       return value;
-    },
-
-    provide(field) {
-      return EditorView.decorations.from(field);
     },
   });
 }
