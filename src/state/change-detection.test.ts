@@ -42,12 +42,28 @@ describe("createChangeChecker", () => {
     expect(checker(tr)).toBe(true);
   });
 
+  it("supports comparing explicit before/after states", () => {
+    const checker = createChangeChecker((state) => state.selection.main.anchor);
+    const beforeState = createMarkdownState("hello");
+    const afterState = beforeState.update({ selection: { anchor: 2 } }).state;
+
+    expect(checker(beforeState, afterState)).toBe(true);
+  });
+
   it("returns true when doc checking is enabled", () => {
     const checker = createChangeChecker({ doc: true });
     const state = createMarkdownState("hello");
     const tr = state.update({ changes: { from: 0, insert: "x" } });
 
     expect(checker(tr)).toBe(true);
+  });
+
+  it("supports doc checking across explicit before/after states", () => {
+    const checker = createChangeChecker({ doc: true });
+    const beforeState = createMarkdownState("hello");
+    const afterState = beforeState.update({ changes: { from: 0, insert: "x" } }).state;
+
+    expect(checker(beforeState, afterState)).toBe(true);
   });
 
   it("returns true when tree checking is enabled", () => {
@@ -63,6 +79,20 @@ describe("createChangeChecker", () => {
 
     expect(tr.docChanged).toBe(false);
     expect(checker(tr)).toBe(true);
+  });
+
+  it("supports tree checking across explicit before/after states", () => {
+    const language = new Compartment();
+    const checker = createChangeChecker({ tree: true });
+    const beforeState = EditorState.create({
+      doc: "~~strike~~",
+      extensions: [language.of(markdown())],
+    });
+    const afterState = beforeState.update({
+      effects: language.reconfigure(markdown({ extensions: [strikethroughExtension] })),
+    }).state;
+
+    expect(checker(beforeState, afterState)).toBe(true);
   });
 
   it("uses custom equality for derived values", () => {

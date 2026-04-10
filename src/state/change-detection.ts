@@ -14,6 +14,11 @@ export interface StateValueSelector<T> {
   readonly equals?: (before: T, after: T) => boolean;
 }
 
+export interface ChangeChecker {
+  (tr: Transaction): boolean;
+  (beforeState: EditorState, afterState: EditorState): boolean;
+}
+
 type StateValueSelectorLike<T> = StateValueSelector<T> | ((state: EditorState) => T);
 type StateValueSelectorTuple<T extends readonly unknown[]> = {
   [K in keyof T]: StateValueSelectorLike<T[K]>;
@@ -47,17 +52,31 @@ function selectedStateValuesChanged(
   return false;
 }
 
+function statePairChanged(
+  beforeState: EditorState,
+  afterState: EditorState,
+  options: ChangeCheckerOptions,
+  selectors: readonly StateValueSelectorLike<unknown>[],
+  docChanged: boolean,
+): boolean {
+  if (options.doc && docChanged) return true;
+  if (options.tree && syntaxTree(afterState) !== syntaxTree(beforeState)) {
+    return true;
+  }
+  return selectedStateValuesChanged(beforeState, afterState, selectors);
+}
+
 export function createChangeChecker<T extends readonly unknown[]>(
   ...selectors: StateValueSelectorTuple<T>
-): (tr: Transaction) => boolean;
+): ChangeChecker;
 export function createChangeChecker<T extends readonly unknown[]>(
   options: ChangeCheckerOptions,
   ...selectors: StateValueSelectorTuple<T>
-): (tr: Transaction) => boolean;
+): ChangeChecker;
 export function createChangeChecker(
   optionsOrSelector?: ChangeCheckerOptions | StateValueSelectorLike<unknown>,
   ...restSelectors: readonly StateValueSelectorLike<unknown>[]
-): (tr: Transaction) => boolean {
+): ChangeChecker {
   const options = isChangeCheckerOptions(optionsOrSelector) ? optionsOrSelector : {};
   const selectors = optionsOrSelector === undefined
     ? restSelectors
@@ -65,11 +84,25 @@ export function createChangeChecker(
       ? restSelectors
       : [optionsOrSelector, ...restSelectors];
 
-  return (tr) => {
-    if (options.doc && tr.docChanged) return true;
-    if (options.tree && syntaxTree(tr.state) !== syntaxTree(tr.startState)) {
-      return true;
+  return ((first: Transaction | EditorState, second?: EditorState) => {
+    if (second !== undefined) {
+      const beforeState = first as EditorState;
+      return statePairChanged(
+        beforeState,
+        second,
+        options,
+        selectors,
+        options.doc ? !beforeState.doc.eq(second.doc) : false,
+      );
     }
-    return selectedStateValuesChanged(tr.startState, tr.state, selectors);
-  };
+
+    const tr = first as Transaction;
+    return statePairChanged(
+      tr.startState,
+      tr.state,
+      options,
+      selectors,
+      tr.docChanged,
+    );
+  }) as ChangeChecker;
 }
