@@ -7,6 +7,7 @@ use base64::Engine;
 use same_file::Handle as FileHandle;
 use serde::Serialize;
 
+use super::path_filter::should_ignore_path_segment;
 use crate::commands::state::ProjectRootEntry;
 use crate::services::path::file_name_to_frontend_string;
 
@@ -174,7 +175,7 @@ fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEn
         let entry = entry.map_err(|e| e.to_string())?;
         let file_name = file_name_to_frontend_string(&entry.file_name(), "Directory entry name")?;
 
-        if is_hidden_entry(&file_name) {
+        if should_ignore_path_segment(&file_name) {
             continue;
         }
 
@@ -195,10 +196,6 @@ fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEn
 
     sort_entries(&mut children);
     Ok(children)
-}
-
-fn is_hidden_entry(name: &str) -> bool {
-    name.starts_with('.') || name == "node_modules" || name == "target"
 }
 
 fn sort_entries(entries: &mut [FileEntry]) {
@@ -224,7 +221,7 @@ fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, 
         let entry = entry.map_err(|e| e.to_string())?;
         let file_name = file_name_to_frontend_string(&entry.file_name(), "Directory entry name")?;
 
-        if is_hidden_entry(&file_name) {
+        if should_ignore_path_segment(&file_name) {
             continue;
         }
 
@@ -382,6 +379,22 @@ mod tests {
         assert_eq!(result[1].path, "docs/note.md");
 
         let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn read_directory_children_keeps_regular_files_named_like_ignored_directories() {
+        let dir = create_temp_dir("list-children-named-like-ignored");
+        fs::create_dir_all(dir.join("node_modules")).unwrap();
+        fs::create_dir_all(dir.join("target")).unwrap();
+        fs::write(dir.join("node_modules.txt"), "nm").unwrap();
+        fs::write(dir.join("target.md"), "t").unwrap();
+
+        let result = list_children(&dir, "").unwrap();
+        let names: Vec<&str> = result.iter().map(|entry| entry.name.as_str()).collect();
+
+        assert_eq!(names, vec!["node_modules.txt", "target.md"]);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]

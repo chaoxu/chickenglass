@@ -8,9 +8,9 @@ use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct FileChangedEvent {
-    pub(crate) path: String,
-    pub(crate) tree_changed: bool,
+pub(super) struct FileChangedEvent {
+    pub(super) path: String,
+    pub(super) tree_changed: bool,
 }
 
 pub(crate) enum WatchEventMessage {
@@ -18,10 +18,10 @@ pub(crate) enum WatchEventMessage {
     FileChanged(QueuedFileChangedEvent),
 }
 
-pub(crate) struct QueuedFileChangedEvent {
-    pub(crate) absolute_path: PathBuf,
-    pub(crate) observed_at: Instant,
-    pub(crate) payload: FileChangedEvent,
+pub(super) struct QueuedFileChangedEvent {
+    pub(super) absolute_path: PathBuf,
+    pub(super) observed_at: Instant,
+    pub(super) payload: FileChangedEvent,
 }
 
 struct DebouncedEventDispatcher {
@@ -122,8 +122,8 @@ fn should_emit_debounced_event(
 #[cfg(test)]
 mod tests {
     use super::{
-        DebouncedEventDispatcher, FileChangedEvent, QueuedFileChangedEvent, WatchEventMessage,
-        should_emit_debounced_event,
+        should_emit_debounced_event, DebouncedEventDispatcher, FileChangedEvent,
+        QueuedFileChangedEvent, WatchEventMessage,
     };
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};

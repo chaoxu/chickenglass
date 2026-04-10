@@ -4,15 +4,17 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 use notify::{
-    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind,
+    event::ModifyKind, Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 
-use super::watch_debouncer::{FileChangedEvent, QueuedFileChangedEvent};
-use super::watch_filter::should_ignore_relative_path;
+use self::debouncer::{FileChangedEvent, QueuedFileChangedEvent};
+use super::path_filter::should_ignore_relative_path;
 use crate::commands::state::FileWatcherEntry;
 use crate::services::path::path_to_frontend_string;
 
-pub(crate) use super::watch_debouncer::{WatchEventMessage, spawn_debounced_event_worker};
+mod debouncer;
+
+pub(crate) use self::debouncer::{spawn_debounced_event_worker, WatchEventMessage};
 
 pub fn create_directory_watcher(
     root: PathBuf,
@@ -162,8 +164,8 @@ mod tests {
     };
     use crate::commands::state::FileWatcherEntry;
     use notify::{
-        EventKind,
         event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
+        EventKind,
     };
     use std::collections::HashMap;
     use std::ffi::OsString;
@@ -208,6 +210,21 @@ mod tests {
             Some("docs/new-subdir".to_string()),
         );
         assert_eq!(normalize_relative_event_path(&root, &dir, false), None);
+
+        fs::remove_dir_all(&root).expect("remove test directory");
+    }
+
+    #[test]
+    fn keeps_regular_files_named_like_ignored_directories() {
+        let root = create_temp_dir("watch-target-file");
+        let path = root.join("docs/target.md");
+        fs::create_dir_all(path.parent().expect("target file parent")).expect("create docs dir");
+        fs::write(&path, "hello").expect("create watched file");
+
+        assert_eq!(
+            normalize_relative_event_path(&root, &path, false),
+            Some("docs/target.md".to_string()),
+        );
 
         fs::remove_dir_all(&root).expect("remove test directory");
     }
