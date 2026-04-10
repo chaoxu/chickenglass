@@ -75,11 +75,13 @@ function LazyTableCell({
   cell,
   className,
   namespace,
+  onCommit,
   onTextChange,
 }: {
   readonly cell: string;
   readonly className: string;
   readonly namespace: string;
+  readonly onCommit: () => void;
   readonly onTextChange: (text: string) => void;
 }) {
   const surfaceEditable = useLexicalSurfaceEditable();
@@ -100,6 +102,7 @@ function LazyTableCell({
         const next = event.relatedTarget;
         if (next instanceof Node && shellRef.current?.contains(next)) return;
         setEditing(false);
+        onCommit();
       }}
     >
       {editing ? (
@@ -759,37 +762,45 @@ function TableBlockRenderer({
   readonly nodeKey: NodeKey;
   readonly raw: string;
 }) {
-  const parsed = useMemo(() => parseMarkdownTable(raw), [raw]);
+  const externalParsed = useMemo(() => parseMarkdownTable(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
+  const [draft, setDraft] = useState(externalParsed);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+
+  useEffect(() => {
+    setDraft(externalParsed);
+  }, [externalParsed]);
+
+  const flushDraft = useCallback(() => {
+    if (draftRef.current) {
+      updateRaw(serializeMarkdownTable(draftRef.current));
+    }
+  }, [updateRaw]);
+
+  useEffect(() => () => { flushDraft(); }, [flushDraft]);
 
   const updateHeaderCell = useCallback((columnIndex: number, nextValue: string) => {
-    if (!parsed) {
-      return;
-    }
-    const headers = parsed.headers.map((cell, index) => (index === columnIndex ? nextValue : cell));
-    updateRaw(serializeMarkdownTable({
-      ...parsed,
-      headers,
-    }));
-  }, [parsed, updateRaw]);
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return { ...prev, headers: prev.headers.map((cell, i) => (i === columnIndex ? nextValue : cell)) };
+    });
+  }, []);
 
   const updateBodyCell = useCallback((rowIndex: number, columnIndex: number, nextValue: string) => {
-    if (!parsed) {
-      return;
-    }
-    const rows = parsed.rows.map((row, currentRowIndex) =>
-      currentRowIndex === rowIndex
-        ? row.map((cell, currentColumnIndex) =>
-            currentColumnIndex === columnIndex ? nextValue : cell)
-        : [...row]);
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        rows: prev.rows.map((row, ri) =>
+          ri === rowIndex
+            ? row.map((cell, ci) => (ci === columnIndex ? nextValue : cell))
+            : row),
+      };
+    });
+  }, []);
 
-    updateRaw(serializeMarkdownTable({
-      ...parsed,
-      rows,
-    }));
-  }, [parsed, updateRaw]);
-
-  if (!parsed) {
+  if (!draft) {
     return <div className="cf-lexical-raw-fallback">{raw}</div>;
   }
 
@@ -798,12 +809,13 @@ function TableBlockRenderer({
       <table>
         <thead>
           <tr>
-            {parsed.headers.map((cell, columnIndex) => (
+            {draft.headers.map((cell, columnIndex) => (
               <th key={`h-${columnIndex}`}>
                 <LazyTableCell
                   cell={cell}
                   className="cf-lexical-nested-editor cf-lexical-nested-editor--table-cell"
                   namespace={`coflat-table-${nodeKey}-head-${columnIndex}`}
+                  onCommit={flushDraft}
                   onTextChange={(nextValue) => updateHeaderCell(columnIndex, nextValue)}
                 />
               </th>
@@ -811,7 +823,7 @@ function TableBlockRenderer({
           </tr>
         </thead>
         <tbody>
-          {parsed.rows.map((row, rowIndex) => (
+          {draft.rows.map((row, rowIndex) => (
             <tr key={`r-${rowIndex}`}>
               {row.map((cell, columnIndex) => (
                 <td key={`c-${rowIndex}-${columnIndex}`}>
@@ -819,6 +831,7 @@ function TableBlockRenderer({
                     cell={cell}
                     className="cf-lexical-nested-editor cf-lexical-nested-editor--table-cell"
                     namespace={`coflat-table-${nodeKey}-${rowIndex}-${columnIndex}`}
+                    onCommit={flushDraft}
                     onTextChange={(nextValue) => updateBodyCell(rowIndex, columnIndex, nextValue)}
                   />
                 </td>
