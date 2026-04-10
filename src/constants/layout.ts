@@ -2,7 +2,7 @@
  * Layout dimension constants used across the Coflat editor and themes.
  *
  * All values are CSS string literals (or percentages) matching the design
- * system so they can be used directly in CM6 theme objects and inline styles.
+ * system so they can be used directly in inline styles and theme presets.
  */
 
 /**

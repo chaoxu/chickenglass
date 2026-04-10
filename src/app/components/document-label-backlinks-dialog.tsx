@@ -12,7 +12,7 @@ import { ScrollArea } from "./ui/scroll-area";
 import type {
   DocumentLabelBacklinkItem,
   DocumentLabelBacklinksResult,
-} from "../../semantics/document-label-backlinks";
+} from "../markdown/labels";
 
 interface DocumentLabelBacklinksDialogProps {
   result: DocumentLabelBacklinksResult | null;

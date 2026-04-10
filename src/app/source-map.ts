@@ -1,4 +1,6 @@
-import type { ChangeSet } from "@codemirror/state";
+interface PositionMapping {
+  mapPos: (pos: number, assoc?: number) => number;
+}
 
 /** A region of the composed document that belongs to an included file. */
 export interface IncludeRegion {
@@ -50,8 +52,8 @@ function searchRegion(regions: IncludeRegion[], pos: number): IncludeRegion | nu
   return null;
 }
 
-/** Recursively update region positions through a CM6 ChangeSet. */
-function mapRegionsThrough(regions: IncludeRegion[], changes: ChangeSet): void {
+/** Recursively update region positions through a position-mapping adapter. */
+function mapRegionsThrough(regions: IncludeRegion[], changes: PositionMapping): void {
   for (const region of regions) {
     const newFrom = changes.mapPos(region.from, -1);
     const newTo = changes.mapPos(region.to, 1);
@@ -97,8 +99,8 @@ function decomposeRegions(
 export class SourceMap {
   constructor(public regions: IncludeRegion[]) {}
 
-  /** Update all region positions through a CM6 ChangeSet. */
-  mapThrough(changes: ChangeSet): void {
+  /** Update all region positions through a position-mapping adapter. */
+  mapThrough(changes: PositionMapping): void {
     mapRegionsThrough(this.regions, changes);
   }
 

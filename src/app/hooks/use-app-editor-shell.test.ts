@@ -6,6 +6,7 @@ import { MemoryFileSystem } from "../file-manager";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import type { Settings } from "../lib/types";
 import type { AppEditorShellController } from "./use-app-editor-shell";
+import type { MarkdownEditorHandle } from "../../lexical/plain-text-editor";
 
 vi.mock("../perf", () => ({
   measureAsync: (_name: string, task: () => Promise<unknown>) => task(),
@@ -53,7 +54,7 @@ function createHarness(
     showLineNumbers: false,
     wordWrap: true,
     spellCheck: false,
-    editorMode: "rich",
+    editorMode: "lexical",
     theme: "system",
     defaultExportFormat: "pdf",
     enabledPlugins: {},
@@ -86,6 +87,16 @@ function replaceCurrentDoc(
 ): readonly EditorDocumentChange[] {
   const currentDoc = ref.result.getCurrentDocText();
   return [{ from: 0, to: currentDoc.length, insert: nextDoc }];
+}
+
+function createHandle(): MarkdownEditorHandle {
+  return {
+    applyChanges: vi.fn(),
+    focus: vi.fn(),
+    getSelection: vi.fn(() => ({ anchor: 0, focus: 0, from: 0, to: 0 })),
+    insertText: vi.fn(),
+    setSelection: vi.fn(),
+  };
 }
 
 describe("useAppEditorShell", () => {
@@ -167,11 +178,20 @@ describe("useAppEditorShell", () => {
     });
 
     act(() => {
+      ref.result.handleLexicalEditorReady(createHandle(), {} as never);
+      ref.result.handleEditorDocumentReady("a.md");
+    });
+
+    act(() => {
       ref.result.handleSearchResult({
         file: "b.md",
         pos: 0,
         editorMode: "source",
       });
+    });
+
+    act(() => {
+      ref.result.handleEditorDocumentReady("b.md");
     });
 
     await vi.waitFor(() => {
@@ -196,6 +216,11 @@ describe("useAppEditorShell", () => {
 
     await act(async () => {
       await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleLexicalEditorReady(createHandle(), {} as never);
+      ref.result.handleEditorDocumentReady("a.md");
     });
 
     act(() => {
@@ -225,6 +250,6 @@ describe("useAppEditorShell", () => {
     });
 
     expect(ref.result.currentPath).toBe("b.md");
-    expect(ref.result.editorMode).toBe("rich");
+    expect(ref.result.editorMode).toBe("lexical");
   });
 });

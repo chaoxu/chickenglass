@@ -6,43 +6,19 @@
  * Declaring them here avoids unsafe `as unknown as` double-casts throughout
  * the codebase.
  *
- * See CLAUDE.md "Debug helpers" for usage documentation.
  */
 
-import type { EditorView } from "@codemirror/view";
-import type { DebugHelpers } from "../editor";
 import type { SourceMap } from "../app/source-map";
-import type { EditorMode } from "../editor";
+import type { EditorMode } from "../app/editor-mode";
 import type { DebugDocumentState, DebugProjectFile } from "../app/hooks/use-app-debug";
 
 declare global {
   interface Window {
     /**
-     * The active CM6 EditorView instance.
-     * Set by useEditorDebugBridge; cleared on unmount.
-     */
-    __cmView?: EditorView;
-
-    /**
-     * Debug helper functions for the active editor, including stable
-     * rich-mode vertical motion, measured geometry snapshots, recent
-     * motion-guard history, and explicit structure-edit helpers used by
-     * browser regressions.
-     * Set by useEditorDebugBridge; cleared on unmount.
-     */
-    __cmDebug?: DebugHelpers;
-
-    /**
      * Source map for include expansion.
      * Set by useEditorDocumentServices when includes are expanded.
      */
     __cfSourceMap?: SourceMap | null;
-
-    /**
-     * Toggle flag for fenced-div parser tracing.
-     * Set `true` in the console to enable verbose parser logging.
-     */
-    __fencedDivDebug?: boolean;
 
     /**
      * App-level debug helpers exposed for console and Playwright testing.
@@ -64,6 +40,56 @@ declare global {
       getProjectRoot: () => string | null;
       getCurrentDocument: () => DebugDocumentState | null;
       isDirty: () => boolean;
+    };
+
+    /**
+     * Editor-level debug helpers exposed for browser automation and console use.
+     * Present only when a document editor surface is mounted.
+     */
+    __editor?: {
+      focus: () => void;
+      getDoc: () => string;
+      getSelection: () => {
+        anchor: number;
+        focus: number;
+        from: number;
+        to: number;
+      };
+      insertText: (text: string) => void;
+      setDoc: (doc: string) => void;
+      setSelection: (anchor: number, focus?: number) => void;
+    };
+
+    __cmView?: {
+      dispatch: (...args: unknown[]) => void;
+      dom: Element | null;
+      focus: () => void;
+      state: {
+        doc: {
+          toString: () => string;
+        };
+      };
+    };
+
+    __cmDebug?: {
+      dump: () => {
+        doc: string;
+        selection: {
+          anchor: number;
+          focus: number;
+          from: number;
+          to: number;
+        } | null;
+      };
+      line: (lineNumber: number) => string | null;
+      selection: () => {
+        anchor: number;
+        focus: number;
+        from: number;
+        to: number;
+      } | null;
+      tree: () => string;
+      treeString: () => string;
     };
 
     /**

@@ -1,55 +1,29 @@
-/**
- * Regression test: ATX headings parse and render correctly.
- *
- * Opens the stable regression fixture and verifies the Lezer syntax tree
- * contains ATXHeading nodes.
- */
-
-/* global window */
-
-import { openRegressionDocument, scrollToText } from "../test-helpers.mjs";
+import { openRegressionDocument } from "../test-helpers.mjs";
 
 export const name = "headings";
 
 export async function run(page) {
-  await openRegressionDocument(page);
-  await new Promise((r) => setTimeout(r, 800));
+  await openRegressionDocument(page, "index.md");
+  await page.waitForTimeout(500);
 
-  const tree = await page.evaluate(() => window.__cmDebug.treeString());
-
-  const hasH1 = tree.includes("ATXHeading1");
-  const hasH2 = tree.includes("ATXHeading2");
-
-  if (!hasH1 && !hasH2) {
-    return { pass: false, message: "No ATXHeading1 or ATXHeading2 found in syntax tree" };
-  }
-
-  await scrollToText(page, "# Display Math");
-
-  // Verify heading decorations exist in the DOM (line decorations with heading classes)
-  const headingCount = await page.evaluate(() => {
-    const editor = window.__cmView.dom;
-    return editor.querySelectorAll(
-      '.cf-heading-line-1, .cf-heading-line-2, .cf-heading-line-3, [data-section-number]',
-    ).length;
-  });
-
-  if (headingCount === 0) {
-    return {
-      pass: false,
-      message: "Heading nodes exist in tree but no heading line decorations or section numbers are visible",
-    };
-  }
-
-  const sectionNumbers = await page.evaluate(() => {
-    const editor = window.__cmView.dom;
-    return Array.from(editor.querySelectorAll("[data-section-number]"))
+  const state = await page.evaluate(() => ({
+    headingCount: document.querySelectorAll(".cf-lexical-heading").length,
+    sectionNumbers: [...document.querySelectorAll("[data-section-number]")]
       .map((el) => el.getAttribute("data-section-number"))
-      .filter(Boolean);
-  });
+      .filter(Boolean),
+    tree: window.__cmDebug?.treeString?.() ?? "",
+  }));
+
+  if (!state.tree.includes("ATXHeading1") && !state.tree.includes("ATXHeading2")) {
+    return { pass: false, message: "debug tree did not report any ATX headings" };
+  }
+
+  if (state.headingCount === 0) {
+    return { pass: false, message: "rich mode did not render any heading surfaces" };
+  }
 
   return {
     pass: true,
-    message: `${headingCount} visible heading decorations (${sectionNumbers.join(", ")})`,
+    message: `${state.headingCount} headings rendered${state.sectionNumbers.length > 0 ? ` (${state.sectionNumbers.join(", ")})` : ""}`,
   };
 }

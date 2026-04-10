@@ -1,32 +1,11 @@
-/**
- * Canonical project configuration utilities shared across editor/app/state.
- *
- * Keeps the CM6 Facet and pure merge/parse helpers in a neutral owner so
- * other subsystems do not need to import them through editor/.
- */
-
-import { Facet } from "@codemirror/state";
-import type { FrontmatterConfig } from "./parser/frontmatter";
-import { parseFrontmatter } from "./parser/frontmatter";
+import type { FrontmatterConfig } from "./lib/frontmatter";
+import { parseFrontmatter } from "./lib/frontmatter";
 
 /** Project-level configuration. Derived from FrontmatterConfig, minus title (always per-file). */
 export type ProjectConfig = Omit<FrontmatterConfig, "title">;
 
 /** Well-known project config file name. */
 export const PROJECT_CONFIG_FILE = "coflat.yaml";
-
-/**
- * CM6 Facet that holds the project-level configuration.
- *
- * Extensions provide a ProjectConfig value; the frontmatter StateField
- * reads the combined value and merges it with per-file frontmatter.
- */
-export const projectConfigFacet = Facet.define<ProjectConfig, ProjectConfig>({
-  combine(values) {
-    // There should be at most one provider. Take the last one.
-    return values.length > 0 ? values[values.length - 1] : {};
-  },
-});
 
 /**
  * Parse a `coflat.yaml` file into a ProjectConfig.
@@ -39,8 +18,6 @@ export function parseProjectConfig(yaml: string): ProjectConfig {
   const wrapped = `---\n${yaml}\n---\n`;
   const { config } = parseFrontmatter(wrapped);
 
-  // ProjectConfig excludes title (title is always per-file)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { title, ...projectConfig } = config;
   return projectConfig;
 }

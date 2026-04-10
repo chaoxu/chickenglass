@@ -1,13 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FileSystem } from "./file-manager";
-
-const { resolveLocalImageOverridesMock } = vi.hoisted(() => ({
-  resolveLocalImageOverridesMock: vi.fn(),
-}));
-
-vi.mock("./pdf-image-previews", () => ({
-  resolveLocalImageOverrides: resolveLocalImageOverridesMock,
-}));
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   _buildHtmlDocumentForTest,
@@ -15,11 +6,6 @@ import {
   _resolveExportThemeTokensForTest,
   sanitizeCssValue,
 } from "./export";
-
-beforeEach(() => {
-  resolveLocalImageOverridesMock.mockReset();
-  resolveLocalImageOverridesMock.mockResolvedValue(new Map());
-});
 
 describe("resolveExportThemeTokens", () => {
   const root = document.documentElement;
@@ -56,7 +42,7 @@ describe("resolveExportThemeTokens", () => {
 });
 
 describe("buildHtmlDocument", () => {
-  it("uses theme CSS variables instead of hardcoded export colors", () => {
+  it("renders the markdown source inside a styled pre block", () => {
     const html = _buildHtmlDocumentForTest(
       "::: {.theorem} Title\nBody\n:::\n\nA [link](https://example.com).\n\n`code`",
       "sample",
@@ -65,34 +51,22 @@ describe("buildHtmlDocument", () => {
     expect(html).toContain("--cf-bg: #ffffff;");
     expect(html).toContain("color: var(--cf-fg);");
     expect(html).toContain("background: var(--cf-hover);");
-    expect(html).toContain(".cf-block-theorem");
-    expect(html).toContain("font-style: var(--cf-block-theorem-style);");
-    expect(html).toContain("border-top: 1px solid var(--cf-border);");
+    expect(html).toContain('<pre class="cf-markdown-source">');
+    expect(html).toContain("::: {.theorem} Title");
+    expect(html).toContain("A [link](https://example.com).");
     expect(html).not.toContain("color: #111;");
     expect(html).not.toContain("background: #fff;");
-    expect(html).not.toContain("border-left: 3px solid #4a9eff;");
   });
 
-  it("feeds prepared PDF preview overrides into exported HTML", async () => {
-    const fs = {} as unknown as FileSystem;
-    resolveLocalImageOverridesMock.mockResolvedValue(new Map([
-      ["notes/fig.pdf", "data:image/png;base64,PDFPAGE1"],
-    ]));
-
+  it("keeps async HTML export aligned with the source-preserving renderer", async () => {
     const html = await _buildHtmlDocumentAsyncForTest(
       "![Figure](fig.pdf)",
       "sample",
-      fs,
+      undefined,
       "notes/main.md",
     );
 
-    expect(resolveLocalImageOverridesMock).toHaveBeenCalledWith(
-      "![Figure](fig.pdf)",
-      fs,
-      "notes/main.md",
-    );
-    expect(html).toContain('<img src="data:image/png;base64,PDFPAGE1" alt="Figure">');
-    expect(html).not.toContain('<img src="fig.pdf" alt="Figure">');
+    expect(html).toContain('<pre class="cf-markdown-source">![Figure](fig.pdf)</pre>');
   });
 
   // Regression (#503): CSS values injected into the <style> block must not

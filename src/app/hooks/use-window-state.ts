@@ -35,6 +35,34 @@ export interface UseWindowStateReturn {
   reloadState: () => void;
 }
 
+function currentDocumentEqual(
+  left: CurrentDocumentState | null,
+  right: CurrentDocumentState | null,
+): boolean {
+  return left?.path === right?.path && left?.name === right?.name;
+}
+
+function sidebarSectionsEqual(
+  left: readonly SidebarSectionState[],
+  right: readonly SidebarSectionState[],
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((section, index) =>
+    section.title === right[index]?.title
+    && section.collapsed === right[index]?.collapsed,
+  );
+}
+
+function windowStateEqual(left: WindowState, right: WindowState): boolean {
+  return left.projectRoot === right.projectRoot
+    && left.sidebarWidth === right.sidebarWidth
+    && left.version === right.version
+    && currentDocumentEqual(left.currentDocument, right.currentDocument)
+    && sidebarSectionsEqual(left.sidebarSections, right.sidebarSections);
+}
+
 export function useWindowState(): UseWindowStateReturn {
   const [windowState, setWindowState] = useState<WindowState>(loadWindowState);
 
@@ -52,6 +80,9 @@ export function useWindowState(): UseWindowStateReturn {
           sidebarWidth: patch.sidebarWidth ?? prev.sidebarWidth,
           sidebarSections: patch.sidebarSections ?? prev.sidebarSections,
         });
+        if (windowStateEqual(prev, next)) {
+          return prev;
+        }
         saveWindowState(next);
         return next;
       });

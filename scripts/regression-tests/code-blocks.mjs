@@ -1,51 +1,73 @@
-/**
- * Regression test: code block rendering and syntax highlighting.
- *
- * Verifies that FencedCode nodes exist in the syntax tree and that code blocks
- * have rendered with the codeblock header/body decorations.
- */
-
-/* global window */
-
-import { openRegressionDocument, scrollToText } from "../test-helpers.mjs";
+import { openRegressionDocument } from "../test-helpers.mjs";
 
 export const name = "code-blocks";
 
 export async function run(page) {
-  await openRegressionDocument(page);
-  await new Promise((r) => setTimeout(r, 800));
+  await openRegressionDocument(page, "index.md", { mode: "lexical" });
 
-  // Check for FencedCode in syntax tree
-  const tree = await page.evaluate(() => window.__cmDebug.treeString());
-  const hasFencedCode = tree.includes("FencedCode");
+  const initialState = await page.evaluate(() => {
+    const body = document.querySelector(".cf-codeblock-body.cf-lexical-code-block");
+    const button = document.querySelector(".cf-codeblock-copy");
+    const label = document.querySelector(".cf-codeblock-language");
+    return {
+      hasButton: Boolean(button),
+      hasBody: Boolean(body),
+      language: label?.textContent?.trim() ?? null,
+    };
+  });
 
-  if (!hasFencedCode) {
-    return { pass: false, message: "No FencedCode node found in syntax tree" };
+  if (!initialState.hasButton || !initialState.hasBody || !initialState.language) {
+    return { pass: false, message: "code block chrome did not render language/copy affordances" };
   }
 
-  await scrollToText(page, "fibonacci :: Int -> Int");
-
-  // Check for codeblock header decorations
-  const headerCount = await page.evaluate(() => {
-    const editor = window.__cmView.dom;
-    return editor.querySelectorAll(".cf-codeblock-header").length;
-  });
-
-  // Check for codeblock body decorations
-  const bodyCount = await page.evaluate(() => {
-    const editor = window.__cmView.dom;
-    return editor.querySelectorAll(".cf-codeblock-body").length;
-  });
-
-  if (headerCount === 0 && bodyCount === 0) {
-    return {
-      pass: false,
-      message: "FencedCode exists in tree but no .cf-codeblock-header or .cf-codeblock-body in DOM",
+  const copied = await page.evaluate(async () => {
+    const writes = [];
+    const originalClipboard = navigator.clipboard;
+    const clipboard = {
+      ...originalClipboard,
+      writeText: async (text) => {
+        writes.push(text);
+      },
     };
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: clipboard,
+    });
+
+    const button = document.querySelector(".cf-codeblock-copy");
+    if (!(button instanceof HTMLButtonElement)) {
+      return { ok: false, writes };
+    }
+
+    button.dispatchEvent(new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+    }));
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: originalClipboard,
+    });
+
+    return {
+      ok: true,
+      writes,
+      label: button.textContent ?? "",
+    };
+  });
+
+  if (!copied.ok || copied.writes.length === 0 || !copied.writes[0]?.includes("fibonacci :: Int -> Int")) {
+    return { pass: false, message: "code block copy button did not write the block contents" };
+  }
+
+  if (copied.label.trim() !== "Copied") {
+    return { pass: false, message: "code block copy button did not acknowledge the copy action" };
   }
 
   return {
     pass: true,
-    message: `${headerCount} code block headers, ${bodyCount} body lines rendered`,
+    message: `code block chrome rendered with ${initialState.language ?? "unknown"} label and a working copy button`,
   };
 }

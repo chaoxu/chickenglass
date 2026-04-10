@@ -9,7 +9,7 @@ shortcuts, or the Tauri menu definition (`src-tauri/src/menu.rs`).
 1. Build and launch the Tauri app:
 
    ```bash
-   npm run tauri:dev
+   pnpm tauri:dev
    ```
 
 2. The app should start with the demo blog project loaded.
@@ -18,7 +18,7 @@ shortcuts, or the Tauri menu definition (`src-tauri/src/menu.rs`).
 
 ## DevTools Smoke Bridge
 
-In `npm run tauri:dev`, the frontend exposes a dev-only native smoke bridge on
+In `pnpm tauri:dev`, the frontend exposes a dev-only native smoke bridge on
 `window.__tauriSmoke` for actions that do not need an OS picker click:
 
 ```js
@@ -98,15 +98,15 @@ Use this bridge to verify native state transitions deterministically:
 | 6f | Press **Escape** to dismiss the palette | Palette closes without side effects | Palette disappears; editor is focused |
 | 6g | Cross-check: every native menu item with a wired handler has a corresponding palette entry | No menu actions are missing from the palette | Compare File/Edit/View/Format/Help menu items against palette commands |
 
-## 7. Mode Switching (Rich/Source)
+## 7. Mode Switching (Lexical/Source)
 
 | Step | Action | Expected Result | How to Verify |
 |------|--------|-----------------|---------------|
-| 7a | Open a `.md` file; check the status bar (bottom-right) | Mode indicator shows "Rich" (default for markdown) | Status bar displays "Rich" |
+| 7a | Open a `.md` file; check the status bar (bottom-right) | Mode indicator shows "Lexical" (default for markdown) | Status bar displays "Lexical" |
 | 7b | Click the mode indicator in the status bar | Mode cycles to "Source" | Status bar now shows "Source"; editor shows raw markdown |
-| 7c | Click the mode indicator again | Mode cycles back to "Rich" | Status bar shows "Rich"; editor shows rendered content |
+| 7c | Click the mode indicator again | Mode cycles back to "Lexical" | Status bar shows "Lexical"; editor returns to the formatted editing surface |
 | 7d | Open a non-markdown file (e.g., `.yaml`, `.json`) | Mode indicator shows "Source" and is disabled | Status bar shows "Source"; clicking does nothing |
-| 7e | Use the command palette: search "mode" or "Rich" | No direct mode-switch command exists (mode is toggled via status bar) | Confirm behavior matches expectations |
+| 7e | Use the command palette: search "mode" or "Lexical" | No direct mode-switch command exists (mode is toggled via status bar) | Confirm behavior matches expectations |
 
 ## 8. Recent Files (menu)
 
@@ -172,7 +172,7 @@ These menu items are defined in Rust but have no frontend handler wired in
 
 Native smoke coverage is currently a hybrid:
 
-1. Launch the Tauri app in dev mode (`npm run tauri:dev`).
+1. Launch the Tauri app in dev mode (`pnpm tauri:dev`).
 2. Use the DevTools console plus `window.__tauriSmoke` for deterministic project/file/close/watcher checks.
 3. Use the manual checklist above for real OS dialogs (`Open File`, `Open Folder`, `Save As`) that still require picker interaction.
 

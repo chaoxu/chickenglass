@@ -2,8 +2,8 @@
  * Built-in writing themes for Coflat.
  *
  * Each theme is a set of CSS custom property overrides applied to
- * `document.documentElement`. The `dark` flag tells CM6 whether to
- * activate its dark-mode base theme (colorScheme, scroll gutter, etc.).
+ * `document.documentElement`. The `dark` flag marks presets that are designed
+ * to sit on a dark base palette.
  */
 import type { WritingThemeVariables } from "../../theme-contract";
 
@@ -14,7 +14,7 @@ export interface WritingTheme {
   name: string;
   /** CSS variable overrides (keys include the `--cf-` prefix). */
   variables: WritingThemeVariables;
-  /** Whether this theme is dark (drives CM6 dark base theme). */
+  /** Whether this theme is designed for a dark base palette. */
   dark: boolean;
 }
 

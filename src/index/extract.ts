@@ -1,139 +1,88 @@
-/**
- * Extraction functions that parse markdown content using the shared
- * document analysis layer instead of bespoke tree walks.
- */
-
+import { extractHeadingDefinitions } from "../app/markdown/headings";
 import {
-  type DocumentSemantics,
-  type FencedDivSemantics,
-} from "../semantics/document";
-import { analyzeMarkdownSemantics } from "../semantics/markdown-analysis";
-import {
-  buildDocumentReferenceCatalog,
-  type DocumentReferenceCatalog,
-} from "../semantics/reference-catalog";
+  buildDocumentLabelGraph,
+  extractMarkdownBlocks,
+  extractMarkdownEquations,
+} from "../app/markdown/labels";
+import { maskMarkdownCodeSpansAndBlocks } from "../app/markdown/masking";
 import type { IndexEntry, IndexReference, FileIndex } from "./query-api";
 
 export function extractFileIndex(
   content: string,
   file: string,
 ): FileIndex {
-  const analysis = analyzeMarkdownSemantics(content);
   const entries: IndexEntry[] = [];
   const references: IndexReference[] = [];
+  const scanDoc = maskMarkdownCodeSpansAndBlocks(content);
+  const headings = extractHeadingDefinitions(content, scanDoc);
+  const blocks = extractMarkdownBlocks(content, scanDoc);
+  const equations = extractMarkdownEquations(content, scanDoc);
+  const graph = buildDocumentLabelGraph(content);
 
-  extractFromAnalysis(content, file, analysis, entries, references);
-  return { file, sourceText: content, entries, references };
-}
-
-function extractFromAnalysis(
-  content: string,
-  file: string,
-  analysis: DocumentSemantics,
-  entries: IndexEntry[],
-  references: IndexReference[],
-): void {
-  const catalog = buildDocumentReferenceCatalog(analysis);
-  appendBlockEntries(content, file, analysis, catalog, entries);
-  appendEquationEntries(file, catalog, entries);
-  appendHeadingEntries(file, catalog, entries);
-  appendReferences(file, catalog, references);
-}
-
-function appendBlockEntries(
-  content: string,
-  file: string,
-  analysis: DocumentSemantics,
-  catalog: DocumentReferenceCatalog,
-  entries: IndexEntry[],
-): void {
-  for (const target of catalog.targets) {
-    if (target.kind !== "block") continue;
-    const div = analysis.fencedDivByFrom.get(target.from);
-    if (!div) continue;
-
-    entries.push({
-      type: target.blockType ?? "div",
-      label: target.id,
-      title: target.title,
-      file,
-      position: { from: target.from, to: target.to },
-      content: extractFencedDivBody(div, content),
-    });
-  }
-}
-
-function appendEquationEntries(
-  file: string,
-  catalog: DocumentReferenceCatalog,
-  entries: IndexEntry[],
-): void {
-  for (const target of catalog.targets) {
-    if (target.kind !== "equation") continue;
-    entries.push({
-      type: "equation",
-      label: target.id,
-      file,
-      position: { from: target.from, to: target.to },
-      content: target.text ?? "",
-    });
-  }
-}
-
-function appendHeadingEntries(
-  file: string,
-  catalog: DocumentReferenceCatalog,
-  entries: IndexEntry[],
-): void {
-  for (const target of catalog.targets) {
-    if (target.kind !== "heading") continue;
+  for (const heading of headings) {
     entries.push({
       type: "heading",
-      label: target.id,
-      number: target.number,
-      title: target.title,
+      label: heading.id,
+      number: heading.number || undefined,
+      title: heading.text,
       file,
-      position: { from: target.from, to: target.to },
-      content: target.title ?? "",
+      position: { from: heading.from, to: heading.to },
+      content: heading.text,
     });
   }
-}
 
-function appendReferences(
-  file: string,
-  catalog: DocumentReferenceCatalog,
-  references: IndexReference[],
-): void {
-  for (const ref of catalog.references) {
-    references.push({
-      bracketed: ref.bracketed,
-      ids: ref.ids,
-      locators: ref.locators,
+  for (const block of blocks) {
+    entries.push({
+      type: block.blockType ?? "div",
+      label: block.id,
+      title: block.title,
+      file,
+      position: { from: block.from, to: block.to },
+      content: block.content,
+    });
+  }
+
+  for (const equation of equations) {
+    entries.push({
+      type: "equation",
+      label: equation.id,
+      file,
+      position: { from: equation.from, to: equation.to },
+      content: equation.text,
+    });
+  }
+
+  const clusteredReferences = new Map<string, {
+    bracketed: boolean;
+    ids: string[];
+    locators: Array<string | undefined>;
+    sourceFile: string;
+    position: { from: number; to: number };
+  }>();
+  for (const reference of graph.references) {
+    const key = `${reference.clusterFrom}:${reference.clusterTo}`;
+    const existing = clusteredReferences.get(key);
+    if (existing) {
+      existing.ids.push(reference.id);
+      existing.locators.push(reference.locator);
+      continue;
+    }
+    clusteredReferences.set(key, {
+      bracketed: reference.bracketed,
+      ids: [reference.id],
+      locators: [reference.locator],
       sourceFile: file,
-      position: { from: ref.from, to: ref.to },
+      position: { from: reference.clusterFrom, to: reference.clusterTo },
     });
   }
-}
 
-function extractFencedDivBody(div: FencedDivSemantics, content: string): string {
-  const bodyStart = skipFenceLine(content, div.openFenceTo);
-  const bodyEnd = trimClosingFence(content, div.closeFenceFrom, div.to);
-  if (bodyEnd <= bodyStart) return "";
-  return content.slice(bodyStart, bodyEnd);
-}
+  references.push(...Array.from(clusteredReferences.values(), (reference) => ({
+    ...reference,
+    ids: [...reference.ids],
+    locators: [...reference.locators],
+  })));
 
-function skipFenceLine(content: string, pos: number): number {
-  let next = pos;
-  while (next < content.length && content[next] !== "\n") next++;
-  if (next < content.length && content[next] === "\n") next++;
-  return next;
-}
-
-function trimClosingFence(content: string, closeFenceFrom: number, fallbackTo: number): number {
-  if (closeFenceFrom < 0) return fallbackTo;
-  let end = closeFenceFrom;
-  if (end > 0 && content[end - 1] === "\n") end--;
-  return end;
+  return { file, sourceText: content, entries, references };
 }
 
 export function updateFileInIndex(

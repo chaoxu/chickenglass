@@ -115,7 +115,7 @@ describe("perf regression reports", () => {
 
   it("fails fast when required metrics are missing or incomplete", () => {
     expect(() => buildPerfRegressionReport({
-      scenario: "typing-rich-burst",
+      scenario: "typing-lexical-burst",
       iterations: 2,
       warmup: 0,
       settleMs: 200,

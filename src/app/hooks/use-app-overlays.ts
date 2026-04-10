@@ -4,17 +4,16 @@ import { dispatchFormatEvent } from "../../constants/events";
 import {
   resolveDocumentLabelBacklinks,
   type DocumentLabelBacklinksResult,
-} from "../../semantics/document-label-backlinks";
+} from "../markdown/labels";
 import {
   prepareDocumentLabelRename,
   resolveDocumentLabelRenameTarget,
   type DocumentLabelRenameTarget,
-} from "../../semantics/document-label-rename";
+} from "../markdown/labels";
 import { toggleFpsMeter } from "../fps-meter";
 import { batchExport, exportDocument } from "../export";
 import type { FileSystem } from "../file-manager";
 import { basename, modKey } from "../lib/utils";
-import { dispatchIfConnected } from "../lib/view-dispatch";
 import type { PaletteCommand } from "../components/command-palette";
 import { collectSearchableMarkdownPaths } from "../search";
 import { useAutoSave } from "./use-auto-save";
@@ -41,7 +40,7 @@ interface AppOverlayDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
+    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "editorHandle" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
   >;
   onOpenFile: () => void;
   onQuit: () => void;
@@ -286,13 +285,18 @@ export function useAppOverlays({
   }, [editor]);
 
   const handleShowLabelBacklinks = useCallback(() => {
-    const view = editor.editorState?.view;
-    if (!view || !editor.currentPath?.endsWith(".md")) {
+    const handle = editor.editorHandle;
+    if (!handle || !editor.currentPath?.endsWith(".md")) {
       window.alert(LABEL_ACTION_MESSAGE);
       return;
     }
 
-    const lookup = resolveDocumentLabelBacklinks(view.state);
+    const selection = handle.getSelection();
+    const lookup = resolveDocumentLabelBacklinks(
+      editor.getCurrentDocText(),
+      selection.from,
+      selection.to,
+    );
     if (lookup.kind === "ready") {
       setLabelBacklinks(lookup.result);
       return;
@@ -306,16 +310,22 @@ export function useAppOverlays({
     }
 
     window.alert(LABEL_ACTION_MESSAGE);
-  }, [editor.currentPath, editor.editorState?.view]);
+  }, [editor.currentPath, editor.editorHandle, editor.getCurrentDocText]);
 
   const handleRenameDocumentLabel = useCallback(() => {
-    const view = editor.editorState?.view;
-    if (!view || !editor.currentPath?.endsWith(".md")) {
+    const handle = editor.editorHandle;
+    if (!handle || !editor.currentPath?.endsWith(".md")) {
       window.alert(LABEL_ACTION_MESSAGE);
       return;
     }
 
-    const lookup = resolveDocumentLabelRenameTarget(view.state);
+    const selection = handle.getSelection();
+    const currentDoc = editor.getCurrentDocText();
+    const lookup = resolveDocumentLabelRenameTarget(
+      currentDoc,
+      selection.from,
+      selection.to,
+    );
     if (lookup.kind === "duplicate") {
       window.alert(duplicateRenameMessage(lookup.id));
       return;
@@ -334,21 +344,18 @@ export function useAppOverlays({
       return;
     }
 
-    const rename = prepareDocumentLabelRename(view.state, promptedId);
+    const rename = prepareDocumentLabelRename(
+      currentDoc,
+      selection.from,
+      promptedId,
+      selection.to,
+    );
     if (rename.kind === "ready") {
-      if (rename.changes.length === 0) return;
-      if (dispatchIfConnected(
-        view,
-        { changes: [...rename.changes], scrollIntoView: true },
-        { context: "[rename-label] dispatch failed:" },
-      )) {
-        view.focus();
-        window.requestAnimationFrame(() => {
-          if (view.dom.isConnected) {
-            view.focus();
-          }
-        });
+      if (rename.changes.length === 0) {
+        return;
       }
+      handle.applyChanges(rename.changes);
+      handle.focus();
       return;
     }
 
@@ -368,7 +375,7 @@ export function useAppOverlays({
     }
 
     window.alert(LABEL_ACTION_MESSAGE);
-  }, [editor.currentPath, editor.editorState?.view]);
+  }, [editor.currentPath, editor.editorHandle, editor.getCurrentDocText]);
 
   // ── Single command registry ──────────────────────────────────────────────
   // Each command is defined once. Palette entries, hotkey bindings, and
@@ -407,9 +414,6 @@ export function useAppOverlays({
     { id: "view.toggle-sidenotes", label: "Toggle Sidenote Margin", category: "View", action: () => sidebarLayout.setSidenotesCollapsed((value) => !value) },
     { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => workspace.setTheme(workspace.resolvedTheme === "dark" ? "light" : "dark") },
     { id: "view.toggle-fps", label: "Toggle FPS Meter", category: "View", action: () => toggleFpsMeter() },
-
-    // ── Insert ────────────────────────────────────────────────────────────
-    { id: "insert.image", label: "Insert Image", category: "Insert", action: () => editor.handleInsertImage() },
 
     // ── Export ────────────────────────────────────────────────────────────
     { id: "export.html", label: "Export Current File to HTML", category: "Export", menuId: "file_export", action: handleExportHtml },

@@ -1,7 +1,10 @@
 import { useEffect, useRef } from "react";
-import type { EditorMode } from "../../editor";
+import type { EditorMode } from "../editor-mode";
+import type { MarkdownEditorHandle } from "../../lexical/plain-text-editor";
 import { isTauri } from "../../lib/tauri";
 import { recordDebugSessionEvent } from "../../debug/session-recorder";
+import { buildLegacyTreeString } from "../legacy-debug-bridge";
+import type { SourceMap } from "../source-map";
 import {
   clearCombinedPerf,
   getCombinedPerfSnapshot,
@@ -41,6 +44,7 @@ interface TauriSmokeWindowState {
 }
 
 interface AppDebugDeps {
+  editorHandle: MarkdownEditorHandle | null;
   openProject: (path: string) => Promise<boolean>;
   openFile: (path: string) => Promise<void>;
   hasFile: (path: string) => Promise<boolean>;
@@ -55,6 +59,8 @@ interface AppDebugDeps {
   requestNativeClose: () => Promise<void>;
   setMode: (mode: EditorMode) => void;
   getMode: () => EditorMode;
+  getCurrentDocText: () => string;
+  getCurrentSourceMap: () => SourceMap | null;
   projectRoot: string | null;
   currentDocument: DebugDocumentState | null;
   hasDirtyDocument: boolean;
@@ -63,6 +69,7 @@ interface AppDebugDeps {
 }
 
 export function useAppDebug({
+  editorHandle,
   openProject,
   openFile,
   hasFile,
@@ -74,6 +81,8 @@ export function useAppDebug({
   requestNativeClose,
   setMode,
   getMode,
+  getCurrentDocText,
+  getCurrentSourceMap,
   projectRoot,
   currentDocument,
   hasDirtyDocument,
@@ -193,6 +202,59 @@ export function useAppDebug({
       getCurrentDocument: () => currentDocument,
       isDirty: () => hasDirtyDocument,
     };
+    window.__editor = editorHandle
+      ? {
+          focus: () => {
+            recordDebugSessionEvent({
+              timestamp: Date.now(),
+              type: "app",
+              summary: "editor.focus",
+            });
+            editorHandle.focus();
+          },
+          getDoc: () => getCurrentDocText(),
+          getSelection: () => editorHandle.getSelection(),
+          insertText: (text) => {
+            recordDebugSessionEvent({
+              timestamp: Date.now(),
+              type: "app",
+              summary: `editor.insertText ${text.length}`,
+              detail: { text },
+            });
+            editorHandle.insertText(text);
+          },
+          setDoc: (doc) => {
+            recordDebugSessionEvent({
+              timestamp: Date.now(),
+              type: "app",
+              summary: `editor.setDoc ${doc.length}`,
+              detail: { docLength: doc.length },
+            });
+            editorHandle.setDoc(doc);
+          },
+          setSelection: (anchor, focus = anchor) => {
+            recordDebugSessionEvent({
+              timestamp: Date.now(),
+              type: "app",
+              summary: `editor.setSelection ${anchor}:${focus}`,
+              detail: { anchor, focus },
+            });
+            editorHandle.setSelection(anchor, focus);
+          },
+        }
+      : undefined;
+    window.__cmView = {
+      dispatch: () => {},
+      dom: document.querySelector('[data-testid="lexical-editor"]'),
+      focus: () => {
+        editorHandle?.focus();
+      },
+      state: {
+        doc: {
+          toString: () => getCurrentDocText(),
+        },
+      },
+    };
     window.__cfDebug = {
       perfSummary: getCombinedPerfSnapshot,
       printPerfSummary,
@@ -200,6 +262,17 @@ export function useAppDebug({
       togglePerfPanel,
       toggleFps: toggleFpsMeter,
     };
+    window.__cmDebug = {
+      dump: () => ({
+        doc: getCurrentDocText(),
+        selection: editorHandle?.getSelection() ?? null,
+      }),
+      line: (lineNumber: number) => getCurrentDocText().split("\n")[lineNumber - 1] ?? null,
+      selection: () => editorHandle?.getSelection() ?? null,
+      tree: () => buildLegacyTreeString(getCurrentDocText()),
+      treeString: () => buildLegacyTreeString(getCurrentDocText()),
+    };
+    window.__cfSourceMap = getCurrentSourceMap();
     if (import.meta.env.DEV && isTauri()) {
       window.__tauriSmoke = {
         openProject,
@@ -233,10 +306,15 @@ export function useAppDebug({
       // Clear debug globals on unmount / HMR so stale closures are not left
       // on window between hot-reloads or component teardowns.
       delete window.__app;
+      delete window.__editor;
+      delete window.__cmView;
+      delete window.__cmDebug;
       delete window.__cfDebug;
+      delete window.__cfSourceMap;
       delete window.__tauriSmoke;
     };
   }, [
+    editorHandle,
     openProject,
     openFile,
     hasFile,
@@ -248,6 +326,8 @@ export function useAppDebug({
     requestNativeClose,
     setMode,
     getMode,
+    getCurrentDocText,
+    getCurrentSourceMap,
     projectRoot,
     currentDocument,
     hasDirtyDocument,

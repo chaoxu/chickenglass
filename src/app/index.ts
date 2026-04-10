@@ -21,7 +21,6 @@ export { useTheme, type Theme, type ResolvedTheme } from "./hooks/use-theme";
 export { useAutoSave } from "./hooks/use-auto-save";
 export { useWindowState } from "./hooks/use-window-state";
 export { useRecentFiles } from "./hooks/use-recent-files";
-export { useEditor } from "./hooks/use-editor";
 export { useSettings } from "./hooks/use-settings";
 export { useHotkeys } from "./hooks/use-hotkeys";
 
@@ -45,7 +44,6 @@ export { SourceMap, type IncludeRegion } from "./source-map";
 export { FileWatcher, type FileWatcherConfig } from "./file-watcher";
 export {
   type ProjectConfig,
-  projectConfigFacet,
   parseProjectConfig,
   mergeConfigs,
   loadProjectConfig,

@@ -63,7 +63,7 @@ function currentContext(): DebugSessionEvent["context"] {
   return {
     document: window.__app?.getCurrentDocument?.() ?? null,
     mode: window.__app?.getMode?.() ?? null,
-    selection: window.__cmDebug?.selection?.() ?? null,
+    selection: null,
     location: window.location.href,
   };
 }

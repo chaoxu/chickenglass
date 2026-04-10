@@ -10,16 +10,10 @@
 import { isTauri } from "../lib/tauri";
 import { measureAsync } from "./perf";
 import type { FileSystem, FileEntry } from "./file-manager";
-import {
-  markdownToHtml,
-  escapeHtml,
-  type MarkdownToHtmlOptions,
-} from "./markdown-to-html";
 import type { ExportFormat } from "./lib/types";
 import { basename } from "./lib/utils";
 import { exportThemeTokenDefaults } from "../theme-contract";
 import { checkPandocCommand, exportDocumentCommand } from "./tauri-client/export";
-import { resolveLocalImageOverrides } from "./pdf-image-previews";
 
 export type { ExportFormat };
 
@@ -63,9 +57,7 @@ function deriveOutputPath(sourcePath: string, format: ExportFormat): string {
 function buildHtmlDocument(
   content: string,
   title: string,
-  htmlOptions?: Pick<MarkdownToHtmlOptions, "documentPath" | "imageUrlOverrides">,
 ): string {
-  const bodyHtml = markdownToHtml(content, htmlOptions);
   const themeTokens = serializeExportThemeTokens({
     ...resolveExportThemeTokens(),
   });
@@ -76,203 +68,34 @@ function buildHtmlDocument(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
   <style>
     :root {
 ${themeTokens}
     }
-    /* Document typography */
     body {
       font-family: var(--cf-content-font);
       font-size: 16px;
-      line-height: 1.7;
+      line-height: 1.6;
       max-width: 800px;
       margin: 3rem auto;
       padding: 0 1.5rem;
       color: var(--cf-fg);
       background: var(--cf-bg);
     }
-    h1, h2, h3, h4, h5, h6 {
-      font-family: var(--cf-ui-font);
-      margin-top: 2rem;
-      margin-bottom: 0.5rem;
-      color: var(--cf-fg);
-    }
-    a {
-      color: var(--cf-fg);
-      text-decoration: none;
-      border-bottom: 1px dotted var(--cf-muted);
-    }
-    .katex {
-      color: inherit;
-      font-size: inherit;
-    }
-    pre {
+    .cf-markdown-source {
       font-family: var(--cf-code-font);
       background: var(--cf-hover);
       border: 1px solid var(--cf-border);
       padding: 1rem;
       overflow-x: auto;
-      border-radius: 0;
-    }
-    code {
-      font-family: var(--cf-code-font);
-      font-size: 0.85em;
-      background: var(--cf-hover);
-      padding: 0.15em 0.35em;
-
+      white-space: pre-wrap;
       border-radius: var(--cf-border-radius);
-    }
-    pre code {
-      background: none;
-      padding: 0;
-    }
-    blockquote {
-      margin-left: 0;
-      padding-left: 1em;
-      border-left: 3px solid var(--cf-blockquote-border);
-      color: var(--cf-blockquote-color);
-    }
-    ul, ol {
-      padding-left: 1.5em;
-      margin: 0.8em 0;
-      list-style-position: outside;
-    }
-    ul {
-      list-style-type: disc;
-    }
-    ol {
-      list-style-type: decimal;
-    }
-    li {
-      display: list-item;
-      margin: 0.2em 0;
-    }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin: 1.5rem 0;
-      font-size: var(--cf-table-font-size, 0.9em);
-    }
-    th, td {
-      border: 1px solid var(--cf-table-border);
-      padding: var(--cf-table-cell-padding);
-      line-height: var(--cf-table-line-height, 1.5);
-      text-align: left;
-    }
-    th {
-      font-weight: 600;
-      border-bottom: 2px solid var(--cf-table-header-border);
-      background: var(--cf-subtle);
-    }
-    hr {
-      border: none;
-      border-top: 1px solid var(--cf-border);
-      margin: 2rem 0;
-    }
-    mark {
-      background: var(--cf-mark-bg);
-      padding: 0.1em 0.2em;
-      border-radius: var(--cf-border-radius);
-    }
-    /* Inline formatting — cf-* classes shared with CM6 rich mode */
-    .cf-bold { font-weight: 700; }
-    .cf-italic { font-style: italic; }
-    .cf-strikethrough { text-decoration: line-through; }
-    .cf-highlight {
-      background: var(--cf-mark-bg);
-      padding: 0.1em 0.2em;
-      border-radius: var(--cf-border-radius);
-    }
-    .cf-inline-code {
-      font-family: var(--cf-code-font);
-      font-size: 0.85em;
-      background: var(--cf-hover);
-      padding: 0.15em 0.35em;
-      border-radius: var(--cf-border-radius);
-    }
-    .cf-math-display {
-      margin: 0;
-      text-align: center;
-    }
-    .cf-math-display-numbered {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-      align-items: center;
-      text-align: initial;
-    }
-    .cf-math-display-content {
-      display: inline-block;
-    }
-    .cf-math-display-numbered > .cf-math-display-content {
-      grid-column: 2;
-    }
-    .cf-math-display-number {
-      grid-column: 3;
-      justify-self: end;
-      padding-left: 1rem;
-      white-space: nowrap;
-      font-style: normal;
-      font-variant-numeric: tabular-nums;
-    }
-    .cf-math-display .katex-display {
-      margin: 0;
-    }
-    .cf-block-theorem { font-style: var(--cf-block-theorem-style); margin: var(--cf-block-margin); }
-    .cf-block-lemma { font-style: var(--cf-block-lemma-style); margin: var(--cf-block-margin); }
-    .cf-block-corollary { font-style: var(--cf-block-corollary-style); margin: var(--cf-block-margin); }
-    .cf-block-proposition { font-style: var(--cf-block-proposition-style); margin: var(--cf-block-margin); }
-    .cf-block-conjecture { font-style: var(--cf-block-conjecture-style); margin: var(--cf-block-margin); }
-    .cf-block-definition { font-style: var(--cf-block-definition-style); margin: var(--cf-block-margin); }
-    .cf-block-problem { font-style: var(--cf-block-problem-style); margin: var(--cf-block-margin); }
-    .cf-block-example { font-style: var(--cf-block-example-style); margin: var(--cf-block-margin); }
-    .cf-block-remark, .cf-block-note { font-style: var(--cf-block-remark-style); margin: var(--cf-block-margin); }
-    .cf-block-proof {
-      font-style: var(--cf-block-proof-style);
-      margin: var(--cf-block-margin);
-      position: relative;
-    }
-    .cf-block-proof::after {
-      content: var(--cf-proof-marker);
-      color: var(--cf-proof-marker-color);
-      font-size: var(--cf-proof-marker-size);
-      float: right;
-    }
-    .cf-block-header-rendered {
-      display: var(--cf-block-title-display);
-      font-weight: var(--cf-block-title-weight);
-      color: var(--cf-block-title-color);
-      font-style: normal;
-    }
-    .cf-block-header-rendered::after {
-      content: var(--cf-block-title-separator);
-    }
-    .cross-ref {
-      color: var(--cf-fg);
-      text-decoration: none;
-      border-bottom: 1px dashed var(--cf-muted);
-    }
-    .cross-ref:hover {
-      border-bottom-style: solid;
-    }
-    .footnote {
-      font-size: 0.85em;
-      color: var(--cf-muted);
-      padding: 0.25rem 0;
-      border-top: 1px solid var(--cf-border);
-      margin-top: 0.5rem;
-    }
-    .math-error {
-      color: var(--cf-math-error-fg);
-      background: var(--cf-math-error-bg);
-    }
-    input[type="checkbox"] {
-      margin-right: 0.4em;
     }
   </style>
 </head>
 <body>
-${bodyHtml}
+  <h1>${escapeHtml(title)}</h1>
+  <pre class="cf-markdown-source">${escapeHtml(content)}</pre>
 </body>
 </html>`;
 }
@@ -280,14 +103,10 @@ ${bodyHtml}
 async function buildHtmlDocumentWithResolvedImages(
   content: string,
   title: string,
-  fs?: FileSystem,
-  documentPath = "",
+  _fs?: FileSystem,
+  _documentPath = "",
 ): Promise<string> {
-  const imageUrlOverrides = await resolveLocalImageOverrides(content, fs, documentPath);
-  return buildHtmlDocument(content, title, {
-    documentPath,
-    imageUrlOverrides,
-  });
+  return buildHtmlDocument(content, title);
 }
 
 function resolveExportThemeTokens(): Record<string, string> {
@@ -330,6 +149,15 @@ function serializeExportThemeTokens(tokens: Record<string, string>): string {
 export const _buildHtmlDocumentForTest = buildHtmlDocument;
 export const _buildHtmlDocumentAsyncForTest = buildHtmlDocumentWithResolvedImages;
 export const _resolveExportThemeTokensForTest = resolveExportThemeTokens;
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
 
 /**
  * Export a document to PDF, LaTeX, or HTML.

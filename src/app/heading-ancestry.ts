@@ -1,14 +1,10 @@
-/**
- * Re-export from canonical location `src/semantics/heading-ancestry.ts`.
- *
- * Kept for backward compatibility — existing app/ imports continue to work.
- * New code should import from `../semantics/heading-ancestry` directly.
- */
 export {
-  type HeadingEntry,
-  extractHeadings,
-  headingAncestryAt,
   activeHeadingIndex,
+  extractHeadingsFromMarkdown as extractHeadings,
+  extractHeadingDefinitions,
   findTrailingHeadingAttributes,
   hasUnnumberedHeadingAttributes,
-} from "../semantics/heading-ancestry";
+  headingAncestryAt,
+  type HeadingDefinition,
+  type HeadingEntry,
+} from "./markdown/headings";

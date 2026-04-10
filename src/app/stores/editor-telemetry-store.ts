@@ -11,7 +11,7 @@
  */
 
 import { create } from "zustand";
-import type { EditorView } from "@codemirror/view";
+import { getTextPosition } from "../markdown/text-lines";
 
 // ── State shape ─────────────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ export interface EditorTelemetryState {
 
 interface EditorTelemetryActions {
   /** Update cursor position and derive line/col from the view. */
-  setCursorPos: (pos: number, view: EditorView) => void;
+  setCursorPos: (pos: number, doc: string) => void;
   /** Update scroll metrics. */
   setScroll: (top: number, from: number) => void;
   /** Update word and character counts together. */
@@ -63,13 +63,13 @@ export const useEditorTelemetryStore = create<EditorTelemetryStore>()(
   (set) => ({
     ...initialState,
 
-    setCursorPos: (pos: number, view: EditorView) => {
+    setCursorPos: (pos: number, doc: string) => {
       try {
-        const line = view.state.doc.lineAt(pos);
+        const line = getTextPosition(doc, pos);
         set({
           cursorPos: pos,
-          cursorLine: line.number,
-          cursorCol: pos - line.from + 1,
+          cursorLine: line.line,
+          cursorCol: line.col,
         });
       } catch {
         // Stale offset after doc change — use defaults.

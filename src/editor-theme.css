@@ -1,92 +1,26 @@
-/* ── Coflat Editor Theme ────────────────────────────────────────────────────
- * Standalone stylesheet for the Coflat editor.
- *
- * Standalone consumers import this once:
- *
- *   import "coflat/editor/style.css";
- *   import { mountEditor } from "coflat/editor";
- *
- * Provides:
- *   - --cf-* design tokens (light & dark)
- *   - CodeMirror 6 base overrides
- *   - Shared component classes (math, blocks, search, tooltips, etc.)
- *
- * Does NOT include Tailwind, app-shell layout, or print styles.
- * ──────────────────────────────────────────────────────────────────────────── */
-
-/* ── Design tokens ──────────────────────────────────────────────────────────
- * Minimal black-and-white palette. No gradients, no shadows, borders for depth.
- * Typography: 12px labels, 14px body, 16px editor. Weights: 400/500/600.
- * Spacing: 4/8/12/16px increments. Opacity for icon affordance (0.6 → 1.0).
- * ──────────────────────────────────────────────────────────────────────────── */
-
 :root {
   --cf-ui-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --cf-content-font: KaTeX_Main, "Times New Roman", serif;
   --cf-code-font: Monaco, "DejaVu Sans Mono", Consolas, monospace;
-
-  /* Backgrounds — flat: secondary matches primary */
   --cf-bg: #ffffff;
   --cf-bg-secondary: #ffffff;
-
-  /* Text */
   --cf-fg: #09090b;
   --cf-muted: #71717a;
-
-  /* Borders — always 1px solid, primary separator */
   --cf-border: #e4e4e7;
-
-  /* Interactive states — visible enough for 3:1 contrast on white (#fff) */
   --cf-subtle: rgba(0, 0, 0, 0.04);
   --cf-hover: rgba(0, 0, 0, 0.08);
   --cf-active: rgba(0, 0, 0, 0.12);
-
-  /* Highlight (==text==) background — shared between editor and read mode */
   --cf-mark-bg: rgba(255, 255, 0, 0.2);
   --cf-math-error-fg: #c00;
   --cf-math-error-bg: rgba(255, 0, 0, 0.05);
-
-  /* Accent — black, one color */
   --cf-accent: #18181b;
   --cf-accent-fg: #ffffff;
-  --cf-active-shell-border: #dc2626;
-  --cf-active-shell-fill: rgba(220, 38, 38, 0.10);
-  --cf-active-shell-border-width: 2px;
-
-  /* Overlay (semi-transparent background for floating bars) */
+  --cf-link: var(--cf-fg);
   --cf-bg-overlay: rgba(255, 255, 255, 0.82);
   --cf-border-overlay: rgba(228, 228, 231, 0.6);
-
-  /* Layer system — inline editor chrome stays below body-level popups. */
-  --cf-layer-inline-chrome: 1;
-  --cf-layer-preview-surface: 1000;
-  --cf-layer-block-picker: 1010;
-
-  /* Theme-owned special surfaces */
   --cf-block-header-accent: var(--cf-fg);
-  --cf-block-header-border-width: 0px;
-
-  /* Per-block-type accent colors (default to shared fallback).
-   * These tokens match the STYLED_BLOCK_NAMES list derived from
-   * BLOCK_MANIFEST in src/constants/block-manifest.ts. When adding
-   * a new block type, add its entry to the manifest and corresponding
-   * --cf-block-{name}-accent and --cf-block-{name}-style tokens here. */
-  --cf-block-theorem-accent: var(--cf-block-header-accent);
-  --cf-block-lemma-accent: var(--cf-block-header-accent);
-  --cf-block-corollary-accent: var(--cf-block-header-accent);
-  --cf-block-proposition-accent: var(--cf-block-header-accent);
-  --cf-block-conjecture-accent: var(--cf-block-header-accent);
-  --cf-block-definition-accent: var(--cf-block-header-accent);
-  --cf-block-problem-accent: var(--cf-block-header-accent);
-  --cf-block-example-accent: var(--cf-block-header-accent);
-  --cf-block-remark-accent: var(--cf-block-header-accent);
-  --cf-block-proof-accent: var(--cf-block-header-accent);
-  --cf-block-algorithm-accent: var(--cf-block-header-accent);
-  --cf-block-figure-accent: var(--cf-block-header-accent);
-  --cf-block-table-accent: var(--cf-block-header-accent);
   --cf-block-title-color: var(--cf-fg);
   --cf-block-title-weight: 700;
-  /* Per-block-type body font style — must match BLOCK_MANIFEST bodyStyle values */
   --cf-block-theorem-style: italic;
   --cf-block-lemma-style: italic;
   --cf-block-corollary-style: italic;
@@ -100,10 +34,6 @@
   --cf-block-algorithm-style: normal;
   --cf-block-figure-style: normal;
   --cf-block-table-style: normal;
-  --cf-block-nest-1: var(--cf-border);
-  --cf-block-nest-2: var(--cf-active);
-  --cf-block-nest-3: var(--cf-muted);
-  --cf-block-nest-4: var(--cf-fg);
   --cf-proof-marker: "\220E";
   --cf-proof-marker-color: var(--cf-fg);
   --cf-proof-marker-size: 1.2em;
@@ -112,9 +42,6 @@
   --cf-block-margin: 0.6em 0;
   --cf-block-title-display: inline;
   --cf-block-title-separator: ".\2002\2002";
-  --cf-include-accent: var(--cf-border);
-  --cf-include-label-color: var(--cf-border);
-  --cf-include-label-active-color: var(--cf-muted);
   --cf-table-border: var(--cf-border);
   --cf-table-header-border: var(--cf-border);
   --cf-table-edit-outline: var(--cf-active);
@@ -122,39 +49,41 @@
   --cf-table-font-size: 0.9em;
   --cf-table-line-height: 1.5;
   --cf-embed-border: var(--cf-border);
-
-  /* Border radius */
-  --cf-border-radius: 2px;
-  --cf-border-radius-lg: 4px;
-
-  /* Spacing scale */
-  --cf-spacing-xs: 4px;
-  --cf-spacing-sm: 8px;
-  --cf-spacing-md: 12px;
-  --cf-spacing-lg: 16px;
-
-  /* Preview surfaces */
-  --cf-preview-surface-max-width: 400px;
-  --cf-preview-surface-max-height: 300px;
-  --cf-preview-surface-padding-block: var(--cf-spacing-md);
-  --cf-preview-surface-padding-inline: var(--cf-spacing-lg);
-  --cf-preview-surface-font-size: 0.9em;
-
-  /* UI font sizes */
-  --cf-ui-font-size-sm: 12px;
-  --cf-ui-font-size-base: 14px;
-
-  /* Border widths */
-  --cf-border-width: 1px;
-  --cf-border-width-accent: 2px;
-
-  /* Transitions */
-  --cf-transition: 0.15s ease;
-
-  /* Layout */
+  --cf-base-font-size: 16px;
+  --cf-line-height: 1.5;
   --cf-content-max-width: 800px;
   --cf-sidenote-width: 224px;
   --cf-fence-guide-width: 3px;
+  --cf-ui-font-size-sm: 12px;
+  --cf-ui-font-size-base: 14px;
+  --cf-h1-size: 1.15em;
+  --cf-h1-weight: 700;
+  --cf-h1-style: normal;
+  --cf-h2-size: 1.15em;
+  --cf-h2-weight: 400;
+  --cf-h2-style: italic;
+  --cf-h3-size: 1.1em;
+  --cf-h3-weight: 600;
+  --cf-h3-style: italic;
+  --cf-h4-size: 1.05em;
+  --cf-h4-weight: 600;
+  --cf-h4-style: normal;
+  --cf-h5-size: 1em;
+  --cf-h5-weight: 600;
+  --cf-h5-style: normal;
+  --cf-h6-size: 0.95em;
+  --cf-h6-weight: 600;
+  --cf-h6-style: normal;
+  --cf-preview-surface-max-width: 640px;
+  --cf-preview-surface-max-height: 520px;
+  --cf-preview-surface-padding-block: 12px;
+  --cf-preview-surface-padding-inline: 16px;
+  --cf-preview-surface-font-size: 0.9em;
+  --cf-border-width: 1px;
+  --cf-border-width-accent: 2px;
+  --cf-transition: 0.15s ease;
+  --cf-border-radius: 2px;
+  --cf-border-radius-lg: 4px;
 }
 
 [data-theme="dark"] {
@@ -164,115 +93,560 @@
   --cf-muted: #a1a1aa;
   --cf-border: #27272a;
   --cf-subtle: rgba(255, 255, 255, 0.05);
-  --cf-hover: rgba(255, 255, 255, 0.10);
+  --cf-hover: rgba(255, 255, 255, 0.1);
   --cf-active: rgba(255, 255, 255, 0.15);
   --cf-mark-bg: rgba(255, 255, 0, 0.15);
   --cf-math-error-fg: #fca5a5;
   --cf-math-error-bg: rgba(239, 68, 68, 0.18);
   --cf-accent: #fafafa;
   --cf-accent-fg: #09090b;
-  --cf-active-shell-border: #ef4444;
-  --cf-active-shell-fill: rgba(239, 68, 68, 0.16);
-  --cf-active-shell-border-width: 2px;
   --cf-bg-overlay: rgba(10, 10, 10, 0.82);
   --cf-border-overlay: rgba(63, 63, 70, 0.6);
 }
 
-/* ── Font utility classes ──────────────────────────────────────────────────── */
-
-.cf-ui-font {
-  font-family: var(--cf-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
-}
-
-.cf-code-font,
-.font-mono {
-  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-}
-
-/* ── CodeMirror 6 overrides ─────────────────────────────────────────────────── */
-
-.cm-editor {
+.cf-lexical-root {
   height: 100%;
+  color: var(--cf-fg);
 }
 
-.cm-scroller {
+.cf-lexical-editor {
+  box-sizing: border-box;
+  min-height: 100%;
   overflow: auto;
-  overscroll-behavior: contain;
+  outline: none;
+  color: var(--cf-fg);
+  background: var(--cf-bg);
+  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
+  font-size: var(--cf-base-font-size, 16px);
+  line-height: var(--cf-line-height, 1.5);
+  caret-color: var(--cf-fg);
+  text-align: left;
+  padding: 24px 48px 64px;
 }
 
-.cm-editor.cm-focused {
+.cf-lexical-editor--source {
+  font-family: var(--cf-code-font);
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
+.cf-lexical-editor--rich > * {
+  width: 100%;
+  max-width: var(--cf-content-max-width, 800px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.cf-lexical-editor--hidden {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: 0;
+  white-space: pre-wrap;
+}
+
+.cf-lexical-editor--rich {
+  white-space: normal;
+}
+
+.cf-lexical-paragraph {
+  margin: 0.8em 0;
+  min-height: 1.5em;
+}
+
+.cf-lexical-editor:focus {
   outline: none;
 }
 
-/* Source mode uses monospace font at a smaller size (~11pt) for raw editing.
- * Rich/read mode keeps the default 16px serif via base-theme.ts. */
-.cf-source-mode .cm-content {
-  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-  font-size: 11pt;
+.cf-lexical-editor::selection,
+.cf-lexical-editor *::selection {
+  background: color-mix(in srgb, var(--cf-accent) 20%, transparent);
 }
 
-/* ── Sidenote margin (portal + items) ──────────────────────────────────────
- * Styles for the sidenote margin rendered via React portal inside the
- * CM6 scroller. These are outside CM6's theme scope, so they live here. */
+.cf-lexical-inline-math {
+  display: inline-flex;
+  align-items: baseline;
+  cursor: text;
+}
 
-/* Portal container — absolutely positioned to the right of content */
-.cf-sidenote-scroller {
+.katex {
+  color: inherit;
+}
+
+.cf-lexical-inline-math .katex {
+  font-size: inherit;
+}
+
+.cf-bold {
+  font-weight: 700;
+}
+
+.cf-italic {
+  font-style: italic;
+}
+
+.cf-strikethrough {
+  text-decoration: line-through;
+}
+
+.cf-highlight {
+  background: var(--cf-mark-bg, rgba(255, 255, 0, 0.2));
+  border-radius: var(--cf-border-radius);
+  padding: 1px 0;
+}
+
+.cf-inline-code {
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: 0.85em;
+  background: var(--cf-hover);
+  padding: 0.15em 0.35em;
+  border-radius: var(--cf-border-radius);
+}
+
+.cf-lexical-link {
+  color: var(--cf-link, var(--cf-fg));
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-underline-offset: 0.12em;
+  cursor: pointer;
+}
+
+.cf-lexical-editor--rich pre:has(> .cf-lexical-code-block) {
+  margin: 1em 0;
+  padding: 1.9rem 1rem 0.7rem;
+  border: 1px solid var(--cf-border);
+  border-radius: 0;
+  background: var(--cf-hover);
+  overflow-x: auto;
+}
+
+.cf-lexical-code-block {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: 0.85em;
+}
+
+.cf-codeblock-language {
+  z-index: 65;
+  color: var(--cf-muted);
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: 0.76em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.cf-codeblock-copy {
+  z-index: 65;
+  height: 1.35rem;
+  border: 0;
+  padding: 0 0.35rem;
+  background: color-mix(in srgb, var(--cf-bg) 88%, transparent);
+  color: var(--cf-muted);
+  font-family: var(--cf-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  font-size: 0.82rem;
+  cursor: pointer;
+  opacity: 0.88;
+  transition: opacity var(--cf-transition), color var(--cf-transition), background var(--cf-transition);
+}
+
+.cf-codeblock-copy:hover {
+  color: var(--cf-fg);
+  background: color-mix(in srgb, var(--cf-bg) 96%, var(--cf-hover));
+}
+
+.cf-codeblock-copy[data-copied="true"] {
+  opacity: 1;
+}
+
+.cf-lexical-quote {
+  margin: 1em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--cf-blockquote-border);
+  color: var(--cf-blockquote-color);
+}
+
+.cf-lexical-list {
+  margin: 0.8em 0;
+}
+
+.cf-lexical-list--unordered,
+.cf-lexical-list--ordered {
+  padding-left: 1.5em;
+}
+
+.cf-lexical-list--unordered {
+  padding-left: 0;
+  list-style: none;
+}
+
+.cf-lexical-list--ordered {
+  list-style-type: decimal;
+  list-style-position: outside;
+}
+
+.cf-lexical-list-item {
+  display: list-item;
+  margin: 0.2em 0;
+}
+
+.cf-lexical-list--unordered > .cf-lexical-list-item {
+  display: block;
+  margin-left: 0;
+  padding-left: 1.35em;
   position: relative;
 }
 
-.cf-sidenote-portal {
+.cf-lexical-list--unordered > .cf-lexical-list-item::before {
+  content: "-";
   position: absolute;
+  left: 0;
   top: 0;
-  right: 0;
-  width: var(--cf-sidenote-width, 224px);
-  height: 0;
-  overflow: visible;
-  pointer-events: none;
-  z-index: var(--cf-layer-inline-chrome);
-  box-sizing: border-box;
+  color: var(--cf-fg);
+  font-weight: 400;
 }
 
-/* Sidenote margin separator — sticky pseudo-element stays visible
-   during scrolling without contributing to scroll height */
-.cf-sidenote-portal::before {
-  content: "";
-  position: sticky;
-  top: 0;
+.cf-lexical-list-item--nested {
+  margin-top: 0.2em;
+}
+
+.cf-lexical-heading {
+  text-align: left;
+  color: var(--cf-fg);
+  line-height: 1.3;
+}
+
+.cf-lexical-heading--h1 {
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h1-size, 1.15em);
+  font-style: var(--cf-h1-style, normal);
+  font-weight: var(--cf-h1-weight, 700);
+}
+
+.cf-lexical-heading--h2 {
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h2-size, 1.15em);
+  font-style: var(--cf-h2-style, italic);
+  font-weight: var(--cf-h2-weight, 400);
+}
+
+.cf-lexical-heading--h3 {
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h3-size, 1.1em);
+  font-style: var(--cf-h3-style, italic);
+  font-weight: var(--cf-h3-weight, 600);
+}
+
+.cf-lexical-heading--h4 {
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h4-size, 1.05em);
+  font-style: var(--cf-h4-style, normal);
+  font-weight: var(--cf-h4-weight, 600);
+}
+
+.cf-lexical-heading--h5 {
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h5-size, 1em);
+  font-style: var(--cf-h5-style, normal);
+  font-weight: var(--cf-h5-weight, 600);
+}
+
+.cf-lexical-heading--h6 {
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h6-size, 0.95em);
+  font-style: var(--cf-h6-style, normal);
+  font-weight: var(--cf-h6-weight, 600);
+}
+
+.cf-lexical-inline-math-panel {
+  z-index: 60;
+  width: max-content;
+  max-width: calc(100vw - 4px);
+}
+
+.cf-lexical-inline-math-panel-shell {
+  max-width: calc(100vw - 4px);
+}
+
+.cf-lexical-inline-math-panel-surface {
+  padding: 1px 2px;
+}
+
+.cf-lexical-inline-math-source {
+  min-width: 0;
+  color: var(--cf-fg);
+  font-family: var(--cf-code-font);
+  font-size: 0.92em;
+}
+
+.cf-lexical-inline-math-panel-editor {
   display: block;
-  width: 1px;
-  height: 100vh;
-  background: var(--cf-border);
-  opacity: 0.5;
-  pointer-events: none;
+  max-width: calc(100vw - 4px);
+  height: auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 1px;
+  box-shadow: none;
 }
 
-/* Individual sidenote entry in the margin */
-.cf-sidenote-entry {
-  position: absolute;
-  width: 100%;
-  padding: 0 12px;
-  font-size: 0.75rem;
-  line-height: 1.625;
-  color: var(--cf-fg);
-  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-  pointer-events: auto;
+.cf-lexical-inline-math-panel-editor:focus {
+  border: 0;
+  background: transparent;
+}
+
+.cf-lexical-inline-image-shell {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0.2rem;
+  vertical-align: text-bottom;
   cursor: pointer;
-  overflow-wrap: break-word;
-  box-sizing: border-box;
 }
 
-/* Superscript number inside a sidenote entry */
-.cf-sidenote-entry-number {
-  font-weight: 600;
+.cf-lexical-inline-image {
+  display: block;
+  width: auto;
+  max-width: min(16rem, 100%);
+  max-height: 2.6rem;
+  border-radius: calc(var(--cf-border-radius) + 1px);
+}
+
+.cf-lexical-inline-image-fallback {
+  display: inline-block;
+  padding: 0 0.3rem;
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-border-radius);
+  background: color-mix(in srgb, var(--cf-bg) 94%, var(--cf-hover));
+  color: var(--cf-muted);
+  font-family: var(--cf-ui-font);
+  font-size: 0.88em;
+}
+
+.cf-lexical-inline-token-source {
+  min-width: 0;
   color: var(--cf-fg);
-  font-size: 0.7em;
-  vertical-align: super;
-  margin-right: 2px;
+  font-family: var(--cf-code-font);
+  font-size: 0.92em;
 }
 
-/* ── Bibliography / References section ──────────────────────────────────── */
+.cf-lexical-floating-source-shell {
+  max-width: min(var(--cf-preview-surface-max-width), calc(100vw - 10px));
+}
 
-.cf-bibliography {
+.cf-lexical-floating-source-shell.cf-lexical-inline-math-panel {
+  max-width: calc(100vw - 10px);
+}
+
+.cf-lexical-floating-source-surface {
+  padding: 10px 14px;
+  box-sizing: border-box;
+  background: var(--cf-bg);
+}
+
+.cf-lexical-floating-source-editor {
+  min-width: 0;
+  max-width: calc(100vw - 4px);
+}
+
+.cf-lexical-inline-token-panel-shell {
+  max-width: calc(100vw - 4px);
+}
+
+.cf-lexical-inline-token-panel-surface {
+  padding: 1px 2px;
+}
+
+.cf-lexical-inline-token-panel-editor {
+  max-width: calc(100vw - 4px);
+  height: auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 1px;
+  box-shadow: none;
+}
+
+.cf-lexical-inline-token-panel-editor:focus {
+  border: 0;
+  background: transparent;
+}
+
+.cf-lexical-inline-format-source {
+  display: inline;
+  vertical-align: baseline;
+  max-width: min(100%, calc(100vw - 8px));
+  white-space: pre-wrap;
+  border: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  text-decoration-thickness: inherit;
+  caret-color: var(--cf-fg);
+  word-break: break-word;
+}
+
+.cf-lexical-reference {
+  color: var(--cf-fg);
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.cf-crossref {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--cf-muted);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.cf-crossref-unresolved {
+  color: var(--cf-muted);
+  text-decoration-style: dashed;
+  text-decoration-color: var(--cf-muted);
+}
+
+.cf-lexical-footnote-ref {
+  color: var(--cf-fg);
+  font-size: 0.75em;
+  vertical-align: super;
+}
+
+.cf-lexical-raw-block {
+  display: block;
+  margin: 0.75rem 0;
+}
+
+.cf-lexical-raw-fallback {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-border-radius);
+  background: color-mix(in srgb, var(--cf-bg) 90%, var(--cf-hover));
+  font-family: var(--cf-code-font);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+}
+
+.cf-lexical-nested-editor {
+  min-height: auto;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+.cf-lexical-nested-editor .cf-lexical-paragraph {
+  min-height: auto;
+}
+
+.cf-lexical-nested-editor--frontmatter-title {
+  font-size: 1.6em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.cf-lexical-nested-editor--title {
+  font-size: inherit;
+}
+
+.cf-lexical-nested-editor--title :is(.cf-lexical-paragraph, .cf-lexical-heading) {
+  display: inline;
+  margin: 0;
+}
+
+.cf-lexical-nested-editor--block-body,
+.cf-lexical-nested-editor--footnote,
+.cf-lexical-nested-editor--blockquote,
+.cf-lexical-nested-editor--include-preview {
+  white-space: normal;
+}
+
+.cf-lexical-nested-editor--caption :is(.cf-lexical-paragraph, .cf-lexical-heading) {
+  display: inline;
+  margin: 0;
+}
+
+.cf-lexical-structure-source-editor--include,
+.cf-lexical-structure-source-editor--embed,
+.cf-lexical-structure-source-editor--math {
+  font-family: var(--cf-code-font);
+  font-size: 0.92rem;
+  white-space: pre-wrap;
+}
+
+.cf-lexical-nested-editor--table-cell {
+  font-size: 0.96rem;
+}
+
+.cf-lexical-nested-editor--table-cell :is(.cf-lexical-paragraph, .cf-lexical-heading) {
+  margin: 0;
+}
+
+.cf-lexical-title-shell {
+  margin: 0 0 1em;
+  padding-bottom: 0.15em;
+  border-bottom: var(--cf-border-width) solid var(--cf-border);
+}
+
+.cf-lexical-title-shell.is-editing-source {
+  border-bottom: 0;
+}
+
+.cf-lexical-raw-block-shell {
+  position: relative;
+}
+
+.cf-lexical-structure-toggle {
+  cursor: pointer;
+}
+
+.cf-lexical-frontmatter-title {
+  margin: 0;
+  font-size: 1.6em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.cf-lexical-frontmatter-title--empty {
+  color: var(--cf-muted);
+  font-weight: 400;
+}
+
+.cf-lexical-structure-source-editor {
+  color: var(--cf-fg);
+  font-family: var(--cf-code-font);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.cf-lexical-structure-source-editor .cf-lexical-paragraph {
+  margin: 0;
+  min-height: 1.2em;
+}
+
+.cf-lexical-structure-source-editor--opener,
+.cf-lexical-structure-source-editor--include,
+.cf-lexical-structure-source-editor--embed {
+  white-space: pre;
+}
+
+.cf-lexical-block-source-line {
+  margin: 0 0 0.15em;
+}
+
+.cf-lexical-bibliography {
+  margin: 2em 0 3rem;
+  padding: 0 0 2rem;
   font-size: 0.85rem;
   line-height: 1.4;
   text-align: left;
@@ -280,24 +654,15 @@
   -webkit-hyphens: manual;
 }
 
-.cf-bibliography-footnotes {
-  margin-top: 2em;
-}
-
-.cf-bibliography-footnotes .cf-bibliography-entry {
-  cursor: pointer;
-  font-size: 0.85em;
-  line-height: 1.6;
-  margin-bottom: 4px;
-}
-
-.cf-bibliography-entry-number {
-  font-weight: 600;
-  margin-right: 4px;
+.cf-bibliography-heading {
+  margin: 0 0 0.65rem;
+  font-family: var(--cf-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .cf-bibliography-entry + .cf-bibliography-entry {
-  margin-top: 0.15em;
+  margin-top: 0.25rem;
 }
 
 .cf-bibliography-entry > .csl-entry {
@@ -335,226 +700,487 @@
   margin-left: 0.35em;
 }
 
-/* No heading math size hacks needed — font-size is on .cm-line via
- * Decoration.line (.cf-heading-line-N), so all children inherit it. */
-
-/* ── Math sizing & color: inherit from surrounding context ─────────────── */
-
-.katex {
-  color: inherit;
+.cf-lexical-heading[data-coflat-heading-number]::before {
+  content: attr(data-coflat-heading-number) ".\2002";
+  margin-right: 0.25rem;
+  color: var(--cf-fg);
+  font-weight: 400;
 }
 
-.cf-math-inline .katex {
-  font-size: inherit;
-}
-
-/* ── Breadcrumb overlay ─────────────────────────────────────────────────── */
-
-.cf-breadcrumbs {
-  opacity: 0;
-  transition: opacity var(--cf-transition, 0.15s);
-}
-
-.cf-breadcrumbs-visible {
-  opacity: 1;
-}
-
-.cf-breadcrumbs-hidden {
-  height: 4px;
-  overflow: hidden;
-}
-
-.cf-breadcrumbs-instant {
-  transition: none;
-}
-
-/* ── Lightweight nested inline editors ──────────────────────────────────── */
-
-.cf-inline-editor {
-  background-color: transparent !important;
-  border: none !important;
-  font-family: inherit !important;
-  font-size: inherit !important;
-  line-height: inherit !important;
-  margin: 0 !important;
-  min-height: auto !important;
-  padding: 0 !important;
-}
-
-.cf-inline-editor.cm-focused {
-  outline: none !important;
-}
-
-.cf-inline-editor .cm-gutters {
-  display: none !important;
-}
-
-.cf-inline-editor .cm-scroller {
-  font-family: inherit !important;
-  font-size: inherit !important;
-  line-height: inherit !important;
-  overflow: visible !important;
-}
-
-.cf-inline-editor .cm-content {
-  font-family: inherit !important;
-  font-size: inherit !important;
-  line-height: inherit !important;
-  margin: 0 !important;
-  max-width: none !important;
-  min-height: auto !important;
-  padding: 0 !important;
-}
-
-.cf-inline-editor .cm-line {
-  padding: 0 !important;
-}
-
-.cf-inline-editor .cm-cursor {
-  border-left-color: currentColor;
-}
-
-/* Display math: centered, no extra margin. Shared between CM6 decorations,
- * read mode, and HTML export — unscoped so all contexts inherit. */
-.cf-math-display {
-  margin: 0;
-  text-align: center;
-}
-
-.cf-math-display-numbered {
+.cf-lexical-display-math {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 1rem;
   align-items: center;
+  margin: 0.8em 0;
   text-align: initial;
 }
 
-.cf-math-display-content {
-  display: inline-block;
-}
-
-.cf-math-display-numbered > .cf-math-display-content {
+.cf-lexical-display-math-body {
   grid-column: 2;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
 }
 
-.cf-math-display-number {
-  grid-column: 3;
-  justify-self: end;
-  padding-left: 1rem;
-  white-space: nowrap;
-  font-style: normal;
-  font-variant-numeric: tabular-nums;
-}
-
-.cf-math-display .katex-display {
+.cf-lexical-display-math .katex-display {
   font-size: inherit;
   margin: 0;
 }
 
-.cf-math-display .katex-display > .katex {
+.cf-lexical-display-math .katex-display > .katex {
   font-size: inherit;
 }
 
-/* Collapse the cm-line containing a display math widget so it only takes
- * the widget's natural height. Without this, the line's lineHeight and
- * cm-widgetBuffer elements add ~45px of empty space around the equation. */
-.cm-line:has(> .cf-math-display) {
-  line-height: 0;
+.cf-lexical-display-math-label {
+  grid-column: 3;
+  justify-self: end;
+  padding-left: 1rem;
+  color: var(--cf-muted);
+  font-family: inherit;
+  font-size: 1em;
+  font-style: normal;
+  white-space: nowrap;
 }
 
-.cm-line:has(> .cf-math-display) > .cm-widgetBuffer {
-  display: none;
+.cf-lexical-display-math-editor {
+  grid-column: 1 / -1;
 }
 
-/* ── Shared preview surfaces ────────────────────────────────────────────────
- * Shared shell/content contract for hover preview, footnote tooltip, and
- * math preview. Surface-specific behavior layers on top of these primitives.
- */
-.cf-preview-surface-shell {
-  position: fixed;
-  z-index: var(--cf-layer-preview-surface);
+.cf-lexical-block {
+  margin: var(--cf-block-margin);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.cf-lexical-block--proof {
+  position: relative;
+}
+
+.cf-lexical-block--theorem,
+.cf-lexical-block--lemma,
+.cf-lexical-block--corollary,
+.cf-lexical-block--proposition,
+.cf-lexical-block--conjecture {
+  font-style: italic;
+}
+
+.cf-lexical-block--definition,
+.cf-lexical-block--problem,
+.cf-lexical-block--example,
+.cf-lexical-block--remark,
+.cf-lexical-block--note,
+.cf-lexical-block--proof,
+.cf-lexical-block--algorithm,
+.cf-lexical-block--figure,
+.cf-lexical-block--table {
+  font-style: normal;
+}
+
+.cf-lexical-block--proof::after {
+  content: var(--cf-proof-marker);
+  float: right;
+  color: var(--cf-proof-marker-color);
+  font-size: var(--cf-proof-marker-size);
+}
+
+.cf-lexical-block-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35em;
+  align-items: baseline;
+  margin-bottom: 0.2em;
+}
+
+.cf-lexical-block-label {
+  color: var(--cf-block-title-color);
+  font-family: inherit;
+  font-size: 1em;
+  font-style: normal;
+  font-weight: var(--cf-block-title-weight);
+}
+
+.cf-lexical-block-title :is(p, h1, h2, h3, h4, h5, h6) {
+  display: inline;
+  margin: 0;
+}
+
+.cf-lexical-block-title {
+  display: inline;
+  min-width: 0;
+}
+
+.cf-lexical-block--proof .cf-lexical-block-label {
+  font-style: italic;
+  font-weight: 400;
+}
+
+.cf-lexical-block-body > :first-child {
+  margin-top: 0;
+}
+
+.cf-lexical-block-body > :last-child {
+  margin-bottom: 0;
+}
+
+.cf-lexical-block-body .cf-lexical-paragraph:first-child {
+  margin-top: 0;
+}
+
+.cf-lexical-block-body .cf-lexical-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.cf-lexical-block--captioned {
+  padding-bottom: 0;
+}
+
+.cf-lexical-block-caption {
+  display: block;
+  margin-top: var(--cf-spacing-xs, 4px);
+  padding-top: 0;
+  border-top: 0;
+  text-align: center;
+}
+
+.cf-lexical-block-caption-label {
+  display: inline;
+  font-family: inherit;
+  font-size: 1em;
+  font-weight: var(--cf-block-title-weight);
+  white-space: normal;
+}
+
+.cf-lexical-block-caption-label::after {
+  content: var(--cf-block-title-separator);
+}
+
+.cf-lexical-block-caption-text {
+  display: inline;
+  min-width: 0;
+}
+
+.cf-lexical-blockquote-shell {
+  margin: 1rem 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--cf-blockquote-border);
+  color: var(--cf-blockquote-color);
+}
+
+.cf-lexical-embed-frame-shell {
+  overflow: hidden;
+  margin-bottom: 0.6rem;
+  border: 1px solid var(--cf-embed-border);
+  border-radius: calc(var(--cf-border-radius) + 2px);
+  background: color-mix(in srgb, var(--cf-bg) 96%, var(--cf-hover));
+}
+
+.cf-lexical-embed-frame {
+  display: block;
+  width: 100%;
+  min-height: 26rem;
+  border: 0;
+}
+
+.cf-lexical-embed-frame--youtube {
+  aspect-ratio: 16 / 9;
+  min-height: min(52vw, 32rem);
+}
+
+.cf-lexical-embed-link {
+  color: var(--cf-fg);
+  text-decoration: underline;
+  word-break: break-word;
+}
+
+.cf-lexical-image-block {
+  margin: 1rem 0;
+}
+
+.cf-lexical-image {
+  display: block;
+  margin-inline: auto;
+  max-width: 100%;
+  border-radius: calc(var(--cf-border-radius) + 2px);
+}
+
+.cf-lexical-image-caption {
+  margin-top: 0.5rem;
+  color: var(--cf-muted);
+  font-size: 0.92rem;
+  text-align: center;
+}
+
+.cf-lexical-media {
+  margin: 0.75rem 0;
+}
+
+.cf-lexical-media-fallback {
+  padding: 0.85rem 1rem;
+  border: 1px dashed var(--cf-border);
+  border-radius: 0.5rem;
+  color: var(--cf-muted);
+  font-family: var(--cf-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  font-size: 0.9rem;
+  background: color-mix(in srgb, var(--cf-bg) 96%, var(--cf-hover));
+}
+
+.cf-lexical-media-object {
+  width: 100%;
+  min-height: 28rem;
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-border-radius);
+  background: #fff;
+}
+
+.cf-lexical-table-block table {
+  width: auto;
+  max-width: 100%;
+  margin-inline: auto;
+  border-collapse: collapse;
+  font-size: var(--cf-table-font-size, 0.9em);
+}
+
+.cf-lexical-table-block :is(th, td) {
+  padding: var(--cf-table-cell-padding);
+  border: 1px solid var(--cf-table-border);
+  vertical-align: top;
+  min-width: 10rem;
+  text-align: left;
+  line-height: var(--cf-table-line-height, 1.5);
+}
+
+.cf-lexical-table-block th {
+  background: var(--cf-subtle);
+  font-family: inherit;
+  font-weight: 600;
+  border-bottom: 2px solid var(--cf-table-header-border);
+}
+
+.cf-lexical-footnote-definition {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  color: var(--cf-muted);
+  font-size: 0.85em;
+}
+
+.cf-lexical-footnote-definition-body > :first-child {
+  margin-top: 0;
+}
+
+.cf-lexical-footnote-definition-body > :last-child {
+  margin-bottom: 0;
+}
+
+.cf-lexical-include-shell {
+  margin: 1rem 0;
+}
+
+.cf-lexical-include-affordances {
+  z-index: 55;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  pointer-events: none;
+}
+
+.cf-lexical-include-affordances > .cf-lexical-include-path-toggle,
+.cf-lexical-include-affordances > .cf-lexical-include-path-label {
+  pointer-events: auto;
+}
+
+.cf-lexical-include-meta {
+  margin-bottom: 0.45rem;
+}
+
+.cf-lexical-include-path-toggle,
+.cf-lexical-include-path-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--cf-muted);
+  font-family: var(--cf-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  font-size: 0.82rem;
+}
+
+.cf-lexical-include-path-toggle {
+  cursor: pointer;
+  transition: background var(--cf-transition), border-color var(--cf-transition), color var(--cf-transition);
+}
+
+.cf-lexical-include-path-toggle:hover {
+  border-color: var(--cf-border);
+  background: var(--cf-hover);
+  color: var(--cf-fg);
+}
+
+.cf-lexical-include-content > :first-child {
+  margin-top: 0;
+}
+
+.cf-lexical-editor--rich table {
+  width: 100%;
+  margin: 1.2em 0;
+  border-collapse: collapse;
+  font-size: var(--cf-table-font-size, 0.9em);
+}
+
+.cf-lexical-editor--rich :is(th, td) {
+  border: 1px solid var(--cf-table-border);
+  padding: var(--cf-table-cell-padding);
+  text-align: left;
+  line-height: var(--cf-table-line-height, 1.5);
+}
+
+.cf-lexical-editor--rich th {
+  background: var(--cf-subtle);
+  font-weight: 600;
+  border-bottom: 2px solid var(--cf-table-header-border);
+}
+
+.cf-lexical-editor--rich pre {
+  overflow-x: auto;
+}
+
+.cf-lexical-editor--rich code {
+  font-family: var(--cf-code-font);
+}
+
+.cf-reference-completion-anchor {
+  z-index: 70;
+}
+
+.cf-reference-completion-tooltip {
+  min-width: min(24rem, calc(100vw - 1rem));
+  max-width: min(52rem, calc(100vw - 1rem));
+  max-height: min(32rem, calc(100vh - 1rem));
+  overflow: hidden;
+  box-shadow: 0 12px 24px -18px rgb(0 0 0 / 0.22), 0 10px 18px -18px rgb(0 0 0 / 0.18);
+}
+
+.cf-reference-completion-list {
+  max-height: min(32rem, calc(100vh - 1rem));
+  margin: 0;
+  padding: 0.25rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.cf-reference-completion-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.75rem;
+  row-gap: 0.2rem;
+  align-items: start;
+  margin: 0;
+  padding: 0.4rem 0.55rem 0.5rem;
+  border-radius: 0.35rem;
+  color: var(--cf-fg);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.cf-reference-completion-preview[aria-selected="true"] {
+  background: color-mix(in srgb, var(--cf-bg) 88%, var(--cf-hover));
+}
+
+.cf-reference-completion-preview .cm-completionLabel {
+  min-width: 0;
+  color: inherit;
+  font-family: var(--cf-ui-font);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.cf-reference-completion-preview .cm-completionDetail {
+  color: var(--cf-muted);
+  font-family: var(--cf-ui-font);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.cf-reference-completion-content,
+.cf-reference-completion-preview .cf-citation-preview {
+  grid-column: 1 / span 2;
+  min-width: 0;
+  padding-top: 0.15rem;
+}
+
+.cf-reference-completion-rich-preview {
+  min-width: 0;
+  color: var(--cf-fg);
+}
+
+.cf-reference-completion-rich-preview .katex {
+  font-size: inherit;
+}
+
+.cf-reference-completion-rich-preview .katex-display {
+  margin: 0;
+}
+
+.cf-reference-completion-rich-preview .katex-display > .katex {
+  font-size: inherit;
+}
+
+.cf-reference-completion-rich-preview > :first-child {
+  margin-top: 0;
+}
+
+.cf-reference-completion-rich-preview > :last-child {
+  margin-bottom: 0;
+}
+
+.cf-reference-completion-rich-preview .cf-lexical-block,
+.cf-reference-completion-rich-preview .cf-lexical-display-math,
+.cf-reference-completion-rich-preview .cf-lexical-blockquote-shell,
+.cf-reference-completion-rich-preview table,
+.cf-reference-completion-rich-preview p {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.cf-reference-completion-rich-preview .cf-lexical-block + .cf-lexical-block,
+.cf-reference-completion-rich-preview p + p {
+  margin-top: 0.45rem;
+}
+
+.cf-reference-completion-rich-preview .cf-lexical-block-caption {
+  margin-top: 0.25rem;
+}
+
+.cf-reference-completion-rich-preview .cf-lexical-display-math {
+  margin: 0.2rem 0;
+}
+
+.cf-reference-completion-rich-preview .cf-lexical-display-math-body {
+  overflow-y: hidden;
+}
+
+.cf-hover-preview-tooltip {
+  pointer-events: none;
+  z-index: 50;
+  max-width: min(var(--cf-preview-surface-max-width), calc(100vw - 10px));
+  max-height: min(var(--cf-preview-surface-max-height), calc(100vh - 10px));
+  overflow-x: hidden;
+  overflow-y: auto;
   background: var(--cf-bg);
   border: 1px solid var(--cf-border);
   border-radius: 8px;
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  max-width: min(var(--cf-preview-surface-max-width), calc(100vw - 10px));
-  max-height: min(var(--cf-preview-surface-max-height), calc(100vh - 10px));
-  overflow: auto;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-.cf-preview-surface-content {
-  display: block;
-  padding: var(--cf-preview-surface-padding-block) var(--cf-preview-surface-padding-inline);
-  font-size: var(--cf-preview-surface-font-size);
-  line-height: 1.5;
-  color: var(--cf-fg);
-  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
-  box-sizing: border-box;
-}
-
-.cf-preview-surface-header {
-  font-weight: 700;
-  margin-bottom: var(--cf-spacing-xs);
-  color: var(--cf-fg);
-}
-
-.cf-preview-surface-body {
-  color: var(--cf-fg);
-  overflow-wrap: break-word;
-}
-
-.cf-preview-surface-body p {
-  margin: 0.25em 0;
-}
-
-.cf-preview-surface-body p:first-child {
-  margin-top: 0;
-}
-
-.cf-preview-surface-body p:last-child {
-  margin-bottom: 0;
-}
-
-.cf-preview-surface-body .cf-math-display {
-  margin: 0;
-  text-align: center;
-}
-
-.cf-preview-surface-body blockquote {
-  border-left: 3px solid var(--cf-blockquote-border);
-  padding-left: 1em;
-  margin-left: 0;
-  color: var(--cf-blockquote-color);
-}
-
-.cf-preview-surface-body ul,
-.cf-preview-surface-body ol {
-  padding-left: 1.5em;
-  margin: 0.8em 0;
-}
-
-.cf-preview-surface-body ul {
-  list-style-type: disc;
-  list-style-position: outside;
-}
-
-.cf-preview-surface-body ol {
-  list-style-type: decimal;
-  list-style-position: outside;
-}
-
-.cf-preview-surface-body li {
-  display: list-item;
-  margin: 0.2em 0;
-}
-
-/* ── Hover preview tooltip (appended to document.body) ─────────────────────
- * Used when sidenote margin is collapsed to show footnote content.
- * Styled to match shadcn HoverCard visual language. */
-.cf-hover-preview-tooltip {
-  pointer-events: none;
-  /* Enter/exit animation (respects prefers-reduced-motion via --cf-transition) */
   opacity: 0;
   transform: translateY(2px);
   transition: opacity var(--cf-transition), transform var(--cf-transition);
@@ -567,8 +1193,92 @@
 
 .cf-hover-preview {
   display: block;
+  padding: var(--cf-preview-surface-padding-block) var(--cf-preview-surface-padding-inline);
+  font-size: var(--cf-preview-surface-font-size);
+  line-height: 1.5;
+  color: var(--cf-fg);
+  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
   box-sizing: border-box;
 }
+
+.cf-hover-preview-header {
+  font-weight: 700;
+  margin-bottom: var(--cf-spacing-xs, 4px);
+  color: var(--cf-fg);
+}
+
+.cf-hover-preview-body {
+  color: var(--cf-fg);
+  overflow-wrap: break-word;
+}
+
+.cf-hover-preview .katex {
+  font-size: inherit;
+}
+
+.cf-hover-preview .katex-display {
+  margin: 0;
+}
+
+.cf-hover-preview .katex-display > .katex {
+  font-size: inherit;
+}
+
+.cf-hover-preview-body p {
+  margin: 0.25em 0;
+}
+
+.cf-hover-preview-body p:first-child {
+  margin-top: 0;
+}
+
+.cf-hover-preview-body p:last-child {
+  margin-bottom: 0;
+}
+
+.cf-hover-preview-body blockquote {
+  border-left: 3px solid var(--cf-blockquote-border);
+  padding-left: 1em;
+  margin-left: 0;
+  color: var(--cf-blockquote-color);
+}
+
+.cf-hover-preview-body ul,
+.cf-hover-preview-body ol {
+  padding-left: 1.5em;
+  margin: 0.8em 0;
+}
+
+.cf-hover-preview-body ul {
+  padding-left: 0;
+  list-style: none;
+}
+
+.cf-hover-preview-body ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+}
+
+.cf-hover-preview-body li {
+  display: list-item;
+  margin: 0.2em 0;
+}
+
+.cf-hover-preview-body ul > li {
+  display: block;
+  margin-left: 0;
+  padding-left: 1.35em;
+  position: relative;
+}
+
+.cf-hover-preview-body ul > li::before {
+  content: "-";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--cf-fg);
+}
+
 .cf-hover-preview-unresolved {
   color: var(--cf-muted);
   font-style: italic;
@@ -577,30 +1287,24 @@
 .cf-citation-preview {
   white-space: normal;
 }
+
 .cf-hover-preview-citation {
   color: var(--cf-fg);
-  margin-bottom: var(--cf-spacing-xs);
+  margin-bottom: var(--cf-spacing-xs, 4px);
 }
 
 .cf-hover-preview-citation:last-child {
   margin-bottom: 0;
 }
 
-.cf-hover-preview-separator {
-  border: none;
-  border-top: 1px solid var(--cf-border);
-  margin: var(--cf-spacing-xs) 0;
-}
-
 .cf-hover-preview-code-block {
-  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-  background: var(--cf-hover);
-  border: 1px solid var(--cf-border);
-  padding: 0.5em 0.75em;
-  border-radius: 0;
   overflow-x: auto;
   margin: 0.75em 0;
-  max-width: 100%;
+  padding: 0.5em 0.75em;
+  border: 1px solid var(--cf-border);
+  border-radius: 0;
+  background: var(--cf-hover);
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   box-sizing: border-box;
 }
 
@@ -626,12 +1330,12 @@
 }
 
 .cf-hover-preview-table-scroll table {
-  border-collapse: collapse;
-  font-size: var(--cf-table-font-size, 0.9em);
   width: max-content;
   min-width: 100%;
   max-width: none;
   margin-inline: 0;
+  border-collapse: collapse;
+  font-size: var(--cf-table-font-size, 0.9em);
 }
 
 .cf-hover-preview-table-scroll th,
@@ -643,412 +1347,11 @@
 }
 
 .cf-hover-preview-table-scroll th {
+  background: var(--cf-subtle);
   font-weight: 600;
   border-bottom: 2px solid var(--cf-table-header-border);
-  background: var(--cf-subtle);
 }
 
-/* ── Math preview panel ───────────────────────────────────────────────────── */
-
-.cf-math-preview-scroller {
-  position: relative;
-}
-
-.cf-math-preview-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 0;
-  height: 0;
-  overflow: visible;
-  pointer-events: none;
-  z-index: var(--cf-layer-preview-surface);
-}
-
-.cf-math-preview {
-  position: absolute;
-  width: fit-content;
-  cursor: grab;
-  pointer-events: auto;
-}
-
-.cf-math-preview-content {
-  cursor: pointer;
-}
-
-/* ── Stable-shell debug lane ─────────────────────────────────────────────── */
-
-.cm-line.cf-active-shell {
-  background: transparent;
-}
-
-.cm-line.cf-active-shell-top {
-  border-top-left-radius: var(--cf-border-radius-lg);
-  border-top-right-radius: var(--cf-border-radius-lg);
-}
-
-.cm-line.cf-active-shell-bottom {
-  border-bottom-left-radius: var(--cf-border-radius-lg);
-  border-bottom-right-radius: var(--cf-border-radius-lg);
-}
-
-.cf-active-shell-widget {
-  background: transparent;
-  box-sizing: border-box;
-}
-
-.cf-shell-surface-layer {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: calc(var(--cf-layer-preview-surface) + 10);
-}
-
-.cf-shell-surface-box {
-  position: fixed;
-  border: var(--cf-active-shell-border-width) solid var(--cf-active-shell-border);
-  border-radius: 8px;
-  background: var(--cf-active-shell-fill);
-  box-sizing: border-box;
-}
-
-.cf-shell-surface-box[data-depth="1"] {
-  border-style: dashed;
-}
-
-.cf-shell-surface-box[data-depth="2"] {
-  border-style: dotted;
-}
-
-.cf-shell-surface-label {
-  position: absolute;
-  top: -18px;
-  left: -1px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--cf-active-shell-border);
-  color: #fff;
-  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.4;
-  letter-spacing: 0.03em;
-}
-
-.cf-editor-debug-host {
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  height: 100%;
-  min-width: 0;
-}
-
-.cf-editor-debug-host > .cm-editor {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.cf-debug-panel {
-  position: relative;
-  flex: 0 0 min(340px, 32vw);
-  width: min(340px, 32vw);
-  min-width: 280px;
-  height: 100%;
-  overflow: auto;
-  padding: 12px 14px 20px;
-  box-sizing: border-box;
-  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--cf-fg);
-  background: color-mix(in srgb, var(--cf-bg) 86%, transparent);
-  backdrop-filter: blur(10px);
-  border-left: 1px solid var(--cf-border);
-  z-index: calc(var(--cf-layer-preview-surface) + 20);
-}
-
-.cf-debug-panel-title {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  margin-bottom: 12px;
-  text-transform: uppercase;
-}
-
-.cf-debug-panel-actions {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.cf-debug-panel-button {
-  appearance: none;
-  border: 1px solid var(--cf-border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--cf-bg) 82%, var(--cf-active-shell-fill));
-  color: var(--cf-fg);
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  padding: 6px 10px;
-  text-transform: uppercase;
-}
-
-.cf-debug-panel-button:hover {
-  border-color: var(--cf-active-shell-border);
-  background: color-mix(in srgb, var(--cf-bg) 68%, var(--cf-active-shell-fill));
-}
-
-.cf-debug-panel-button:active {
-  background: color-mix(in srgb, var(--cf-bg) 56%, var(--cf-active-shell-fill));
-}
-
-.cf-debug-panel-section + .cf-debug-panel-section {
-  margin-top: 12px;
-}
-
-.cf-debug-panel-label {
-  color: var(--cf-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  margin-bottom: 4px;
-  text-transform: uppercase;
-}
-
-.cf-debug-panel-pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.cf-debug-panel-meta {
-  color: var(--cf-muted);
-  margin-top: 4px;
-  word-break: break-word;
-}
-
-/* ── Block type picker (appended to document.body) ─────────────────────────
- * Floating popup shown when the user types ::: at line start in rich mode.
- * Lists available block types for insertion. */
-.cf-block-picker {
-  position: fixed;
-  z-index: var(--cf-layer-block-picker);
-  background: var(--cf-bg);
-  border: 1px solid var(--cf-border);
-  border-radius: 8px;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  max-height: 240px;
-  min-width: 200px;
-  overflow: hidden;
-  font-size: 14px;
-  font-family: var(--cf-ui-font);
-  color: var(--cf-fg);
-  /* Enter/exit animation */
-  opacity: 0;
-  transform: translateY(-2px);
-  transition: opacity var(--cf-transition), transform var(--cf-transition);
-}
-
-.cf-block-picker[data-visible="true"] {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.cf-block-picker-command {
-  display: flex;
-  flex-direction: column;
-  max-height: 240px;
-}
-
-.cf-block-picker-input {
-  width: 100%;
-  padding: 6px 10px;
-  border: none;
-  border-bottom: 1px solid var(--cf-border);
-  background: transparent;
-  color: var(--cf-fg);
-  font-family: var(--cf-ui-font);
-  font-size: 14px;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.cf-block-picker-input::placeholder {
-  color: var(--cf-muted);
-}
-
-.cf-block-picker-list {
-  max-height: 192px;
-  overflow-y: auto;
-  padding: 4px;
-  scroll-padding-block-start: 8px;
-  scroll-padding-block-end: 8px;
-}
-
-.cf-block-picker-empty {
-  padding: 8px 10px;
-  color: var(--cf-muted);
-}
-
-.cf-block-picker-item {
-  padding: 6px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.cf-block-picker-item:hover {
-  background: var(--cf-hover);
-}
-
-.cf-block-picker-item[data-selected="true"],
-.cf-block-picker-item[aria-selected="true"] {
-  background: var(--cf-subtle);
-}
-
-.cf-block-picker-item[data-selected="true"]:hover,
-.cf-block-picker-item[aria-selected="true"]:hover {
-  background: var(--cf-hover);
-}
-
-/* ── Fenced div blocks (theorem, proof, etc.) — shared by rich & read mode ──
- * Unscoped cf-block-* rules produced by both CM6 decorations (rich mode)
- * and markdownToHtml (read mode / HTML export). In rich mode, CM6's
- * EditorView.theme auto-generates equivalent font-style rules under
- * .cm-editor scope; these globals serve read mode and HTML export.
- * Margin and proof ::after use :not(.cm-line) to avoid affecting CM6 lines. */
-.cf-block-theorem { font-style: var(--cf-block-theorem-style); }
-.cf-block-lemma { font-style: var(--cf-block-lemma-style); }
-.cf-block-corollary { font-style: var(--cf-block-corollary-style); }
-.cf-block-proposition { font-style: var(--cf-block-proposition-style); }
-.cf-block-conjecture { font-style: var(--cf-block-conjecture-style); }
-.cf-block-definition { font-style: var(--cf-block-definition-style); }
-.cf-block-problem { font-style: var(--cf-block-problem-style); }
-.cf-block-example { font-style: var(--cf-block-example-style); }
-.cf-block-remark, .cf-block-note { font-style: var(--cf-block-remark-style); }
-.cf-block-proof { font-style: var(--cf-block-proof-style); }
-.cf-block-algorithm { font-style: var(--cf-block-algorithm-style); }
-.cf-block-figure { font-style: var(--cf-block-figure-style); }
-.cf-block-table { font-style: var(--cf-block-table-style); }
-
-/* Block margin — only on wrapper divs (read mode / HTML export), not on
- * CM6 .cm-line elements that carry the same cf-block-* class names.
- * All block divs carry the shared "cf-block" base class. */
-.cf-block:not(.cm-line) {
-  margin: var(--cf-block-margin);
-}
-
-/* Proof needs position: relative for the ::after tombstone (outside CM6 only). */
-.cf-block-proof:not(.cm-line) {
-  position: relative;
-}
-
-/* QED tombstone at end of proof — outside CM6 only (read mode / HTML export).
- * Rich mode uses .cf-block-qed via CM6 line decoration on the last content
- * line instead. The :not(.cm-line) guard prevents this from firing on
- * CM6 line elements that carry the cf-block-proof class. */
-.cf-block-proof:not(.cm-line)::after {
-  content: var(--cf-proof-marker);
-  color: var(--cf-proof-marker-color);
-  font-size: var(--cf-proof-marker-size);
-  float: right;
-}
-
-.cf-block-caption {
-  display: block;
-  margin-top: var(--cf-spacing-xs);
-  text-align: center;
-}
-
-.cf-block-caption .cf-block-header-rendered::after {
-  content: var(--cf-block-title-separator);
-}
-
-.cf-block-proof .cf-block-header-rendered {
-  font-style: italic;
-  font-weight: 400;
-}
-
-.cf-block-proof .cf-block-header-rendered::after {
-  content: ". ";
-}
-
-.cf-block-figure img {
-  display: block;
-  margin-inline: auto;
-  max-width: 100%;
-}
-
-.cf-block-table table {
-  width: auto;
-  margin-inline: auto;
-  max-width: 100%;
-}
-
-/* Blockquote styling — cf-block-blockquote is unscoped (shared with export),
- * bare blockquote stays scoped to hover preview. */
-.cf-block-blockquote {
-  border-left: 3px solid var(--cf-blockquote-border);
-  padding-left: 1em;
-  margin-left: 0;
-  color: var(--cf-blockquote-color);
-}
-
-/* Block header rendered label (e.g. "Theorem 1."): bold, normal style, inline.
- * Shared class cf-block-header-rendered is used by both CM6 widgets and
- * markdownToHtml output. The base font-weight/color is set in block-theme.ts
- * for CM6; display and font-style reset apply globally. */
-.cf-block-header-rendered {
-  display: var(--cf-block-title-display);
-  font-weight: var(--cf-block-title-weight);
-  color: var(--cf-block-title-color);
-  font-style: normal;
-}
-
-/* ── Cross-references & citations ──────────────────────────────────────────
- * These classes are shared between editor (CM6 widgets) and read mode HTML.
- *
- * Synchronized class pairs (editor <-> read mode):
- *   Editor: cf-crossref           <-> Read: a.cross-ref
- *   Editor: cf-crossref-unresolved (no read mode equivalent)
- *   Editor: cf-citation           <-> Read: span.cf-citation (same class)
- *   Editor: cf-citation-narrative <-> Read: (narrative cites inline in read mode)
- *   Editor: cf-math-error         <-> Read: .math-error
- *   Editor: cf-block-header-rendered <-> Read: strong.cf-block-header-rendered
- *   Editor: cf-block-{type}       <-> Read: div.cf-block-{type}
- *   Editor: cf-math-display       <-> Read: div.cf-math-display
- *   Editor: cf-bold               <-> Read: strong.cf-bold
- *   Editor: cf-italic             <-> Read: em.cf-italic
- *   Editor: cf-strikethrough      <-> Read: del.cf-strikethrough
- *   Editor: cf-highlight          <-> Read: mark.cf-highlight
- *   Editor: cf-inline-code        <-> Read: code.cf-inline-code
- * ──────────────────────────────────────────────────────────────────────────── */
-
-/* Resolved cross-reference — subtle underline to indicate it's a link */
-.cf-crossref {
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: var(--cf-muted);
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-
-/* Unresolved cross-reference — dashed underline + muted color to signal breakage */
-.cf-crossref-unresolved {
-  color: var(--cf-muted);
-  text-decoration-style: dashed;
-  text-decoration-color: var(--cf-muted);
-}
-
-/* cf-citation — citation widget (editor). Intentionally unstyled: citations
- * render as parenthetical text like "(1)" and inherit surrounding styles.
- * cf-citation-narrative — narrative variant, e.g. "Author (2024)". Also
- * intentionally unstyled; appears as inline prose. */
-
-/* Math rendering error — theme-provided error colors */
 .cf-math-error {
   color: var(--cf-math-error-fg);
   background: var(--cf-math-error-bg);
@@ -1058,246 +1361,22 @@
   font-size: 0.85em;
 }
 
-/* Inline code — shared between editor (CM6 mark decoration), read mode,
- * sidenote margin entries, hover previews, and footnote section widgets.
- * The CM6 theme (typography-theme.ts) applies the same class inside the
- * editor; this global rule covers all non-CM6 surfaces. */
-.cf-inline-code {
-  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-  font-size: 0.85em;
+.cf-link-rendered {
+  color: var(--cf-fg);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
-/* Block source syntax — monospace font for ::: fence syntax and closing fence lines.
- * Applied as a mark decoration on the opening fence syntax (not the title text),
- * and as a line decoration on the closing fence (which has no title content). */
-.cf-block-source {
-  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-  font-size: 0.85em;
+.cf-block-header-rendered {
+  display: var(--cf-block-title-display);
+  color: var(--cf-block-title-color);
   font-style: normal;
+  font-weight: var(--cf-block-title-weight);
 }
 
-/* Fence guide lines — no visual styling here; box-shadow is applied per depth
- * level via cf-fence-d1..d4 in block-theme.ts. This class exists as a common
- * hook for all depth levels (used in fence-guide.ts). */
-
-/* Widget-backed search matches — visible highlight for rendered math, block
- * headers, citations, crossrefs, tables, and other Decoration.replace
- * surfaces that would otherwise swallow CM6's source-range highlight. */
-.cf-search-match {
-  border-radius: var(--cf-border-radius);
-  background: color-mix(in srgb, var(--cf-accent) 12%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--cf-accent) 24%, transparent);
-}
-
-.cf-search-match-selected {
-  background: color-mix(in srgb, var(--cf-accent) 18%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cf-accent) 55%, transparent);
-}
-
-/* ── Coflat search panel (in-document find & replace) ──────────────────────
- * Custom CM6 panel replacing the stock search UI. Uses --cf-* design tokens
- * for consistent look with the rest of the app. */
-
-.cf-search-panel {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--cf-spacing-xs);
-  padding: var(--cf-spacing-sm) var(--cf-spacing-md);
-  background: var(--cf-bg);
-  border-bottom: 1px solid var(--cf-border);
-  font-family: var(--cf-ui-font);
-  font-size: var(--cf-ui-font-size-sm);
-  color: var(--cf-fg);
-}
-
-.cf-search-toggle-replace {
-  align-self: center;
-  background: none;
-  border: none;
-  color: var(--cf-muted);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 2px;
-  line-height: 1;
-  border-radius: var(--cf-border-radius);
-  flex-shrink: 0;
-}
-
-.cf-search-toggle-replace:hover {
-  color: var(--cf-fg);
-  background: var(--cf-hover);
-}
-
-.cf-search-row {
-  display: flex;
-  align-items: center;
-  gap: var(--cf-spacing-xs);
-  flex-wrap: nowrap;
-}
-
-.cf-search-input-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 160px;
-  max-width: 280px;
-  border: 1px solid var(--cf-border);
-  border-radius: var(--cf-border-radius);
-  background: var(--cf-bg);
-  transition: border-color var(--cf-transition);
-}
-
-.cf-search-input-wrap:focus-within {
-  border-color: var(--cf-accent);
-}
-
-.cf-search-input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  padding: 4px 6px;
-  font-family: inherit;
-  font-size: inherit;
-  color: var(--cf-fg);
-}
-
-.cf-search-input::placeholder {
-  color: var(--cf-muted);
-}
-
-.cf-search-match-info {
-  flex-shrink: 0;
-  padding-right: 6px;
-  color: var(--cf-muted);
-  font-size: 11px;
-  white-space: nowrap;
-  user-select: none;
-}
-
-.cf-search-toggles {
-  display: flex;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.cf-search-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 4px;
-  border: 1px solid transparent;
-  border-radius: var(--cf-border-radius);
-  background: transparent;
-  color: var(--cf-muted);
+.cf-markdown-source {
   font-family: var(--cf-code-font);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all var(--cf-transition);
-  user-select: none;
-}
-
-.cf-search-toggle:hover {
   background: var(--cf-hover);
-  color: var(--cf-fg);
-}
-
-.cf-search-toggle-active {
-  background: var(--cf-active);
-  color: var(--cf-fg);
-  border-color: var(--cf-border);
-}
-
-.cf-search-nav {
-  display: flex;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.cf-search-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 24px;
-  padding: 0 6px;
   border: 1px solid var(--cf-border);
   border-radius: var(--cf-border-radius);
-  background: var(--cf-bg);
-  color: var(--cf-fg);
-  font-family: var(--cf-ui-font);
-  font-size: var(--cf-ui-font-size-sm);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background var(--cf-transition);
-  user-select: none;
-}
-
-.cf-search-action:hover {
-  background: var(--cf-hover);
-}
-
-.cf-search-close {
-  border: none;
-  background: transparent;
-  color: var(--cf-muted);
-  font-size: 16px;
-  margin-left: auto;
-}
-
-.cf-search-close:hover {
-  color: var(--cf-fg);
-  background: var(--cf-hover);
-}
-
-.cf-replace-row {
-  margin-top: var(--cf-spacing-xs);
-}
-
-.cf-search-replace-actions {
-  display: flex;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-/* Stack the search and replace rows when the toggle-replace button is present */
-.cf-search-panel {
-  flex-wrap: wrap;
-}
-
-/* Reset the default CM6 search panel chrome — our panel sits inside .cm-panel */
-.cm-panel.cm-search {
-  padding: 0;
-  background: none;
-}
-
-/* ── Motion preferences ──────────────────────────────────────────────────── */
-
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --cf-transition: 0s;
-  }
-}
-
-/* ── High-contrast preferences ───────────────────────────────────────────── */
-
-@media (prefers-contrast: more) {
-  :root {
-    --cf-border: #71717a;
-    --cf-muted: #3f3f46;
-    --cf-subtle: rgba(0, 0, 0, 0.08);
-    --cf-hover: rgba(0, 0, 0, 0.12);
-    --cf-active: rgba(0, 0, 0, 0.18);
-  }
-
-  [data-theme="dark"] {
-    --cf-border: #a1a1aa;
-    --cf-muted: #d4d4d8;
-    --cf-subtle: rgba(255, 255, 255, 0.10);
-    --cf-hover: rgba(255, 255, 255, 0.18);
-    --cf-active: rgba(255, 255, 255, 0.28);
-  }
 }

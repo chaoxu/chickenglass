@@ -40,7 +40,7 @@ declare global {
   }
 }
 
-/** Dispatch a formatting event to the document for CM6 to handle. */
+/** Dispatch a formatting event to the document for the active markdown surface to handle. */
 export function dispatchFormatEvent(type: SimpleFormatEventType): void;
 export function dispatchFormatEvent(
   type: "heading",
@@ -61,9 +61,30 @@ export function dispatchFormatEvent(
   document.dispatchEvent(new CustomEvent<FormatEventDetail>(FORMAT_EVENT, { detail: eventDetail }));
 }
 
+export const NAVIGATE_SOURCE_POSITION_EVENT = "cf:navigate-source-position";
+
+export interface NavigateSourcePositionEventDetail {
+  pos: number;
+}
+
+declare global {
+  interface DocumentEventMap {
+    "cf:navigate-source-position": CustomEvent<NavigateSourcePositionEventDetail>;
+  }
+}
+
+export function dispatchNavigateSourcePositionEvent(pos: number): void {
+  document.dispatchEvent(new CustomEvent<NavigateSourcePositionEventDetail>(
+    NAVIGATE_SOURCE_POSITION_EVENT,
+    {
+      detail: { pos },
+    },
+  ));
+}
+
 /**
- * Dispatched on `view.dom` (bubbles) when the editor mode cycles.
- * Detail: the new `EditorMode` string ("rich" | "source" | "read").
+ * Dispatched on the editor host when the editor mode changes.
+ * Detail: the new `EditorMode` string ("lexical" | "source").
  */
 export const MODE_CHANGE_EVENT = "cf:mode-change";
 

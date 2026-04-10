@@ -1,7 +1,7 @@
 /**
  * URL safety utilities.
  *
- * No dependency on CM6 or DOM — safe to use from any layer.
+ * No dependency on React or DOM — safe to use from any layer.
  */
 
 /**

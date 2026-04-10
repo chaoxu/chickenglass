@@ -48,8 +48,8 @@ try {
   if (!builtCss.includes("--cf-bg")) {
     throw new Error("dist/editor.css is missing theme token definitions");
   }
-  if (!builtCss.includes(".cm-editor")) {
-    throw new Error("dist/editor.css is missing CodeMirror overrides");
+  if (!builtCss.includes(".cf-lexical-editor")) {
+    throw new Error("dist/editor.css is missing Lexical editor styles");
   }
   if (builtCss.includes("@import")) {
     throw new Error("dist/editor.css still contains @import directives");
@@ -58,9 +58,6 @@ try {
   const builtModule = readFileSync(join(repoRoot, "dist", "editor.mjs"), "utf8");
   if (/from ["']\.\.?\//.test(builtModule) || /import\(["']\.\.?\//.test(builtModule)) {
     throw new Error("dist/editor.mjs still contains relative chunk imports");
-  }
-  if (builtModule.includes("@overleaf/codemirror-tree-view")) {
-    throw new Error("dist/editor.mjs still externalizes @overleaf/codemirror-tree-view");
   }
 
   const builtTypes = readFileSync(join(repoRoot, "dist", "editor.d.ts"), "utf8");

@@ -1,14 +1,20 @@
 /**
  * Framework-free utility functions shared across all layers.
  *
- * These are pure functions with no dependency on CM6, React, DOM, or any
- * framework — safe to import from plugins/, render/, semantics/, and app/.
+ * These are pure functions with no dependency on React, DOM, or editor runtime
+ * internals, and are safe to import from any layer.
  */
 
+import { clsx, type ClassValue } from "clsx";
 import {
   basename as patheBasename,
   dirname as patheDirname,
 } from "pathe";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]): string {
+  return twMerge(clsx(inputs));
+}
 
 /**
  * Return `s` with its first character uppercased.

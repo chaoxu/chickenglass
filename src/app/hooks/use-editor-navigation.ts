@@ -1,66 +1,35 @@
-/**
- * useEditorNavigation — focused hook for editor navigation and search-result coordination.
- *
- * Extracted from useAppEditorShell to isolate the navigation cluster:
- * - Outline heading jumps (handleOutlineSelect)
- * - Go-to-line (handleGotoLine)
- * - Cross-file search-result navigation (handleSearchResult)
- * - Editor-readiness synchronization needed by those actions
- *
- * The hook maintains its own view ref so navigation callbacks are always
- * working with the latest CM6 EditorView, even across async boundaries.
- */
-
 import { useRef, useEffect, useCallback } from "react";
-import { EditorView } from "@codemirror/view";
 
-/** Dependencies injected from the shell into the navigation hook. */
+import type { MarkdownEditorHandle } from "../../lexical/plain-text-editor";
+import { getOffsetForLineAndColumn } from "../markdown/text-lines";
+
 export interface EditorNavigationDeps {
-  /** Open a file by path (delegates to useEditorSession). */
-  openFile: (path: string) => Promise<void>;
-  /** Returns true if the given path is the currently open document. */
-  isPathOpen: (path: string) => boolean;
-  /** The current document path, or null when no file is open. */
-  currentPath: string | null;
+  readonly openFile: (path: string) => Promise<void>;
+  readonly isPathOpen: (path: string) => boolean;
+  readonly currentPath: string | null;
+  readonly getCurrentDocText: () => string;
 }
 
-/** Public API surface of the navigation hook. */
 export interface EditorNavigationController {
-  /**
-   * Scroll the editor to `from` (a document character offset) and focus it.
-   * Used by the outline panel when the user clicks a heading entry.
-   */
-  handleOutlineSelect: (from: number) => void;
-  /**
-   * Move the cursor to a 1-based line and optional 1-based column, then scroll
-   * into view. Line numbers are clamped to the document range.
-   */
-  handleGotoLine: (line: number, col?: number) => void;
-  /**
-   * Open `file` (if it is not already current) then scroll to character offset `pos`.
-   * Uses a stable ref instead of closure-captured state so the view reference
-   * is always fresh after the async `openFile` resolves.
-   * Calls `onComplete` when navigation finishes.
-   */
-  handleSearchResult: (file: string, pos: number, onComplete?: () => void) => Promise<boolean>;
-  /** Called after the editor has applied the current document/path to the live CM6 view. */
-  handleEditorDocumentReady: (view: EditorView, docPath: string | undefined) => void;
-  /**
-   * Must be called when the editor view changes (mount/unmount/re-mount) so
-   * internal refs stay current. When the view goes null, pending readiness
-   * waiters are aborted.
-   */
-  syncView: (view: EditorView | null) => void;
+  readonly handleOutlineSelect: (from: number) => void;
+  readonly handleGotoLine: (line: number, col?: number) => void;
+  readonly handleSearchResult: (
+    file: string,
+    pos: number,
+    options?: { focusSelection?: boolean },
+    onComplete?: () => void,
+  ) => Promise<boolean>;
+  readonly handleEditorDocumentReady: (docPath: string | undefined) => void;
+  readonly syncHandle: (handle: MarkdownEditorHandle | null) => void;
 }
 
 export function useEditorNavigation({
   openFile,
   isPathOpen,
   currentPath,
+  getCurrentDocText,
 }: EditorNavigationDeps): EditorNavigationController {
-  // Stable ref always pointing at the latest view, so async callbacks
-  // never capture a stale closure after openFile resolves.
-  const latestViewRef = useRef<EditorView | null>(null);
+  const latestHandleRef = useRef<MarkdownEditorHandle | null>(null);
   const latestReadyPathRef = useRef<string | null>(null);
   const readyPathWaitersRef = useRef<Map<string, Set<(ready: boolean) => void>>>(new Map());
   const searchRequestRef = useRef(0);
@@ -85,7 +54,7 @@ export function useEditorNavigation({
   }, []);
 
   const waitForEditorDocumentReady = useCallback((path: string): Promise<boolean> => {
-    if (latestReadyPathRef.current === path && latestViewRef.current) {
+    if (latestReadyPathRef.current === path && latestHandleRef.current) {
       return Promise.resolve(true);
     }
     if (!isPathOpen(path)) {
@@ -98,17 +67,16 @@ export function useEditorNavigation({
     });
   }, [isPathOpen]);
 
-  const syncView = useCallback((view: EditorView | null) => {
-    latestViewRef.current = view;
-    if (!view) {
+  const syncHandle = useCallback((handle: MarkdownEditorHandle | null) => {
+    latestHandleRef.current = handle;
+    if (!handle) {
       latestReadyPathRef.current = null;
       abortReadyWaitersExcept(null);
     }
   }, [abortReadyWaitersExcept]);
 
-  const handleEditorDocumentReady = useCallback((view: EditorView, docPath: string | undefined) => {
-    latestViewRef.current = view;
-    if (!docPath) {
+  const handleEditorDocumentReady = useCallback((docPath: string | undefined) => {
+    if (!docPath || !latestHandleRef.current) {
       return;
     }
     latestReadyPathRef.current = docPath;
@@ -121,27 +89,32 @@ export function useEditorNavigation({
   }, [abortReadyWaitersExcept, currentPath]);
 
   const handleOutlineSelect = useCallback((from: number) => {
-    const view = latestViewRef.current;
-    if (!view) return;
-    view.dispatch({ selection: { anchor: from }, scrollIntoView: true });
-    view.focus();
+    const handle = latestHandleRef.current;
+    if (!handle) {
+      return;
+    }
+    handle.setSelection(from);
+    handle.focus();
   }, []);
 
   const handleGotoLine = useCallback((line: number, col?: number) => {
-    const view = latestViewRef.current;
-    if (!view) return;
-    const docLine = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines)));
-    const offset = docLine.from + (col ? col - 1 : 0);
-    view.dispatch({ selection: { anchor: offset }, scrollIntoView: true });
-    view.focus();
-  }, []);
+    const handle = latestHandleRef.current;
+    if (!handle) {
+      return;
+    }
+    const offset = getOffsetForLineAndColumn(getCurrentDocText(), line, col);
+    handle.setSelection(offset);
+    handle.focus();
+  }, [getCurrentDocText]);
 
   const handleSearchResult = useCallback(async (
     file: string,
     pos: number,
+    options?: { focusSelection?: boolean },
     onComplete?: () => void,
   ): Promise<boolean> => {
     const requestId = ++searchRequestRef.current;
+
     try {
       await openFile(file);
       if (requestId !== searchRequestRef.current || !isPathOpen(file)) {
@@ -160,15 +133,15 @@ export function useEditorNavigation({
         return false;
       }
 
-      const view = latestViewRef.current;
-      if (view && latestReadyPathRef.current === file) {
-        view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
-        view.focus();
+      const handle = latestHandleRef.current;
+      if (options?.focusSelection !== false && handle && latestReadyPathRef.current === file) {
+        handle.setSelection(pos);
+        handle.focus();
       }
       onComplete?.();
       return true;
-    } catch (e: unknown) {
-      console.error("[editor] handleSearchResult: failed to open file", file, e);
+    } catch (error: unknown) {
+      console.error("[editor] handleSearchResult: failed to open file", file, error);
       return false;
     }
   }, [isPathOpen, openFile, waitForEditorDocumentReady]);
@@ -178,6 +151,6 @@ export function useEditorNavigation({
     handleGotoLine,
     handleSearchResult,
     handleEditorDocumentReady,
-    syncView,
+    syncHandle,
   };
 }

@@ -1,6 +1,8 @@
 import { act, createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { EditorMode } from "../editor-mode";
+import { SourceMap } from "../source-map";
 
 const nativeDebugMockState = vi.hoisted(() => ({
   debugListWindows: vi.fn(async () => [{ label: "main", focused: true }]),
@@ -40,11 +42,22 @@ const saveFile = vi.fn(async () => {});
 const closeFile = vi.fn(async (_options?: { discard?: boolean }) => true);
 const setSearchOpen = vi.fn((_open: boolean) => {});
 const requestNativeClose = vi.fn(async () => {});
-const setMode = vi.fn((_mode: "rich" | "source" | "read") => {});
-const getMode = vi.fn(() => "rich" as const);
+const setMode = vi.fn((_mode: EditorMode) => {});
+const getMode = vi.fn(() => "lexical" as const);
+const getCurrentSourceMap = vi.fn(() => new SourceMap([]));
+const editorHandle = {
+  focus: vi.fn(),
+  getDoc: vi.fn(() => "# Notes"),
+  getSelection: vi.fn(() => ({ anchor: 0, focus: 0, from: 0, to: 0 })),
+  insertText: vi.fn(),
+  setDoc: vi.fn(),
+  setSelection: vi.fn(),
+  applyChanges: vi.fn(),
+};
 
 const Harness: FC = () => {
   useAppDebug({
+    editorHandle,
     openProject,
     openFile,
     hasFile,
@@ -55,6 +68,8 @@ const Harness: FC = () => {
     requestNativeClose,
     setMode,
     getMode,
+    getCurrentDocText: () => "# Notes",
+    getCurrentSourceMap,
     projectRoot: "/tmp/frontend-project",
     currentDocument: {
       path: "notes.md",
@@ -84,7 +99,16 @@ describe("useAppDebug", () => {
     requestNativeClose.mockClear();
     setMode.mockClear();
     getMode.mockClear();
-    getMode.mockReturnValue("rich");
+    getMode.mockReturnValue("lexical");
+    getCurrentSourceMap.mockClear();
+    getCurrentSourceMap.mockReturnValue(new SourceMap([]));
+    editorHandle.focus.mockClear();
+    editorHandle.getDoc.mockClear();
+    editorHandle.getSelection.mockClear();
+    editorHandle.insertText.mockClear();
+    editorHandle.setDoc.mockClear();
+    editorHandle.setSelection.mockClear();
+    editorHandle.applyChanges.mockClear();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -101,6 +125,9 @@ describe("useAppDebug", () => {
     });
 
     expect(window.__app?.openFileWithContent).toBeDefined();
+    expect(window.__editor?.getDoc).toBeDefined();
+    expect(window.__cmView?.state.doc.toString()).toBe("# Notes");
+    expect(window.__cmDebug?.treeString()).toContain("ATXHeading1");
     expect(window.__tauriSmoke).toBeDefined();
 
     const snapshot = await window.__tauriSmoke?.getWindowState();
@@ -115,7 +142,7 @@ describe("useAppDebug", () => {
       dirty: true,
       startupComplete: true,
       restoredProjectRoot: "/tmp/saved-project",
-      mode: "rich",
+      mode: "lexical",
       backendProjectRoot: "/tmp/backend-project",
       backendProjectGeneration: 4,
       watcherRoot: "/tmp/backend-project",

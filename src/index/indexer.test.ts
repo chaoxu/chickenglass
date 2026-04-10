@@ -331,21 +331,16 @@ See [@eq:class] for the class equation.`;
 
 describe("edge cases", () => {
   it("does NOT produce false labels for incomplete/unclosed fenced divs at EOF", () => {
-    // The Lezer parser uses error recovery and will still emit a FencedDiv
-    // node for an unclosed block at EOF, so the indexer will extract an entry.
-    // This test documents the actual behavior: the label IS present, but the
-    // entry's content is the partial body (up to EOF). A caller must not assume
-    // unclosed divs are silently dropped.
+    // The markdown extractor keeps the opening fenced-div metadata even when
+    // the closing fence is missing at EOF. This documents the behavior: the
+    // label is present and the content is the partial body up to EOF.
     const content = `::: {.theorem #thm-unclosed}
 This theorem has no closing fence.`;
     const result = extractFileIndex(content, "test.md");
 
-    // Parser error-recovery emits a FencedDiv node even for unclosed divs.
     const labelled = result.entries.filter((e) => e.label === "thm-unclosed");
     expect(labelled).toHaveLength(1);
-    // The type and label are still correctly extracted from the opening fence.
     expect(labelled[0].type).toBe("theorem");
-    // The content is the partial body text (no closing fence line).
     expect(labelled[0].content).toContain("This theorem has no closing fence.");
   });
 

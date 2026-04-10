@@ -110,7 +110,11 @@ describe("FileWatcher with chokidar", () => {
 
   it("ignores dotfiles, node_modules, and dist via the ignored option", () => {
     const watchCall = vi.mocked(watch).mock.calls[0];
-    const ignoredFn = watchCall[1]!.ignored as (path: string) => boolean;
+    const watchOptions = watchCall?.[1];
+    if (!watchOptions) {
+      throw new Error("missing chokidar watch options");
+    }
+    const ignoredFn = watchOptions.ignored as (path: string) => boolean;
 
     // Root dir itself is not ignored
     expect(ignoredFn("/project")).toBe(false);

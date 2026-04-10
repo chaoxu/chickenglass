@@ -102,7 +102,7 @@ export default defineConfig(({ mode }) => {
       GIT_COMMIT_TIME: JSON.stringify(gitBuildInfo.time),
     },
     optimizeDeps: {
-      include: ["katex", "pdfjs-dist", "citation-js", "@citation-js/core"],
+      include: ["katex"],
     },
     build: {
       target: "es2022",

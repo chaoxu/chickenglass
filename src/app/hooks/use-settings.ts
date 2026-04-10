@@ -20,7 +20,7 @@ const DEFAULT_SETTINGS: Settings = {
   showLineNumbers: false,
   wordWrap: true,
   spellCheck: false,
-  editorMode: "rich",
+  editorMode: "lexical",
   theme: "system",
   defaultExportFormat: "pdf",
   enabledPlugins: {},
@@ -37,6 +37,10 @@ function isValidTheme(value: unknown): value is Settings["theme"] {
 function loadSettings(): Settings {
   const parsed = readLocalStorage<Partial<Settings>>(SETTINGS_KEY, {});
   const loaded = { ...DEFAULT_SETTINGS, ...parsed };
+
+  if ((parsed as { editorMode?: string }).editorMode === "read") {
+    loaded.editorMode = "lexical";
+  }
 
   // Migrate legacy spellCheck boolean into enabledPlugins
   if (loaded.spellCheck !== undefined && loaded.enabledPlugins?.spellcheck === undefined) {

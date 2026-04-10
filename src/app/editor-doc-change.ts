@@ -1,24 +1,19 @@
-import { Text } from "@codemirror/state";
-
 export interface EditorDocumentChange {
   from: number;
   to: number;
   insert: string;
 }
 
-export type EditorDocumentText = Text;
+export type EditorDocumentText = string;
 
-export const emptyEditorDocument = Text.empty;
+export const emptyEditorDocument = "";
 
 export function createEditorDocumentText(doc: string): EditorDocumentText {
-  if (doc.length === 0) {
-    return emptyEditorDocument;
-  }
-  return Text.of(doc.split("\n"));
+  return doc;
 }
 
 export function editorDocumentToString(doc: EditorDocumentText): string {
-  return doc.toString();
+  return doc;
 }
 
 export function applyEditorDocumentChanges(
@@ -44,13 +39,44 @@ export function applyEditorDocumentChanges(
     ) {
       throw new Error("Editor document changes must be sorted, non-overlapping, and valid.");
     }
-    nextDoc = nextDoc.replace(
-      change.from,
-      change.to,
-      createEditorDocumentText(change.insert),
-    );
+    nextDoc = `${nextDoc.slice(0, change.from)}${change.insert}${nextDoc.slice(change.to)}`;
     nextFrom = change.from;
   }
 
   return nextDoc;
+}
+
+export function createMinimalEditorDocumentChanges(
+  previousDoc: string,
+  nextDoc: string,
+): EditorDocumentChange[] {
+  if (previousDoc === nextDoc) {
+    return [];
+  }
+
+  let start = 0;
+  const maxPrefix = Math.min(previousDoc.length, nextDoc.length);
+  while (
+    start < maxPrefix
+    && previousDoc.charCodeAt(start) === nextDoc.charCodeAt(start)
+  ) {
+    start += 1;
+  }
+
+  let previousEnd = previousDoc.length;
+  let nextEnd = nextDoc.length;
+  while (
+    previousEnd > start
+    && nextEnd > start
+    && previousDoc.charCodeAt(previousEnd - 1) === nextDoc.charCodeAt(nextEnd - 1)
+  ) {
+    previousEnd -= 1;
+    nextEnd -= 1;
+  }
+
+  return [{
+    from: start,
+    to: previousEnd,
+    insert: nextDoc.slice(start, nextEnd),
+  }];
 }

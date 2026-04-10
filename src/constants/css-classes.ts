@@ -36,7 +36,7 @@ export const CSS = {
   /** Collapsed header line — no visible label, zero height (e.g. blockquote). */
   blockHeaderCollapsed: "cf-block-header-collapsed",
 
-  /** Closing fence line — always hidden in rich mode (zero height). */
+  /** Closing fence line — collapsed in the formatted markdown surface. */
   blockClosingFence: "cf-block-closing-fence",
 
   /** QED tombstone marker on last content line of proof blocks. */
@@ -50,9 +50,6 @@ export const CSS = {
 
   /** Source mode editor attribute. */
   sourceMode: "cf-source-mode",
-
-  /** Read mode editor attribute. */
-  readMode: "cf-read-mode",
 
   /** Embed container: "cf-embed cf-embed-{type}". */
   embed: (type: string) => `cf-embed cf-embed-${type}`,
@@ -150,11 +147,6 @@ export const CSS = {
 
   /** Document title from frontmatter. */
   docTitle: "cf-doc-title",
-
-  /** Read mode view container. */
-  readModeView: "cf-read-mode-view",
-  readTitle: "cf-read-title",
-  sectionNumber: "cf-section-number",
 
   /** Block blockquote. */
   blockBlockquote: "cf-block-blockquote",

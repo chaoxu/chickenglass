@@ -184,7 +184,7 @@ export const themeSurfaceTokenMap = {
     "--cf-sidenote-width",
     "--cf-fence-guide-width",
   ],
-  readMode: [
+  exportSurface: [
     "--cf-bg",
     "--cf-fg",
     "--cf-content-font",
@@ -367,8 +367,8 @@ export const exportThemeTokenDefaults: Record<ThemeTokenName, string> = {
   "--cf-h6-weight": "600",
   "--cf-h6-style": "normal",
   // Preview surfaces
-  "--cf-preview-surface-max-width": "400px",
-  "--cf-preview-surface-max-height": "300px",
+  "--cf-preview-surface-max-width": "640px",
+  "--cf-preview-surface-max-height": "520px",
   "--cf-preview-surface-padding-block": "var(--cf-spacing-md)",
   "--cf-preview-surface-padding-inline": "var(--cf-spacing-lg)",
   "--cf-preview-surface-font-size": "0.9em",

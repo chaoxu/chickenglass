@@ -1,247 +1,152 @@
-import { useRef, useEffect, useMemo, useState, lazy, Suspense, useSyncExternalStore, useCallback } from "react";
-import { EditorView } from "@codemirror/view";
-import { useEditor } from "../hooks/use-editor";
-import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
-import { useEditorStateTracking } from "../hooks/use-editor-state-tracking";
-import { useSidenotesAutoCollapse } from "../hooks/use-sidenotes-auto-collapse";
-import { useFootnoteTooltip } from "../hooks/use-footnote-tooltip";
-import { Breadcrumbs } from "./breadcrumbs";
-import { SidenoteMargin, type SidenoteInvalidation } from "./sidenote-margin";
-import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { LexicalEditor } from "lexical";
+
+import { type MarkdownEditorHandle, type MarkdownEditorSelection } from "../../lexical/plain-text-editor";
+import { computeLiveStats } from "../writing-stats";
 import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
-import { blockCounterField } from "../../plugins/block-counter";
-import {
-  documentSemanticsField,
-  getDocumentAnalysisRevision,
-  getDocumentAnalysisSliceRevision,
-} from "../../semantics/codemirror-source";
-import { bibDataField } from "../../citations/citation-render";
-import { frontmatterField, type EditorMode } from "../../editor";
-import { mathMacrosField } from "../../render";
-import { serializeMacros } from "../../render/render-core";
-import {
-  EMPTY_ACTIVE_DOCUMENT_SNAPSHOT,
-  unsubscribeNoop,
-  type ActiveDocumentSignal,
-} from "../active-document-signal";
+import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
+import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
+import type { EditorDocumentChange } from "../editor-doc-change";
+import type { EditorMode } from "../editor-mode";
+import { Breadcrumbs } from "./breadcrumbs";
+import { LexicalEditorSurface } from "./lexical-editor-surface";
 
-/** Lazy-loaded read-mode view — kept out of the startup bundle (read mode is deferred). */
-const ReadModeView = lazy(() =>
-  import("./read-mode-view").then((m) => ({ default: m.ReadModeView })),
-);
-
-const EMPTY_MACROS: Record<string, string> = {};
-const EMPTY_SIDENOTE_INVALIDATION: SidenoteInvalidation = {
-  revision: 0,
-  footnotesChanged: false,
-  macrosChanged: false,
-  globalLayoutChanged: false,
-  layoutChangeFrom: -1,
-};
-export interface EditorPaneProps extends UseEditorOptions {
-  sidenotesCollapsed?: boolean;
-  onSidenotesCollapsedChange?: (collapsed: boolean) => void;
-  onStateChange?: (state: UseEditorReturn) => void;
-  onDocumentReady?: (view: EditorView, docPath: string | undefined) => void;
-  /** Called when the document heading list changes (e.g. after async parse completes). */
-  onHeadingsChange?: (headings: HeadingEntry[]) => void;
-  /** Called when the document diagnostics change. */
-  onDiagnosticsChange?: (diagnostics: DiagnosticEntry[]) => void;
-  /** Current editor mode — "read" shows the HTML renderer instead of CM6. */
-  editorMode?: EditorMode;
-  /** External signal used to refresh read mode without rerendering the shell. */
-  activeDocumentSignal?: ActiveDocumentSignal;
+export interface EditorPaneProps {
+  readonly doc: string;
+  readonly docPath?: string;
+  readonly editorMode: EditorMode;
+  readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
+  readonly onDocumentReady?: (docPath: string | undefined) => void;
+  readonly onHeadingsChange?: (headings: HeadingEntry[]) => void;
+  readonly onDiagnosticsChange?: (diagnostics: DiagnosticEntry[]) => void;
+  readonly onLexicalEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
+  readonly onOutlineSelect?: (from: number) => void;
+  readonly spellCheck?: boolean;
 }
 
 export function EditorPane({
-  onStateChange,
+  doc,
+  docPath,
+  editorMode,
+  onDocChange,
   onDocumentReady,
-  sidenotesCollapsed,
-  onSidenotesCollapsedChange,
   onHeadingsChange,
   onDiagnosticsChange,
-  editorMode,
-  activeDocumentSignal,
-  ...editorOptions
+  onLexicalEditorReady,
+  onOutlineSelect,
+  spellCheck = false,
 }: EditorPaneProps) {
-  const isReadMode = editorMode === "read";
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [sidenoteInvalidation, setSidenoteInvalidation] = useState<SidenoteInvalidation>(
-    EMPTY_SIDENOTE_INVALIDATION,
-  );
+  const [liveDoc, setLiveDoc] = useState(doc);
+  const liveDocRef = useRef(doc);
+  const richRootRef = useRef<HTMLElement | null>(null);
 
-  // Stable ref so the CM6 listener always sees the latest callback
-  // without forcing an editor re-creation.
-  const onHeadingsChangeRef = useRef(onHeadingsChange);
-  useEffect(() => { onHeadingsChangeRef.current = onHeadingsChange; }, [onHeadingsChange]);
+  useEffect(() => {
+    liveDocRef.current = liveDoc;
+  }, [liveDoc]);
 
-  const onDiagnosticsChangeRef = useRef(onDiagnosticsChange);
-  useEffect(() => { onDiagnosticsChangeRef.current = onDiagnosticsChange; }, [onDiagnosticsChange]);
+  useEffect(() => {
+    setLiveDoc(doc);
+    liveDocRef.current = doc;
+    const counts = computeLiveStats(doc);
+    const telemetry = useEditorTelemetryStore.getState();
+    telemetry.setLiveCounts(counts.words, counts.chars);
+    telemetry.setScroll(0, 0);
+    telemetry.setCursorPos(0, doc);
+  }, [doc]);
 
-  const sidenotesCollapsedRef = useRef(sidenotesCollapsed);
-  useEffect(() => { sidenotesCollapsedRef.current = sidenotesCollapsed; }, [sidenotesCollapsed]);
+  const headings = useMemo(() => extractHeadings(liveDoc), [liveDoc]);
+  const diagnostics = useMemo(() => extractDiagnostics(liveDoc), [liveDoc]);
 
-  const isReadModeRef = useRef(isReadMode);
-  useEffect(() => { isReadModeRef.current = isReadMode; }, [isReadMode]);
+  useEffect(() => {
+    onHeadingsChange?.(headings);
+  }, [headings, onHeadingsChange]);
 
-  // CM6 extension that detects heading-slice revision changes and
-  // pushes fresh headings into React.  Created once (stable reference)
-  // so it never triggers editor re-creation.
-  const headingTrackingExtension = useMemo(() => {
-    let lastRev: number | undefined;
-    return EditorView.updateListener.of((update) => {
-      const analysis = update.state.field(documentSemanticsField, false);
-      if (!analysis) return;
-      const rev = getDocumentAnalysisSliceRevision(analysis, "headings");
-      if (rev === lastRev) return;
-      lastRev = rev;
-      onHeadingsChangeRef.current?.(extractHeadings(update.state));
-    });
+  useEffect(() => {
+    onDiagnosticsChange?.(diagnostics);
+  }, [diagnostics, onDiagnosticsChange]);
+
+  const handleSelectionChange = useCallback((selection: MarkdownEditorSelection) => {
+    const telemetry = useEditorTelemetryStore.getState();
+    telemetry.setCursorPos(selection.focus, liveDocRef.current);
+    telemetry.setScroll(telemetry.scrollTop, selection.from);
   }, []);
 
-  // CM6 extension that detects semantic or bibliography changes and
-  // pushes fresh diagnostics into React.
-  const diagnosticTrackingExtension = useMemo(() => {
-    let lastAnalysisRev: number | undefined;
-    let lastBibRev: number | undefined;
-    return EditorView.updateListener.of((update) => {
-      const analysis = update.state.field(documentSemanticsField, false);
-      if (!analysis) return;
-      const analysisRev = getDocumentAnalysisRevision(analysis);
-      const bibState = update.state.field(bibDataField, false);
-      const bibRev = bibState?.processorRevision;
-      const blockCountersChanged =
-        update.startState.field(blockCounterField, false)
-        !== update.state.field(blockCounterField, false);
-      if (analysisRev === lastAnalysisRev && bibRev === lastBibRev && !blockCountersChanged) return;
-      lastAnalysisRev = analysisRev;
-      lastBibRev = bibRev;
-      onDiagnosticsChangeRef.current?.(extractDiagnostics(update.state));
-    });
+  const handleTextChange = useCallback((nextDoc: string) => {
+    liveDocRef.current = nextDoc;
+    setLiveDoc(nextDoc);
+    const counts = computeLiveStats(nextDoc);
+    useEditorTelemetryStore.getState().setLiveCounts(counts.words, counts.chars);
   }, []);
 
-  const sidenoteTrackingExtension = useMemo(() => {
-    return EditorView.updateListener.of((update) => {
-      if (isReadModeRef.current || sidenotesCollapsedRef.current) return;
-
-      const beforeAnalysis = update.startState.field(documentSemanticsField, false);
-      const afterAnalysis = update.state.field(documentSemanticsField, false);
-      if (!afterAnalysis) return;
-
-      const footnotesChanged = beforeAnalysis?.footnotes !== afterAnalysis.footnotes;
-      const beforeMacros = update.startState.field(mathMacrosField, false) ?? EMPTY_MACROS;
-      const afterMacros = update.state.field(mathMacrosField, false) ?? EMPTY_MACROS;
-      const macrosChanged = beforeMacros !== afterMacros
-        && serializeMacros(beforeMacros) !== serializeMacros(afterMacros);
-      let layoutChangeFrom = -1;
-      if (update.docChanged) {
-        update.changes.iterChangedRanges((_fromA, _toA, fromB) => {
-          if (layoutChangeFrom === -1 || fromB < layoutChangeFrom) {
-            layoutChangeFrom = fromB;
-          }
-        });
-      }
-      const globalLayoutChanged = !update.docChanged && update.heightChanged;
-
-      if (!footnotesChanged && !macrosChanged && layoutChangeFrom === -1 && !globalLayoutChanged) return;
-
-      setSidenoteInvalidation((previous) => ({
-        revision: previous.revision + 1,
-        footnotesChanged,
-        macrosChanged,
-        globalLayoutChanged,
-        layoutChangeFrom,
-      }));
-    });
+  const handleScrollChange = useCallback((scrollTop: number) => {
+    const telemetry = useEditorTelemetryStore.getState();
+    telemetry.setScroll(scrollTop, telemetry.viewportFrom);
   }, []);
 
-  const extensions = useMemo(
-    () => [
-      ...(editorOptions.extensions ?? []),
-      headingTrackingExtension,
-      diagnosticTrackingExtension,
-      sidenoteTrackingExtension,
-    ],
-    [editorOptions.extensions, headingTrackingExtension, diagnosticTrackingExtension, sidenoteTrackingExtension],
-  );
+  const handleViewportFromChange = useCallback((from: number) => {
+    const telemetry = useEditorTelemetryStore.getState();
+    telemetry.setScroll(telemetry.scrollTop, from);
+  }, []);
 
-  const editorState = useEditor(containerRef, {
-    ...editorOptions,
-    onDocumentReady,
-    extensions,
-  });
+  const handleRichRootElementChange = useCallback((root: HTMLElement | null) => {
+    richRootRef.current = root;
+  }, []);
 
-  const { view } = editorState;
-
-  useEditorStateTracking(editorState, onStateChange);
-  useSidenotesAutoCollapse(view, sidenotesCollapsed, onSidenotesCollapsedChange);
-  useFootnoteTooltip(view, sidenotesCollapsed);
-
-  // Extract headings for breadcrumbs and outline
-  const headings = view ? extractHeadings(view.state) : [];
-  const subscribeToActiveDocument = useCallback((onStoreChange: () => void) => {
-    if (!isReadMode || !activeDocumentSignal) {
-      return unsubscribeNoop;
+  const handleHeadingNavigation = useCallback((from: number): boolean => {
+    if (editorMode === "source") {
+      return false;
     }
-    return activeDocumentSignal.subscribe(onStoreChange);
-  }, [activeDocumentSignal, isReadMode]);
-  const getActiveDocumentSnapshot = useCallback(() => {
-    if (!isReadMode || !activeDocumentSignal) {
-      return EMPTY_ACTIVE_DOCUMENT_SNAPSHOT;
-    }
-    return activeDocumentSignal.getSnapshot();
-  }, [activeDocumentSignal, isReadMode]);
-  const activeDocument = useSyncExternalStore(
-    subscribeToActiveDocument,
-    getActiveDocumentSnapshot,
-    getActiveDocumentSnapshot,
-  );
 
-  // Get the live document content, frontmatter config, and bibliography for ReadModeView
-  const readModeContent = useMemo(() => {
-    if (!isReadMode) {
-      return editorOptions.doc;
+    const root = richRootRef.current;
+    if (!root) {
+      return false;
     }
-    // Only read mode subscribes to active-document edits so rich/source typing
-    // does not pull the editor pane through a React rerender.
-    return view ? view.state.doc.toString() : editorOptions.doc;
-  }, [activeDocument.revision, editorOptions.doc, isReadMode, view]);
-  const fmState = view ? view.state.field(frontmatterField, false) : undefined;
-  const frontmatterConfig = fmState?.config ?? {};
-  const bibData = view ? view.state.field(bibDataField, false) : undefined;
+
+    const selector = `.cf-lexical-heading[data-coflat-heading-pos="${String(from)}"]`;
+    const target = root.querySelector<HTMLElement>(selector);
+    if (!target) {
+      return false;
+    }
+
+    const rootRect = root.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    root.scrollTop += targetRect.top - rootRect.top - 24;
+    root.focus();
+    return true;
+  }, [editorMode]);
+
+  const handleEditorReady = useCallback((handle: MarkdownEditorHandle, editor: LexicalEditor) => {
+    onLexicalEditorReady?.(handle, editor);
+  }, [onLexicalEditorReady]);
+
+  const handleDocumentReady = useCallback(() => {
+    onDocumentReady?.(docPath);
+  }, [docPath, onDocumentReady]);
 
   return (
-    <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
-      {!isReadMode && (
-        <Breadcrumbs
-          headings={headings}
-          onSelect={(from) => {
-            if (view) {
-              view.dispatch({ selection: { anchor: from }, scrollIntoView: true });
-              view.focus();
-            }
-          }}
-        />
-      )}
-      {/* CM6 editor — hidden (not unmounted) in read mode to preserve state */}
-      <div ref={containerRef} className="h-full" style={isReadMode ? { display: "none" } : undefined} />
-      {/* Read mode HTML renderer (lazy-loaded — read mode is deferred) */}
-      {isReadMode && (
-        <Suspense fallback={null}>
-          <ReadModeView
-            content={readModeContent}
-            frontmatterConfig={frontmatterConfig}
-            bibliography={bibData?.store}
-            cslProcessor={bibData?.cslProcessor}
-            fs={editorOptions.fs}
-            docPath={editorOptions.docPath}
-          />
-        </Suspense>
-      )}
-      {/* Portal target — SidenoteMargin renders into the CM6 scroller via DOM portal */}
-      {!isReadMode && !sidenotesCollapsed && (
-        <SidenoteMargin view={view} invalidation={sidenoteInvalidation} />
-      )}
+    <div className="relative flex-1 overflow-hidden" style={{ minHeight: 0 }}>
+      <Breadcrumbs
+        headings={headings}
+        onSelect={(from) => {
+          if (!handleHeadingNavigation(from)) {
+            onOutlineSelect?.(from);
+          }
+        }}
+      />
+      <LexicalEditorSurface
+        doc={doc}
+        docPath={docPath}
+        editorMode={editorMode}
+        onDocChange={onDocChange}
+        onEditorReady={handleEditorReady}
+        onRichRootElementChange={handleRichRootElementChange}
+        onSelectionChange={handleSelectionChange}
+        onTextChange={handleTextChange}
+        onDocumentReady={handleDocumentReady}
+        onScrollChange={handleScrollChange}
+        onViewportFromChange={handleViewportFromChange}
+        spellCheck={spellCheck}
+      />
     </div>
   );
 }

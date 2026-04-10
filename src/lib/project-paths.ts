@@ -1,8 +1,7 @@
 /**
  * Project-relative path utilities.
  *
- * No dependency on CM6 or React — safe to import from plugins/,
- * editor/, render/, and app/.
+ * No dependency on React or DOM — safe to import from any layer.
  */
 
 import { normalize } from "pathe";

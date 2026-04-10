@@ -1,4 +1,4 @@
-import type { EditorMode } from "../editor";
+import type { EditorMode } from "./editor-mode";
 import type { IndexQuery } from "../index/query-api";
 import type { FileEntry } from "../lib/types";
 

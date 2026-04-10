@@ -1,7 +1,7 @@
 import type { Settings, Theme } from "../../lib/types";
 import { cn } from "../../lib/utils";
 import { builtinThemes } from "../../themes";
-import { themePresets, themePresetKeys } from "../../../editor/theme-config";
+import { themePresets, themePresetKeys } from "../../theme-config";
 import { Textarea } from "../ui/textarea";
 import { Row } from "./shared";
 
@@ -111,7 +111,7 @@ export function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: 
           id="sd-custom-css"
           value={settings.customCss}
           onChange={(e) => { onUpdateSetting("customCss", e.target.value); }}
-          placeholder={`/* Example: change editor font */\n.cm-content {\n  font-family: "Georgia", serif;\n}`}
+          placeholder={`/* Example: change editor font */\n[data-testid="lexical-editor"] {\n  font-family: "Georgia", serif;\n}`}
           className="h-32 resize-y text-xs font-mono"
           spellCheck={false}
         />

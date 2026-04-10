@@ -89,7 +89,7 @@ async function main() {
     }
     await waitForDebugBridge(page);
   } catch {
-    console.error("Timed out waiting for debug bridge (__app, __cmView, __cmDebug, __cfDebug).");
+    console.error("Timed out waiting for debug bridge (__app, __cfDebug).");
     console.error("The dev server may not have finished loading.");
     process.exit(1);
   }

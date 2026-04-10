@@ -1,9 +1,9 @@
 // Re-export canonical types from their source modules.
 export type { Tab } from "../tab-bar";
-export type { EditorMode } from "../../editor";
+export type { EditorMode } from "../editor-mode";
 export type { Theme } from "../theme-manager";
 
-import type { EditorMode } from "../../editor";
+import type { EditorMode } from "../editor-mode";
 import type { Theme } from "../theme-manager";
 
 export type ExportFormat = "pdf" | "latex" | "html";

@@ -9,9 +9,9 @@ import {
 } from "./perf-regression.mjs";
 
 describe("perf regression scenarios", () => {
-  it("registers typing-rich-burst with the expected benchmark docs and required metrics", () => {
+  it("registers typing-lexical-burst with the expected benchmark docs and required metrics", () => {
     const availableCases = availableTypingBurstCases().map(({ key, displayPath }) => ({ key, displayPath }));
-    expect(scenarios["typing-rich-burst"]).toMatchObject({
+    expect(scenarios["typing-lexical-burst"]).toMatchObject({
       defaultSettleMs: 200,
     });
     expect(TYPING_BURST_CASES.map(({ key, displayPath }) => ({ key, displayPath }))).toEqual([
@@ -20,18 +20,18 @@ describe("perf regression scenarios", () => {
       { key: "cogirth_main2", displayPath: "fixtures/cogirth/main2.md" },
     ]);
     expect(availableCases).toContainEqual({ key: "index", displayPath: "demo/index.md" });
-    expect(scenarios["typing-rich-burst"].requiredMetrics).toContain(
+    expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
       "typing.wall_ms.index.after_frontmatter",
     );
     if (availableCases.some(({ key }) => key === "cogirth_main2")) {
-      expect(scenarios["typing-rich-burst"].requiredMetrics).toContain(
+      expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
         "typing.wall_ms.cogirth_main2.inline_math",
       );
-      expect(scenarios["typing-rich-burst"].requiredMetrics).toContain(
+      expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
         "typing.settle_ms.cogirth_main2.citation_ref",
       );
     } else {
-      expect(scenarios["typing-rich-burst"].requiredMetrics).not.toContain(
+      expect(scenarios["typing-lexical-burst"].requiredMetrics).not.toContain(
         "typing.wall_ms.cogirth_main2.inline_math",
       );
     }

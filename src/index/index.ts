@@ -5,20 +5,6 @@
  * indexer with query API (T15).
  */
 
-// Cross-reference resolver (T12)
-export type {
-  CrossrefKind,
-  ResolvedCrossref,
-  EquationEntry,
-  CrossrefMatch,
-} from "./crossref-resolver";
-export {
-  collectEquationLabels,
-  resolveCrossref,
-  findCrossrefs,
-} from "./crossref-resolver";
-
-// Background indexer query API (T15)
 export {
   getAllLabels,
   queryIndex,

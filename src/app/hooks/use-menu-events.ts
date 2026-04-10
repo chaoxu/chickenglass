@@ -20,7 +20,7 @@ import { isTauri } from "../../lib/tauri";
 import { dispatchFormatEvent, type SimpleFormatEventType } from "../../constants/events";
 
 /**
- * Map from menu-event IDs that dispatch a cf:format event for CM6.
+ * Map from menu-event IDs that dispatch a cf:format event for the markdown editor.
  * To add a new format action, add an entry here.
  */
 const formatEventMap: Readonly<Record<string, SimpleFormatEventType>> = {
@@ -68,7 +68,7 @@ export function useMenuEvents(handlers: Record<string, () => void>): void {
           return;
         }
 
-        // Format events dispatched as cf:format CustomEvents for CM6
+        // Format events dispatched as cf:format CustomEvents for the active editor surface
         const formatAction = formatEventMap[id];
         if (formatAction) {
           dispatchFormatEvent(formatAction);

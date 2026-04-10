@@ -1,48 +1,27 @@
-/**
- * Regression test: table grid rendering.
- *
- * Verifies that pipe tables in the document are rendered with the grid layout
- * system (`.cf-grid-cell` elements).
- */
-
-/* global window */
-
-import { openRegressionDocument, scrollToText } from "../test-helpers.mjs";
+import { openRegressionDocument } from "../test-helpers.mjs";
 
 export const name = "tables";
 
 export async function run(page) {
-  await openRegressionDocument(page);
-  await new Promise((r) => setTimeout(r, 800));
+  await openRegressionDocument(page, "index.md");
+  await page.waitForTimeout(500);
 
-  // Check for Table node in syntax tree
-  const tree = await page.evaluate(() => window.__cmDebug.treeString());
-  const hasTable = tree.includes("Table");
+  const state = await page.evaluate(() => ({
+    cellCount: document.querySelectorAll("table td, table th").length,
+    tableCount: document.querySelectorAll(".cf-lexical-table-block table, table").length,
+    tree: window.__cmDebug?.treeString?.() ?? "",
+  }));
 
-  if (!hasTable) {
-    return { pass: false, message: "No Table node found in syntax tree" };
+  if (!state.tree.includes("Table")) {
+    return { pass: false, message: "debug tree did not report a markdown table" };
   }
 
-  await scrollToText(page, "# Tables");
-
-  // Check for rendered grid cells
-  const cellCount = await page.evaluate(() => {
-    const editor = window.__cmView.dom;
-    return editor.querySelectorAll(".cf-grid-cell").length;
-  });
-
-  if (cellCount === 0) {
-    return { pass: false, message: "Table node exists but no .cf-grid-cell elements in DOM" };
+  if (state.tableCount === 0 || state.cellCount === 0) {
+    return { pass: false, message: "rich mode did not render the table grid" };
   }
-
-  // Verify header cells exist
-  const headerCellCount = await page.evaluate(() => {
-    const editor = window.__cmView.dom;
-    return editor.querySelectorAll(".cf-grid-cell-header").length;
-  });
 
   return {
     pass: true,
-    message: `${cellCount} grid cells (${headerCellCount} headers) rendered`,
+    message: `${state.tableCount} tables rendered with ${state.cellCount} cells`,
   };
 }

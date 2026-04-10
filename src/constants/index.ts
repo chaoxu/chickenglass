@@ -1,8 +1,8 @@
 /**
  * Barrel file for centralized constants.
  *
- * Re-exports block manifest, CSS class names, Lezer node types,
- * timing limits, layout dimensions, DOM event names, and storage keys.
+ * Re-exports block manifests, CSS class names, timing limits, layout
+ * dimensions, DOM event names, and storage keys.
  */
 
 export {
@@ -21,8 +21,6 @@ export {
 } from "./block-manifest";
 
 export { CSS } from "./css-classes";
-
-export { NODE, type NodeTypeName } from "./node-types";
 
 export {
   IMAGE_TIMEOUT_MS,

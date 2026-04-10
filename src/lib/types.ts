@@ -1,50 +1,8 @@
 /**
  * Shared type definitions for the filesystem abstraction.
  *
- * These interfaces are used across plugins/, editor/, render/, and app/.
- * Keeping them here avoids app/ → plugins/ or render/ → app/ boundary
- * violations.
+ * These interfaces are used across the app shell and export/index helpers.
  */
-
-import { Facet } from "@codemirror/state";
-
-/**
- * CM6 Facet that provides a FileSystem instance to render plugins.
- *
- * The app layer provides `fileSystemFacet.of(fs)` when creating the editor.
- * Render plugins (e.g., image-render for PDF preview) read it to perform
- * binary file I/O without importing from the app layer.
- *
- * Pattern follows projectConfigFacet: at most one provider, last wins.
- */
-export const fileSystemFacet = Facet.define<FileSystem | null, FileSystem | null>({
-  combine(values) {
-    // There should be at most one provider. Take the last non-null one.
-    for (let i = values.length - 1; i >= 0; i--) {
-      if (values[i] !== null) return values[i];
-    }
-    return null;
-  },
-});
-
-/**
- * CM6 Facet that provides the current document's project-relative path.
- *
- * Render plugins (e.g., image-render for PDF preview) use it to resolve
- * relative media paths against the document's directory, so that
- * `![](diagram.pdf)` in `posts/math.md` resolves to `posts/diagram.pdf`.
- *
- * Pattern follows fileSystemFacet: at most one provider, last wins.
- * Default is "" (project root), which means relative paths resolve from root.
- */
-export const documentPathFacet = Facet.define<string, string>({
-  combine(values) {
-    for (let i = values.length - 1; i >= 0; i--) {
-      if (values[i]) return values[i];
-    }
-    return "";
-  },
-});
 
 /** File entry representing a single file or directory in the tree. */
 export interface FileEntry {
@@ -61,11 +19,7 @@ export interface FileEntry {
 /**
  * Plain-data block counter entry for cross-reference resolution.
  *
- * Mirrors `NumberedBlock` from the CM6 block-counter state field but without
- * position data — only the fields needed for label formatting. Lives here so
- * that both the CM6-free HTML export path (`markdown-to-html.ts`) and the
- * editor render layer can share the type without crossing the `src/app/`
- * boundary.
+ * Shared plain-data representation for numbering/cross-reference formatting.
  */
 export interface BlockCounterEntry {
   /** The plugin class name (e.g. "theorem"). */

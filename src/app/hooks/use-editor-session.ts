@@ -32,6 +32,7 @@ export interface UseEditorSessionReturn {
   editorDoc: string;
   activeDocumentSignal: ActiveDocumentSignal;
   getCurrentDocText: () => string;
+  getCurrentSourceMap: () => SourceMap | null;
   isPathOpen: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
   cancelPendingOpenFile: () => void;
@@ -104,6 +105,7 @@ export function useEditorSession({
     editorDoc: snapshot.editorDoc,
     activeDocumentSignal: runtime.activeDocumentSignal,
     getCurrentDocText: sessionService.getCurrentDocText,
+    getCurrentSourceMap: sessionService.getCurrentSourceMap,
     isPathOpen: sessionService.isPathOpen,
     isPathDirty: sessionService.isPathDirty,
     cancelPendingOpenFile: sessionService.cancelPendingOpenFile,

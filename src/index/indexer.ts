@@ -1,18 +1,17 @@
 /**
  * Main-thread document indexer.
  *
- * Maintains an in-memory index of all parsed markdown files and provides
+ * Maintains an in-memory index of parsed markdown files and provides
  * synchronous query methods. Extraction runs directly on the main thread
- * using the Lezer parser — no web worker involved.
+ * from the canonical markdown text — no web worker involved.
  *
  * Design decision (T21): The web worker was removed because the overhead
- * of worker bundle duplication (Lezer parser + extensions duplicated in a
- * separate bundle), structured-clone message serialization for every
+ * of a separate bundle, structured-clone message serialization for every
  * update/query, and forced async indirection for trivial Map lookups far
- * exceeds the cost of main-thread Lezer parsing. For typical math documents
- * (5–50 KB), Lezer tree parsing + extraction takes sub-millisecond to a
- * few milliseconds — well within a single frame budget. Queries (resolve,
- * find, filter) are pure Map/array lookups that complete in microseconds.
+ * exceeds the cost of main-thread markdown extraction. For typical math
+ * documents (5–50 KB), extraction takes sub-millisecond to a few milliseconds,
+ * well within a single frame budget. Queries (resolve, find, filter) are pure
+ * Map/array lookups that complete in microseconds.
  */
 
 import type {

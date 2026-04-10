@@ -98,10 +98,13 @@ function AppInner() {
 
   // Stable reference for lazy child loading — used by default-doc search
   // and session persistence so their effects don't re-fire unnecessarily.
-  const listChildrenStable = useMemo(
-    () => fs.listChildren ? (path: string) => fs.listChildren!(path) : undefined,
-    [fs],
-  );
+  const listChildrenStable = useMemo(() => {
+    const listChildren = fs.listChildren;
+    if (!listChildren) {
+      return undefined;
+    }
+    return (path: string) => listChildren.call(fs, path);
+  }, [fs]);
 
   const loadFixtureProject = useMemo(() => {
     if (!(fs instanceof MemoryFileSystem)) {
@@ -151,6 +154,7 @@ function AppInner() {
   });
 
   useAppDebug({
+    editorHandle: editor.editorHandle,
     openProject: (path) => fileDialogs.openProjectInCurrentWindow(path),
     openFile: editor.openFile,
     hasFile: (path) => fs.exists(path),
@@ -162,6 +166,8 @@ function AppInner() {
     requestNativeClose: fileDialogs.handleQuitRequest,
     setMode: editor.handleModeChange,
     getMode: () => editor.editorMode,
+    getCurrentDocText: editor.getCurrentDocText,
+    getCurrentSourceMap: editor.getCurrentSourceMap,
     projectRoot: workspace.projectRoot,
     currentDocument: editor.currentDocument,
     hasDirtyDocument: editor.hasDirtyDocument,

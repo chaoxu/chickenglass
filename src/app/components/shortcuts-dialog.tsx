@@ -70,12 +70,12 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
     name: "Format",
     items: [
-      { label: "Insert inline math ($...$)", keys: "via Command Palette" },
-      { label: "Insert display math ($$...$$)", keys: "via Command Palette" },
-      { label: "Insert Theorem block", keys: "via Command Palette" },
-      { label: "Insert Lemma block", keys: "via Command Palette" },
-      { label: "Insert Proof block", keys: "via Command Palette" },
-      { label: "Insert Definition block", keys: "via Command Palette" },
+      { label: "Insert inline math", keys: "Type $...$" },
+      { label: "Insert display math", keys: "Type $$ then Enter" },
+      { label: "Insert theorem-like block", keys: "Type ::: {.theorem} then Enter" },
+      { label: "Insert table", keys: "Type header + divider, then Enter" },
+      { label: "Insert frontmatter", keys: "Type --- at top, then Enter" },
+      { label: "Edit block structure", keys: "Click block label or title shell" },
     ],
   },
 ];

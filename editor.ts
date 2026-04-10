@@ -1,135 +1,144 @@
-import type { Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { createElement, useEffect, useRef, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { flushSync } from "react-dom";
 
+import { type EditorMode, normalizeEditorMode } from "./src/app/editor-mode";
 import {
-  createEditor,
-  editorModeField,
-  setEditorMode,
-} from "./src/editor";
-import { programmaticDocumentChangeAnnotation } from "./src/editor/programmatic-document-change";
-import { setIncludeRegionsEffect } from "./src/lib/include-regions";
+  LexicalPlainTextEditor,
+  type MarkdownEditorHandle,
+} from "./src/lexical/plain-text-editor";
 
-export type StandaloneEditorMode = "rich" | "source";
+export type StandaloneEditorMode = EditorMode;
 
 export interface MountEditorOptions {
-  /** DOM element that receives the mounted editor. */
-  parent: HTMLElement;
-  /** Initial markdown content. Defaults to an empty document. */
-  doc?: string;
-  /** Initial display mode. Standalone support is limited to rich/source. */
-  mode?: StandaloneEditorMode;
-  /** Extra CodeMirror extensions supplied by the host. */
-  extensions?: readonly Extension[];
-  /** Called for direct user edits only. */
-  onChange?: (doc: string) => void;
-  /** Called whenever the effective rich/source mode changes. */
-  onModeChange?: (mode: StandaloneEditorMode) => void;
+  readonly parent: HTMLElement;
+  readonly doc?: string;
+  readonly mode?: StandaloneEditorMode;
+  readonly onChange?: (doc: string) => void;
+  readonly onModeChange?: (mode: StandaloneEditorMode) => void;
 }
 
 export interface MountedEditor {
-  getDoc: () => string;
-  setDoc: (doc: string) => void;
-  getMode: () => StandaloneEditorMode;
-  setMode: (mode: StandaloneEditorMode) => void;
-  focus: () => void;
-  unmount: () => void;
+  readonly getDoc: () => string;
+  readonly setDoc: (doc: string) => void;
+  readonly getMode: () => StandaloneEditorMode;
+  readonly setMode: (mode: StandaloneEditorMode) => void;
+  readonly focus: () => void;
+  readonly unmount: () => void;
 }
 
-function toStandaloneMode(mode: string | undefined): StandaloneEditorMode {
-  return mode === "source" ? "source" : "rich";
+interface StandaloneEditorControl {
+  readonly focus: () => void;
+  readonly getDoc: () => string;
+  readonly getMode: () => StandaloneEditorMode;
+  readonly setDoc: (doc: string) => void;
+  readonly setMode: (mode: StandaloneEditorMode) => void;
+}
+
+interface MountedLexicalEditorProps {
+  readonly controlRef: { current: StandaloneEditorControl | null };
+  readonly initialDoc: string;
+  readonly initialMode: StandaloneEditorMode;
+  readonly onChange?: (doc: string) => void;
+  readonly onModeChange?: (mode: StandaloneEditorMode) => void;
+}
+
+function MountedLexicalEditor({
+  controlRef,
+  initialDoc,
+  initialMode,
+  onChange,
+  onModeChange,
+}: MountedLexicalEditorProps) {
+  const [doc, setDoc] = useState(initialDoc);
+  const [mode, setModeState] = useState<StandaloneEditorMode>(initialMode);
+  const docRef = useRef(initialDoc);
+  const handleRef = useRef<MarkdownEditorHandle | null>(null);
+
+  useEffect(() => {
+    controlRef.current = {
+      focus: () => handleRef.current?.focus(),
+      getDoc: () => docRef.current,
+      getMode: () => mode,
+      setDoc: (nextDoc) => {
+        docRef.current = nextDoc;
+        setDoc(nextDoc);
+      },
+      setMode: (nextMode) => {
+        const normalized = normalizeEditorMode(nextMode, true);
+        setModeState(normalized);
+        onModeChange?.(normalized);
+      },
+    };
+
+    return () => {
+      controlRef.current = null;
+    };
+  }, [controlRef, mode, onModeChange]);
+
+  return (
+    createElement(LexicalPlainTextEditor, {
+      doc,
+      namespace: "coflat-standalone-editor",
+      editorClassName: [
+        "cf-lexical-editor",
+        "h-full overflow-auto px-6 py-8 text-[var(--cf-fg)] outline-none",
+        mode === "source"
+          ? "cf-lexical-editor--source font-mono whitespace-pre-wrap"
+          : "whitespace-pre-wrap",
+      ].join(" "),
+      onEditorReady: (handle: MarkdownEditorHandle) => {
+        handleRef.current = handle;
+      },
+      onTextChange: (nextDoc: string) => {
+        docRef.current = nextDoc;
+      },
+      onDocChange: () => {
+        onChange?.(docRef.current);
+      },
+    })
+  );
 }
 
 export function mountEditor(options: MountEditorOptions): MountedEditor {
   const initialDoc = options.doc ?? "";
-  const initialMode = options.mode ?? "rich";
-  let currentDoc = initialDoc;
-  let currentMode: StandaloneEditorMode = "rich";
-  let suppressModeCallback = false;
+  const initialMode = normalizeEditorMode(options.mode ?? "lexical", true);
+  const controlRef: { current: StandaloneEditorControl | null } = { current: null };
 
   options.parent.replaceChildren();
-
-  const updateListener = EditorView.updateListener.of((update) => {
-    if (update.docChanged) {
-      const nextDoc = update.state.doc.toString();
-      currentDoc = nextDoc;
-      const programmaticDocChange = update.transactions.some((tr) =>
-        tr.annotation(programmaticDocumentChangeAnnotation),
-      );
-      if (!programmaticDocChange) {
-        options.onChange?.(nextDoc);
-      }
-    }
-
-    const nextMode = toStandaloneMode(update.state.field(editorModeField, false));
-    if (nextMode !== currentMode) {
-      currentMode = nextMode;
-      if (!suppressModeCallback) {
-        options.onModeChange?.(nextMode);
-      }
-    }
+  const root: Root = createRoot(options.parent);
+  flushSync(() => {
+    root.render(createElement(MountedLexicalEditor, {
+      controlRef,
+      initialDoc,
+      initialMode,
+      onChange: options.onChange,
+      onModeChange: options.onModeChange,
+    }));
   });
-
-  let view: EditorView | null = createEditor({
-    parent: options.parent,
-    doc: initialDoc,
-    extensions: [updateListener, ...(options.extensions ?? [])],
-  });
-
-  if (initialMode !== "rich") {
-    suppressModeCallback = true;
-    setEditorMode(view, initialMode);
-    suppressModeCallback = false;
-  }
-
-  currentMode = toStandaloneMode(view.state.field(editorModeField, false));
 
   return {
     getDoc() {
-      return currentDoc;
+      return controlRef.current?.getDoc() ?? initialDoc;
     },
-
     setDoc(doc) {
-      currentDoc = doc;
-      if (!view || doc === view.state.doc.toString()) {
-        return;
-      }
-
-      view.dispatch({
-        changes: {
-          from: 0,
-          to: view.state.doc.length,
-          insert: doc,
-        },
-        selection: { anchor: 0 },
-        effects: setIncludeRegionsEffect.of([]),
-        annotations: programmaticDocumentChangeAnnotation.of(true),
+      flushSync(() => {
+        controlRef.current?.setDoc(doc);
       });
-      view.scrollDOM.scrollTop = 0;
     },
-
     getMode() {
-      return currentMode;
+      return controlRef.current?.getMode() ?? initialMode;
     },
-
     setMode(mode) {
-      if (!view) {
-        currentMode = mode;
-        return;
-      }
-      setEditorMode(view, mode);
+      flushSync(() => {
+        controlRef.current?.setMode(mode);
+      });
     },
-
     focus() {
-      view?.focus();
+      controlRef.current?.focus();
     },
-
     unmount() {
-      if (!view) {
-        return;
-      }
-      const mountedView = view;
-      view = null;
-      mountedView.destroy();
+      root.unmount();
       options.parent.replaceChildren();
     },
   };

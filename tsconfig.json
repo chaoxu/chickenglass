@@ -19,5 +19,28 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "editor.ts", "demo"]
+  "include": [
+    "src/app/**/*.ts",
+    "src/app/**/*.tsx",
+    "src/constants/**/*.ts",
+    "src/debug/**/*.ts",
+    "src/index/extract.ts",
+    "src/index/index.ts",
+    "src/index/indexer.ts",
+    "src/index/query-api.ts",
+    "src/lexical/**/*.ts",
+    "src/lexical/**/*.tsx",
+    "src/lib/**/*.ts",
+    "src/test-setup.ts",
+    "src/theme-contract.ts",
+    "src/vite-env.d.ts",
+    "src/types/**/*.d.ts",
+    "editor.ts",
+    "demo/**/*.ts",
+    "demo/**/*.tsx"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
 }

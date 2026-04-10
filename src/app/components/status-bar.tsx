@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
-import { markdownEditorModes, type EditorMode } from "../../editor";
+import { markdownEditorModes, type EditorMode } from "../editor-mode";
 import { computeDocStats, formatReadingTime, type DocStats } from "../writing-stats";
 import { subscribeFpsMeter, getFpsMeterSnapshot } from "../fps-meter";
 import { cn } from "../lib/utils";
@@ -33,9 +33,8 @@ export interface StatusBarProps {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const MODE_LABELS: Record<EditorMode, string> = {
-  rich: "Rich",
+  lexical: "Lexical",
   source: "Source",
-  read: "Read",
 };
 // ── StatsPopover ───────────────────────────────────────────────────────────────
 
@@ -135,7 +134,7 @@ const FpsIndicator = memo(function FpsIndicator() {
  *
  * Left:   word count + character count (clickable — opens stats popover)
  * Center: cursor position Ln/Col
- * Right:  build info + mode indicator (mode is clickable to cycle Rich ↔ Source)
+ * Right:  build info + mode indicator (mode is clickable to cycle Lexical ↔ Source)
  */
 export function StatusBar({
   editorMode,

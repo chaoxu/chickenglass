@@ -1,116 +1,119 @@
-/**
- * Regression test: typing @ and [@ offers cross-reference and citation ids.
- */
-
-import {
-  insertEditorText,
-  openFixtureDocument,
-  pickAutocompleteOption,
-  readAutocompleteOptions,
-  switchToMode,
-  waitForAutocomplete,
-} from "../test-helpers.mjs";
+import { openRegressionDocument, readEditorText } from "../test-helpers.mjs";
 
 export const name = "reference-autocomplete";
 
-async function focusEditorEnd(page) {
-  await page.evaluate(() => {
-    const view = window.__cmView;
-    view.focus();
-    const anchor = view.state.doc.length;
-    view.dispatch({ selection: { anchor } });
+async function placeVisibleCaretAtEnd(page) {
+  const placed = await page.evaluate(() => {
+    const editor = document.querySelector(".cf-lexical-editor--rich[contenteditable='true']");
+    if (!(editor instanceof HTMLElement)) {
+      return false;
+    }
+
+    const selection = window.getSelection();
+    if (!selection) {
+      return false;
+    }
+
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    let lastTextNode = null;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if ((node.textContent?.length ?? 0) > 0) {
+        lastTextNode = node;
+      }
+    }
+
+    if (!(lastTextNode instanceof Text)) {
+      return false;
+    }
+
+    const range = document.createRange();
+    range.setStart(lastTextNode, lastTextNode.textContent?.length ?? 0);
+    range.collapse(true);
+    editor.focus();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
   });
-  await page.waitForTimeout(100);
+
+  if (!placed) {
+    throw new Error("failed to place a visible caret at the end of the Lexical rich surface");
+  }
+
+  await page.waitForTimeout(150);
 }
 
-async function readDoc(page) {
-  return page.evaluate(() => window.__cmView.state.doc.toString());
+async function waitForReferenceCompletion(page) {
+  await page.locator(".cf-reference-completion-tooltip").waitFor({ state: "visible", timeout: 5000 });
+}
+
+async function readCompletionOptions(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll(".cf-reference-completion-preview")].map((item) =>
+      item.textContent?.replace(/\s+/g, " ").trim() ?? "")
+  );
+}
+
+async function pickCompletionOption(page, needle) {
+  const option = page.locator(".cf-reference-completion-preview").filter({ hasText: needle }).first();
+  await option.waitFor({ state: "visible", timeout: 5000 });
+  await option.click();
+  await page.waitForTimeout(200);
 }
 
 export async function run(page) {
-  await openFixtureDocument(page, "cogirth/reference-autocomplete.md", { project: "full-project" });
-  await focusEditorEnd(page);
+  await openRegressionDocument(page, "index.md", { mode: "lexical" });
+  await placeVisibleCaretAtEnd(page);
 
-  await insertEditorText(page, "\n\nRich mode [@");
-  await waitForAutocomplete(page);
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Bracketed [@");
+  await waitForReferenceCompletion(page);
 
-  const richModeOptions = await readAutocompleteOptions(page);
-  if (!richModeOptions.some((option) => option.includes("thm:autocomplete"))) {
+  const bracketedOptions = await readCompletionOptions(page);
+  if (!bracketedOptions.some((option) => option.includes("thm:hover-preview"))) {
     return {
       pass: false,
-      message: `rich-mode autocomplete for [@ is missing theorem labels: ${JSON.stringify(richModeOptions)}`,
+      message: `bracketed @ completion is missing theorem labels: ${JSON.stringify(bracketedOptions)}`,
     };
   }
-  if (!richModeOptions.some((option) => option.includes("karger2000"))) {
+  if (!bracketedOptions.some((option) => option.includes("cormen2009"))) {
     return {
       pass: false,
-      message: `rich-mode autocomplete for [@ is missing citation keys: ${JSON.stringify(richModeOptions)}`,
-    };
-  }
-
-  await pickAutocompleteOption(page, "thm:autocomplete");
-
-  const afterRichMode = await readDoc(page);
-  if (!afterRichMode.includes("Rich mode [@thm:autocomplete")) {
-    return {
-      pass: false,
-      message: "rich-mode autocomplete did not insert the selected bracketed cross-reference id",
+      message: `bracketed @ completion is missing citation keys: ${JSON.stringify(bracketedOptions)}`,
     };
   }
 
-  await switchToMode(page, "source");
-  await focusEditorEnd(page);
-
-  await insertEditorText(page, "\n\nBracketed [@");
-  await waitForAutocomplete(page);
-
-  const bracketedOptions = await readAutocompleteOptions(page);
-  if (!bracketedOptions.some((option) => option.includes("thm:autocomplete"))) {
+  await pickCompletionOption(page, "thm:hover-preview");
+  const afterBracketed = await readEditorText(page);
+  if (!afterBracketed.includes("Bracketed [@thm:hover-preview")) {
     return {
       pass: false,
-      message: `source-mode autocomplete for [@ is missing theorem labels: ${JSON.stringify(bracketedOptions)}`,
-    };
-  }
-  if (!bracketedOptions.some((option) => option.includes("karger2000"))) {
-    return {
-      pass: false,
-      message: `source-mode autocomplete for [@ is missing citation keys: ${JSON.stringify(bracketedOptions)}`,
+      message: "bracketed autocomplete did not insert the selected cross-reference id",
     };
   }
 
-  await pickAutocompleteOption(page, "thm:autocomplete");
+  await page.keyboard.type("] and narrative @");
+  await waitForReferenceCompletion(page);
 
-  const afterBracketed = await readDoc(page);
-  if (!afterBracketed.includes("Bracketed [@thm:autocomplete")) {
+  const narrativeOptions = await readCompletionOptions(page);
+  if (!narrativeOptions.some((option) => option.includes("cormen2009"))) {
     return {
       pass: false,
-      message: "source-mode autocomplete did not insert the selected bracketed cross-reference id",
+      message: `narrative @ completion is missing citation keys: ${JSON.stringify(narrativeOptions)}`,
     };
   }
 
-  await insertEditorText(page, "] and narrative @");
-  await waitForAutocomplete(page);
-
-  const narrativeOptions = await readAutocompleteOptions(page);
-  if (!narrativeOptions.some((option) => option.includes("karger2000"))) {
+  await pickCompletionOption(page, "cormen2009");
+  const afterNarrative = await readEditorText(page);
+  if (!afterNarrative.includes("narrative @cormen2009")) {
     return {
       pass: false,
-      message: `autocomplete for @ is missing citation keys: ${JSON.stringify(narrativeOptions)}`,
-    };
-  }
-
-  await pickAutocompleteOption(page, "karger2000");
-
-  const afterNarrative = await readDoc(page);
-  if (!afterNarrative.includes("narrative @karger2000")) {
-    return {
-      pass: false,
-      message: "autocomplete did not insert the selected narrative citation id",
+      message: "narrative autocomplete did not insert the selected citation id",
     };
   }
 
   return {
     pass: true,
-    message: "rich/source mode typing for [@ and @ opened completion with semantic labels and citation keys",
+    message: "visible Lexical typing opens @ completion for bracketed and narrative references",
   };
 }

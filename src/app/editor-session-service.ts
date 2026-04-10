@@ -26,11 +26,13 @@ import {
   documentTextForPath,
   type EditorSessionRuntime,
 } from "./editor-session-runtime";
+import { expandDocumentIncludes } from "./include-resolver";
 
 export type ExternalDocumentSyncResult = "ignore" | "notify" | "reloaded";
 
 export interface EditorSessionService {
   getCurrentDocText: () => string;
+  getCurrentSourceMap: () => SourceMap | null;
   isPathOpen: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
   cancelPendingOpenFile: () => void;
@@ -88,16 +90,24 @@ export function createEditorSessionService({
     runtime.sourceMaps.delete(path);
   };
 
-  const applyReloadedDocument = (path: string, content: string) => {
+  const applyReloadedDocument = (
+    path: string,
+    content: string,
+    sourceMap: SourceMap | null,
+    rawContent: string,
+  ) => {
     if (!runtime.hasPath(path)) {
       return false;
     }
 
     const documentText = createEditorDocumentText(content);
     clearPathBuffers(path);
+    if (sourceMap) {
+      runtime.sourceMaps.set(path, sourceMap);
+    }
     runtime.buffers.set(path, documentText);
     runtime.liveDocs.set(path, documentText);
-    runtime.pipeline.initPath(path, content);
+    runtime.pipeline.initPath(path, rawContent);
     runtime.commit(
       markSessionDocumentDirty(runtime.getState(), path, false),
       runtime.getCurrentPath() === path
@@ -146,6 +156,11 @@ export function createEditorSessionService({
   const getCurrentDocText = (): string =>
     documentForPath(runtime.getCurrentPath(), runtime.liveDocs, runtime.buffers);
 
+  const getCurrentSourceMap = (): SourceMap | null => {
+    const currentPath = runtime.getCurrentPath();
+    return currentPath ? runtime.sourceMaps.get(currentPath) ?? null : null;
+  };
+
   const isPathOpen = (path: string): boolean => runtime.hasPath(path);
 
   const isPathDirty = (path: string): boolean => runtime.isPathDirty(path);
@@ -165,7 +180,7 @@ export function createEditorSessionService({
     const nextState = markSessionDocumentDirty(
       runtime.getState(),
       currentPath,
-      !doc.eq(runtime.buffers.get(currentPath) ?? emptyEditorDocument),
+      doc !== (runtime.buffers.get(currentPath) ?? emptyEditorDocument),
     );
     runtime.commit(nextState);
   };
@@ -214,11 +229,18 @@ export function createEditorSessionService({
 
     return withPerfOperation("open_file", async (operation) => {
       try {
-        const content = await operation.measureAsync(
+        const rawContent = await operation.measureAsync(
           "open_file.read",
           () => fs.readFile(path),
           { category: "open_file", detail: path },
         );
+        const expanded = path.endsWith(".md")
+          ? await operation.measureAsync(
+            "open_file.expand_includes",
+            () => expandDocumentIncludes(path, rawContent, fs),
+            { category: "open_file", detail: path },
+          )
+          : { sourceMap: null, text: rawContent };
 
         if (!runtime.isLatestOpenFileRequest(requestId)) {
           return;
@@ -229,18 +251,21 @@ export function createEditorSessionService({
           clearPathBuffers(previousPath);
         }
 
-        const documentText = createEditorDocumentText(content);
+        const documentText = createEditorDocumentText(expanded.text);
         runtime.sourceMaps.delete(path);
+        if (expanded.sourceMap) {
+          runtime.sourceMaps.set(path, expanded.sourceMap);
+        }
         runtime.buffers.set(path, documentText);
         runtime.liveDocs.set(path, documentText);
-        runtime.pipeline.initPath(path, content);
+        runtime.pipeline.initPath(path, rawContent);
         runtime.commit(
           setCurrentSessionDocument(runtime.getState(), {
             path,
             name: targetName,
             dirty: false,
           }),
-          { editorDoc: content },
+          { editorDoc: expanded.text },
         );
         addRecentFile(path);
       } catch (error: unknown) {
@@ -286,8 +311,11 @@ export function createEditorSessionService({
     if (!runtime.hasPath(path)) return;
 
     try {
-      const content = await fs.readFile(path);
-      applyReloadedDocument(path, content);
+      const rawContent = await fs.readFile(path);
+      const expanded = path.endsWith(".md")
+        ? await expandDocumentIncludes(path, rawContent, fs)
+        : { sourceMap: null, text: rawContent };
+      applyReloadedDocument(path, expanded.text, expanded.sourceMap, rawContent);
     } catch (error: unknown) {
       console.error("[session] reload failed:", path, error);
       throw error;
@@ -299,9 +327,9 @@ export function createEditorSessionService({
       return "ignore";
     }
 
-    let content: string;
+    let rawContent: string;
     try {
-      content = await fs.readFile(path);
+      rawContent = await fs.readFile(path);
     } catch {
       const currentDocument = runtime.getCurrentDocument();
       return currentDocument?.path === path && currentDocument.dirty
@@ -313,7 +341,7 @@ export function createEditorSessionService({
       return "ignore";
     }
 
-    if (runtime.pipeline.isSelfChange(path, content)) {
+    if (runtime.pipeline.isSelfChange(path, rawContent)) {
       return "ignore";
     }
 
@@ -325,7 +353,10 @@ export function createEditorSessionService({
       return "notify";
     }
 
-    applyReloadedDocument(path, content);
+    const expanded = path.endsWith(".md")
+      ? await expandDocumentIncludes(path, rawContent, fs)
+      : { sourceMap: null, text: rawContent };
+    applyReloadedDocument(path, expanded.text, expanded.sourceMap, rawContent);
     return "reloaded";
   };
 
@@ -378,6 +409,7 @@ export function createEditorSessionService({
 
   return {
     getCurrentDocText,
+    getCurrentSourceMap,
     isPathOpen,
     isPathDirty,
     cancelPendingOpenFile,

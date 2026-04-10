@@ -9,7 +9,7 @@
  * CJK text and other non-Latin scripts correctly without regex heuristics.
  */
 
-import { parseFrontmatter } from "../parser/frontmatter";
+import { parseFrontmatter } from "../lib/frontmatter";
 import { READING_WPM } from "../constants";
 
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });

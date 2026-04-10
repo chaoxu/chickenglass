@@ -1,11 +1,3 @@
-/**
- * Regression test: app search follows editor mode and preserves it on navigation.
- *
- * Rich mode should search semantic index entries with a type filter, while
- * source mode should search raw file text and keep the destination file in
- * source mode after a cross-file result is opened.
- */
-
 import { closeAppSearch, openAppSearch, openFixtureDocument } from "../test-helpers.mjs";
 
 export const name = "search-mode-awareness";
@@ -20,14 +12,10 @@ function dialogSnapshot() {
   }
 
   return {
-    placeholder: dialog.querySelector("input")?.getAttribute("placeholder") ?? null,
     hasTypeFilter: Boolean(
       dialog.querySelector('[aria-label="Filter search results by block type"]'),
     ),
-    text: dialog.textContent ?? "",
-    buttonTexts: [...dialog.querySelectorAll("button")]
-      .map((button) => button.textContent?.trim() ?? "")
-      .filter(Boolean),
+    placeholder: dialog.querySelector("input")?.getAttribute("placeholder") ?? null,
   };
 }
 
@@ -45,22 +33,18 @@ async function setMode(page, mode) {
 
 export async function run(page) {
   await openFixtureDocument(page, "cogirth/search-mode-awareness.md", { project: "full-project" });
-  await setMode(page, "rich");
+  await setMode(page, "lexical");
 
   await openAppSearch(page);
-
   const semanticUi = await page.evaluate(dialogSnapshot);
   if (!semanticUi) {
-    return { pass: false, message: "search dialog did not open in rich mode" };
+    return { pass: false, message: "search dialog did not open in lexical mode" };
   }
   if (semanticUi.placeholder !== "Search blocks, labels, math…") {
-    return {
-      pass: false,
-      message: `unexpected rich-mode search placeholder: ${JSON.stringify(semanticUi.placeholder)}`,
-    };
+    return { pass: false, message: `unexpected lexical-mode search placeholder: ${JSON.stringify(semanticUi.placeholder)}` };
   }
   if (!semanticUi.hasTypeFilter) {
-    return { pass: false, message: "rich-mode search is missing the semantic type filter" };
+    return { pass: false, message: "lexical-mode search is missing the semantic type filter" };
   }
 
   const input = page.locator('[role="dialog"] input');
@@ -88,10 +72,7 @@ export async function run(page) {
     return { pass: false, message: "search dialog did not open in source mode" };
   }
   if (sourceUi.placeholder !== "Search source text…") {
-    return {
-      pass: false,
-      message: `unexpected source-mode search placeholder: ${JSON.stringify(sourceUi.placeholder)}`,
-    };
+    return { pass: false, message: `unexpected source-mode search placeholder: ${JSON.stringify(sourceUi.placeholder)}` };
   }
   if (sourceUi.hasTypeFilter) {
     return { pass: false, message: "source-mode search still shows the semantic type filter" };
@@ -109,8 +90,7 @@ export async function run(page) {
 
   const clicked = await page.evaluate((needle) => {
     const button = [...document.querySelectorAll('[role="dialog"] button')].find((candidate) =>
-      (candidate.textContent ?? "").includes(needle),
-    );
+      (candidate.textContent ?? "").includes(needle));
     if (!(button instanceof HTMLButtonElement)) {
       return false;
     }
@@ -126,28 +106,23 @@ export async function run(page) {
     () => !document.querySelector('[role="dialog"] input'),
     { timeout: 5000 },
   );
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(300);
 
   const navigationState = await page.evaluate((needle) => ({
-    mode: window.__app.getMode(),
-    hasNeedle: window.__cmView.state.doc.toString().includes(needle),
+    doc: window.__editor?.getDoc?.() ?? "",
+    mode: window.__app?.getMode?.() ?? null,
   }), RAW_TOKEN);
 
   if (navigationState.mode !== "source") {
-    return {
-      pass: false,
-      message: `search result opened in ${navigationState.mode} mode instead of source mode`,
-    };
+    return { pass: false, message: `search result opened in ${navigationState.mode} mode instead of source mode` };
   }
-  if (!navigationState.hasNeedle) {
-    return {
-      pass: false,
-      message: "search result did not open the target source document",
-    };
+
+  if (!navigationState.doc.includes(RAW_TOKEN)) {
+    return { pass: false, message: "source-mode search did not open the matching document" };
   }
 
   return {
     pass: true,
-    message: "app search switched between semantic/source behavior and preserved source mode across file navigation",
+    message: "search switched between semantic/source behavior and preserved source mode across navigation",
   };
 }

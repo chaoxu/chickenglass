@@ -22,6 +22,7 @@ import {
   hasFixtureDocument,
   openFixtureDocument,
   PUBLIC_SHOWCASE_FIXTURE,
+  readEditorText,
   resolveFixtureDocumentWithFallback,
   sleep,
   switchToMode,
@@ -52,10 +53,6 @@ async function getPerfSnapshot(page) {
   return evaluateStep(page, "getPerfSnapshot", async () => window.__cfDebug.perfSummary());
 }
 
-async function getSemanticRevisionInfo(page) {
-  return page.evaluate(() => window.__cmDebug.semantics());
-}
-
 async function discardDirtyPerfState(page) {
   try {
     await page.evaluate(async () => {
@@ -66,7 +63,7 @@ async function discardDirtyPerfState(page) {
       try {
         await app.closeFile({ discard: true });
       } catch {
-        // Ignore cleanup failures — the next run will reload from scratch.
+        // Ignore cleanup failures between perf reps.
       }
     });
   } catch (error) {
@@ -79,7 +76,6 @@ async function discardDirtyPerfState(page) {
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");
-const SCROLL_STEP_SIZE = 30;
 const SCROLL_FIXTURE = {
   displayPath: "fixtures/cogirth/main2.md",
   virtualPath: "cogirth/main2.md",
@@ -100,18 +96,25 @@ export const TYPING_BURST_REQUIRED_METRICS = [
 const DEFAULT_TYPING_BURST_POSITION_KEYS = ["after_frontmatter", "near_end"];
 
 async function runSteppedScroll(page) {
-  return page.evaluate(async (stepSize) => {
-    const view = window.__cmView;
-    const totalLines = view.state.doc.lines;
-    const steps = [];
-    for (let line = 1 + stepSize; line <= totalLines; line += stepSize) {
-      const target = Math.min(line, totalLines);
-      const lineObj = view.state.doc.line(target);
-      const t0 = performance.now();
-      view.dispatch({ selection: { anchor: lineObj.from }, scrollIntoView: true });
-      steps.push(performance.now() - t0);
-      await new Promise((r) => setTimeout(r, 16));
+  return page.evaluate(async () => {
+    const editor = document.querySelector('[data-testid="lexical-editor"]');
+    if (!(editor instanceof HTMLElement)) {
+      throw new Error("Missing lexical editor element.");
     }
+
+    const maxScrollTop = Math.max(0, editor.scrollHeight - editor.clientHeight);
+    const stepSize = Math.max(120, Math.floor(editor.clientHeight / 3));
+    const steps = [];
+
+    for (let scrollTop = stepSize; scrollTop <= maxScrollTop; scrollTop += stepSize) {
+      const target = Math.min(scrollTop, maxScrollTop);
+      const t0 = performance.now();
+      editor.scrollTop = target;
+      editor.dispatchEvent(new Event("scroll", { bubbles: true }));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      steps.push(performance.now() - t0);
+    }
+
     const total = steps.reduce((a, b) => a + b, 0);
     return {
       stepCount: steps.length,
@@ -119,7 +122,7 @@ async function runSteppedScroll(page) {
       maxStepMs: Math.max(...steps, 0),
       totalMs: total,
     };
-  }, SCROLL_STEP_SIZE);
+  });
 }
 
 function steppedScrollMetrics(result) {
@@ -217,8 +220,6 @@ function findPatternPosition(lines, frontmatterEnd, positionKey, pattern, option
 
   for (let i = frontmatterEnd; i < lines.length; i += 1) {
     const line = lines[i];
-    // Callers pass non-global regexes here. `RegExp.prototype.exec()` would be
-    // stateful across lines only if the pattern used the `g` flag.
     const match = pattern.exec(line.text);
     if (!match || match.index < 0) {
       continue;
@@ -315,9 +316,9 @@ function resolveScrollFixture() {
   return resolveFixtureDocumentWithFallback(SCROLL_FIXTURE, PUBLIC_SCROLL_FALLBACK);
 }
 
-async function openCleanRichDocument(page, path, content) {
+async function openCleanLexicalDocument(page, path, content) {
   const verificationWindow = 200;
-  await evaluateStep(page, "openCleanRichDocument", async ({ nextPath, nextContent }) => {
+  await evaluateStep(page, "openCleanLexicalDocument", async ({ nextPath, nextContent }) => {
     const app = window.__app;
     if (!app?.openFileWithContent) {
       throw new Error("window.__app.openFileWithContent is unavailable.");
@@ -329,12 +330,12 @@ async function openCleanRichDocument(page, path, content) {
         // Ignore stale close failures between perf reps.
       }
     }
-    app.setMode("rich");
+    app.setMode("lexical");
     await app.openFileWithContent(nextPath, nextContent);
   }, { nextPath: path, nextContent: content });
   await page.waitForFunction(
     ({ expectedLength, expectedPrefix, expectedSuffix }) => {
-      const docText = window.__cmView?.state?.doc?.toString();
+      const docText = window.__editor?.getDoc?.();
       return typeof docText === "string" &&
         docText.length === expectedLength &&
         docText.startsWith(expectedPrefix) &&
@@ -356,20 +357,15 @@ async function measureTypingBurst(page, anchor, insertCount) {
     const mean = (values) =>
       values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
 
-    const view = window.__cmView;
-    view.dispatch({ selection: { anchor: nextAnchor }, scrollIntoView: true });
-    view.focus();
+    window.__editor.setSelection(nextAnchor);
+    window.__editor.focus();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
     const timings = [];
     const wallStart = performance.now();
     for (let i = 0; i < count; i += 1) {
-      const pos = view.state.selection.main.anchor;
       const t0 = performance.now();
-      view.dispatch({
-        changes: { from: pos, to: pos, insert: "1" },
-        selection: { anchor: pos + 1 },
-      });
+      window.__editor.insertText("1");
       timings.push(performance.now() - t0);
     }
     const wallMs = performance.now() - wallStart;
@@ -418,108 +414,36 @@ function typingBurstRequiredMetricNames(caseDefinitions = TYPING_BURST_CASES) {
 
 export const scenarios = {
   "open-index": {
-    description: "Reload the app and open demo/index.md in Rich mode.",
+    description: "Reload the app and open demo/index.md in Lexical mode.",
     defaultSettleMs: 400,
     run: async (page) => {
-      await openFixtureDocument(page, "index.md", { mode: "rich" });
+      await openFixtureDocument(page, "index.md", { mode: "lexical" });
     },
   },
-  "open-heavy-post": {
-    description: "Reload the app and open a heavy math/reference fixture post.",
+  "open-scroll-fixture": {
+    description: "Reload the app and open the preferred heavy markdown fixture in Lexical mode.",
     defaultSettleMs: 700,
     run: async (page) => {
-      await openFixtureDocument(page, "posts/2020-07-11-yotta-savings-and-covering-designs.md", { mode: "rich" });
+      await openFixtureDocument(page, resolveScrollFixture(), { mode: "lexical" });
     },
   },
   "mode-cycle-index": {
-    description: "Reload the app, open demo/index.md, then cycle Source/Read/Rich.",
+    description: "Reload the app, open demo/index.md, then cycle Source/Lexical.",
     defaultSettleMs: 500,
     run: async (page) => {
-      await openFixtureDocument(page, "index.md", { mode: "rich" });
+      await openFixtureDocument(page, "index.md", { mode: "lexical" });
       await switchToMode(page, "source");
-      await switchToMode(page, "read");
-      await switchToMode(page, "rich");
+      await switchToMode(page, "lexical");
     },
   },
-  "local-edit-index": {
-    description: "Reload the app, open demo/index.md, then apply a local inline-math edit.",
-    defaultSettleMs: 300,
-    run: async (page) => {
-      await openFixtureDocument(page, "index.md", { mode: "rich" });
-      await page.waitForTimeout(800);
-      const before = await getSemanticRevisionInfo(page);
-      const after = await page.evaluate((previous) => {
-        const view = window.__cmView;
-        const docText = view.state.doc.toString();
-        const inlineMath = /\$([^$\n]+)\$/.exec(docText);
-        const body = inlineMath?.[1] ?? "";
-        const matchIndex = inlineMath?.index ?? -1;
-        const bodyOffset = body.search(/[A-Za-z0-9]/);
-        const changeFrom = matchIndex >= 0
-          ? matchIndex + 1 + (bodyOffset >= 0 ? bodyOffset : 0)
-          : -1;
-
-        if (changeFrom < 0) {
-          throw new Error("Failed to locate an inline math fixture in index.md");
-        }
-
-        view.dispatch({
-          changes: {
-            from: changeFrom,
-            to: changeFrom + 1,
-            insert: "z",
-          },
-          selection: { anchor: changeFrom + 1 },
-        });
-
-        const next = window.__cmDebug.semantics();
-        const changedSlices = Object.entries(next.slices)
-          .filter(([name, value]) => value !== previous.slices[name])
-          .map(([name]) => name);
-
-        return {
-          revisionDelta: next.revision - previous.revision,
-          changedSlices,
-        };
-      }, before);
-
-      return {
-        metrics: [
-          {
-            name: "semantic.revision_delta",
-            unit: "count",
-            value: after.revisionDelta,
-          },
-          {
-            name: "semantic.changed_slice_count",
-            unit: "count",
-            value: after.changedSlices.length,
-          },
-          ...[
-            "headings",
-            "footnotes",
-            "fencedDivs",
-            "equations",
-            "mathRegions",
-            "references",
-            "includes",
-          ].map((sliceName) => ({
-            name: `semantic.slice.${sliceName}`,
-            unit: "count",
-            value: after.changedSlices.includes(sliceName) ? 1 : 0,
-          })),
-        ],
-      };
-    },
-  },
-  "typing-rich-burst": {
-    description: "Measure rich-mode typing bursts across prose, inline math, and citation/ref hotspots, including the canonical heavy fixture.",
+  "typing-lexical-burst": {
+    description: "Measure Lexical-mode typing bursts across prose, inline math, and citation/ref hotspots.",
     defaultSettleMs: 200,
     requiredMetrics: typingBurstRequiredMetricNames(availableTypingBurstCases()),
     run: async (page) => {
       const metrics = [];
       for (const testCase of availableTypingBurstCases().map(resolveTypingBurstFixture)) {
-        const originalText = await openCleanRichDocument(
+        const originalText = await openCleanLexicalDocument(
           page,
           testCase.virtualPath,
           testCase.content,
@@ -529,7 +453,7 @@ export const scenarios = {
           testCase.positionKeys,
         );
         for (const [positionKey, position] of Object.entries(positions)) {
-          await openCleanRichDocument(page, testCase.virtualPath, testCase.content);
+          await openCleanLexicalDocument(page, testCase.virtualPath, testCase.content);
           const result = await measureTypingBurst(page, position.anchor, TYPING_BURST_INSERT_COUNT);
           metrics.push(...typingBurstMetrics(testCase.key, positionKey, result));
         }
@@ -537,64 +461,18 @@ export const scenarios = {
       return { metrics };
     },
   },
-  "scroll-step-rich": {
-    description: `Open the preferred heavy Rich-mode scroll fixture, falling back to demo/index.md when local private fixtures are unavailable.`,
+  "scroll-step-lexical": {
+    description: "Open the preferred heavy Lexical-mode scroll fixture, falling back to demo/index.md when private fixtures are unavailable.",
     defaultSettleMs: 400,
     run: async (page) => {
-      await openFixtureDocument(page, resolveScrollFixture(), { mode: "rich" });
+      await openFixtureDocument(page, resolveScrollFixture(), { mode: "lexical" });
       await sleep(800);
       const result = await runSteppedScroll(page);
       return { metrics: steppedScrollMetrics(result) };
     },
   },
-  "scroll-jump-rich": {
-    description: "Open the preferred heavy Rich-mode scroll fixture, then perform cold and warm jump scrolls.",
-    defaultSettleMs: 400,
-    run: async (page) => {
-      await openFixtureDocument(page, resolveScrollFixture(), { mode: "rich" });
-      await sleep(800);
-
-      const jumpResult = await page.evaluate(async () => {
-        const view = window.__cmView;
-        const totalLines = view.state.doc.lines;
-        const nearBottom = Math.max(1, totalLines - 10);
-
-        // Cold jump: top to near-bottom
-        const lb = view.state.doc.line(nearBottom);
-        const t0 = performance.now();
-        view.dispatch({ selection: { anchor: lb.from }, scrollIntoView: true });
-        const coldMs = performance.now() - t0;
-
-        await new Promise((r) => setTimeout(r, 200));
-
-        // Warm jump: back to top
-        const lt = view.state.doc.line(1);
-        const t1 = performance.now();
-        view.dispatch({ selection: { anchor: lt.from }, scrollIntoView: true });
-        const warmBackMs = performance.now() - t1;
-
-        await new Promise((r) => setTimeout(r, 200));
-
-        // Warm jump: forward again
-        const lb2 = view.state.doc.line(nearBottom);
-        const t2 = performance.now();
-        view.dispatch({ selection: { anchor: lb2.from }, scrollIntoView: true });
-        const warmForwardMs = performance.now() - t2;
-
-        return { coldMs, warmBackMs, warmForwardMs };
-      });
-
-      return {
-        metrics: [
-          { name: "scroll.cold_jump_ms", unit: "ms", value: jumpResult.coldMs },
-          { name: "scroll.warm_back_ms", unit: "ms", value: jumpResult.warmBackMs },
-          { name: "scroll.warm_forward_ms", unit: "ms", value: jumpResult.warmForwardMs },
-        ],
-      };
-    },
-  },
   "scroll-step-source": {
-    description: "Open the preferred heavy Source-mode scroll fixture, falling back to demo/index.md when local private fixtures are unavailable.",
+    description: "Open the preferred heavy Source-mode scroll fixture, falling back to demo/index.md when private fixtures are unavailable.",
     defaultSettleMs: 400,
     run: async (page) => {
       await openFixtureDocument(page, resolveScrollFixture(), { mode: "source" });
@@ -710,12 +588,12 @@ function printComparison(result) {
   const spanRegressions = [...result.frontend, ...result.backend]
     .filter((entry) => entry.status === "regressed")
     .map((entry) => ({
-    source: entry.source,
-    name: entry.name,
-    avgDeltaMs: entry.avgDeltaMs,
-    avgPct: `${entry.avgPct}%`,
-    maxDeltaMs: entry.maxDeltaMs,
-    maxPct: `${entry.maxPct}%`,
+      source: entry.source,
+      name: entry.name,
+      avgDeltaMs: entry.avgDeltaMs,
+      avgPct: `${entry.avgPct}%`,
+      maxDeltaMs: entry.maxDeltaMs,
+      maxPct: `${entry.maxPct}%`,
     }));
 
   if (spanRegressions.length === 0) {

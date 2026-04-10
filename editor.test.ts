@@ -9,8 +9,8 @@ describe("mountEditor", () => {
     const editor = mountEditor({ parent });
 
     expect(editor.getDoc()).toBe("");
-    expect(editor.getMode()).toBe("rich");
-    expect(parent.querySelector(".cm-editor")).toBeTruthy();
+    expect(editor.getMode()).toBe("lexical");
+    expect(parent.querySelector('[data-testid="lexical-editor"]')).toBeTruthy();
 
     editor.unmount();
   });
@@ -58,9 +58,9 @@ describe("mountEditor", () => {
     });
 
     editor.setMode("source");
-    editor.setMode("rich");
+    editor.setMode("lexical");
 
-    expect(onModeChange.mock.calls).toEqual([["source"], ["rich"]]);
+    expect(onModeChange.mock.calls).toEqual([["source"], ["lexical"]]);
 
     editor.unmount();
   });

@@ -35,9 +35,8 @@ interface Credit {
 
 const CREDITS: Credit[] = [
   { name: "Tauri", url: "https://tauri.app" },
-  { name: "CodeMirror", url: "https://codemirror.net" },
+  { name: "Lexical", url: "https://lexical.dev" },
   { name: "KaTeX", url: "https://katex.org" },
-  { name: "Lezer", url: "https://lezer.codemirror.net" },
   { name: "Pandoc", url: "https://pandoc.org" },
 ];
 
