@@ -45,6 +45,21 @@ function replaceFirstLine(raw: string, nextFirstLine: string): string {
   return lines.join("\n");
 }
 
+function structureToggleProps(
+  active: boolean,
+  onActivate: () => void,
+): Record<string, unknown> {
+  if (!active) return {};
+  return {
+    onClick: (e: React.SyntheticEvent) => { e.preventDefault(); onActivate(); },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onActivate(); }
+    },
+    role: "button",
+    tabIndex: 0,
+  };
+}
+
 function useRawBlockUpdater(nodeKey: NodeKey): (raw: string) => void {
   const [editor] = useLexicalComposerContext();
 
@@ -578,14 +593,7 @@ function FrontmatterRenderer({
       ) : (
         <div
           className="cf-lexical-structure-toggle cf-lexical-structure-toggle--frontmatter"
-          onMouseDown={surfaceEditable
-            ? (event) => {
-                event.preventDefault();
-                setEditingSource(true);
-              }
-            : undefined}
-          role={surfaceEditable ? "button" : undefined}
-          tabIndex={surfaceEditable ? 0 : undefined}
+          {...structureToggleProps(surfaceEditable, () => setEditingSource(true))}
         >
           {title ? (
             <MarkdownNestedEditor
@@ -910,14 +918,7 @@ function CaptionedBlockRenderer({
         <footer className="cf-lexical-block-caption">
           <span
             className="cf-lexical-block-caption-label cf-lexical-structure-toggle"
-            onMouseDown={surfaceEditable
-              ? (event) => {
-                  event.preventDefault();
-                  setEditingOpener(true);
-                }
-              : undefined}
-            role={surfaceEditable ? "button" : undefined}
-            tabIndex={surfaceEditable ? 0 : undefined}
+            {...structureToggleProps(surfaceEditable, () => setEditingOpener(true))}
           >
             {`${label}.`}
           </span>
@@ -974,14 +975,7 @@ function EmbedBlockRenderer({
       <header className="cf-lexical-block-header">
         <span
           className="cf-lexical-block-label cf-lexical-structure-toggle"
-          onMouseDown={surfaceEditable
-            ? (event) => {
-                event.preventDefault();
-                setEditingOpener(true);
-              }
-            : undefined}
-          role={surfaceEditable ? "button" : undefined}
-          tabIndex={surfaceEditable ? 0 : undefined}
+          {...structureToggleProps(surfaceEditable, () => setEditingOpener(true))}
         >
           {label}
         </span>
@@ -1105,14 +1099,7 @@ function FencedDivBlockRenderer({
       <header className="cf-lexical-block-header">
         <span
           className="cf-lexical-block-label cf-lexical-structure-toggle"
-          onMouseDown={surfaceEditable
-            ? (event) => {
-                event.preventDefault();
-                setEditingOpener(true);
-              }
-            : undefined}
-          role={surfaceEditable ? "button" : undefined}
-          tabIndex={surfaceEditable ? 0 : undefined}
+          {...structureToggleProps(surfaceEditable, () => setEditingOpener(true))}
         >
           {label}
         </span>
