@@ -258,7 +258,7 @@ Every performance issue and PR must include a **before/after measurement** on a 
 ## Maintenance triggers
 
 - **Large file trigger**: if a change touches a file above roughly 600 lines, or a file that already mixes multiple concerns, explicitly evaluate extraction/splitting before adding more logic.
-- **Neutral owner rule**: if a selector/type/model is used by more than one subsystem, move it into a neutral owner. Do not let renderers depend on protection/event modules for core document selectors.
+- **Neutral owner rule**: if a selector/type/model is used by more than one subsystem, move it into a neutral owner. Do not let renderers depend on protection/event modules for core document selectors. See [Subsystem pattern: Neutral owner for cross-subsystem state](docs/architecture/subsystem-pattern.md#neutral-owner-for-cross-subsystem-state).
 - **Debug-bridge sync rule**: if a change touches the browser/debug harness, update `scripts/test-helpers.mjs`, `src/types/window.d.ts`, and this shared file together.
 
 ## Development rules & architecture

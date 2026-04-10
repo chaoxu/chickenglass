@@ -1234,8 +1234,35 @@ describe("#318 — subsystem pattern", () => {
 
   it("adds subsystem guidance to the agent instructions", () => {
     const claude = fileText("CLAUDE.md");
+    const agents = fileText("AGENTS.md");
+
     expect(claude).toContain("docs/architecture/subsystem-pattern.md");
     expect(claude).toContain("One concept should have one clear owner");
+    expect(agents).toContain("docs/architecture/subsystem-pattern.md");
+    expect(agents).toContain("One concept should have one clear owner");
+  });
+
+  it("documents the neutral-owner rule and its canonical home", () => {
+    const subsystemPattern = fileText("docs/architecture/subsystem-pattern.md");
+    const claude = fileText("CLAUDE.md");
+    const agents = fileText("AGENTS.md");
+
+    expect(subsystemPattern).toContain("## Neutral owner for cross-subsystem state");
+    expect(subsystemPattern).toContain("`src/state/` is the");
+    expect(subsystemPattern).toContain("subsystems may consume `src/state/`");
+    expect(subsystemPattern).toContain("must not define state for another subsystem");
+    expect(subsystemPattern).toContain("`src/state/document-analysis.ts`");
+    expect(subsystemPattern).toContain("`src/state/code-block-structure.ts`");
+    expect(subsystemPattern).toContain("`src/state/plugin-registry.ts`");
+    expect(subsystemPattern).toContain(
+      "state into `src/state/`, the neutral owner, instead of parking it",
+    );
+    expect(claude).toContain(
+      "docs/architecture/subsystem-pattern.md#neutral-owner-for-cross-subsystem-state",
+    );
+    expect(agents).toContain(
+      "docs/architecture/subsystem-pattern.md#neutral-owner-for-cross-subsystem-state",
+    );
   });
 });
 
