@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
+  clearDocumentAnalysisCache,
   getCachedDocumentAnalysis,
   rememberCachedDocumentAnalysis,
 } from "../semantics/incremental/cached-document-analysis";
@@ -26,6 +27,10 @@ function requireFileAnalysis(
   expect(analysis).toBeDefined();
   return analysis as NonNullable<ReturnType<typeof getFileIndexAnalysis>>;
 }
+
+beforeEach(() => {
+  clearDocumentAnalysisCache();
+});
 
 describe("cached document analysis", () => {
   it("reuses the cached entry when the text is unchanged", () => {

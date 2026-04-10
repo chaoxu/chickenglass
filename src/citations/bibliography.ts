@@ -26,11 +26,11 @@ import {
 } from "./bibliography-backlinks";
 import { CSS } from "../constants/css-classes";
 import { RenderWidget, buildDecorations, createDecorationsField, sanitizeCslHtml } from "../render/render-core";
-import { analyzeMarkdownSemantics } from "../semantics/markdown-analysis";
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
+import { getDocumentAnalysis } from "../semantics/incremental/cached-document-analysis";
 import { type BibStore, bibDataEffect, bibDataField } from "../state/bib-data";
 
 /**
@@ -40,8 +40,15 @@ import { type BibStore, bibDataEffect, bibDataField } from "../state/bib-data";
  * @deprecated Prefer `collectCitedIdsFromReferenceIndex(analysis.referenceIndex, store)`
  * when document analysis is already available.
  */
-export function collectCitedIds(text: string, store: BibStore): string[] {
-  return collectCitedIdsFromReferenceIndex(analyzeMarkdownSemantics(text).referenceIndex, store);
+export function collectCitedIds(
+  text: string,
+  store: BibStore,
+  documentPath?: string,
+): string[] {
+  return collectCitedIdsFromReferenceIndex(
+    getDocumentAnalysis(text, documentPath).referenceIndex,
+    store,
+  );
 }
 
 /**
