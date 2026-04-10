@@ -13,6 +13,7 @@ src-tauri/gen/schemas/
 ~/
 .claude/worktrees/
 .playwright-cli/
+output/
 # Public showcase only. Non-generated or regression content belongs in fixtures/.
 demo/*
 !demo/index.md
