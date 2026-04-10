@@ -1,4 +1,9 @@
-import { type EditorState, type Extension, type Range } from "@codemirror/state";
+import {
+  type EditorState,
+  type Extension,
+  type Range,
+  StateField,
+} from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 import {
   type Decoration,
@@ -14,7 +19,6 @@ import {
   pushBlockWidgetDecoration,
   pushWidgetDecoration,
 } from "./decoration-core";
-import { createDecorationStateField } from "./decoration-field";
 import { RenderWidget } from "./source-widget";
 import {
   clearActiveFenceGuideClasses,
@@ -31,12 +35,23 @@ import {
   type BlockWidgetHeightBinding,
 } from "./block-widget-height";
 import {
+  collectChangedLocalMediaPaths,
+  getLocalMediaPreviewDependency,
   resolveLocalMediaPreview,
+  resolveLocalMediaPathFromState,
   resolveLocalMediaPreviewFromState,
+  type LocalMediaDependencies,
+  type LocalMediaPreviewDependency,
   type MediaPreviewResult,
 } from "./media-preview";
 import { CSS } from "../constants/css-classes";
 import { createChangeChecker } from "../state/change-detection";
+import {
+  dirtyRangesFromChanges,
+  expandChangeRangeToLines,
+  rangeIntersectsDirtyRanges,
+  type DirtyRange,
+} from "./incremental-dirty-ranges";
 
 type ImagePreviewState =
   | { kind: "image"; src: string }
@@ -280,73 +295,338 @@ function isStandaloneImageLine(
   return line.text.trim() === imageText;
 }
 
-function buildImageDecorations(state: EditorState): DecorationSet {
-  const items: Range<Decoration>[] = [];
+interface ImageNodeInfo {
+  readonly from: number;
+  readonly to: number;
+  readonly alt: string;
+  readonly src: string;
+  readonly isBlock: boolean;
+  readonly preview: MediaPreviewResult | null;
+}
+
+interface LocalMediaDependencyCounts {
+  readonly imagePaths: Map<string, number>;
+  readonly pdfPaths: Map<string, number>;
+}
+
+interface ImageDecorationState {
+  readonly decorations: DecorationSet;
+  readonly mediaDependencies: LocalMediaDependencies;
+  readonly dependencyCounts: LocalMediaDependencyCounts;
+}
+
+function createDependencyCounts(): LocalMediaDependencyCounts {
+  return {
+    imagePaths: new Map<string, number>(),
+    pdfPaths: new Map<string, number>(),
+  };
+}
+
+function cloneDependencyCounts(
+  counts: LocalMediaDependencyCounts,
+): LocalMediaDependencyCounts {
+  return {
+    imagePaths: new Map(counts.imagePaths),
+    pdfPaths: new Map(counts.pdfPaths),
+  };
+}
+
+function dependencyCountsToDependencies(
+  counts: LocalMediaDependencyCounts,
+): LocalMediaDependencies {
+  return {
+    imagePaths: new Set(counts.imagePaths.keys()),
+    pdfPaths: new Set(counts.pdfPaths.keys()),
+  };
+}
+
+function adjustDependencyCount(
+  counts: Map<string, number>,
+  path: string,
+  delta: number,
+): void {
+  const next = (counts.get(path) ?? 0) + delta;
+  if (next <= 0) {
+    counts.delete(path);
+    return;
+  }
+  counts.set(path, next);
+}
+
+function applyDependencyDelta(
+  counts: LocalMediaDependencyCounts,
+  dependency: LocalMediaPreviewDependency | null,
+  delta: number,
+): void {
+  if (!dependency) return;
+  const target = dependency.cacheKind === "pdf"
+    ? counts.pdfPaths
+    : counts.imagePaths;
+  adjustDependencyCount(target, dependency.resolvedPath, delta);
+}
+
+function getImageDependency(
+  info: ImageNodeInfo,
+): LocalMediaPreviewDependency | null {
+  return info.preview
+    ? getLocalMediaPreviewDependency(info.src, info.preview)
+    : null;
+}
+
+function buildImageNodeInfo(
+  state: EditorState,
+  node: SyntaxNode,
+): ImageNodeInfo | null {
+  const parsed = readImageContent(state, node);
+  if (!parsed) return null;
+
+  return {
+    from: node.from,
+    to: node.to,
+    alt: parsed.alt,
+    src: parsed.src,
+    isBlock: isStandaloneImageLine(state, node.from, node.to),
+    preview: resolveLocalMediaPreviewFromState(state, parsed.src),
+  };
+}
+
+function collectImageNodeInfosInRanges(
+  state: EditorState,
+  dirtyRanges: readonly DirtyRange[],
+): ImageNodeInfo[] {
+  if (dirtyRanges.length === 0) return [];
+  const infos: ImageNodeInfo[] = [];
+  const seen = new Set<string>();
+
+  for (const range of dirtyRanges) {
+    syntaxTree(state).iterate({
+      from: range.from,
+      to: range.to,
+      enter(node) {
+        if (node.name !== "Image") return;
+        if (!rangeIntersectsDirtyRanges(node.from, node.to, [range])) return;
+        const key = `${node.from}:${node.to}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        const info = buildImageNodeInfo(state, node.node);
+        if (info) infos.push(info);
+        return false;
+      },
+    });
+  }
+
+  return infos;
+}
+
+function collectAllImageNodeInfos(state: EditorState): ImageNodeInfo[] {
+  return collectImageNodeInfosInRanges(state, [{ from: 0, to: state.doc.length }]);
+}
+
+function collectImageNodeInfosForResolvedPaths(
+  state: EditorState,
+  resolvedPaths: ReadonlySet<string>,
+): ImageNodeInfo[] {
+  if (resolvedPaths.size === 0) return [];
+  const infos: ImageNodeInfo[] = [];
   syntaxTree(state).iterate({
     enter(node) {
       if (node.name !== "Image") return;
-      const parsed = readImageContent(state, node.node);
-      if (!parsed) return false;
-
-      const isBlock = isStandaloneImageLine(state, node.from, node.to);
-      const preview = resolveLocalMediaPreviewFromState(state, parsed.src);
-      const widget = preview
-        ? mediaPreviewWidget(parsed.alt, parsed.src, preview, isBlock)
-        : new ImagePreviewWidget(
-            parsed.alt,
-            parsed.src,
-            { kind: "image", src: parsed.src },
-            isBlock,
-          );
-      if (isBlock) {
-        pushBlockWidgetDecoration(items, widget, node.from, node.to);
-      } else {
-        pushWidgetDecoration(items, widget, node.from, node.to);
+      const info = buildImageNodeInfo(state, node.node);
+      if (!info) return false;
+      const resolvedPath = resolveLocalMediaPathFromState(state, info.src);
+      if (resolvedPath && resolvedPaths.has(resolvedPath)) {
+        infos.push(info);
       }
       return false;
     },
   });
-  return buildDecorations(items);
+  return infos;
+}
+
+function buildImageItemsFromInfos(
+  infos: readonly ImageNodeInfo[],
+): Range<Decoration>[] {
+  const items: Range<Decoration>[] = [];
+  for (const info of infos) {
+    const widget = info.preview
+      ? mediaPreviewWidget(info.alt, info.src, info.preview, info.isBlock)
+      : new ImagePreviewWidget(
+          info.alt,
+          info.src,
+          { kind: "image", src: info.src },
+          info.isBlock,
+        );
+    if (info.isBlock) {
+      pushBlockWidgetDecoration(items, widget, info.from, info.to);
+    } else {
+      pushWidgetDecoration(items, widget, info.from, info.to);
+    }
+  }
+  return items;
+}
+
+function buildDependencyCountsFromInfos(
+  infos: readonly ImageNodeInfo[],
+): LocalMediaDependencyCounts {
+  const counts = createDependencyCounts();
+  for (const info of infos) {
+    applyDependencyDelta(counts, getImageDependency(info), 1);
+  }
+  return counts;
+}
+
+function buildImageDecorationState(state: EditorState): ImageDecorationState {
+  const infos = collectAllImageNodeInfos(state);
+  const dependencyCounts = buildDependencyCountsFromInfos(infos);
+  return {
+    decorations: buildDecorations(buildImageItemsFromInfos(infos)),
+    mediaDependencies: dependencyCountsToDependencies(dependencyCounts),
+    dependencyCounts,
+  };
+}
+
+function mapInfoRangeToDirtyRange(
+  info: ImageNodeInfo,
+  state: EditorState,
+  changes: Parameters<DecorationSet["map"]>[0],
+): DirtyRange {
+  const mappedFrom = changes.mapPos(info.from, 1);
+  const mappedTo = changes.mapPos(info.to, -1);
+  return expandChangeRangeToLines(
+    state.doc,
+    Math.max(0, Math.min(mappedFrom, state.doc.length)),
+    Math.max(0, Math.min(Math.max(mappedFrom, mappedTo), state.doc.length)),
+  );
+}
+
+function replaceImageDecorationsInRanges(
+  decorations: DecorationSet,
+  dirtyRanges: readonly DirtyRange[],
+  infos: readonly ImageNodeInfo[],
+): DecorationSet {
+  let next = decorations;
+  for (const range of dirtyRanges) {
+    next = next.update({
+      filterFrom: range.from,
+      filterTo: range.to,
+      filter: (from, to) => !rangeIntersectsDirtyRanges(from, to, [range]),
+    });
+  }
+
+  const items = buildImageItemsFromInfos(infos);
+  if (items.length > 0) {
+    next = next.update({
+      add: items,
+      sort: true,
+    });
+  }
+  return next;
 }
 
 const imageDecorationsChanged = createChangeChecker(
-  { doc: true, tree: true },
+  { tree: true },
   (state) => state.field(pdfPreviewField, false),
   (state) => state.field(imageUrlField, false),
 );
 
-const imageDecorationField = createDecorationStateField({
+const imageDecorationField: StateField<ImageDecorationState> = StateField.define({
   create(state) {
-    return buildImageDecorations(state);
+    return buildImageDecorationState(state);
   },
   update(value, tr) {
-    return imageDecorationsChanged(tr) ? buildImageDecorations(tr.state) : value;
+    if (tr.docChanged) {
+      const oldDirtyRanges = dirtyRangesFromChanges(
+        tr.changes,
+        (from, to) => expandChangeRangeToLines(tr.startState.doc, from, to),
+      );
+      const newDirtyRanges = dirtyRangesFromChanges(
+        tr.changes,
+        (from, to) => expandChangeRangeToLines(tr.state.doc, from, to),
+      );
+      const oldInfos = collectImageNodeInfosInRanges(tr.startState, oldDirtyRanges);
+      const newInfos = collectImageNodeInfosInRanges(tr.state, newDirtyRanges);
+      const dirtyRanges = [
+        ...newDirtyRanges,
+        ...oldInfos.map((info) => mapInfoRangeToDirtyRange(info, tr.state, tr.changes)),
+      ];
+      const dependencyCounts = cloneDependencyCounts(value.dependencyCounts);
+      for (const info of oldInfos) {
+        applyDependencyDelta(dependencyCounts, getImageDependency(info), -1);
+      }
+      for (const info of newInfos) {
+        applyDependencyDelta(dependencyCounts, getImageDependency(info), 1);
+      }
+      return {
+        decorations: replaceImageDecorationsInRanges(
+          value.decorations.map(tr.changes),
+          dirtyRanges,
+          newInfos,
+        ),
+        mediaDependencies: dependencyCountsToDependencies(dependencyCounts),
+        dependencyCounts,
+      };
+    }
+
+    const changedPaths = collectChangedLocalMediaPaths(
+      value.mediaDependencies,
+      tr.startState.field(pdfPreviewField, false) || new Map<string, unknown>(),
+      tr.state.field(pdfPreviewField, false) || new Map<string, unknown>(),
+      tr.startState.field(imageUrlField, false) || new Map<string, unknown>(),
+      tr.state.field(imageUrlField, false) || new Map<string, unknown>(),
+    );
+    if (changedPaths.size > 0) {
+      const infos = collectImageNodeInfosForResolvedPaths(tr.state, changedPaths);
+      return {
+        decorations: replaceImageDecorationsInRanges(
+          value.decorations,
+          infos.map((info) => ({ from: info.from, to: info.to })),
+          infos,
+        ),
+        mediaDependencies: value.mediaDependencies,
+        dependencyCounts: value.dependencyCounts,
+      };
+    }
+
+    return imageDecorationsChanged(tr) ? buildImageDecorationState(tr.state) : value;
   },
+  provide: (field: StateField<ImageDecorationState>) => EditorView.decorations.from(
+    field,
+    (value: ImageDecorationState) => value.decorations,
+  ),
 });
 
-function requestImagePreviews(view: EditorView): void {
-  syntaxTree(view.state).iterate({
-    enter(node) {
-      if (node.name !== "Image") return;
-      const parsed = readImageContent(view.state, node.node);
-      if (!parsed) return false;
-      resolveLocalMediaPreview(view, parsed.src);
-      return false;
-    },
-  });
+function requestImagePreviewsForInfos(
+  view: EditorView,
+  infos: readonly ImageNodeInfo[],
+): void {
+  for (const info of infos) {
+    resolveLocalMediaPreview(view, info.src);
+  }
 }
 
 const imageRequestPlugin = ViewPlugin.fromClass(class {
   constructor(view: EditorView) {
-    requestImagePreviews(view);
+    requestImagePreviewsForInfos(view, collectAllImageNodeInfos(view.state));
   }
 
   update(update: ViewUpdate): void {
-    if (
-      update.docChanged ||
-      syntaxTree(update.state) !== syntaxTree(update.startState)
-    ) {
-      requestImagePreviews(update.view);
+    if (update.docChanged) {
+      const dirtyRanges = dirtyRangesFromChanges(
+        update.changes,
+        (from, to) => expandChangeRangeToLines(update.state.doc, from, to),
+      );
+      requestImagePreviewsForInfos(
+        update.view,
+        collectImageNodeInfosInRanges(update.state, dirtyRanges),
+      );
+      return;
+    }
+
+    if (syntaxTree(update.state) !== syntaxTree(update.startState)) {
+      requestImagePreviewsForInfos(
+        update.view,
+        collectAllImageNodeInfos(update.state),
+      );
     }
   }
 });

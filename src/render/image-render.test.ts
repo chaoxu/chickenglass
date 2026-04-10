@@ -463,11 +463,7 @@ describe("ImageRenderPlugin incremental docChanged (#824)", () => {
       },
     });
 
-    expect(resolvePreview).toHaveBeenCalledTimes(2);
-    expect(resolvePreview.mock.calls.map((call) => call[1])).toEqual([
-      "https://a.co/a.png",
-      "https://a.co/b.png",
-    ]);
+    expect(resolvePreview).not.toHaveBeenCalled();
     expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(2);
   });
 
@@ -517,10 +513,9 @@ describe("ImageRenderPlugin incremental docChanged (#824)", () => {
       },
     });
 
-    expect(resolvePreview).toHaveBeenCalledTimes(2);
+    expect(resolvePreview).toHaveBeenCalledTimes(1);
     expect(resolvePreview.mock.calls.map((call) => call[1])).toEqual([
       nextUrl,
-      "https://example.com/b.png",
     ]);
 
     const renderedSources = [...view.dom.querySelectorAll(`.${CSS.imageWrapper} img`)]
@@ -560,7 +555,9 @@ describe("imageRenderPlugin block ownership", () => {
     const view = createTestView("![](figure.png)", {
       extensions: [markdown(), imageUrlField, pdfPreviewField, imageRenderPlugin],
     });
-    const specs = getDecorationSpecs(view.state.field(_imageDecorationFieldForTest));
+    const specs = getDecorationSpecs(
+      view.state.field(_imageDecorationFieldForTest).decorations,
+    );
     expect(specs.some((spec) => spec.block === true && spec.widgetClass === "ImagePreviewWidget")).toBe(true);
     view.destroy();
   });
@@ -569,7 +566,9 @@ describe("imageRenderPlugin block ownership", () => {
     const view = createTestView("prefix ![](figure.png) suffix", {
       extensions: [markdown(), imageUrlField, pdfPreviewField, imageRenderPlugin],
     });
-    const specs = getDecorationSpecs(view.state.field(_imageDecorationFieldForTest));
+    const specs = getDecorationSpecs(
+      view.state.field(_imageDecorationFieldForTest).decorations,
+    );
     expect(specs.some((spec) => spec.block === true && spec.widgetClass === "ImagePreviewWidget")).toBe(false);
     expect(specs.some((spec) => spec.widgetClass === "ImagePreviewWidget")).toBe(true);
     view.destroy();

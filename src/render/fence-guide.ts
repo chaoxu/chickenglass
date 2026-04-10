@@ -34,7 +34,10 @@ import {
   focusEffect,
   focusTracker,
 } from "./focus-state";
-import { documentSemanticsField } from "../state/document-analysis";
+import {
+  documentSemanticsField,
+  getDocumentAnalysisSliceRevision,
+} from "../state/document-analysis";
 import { NODE } from "../constants/node-types";
 import { CSS } from "../constants/css-classes";
 import { findAncestorByName } from "../lib/syntax-tree-helpers";
@@ -45,6 +48,7 @@ import {
 } from "../lib/range-helpers";
 import {
   clearActiveFenceGuideClasses,
+  resolveLiveWidgetSourceRange,
   syncActiveFenceGuideClasses,
 } from "./source-widget";
 
@@ -146,60 +150,70 @@ function buildFenceGuides(state: EditorState): DecorationSet {
   return buildDecorations(items);
 }
 
-function parseSourcePos(value: string | undefined): number | null {
-  if (!value) return null;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
+const BLOCK_WIDGET_SELECTOR = "[data-active-fence-guides]";
 
-const BLOCK_WIDGET_SELECTOR = [
-  `.${CSS.mathDisplay}`,
-  `.${CSS.tableWidget}`,
-  `.${CSS.imageWrapper}`,
-  ".cf-block-caption",
-  ".cf-embed",
-].join(", ");
-
-function syncFenceGuideWidgets(view: EditorView): void {
+function syncFenceGuideWidgets(view: EditorView): boolean {
   const widgets = view.dom.querySelectorAll<HTMLElement>(BLOCK_WIDGET_SELECTOR);
+  let hasActiveGuides = false;
   for (const widget of widgets) {
     if (widget.classList.contains(CSS.imageWrapper) && widget.tagName !== "DIV") {
       clearActiveFenceGuideClasses(widget);
       continue;
     }
-    const from = parseSourcePos(widget.dataset.sourceFrom);
-    const to = parseSourcePos(widget.dataset.sourceTo);
-    if (from === null || to === null || to < from) {
+    const sourceRange = resolveLiveWidgetSourceRange(view, widget);
+    if (!sourceRange) {
       clearActiveFenceGuideClasses(widget);
       continue;
     }
+    const { from, to } = sourceRange;
     syncActiveFenceGuideClasses(widget, view, from, to);
+    if (widget.classList.contains("cf-fence-guide")) {
+      hasActiveGuides = true;
+    }
   }
+  return hasActiveGuides;
 }
 
 const fenceGuideWidgetView = ViewPlugin.fromClass(class {
   private syncScheduled = false;
   private frameId: number | null = null;
+  private activePath = "";
+  private hasActiveGuides = false;
 
   constructor(view: EditorView) {
-    syncFenceGuideWidgets(view);
+    this.activePath = computeActivePath(view.state);
+    this.hasActiveGuides = syncFenceGuideWidgets(view);
     this.scheduleSync(view);
   }
 
   update(update: ViewUpdate): void {
-    if (
-      update.docChanged ||
-      update.selectionSet ||
-      update.focusChanged ||
-      update.viewportChanged ||
-      update.geometryChanged
-    ) {
-      syncFenceGuideWidgets(update.view);
-      this.scheduleSync(update.view);
-    }
+    const nextActivePath = computeActivePath(update.state);
+    const activePathChanged = nextActivePath !== this.activePath;
+    this.activePath = nextActivePath;
+
+    const fencedDivsChanged =
+      getDocumentAnalysisSliceRevision(
+        update.state.field(documentSemanticsField),
+        "fencedDivs",
+      ) !== getDocumentAnalysisSliceRevision(
+        update.startState.field(documentSemanticsField),
+        "fencedDivs",
+      );
+    const visibilityOrGeometryChanged =
+      update.viewportChanged || update.geometryChanged;
+    const needsSync =
+      activePathChanged ||
+      fencedDivsChanged ||
+      ((nextActivePath !== "" || this.hasActiveGuides) && visibilityOrGeometryChanged);
+
+    if (!needsSync) return;
+
+    this.hasActiveGuides = syncFenceGuideWidgets(update.view);
+    this.scheduleSync(update.view);
   }
 
   private scheduleSync(view: EditorView): void {
+    if (this.activePath === "" && !this.hasActiveGuides) return;
     if (this.syncScheduled) return;
     this.syncScheduled = true;
     const run = (): void => {
@@ -207,7 +221,7 @@ const fenceGuideWidgetView = ViewPlugin.fromClass(class {
         this.frameId = null;
         this.syncScheduled = false;
         if (!view.dom.isConnected) return;
-        syncFenceGuideWidgets(view);
+        this.hasActiveGuides = syncFenceGuideWidgets(view);
       });
     };
     if (typeof requestAnimationFrame === "function") {
@@ -217,7 +231,7 @@ const fenceGuideWidgetView = ViewPlugin.fromClass(class {
     queueMicrotask(() => {
       this.syncScheduled = false;
       if (!view.dom.isConnected) return;
-      syncFenceGuideWidgets(view);
+      this.hasActiveGuides = syncFenceGuideWidgets(view);
     });
   }
 

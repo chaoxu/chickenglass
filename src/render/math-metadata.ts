@@ -56,7 +56,7 @@ function collectVisibleRenderedMathWidgets(
 function syncRenderedMathWidgetMetadata(
   view: EditorView,
   mathDecorationField: StateField<DecorationSet>,
-): void {
+): boolean {
   const widgets = collectVisibleRenderedMathWidgets(view, mathDecorationField);
   const mathRoots = view.dom.querySelectorAll<HTMLElement>(
     `.${CSS.mathInline}, .${CSS.mathDisplay}`,
@@ -77,6 +77,23 @@ function syncRenderedMathWidgetMetadata(
   for (let i = count; i < mathRoots.length; i++) {
     clearSourceRangeAttrs(mathRoots[i]);
   }
+
+  return count > 0;
+}
+
+function docChangeTouchesViewport(update: ViewUpdate): boolean {
+  let touchesViewport = false;
+  update.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
+    if (touchesViewport) return;
+    const changeTo = Math.max(fromB, toB);
+    if (fromB <= update.view.viewport.to && changeTo >= update.view.viewport.from) {
+      touchesViewport = true;
+    } else if (fromB < update.view.viewport.from) {
+      // Any edit before the viewport shifts later widget source positions.
+      touchesViewport = true;
+    }
+  });
+  return touchesViewport;
 }
 
 export function createMathWidgetMetadataPlugin(
@@ -85,19 +102,26 @@ export function createMathWidgetMetadataPlugin(
   return ViewPlugin.fromClass(
     class {
       private syncScheduled = false;
+      private hadVisibleMathWidgets = false;
 
       constructor(view: EditorView) {
         this.scheduleSync(view);
       }
 
       update(update: ViewUpdate) {
+        const decorationsChanged =
+          update.state.field(mathDecorationField, false)
+            !== update.startState.field(mathDecorationField, false);
         if (
-      update.docChanged
+          decorationsChanged
           || update.selectionSet
           || update.focusChanged
           || update.viewportChanged
-          || update.state.field(mathDecorationField, false)
-            !== update.startState.field(mathDecorationField, false)
+          || (
+            update.docChanged
+            && this.hadVisibleMathWidgets
+            && docChangeTouchesViewport(update)
+          )
         ) {
           this.scheduleSync(update.view);
         }
@@ -111,7 +135,10 @@ export function createMathWidgetMetadataPlugin(
           write: () => {
             this.syncScheduled = false;
             if (!view.dom.isConnected) return;
-            syncRenderedMathWidgetMetadata(view, mathDecorationField);
+            this.hadVisibleMathWidgets = syncRenderedMathWidgetMetadata(
+              view,
+              mathDecorationField,
+            );
           },
         });
       }

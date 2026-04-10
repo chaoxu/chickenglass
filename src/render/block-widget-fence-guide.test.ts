@@ -121,4 +121,39 @@ describe("block widgets inside active fenced divs", () => {
     await flushFrames();
     expectFenceGuide(view.dom.querySelector(`.${CSS.tableWidget}`), 1);
   });
+
+  it("does not rescan block widgets on plain paragraph edits outside fenced divs", async () => {
+    const doc = [
+      "::: {.theorem}",
+      "Prelude",
+      "$$",
+      "x^2 + y^2 = z^2",
+      "$$",
+      ":::",
+      "",
+      "Tail paragraph",
+    ].join("\n");
+
+    const view = createRichView(doc, "Tail paragraph");
+    await flushFrames();
+
+    const selector = "[data-active-fence-guides]";
+    const original = view.dom.querySelectorAll.bind(view.dom);
+    let scanCount = 0;
+    vi.spyOn(view.dom, "querySelectorAll").mockImplementation(((query: string) => {
+      if (query === selector) {
+        scanCount++;
+      }
+      return original(query);
+    }) as typeof view.dom.querySelectorAll);
+
+    const anchor = view.state.selection.main.head;
+    view.dispatch({
+      changes: { from: anchor, insert: "x" },
+      selection: { anchor: anchor + 1 },
+    });
+
+    await flushFrames();
+    expect(scanCount).toBe(0);
+  });
 });
