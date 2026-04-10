@@ -335,7 +335,11 @@ Use this file to verify the split issues from #396 through #410.
 
 # Figures, Tables, and Local Media
 
-These blocks cover newer caption-below behavior and local PDF image rendering.
+These blocks cover newer caption-below behavior, regular local raster images, and local PDF image rendering.
+
+::: {#fig:growth-local .figure} Linear versus exponential growth chart
+![Linear versus exponential growth chart](showcase/linear-vs-exponential-growth.png)
+:::
 
 ::: {#fig:pdf-local .figure} Local PDF figure with math $x^2 + y^2 = z^2$
 ![Generated showcase figure rendered from a local PDF asset](showcase/generated-figure.pdf)
@@ -344,16 +348,18 @@ These blocks cover newer caption-below behavior and local PDF image rendering.
 ::: {#tbl:feature-matrix .table} Feature coverage matrix
 | Surface | Example | What to verify |
 |---------|---------|----------------|
-| figure block | [@fig:pdf-local] | caption stays below the media |
+| raster figure block | [@fig:growth-local] | regular local image rendering + caption below |
+| pdf figure block | [@fig:pdf-local] | PDF preview rendering + caption below |
 | theorem block | [@thm:fundamental] | numbered block cross-reference |
 | citation | [@cormen2009] | CSL-formatted citation rendering |
 | inline math | $x^2 + y^2 = z^2$ | KaTeX inside table cells |
 | inline code | `showcase/generated-figure.pdf` | monospace styling inside table cells |
 :::
 
-Cross-references: see [@fig:pdf-local] and [@tbl:feature-matrix].
+Cross-references: see [@fig:growth-local], [@fig:pdf-local], and [@tbl:feature-matrix].
 
-- #506: the figure and table blocks above should render with "Figure 1." and "Table 1." labels on the LAST body line, not the opening fence.
+- #506: the figure and table blocks above should render with figure/table labels on the LAST body line, not the opening fence.
 - #506: the opening fence line should show only the editable caption text, without a label prefix.
-- #506: `[@fig:pdf-local]` should resolve to "Figure 1" and `[@tbl:feature-matrix]` to "Table 1".
+- #506: `[@fig:growth-local]`, `[@fig:pdf-local]`, and `[@tbl:feature-matrix]` should resolve to the correct figure/table numbers.
+- Local raster media inside the first figure block should render as a normal image, not a broken placeholder.
 - Local PDF media inside the figure block should render as an image preview instead of raw markdown or a broken-file placeholder.
