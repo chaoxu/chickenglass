@@ -309,6 +309,8 @@ const mathDecorationField = createDecorationStateField({
     const updatePlan = planSemanticSensitiveUpdate(tr, {
       docChanged: (transaction) => transaction.docChanged,
       semanticChanged: () => regionsBefore !== regionsAfter,
+      // Unchanged math slice identity means the edit stayed outside math, so
+      // preserving the existing DecorationSet matches the pre-refactor path.
       stableDocChangeMode: "keep",
       shouldRebuild: (_transaction, context) => {
         if (tr.annotation(programmaticDocumentChangeAnnotation) === true) {
