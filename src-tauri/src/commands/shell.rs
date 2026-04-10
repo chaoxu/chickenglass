@@ -2,9 +2,12 @@ use std::process::Command;
 
 use tauri::{State, WebviewWindow, command};
 
-use super::context::{CommandSpec, WindowCommandContext, run_command};
 use super::state::{PerfState, ProjectRoot};
-use crate::services::path::resolve_existing_path;
+use super::{
+    context::{CommandSpec, WindowCommandContext, run_command},
+    map_err_str,
+};
+use crate::services::path::ProjectPathResolver;
 
 const OPEN_URL: CommandSpec = CommandSpec::new("tauri.open_url", "tauri.shell.open_url", "tauri");
 const REVEAL_IN_FINDER: CommandSpec = CommandSpec::new(
@@ -26,26 +29,26 @@ pub fn open_url(perf: State<'_, PerfState>, url: String) -> Result<(), String> {
 
         #[cfg(target_os = "macos")]
         {
-            Command::new("open")
-                .arg(&url)
-                .spawn()
-                .map_err(|e| format!("Failed to open URL: {}", e))?;
+            map_err_str!(
+                Command::new("open").arg(&url).spawn(),
+                "Failed to open URL: {}"
+            )?;
         }
 
         #[cfg(target_os = "windows")]
         {
-            Command::new("cmd")
-                .args(["/C", "start", "", &url])
-                .spawn()
-                .map_err(|e| format!("Failed to open URL: {}", e))?;
+            map_err_str!(
+                Command::new("cmd").args(["/C", "start", "", &url]).spawn(),
+                "Failed to open URL: {}"
+            )?;
         }
 
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
-            Command::new("xdg-open")
-                .arg(&url)
-                .spawn()
-                .map_err(|e| format!("Failed to open URL: {}", e))?;
+            map_err_str!(
+                Command::new("xdg-open").arg(&url).spawn(),
+                "Failed to open URL: {}"
+            )?;
         }
 
         Ok(())
@@ -64,34 +67,34 @@ pub fn reveal_in_finder(
         REVEAL_IN_FINDER,
         Some(&path),
         |project_root| {
-            let abs_path = resolve_existing_path(&project_root, &path)?
-                .to_string_lossy()
-                .to_string();
+            let paths = ProjectPathResolver::new(project_root)?;
+            let abs_path = paths.resolve_existing_path(&path)?;
 
             #[cfg(target_os = "macos")]
             {
-                Command::new("open")
-                    .args(["-R", &abs_path])
-                    .spawn()
-                    .map_err(|e| format!("Failed to reveal in Finder: {}", e))?;
+                map_err_str!(
+                    Command::new("open").arg("-R").arg(&abs_path).spawn(),
+                    "Failed to reveal in Finder: {}"
+                )?;
             }
 
             #[cfg(target_os = "windows")]
             {
-                Command::new("explorer")
-                    .arg(format!("/select,{}", abs_path))
-                    .spawn()
-                    .map_err(|e| format!("Failed to reveal in Explorer: {}", e))?;
+                let mut select_arg = std::ffi::OsString::from("/select,");
+                select_arg.push(&abs_path);
+                map_err_str!(
+                    Command::new("explorer").arg(select_arg).spawn(),
+                    "Failed to reveal in Explorer: {}"
+                )?;
             }
 
             #[cfg(not(any(target_os = "macos", target_os = "windows")))]
             {
-                let path = std::path::PathBuf::from(&abs_path);
-                let parent = path.parent().unwrap_or(&path);
-                Command::new("xdg-open")
-                    .arg(parent)
-                    .spawn()
-                    .map_err(|e| format!("Failed to open file manager: {}", e))?;
+                let parent = abs_path.parent().unwrap_or(&abs_path);
+                map_err_str!(
+                    Command::new("xdg-open").arg(parent).spawn(),
+                    "Failed to open file manager: {}"
+                )?;
             }
 
             Ok(())

@@ -1,12 +1,15 @@
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use tauri::{State, WebviewWindow, command};
 
-use super::context::{CommandSpec, WindowCommandContext, run_command};
 use super::state::{PerfState, ProjectRoot};
-use crate::services::path::{project_relative_path, resolve_project_path};
+use super::{
+    context::{CommandSpec, WindowCommandContext, run_command},
+    map_err_str,
+};
+use crate::services::path::ProjectPathResolver;
 
 const CHECK_PANDOC: CommandSpec =
     CommandSpec::new("tauri.check_pandoc", "tauri.export.check_pandoc", "tauri");
@@ -20,10 +23,10 @@ const EXPORT_DOCUMENT: CommandSpec = CommandSpec::new(
 #[command]
 pub fn check_pandoc(perf: State<'_, PerfState>) -> Result<String, String> {
     run_command(&perf, CHECK_PANDOC, None, || {
-        let output = Command::new("pandoc")
-            .arg("--version")
-            .output()
-            .map_err(|e| format!("Failed to run pandoc: {}", e))?;
+        let output = map_err_str!(
+            Command::new("pandoc").arg("--version").output(),
+            "Failed to run pandoc: {}"
+        )?;
 
         if !output.status.success() {
             return Err("pandoc --version returned a non-zero exit code".to_string());
@@ -39,8 +42,11 @@ pub fn check_pandoc(perf: State<'_, PerfState>) -> Result<String, String> {
 }
 
 /// Export a markdown document to PDF or LaTeX via Pandoc.
-fn resolve_export_output_path(project_root: &Path, output_path: &str) -> Result<PathBuf, String> {
-    let resolved_path = resolve_project_path(project_root, output_path)?;
+fn resolve_export_output_path(
+    paths: &ProjectPathResolver,
+    output_path: &str,
+) -> Result<PathBuf, String> {
+    let resolved_path = paths.resolve_project_path(output_path)?;
 
     if let Some(parent) = resolved_path.parent() {
         if !parent.exists() {
@@ -67,45 +73,48 @@ pub fn export_document(
         EXPORT_DOCUMENT,
         Some(&output_path),
         |project_root| {
-            let output_path = resolve_export_output_path(&project_root, &output_path)?;
+            let paths = ProjectPathResolver::new(project_root)?;
+            let output_path = resolve_export_output_path(&paths, &output_path)?;
 
-            let mut args = vec![
-                "-f".to_string(),
-                "markdown".to_string(),
-                "-o".to_string(),
-                output_path.to_string_lossy().to_string(),
-            ];
+            let mut command = Command::new("pandoc");
+            command
+                .arg("-f")
+                .arg("markdown")
+                .arg("-o")
+                .arg(&output_path);
 
             match format.as_str() {
-                "pdf" => args.push("--pdf-engine=xelatex".to_string()),
+                "pdf" => {
+                    command.arg("--pdf-engine=xelatex");
+                }
                 "latex" => {}
                 _ => return Err(format!("Unsupported export format: {}", format)),
             }
 
-            let mut child = Command::new("pandoc")
-                .args(&args)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .map_err(|e| format!("Failed to start pandoc: {}", e))?;
+            let mut child = map_err_str!(
+                command
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn(),
+                "Failed to start pandoc: {}"
+            )?;
 
             if let Some(ref mut stdin) = child.stdin {
-                stdin
-                    .write_all(content.as_bytes())
-                    .map_err(|e| format!("Failed to write to pandoc stdin: {}", e))?;
+                map_err_str!(
+                    stdin.write_all(content.as_bytes()),
+                    "Failed to write to pandoc stdin: {}"
+                )?;
             }
 
-            let output = child
-                .wait_with_output()
-                .map_err(|e| format!("Failed to wait for pandoc: {}", e))?;
+            let output = map_err_str!(child.wait_with_output(), "Failed to wait for pandoc: {}")?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 return Err(format!("Pandoc failed: {}", stderr));
             }
 
-            project_relative_path(&project_root, &output_path)
+            paths.project_relative_path(&output_path)
         },
     )
 }
@@ -113,6 +122,7 @@ pub fn export_document(
 #[cfg(test)]
 mod tests {
     use super::resolve_export_output_path;
+    use crate::services::path::ProjectPathResolver;
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -132,9 +142,10 @@ mod tests {
         let project_root = create_temp_dir("export-root");
         let docs_dir = project_root.join("docs");
         fs::create_dir_all(&docs_dir).expect("create docs dir");
+        let paths = ProjectPathResolver::new(&project_root).expect("build path resolver");
 
         let output_path =
-            resolve_export_output_path(&project_root, "docs/out.pdf").expect("resolve output");
+            resolve_export_output_path(&paths, "docs/out.pdf").expect("resolve output");
 
         assert_eq!(output_path, docs_dir.join("out.pdf"));
 
@@ -144,8 +155,9 @@ mod tests {
     #[test]
     fn rejects_relative_paths_that_escape_the_project_root() {
         let project_root = create_temp_dir("export-root");
+        let paths = ProjectPathResolver::new(&project_root).expect("build path resolver");
 
-        let error = resolve_export_output_path(&project_root, "../out.pdf")
+        let error = resolve_export_output_path(&paths, "../out.pdf")
             .expect_err("path traversal should fail");
 
         assert!(error.contains("escapes project root"));
@@ -158,10 +170,10 @@ mod tests {
         let project_root = create_temp_dir("export-root");
         let outside_root = create_temp_dir("export-outside");
         let outside_path = outside_root.join("out.pdf");
+        let paths = ProjectPathResolver::new(&project_root).expect("build path resolver");
 
-        let error =
-            resolve_export_output_path(&project_root, outside_path.to_str().expect("utf-8 path"))
-                .expect_err("absolute path outside root should fail");
+        let error = resolve_export_output_path(&paths, outside_path.to_str().expect("utf-8 path"))
+            .expect_err("absolute path outside root should fail");
 
         assert!(error.contains("escapes project root"));
 

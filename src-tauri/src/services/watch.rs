@@ -4,12 +4,13 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use notify::{
-    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind,
+    event::ModifyKind, Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::commands::state::FileWatcherEntry;
+use crate::services::path::path_to_frontend_string;
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -257,11 +258,14 @@ fn normalize_relative_event_path(root: &Path, path: &Path, tree_changed: bool) -
         return None;
     }
 
-    let relative = path
-        .strip_prefix(root)
-        .ok()?
-        .to_string_lossy()
-        .replace('\\', "/");
+    let relative = path.strip_prefix(root).ok()?;
+    let relative = match path_to_frontend_string(relative, "Watch event path") {
+        Ok(relative) => relative,
+        Err(error) => {
+            eprintln!("[watch] {}", error);
+            return None;
+        }
+    };
 
     if should_ignore_relative_path(&relative) {
         return None;
@@ -273,19 +277,30 @@ fn normalize_relative_event_path(root: &Path, path: &Path, tree_changed: bool) -
 #[cfg(test)]
 mod tests {
     use super::{
-        DebouncedEventDispatcher, FileChangedEvent, QueuedFileChangedEvent, WatchEventMessage,
         event_changes_tree, normalize_relative_event_path, remove_watcher_generation,
         reserve_watcher_slot, should_emit_debounced_event, should_ignore_relative_path,
+        DebouncedEventDispatcher, FileChangedEvent, QueuedFileChangedEvent, WatchEventMessage,
     };
     use crate::commands::state::FileWatcherEntry;
     use notify::{
-        EventKind,
         event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
+        EventKind,
     };
     use std::collections::HashMap;
+    use std::ffi::OsString;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    fn create_temp_dir(prefix: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("coflat-{prefix}-{unique}"));
+        fs::create_dir_all(&path).expect("create temp dir");
+        path.canonicalize().expect("canonicalize temp dir")
+    }
 
     #[test]
     fn ignores_hidden_and_generated_relative_paths() {
@@ -460,6 +475,21 @@ mod tests {
             Some("docs/new-subdir".to_string()),
         );
         assert_eq!(normalize_relative_event_path(&root, &dir, false), None);
+
+        fs::remove_dir_all(&root).expect("remove test directory");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_non_utf8_relative_event_paths() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let root = create_temp_dir("watch-nonutf8-root");
+        let path = root.join(PathBuf::from(OsString::from_vec(vec![
+            b'b', b'a', b'd', 0x80,
+        ])));
+
+        assert_eq!(normalize_relative_event_path(&root, &path, false), None);
 
         fs::remove_dir_all(&root).expect("remove test directory");
     }

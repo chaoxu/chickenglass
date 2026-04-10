@@ -8,6 +8,7 @@ use same_file::Handle as FileHandle;
 use serde::Serialize;
 
 use crate::commands::state::ProjectRootEntry;
+use crate::services::path::file_name_to_frontend_string;
 
 /// A file or directory entry for the sidebar tree.
 #[derive(Serialize, Clone)]
@@ -129,7 +130,8 @@ pub fn read_binary_file(path: &Path, relative_path: &str) -> Result<String, Stri
 pub fn list_tree(project_root: &Path) -> Result<FileEntry, String> {
     let name = project_root
         .file_name()
-        .map(|n| n.to_string_lossy().to_string())
+        .map(|n| file_name_to_frontend_string(n, "Project root name"))
+        .transpose()?
         .unwrap_or_else(|| "project".to_string());
     build_tree(project_root, &name, "")
 }
@@ -170,7 +172,7 @@ fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEn
     let mut children = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;
-        let file_name = entry.file_name().to_string_lossy().to_string();
+        let file_name = file_name_to_frontend_string(&entry.file_name(), "Directory entry name")?;
 
         if is_hidden_entry(&file_name) {
             continue;
@@ -220,7 +222,7 @@ fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, 
 
     for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;
-        let file_name = entry.file_name().to_string_lossy().to_string();
+        let file_name = file_name_to_frontend_string(&entry.file_name(), "Directory entry name")?;
 
         if is_hidden_entry(&file_name) {
             continue;
@@ -258,8 +260,8 @@ fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, 
 #[cfg(test)]
 mod tests {
     use super::{
-        FileEntry, install_project_root, list_children, write_existing_file,
-        write_existing_file_with_handle,
+        install_project_root, list_children, write_existing_file, write_existing_file_with_handle,
+        FileEntry,
     };
     use crate::commands::state::ProjectRootEntry;
     use same_file::Handle as FileHandle;
@@ -380,6 +382,25 @@ mod tests {
         assert_eq!(result[1].path, "docs/note.md");
 
         let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn list_children_rejects_non_utf8_entry_names() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        let dir = create_temp_dir("list-children-nonutf8");
+        let file_name = OsString::from_vec(vec![b'b', b'a', b'd', 0x80]);
+        fs::write(dir.join(PathBuf::from(file_name)), "x").unwrap();
+
+        let err = match list_children(&dir, "") {
+            Ok(_) => panic!("non-utf8 entry names should fail"),
+            Err(err) => err,
+        };
+        assert!(err.contains("Directory entry name is not valid UTF-8"));
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

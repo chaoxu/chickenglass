@@ -2,7 +2,7 @@ use tauri::{State, WebviewWindow, command};
 
 use super::context::{CommandSpec, WindowCommandContext};
 use super::state::{PerfState, ProjectRoot};
-use crate::services::path as path_service;
+use crate::services::path::ProjectPathResolver;
 
 const TO_PROJECT_RELATIVE_PATH: CommandSpec = CommandSpec::new(
     "tauri.to_project_relative_path",
@@ -21,7 +21,8 @@ pub fn to_project_relative_path(
         TO_PROJECT_RELATIVE_PATH,
         Some(&path),
         |project_root| {
-            path_service::project_relative_path(project_root, std::path::Path::new(&path))
+            let paths = ProjectPathResolver::new(project_root)?;
+            paths.project_relative_path(std::path::Path::new(&path))
         },
     )
 }

@@ -1,41 +1,67 @@
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
-pub fn resolve_project_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
-    let full = root.join(relative);
-    // Resolve `..` and symlink aliases before checking project-root containment.
-    let canonical = canonicalize_maybe_missing(&full)
-        .map_err(|e| format!("Cannot resolve path '{}': {}", relative, e))?;
-    let canonical_root = root
-        .canonicalize()
-        .map_err(|e| format!("Cannot canonicalize root: {}", e))?;
-    if !canonical.starts_with(&canonical_root) {
-        return Err(format!("Path '{}' escapes project root", relative));
-    }
-    Ok(canonical)
+pub struct ProjectPathResolver {
+    canonical_root: PathBuf,
 }
 
-pub fn resolve_existing_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
-    let full = resolve_project_path(root, relative)?;
-    if !full.exists() {
-        return Err(format!(
-            "Cannot resolve path '{}': No such file or directory",
-            relative
-        ));
+impl ProjectPathResolver {
+    pub fn new(root: &Path) -> Result<Self, String> {
+        let canonical_root = root
+            .canonicalize()
+            .map_err(|e| format!("Cannot resolve project root '{}': {}", root.display(), e))?;
+        Ok(Self { canonical_root })
     }
-    Ok(full)
+
+    pub fn resolve_project_path(&self, relative: &str) -> Result<PathBuf, String> {
+        let full = self.canonical_root.join(relative);
+        // Resolve `..` and symlink aliases before checking project-root containment.
+        let canonical = canonicalize_maybe_missing(&full)
+            .map_err(|e| format!("Cannot resolve path '{}': {}", relative, e))?;
+        if !canonical.starts_with(&self.canonical_root) {
+            return Err(format!("Path '{}' escapes project root", relative));
+        }
+        Ok(canonical)
+    }
+
+    pub fn resolve_existing_path(&self, relative: &str) -> Result<PathBuf, String> {
+        let full = self.resolve_project_path(relative)?;
+        if !full.exists() {
+            return Err(format!(
+                "Cannot resolve path '{}': No such file or directory",
+                relative
+            ));
+        }
+        Ok(full)
+    }
+
+    pub fn project_relative_path(&self, candidate: &Path) -> Result<String, String> {
+        let canonical_candidate = canonicalize_maybe_missing(candidate)
+            .map_err(|_| format!("Path '{}' escapes project root", candidate.display()))?;
+
+        let relative = canonical_candidate
+            .strip_prefix(&self.canonical_root)
+            .map_err(|_| format!("Path '{}' escapes project root", candidate.display()))?;
+
+        path_to_frontend_string(relative, "Project-relative path")
+    }
 }
 
-pub fn project_relative_path(root: &Path, candidate: &Path) -> Result<String, String> {
-    let canonical_root = canonicalize_maybe_missing(root)
-        .map_err(|_| format!("Cannot resolve project root '{}'", root.display()))?;
-    let canonical_candidate = canonicalize_maybe_missing(candidate)
-        .map_err(|_| format!("Path '{}' escapes project root", candidate.display()))?;
+pub fn file_name_to_frontend_string(name: &OsStr, label: &str) -> Result<String, String> {
+    name.to_str()
+        .map(str::to_owned)
+        .ok_or_else(|| format!("{label} is not valid UTF-8"))
+}
 
-    let relative = canonical_candidate
-        .strip_prefix(&canonical_root)
-        .map_err(|_| format!("Path '{}' escapes project root", candidate.display()))?;
-
-    Ok(relative.to_string_lossy().replace('\\', "/"))
+pub fn path_to_frontend_string(path: &Path, label: &str) -> Result<String, String> {
+    let path = path
+        .to_str()
+        .ok_or_else(|| format!("{label} is not valid UTF-8"))?;
+    if std::path::MAIN_SEPARATOR == '\\' {
+        Ok(path.replace('\\', "/"))
+    } else {
+        Ok(path.to_string())
+    }
 }
 
 fn canonicalize_maybe_missing(path: &Path) -> Result<PathBuf, String> {
@@ -94,8 +120,9 @@ mod tests {
         let file = root.join("sub/file.md");
         fs::create_dir_all(file.parent().unwrap()).unwrap();
         fs::write(&file, "").unwrap();
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let result = project_relative_path(&root, &file).unwrap();
+        let result = resolver.project_relative_path(&file).unwrap();
         assert_eq!(result, "sub/file.md");
 
         fs::remove_dir_all(&root).unwrap();
@@ -106,6 +133,7 @@ mod tests {
         let root = create_temp_dir("symlink-test");
         let file = root.join("doc.md");
         fs::write(&file, "").unwrap();
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
         let alias_parent = root.parent().unwrap().join("coflat-symlink-alias");
         let _ = fs::remove_file(&alias_parent);
@@ -115,7 +143,7 @@ mod tests {
         std::os::windows::fs::symlink_dir(&root, &alias_parent).unwrap();
 
         let aliased_candidate = alias_parent.join("doc.md");
-        let result = project_relative_path(&root, &aliased_candidate).unwrap();
+        let result = resolver.project_relative_path(&aliased_candidate).unwrap();
         assert_eq!(result, "doc.md");
 
         fs::remove_file(&alias_parent).unwrap();
@@ -142,9 +170,10 @@ mod tests {
 
         let file = canonical_root.join("notes.md");
         fs::write(&file, "").unwrap();
+        let resolver = ProjectPathResolver::new(&canonical_root).unwrap();
 
         let aliased_candidate = raw_tmp.join(&dir_name).join("notes.md");
-        let result = project_relative_path(&canonical_root, &aliased_candidate).unwrap();
+        let result = resolver.project_relative_path(&aliased_candidate).unwrap();
         assert_eq!(result, "notes.md");
 
         fs::remove_dir_all(&canonical_root).unwrap();
@@ -154,8 +183,9 @@ mod tests {
     fn project_relative_path_nonexistent_file() {
         let root = create_temp_dir("path-nonexist");
         let candidate = root.join("new-file.md");
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let result = project_relative_path(&root, &candidate).unwrap();
+        let result = resolver.project_relative_path(&candidate).unwrap();
         assert_eq!(result, "new-file.md");
 
         fs::remove_dir_all(&root).unwrap();
@@ -165,8 +195,9 @@ mod tests {
     fn project_relative_path_nonexistent_nested() {
         let root = create_temp_dir("path-nested");
         let candidate = root.join("new-dir/deep/file.md");
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let result = project_relative_path(&root, &candidate).unwrap();
+        let result = resolver.project_relative_path(&candidate).unwrap();
         assert_eq!(result, "new-dir/deep/file.md");
 
         fs::remove_dir_all(&root).unwrap();
@@ -178,22 +209,71 @@ mod tests {
         let outside = create_temp_dir("path-outside-other");
         let candidate = outside.join("file.md");
         fs::write(&candidate, "").unwrap();
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let err = project_relative_path(&root, &candidate).expect_err("should reject");
+        let err = resolver
+            .project_relative_path(&candidate)
+            .expect_err("should reject");
         assert!(err.contains("escapes project root"));
 
         fs::remove_dir_all(&root).unwrap();
         fs::remove_dir_all(&outside).unwrap();
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn project_relative_path_rejects_non_utf8_paths() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        let root = create_temp_dir("path-nonutf8");
+        let candidate = root.join(PathBuf::from(OsString::from_vec(vec![
+            b'b', b'a', b'd', 0x80,
+        ])));
+        let resolver = ProjectPathResolver::new(&root).unwrap();
+
+        let err = resolver
+            .project_relative_path(&candidate)
+            .expect_err("non-utf8 paths should be rejected");
+        assert!(err.contains("not valid UTF-8"), "got: {}", err);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn path_to_frontend_string_preserves_literal_backslashes_on_unix() {
+        assert_eq!(
+            path_to_frontend_string(Path::new(r"docs\literal-backslash.md"), "Relative path")
+                .unwrap(),
+            r"docs\literal-backslash.md",
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn file_name_to_frontend_string_rejects_non_utf8_names() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        let err = file_name_to_frontend_string(
+            &OsString::from_vec(vec![b'b', b'a', b'd', 0x80]),
+            "Directory entry name",
+        )
+        .expect_err("non-utf8 file names should fail");
+        assert!(err.contains("Directory entry name is not valid UTF-8"));
+    }
+
     #[test]
     fn resolve_project_path_rejects_dotdot_escape() {
         let root = create_temp_dir("traversal-test");
         fs::create_dir_all(root.join("sub")).unwrap();
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let err = resolve_project_path(&root, "sub/../../etc/passwd")
+        let err = resolver
+            .resolve_project_path("sub/../../etc/passwd")
             .expect_err("should reject traversal");
-        assert!(err.contains("escapes project root"), "got: {err}");
+        assert!(err.contains("escapes project root"), "got: {}", err);
 
         fs::remove_dir_all(&root).unwrap();
     }
@@ -204,8 +284,9 @@ mod tests {
         fs::create_dir_all(root.join("a/b")).unwrap();
         let file = root.join("a/target.md");
         fs::write(&file, "").unwrap();
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let result = resolve_project_path(&root, "a/b/../target.md").unwrap();
+        let result = resolver.resolve_project_path("a/b/../target.md").unwrap();
         assert!(result.ends_with("target.md"));
         assert!(result.starts_with(&root));
 
@@ -252,17 +333,20 @@ mod tests {
         let outside = create_temp_dir("dangling-leaf-outside");
         let dangling_target = outside.join("escaped.md");
         let link = root.join("escape.md");
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
         #[cfg(unix)]
         std::os::unix::fs::symlink(&dangling_target, &link).unwrap();
         #[cfg(windows)]
         std::os::windows::fs::symlink_file(&dangling_target, &link).unwrap();
 
-        let err = resolve_project_path(&root, "escape.md")
+        let err = resolver
+            .resolve_project_path("escape.md")
             .expect_err("dangling symlink leaf should be rejected");
         assert!(
             err.contains("Cannot resolve path 'escape.md'"),
-            "got: {err}"
+            "got: {}",
+            err
         );
 
         fs::remove_dir_all(&root).unwrap();
@@ -275,17 +359,20 @@ mod tests {
         let outside = create_temp_dir("dangling-ancestor-outside");
         let dangling_target = outside.join("missing-dir");
         let link = root.join("escape");
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
         #[cfg(unix)]
         std::os::unix::fs::symlink(&dangling_target, &link).unwrap();
         #[cfg(windows)]
         std::os::windows::fs::symlink_dir(&dangling_target, &link).unwrap();
 
-        let err = resolve_project_path(&root, "escape/note.md")
+        let err = resolver
+            .resolve_project_path("escape/note.md")
             .expect_err("dangling symlink ancestor should be rejected");
         assert!(
             err.contains("Cannot resolve path 'escape/note.md'"),
-            "got: {err}"
+            "got: {}",
+            err
         );
 
         fs::remove_dir_all(&root).unwrap();

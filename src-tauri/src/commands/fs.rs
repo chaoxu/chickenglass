@@ -2,10 +2,13 @@ use std::path::PathBuf;
 
 use tauri::{State, WebviewWindow, command};
 
-use super::context::{CommandSpec, WindowCommandContext, run_command};
 use super::state::{PerfState, ProjectRoot};
+use super::{
+    context::{CommandSpec, WindowCommandContext, run_command},
+    map_err_str,
+};
 pub use crate::services::filesystem::FileEntry;
-use crate::services::{filesystem, path as path_service};
+use crate::services::{filesystem, path::ProjectPathResolver};
 
 const OPEN_FOLDER: CommandSpec =
     CommandSpec::new("tauri.open_folder", "tauri.fs.open_folder", "tauri");
@@ -52,9 +55,7 @@ pub fn open_folder(
         if !path.is_dir() {
             return Err(format!("Not a directory: {}", path.display()));
         }
-        let canonical = path
-            .canonicalize()
-            .map_err(|e| format!("Cannot resolve path: {}", e))?;
+        let canonical = map_err_str!(path.canonicalize(), "Cannot resolve path: {}")?;
         let mut lock = root.0.lock().map_err(|e| e.to_string())?;
         Ok(filesystem::install_project_root(
             &mut lock,
@@ -73,7 +74,8 @@ pub fn read_file(
     path: String,
 ) -> Result<String, String> {
     WindowCommandContext::new(&window, &root, &perf).run(READ_FILE, Some(&path), |project_root| {
-        let resolved = path_service::resolve_existing_path(project_root, &path)?;
+        let paths = ProjectPathResolver::new(project_root)?;
+        let resolved = paths.resolve_existing_path(&path)?;
         filesystem::read_text_file(&resolved, &path)
     })
 }
@@ -87,7 +89,8 @@ pub fn write_file(
     content: String,
 ) -> Result<(), String> {
     WindowCommandContext::new(&window, &root, &perf).run(WRITE_FILE, Some(&path), |project_root| {
-        let resolved = path_service::resolve_existing_path(project_root, &path)?;
+        let paths = ProjectPathResolver::new(project_root)?;
+        let resolved = paths.resolve_existing_path(&path)?;
         filesystem::write_text_file(&resolved, &path, &content)
     })
 }
@@ -101,7 +104,8 @@ pub fn create_file(
     content: Option<String>,
 ) -> Result<(), String> {
     WindowCommandContext::new(&window, &root, &perf).run(CREATE_FILE, Some(&path), |project_root| {
-        let full = path_service::resolve_project_path(project_root, &path)?;
+        let paths = ProjectPathResolver::new(project_root)?;
+        let full = paths.resolve_project_path(&path)?;
         filesystem::create_text_file(&full, &path, content.as_deref())
     })
 }
@@ -117,7 +121,8 @@ pub fn create_directory(
         CREATE_DIRECTORY,
         Some(&path),
         |project_root| {
-            let full = path_service::resolve_project_path(project_root, &path)?;
+            let paths = ProjectPathResolver::new(project_root)?;
+            let full = paths.resolve_project_path(&path)?;
             filesystem::create_directory(&full, &path)
         },
     )
@@ -131,7 +136,8 @@ pub fn file_exists(
     path: String,
 ) -> Result<bool, String> {
     WindowCommandContext::new(&window, &root, &perf).run(FILE_EXISTS, Some(&path), |project_root| {
-        let full = path_service::resolve_project_path(project_root, &path)?;
+        let paths = ProjectPathResolver::new(project_root)?;
+        let full = paths.resolve_project_path(&path)?;
         Ok(full.exists())
     })
 }
@@ -148,8 +154,9 @@ pub fn rename_file(
         RENAME_FILE,
         Some(&old_path),
         |project_root| {
-            let old_resolved = path_service::resolve_existing_path(project_root, &old_path)?;
-            let new_full = path_service::resolve_project_path(project_root, &new_path)?;
+            let paths = ProjectPathResolver::new(project_root)?;
+            let old_resolved = paths.resolve_existing_path(&old_path)?;
+            let new_full = paths.resolve_project_path(&new_path)?;
             filesystem::rename_path(&old_resolved, &old_path, &new_full, &new_path)
         },
     )
@@ -172,7 +179,8 @@ pub fn delete_file(
     path: String,
 ) -> Result<(), String> {
     WindowCommandContext::new(&window, &root, &perf).run(DELETE_FILE, Some(&path), |project_root| {
-        let resolved = path_service::resolve_existing_path(project_root, &path)?;
+        let paths = ProjectPathResolver::new(project_root)?;
+        let resolved = paths.resolve_existing_path(&path)?;
         filesystem::delete_path(&resolved, &path)
     })
 }
@@ -189,7 +197,8 @@ pub fn write_file_binary(
         WRITE_FILE_BINARY,
         Some(&path),
         |project_root| {
-            let full = path_service::resolve_project_path(project_root, &path)?;
+            let paths = ProjectPathResolver::new(project_root)?;
+            let full = paths.resolve_project_path(&path)?;
             filesystem::write_binary_file(&full, &path, &data_base64)
         },
     )
@@ -206,7 +215,8 @@ pub fn read_file_binary(
         READ_FILE_BINARY,
         Some(&path),
         |project_root| {
-            let resolved = path_service::resolve_existing_path(project_root, &path)?;
+            let paths = ProjectPathResolver::new(project_root)?;
+            let resolved = paths.resolve_existing_path(&path)?;
             filesystem::read_binary_file(&resolved, &path)
         },
     )
@@ -223,10 +233,11 @@ pub fn list_children(
         LIST_CHILDREN,
         Some(&path),
         |project_root| {
+            let paths = ProjectPathResolver::new(project_root)?;
             let dir = if path.is_empty() {
                 project_root.to_path_buf()
             } else {
-                path_service::resolve_existing_path(project_root, &path)?
+                paths.resolve_existing_path(&path)?
             };
             filesystem::list_children(&dir, &path)
         },
