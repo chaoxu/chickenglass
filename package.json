@@ -26,6 +26,7 @@
     "build": "pnpm typecheck && vite build && pnpm build:editor",
     "build:editor": "tsc -p tsconfig.editor.json && vite build --config vite.editor.config.ts",
     "lint": "biome lint .",
+    "lint:boundaries": "node scripts/check-plugin-render-boundary.mjs",
     "lint:fix": "biome lint . --write",
     "test": "vitest run",
     "test:focused": "node scripts/focused-vitest.mjs",

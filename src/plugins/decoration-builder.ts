@@ -2,31 +2,20 @@ import type { EditorState, Range } from "@codemirror/state";
 import { Decoration } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
 import type { FencedDivInfo } from "../fenced-block/model";
-import { pluginRenderAdapter } from "../lib/plugin-render-adapter";
-import { decorationHidden } from "../render/render-core";
-import type { PluginRenderAdapter } from "./plugin-render-adapter";
-import {
-  addAttributeTitleDecoration,
-  addHeaderWidgetDecoration,
-  addInlineTitleParenDecorations,
-} from "../render/plugin-adapters/chrome";
-import { addEmbedWidget } from "../render/plugin-adapters/embed";
+import { pushPluginHiddenDecoration } from "./plugin-render-adapter";
 
 /**
  * Fluent helper for accumulating block-render decorations while keeping the
  * underlying push order stable.
  */
 export class DecorationBuilder {
-  constructor(
-    private readonly items: Range<Decoration>[] = [],
-    private readonly adapter: PluginRenderAdapter = pluginRenderAdapter,
-  ) {}
+  constructor(private readonly items: Range<Decoration>[] = []) {}
 
   addHidden(from?: number, to?: number): this {
     if (from === undefined || to === undefined || to <= from) {
       return this;
     }
-    this.items.push(decorationHidden.range(from, to));
+    pushPluginHiddenDecoration(this.items, from, to);
     return this;
   }
 
@@ -51,43 +40,6 @@ export class DecorationBuilder {
       this.addLine(div.closeFenceFrom, CSS.includeFence);
     }
 
-    return this;
-  }
-
-  addHeaderWidget(
-    div: FencedDivInfo,
-    header: string,
-    cursorInside: boolean,
-    macros: Record<string, string>,
-  ): this {
-    addHeaderWidgetDecoration(this.adapter, div, header, cursorInside, macros, this.items);
-    return this;
-  }
-
-  addInlineTitleParens(titleFrom?: number, titleTo?: number): this {
-    if (titleFrom === undefined || titleTo === undefined) {
-      return this;
-    }
-    addInlineTitleParenDecorations(titleFrom, titleTo, this.items);
-    return this;
-  }
-
-  addAttributeTitle(
-    openFenceTo: number,
-    title: string | undefined,
-    macros: Record<string, string>,
-  ): this {
-    if (!title) return this;
-    addAttributeTitleDecoration(openFenceTo, title, macros, this.items);
-    return this;
-  }
-
-  addEmbedWidget(
-    state: EditorState,
-    div: FencedDivInfo,
-    active: boolean,
-  ): this {
-    addEmbedWidget(this.adapter, state, div, this.items, active);
     return this;
   }
 

@@ -924,9 +924,8 @@ describe("#299 — centralized block manifest and CSS registry", () => {
     expect(specialBehaviorHandlers).toContain("specialBehaviorHandlers");
     expect(pluginRenderChrome).toContain("PluginRenderAdapter");
     expect(pluginRenderChrome).toContain("addPluginMarkerReplacement");
-    expect(decorationBuilder).toContain("../render/plugin-adapters/chrome");
-    expect(decorationBuilder).toContain("../render/plugin-adapters/embed");
-    expect(embedPlugin).toContain("../render/plugin-adapters/embed");
+    expect(decorationBuilder).not.toMatch(/from ["']\.\.\/render\//);
+    expect(embedPlugin).not.toMatch(/from ["']\.\.\/render\//);
     expect(embedPlugin).toContain("renderDecorations");
     expect(pluginRender).toContain("renderDecorations?.addBodyDecorations");
     // #374 and #1094: special-behavior dispatch remains centralized for shared
@@ -944,6 +943,7 @@ describe("#1092 — plugin-owned render adapter seam", () => {
     const contractFile = fileText("src/plugins/plugin-render-adapter.ts");
 
     expect(contract.addPluginMarkerReplacement).toBeDefined();
+    expect(contract.pushPluginHiddenDecoration).toBeDefined();
     expect(contract.pushPluginWidgetDecoration).toBeDefined();
     expect(contractFile).toContain("export interface PluginRenderAdapter");
     expect(contractFile).toContain("export interface PluginRenderWidget");
@@ -953,7 +953,6 @@ describe("#1092 — plugin-owned render adapter seam", () => {
   it("routes block chrome and embed helpers through the render adapter", () => {
     const pluginRender = fileText("src/render/plugin-render.ts");
     const chrome = fileText("src/render/plugin-adapters/chrome.ts");
-    const embed = fileText("src/render/plugin-adapters/embed.ts");
     const embedPlugin = fileText("src/plugins/embed-plugin.ts");
     const decorationBuilder = fileText("src/plugins/decoration-builder.ts");
     const bridge = fileText("src/lib/plugin-render-adapter.ts");
@@ -964,7 +963,7 @@ describe("#1092 — plugin-owned render adapter seam", () => {
     expect(fileExists("src/render/plugin-render.ts")).toBe(true);
     expect(fileExists("src/plugins/plugin-render.ts")).toBe(false);
     expect(fileExists("src/render/plugin-adapters/chrome.ts")).toBe(true);
-    expect(fileExists("src/render/plugin-adapters/embed.ts")).toBe(true);
+    expect(fileExists("src/render/plugin-adapters/embed.ts")).toBe(false);
     expect(fileExists("src/plugins/plugin-render-chrome.ts")).toBe(false);
     expect(fileExists("src/plugins/plugin-render-embed.ts")).toBe(false);
     expect(renderAdapter).toContain("const codeMirrorPluginRenderAdapter: PluginRenderAdapter");
@@ -976,22 +975,20 @@ describe("#1092 — plugin-owned render adapter seam", () => {
     expect(pluginsIndex).not.toContain("blockRenderPlugin");
     expect(pluginRender).toContain("pluginRenderAdapter");
     expect(pluginRender).toContain("./plugin-adapters/chrome");
-    expect(decorationBuilder).toContain("../render/plugin-adapters/chrome");
-    expect(decorationBuilder).toContain("../render/plugin-adapters/embed");
-    expect(embedPlugin).toContain("../render/plugin-adapters/embed");
+    expect(decorationBuilder).toContain("pushPluginHiddenDecoration");
+    expect(decorationBuilder).not.toMatch(/from ["']\.\.\/render\//);
+    expect(embedPlugin).toContain("pushPluginWidgetDecoration");
+    expect(embedPlugin).toContain("adapter.createEmbedWidget");
+    expect(embedPlugin).not.toMatch(/from ["']\.\.\/render\//);
     expect(chrome).toContain("PluginRenderAdapter");
     expect(chrome).toContain("adapter.createHeaderWidget");
-    expect(embed).toContain("PluginRenderAdapter");
-    expect(embed).toContain("adapter.createEmbedWidget");
     expect(pluginRender).not.toContain("../render/plugin-render-adapter");
     expect(pluginRender).not.toContain("./plugin-render-chrome");
     expect(decorationBuilder).not.toContain("./plugin-render-chrome");
     expect(decorationBuilder).not.toContain("./plugin-render-embed");
     expect(embedPlugin).not.toContain("./plugin-render-embed");
     expect(chrome).toContain("../../plugins/plugin-render-adapter");
-    expect(embed).toContain("../../plugins/plugin-render-adapter");
     expect(chrome).not.toContain("../plugin-render-adapter");
-    expect(embed).not.toContain("../plugin-render-adapter");
   });
 });
 
