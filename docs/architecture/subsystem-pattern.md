@@ -131,6 +131,37 @@ Current owner rules:
 
 UI components should consume those owners, not redefine the same concept.
 
+## Neutral owner for cross-subsystem state
+
+If a selector, type, or model is used by more than one subsystem, it no
+longer belongs inside one subsystem's internal module. `src/state/` is the
+neutral owner for shared editor/document state.
+
+Use `src/state/` for:
+
+- CM6 `StateField`s and helpers consumed by more than one subsystem
+- selectors and typed models that more than one subsystem needs to reason
+  about
+- document state that must be shared without creating renderer -> plugin,
+  adapter -> effect, or peer-subsystem imports
+
+Import direction rule:
+
+- subsystems may consume `src/state/`
+- `src/state/` may compose lower-level semantics/model modules
+- a subsystem must not define state for another subsystem or make peers
+  import from its internal module just to reach shared state
+
+Concrete Epic 2 moves already in the repo:
+
+- `src/state/document-analysis.ts` moved semantic document analysis to a
+  neutral owner used by editor, render, citations, and semantics helpers
+- `src/state/code-block-structure.ts` moved fenced-code structure out of
+  renderer/protection ownership into a shared state module
+- `src/state/plugin-registry.ts` made plugin registry state consumable from
+  editor, render, semantics, and plugins without leaving CM6 ownership inside
+  `src/plugins/`
+
 ## Subsystem checklist
 
 Before adding or refactoring a complex feature, ask:
@@ -163,7 +194,10 @@ Avoid:
 
 ## Current hotspot map
 
-These are the remaining areas that should be judged against this pattern:
+These are the remaining areas that should be judged against this pattern. When
+they need selectors/types/models shared across subsystem boundaries, move that
+state into `src/state/`, the neutral owner, instead of parking it under one of
+the consumers:
 
 - search
 - tabs/session
