@@ -4,7 +4,7 @@ import type { EditorView } from "@codemirror/view";
 import { markdownExtensions } from "../parser";
 import { fenceProtectionExtension } from "../plugins/fence-protection";
 import { blockCounterField } from "../state/block-counter";
-import { createPluginRegistryField } from "../plugins/plugin-registry";
+import { createPluginRegistryField } from "../state/plugin-registry";
 import { _blockDecorationFieldForTest as blockDecorationField } from "../plugins/plugin-render";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { editorFocusField, mathMacrosField } from "../render/render-core";

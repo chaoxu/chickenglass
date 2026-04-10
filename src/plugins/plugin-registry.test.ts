@@ -18,9 +18,8 @@ import {
   getRegisteredNames,
   pluginFromConfig,
   applyFrontmatterBlocks,
-  pluginRegistryField,
-  createPluginRegistryField,
 } from "./plugin-registry";
+import { createPluginRegistryField, pluginRegistryField } from "../state/plugin-registry";
 
 describe("createRegistryState", () => {
   it("creates an empty registry", () => {

@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { markdownExtensions } from "../parser";
 import {
-  createPluginRegistryField,
   defaultPlugins,
 } from "../plugins";
 import { blockCounterField } from "../state/block-counter";
+import { createPluginRegistryField } from "../state/plugin-registry";
 import {
   buildDocumentLabelGraph,
   documentLabelGraphField,

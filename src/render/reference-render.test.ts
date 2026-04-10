@@ -6,8 +6,11 @@ import { fencedDiv } from "../parser/fenced-div";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { frontmatterField } from "../editor/frontmatter-state";
-import { createPluginRegistryField, pluginRegistryField } from "../plugins/plugin-registry";
 import { blockCounterField } from "../state/block-counter";
+import {
+  createPluginRegistryField,
+  pluginRegistryField,
+} from "../state/plugin-registry";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import type { BlockPlugin } from "../plugins/plugin-types";
 import type { CslJsonItem } from "../citations/bibtex-parser";

@@ -40,7 +40,6 @@ import {
   type MixedClusterPart,
 } from "./crossref-render";
 import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
-import { pluginRegistryField } from "../plugins/plugin-registry";
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
@@ -52,6 +51,7 @@ import {
 } from "../semantics/document";
 import { blockCounterField } from "../state/block-counter";
 import { bibDataField } from "../state/bib-data";
+import { pluginRegistryField } from "../state/plugin-registry";
 import {
   type DirtyRange,
   dirtyRangesFromChanges,

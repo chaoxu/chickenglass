@@ -47,6 +47,7 @@ import {
   type FenceChangeSpec,
   type FenceRange,
 } from "./fence-protection-pipeline";
+import { pluginRegistryField } from "../state/plugin-registry";
 import {
   buildClosingFenceAtomicRanges,
   buildClosingFenceRanges,
@@ -66,7 +67,6 @@ import {
 import { createPairedMathEntry } from "./fence-math-entry";
 import {
   type PluginRegistryState,
-  pluginRegistryField,
   getPluginOrFallback,
 } from "./plugin-registry";
 import {

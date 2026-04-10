@@ -50,8 +50,9 @@ import {
   type LocalMediaDependencies,
 } from "./media-preview";
 import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
-import { getPlugin, pluginRegistryField } from "../plugins/plugin-registry";
 import { type BibStore, bibDataField } from "../state/bib-data";
+import { pluginRegistryField } from "../state/plugin-registry";
+import { getPlugin } from "../plugins/plugin-registry";
 import { findRenderedReference } from "./reference-targeting";
 
 // ── Singleton tooltip element ───────────────────────────────────────────────

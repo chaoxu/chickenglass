@@ -5,12 +5,12 @@ import {
   computeBlockNumbers,
   type BlockCounterState,
 } from "../plugins/block-counter";
-import { pluginRegistryField } from "../plugins/plugin-registry";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
 } from "../semantics/codemirror-source";
 import { frontmatterField } from "./frontmatter-state";
+import { pluginRegistryField } from "./plugin-registry";
 
 export type {
   BlockCounterState,

@@ -19,11 +19,11 @@ import {
 import { searchHighlightPlugin } from "../render/search-highlight";
 import { referenceRenderPlugin } from "../render/reference-render";
 import {
-  createPluginRegistryField,
   blockRenderPlugin,
   defaultPlugins,
 } from "../plugins";
 import { blockCounterField } from "../state/block-counter";
+import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import { bibliographyPlugin, bibDataField } from "../citations";
 import { pdfPreviewField } from "../render/pdf-preview-cache";
