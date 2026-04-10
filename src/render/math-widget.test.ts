@@ -21,6 +21,13 @@ describe("MathWidget (inline)", () => {
     expect(el.querySelector(".katex")).not.toBeNull();
   });
 
+  it("keeps inline widget DOM on the lightweight KaTeX HTML path", () => {
+    const widget = new MathWidget("x^2", "$x^2$", false);
+    const el = widget.toDOM();
+    expect(el.querySelector(".katex-html")).not.toBeNull();
+    expect(el.querySelector(".katex-mathml")).toBeNull();
+  });
+
   it("dispatches to updated position after updateSourceRange", () => {
     const focus = vi.fn();
     const dispatch = vi.fn();
@@ -42,6 +49,10 @@ describe("MathWidget (inline)", () => {
 });
 
 describe("MathWidget (display)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("creates a div with cf-math-display class", () => {
     const widget = new MathWidget("x^2", "$$x^2$$", true);
     const el = widget.toDOM();
@@ -54,6 +65,18 @@ describe("MathWidget (display)", () => {
     const el = widget.toDOM();
     expect(el.classList.contains(CSS.mathDisplayNumbered)).toBe(true);
     expect(el.querySelector(`.${CSS.mathDisplayNumber}`)?.textContent).toBe("(7)");
+  });
+
+  it("reuses cached display DOM across equal widget instances", () => {
+    const first = new MathWidget("x^2", "$$x^2$$", true);
+    expect(first.toDOM().querySelector(".katex-display")).not.toBeNull();
+
+    vi.spyOn(katex, "renderToString").mockImplementation(() => {
+      throw new Error("display cache miss");
+    });
+
+    const second = new MathWidget("x^2", "$$x^2$$", true);
+    expect(second.toDOM().querySelector(".katex-display")).not.toBeNull();
   });
 
   it("only reveals source when clicking the rendered display math content", () => {
@@ -145,7 +168,7 @@ describe("renderKatex", () => {
   });
 
   it("reuses cached KaTeX HTML across widget and inline renderers", () => {
-    renderKatexToHtml("x^2", false, {});
+    renderKatexToHtml("x^2", false, {}, "html");
     vi.spyOn(katex, "renderToString").mockImplementation(() => {
       throw new Error("cache miss");
     });

@@ -5,7 +5,6 @@ import type {
   OrderedFootnoteEntry,
 } from "../../document";
 import {
-  mapRangeObject,
   replaceOverlappingRanges,
   rangesOverlap,
   type RangeLike,
@@ -37,19 +36,30 @@ export function mapFootnoteReference(
   value: FootnoteReference,
   changes: PositionMapper,
 ): FootnoteReference {
-  return mapRangeObject(value, changes);
+  const from = changes.mapPos(value.from, 1);
+  const to = Math.max(from, changes.mapPos(value.to, -1));
+  if (from === value.from && to === value.to) {
+    return value;
+  }
+  return {
+    id: value.id,
+    from,
+    to,
+  };
 }
 
 export function mapFootnoteDefinition(
   value: FootnoteDefinition,
   changes: PositionMapper,
 ): FootnoteDefinition {
-  const mappedRange = mapRangeObject(value, changes);
+  const from = changes.mapPos(value.from, 1);
+  const to = Math.max(from, changes.mapPos(value.to, -1));
   const labelFrom = changes.mapPos(value.labelFrom, 1);
   const labelTo = Math.max(labelFrom, changes.mapPos(value.labelTo, -1));
 
   if (
-    mappedRange === value
+    from === value.from
+    && to === value.to
     && labelFrom === value.labelFrom
     && labelTo === value.labelTo
   ) {
@@ -57,7 +67,10 @@ export function mapFootnoteDefinition(
   }
 
   return {
-    ...mappedRange,
+    id: value.id,
+    from,
+    to,
+    content: value.content,
     labelFrom,
     labelTo,
   };

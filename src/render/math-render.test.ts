@@ -19,6 +19,7 @@ import {
   createStructureEditTargetAt,
   setStructureEditTargetEffect,
 } from "../editor/structure-edit-state";
+import { setInlineMathViewportRangesEffect } from "./math-inline-viewport";
 
 /** Count only widget (replace) decorations, ignoring mark decorations like cf-math-source. */
 function countWidgets(ranges: ReturnType<typeof collectMathRanges>): number {
@@ -825,6 +826,44 @@ describe("math decoration invalidation", () => {
       expect(widgetSourceMap.get(widgetEl)?.sourceTo).toBe(12);
     });
   });
+
+  it("limits initial inline math widgets to the selection band while keeping display math rendered", () => {
+    const inlineLines = Array.from(
+      { length: 20 },
+      (_, index) => `line ${index + 1} $x_${index + 1}$`,
+    );
+    const doc = [...inlineLines, "", "$$z$$", ""].join("\n");
+    const state = createMathRenderState(doc, 0);
+
+    const widgetSpecs = getDecorationSpecs(state.field(mathDecorationField))
+      .filter((spec) => spec.widgetClass === "MathWidget");
+
+    expect(widgetSpecs.filter((spec) => spec.block === true)).toHaveLength(1);
+    expect(widgetSpecs.filter((spec) => spec.block !== true)).toHaveLength(9);
+  });
+
+  it("rebuilds when the inline math viewport band changes", () => {
+    const inlineLines = Array.from(
+      { length: 20 },
+      (_, index) => `line ${index + 1} $x_${index + 1}$`,
+    );
+    const doc = inlineLines.join("\n");
+    const state = createMathRenderState(doc, 0);
+    const before = getDecorationSpecs(state.field(mathDecorationField))
+      .filter((spec) => spec.widgetClass === "MathWidget");
+
+    const from = state.doc.line(15).from;
+    const to = state.doc.line(20).to;
+    const afterState = state.update({
+      effects: setInlineMathViewportRangesEffect.of([{ from, to }]),
+    }).state;
+    const after = getDecorationSpecs(afterState.field(mathDecorationField))
+      .filter((spec) => spec.widgetClass === "MathWidget");
+
+    expect(afterState.field(mathDecorationField)).not.toBe(state.field(mathDecorationField));
+    expect(before).toHaveLength(9);
+    expect(after).toHaveLength(6);
+  });
 });
 
 describe("live math widget metadata", () => {
@@ -1201,7 +1240,7 @@ describe("shared KaTeX HTML cache", () => {
   });
 
   it("reuses cached KaTeX HTML across widget and inline renderers", () => {
-    renderKatexToHtml("x^2", false, {});
+    renderKatexToHtml("x^2", false, {}, "html");
     vi.spyOn(katex, "renderToString").mockImplementation(() => {
       throw new Error("cache miss");
     });

@@ -1,7 +1,6 @@
 import type { HeadingSemantics } from "../../document";
 import {
   firstOverlapIndex,
-  mapRangeObject,
   rangesOverlap,
   replaceOverlappingRanges,
   type RangeLike,
@@ -169,7 +168,20 @@ export function mapHeadingSemantics(
   value: HeadingSemantics,
   changes: PositionMapper,
 ): HeadingSemantics {
-  return mapRangeObject(value, changes);
+  const from = changes.mapPos(value.from, 1);
+  const to = Math.max(from, changes.mapPos(value.to, -1));
+  if (from === value.from && to === value.to) {
+    return value;
+  }
+  return {
+    from,
+    to,
+    level: value.level,
+    text: value.text,
+    id: value.id,
+    number: value.number,
+    unnumbered: value.unnumbered,
+  };
 }
 
 export function createHeadingSlice(

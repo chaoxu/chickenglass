@@ -24,9 +24,11 @@ import {
   observeBlockWidgetHeight,
   type BlockWidgetHeightBinding,
 } from "./block-widget-height";
+import { cloneRenderedHTMLElement } from "./widget-core";
 
 const KATEX_STYLE_ID = "cf-katex-styles";
 const displayMathHeightCache = new Map<string, number>();
+const displayMathDomCache = new Map<string, HTMLElement>();
 
 function ensureKatexStyles(): void {
   if (typeof document === "undefined") return;
@@ -42,6 +44,7 @@ ensureKatexStyles();
 
 export function clearKatexCache(): void {
   clearKatexHtmlCache();
+  displayMathDomCache.clear();
 }
 
 /**
@@ -55,7 +58,15 @@ export function renderKatex(
   macros: Record<string, string>,
 ): void {
   try {
-    element.innerHTML = renderKatexToHtml(latex, isDisplay, macros);
+    // Inline widgets dominate large-doc mounted DOM. Keep display math on the
+    // full KaTeX output path, but drop the duplicated MathML subtree for inline
+    // widgets because the wrapper already provides an accessible label.
+    element.innerHTML = renderKatexToHtml(
+      latex,
+      isDisplay,
+      macros,
+      isDisplay ? "htmlAndMathml" : "html",
+    );
   } catch (err: unknown) {
     element.className = "cf-math-error";
     element.setAttribute("role", "alert");
@@ -116,6 +127,7 @@ export class MathWidget extends ShellMacroAwareWidget {
     resizeMeasureFrame: null,
   };
   private readonly displayMeasurementKey: string;
+  private readonly displayDomCacheKey: string;
 
   constructor(
     private readonly latex: string,
@@ -127,6 +139,12 @@ export class MathWidget extends ShellMacroAwareWidget {
   ) {
     super(macros);
     this.displayMeasurementKey = [
+      this.raw,
+      this.macrosKey,
+      this.equationNumber === undefined ? "" : String(this.equationNumber),
+    ].join("\u0001");
+    this.displayDomCacheKey = [
+      this.latex,
       this.raw,
       this.macrosKey,
       this.equationNumber === undefined ? "" : String(this.equationNumber),
@@ -214,21 +232,35 @@ export class MathWidget extends ShellMacroAwareWidget {
     });
   }
 
+  private createSharedDisplayDOM(): HTMLElement {
+    const cached = displayMathDomCache.get(this.displayDomCacheKey);
+    if (cached) {
+      return cloneRenderedHTMLElement(cached);
+    }
+
+    const el = document.createElement("div");
+    el.className = CSS.mathDisplay;
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", this.latex);
+    const content = document.createElement("div");
+    renderKatex(content, this.latex, this.isDisplay, this.macros);
+    content.className = CSS.mathDisplayContent;
+    el.appendChild(content);
+    this.syncDisplayLayout(el);
+    this.syncDisplayEquationNumber(el);
+    displayMathDomCache.set(this.displayDomCacheKey, cloneRenderedHTMLElement(el));
+    return el;
+  }
+
   createDOM(): HTMLElement {
     return this.createCachedDOM(() => {
-      const el = document.createElement(this.isDisplay ? "div" : "span");
-      el.className = this.isDisplay ? CSS.mathDisplay : CSS.mathInline;
+      if (this.isDisplay) {
+        return this.createSharedDisplayDOM();
+      }
+      const el = document.createElement("span");
+      el.className = CSS.mathInline;
       el.setAttribute("role", "img");
       el.setAttribute("aria-label", this.latex);
-      if (this.isDisplay) {
-        const content = document.createElement("div");
-        renderKatex(content, this.latex, this.isDisplay, this.macros);
-        content.className = CSS.mathDisplayContent;
-        el.appendChild(content);
-        this.syncDisplayLayout(el);
-        this.syncDisplayEquationNumber(el);
-        return el;
-      }
       renderKatex(el, this.latex, this.isDisplay, this.macros);
       return el;
     });

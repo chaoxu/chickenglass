@@ -44,7 +44,6 @@ import {
 } from "./slices/reference-slice";
 import {
   lowerBoundByTo,
-  mapRangeObject,
   replaceOverlappingRanges,
   type PositionMapper,
 } from "./merge-utils";
@@ -381,7 +380,11 @@ function mapExcludedRanges(
 ): readonly ExcludedRange[] {
   let changed = false;
   const mapped = values.map((value) => {
-    const next = mapRangeObject(value, changes);
+    const from = changes.mapPos(value.from, 1);
+    const to = Math.max(from, changes.mapPos(value.to, -1));
+    const next = from === value.from && to === value.to
+      ? value
+      : { from, to };
     if (next !== value) changed = true;
     return next;
   });
@@ -567,7 +570,9 @@ export function updateDocumentAnalysis(
       ...dirtyExtractions,
       ...mathOverhangRanges.map(range => ({
         window: { fromNew: range.from, toNew: range.to },
-        structural: extractStructuralWindow(doc, tree, range),
+        structural: extractStructuralWindow(doc, tree, range, {
+          includeNarrativeRefs: false,
+        }),
       })),
     ];
   const equationSlice = mergeEquationSlice(

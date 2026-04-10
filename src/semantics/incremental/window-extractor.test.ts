@@ -115,4 +115,28 @@ describe("extractStructuralWindow", () => {
       equations.map(({ number: _number, ...equation }) => equation),
     );
   });
+
+  it("can skip narrative reference extraction for incremental callers", () => {
+    const doc = "See @thm-main and [@eq:one].\n";
+    const tree = parser.parse(doc);
+    const src = stringTextSource(doc);
+
+    const structural = extractStructuralWindow(src, tree, {
+      from: 0,
+      to: doc.length,
+    }, {
+      includeNarrativeRefs: false,
+    });
+
+    expect(structural.narrativeRefs).toEqual([]);
+    expect(structural.bracketedRefs).toEqual([
+      {
+        from: doc.indexOf("[@eq:one]"),
+        to: doc.indexOf("[@eq:one]") + "[@eq:one]".length,
+        bracketed: true,
+        ids: ["eq:one"],
+        locators: [undefined],
+      },
+    ]);
+  });
 });

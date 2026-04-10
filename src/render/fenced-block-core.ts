@@ -167,6 +167,7 @@ export function createFencedBlockDecorationField(
   options?: {
     extraShouldRebuild?: (tr: Transaction) => boolean;
     selectionShouldRebuild?: (tr: Transaction) => boolean;
+    rebuildOnTreeChange?: boolean;
   },
 ): StateField<DecorationSet> {
   return createDecorationsField(
@@ -180,6 +181,7 @@ export function createFencedBlockDecorationField(
         selectionNeedsRebuild ||
         tr.effects.some((e) => e.is(focusEffect)) ||
         (
+          options?.rebuildOnTreeChange !== false &&
           syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
           syntaxTreeAvailable(tr.state, tr.state.doc.length)
         ) ||

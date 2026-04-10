@@ -92,7 +92,12 @@ export const mathPrewarmPlugin: Extension = ViewPlugin.fromClass(
           }
           const region = regions[index++];
           try {
-            renderKatexToHtml(region.latex, region.isDisplay, macros);
+            renderKatexToHtml(
+              region.latex,
+              region.isDisplay,
+              macros,
+              region.isDisplay ? "htmlAndMathml" : "html",
+            );
           } catch {
             // KaTeX parse error — skip; the widget will show the error on render.
           }

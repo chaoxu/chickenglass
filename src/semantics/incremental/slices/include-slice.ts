@@ -4,7 +4,6 @@ import type {
   TextSource,
 } from "../../document";
 import {
-  mapRangeObject,
   type PositionMapper,
 } from "../merge-utils";
 
@@ -88,7 +87,18 @@ export function deriveIncludeSlice(
   changes?: PositionMapper,
 ): readonly IncludeSemantics[] {
   const mappedPrevious = changes
-    ? previous.map((include) => mapRangeObject(include, changes))
+    ? previous.map((include) => {
+        const from = changes.mapPos(include.from, 1);
+        const to = Math.max(from, changes.mapPos(include.to, -1));
+        if (from === include.from && to === include.to) {
+          return include;
+        }
+        return {
+          from,
+          to,
+          path: include.path,
+        };
+      })
     : previous;
   const previousByFrom = new Map(mappedPrevious.map((include) => [include.from, include]));
   const includes: IncludeSemantics[] = [];

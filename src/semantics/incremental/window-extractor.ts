@@ -1,6 +1,6 @@
 import type { Tree } from "@lezer/common";
 import { NODE } from "../../constants/node-types";
-import type { ReferenceSemantics, TextSource } from "../document";
+import type { FencedDivSemantics, MathSemantics, ReferenceSemantics, TextSource } from "../document";
 import { NARRATIVE_REFERENCE_RE } from "../reference-parts";
 import {
   collectFencedDiv,
@@ -23,6 +23,15 @@ export type {
   StructuralWindowExtraction,
 } from "./window-collectors";
 
+export interface FencedDivExpansionExtraction {
+  readonly fencedDivs: readonly FencedDivSemantics[];
+  readonly mathRegions: readonly MathSemantics[];
+}
+
+interface StructuralWindowExtractOptions {
+  readonly includeNarrativeRefs?: boolean;
+}
+
 const ATX_HEADING_RE = /^ATXHeading(\d)$/;
 
 function normalizeWindow(
@@ -32,6 +41,19 @@ function normalizeWindow(
   const from = Math.max(0, Math.min(window?.from ?? 0, doc.length));
   const to = Math.max(from, Math.min(window?.to ?? doc.length, doc.length));
   return { from, to };
+}
+
+function shouldDescendIntoStructuralNode(name: string): boolean {
+  switch (name) {
+    case NODE.InlineCode:
+    case NODE.InlineMath:
+    case NODE.DisplayMath:
+    case NODE.Link:
+    case NODE.FootnoteRef:
+      return false;
+    default:
+      return true;
+  }
 }
 
 /**
@@ -50,6 +72,9 @@ export function collectNarrativeRefsInWindow(
 ): void {
   const prefixLen = range.from > 0 ? 1 : 0;
   const text = doc.slice(range.from - prefixLen, range.to);
+  if (text.indexOf("@", prefixLen) === -1) {
+    return;
+  }
 
   NARRATIVE_REFERENCE_RE.lastIndex = prefixLen;
   let match: RegExpExecArray | null;
@@ -144,6 +169,7 @@ export function computeNarrativeExtractionRange(
   const c = tree.cursor();
   scan: for (;;) {
     if (c.from <= range.to && c.to >= range.from) {
+      const name = c.name;
       switch (c.name) {
         case NODE.InlineCode:
         case NODE.InlineMath:
@@ -151,7 +177,7 @@ export function computeNarrativeExtractionRange(
           excludedRanges.push({ from: c.from, to: c.to });
           break;
       }
-      if (c.firstChild()) continue;
+      if (shouldDescendIntoStructuralNode(name) && c.firstChild()) continue;
     }
     for (;;) {
       if (c.nextSibling()) break;
@@ -167,6 +193,7 @@ export function collectStructuralWindow(
   tree: Tree,
   result: StructuralWindowExtraction,
   window?: StructuralWindow,
+  options?: StructuralWindowExtractOptions,
 ): StructuralWindowExtraction {
   const range = normalizeWindow(doc, window);
 
@@ -174,6 +201,7 @@ export function collectStructuralWindow(
   scan: for (;;) {
     if (c.from <= range.to && c.to >= range.from) {
       const name = c.name;
+      let shouldDescend = shouldDescendIntoStructuralNode(name);
 
       const headingMatch = ATX_HEADING_RE.exec(name);
       if (headingMatch) {
@@ -192,16 +220,19 @@ export function collectStructuralWindow(
           case NODE.InlineMath:
           case NODE.DisplayMath:
             collectMath(doc, c, result);
+            shouldDescend = false;
             break;
           case NODE.InlineCode:
             result.excludedRanges.push({ from: c.from, to: c.to });
+            shouldDescend = false;
             break;
           case NODE.Link:
             collectLink(doc, c, result);
+            shouldDescend = false;
             break;
         }
       }
-      if (c.firstChild()) continue;
+      if (shouldDescend && c.firstChild()) continue;
     }
     for (;;) {
       if (c.nextSibling()) break;
@@ -209,7 +240,9 @@ export function collectStructuralWindow(
     }
   }
 
-  collectNarrativeRefsInWindow(doc, result.excludedRanges, range, result.narrativeRefs);
+  if (options?.includeNarrativeRefs !== false) {
+    collectNarrativeRefsInWindow(doc, result.excludedRanges, range, result.narrativeRefs);
+  }
 
   return result;
 }
@@ -218,6 +251,49 @@ export function extractStructuralWindow(
   doc: TextSource,
   tree: Tree,
   window?: StructuralWindow,
+  options?: StructuralWindowExtractOptions,
 ): StructuralWindowExtraction {
-  return collectStructuralWindow(doc, tree, createStructuralWindowExtraction(), window);
+  return collectStructuralWindow(
+    doc,
+    tree,
+    createStructuralWindowExtraction(),
+    window,
+    options,
+  );
+}
+
+export function extractFencedDivExpansionWindow(
+  doc: TextSource,
+  tree: Tree,
+  window?: StructuralWindow,
+): FencedDivExpansionExtraction {
+  const range = normalizeWindow(doc, window);
+  const structural = createStructuralWindowExtraction();
+
+  const c = tree.cursor();
+  scan: for (;;) {
+    if (c.from <= range.to && c.to >= range.from) {
+      let shouldDescend = true;
+      switch (c.name) {
+        case NODE.FencedDiv:
+          collectFencedDiv(doc, c, structural);
+          break;
+        case NODE.InlineMath:
+        case NODE.DisplayMath:
+          collectMath(doc, c, structural);
+          shouldDescend = false;
+          break;
+      }
+      if (shouldDescend && c.firstChild()) continue;
+    }
+    for (;;) {
+      if (c.nextSibling()) break;
+      if (!c.parent()) break scan;
+    }
+  }
+
+  return {
+    fencedDivs: structural.fencedDivs,
+    mathRegions: structural.mathRegions,
+  };
 }

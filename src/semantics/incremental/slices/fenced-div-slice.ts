@@ -6,6 +6,7 @@ import {
 } from "../merge-utils";
 import type { DirtyWindow } from "../types";
 import {
+  extractFencedDivExpansionWindow,
   extractStructuralWindow,
   type StructuralWindowExtraction,
 } from "../window-extractor";
@@ -177,18 +178,18 @@ export function extractDirtyFencedDivWindows(
       range = expandRange(range, oldRange.from, oldRange.to);
     }
 
-    let structural = extractStructuralWindow(doc, tree, range);
+    let expansion = extractFencedDivExpansionWindow(doc, tree, range);
     while (true) {
       let nextRange = range;
-      if (structural.fencedDivs.length > 0) {
-        const structuralSpan = spanRange(structural.fencedDivs, {
+      if (expansion.fencedDivs.length > 0) {
+        const structuralSpan = spanRange(expansion.fencedDivs, {
           start: 0,
-          end: structural.fencedDivs.length,
+          end: expansion.fencedDivs.length,
         });
         nextRange = expandRange(nextRange, structuralSpan.from, structuralSpan.to);
       }
 
-      for (const math of structural.mathRegions) {
+      for (const math of expansion.mathRegions) {
         if (math.isDisplay && math.from < nextRange.to && nextRange.from < math.to) {
           nextRange = expandRange(nextRange, math.from, math.to);
         }
@@ -204,12 +205,14 @@ export function extractDirtyFencedDivWindows(
         return {
           window,
           range,
-          structural,
+          structural: extractStructuralWindow(doc, tree, range, {
+            includeNarrativeRefs: false,
+          }),
         };
       }
 
       range = nextRange;
-      structural = extractStructuralWindow(doc, tree, range);
+      expansion = extractFencedDivExpansionWindow(doc, tree, range);
     }
   });
 }

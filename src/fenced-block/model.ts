@@ -37,6 +37,8 @@ interface FencedDivGeometryInfo extends FencedBlockInfo {
   readonly titleTo?: number;
 }
 
+const fencedDivInfoCache = new WeakMap<object, FencedDivInfo[]>();
+
 function mapSentinelPos(
   pos: number,
   changes: FencedBlockPositionMapper,
@@ -61,12 +63,16 @@ function mapOptionalPos(
 export function collectFencedDivs(state: EditorState): FencedDivInfo[] {
   const semantics = state.field(documentSemanticsField, false);
   if (!semantics) return [];
-  return semantics.fencedDivs
+  const cached = fencedDivInfoCache.get(semantics as object);
+  if (cached) return cached;
+  const collected = semantics.fencedDivs
     .filter((div): div is FencedDivSemantics & { primaryClass: string } => Boolean(div.primaryClass))
     .map((div) => ({
       ...div,
       className: div.primaryClass,
     }));
+  fencedDivInfoCache.set(semantics as object, collected);
+  return collected;
 }
 
 /**

@@ -1,7 +1,6 @@
 import type { EquationSemantics } from "../../document";
 import {
   firstOverlapIndex,
-  mapRangeObject,
   rangesOverlap,
   replaceOverlappingRanges,
   type PositionMapper,
@@ -33,12 +32,14 @@ export function mapEquationSemantics(
   value: EquationSemantics,
   changes: PositionMapper,
 ): EquationSemantics {
-  const mappedRange = mapRangeObject(value, changes);
+  const from = changes.mapPos(value.from, 1);
+  const to = Math.max(from, changes.mapPos(value.to, -1));
   const labelFrom = changes.mapPos(value.labelFrom, 1);
   const labelTo = Math.max(labelFrom, changes.mapPos(value.labelTo, -1));
 
   if (
-    mappedRange === value
+    from === value.from
+    && to === value.to
     && labelFrom === value.labelFrom
     && labelTo === value.labelTo
   ) {
@@ -46,9 +47,13 @@ export function mapEquationSemantics(
   }
 
   return {
-    ...mappedRange,
+    from,
+    to,
+    id: value.id,
     labelFrom,
     labelTo,
+    latex: value.latex,
+    number: value.number,
   };
 }
 

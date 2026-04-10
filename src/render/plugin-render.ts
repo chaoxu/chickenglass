@@ -39,7 +39,6 @@ import {
 } from "./render-core";
 import {
   documentSemanticsField,
-  getDocumentAnalysisSliceRevision,
 } from "../state/document-analysis";
 import { type BlockCounterState, blockCounterField } from "../state/block-counter";
 import { pluginRegistryField } from "../state/plugin-registry";
@@ -69,6 +68,43 @@ function sameNumberSet(
     if (!after.has(value)) return false;
   }
   return true;
+}
+
+function sameStringArray(
+  before: readonly string[] | null,
+  after: readonly string[] | null,
+): boolean {
+  if (before === after) return true;
+  if (!before || !after) return before === after;
+  if (before.length !== after.length) return false;
+  for (let index = 0; index < before.length; index += 1) {
+    if (before[index] !== after[index]) return false;
+  }
+  return true;
+}
+
+function getFencedDivRenderSignature(
+  state: EditorState,
+): readonly string[] | null {
+  const semantics = state.field(documentSemanticsField, false);
+  if (!semantics) return null;
+  return semantics.fencedDivs.map((div) => [
+    div.primaryClass ?? "",
+    div.classes.join("\u0001"),
+    div.id ?? "",
+    div.title ?? "",
+    div.singleLine ? "1" : "0",
+    div.isSelfClosing ? "1" : "0",
+    div.closeFenceFrom < 0 ? "0" : "1",
+  ].join("\u0002"));
+}
+
+function getBlockCounterSignature(state: EditorState): string {
+  const counters = state.field(blockCounterField, false);
+  if (!counters) return "";
+  return counters.blocks
+    .map((block) => `${block.type}\u0000${block.id ?? ""}\u0000${block.number}`)
+    .join("\u0001");
 }
 /**
  * Build decorations for all fenced divs using the plugin registry.
@@ -285,20 +321,20 @@ const activeShellStartsChanged = createChangeChecker({
   equals: sameNumberSet,
 });
 
-const fencedDivsRevisionChanged = createChangeChecker((state) => {
-  const semantics = state.field(documentSemanticsField, false);
-  return semantics ? getDocumentAnalysisSliceRevision(semantics, "fencedDivs") : null;
+const fencedDivRenderSignatureChanged = createChangeChecker({
+  get: getFencedDivRenderSignature,
+  equals: sameStringArray,
 });
 
 const blockDecorationDependencyChanged = createChangeChecker(
   (state) => state.field(pluginRegistryField, false),
-  (state) => state.field(blockCounterField, false),
+  getBlockCounterSignature,
   (state) => state.field(mathMacrosField, false),
 );
 
 function blockDecorationInputsChanged(tr: Transaction): boolean {
   return hasStructureEditEffect(tr)
-    || fencedDivsRevisionChanged(tr)
+    || fencedDivRenderSignatureChanged(tr)
     || blockDecorationDependencyChanged(tr);
 }
 
@@ -311,6 +347,7 @@ function blockDecorationInputsChanged(tr: Transaction): boolean {
 const blockDecorationField = createFencedBlockDecorationField(buildBlockDecorations, {
   extraShouldRebuild: blockDecorationInputsChanged,
   selectionShouldRebuild: activeShellStartsChanged,
+  rebuildOnTreeChange: false,
 });
 
 /** Exported for unit testing decoration logic without a browser. */

@@ -1,7 +1,6 @@
 import type { Tree } from "@lezer/common";
 import type { MathSemantics, TextSource } from "../../document";
 import {
-  mapRangeObject,
   rangesOverlap,
   replaceOverlappingRanges,
   type PositionMapper,
@@ -36,13 +35,15 @@ export function mapMathSemantics(
   value: MathSemantics,
   changes: PositionMapper,
 ): MathSemantics {
-  const mappedRange = mapRangeObject(value, changes);
+  const from = changes.mapPos(value.from, 1);
+  const to = Math.max(from, changes.mapPos(value.to, -1));
   const contentFrom = changes.mapPos(value.contentFrom, -1);
   const contentTo = Math.max(contentFrom, changes.mapPos(value.contentTo, 1));
   const labelFrom = mapOptionalPos(value.labelFrom, changes, 1);
 
   if (
-    mappedRange === value
+    from === value.from
+    && to === value.to
     && contentFrom === value.contentFrom
     && contentTo === value.contentTo
     && labelFrom === value.labelFrom
@@ -51,10 +52,13 @@ export function mapMathSemantics(
   }
 
   return {
-    ...mappedRange,
+    from,
+    to,
+    isDisplay: value.isDisplay,
     contentFrom,
     contentTo,
     labelFrom,
+    latex: value.latex,
   };
 }
 
@@ -169,10 +173,12 @@ export function expandDirtyMathExtractions(
     }
 
     changed = true;
-    return {
-      window: { fromNew: range.from, toNew: range.to },
-      structural: extractStructuralWindow(doc, tree, range),
-    };
+      return {
+        window: { fromNew: range.from, toNew: range.to },
+        structural: extractStructuralWindow(doc, tree, range, {
+          includeNarrativeRefs: false,
+        }),
+      };
   });
 
   return changed ? expanded : dirtyExtractions;
@@ -237,6 +243,8 @@ export function mergeMathSlice(
       const overhang = extractStructuralWindow(doc, tree, {
         from: window.toNew,
         to: overhangTo,
+      }, {
+        includeNarrativeRefs: false,
       });
       const overhangRegions = overhang.mathRegions.filter(
         (r) => r.from < overhangTo && r.to > window.toNew,

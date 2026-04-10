@@ -12,6 +12,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import {
   _blockDecorationFieldForTest as blockDecorationField,
+  _blockDecorationInputsChangedForTest as blockDecorationInputsChanged,
 } from "./plugin-render";
 import {
   BlockCaptionWidget,
@@ -232,6 +233,42 @@ describe("blockDecorationField", () => {
         .toDOM()
         .textContent,
     ).toContain("Satz");
+  });
+
+  it("does not rebuild for plain prose edits that only remap fenced-div positions", () => {
+    const doc = [
+      "# Intro",
+      "",
+      "Plain prose here.",
+      "",
+      "::: {.theorem #thm:one} Title",
+      "Body",
+      ":::",
+    ].join("\n");
+    const state = createTestState(doc, doc.indexOf("prose"), true);
+    const prosePos = state.doc.toString().indexOf("prose");
+    const tr = state.update({
+      changes: { from: prosePos, to: prosePos, insert: "1" },
+      selection: { anchor: prosePos + 1 },
+    });
+
+    expect(blockDecorationInputsChanged(tr)).toBe(false);
+  });
+
+  it("rebuilds when fenced-div render content changes", () => {
+    const doc = [
+      "::: {.theorem #thm:one} Old Title",
+      "Body",
+      ":::",
+    ].join("\n");
+    const state = createTestState(doc, 0, true);
+    const titlePos = state.doc.toString().indexOf("Old");
+    const tr = state.update({
+      changes: { from: titlePos, to: titlePos + "Old".length, insert: "New" },
+      selection: { anchor: titlePos + 1 },
+    });
+
+    expect(blockDecorationInputsChanged(tr)).toBe(true);
   });
 
   it("closing fence always hidden even when cursor is on closing fence (#428)", () => {

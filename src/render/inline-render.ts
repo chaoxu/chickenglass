@@ -135,7 +135,7 @@ function renderFragment(
       span.setAttribute("role", "img");
       span.setAttribute("aria-label", fragment.latex);
       try {
-        span.innerHTML = renderKatexToHtml(fragment.latex, false, macros);
+        span.innerHTML = renderKatexToHtml(fragment.latex, false, macros, "html");
       } catch (_e) {
         // best-effort: KaTeX render failed — show raw LaTeX source as fallback
         span.textContent = fragment.raw;

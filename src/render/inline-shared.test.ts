@@ -154,6 +154,13 @@ describe("renderKatexToHtml", () => {
     expect(html).toContain('href="https://example.com"');
   });
 
+  it("supports lightweight inline HTML without the MathML subtree", () => {
+    const html = renderKatexToHtml("x^2+y^2", false, {}, "html");
+    expect(html).toContain('data-loc-start="0"');
+    expect(html).not.toContain("katex-mathml");
+    expect(html).not.toContain("<math");
+  });
+
   it("logs each KaTeX render failure only once per expression", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(katex, "renderToString").mockImplementation(() => {

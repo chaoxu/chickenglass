@@ -1,6 +1,5 @@
 import type { ReferenceSemantics } from "../../document";
 import {
-  mapRangeObject,
   replaceOverlappingRanges,
   type PositionMapper,
 } from "../merge-utils";
@@ -45,7 +44,18 @@ export function mapReferenceSemantics(
   value: ReferenceSemantics,
   changes: PositionMapper,
 ): ReferenceSemantics {
-  return mapRangeObject(value, changes);
+  const from = changes.mapPos(value.from, 1);
+  const to = Math.max(from, changes.mapPos(value.to, -1));
+  if (from === value.from && to === value.to) {
+    return value;
+  }
+  return {
+    from,
+    to,
+    bracketed: value.bracketed,
+    ids: value.ids,
+    locators: value.locators,
+  };
 }
 
 function mapBracketedReferences(

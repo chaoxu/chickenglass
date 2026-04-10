@@ -39,6 +39,7 @@ export const MARK_NODES: ReadonlySet<string> = new Set([
 
 const katexHtmlCache = new Map<string, string>();
 const katexErrorLogCache = new Set<string>();
+export type KatexRenderOutputMode = "htmlAndMathml" | "html";
 
 /**
  * Maximum number of entries the KaTeX HTML cache may hold.
@@ -64,8 +65,15 @@ function katexCacheKey(
   latex: string,
   isDisplay: boolean,
   macros: Record<string, string>,
+  outputMode: KatexRenderOutputMode,
 ): string {
-  return serializeKatexMacros(macros) + "\0" + (isDisplay ? "D" : "I") + "\0" + latex;
+  return serializeKatexMacros(macros)
+    + "\0"
+    + (isDisplay ? "D" : "I")
+    + "\0"
+    + outputMode
+    + "\0"
+    + latex;
 }
 
 export function clearKatexHtmlCache(): void {
@@ -113,8 +121,9 @@ export function renderKatexToHtml(
   latex: string,
   isDisplay: boolean,
   macros: Record<string, string>,
+  outputMode: KatexRenderOutputMode = "htmlAndMathml",
 ): string {
-  const key = katexCacheKey(latex, isDisplay, macros);
+  const key = katexCacheKey(latex, isDisplay, macros, outputMode);
   const cached = katexHtmlCache.get(key);
   if (cached !== undefined) {
     return cached;
@@ -124,7 +133,7 @@ export function renderKatexToHtml(
   try {
     html = katex.renderToString(latex, {
       ...buildKatexOptions(isDisplay, macros),
-      output: "htmlAndMathml",
+      output: outputMode,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
