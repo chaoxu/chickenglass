@@ -18,7 +18,7 @@ pub(crate) enum WatchEventMessage {
     FileChanged(QueuedFileChangedEvent),
 }
 
-pub(super) struct QueuedFileChangedEvent {
+pub(crate) struct QueuedFileChangedEvent {
     pub(super) absolute_path: PathBuf,
     pub(super) observed_at: Instant,
     pub(super) payload: FileChangedEvent,
