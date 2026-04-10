@@ -4,12 +4,15 @@ import {
   WidgetType,
 } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
+import { renderDocumentFragmentToDom } from "../document-surfaces";
 import type { FencedDivInfo } from "../fenced-block/model";
 import {
   getFencedDivRevealFrom,
   getFencedDivRevealTo,
   getFencedDivStructuralOpenTo,
 } from "../fenced-block/model";
+import { ShellMacroAwareWidget } from "../render/shell-widget";
+import { syncActiveFenceGuideClasses } from "../render/source-widget";
 import {
   addPluginMarkerReplacement,
   type PluginRenderAdapter,
@@ -59,6 +62,189 @@ const closeParenWidget = Decoration.widget({
   side: 1,
 });
 
+function captionClassName(active: boolean): string {
+  return active
+    ? `cf-block-caption ${CSS.activeShellWidget} ${CSS.activeShellFooter}`
+    : "cf-block-caption";
+}
+
+abstract class MacroRenderingWidget extends ShellMacroAwareWidget {
+  protected readonly macros: Record<string, string>;
+
+  constructor(macros: Record<string, string>) {
+    super(macros);
+    this.macros = macros;
+    this.useLiveSourceRange = false;
+  }
+
+  protected createRenderedDOM(build: () => HTMLElement): HTMLElement {
+    return this.createCachedDOM(build);
+  }
+
+  protected refreshRenderedDOM(
+    dom: HTMLElement,
+    render: (el: HTMLElement) => void,
+  ): boolean {
+    render(dom);
+    this.syncWidgetAttrs(dom);
+    return true;
+  }
+
+  protected renderBlockTitle(el: HTMLElement, text: string): void {
+    el.textContent = "";
+    renderDocumentFragmentToDom(el, {
+      kind: "block-title",
+      text,
+      macros: this.macros,
+    });
+  }
+}
+
+export class BlockHeaderWidget extends MacroRenderingWidget {
+  constructor(
+    private readonly header: string,
+    macros: Record<string, string>,
+  ) {
+    super(macros);
+  }
+
+  createDOM(): HTMLElement {
+    return this.createRenderedDOM(() => {
+      const el = document.createElement("span");
+      el.className = CSS.blockHeaderRendered;
+      this.renderBlockTitle(el, this.header);
+      return el;
+    });
+  }
+
+  eq(other: BlockHeaderWidget): boolean {
+    return this.header === other.header && this.macrosKey === other.macrosKey;
+  }
+
+  updateDOM(dom: HTMLElement): boolean {
+    return this.refreshRenderedDOM(dom, (el) => {
+      el.className = CSS.blockHeaderRendered;
+      this.renderBlockTitle(el, this.header);
+    });
+  }
+}
+
+export class BlockCaptionWidget extends MacroRenderingWidget {
+  constructor(
+    private readonly header: string,
+    private readonly title: string,
+    macros: Record<string, string>,
+    private readonly active: boolean = false,
+  ) {
+    super(macros);
+  }
+
+  private renderCaptionContent(el: HTMLElement): void {
+    el.textContent = "";
+
+    const headerEl = document.createElement("span");
+    headerEl.className = CSS.blockHeaderRendered;
+    this.renderBlockTitle(headerEl, this.header);
+    el.appendChild(headerEl);
+
+    if (!this.title) return;
+
+    const titleEl = document.createElement("span");
+    titleEl.className = "cf-block-caption-text";
+    this.renderBlockTitle(titleEl, this.title);
+    el.appendChild(titleEl);
+  }
+
+  createDOM(): HTMLElement {
+    return this.createRenderedDOM(() => {
+      const el = document.createElement("div");
+      el.className = captionClassName(this.active);
+      this.renderCaptionContent(el);
+      return el;
+    });
+  }
+
+  override toDOM(view?: import("@codemirror/view").EditorView): HTMLElement {
+    const el = this.createDOM();
+    this.syncWidgetAttrs(el);
+    el.dataset.activeFenceGuides = "true";
+    syncActiveFenceGuideClasses(el, view, this.sourceFrom, this.sourceTo);
+    if (this.sourceFrom >= 0 && view) {
+      this.bindSourceReveal(el, view);
+    }
+    return el;
+  }
+
+  eq(other: BlockCaptionWidget): boolean {
+    return (
+      this.header === other.header &&
+      this.title === other.title &&
+      this.macrosKey === other.macrosKey &&
+      this.active === other.active
+    );
+  }
+
+  updateDOM(
+    dom: HTMLElement,
+    view?: import("@codemirror/view").EditorView,
+  ): boolean {
+    if (!dom.classList.contains("cf-block-caption")) return false;
+    this.refreshRenderedDOM(dom, (el) => {
+      el.className = captionClassName(this.active);
+      this.renderCaptionContent(el);
+    });
+    dom.dataset.activeFenceGuides = "true";
+    syncActiveFenceGuideClasses(dom, view, this.sourceFrom, this.sourceTo);
+    return true;
+  }
+}
+
+class AttributeTitleWidget extends MacroRenderingWidget {
+  constructor(
+    private readonly title: string,
+    macros: Record<string, string>,
+  ) {
+    super(macros);
+  }
+
+  private renderAttributeTitle(el: HTMLElement): void {
+    el.className = CSS.blockAttrTitle;
+    el.textContent = "";
+
+    const openParen = document.createElement("span");
+    openParen.className = CSS.blockTitleParen;
+    openParen.textContent = "(";
+    el.appendChild(openParen);
+
+    const titleContent = document.createElement("span");
+    this.renderBlockTitle(titleContent, this.title);
+    el.appendChild(titleContent);
+
+    const closeParen = document.createElement("span");
+    closeParen.className = CSS.blockTitleParen;
+    closeParen.textContent = ")";
+    el.appendChild(closeParen);
+  }
+
+  createDOM(): HTMLElement {
+    return this.createRenderedDOM(() => {
+      const el = document.createElement("span");
+      this.renderAttributeTitle(el);
+      return el;
+    });
+  }
+
+  eq(other: AttributeTitleWidget): boolean {
+    return this.title === other.title && this.macrosKey === other.macrosKey;
+  }
+
+  updateDOM(dom: HTMLElement): boolean {
+    if (!dom.classList.contains(CSS.blockAttrTitle)) return false;
+    return this.refreshRenderedDOM(dom, (el) => {
+      this.renderAttributeTitle(el);
+    });
+  }
+}
 /**
  * Add header widget decoration using the heading-like marker replacement pattern.
  *
@@ -89,7 +275,6 @@ export function addInlineTitleParenDecorations(
 }
 
 export function addAttributeTitleDecoration(
-  adapter: PluginRenderAdapter,
   openFenceTo: number,
   title: string,
   macros: Record<string, string>,
@@ -97,7 +282,7 @@ export function addAttributeTitleDecoration(
 ): void {
   items.push(
     Decoration.widget({
-      widget: adapter.createAttributeTitleWidget(title, macros),
+      widget: new AttributeTitleWidget(title, macros),
       side: 1,
     }).range(openFenceTo),
   );

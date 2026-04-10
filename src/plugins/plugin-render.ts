@@ -14,8 +14,7 @@
  * are permitted by CM6.
  */
 
-import type { Transaction } from "@codemirror/state";
-import { EditorState, type Extension, type Range } from "@codemirror/state";
+import { EditorState, type Extension, type Transaction } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -27,16 +26,12 @@ import {
   hasStructureEditEffect,
   isFencedStructureEditActive,
 } from "../editor/structure-edit-state";
-import {
-  collectFencedDivs,
-  type FencedDivInfo,
-} from "../fenced-block/model";
+import { collectFencedDivs } from "../fenced-block/model";
 import { pluginRenderAdapter } from "../lib/plugin-render-adapter";
 import {
   addSingleLineClosingFence,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
-  decorationHidden,
   editorFocusField,
   focusTracker,
   hideMultiLineClosingFence,
@@ -48,68 +43,19 @@ import {
 } from "../semantics/codemirror-source";
 import { type BlockCounterState, blockCounterField } from "../state/block-counter";
 import { pluginRegistryField } from "../state/plugin-registry";
+import { DecorationBuilder } from "./decoration-builder";
 import { fenceProtectionExtension } from "./fence-protection";
 import { getPluginOrFallback } from "./plugin-registry";
 import {
-  addAttributeTitleDecoration,
   addCaptionDecoration,
-  addHeaderWidgetDecoration,
   addInlineHeaderDecoration,
   addInlineTitleParenDecorations,
 } from "./plugin-render-chrome";
-import { addEmbedWidget } from "./plugin-render-embed";
 import type { BlockAttrs } from "./plugin-types";
+import { applySpecialBehavior } from "./special-behavior-handlers";
 
 function joinClasses(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");
-}
-
-
-/** Hide all fence syntax for include blocks so content flows seamlessly. */
-function addIncludeDecorations(
-  div: FencedDivInfo,
-  items: Range<Decoration>[],
-): void {
-  // Hide the entire opening fence line
-  items.push(decorationHidden.range(div.openFenceFrom, div.openFenceTo));
-  if (div.attrFrom !== undefined && div.attrTo !== undefined) {
-    items.push(decorationHidden.range(div.attrFrom, div.attrTo));
-  }
-  if (div.titleFrom !== undefined && div.titleTo !== undefined) {
-    items.push(decorationHidden.range(div.titleFrom, div.titleTo));
-  }
-  // Hide closing fence
-  if (div.closeFenceFrom >= 0 && div.closeFenceTo > div.closeFenceFrom) {
-    items.push(decorationHidden.range(div.closeFenceFrom, div.closeFenceTo));
-  }
-  // Collapse fence lines to zero height
-  items.push(
-    Decoration.line({ class: CSS.includeFence }).range(div.openFenceFrom),
-  );
-  if (div.closeFenceFrom >= 0) {
-    items.push(
-      Decoration.line({ class: CSS.includeFence }).range(div.closeFenceFrom),
-    );
-  }
-}
-
-/** Add right-aligned QED tombstone on the last content line of proof blocks. */
-function addQedDecoration(
-  state: EditorState,
-  div: FencedDivInfo,
-  items: Range<Decoration>[],
-): void {
-  if (div.closeFenceFrom < 0) return;
-
-  const closeLine = state.doc.lineAt(div.closeFenceFrom);
-  if (closeLine.number > 1) {
-    const lastContentLine = state.doc.line(closeLine.number - 1);
-    if (lastContentLine.from > div.openFenceFrom) {
-      items.push(
-        Decoration.line({ class: CSS.blockQed }).range(lastContentLine.from),
-      );
-    }
-  }
 }
 
 /**
@@ -132,17 +78,17 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     openLine,
     closeLine,
   }, items) => {
+    const builder = new DecorationBuilder(items);
     const plugin = getPluginOrFallback(registry, div.className);
 
     // Include blocks are always invisible — content flows seamlessly
     if (EXCLUDED_FROM_FALLBACK.has(div.className)) {
-      addIncludeDecorations(div, items);
+      builder.addIncludeDecorations(div);
       return;
     }
 
     if (!plugin) return;
 
-    const isEmbed = plugin.specialBehavior === "embed";
     const structureEditActive = isFencedStructureEditActive(state, div);
     const activeShell = activeShellStarts.has(div.openFenceFrom);
 
@@ -198,14 +144,14 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       activeShell && openerLineVisible && CSS.activeShellTop,
       openerIsBottom && openerLineVisible && CSS.activeShellBottom,
     );
-    items.push(Decoration.line({ class: headerClass }).range(div.from));
+    builder.addLine(div.from, headerClass);
     // Always keep the widget replacement active — structure editing uses
     // explicit mapped state, not raw-text editing of the fence syntax.
     // Toggling the replacement on/off caused a 1px geometry delta (#1015).
     if (captionBelow || inlineHeader) {
-      addHeaderWidgetDecoration(pluginRenderAdapter, div, "", openerSourceActive, macros, items);
+      builder.addHeaderWidget(div, "", openerSourceActive, macros);
     } else {
-      addHeaderWidgetDecoration(pluginRenderAdapter, div, spec.header, openerSourceActive, macros, items);
+      builder.addHeaderWidget(div, spec.header, openerSourceActive, macros);
     }
 
     // Title text: wrap in visual parentheses via widget decorations (rendered mode only).
@@ -213,11 +159,11 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // marks get split around Decoration.replace (math widgets), causing ") $x^2$".
     // For below-caption blocks, title text is the caption — no parens needed.
     if (!openerSourceActive && !captionBelow && !inlineHeader && div.titleFrom !== undefined && div.titleTo !== undefined) {
-      addInlineTitleParenDecorations(div.titleFrom, div.titleTo, items);
+      builder.addInlineTitleParens(div.titleFrom, div.titleTo);
     }
 
     if (!openerSourceActive && (captionBelow || inlineHeader) && div.titleFrom !== undefined && div.titleTo !== undefined) {
-      items.push(decorationHidden.range(div.titleFrom, div.titleTo));
+      builder.addHidden(div.titleFrom, div.titleTo);
     }
 
     // Attribute-only title (not used for below-caption blocks — their title is the caption).
@@ -228,7 +174,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       div.titleTo === undefined &&
       div.title
     ) {
-      addAttributeTitleDecoration(pluginRenderAdapter, div.openFenceTo, div.title, macros, items);
+      builder.addAttributeTitle(div.openFenceTo, div.title, macros);
     }
 
     // --- Closing fence ---
@@ -239,30 +185,22 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       addSingleLineClosingFence(state, div.closeFenceFrom, div.closeFenceTo, items);
     } else {
       hideMultiLineClosingFence(div.closeFenceFrom, div.closeFenceTo, items);
-
-      // Embed blocks: replace body content with iframe widget
-      if (isEmbed && !openerSourceActive) {
-        const openLine = state.doc.lineAt(div.openFenceFrom);
-        addEmbedWidget(pluginRenderAdapter, state, div, openLine, items, activeShell);
-      }
     }
 
     // Body lines: apply block-type class for per-type styling (italic, etc.)
     if (!div.singleLine) {
-      const openLine = state.doc.lineAt(div.from);
       const closeFrom = div.closeFenceFrom >= 0 ? div.closeFenceFrom : div.to;
-      const closeLine = state.doc.lineAt(closeFrom);
-      for (let lineNum = openLine.number + 1; lineNum < closeLine.number; lineNum++) {
+      const bodyCloseLine = state.doc.lineAt(closeFrom);
+      for (let lineNum = openLine.number + 1; lineNum < bodyCloseLine.number; lineNum++) {
         const line = state.doc.line(lineNum);
-        items.push(
-          Decoration.line({
-            class: joinClasses(
-              spec.className,
-              activeShell && CSS.activeShell,
-              activeShell && !openerLineVisible && lineNum === openLine.number + 1 && CSS.activeShellTop,
-              activeShell && !bottomOnCaption && lineNum === closeLine.number - 1 && CSS.activeShellBottom,
-            ),
-          }).range(line.from),
+        builder.addLine(
+          line.from,
+          joinClasses(
+            spec.className,
+            activeShell && CSS.activeShell,
+            activeShell && !openerLineVisible && lineNum === openLine.number + 1 && CSS.activeShellTop,
+            activeShell && !bottomOnCaption && lineNum === bodyCloseLine.number - 1 && CSS.activeShellBottom,
+          ),
         );
       }
 
@@ -295,10 +233,14 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       }
     }
 
-    // QED tombstone for blocks with "qed" special behavior (closing fence is always hidden)
-    if (plugin.specialBehavior === "qed") {
-      addQedDecoration(state, div, items);
-    }
+    applySpecialBehavior(plugin.specialBehavior, {
+      state,
+      div,
+      builder,
+      openLine,
+      activeShell,
+      openerSourceActive,
+    });
   });
 
   return baseDecos;
@@ -348,7 +290,10 @@ const blockDecorationField = createFencedBlockDecorationField(buildBlockDecorati
 });
 
 /** Exported for unit testing decoration logic without a browser. */
-export { blockDecorationField as _blockDecorationFieldForTest, blockDecorationInputsChanged as _blockDecorationInputsChangedForTest };
+export {
+  blockDecorationField as _blockDecorationFieldForTest,
+  blockDecorationInputsChanged as _blockDecorationInputsChangedForTest,
+};
 
 /** CM6 extension that renders fenced divs using the block plugin system. */
 export const blockRenderPlugin: Extension = [

@@ -890,15 +890,22 @@ describe("#299 — centralized block manifest and CSS registry", () => {
     const blockTheme = fileText("src/editor/block-theme.ts");
     const pluginRender = fileText("src/plugins/plugin-render.ts");
     const pluginRenderChrome = fileText("src/plugins/plugin-render-chrome.ts");
+    const decorationBuilder = fileText("src/plugins/decoration-builder.ts");
+    const specialBehaviorHandlers = fileText("src/plugins/special-behavior-handlers.ts");
 
     expect(blockTheme).toContain("STYLED_BLOCK_NAMES");
     expect(pluginRender).toContain("getPluginOrFallback");
     expect(pluginRender).toContain("createFencedBlockDecorationField");
+    expect(pluginRender).toContain("DecorationBuilder");
+    expect(pluginRender).toContain("applySpecialBehavior");
     expect(pluginRenderChrome).toContain("CSS.blockHeaderRendered");
+    expect(pluginRenderChrome).toContain("MacroRenderingWidget");
     expect(pluginRenderChrome).toContain("renderDocumentFragmentToDom");
-    // #374: embed detection is now data-driven via plugin.specialBehavior,
-    // not via the EMBED_CLASSES set — this is the correct post-migration state.
-    expect(pluginRender).toContain('specialBehavior === "embed"');
+    expect(decorationBuilder).toContain("class DecorationBuilder");
+    expect(specialBehaviorHandlers).toContain("specialBehaviorHandlers");
+    // #374: special-behavior dispatch remains data-driven off plugin metadata,
+    // but the concrete handlers now live outside plugin-render.ts.
+    expect(pluginRender).not.toContain('specialBehavior === "embed"');
     expect(pluginRender).not.toContain("EMBED_CLASSES");
   });
 });
