@@ -62,8 +62,8 @@ import {
   createOpeningFenceColonProtection,
   createOpeningFenceDeletionCleanup,
   createOpeningFenceMathProtection,
-  createPairedMathEntry,
 } from "./fence-transaction-filters";
+import { createPairedMathEntry } from "./fence-math-entry";
 import {
   type PluginRegistryState,
   pluginRegistryField,
@@ -462,7 +462,6 @@ export const openingFenceDeletionCleanup = createOpeningFenceDeletionCleanup({
  */
 export const closingFenceProtection = createClosingFenceProtection({
   shouldBypassFenceProtection,
-  annotateFenceRewrite,
   getClosingFenceRanges,
 });
 
@@ -479,7 +478,6 @@ export const closingFenceProtection = createClosingFenceProtection({
  */
 export const openingFenceColonProtection = createOpeningFenceColonProtection({
   shouldBypassFenceProtection,
-  annotateFenceRewrite,
   getOpeningFenceColonRanges,
 });
 
@@ -492,7 +490,6 @@ export const openingFenceColonProtection = createOpeningFenceColonProtection({
  */
 export const openingFenceBacktickProtection = createOpeningFenceBacktickProtection({
   shouldBypassFenceProtection,
-  annotateFenceRewrite,
   getOpeningFenceBacktickRanges,
 });
 
@@ -510,7 +507,6 @@ export function getOpeningMathDelimiterRanges(state: EditorState): readonly Fenc
  */
 export const openingFenceMathProtection = createOpeningFenceMathProtection({
   shouldBypassFenceProtection,
-  annotateFenceRewrite,
   getOpeningMathDelimiterRanges,
 });
 
