@@ -13,11 +13,11 @@ import {
   getFencedDivRevealTo,
 } from "../fenced-block/model";
 import { containsPos, containsRange } from "../lib/range-helpers";
-import { focusEffect } from "../render/focus-state";
 import type {
   FootnoteDefinition,
 } from "../semantics/document";
 import { documentAnalysisField } from "../state/document-analysis";
+import { focusEffect } from "../state/editor-focus";
 import { frontmatterField } from "./frontmatter-state";
 import { programmaticDocumentChangeAnnotation } from "./programmatic-document-change";
 import { findCodeShellAt } from "./shell-ownership";
