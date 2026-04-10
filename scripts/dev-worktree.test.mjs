@@ -12,9 +12,15 @@ import {
 const cliPath = join(process.cwd(), "scripts", "dev-worktree.mjs");
 
 function run(cwd, ...args) {
-  return execFileSync(args[0], args.slice(1), {
+  const command = args[0] === "git"
+    ? ["git", "-c", "core.hooksPath=/dev/null", ...args.slice(1)]
+    : args;
+  return execFileSync(command[0], command.slice(1), {
     cwd,
     encoding: "utf8",
+    env: Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+    ),
   }).trim();
 }
 

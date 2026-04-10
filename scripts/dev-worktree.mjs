@@ -9,6 +9,12 @@ import {
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import process from "node:process";
 
+function withoutGitEnv(env = process.env) {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !key.startsWith("GIT_")),
+  );
+}
+
 function usage() {
   return `Usage:
   npm run dev:worktree -- <name> [--base <ref>] [--branch <branch>] [--path <path>] [--fetch]
@@ -32,6 +38,7 @@ function runCommand(command, args, cwd, check = true) {
   const result = spawnSync(command, args, {
     cwd,
     encoding: "utf8",
+    env: withoutGitEnv(),
   });
 
   if (result.error) {
