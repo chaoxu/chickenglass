@@ -119,6 +119,73 @@ describe("incremental document analysis engine", () => {
     expect(after.mathRegions[0]).not.toBe(before.mathRegions[0]);
   });
 
+  it("matches a full rebuild for plain prose inserts before later structural syntax", () => {
+    const state = createState([
+      "Intro paragraph.",
+      "",
+      "Still plain prose.",
+      "",
+      "::: {.theorem #thm:one} Title",
+      "Body",
+      ":::",
+      "",
+      "See [@thm:one] and $x$.",
+    ].join("\n"));
+    const before = analyze(state);
+    const insertPos = state.doc.toString().indexOf("plain prose");
+    const tr = state.update({
+      changes: { from: insertPos, to: insertPos, insert: "1" },
+    });
+
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      fullTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+    const rebuilt = analyze(tr.state);
+
+    expect(after.headings).toEqual(rebuilt.headings);
+    expect(after.footnotes).toEqual(rebuilt.footnotes);
+    expect(after.fencedDivs).toEqual(rebuilt.fencedDivs);
+    expect(after.equations).toEqual(rebuilt.equations);
+    expect(after.mathRegions).toEqual(rebuilt.mathRegions);
+    expect(after.references).toEqual(rebuilt.references);
+    expect(after.includes).toEqual(rebuilt.includes);
+  });
+
+  it("matches a full rebuild for plain prose inserts inside a fenced block body", () => {
+    const state = createState([
+      "::: {.theorem #thm:one} Sample",
+      "Body with $x$ and [@thm:one] inside the fenced block.",
+      "Second prose line in the same block.",
+      ":::",
+      "",
+      "Tail paragraph.",
+    ].join("\n"));
+    const before = analyze(state);
+    const insertPos = state.doc.toString().indexOf("Second prose");
+    const tr = state.update({
+      changes: { from: insertPos, to: insertPos, insert: "local " },
+    });
+
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      fullTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+    const rebuilt = analyze(tr.state);
+
+    expect(after.headings).toEqual(rebuilt.headings);
+    expect(after.footnotes).toEqual(rebuilt.footnotes);
+    expect(after.fencedDivs).toEqual(rebuilt.fencedDivs);
+    expect(after.equations).toEqual(rebuilt.equations);
+    expect(after.mathRegions).toEqual(rebuilt.mathRegions);
+    expect(after.references).toEqual(rebuilt.references);
+    expect(after.includes).toEqual(rebuilt.includes);
+  });
+
   it("refreshes IR section ranges when a tail edit reuses the prior analysis", () => {
     const state = createState([
       "# Intro",

@@ -9,6 +9,34 @@ export interface SemanticDeltaBuildOptions {
   readonly dirtyWindowGap?: number;
 }
 
+const INLINE_PROSE_SAFE_CHANGE_RE = /^[A-Za-z0-9 ,.;!?'"()/_-]*$/;
+
+function isPlainInlineText(text: string): boolean {
+  return text.length === 0 || (
+    !text.includes("\n")
+    && !text.includes("\r")
+    && INLINE_PROSE_SAFE_CHANGE_RE.test(text)
+  );
+}
+
+function detectPlainInlineTextOnlyChange(tr: Transaction): boolean {
+  if (!tr.docChanged) {
+    return false;
+  }
+
+  let plain = true;
+  tr.changes.iterChanges((fromOld, toOld, _fromNew, _toNew, inserted) => {
+    if (!plain) return;
+    const removedText = tr.startState.doc.sliceString(fromOld, toOld);
+    const insertedText = inserted.sliceString(0, inserted.length);
+    if (!isPlainInlineText(removedText) || !isPlainInlineText(insertedText)) {
+      plain = false;
+    }
+  });
+
+  return plain;
+}
+
 function collectRawChangedRanges(tr: Transaction): RawChangedRange[] {
   const ranges: RawChangedRange[] = [];
   tr.changes.iterChangedRanges((fromOld, toOld, fromNew, toNew) => {
@@ -91,6 +119,7 @@ export function buildSemanticDelta(
     syntaxTreeChanged,
     frontmatterChanged: detectFrontmatterChange(tr),
     globalInvalidation: tr.annotation(semanticGlobalInvalidationAnnotation) === true,
+    plainInlineTextOnlyChange: detectPlainInlineTextOnlyChange(tr),
     mapOldToNew(pos, assoc = -1) {
       return tr.changes.mapPos(pos, assoc);
     },

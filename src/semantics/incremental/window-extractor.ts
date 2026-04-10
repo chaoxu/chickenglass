@@ -247,6 +247,47 @@ export function collectStructuralWindow(
   return result;
 }
 
+export function collectInlineStructuralWindow(
+  doc: TextSource,
+  tree: Tree,
+  result: StructuralWindowExtraction,
+  window?: StructuralWindow,
+): StructuralWindowExtraction {
+  const range = normalizeWindow(doc, window);
+
+  const c = tree.cursor();
+  scan: for (;;) {
+    if (c.from <= range.to && c.to >= range.from) {
+      const name = c.name;
+      let shouldDescend = shouldDescendIntoStructuralNode(name);
+
+      switch (name) {
+        case NODE.InlineMath:
+        case NODE.DisplayMath:
+          collectMath(doc, c, result);
+          shouldDescend = false;
+          break;
+        case NODE.InlineCode:
+          result.excludedRanges.push({ from: c.from, to: c.to });
+          shouldDescend = false;
+          break;
+        case NODE.Link:
+          collectLink(doc, c, result);
+          shouldDescend = false;
+          break;
+      }
+
+      if (shouldDescend && c.firstChild()) continue;
+    }
+    for (;;) {
+      if (c.nextSibling()) break;
+      if (!c.parent()) break scan;
+    }
+  }
+
+  return result;
+}
+
 export function extractStructuralWindow(
   doc: TextSource,
   tree: Tree,
@@ -259,6 +300,19 @@ export function extractStructuralWindow(
     createStructuralWindowExtraction(),
     window,
     options,
+  );
+}
+
+export function extractInlineStructuralWindow(
+  doc: TextSource,
+  tree: Tree,
+  window?: StructuralWindow,
+): StructuralWindowExtraction {
+  return collectInlineStructuralWindow(
+    doc,
+    tree,
+    createStructuralWindowExtraction(),
+    window,
   );
 }
 

@@ -15,7 +15,9 @@ import {
   type EquationSlice,
 } from "./slices/equation-slice";
 import {
+  type ExtractedDirtyStructuralWindow,
   extractDirtyFencedDivWindows,
+  mapFencedDivSemantics,
   mergeFencedDivSlice,
 } from "./slices/fenced-div-slice";
 import {
@@ -52,6 +54,8 @@ import type { ReferenceSemantics } from "../document";
 import {
   collectNarrativeRefsInWindow,
   computeNarrativeExtractionRange,
+  expandRangeToParagraphBoundaries,
+  extractInlineStructuralWindow,
   extractStructuralWindow,
   type ExcludedRange,
   type StructuralWindowExtraction,
@@ -455,6 +459,133 @@ function mergeExcludedRanges(
   return ranges;
 }
 
+function collectFencedDivStructureRanges(
+  fencedDivs: readonly FencedDivSemantics[],
+): readonly { readonly from: number; readonly to: number }[] {
+  const ranges: { from: number; to: number }[] = [];
+  for (const div of fencedDivs) {
+    ranges.push({ from: div.openFenceFrom, to: div.openFenceTo });
+    if (
+      div.attrFrom !== undefined
+      && div.attrTo !== undefined
+      && div.attrFrom < div.attrTo
+    ) {
+      ranges.push({ from: div.attrFrom, to: div.attrTo });
+    }
+    if (
+      div.titleFrom !== undefined
+      && div.titleTo !== undefined
+      && div.titleFrom < div.titleTo
+    ) {
+      ranges.push({ from: div.titleFrom, to: div.titleTo });
+    }
+    if (div.closeFenceFrom >= 0 && div.closeFenceFrom < div.closeFenceTo) {
+      ranges.push({ from: div.closeFenceFrom, to: div.closeFenceTo });
+    }
+  }
+  return ranges;
+}
+
+function windowTouchesRange(
+  range: { readonly from: number; readonly to: number },
+  window: Pick<DirtyWindow, "fromOld" | "toOld">,
+): boolean {
+  if (window.fromOld === window.toOld) {
+    return range.from <= window.fromOld && window.fromOld <= range.to;
+  }
+  return range.from < window.toOld && window.fromOld < range.to;
+}
+
+function windowsTouchAnyRange(
+  windows: readonly Pick<DirtyWindow, "fromOld" | "toOld">[],
+  ranges: readonly { readonly from: number; readonly to: number }[],
+): boolean {
+  for (const window of windows) {
+    for (const range of ranges) {
+      if (windowTouchesRange(range, window)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function canSkipStructuralExtraction(
+  previousState: InternalDocumentAnalysisState,
+  delta: SemanticDelta,
+): boolean {
+  if (!delta.plainInlineTextOnlyChange) {
+    return false;
+  }
+
+  const dirtyWindows = delta.dirtyWindows;
+  return !(
+    windowsTouchAnyRange(dirtyWindows, previousState.headingSlice.headings)
+    || windowsTouchAnyRange(dirtyWindows, previousState.footnoteSlice.refs)
+    || windowsTouchAnyRange(dirtyWindows, previousState.footnoteSlice.definitions)
+    || windowsTouchAnyRange(dirtyWindows, previousState.fencedDivSlice.fencedDivs)
+    || windowsTouchAnyRange(dirtyWindows, previousState.equationSlice.equations)
+    || windowsTouchAnyRange(dirtyWindows, previousState.mathSlice.mathRegions)
+    || windowsTouchAnyRange(dirtyWindows, previousState.referenceSlice.references)
+    || windowsTouchAnyRange(dirtyWindows, previousState.excludedRanges)
+  );
+}
+
+function canUseParagraphStructuralExtraction(
+  previousState: InternalDocumentAnalysisState,
+  delta: SemanticDelta,
+): boolean {
+  if (!delta.plainInlineTextOnlyChange) {
+    return false;
+  }
+
+  const dirtyWindows = delta.dirtyWindows;
+  return !(
+    windowsTouchAnyRange(dirtyWindows, previousState.headingSlice.headings)
+    || windowsTouchAnyRange(dirtyWindows, previousState.footnoteSlice.refs)
+    || windowsTouchAnyRange(dirtyWindows, previousState.footnoteSlice.definitions)
+    || windowsTouchAnyRange(
+      dirtyWindows,
+      collectFencedDivStructureRanges(previousState.fencedDivSlice.fencedDivs),
+    )
+    || windowsTouchAnyRange(dirtyWindows, previousState.equationSlice.equations)
+    || windowsTouchAnyRange(dirtyWindows, previousState.includeSlice.includes)
+  );
+}
+
+function extractDirtyParagraphWindows(
+  doc: TextSource,
+  tree: Tree,
+  dirtyWindows: readonly DirtyWindow[],
+): readonly ExtractedDirtyStructuralWindow[] {
+  return dirtyWindows.map((window) => {
+    const range = expandRangeToParagraphBoundaries(doc, {
+      from: window.fromNew,
+      to: window.toNew,
+    });
+    return {
+      window,
+      range,
+      structural: extractInlineStructuralWindow(doc, tree, range),
+    };
+  });
+}
+
+function mapFencedDivsOnly(
+  previous: readonly FencedDivSemantics[],
+  changes: PositionMapper,
+): readonly FencedDivSemantics[] {
+  let changed = false;
+  const mapped = previous.map((div) => {
+    const next = mapFencedDivSemantics(div, changes);
+    if (next !== div) {
+      changed = true;
+    }
+    return next;
+  });
+  return changed ? mapped : previous;
+}
+
 export function updateDocumentAnalysis(
   previous: DocumentAnalysis,
   doc: TextSource,
@@ -480,6 +611,10 @@ export function updateDocumentAnalysis(
   }
 
   const changes = createPositionMapper(delta);
+  const skipStructuralExtraction = canSkipStructuralExtraction(previousState, delta);
+  const useParagraphStructuralExtraction =
+    !skipStructuralExtraction
+    && canUseParagraphStructuralExtraction(previousState, delta);
   const expandedForEquations = expandDirtyWindows(
     delta.dirtyWindows,
     previousState.equationSlice.equations,
@@ -492,13 +627,17 @@ export function updateDocumentAnalysis(
     delta.mapOldToNew,
     true,
   );
-  const extractedDirtyWindows = extractDirtyFencedDivWindows(
-    previousState.fencedDivSlice.fencedDivs,
-    doc,
-    tree,
-    changes,
-    expandedForExcluded,
-  );
+  const extractedDirtyWindows = skipStructuralExtraction
+    ? []
+    : useParagraphStructuralExtraction
+      ? extractDirtyParagraphWindows(doc, tree, expandedForExcluded)
+      : extractDirtyFencedDivWindows(
+          previousState.fencedDivSlice.fencedDivs,
+          doc,
+          tree,
+          changes,
+          expandedForExcluded,
+        );
   const dirtyExtractions = extractedDirtyWindows.map(({ window, range, structural }) => ({
     window: {
       ...window,
@@ -511,21 +650,26 @@ export function updateDocumentAnalysis(
   const headingSlice = mergeHeadingSlice(
     previousState.headingSlice,
     delta,
-    dirtyExtractions,
+    useParagraphStructuralExtraction ? [] : dirtyExtractions,
   );
   const footnoteSlice = mergeFootnoteSlice(
     previousState.footnoteSlice,
     delta,
-    dirtyExtractions,
+    useParagraphStructuralExtraction ? [] : dirtyExtractions,
   );
-  const mergedFencedDivs = reuseEquivalentArray(
-    previousState.fencedDivSlice.fencedDivs,
-    mergeFencedDivSlice(
-      previousState.fencedDivSlice.fencedDivs,
-      changes,
-      extractedDirtyWindows,
-    ),
-  );
+  const mergedFencedDivs = useParagraphStructuralExtraction
+    ? reuseEquivalentArray(
+        previousState.fencedDivSlice.fencedDivs,
+        mapFencedDivsOnly(previousState.fencedDivSlice.fencedDivs, changes),
+      )
+    : reuseEquivalentArray(
+        previousState.fencedDivSlice.fencedDivs,
+        mergeFencedDivSlice(
+          previousState.fencedDivSlice.fencedDivs,
+          changes,
+          extractedDirtyWindows,
+        ),
+      );
   const fencedDivSlice = mergedFencedDivs === previousState.fencedDivSlice.fencedDivs
     ? previousState.fencedDivSlice
     : createFencedDivSlice(mergedFencedDivs);
@@ -565,9 +709,9 @@ export function updateDocumentAnalysis(
     dirtyExtractions.map((e) => e.window),
   );
   const equationDirtyExtractions = mathOverhangRanges.length === 0
-    ? dirtyExtractions
+    ? (useParagraphStructuralExtraction ? [] : dirtyExtractions)
     : [
-      ...dirtyExtractions,
+      ...(useParagraphStructuralExtraction ? [] : dirtyExtractions),
       ...mathOverhangRanges.map(range => ({
         window: { fromNew: range.from, toNew: range.to },
         structural: extractStructuralWindow(doc, tree, range, {
@@ -592,7 +736,19 @@ export function updateDocumentAnalysis(
   // extend beyond the initial line range — e.g. a multi-line code span
   // created by a delimiter edit.
   const narrativeExtractions: NarrativeRefExtraction[] = dirtyExtractions.map(
-    ({ window }) => {
+    ({ window, structural }) => {
+      if (useParagraphStructuralExtraction) {
+        const narrativeRefs: ReferenceSemantics[] = [];
+        const range = { from: window.fromNew, to: window.toNew };
+        collectNarrativeRefsInWindow(
+          doc,
+          structural.excludedRanges,
+          range,
+          narrativeRefs,
+        );
+        return { window: range, narrativeRefs };
+      }
+
       const { range, excludedRanges: freshExcluded } =
         computeNarrativeExtractionRange(doc, tree, window.fromNew, window.toNew);
       const narrativeRefs: ReferenceSemantics[] = [];

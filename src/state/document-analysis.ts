@@ -14,14 +14,48 @@ import {
 } from "../semantics/incremental/engine";
 import { buildSemanticDelta } from "../semantics/incremental/semantic-delta";
 
+const MATERIALIZE_TEXT_AFTER_SLICE_CALLS = 8;
+
+function lineAtInText(text: string, pos: number) {
+  const safePos = Math.max(0, Math.min(pos, text.length));
+  const from = Math.max(0, text.lastIndexOf("\n", Math.max(0, safePos - 1)) + 1);
+  const nextBreak = text.indexOf("\n", safePos);
+  const to = nextBreak === -1 ? text.length : nextBreak;
+  return {
+    from,
+    to,
+    text: text.slice(from, to),
+  };
+}
+
 export function editorStateTextSource(state: EditorState): TextSource {
   const doc = state.doc;
+  let materializedText: string | undefined;
+  let sliceCalls = 0;
+
+  function getMaterializedText(): string {
+    if (materializedText === undefined) {
+      materializedText = doc.toString();
+    }
+    return materializedText;
+  }
+
   return {
     length: doc.length,
     slice(from, to) {
+      if (materializedText !== undefined) {
+        return materializedText.slice(from, to);
+      }
+      sliceCalls++;
+      if (sliceCalls >= MATERIALIZE_TEXT_AFTER_SLICE_CALLS) {
+        return getMaterializedText().slice(from, to);
+      }
       return doc.sliceString(from, to);
     },
     lineAt(pos) {
+      if (materializedText !== undefined) {
+        return lineAtInText(materializedText, pos);
+      }
       const line = doc.lineAt(pos);
       return {
         from: line.from,

@@ -31,6 +31,7 @@ describe("buildSemanticDelta", () => {
     ]);
     expect(delta.mapOldToNew(3)).toBe(5);
     expect(delta.mapNewToOld(5)).toBe(3);
+    expect(delta.plainInlineTextOnlyChange).toBe(true);
   });
 
   it("captures exact old and new coordinates for a delete", () => {
@@ -44,6 +45,7 @@ describe("buildSemanticDelta", () => {
     expect(delta.rawChangedRanges).toEqual([
       { fromOld: 1, toOld: 4, fromNew: 1, toNew: 1 },
     ]);
+    expect(delta.plainInlineTextOnlyChange).toBe(true);
   });
 
   it("preserves multiple changed ranges before dirty-window coalescing", () => {
@@ -81,6 +83,25 @@ describe("buildSemanticDelta", () => {
     expect(delta.dirtyWindows).toEqual([]);
     expect(delta.syntaxTreeChanged).toBe(true);
     expect(delta.frontmatterChanged).toBe(false);
+    expect(delta.plainInlineTextOnlyChange).toBe(false);
+  });
+
+  it("does not mark markdown-trigger inserts as plain inline text only", () => {
+    const state = createMarkdownState("alpha");
+    const tr = state.update({
+      changes: { from: 0, insert: "@" },
+    });
+
+    expect(buildSemanticDelta(tr).plainInlineTextOnlyChange).toBe(false);
+  });
+
+  it("does not mark newline inserts as plain inline text only", () => {
+    const state = createMarkdownState("alpha");
+    const tr = state.update({
+      changes: { from: state.doc.length, insert: "\n" },
+    });
+
+    expect(buildSemanticDelta(tr).plainInlineTextOnlyChange).toBe(false);
   });
 
   it("marks frontmatter edits without broadening body edits into frontmatter changes", () => {

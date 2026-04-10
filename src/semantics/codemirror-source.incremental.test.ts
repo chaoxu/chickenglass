@@ -66,6 +66,24 @@ function expectEquationStateMatchesRebuild(state: EditorState): void {
 }
 
 describe("documentAnalysisField incremental contract", () => {
+  it("keeps CM6 text-source slices and lines correct after slice caching activates", () => {
+    const state = EditorState.create({
+      doc: "Alpha\nBeta\nGamma",
+    });
+    const source = editorStateTextSource(state);
+
+    for (let i = 0; i < 8; i++) {
+      expect(source.slice(0, 1)).toBe("A");
+    }
+
+    expect(source.slice(6, 10)).toBe("Beta");
+    expect(source.lineAt(7)).toEqual({
+      from: 6,
+      to: 10,
+      text: "Beta",
+    });
+  });
+
   it("reuses unchanged math region objects across unrelated edits", () => {
     const doc = [
       "Alpha $x$.",

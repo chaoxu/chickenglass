@@ -132,6 +132,7 @@ function buildTextSemanticDelta(
       || touchesFrontmatter(nextText, range.fromNew, range.toNew),
     ),
     globalInvalidation: false,
+    plainInlineTextOnlyChange: false,
     mapOldToNew(pos, assoc = -1) {
       return changes.mapPos(pos, assoc);
     },

@@ -310,13 +310,37 @@ export function collectMath(
 ): void {
   const isDisplay = isDisplayMath(node);
   const markName = isDisplay ? "DisplayMathMark" : "InlineMathMark";
-  const marks = node.node.getChildren(markName);
-  const equationLabel = isDisplay ? node.node.getChild(NODE.EquationLabel) : null;
-  const contentFrom = marks.length >= 1 ? marks[0].to : node.from;
-  const contentTo = marks.length >= 2 ? marks[marks.length - 1].from : node.to;
+  let markCount = 0;
+  let firstMarkTo: number | undefined;
+  let lastMarkFrom: number | undefined;
+  let lastMarkTo: number | undefined;
+  let equationLabelFrom: number | undefined;
+  let equationLabelTo: number | undefined;
+  const cursor = node.node.cursor();
+
+  if (cursor.firstChild()) {
+    do {
+      if (cursor.name === markName) {
+        markCount++;
+        if (firstMarkTo === undefined) {
+          firstMarkTo = cursor.to;
+        }
+        lastMarkFrom = cursor.from;
+        lastMarkTo = cursor.to;
+      } else if (isDisplay && cursor.name === NODE.EquationLabel) {
+        equationLabelFrom = cursor.from;
+        equationLabelTo = cursor.to;
+      }
+    } while (cursor.nextSibling());
+  }
+
+  const contentFrom = firstMarkTo ?? node.from;
+  const contentTo = markCount >= 2 && lastMarkFrom !== undefined
+    ? lastMarkFrom
+    : node.to;
   const labelFrom =
-    equationLabel && marks.length >= 2
-      ? marks[marks.length - 1].to
+    equationLabelFrom !== undefined && markCount >= 2
+      ? lastMarkTo
       : undefined;
   const latex = contentFrom <= contentTo
     ? doc.slice(contentFrom, contentTo)
@@ -332,11 +356,14 @@ export function collectMath(
     latex,
   });
 
-  if (equationLabel) {
+  if (
+    equationLabelFrom !== undefined
+    && equationLabelTo !== undefined
+  ) {
     const labelId = readBracedLabelId(
-      doc.slice(equationLabel.from, equationLabel.to),
+      doc.slice(equationLabelFrom, equationLabelTo),
       0,
-      equationLabel.to - equationLabel.from,
+      equationLabelTo - equationLabelFrom,
       "eq:",
     );
     if (labelId) {
@@ -344,9 +371,9 @@ export function collectMath(
         id: labelId,
         from: node.from,
         to: node.to,
-        labelFrom: equationLabel.from,
-        labelTo: equationLabel.to,
-        latex: extractDisplayMathLatex(doc.slice(node.from, equationLabel.from)),
+        labelFrom: equationLabelFrom,
+        labelTo: equationLabelTo,
+        latex: extractDisplayMathLatex(doc.slice(node.from, equationLabelFrom)),
       });
     }
   }

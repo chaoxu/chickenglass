@@ -19,6 +19,7 @@ export interface SemanticDelta {
   readonly syntaxTreeChanged: boolean;
   readonly frontmatterChanged: boolean;
   readonly globalInvalidation: boolean;
+  readonly plainInlineTextOnlyChange: boolean;
   mapOldToNew(pos: number, assoc?: number): number;
   mapNewToOld(pos: number, assoc?: number): number;
 }
