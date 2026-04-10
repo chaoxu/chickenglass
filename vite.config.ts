@@ -95,6 +95,7 @@ function debugSessionSinkPlugin(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const gitBuildInfo = readGitBuildInfo();
+  const disableHmr = mode === "show" || process.env.COFLAT_DISABLE_HMR === "1";
   return {
     plugins: [react(), tailwindcss(), debugSessionSinkPlugin()],
     define: {
@@ -107,6 +108,9 @@ export default defineConfig(({ mode }) => {
     build: {
       target: "es2022",
       sourcemap: mode === "development",
+    },
+    server: {
+      hmr: disableHmr ? false : undefined,
     },
   };
 });

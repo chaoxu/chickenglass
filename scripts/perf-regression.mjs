@@ -501,6 +501,7 @@ Options:
   --headed                 Show the Playwright-owned browser window
   --port <n>               CDP port for Chrome for Testing (default: 9322)
   --url <url>              App URL that Chrome is already running against
+  --heavy-doc              Use long timeouts/settles for heavy-doc automation
 `);
 }
 
@@ -509,11 +510,15 @@ function parseCliArgs(argv = process.argv.slice(2)) {
   const command = hasExplicitCommand ? argv[0] : "capture";
   const options = hasExplicitCommand ? argv.slice(1) : argv;
 
+  const parser = createArgParser(options);
+  const heavyDoc = parser.hasFlag("--heavy-doc");
+
   return {
     command,
     options,
+    heavyDoc,
     chromeArgs: parseChromeArgs(options, { browser: "managed" }),
-    ...createArgParser(options),
+    ...parser,
   };
 }
 
@@ -624,7 +629,7 @@ function printComparison(result) {
 }
 
 export async function main(argv = process.argv.slice(2)) {
-  const { command, options, chromeArgs, getFlag, getIntFlag } = parseCliArgs(argv);
+  const { command, options, heavyDoc, chromeArgs, getFlag, getIntFlag } = parseCliArgs(argv);
   if (options.includes("--help") || options.includes("-h")) {
     printUsage();
     return;
@@ -639,7 +644,8 @@ export async function main(argv = process.argv.slice(2)) {
 
   const iterations = getIntFlag("--iterations", 3);
   const warmup = getIntFlag("--warmup", 1);
-  const settleMs = getIntFlag("--settle-ms", scenario.defaultSettleMs);
+  const defaultSettleMs = heavyDoc ? Math.max(scenario.defaultSettleMs, 3000) : scenario.defaultSettleMs;
+  const settleMs = getIntFlag("--settle-ms", defaultSettleMs);
 
   const page = await connectEditor({
     browser: chromeArgs.browser,

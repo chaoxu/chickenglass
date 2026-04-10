@@ -840,6 +840,51 @@ export async function screenshot(page, path, options = {}) {
   await page.screenshot({ path, ...options });
 }
 
+export async function captureDebugState(page, label = "capture") {
+  await waitForEditorSurface(page);
+  const state = await page.evaluate(() => {
+    const doc = window.__editor?.getDoc?.() ?? "";
+    const selection = window.__editor?.getSelection?.() ?? null;
+    const mode = window.__app?.getMode?.() ?? null;
+    return { document: doc, selection, mode };
+  });
+  return { label, ...state, capturedAt: new Date().toISOString() };
+}
+
+export async function setCursor(page, line, col = 0) {
+  await waitForEditorSurface(page);
+  const doc = await readEditorText(page);
+  const lines = doc.split("\n");
+  if (line < 1 || line > lines.length) {
+    throw new Error(`setCursor: line ${line} out of range (document has ${lines.length} lines).`);
+  }
+  let offset = 0;
+  for (let i = 0; i < line - 1; i++) {
+    offset += lines[i].length + 1;
+  }
+  offset += Math.min(col, lines[line - 1].length);
+  await setSelection(page, offset, offset);
+}
+
+export async function jumpToTextAnchor(page, text, options = {}) {
+  const { occurrence = 1, offset: charOffset = 0 } = options;
+  await waitForEditorSurface(page);
+  const doc = await readEditorText(page);
+  let pos = -1;
+  let found = 0;
+  let searchFrom = 0;
+  while (found < occurrence) {
+    pos = doc.indexOf(text, searchFrom);
+    if (pos === -1) {
+      throw new Error(`jumpToTextAnchor: "${text}" occurrence ${occurrence} not found (found ${found}).`);
+    }
+    found += 1;
+    searchFrom = pos + 1;
+  }
+  const anchor = Math.max(0, pos + charOffset);
+  await setSelection(page, anchor, anchor);
+}
+
 export async function disconnectBrowser(page) {
   try {
     const cleanup = browserCleanupByPage.get(page);
