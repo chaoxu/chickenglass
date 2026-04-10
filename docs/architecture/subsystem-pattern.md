@@ -151,6 +151,9 @@ Import direction rule:
 - `src/state/` may compose lower-level semantics/model modules
 - a subsystem must not define state for another subsystem or make peers
   import from its internal module just to reach shared state
+- if a consumer needs one concept, import the owner module directly
+- if a consumer needs several state owners together, add a focused
+  `src/state/<use-case>-state.ts` composition module instead of a broad barrel
 
 Concrete Epic 2 moves already in the repo:
 
@@ -161,6 +164,9 @@ Concrete Epic 2 moves already in the repo:
 - `src/state/plugin-registry.ts` made plugin registry state consumable from
   editor, render, semantics, and plugins without leaving CM6 ownership inside
   `src/plugins/`
+
+See [Document State Module](./document-state-module.md) for the canonical
+selector, composition, and registry rules.
 
 ## Subsystem checklist
 
@@ -207,6 +213,10 @@ the consumers:
 
 When these areas are changed, the goal is not just to make the code shorter.
 The goal is to make the owner, transitions, adapters, and invariants explicit.
+Shared CM6 document state for those areas belongs in `src/state/` per
+[Document State Module](./document-state-module.md).
+Shared CM6 document state for those areas belongs in `src/state/` per
+[Document State Module](./document-state-module.md).
 
 ## Good subsystem examples in the repo
 

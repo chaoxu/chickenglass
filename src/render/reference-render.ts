@@ -40,16 +40,8 @@ import {
 } from "./crossref-render";
 import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
 import {
-  documentAnalysisField,
-  getDocumentAnalysisSliceRevision,
-} from "../state/document-analysis";
-import {
-  getEquationNumbersCacheKey,
   type ReferenceSemantics,
 } from "../semantics/document";
-import { blockCounterField } from "../state/block-counter";
-import { bibDataField } from "../state/bib-data";
-import { pluginRegistryField } from "../state/plugin-registry";
 import {
   type DirtyRange,
   dirtyRangesFromChanges,
@@ -62,147 +54,27 @@ import {
   inlineRevealTargetChanged,
 } from "./inline-reveal-policy";
 import { isDebugRenderFlagEnabled } from "./debug-render-flags";
-import { createChangeChecker } from "../state/change-detection";
 import { createSemanticSensitiveViewPlugin } from "./view-plugin-factories";
+import {
+  getReferenceRenderAnalysis,
+  getReferenceRenderState,
+  referenceRenderRebuildDependenciesChanged,
+  referenceRenderSliceChanged,
+} from "../state/reference-render-state";
 
-function serializeKeyPart(value: string | undefined): string {
-  return value ?? "";
-}
-
-const objectIdentityIds = new WeakMap<object, number>();
-let nextObjectIdentityId = 1;
-
-function getObjectIdentityId(value: object | null | undefined): number {
-  if (!value) return 0;
-  const existing = objectIdentityIds.get(value);
-  if (existing !== undefined) return existing;
-  const next = nextObjectIdentityId++;
-  objectIdentityIds.set(value, next);
-  return next;
-}
-
-function getBlockNumberingKey(state: EditorState): string {
-  const counters = state.field(blockCounterField, false);
-  if (!counters) return "";
-
-  return counters.blocks
-    .map((block) => `${block.type}\0${serializeKeyPart(block.id)}\0${block.number}`)
-    .join("\u0001");
-}
-
-const referenceSliceChanged = createChangeChecker(
-  (state) => state.field(documentAnalysisField).references,
-  (state) => state.field(documentAnalysisField).referenceByFrom,
-  (state) => getDocumentAnalysisSliceRevision(state.field(documentAnalysisField), "references"),
-);
-
-function getEquationNumberingSnapshot(state: EditorState) {
-  const analysis = state.field(documentAnalysisField);
-  return {
-    equations: analysis.equations,
-    equationById: analysis.equationById,
-    revision: getDocumentAnalysisSliceRevision(analysis, "equations"),
-    key: getEquationNumbersCacheKey(analysis),
-  };
-}
-
-function sameEquationNumberingSnapshot(
-  before: ReturnType<typeof getEquationNumberingSnapshot>,
-  after: ReturnType<typeof getEquationNumberingSnapshot>,
-): boolean {
-  return before.key === after.key || (
-    before.equations === after.equations &&
-    before.equationById === after.equationById &&
-    before.revision === after.revision
-  );
-}
-
-function getBlockNumberingSnapshot(state: EditorState) {
-  return {
-    counters: state.field(blockCounterField, false),
-    key: getBlockNumberingKey(state),
-  };
-}
-
-function sameBlockNumberingSnapshot(
-  before: ReturnType<typeof getBlockNumberingSnapshot>,
-  after: ReturnType<typeof getBlockNumberingSnapshot>,
-): boolean {
-  return before.key === after.key || before.counters === after.counters;
-}
-
-const crossrefNumberingChanged = createChangeChecker(
-  {
-    get: getEquationNumberingSnapshot,
-    equals: sameEquationNumberingSnapshot,
-  },
-  {
-    get: getBlockNumberingSnapshot,
-    equals: sameBlockNumberingSnapshot,
-  },
-);
-
-const bibliographyInputsChanged = createChangeChecker(
-  (state) => state.field(bibDataField, false)?.store ?? null,
-  (state) => state.field(bibDataField, false)?.cslProcessor ?? null,
-  (state) => state.field(bibDataField, false)?.processorRevision ?? null,
-);
-
-const blockLabelConfigChanged = createChangeChecker(
-  (state) => state.field(pluginRegistryField, false),
-);
-
-export function getReferenceRenderDependencySignature(
-  state: EditorState,
-): string {
-  const analysis = state.field(documentAnalysisField, false);
-  const bibState = state.field(bibDataField, false);
-  const pluginRegistry = state.field(pluginRegistryField, false);
-  if (!analysis || !bibState) {
-    return [
-      "",
-      "",
-      "",
-      0,
-      0,
-      0,
-      "",
-      getObjectIdentityId(pluginRegistry as object | null | undefined),
-    ].join("\u0001");
-  }
-  const { store, cslProcessor, processorRevision } = bibState;
-
-  return [
-    getDocumentAnalysisSliceRevision(analysis, "references"),
-    getEquationNumbersCacheKey(analysis),
-    getBlockNumberingKey(state),
-    getObjectIdentityId(store as object),
-    getObjectIdentityId(cslProcessor),
-    processorRevision,
-    cslProcessor.citationRegistrationKey ?? "",
-    getObjectIdentityId(pluginRegistry as object | null | undefined),
-  ].join("\u0001");
-}
-
-export function referenceRenderDependenciesChanged(
-  beforeState: EditorState,
-  afterState: EditorState,
-): boolean {
-  return (
-    bibliographyInputsChanged(beforeState, afterState) ||
-    blockLabelConfigChanged(beforeState, afterState) ||
-    referenceSliceChanged(beforeState, afterState) ||
-    crossrefNumberingChanged(beforeState, afterState)
-  );
-}
+export {
+  getReferenceRenderDependencySignature,
+  referenceRenderDependenciesChanged,
+} from "../state/reference-render-state";
 
 function getRevealedReferenceTarget(
   state: EditorState,
   focused: boolean,
 ): Pick<ReferenceSemantics, "from" | "to"> | null {
+  const analysis = getReferenceRenderAnalysis(state);
   return findFocusedInlineRevealTarget(
     state.selection.main,
-    state.field(documentAnalysisField).references,
+    analysis.references,
     focused,
   );
 }
@@ -253,9 +125,9 @@ export function planReferenceRendering(
   view: EditorView,
   store: BibStore,
   processor: CslProcessor,
-  references = view.state.field(documentAnalysisField).references,
+  references = getReferenceRenderAnalysis(view.state).references,
 ): ReferenceRenderItem[] {
-  const analysis = view.state.field(documentAnalysisField);
+  const analysis = getReferenceRenderAnalysis(view.state);
   const equationLabels = analysis.equationById;
   const items: ReferenceRenderItem[] = [];
   const activeRef = getRevealedReferenceTarget(view.state, view.hasFocus);
@@ -405,10 +277,10 @@ export function collectReferenceRanges(
   view: EditorView,
   store: BibStore,
   cslProcessor?: CslProcessor,
-  references = view.state.field(documentAnalysisField).references,
+  references = getReferenceRenderState(view.state).analysis.references,
 ): Range<Decoration>[] {
-  const processor = cslProcessor ?? view.state.field(bibDataField).cslProcessor;
-  const analysis = view.state.field(documentAnalysisField);
+  const { analysis, bibliography } = getReferenceRenderState(view.state);
+  const processor = cslProcessor ?? bibliography.cslProcessor;
 
   // Numeric CSL registration is global to document order. Cache it at the
   // (analysis, bibliography-store) boundary so ordinary navigation does not
@@ -420,7 +292,8 @@ export function collectReferenceRanges(
 
 /** Build reference decorations from the view state. */
 function buildReferenceDecorations(view: EditorView): DecorationSet {
-  const { store, cslProcessor } = view.state.field(bibDataField);
+  const { bibliography } = getReferenceRenderState(view.state);
+  const { store, cslProcessor } = bibliography;
   return buildDecorations(collectReferenceRanges(view, store, cslProcessor));
 }
 
@@ -475,11 +348,7 @@ function getReferenceRevealChange(update: ViewUpdate): ReferenceRevealChange {
 }
 
 function referenceRenderDependenciesNeedRebuild(update: ViewUpdate): boolean {
-  return (
-    bibliographyInputsChanged(update.startState, update.state) ||
-    blockLabelConfigChanged(update.startState, update.state) ||
-    crossrefNumberingChanged(update.startState, update.state)
-  );
+  return referenceRenderRebuildDependenciesChanged(update.startState, update.state);
 }
 
 function computeReferenceDirtyRanges(update: ViewUpdate): DirtyRange[] {
@@ -501,9 +370,10 @@ function collectReferenceRangesForDirtySpans(
   view: EditorView,
   dirtyRanges: readonly DirtyRange[],
 ): Range<Decoration>[] {
-  const { store, cslProcessor } = view.state.field(bibDataField);
+  const { analysis, bibliography } = getReferenceRenderState(view.state);
+  const { store, cslProcessor } = bibliography;
   const dirtyRefs = collectDirtyReferences(
-    view.state.field(documentAnalysisField).references,
+    analysis.references,
     dirtyRanges,
   );
   return dirtyRefs.length > 0
@@ -516,7 +386,7 @@ export const referenceRenderPlugin: Extension = createSemanticSensitiveViewPlugi
   buildReferenceDecorations,
   {
     collectRanges: collectReferenceRangesForDirtySpans,
-    semanticChanged: referenceSliceChanged,
+    semanticChanged: referenceRenderSliceChanged,
     contextChanged: (update) => getReferenceRevealChange(update).activeChanged,
     contextUpdateMode: "dirty-ranges",
     shouldRebuild: (update) => referenceRenderDependenciesNeedRebuild(update),

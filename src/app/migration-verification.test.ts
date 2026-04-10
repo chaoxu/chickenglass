@@ -874,7 +874,9 @@ describe("#298 — canonical document analysis pass", () => {
     expect(htmlEntry).toContain('export { markdownToHtml } from "./markdown-to-html/document"');
     expect(htmlDocument).toMatch(/analyze(?:Document|Markdown)Semantics/);
     expect(crossrefs).toMatch(/documentAnalysisField|getDocumentAnalysisOrRecompute|buildEditorDocumentReferenceCatalog/);
-    expect(references).toMatch(/documentAnalysisField|getDocumentAnalysisOrRecompute|buildEditorDocumentReferenceCatalog/);
+    expect(references).toMatch(
+      /documentAnalysisField|getDocumentAnalysisOrRecompute|buildEditorDocumentReferenceCatalog|reference-render-state|getReferenceRenderAnalysis|getReferenceRenderState/,
+    );
   });
 });
 
@@ -1263,6 +1265,30 @@ describe("#318 — subsystem pattern", () => {
     expect(agents).toContain(
       "docs/architecture/subsystem-pattern.md#neutral-owner-for-cross-subsystem-state",
     );
+  });
+});
+
+describe("#1091 — document state module contract", () => {
+  it("documents canonical src/state composition rules", () => {
+    const subsystem = fileText("docs/architecture/subsystem-pattern.md");
+    const documentState = fileText("docs/architecture/document-state-module.md");
+
+    expect(fileExists("docs/architecture/document-state-module.md")).toBe(true);
+    expect(subsystem).toContain("Document State Module");
+    expect(subsystem).toContain("src/state/");
+    expect(documentState).toContain("reference-render-state.ts");
+    expect(documentState).toContain("src/state/<use-case>-state.ts");
+    expect(documentState).toContain("Do not add a broad `src/state/index.ts` barrel");
+  });
+
+  it("routes a representative renderer through a state composition module", () => {
+    const referenceRender = fileText("src/render/reference-render.ts");
+    const referenceRenderState = fileText("src/state/reference-render-state.ts");
+
+    expect(fileExists("src/state/reference-render-state.ts")).toBe(true);
+    expect(referenceRender).toContain("../state/reference-render-state");
+    expect(referenceRenderState).toContain("getReferenceRenderState");
+    expect(referenceRenderState).toContain("referenceRenderDependenciesChanged");
   });
 });
 
