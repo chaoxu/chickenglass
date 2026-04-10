@@ -191,6 +191,26 @@ describe("document semantics analyzers", () => {
     });
   });
 
+  it("extracts include paths from the block body instead of attribute title fallbacks", () => {
+    const doc = '::: {.include title="attr.md"}\nbody.md\n:::\n';
+    const tree = parser.parse(doc);
+
+    const semantics = analyzeDocumentSemantics(stringTextSource(doc), tree);
+
+    expect(semantics.includes).toHaveLength(1);
+    expect(semantics.includes[0]?.path).toBe("body.md");
+  });
+
+  it("extracts includes from unclosed multi-line include blocks", () => {
+    const doc = "::: {.include}\nchapter1.md";
+    const tree = parser.parse(doc);
+
+    const semantics = analyzeDocumentSemantics(stringTextSource(doc), tree);
+
+    expect(semantics.includes).toHaveLength(1);
+    expect(semantics.includes[0]?.path).toBe("chapter1.md");
+  });
+
   it("extracts multiple includes", () => {
     const doc = [
       "::: {.include}",

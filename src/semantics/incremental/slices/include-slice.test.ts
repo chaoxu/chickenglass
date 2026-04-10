@@ -27,6 +27,19 @@ function fullTree(state: EditorState) {
 }
 
 describe("deriveIncludeSlice", () => {
+  it("uses the block body instead of attribute title fallbacks for include paths", () => {
+    const doc = '::: {.include title="attr.md"}\nbody.md\n:::\n';
+    const state = createState(doc);
+    const source = editorStateTextSource(state);
+    const tree = fullTree(state);
+    const analysis = analyzeDocumentSemantics(source, tree);
+
+    const includes = deriveIncludeSlice(source, analysis.fencedDivs);
+
+    expect(includes).toEqual(analysis.includes);
+    expect(includes[0]?.path).toBe("body.md");
+  });
+
   it("updates only affected include entries after fenced-div merge", () => {
     const doc = [
       "::: {.include}",
@@ -217,5 +230,43 @@ describe("deriveIncludeSlice", () => {
       analyzeDocumentSemantics(afterDoc, fullTree(tr.state)).includes,
     );
     expect(afterIncludes).toEqual([]);
+  });
+
+  it("keeps include paths when an edit removes the closing fence", () => {
+    const doc = "::: {.include}\nchapter1.md\n:::\n";
+    const beforeState = createState(doc);
+    const beforeDoc = editorStateTextSource(beforeState);
+    const before = analyzeDocumentSemantics(beforeDoc, fullTree(beforeState));
+
+    const closeFenceFrom = doc.lastIndexOf("\n:::") + 1;
+    const tr = beforeState.update({
+      changes: { from: closeFenceFrom, to: closeFenceFrom + 3, insert: "" },
+    });
+    const afterDoc = editorStateTextSource(tr.state);
+    const delta = buildSemanticDelta(tr);
+    const extractedDirtyWindows = extractDirtyFencedDivWindows(
+      before.fencedDivs,
+      afterDoc,
+      fullTree(tr.state),
+      tr.changes,
+      delta.dirtyWindows,
+    );
+    const afterFencedDivs = mergeFencedDivSlice(
+      before.fencedDivs,
+      tr.changes,
+      extractedDirtyWindows,
+    );
+
+    const afterIncludes = deriveIncludeSlice(
+      afterDoc,
+      afterFencedDivs,
+      before.includes,
+      tr.changes,
+    );
+
+    expect(afterIncludes).toEqual(
+      analyzeDocumentSemantics(afterDoc, fullTree(tr.state)).includes,
+    );
+    expect(afterIncludes[0]?.path).toBe("chapter1.md");
   });
 });

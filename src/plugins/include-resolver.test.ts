@@ -70,6 +70,19 @@ A theorem block.
     expect(extractIncludePaths(content)).toEqual(["chapter1.md"]);
   });
 
+  it("prefers the include body over attribute title fallbacks", () => {
+    const content = `::: {.include title="attr.md"}
+body.md
+:::`;
+    expect(extractIncludePaths(content)).toEqual(["body.md"]);
+  });
+
+  it("extracts unclosed multi-line include blocks", () => {
+    const content = `::: {.include}
+body.md`;
+    expect(extractIncludePaths(content)).toEqual(["body.md"]);
+  });
+
   // Regression: #357 — include syntax inside fenced code blocks must be ignored
   it("ignores include syntax inside a fenced code block (backticks)", () => {
     const content = `\`\`\`
@@ -439,6 +452,20 @@ chapter1.md
 });
 
 describe("flattenIncludesWithSourceMap", () => {
+  it("replaces single-line include blocks using canonical analysis ranges", () => {
+    const rootContent = "Intro\n\n::: {.include} ch.md :::\n\nEnd.";
+    const includes = [{ path: "ch.md", content: "Chapter text", children: [] }];
+
+    const result = flattenIncludesWithSourceMap(rootContent, includes);
+
+    expect(result.text).toBe("Intro\n\nChapter text\n\nEnd.");
+    expect(result.regions).toHaveLength(1);
+    expect(result.regions[0]).toMatchObject({
+      file: "ch.md",
+      originalRef: "::: {.include} ch.md :::",
+    });
+  });
+
   it("produces nested child regions for recursive includes", () => {
     const sectionInclude = `::: {.include}
 sec.md
