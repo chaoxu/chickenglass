@@ -17,19 +17,19 @@ import {
   BlockCaptionWidget,
   BlockHeaderWidget,
   embedSandboxPermissions,
-} from "../render/plugin-render-adapter";
+} from "./plugin-render-adapter";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../state/document-analysis";
-import { editorFocusField, focusEffect, mathMacrosField } from "../render/render-core";
-import { widgetSourceMap } from "../render/render-utils";
+import { editorFocusField, focusEffect, mathMacrosField } from "./render-core";
+import { widgetSourceMap } from "./render-utils";
 import { frontmatterField } from "../editor/frontmatter-state";
 import {
   activeStructureEditField,
   createFencedStructureEditTarget,
   setStructureEditTargetEffect,
 } from "../editor/structure-edit-state";
-import { defaultPlugins } from "./default-plugins";
+import { defaultPlugins } from "../plugins/default-plugins";
 import { IFRAME_POLL_INTERVAL_MS } from "../constants/timing";
 import {
   applyStateEffects,

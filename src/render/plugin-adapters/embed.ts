@@ -1,16 +1,16 @@
 import { type EditorState, type Range } from "@codemirror/state";
 import type { Decoration } from "@codemirror/view";
-import type { FencedDivInfo } from "../fenced-block/model";
+import type { FencedDivInfo } from "../../fenced-block/model";
 import {
   extractYoutubeId,
   gistEmbedUrl,
   isValidEmbedUrl,
   youtubeEmbedUrl,
-} from "./embed-url";
+} from "../../plugins/embed-url";
 import {
   type PluginRenderAdapter,
   pushPluginWidgetDecoration,
-} from "./plugin-render-adapter";
+} from "../../plugins/plugin-render-adapter";
 
 function computeEmbedSrc(
   embedType: string,

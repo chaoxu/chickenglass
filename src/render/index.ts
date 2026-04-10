@@ -5,6 +5,9 @@ export * from "./render-core";
 export { renderInlineMarkdown } from "./inline-render";
 export { markdownRenderPlugin } from "./markdown-render";
 export {
+  blockRenderPlugin,
+} from "./plugin-render";
+export {
   MathWidget,
   mathRenderPlugin,
   renderKatex,

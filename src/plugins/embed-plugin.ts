@@ -22,7 +22,7 @@
 
 import type { BlockPlugin, BlockRenderDecorations } from "./plugin-types";
 import { type StandardPluginOptions, createStandardPlugin } from "./plugin-factory";
-import { addEmbedWidget } from "./plugin-render-embed";
+import { addEmbedWidget } from "../render/plugin-adapters/embed";
 
 export {
   extractYoutubeId,

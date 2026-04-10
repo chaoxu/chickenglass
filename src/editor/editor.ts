@@ -3,8 +3,8 @@ import { Compartment, EditorState, type Extension, StateEffect, StateField } fro
 import { EditorView } from "@codemirror/view";
 import { treeView } from "@overleaf/codemirror-tree-view";
 import { bibliographyPlugin } from "../citations";
-import { blockRenderPlugin } from "../plugins";
 import {
+  blockRenderPlugin,
   checkboxRenderPlugin,
   codeBlockRenderPlugin,
   codeBlockStructureField,

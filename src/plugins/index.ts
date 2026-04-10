@@ -22,9 +22,6 @@ export {
   emptyCounterState,
 } from "./block-counter";
 export {
-  blockRenderPlugin,
-} from "./plugin-render";
-export {
   fenceOperationAnnotation,
 } from "./fence-protection";
 export {

@@ -36,22 +36,22 @@ import {
   focusTracker,
   hideMultiLineClosingFence,
   mathMacrosField,
-} from "../render/render-core";
+} from "./render-core";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
 } from "../state/document-analysis";
 import { type BlockCounterState, blockCounterField } from "../state/block-counter";
 import { pluginRegistryField } from "../state/plugin-registry";
-import { DecorationBuilder } from "./decoration-builder";
-import { fenceProtectionExtension } from "./fence-protection";
-import { getPluginOrFallback } from "./plugin-registry";
+import { DecorationBuilder } from "../plugins/decoration-builder";
+import { fenceProtectionExtension } from "../plugins/fence-protection";
+import { getPluginOrFallback } from "../plugins/plugin-registry";
 import {
   addCaptionDecoration,
   addInlineHeaderDecoration,
-} from "./plugin-render-chrome";
-import type { BlockAttrs } from "./plugin-types";
-import { applySpecialBehavior } from "./special-behavior-handlers";
+} from "./plugin-adapters/chrome";
+import type { BlockAttrs } from "../plugins/plugin-types";
+import { applySpecialBehavior } from "../plugins/special-behavior-handlers";
 
 function joinClasses(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");

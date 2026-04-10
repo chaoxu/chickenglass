@@ -3,20 +3,20 @@ import {
   Decoration,
   WidgetType,
 } from "@codemirror/view";
-import { CSS } from "../constants/css-classes";
-import { renderDocumentFragmentToDom } from "../document-surfaces";
-import type { FencedDivInfo } from "../fenced-block/model";
+import { CSS } from "../../constants/css-classes";
+import { renderDocumentFragmentToDom } from "../../document-surfaces";
+import type { FencedDivInfo } from "../../fenced-block/model";
 import {
   getFencedDivRevealFrom,
   getFencedDivRevealTo,
   getFencedDivStructuralOpenTo,
-} from "../fenced-block/model";
-import { ShellMacroAwareWidget } from "../render/shell-widget";
-import { syncActiveFenceGuideClasses } from "../render/source-widget";
+} from "../../fenced-block/model";
+import { ShellMacroAwareWidget } from "../shell-widget";
+import { syncActiveFenceGuideClasses } from "../source-widget";
 import {
   addPluginMarkerReplacement,
   type PluginRenderAdapter,
-} from "./plugin-render-adapter";
+} from "../../plugins/plugin-render-adapter";
 
 class SimpleTextWidget extends WidgetType {
   constructor(
