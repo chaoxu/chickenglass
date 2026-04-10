@@ -6,7 +6,7 @@ import type {
   NodeSpec,
 } from "@lezer/markdown";
 import { tags, styleTags } from "@lezer/highlight";
-import { COLON, SPACE, TAB, OPEN_BRACE, findMatchingBrace, skipSpaceTab, isSpaceTab } from "./char-utils";
+import { COLON, OPEN_BRACE, findMatchingBrace, isSpaceTab } from "./char-utils";
 
 /**
  * Lezer markdown extension for Pandoc-style fenced divs.
@@ -46,15 +46,40 @@ export function countColons(text: string, pos: number): number {
   return count;
 }
 
+interface FencePrefixInfo {
+  readonly colonCount: number;
+  readonly cursorAfterColons: number;
+}
+
+function readFencePrefix(text: string, pos: number): FencePrefixInfo | undefined {
+  const colonCount = countColons(text, pos);
+  if (colonCount < 3) return undefined;
+
+  let cursor = pos + colonCount;
+  while (cursor < text.length && isSpaceTab(text.charCodeAt(cursor))) {
+    cursor++;
+  }
+
+  return {
+    colonCount,
+    cursorAfterColons: cursor,
+  };
+}
+
+function closingFenceColonCount(
+  text: string,
+  prefix: FencePrefixInfo | undefined,
+): number {
+  if (!prefix) return -1;
+  return prefix.cursorAfterColons >= text.length ? prefix.colonCount : -1;
+}
+
 /**
  * Check if a line is a closing fence (3+ colons followed by only whitespace).
  * Returns the colon count or -1 if not a closing fence.
  */
 export function isClosingFence(text: string, pos: number): number {
-  const colonCount = countColons(text, pos);
-  if (colonCount < 3) return -1;
-  const afterColons = skipSpaceTab(text, pos + colonCount);
-  return afterColons >= text.length ? colonCount : -1;
+  return closingFenceColonCount(text, readFencePrefix(text, pos));
 }
 
 /**
@@ -64,12 +89,9 @@ export function isClosingFence(text: string, pos: number): number {
  */
 function parseFenceColonsAndAttrs(
   text: string,
-  pos: number,
+  prefix: FencePrefixInfo,
 ): { colonCount: number; attrFrom: number; attrTo: number; cursorAfterAttr: number } | undefined {
-  const colonCount = countColons(text, pos);
-  if (colonCount < 3) return undefined;
-
-  let cursor = skipSpaceTab(text, pos + colonCount);
+  let cursor = prefix.cursorAfterColons;
 
   // A bare `:::` with nothing after is a closing fence, not an opening one
   if (cursor >= text.length) return undefined;
@@ -83,7 +105,10 @@ function parseFenceColonsAndAttrs(
     if (end === -1) return undefined;
     attrFrom = cursor;
     attrTo = end;
-    cursor = skipSpaceTab(text, end);
+    cursor = end;
+    while (cursor < text.length && isSpaceTab(text.charCodeAt(cursor))) {
+      cursor++;
+    }
   } else {
     // Short-form: ::: ClassName [Title...]
     // The first word is treated as the class name. We synthesize a
@@ -93,18 +118,24 @@ function parseFenceColonsAndAttrs(
     const wordStart = cursor;
     while (
       cursor < text.length &&
-      text.charCodeAt(cursor) !== SPACE &&
-      text.charCodeAt(cursor) !== TAB
+      !isSpaceTab(text.charCodeAt(cursor))
     ) {
       cursor++;
     }
     if (cursor === wordStart) return undefined; // nothing after :::
     attrFrom = wordStart;
     attrTo = cursor;
-    cursor = skipSpaceTab(text, cursor);
+    while (cursor < text.length && isSpaceTab(text.charCodeAt(cursor))) {
+      cursor++;
+    }
   }
 
-  return { colonCount, attrFrom, attrTo, cursorAfterAttr: cursor };
+  return {
+    colonCount: prefix.colonCount,
+    attrFrom,
+    attrTo,
+    cursorAfterAttr: cursor,
+  };
 }
 
 /**
@@ -175,9 +206,11 @@ function parseFenceTitle(
  */
 function parseOpeningFence(
   text: string,
-  pos: number,
+  prefix: FencePrefixInfo | undefined,
 ): OpeningFenceInfo | undefined {
-  const stage1 = parseFenceColonsAndAttrs(text, pos);
+  if (!prefix) return undefined;
+
+  const stage1 = parseFenceColonsAndAttrs(text, prefix);
   if (!stage1) return undefined;
 
   const { colonCount, attrFrom, attrTo, cursorAfterAttr } = stage1;
@@ -258,7 +291,10 @@ function fencedDivComposite(
   if (value < 0) return false;
 
   const colonCount = unpackColonCount(value);
-  const closingColons = isClosingFence(line.text, line.pos);
+  const closingColons = closingFenceColonCount(
+    line.text,
+    readFencePrefix(line.text, line.pos),
+  );
   fencedDivLog(`composite line="${line.text.slice(0, 40)}" closing=${closingColons} need=${colonCount} lineStart=${cx.lineStart} depth=${cx.depth}`);
   if (closingColons >= colonCount) {
     fencedDivLog(`CLOSING at lineStart=${cx.lineStart} depth=${cx.depth}`);
@@ -280,17 +316,23 @@ const fencedDivBlockParser: BlockParser = {
   before: "FencedCode",
 
   parse(cx: BlockContext, line: Line) {
+    if (cx.lineStart === 0 && line.pos === 0) {
+      parseGeneration = 0;
+    }
+
+    const prefix = readFencePrefix(line.text, line.pos);
+
     // Check for closing fence that was rejected by composite callback.
     // After the composite finishes, the closing fence line is re-processed
     // by block parsers. We consume it here so it doesn't become a paragraph.
-    const closingColons = isClosingFence(line.text, line.pos);
+    const closingColons = closingFenceColonCount(line.text, prefix);
     if (closingColons >= 3) {
       cx.nextLine();
       return true;
     }
 
     // Check for opening fence
-    const info = parseOpeningFence(line.text, line.pos);
+    const info = parseOpeningFence(line.text, prefix);
     if (!info) return false;
 
     const fenceStart = cx.lineStart + line.pos;
@@ -355,9 +397,11 @@ const fencedDivBlockParser: BlockParser = {
   },
 
   endLeaf(_cx: BlockContext, line: Line) {
+    const prefix = readFencePrefix(line.text, line.pos);
+
     // Both opening and closing fences should interrupt paragraphs
-    if (isClosingFence(line.text, line.pos) >= 3) return true;
-    return parseOpeningFence(line.text, line.pos) !== undefined;
+    if (closingFenceColonCount(line.text, prefix) >= 3) return true;
+    return parseOpeningFence(line.text, prefix) !== undefined;
   },
 };
 
