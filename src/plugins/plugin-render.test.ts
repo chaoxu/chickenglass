@@ -12,10 +12,12 @@ import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import {
   _blockDecorationFieldForTest as blockDecorationField,
-  _BlockCaptionWidgetForTest as BlockCaptionWidget,
-  _BlockHeaderWidgetForTest as BlockHeaderWidget,
-  embedSandboxPermissions,
 } from "./plugin-render";
+import {
+  BlockCaptionWidget,
+  BlockHeaderWidget,
+  embedSandboxPermissions,
+} from "../render/plugin-render-adapter";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../semantics/codemirror-source";

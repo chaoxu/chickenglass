@@ -30,9 +30,8 @@ import {
 import {
   collectFencedDivs,
   type FencedDivInfo,
-  getFencedDivRevealFrom,
-  getFencedDivRevealTo,
 } from "../fenced-block/model";
+import { pluginRenderAdapter } from "../lib/plugin-render-adapter";
 import {
   addSingleLineClosingFence,
   buildFencedBlockDecorations,
@@ -53,16 +52,13 @@ import { fenceProtectionExtension } from "./fence-protection";
 import { getPluginOrFallback } from "./plugin-registry";
 import {
   addAttributeTitleDecoration,
+  addCaptionDecoration,
   addHeaderWidgetDecoration,
+  addInlineHeaderDecoration,
   addInlineTitleParenDecorations,
-  BlockCaptionWidget,
-  BlockHeaderWidget,
 } from "./plugin-render-chrome";
 import { addEmbedWidget } from "./plugin-render-embed";
 import type { BlockAttrs } from "./plugin-types";
-
-export { BlockCaptionWidget as _BlockCaptionWidgetForTest, BlockHeaderWidget as _BlockHeaderWidgetForTest } from "./plugin-render-chrome";
-export { embedSandboxPermissions } from "./plugin-render-embed";
 
 function joinClasses(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");
@@ -207,9 +203,9 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // explicit mapped state, not raw-text editing of the fence syntax.
     // Toggling the replacement on/off caused a 1px geometry delta (#1015).
     if (captionBelow || inlineHeader) {
-      addHeaderWidgetDecoration(div, "", openerSourceActive, macros, items);
+      addHeaderWidgetDecoration(pluginRenderAdapter, div, "", openerSourceActive, macros, items);
     } else {
-      addHeaderWidgetDecoration(div, spec.header, openerSourceActive, macros, items);
+      addHeaderWidgetDecoration(pluginRenderAdapter, div, spec.header, openerSourceActive, macros, items);
     }
 
     // Title text: wrap in visual parentheses via widget decorations (rendered mode only).
@@ -232,7 +228,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       div.titleTo === undefined &&
       div.title
     ) {
-      addAttributeTitleDecoration(div.openFenceTo, div.title, macros, items);
+      addAttributeTitleDecoration(pluginRenderAdapter, div.openFenceTo, div.title, macros, items);
     }
 
     // --- Closing fence ---
@@ -247,7 +243,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       // Embed blocks: replace body content with iframe widget
       if (isEmbed && !openerSourceActive) {
         const openLine = state.doc.lineAt(div.openFenceFrom);
-        addEmbedWidget(state, div, openLine, items, activeShell);
+        addEmbedWidget(pluginRenderAdapter, state, div, openLine, items, activeShell);
       }
     }
 
@@ -272,36 +268,29 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
 
       if (inlineHeader && !openerSourceActive && closeLine.number > openLine.number + 1) {
         const firstBodyLine = state.doc.line(openLine.number + 1);
-        const inlineHeaderWidget = new BlockHeaderWidget(spec.header, macros);
-        inlineHeaderWidget.updateSourceRange(
-          getFencedDivRevealFrom(div),
-          getFencedDivRevealTo(div),
-        );
-        items.push(
-          Decoration.line({ class: `${spec.className} ${CSS.blockHeader}` }).range(firstBodyLine.from),
-        );
-        items.push(
-          Decoration.widget({
-            widget: inlineHeaderWidget,
-            side: -1,
-          }).range(firstBodyLine.from),
+        addInlineHeaderDecoration(
+          pluginRenderAdapter,
+          div,
+          firstBodyLine.from,
+          spec.header,
+          spec.className,
+          macros,
+          items,
         );
       }
 
       // Below-caption label: add a real caption block after the content.
       if (captionBelow && !openerSourceActive && closeLine.number > openLine.number + 1) {
         const lastBodyLine = state.doc.line(closeLine.number - 1);
-        const captionWidget = new BlockCaptionWidget(spec.header, div.title ?? "", macros, activeShell);
-        captionWidget.updateSourceRange(
-          div.titleFrom ?? getFencedDivRevealFrom(div),
-          div.titleTo ?? getFencedDivRevealTo(div),
-        );
-        items.push(
-          Decoration.widget({
-            widget: captionWidget,
-            side: 1,
-            block: true,
-          }).range(lastBodyLine.to),
+        addCaptionDecoration(
+          pluginRenderAdapter,
+          div,
+          lastBodyLine.to,
+          spec.header,
+          div.title ?? "",
+          macros,
+          activeShell,
+          items,
         );
       }
     }
@@ -359,8 +348,7 @@ const blockDecorationField = createFencedBlockDecorationField(buildBlockDecorati
 });
 
 /** Exported for unit testing decoration logic without a browser. */
-export { blockDecorationField as _blockDecorationFieldForTest };
-export { blockDecorationInputsChanged as _blockDecorationInputsChangedForTest };
+export { blockDecorationField as _blockDecorationFieldForTest, blockDecorationInputsChanged as _blockDecorationInputsChangedForTest };
 
 /** CM6 extension that renders fenced divs using the block plugin system. */
 export const blockRenderPlugin: Extension = [
