@@ -3,6 +3,7 @@ import { EditorView } from "@codemirror/view";
 import { bibDataField } from "../citations";
 import { includeRegionsField } from "../lib/include-regions";
 import { defaultPlugins } from "../plugins";
+import { referencePresentationField } from "../references/presentation";
 import { imageUrlField } from "../render/image-url-cache";
 import { pdfPreviewField } from "../render/pdf-preview-cache";
 import { documentLabelGraphField } from "../semantics/document-label-graph";
@@ -32,6 +33,8 @@ export function coreDocumentStateExtensions(): Extension[] {
     documentReferenceCatalogField,
     documentLabelGraphField,
     bibDataField,
+    // Presentation text depends on bibliography and reference-catalog state.
+    referencePresentationField,
     pdfPreviewField,
     imageUrlField,
   ];

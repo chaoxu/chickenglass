@@ -9,14 +9,13 @@ import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 import type { EditorState, Extension } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
-import type { CslJsonItem } from "../citations/bibtex-parser";
 import {
   buildCitationPreviewContent,
-  formatCitationPreview,
 } from "../citations/citation-preview";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CSS } from "../constants/css-classes";
 import { findAncestor } from "../lib/syntax-tree-helpers";
+import { getReferencePresentationModel } from "../references/presentation";
 import { buildCrossrefCompletionPreviewContent } from "../render/hover-preview";
 import { getEditorDocumentReferenceCatalog } from "../semantics/editor-reference-catalog";
 
@@ -176,31 +175,6 @@ export function findReferenceCompletionMatch(
   );
 }
 
-function formatCitationAuthor(item: CslJsonItem): string {
-  const author = item.author?.[0];
-  const base =
-    author?.family
-    ?? author?.literal
-    ?? author?.given
-    ?? item.publisher
-    ?? item.id;
-
-  return item.author && item.author.length > 1
-    ? `${base} et al.`
-    : base;
-}
-
-function formatCitationYear(item: CslJsonItem): string | undefined {
-  const year = item.issued?.["date-parts"]?.[0]?.[0];
-  return typeof year === "number" ? String(year) : undefined;
-}
-
-function formatCitationDetail(item: CslJsonItem): string {
-  const author = formatCitationAuthor(item);
-  const year = formatCitationYear(item);
-  return year ? `${author} ${year}` : author;
-}
-
 function isCitationCompletion(
   completion: Completion,
 ): completion is ReferenceAutocompleteCompletion & {
@@ -252,6 +226,7 @@ export function collectReferenceCompletionCandidates(
 ): ReferenceCompletionCandidate[] {
   const candidates = new Map<string, ReferenceCompletionCandidate>();
   const catalog = getEditorDocumentReferenceCatalog(state);
+  const presentation = getReferencePresentationModel(state);
 
   for (const target of catalog.targets) {
     if (!target.id || candidates.has(target.id)) continue;
@@ -261,7 +236,7 @@ export function collectReferenceCompletionCandidates(
         candidates.set(target.id, {
           id: target.id,
           kind: "block",
-          detail: target.displayLabel,
+          detail: presentation.getDisplayText(target.id),
           info: target.title,
         });
         break;
@@ -269,7 +244,7 @@ export function collectReferenceCompletionCandidates(
         candidates.set(target.id, {
           id: target.id,
           kind: "equation",
-          detail: target.displayLabel,
+          detail: presentation.getDisplayText(target.id),
           info: target.text,
         });
         break;
@@ -277,7 +252,7 @@ export function collectReferenceCompletionCandidates(
         candidates.set(target.id, {
           id: target.id,
           kind: "heading",
-          detail: target.displayLabel,
+          detail: presentation.getDisplayText(target.id),
           info: target.title,
         });
         break;
@@ -291,8 +266,8 @@ export function collectReferenceCompletionCandidates(
       candidates.set(item.id, {
         id: item.id,
         kind: "citation",
-        detail: formatCitationDetail(item),
-        preview: formatCitationPreview(item),
+        detail: presentation.getDisplayText(item.id),
+        preview: presentation.getPreviewText(item.id),
       });
     }
   }
