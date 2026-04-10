@@ -11,8 +11,8 @@
  * - @id narrative citations: "Author (Year)"
  * - [@a; @b] multiple citations: "(Author1, Year1; Author2, Year2)"
  */
-import { type WidgetType } from "@codemirror/view";
-import { SimpleTextRenderWidget } from "../render/render-core";
+import { SimpleTextReferenceWidget } from "../render/render-core";
+import { CSS } from "../constants/css-classes";
 import { getDocumentAnalysis } from "../semantics/incremental/cached-document-analysis";
 import type { BibStore } from "../state/bib-data";
 export {
@@ -28,30 +28,17 @@ export {
  * Handles both parenthetical citations like "(Karger, 2000)" and narrative
  * citations like "Karger (2000)". Pass `narrative: true` for the latter.
  */
-export class CitationWidget extends SimpleTextRenderWidget {
-  private readonly idsKey: string;
-
+export class CitationWidget extends SimpleTextReferenceWidget {
   constructor(
-    private readonly text: string,
+    text: string,
     ids: readonly string[],
-    private readonly narrative: boolean = false,
+    narrative: boolean = false,
   ) {
     super({
-      tagName: "span",
-      className: narrative ? "cf-citation cf-citation-narrative" : "cf-citation",
+      className: narrative ? CSS.citationNarrative : CSS.citation,
       text,
-      attrs: { "aria-label": ids.join("; ") },
+      ariaLabel: ids.join("; "),
     });
-    this.idsKey = ids.join("\0");
-  }
-
-  eq(other: WidgetType): boolean {
-    return (
-      other instanceof CitationWidget &&
-      this.text === other.text &&
-      this.idsKey === other.idsKey &&
-      this.narrative === other.narrative
-    );
   }
 }
 

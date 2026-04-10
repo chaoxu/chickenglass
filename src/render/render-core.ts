@@ -39,6 +39,19 @@ export {
   type SimpleTextRenderSpec,
 } from "./source-widget";
 
+// ── reference-widget.ts ──────────────────────────────────────────────────────
+export {
+  REFERENCE_WIDGET_SELECTOR,
+  findReferenceWidgetContainer,
+  isReferenceWidgetTarget,
+  ReferenceWidget,
+  SimpleTextReferenceWidget,
+  type ReferenceRootSpec,
+  type ReferenceItemSpec,
+  type ReferenceListSpec,
+  type SimpleTextReferenceSpec,
+} from "./reference-widget";
+
 // ── shell-widget.ts ──────────────────────────────────────────────────────────
 export {
   ShellWidget,

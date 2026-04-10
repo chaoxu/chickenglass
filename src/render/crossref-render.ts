@@ -6,34 +6,32 @@
  * exports the widget classes used by the rendering system.
  */
 
-import {
-  type ResolvedCrossref,
-} from "../index/crossref-resolver";
+import { type WidgetType } from "@codemirror/view";
+import { type ResolvedCrossref } from "../index/crossref-resolver";
 import { CSS } from "../constants/css-classes";
 import {
-  RenderWidget,
-  SimpleTextRenderWidget,
-} from "./source-widget";
+  ReferenceWidget,
+  SimpleTextReferenceWidget,
+} from "./reference-widget";
 
 /** Widget for a resolved cross-reference (block or equation). */
-export class CrossrefWidget extends SimpleTextRenderWidget {
+export class CrossrefWidget extends SimpleTextReferenceWidget {
   constructor(
     private readonly resolved: ResolvedCrossref,
-    private readonly raw: string,
+    raw: string,
   ) {
     super({
-      tagName: "span",
-      className: "cf-crossref",
+      className: CSS.crossref,
       text: resolved.label,
-      attrs: { "aria-label": raw },
+      ariaLabel: raw,
     });
   }
 
-  eq(other: CrossrefWidget): boolean {
+  override eq(other: WidgetType): boolean {
     return (
+      other instanceof CrossrefWidget &&
       this.resolved.kind === other.resolved.kind &&
-      this.resolved.label === other.resolved.label &&
-      this.raw === other.raw
+      super.eq(other)
     );
   }
 }
@@ -51,36 +49,33 @@ export interface ClusteredCrossrefPart {
  * node separators, so hover-preview can target individual items (#397).
  * Unresolved items degrade in place instead of collapsing the whole cluster.
  */
-export class ClusteredCrossrefWidget extends RenderWidget {
+export class ClusteredCrossrefWidget extends ReferenceWidget {
   constructor(
     private readonly parts: readonly ClusteredCrossrefPart[],
-    private readonly raw: string,
+    raw: string,
   ) {
-    super();
+    super({
+      className: CSS.crossref,
+      ariaLabel: raw,
+    });
   }
 
   createDOM(): HTMLElement {
-    const container = document.createElement("span");
-    container.className = CSS.crossref;
-    container.setAttribute("aria-label", this.raw);
-    for (let i = 0; i < this.parts.length; i++) {
-      if (i > 0) {
-        container.appendChild(document.createTextNode("; "));
-      }
-      const span = document.createElement("span");
-      span.setAttribute("data-ref-id", this.parts[i].id);
-      if (this.parts[i].unresolved) {
-        span.className = CSS.crossrefUnresolved;
-      }
-      span.textContent = this.parts[i].text;
-      container.appendChild(span);
-    }
-    return container;
+    return this.createReferenceListDOM({
+      ...this.rootSpec,
+      items: this.parts.map((part) => ({
+        id: part.id,
+        text: part.text,
+        ...(part.unresolved ? { className: CSS.crossrefUnresolved } : {}),
+      })),
+      separatorText: "; ",
+    });
   }
 
-  eq(other: ClusteredCrossrefWidget): boolean {
+  override eq(other: WidgetType): boolean {
+    if (!(other instanceof ClusteredCrossrefWidget)) return false;
     if (this.parts.length !== other.parts.length) return false;
-    if (this.raw !== other.raw) return false;
+    if (!this.hasSameReferenceRoot(other)) return false;
     return this.parts.every(
       (part, i) =>
         part.id === other.parts[i].id &&
@@ -107,35 +102,34 @@ export interface MixedClusterPart {
  * node separators, wrapped in outer parens, so hover-preview can target
  * individual items (#397).
  */
-export class MixedClusterWidget extends RenderWidget {
+export class MixedClusterWidget extends ReferenceWidget {
   constructor(
     private readonly parts: readonly MixedClusterPart[],
-    private readonly raw: string,
+    raw: string,
   ) {
-    super();
+    super({
+      className: CSS.citation,
+      ariaLabel: raw,
+    });
   }
 
   createDOM(): HTMLElement {
-    const container = document.createElement("span");
-    container.className = CSS.citation;
-    container.setAttribute("aria-label", this.raw);
-    container.appendChild(document.createTextNode("("));
-    for (let i = 0; i < this.parts.length; i++) {
-      if (i > 0) {
-        container.appendChild(document.createTextNode("; "));
-      }
-      const span = document.createElement("span");
-      span.setAttribute("data-ref-id", this.parts[i].id);
-      span.textContent = this.parts[i].text;
-      container.appendChild(span);
-    }
-    container.appendChild(document.createTextNode(")"));
-    return container;
+    return this.createReferenceListDOM({
+      ...this.rootSpec,
+      items: this.parts.map((part) => ({
+        id: part.id,
+        text: part.text,
+      })),
+      prefixText: "(",
+      separatorText: "; ",
+      suffixText: ")",
+    });
   }
 
-  eq(other: MixedClusterWidget): boolean {
+  override eq(other: WidgetType): boolean {
+    if (!(other instanceof MixedClusterWidget)) return false;
     if (this.parts.length !== other.parts.length) return false;
-    if (this.raw !== other.raw) return false;
+    if (!this.hasSameReferenceRoot(other)) return false;
     return this.parts.every(
       (p, i) =>
         p.id === other.parts[i].id &&
@@ -168,17 +162,16 @@ function stripBracketSyntax(raw: string): string {
  * display path (`renderInlineMarkdown`), which renders `[@id]` as just
  * the bare id text (#406). The full raw source is kept as the tooltip.
  */
-export class UnresolvedRefWidget extends SimpleTextRenderWidget {
+export class UnresolvedRefWidget extends SimpleTextReferenceWidget {
   constructor(private readonly raw: string) {
     super({
-      tagName: "span",
-      className: "cf-crossref cf-crossref-unresolved",
+      className: CSS.crossrefUnresolved,
       text: stripBracketSyntax(raw),
-      attrs: { "aria-label": "Unresolved reference" },
+      ariaLabel: "Unresolved reference",
     });
   }
 
-  eq(other: UnresolvedRefWidget): boolean {
-    return this.raw === other.raw;
+  override eq(other: WidgetType): boolean {
+    return other instanceof UnresolvedRefWidget && this.raw === other.raw;
   }
 }

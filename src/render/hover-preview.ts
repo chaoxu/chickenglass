@@ -54,6 +54,10 @@ import { type BibStore, bibDataField } from "../state/bib-data";
 import { pluginRegistryField } from "../state/plugin-registry";
 import { getPlugin } from "../plugins/plugin-registry";
 import { findRenderedReference } from "./reference-targeting";
+import {
+  findReferenceWidgetContainer,
+  REFERENCE_WIDGET_SELECTOR,
+} from "./reference-widget";
 
 // ── Singleton tooltip element ───────────────────────────────────────────────
 
@@ -866,7 +870,7 @@ function buildTooltipPlanForElement(
   const refId = refIdFromElement(target);
 
   // Find the widget container to determine if this is crossref or citation
-  const widgetEl = target.closest(".cf-crossref, .cf-citation") as HTMLElement | null;
+  const widgetEl = findReferenceWidgetContainer(target);
   if (!widgetEl) return null;
 
   const ref = findRenderedReference(view, widgetEl);
@@ -937,7 +941,7 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
 
     // Check if the target (or ancestor) is a crossref/citation widget item
     const widgetItem = target.closest("[data-ref-id]") as HTMLElement | null;
-    const widgetContainer = target.closest(".cf-crossref, .cf-citation") as HTMLElement | null;
+    const widgetContainer = findReferenceWidgetContainer(target);
 
     // Determine the hover anchor: prefer the specific item span for clusters
     const anchor = widgetItem ?? widgetContainer;
@@ -983,7 +987,7 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
     // Check if mouse moved to another widget item/container
     if (relatedTarget) {
       const stillInWidget = relatedTarget.closest(
-        "[data-ref-id], .cf-crossref, .cf-citation",
+        `[data-ref-id], ${REFERENCE_WIDGET_SELECTOR}`,
       );
       if (stillInWidget) return; // onMouseOver will handle the switch
     }
