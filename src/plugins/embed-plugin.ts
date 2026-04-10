@@ -20,9 +20,21 @@
  * Security: Only https:// URLs are allowed. Iframes use sandbox attributes.
  */
 
+import type { EditorState, Range } from "@codemirror/state";
+import type { Decoration } from "@codemirror/view";
+import type { FencedDivInfo } from "../fenced-block/model";
 import type { BlockPlugin, BlockRenderDecorations } from "./plugin-types";
 import { type StandardPluginOptions, createStandardPlugin } from "./plugin-factory";
-import { addEmbedWidget } from "../render/plugin-adapters/embed";
+import {
+  type PluginRenderAdapter,
+  pushPluginWidgetDecoration,
+} from "./plugin-render-adapter";
+import {
+  extractYoutubeId,
+  gistEmbedUrl,
+  isValidEmbedUrl,
+  youtubeEmbedUrl,
+} from "./embed-url";
 
 export {
   extractYoutubeId,
@@ -31,10 +43,63 @@ export {
   youtubeEmbedUrl,
 } from "./embed-url";
 
+function computeEmbedSrc(
+  embedType: string,
+  rawUrl: string,
+): string | undefined {
+  const url = rawUrl.trim();
+  if (!isValidEmbedUrl(url)) return undefined;
+
+  switch (embedType) {
+    case "youtube": {
+      const videoId = extractYoutubeId(url);
+      return videoId ? youtubeEmbedUrl(videoId) : undefined;
+    }
+    case "gist":
+      return gistEmbedUrl(url);
+    case "embed":
+    case "iframe":
+    default:
+      return url;
+  }
+}
+
+function addEmbedWidgetDecoration(
+  state: EditorState,
+  div: FencedDivInfo,
+  items: Range<Decoration>[],
+  adapter: PluginRenderAdapter,
+  active: boolean,
+): void {
+  if (div.singleLine || div.closeFenceFrom < 0) return;
+
+  const openLine = state.doc.lineAt(div.openFenceFrom);
+  const bodyFrom = openLine.to + 1;
+  const bodyTo = div.closeFenceFrom - 1;
+  if (bodyFrom > bodyTo) return;
+
+  const rawUrl = state.sliceDoc(bodyFrom, bodyTo).trim();
+  const src = computeEmbedSrc(div.className, rawUrl);
+  if (!src) return;
+
+  pushPluginWidgetDecoration(
+    items,
+    adapter.createEmbedWidget(src, div.className, active),
+    bodyFrom,
+    bodyTo,
+  );
+}
+
 const embedRenderDecorations: BlockRenderDecorations = {
   addBodyDecorations({ adapter, state, div, items, activeShell, openerSourceActive }) {
     if (openerSourceActive) return;
-    addEmbedWidget(adapter, state, div, items, activeShell);
+    addEmbedWidgetDecoration(
+      state,
+      div,
+      items,
+      adapter,
+      activeShell,
+    );
   },
 };
 

@@ -21,13 +21,13 @@ import {
   getOpeningFenceBacktickRanges,
   getOpeningMathDelimiterRanges,
   _fenceProtectionCacheFieldForTest as fenceProtectionCacheField,
-} from "./fence-protection";
-import { _blockDecorationFieldForTest as blockDecorationField } from "../render/plugin-render";
+} from "../plugins/fence-protection";
+import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-render";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../state/document-analysis";
-import { editorFocusField, mathMacrosField } from "../render/render-core";
-import { _codeBlockStructureFieldForTest as codeBlockStructureField } from "../render/code-block-render";
+import { editorFocusField, mathMacrosField } from "./render-core";
+import { _codeBlockStructureFieldForTest as codeBlockStructureField } from "./code-block-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import {
   createEditorState,

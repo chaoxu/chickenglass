@@ -66,6 +66,14 @@ export function addPluginMarkerReplacement(
   items.push(decorationHidden.range(markerFrom, markerTo));
 }
 
+export function pushPluginHiddenDecoration(
+  items: Range<Decoration>[],
+  from: number,
+  to: number,
+): void {
+  items.push(decorationHidden.range(from, to));
+}
+
 export function pushPluginWidgetDecoration(
   items: Range<Decoration>[],
   widget: PluginRenderWidget,

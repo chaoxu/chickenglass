@@ -5,7 +5,7 @@ import type {
   FencedDivInfo,
 } from "../fenced-block/model";
 import { countColons } from "../parser";
-import type { CodeBlockInfo } from "../render/code-block-render";
+import type { CodeBlockInfo } from "../state/code-block-structure";
 import type { FenceRange } from "./fence-protection-pipeline";
 
 const closingFenceAtomicMark = Decoration.mark({});

@@ -47,8 +47,11 @@ import { DecorationBuilder } from "../plugins/decoration-builder";
 import { fenceProtectionExtension } from "../plugins/fence-protection";
 import { getPluginOrFallback } from "../plugins/plugin-registry";
 import {
+  addAttributeTitleDecoration,
   addCaptionDecoration,
+  addHeaderWidgetDecoration,
   addInlineHeaderDecoration,
+  addInlineTitleParenDecorations,
 } from "./plugin-adapters/chrome";
 import type { BlockAttrs } from "../plugins/plugin-types";
 import { applySpecialBehavior } from "../plugins/special-behavior-handlers";
@@ -158,9 +161,23 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // explicit mapped state, not raw-text editing of the fence syntax.
     // Toggling the replacement on/off caused a 1px geometry delta (#1015).
     if (captionBelow || inlineHeader) {
-      builder.addHeaderWidget(div, "", openerSourceActive, macros);
+      addHeaderWidgetDecoration(
+        pluginRenderAdapter,
+        div,
+        "",
+        openerSourceActive,
+        macros,
+        items,
+      );
     } else {
-      builder.addHeaderWidget(div, spec.header, openerSourceActive, macros);
+      addHeaderWidgetDecoration(
+        pluginRenderAdapter,
+        div,
+        spec.header,
+        openerSourceActive,
+        macros,
+        items,
+      );
     }
 
     // Title text: wrap in visual parentheses via widget decorations (rendered mode only).
@@ -168,7 +185,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // marks get split around Decoration.replace (math widgets), causing ") $x^2$".
     // For below-caption blocks, title text is the caption — no parens needed.
     if (!openerSourceActive && !captionBelow && !inlineHeader && div.titleFrom !== undefined && div.titleTo !== undefined) {
-      builder.addInlineTitleParens(div.titleFrom, div.titleTo);
+      addInlineTitleParenDecorations(div.titleFrom, div.titleTo, items);
     }
 
     if (!openerSourceActive && (captionBelow || inlineHeader) && div.titleFrom !== undefined && div.titleTo !== undefined) {
@@ -183,7 +200,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       div.titleTo === undefined &&
       div.title
     ) {
-      builder.addAttributeTitle(div.openFenceTo, div.title, macros);
+      addAttributeTitleDecoration(div.openFenceTo, div.title, macros, items);
     }
 
     // --- Closing fence ---
