@@ -4,6 +4,8 @@ import type { BackgroundIndexer } from "../../index/indexer";
 import type { IndexEntry, IndexQuery, SourceTextQuery } from "../../index/query-api";
 import { useSearchPanelController } from "./use-search-panel-controller";
 
+type UseSearchPanelControllerProps = Parameters<typeof useSearchPanelController>[0];
+
 function createMockIndexer(): BackgroundIndexer {
   return {
     query: vi.fn<(query: IndexQuery) => Promise<readonly IndexEntry[]>>(async () => []),
@@ -13,13 +15,15 @@ function createMockIndexer(): BackgroundIndexer {
 
 describe("useSearchPanelController", () => {
   it("resets query and type filter when the panel closes", async () => {
+    const initialProps: UseSearchPanelControllerProps = {
+      open: true,
+      searchMode: "semantic",
+      searchVersion: 0,
+      indexer: createMockIndexer(),
+    };
+
     const { result, rerender } = renderHook(useSearchPanelController, {
-      initialProps: {
-        open: true,
-        searchMode: "semantic" as const,
-        searchVersion: 0,
-        indexer: createMockIndexer(),
-      },
+      initialProps,
     });
 
     act(() => {
@@ -46,13 +50,15 @@ describe("useSearchPanelController", () => {
   });
 
   it("clears the type filter when switching to source mode", async () => {
+    const initialProps: UseSearchPanelControllerProps = {
+      open: true,
+      searchMode: "semantic",
+      searchVersion: 0,
+      indexer: createMockIndexer(),
+    };
+
     const { result, rerender } = renderHook(useSearchPanelController, {
-      initialProps: {
-        open: true,
-        searchMode: "semantic" as const,
-        searchVersion: 0,
-        indexer: createMockIndexer(),
-      },
+      initialProps,
     });
 
     act(() => {
