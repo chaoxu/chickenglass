@@ -18,7 +18,8 @@ import { frontmatterField } from "./frontmatter-state";
 import { documentSemanticsField } from "../state/document-analysis";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
-import { editorFocusField, mathMacrosField } from "../render/render-core";
+import { editorFocusField } from "../render/render-core";
+import { mathMacrosField } from "../state/math-macros";
 import {
   resolveCrossref,
   collectEquationLabels,

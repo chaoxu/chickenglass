@@ -59,7 +59,6 @@ import {
   SimpleTextRenderWidget,
   serializeMacros,
 } from "./source-widget";
-import { mathMacrosField } from "./math-macros";
 import {
   type FootnoteSemantics,
   numberFootnotes,
@@ -69,6 +68,7 @@ import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
 } from "../state/document-analysis";
+import { mathMacrosField } from "../state/math-macros";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import { CSS } from "../constants/css-classes";
 import {

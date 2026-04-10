@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import type { FileSystem } from "../lib/types";
 import {
-  _resetImageUrlCache,
-  getImageDataUrl,
-  invalidateImageDataUrl,
   imageUrlEffect,
   imageUrlField,
   imageUrlRemoveEffect,
+} from "../state/image-url";
+import {
+  _resetImageUrlCache,
+  getImageDataUrl,
+  invalidateImageDataUrl,
   requestImageDataUrl,
 } from "./image-url-cache";
 

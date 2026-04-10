@@ -24,18 +24,18 @@ import {
 import { buildDecorations } from "./decoration-core";
 import { createDecorationStateField } from "./decoration-field";
 import { editorFocusField, focusTracker } from "./focus-state";
-import { mathMacrosField } from "./math-macros";
 import {
   getReferenceRenderDependencySignature,
   referenceRenderDependenciesChanged,
 } from "./reference-render";
 import {
-  tableDiscoveryField,
   findTableAtCursor,
   findTablesInState,
   findTablesInView,
   tableDiscoveryParsePlugin,
 } from "./table-discovery";
+import { mathMacrosField } from "../state/math-macros";
+import { tableDiscoveryField } from "../state/table-discovery";
 import { showTableContextMenu } from "./table-actions";
 import { tableKeybindings } from "./table-navigation";
 import { cellEditAnnotation, TableWidget } from "./table-widget";

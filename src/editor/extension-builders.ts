@@ -1,15 +1,15 @@
 import { type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { bibDataField } from "../citations";
-import { includeRegionsField } from "../lib/include-regions";
 import { defaultPlugins } from "../plugins";
 import { referencePresentationField } from "../references/presentation";
-import { imageUrlField } from "../render/image-url-cache";
-import { pdfPreviewField } from "../render/pdf-preview-cache";
-import { documentLabelGraphField } from "../semantics/document-label-graph";
 import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import { blockCounterField } from "../state/block-counter";
 import { documentSemanticsField } from "../state/document-analysis";
+import { documentLabelGraphField } from "../state/document-label-graph";
+import { imageUrlField } from "../state/image-url";
+import { includeRegionsField } from "../state/include-regions";
+import { pdfPreviewField } from "../state/pdf-preview";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import {
   editableCompartment,

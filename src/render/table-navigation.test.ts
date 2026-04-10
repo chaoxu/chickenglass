@@ -2,7 +2,8 @@ import { type EditorView, runScopeHandlers } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
 import { createMarkdownLanguageExtensions } from "../editor/base-editor-extensions";
 import { createTestView } from "../test-utils";
-import { findCellBounds, tableDiscoveryField } from "./table-discovery";
+import { tableDiscoveryField } from "../state/table-discovery";
+import { findCellBounds } from "./table-discovery";
 import { tableKeybindings } from "./table-navigation";
 
 const TWO_ROW_DOC = [

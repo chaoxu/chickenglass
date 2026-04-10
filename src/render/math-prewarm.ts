@@ -3,7 +3,7 @@ import { ViewPlugin, type EditorView, type ViewUpdate } from "@codemirror/view";
 import type { MathSemantics } from "../semantics/document";
 import { documentAnalysisField } from "../state/document-analysis";
 import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
-import { mathMacrosField } from "./math-macros";
+import { mathMacrosField } from "../state/math-macros";
 import { serializeMacros } from "./source-widget";
 
 function scheduleIdle(callback: (deadline?: IdleDeadline) => void): void {

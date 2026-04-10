@@ -1,6 +1,5 @@
 import {
   type EditorState,
-  StateField,
   type Text,
 } from "@codemirror/state";
 import {
@@ -9,16 +8,12 @@ import {
   findEquationLabelSpan,
   findHeadingIdSpan,
 } from "../references/source-ranges";
-import { documentAnalysisField } from "../state/document-analysis";
 import { type DocumentAnalysis } from "./document";
 import {
   getEditorDocumentReferenceCatalog,
   getDocumentAnalysisOrRecompute,
 } from "./editor-reference-catalog";
-import { blockCounterField } from "../state/block-counter";
-import { pluginRegistryField } from "../state/plugin-registry";
 import type { DocumentReferenceCatalog } from "./reference-catalog";
-import { createChangeChecker } from "../state/change-detection";
 
 const EMPTY_DEFINITIONS: readonly DocumentLabelDefinition[] = [];
 const EMPTY_REFERENCES: readonly DocumentLabelReference[] = [];
@@ -299,13 +294,6 @@ function buildReferences(
   return references;
 }
 
-const graphDependenciesChanged = createChangeChecker(
-  { doc: true },
-  (state) => state.field(documentAnalysisField),
-  (state) => state.field(blockCounterField, false),
-  (state) => state.field(pluginRegistryField, false),
-);
-
 export function isValidDocumentLabelId(id: string): boolean {
   return LOCAL_LABEL_RE.test(id);
 }
@@ -379,16 +367,3 @@ export function validateDocumentLabelRename(
 
   return { ok: true, id: candidate };
 }
-
-export const documentLabelGraphField = StateField.define<DocumentLabelGraph>({
-  create(state) {
-    return buildDocumentLabelGraph(state);
-  },
-
-  update(value, tr) {
-    if (!graphDependenciesChanged(tr)) {
-      return value;
-    }
-    return buildDocumentLabelGraph(tr.state);
-  },
-});

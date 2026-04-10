@@ -7,11 +7,11 @@ import {
   _imageDecorationFieldForTest,
   imageRenderPlugin,
 } from "./image-render";
-import { imageUrlEffect, imageUrlField } from "./image-url-cache";
-import { pdfPreviewField } from "./pdf-preview-cache";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
 import { documentPathFacet } from "../lib/types";
+import { imageUrlEffect, imageUrlField } from "../state/image-url";
+import { pdfPreviewField } from "../state/pdf-preview";
 import { createTestView, getDecorationSpecs } from "../test-utils";
 import * as mediaPreview from "./media-preview";
 

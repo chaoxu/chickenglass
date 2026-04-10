@@ -25,7 +25,9 @@ import { blockCounterField, type NumberedBlock } from "../state/block-counter";
 import {
   buildCitationPreviewContent,
 } from "../citations/citation-preview";
-import { mathMacrosField } from "./math-macros";
+import { imageUrlField } from "../state/image-url";
+import { mathMacrosField } from "../state/math-macros";
+import { pdfPreviewField } from "../state/pdf-preview";
 import { renderKatex } from "./math-widget";
 import { renderBlockContentToDom, renderDocumentFragmentToDom, type BlockContentOptions } from "../document-surfaces";
 import {
@@ -37,7 +39,6 @@ import {
 import { documentPathFacet, type BlockCounterEntry } from "../lib/types";
 import { documentAnalysisField } from "../state/document-analysis";
 import { collectImageTargets } from "../app/pdf-image-previews";
-import { imageUrlField } from "./image-url-cache";
 import {
   createLocalMediaDependencies,
   EMPTY_LOCAL_MEDIA_DEPENDENCIES,
@@ -48,7 +49,7 @@ import {
   trackLocalMediaPreviewDependency,
   type LocalMediaDependencies,
 } from "./media-preview";
-import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
+import { getPdfCanvas } from "./pdf-preview-cache";
 import { type BibStore, bibDataField } from "../state/bib-data";
 import { pluginRegistryField } from "../state/plugin-registry";
 import { getPlugin } from "../plugins/plugin-registry";

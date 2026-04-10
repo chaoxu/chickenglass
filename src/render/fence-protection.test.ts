@@ -26,7 +26,8 @@ import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-r
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../state/document-analysis";
-import { editorFocusField, mathMacrosField } from "./render-core";
+import { mathMacrosField } from "../state/math-macros";
+import { editorFocusField } from "./render-core";
 import { _codeBlockStructureFieldForTest as codeBlockStructureField } from "./code-block-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import {

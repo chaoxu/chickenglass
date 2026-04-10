@@ -16,7 +16,7 @@ import {
   type MathSemantics,
 } from "../semantics/document";
 import { mathMouseSelectionStyle } from "./math-interactions";
-import { mathMacrosField } from "./math-macros";
+import { mathMacrosField } from "../state/math-macros";
 import { createMathWidgetMetadataPlugin } from "./math-metadata";
 import { mathPrewarmPlugin } from "./math-prewarm";
 import {

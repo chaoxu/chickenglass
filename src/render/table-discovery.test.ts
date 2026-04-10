@@ -2,6 +2,7 @@ import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { describe, expect, it } from "vitest";
 import { markdownExtensions } from "../parser";
+import { tableDiscoveryField, type TableRange } from "../state/table-discovery";
 import {
   findCellBounds,
   findClosestTable,
@@ -10,8 +11,6 @@ import {
   findTablesInState,
   findTablesInView,
   skipSeparator,
-  tableDiscoveryField,
-  type TableRange,
 } from "./table-discovery";
 import type { ParsedTable } from "./table-utils";
 

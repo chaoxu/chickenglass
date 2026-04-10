@@ -19,7 +19,7 @@ import { createSimpleViewPlugin } from "./view-plugin-factories";
 import { SimpleTextRenderWidget } from "./source-widget";
 import { containsPos } from "../lib/range-helpers";
 import { basename } from "../lib/utils";
-import { includeRegionsField, type IncludeRegionState } from "../lib/include-regions";
+import { includeRegionsField, type IncludeRegionState } from "../state/include-regions";
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,

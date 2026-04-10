@@ -17,6 +17,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import type { FileSystem } from "../lib/types";
+import {
+  ERROR_COOLDOWN_MS,
+  pdfPreviewEffect,
+  pdfPreviewField,
+  pdfPreviewRemoveEffect,
+} from "../state/pdf-preview";
 
 const { rasterizeMock } = vi.hoisted(() => ({
   rasterizeMock: vi.fn(),
@@ -27,13 +33,9 @@ vi.mock("./pdf-rasterizer", () => ({
 }));
 
 import {
-  pdfPreviewField,
-  pdfPreviewEffect,
-  pdfPreviewRemoveEffect,
   requestPdfPreview,
   getPdfCanvas,
   _resetPendingPaths,
-  ERROR_COOLDOWN_MS,
 } from "./pdf-preview-cache";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

@@ -15,7 +15,7 @@ import {
   includeRegionsField,
   setIncludeRegionsEffect,
   type IncludeRegionState,
-} from "../lib/include-regions";
+} from "../state/include-regions";
 import { createTestView } from "../test-utils";
 import {
   _includeLabelViewPluginForTest,
