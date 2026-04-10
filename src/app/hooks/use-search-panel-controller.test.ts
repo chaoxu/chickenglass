@@ -1,29 +1,67 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
 import type { BackgroundIndexer } from "../../index/indexer";
 import type { IndexEntry, IndexQuery, SourceTextQuery } from "../../index/query-api";
 import { useSearchPanelController } from "./use-search-panel-controller";
 
 type UseSearchPanelControllerProps = Parameters<typeof useSearchPanelController>[0];
 
-function createMockIndexer(): BackgroundIndexer {
+function createMockIndexer() {
+  let resolveQuery: ((entries: readonly IndexEntry[]) => void) | null = null;
+  let rejectQuery: ((error: Error) => void) | null = null;
+
+  const querySpy = vi.fn<(query: IndexQuery) => Promise<readonly IndexEntry[]>>(
+    () => new Promise<readonly IndexEntry[]>((resolve, reject) => {
+      resolveQuery = resolve;
+      rejectQuery = reject;
+    }),
+  );
+  const querySourceTextSpy = vi.fn<(query: SourceTextQuery) => Promise<readonly IndexEntry[]>>(
+    () => new Promise<readonly IndexEntry[]>((resolve, reject) => {
+      resolveQuery = resolve;
+      rejectQuery = reject;
+    }),
+  );
+
   return {
-    query: vi.fn<(query: IndexQuery) => Promise<readonly IndexEntry[]>>(async () => []),
-    querySourceText: vi.fn<(query: SourceTextQuery) => Promise<readonly IndexEntry[]>>(async () => []),
-  } as unknown as BackgroundIndexer;
+    indexer: {
+      query: querySpy,
+      querySourceText: querySourceTextSpy,
+    } as unknown as BackgroundIndexer,
+    querySpy,
+    querySourceTextSpy,
+    resolve(entries: readonly IndexEntry[] = []) {
+      resolveQuery?.(entries);
+      resolveQuery = null;
+      rejectQuery = null;
+    },
+    reject(error = new Error("test")) {
+      rejectQuery?.(error);
+      resolveQuery = null;
+      rejectQuery = null;
+    },
+  };
+}
+
+function createProps(
+  indexer: BackgroundIndexer,
+  overrides: Partial<UseSearchPanelControllerProps> = {},
+): UseSearchPanelControllerProps {
+  return {
+    open: true,
+    searchMode: "semantic",
+    searchVersion: 0,
+    indexer,
+    ...overrides,
+  };
 }
 
 describe("useSearchPanelController", () => {
-  it("resets query and type filter when the panel closes", async () => {
-    const initialProps: UseSearchPanelControllerProps = {
-      open: true,
-      searchMode: "semantic",
-      searchVersion: 0,
-      indexer: createMockIndexer(),
-    };
-
+  it("resets query, filter, and async state when the panel closes", async () => {
+    const mock = createMockIndexer();
     const { result, rerender } = renderHook(useSearchPanelController, {
-      initialProps,
+      initialProps: createProps(mock.indexer),
     });
 
     act(() => {
@@ -31,15 +69,15 @@ describe("useSearchPanelController", () => {
       result.current.setTypeFilter("theorem");
     });
 
-    expect(result.current.query).toBe("alpha");
-    expect(result.current.typeFilter).toBe("theorem");
-
-    rerender({
-      open: false,
-      searchMode: "semantic",
-      searchVersion: 0,
-      indexer: createMockIndexer(),
+    await waitFor(() => {
+      expect(mock.querySpy).toHaveBeenCalledWith({
+        content: "alpha",
+        type: "theorem",
+      });
+      expect(result.current.searching).toBe(true);
     });
+
+    rerender(createProps(mock.indexer, { open: false }));
 
     await waitFor(() => {
       expect(result.current.query).toBe("");
@@ -47,18 +85,25 @@ describe("useSearchPanelController", () => {
       expect(result.current.results).toEqual([]);
       expect(result.current.searching).toBe(false);
     });
+
+    mock.resolve([
+      {
+        type: "theorem",
+        file: "notes.md",
+        position: { from: 0, to: 5 },
+      },
+    ]);
+
+    await waitFor(() => {
+      expect(result.current.results).toEqual([]);
+      expect(result.current.searching).toBe(false);
+    });
   });
 
-  it("clears the type filter when switching to source mode", async () => {
-    const initialProps: UseSearchPanelControllerProps = {
-      open: true,
-      searchMode: "semantic",
-      searchVersion: 0,
-      indexer: createMockIndexer(),
-    };
-
+  it("clears the type filter and re-queries in source mode", async () => {
+    const mock = createMockIndexer();
     const { result, rerender } = renderHook(useSearchPanelController, {
-      initialProps,
+      initialProps: createProps(mock.indexer),
     });
 
     act(() => {
@@ -66,16 +111,143 @@ describe("useSearchPanelController", () => {
       result.current.setTypeFilter("proof");
     });
 
-    rerender({
-      open: true,
-      searchMode: "source",
-      searchVersion: 0,
-      indexer: createMockIndexer(),
+    await waitFor(() => {
+      expect(mock.querySpy).toHaveBeenCalledWith({
+        content: "alpha",
+        type: "proof",
+      });
     });
+
+    rerender(createProps(mock.indexer, { searchMode: "source" }));
 
     await waitFor(() => {
       expect(result.current.query).toBe("alpha");
       expect(result.current.typeFilter).toBe("");
+      expect(mock.querySourceTextSpy).toHaveBeenCalledWith({ text: "alpha" });
+    });
+  });
+
+  it("keeps semantic filter-only searches active", async () => {
+    const mock = createMockIndexer();
+    const { result } = renderHook(useSearchPanelController, {
+      initialProps: createProps(mock.indexer),
+    });
+
+    act(() => {
+      result.current.setTypeFilter("definition");
+    });
+
+    await waitFor(() => {
+      expect(mock.querySpy).toHaveBeenCalledWith({
+        type: "definition",
+        content: undefined,
+      });
+      expect(mock.querySourceTextSpy).not.toHaveBeenCalled();
+      expect(result.current.searching).toBe(true);
+    });
+  });
+
+  it("uses source-text queries in source mode", async () => {
+    const mock = createMockIndexer();
+    const { result } = renderHook(useSearchPanelController, {
+      initialProps: createProps(mock.indexer, { searchMode: "source" }),
+    });
+
+    act(() => {
+      result.current.setQuery(" raw_token_785 ");
+    });
+
+    await waitFor(() => {
+      expect(mock.querySpy).not.toHaveBeenCalled();
+      expect(mock.querySourceTextSpy).toHaveBeenCalledWith({ text: "raw_token_785" });
+      expect(result.current.searching).toBe(true);
+    });
+
+    mock.resolve([]);
+
+    await waitFor(() => {
+      expect(result.current.searching).toBe(false);
+    });
+  });
+
+  it("stays idle for empty source-mode queries", () => {
+    const mock = createMockIndexer();
+    const { result } = renderHook(useSearchPanelController, {
+      initialProps: createProps(mock.indexer, { searchMode: "source" }),
+    });
+
+    expect(mock.querySpy).not.toHaveBeenCalled();
+    expect(mock.querySourceTextSpy).not.toHaveBeenCalled();
+    expect(result.current.results).toEqual([]);
+    expect(result.current.searching).toBe(false);
+  });
+
+  it("clears results after a failed search", async () => {
+    const mock = createMockIndexer();
+    const { result } = renderHook(useSearchPanelController, {
+      initialProps: createProps(mock.indexer),
+    });
+
+    act(() => {
+      result.current.setQuery("alpha");
+    });
+
+    await waitFor(() => {
+      expect(mock.querySpy).toHaveBeenCalledWith({
+        content: "alpha",
+        type: undefined,
+      });
+      expect(result.current.searching).toBe(true);
+    });
+
+    mock.reject(new Error("index error"));
+
+    await waitFor(() => {
+      expect(result.current.results).toEqual([]);
+      expect(result.current.searching).toBe(false);
+    });
+  });
+
+  it("reruns the current search when searchVersion changes", async () => {
+    const mock = createMockIndexer();
+    const entry: IndexEntry = {
+      type: "heading",
+      file: "chapter1.md",
+      title: "Alpha",
+      position: { from: 12, to: 17 },
+      content: "alpha heading",
+    };
+    const { result, rerender } = renderHook(useSearchPanelController, {
+      initialProps: createProps(mock.indexer),
+    });
+
+    act(() => {
+      result.current.setQuery("alpha");
+    });
+
+    await waitFor(() => {
+      expect(mock.querySpy).toHaveBeenCalledTimes(1);
+    });
+
+    mock.resolve([entry]);
+
+    await waitFor(() => {
+      expect(result.current.results).toEqual([entry]);
+      expect(result.current.searching).toBe(false);
+    });
+
+    rerender(createProps(mock.indexer, { searchVersion: 1 }));
+
+    await waitFor(() => {
+      expect(mock.querySpy).toHaveBeenCalledTimes(2);
+      expect(result.current.searching).toBe(true);
+    });
+
+    mock.resolve([entry]);
+
+    await waitFor(() => {
+      expect(result.current.results).toEqual([entry]);
+      expect(result.current.searching).toBe(false);
     });
   });
 });
