@@ -15,7 +15,6 @@ import {
   type DecorationSet,
   type EditorView,
   type ViewUpdate,
-  ViewPlugin,
 } from "@codemirror/view";
 import { type ChangeSet, type EditorState, type Extension, type Range } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
@@ -62,9 +61,9 @@ import {
   findFocusedInlineRevealTarget,
   inlineRevealTargetChanged,
 } from "./inline-reveal-policy";
-import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 import { isDebugRenderFlagEnabled } from "./debug-render-flags";
 import { createChangeChecker } from "../state/change-detection";
+import { createSemanticSensitiveViewPlugin } from "./view-plugin-factories";
 
 function serializeKeyPart(value: string | undefined): string {
   return value ?? "";
@@ -457,121 +456,72 @@ function mergeDirtyRangesWithActiveReference(
   return mergeDirtyRanges([...dirtyRanges, ...activeRanges]);
 }
 
-class ReferenceRenderViewPlugin {
-  decorations: DecorationSet;
-  constructor(readonly view: EditorView) {
-    this.decorations = buildReferenceDecorations(view);
-  }
+interface ReferenceRevealChange {
+  readonly beforeActive: Pick<ReferenceSemantics, "from" | "to"> | null;
+  readonly afterActive: Pick<ReferenceSemantics, "from" | "to"> | null;
+  readonly activeChanged: boolean;
+}
 
-  private rebuildAll(view: EditorView): void {
-    this.decorations = buildReferenceDecorations(view);
-  }
+function getReferenceRevealChange(update: ViewUpdate): ReferenceRevealChange {
+  const endFocused = update.view.hasFocus;
+  const startFocused = update.focusChanged ? !endFocused : endFocused;
+  const beforeActive = getRevealedReferenceTarget(update.startState, startFocused);
+  const afterActive = getRevealedReferenceTarget(update.state, endFocused);
+  return {
+    beforeActive,
+    afterActive,
+    activeChanged: inlineRevealTargetChanged(beforeActive, afterActive),
+  };
+}
 
-  private updateDirtyRanges(
-    update: ViewUpdate,
-    dirtyRanges: readonly DirtyRange[],
-  ): void {
-    const { store, cslProcessor } = update.state.field(bibDataField);
-    const analysis = update.state.field(documentAnalysisField);
-    const mapped = mappedDecorationsWithFreshWidgetSources(
-      this.decorations,
-      update.changes,
-    );
+function referenceRenderDependenciesNeedRebuild(update: ViewUpdate): boolean {
+  return (
+    bibliographyInputsChanged(update.startState, update.state) ||
+    blockLabelConfigChanged(update.startState, update.state) ||
+    crossrefNumberingChanged(update.startState, update.state)
+  );
+}
 
-    let nextDecorations = mapped;
-    for (const range of dirtyRanges) {
-      nextDecorations = nextDecorations.update({
-        filterFrom: range.from,
-        filterTo: range.to,
-        filter: (from, to) => !rangeIntersectsDirtyRanges(from, to, [range]),
-      });
-    }
-
-    const dirtyRefs = collectDirtyReferences(analysis.references, dirtyRanges);
-    if (dirtyRefs.length > 0) {
-      nextDecorations = nextDecorations.update({
-        add: collectReferenceRanges(update.view, store, cslProcessor, dirtyRefs),
-        sort: true,
-      });
-    }
-
-    this.decorations = nextDecorations;
-  }
-
-  update(update: ViewUpdate): void {
-    if (
-      update.transactions.some((tr) =>
-        tr.annotation(programmaticDocumentChangeAnnotation) === true
+function computeReferenceDirtyRanges(update: ViewUpdate): DirtyRange[] {
+  const { beforeActive, afterActive, activeChanged } = getReferenceRevealChange(update);
+  const docDirtyRanges = update.docChanged
+    ? dirtyRangesFromChanges(
+        update.changes,
+        (from, to) => expandChangeRangeToLines(update.state.doc, from, to),
       )
-    ) {
-      this.rebuildAll(update.view);
-      return;
-    }
+    : [];
+  return mergeDirtyRangesWithActiveReference(
+    docDirtyRanges,
+    activeChanged ? beforeActive : null,
+    activeChanged ? afterActive : null,
+  );
+}
 
-    const referencesChanged = referenceSliceChanged(update.startState, update.state);
-    const endFocused = update.view.hasFocus;
-    const startFocused = update.focusChanged ? !endFocused : endFocused;
-    const beforeActive = getRevealedReferenceTarget(update.startState, startFocused);
-    const afterActive = getRevealedReferenceTarget(update.state, endFocused);
-    const activeChanged = inlineRevealTargetChanged(beforeActive, afterActive);
-
-    if (
-      bibliographyInputsChanged(update.startState, update.state) ||
-      blockLabelConfigChanged(update.startState, update.state) ||
-      crossrefNumberingChanged(update.startState, update.state)
-    ) {
-      this.rebuildAll(update.view);
-      return;
-    }
-
-    if (!update.docChanged && referencesChanged) {
-      this.rebuildAll(update.view);
-      return;
-    }
-
-    if (update.docChanged) {
-      if (!referencesChanged && !activeChanged) {
-        this.decorations = mappedDecorationsWithFreshWidgetSources(
-          this.decorations,
-          update.changes,
-        );
-        return;
-      }
-
-      const dirtyRanges = mergeDirtyRangesWithActiveReference(
-        dirtyRangesFromChanges(
-          update.changes,
-          (from, to) => expandChangeRangeToLines(update.state.doc, from, to),
-        ),
-        activeChanged ? beforeActive : null,
-        activeChanged ? afterActive : null,
-      );
-
-      if (dirtyRanges.length === 0) {
-        this.decorations = mappedDecorationsWithFreshWidgetSources(
-          this.decorations,
-          update.changes,
-        );
-        return;
-      }
-
-      this.updateDirtyRanges(update, dirtyRanges);
-      return;
-    }
-
-    if (activeChanged) {
-      this.updateDirtyRanges(
-        update,
-        mergeDirtyRangesWithActiveReference([], beforeActive, afterActive),
-      );
-    }
-  }
+function collectReferenceRangesForDirtySpans(
+  view: EditorView,
+  dirtyRanges: readonly DirtyRange[],
+): Range<Decoration>[] {
+  const { store, cslProcessor } = view.state.field(bibDataField);
+  const dirtyRefs = collectDirtyReferences(
+    view.state.field(documentAnalysisField).references,
+    dirtyRanges,
+  );
+  return dirtyRefs.length > 0
+    ? collectReferenceRanges(view, store, cslProcessor, dirtyRefs)
+    : [];
 }
 
 /** CM6 extension that renders all [@id] and @id references with Typora-style toggle. */
-export const referenceRenderPlugin: Extension = ViewPlugin.fromClass(
-  ReferenceRenderViewPlugin,
+export const referenceRenderPlugin: Extension = createSemanticSensitiveViewPlugin(
+  buildReferenceDecorations,
   {
-    decorations: (value) => value.decorations,
+    collectRanges: collectReferenceRangesForDirtySpans,
+    semanticChanged: referenceSliceChanged,
+    contextChanged: (update) => getReferenceRevealChange(update).activeChanged,
+    contextUpdateMode: "dirty-ranges",
+    shouldRebuild: (update) => referenceRenderDependenciesNeedRebuild(update),
+    dirtyRangeFn: (update) => computeReferenceDirtyRanges(update),
+    mapDecorations: (decorations, update) =>
+      mappedDecorationsWithFreshWidgetSources(decorations, update.changes),
   },
 );

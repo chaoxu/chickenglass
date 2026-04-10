@@ -10,9 +10,11 @@ import {
 } from "@codemirror/view";
 import {
   createCursorSensitiveViewPlugin,
+  createSemanticSensitiveViewPlugin,
   createSimpleViewPlugin,
   cursorSensitiveShouldUpdate,
   defaultShouldUpdate,
+  planSemanticSensitiveUpdate,
 } from "./view-plugin-factories";
 import {
   createEditorState,
@@ -168,6 +170,81 @@ describe("cursorSensitiveShouldUpdate", () => {
 
   it("returns false when nothing changed", () => {
     expect(cursorSensitiveShouldUpdate(mockViewUpdate())).toBe(false);
+  });
+});
+
+describe("planSemanticSensitiveUpdate", () => {
+  it("returns map for doc changes that keep semantics and context stable", () => {
+    const plan = planSemanticSensitiveUpdate(
+      { docChanged: true },
+      {
+        docChanged: (update) => update.docChanged,
+        semanticChanged: () => false,
+      },
+    );
+    expect(plan).toEqual({ kind: "map" });
+  });
+
+  it("can keep decorations for doc changes when the caller opts out of mapping", () => {
+    const plan = planSemanticSensitiveUpdate(
+      { docChanged: true },
+      {
+        docChanged: (update) => update.docChanged,
+        semanticChanged: () => false,
+        stableDocChangeMode: "keep",
+      },
+    );
+    expect(plan).toEqual({ kind: "keep" });
+  });
+
+  it("returns dirty ranges for semantic doc changes when provided", () => {
+    const dirtyRanges = [{ from: 4, to: 7 }];
+    const plan = planSemanticSensitiveUpdate(
+      { docChanged: true },
+      {
+        docChanged: (update) => update.docChanged,
+        semanticChanged: () => true,
+        dirtyRanges: () => dirtyRanges,
+      },
+    );
+    expect(plan).toEqual({ kind: "dirty", dirtyRanges });
+  });
+
+  it("rebuilds on non-doc semantic changes", () => {
+    const plan = planSemanticSensitiveUpdate(
+      { docChanged: false },
+      {
+        docChanged: (update) => update.docChanged,
+        semanticChanged: () => true,
+      },
+    );
+    expect(plan).toEqual({ kind: "rebuild" });
+  });
+
+  it("keeps decorations for no-op updates", () => {
+    const plan = planSemanticSensitiveUpdate(
+      { docChanged: false },
+      {
+        docChanged: (update) => update.docChanged,
+        semanticChanged: () => false,
+      },
+    );
+    expect(plan).toEqual({ kind: "keep" });
+  });
+
+  it("supports incremental context-only updates", () => {
+    const dirtyRanges = [{ from: 2, to: 5 }];
+    const plan = planSemanticSensitiveUpdate(
+      { docChanged: false },
+      {
+        docChanged: (update) => update.docChanged,
+        semanticChanged: () => false,
+        contextChanged: () => true,
+        contextUpdateMode: "dirty-ranges",
+        dirtyRanges: () => dirtyRanges,
+      },
+    );
+    expect(plan).toEqual({ kind: "dirty", dirtyRanges });
   });
 });
 
@@ -613,5 +690,138 @@ describe("createCursorSensitiveViewPlugin", () => {
     });
     view = createTestView("hello", { extensions: [markdown(), ext] });
     expect(skipResult).toBe(false);
+  });
+});
+
+describe("createSemanticSensitiveViewPlugin", () => {
+  let view: EditorView | undefined;
+
+  interface SemanticSensitivePluginProbe {
+    decorations: DecorationSet;
+  }
+
+  function getPluginProbe(
+    ext: ReturnType<typeof createSemanticSensitiveViewPlugin>,
+  ): SemanticSensitivePluginProbe {
+    const plugin = view?.plugin(ext as unknown as ViewPlugin<SemanticSensitivePluginProbe>);
+    expect(plugin).toBeTruthy();
+    if (!plugin) throw new Error("expected semantic-sensitive plugin instance");
+    return plugin;
+  }
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
+  it("maps decorations on doc changes when semantics stay stable", () => {
+    let buildCount = 0;
+    let collectCount = 0;
+    const ext = createSemanticSensitiveViewPlugin(
+      (currentView) => {
+        buildCount++;
+        return Decoration.set([
+          Decoration.mark({ class: "left" }).range(0, 1),
+          Decoration.mark({ class: "right" }).range(1, currentView.state.doc.length),
+        ], true);
+      },
+      {
+        collectRanges: () => {
+          collectCount++;
+          return [];
+        },
+        semanticChanged: () => false,
+        dirtyRangeFn: () => [],
+      },
+    );
+    view = createTestView("abcd", { extensions: [markdown(), ext] });
+    buildCount = 0;
+    collectCount = 0;
+
+    view.dispatch({ changes: { from: 0, insert: "!" } });
+
+    expect(buildCount).toBe(0);
+    expect(collectCount).toBe(0);
+    const specs = getDecorationSpecs(getPluginProbe(ext).decorations)
+      .map((spec) => `${spec.class}:${spec.from}-${spec.to}`)
+      .sort();
+    expect(specs).toEqual([
+      "left:1-2",
+      "right:2-5",
+    ]);
+  });
+
+  it("rebuilds only dirty ranges for semantic doc changes", () => {
+    let buildCount = 0;
+    const ext = createSemanticSensitiveViewPlugin(
+      () => {
+        buildCount++;
+        return Decoration.set([
+          Decoration.mark({ class: "left" }).range(0, 1),
+          Decoration.mark({ class: "target" }).range(1, 2),
+          Decoration.mark({ class: "right" }).range(2, 4),
+        ], true);
+      },
+      {
+        collectRanges: (_view, dirtyRanges) => {
+          expect(dirtyRanges).toEqual([{ from: 1, to: 2 }]);
+          return [Decoration.mark({ class: "dirty" }).range(1, 2)];
+        },
+        semanticChanged: () => true,
+        dirtyRangeFn: () => [{ from: 1, to: 2 }],
+      },
+    );
+    view = createTestView("abcd", { extensions: [markdown(), ext] });
+    buildCount = 0;
+
+    view.dispatch({ changes: { from: 1, to: 2, insert: "X" } });
+
+    expect(buildCount).toBe(0);
+    const specs = getDecorationSpecs(getPluginProbe(ext).decorations)
+      .map((spec) => `${spec.class}:${spec.from}-${spec.to}`)
+      .sort();
+    expect(specs).toEqual([
+      "dirty:1-2",
+      "left:0-1",
+      "right:2-4",
+    ]);
+  });
+
+  it("supports context-only dirty-range updates", () => {
+    let buildCount = 0;
+    let collectCount = 0;
+    const ext = createSemanticSensitiveViewPlugin(
+      () => {
+        buildCount++;
+        return Decoration.set([
+          Decoration.mark({ class: "base" }).range(0, 1),
+        ], true);
+      },
+      {
+        collectRanges: (_view, dirtyRanges) => {
+          collectCount++;
+          return [Decoration.mark({ class: "context" }).range(dirtyRanges[0].from, dirtyRanges[0].to)];
+        },
+        semanticChanged: () => false,
+        contextChanged: (update) => update.selectionSet,
+        contextUpdateMode: "dirty-ranges",
+        dirtyRangeFn: () => [{ from: 2, to: 3 }],
+      },
+    );
+    view = createTestView("abcd", { extensions: [markdown(), ext] });
+    buildCount = 0;
+    collectCount = 0;
+
+    view.dispatch({ selection: { anchor: 2 } });
+
+    expect(buildCount).toBe(0);
+    expect(collectCount).toBe(1);
+    const specs = getDecorationSpecs(getPluginProbe(ext).decorations)
+      .map((spec) => `${spec.class}:${spec.from}-${spec.to}`)
+      .sort();
+    expect(specs).toEqual([
+      "base:0-1",
+      "context:2-3",
+    ]);
   });
 });

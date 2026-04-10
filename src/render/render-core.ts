@@ -99,6 +99,7 @@ export {
   defaultShouldUpdate,
   cursorSensitiveShouldUpdate,
   createCursorSensitiveViewPlugin,
+  createSemanticSensitiveViewPlugin,
   createSimpleViewPlugin,
   type CursorSensitiveCollectFn,
 } from "./view-plugin-factories";
