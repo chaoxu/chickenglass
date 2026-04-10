@@ -39,21 +39,18 @@ import { NODE } from "../constants/node-types";
 import { CSS } from "../constants/css-classes";
 import { findAncestorByName } from "../lib/syntax-tree-helpers";
 import {
+  containsRange,
+  toRanges,
+  type RangeLike,
+} from "../lib/range-helpers";
+import {
   clearActiveFenceGuideClasses,
   syncActiveFenceGuideClasses,
 } from "./source-widget";
 
-interface FencedDivRange {
-  from: number;
-  to: number;
-}
-
 /** Collect all FencedDiv ranges from the syntax tree. */
-function collectFencedDivRanges(state: EditorState): FencedDivRange[] {
-  return state.field(documentSemanticsField).fencedDivs.map((div) => ({
-    from: div.from,
-    to: div.to,
-  }));
+function collectFencedDivRanges(state: EditorState): RangeLike[] {
+  return toRanges(state.field(documentSemanticsField).fencedDivs);
 }
 
 /**
@@ -75,7 +72,8 @@ function computeActivePath(state: EditorState): string {
   for (;;) {
     const fencedDiv = findAncestorByName(node, NODE.FencedDiv);
     if (!fencedDiv) break;
-    if (cursor.from >= fencedDiv.from && cursor.to <= fencedDiv.to) {
+    const fencedDivRange = { from: fencedDiv.from, to: fencedDiv.to };
+    if (containsRange(fencedDivRange, cursor)) {
       parts.push(`${fencedDiv.from}:${fencedDiv.to}`);
     }
     const parent = fencedDiv.parent;
@@ -96,7 +94,7 @@ function buildFenceGuides(state: EditorState): DecorationSet {
 
   // Find which FencedDivs contain the cursor
   const activeDivs = allDivs.filter(
-    (d) => cursor.from >= d.from && cursor.to <= d.to,
+    (div) => containsRange(div, cursor),
   );
 
   if (activeDivs.length === 0) return Decoration.none;

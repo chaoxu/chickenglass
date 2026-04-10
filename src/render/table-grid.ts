@@ -49,6 +49,11 @@ import {
 import { createSimpleTextWidget } from "./render-core";
 import { ContextMenu } from "../lib/context-menu";
 import type { ContextMenuItem } from "../lib/context-menu";
+import {
+  containsPos,
+  containsPosExclusiveEnd,
+  rangesIntersect,
+} from "../lib/range-helpers";
 import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 import {
   addRow,
@@ -312,7 +317,7 @@ function tableIntersectsDirtyRanges(
   dirtyRanges: readonly VisibleRange[],
 ): boolean {
   for (const range of dirtyRanges) {
-    if (table.from < range.to && table.to > range.from) return true;
+    if (rangesIntersect(table, range)) return true;
     if (range.from >= table.to) break;
   }
   return false;
@@ -405,10 +410,11 @@ function rangeTouchesDirtyRanges(
   to: number,
   dirtyRanges: readonly VisibleRange[],
 ): boolean {
+  const target = { from, to };
   for (const range of dirtyRanges) {
     if (from === to) {
-      if (from >= range.from && from < range.to) return true;
-    } else if (from < range.to && to > range.from) {
+      if (containsPosExclusiveEnd(range, from)) return true;
+    } else if (rangesIntersect(target, range)) {
       return true;
     }
 
@@ -887,7 +893,7 @@ function guardCrossRowPos(
   if (!cell) return null;
 
   const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-  if (pos !== null && pos >= cell.from && pos <= cell.to) return null;
+  if (pos !== null && containsPos(cell, pos)) return null;
 
   return cell.to;
 }
@@ -976,7 +982,10 @@ export function getTableDeleteRange(
     const line = doc.line(table.startLineNumber + 2 + rowIndex);
     const lineDeleteTo = line.to < doc.length ? line.to + 1 : line.to;
     const coversWholeRow = from <= line.from && to >= line.to;
-    const overlapsRow = to > line.from && from < lineDeleteTo;
+    const overlapsRow = rangesIntersect(
+      { from, to },
+      { from: line.from, to: lineDeleteTo },
+    );
 
     if (coversWholeRow) {
       if (deleteFrom === null) deleteFrom = line.from;

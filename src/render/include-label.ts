@@ -17,6 +17,7 @@ import { type Extension, type Range } from "@codemirror/state";
 import { buildDecorations } from "./decoration-core";
 import { createSimpleViewPlugin } from "./view-plugin-factories";
 import { SimpleTextRenderWidget } from "./source-widget";
+import { containsPos } from "../lib/range-helpers";
 import { basename } from "../lib/utils";
 import { includeRegionsField, type IncludeRegionState } from "../lib/include-regions";
 import {
@@ -68,7 +69,7 @@ function buildIncludeDecorations(view: EditorView): DecorationSet {
     if (from >= to) continue;
 
     // Widget label at start of include block
-    const active = cursor >= from && cursor <= to;
+    const active = containsPos({ from, to }, cursor);
     const filename = basename(inc.path);
     const startLine = doc.lineAt(from);
     items.push(Decoration.widget({

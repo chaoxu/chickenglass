@@ -2,6 +2,7 @@ import { syntaxTree } from "@codemirror/language";
 import type { Range, EditorState } from "@codemirror/state";
 import type { Decoration, EditorView } from "@codemirror/view";
 import type { SyntaxNodeRef } from "@lezer/common";
+import { containsRange } from "../lib/range-helpers";
 import type { VisibleRange } from "./viewport-diff";
 
 /**
@@ -23,10 +24,10 @@ export function cursorInRange(
   if ("state" in viewOrState) {
     if (!viewOrState.hasFocus) return false;
     const cursor = viewOrState.state.selection.main;
-    return cursor.from >= from && cursor.to <= to;
+    return containsRange({ from, to }, cursor);
   }
   const cursor = viewOrState.selection.main;
-  return cursor.from >= from && cursor.to <= to;
+  return containsRange({ from, to }, cursor);
 }
 
 /** Result of collecting renderable nodes from the syntax tree. */

@@ -1,4 +1,5 @@
 import type { EditorView } from "@codemirror/view";
+import { rangesOverlap } from "../lib/range-helpers";
 import { frontmatterField } from "./frontmatter-state";
 import {
   activeShellPath,
@@ -96,10 +97,6 @@ function unionClientRects(
   const top = Math.min(...rects.map((rect) => rect.top));
   const bottom = Math.max(...rects.map((rect) => rect.bottom));
   return normalizeRect(left, right, top, bottom);
-}
-
-function overlap(fromA: number, toA: number, fromB: number, toB: number): boolean {
-  return fromA <= toB && fromB <= toA;
 }
 
 function parseSourcePos(value: string | undefined): number | null {
@@ -214,7 +211,7 @@ function buildSurface(
   entries: readonly SourceRangeEntry[],
 ): ShellSurface {
   const nodes = entries
-    .filter((entry) => overlap(entry.from, entry.to, from, to))
+    .filter((entry) => rangesOverlap(entry, { from, to }))
     .map((entry) => ({
       kind: entry.kind,
       from: entry.from,

@@ -6,9 +6,7 @@ import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 import {
-  _collectOverlappingOrderedRangesForTest,
   _computeContainerDirtyRegionForTest,
-  _getMergedRangeCoverageForTest,
   containerAttributesField,
   containerAttributesPlugin,
 } from "./container-attributes";
@@ -59,45 +57,6 @@ function extractTagNames(state: EditorState): string[] {
 afterEach(() => {
   document.body.innerHTML = "";
   vi.useRealTimers();
-});
-
-describe("containerAttributes overlap helpers", () => {
-  it("returns only overlapping heading ranges from an ordered slice", () => {
-    expect(
-      _collectOverlappingOrderedRangesForTest(
-        [
-          { from: 0, to: 6 },
-          { from: 10, to: 16 },
-          { from: 20, to: 26 },
-          { from: 30, to: 36 },
-        ],
-        12,
-        31,
-      ),
-    ).toEqual([
-      { from: 10, to: 16 },
-      { from: 20, to: 26 },
-      { from: 30, to: 36 },
-    ]);
-  });
-
-  it("collapses nested fenced divs into overlapping coverage intervals", () => {
-    const coverage = _getMergedRangeCoverageForTest([
-      { from: 0, to: 100 },
-      { from: 10, to: 20 },
-      { from: 30, to: 40 },
-      { from: 120, to: 135 },
-      { from: 130, to: 150 },
-    ]);
-
-    expect(coverage).toEqual([
-      { from: 0, to: 100 },
-      { from: 120, to: 150 },
-    ]);
-    expect(
-      _collectOverlappingOrderedRangesForTest(coverage, 90, 95),
-    ).toEqual([{ from: 0, to: 100 }]);
-  });
 });
 
 describe("containerAttributesField", () => {

@@ -6,6 +6,7 @@ import {
   isPlainPrimaryMouseEvent,
 } from "../editor/mouse-selection-core";
 import { documentAnalysisField } from "../semantics/codemirror-source";
+import { rangesIntersect } from "../lib/range-helpers";
 import { _snapToTokenBoundary } from "./math-source";
 import { editorFocusField } from "./focus-state";
 import { isFocusedInlineRevealTarget } from "./inline-reveal-policy";
@@ -149,7 +150,7 @@ function snapPointerSelectionOverInlineMath(
     let to = Math.max(range.from, range.to);
 
     for (const mathRange of mathRanges) {
-      if (to > mathRange.from && from < mathRange.to) {
+      if (rangesIntersect({ from, to }, mathRange)) {
         from = Math.min(from, mathRange.from);
         to = Math.max(to, mathRange.to);
       }

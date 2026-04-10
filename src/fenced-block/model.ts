@@ -1,5 +1,6 @@
 import type { EditorState } from "@codemirror/state";
 import type { FencedDivSemantics } from "../semantics/document";
+import { containsPos } from "../lib/range-helpers";
 import { documentSemanticsField } from "../semantics/codemirror-source";
 
 export interface FencedBlockPositionMapper {
@@ -135,7 +136,7 @@ export function findFencedBlockAt<T extends Pick<FencedBlockInfo, "from" | "to">
   pos: number,
 ): T | null {
   for (const block of blocks) {
-    if (pos >= block.from && pos <= block.to) return block;
+    if (containsPos(block, pos)) return block;
   }
   return null;
 }
