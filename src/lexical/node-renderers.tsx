@@ -60,6 +60,65 @@ function structureToggleProps(
   };
 }
 
+function richHtmlOptions(context: ReturnType<typeof useLexicalRenderContext>) {
+  return {
+    config: context.config,
+    docPath: context.docPath,
+    renderIndex: context.renderIndex,
+    resolveAssetUrl: context.resolveAssetUrl,
+  };
+}
+
+function LazyTableCell({
+  cell,
+  className,
+  namespace,
+  onTextChange,
+}: {
+  readonly cell: string;
+  readonly className: string;
+  readonly namespace: string;
+  readonly onTextChange: (text: string) => void;
+}) {
+  const surfaceEditable = useLexicalSurfaceEditable();
+  const context = useLexicalRenderContext();
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState(false);
+
+  const cellHtml = useMemo(
+    () => renderMarkdownRichHtml(cell, richHtmlOptions(context)),
+    [cell, context],
+  );
+
+  return (
+    <div
+      ref={shellRef}
+      onBlurCapture={(event) => {
+        if (!editing) return;
+        const next = event.relatedTarget;
+        if (next instanceof Node && shellRef.current?.contains(next)) return;
+        setEditing(false);
+      }}
+    >
+      {editing ? (
+        <MarkdownNestedEditor
+          className={className}
+          doc={cell}
+          namespace={namespace}
+          onTextChange={onTextChange}
+        />
+      ) : (
+        <div
+          className={`${className} cf-lexical-nested-editor--static`}
+          dangerouslySetInnerHTML={{ __html: cellHtml }}
+          onFocus={surfaceEditable ? () => setEditing(true) : undefined}
+          tabIndex={surfaceEditable ? 0 : undefined}
+        />
+      )}
+    </div>
+  );
+}
+
 function useRawBlockUpdater(nodeKey: NodeKey): (raw: string) => void {
   const [editor] = useLexicalComposerContext();
 
@@ -575,9 +634,15 @@ function FrontmatterRenderer({
   readonly raw: string;
 }) {
   const surfaceEditable = useLexicalSurfaceEditable();
+  const context = useLexicalRenderContext();
   const title = parseFrontmatter(raw).config.title ?? "";
   const updateRaw = useRawBlockUpdater(nodeKey);
   const [editingSource, setEditingSource] = useState(false);
+
+  const titleHtml = useMemo(
+    () => title ? renderMarkdownRichHtml(title, richHtmlOptions(context)) : "",
+    [title, context],
+  );
 
   return (
     <header className={`cf-lexical-title-shell${editingSource ? " is-editing-source" : ""}`}>
@@ -596,11 +661,9 @@ function FrontmatterRenderer({
           {...structureToggleProps(surfaceEditable, () => setEditingSource(true))}
         >
           {title ? (
-            <MarkdownNestedEditor
+            <div
               className="cf-lexical-nested-editor cf-lexical-nested-editor--frontmatter-title"
-              doc={title}
-              editable={false}
-              namespace={`coflat-frontmatter-title-${nodeKey}`}
+              dangerouslySetInnerHTML={{ __html: titleHtml }}
             />
           ) : (
             <h1 className="cf-lexical-frontmatter-title cf-lexical-frontmatter-title--empty">Untitled</h1>
@@ -746,9 +809,9 @@ function TableBlockRenderer({
           <tr>
             {parsed.headers.map((cell, columnIndex) => (
               <th key={`h-${columnIndex}`}>
-                <MarkdownNestedEditor
+                <LazyTableCell
+                  cell={cell}
                   className="cf-lexical-nested-editor cf-lexical-nested-editor--table-cell"
-                  doc={cell}
                   namespace={`coflat-table-${nodeKey}-head-${columnIndex}`}
                   onTextChange={(nextValue) => updateHeaderCell(columnIndex, nextValue)}
                 />
@@ -761,9 +824,9 @@ function TableBlockRenderer({
             <tr key={`r-${rowIndex}`}>
               {row.map((cell, columnIndex) => (
                 <td key={`c-${rowIndex}-${columnIndex}`}>
-                  <MarkdownNestedEditor
+                  <LazyTableCell
+                    cell={cell}
                     className="cf-lexical-nested-editor cf-lexical-nested-editor--table-cell"
-                    doc={cell}
                     namespace={`coflat-table-${nodeKey}-${rowIndex}-${columnIndex}`}
                     onTextChange={(nextValue) => updateBodyCell(rowIndex, columnIndex, nextValue)}
                   />
