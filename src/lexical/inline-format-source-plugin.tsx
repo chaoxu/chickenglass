@@ -476,8 +476,8 @@ export function InlineFormatSourcePlugin() {
     const syncSourceSelection = (activation: InlineFormatActivation) => {
       queueMicrotask(() => {
         editor.update(() => {
-          const sourceNode = $getRoot().getAllTextNodes().find($isInlineFormatSourceNode);
-          if (!sourceNode) {
+          const sourceNode = $getNodeByKey(activation.nodeKey);
+          if (!$isInlineFormatSourceNode(sourceNode)) {
             return;
           }
           const caretOffset = getInlineFormatEntryCaretOffset(sourceNode.getRaw(), activation.entrySide);
@@ -491,8 +491,8 @@ export function InlineFormatSourcePlugin() {
         const syncDomSelection = (remainingFrames: number) => {
           requestAnimationFrame(() => {
             editor.update(() => {
-              const sourceNode = $getRoot().getAllTextNodes().find($isInlineFormatSourceNode);
-              if (!sourceNode) {
+              const sourceNode = $getNodeByKey(activation.nodeKey);
+              if (!$isInlineFormatSourceNode(sourceNode)) {
                 return;
               }
               const caretOffset = getInlineFormatEntryCaretOffset(sourceNode.getRaw(), activation.entrySide);
