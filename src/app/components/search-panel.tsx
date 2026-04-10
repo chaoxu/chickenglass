@@ -8,8 +8,6 @@
 
 import { memo } from "react";
 import { Search } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
-import type { BackgroundIndexer } from "../../index/indexer";
 import type { IndexEntry } from "../../index/query-api";
 import { basename } from "../lib/utils";
 import type { AppSearchMode } from "../search";
@@ -17,8 +15,8 @@ import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { useSearchIndexer } from "../hooks/use-search-indexer";
 import { BLOCK_MANIFEST_ENTRIES } from "../../constants/block-manifest";
+import type { SearchPanelControllerState } from "../hooks/use-search-panel-controller";
 
 /**
  * Block types for the search filter dropdown.
@@ -46,10 +44,12 @@ export interface SearchPanelProps {
   onResultSelect: (entry: IndexEntry) => void;
   /** Whether the app-level search is semantic or raw source text. */
   searchMode: AppSearchMode;
-  /** Monotonic version that bumps whenever the backing index changes. */
-  searchVersion: number;
-  /** The background indexer to query. */
-  indexer?: BackgroundIndexer | null;
+  /** Controller-owned search state. */
+  state: SearchPanelControllerState;
+  /** Called when the search query changes. */
+  onQueryChange: (query: string) => void;
+  /** Called when the block-type filter changes. */
+  onTypeFilterChange: (typeFilter: string) => void;
 }
 
 /** Group results by file path. */
@@ -121,61 +121,21 @@ export const SearchResultItem = memo(function SearchResultItem({
 // ── SearchPanel ───────────────────────────────────────────────────────────────
 
 /**
- * Modal search panel that queries the BackgroundIndexer.
- * Results are grouped by file. Clicking a result calls onResultSelect
- * and closes the panel.
+ * Modal search panel view. Results are grouped by file and rendered from the
+ * controller-owned search state passed in via props.
  */
 export function SearchPanel({
   open,
   onOpenChange,
   onResultSelect,
   searchMode,
-  searchVersion,
-  indexer,
+  state,
+  onQueryChange,
+  onTypeFilterChange,
 }: SearchPanelProps) {
-  const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Focus input whenever panel opens; clear state on close.
-  useEffect(() => {
-    if (open) {
-      // Defer one frame so the element is visible before focusing.
-      const id = requestAnimationFrame(() => {
-        inputRef.current?.focus();
-      });
-      return () => cancelAnimationFrame(id);
-    } else {
-      setQuery("");
-      setTypeFilter("");
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (searchMode === "source") {
-      setTypeFilter("");
-    }
-  }, [searchMode]);
-
-  const { results, searching } = useSearchIndexer(
-    open,
-    query,
-    typeFilter,
-    searchMode,
-    searchVersion,
-    indexer,
-  );
-
-  const handleResultClick = useCallback(
-    (entry: IndexEntry) => {
-      onResultSelect(entry);
-      onOpenChange(false);
-    },
-    [onResultSelect, onOpenChange],
-  );
-
   if (!open) return null;
 
+  const { query, typeFilter, results, searching } = state;
   const grouped = groupByFile(results);
   const text = query.trim();
   let statusText: string;
@@ -201,17 +161,17 @@ export function SearchPanel({
             aria-hidden="true"
           />
           <Input
-            ref={inputRef}
+            autoFocus
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => onQueryChange(e.target.value)}
             placeholder={searchMode === "semantic" ? "Search blocks, labels, math…" : "Search source text…"}
             className="h-8 flex-1 border-0 bg-transparent px-0 py-0 shadow-none focus:ring-0"
           />
           {searchMode === "semantic" && (
             <Select
               value={typeFilter || ALL_TYPES_VALUE}
-              onValueChange={(value) => setTypeFilter(value === ALL_TYPES_VALUE ? "" : value)}
+              onValueChange={(value) => onTypeFilterChange(value === ALL_TYPES_VALUE ? "" : value)}
             >
               <SelectTrigger
                 aria-label="Filter search results by block type"
@@ -248,7 +208,7 @@ export function SearchPanel({
 
                 {/* Entries in this file */}
                 {entries.map((entry) => (
-                  <SearchResultItem key={`${entry.file}:${entry.position.from}`} entry={entry} onClick={handleResultClick} />
+                  <SearchResultItem key={`${entry.file}:${entry.position.from}`} entry={entry} onClick={onResultSelect} />
                 ))}
               </div>
             ))
