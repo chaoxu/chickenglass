@@ -13,7 +13,6 @@ import type {
 } from "./document";
 import {
   formatBlockReferenceLabel,
-  formatEquationReferenceLabel,
   formatHeadingReferenceLabel,
 } from "../references/format";
 

@@ -80,6 +80,8 @@ export interface DocumentArtifacts {
   readonly ir: DocumentIR;
 }
 
+type DocumentAnalysisBase = Omit<DocumentAnalysis, "referenceIndex">;
+
 interface FencedDivSlice {
   readonly fencedDivs: readonly FencedDivSemantics[];
   readonly fencedDivByFrom: ReadonlyMap<number, FencedDivSemantics>;
@@ -105,13 +107,13 @@ interface SliceRegistryEntry {
   readonly sliceKey: keyof DocumentAnalysisSlices;
   readonly project: (
     slice: DocumentAnalysisSlices[keyof DocumentAnalysisSlices],
-  ) => Partial<DocumentAnalysis>;
+  ) => Partial<DocumentAnalysisBase>;
 }
 
 function sliceEntry<SK extends keyof DocumentAnalysisSlices>(
   revisionKey: DocumentAnalysisSliceName,
   sliceKey: SK,
-  project: (slice: DocumentAnalysisSlices[SK]) => Partial<DocumentAnalysis>,
+  project: (slice: DocumentAnalysisSlices[SK]) => Partial<DocumentAnalysisBase>,
 ): SliceRegistryEntry {
   return {
     revisionKey,
@@ -298,6 +300,16 @@ function sameReferenceIndexInputs(
   );
 }
 
+function buildDocumentAnalysisBase(
+  slices: DocumentAnalysisSlices,
+): DocumentAnalysisBase {
+  const analysis = {} as DocumentAnalysisBase;
+  for (const { sliceKey, project } of SLICE_REGISTRY) {
+    Object.assign(analysis, project(slices[sliceKey]));
+  }
+  return analysis;
+}
+
 function finalizeDocumentAnalysis(
   previous: DocumentAnalysis | undefined,
   slices: DocumentAnalysisSlices,
@@ -314,20 +326,21 @@ function finalizeDocumentAnalysis(
   }
 
   const revisions = buildRevisionInfo(previousState, slices);
-  const analysis = {} as DocumentAnalysis;
-  for (const { sliceKey, project } of SLICE_REGISTRY) {
-    Object.assign(analysis, project(slices[sliceKey]));
-  }
-  analysis.referenceIndex =
+  const analysisBase = buildDocumentAnalysisBase(slices);
+  const referenceIndex =
     previousState && sameReferenceIndexInputs(previousState, slices)
       ? previousState.referenceIndex
-      : classifyReferenceIndex(doc, analysis);
+      : classifyReferenceIndex(doc, analysisBase);
+  const analysis: DocumentAnalysis = {
+    ...analysisBase,
+    referenceIndex,
+  };
 
   return withInternalState(analysis, {
     ...slices,
     revisions,
     excludedRanges,
-    referenceIndex: analysis.referenceIndex,
+    referenceIndex,
   });
 }
 

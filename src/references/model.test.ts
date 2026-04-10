@@ -19,6 +19,7 @@ describe("ReferenceIndexModel", () => {
         {
           id: "sec:intro",
           type: "crossref",
+          targetKind: "heading",
           sourceRange: { from: 28, to: 38 },
           display: "Section 1",
           target: {
@@ -32,6 +33,7 @@ describe("ReferenceIndexModel", () => {
         {
           id: "eq:main",
           type: "label",
+          targetKind: "equation",
           sourceRange: { from: 60, to: 69 },
           display: "Eq. (1)",
           target: {
