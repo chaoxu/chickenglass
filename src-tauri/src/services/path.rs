@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 pub struct ProjectPathResolver {
@@ -42,7 +43,7 @@ impl ProjectPathResolver {
             .strip_prefix(&self.canonical_root)
             .map_err(|_| format!("Path '{}' escapes project root", candidate.display()))?;
 
-        normalize_project_relative_path(relative)
+        path_to_frontend_string(relative, "Project-relative path")
     }
 }
 
@@ -58,11 +59,21 @@ pub fn project_relative_path(root: &Path, candidate: &Path) -> Result<String, St
     ProjectPathResolver::new(root)?.project_relative_path(candidate)
 }
 
-fn normalize_project_relative_path(relative: &Path) -> Result<String, String> {
-    let relative = relative
+pub fn file_name_to_frontend_string(name: &OsStr, label: &str) -> Result<String, String> {
+    name.to_str()
+        .map(str::to_owned)
+        .ok_or_else(|| format!("{label} is not valid UTF-8"))
+}
+
+pub fn path_to_frontend_string(path: &Path, label: &str) -> Result<String, String> {
+    let path = path
         .to_str()
-        .ok_or_else(|| "Project-relative path is not valid UTF-8".to_string())?;
-    Ok(relative.replace('\\', "/"))
+        .ok_or_else(|| format!("{label} is not valid UTF-8"))?;
+    if std::path::MAIN_SEPARATOR == '\\' {
+        Ok(path.replace('\\', "/"))
+    } else {
+        Ok(path.to_string())
+    }
 }
 
 fn canonicalize_maybe_missing(path: &Path) -> Result<PathBuf, String> {
@@ -231,6 +242,30 @@ mod tests {
         fs::remove_dir_all(&root).unwrap();
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn path_to_frontend_string_preserves_literal_backslashes_on_unix() {
+        assert_eq!(
+            path_to_frontend_string(Path::new(r"docs\literal-backslash.md"), "Relative path")
+                .unwrap(),
+            r"docs\literal-backslash.md",
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn file_name_to_frontend_string_rejects_non_utf8_names() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        let err = file_name_to_frontend_string(
+            &OsString::from_vec(vec![b'b', b'a', b'd', 0x80]),
+            "Directory entry name",
+        )
+        .expect_err("non-utf8 file names should fail");
+        assert!(err.contains("Directory entry name is not valid UTF-8"));
+    }
+
     #[test]
     fn resolve_project_path_rejects_dotdot_escape() {
         let root = create_temp_dir("traversal-test");
@@ -305,7 +340,11 @@ mod tests {
 
         let err = resolve_project_path(&root, "escape.md")
             .expect_err("dangling symlink leaf should be rejected");
-        assert!(err.contains("Cannot resolve path 'escape.md'"), "got: {}", err);
+        assert!(
+            err.contains("Cannot resolve path 'escape.md'"),
+            "got: {}",
+            err
+        );
 
         fs::remove_dir_all(&root).unwrap();
         fs::remove_dir_all(&outside).unwrap();
