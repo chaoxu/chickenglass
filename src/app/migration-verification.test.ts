@@ -950,6 +950,18 @@ describe("#1092 — plugin-owned render adapter seam", () => {
   });
 });
 
+describe("#1095 — fence protection owns its code-block structure dependency", () => {
+  it("keeps fence protection out of render internals", () => {
+    const fenceProtection = fileText("src/plugins/fence-protection.ts");
+    const codeBlockRender = fileText("src/render/code-block-render.ts");
+
+    expect(fileExists("src/state/code-block-structure.ts")).toBe(true);
+    expect(fenceProtection).toContain('../state/code-block-structure');
+    expect(fenceProtection).not.toMatch(/from "\.\.\/render\//);
+    expect(codeBlockRender).toContain('../state/code-block-structure');
+  });
+});
+
 describe("#321 — standardized background dispatch handling", () => {
   it("documents the error-handling policy and exports the dispatch helper", async () => {
     const dispatch = await import("./lib/view-dispatch");

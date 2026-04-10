@@ -78,7 +78,7 @@ import {
   collectCodeBlocks,
   getCodeBlockStructureRevision,
   type CodeBlockInfo,
-} from "../render/code-block-render";
+} from "../state/code-block-structure";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 

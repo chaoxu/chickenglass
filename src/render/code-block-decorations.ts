@@ -25,7 +25,7 @@ import {
   type CodeBlockInfo,
   collectCodeBlocks,
   getCodeBlockStructureRevision,
-} from "./code-block-structure";
+} from "../state/code-block-structure";
 import { pushWidgetDecoration } from "./decoration-core";
 import {
   buildFencedBlockDecorations,

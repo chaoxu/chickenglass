@@ -1,6 +1,7 @@
 import type { ChangeDesc } from "@codemirror/state";
 import {
   containsPosExclusiveEnd,
+  mergeRanges,
   rangesIntersect,
 } from "../lib/range-helpers";
 
@@ -116,32 +117,11 @@ export function rangeIntersectsRanges(
   return false;
 }
 
-/** Merge overlapping ranges into a minimal sorted set. */
-export function mergeRanges(
-  ranges: readonly VisibleRange[],
-  adjacency = 0,
-): VisibleRange[] {
-  if (ranges.length <= 1) return [...ranges];
-  const sorted = [...ranges].sort((left, right) => left.from - right.from);
-  const merged: VisibleRange[] = [sorted[0]];
-  for (let i = 1; i < sorted.length; i++) {
-    const last = merged[merged.length - 1];
-    const current = sorted[i];
-    if (current.from <= last.to + adjacency) {
-      merged[merged.length - 1] = {
-        from: last.from,
-        to: Math.max(last.to, current.to),
-      };
-      continue;
-    }
-    merged.push(current);
-  }
-  return merged;
-}
-
 /** Snapshot CM6's live visibleRanges into a plain array of {from, to}. */
 export function snapshotRanges(
   ranges: readonly { from: number; to: number }[],
 ): VisibleRange[] {
   return ranges.map((range) => ({ from: range.from, to: range.to }));
 }
+
+export { mergeRanges };
