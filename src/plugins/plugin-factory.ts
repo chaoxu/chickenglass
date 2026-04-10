@@ -5,7 +5,7 @@
  * follow the common pattern of name + counter + numbered + title + render.
  */
 
-import type { BlockPlugin } from "./plugin-types";
+import type { BlockPlugin, BlockRenderDecorations } from "./plugin-types";
 import type { BlockManifestEntry, CaptionPosition, HeaderPosition, SpecialBehavior } from "../constants/block-manifest";
 import { createBlockRender } from "./block-render";
 import { capitalize, pickDefined } from "../lib/utils";
@@ -45,6 +45,8 @@ export interface StandardPluginOptions {
   readonly captionPosition?: CaptionPosition;
   /** Whether the rendered header is block-level or inline with the first body line. */
   readonly headerPosition?: HeaderPosition;
+  /** Optional plugin-owned rich-mode decoration hooks. */
+  readonly renderDecorations?: BlockRenderDecorations;
 }
 
 export const STANDARD_PLUGIN_METADATA_KEYS = [
@@ -99,6 +101,9 @@ export function createStandardPlugin(options: StandardPluginSource): BlockPlugin
   const title = options.title ?? capitalize(options.name);
   const numbered = options.numbered ?? true;
   const counter = resolveStandardPluginCounter(options);
+  const renderDecorations = !isBlockManifestEntry(options)
+    ? options.renderDecorations
+    : undefined;
   return {
     name: options.name,
     ...(counter !== undefined ? { counter } : {}),
@@ -106,5 +111,6 @@ export function createStandardPlugin(options: StandardPluginSource): BlockPlugin
     title,
     render: createBlockRender(title),
     ...pickDefined(options, STANDARD_PLUGIN_METADATA_KEYS),
+    ...(renderDecorations !== undefined ? { renderDecorations } : {}),
   };
 }

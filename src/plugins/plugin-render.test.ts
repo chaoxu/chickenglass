@@ -542,9 +542,12 @@ describe("disabled blocks show raw fences (issue #356)", () => {
 
   it("keeps embed previews mounted when the cursor enters the block body", () => {
     const doc = `::: {.embed}\nhttps://example.com/widget\n:::`;
+    const embedPlugin = defaultPlugins.find((plugin) => plugin.name === "embed");
+    expect(embedPlugin).toBeDefined();
+    if (!embedPlugin) throw new Error("expected default embed plugin");
     const state = createTestStateWithPlugins(
       doc,
-      [makeBlockPlugin({ name: "embed", specialBehavior: "embed" })],
+      [embedPlugin],
       doc.indexOf("https://example.com/widget"),
       true,
     );
@@ -557,9 +560,12 @@ describe("disabled blocks show raw fences (issue #356)", () => {
 
   it("shows embed source only during explicit structure edit", () => {
     const doc = `::: {.embed}\nhttps://example.com/widget\n:::`;
+    const embedPlugin = defaultPlugins.find((plugin) => plugin.name === "embed");
+    expect(embedPlugin).toBeDefined();
+    if (!embedPlugin) throw new Error("expected default embed plugin");
     const base = createTestStateWithPlugins(
       doc,
-      [makeBlockPlugin({ name: "embed", specialBehavior: "embed" })],
+      [embedPlugin],
       doc.indexOf("https://example.com/widget"),
       true,
     );

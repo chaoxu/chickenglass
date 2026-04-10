@@ -274,6 +274,19 @@ describe("pluginFromConfig", () => {
     expect(plugin.headerPosition).toBe("inline");
   });
 
+  it("inherits render decoration hooks from existing plugin when partially overridden", () => {
+    const addBodyDecorations = () => {};
+    const existing = makeBlockPlugin({
+      name: "embed",
+      numbered: false,
+      title: "Embed",
+      specialBehavior: "embed",
+      renderDecorations: { addBodyDecorations },
+    });
+    const plugin = pluginFromConfig("embed", { title: "Widget" }, existing);
+    expect(plugin.renderDecorations?.addBodyDecorations).toBe(addBodyDecorations);
+  });
+
   it("inherits display metadata from existing plugin when partially overridden", () => {
     const existing = makeBlockPlugin({
       name: "blockquote",
