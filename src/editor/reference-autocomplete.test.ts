@@ -4,12 +4,16 @@ import {
   startCompletion,
 } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { CslProcessor } from "../citations/csl-processor";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import {
   defaultPlugins,
 } from "../plugins";
+import {
+  getReferencePresentationComputationCountForTest,
+  resetReferencePresentationComputationCountForTest,
+} from "../references/presentation";
 import { documentAnalysisField } from "../state/document-analysis";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
@@ -77,6 +81,10 @@ function typeText(view: ReturnType<typeof createEditor>, text: string): void {
     userEvent: "input.type",
   });
 }
+
+afterEach(() => {
+  resetReferencePresentationComputationCountForTest();
+});
 
 describe("findReferenceCompletionMatch", () => {
   it("detects bracketed references at [@", () => {
@@ -173,6 +181,21 @@ describe("collectReferenceCompletionCandidates", () => {
       preview: "Karger, David R.. Minimum cuts in near-linear time. JACM, 47(1), 46-76. 2000.",
     });
     expect(byId.size).toBe(4);
+  });
+
+  it("reuses the shared citation formatter across repeated candidate collection", () => {
+    const state = createReferenceState("See [@").update({
+      effects: bibDataEffect.of({
+        store: makeBibStore([CSL_FIXTURES.karger]),
+        cslProcessor: new CslProcessor([CSL_FIXTURES.karger]),
+      }),
+    }).state;
+
+    collectReferenceCompletionCandidates(state);
+    expect(getReferencePresentationComputationCountForTest()).toBe(1);
+
+    collectReferenceCompletionCandidates(state);
+    expect(getReferencePresentationComputationCountForTest()).toBe(1);
   });
 });
 

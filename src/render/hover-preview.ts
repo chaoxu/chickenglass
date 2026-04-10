@@ -24,7 +24,6 @@ import {
 import { blockCounterField, type NumberedBlock } from "../state/block-counter";
 import {
   buildCitationPreviewContent,
-  formatCitationPreview,
 } from "../citations/citation-preview";
 import { mathMacrosField } from "./math-macros";
 import { renderKatex } from "./math-widget";
@@ -53,6 +52,7 @@ import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
 import { type BibStore, bibDataField } from "../state/bib-data";
 import { pluginRegistryField } from "../state/plugin-registry";
 import { getPlugin } from "../plugins/plugin-registry";
+import { getReferencePresentationModel } from "../references/presentation";
 import { findRenderedReference } from "./reference-targeting";
 import {
   findReferenceWidgetContainer,
@@ -722,14 +722,16 @@ export function buildCrossrefCompletionPreviewContent(
  * Build the tooltip plan for a citation hover preview.
  */
 function buildCitationTooltipPlan(
+  view: EditorView,
   ids: readonly string[],
   store: BibStore,
 ): TooltipPlan {
+  const presentation = getReferencePresentationModel(view.state);
   const previews = ids
     .map((id) => {
-      const entry = store.get(id);
-      if (!entry) return null;
-      return { id, preview: formatCitationPreview(entry) };
+      const preview = presentation.getPreviewText(id);
+      if (!preview) return null;
+      return { id, preview };
     })
     .filter((item): item is { id: string; preview: string } => item !== null);
 
@@ -771,9 +773,8 @@ function buildSingleItemTooltipPlan(
   const macros = view.state.field(mathMacrosField, false) ?? {};
 
   if (resolved.kind === "citation") {
-    const entry = store.get(id);
-    if (entry) {
-      const preview = formatCitationPreview(entry);
+    const preview = getReferencePresentationModel(view.state).getPreviewText(id);
+    if (preview) {
       return {
         buildContent: () => {
           const container = createPreviewSurfaceContent(CSS.hoverPreview);
@@ -906,7 +907,7 @@ function buildTooltipPlanForElement(
       const itemIndex = ref.ids.indexOf(refId);
       return buildSingleItemTooltipPlan(view, refId, classifications[itemIndex], store);
     }
-    return buildCitationTooltipPlan(ref.ids, store);
+    return buildCitationTooltipPlan(view, ref.ids, store);
   }
 
   return null;
