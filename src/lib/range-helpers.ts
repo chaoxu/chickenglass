@@ -182,6 +182,8 @@ export function getMergedRangeCoverage(
 
   for (let index = 1; index < values.length; index += 1) {
     const value = values[index];
+    // Ordered coverage merges when the next range starts at or before the
+    // current inclusive end, matching the previous `value.from <= currentTo`.
     if (containsPos({ from: currentFrom, to: currentTo }, value.from)) {
       currentTo = Math.max(currentTo, value.to);
       continue;
