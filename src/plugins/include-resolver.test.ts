@@ -439,6 +439,20 @@ chapter1.md
 });
 
 describe("flattenIncludesWithSourceMap", () => {
+  it("replaces single-line include blocks using canonical analysis ranges", () => {
+    const rootContent = "Intro\n\n::: {.include} ch.md :::\n\nEnd.";
+    const includes = [{ path: "ch.md", content: "Chapter text", children: [] }];
+
+    const result = flattenIncludesWithSourceMap(rootContent, includes);
+
+    expect(result.text).toBe("Intro\n\nChapter text\n\nEnd.");
+    expect(result.regions).toHaveLength(1);
+    expect(result.regions[0]).toMatchObject({
+      file: "ch.md",
+      originalRef: "::: {.include} ch.md :::",
+    });
+  });
+
   it("produces nested child regions for recursive includes", () => {
     const sectionInclude = `::: {.include}
 sec.md

@@ -1,14 +1,9 @@
-import { parser } from "@lezer/markdown";
 import type { FileSystem } from "../lib/types";
 import {
   normalizeProjectPath,
   resolveProjectPathFromDocument,
 } from "../lib/project-paths";
-import { markdownExtensions, extractDivClass } from "../parser";
-import { NODE } from "../constants/node-types";
-
-/** Lezer parser configured with the same extensions used by the editor. */
-const includeParser = parser.configure(markdownExtensions);
+import { analyzeMarkdownSemantics } from "../semantics/markdown-analysis";
 
 /** A single resolved include: the file path and its content. */
 export interface ResolvedInclude {
@@ -58,59 +53,19 @@ interface IncludeMatch {
 }
 
 /**
- * Walk the Lezer syntax tree to find `::: {.include} ... :::` blocks.
- *
- * Returns located include matches in document order. Code blocks are
- * naturally excluded because Lezer parses them as FencedCode, not FencedDiv.
+ * Adapt canonical include entries from DocumentAnalysis into the richer match
+ * shape used by flattening and source-map generation.
  */
 function findIncludeBlocks(content: string): readonly IncludeMatch[] {
-  const tree = includeParser.parse(content);
-  const matches: IncludeMatch[] = [];
-
-  tree.iterate({
-    enter(node) {
-      if (node.name !== NODE.FencedDiv) return;
-
-      const attrNode = node.node.getChild(NODE.FencedDivAttributes);
-      if (!attrNode) return;
-
-      const attrs = extractDivClass(content.slice(attrNode.from, attrNode.to));
-      if (!attrs || !attrs.classes.includes("include")) return;
-
-      // Extract the body text between the opening fence line and closing fence.
-      // For multi-line: content between opening fence line and closing `:::`
-      // For single-line: title text after `{.include}` before closing `:::`
-      const titleNode = node.node.getChild("FencedDivTitle");
-      let bodyText: string;
-      if (titleNode) {
-        // Single-line form: `::: {.include} chapter1.md :::`
-        // The title node contains the path.
-        bodyText = content.slice(titleNode.from, titleNode.to);
-      } else {
-        // Multi-line form: extract text between attr end and close fence.
-        const fenceNodes = node.node.getChildren(NODE.FencedDivFence);
-        const closeFence = fenceNodes.length >= 2 ? fenceNodes[fenceNodes.length - 1] : undefined;
-        const bodyFrom = attrNode.to;
-        const bodyTo = closeFence && closeFence.from >= 0 ? closeFence.from : node.to;
-        bodyText = content.slice(bodyFrom, bodyTo);
-      }
-
-      const path = bodyText.trim();
-      if (path.length > 0) {
-        matches.push({
-          from: node.from,
-          to: node.to,
-          path,
-          text: content.slice(node.from, node.to),
-        });
-      }
-    },
-  });
-
-  return matches;
+  return analyzeMarkdownSemantics(content).includes.map((include) => ({
+    from: include.from,
+    to: include.to,
+    path: include.path,
+    text: content.slice(include.from, include.to),
+  }));
 }
 
-/** Extract include paths from markdown content using Lezer tree walking. */
+/** Extract include paths from markdown content using canonical document analysis. */
 export function extractIncludePaths(content: string): readonly string[] {
   return findIncludeBlocks(content).map((m) => m.path);
 }
