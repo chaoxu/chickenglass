@@ -135,19 +135,13 @@ function ClickCaretRepairPlugin({
           return;
         }
 
-        if (hasEditableTextSelection(rootElement)) {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && rootElement.contains(sel.anchorNode)) {
           return;
         }
 
         editor.update(() => {
-          const root = $getRoot();
-          const textNodes = root.getAllTextNodes().filter((node) => node.getTextContentSize() > 0);
-          const lastTextNode = textNodes[textNodes.length - 1];
-          if (lastTextNode) {
-            lastTextNode.selectEnd();
-            return;
-          }
-          root.selectEnd();
+          $getRoot().selectEnd();
         }, { discrete: true });
       });
     };
@@ -252,7 +246,7 @@ function RootElementPlugin({
   return null;
 }
 
-function repairBlankClickSelection(root: HTMLElement): void {
+function repairBlankClickSelection(root: HTMLElement, event: React.MouseEvent): void {
   if (hasEditableTextSelection(root)) {
     return;
   }
@@ -262,21 +256,11 @@ function repairBlankClickSelection(root: HTMLElement): void {
     return;
   }
 
-  const textLeaves = [...root.querySelectorAll("[data-lexical-text='true']")];
-  const lastTextNode = textLeaves
-    .map((leaf) => leaf.firstChild)
-    .filter((node): node is Text => node instanceof Text && node.textContent !== null && node.textContent.length > 0)
-    .at(-1) ?? null;
-
-  if (!lastTextNode) {
-    return;
+  const range = document.caretRangeFromPoint(event.clientX, event.clientY);
+  if (range && root.contains(range.startContainer)) {
+    selection.removeAllRanges();
+    selection.addRange(range);
   }
-
-  const range = document.createRange();
-  range.setStart(lastTextNode, lastTextNode.textContent?.length ?? 0);
-  range.collapse(true);
-  selection.removeAllRanges();
-  selection.addRange(range);
 }
 
 export interface LexicalRichMarkdownEditorProps {
@@ -424,8 +408,8 @@ export function LexicalRichMarkdownEditor({
                       }
                     : undefined}
                   onMouseUp={editable && shouldRepairBlankClickSelection
-                    ? (event) => {
-                      repairBlankClickSelection(event.currentTarget);
+                    ? (event: React.MouseEvent<HTMLDivElement>) => {
+                      repairBlankClickSelection(event.currentTarget, event);
                     }
                     : undefined}
                   onScroll={(event) => onScrollChange?.(event.currentTarget.scrollTop)}
