@@ -136,7 +136,7 @@ function normalizeCaptureForDiff(capture) {
 }
 
 function mergedContextValue(next, key, fallback) {
-  return Object.prototype.hasOwnProperty.call(next, key)
+  return Object.hasOwn(next, key)
     ? next[key]
     : fallback;
 }
