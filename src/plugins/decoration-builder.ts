@@ -9,8 +9,8 @@ import {
   addAttributeTitleDecoration,
   addHeaderWidgetDecoration,
   addInlineTitleParenDecorations,
-} from "./plugin-render-chrome";
-import { addEmbedWidget } from "./plugin-render-embed";
+} from "../render/plugin-adapters/chrome";
+import { addEmbedWidget } from "../render/plugin-adapters/embed";
 
 /**
  * Fluent helper for accumulating block-render decorations while keeping the

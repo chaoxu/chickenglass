@@ -5,10 +5,9 @@ import { frontmatterField } from "../editor/frontmatter-state";
 import { documentSemanticsField } from "../state/document-analysis";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
-import { blockRenderPlugin } from "./plugin-render";
+import { blockRenderPlugin, _blockDecorationFieldForTest } from "../render/plugin-render";
 import { defaultPlugins } from "./default-plugins";
 import { mathMacrosField } from "../render/render-core";
-import { _blockDecorationFieldForTest } from "./plugin-render";
 import { createTestView, getDecorationSpecs } from "../test-utils";
 
 const figurePlugin = defaultPlugins.find((p) => p.name === "figure")!;

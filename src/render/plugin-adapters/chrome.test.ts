@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { widgetSourceMap } from "../render/render-utils";
+import { widgetSourceMap } from "../render-utils";
 import {
   BlockCaptionWidget,
   BlockHeaderWidget,
-} from "./plugin-render-chrome";
+} from "./chrome";
 
 describe("BlockHeaderWidget", () => {
   it("updates content and refreshes source-range metadata", () => {

@@ -11,7 +11,7 @@ import { pdfPreviewField } from "./pdf-preview-cache";
 import { tableRenderPlugin } from "./table-render";
 import { createTestView } from "../test-utils";
 import { CSS } from "../constants/css-classes";
-import { blockRenderPlugin } from "../plugins/plugin-render";
+import { blockRenderPlugin } from "./plugin-render";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { defaultPlugins } from "../plugins/default-plugins";

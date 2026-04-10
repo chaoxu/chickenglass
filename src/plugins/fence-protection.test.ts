@@ -22,7 +22,7 @@ import {
   getOpeningMathDelimiterRanges,
   _fenceProtectionCacheFieldForTest as fenceProtectionCacheField,
 } from "./fence-protection";
-import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-render";
+import { _blockDecorationFieldForTest as blockDecorationField } from "../render/plugin-render";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../state/document-analysis";

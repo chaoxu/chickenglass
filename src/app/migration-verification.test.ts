@@ -907,8 +907,8 @@ describe("#299 — centralized block manifest and CSS registry", () => {
   it("uses the shared registries in block rendering paths", () => {
     const blockTheme = fileText("src/editor/block-theme.ts");
     const embedPlugin = fileText("src/plugins/embed-plugin.ts");
-    const pluginRender = fileText("src/plugins/plugin-render.ts");
-    const pluginRenderChrome = fileText("src/plugins/plugin-render-chrome.ts");
+    const pluginRender = fileText("src/render/plugin-render.ts");
+    const pluginRenderChrome = fileText("src/render/plugin-adapters/chrome.ts");
     const decorationBuilder = fileText("src/plugins/decoration-builder.ts");
     const specialBehaviorHandlers = fileText("src/plugins/special-behavior-handlers.ts");
 
@@ -924,6 +924,9 @@ describe("#299 — centralized block manifest and CSS registry", () => {
     expect(specialBehaviorHandlers).toContain("specialBehaviorHandlers");
     expect(pluginRenderChrome).toContain("PluginRenderAdapter");
     expect(pluginRenderChrome).toContain("addPluginMarkerReplacement");
+    expect(decorationBuilder).toContain("../render/plugin-adapters/chrome");
+    expect(decorationBuilder).toContain("../render/plugin-adapters/embed");
+    expect(embedPlugin).toContain("../render/plugin-adapters/embed");
     expect(embedPlugin).toContain("renderDecorations");
     expect(pluginRender).toContain("renderDecorations?.addBodyDecorations");
     // #374 and #1094: special-behavior dispatch remains centralized for shared
@@ -948,28 +951,47 @@ describe("#1092 — plugin-owned render adapter seam", () => {
   });
 
   it("routes block chrome and embed helpers through the render adapter", () => {
-    const pluginRender = fileText("src/plugins/plugin-render.ts");
-    const chrome = fileText("src/plugins/plugin-render-chrome.ts");
-    const embed = fileText("src/plugins/plugin-render-embed.ts");
+    const pluginRender = fileText("src/render/plugin-render.ts");
+    const chrome = fileText("src/render/plugin-adapters/chrome.ts");
+    const embed = fileText("src/render/plugin-adapters/embed.ts");
+    const embedPlugin = fileText("src/plugins/embed-plugin.ts");
+    const decorationBuilder = fileText("src/plugins/decoration-builder.ts");
     const bridge = fileText("src/lib/plugin-render-adapter.ts");
     const renderAdapter = fileText("src/render/plugin-render-adapter.ts");
+    const renderIndex = fileText("src/render/index.ts");
+    const pluginsIndex = fileText("src/plugins/index.ts");
 
+    expect(fileExists("src/render/plugin-render.ts")).toBe(true);
+    expect(fileExists("src/plugins/plugin-render.ts")).toBe(false);
+    expect(fileExists("src/render/plugin-adapters/chrome.ts")).toBe(true);
+    expect(fileExists("src/render/plugin-adapters/embed.ts")).toBe(true);
+    expect(fileExists("src/plugins/plugin-render-chrome.ts")).toBe(false);
+    expect(fileExists("src/plugins/plugin-render-embed.ts")).toBe(false);
     expect(renderAdapter).toContain("const codeMirrorPluginRenderAdapter: PluginRenderAdapter");
     expect(renderAdapter).toContain("createHeaderWidget");
     expect(renderAdapter).toContain("createEmbedWidget");
     expect(bridge).toContain('import type { PluginRenderAdapter }');
     expect(bridge).toContain("codeMirrorPluginRenderAdapter");
+    expect(renderIndex).toContain("blockRenderPlugin");
+    expect(pluginsIndex).not.toContain("blockRenderPlugin");
     expect(pluginRender).toContain("pluginRenderAdapter");
+    expect(pluginRender).toContain("./plugin-adapters/chrome");
+    expect(decorationBuilder).toContain("../render/plugin-adapters/chrome");
+    expect(decorationBuilder).toContain("../render/plugin-adapters/embed");
+    expect(embedPlugin).toContain("../render/plugin-adapters/embed");
     expect(chrome).toContain("PluginRenderAdapter");
     expect(chrome).toContain("adapter.createHeaderWidget");
     expect(embed).toContain("PluginRenderAdapter");
     expect(embed).toContain("adapter.createEmbedWidget");
     expect(pluginRender).not.toContain("../render/plugin-render-adapter");
-    expect(chrome).not.toContain("../render/plugin-render-adapter");
-    expect(embed).not.toContain("../render/plugin-render-adapter");
-    expect(chrome).not.toContain("../render/render-core");
-    expect(embed).not.toContain("../render/render-core");
-    expect(embed).not.toContain("../render/source-widget");
+    expect(pluginRender).not.toContain("./plugin-render-chrome");
+    expect(decorationBuilder).not.toContain("./plugin-render-chrome");
+    expect(decorationBuilder).not.toContain("./plugin-render-embed");
+    expect(embedPlugin).not.toContain("./plugin-render-embed");
+    expect(chrome).toContain("../../plugins/plugin-render-adapter");
+    expect(embed).toContain("../../plugins/plugin-render-adapter");
+    expect(chrome).not.toContain("../plugin-render-adapter");
+    expect(embed).not.toContain("../plugin-render-adapter");
   });
 });
 
@@ -1018,7 +1040,7 @@ describe("#370 — shared decoration/widget factories", () => {
     const checkbox = fileText("src/render/checkbox-render.ts");
     const image = fileText("src/render/image-render.ts");
     const reference = fileText("src/render/reference-render.ts");
-    const pluginRender = fileText("src/plugins/plugin-render.ts");
+    const pluginRender = fileText("src/render/plugin-render.ts");
 
     expect(checkbox).toContain("createSimpleViewPlugin");
     expect(checkbox).toContain("pushWidgetDecoration");
@@ -1243,14 +1265,14 @@ describe("#314 — document surface renderer layer", () => {
     const footnoteTooltip = fileText("src/app/hooks/use-footnote-tooltip.ts");
     const readMode = fileText("src/app/components/read-mode-view.tsx");
     const hoverPreview = fileText("src/render/hover-preview.ts");
-    const pluginRenderChrome = fileText("src/plugins/plugin-render-chrome.ts");
+    const pluginRenderChrome = fileText("src/render/plugin-adapters/chrome.ts");
     const frontmatterRender = fileText("src/editor/frontmatter-render.ts");
 
     expect(headingChrome).toContain("../../document-surfaces");
     expect(footnoteTooltip).toContain("../../document-surfaces");
     expect(readMode).toContain("../../document-surfaces");
     expect(hoverPreview).toContain("../document-surfaces");
-    expect(pluginRenderChrome).toContain("../document-surfaces");
+    expect(pluginRenderChrome).toContain("../../document-surfaces");
     expect(frontmatterRender).toContain("../document-surfaces");
   });
 });
