@@ -35,8 +35,7 @@ export interface ReferenceIndexAnalysisInput {
   readonly references: readonly ReferenceSemantics[];
 }
 
-function entryPriority(entry: ReferenceEntry): number {
-  if (entry.type === "citation") return 0;
+function entryPriority(entry: LocalReferenceEntry): number {
   if (entry.targetKind === "heading") return 1;
   if (entry.targetKind === "equation") return 2;
   return 3;

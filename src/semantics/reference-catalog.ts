@@ -2,19 +2,21 @@ import type {
   CrossrefReferenceEntry,
   LabelReferenceEntry,
 } from "../references/model";
-export {
-  formatBlockReferenceLabel,
-  formatEquationReferenceLabel,
-  formatHeadingReferenceLabel,
-} from "../references/format";
 import type {
   DocumentAnalysis,
   ReferenceSemantics,
 } from "./document";
 import {
   formatBlockReferenceLabel,
+  formatEquationReferenceLabel,
   formatHeadingReferenceLabel,
 } from "../references/format";
+
+export {
+  formatBlockReferenceLabel,
+  formatEquationReferenceLabel,
+  formatHeadingReferenceLabel,
+};
 
 export type DocumentReferenceTargetKind = "block" | "equation" | "heading";
 

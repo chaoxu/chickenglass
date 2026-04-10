@@ -461,6 +461,9 @@ export function collectCitationMatches(
  *
  * Convenience wrapper over `collectCitationMatches` for callers that
  * only need a flat deduplicated id list (e.g. the bibliography plugin).
+ *
+ * @deprecated Prefer `collectCitedIdsFromReferenceIndex()` when document
+ * analysis is already available.
  */
 export function collectCitedIdsFromReferences(
   references: readonly RefWithIds[],
