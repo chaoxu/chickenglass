@@ -14,6 +14,7 @@ describe("render-utils compatibility barrel", () => {
     expect(renderUtils.createBooleanToggleField).toBeDefined();
     expect(renderUtils.focusEffect).toBeDefined();
     expect(renderUtils.createSimpleViewPlugin).toBeDefined();
+    expect(renderUtils.createDecorationStateField).toBeDefined();
     expect(renderUtils.createDecorationsField).toBeDefined();
   });
 });

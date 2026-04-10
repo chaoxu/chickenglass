@@ -20,9 +20,9 @@ import {
   type EditorState,
   type Extension,
   type Range,
-  StateField,
 } from "@codemirror/state";
 import { buildDecorations } from "./decoration-core";
+import { createDecorationStateField } from "./decoration-field";
 import { editorFocusField, focusTracker } from "./focus-state";
 import { mathMacrosField } from "./math-macros";
 import {
@@ -109,7 +109,7 @@ function buildTableDecorationsFromState(state: EditorState): DecorationSet {
  * Uses a StateField (not ViewPlugin) so that block-level replace decorations
  * (which cross line breaks) are permitted by CM6.
  */
-const tableDecorationField = StateField.define<DecorationSet>({
+const tableDecorationField = createDecorationStateField({
   create(state) {
     return buildTableDecorationsFromState(state);
   },
@@ -137,9 +137,6 @@ const tableDecorationField = StateField.define<DecorationSet>({
     return value;
   },
 
-  provide(field) {
-    return EditorView.decorations.from(field);
-  },
 });
 
 /** Standalone DOM event handler for table context menus. */

@@ -2,7 +2,6 @@ import {
   type EditorState,
   type Extension,
   type Range,
-  StateField,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -30,6 +29,7 @@ import {
   pushBlockWidgetDecoration,
   pushWidgetDecoration,
 } from "./decoration-core";
+import { createDecorationStateField } from "./decoration-field";
 import { isDebugRenderFlagEnabled } from "./debug-render-flags";
 import {
   editorFocusField,
@@ -285,7 +285,7 @@ function rebuildMathDecorations(state: EditorState): DecorationSet {
  * Uses a StateField so that block-level replace decorations for display math
  * are permitted by CM6.
  */
-const mathDecorationField = StateField.define<DecorationSet>({
+const mathDecorationField = createDecorationStateField({
   create(state) {
     return rebuildMathDecorations(state);
   },
@@ -361,10 +361,6 @@ const mathDecorationField = StateField.define<DecorationSet>({
       return rebuildMathDecorations(tr.state);
     }
     return value;
-  },
-
-  provide(field) {
-    return EditorView.decorations.from(field);
   },
 });
 

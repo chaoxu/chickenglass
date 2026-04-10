@@ -10,6 +10,7 @@ import {
   type EditorView,
 } from "@codemirror/view";
 import {
+  createDecorationStateField,
   createDecorationsField,
   cursorSensitiveShouldRebuild,
   defaultShouldRebuild,
@@ -222,6 +223,39 @@ describe("createDecorationsField", () => {
     const updated = state.update({ selection: { anchor: 3 } }).state;
     expect(buildCount).toBe(0);
     expect(updated.field(field)).toBe(state.field(field));
+  });
+});
+
+describe("createDecorationStateField", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
+  it("delegates explicit create/update handlers", () => {
+    const lineDeco = Decoration.line({ class: "test-state-field" });
+    let createCount = 0;
+    let updateCount = 0;
+    const field = createDecorationStateField({
+      create() {
+        createCount++;
+        return Decoration.set([lineDeco.range(0)]);
+      },
+      update() {
+        updateCount++;
+        return Decoration.set([lineDeco.range(0)]);
+      },
+    });
+
+    view = createTestView("hello", { extensions: [markdown(), field] });
+    expect(createCount).toBe(1);
+    expect(getDecorationSpecs(view.state.field(field))[0].class).toBe("test-state-field");
+
+    const updated = view.state.update({ changes: { from: 0, insert: "x" } }).state;
+    expect(updateCount).toBe(1);
+    expect(getDecorationSpecs(updated.field(field))[0].class).toBe("test-state-field");
   });
 });
 
