@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { EditorMode } from "../../editor";
 import { isTauri } from "../../lib/tauri";
 import {
+  captureDebugSessionState,
   getDebugSessionRecorderStatus,
   recordDebugSessionEvent,
 } from "../../debug/session-recorder";
@@ -223,6 +224,7 @@ export function useAppDebug({
       clearScrollGuards: () => clearScrollGuardEvents(),
       renderState: () => window.__cmDebug?.renderState?.() ?? null,
       recorderStatus: () => getDebugSessionRecorderStatus(),
+      captureState: (label?: string | null) => captureDebugSessionState(label),
     };
     if (import.meta.env.DEV && isTauri()) {
       window.__tauriSmoke = {

@@ -15,6 +15,10 @@ import type { SourceMap } from "../app/source-map";
 import type { EditorMode } from "../editor";
 import type { DebugDocumentState, DebugProjectFile } from "../app/hooks/use-app-debug";
 import type { ScrollGuardEvent } from "../app/hooks/use-editor-scroll";
+import type {
+  DebugSessionCapture,
+  DebugSessionRecorderStatus,
+} from "../debug/session-recorder";
 
 declare global {
   interface Window {
@@ -80,13 +84,8 @@ declare global {
       scrollGuards: () => readonly ScrollGuardEvent[];
       clearScrollGuards: () => void;
       renderState: () => DebugRenderState | null;
-      recorderStatus: () => {
-        sessionId: string | null;
-        sessionKind: "human" | "webdriver";
-        connected: boolean;
-        queued: number;
-        captureMode: "smart";
-      };
+      recorderStatus: () => DebugSessionRecorderStatus;
+      captureState: (label?: string | null) => DebugSessionCapture;
     };
 
     /**

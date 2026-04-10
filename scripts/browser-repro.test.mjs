@@ -1,0 +1,170 @@
+import { describe, expect, it } from "vitest";
+import {
+  diffSessionSummaries,
+  extractReplayActions,
+  parseSessionEvents,
+  summarizeSessionEvents,
+} from "./browser-repro.mjs";
+
+describe("browser repro helpers", () => {
+  it("extracts replayable key and pointer actions from a session log", () => {
+    const events = parseSessionEvents(`
+{"type":"key","detail":{"key":"a","metaKey":false,"ctrlKey":false,"altKey":false,"shiftKey":false}}
+{"type":"key","detail":{"key":"ArrowDown","metaKey":false,"ctrlKey":false,"altKey":false,"shiftKey":true}}
+{"type":"pointer","detail":{"editorX":120,"editorY":48,"button":0,"metaKey":false,"ctrlKey":false,"altKey":false,"shiftKey":false}}
+{"type":"key","detail":{"key":"Process","metaKey":false,"ctrlKey":false,"altKey":false,"shiftKey":false}}
+`);
+
+    expect(extractReplayActions(events)).toEqual({
+      actions: [
+        { type: "insertText", text: "a" },
+        {
+          type: "press",
+          key: "ArrowDown",
+          modifiers: ["Shift"],
+        },
+        {
+          type: "click",
+          editorX: 120,
+          editorY: 48,
+          clientX: null,
+          clientY: null,
+          button: 0,
+          modifiers: [],
+        },
+      ],
+      skipped: 1,
+    });
+  });
+
+  it("prefers explicit snapshot events when summarizing a session", () => {
+    const summary = summarizeSessionEvents([
+      {
+        type: "key",
+        context: {
+          document: { path: "index.md", name: "index.md", dirty: false },
+          mode: "rich",
+          selection: { anchor: 1, head: 1, from: 1, to: 1, empty: true, line: 1, col: 2 },
+          render: null,
+          structure: null,
+          location: "http://localhost:5173/",
+        },
+      },
+      {
+        type: "snapshot",
+        detail: {
+          document: { path: "proof.md", name: "proof.md", dirty: true },
+          mode: "source",
+          selection: { anchor: 9, head: 9, from: 9, to: 9, empty: true, line: 2, col: 3 },
+          structure: { kind: "frontmatter", from: 0, to: 18, title: "Proof" },
+          render: { visibleRawFencedOpeners: [] },
+          location: "http://localhost:5173/",
+          label: "after replay",
+          recorder: {
+            sessionId: "sess-a",
+            sessionKind: "webdriver",
+            connected: true,
+            queued: 0,
+            captureMode: "smart",
+          },
+        },
+      },
+    ]);
+
+    expect(summary.captureSource).toBe("snapshot");
+    expect(summary.comparableCapture).toMatchObject({
+      document: { path: "proof.md", name: "proof.md", dirty: true },
+      mode: "source",
+      selection: { head: 9, line: 2, col: 3 },
+      structure: { kind: "frontmatter", to: 18 },
+    });
+  });
+
+  it("clears stale structure state when a later context explicitly reports null", () => {
+    const summary = summarizeSessionEvents([
+      {
+        type: "caret",
+        context: {
+          document: { path: "proof.md", name: "proof.md", dirty: false },
+          mode: "rich",
+          selection: { anchor: 1, head: 1, from: 1, to: 1, empty: true, line: 1, col: 2 },
+          render: null,
+          structure: { kind: "frontmatter", from: 0, to: 12, title: "Proof" },
+          location: "http://localhost:5173/",
+        },
+      },
+      {
+        type: "focus",
+        context: {
+          document: { path: "proof.md", name: "proof.md", dirty: false },
+          mode: "rich",
+          selection: null,
+          render: null,
+          structure: null,
+          location: "http://localhost:5173/",
+        },
+      },
+    ]);
+
+    expect(summary.lastContext.structure).toBeNull();
+  });
+
+  it("diffs event counts and comparable capture state across two sessions", () => {
+    const left = summarizeSessionEvents([
+      {
+        type: "snapshot",
+        detail: {
+          document: { path: "index.md", name: "index.md", dirty: false },
+          mode: "rich",
+          selection: { anchor: 1, head: 1, from: 1, to: 1, empty: true, line: 1, col: 2 },
+          structure: null,
+          render: { visibleRawFencedOpeners: [] },
+          location: "http://localhost:5173/",
+          label: null,
+          recorder: {
+            sessionId: "sess-left",
+            sessionKind: "human",
+            connected: true,
+            queued: 0,
+            captureMode: "smart",
+          },
+        },
+      },
+      { type: "key" },
+    ]);
+    const right = summarizeSessionEvents([
+      {
+        type: "snapshot",
+        detail: {
+          document: { path: "index.md", name: "index.md", dirty: false },
+          mode: "rich",
+          selection: { anchor: 5, head: 5, from: 5, to: 5, empty: true, line: 1, col: 6 },
+          structure: null,
+          render: { visibleRawFencedOpeners: [{ line: 8, text: "::: {.proof}", classes: [] }] },
+          location: "http://localhost:5173/",
+          label: null,
+          recorder: {
+            sessionId: "sess-right",
+            sessionKind: "webdriver",
+            connected: false,
+            queued: 2,
+            captureMode: "smart",
+          },
+        },
+      },
+      { type: "key" },
+      { type: "key" },
+    ]);
+
+    const diff = diffSessionSummaries(left, right);
+
+    expect(diff.equal).toBe(false);
+    expect(diff.eventCountDifferences).toEqual([
+      { type: "key", left: 1, right: 2 },
+    ]);
+    expect(diff.captureDiff.differences.map((entry) => entry.field)).toEqual([
+      "selection",
+      "render",
+    ]);
+  });
+});

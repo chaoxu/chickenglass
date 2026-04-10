@@ -107,7 +107,7 @@ interface SemanticDebugInfo {
   };
 }
 
-interface SelectionInfo {
+export interface SelectionInfo {
   readonly anchor: number;
   readonly head: number;
   readonly from: number;
