@@ -47,18 +47,6 @@ impl ProjectPathResolver {
     }
 }
 
-pub fn resolve_project_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
-    ProjectPathResolver::new(root)?.resolve_project_path(relative)
-}
-
-pub fn resolve_existing_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
-    ProjectPathResolver::new(root)?.resolve_existing_path(relative)
-}
-
-pub fn project_relative_path(root: &Path, candidate: &Path) -> Result<String, String> {
-    ProjectPathResolver::new(root)?.project_relative_path(candidate)
-}
-
 pub fn file_name_to_frontend_string(name: &OsStr, label: &str) -> Result<String, String> {
     name.to_str()
         .map(str::to_owned)
@@ -132,8 +120,9 @@ mod tests {
         let file = root.join("sub/file.md");
         fs::create_dir_all(file.parent().unwrap()).unwrap();
         fs::write(&file, "").unwrap();
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let result = project_relative_path(&root, &file).unwrap();
+        let result = resolver.project_relative_path(&file).unwrap();
         assert_eq!(result, "sub/file.md");
 
         fs::remove_dir_all(&root).unwrap();
@@ -144,6 +133,7 @@ mod tests {
         let root = create_temp_dir("symlink-test");
         let file = root.join("doc.md");
         fs::write(&file, "").unwrap();
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
         let alias_parent = root.parent().unwrap().join("coflat-symlink-alias");
         let _ = fs::remove_file(&alias_parent);
@@ -153,7 +143,7 @@ mod tests {
         std::os::windows::fs::symlink_dir(&root, &alias_parent).unwrap();
 
         let aliased_candidate = alias_parent.join("doc.md");
-        let result = project_relative_path(&root, &aliased_candidate).unwrap();
+        let result = resolver.project_relative_path(&aliased_candidate).unwrap();
         assert_eq!(result, "doc.md");
 
         fs::remove_file(&alias_parent).unwrap();
@@ -180,9 +170,10 @@ mod tests {
 
         let file = canonical_root.join("notes.md");
         fs::write(&file, "").unwrap();
+        let resolver = ProjectPathResolver::new(&canonical_root).unwrap();
 
         let aliased_candidate = raw_tmp.join(&dir_name).join("notes.md");
-        let result = project_relative_path(&canonical_root, &aliased_candidate).unwrap();
+        let result = resolver.project_relative_path(&aliased_candidate).unwrap();
         assert_eq!(result, "notes.md");
 
         fs::remove_dir_all(&canonical_root).unwrap();
@@ -192,8 +183,9 @@ mod tests {
     fn project_relative_path_nonexistent_file() {
         let root = create_temp_dir("path-nonexist");
         let candidate = root.join("new-file.md");
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let result = project_relative_path(&root, &candidate).unwrap();
+        let result = resolver.project_relative_path(&candidate).unwrap();
         assert_eq!(result, "new-file.md");
 
         fs::remove_dir_all(&root).unwrap();
@@ -203,8 +195,9 @@ mod tests {
     fn project_relative_path_nonexistent_nested() {
         let root = create_temp_dir("path-nested");
         let candidate = root.join("new-dir/deep/file.md");
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let result = project_relative_path(&root, &candidate).unwrap();
+        let result = resolver.project_relative_path(&candidate).unwrap();
         assert_eq!(result, "new-dir/deep/file.md");
 
         fs::remove_dir_all(&root).unwrap();
@@ -216,8 +209,11 @@ mod tests {
         let outside = create_temp_dir("path-outside-other");
         let candidate = outside.join("file.md");
         fs::write(&candidate, "").unwrap();
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let err = project_relative_path(&root, &candidate).expect_err("should reject");
+        let err = resolver
+            .project_relative_path(&candidate)
+            .expect_err("should reject");
         assert!(err.contains("escapes project root"));
 
         fs::remove_dir_all(&root).unwrap();
@@ -234,8 +230,10 @@ mod tests {
         let candidate = root.join(PathBuf::from(OsString::from_vec(vec![
             b'b', b'a', b'd', 0x80,
         ])));
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let err = project_relative_path(&root, &candidate)
+        let err = resolver
+            .project_relative_path(&candidate)
             .expect_err("non-utf8 paths should be rejected");
         assert!(err.contains("not valid UTF-8"), "got: {}", err);
 
@@ -270,8 +268,10 @@ mod tests {
     fn resolve_project_path_rejects_dotdot_escape() {
         let root = create_temp_dir("traversal-test");
         fs::create_dir_all(root.join("sub")).unwrap();
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let err = resolve_project_path(&root, "sub/../../etc/passwd")
+        let err = resolver
+            .resolve_project_path("sub/../../etc/passwd")
             .expect_err("should reject traversal");
         assert!(err.contains("escapes project root"), "got: {}", err);
 
@@ -284,8 +284,9 @@ mod tests {
         fs::create_dir_all(root.join("a/b")).unwrap();
         let file = root.join("a/target.md");
         fs::write(&file, "").unwrap();
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let result = resolve_project_path(&root, "a/b/../target.md").unwrap();
+        let result = resolver.resolve_project_path("a/b/../target.md").unwrap();
         assert!(result.ends_with("target.md"));
         assert!(result.starts_with(&root));
 
@@ -332,13 +333,15 @@ mod tests {
         let outside = create_temp_dir("dangling-leaf-outside");
         let dangling_target = outside.join("escaped.md");
         let link = root.join("escape.md");
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
         #[cfg(unix)]
         std::os::unix::fs::symlink(&dangling_target, &link).unwrap();
         #[cfg(windows)]
         std::os::windows::fs::symlink_file(&dangling_target, &link).unwrap();
 
-        let err = resolve_project_path(&root, "escape.md")
+        let err = resolver
+            .resolve_project_path("escape.md")
             .expect_err("dangling symlink leaf should be rejected");
         assert!(
             err.contains("Cannot resolve path 'escape.md'"),
@@ -356,13 +359,15 @@ mod tests {
         let outside = create_temp_dir("dangling-ancestor-outside");
         let dangling_target = outside.join("missing-dir");
         let link = root.join("escape");
+        let resolver = ProjectPathResolver::new(&root).unwrap();
 
         #[cfg(unix)]
         std::os::unix::fs::symlink(&dangling_target, &link).unwrap();
         #[cfg(windows)]
         std::os::windows::fs::symlink_dir(&dangling_target, &link).unwrap();
 
-        let err = resolve_project_path(&root, "escape/note.md")
+        let err = resolver
+            .resolve_project_path("escape/note.md")
             .expect_err("dangling symlink ancestor should be rejected");
         assert!(
             err.contains("Cannot resolve path 'escape/note.md'"),
