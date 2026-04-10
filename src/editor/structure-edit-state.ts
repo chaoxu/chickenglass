@@ -14,13 +14,13 @@ import {
 } from "../fenced-block/model";
 import { containsPos, containsRange } from "../lib/range-helpers";
 import { focusEffect } from "../render/focus-state";
-import { programmaticDocumentChangeAnnotation } from "./programmatic-document-change";
-import { findCodeShellAt } from "./shell-ownership";
-import { documentAnalysisField } from "../state/document-analysis";
 import type {
   FootnoteDefinition,
 } from "../semantics/document";
+import { documentAnalysisField } from "../state/document-analysis";
 import { frontmatterField } from "./frontmatter-state";
+import { programmaticDocumentChangeAnnotation } from "./programmatic-document-change";
+import { findCodeShellAt } from "./shell-ownership";
 
 export interface FencedStructureEditTarget {
   readonly kind: "fenced-opener";

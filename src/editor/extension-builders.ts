@@ -2,13 +2,14 @@ import { type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { bibDataField } from "../citations";
 import { includeRegionsField } from "../lib/include-regions";
-import { createPluginRegistryField, defaultPlugins } from "../plugins";
+import { defaultPlugins } from "../plugins";
 import { imageUrlField } from "../render/image-url-cache";
 import { pdfPreviewField } from "../render/pdf-preview-cache";
-import { documentSemanticsField } from "../semantics/codemirror-source";
 import { documentLabelGraphField } from "../semantics/document-label-graph";
 import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import { blockCounterField } from "../state/block-counter";
+import { documentSemanticsField } from "../state/document-analysis";
+import { createPluginRegistryField } from "../state/plugin-registry";
 import {
   editableCompartment,
   lineNumbersCompartment,
