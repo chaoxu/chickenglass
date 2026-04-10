@@ -1,7 +1,10 @@
-import type { EditorState } from "@codemirror/state";
+import { StateField, type EditorState, type Transaction } from "@codemirror/state";
 import type { CslJsonItem } from "../citations/bibtex-parser";
 import { formatCitationPreview } from "../citations/citation-preview";
-import { getEditorDocumentReferenceCatalog } from "../semantics/editor-reference-catalog";
+import {
+  documentReferenceCatalogField,
+  getEditorDocumentReferenceCatalog,
+} from "../semantics/editor-reference-catalog";
 import { getPreferredDocumentReferenceTarget } from "../semantics/reference-catalog";
 import { type BibStore, bibDataField } from "../state/bib-data";
 
@@ -16,11 +19,6 @@ export interface ReferencePresentationModel {
 }
 
 let referencePresentationComputationCount = 0;
-
-const citationFormatCache = new WeakMap<
-  object,
-  WeakMap<BibStore, Map<string, CachedCitationFormat>>
->();
 
 function formatCitationAuthor(item: CslJsonItem): string {
   const author = item.author?.[0];
@@ -47,31 +45,8 @@ function formatCitationDisplay(item: CslJsonItem): string {
   return year ? `${author} ${year}` : author;
 }
 
-function getReferenceCacheScope(state: EditorState): object {
-  return state.doc;
-}
-
-function getCitationFormatEntries(
-  scope: object,
-  store: BibStore,
-): Map<string, CachedCitationFormat> {
-  let byStore = citationFormatCache.get(scope);
-  if (!byStore) {
-    byStore = new WeakMap<BibStore, Map<string, CachedCitationFormat>>();
-    citationFormatCache.set(scope, byStore);
-  }
-
-  let entries = byStore.get(store);
-  if (!entries) {
-    entries = new Map<string, CachedCitationFormat>();
-    byStore.set(store, entries);
-  }
-
-  return entries;
-}
-
 function getCachedCitationFormat(
-  scope: object,
+  entries: Map<string, CachedCitationFormat>,
   store: BibStore | undefined,
   id: string,
 ): CachedCitationFormat | undefined {
@@ -84,7 +59,6 @@ function getCachedCitationFormat(
     return undefined;
   }
 
-  const entries = getCitationFormatEntries(scope, store);
   const cached = entries.get(id);
   if (cached) {
     return cached;
@@ -99,12 +73,12 @@ function getCachedCitationFormat(
   return next;
 }
 
-export function getReferencePresentationModel(
+function createReferencePresentationModel(
   state: EditorState,
 ): ReferencePresentationModel {
-  const scope = getReferenceCacheScope(state);
   const store = state.field(bibDataField, false)?.store;
   const catalog = getEditorDocumentReferenceCatalog(state);
+  const citationEntries = new Map<string, CachedCitationFormat>();
 
   return {
     getDisplayText(id) {
@@ -113,13 +87,38 @@ export function getReferencePresentationModel(
         return target.displayLabel;
       }
 
-      return getCachedCitationFormat(scope, store, id)?.display ?? id;
+      return getCachedCitationFormat(citationEntries, store, id)?.display ?? id;
     },
 
     getPreviewText(id) {
-      return getCachedCitationFormat(scope, store, id)?.preview;
+      return getCachedCitationFormat(citationEntries, store, id)?.preview;
     },
   };
+}
+
+function referencePresentationDependenciesChanged(tr: Transaction): boolean {
+  return tr.docChanged
+    || tr.startState.field(documentReferenceCatalogField, false)
+      !== tr.state.field(documentReferenceCatalogField, false)
+    || tr.startState.field(bibDataField, false) !== tr.state.field(bibDataField, false);
+}
+
+export const referencePresentationField = StateField.define<ReferencePresentationModel>({
+  create(state) {
+    return createReferencePresentationModel(state);
+  },
+
+  update(value, tr) {
+    return referencePresentationDependenciesChanged(tr)
+      ? createReferencePresentationModel(tr.state)
+      : value;
+  },
+});
+
+export function getReferencePresentationModel(
+  state: EditorState,
+): ReferencePresentationModel {
+  return state.field(referencePresentationField, false) ?? createReferencePresentationModel(state);
 }
 
 export function getReferencePresentationComputationCountForTest(): number {

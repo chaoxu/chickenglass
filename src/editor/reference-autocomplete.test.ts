@@ -12,9 +12,11 @@ import {
 } from "../plugins";
 import {
   getReferencePresentationComputationCountForTest,
+  referencePresentationField,
   resetReferencePresentationComputationCountForTest,
 } from "../references/presentation";
 import { documentAnalysisField } from "../state/document-analysis";
+import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { CSL_FIXTURES, makeBibStore } from "../test-utils";
@@ -67,7 +69,9 @@ function createReferenceState(doc: string): EditorState {
       documentAnalysisField,
       createPluginRegistryField(defaultPlugins),
       blockCounterField,
+      documentReferenceCatalogField,
       bibDataField,
+      referencePresentationField,
     ],
   });
 }

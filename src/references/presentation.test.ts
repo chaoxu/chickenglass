@@ -5,9 +5,9 @@ import { fencedDiv } from "../parser/fenced-div";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { frontmatterField } from "../editor/frontmatter-state";
-import { documentSemanticsField } from "../semantics/codemirror-source";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { blockCounterField } from "../state/block-counter";
+import { documentSemanticsField } from "../state/document-analysis";
 import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CslProcessor } from "../citations/csl-processor";
@@ -21,6 +21,7 @@ import {
 import {
   getReferencePresentationComputationCountForTest,
   getReferencePresentationModel,
+  referencePresentationField,
   resetReferencePresentationComputationCountForTest,
 } from "./presentation";
 
@@ -38,6 +39,7 @@ function createState(doc: string): EditorState {
       blockCounterField,
       documentReferenceCatalogField,
       bibDataField,
+      referencePresentationField,
     ],
   });
 }
@@ -80,7 +82,7 @@ describe("getReferencePresentationModel", () => {
     );
   });
 
-  it("formats each citation once per document version", () => {
+  it("reuses the model across non-document updates and invalidates on doc edits", () => {
     const state = withBibliography(createState("See [@karger2000]."));
 
     const first = getReferencePresentationModel(state);
@@ -88,7 +90,11 @@ describe("getReferencePresentationModel", () => {
     expect(first.getDisplayText("karger2000")).toBe("Karger 2000");
     expect(getReferencePresentationComputationCountForTest()).toBe(1);
 
-    const second = getReferencePresentationModel(state);
+    const selectionState = state.update({
+      selection: { anchor: 0 },
+    }).state;
+    const second = getReferencePresentationModel(selectionState);
+    expect(second).toBe(first);
     expect(second.getPreviewText("karger2000")).toContain("Minimum cuts in near-linear time");
     expect(getReferencePresentationComputationCountForTest()).toBe(1);
 
@@ -98,7 +104,9 @@ describe("getReferencePresentationModel", () => {
         insert: "\n\nMore text.",
       },
     }).state;
-    expect(getReferencePresentationModel(nextState).getPreviewText("karger2000"))
+    const third = getReferencePresentationModel(nextState);
+    expect(third).not.toBe(first);
+    expect(third.getPreviewText("karger2000"))
       .toContain("Minimum cuts in near-linear time");
     expect(getReferencePresentationComputationCountForTest()).toBe(2);
   });
