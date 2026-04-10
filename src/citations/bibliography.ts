@@ -17,7 +17,7 @@ import {
   type CitationBacklink,
   type CslProcessor,
   collectCitationBacklinksFromReferences,
-  collectCitedIdsFromReferences,
+  collectCitedIdsFromReferenceIndex,
 } from "./csl-processor";
 import {
   buildCitationBacklinkAriaLabel,
@@ -37,11 +37,11 @@ import { type BibStore, bibDataEffect, bibDataField } from "../state/bib-data";
  * Collect all citation ids referenced in the document text.
  * Returns a deduplicated set of ids in order of first appearance.
  *
- * @deprecated Prefer `collectCitedIdsFromReferences(analysis.references, store)`
+ * @deprecated Prefer `collectCitedIdsFromReferenceIndex(analysis.referenceIndex, store)`
  * when document analysis is already available.
  */
 export function collectCitedIds(text: string, store: BibStore): string[] {
-  return collectCitedIdsFromReferences(analyzeMarkdownSemantics(text).references, store);
+  return collectCitedIdsFromReferenceIndex(analyzeMarkdownSemantics(text).referenceIndex, store);
 }
 
 /**
@@ -335,7 +335,7 @@ function buildBibliographyDecorationsFromState(state: EditorState): DecorationSe
   // Use the incrementally-maintained document analysis instead of
   // re-parsing the entire document from scratch (#514).
   const analysis = state.field(documentAnalysisField);
-  const citedIds = collectCitedIdsFromReferences(analysis.references, store);
+  const citedIds = collectCitedIdsFromReferenceIndex(analysis.referenceIndex, store);
   if (citedIds.length === 0) return Decoration.none;
   const backlinks = collectCitationBacklinksFromReferences(analysis.references, store);
 

@@ -1,6 +1,8 @@
 import type { Tree } from "@lezer/common";
 import { buildDocumentIR } from "../../ir/document-ir-builder";
 import type { DocumentIR } from "../../ir/types";
+import { classifyReferenceIndex } from "../../references/classifier";
+import type { ReferenceIndexModel } from "../../references/model";
 import type {
   DocumentAnalysis,
   FencedDivSemantics,
@@ -78,6 +80,8 @@ export interface DocumentArtifacts {
   readonly ir: DocumentIR;
 }
 
+type DocumentAnalysisBase = Omit<DocumentAnalysis, "referenceIndex">;
+
 interface FencedDivSlice {
   readonly fencedDivs: readonly FencedDivSemantics[];
   readonly fencedDivByFrom: ReadonlyMap<number, FencedDivSemantics>;
@@ -103,13 +107,13 @@ interface SliceRegistryEntry {
   readonly sliceKey: keyof DocumentAnalysisSlices;
   readonly project: (
     slice: DocumentAnalysisSlices[keyof DocumentAnalysisSlices],
-  ) => Partial<DocumentAnalysis>;
+  ) => Partial<DocumentAnalysisBase>;
 }
 
 function sliceEntry<SK extends keyof DocumentAnalysisSlices>(
   revisionKey: DocumentAnalysisSliceName,
   sliceKey: SK,
-  project: (slice: DocumentAnalysisSlices[SK]) => Partial<DocumentAnalysis>,
+  project: (slice: DocumentAnalysisSlices[SK]) => Partial<DocumentAnalysisBase>,
 ): SliceRegistryEntry {
   return {
     revisionKey,
@@ -150,6 +154,7 @@ const SLICE_REGISTRY: readonly SliceRegistryEntry[] = [
 interface InternalDocumentAnalysisState extends DocumentAnalysisSlices {
   readonly revisions: DocumentAnalysisRevisionInfo;
   readonly excludedRanges: readonly ExcludedRange[];
+  readonly referenceIndex: ReferenceIndexModel;
 }
 
 const ZERO_SLICE_REVISIONS = Object.freeze(
@@ -283,10 +288,33 @@ function sameSlices(
   );
 }
 
+function sameReferenceIndexInputs(
+  previous: InternalDocumentAnalysisState,
+  next: DocumentAnalysisSlices,
+): boolean {
+  return (
+    previous.headingSlice === next.headingSlice &&
+    previous.fencedDivSlice === next.fencedDivSlice &&
+    previous.equationSlice === next.equationSlice &&
+    previous.referenceSlice === next.referenceSlice
+  );
+}
+
+function buildDocumentAnalysisBase(
+  slices: DocumentAnalysisSlices,
+): DocumentAnalysisBase {
+  const analysis = {} as DocumentAnalysisBase;
+  for (const { sliceKey, project } of SLICE_REGISTRY) {
+    Object.assign(analysis, project(slices[sliceKey]));
+  }
+  return analysis;
+}
+
 function finalizeDocumentAnalysis(
   previous: DocumentAnalysis | undefined,
   slices: DocumentAnalysisSlices,
   excludedRanges: readonly ExcludedRange[],
+  doc: TextSource,
 ): DocumentAnalysis {
   const previousState = previous ? getInternalState(previous) : undefined;
   if (
@@ -298,15 +326,21 @@ function finalizeDocumentAnalysis(
   }
 
   const revisions = buildRevisionInfo(previousState, slices);
-  const analysis = {} as DocumentAnalysis;
-  for (const { sliceKey, project } of SLICE_REGISTRY) {
-    Object.assign(analysis, project(slices[sliceKey]));
-  }
+  const analysisBase = buildDocumentAnalysisBase(slices);
+  const referenceIndex =
+    previousState && sameReferenceIndexInputs(previousState, slices)
+      ? previousState.referenceIndex
+      : classifyReferenceIndex(doc, analysisBase);
+  const analysis: DocumentAnalysis = {
+    ...analysisBase,
+    referenceIndex,
+  };
 
   return withInternalState(analysis, {
     ...slices,
     revisions,
     excludedRanges,
+    referenceIndex,
   });
 }
 
@@ -315,7 +349,7 @@ export function createDocumentAnalysis(
   tree: Tree,
 ): DocumentAnalysis {
   const { slices, excludedRanges } = buildSlicesAndExcludedRanges(doc, tree);
-  return finalizeDocumentAnalysis(undefined, slices, excludedRanges);
+  return finalizeDocumentAnalysis(undefined, slices, excludedRanges, doc);
 }
 
 function buildDocumentArtifacts(
@@ -434,12 +468,12 @@ export function updateDocumentAnalysis(
       return previous;
     }
     const { slices, excludedRanges } = buildSlicesAndExcludedRanges(doc, tree);
-    return finalizeDocumentAnalysis(previous, slices, excludedRanges);
+    return finalizeDocumentAnalysis(previous, slices, excludedRanges, doc);
   }
 
   if (delta.globalInvalidation || delta.dirtyWindows.length === 0) {
     const { slices, excludedRanges } = buildSlicesAndExcludedRanges(doc, tree);
-    return finalizeDocumentAnalysis(previous, slices, excludedRanges);
+    return finalizeDocumentAnalysis(previous, slices, excludedRanges, doc);
   }
 
   const changes = createPositionMapper(delta);
@@ -577,7 +611,7 @@ export function updateDocumentAnalysis(
     mathSlice,
     referenceSlice,
     includeSlice,
-  }, excludedRanges);
+  }, excludedRanges, doc);
 }
 
 export function updateDocumentArtifacts(

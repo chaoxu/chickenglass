@@ -425,6 +425,7 @@ describe("incremental document analysis engine", () => {
       "includes",
       "mathRegions",
       "referenceByFrom",
+      "referenceIndex",
       "references",
     ]);
     expect("revision" in analysis).toBe(false);

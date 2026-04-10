@@ -154,6 +154,11 @@ describe("document semantics analyzers", () => {
 
     expect(semantics.equationById.get("eq:first")?.number).toBe(1);
     expect(semantics.references[0]?.ids).toEqual(["eq:first"]);
+    expect(semantics.referenceIndex.get("eq:first")).toMatchObject({
+      type: "label",
+      targetKind: "equation",
+      display: "Eq. (1)",
+    });
     expect(semantics.mathRegions[0]).toMatchObject({
       isDisplay: true,
       latex: "x^2",
