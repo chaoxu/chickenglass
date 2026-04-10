@@ -48,12 +48,14 @@ function replaceFirstLine(raw: string, nextFirstLine: string): string {
 function structureToggleProps(
   active: boolean,
   onActivate: () => void,
+  options?: { stopPropagation?: boolean },
 ): Record<string, unknown> {
   if (!active) return {};
+  const stop = options?.stopPropagation;
   return {
-    onClick: (e: React.SyntheticEvent) => { e.preventDefault(); onActivate(); },
+    onClick: (e: React.SyntheticEvent) => { e.preventDefault(); if (stop) e.stopPropagation(); onActivate(); },
     onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onActivate(); }
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (stop) e.stopPropagation(); onActivate(); }
     },
     role: "button",
     tabIndex: 0,
@@ -306,13 +308,7 @@ export function InlineImageRenderer({
     return (
       <span
         className="cf-lexical-inline-image-fallback"
-        onMouseDown={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setEditing(true);
-        }}
-        role="button"
-        tabIndex={0}
+        {...structureToggleProps(true, () => setEditing(true), { stopPropagation: true })}
       >
         {parsed.alt || parsed.src}
       </span>
@@ -322,13 +318,7 @@ export function InlineImageRenderer({
   return (
     <span
       className="cf-lexical-inline-image-shell"
-      onMouseDown={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        setEditing(true);
-      }}
-      role="button"
-      tabIndex={0}
+      {...structureToggleProps(true, () => setEditing(true), { stopPropagation: true })}
     >
       <img
         alt={parsed.alt || parsed.src}
@@ -414,12 +404,18 @@ export function ReferenceRenderer({
     setHoveredPreview(null);
   }, []);
 
-  const openEditor = useCallback((event: ReactMouseEvent<HTMLElement>) => {
+  const openEditor = useCallback((event: React.SyntheticEvent<HTMLElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setHoveredPreview(null);
     setEditingAnchor(event.currentTarget);
   }, []);
+
+  const openEditorOnKey = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      openEditor(event);
+    }
+  };
 
   const renderSingleItem = useCallback((
     itemRaw: string,
@@ -497,7 +493,8 @@ export function ReferenceRenderer({
           data-coflat-citation={citation ? "true" : undefined}
           data-coflat-reference="true"
           data-coflat-single-ref-id={id}
-          onMouseDown={openEditor}
+          onClick={openEditor}
+          onKeyDown={openEditorOnKey}
           onMouseEnter={handleHoverStart(id)}
           onMouseLeave={handleHoverEnd}
         >
@@ -519,7 +516,8 @@ export function ReferenceRenderer({
           data-coflat-citation="true"
           data-coflat-reference="true"
           data-coflat-single-ref-id={singleId}
-          onMouseDown={openEditor}
+          onClick={openEditor}
+          onKeyDown={openEditorOnKey}
           onMouseEnter={singleId ? handleHoverStart(singleId) : undefined}
           onMouseLeave={handleHoverEnd}
         >
@@ -538,7 +536,8 @@ export function ReferenceRenderer({
         <span
           className={wrapperClass}
           data-coflat-reference="true"
-          onMouseDown={openEditor}
+          onClick={openEditor}
+          onKeyDown={openEditorOnKey}
         >
           {text}
         </span>
@@ -553,7 +552,8 @@ export function ReferenceRenderer({
       <span
         className={wrapperClass}
         data-coflat-reference="true"
-        onMouseDown={openEditor}
+        onClick={openEditor}
+        onKeyDown={openEditorOnKey}
       >
         {renderReferenceCluster(parsed, renderSingleItem)}
       </span>
