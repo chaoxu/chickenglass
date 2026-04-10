@@ -85,10 +85,9 @@ export class DecorationBuilder {
   addEmbedWidget(
     state: EditorState,
     div: FencedDivInfo,
-    openLine: { readonly to: number },
     active: boolean,
   ): this {
-    addEmbedWidget(this.adapter, state, div, openLine, this.items, active);
+    addEmbedWidget(this.adapter, state, div, this.items, active);
     return this;
   }
 
