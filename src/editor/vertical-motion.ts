@@ -1,7 +1,6 @@
 import { EditorSelection } from "@codemirror/state";
 import { type EditorView } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
-import { warnOnce } from "../lib/warn-once";
 import { getLineElement } from "../render/render-core";
 import { appendDebugTimelineEvent } from "./debug-timeline";
 import {
