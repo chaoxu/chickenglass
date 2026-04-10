@@ -46,7 +46,6 @@ import {
 } from "../state/document-analysis";
 import {
   getEquationNumbersCacheKey,
-  type DocumentAnalysis,
   type ReferenceSemantics,
 } from "../semantics/document";
 import { blockCounterField } from "../state/block-counter";
