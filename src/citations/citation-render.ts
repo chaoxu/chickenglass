@@ -13,7 +13,7 @@
  */
 import { type WidgetType } from "@codemirror/view";
 import { SimpleTextRenderWidget } from "../render/render-core";
-import { analyzeMarkdownSemantics } from "../semantics/markdown-analysis";
+import { getDocumentAnalysis } from "../semantics/incremental/cached-document-analysis";
 import type { BibStore } from "../state/bib-data";
 export {
   type BibData,
@@ -92,8 +92,9 @@ interface CitationMatch {
 export function findCitations(
   text: string,
   store: BibStore,
+  documentPath?: string,
 ): CitationMatch[] {
-  const analysis = analyzeMarkdownSemantics(text);
+  const analysis = getDocumentAnalysis(text, documentPath);
   return analysis.references
     .filter((ref) => ref.ids.some((id) => store.has(id)))
     .map((ref) => ({

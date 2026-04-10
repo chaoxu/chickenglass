@@ -867,7 +867,9 @@ describe("#298 — canonical document analysis pass", () => {
     const crossrefs = fileText("src/index/crossref-resolver.ts");
     const references = fileText("src/render/reference-render.ts");
 
-    expect(extract).toMatch(/getCachedDocumentAnalysis|rememberCachedDocumentAnalysis/);
+    expect(extract).toMatch(
+      /getDocumentAnalysis|rememberDocumentAnalysis|getCachedDocumentAnalysis|rememberCachedDocumentAnalysis/,
+    );
     expect(htmlEntry).toContain('export { markdownToHtml } from "./markdown-to-html/document"');
     expect(htmlDocument).toMatch(/analyze(?:Document|Markdown)Semantics/);
     expect(crossrefs).toMatch(/documentAnalysisField|getDocumentAnalysisOrRecompute|buildEditorDocumentReferenceCatalog/);

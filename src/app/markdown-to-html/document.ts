@@ -2,6 +2,7 @@ import {
   analyzeDocumentSemantics,
   stringTextSource,
 } from "../../semantics/document";
+import { rememberDocumentAnalysis } from "../../semantics/incremental/cached-document-analysis";
 import {
   CslProcessor,
   collectCitationBacklinkIndexFromReferences,
@@ -21,7 +22,11 @@ export function markdownToHtml(
   options?: MarkdownToHtmlOptions,
 ): string {
   const tree = mdParser.parse(content);
-  const semantics = analyzeDocumentSemantics(stringTextSource(content), tree);
+  const semantics = rememberDocumentAnalysis(
+    content,
+    analyzeDocumentSemantics(stringTextSource(content), tree),
+    options?.documentPath,
+  );
   const includeBibliography = options?.includeBibliography !== false;
   const cslProcessor = options?.cslProcessor ?? (options?.bibliography
     ? new CslProcessor([...options.bibliography.values()])

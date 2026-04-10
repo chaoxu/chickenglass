@@ -11,6 +11,9 @@ export interface CachedDocumentAnalysis {
   readonly analysis: DocumentAnalysis;
 }
 
+const MAX_SHARED_DOCUMENT_ANALYSIS_ENTRIES = 64;
+const sharedDocumentAnalysisCache = new Map<string, CachedDocumentAnalysis>();
+
 export function getCachedDocumentAnalysis(
   text: string,
   previous?: CachedDocumentAnalysis,
@@ -60,6 +63,51 @@ export function rememberCachedDocumentAnalysis(
   };
 }
 
+/**
+ * Shared non-CM6 accessor for callers that know a stable document path.
+ * The underlying analysis still comes from the incremental engine; this
+ * wrapper only owns cross-caller cache lookup/adoption.
+ */
+export function getDocumentAnalysis(
+  text: string,
+  cacheKey?: string,
+): DocumentAnalysis {
+  const normalizedCacheKey = normalizeCacheKey(cacheKey);
+  if (!normalizedCacheKey) {
+    return getCachedDocumentAnalysis(text).analysis;
+  }
+
+  const cached = getCachedDocumentAnalysis(
+    text,
+    getSharedCachedDocumentAnalysis(normalizedCacheKey),
+  );
+  setSharedCachedDocumentAnalysis(normalizedCacheKey, cached);
+  return cached.analysis;
+}
+
+export function rememberDocumentAnalysis(
+  text: string,
+  analysis: DocumentAnalysis,
+  cacheKey?: string,
+): DocumentAnalysis {
+  const normalizedCacheKey = normalizeCacheKey(cacheKey);
+  if (!normalizedCacheKey) {
+    return analysis;
+  }
+
+  const cached = rememberCachedDocumentAnalysis(
+    text,
+    analysis,
+    getSharedCachedDocumentAnalysis(normalizedCacheKey),
+  );
+  setSharedCachedDocumentAnalysis(normalizedCacheKey, cached);
+  return cached.analysis;
+}
+
+export function clearDocumentAnalysisCache(): void {
+  sharedDocumentAnalysisCache.clear();
+}
+
 function buildTextSemanticDelta(
   previousText: string,
   nextText: string,
@@ -91,6 +139,43 @@ function buildTextSemanticDelta(
       return changes.invertedDesc.mapPos(pos, assoc);
     },
   };
+}
+
+function normalizeCacheKey(cacheKey?: string): string | undefined {
+  if (!cacheKey || cacheKey.length === 0) {
+    return undefined;
+  }
+  return cacheKey;
+}
+
+function getSharedCachedDocumentAnalysis(
+  cacheKey: string,
+): CachedDocumentAnalysis | undefined {
+  const cached = sharedDocumentAnalysisCache.get(cacheKey);
+  if (!cached) {
+    return undefined;
+  }
+
+  // Simple LRU refresh so long-lived sessions do not grow the shared cache
+  // without bound.
+  sharedDocumentAnalysisCache.delete(cacheKey);
+  sharedDocumentAnalysisCache.set(cacheKey, cached);
+  return cached;
+}
+
+function setSharedCachedDocumentAnalysis(
+  cacheKey: string,
+  cached: CachedDocumentAnalysis,
+): void {
+  sharedDocumentAnalysisCache.set(cacheKey, cached);
+  if (sharedDocumentAnalysisCache.size <= MAX_SHARED_DOCUMENT_ANALYSIS_ENTRIES) {
+    return;
+  }
+
+  const oldestCacheKey = sharedDocumentAnalysisCache.keys().next().value;
+  if (oldestCacheKey !== undefined) {
+    sharedDocumentAnalysisCache.delete(oldestCacheKey);
+  }
 }
 
 function collectChangedRanges(

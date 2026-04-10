@@ -121,7 +121,7 @@ export class BackgroundIndexer {
     const nextFiles = new Map<string, FileIndex>();
     let totalEntries = 0;
     for (const { file, content, analysis } of files) {
-      const fileIndex = extractFileIndex(content, file, analysis, this.files.get(file));
+      const fileIndex = extractFileIndex(content, file, analysis);
       nextFiles.set(file, fileIndex);
       totalEntries += fileIndex.entries.length;
     }

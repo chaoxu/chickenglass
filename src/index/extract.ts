@@ -8,9 +8,8 @@ import {
   type FencedDivSemantics,
 } from "../semantics/document";
 import {
-  type CachedDocumentAnalysis,
-  getCachedDocumentAnalysis,
-  rememberCachedDocumentAnalysis,
+  getDocumentAnalysis,
+  rememberDocumentAnalysis,
 } from "../semantics/incremental/cached-document-analysis";
 import {
   buildDocumentReferenceCatalog,
@@ -18,41 +17,37 @@ import {
 } from "../semantics/reference-catalog";
 import type { FileIndex, IndexEntry, IndexReference } from "./query-api";
 
-const fileIndexAnalysisCache = new WeakMap<FileIndex, CachedDocumentAnalysis>();
+const fileIndexAnalysisCache = new WeakMap<FileIndex, DocumentSemantics>();
 
 export function extractFileIndex(
   content: string,
   file: string,
   analysis?: DocumentSemantics,
-  previous?: FileIndex,
 ): FileIndex {
-  const cachedAnalysis = resolveCachedAnalysis(content, analysis, previous);
+  const resolvedAnalysis = resolveAnalysis(content, file, analysis);
   const entries: IndexEntry[] = [];
   const references: IndexReference[] = [];
 
-  extractFromAnalysis(content, file, cachedAnalysis.analysis, entries, references);
+  extractFromAnalysis(content, file, resolvedAnalysis, entries, references);
   const fileIndex = { file, sourceText: content, entries, references };
-  fileIndexAnalysisCache.set(fileIndex, cachedAnalysis);
+  fileIndexAnalysisCache.set(fileIndex, resolvedAnalysis);
   return fileIndex;
 }
 
-function resolveCachedAnalysis(
+function resolveAnalysis(
   content: string,
+  file: string,
   analysis: DocumentSemantics | undefined,
-  previous: FileIndex | undefined,
-): CachedDocumentAnalysis {
-  const previousAnalysis = previous
-    ? fileIndexAnalysisCache.get(previous)
-    : undefined;
+): DocumentSemantics {
   return analysis
-    ? rememberCachedDocumentAnalysis(content, analysis, previousAnalysis)
-    : getCachedDocumentAnalysis(content, previousAnalysis);
+    ? rememberDocumentAnalysis(content, analysis, file)
+    : getDocumentAnalysis(content, file);
 }
 
 export function getFileIndexAnalysis(
   fileIndex: FileIndex,
 ): DocumentSemantics | undefined {
-  return fileIndexAnalysisCache.get(fileIndex)?.analysis;
+  return fileIndexAnalysisCache.get(fileIndex);
 }
 
 function extractFromAnalysis(
@@ -172,7 +167,7 @@ export function updateFileInIndex(
   analysis?: DocumentSemantics,
 ): Map<string, FileIndex> {
   const newFiles = new Map(existingFiles);
-  const fileIndex = extractFileIndex(content, file, analysis, existingFiles.get(file));
+  const fileIndex = extractFileIndex(content, file, analysis);
   newFiles.set(file, fileIndex);
   return newFiles;
 }
