@@ -27,6 +27,10 @@ export interface SimpleTextReferenceSpec extends ReferenceRootSpec {
   readonly text: string;
 }
 
+/**
+ * Serialize the rendered root spec so equality can compare the full DOM
+ * contract without rebuilding or inspecting DOM nodes.
+ */
 function serializeReferenceRootSpec(spec: ReferenceRootSpec): string {
   return [
     spec.tagName ?? "span",
