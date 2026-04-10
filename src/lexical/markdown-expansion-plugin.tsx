@@ -186,14 +186,8 @@ function activateInsertedBlock(editor: LexicalEditor, key: NodeKey, focusTarget:
       return;
     }
 
-    for (const type of ["mousedown", "mouseup", "click"] as const) {
-      target.dispatchEvent(new MouseEvent(type, {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      }));
-    }
     target.focus();
+    target.click();
   });
 }
 

@@ -682,6 +682,7 @@ function DisplayMathBlockRenderer({
   readonly raw: string;
 }) {
   const { config, renderIndex } = useLexicalRenderContext();
+  const surfaceEditable = useLexicalSurfaceEditable();
   const parsed = useMemo(() => parseStructuredDisplayMathRaw(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
   const [editing, setEditing] = useState(false);
@@ -709,22 +710,12 @@ function DisplayMathBlockRenderer({
           <div
             className="cf-lexical-display-math-body"
             dangerouslySetInnerHTML={{ __html: equation }}
-            onMouseDown={(event) => {
-              event.preventDefault();
-              setEditing(true);
-            }}
-            role="button"
-            tabIndex={0}
+            {...structureToggleProps(surfaceEditable, () => setEditing(true))}
           />
           {label ? (
             <div
               className="cf-lexical-display-math-label"
-              onMouseDown={(event) => {
-                event.preventDefault();
-                setEditing(true);
-              }}
-              role="button"
-              tabIndex={0}
+              {...structureToggleProps(surfaceEditable, () => setEditing(true))}
             >
               {label}
             </div>

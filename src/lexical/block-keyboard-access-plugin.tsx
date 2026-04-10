@@ -66,18 +66,8 @@ function queryEditableTargets(target: HTMLElement): HTMLElement[] {
   return [...target.querySelectorAll<HTMLElement>("[contenteditable='true']")];
 }
 
-function activateNestedEditor(
-  editable: HTMLElement,
-  _direction: NavigationDirection,
-): void {
-  const shell = editable.closest<HTMLElement>(".cf-lexical-nested-editor") ?? editable;
-  for (const type of ["mousedown", "mouseup", "click"]) {
-    shell.dispatchEvent(new MouseEvent(type, {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-    }));
-  }
+function activateNestedEditor(editable: HTMLElement): void {
+  editable.focus();
 }
 
 function focusTarget(
@@ -91,7 +81,7 @@ function focusTarget(
     ? editableTargets[0]
     : editableTargets[editableTargets.length - 1];
   if (editable) {
-    activateNestedEditor(editable, direction);
+    activateNestedEditor(editable);
     return true;
   }
 
@@ -117,11 +107,8 @@ function enterDecoratorTarget(
     ".cf-lexical-display-math-body, .cf-lexical-display-math-label",
   );
   if (displayMathActivator) {
-    displayMathActivator.dispatchEvent(new MouseEvent("mousedown", {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-    }));
+    displayMathActivator.focus();
+    displayMathActivator.click();
     return true;
   }
 
