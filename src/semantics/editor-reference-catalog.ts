@@ -195,10 +195,11 @@ export const documentReferenceCatalogField = StateField.define<DocumentReference
 
 export function getEditorDocumentReferenceCatalog(
   state: EditorState,
-  analysis?: DocumentAnalysis,
+  ...analysisArg: [analysis?: DocumentAnalysis]
 ): DocumentReferenceCatalog {
+  const [analysis] = analysisArg;
   const cached = state.field(documentReferenceCatalogField, false);
-  if (arguments.length === 1 && cached) {
+  if (analysisArg.length === 0 && cached) {
     return cached;
   }
   return computeEditorDocumentReferenceCatalog(
