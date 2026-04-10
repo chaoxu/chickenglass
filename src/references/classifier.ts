@@ -175,7 +175,11 @@ function setPreferredLocalEntry(
   candidate: LocalReferenceEntry,
 ): void {
   const existing = index.get(candidate.id);
-  if (!existing || entryPriority(candidate) > entryPriority(existing)) {
+  if (
+    !existing
+    || existing.type === "citation"
+    || entryPriority(candidate) > entryPriority(existing)
+  ) {
     index.set(candidate.id, candidate);
   }
 }

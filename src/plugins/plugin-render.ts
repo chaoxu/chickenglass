@@ -16,7 +16,6 @@
 
 import { EditorState, type Extension, type Transaction } from "@codemirror/state";
 import {
-  Decoration,
   type DecorationSet,
 } from "@codemirror/view";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
@@ -49,7 +48,6 @@ import { getPluginOrFallback } from "./plugin-registry";
 import {
   addCaptionDecoration,
   addInlineHeaderDecoration,
-  addInlineTitleParenDecorations,
 } from "./plugin-render-chrome";
 import type { BlockAttrs } from "./plugin-types";
 import { applySpecialBehavior } from "./special-behavior-handlers";
