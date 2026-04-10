@@ -1042,7 +1042,7 @@ describe("#370 — shared decoration/widget factories", () => {
     expect(checkbox).toContain("createSimpleViewPlugin");
     expect(checkbox).toContain("pushWidgetDecoration");
     expect(image).toContain("pushWidgetDecoration");
-    expect(reference).toContain("ViewPlugin.fromClass");
+    expect(reference).toContain("createSemanticSensitiveViewPlugin");
     expect(reference).toContain("pushWidgetDecoration");
     expect(pluginRender).toContain("buildFencedBlockDecorations");
     expect(pluginRender).toContain("createFencedBlockDecorationField");

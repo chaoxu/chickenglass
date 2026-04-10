@@ -1,5 +1,6 @@
 import { syntaxTree } from "@codemirror/language";
 import {
+  type EditorState,
   type Extension,
   type Range,
 } from "@codemirror/state";
@@ -118,6 +119,89 @@ export type CursorSensitiveContextChangeRangesFn = (
 export type IncrementalDecorationsRangeFn<T extends DecorationRangeBounds> = (
   update: ViewUpdate,
 ) => readonly T[] | null;
+
+export interface SemanticSensitiveUpdateContext {
+  readonly docChanged: boolean;
+  readonly semanticChanged: boolean;
+  readonly contextChanged: boolean;
+}
+
+export type SemanticSensitiveUpdatePlan<T extends DecorationRangeBounds> =
+  | { readonly kind: "keep" }
+  | { readonly kind: "map" }
+  | { readonly kind: "rebuild" }
+  | { readonly kind: "dirty"; readonly dirtyRanges: readonly T[] };
+
+export interface SemanticSensitiveUpdatePlanOptions<
+  TUpdate,
+  TRange extends DecorationRangeBounds,
+> {
+  readonly docChanged: (update: TUpdate) => boolean;
+  readonly semanticChanged: (update: TUpdate) => boolean;
+  readonly contextChanged?: (update: TUpdate) => boolean;
+  readonly stableDocChangeMode?: "keep" | "map";
+  readonly shouldRebuild?: (
+    update: TUpdate,
+    context: SemanticSensitiveUpdateContext,
+  ) => boolean;
+  readonly dirtyRanges?: (
+    update: TUpdate,
+    context: SemanticSensitiveUpdateContext,
+  ) => readonly TRange[] | null;
+  readonly contextUpdateMode?: "rebuild" | "dirty-ranges";
+}
+
+export function planSemanticSensitiveUpdate<
+  TUpdate,
+  TRange extends DecorationRangeBounds,
+>(
+  update: TUpdate,
+  options: SemanticSensitiveUpdatePlanOptions<TUpdate, TRange>,
+): SemanticSensitiveUpdatePlan<TRange> {
+  const context: SemanticSensitiveUpdateContext = {
+    docChanged: options.docChanged(update),
+    semanticChanged: options.semanticChanged(update),
+    contextChanged: options.contextChanged?.(update) ?? false,
+  };
+
+  if (options.shouldRebuild?.(update, context)) {
+    return { kind: "rebuild" };
+  }
+
+  if (!context.docChanged) {
+    if (context.semanticChanged) {
+      return { kind: "rebuild" };
+    }
+    if (!context.contextChanged) {
+      return { kind: "keep" };
+    }
+    if ((options.contextUpdateMode ?? "rebuild") === "rebuild") {
+      return { kind: "rebuild" };
+    }
+
+    const dirtyRanges = options.dirtyRanges?.(update, context);
+    if (dirtyRanges === null || dirtyRanges === undefined) {
+      return { kind: "rebuild" };
+    }
+    if (dirtyRanges.length === 0) {
+      return { kind: "keep" };
+    }
+    return { kind: "dirty", dirtyRanges };
+  }
+
+  if (!context.semanticChanged && !context.contextChanged) {
+    return { kind: options.stableDocChangeMode ?? "map" };
+  }
+
+  const dirtyRanges = options.dirtyRanges?.(update, context);
+  if (dirtyRanges === null || dirtyRanges === undefined) {
+    return { kind: "rebuild" };
+  }
+  if (dirtyRanges.length === 0) {
+    return { kind: "map" };
+  }
+  return { kind: "dirty", dirtyRanges };
+}
 
 /**
  * Factory for ViewPlugins that rebuild only dirty ranges and otherwise map
@@ -379,6 +463,116 @@ export function createCursorSensitiveViewPlugin(
 
   return ViewPlugin.fromClass(CursorSensitivePlugin, {
     ...options?.pluginSpec,
+    decorations: (value) => value.decorations,
+  });
+}
+
+export type SemanticSensitiveDirtyRangeFn<
+  T extends DecorationRangeBounds,
+> = (
+  update: ViewUpdate,
+  context: SemanticSensitiveUpdateContext,
+) => readonly T[] | null;
+
+export function createSemanticSensitiveViewPlugin<
+  T extends DecorationRangeBounds = DecorationRangeBounds,
+>(
+  buildFn: (view: EditorView) => DecorationSet,
+  options: {
+    collectRanges: (view: EditorView, dirtyRanges: readonly T[]) => Range<Decoration>[];
+    semanticChanged: (beforeState: EditorState, afterState: EditorState) => boolean;
+    dirtyRangeFn: SemanticSensitiveDirtyRangeFn<T>;
+    contextChanged?: (update: ViewUpdate) => boolean;
+    contextUpdateMode?: "rebuild" | "dirty-ranges";
+    shouldRebuild?: (
+      update: ViewUpdate,
+      context: SemanticSensitiveUpdateContext,
+    ) => boolean;
+    mapDecorations?: (
+      decorations: DecorationSet,
+      update: ViewUpdate,
+    ) => DecorationSet;
+    pluginSpec?: Omit<PluginSpec<PluginValue>, "decorations">;
+  },
+): Extension {
+  const mapDecorations = options.mapDecorations
+    ?? ((decorations: DecorationSet, update: ViewUpdate) => (
+      update.docChanged ? decorations.map(update.changes) : decorations
+    ));
+
+  class SemanticSensitiveViewPlugin implements PluginValue {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildFn(view);
+    }
+
+    private rebuild(view: EditorView): void {
+      this.decorations = buildFn(view);
+    }
+
+    private updateDirtyRanges(
+      update: ViewUpdate,
+      dirtyRanges: readonly T[],
+    ): void {
+      let nextDecorations = mapDecorations(this.decorations, update);
+      if (dirtyRanges.length > 0) {
+        nextDecorations = filterDecorationSetInRanges(
+          nextDecorations,
+          dirtyRanges,
+          (from, to) => !rangeIntersectsRanges(from, to, dirtyRanges),
+        );
+        const items = options.collectRanges(update.view, dirtyRanges);
+        if (items.length > 0) {
+          nextDecorations = nextDecorations.update({
+            add: items,
+            sort: true,
+          });
+        }
+      }
+
+      this.decorations = nextDecorations;
+    }
+
+    update(update: ViewUpdate): void {
+      const programmaticDocRewrite = (update.transactions ?? []).some((tr) =>
+        tr.annotation(programmaticDocumentChangeAnnotation) === true
+      );
+      if (programmaticDocRewrite) {
+        this.rebuild(update.view);
+        return;
+      }
+
+      const plan = planSemanticSensitiveUpdate(update, {
+        docChanged: (current) => current.docChanged,
+        semanticChanged: (current) => options.semanticChanged(
+          current.startState,
+          current.state,
+        ),
+        contextChanged: options.contextChanged,
+        shouldRebuild: options.shouldRebuild,
+        dirtyRanges: options.dirtyRangeFn,
+        contextUpdateMode: options.contextUpdateMode,
+      });
+
+      switch (plan.kind) {
+        case "keep":
+          return;
+        case "map":
+          this.decorations = mapDecorations(this.decorations, update);
+          return;
+        case "rebuild":
+          this.rebuild(update.view);
+          return;
+        case "dirty":
+          this.updateDirtyRanges(update, plan.dirtyRanges);
+          return;
+      }
+    }
+  }
+
+  return ViewPlugin.fromClass(SemanticSensitiveViewPlugin, {
+    ...options.pluginSpec,
     decorations: (value) => value.decorations,
   });
 }

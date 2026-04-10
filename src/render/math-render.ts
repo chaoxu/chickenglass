@@ -49,6 +49,7 @@ import {
 } from "./inline-reveal-policy";
 import { createChangeChecker } from "../state/change-detection";
 import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
+import { planSemanticSensitiveUpdate } from "./view-plugin-factories";
 
 export { renderKatexToHtml } from "./inline-shared";
 export {
@@ -291,14 +292,6 @@ const mathDecorationField = createDecorationStateField({
   },
 
   update(value, tr) {
-    if (tr.annotation(programmaticDocumentChangeAnnotation) === true) {
-      return rebuildMathDecorations(tr.state);
-    }
-
-    if (mathMacrosChanged(tr)) {
-      return rebuildMathDecorations(tr.state);
-    }
-
     const analysisBefore = tr.startState.field(documentAnalysisField);
     const analysisAfter = tr.state.field(documentAnalysisField);
     const regionsBefore = analysisBefore.mathRegions;
@@ -313,13 +306,24 @@ const mathDecorationField = createDecorationStateField({
     );
     const activeMathChanged = inlineRevealTargetChanged(beforeActive, afterActive);
 
-    if (regionsBefore !== regionsAfter) {
-      if (
-        tr.docChanged
-        && !activeMathChanged
-      ) {
-        if (equationNumberingChanged(analysisBefore, analysisAfter)) {
-          return rebuildMathDecorations(tr.state);
+    const updatePlan = planSemanticSensitiveUpdate(tr, {
+      docChanged: (transaction) => transaction.docChanged,
+      semanticChanged: () => regionsBefore !== regionsAfter,
+      stableDocChangeMode: "keep",
+      shouldRebuild: (_transaction, context) => {
+        if (tr.annotation(programmaticDocumentChangeAnnotation) === true) {
+          return true;
+        }
+        if (mathMacrosChanged(tr) || activeMathChanged) {
+          return true;
+        }
+        return context.docChanged
+          && context.semanticChanged
+          && equationNumberingChanged(analysisBefore, analysisAfter);
+      },
+      dirtyRanges: (_transaction, context) => {
+        if (!context.docChanged || !context.semanticChanged) {
+          return [];
         }
 
         const equationNumbersBefore = buildEquationNumbersByFrom(analysisBefore.equationById);
@@ -332,14 +336,25 @@ const mathDecorationField = createDecorationStateField({
             equationNumbersAfter,
           )
         ) {
-          return value.map(tr.changes);
+          return [];
         }
 
-        const dirtyRanges = dirtyRangesFromChanges(tr.changes, expandChangeRange);
+        return dirtyRangesFromChanges(tr.changes, expandChangeRange);
+      },
+    });
+
+    switch (updatePlan.kind) {
+      case "keep":
+        return value;
+      case "map":
+        return value.map(tr.changes);
+      case "rebuild":
+        return rebuildMathDecorations(tr.state);
+      case "dirty": {
         const mapped = value.map(tr.changes);
-        const dirtyRegions = collectDirtyMathRegions(regionsAfter, dirtyRanges);
+        const dirtyRegions = collectDirtyMathRegions(regionsAfter, updatePlan.dirtyRanges);
         let next = mapped;
-        for (const range of dirtyRanges) {
+        for (const range of updatePlan.dirtyRanges) {
           next = next.update({
             filterFrom: range.from,
             filterTo: range.to,
@@ -354,13 +369,7 @@ const mathDecorationField = createDecorationStateField({
         }
         return next;
       }
-      return rebuildMathDecorations(tr.state);
     }
-
-    if (activeMathChanged) {
-      return rebuildMathDecorations(tr.state);
-    }
-    return value;
   },
 });
 
