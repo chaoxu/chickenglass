@@ -19,7 +19,7 @@ import { normalizeProjectPath, projectPathCandidatesFromDocument } from "../lib/
 import { PROJECT_CONFIG_FILE, mergeConfigs, parseProjectConfig, type ProjectConfig } from "../project-config";
 import { buildFootnoteDefinitionMap, buildRenderIndex, buildStaticAssetUrl, type RenderIndex } from "./rendering";
 
-interface CitationRenderData {
+export interface CitationRenderData {
   readonly backlinks: ReadonlyMap<string, readonly CitationBacklink[]>;
   readonly citedIds: readonly string[];
   readonly cslProcessor?: CslProcessor;
