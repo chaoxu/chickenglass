@@ -2,6 +2,8 @@ import { EditorSelection } from "@codemirror/state";
 import { type EditorView } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
 import { getLineElement } from "../render/render-core";
+import { type TableRange } from "../state/table-discovery";
+import { findTablesInState } from "../state/table-discovery";
 import { appendDebugTimelineEvent } from "./debug-timeline";
 import {
   activateStructureEditAt,
@@ -101,14 +103,6 @@ function readLineHeight(
   return measuredLineHeight(view, lineNumber) ?? FALLBACK_LINE_HEIGHT_PX;
 }
 
-function isRenderedLineVisible(
-  view: EditorView,
-  lineNumber: number,
-): boolean {
-  const height = measuredLineHeight(view, lineNumber);
-  return height !== null && height > 0;
-}
-
 export function sumTraversedLineHeights(
   fromLine: number,
   toLine: number,
@@ -150,18 +144,6 @@ export function correctedReverseVerticalScrollTop(
   return null;
 }
 
-function startCoordsForVerticalMove(
-  view: EditorView,
-  forward: boolean,
-): { left: number; top: number; bottom: number } | null {
-  const range = view.state.selection.main;
-  return safeCoordsAtPos(
-    view,
-    range.head,
-    range.assoc || ((range.empty ? forward : range.head === range.from) ? 1 : -1),
-  );
-}
-
 function safeCoordsAtPos(
   view: EditorView,
   pos: number,
@@ -174,45 +156,21 @@ function safeCoordsAtPos(
   }
 }
 
-function goalColumnForVerticalMove(
-  view: EditorView,
-  forward: boolean,
-): number {
-  const range = view.state.selection.main;
-  if (range.goalColumn != null) return range.goalColumn;
-  const rect = view.contentDOM.getBoundingClientRect();
-  const coords = startCoordsForVerticalMove(view, forward);
-  if (coords) return coords.left - rect.left;
-
-  const line = view.lineBlockAt(range.head);
-  return Math.min(
-    rect.right - rect.left,
-    view.defaultCharacterWidth * (range.head - line.from),
-  );
-}
-
-function nextVisibleLineNumber(
-  view: EditorView,
-  fromLine: number,
-  forward: boolean,
-): number | null {
-  const direction = forward ? 1 : -1;
-  const currentVisible = isRenderedLineVisible(view, fromLine);
-  for (
-    let line = fromLine + (currentVisible ? direction : 0);
-    line >= 1 && line <= view.state.doc.lines;
-    line += direction
-  ) {
-    if (line === fromLine && currentVisible) continue;
-    if (isRenderedLineVisible(view, line)) return line;
-  }
-  return null;
-}
-
 interface HiddenWidgetStop {
   readonly from: number;
   readonly to: number;
   readonly element: HTMLElement;
+}
+
+interface HiddenWidgetStopCandidate extends HiddenWidgetStop {
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
+interface TableStopCandidate {
+  readonly table: TableRange;
+  readonly startLine: number;
+  readonly endLine: number;
 }
 
 function parseWidgetSourcePos(value: string | undefined): number | null {
@@ -221,21 +179,11 @@ function parseWidgetSourcePos(value: string | undefined): number | null {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
-function firstHiddenWidgetStopBetweenLines(
+function collectHiddenWidgetStopCandidates(
   view: EditorView,
-  fromLine: number,
-  nextVisibleLine: number,
-  forward: boolean,
-): HiddenWidgetStop | null {
-  const hiddenLineStart = Math.min(fromLine, nextVisibleLine) + 1;
-  const hiddenLineEnd = Math.max(fromLine, nextVisibleLine) - 1;
-  if (hiddenLineStart > hiddenLineEnd) return null;
-
+): HiddenWidgetStopCandidate[] {
   const seen = new Set<string>();
-  const candidates: Array<HiddenWidgetStop & {
-    readonly startLine: number;
-    readonly endLine: number;
-  }> = [];
+  const candidates: HiddenWidgetStopCandidate[] = [];
 
   for (const el of view.contentDOM.querySelectorAll<HTMLElement>("[data-source-from][data-source-to]")) {
     const from = parseWidgetSourcePos(el.dataset.sourceFrom);
@@ -245,7 +193,6 @@ function firstHiddenWidgetStopBetweenLines(
     const endPos = to > from ? to - 1 : from;
     const startLine = view.state.doc.lineAt(from).number;
     const endLine = view.state.doc.lineAt(endPos).number;
-    if (endLine < hiddenLineStart || startLine > hiddenLineEnd) continue;
 
     const key = `${from}:${to}`;
     if (seen.has(key)) continue;
@@ -253,9 +200,25 @@ function firstHiddenWidgetStopBetweenLines(
     candidates.push({ from, to, startLine, endLine, element: el });
   }
 
-  if (candidates.length === 0) return null;
+  return candidates;
+}
 
-  candidates.sort((left, right) => {
+function firstHiddenWidgetStopBetweenLines(
+  candidates: readonly HiddenWidgetStopCandidate[],
+  fromLine: number,
+  targetLine: number,
+  forward: boolean,
+): HiddenWidgetStop | null {
+  const hiddenLineStart = Math.min(fromLine, targetLine) + 1;
+  const hiddenLineEnd = Math.max(fromLine, targetLine) - 1;
+  if (hiddenLineStart > hiddenLineEnd) return null;
+
+  const matching = candidates.filter((candidate) =>
+    candidate.endLine >= hiddenLineStart && candidate.startLine <= hiddenLineEnd
+  );
+  if (matching.length === 0) return null;
+
+  matching.sort((left, right) => {
     if (forward) {
       if (left.startLine !== right.startLine) return left.startLine - right.startLine;
       if (left.from !== right.from) return left.from - right.from;
@@ -266,12 +229,144 @@ function firstHiddenWidgetStopBetweenLines(
     return right.from - left.from;
   });
 
-  const candidate = candidates[0];
+  const candidate = matching[0];
   return {
     from: candidate.from,
     to: candidate.to,
     element: candidate.element,
   };
+}
+
+function hiddenWidgetStopAtPos(
+  candidates: readonly HiddenWidgetStopCandidate[],
+  pos: number,
+): HiddenWidgetStop | null {
+  const matching = candidates.filter((candidate) =>
+    pos >= candidate.from && (candidate.to === candidate.from ? pos === candidate.to : pos < candidate.to)
+  );
+  if (matching.length === 0) return null;
+
+  matching.sort((left, right) => {
+    const leftSpan = left.to - left.from;
+    const rightSpan = right.to - right.from;
+    return leftSpan - rightSpan || left.from - right.from;
+  });
+  const candidate = matching[0];
+  return {
+    from: candidate.from,
+    to: candidate.to,
+    element: candidate.element,
+  };
+}
+
+function collectTableStopCandidates(
+  view: EditorView,
+): TableStopCandidate[] {
+  return findTablesInState(view.state).map((table) => ({
+    table,
+    startLine: table.startLineNumber,
+    endLine: view.state.doc.lineAt(Math.max(table.from, table.to - 1)).number,
+  }));
+}
+
+function firstTableStopBetweenLines(
+  candidates: readonly TableStopCandidate[],
+  fromLine: number,
+  targetLine: number,
+  forward: boolean,
+): TableRange | null {
+  const hiddenLineStart = Math.min(fromLine, targetLine) + 1;
+  const hiddenLineEnd = Math.max(fromLine, targetLine) - 1;
+  if (hiddenLineStart > hiddenLineEnd) return null;
+
+  const matching = candidates.filter((candidate) =>
+    candidate.endLine >= hiddenLineStart && candidate.startLine <= hiddenLineEnd
+  );
+  if (matching.length === 0) return null;
+
+  matching.sort((left, right) => {
+    if (forward) {
+      if (left.startLine !== right.startLine) return left.startLine - right.startLine;
+      return left.table.from - right.table.from;
+    }
+    if (left.endLine !== right.endLine) return right.endLine - left.endLine;
+    return right.table.to - left.table.to;
+  });
+
+  return matching[0].table;
+}
+
+function tableStopAtPos(
+  candidates: readonly TableStopCandidate[],
+  pos: number,
+): TableRange | null {
+  const matching = candidates.filter((candidate) =>
+    pos >= candidate.table.from && pos < candidate.table.to
+  );
+  if (matching.length === 0) return null;
+
+  matching.sort((left, right) => {
+    const leftSpan = left.table.to - left.table.from;
+    const rightSpan = right.table.to - right.table.from;
+    return leftSpan - rightSpan || left.table.from - right.table.from;
+  });
+  return matching[0].table;
+}
+
+function findClosestTableWidgetContainer(
+  view: EditorView,
+  trackedFrom: number,
+): HTMLElement | null {
+  const containers = view.dom.querySelectorAll<HTMLElement>(".cf-table-widget");
+  let closest: HTMLElement | null = null;
+  let closestDist = Infinity;
+  for (const container of containers) {
+    const parsed = Number.parseInt(container.dataset.tableFrom ?? "0", 10);
+    const tableFrom = Number.isFinite(parsed) ? parsed : 0;
+    const dist = Math.abs(tableFrom - trackedFrom);
+    if (dist < closestDist) {
+      closestDist = dist;
+      closest = container;
+    }
+  }
+  return closest;
+}
+
+function activateTableStop(
+  view: EditorView,
+  table: TableRange,
+): number {
+  const openFirstCell = (): boolean => {
+    const container = findClosestTableWidgetContainer(view, table.from);
+    const firstCell = container?.querySelector<HTMLElement>(
+      '[data-section="header"][data-row="0"][data-col="0"], [data-section][data-row][data-col]',
+    );
+    if (!firstCell) return false;
+    dispatchPlainMouseDown(firstCell);
+    return Boolean(
+      container?.querySelector(`.${CSS.tableCellEditing} .cm-editor`) ||
+      (container !== null &&
+        document.activeElement instanceof HTMLElement &&
+        container.contains(document.activeElement))
+    );
+  };
+
+  if (!openFirstCell()) {
+    view.dispatch({
+      selection: EditorSelection.cursor(table.from, 1),
+      scrollIntoView: true,
+      userEvent: "select",
+    });
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!view.dom.isConnected) return;
+        openFirstCell();
+      });
+    });
+  }
+
+  return table.startLineNumber;
 }
 
 function dispatchPlainMouseDown(target: HTMLElement): void {
@@ -349,42 +444,6 @@ function activateHiddenWidgetStop(
   return lineForStop;
 }
 
-function closestPositionOnLine(
-  view: EditorView,
-  lineNumber: number,
-  goalX: number,
-): number {
-  const line = view.state.doc.line(lineNumber);
-  if (line.length === 0) return line.from;
-
-  let low = line.from;
-  let high = line.to;
-  let best = line.from;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const coords = safeCoordsAtPos(view, mid, 1) ?? safeCoordsAtPos(view, mid, -1);
-    if (!coords) break;
-    if (coords.left <= goalX + 0.5) {
-      best = mid;
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-  return best;
-}
-
-function resolveVisibleLineTarget(
-  view: EditorView,
-  targetLineNumber: number,
-  goalX: number,
-): number {
-  const targetLine = view.state.doc.line(targetLineNumber);
-  if (targetLine.length === 0) return targetLine.from;
-
-  return closestPositionOnLine(view, targetLineNumber, goalX);
-}
-
 function requestSelectionVisibility(
   view: EditorView,
 ): void {
@@ -431,21 +490,25 @@ export function moveVerticallyInRichView(
   if (!range.empty) return false;
 
   const before = snapshotVerticalMotion(view);
-  const goalColumn = goalColumnForVerticalMove(view, forward);
-  const nextVisibleLine = nextVisibleLineNumber(view, before.line, forward);
+  const nextRange = view.moveVertically(range, forward);
 
-  if (nextVisibleLine === null) {
+  if (
+    nextRange.anchor === range.anchor &&
+    nextRange.head === range.head
+  ) {
     // Consume the key at rich-mode boundaries so CM6's default ArrowUp/Down
     // handler does not run a second vertical move with different assoc/goal
     // state and bounce between the terminal blank line and the last content line.
     return true;
   }
 
-  const goalX = view.contentDOM.getBoundingClientRect().left + goalColumn;
+  const rawTargetLine = view.state.doc.lineAt(nextRange.head).number;
+  const hiddenWidgetStops = collectHiddenWidgetStopCandidates(view);
+  const tableStops = collectTableStopCandidates(view);
   const hiddenWidgetStop = firstHiddenWidgetStopBetweenLines(
-    view,
+    hiddenWidgetStops,
     before.line,
-    nextVisibleLine,
+    rawTargetLine,
     forward,
   );
   if (hiddenWidgetStop) {
@@ -455,7 +518,7 @@ export function moveVerticallyInRichView(
         kind: "visible-line-jump",
         direction: forward ? "down" : "up",
         beforeLine: before.line,
-        rawTargetLine: nextVisibleLine,
+        rawTargetLine,
         correctedTargetLine,
         timestamp: Date.now(),
       });
@@ -464,10 +527,63 @@ export function moveVerticallyInRichView(
     }
   }
 
-  const targetPos = resolveVisibleLineTarget(view, nextVisibleLine, goalX);
+  const crossedTableStop = firstTableStopBetweenLines(
+    tableStops,
+    before.line,
+    rawTargetLine,
+    forward,
+  );
+  if (crossedTableStop) {
+    const correctedTargetLine = activateTableStop(view, crossedTableStop);
+    recordVerticalMotionGuardEvent(view, {
+      kind: "visible-line-jump",
+      direction: forward ? "down" : "up",
+      beforeLine: before.line,
+      rawTargetLine,
+      correctedTargetLine,
+      timestamp: Date.now(),
+    });
+    return true;
+  }
+
+  const landedWidgetStop = hiddenWidgetStopAtPos(hiddenWidgetStops, nextRange.head);
+  if (landedWidgetStop) {
+    const correctedTargetLine = activateHiddenWidgetStop(view, landedWidgetStop, forward);
+    if (correctedTargetLine !== null) {
+      recordVerticalMotionGuardEvent(view, {
+        kind: "visible-line-jump",
+        direction: forward ? "down" : "up",
+        beforeLine: before.line,
+        rawTargetLine,
+        correctedTargetLine,
+        timestamp: Date.now(),
+      });
+      requestSelectionVisibility(view);
+      return true;
+    }
+  }
+
+  const landedTableStop = tableStopAtPos(tableStops, nextRange.head);
+  if (landedTableStop) {
+    const correctedTargetLine = activateTableStop(view, landedTableStop);
+    recordVerticalMotionGuardEvent(view, {
+      kind: "visible-line-jump",
+      direction: forward ? "down" : "up",
+      beforeLine: before.line,
+      rawTargetLine,
+      correctedTargetLine,
+      timestamp: Date.now(),
+    });
+    return true;
+  }
+
+  if (activateStructureEditAt(view, nextRange.head)) {
+    requestSelectionVisibility(view);
+    return true;
+  }
 
   view.dispatch({
-    selection: EditorSelection.cursor(targetPos, forward ? 1 : -1, undefined, goalColumn),
+    selection: view.state.selection.replaceRange(nextRange),
     scrollIntoView: false,
     userEvent: "select",
   });
