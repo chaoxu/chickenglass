@@ -1,62 +1,59 @@
-import { type Extension, Compartment, EditorState, StateEffect, StateField } from "@codemirror/state";
+import { indentUnit, LanguageDescription } from "@codemirror/language";
+import { Compartment, EditorState, type Extension, StateEffect, StateField } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { LanguageDescription, indentUnit } from "@codemirror/language";
-import type { EditorPluginManager } from "./editor-plugin";
-
-import { frontmatterDecoration } from "./frontmatter-render";
+import { treeView } from "@overleaf/codemirror-tree-view";
+import { bibliographyPlugin } from "../citations";
+import { blockRenderPlugin } from "../plugins";
 import {
-  containerAttributesPlugin,
-  imageRenderPlugin,
+  checkboxRenderPlugin,
   codeBlockRenderPlugin,
   codeBlockStructureField,
-  checkboxRenderPlugin,
+  containerAttributesPlugin,
+  fenceGuidePlugin,
+  imageRenderPlugin,
+  includeLabelPlugin,
   mathPreviewPlugin,
   sectionNumberPlugin,
-  fenceGuidePlugin,
-  includeLabelPlugin,
   sidenoteRenderPlugin,
 } from "../render";
-import { searchHighlightPlugin } from "../render/search-highlight";
 import { referenceRenderPlugin } from "../render/reference-render";
-import {
-  blockRenderPlugin,
-  defaultPlugins,
-} from "../plugins";
-import { blockCounterField } from "../state/block-counter";
-import { createPluginRegistryField } from "../state/plugin-registry";
-import { documentSemanticsField } from "../state/document-analysis";
-import { bibliographyPlugin, bibDataField } from "../citations";
-import { pdfPreviewField } from "../render/pdf-preview-cache";
-import { imageUrlField } from "../render/image-url-cache";
-import { type ProjectConfig } from "./project-config";
+import { searchHighlightPlugin } from "../render/search-highlight";
 import { tableRenderPlugin } from "../render/table-render";
-import { editorKeybindings } from "./keybindings";
-import { coflatTheme, coflatDarkTheme } from "./theme";
-import { blockTypePickerExtension } from "./block-type-picker";
-import { headingFold } from "./heading-fold";
-import { listOutlinerExtension } from "./list-outliner";
-import { richMouseSelectionStyle } from "./rich-mouse-selection";
-import { treeView } from "@overleaf/codemirror-tree-view";
-import { includeRegionsField } from "../lib/include-regions";
-import { referenceAutocompleteExtension } from "./reference-autocomplete";
-import { richClipboardOutputFilter } from "./rich-clipboard";
-import { debugPanelExtension } from "./debug-panel";
-import { shellSurfaceOverlayExtension } from "./shell-surface-overlay";
-import { emitWindowDebugLaneStateChange } from "./debug-lane-state";
 import {
   createMarkdownLanguageExtensions,
   createProjectConfigExtensions,
   sharedInlineRenderExtensions,
 } from "./base-editor-extensions";
-import { documentLabelGraphField } from "../semantics/document-label-graph";
-import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
-import { frontmatterField } from "./frontmatter-state";
-import { activeStructureEditField } from "./structure-edit-state";
+import { blockTypePickerExtension } from "./block-type-picker";
+import {
+  editableCompartment,
+  modeClassCompartment,
+  renderCompartment,
+  themeCompartment,
+  treeViewCompartment,
+} from "./compartments";
+import { emitWindowDebugLaneStateChange } from "./debug-lane-state";
+import { debugPanelExtension } from "./debug-panel";
+import type { EditorPluginManager } from "./editor-plugin";
+import {
+  coreDocumentStateExtensions,
+  renderModeExtensions,
+  userSettingsExtensions,
+} from "./extension-builders";
+import { frontmatterDecoration } from "./frontmatter-render";
+import { headingFold } from "./heading-fold";
+import { editorKeybindings } from "./keybindings";
+import { listOutlinerExtension } from "./list-outliner";
+import { type ProjectConfig } from "./project-config";
+import { referenceAutocompleteExtension } from "./reference-autocomplete";
+import { richClipboardOutputFilter } from "./rich-clipboard";
+import { richMouseSelectionStyle } from "./rich-mouse-selection";
+import { shellSurfaceOverlayExtension } from "./shell-surface-overlay";
+import { coflatDarkTheme, coflatTheme } from "./theme";
 
 const fallbackDocument = "# Untitled\n";
 
 /** Compartment for the debug tree-view panel — toggled via window.__cmTreeView(). */
-const treeViewCompartment = new Compartment();
 const debugLaneCompartment = new Compartment();
 const defaultDebugLaneExtensions: Extension[] = [];
 
@@ -99,26 +96,12 @@ export const editorModeField = StateField.define<EditorMode>({
   },
 });
 
-/** Compartment for rendering extensions — reconfigured on mode switch. */
-const renderCompartment = new Compartment();
-
-/** Compartment for editability — reconfigured for read mode. */
-const editableCompartment = new Compartment();
-
-/** Compartment for mode-specific CSS classes on .cm-editor. */
-const modeClassCompartment = new Compartment();
-
-/** Compartment for the CM6 dark/light base theme — reconfigured on theme switch. */
-export const themeCompartment = new Compartment();
-
-/** Compartment for word wrap (EditorView.lineWrapping). */
-export const wordWrapCompartment = new Compartment();
-
-/** Compartment for line numbers gutter. */
-export const lineNumbersCompartment = new Compartment();
-
-/** Compartment for tab size (EditorState.tabSize + indentUnit). */
-export const tabSizeCompartment = new Compartment();
+export {
+  lineNumbersCompartment,
+  tabSizeCompartment,
+  themeCompartment,
+  wordWrapCompartment,
+} from "./compartments";
 
 /** All rendering extensions that get toggled by mode. */
 const renderingExtensions: Extension[] = [
@@ -154,62 +137,6 @@ const codeLanguageDescriptions: LanguageDescription[] = [
   LanguageDescription.of({ name: "cpp", alias: ["c", "c++", "cc", "cxx", "h"], load: () => import("@codemirror/lang-cpp").then(m => m.cpp()) }),
   LanguageDescription.of({ name: "rust", alias: ["rs"], load: () => import("@codemirror/lang-rust").then(m => m.rust()) }),
 ];
-
-/** Document-level state fields that must survive mode switches. */
-function coreDocumentStateExtensions(): Extension[] {
-  return [
-    // Frontmatter state (always needed — other extensions read it)
-    frontmatterField,
-
-    // Explicit rich-mode structure editing state (stable-shell experiment)
-    activeStructureEditField,
-
-    // Include expansion metadata must survive Rich/Source mode switches.
-    includeRegionsField,
-
-    // Shared document semantics (headings, fenced divs, footnotes)
-    documentSemanticsField,
-
-    // Block plugin system
-    createPluginRegistryField(defaultPlugins),
-    blockCounterField,
-    documentReferenceCatalogField,
-    documentLabelGraphField,
-
-    // Bibliography state (must come before citation plugins)
-    bibDataField,
-
-    // PDF preview cache (must come before image render plugin reads it)
-    pdfPreviewField,
-    imageUrlField,
-  ];
-}
-
-/** Compartment-wrapped extensions for rich/source/read mode switching. */
-function renderModeExtensions(): Extension[] {
-  return [
-    // Rendering plugins (wrapped in compartment for mode switching)
-    renderCompartment.of(renderingExtensions),
-
-    // Editor mode state (queryable by keybindings and other consumers)
-    editorModeField,
-
-    // Editability (wrapped in compartment for preview mode)
-    editableCompartment.of([]),
-
-    // Mode-specific CSS classes (source mode, read mode)
-    modeClassCompartment.of([]),
-  ];
-}
-
-/** User-configurable settings wrapped in live-reconfigurable compartments. */
-function userSettingsExtensions(): Extension[] {
-  return [
-    wordWrapCompartment.of(EditorView.lineWrapping),
-    lineNumbersCompartment.of([]),
-    tabSizeCompartment.of(tabSizeExtension(2)),
-  ];
-}
 
 /** Editor chrome: folding, outliner, keybindings, picker, theme, debug panel. */
 function editorChromeExtensions(isDark: boolean): Extension[] {
@@ -303,13 +230,16 @@ export function createEditor(config: EditorConfig): EditorView {
       referenceAutocompleteExtension,
 
       // Mode switching (render/editable/modeClass compartments)
-      ...renderModeExtensions(),
+      ...renderModeExtensions({
+        editorModeField,
+        renderingExtensions,
+      }),
 
       // Toggleable editor plugins (managed by EditorPluginManager)
       ...(config.pluginManager?.initialExtensions() ?? []),
 
       // User-configurable settings (word wrap, line numbers, tab size)
-      ...userSettingsExtensions(),
+      ...userSettingsExtensions(tabSizeExtension(2)),
 
       // Editor chrome (folding, outliner, keybindings, picker, theme)
       ...editorChromeExtensions(isDark),

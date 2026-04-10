@@ -1,26 +1,26 @@
 import {
+  type EditorState,
   StateEffect,
   StateField,
-  type EditorState,
   type Transaction,
 } from "@codemirror/state";
 import { type EditorView } from "@codemirror/view";
 import {
   collectFencedDivs,
+  type FencedDivInfo,
   findFencedBlockAt,
   getFencedDivRevealFrom,
   getFencedDivRevealTo,
-  type FencedDivInfo,
 } from "../fenced-block/model";
-import { frontmatterField } from "./frontmatter-state";
-import { focusEffect } from "../render/focus-state";
-import { programmaticDocumentChangeAnnotation } from "./programmatic-document-change";
-import { findCodeShellAt } from "./shell-ownership";
 import { containsPos, containsRange } from "../lib/range-helpers";
-import { documentAnalysisField } from "../state/document-analysis";
+import { focusEffect } from "../render/focus-state";
 import type {
   FootnoteDefinition,
 } from "../semantics/document";
+import { documentAnalysisField } from "../state/document-analysis";
+import { frontmatterField } from "./frontmatter-state";
+import { programmaticDocumentChangeAnnotation } from "./programmatic-document-change";
+import { findCodeShellAt } from "./shell-ownership";
 
 export interface FencedStructureEditTarget {
   readonly kind: "fenced-opener";
@@ -79,14 +79,8 @@ export type StructureEditTarget =
 export const setStructureEditTargetEffect =
   StateEffect.define<StructureEditTarget | null>();
 
-export const clearStructureEditTargetEffect = StateEffect.define<void>();
-
 export function hasStructureEditEffect(tr: Transaction): boolean {
-  return tr.effects.some(
-    (effect) =>
-      effect.is(setStructureEditTargetEffect) ||
-      effect.is(clearStructureEditTargetEffect),
-  );
+  return tr.effects.some((effect) => effect.is(setStructureEditTargetEffect));
 }
 
 function fencedTargetFromDiv(div: FencedDivInfo): FencedStructureEditTarget {
@@ -260,9 +254,6 @@ export const activeStructureEditField =
     },
     update(value, tr) {
       for (const effect of tr.effects) {
-        if (effect.is(clearStructureEditTargetEffect)) {
-          return null;
-        }
         if (effect.is(setStructureEditTargetEffect)) {
           const target = effect.value;
           if (!target) return null;
@@ -418,7 +409,7 @@ export function clearStructureEditTarget(view: EditorView): boolean {
   const active = getActiveStructureEditTarget(view.state);
   if (!active) return false;
   view.dispatch({
-    effects: clearStructureEditTargetEffect.of(undefined),
+    effects: setStructureEditTargetEffect.of(null),
   });
   return true;
 }

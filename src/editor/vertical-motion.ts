@@ -2,12 +2,12 @@ import { EditorSelection } from "@codemirror/state";
 import { type EditorView } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
 import { getLineElement } from "../render/render-core";
+import { appendDebugTimelineEvent } from "./debug-timeline";
 import {
   activateStructureEditAt,
   activateStructureEditTarget,
   createStructureEditTargetAt,
 } from "./structure-edit-state";
-import { appendDebugTimelineEvent } from "./debug-timeline";
 
 const FALLBACK_LINE_HEIGHT_PX = 24;
 const REVERSE_SCROLL_THRESHOLD_PX = 120;
@@ -22,25 +22,25 @@ interface VerticalMotionSnapshot {
   readonly scrollTop: number;
 }
 
+interface BaseVerticalMotionGuardEvent {
+  readonly direction: "up" | "down";
+  readonly beforeLine: number;
+  readonly timestamp: number;
+}
+
 export type VerticalMotionGuardEvent =
-  | {
+  | (BaseVerticalMotionGuardEvent & {
       readonly kind: "visible-line-jump";
-      readonly direction: "up" | "down";
-      readonly beforeLine: number;
       readonly rawTargetLine: number;
       readonly correctedTargetLine: number;
-      readonly timestamp: number;
-    }
-  | {
+    })
+  | (BaseVerticalMotionGuardEvent & {
       readonly kind: "reverse-scroll";
-      readonly direction: "up" | "down";
-      readonly beforeLine: number;
       readonly afterLine: number;
       readonly beforeScrollTop: number;
       readonly afterScrollTop: number;
       readonly correctedScrollTop: number;
-      readonly timestamp: number;
-    };
+    });
 
 export function recordVerticalMotionGuardEvent(
   view: EditorView,
