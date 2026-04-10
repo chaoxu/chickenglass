@@ -8,10 +8,15 @@
 
 import type { BlockPlugin } from "./plugin-types";
 import { BLOCK_MANIFEST_ENTRIES } from "../constants/block-manifest";
+import { embedPlugins } from "./embed-plugin";
 import { pluginFromManifest } from "./plugin-factory";
 
+const embedPluginByName = new Map(embedPlugins.map((plugin) => [plugin.name, plugin] as const));
+
 /** All default block plugins, generated from BLOCK_MANIFEST. */
-export const defaultPlugins: readonly BlockPlugin[] = BLOCK_MANIFEST_ENTRIES.map(pluginFromManifest);
+export const defaultPlugins: readonly BlockPlugin[] = BLOCK_MANIFEST_ENTRIES.map(
+  (entry) => embedPluginByName.get(entry.name) ?? pluginFromManifest(entry),
+);
 
 const theoremFamilyNames = new Set(
   BLOCK_MANIFEST_ENTRIES

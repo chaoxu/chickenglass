@@ -18,10 +18,7 @@ const noopSpecialBehavior: SpecialBehaviorHandler = () => {};
 
 const specialBehaviorHandlers: Readonly<Record<SpecialBehavior, SpecialBehaviorHandler>> = {
   blockquote: noopSpecialBehavior,
-  embed: ({ state, div, builder, openLine, activeShell, openerSourceActive }) => {
-    if (openerSourceActive) return;
-    builder.addEmbedWidget(state, div, openLine, activeShell);
-  },
+  embed: noopSpecialBehavior,
   qed: ({ state, div, builder }) => {
     builder.addQedDecoration(state, div);
   },

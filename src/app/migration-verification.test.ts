@@ -905,6 +905,7 @@ describe("#299 — centralized block manifest and CSS registry", () => {
 
   it("uses the shared registries in block rendering paths", () => {
     const blockTheme = fileText("src/editor/block-theme.ts");
+    const embedPlugin = fileText("src/plugins/embed-plugin.ts");
     const pluginRender = fileText("src/plugins/plugin-render.ts");
     const pluginRenderChrome = fileText("src/plugins/plugin-render-chrome.ts");
     const decorationBuilder = fileText("src/plugins/decoration-builder.ts");
@@ -920,8 +921,14 @@ describe("#299 — centralized block manifest and CSS registry", () => {
     expect(pluginRenderChrome).toContain("renderDocumentFragmentToDom");
     expect(decorationBuilder).toContain("class DecorationBuilder");
     expect(specialBehaviorHandlers).toContain("specialBehaviorHandlers");
-    // #374: special-behavior dispatch remains data-driven off plugin metadata,
-    // but the concrete handlers now live outside plugin-render.ts.
+    expect(pluginRenderChrome).toContain("PluginRenderAdapter");
+    expect(pluginRenderChrome).toContain("addPluginMarkerReplacement");
+    expect(embedPlugin).toContain("renderDecorations");
+    expect(pluginRender).toContain("renderDecorations?.addBodyDecorations");
+    // #374 and #1094: special-behavior dispatch remains centralized for shared
+    // cases, but embed rendering is plugin-owned instead of hardcoded in the
+    // core render pipeline or handler registry.
+    expect(specialBehaviorHandlers).not.toContain("addEmbedWidget");
     expect(pluginRender).not.toContain('specialBehavior === "embed"');
     expect(pluginRender).not.toContain("EMBED_CLASSES");
   });

@@ -6,7 +6,11 @@
  * looks up the registry to decide how to display each fenced div.
  */
 
+import type { EditorState, Range } from "@codemirror/state";
+import type { Decoration } from "@codemirror/view";
 import type { CaptionPosition, HeaderPosition, SpecialBehavior } from "../constants/block-manifest";
+import type { FencedDivInfo } from "../fenced-block/model";
+import type { PluginRenderAdapter } from "./plugin-render-adapter";
 
 /** Attributes extracted from a fenced div and enriched with numbering info. */
 export interface BlockAttrs {
@@ -30,6 +34,22 @@ export interface BlockDecorationSpec {
   readonly className: string;
   /** The header text (e.g. "Theorem 1" or "Proof"). */
   readonly header: string;
+}
+
+/** Plugin-owned context for adding rich-mode block decorations. */
+export interface BlockRenderDecorationContext {
+  readonly adapter: PluginRenderAdapter;
+  readonly state: EditorState;
+  readonly div: FencedDivInfo;
+  readonly items: Range<Decoration>[];
+  readonly activeShell: boolean;
+  readonly openerSourceActive: boolean;
+}
+
+/** Optional decoration hooks that the core renderer dispatches generically. */
+export interface BlockRenderDecorations {
+  /** Add body decorations while the block is rendered in rich mode. */
+  readonly addBodyDecorations?: (context: BlockRenderDecorationContext) => void;
 }
 
 /**
@@ -81,6 +101,12 @@ export interface BlockPlugin {
   readonly captionPosition?: CaptionPosition;
   /** Whether the rendered header is block-level or inline with the first body line. */
   readonly headerPosition?: HeaderPosition;
+  /**
+   * Optional plugin-owned rich-mode decoration hooks.
+   *
+   * This keeps plugin-specific rendering behavior out of `plugin-render.ts`.
+   */
+  readonly renderDecorations?: BlockRenderDecorations;
   /** Produce a decoration spec from the block's attributes. */
   readonly render: (attrs: BlockAttrs) => BlockDecorationSpec;
 }

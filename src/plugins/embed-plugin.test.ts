@@ -248,6 +248,12 @@ describe("embedFamilyPlugins", () => {
       expect(plugin.counter).toBeUndefined();
     }
   });
+
+  it("registers plugin-owned body decoration hooks", () => {
+    for (const plugin of embedFamilyPlugins) {
+      expect(plugin.renderDecorations?.addBodyDecorations).toBeTypeOf("function");
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

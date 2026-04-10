@@ -6,7 +6,7 @@ import {
   gistEmbedUrl,
   isValidEmbedUrl,
   youtubeEmbedUrl,
-} from "./embed-plugin";
+} from "./embed-url";
 import {
   type PluginRenderAdapter,
   pushPluginWidgetDecoration,
@@ -38,12 +38,12 @@ export function addEmbedWidget(
   adapter: PluginRenderAdapter,
   state: EditorState,
   div: FencedDivInfo,
-  openLine: { readonly to: number },
   items: Range<Decoration>[],
   active: boolean,
 ): void {
   if (div.singleLine || div.closeFenceFrom < 0) return;
 
+  const openLine = state.doc.lineAt(div.openFenceFrom);
   const bodyFrom = openLine.to + 1;
   const bodyTo = div.closeFenceFrom - 1;
   if (bodyFrom > bodyTo) return;

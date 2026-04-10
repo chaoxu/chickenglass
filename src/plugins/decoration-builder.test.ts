@@ -78,15 +78,15 @@ describe("DecorationBuilder", () => {
 });
 
 describe("applySpecialBehavior", () => {
-  it("routes embed behavior through the shared handler registry", () => {
+  it("routes qed behavior through the shared handler registry", () => {
     const state = EditorState.create({
-      doc: "::: {.embed}\nhttps://example.com\n:::",
+      doc: "::: {.proof}\nText\n:::",
     });
-    const div = makeDiv(state, "embed");
+    const div = makeDiv(state, "proof");
     const items: Range<Decoration>[] = [];
     const builder = new DecorationBuilder(items);
 
-    applySpecialBehavior("embed", {
+    applySpecialBehavior("qed", {
       state,
       div,
       builder,
@@ -96,6 +96,6 @@ describe("applySpecialBehavior", () => {
     });
 
     const specs = collectSpecs(items);
-    expect(specs.some((spec) => spec.widgetClass === "EmbedWidget")).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.blockQed)).toBe(true);
   });
 });

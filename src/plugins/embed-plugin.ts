@@ -1,9 +1,8 @@
 /**
- * Embed URL helpers for custom content blocks.
+ * Embed-family plugin definitions and URL helpers.
  *
- * The embed plugins themselves are generated from BLOCK_MANIFEST in
- * default-plugins.ts. This file only exports the URL validation and
- * transformation functions used by the renderer.
+ * These plugins own the iframe-style rich rendering behavior so the
+ * core plugin renderer does not need embed-specific branches.
  *
  * Supports embedding external content via iframes:
  * - `.embed` — generic embed (renders URL as iframe)
@@ -21,79 +20,30 @@
  * Security: Only https:// URLs are allowed. Iframes use sandbox attributes.
  */
 
-/** Validate that a URL is safe for embedding (https only). */
-export function isValidEmbedUrl(url: string): boolean {
-  const trimmed = url.trim();
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.protocol === "https:";
-  } catch (_e) {
-    // best-effort: malformed URL string — not a valid embed target
-    return false;
-  }
-}
+import type { BlockPlugin, BlockRenderDecorations } from "./plugin-types";
+import { type StandardPluginOptions, createStandardPlugin } from "./plugin-factory";
+import { addEmbedWidget } from "./plugin-render-embed";
 
-/**
- * Extract YouTube video ID from various YouTube URL formats.
- *
- * Supports:
- * - https://www.youtube.com/watch?v=VIDEO_ID
- * - https://youtu.be/VIDEO_ID
- * - https://www.youtube.com/embed/VIDEO_ID
- *
- * Returns undefined if no video ID can be extracted.
- */
-export function extractYoutubeId(url: string): string | undefined {
-  const trimmed = url.trim();
-  try {
-    const parsed = new URL(trimmed);
+export {
+  extractYoutubeId,
+  gistEmbedUrl,
+  isValidEmbedUrl,
+  youtubeEmbedUrl,
+} from "./embed-url";
 
-    // youtube.com/watch?v=ID
-    if (
-      (parsed.hostname === "www.youtube.com" ||
-        parsed.hostname === "youtube.com") &&
-      parsed.pathname === "/watch"
-    ) {
-      return parsed.searchParams.get("v") ?? undefined;
-    }
+const embedRenderDecorations: BlockRenderDecorations = {
+  addBodyDecorations({ adapter, state, div, items, activeShell, openerSourceActive }) {
+    if (openerSourceActive) return;
+    addEmbedWidget(adapter, state, div, items, activeShell);
+  },
+};
 
-    // youtu.be/ID
-    if (parsed.hostname === "youtu.be") {
-      const id = parsed.pathname.slice(1);
-      return id.length > 0 ? id : undefined;
-    }
+const EMBED_PLUGIN_OPTIONS = [
+  { name: "embed", numbered: false, specialBehavior: "embed", renderDecorations: embedRenderDecorations },
+  { name: "iframe", numbered: false, specialBehavior: "embed", renderDecorations: embedRenderDecorations },
+  { name: "youtube", numbered: false, specialBehavior: "embed", title: "YouTube", renderDecorations: embedRenderDecorations },
+  { name: "gist", numbered: false, specialBehavior: "embed", renderDecorations: embedRenderDecorations },
+] as const satisfies readonly StandardPluginOptions[];
 
-    // youtube.com/embed/ID
-    if (
-      (parsed.hostname === "www.youtube.com" ||
-        parsed.hostname === "youtube.com") &&
-      parsed.pathname.startsWith("/embed/")
-    ) {
-      const id = parsed.pathname.slice("/embed/".length);
-      return id.length > 0 ? id : undefined;
-    }
-  } catch (_e) {
-    // best-effort: invalid URL — fall through to return undefined
-  }
-  return undefined;
-}
-
-/**
- * Build a YouTube embed URL from a video ID.
- */
-export function youtubeEmbedUrl(videoId: string): string {
-  return `https://www.youtube.com/embed/${videoId}`;
-}
-
-/**
- * Build a GitHub Gist embed URL.
- *
- * Gist URLs like https://gist.github.com/user/abc123 can be loaded
- * in an iframe by appending .pibb to get the rendered view.
- */
-export function gistEmbedUrl(url: string): string {
-  const trimmed = url.trim();
-  // Append .pibb for the rendered iframe-friendly view
-  if (trimmed.endsWith(".pibb")) return trimmed;
-  return trimmed.endsWith("/") ? `${trimmed.slice(0, -1)}.pibb` : `${trimmed}.pibb`;
-}
+/** Embed-family plugins with plugin-owned iframe rendering hooks. */
+export const embedPlugins: readonly BlockPlugin[] = EMBED_PLUGIN_OPTIONS.map(createStandardPlugin);
