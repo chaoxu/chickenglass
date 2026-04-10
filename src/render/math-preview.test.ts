@@ -7,7 +7,7 @@ import {
 } from "../editor/base-editor-extensions";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { documentAnalysisField } from "../state/document-analysis";
-import { mathMacrosField } from "./math-macros";
+import { mathMacrosField } from "../state/math-macros";
 
 const { mathPreviewPlugin } = await import("./math-preview");
 

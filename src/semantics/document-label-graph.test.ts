@@ -7,10 +7,10 @@ import {
   defaultPlugins,
 } from "../plugins";
 import { blockCounterField } from "../state/block-counter";
+import { documentLabelGraphField } from "../state/document-label-graph";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import {
   buildDocumentLabelGraph,
-  documentLabelGraphField,
   findDocumentLabelBacklinks,
   getDocumentLabelDefinition,
   getDocumentLabelDefinitions,

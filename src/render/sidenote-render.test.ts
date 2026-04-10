@@ -9,7 +9,7 @@ import { CSS } from "../constants/css-classes";
 import { markdown } from "@codemirror/lang-markdown";
 import { footnoteExtension } from "../parser/footnote";
 import { frontmatterField } from "../editor/frontmatter-state";
-import { mathMacrosField } from "./math-macros";
+import { mathMacrosField } from "../state/math-macros";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,

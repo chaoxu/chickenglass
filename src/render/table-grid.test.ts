@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { createMarkdownLanguageExtensions } from "../editor/base-editor-extensions";
-import { findTablesInState, findPipePositions, tableDiscoveryField } from "./table-discovery";
+import { tableDiscoveryField } from "../state/table-discovery";
+import { findTablesInState, findPipePositions } from "./table-discovery";
 import {
   _computeDirtyTableGridUpdateForTest,
   deleteSelectedTableSelection,

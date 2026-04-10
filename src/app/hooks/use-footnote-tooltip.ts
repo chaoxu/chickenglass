@@ -2,13 +2,14 @@ import { useEffect, useCallback } from "react";
 import { EditorView } from "@codemirror/view";
 import { computePosition, flip, shift, offset } from "@floating-ui/dom";
 import { CSS } from "../../constants";
-import { collectFootnotes, mathMacrosField } from "../../render";
+import { collectFootnotes } from "../../render";
 import { renderDocumentFragmentToDom } from "../../document-surfaces";
 import {
   createPreviewSurfaceBody,
   createPreviewSurfaceContent,
   createPreviewSurfaceShell,
 } from "../../preview-surface";
+import { mathMacrosField } from "../../state/math-macros";
 
 /**
  * Hover tooltip for sidenote refs when the margin is collapsed.

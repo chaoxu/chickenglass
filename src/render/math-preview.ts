@@ -14,7 +14,7 @@ import {
 } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
 import { CSS } from "../constants";
-import { mathMacrosField } from "./math-macros";
+import { mathMacrosField } from "../state/math-macros";
 import { resolveClickToSourcePos } from "./math-interactions";
 import { findActiveMath } from "./math-source";
 import { renderKatex } from "./math-widget";

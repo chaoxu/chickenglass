@@ -3,11 +3,12 @@ import type { EditorView } from "@codemirror/view";
 import { createMarkdownLanguageExtensions } from "../editor/base-editor-extensions";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { documentSemanticsField } from "../state/document-analysis";
+import { imageUrlField } from "../state/image-url";
+import { mathMacrosField } from "../state/math-macros";
+import { pdfPreviewField } from "../state/pdf-preview";
 import { fenceGuidePlugin } from "./fence-guide";
 import { imageRenderPlugin } from "./image-render";
-import { imageUrlField } from "./image-url-cache";
 import { mathRenderPlugin } from "./math-render";
-import { pdfPreviewField } from "./pdf-preview-cache";
 import { tableRenderPlugin } from "./table-render";
 import { createTestView } from "../test-utils";
 import { CSS } from "../constants/css-classes";
@@ -15,7 +16,6 @@ import { blockRenderPlugin } from "./plugin-render";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { defaultPlugins } from "../plugins/default-plugins";
-import { mathMacrosField } from "./render-core";
 
 let view: EditorView | undefined;
 

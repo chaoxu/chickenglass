@@ -28,6 +28,7 @@ import {
 import { createChangeChecker } from "../state/change-detection";
 import { collectFencedDivs } from "../fenced-block/model";
 import { pluginRenderAdapter } from "../lib/plugin-render-adapter";
+import { mathMacrosField } from "../state/math-macros";
 import {
   addSingleLineClosingFence,
   buildFencedBlockDecorations,
@@ -35,7 +36,6 @@ import {
   editorFocusField,
   focusTracker,
   hideMultiLineClosingFence,
-  mathMacrosField,
 } from "./render-core";
 import {
   documentSemanticsField,

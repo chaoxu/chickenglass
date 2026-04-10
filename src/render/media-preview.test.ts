@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { EditorState } from "@codemirror/state";
 import type { FileSystem } from "../lib/types";
-import { imageUrlField, imageUrlEffect, _resetImageUrlCache } from "./image-url-cache";
-import { pdfPreviewField, pdfPreviewEffect, _resetPendingPaths } from "./pdf-preview-cache";
 import { documentPathFacet, fileSystemFacet } from "../lib/types";
+import { imageUrlEffect, imageUrlField } from "../state/image-url";
+import { pdfPreviewEffect, pdfPreviewField } from "../state/pdf-preview";
+import { _resetImageUrlCache } from "./image-url-cache";
+import { _resetPendingPaths } from "./pdf-preview-cache";
 
 // Mock the rasterizer so PDF requests don't need a real PDF engine.
 const { rasterizeMock } = vi.hoisted(() => ({

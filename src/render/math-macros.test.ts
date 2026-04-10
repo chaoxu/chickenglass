@@ -4,7 +4,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { projectConfigFacet } from "../app/project-config";
-import { getMathMacros, mathMacrosField } from "./math-macros";
+import { getMathMacros, mathMacrosField } from "../state/math-macros";
 import { collectMathRanges } from "./math-render";
 import { MathWidget } from "./math-widget";
 import { createTestView } from "../test-utils";

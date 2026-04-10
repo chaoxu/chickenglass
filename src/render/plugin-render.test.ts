@@ -21,7 +21,8 @@ import {
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../state/document-analysis";
-import { editorFocusField, focusEffect, mathMacrosField } from "./render-core";
+import { mathMacrosField } from "../state/math-macros";
+import { editorFocusField, focusEffect } from "./render-core";
 import { widgetSourceMap } from "./render-utils";
 import { frontmatterField } from "../editor/frontmatter-state";
 import {

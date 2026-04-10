@@ -13,10 +13,11 @@ import { useRef, useState, useMemo, useCallback, useLayoutEffect } from "react";
 import type { EditorState } from "@codemirror/state";
 import { createPortal } from "react-dom";
 import { EditorView } from "@codemirror/view";
-import { collectFootnotes, mathMacrosField } from "../../render";
+import { collectFootnotes } from "../../render";
 import { orderedFootnoteEntries } from "../../semantics/document";
 import { renderDocumentFragmentToDom } from "../../document-surfaces";
 import { CSS } from "../../constants/css-classes";
+import { mathMacrosField } from "../../state/math-macros";
 
 interface SidenoteEntry {
   id: string;

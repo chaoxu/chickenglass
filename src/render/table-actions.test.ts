@@ -3,7 +3,8 @@ import type { EditorView } from "@codemirror/view";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { markdownExtensions } from "../parser";
 import { createTestView } from "../test-utils";
-import { findCellBounds, findTablesInState, tableDiscoveryField } from "./table-discovery";
+import { tableDiscoveryField } from "../state/table-discovery";
+import { findCellBounds, findTablesInState } from "./table-discovery";
 import {
   addRow,
   deleteColumn,

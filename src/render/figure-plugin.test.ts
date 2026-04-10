@@ -7,7 +7,7 @@ import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { blockRenderPlugin, _blockDecorationFieldForTest } from "./plugin-render";
 import { defaultPlugins } from "../plugins/default-plugins";
-import { mathMacrosField } from "./render-core";
+import { mathMacrosField } from "../state/math-macros";
 import { createTestView, getDecorationSpecs } from "../test-utils";
 
 const figurePlugin = defaultPlugins.find((p) => p.name === "figure")!;

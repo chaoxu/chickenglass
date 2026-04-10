@@ -9,7 +9,7 @@ import {
 } from "./table-widget";
 import { _tableDecorationFieldForTest as tableDecorationField } from "./table-render";
 import { editorFocusField } from "./render-utils";
-import { mathMacrosField } from "./math-macros";
+import { mathMacrosField } from "../state/math-macros";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { markdownExtensions } from "../parser";
 import type { ParsedTable } from "./table-utils";

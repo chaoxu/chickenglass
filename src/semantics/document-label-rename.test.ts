@@ -7,7 +7,7 @@ import {
   defaultPlugins,
 } from "../plugins";
 import { documentAnalysisField } from "../state/document-analysis";
-import { documentLabelGraphField } from "./document-label-graph";
+import { documentLabelGraphField } from "../state/document-label-graph";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import {

@@ -8,13 +8,13 @@ import {
 } from "./editor";
 import { frontmatterField } from "./frontmatter-state";
 import { documentSemanticsField } from "../state/document-analysis";
-import { documentLabelGraphField } from "../semantics/document-label-graph";
 import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import { blockCounterField } from "../state/block-counter";
 import { bibDataField } from "../citations/citation-render";
-import { includeRegionsField } from "../lib/include-regions";
-import { pdfPreviewField } from "../render/pdf-preview-cache";
-import { imageUrlField } from "../render/image-url-cache";
+import { documentLabelGraphField } from "../state/document-label-graph";
+import { imageUrlField } from "../state/image-url";
+import { includeRegionsField } from "../state/include-regions";
+import { pdfPreviewField } from "../state/pdf-preview";
 
 describe("createEditor", () => {
   it("creates an editor view attached to the given parent", () => {

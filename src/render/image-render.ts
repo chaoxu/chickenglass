@@ -21,8 +21,9 @@ import {
   syncActiveFenceGuideClasses,
 } from "./source-widget";
 import { ShellWidget } from "./shell-widget";
-import { imageUrlField } from "./image-url-cache";
-import { getPdfCanvas, pdfPreviewField } from "./pdf-preview-cache";
+import { imageUrlField } from "../state/image-url";
+import { pdfPreviewField } from "../state/pdf-preview";
+import { getPdfCanvas } from "./pdf-preview-cache";
 import {
   clearBlockWidgetHeightBinding,
   estimatedBlockWidgetHeight,

@@ -11,17 +11,15 @@ import type { EditorView } from "@codemirror/view";
 import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { documentPathFacet, fileSystemFacet, type FileSystem } from "../lib/types";
+import { imageUrlField, type ImageUrlEntry } from "../state/image-url";
+import { pdfPreviewField, type PdfPreviewEntry } from "../state/pdf-preview";
 import {
   getImageDataUrl,
-  imageUrlField,
   requestImageDataUrl,
-  type ImageUrlEntry,
 } from "./image-url-cache";
 import {
   getPdfCanvas,
-  pdfPreviewField,
   requestPdfPreview,
-  type PdfPreviewEntry,
 } from "./pdf-preview-cache";
 
 // ── Result type ─────────────────────────────────────────────────────────────

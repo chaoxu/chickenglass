@@ -21,7 +21,7 @@ import { dispatchIfConnected } from "../lib/view-dispatch";
 import { useBibliography } from "./use-bibliography";
 import { measureAsync } from "../perf";
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
-import { setIncludeRegionsEffect } from "../../lib/include-regions";
+import { setIncludeRegionsEffect } from "../../state/include-regions";
 
 /** Module-level cache shared across repeated document opens. */
 const includeCache = new IncludeExpansionCache();

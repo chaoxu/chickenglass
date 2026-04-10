@@ -37,7 +37,6 @@ import {
   type RangeSet,
 } from "@codemirror/state";
 import {
-  tableDiscoveryField,
   findTablesInState,
   findTableAtCursor,
   findCellBounds,
@@ -46,6 +45,7 @@ import {
   getCursorRowIndex,
   type TableRange,
 } from "./table-discovery";
+import { tableDiscoveryField } from "../state/table-discovery";
 import { createSimpleTextWidget } from "./render-core";
 import { ContextMenu } from "../lib/context-menu";
 import type { ContextMenuItem } from "../lib/context-menu";
