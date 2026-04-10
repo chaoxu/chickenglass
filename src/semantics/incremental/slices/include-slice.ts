@@ -14,13 +14,18 @@ function extractIncludePath(
 ): string | undefined {
   if (div.primaryClass !== "include") return undefined;
 
-  if (div.title) {
-    const path = div.title.trim();
+  if (
+    div.titleFrom !== undefined
+    && div.titleTo !== undefined
+    && div.titleFrom < div.titleTo
+  ) {
+    const path = doc.slice(div.titleFrom, div.titleTo).trim();
     if (path.length > 0) return path;
   }
 
-  if (div.closeFenceFrom >= 0 && div.openFenceTo < div.closeFenceFrom) {
-    const path = doc.slice(div.openFenceTo, div.closeFenceFrom).trim();
+  const bodyTo = div.closeFenceFrom >= 0 ? div.closeFenceFrom : div.to;
+  if (div.openFenceTo < bodyTo) {
+    const path = doc.slice(div.openFenceTo, bodyTo).trim();
     if (path.length > 0) return path;
   }
 

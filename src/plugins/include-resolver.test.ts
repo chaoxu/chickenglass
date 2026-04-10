@@ -70,6 +70,19 @@ A theorem block.
     expect(extractIncludePaths(content)).toEqual(["chapter1.md"]);
   });
 
+  it("prefers the include body over attribute title fallbacks", () => {
+    const content = `::: {.include title="attr.md"}
+body.md
+:::`;
+    expect(extractIncludePaths(content)).toEqual(["body.md"]);
+  });
+
+  it("extracts unclosed multi-line include blocks", () => {
+    const content = `::: {.include}
+body.md`;
+    expect(extractIncludePaths(content)).toEqual(["body.md"]);
+  });
+
   // Regression: #357 — include syntax inside fenced code blocks must be ignored
   it("ignores include syntax inside a fenced code block (backticks)", () => {
     const content = `\`\`\`
