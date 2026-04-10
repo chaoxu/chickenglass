@@ -12,7 +12,7 @@ import { frontmatterField } from "../editor/frontmatter-state";
 import { mathMacrosField } from "./math-macros";
 import { createMockEditorView, createTestView, getDecorationSpecs } from "../test-utils";
 import { focusEffect, widgetSourceMap } from "./render-utils";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { renderInlineMarkdown } from "./inline-render";
 import {
   activeStructureEditField,

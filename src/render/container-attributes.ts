@@ -26,7 +26,7 @@ import {
   getMergedRangeCoverage,
   rangesOverlap,
 } from "../lib/range-helpers";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { buildDecorations } from "./decoration-core";
 
 /**

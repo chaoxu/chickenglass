@@ -34,7 +34,7 @@ import {
   focusEffect,
   focusTracker,
 } from "./focus-state";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { NODE } from "../constants/node-types";
 import { CSS } from "../constants/css-classes";
 import { findAncestorByName } from "../lib/syntax-tree-helpers";

@@ -8,7 +8,7 @@ import {
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
-} from "../semantics/codemirror-source";
+} from "../state/document-analysis";
 import { frontmatterField } from "./frontmatter-state";
 import { pluginRegistryField } from "./plugin-registry";
 

@@ -10,7 +10,7 @@ import {
   findTrailingHeadingAttributes,
   hasUnnumberedHeadingAttributes,
 } from "./document";
-import { documentSemanticsField } from "./codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 
 /** A single heading entry extracted from the document. */
 export interface HeadingEntry {

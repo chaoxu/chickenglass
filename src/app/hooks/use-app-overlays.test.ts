@@ -8,7 +8,7 @@ import { markdownExtensions } from "../../parser";
 import {
   defaultPlugins,
 } from "../../plugins";
-import { documentAnalysisField } from "../../semantics/codemirror-source";
+import { documentAnalysisField } from "../../state/document-analysis";
 import { documentLabelGraphField } from "../../semantics/document-label-graph";
 import { blockCounterField } from "../../state/block-counter";
 import { createPluginRegistryField } from "../../state/plugin-registry";

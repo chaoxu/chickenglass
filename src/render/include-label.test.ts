@@ -10,7 +10,7 @@ import { markdownExtensions } from "../parser";
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
-} from "../semantics/codemirror-source";
+} from "../state/document-analysis";
 import {
   includeRegionsField,
   setIncludeRegionsEffect,

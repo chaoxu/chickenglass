@@ -13,7 +13,7 @@ import { mathMacrosField } from "./math-macros";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
-} from "../semantics/codemirror-source";
+} from "../state/document-analysis";
 import { renderInlineMarkdown } from "./inline-render";
 import {
   computeSidenoteOffsets,

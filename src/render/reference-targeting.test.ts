@@ -5,7 +5,7 @@ import { frontmatterField } from "../editor/frontmatter-state";
 import { equationLabelExtension } from "../parser/equation-label";
 import { fencedDiv } from "../parser/fenced-div";
 import { mathExtension } from "../parser/math-backslash";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { CrossrefWidget } from "./crossref-render";
 import { findRenderedReference } from "./reference-targeting";
 import { createTestView } from "../test-utils";

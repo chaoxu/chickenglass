@@ -72,7 +72,7 @@ import {
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
-} from "../semantics/codemirror-source";
+} from "../state/document-analysis";
 import {
   codeBlockStructureField,
   collectCodeBlocks,

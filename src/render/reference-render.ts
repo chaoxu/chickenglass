@@ -43,7 +43,7 @@ import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
 import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
-} from "../semantics/codemirror-source";
+} from "../state/document-analysis";
 import {
   getEquationNumbersCacheKey,
   type DocumentAnalysis,

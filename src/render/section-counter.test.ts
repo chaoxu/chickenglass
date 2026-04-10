@@ -3,7 +3,7 @@ import { EditorState, type StateField } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import type { Decoration, DecorationSet } from "@codemirror/view";
 import { buildSectionDecorations, sectionNumberPlugin } from "./section-counter";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 
 /** Create an EditorState with the markdown parser and a given document. */
 function createState(doc: string): EditorState {

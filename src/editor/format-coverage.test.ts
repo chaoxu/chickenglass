@@ -15,7 +15,7 @@ import { syntaxTree } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import { frontmatterField } from "./frontmatter-state";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { editorFocusField, mathMacrosField } from "../render/render-core";

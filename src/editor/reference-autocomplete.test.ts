@@ -10,7 +10,7 @@ import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import {
   defaultPlugins,
 } from "../plugins";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { CSL_FIXTURES, makeBibStore } from "../test-utils";

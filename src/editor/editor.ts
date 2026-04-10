@@ -24,7 +24,7 @@ import {
 } from "../plugins";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { bibliographyPlugin, bibDataField } from "../citations";
 import { pdfPreviewField } from "../render/pdf-preview-cache";
 import { imageUrlField } from "../render/image-url-cache";

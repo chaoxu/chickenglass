@@ -4,7 +4,7 @@ import * as language from "@codemirror/language";
 import type { Decoration } from "@codemirror/view";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import {
   _computeContainerDirtyRegionForTest,
   containerAttributesField,

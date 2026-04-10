@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { dispatchFormatEvent } from "../../constants/events";
 import { BackgroundIndexer } from "../../index";
-import { documentAnalysisField } from "../../semantics/codemirror-source";
+import { documentAnalysisField } from "../../state/document-analysis";
 import {
   type DocumentLabelBacklinksResult,
   resolveDocumentLabelBacklinks,

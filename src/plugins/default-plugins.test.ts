@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { CSS } from "../constants/css-classes";
 import { createEditorState } from "../test-utils";
 

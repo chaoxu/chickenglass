@@ -11,7 +11,7 @@ import {
   documentAnalysisField,
   editorStateTextSource,
   getDocumentAnalysisSliceRevision,
-} from "./codemirror-source";
+} from "../state/document-analysis";
 import {
   analyzeDocumentSemantics,
   type DocumentAnalysis,

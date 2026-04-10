@@ -20,7 +20,7 @@ import {
 } from "../render/plugin-render-adapter";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { editorFocusField, focusEffect, mathMacrosField } from "../render/render-core";
 import { widgetSourceMap } from "../render/render-utils";
 import { frontmatterField } from "../editor/frontmatter-state";

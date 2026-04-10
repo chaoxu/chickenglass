@@ -10,7 +10,7 @@ import {
   findEquationLabelSpan,
   findHeadingIdSpan,
 } from "../references/source-ranges";
-import { documentAnalysisField } from "./codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import { type DocumentAnalysis } from "./document";
 import {
   getEditorDocumentReferenceCatalog,

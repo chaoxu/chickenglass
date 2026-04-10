@@ -10,7 +10,7 @@ import { documentPathFacet } from "../lib/types";
 import {
   defaultPlugins,
 } from "../plugins";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { mathMacrosField } from "./math-macros";

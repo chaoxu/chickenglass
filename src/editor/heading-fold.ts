@@ -31,7 +31,7 @@ import type { HeadingSemantics } from "../semantics/document";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
-} from "../semantics/codemirror-source";
+} from "../state/document-analysis";
 
 interface HeadingFoldSection {
   readonly headingFrom: number;

@@ -14,7 +14,7 @@ import {
   documentSemanticsField,
   getDocumentAnalysisRevision,
   getDocumentAnalysisSliceRevision,
-} from "../../semantics/codemirror-source";
+} from "../../state/document-analysis";
 import { blockCounterField } from "../../state/block-counter";
 import { bibDataField } from "../../citations/citation-render";
 import { frontmatterField, type EditorMode } from "../../editor";

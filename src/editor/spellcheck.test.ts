@@ -12,7 +12,7 @@ import {
   spellcheckExtension,
   toggleSpellcheck,
 } from "./spellcheck";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import { createTestView } from "../test-utils";
 
 interface SpellcheckPluginValue {

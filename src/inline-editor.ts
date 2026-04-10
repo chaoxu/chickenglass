@@ -18,7 +18,7 @@ import {
 } from "./editor/base-editor-extensions";
 import { CSS } from "./constants/css-classes";
 import { referenceRenderPlugin } from "./render/reference-render";
-import { documentAnalysisField } from "./semantics/codemirror-source";
+import { documentAnalysisField } from "./state/document-analysis";
 import { type BibData, bibDataEffect, bibDataField } from "./state/bib-data";
 import { frontmatterField } from "./state/frontmatter-state";
 

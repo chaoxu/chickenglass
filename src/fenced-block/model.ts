@@ -1,7 +1,7 @@
 import type { EditorState } from "@codemirror/state";
 import type { FencedDivSemantics } from "../semantics/document";
 import { containsPos } from "../lib/range-helpers";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 
 export interface FencedBlockPositionMapper {
   mapPos(pos: number, assoc?: number): number;

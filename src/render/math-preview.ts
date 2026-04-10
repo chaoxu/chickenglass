@@ -22,7 +22,7 @@ import {
   createPreviewSurfaceContent,
   createPreviewSurfaceShell,
 } from "../preview-surface";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 
 interface MathRegionSnapshot {
   latex: string;

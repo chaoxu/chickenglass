@@ -8,7 +8,7 @@ import { getMathMacros, mathMacrosField } from "./math-macros";
 import { collectMathRanges } from "./math-render";
 import { MathWidget } from "./math-widget";
 import { createTestView } from "../test-utils";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 
 /** Create an EditorView with frontmatter and math parser extensions. */
 function createView(

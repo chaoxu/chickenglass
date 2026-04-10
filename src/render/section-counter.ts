@@ -20,7 +20,7 @@ import {
 } from "@codemirror/state";
 import { buildDecorations } from "./decoration-core";
 import { createDecorationsField } from "./decoration-field";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 
 /** Build section-number decorations for all headings in the document. */
 export function buildSectionDecorations(state: EditorState): DecorationSet {

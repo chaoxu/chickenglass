@@ -12,7 +12,7 @@ import type { NumberingScheme } from "../parser/frontmatter";
 import type { FencedDivSemantics } from "../semantics/document";
 import type { PluginRegistryState } from "./plugin-registry";
 import { getPluginOrFallback } from "./plugin-registry";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 
 /** A numbered block entry mapping a fenced div to its assigned number. */
 export interface NumberedBlock {

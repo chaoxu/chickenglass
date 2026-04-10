@@ -39,7 +39,7 @@ import {
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
-} from "../semantics/codemirror-source";
+} from "../state/document-analysis";
 import { type BlockCounterState, blockCounterField } from "../state/block-counter";
 import { pluginRegistryField } from "../state/plugin-registry";
 import { DecorationBuilder } from "./decoration-builder";

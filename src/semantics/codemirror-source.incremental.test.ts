@@ -9,7 +9,7 @@ import {
   editorStateTextSource,
   getDocumentAnalysisRevision,
   getDocumentAnalysisSliceRevision,
-} from "./codemirror-source";
+} from "../state/document-analysis";
 
 function createSemanticsState(doc: string): EditorState {
   const state = EditorState.create({

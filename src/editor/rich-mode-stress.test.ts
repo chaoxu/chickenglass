@@ -16,7 +16,7 @@ import fc from "fast-check";
 import { syntaxTree } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
 import { createEditor, editorModeField, setEditorMode, type EditorMode } from "./editor";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 
 // ── Seed documents ───────────────────────────────────────────────────────────
 

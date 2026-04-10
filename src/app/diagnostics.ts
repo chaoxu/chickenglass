@@ -1,5 +1,5 @@
 import type { EditorState } from "@codemirror/state";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import { bibDataField } from "../citations/citation-render";
 import { classifyReference } from "../index/crossref-resolver";
 import { blockCounterField } from "../state/block-counter";

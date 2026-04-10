@@ -17,7 +17,7 @@ import {
   isValidDocumentLabelId,
   validateDocumentLabelRename,
 } from "./document-label-graph";
-import { documentAnalysisField } from "./codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 
 function createGraphState(doc: string): EditorState {
   return EditorState.create({

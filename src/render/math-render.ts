@@ -11,7 +11,7 @@ import {
   EditorView,
 } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import {
   getEquationNumbersCacheKey,
   type DocumentAnalysis,

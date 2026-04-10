@@ -36,7 +36,7 @@ import {
   createPreviewSurfaceShell,
 } from "../preview-surface";
 import { documentPathFacet, type BlockCounterEntry } from "../lib/types";
-import { documentAnalysisField } from "../semantics/codemirror-source";
+import { documentAnalysisField } from "../state/document-analysis";
 import { collectImageTargets } from "../app/pdf-image-previews";
 import { imageUrlField } from "./image-url-cache";
 import {

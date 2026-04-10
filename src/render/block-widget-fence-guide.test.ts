@@ -2,7 +2,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { EditorView } from "@codemirror/view";
 import { createMarkdownLanguageExtensions } from "../editor/base-editor-extensions";
 import { frontmatterField } from "../editor/frontmatter-state";
-import { documentSemanticsField } from "../semantics/codemirror-source";
+import { documentSemanticsField } from "../state/document-analysis";
 import { fenceGuidePlugin } from "./fence-guide";
 import { imageRenderPlugin } from "./image-render";
 import { imageUrlField } from "./image-url-cache";
