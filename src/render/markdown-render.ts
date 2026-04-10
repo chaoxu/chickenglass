@@ -18,6 +18,7 @@ import {
 import { cursorInRange } from "./node-collection";
 import { createCursorSensitiveViewPlugin } from "./view-plugin-factories";
 import { findTrailingHeadingAttributes } from "../semantics/heading-ancestry";
+import { containsRange } from "../lib/range-helpers";
 import { isSafeUrl } from "../lib/url-utils";
 import { openExternalUrl } from "../lib/open-link";
 
@@ -399,7 +400,10 @@ function collectCursorContextSnapshot(
     for (const side of [1, -1] as const) {
       let node = tree.resolveInner(pos, side);
       while (node.parent) {
-        if (CURSOR_SENSITIVE_NODES.has(node.name) && from >= node.from && to <= node.to) {
+        if (
+          CURSOR_SENSITIVE_NODES.has(node.name) &&
+          containsRange(node, { from, to })
+        ) {
           const key = `${node.name}:${node.from}:${node.to}`;
           if (!entriesByKey.has(key)) {
             entriesByKey.set(key, { key, from: node.from, to: node.to });

@@ -16,7 +16,7 @@ import { frontmatterField } from "./frontmatter-state";
 import { focusEffect } from "../render/focus-state";
 import { programmaticDocumentChangeAnnotation } from "./programmatic-document-change";
 import { findCodeShellAt } from "./shell-ownership";
-import { containsPos } from "../lib/range-helpers";
+import { containsPos, containsRange } from "../lib/range-helpers";
 import { documentAnalysisField } from "../semantics/codemirror-source";
 import type {
   FootnoteDefinition,
@@ -223,19 +223,26 @@ function selectionWithinStructureTarget(
   from: number,
   to: number,
 ): boolean {
+  const selection = { from, to };
   if (target.kind === "frontmatter") {
-    return from >= target.from && to <= target.to;
+    return containsRange(target, selection);
   }
   if (target.kind === "code-fence") {
-    return from >= target.openFenceFrom && to <= target.openFenceTo;
+    return containsRange(
+      { from: target.openFenceFrom, to: target.openFenceTo },
+      selection,
+    );
   }
   if (target.kind === "footnote-label") {
-    return from >= target.labelFrom && to <= target.labelTo;
+    return containsRange(
+      { from: target.labelFrom, to: target.labelTo },
+      selection,
+    );
   }
   if (target.kind === "display-math") {
-    return from >= target.from && to <= target.to;
+    return containsRange(target, selection);
   }
-  return from >= target.editFrom && to <= target.editTo;
+  return containsRange({ from: target.editFrom, to: target.editTo }, selection);
 }
 
 function transactionBlurred(tr: Transaction): boolean {
@@ -361,7 +368,10 @@ function structureTargetContainsPos(
   target: StructureEditTarget,
   pos: number,
 ): boolean {
-  return pos >= structureTargetFrom(target) && pos <= structureTargetTo(target);
+  return containsPos(
+    { from: structureTargetFrom(target), to: structureTargetTo(target) },
+    pos,
+  );
 }
 
 export function activateStructureEditTarget(

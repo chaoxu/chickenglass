@@ -23,11 +23,32 @@ export function containsPos(
   return pos >= range.from && pos <= range.to;
 }
 
+export function containsRange(
+  outer: Pick<RangeLike, "from" | "to">,
+  inner: Pick<RangeLike, "from" | "to">,
+): boolean {
+  return inner.from >= outer.from && inner.to <= outer.to;
+}
+
 export function rangesOverlap(
   left: Pick<RangeLike, "from" | "to">,
   right: Pick<RangeLike, "from" | "to">,
 ): boolean {
   return left.from <= right.to && right.from <= left.to;
+}
+
+export function containsPosExclusiveEnd(
+  range: Pick<RangeLike, "from" | "to">,
+  pos: number,
+): boolean {
+  return pos >= range.from && pos < range.to;
+}
+
+export function rangesIntersect(
+  left: Pick<RangeLike, "from" | "to">,
+  right: Pick<RangeLike, "from" | "to">,
+): boolean {
+  return left.from < right.to && right.from < left.to;
 }
 
 export function toRanges<T extends RangeLike>(

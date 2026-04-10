@@ -1,6 +1,7 @@
 import { type DecorationSet, type EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { type Extension, type StateField } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
+import { rangesIntersect } from "../lib/range-helpers";
 import { MathWidget } from "./math-widget";
 import {
   clearActiveFenceGuideClasses,
@@ -48,7 +49,7 @@ function collectVisibleRenderedMathWidgets(
 ): RenderedMathWidget[] {
   const widgets = collectRenderedMathWidgets(view, mathDecorationField);
   return widgets.filter(
-    (widget) => widget.from < view.viewport.to && widget.to > view.viewport.from,
+    (widget) => rangesIntersect(widget, view.viewport),
   );
 }
 

@@ -1,4 +1,5 @@
 import type { SelectionRange } from "@codemirror/state";
+import { containsRange } from "../lib/range-helpers";
 
 export interface InlineRevealTarget {
   readonly from: number;
@@ -9,7 +10,7 @@ export function selectionTouchesInlineTarget(
   selection: SelectionRange,
   target: InlineRevealTarget,
 ): boolean {
-  return selection.from >= target.from && selection.to <= target.to;
+  return containsRange(target, selection);
 }
 
 export function isFocusedInlineRevealTarget(

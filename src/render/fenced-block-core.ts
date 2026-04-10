@@ -2,6 +2,7 @@ import { type EditorState, type Line, type Range, type StateField, type Transact
 import { type DecorationSet, Decoration, EditorView } from "@codemirror/view";
 import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import type { FencedBlockInfo } from "../fenced-block/model";
+import { containsPos } from "../lib/range-helpers";
 import {
   buildDecorations,
   decorationHidden,
@@ -34,7 +35,7 @@ export function isCursorOnOpenFence(
   if (!focused) return false;
   const cursor = state.selection.main;
   const openLine = state.doc.lineAt(block.openFenceFrom);
-  return cursor.from >= openLine.from && cursor.from <= openLine.to;
+  return containsPos(openLine, cursor.from);
 }
 
 /** Check whether the cursor is on the closing fence line of a fenced block. */
@@ -45,7 +46,10 @@ export function isCursorOnCloseFence(
 ): boolean {
   if (!focused || block.closeFenceFrom < 0) return false;
   const cursor = state.selection.main;
-  return cursor.from >= block.closeFenceFrom && cursor.from <= block.closeFenceTo;
+  return containsPos(
+    { from: block.closeFenceFrom, to: block.closeFenceTo },
+    cursor.from,
+  );
 }
 
 /** Compute shared fence/body render context for a fenced block. */

@@ -1,4 +1,5 @@
 import type { ChangeSet, Text } from "@codemirror/state";
+import { rangesIntersect } from "../lib/range-helpers";
 
 export interface DirtyRange {
   readonly from: number;
@@ -61,7 +62,7 @@ export function rangeIntersectsDirtyRanges(
   dirtyRanges: readonly DirtyRange[],
 ): boolean {
   for (const range of dirtyRanges) {
-    if (from < range.to && to > range.from) return true;
+    if (rangesIntersect({ from, to }, range)) return true;
     if (range.from >= to) break;
   }
   return false;

@@ -1,4 +1,8 @@
 import type { ChangeDesc } from "@codemirror/state";
+import {
+  containsPosExclusiveEnd,
+  rangesIntersect,
+} from "../lib/range-helpers";
 
 /** A snapshot of a visible document range (matches CM6 visibleRanges shape). */
 export interface VisibleRange {
@@ -52,7 +56,7 @@ export function isPositionInRanges(
   ranges: readonly VisibleRange[],
 ): boolean {
   for (const range of ranges) {
-    if (pos >= range.from && pos < range.to) return true;
+    if (containsPosExclusiveEnd(range, pos)) return true;
     if (range.from > pos) break;
   }
   return false;
@@ -99,13 +103,14 @@ export function rangeIntersectsRanges(
   to: number,
   ranges: readonly VisibleRange[],
 ): boolean {
+  const target = { from, to };
   for (const range of ranges) {
     if (from === to) {
-      if (from >= range.from && from < range.to) return true;
+      if (containsPosExclusiveEnd(range, from)) return true;
       if (range.from > from) break;
       continue;
     }
-    if (from < range.to && to > range.from) return true;
+    if (rangesIntersect(target, range)) return true;
     if (range.from >= to) break;
   }
   return false;

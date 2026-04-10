@@ -4,10 +4,13 @@ import {
   clampDocPos,
   collectOverlappingOrderedRanges,
   containsPos,
+  containsPosExclusiveEnd,
+  containsRange,
   expandChangeQueryRange,
   expandRangeToLineBounds,
   getMergedRangeCoverage,
   getOrderedRangePrefixMaxTo,
+  rangesIntersect,
   rangesOverlap,
   toRanges,
 } from "./range-helpers";
@@ -20,10 +23,32 @@ describe("containsPos", () => {
   });
 });
 
+describe("containsRange", () => {
+  it("includes both inner range boundaries", () => {
+    expect(containsRange({ from: 5, to: 10 }, { from: 5, to: 10 })).toBe(true);
+    expect(containsRange({ from: 5, to: 10 }, { from: 6, to: 9 })).toBe(true);
+    expect(containsRange({ from: 5, to: 10 }, { from: 4, to: 9 })).toBe(false);
+  });
+});
+
 describe("rangesOverlap", () => {
   it("treats touching endpoints as overlapping", () => {
     expect(rangesOverlap({ from: 0, to: 5 }, { from: 5, to: 10 })).toBe(true);
     expect(rangesOverlap({ from: 0, to: 5 }, { from: 6, to: 10 })).toBe(false);
+  });
+});
+
+describe("containsPosExclusiveEnd", () => {
+  it("includes the start boundary but excludes the end boundary", () => {
+    expect(containsPosExclusiveEnd({ from: 5, to: 10 }, 5)).toBe(true);
+    expect(containsPosExclusiveEnd({ from: 5, to: 10 }, 10)).toBe(false);
+  });
+});
+
+describe("rangesIntersect", () => {
+  it("treats touching endpoints as non-intersecting", () => {
+    expect(rangesIntersect({ from: 0, to: 5 }, { from: 5, to: 10 })).toBe(false);
+    expect(rangesIntersect({ from: 0, to: 5 }, { from: 4, to: 10 })).toBe(true);
   });
 });
 
