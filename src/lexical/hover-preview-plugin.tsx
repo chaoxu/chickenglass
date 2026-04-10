@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import DOMPurify from "dompurify";
-import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 
+import { SurfaceFloatingPortal } from "../lexical-next";
 import { useLexicalRenderContext } from "./render-context";
 import { FigureMedia } from "./figure-media";
 import {
@@ -41,41 +40,16 @@ export function FloatingPreviewPortal({
   readonly anchor: HTMLElement;
   readonly children: ReactNode;
 }) {
-  const tooltipRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const tooltip = tooltipRef.current;
-    if (!tooltip) {
-      return;
-    }
-
-    return autoUpdate(anchor, tooltip, () => {
-      void computePosition(anchor, tooltip, {
-        placement: "top",
-        middleware: [offset(6), flip(), shift({ padding: 5 })],
-      }).then(({ x, y }) => {
-        Object.assign(tooltip.style, {
-          left: `${x}px`,
-          top: `${y}px`,
-        });
-      });
-    });
-  }, [anchor]);
-
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  return createPortal(
-    <div
+  return (
+    <SurfaceFloatingPortal
+      anchor={anchor}
       className="cf-hover-preview-tooltip"
-      data-visible="true"
-      ref={tooltipRef}
-      style={{ display: "block", position: "fixed" }}
+      placement="top"
+      visible
+      zIndex={50}
     >
       {children}
-    </div>,
-    document.body,
+    </SurfaceFloatingPortal>
   );
 }
 
@@ -142,7 +116,7 @@ function usePreviewBuilder() {
                   </div>
                   {titleHtml ? (
                     <footer className="cf-lexical-block-caption">
-                      <span className="cf-lexical-block-caption-label">{`${figureLabel}.`}</span>
+                      <span className="cf-lexical-block-caption-label">{figureLabel}</span>
                       <PreviewHtml
                         className="cf-lexical-block-caption-text"
                         html={titleHtml}
@@ -253,9 +227,7 @@ export function HoverPreviewPlugin() {
   const [editor] = useLexicalComposerContext();
   const buildPreview = usePreviewBuilder();
   const [preview, setPreview] = useState<PreviewState | null>(null);
-  const tooltipRef = useRef<HTMLDivElement | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cleanupPositionRef = useRef<(() => void) | null>(null);
   const rootHandlersRef = useRef(new WeakMap<HTMLElement, {
     readonly mouseOut: (event: MouseEvent) => void;
     readonly mouseOver: (event: Event) => void;
@@ -266,36 +238,8 @@ export function HoverPreviewPlugin() {
       if (hoverTimerRef.current) {
         clearTimeout(hoverTimerRef.current);
       }
-      cleanupPositionRef.current?.();
     };
   }, []);
-
-  useEffect(() => {
-    const tooltip = tooltipRef.current;
-    if (!preview || !tooltip) {
-      cleanupPositionRef.current?.();
-      cleanupPositionRef.current = null;
-      return;
-    }
-
-    cleanupPositionRef.current?.();
-    cleanupPositionRef.current = autoUpdate(preview.anchor, tooltip, () => {
-      void computePosition(preview.anchor, tooltip, {
-        placement: "top",
-        middleware: [offset(6), flip(), shift({ padding: 5 })],
-      }).then(({ x, y }) => {
-        Object.assign(tooltip.style, {
-          left: `${x}px`,
-          top: `${y}px`,
-        });
-      });
-    });
-
-    return () => {
-      cleanupPositionRef.current?.();
-      cleanupPositionRef.current = null;
-    };
-  }, [preview]);
 
   useEffect(() => {
     const clearHoverTimer = () => {
@@ -396,19 +340,19 @@ export function HoverPreviewPlugin() {
     });
   }, [buildPreview, editor, preview]);
 
-  if (typeof document === "undefined") {
+  if (!preview) {
     return null;
   }
 
-  return createPortal(
-    <div
+  return (
+    <SurfaceFloatingPortal
+      anchor={preview.anchor}
       className="cf-hover-preview-tooltip"
-      data-visible={preview ? "true" : "false"}
-      ref={tooltipRef}
-      style={{ display: preview ? "block" : "none", position: "fixed" }}
+      placement="top"
+      visible
+      zIndex={50}
     >
-      {preview?.content ?? null}
-    </div>,
-    document.body,
+      {preview.content}
+    </SurfaceFloatingPortal>
   );
 }

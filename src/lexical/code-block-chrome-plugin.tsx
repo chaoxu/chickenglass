@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { mergeRegister } from "lexical";
 
+import { useEditorScrollSurface } from "../lexical-next";
+
 const ID_ATTR = "data-coflat-codeblock-id";
 const LANGUAGE_ATTR = "data-coflat-codeblock-language";
 
@@ -34,8 +36,12 @@ function formatLanguage(codeElement: HTMLElement): string {
   return language ? language.toUpperCase() : "TEXT";
 }
 
-function collectCodeBlockOverlays(rootElement: HTMLElement): readonly CodeBlockOverlay[] {
+function collectCodeBlockOverlays(
+  rootElement: HTMLElement,
+  surfaceElement: HTMLElement,
+): readonly CodeBlockOverlay[] {
   const overlays: CodeBlockOverlay[] = [];
+  const surfaceRect = surfaceElement.getBoundingClientRect();
 
   for (const codeElement of rootElement.querySelectorAll<HTMLElement>(".cf-lexical-code-block")) {
     const id = ensureCodeBlockId(codeElement);
@@ -50,8 +56,8 @@ function collectCodeBlockOverlays(rootElement: HTMLElement): readonly CodeBlockO
       id,
       language: codeElement.getAttribute(LANGUAGE_ATTR) ?? "TEXT",
       rect: {
-        left: rect.left,
-        top: rect.top,
+        left: rect.left - surfaceRect.left + surfaceElement.scrollLeft,
+        top: rect.top - surfaceRect.top + surfaceElement.scrollTop,
         width: rect.width,
       },
       text: codeElement.textContent ?? "",
@@ -66,13 +72,14 @@ export function CodeBlockChromePlugin() {
   const [rootElement, setRootElement] = useState<HTMLElement | null>(null);
   const [overlays, setOverlays] = useState<readonly CodeBlockOverlay[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const surfaceElement = useEditorScrollSurface();
 
   useEffect(() => {
     let raf = 0;
     let timeout = 0;
 
     const sync = () => {
-      if (!rootElement) {
+      if (!rootElement || !surfaceElement) {
         setOverlays([]);
         return;
       }
@@ -81,24 +88,24 @@ export function CodeBlockChromePlugin() {
       window.clearTimeout(timeout);
 
       const commit = () => {
-        if (!rootElement) {
+        if (!rootElement || !surfaceElement) {
           setOverlays([]);
           return;
         }
-        setOverlays(collectCodeBlockOverlays(rootElement));
+        setOverlays(collectCodeBlockOverlays(rootElement, surfaceElement));
       };
 
       raf = requestAnimationFrame(commit);
       timeout = window.setTimeout(commit, 120);
     };
 
-    if (!rootElement) {
+    if (!rootElement || !surfaceElement) {
       setOverlays([]);
       return undefined;
     }
 
     sync();
-    rootElement.addEventListener("scroll", sync, { passive: true });
+    surfaceElement.addEventListener("scroll", sync, { passive: true });
     window.addEventListener("resize", sync);
 
     return mergeRegister(
@@ -108,22 +115,22 @@ export function CodeBlockChromePlugin() {
       () => {
         cancelAnimationFrame(raf);
         window.clearTimeout(timeout);
-        rootElement.removeEventListener("scroll", sync);
+        surfaceElement.removeEventListener("scroll", sync);
         window.removeEventListener("resize", sync);
       },
     );
-  }, [editor, rootElement]);
+  }, [editor, rootElement, surfaceElement]);
 
   useEffect(() => editor.registerRootListener((nextRootElement) => {
     setRootElement(nextRootElement);
   }), [editor]);
 
   const portal = useMemo(() => {
-    if (typeof document === "undefined") {
+    if (!surfaceElement || typeof document === "undefined") {
       return null;
     }
-    return document.body;
-  }, []);
+    return surfaceElement;
+  }, [surfaceElement]);
 
   if (!portal || overlays.length === 0) {
     return null;
@@ -138,7 +145,7 @@ export function CodeBlockChromePlugin() {
           style={{
             left: `${overlay.rect.left + 16}px`,
             top: `${overlay.rect.top + 6}px`,
-            position: "fixed",
+            position: "absolute",
           }}
         >
           {overlay.language}
@@ -163,7 +170,7 @@ export function CodeBlockChromePlugin() {
           style={{
             left: `${overlay.rect.left + overlay.rect.width - 54}px`,
             top: `${overlay.rect.top + 2}px`,
-            position: "fixed",
+            position: "absolute",
           }}
           type="button"
         >

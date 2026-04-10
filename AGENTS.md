@@ -159,6 +159,36 @@ Do not use the Playwright MCP plugin for this repo.
 - Keep modules small and focused
 - If a file is already too large or mixes unrelated concerns, split it before adding more
 
+## Rich surface architecture
+
+- Preserve render/edit parity. If clicking into a surface changes content,
+  token interpretation, typography, or layout, treat that as an architectural
+  bug, not a styling bug.
+- Do not maintain separate semantic renderers for the inactive and active
+  states of the same field. If lazy mounting is needed for performance, the
+  inactive path must still use the same formatting model and data as the active
+  editor path.
+- Floating chrome, popovers, and overlays must be owned by the actual editor
+  scroll surface. Do not attach viewport-fixed chrome to `document.body` when
+  the editor scrolls inside another container.
+- Match the editor primitive to the field semantics:
+  captions and titles are inline fields;
+  table cells and block bodies are rich block fields;
+  block openers, include paths, and similar metadata are source-text fields.
+- Do not place block-level nested editors inside inline layout slots. If a
+  field must stay on one line, it needs an inline editing surface all the way
+  down, not block wrappers styled to look inline.
+- Punctuation, separators, and label chrome must have a single owner. Either
+  markup owns it or CSS owns it, never both.
+- Prefer structural fixes over symptom patches. Avoid one-off CSS/font-size
+  compensation, per-token parity hacks, or manual scroll-offset corrections
+  when the ownership model is wrong.
+- When changing user-visible rich-surface behavior, add browser coverage for:
+  inactive vs active parity,
+  overlay positioning while scrolling,
+  inline caption/title layout,
+  and rich token behavior inside nested editors.
+
 ## Document format
 
 Pandoc-flavored markdown is the canonical document format. See `FORMAT.md`.
@@ -198,6 +228,7 @@ Reference docs live under `docs/` and are loaded on demand:
 
 - `docs/architecture/development-rules.md`
 - `docs/architecture/architecture-decisions.md`
+- `docs/architecture/lexical-native-rewrite.md`
 - `docs/architecture/subsystem-pattern.md`
 - `docs/design/inline-rendering-policy.md`
 - `docs/architecture/theme-contract.md`

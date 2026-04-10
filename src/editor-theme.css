@@ -109,6 +109,25 @@
   color: var(--cf-fg);
 }
 
+.cf-lexical-surface {
+  position: relative;
+}
+
+.cf-lexical-surface--block {
+  height: 100%;
+  overflow: hidden;
+}
+
+.cf-lexical-surface--scroll {
+  height: 100%;
+  overflow: auto;
+}
+
+.cf-lexical-surface--inline {
+  display: inline;
+  overflow: visible;
+}
+
 .cf-lexical-editor {
   box-sizing: border-box;
   min-height: 100%;
@@ -147,6 +166,28 @@
 
 .cf-lexical-editor--rich {
   white-space: normal;
+}
+
+.cf-lexical-editor--inline-surface {
+  display: inline;
+  min-height: auto;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
+  white-space: normal;
+}
+
+.cf-lexical-editor--inline-surface > * {
+  display: inline;
+  width: auto;
+  max-width: none;
+  margin: 0;
+}
+
+.cf-lexical-editor--inline-surface :is(.cf-lexical-paragraph, .cf-lexical-heading) {
+  display: inline;
+  margin: 0;
+  min-height: auto;
 }
 
 .cf-lexical-paragraph {
@@ -413,6 +454,7 @@
 .cf-lexical-inline-image {
   display: block;
   width: auto;
+  height: auto;
   max-width: min(16rem, 100%);
   max-height: 2.6rem;
   border-radius: calc(var(--cf-border-radius) + 1px);
@@ -859,6 +901,11 @@
 .cf-lexical-block-caption-text {
   display: inline;
   min-width: 0;
+}
+
+.cf-lexical-block-caption-text > .cf-embedded-field-shell,
+.cf-lexical-block-title > .cf-embedded-field-shell {
+  display: inline;
 }
 
 .cf-lexical-blockquote-shell {

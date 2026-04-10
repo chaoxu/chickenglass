@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 import { $createAutoLinkNode, $createLinkNode, $isAutoLinkNode, $isLinkNode } from "@lexical/link";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
@@ -10,6 +8,7 @@ import {
   type NodeKey,
 } from "lexical";
 
+import { SurfaceFloatingPortal } from "../lexical-next";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
@@ -48,7 +47,6 @@ export function LinkSourcePlugin() {
   const [editing, setEditing] = useState<EditingLinkState | null>(null);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const tooltipRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!editing) {
@@ -64,25 +62,6 @@ export function LinkSourcePlugin() {
     }
     inputRef.current?.focus();
     inputRef.current?.select();
-  }, [editing]);
-
-  useEffect(() => {
-    const tooltip = tooltipRef.current;
-    if (!editing || !tooltip) {
-      return;
-    }
-
-    return autoUpdate(editing.anchor, tooltip, () => {
-      void computePosition(editing.anchor, tooltip, {
-        placement: "bottom-start",
-        middleware: [offset(6), flip(), shift({ padding: 5 })],
-      }).then(({ x, y }) => {
-        Object.assign(tooltip.style, {
-          left: `${x}px`,
-          top: `${y}px`,
-        });
-      });
-    });
   }, [editing]);
 
   useEffect(() => {
@@ -182,17 +161,14 @@ export function LinkSourcePlugin() {
     });
   };
 
-  if (!editing || typeof document === "undefined") {
+  if (!editing) {
     return null;
   }
 
   const inputWidthCh = Math.max(3, draft.length + 1);
 
-  return createPortal(
-    <div
-      ref={tooltipRef}
-      style={{ position: "fixed", zIndex: 60 }}
-    >
+  return (
+    <SurfaceFloatingPortal anchor={editing.anchor}>
       <EditorChromePanel className="cf-lexical-floating-source-shell cf-lexical-inline-token-panel-shell">
         <EditorChromeBody className="cf-lexical-floating-source-surface cf-lexical-inline-token-panel-surface">
           <EditorChromeInput
@@ -222,7 +198,6 @@ export function LinkSourcePlugin() {
           />
         </EditorChromeBody>
       </EditorChromePanel>
-    </div>,
-    document.body,
+    </SurfaceFloatingPortal>
   );
 }

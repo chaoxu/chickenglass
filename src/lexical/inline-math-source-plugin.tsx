@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal, flushSync } from "react-dom";
-import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
+import { flushSync } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   $createNodeSelection,
@@ -16,6 +15,7 @@ import {
   type NodeKey,
 } from "lexical";
 
+import { SurfaceFloatingPortal } from "../lexical-next";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
 import { $isInlineMathNode } from "./nodes/inline-math-node";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
@@ -128,7 +128,6 @@ export function InlineMathSourcePlugin() {
   const [editing, setEditing] = useState<EditingState | null>(null);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const tooltipRef = useRef<HTMLDivElement | null>(null);
   const closingRef = useRef(false);
 
   const updateMathRaw = useCallback((
@@ -251,25 +250,6 @@ export function InlineMathSourcePlugin() {
   }, [editing]);
 
   useEffect(() => {
-    const tooltip = tooltipRef.current;
-    if (!editing || !tooltip) {
-      return;
-    }
-
-    return autoUpdate(editing.anchor, tooltip, () => {
-      void computePosition(editing.anchor, tooltip, {
-        placement: "bottom-start",
-        middleware: [offset(8), flip(), shift({ padding: 8 })],
-      }).then(({ x, y }) => {
-        Object.assign(tooltip.style, {
-          left: `${x}px`,
-          top: `${y}px`,
-        });
-      });
-    });
-  }, [editing]);
-
-  useEffect(() => {
     const tryOpenAdjacentInlineMath = (
       event: KeyboardEvent,
       isBackward: boolean,
@@ -389,17 +369,18 @@ export function InlineMathSourcePlugin() {
     );
   }, [editor, startEditing]);
 
-  if (!editing || typeof document === "undefined") {
+  if (!editing) {
     return null;
   }
 
   const inputWidthCh = Math.max(3, draft.length + 1);
 
-  return createPortal(
-    <div
+  return (
+    <SurfaceFloatingPortal
+      anchor={editing.anchor}
       className="cf-lexical-inline-math-panel"
-      ref={tooltipRef}
-      style={{ position: "fixed", zIndex: 60 }}
+      offsetPx={8}
+      shiftPaddingPx={8}
     >
       <EditorChromePanel className="cf-lexical-floating-source-shell cf-lexical-inline-math-panel-shell">
         <EditorChromeBody className="cf-lexical-floating-source-surface cf-lexical-inline-math-panel-surface">
@@ -468,7 +449,6 @@ export function InlineMathSourcePlugin() {
           />
         </EditorChromeBody>
       </EditorChromePanel>
-    </div>,
-    document.body,
+    </SurfaceFloatingPortal>
   );
 }

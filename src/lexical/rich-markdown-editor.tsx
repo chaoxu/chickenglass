@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -47,6 +47,7 @@ import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
 import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
 import { SourcePositionPlugin } from "./source-position-plugin";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
+import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "../lexical-next";
 
 const clickRepairHandlers = new WeakMap<HTMLElement, EventListener>();
 
@@ -168,15 +169,30 @@ function ClickCaretRepairPlugin({
   return null;
 }
 
+function EditableSyncPlugin({
+  editable,
+}: {
+  readonly editable: boolean;
+}) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    editor.setEditable(editable);
+  }, [editable, editor]);
+
+  return null;
+}
+
 function ViewportTrackingPlugin({
   onViewportFromChange,
 }: {
   readonly onViewportFromChange?: (from: number) => void;
 }) {
   const [editor] = useLexicalComposerContext();
+  const surface = useEditorScrollSurface();
 
   useEffect(() => {
-    if (!onViewportFromChange || typeof window === "undefined") {
+    if (!onViewportFromChange || !surface || typeof window === "undefined") {
       return;
     }
 
@@ -197,16 +213,11 @@ function ViewportTrackingPlugin({
       });
     };
 
-    const unregisterRoot = editor.registerRootListener((rootElement, previousRootElement) => {
-      previousRootElement?.removeEventListener("scroll", sync);
-      rootElement?.addEventListener("scroll", sync, { passive: true });
-      sync();
-    });
-
     const unregisterUpdate = editor.registerUpdateListener(() => {
       sync();
     });
 
+    surface.addEventListener("scroll", sync, { passive: true });
     window.addEventListener("resize", sync);
     sync();
 
@@ -214,13 +225,11 @@ function ViewportTrackingPlugin({
       if (frame !== 0) {
         cancelAnimationFrame(frame);
       }
+      surface.removeEventListener("scroll", sync);
       window.removeEventListener("resize", sync);
-      const root = editor.getRootElement();
-      root?.removeEventListener("scroll", sync);
       unregisterUpdate();
-      unregisterRoot();
     };
-  }, [editor, onViewportFromChange]);
+  }, [editor, onViewportFromChange, surface]);
 
   return null;
 }
@@ -268,6 +277,7 @@ export interface LexicalRichMarkdownEditorProps {
   readonly docPath?: string;
   readonly editable?: boolean;
   readonly editorClassName?: string;
+  readonly layoutMode?: "block" | "inline";
   readonly namespace?: string;
   readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
   readonly onRootElementChange?: (root: HTMLElement | null) => void;
@@ -278,8 +288,11 @@ export interface LexicalRichMarkdownEditorProps {
   readonly requireUserEditFlag?: boolean;
   readonly renderContextValue?: LexicalRenderContextValue;
   readonly showBibliography?: boolean;
+  readonly showCodeBlockChrome?: boolean;
   readonly showHeadingChrome?: boolean;
   readonly showIncludeAffordances?: boolean;
+  readonly showViewportTracking?: boolean;
+  readonly singleLine?: boolean;
   readonly enableSourceNavigation?: boolean;
   readonly spellCheck?: boolean;
   readonly testId?: string | null;
@@ -290,6 +303,7 @@ export function LexicalRichMarkdownEditor({
   docPath,
   editable = true,
   editorClassName,
+  layoutMode = "block",
   namespace = "coflat-lexical-rich-markdown",
   onDocChange,
   onRootElementChange,
@@ -300,16 +314,21 @@ export function LexicalRichMarkdownEditor({
   requireUserEditFlag = true,
   renderContextValue,
   showBibliography = false,
+  showCodeBlockChrome = true,
   showHeadingChrome = true,
   showIncludeAffordances = false,
+  showViewportTracking = true,
+  singleLine = false,
   enableSourceNavigation = false,
   spellCheck = false,
   testId = "lexical-editor",
 }: LexicalRichMarkdownEditorProps) {
+  const inheritedSurface = useEditorScrollSurface();
   const initialDocRef = useRef(doc);
   const lastCommittedDocRef = useRef(doc);
   const suppressedDocRef = useRef<string | null>(null);
   const userEditPendingRef = useRef(false);
+  const [surfaceElement, setSurfaceElement] = useState<HTMLElement | null>(null);
 
   const initialConfig = useMemo(() => ({
     editable,
@@ -359,16 +378,31 @@ export function LexicalRichMarkdownEditor({
     onDocChange?.(changes);
   }, [onDocChange, onTextChange, requireUserEditFlag]);
 
+  const shellClassName = layoutMode === "inline"
+    ? "cf-lexical-surface cf-lexical-surface--inline"
+    : showBibliography
+      ? "cf-lexical-surface cf-lexical-surface--scroll"
+      : "cf-lexical-surface cf-lexical-surface--block";
+
+  const resolvedEditorClassName = [
+    editorClassName,
+    layoutMode === "inline" ? "cf-lexical-editor--inline-surface" : "",
+  ].filter(Boolean).join(" ");
+  const effectiveSurface = inheritedSurface ?? surfaceElement;
+
   return (
     <LexicalRenderContextProvider doc={doc} docPath={docPath} value={renderContextValue}>
       <LexicalSurfaceEditableProvider editable={editable}>
         <div
-          className={showBibliography ? "h-full overflow-auto" : "h-full overflow-hidden"}
-          onScroll={showBibliography
+          className={shellClassName}
+          onScroll={layoutMode === "block" && showBibliography
             ? (event) => onScrollChange?.(event.currentTarget.scrollTop)
             : undefined}
+          ref={setSurfaceElement}
         >
-          <LexicalComposer initialConfig={initialConfig}>
+          <EditorScrollSurfaceProvider surface={effectiveSurface}>
+            <LexicalComposer initialConfig={initialConfig}>
+              <EditableSyncPlugin editable={editable} />
             <RootElementPlugin onRootElementChange={onRootElementChange} />
             <DocumentSyncPlugin
               doc={doc}
@@ -379,7 +413,7 @@ export function LexicalRichMarkdownEditor({
               contentEditable={(
                 <ContentEditable
                   aria-label="Lexical rich editor"
-                  className={editorClassName}
+                  className={resolvedEditorClassName}
                   data-testid={testId ?? undefined}
                   onBeforeInput={editable
                     ? () => {
@@ -393,6 +427,10 @@ export function LexicalRichMarkdownEditor({
                     : undefined}
                   onKeyDown={editable
                     ? (event) => {
+                        if (singleLine && event.key === "Enter") {
+                          event.preventDefault();
+                          return;
+                        }
                         if (
                           event.key === "Backspace"
                           || event.key === "Delete"
@@ -420,7 +458,7 @@ export function LexicalRichMarkdownEditor({
               placeholder={null}
             />
             <FocusEdgePlugin />
-            <CodeBlockChromePlugin />
+            {showCodeBlockChrome ? <CodeBlockChromePlugin /> : null}
             {showIncludeAffordances ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
             {editable && shouldRepairBlankClickSelection ? <ClickCaretRepairPlugin enabled /> : null}
             {editable ? <HistoryPlugin /> : null}
@@ -435,11 +473,12 @@ export function LexicalRichMarkdownEditor({
             {editable ? <ReferenceTypeaheadPlugin /> : null}
             {showHeadingChrome ? <HeadingChromePlugin doc={renderContextValue?.doc ?? doc} /> : null}
             <SourcePositionPlugin doc={renderContextValue?.doc ?? doc} enableNavigation={enableSourceNavigation} />
-            <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} />
+            {showViewportTracking ? <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} /> : null}
             {editable ? <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} /> : null}
             {editable ? <OnChangePlugin onChange={handleChange} /> : null}
             {showBibliography ? <BibliographySection /> : null}
-          </LexicalComposer>
+            </LexicalComposer>
+          </EditorScrollSurfaceProvider>
         </div>
       </LexicalSurfaceEditableProvider>
     </LexicalRenderContextProvider>

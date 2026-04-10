@@ -13,6 +13,8 @@ export async function run(page) {
     const figureImage = document.querySelector(".cf-lexical-block--figure img");
     const tableCaption = document.querySelector(".cf-lexical-block--table .cf-lexical-block-caption");
     const tableElement = document.querySelector(".cf-lexical-block--table table");
+    const figureLabel = figureCaption?.querySelector(".cf-lexical-block-caption-label");
+    const tableLabel = tableCaption?.querySelector(".cf-lexical-block-caption-label");
 
     const figureCaptionBox = figureCaption?.getBoundingClientRect() ?? null;
     const figureImageBox = figureImage?.getBoundingClientRect() ?? null;
@@ -26,9 +28,13 @@ export async function run(page) {
       mathmlPosition: getComputedStyle(document.querySelector(".katex-mathml") ?? document.body).position,
       tableCaptionBelow: Boolean(tableCaptionBox && tableBox && tableCaptionBox.top >= tableBox.bottom - 1),
       tableCaptionText: tableCaption?.textContent?.trim() ?? "",
+      tableLabelSeparator: tableLabel ? getComputedStyle(tableLabel, "::after").content : "",
+      tableLabelText: tableLabel?.textContent?.trim() ?? "",
       tableCount: document.querySelectorAll(".cf-lexical-block--table table").length,
       figureCaptionBelow: Boolean(figureCaptionBox && figureImageBox && figureCaptionBox.top >= figureImageBox.bottom - 1),
       figureCaptionText: figureCaption?.textContent?.trim() ?? "",
+      figureLabelSeparator: figureLabel ? getComputedStyle(figureLabel, "::after").content : "",
+      figureLabelText: figureLabel?.textContent?.trim() ?? "",
       figureImageCount: document.querySelectorAll(".cf-lexical-block--figure img").length,
       youtubeIframeCount: document.querySelectorAll(".cf-lexical-block--youtube iframe").length,
     };
@@ -40,13 +46,21 @@ export async function run(page) {
   if (state.figureImageCount === 0) {
     return { pass: false, message: "figure block did not render a local media preview" };
   }
-  if (!state.figureCaptionBelow || !state.figureCaptionText.includes("Figure 1.")) {
+  if (
+    !state.figureCaptionBelow
+    || state.figureLabelText !== "Figure 1"
+    || !state.figureLabelSeparator.includes(".")
+  ) {
     return { pass: false, message: "figure caption did not render below the media with the numbered label" };
   }
   if (state.tableCount === 0) {
     return { pass: false, message: "table block did not render a real table surface" };
   }
-  if (!state.tableCaptionBelow || !state.tableCaptionText.includes("Table 1.")) {
+  if (
+    !state.tableCaptionBelow
+    || state.tableLabelText !== "Table 1"
+    || !state.tableLabelSeparator.includes(".")
+  ) {
     return { pass: false, message: "table caption did not render below the table with the numbered label" };
   }
   if (state.gistIframeCount === 0 || state.youtubeIframeCount === 0) {

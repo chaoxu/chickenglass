@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useState } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { mergeRegister } from "lexical";
 
+import { SurfacePortal, useEditorScrollSurface } from "../lexical-next";
 import type { IncludeRegion } from "../app/source-map";
 import { useEditorTelemetryStore } from "../app/stores/editor-telemetry-store";
 
@@ -25,6 +25,7 @@ export function IncludeRegionAffordancePlugin({
   readonly editable: boolean;
 }) {
   const [editor] = useLexicalComposerContext();
+  const surface = useEditorScrollSurface();
   const [rootElement, setRootElement] = useState<HTMLElement | null>(null);
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
   const [path, setPath] = useState<string | null>(null);
@@ -34,7 +35,7 @@ export function IncludeRegionAffordancePlugin({
   }), [editor]);
 
   useEffect(() => {
-    if (!rootElement) {
+    if (!rootElement || !surface) {
       setPosition(null);
       setPath(null);
       return undefined;
@@ -55,14 +56,14 @@ export function IncludeRegionAffordancePlugin({
         setPosition(null);
         return;
       }
-      const rect = rootElement.getBoundingClientRect();
       setPosition({
-        left: rect.left + 24,
-        top: rect.top + 12,
+        left: surface.scrollLeft + 24,
+        top: surface.scrollTop + 12,
       });
     };
 
     sync();
+    surface.addEventListener("scroll", sync, { passive: true });
     window.addEventListener("resize", sync);
 
     return mergeRegister(
@@ -78,33 +79,33 @@ export function IncludeRegionAffordancePlugin({
         }
       }),
       () => {
+        surface.removeEventListener("scroll", sync);
         window.removeEventListener("resize", sync);
       },
     );
-  }, [editor, rootElement]);
+  }, [editor, rootElement, surface]);
 
-  const portal = useMemo(() => (typeof document !== "undefined" ? document.body : null), []);
-
-  if (!portal || !position || !path) {
+  if (!position || !path) {
     return null;
   }
 
-  return createPortal(
-    <div
-      className="cf-lexical-include-affordances"
-      style={{
-        left: `${position.left}px`,
-        position: "fixed",
-        top: `${position.top}px`,
-      }}
-    >
-      <span
-        className={editable ? "cf-lexical-include-path-toggle" : "cf-lexical-include-path-label"}
-        title={path}
+  return (
+    <SurfacePortal>
+      <div
+        className="cf-lexical-include-affordances"
+        style={{
+          left: `${position.left}px`,
+          position: "absolute",
+          top: `${position.top}px`,
+        }}
       >
-        {path}
-      </span>
-    </div>,
-    portal,
+        <span
+          className={editable ? "cf-lexical-include-path-toggle" : "cf-lexical-include-path-label"}
+          title={path}
+        >
+          {path}
+        </span>
+      </div>
+    </SurfacePortal>
   );
 }

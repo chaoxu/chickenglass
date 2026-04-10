@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX, type MouseEvent as ReactMouseEvent } from "react";
-import { createPortal } from "react-dom";
-import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 import katex from "katex";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getNodeByKey, type NodeKey } from "lexical";
 
+import { SurfaceFloatingPortal } from "../lexical-next";
+import { EmbeddedFieldEditor } from "./embedded-field-editor";
 import { useLexicalSurfaceEditable } from "./editability-context";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
 import { computeEmbedSrc, embedSandboxPermissions } from "./embed";
 import { FigureMedia } from "./figure-media";
 import { useAssetPreview } from "./media-preview";
-import { LexicalPlainTextEditor } from "./plain-text-editor";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
 import { FloatingPreviewPortal, PreviewHtml, ReferenceHoverPreviewPortal } from "./hover-preview-plugin";
 import { useIncludedDocument, useLexicalRenderContext } from "./render-context";
@@ -65,64 +64,12 @@ function structureToggleProps(
 
 function richHtmlOptions(context: ReturnType<typeof useLexicalRenderContext>) {
   return {
+    citations: context.citations,
     config: context.config,
     docPath: context.docPath,
     renderIndex: context.renderIndex,
     resolveAssetUrl: context.resolveAssetUrl,
   };
-}
-
-function LazyTableCell({
-  cell,
-  className,
-  namespace,
-  onCommit,
-  onTextChange,
-}: {
-  readonly cell: string;
-  readonly className: string;
-  readonly namespace: string;
-  readonly onCommit: () => void;
-  readonly onTextChange: (text: string) => void;
-}) {
-  const surfaceEditable = useLexicalSurfaceEditable();
-  const context = useLexicalRenderContext();
-  const shellRef = useRef<HTMLDivElement>(null);
-  const [editing, setEditing] = useState(false);
-
-  const cellHtml = useMemo(
-    () => renderMarkdownRichHtml(cell, richHtmlOptions(context)),
-    [cell, context],
-  );
-
-  return (
-    <div
-      ref={shellRef}
-      onBlurCapture={(event) => {
-        if (!editing) return;
-        const next = event.relatedTarget;
-        if (next instanceof Node && shellRef.current?.contains(next)) return;
-        setEditing(false);
-        onCommit();
-      }}
-    >
-      {editing ? (
-        <MarkdownNestedEditor
-          className={className}
-          doc={cell}
-          namespace={namespace}
-          onTextChange={onTextChange}
-        />
-      ) : (
-        <div
-          className={`${className} cf-lexical-nested-editor--static`}
-          dangerouslySetInnerHTML={{ __html: cellHtml }}
-          onFocus={surfaceEditable ? () => setEditing(true) : undefined}
-          tabIndex={surfaceEditable ? 0 : undefined}
-        />
-      )}
-    </div>
-  );
 }
 
 function useRawBlockUpdater(nodeKey: NodeKey): (raw: string) => void {
@@ -140,66 +87,6 @@ function useRawBlockUpdater(nodeKey: NodeKey): (raw: string) => void {
       tag: COFLAT_NESTED_EDIT_TAG,
     });
   }, [editor, nodeKey]);
-}
-
-function MarkdownNestedEditor({
-  className,
-  doc,
-  editable,
-  namespace,
-  onTextChange,
-  plainText = false,
-}: {
-  readonly className: string;
-  readonly doc: string;
-  readonly editable?: boolean;
-  readonly namespace: string;
-  readonly onTextChange?: (text: string) => void;
-  readonly plainText?: boolean;
-}) {
-  const context = useLexicalRenderContext();
-  const surfaceEditable = useLexicalSurfaceEditable();
-  const nestedEditable = editable ?? surfaceEditable;
-  const editorClassName = `cf-lexical-editor ${className}`;
-  const currentDocRef = useRef(doc);
-  currentDocRef.current = doc;
-
-  const handleTextChange = useCallback((nextText: string) => {
-    if (nextText === currentDocRef.current) {
-      return;
-    }
-    onTextChange?.(nextText);
-  }, [onTextChange]);
-
-  if (plainText) {
-    return (
-      <LexicalPlainTextEditor
-        doc={doc}
-        editable={nestedEditable}
-        editorClassName={editorClassName}
-        namespace={namespace}
-        onTextChange={handleTextChange}
-        spellCheck={false}
-        testId={null}
-      />
-    );
-  }
-
-  return (
-    <LexicalRichMarkdownEditor
-      doc={doc}
-      editable={nestedEditable}
-      editorClassName={editorClassName}
-      namespace={namespace}
-      onTextChange={handleTextChange}
-      repairBlankClickSelection
-      requireUserEditFlag={false}
-      renderContextValue={context}
-      showHeadingChrome={false}
-      spellCheck={false}
-      testId={null}
-    />
-  );
 }
 
 function FencedDivStructureSourceEditor({
@@ -347,7 +234,6 @@ export function ReferenceRenderer({
   const [editingAnchor, setEditingAnchor] = useState<HTMLElement | null>(null);
   const [hoveredPreview, setHoveredPreview] = useState<{ anchor: HTMLElement; id: string } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const tooltipRef = useRef<HTMLDivElement | null>(null);
   const text = useMemo(
     () => renderReferenceDisplay(raw, renderIndex, citations),
     [citations, raw, renderIndex],
@@ -364,25 +250,6 @@ export function ReferenceRenderer({
       inputRef.current?.focus();
       inputRef.current?.select();
     }
-  }, [editingAnchor]);
-
-  useEffect(() => {
-    const tooltip = tooltipRef.current;
-    if (!editingAnchor || !tooltip) {
-      return;
-    }
-
-    return autoUpdate(editingAnchor, tooltip, () => {
-      void computePosition(editingAnchor, tooltip, {
-        placement: "bottom-start",
-        middleware: [offset(6), flip(), shift({ padding: 5 })],
-      }).then(({ x, y }) => {
-        Object.assign(tooltip.style, {
-          left: `${x}px`,
-          top: `${y}px`,
-        });
-      });
-    });
   }, [editingAnchor]);
 
   const commitDraft = useCallback((nextRaw: string) => {
@@ -439,12 +306,9 @@ export function ReferenceRenderer({
 
   const inputWidthCh = Math.max(3, draft.length + 1);
 
-  const editingPortal = editingAnchor && typeof document !== "undefined"
-    ? createPortal(
-      <div
-        ref={tooltipRef}
-        style={{ position: "fixed", zIndex: 60 }}
-      >
+  const editingPortal = editingAnchor
+    ? (
+      <SurfaceFloatingPortal anchor={editingAnchor}>
         <EditorChromePanel className="cf-lexical-floating-source-shell cf-lexical-inline-token-panel-shell">
           <EditorChromeBody className="cf-lexical-floating-source-surface cf-lexical-inline-token-panel-surface">
             <EditorChromeInput
@@ -474,8 +338,7 @@ export function ReferenceRenderer({
             />
           </EditorChromeBody>
         </EditorChromePanel>
-      </div>,
-      document.body,
+      </SurfaceFloatingPortal>
     )
     : null;
 
@@ -766,28 +629,32 @@ function TableBlockRenderer({
   const externalParsed = useMemo(() => parseMarkdownTable(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
   const [draft, setDraft] = useState(externalParsed);
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
 
   useEffect(() => {
     setDraft(externalParsed);
   }, [externalParsed]);
 
-  const flushDraft = useCallback(() => {
-    if (draftRef.current) {
-      updateRaw(serializeMarkdownTable(draftRef.current));
-    }
+  const updateHeaderCell = useCallback((columnIndex: number, nextValue: string) => {
+    setDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const next = updateTableHeaderCell(prev, columnIndex, nextValue);
+      updateRaw(serializeMarkdownTable(next));
+      return next;
+    });
   }, [updateRaw]);
 
-  useEffect(() => () => { flushDraft(); }, [flushDraft]);
-
-  const updateHeaderCell = useCallback((columnIndex: number, nextValue: string) => {
-    setDraft((prev) => prev ? updateTableHeaderCell(prev, columnIndex, nextValue) : prev);
-  }, []);
-
   const updateBodyCell = useCallback((rowIndex: number, columnIndex: number, nextValue: string) => {
-    setDraft((prev) => prev ? updateTableBodyCell(prev, rowIndex, columnIndex, nextValue) : prev);
-  }, []);
+    setDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const next = updateTableBodyCell(prev, rowIndex, columnIndex, nextValue);
+      updateRaw(serializeMarkdownTable(next));
+      return next;
+    });
+  }, [updateRaw]);
 
   if (!draft) {
     return <div className="cf-lexical-raw-fallback">{raw}</div>;
@@ -800,11 +667,12 @@ function TableBlockRenderer({
           <tr>
             {draft.headers.map((cell, columnIndex) => (
               <th key={`h-${columnIndex}`}>
-                <LazyTableCell
-                  cell={cell}
-                  className="cf-lexical-nested-editor cf-lexical-nested-editor--table-cell"
+                <EmbeddedFieldEditor
+                  activation="focus"
+                  className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--table-cell"
+                  doc={cell}
+                  family="table-cell"
                   namespace={`coflat-table-${nodeKey}-head-${columnIndex}`}
-                  onCommit={flushDraft}
                   onTextChange={(nextValue) => updateHeaderCell(columnIndex, nextValue)}
                 />
               </th>
@@ -816,11 +684,12 @@ function TableBlockRenderer({
             <tr key={`r-${rowIndex}`}>
               {row.map((cell, columnIndex) => (
                 <td key={`c-${rowIndex}-${columnIndex}`}>
-                  <LazyTableCell
-                    cell={cell}
-                    className="cf-lexical-nested-editor cf-lexical-nested-editor--table-cell"
+                  <EmbeddedFieldEditor
+                    activation="focus"
+                    className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--table-cell"
+                    doc={cell}
+                    family="table-cell"
                     namespace={`coflat-table-${nodeKey}-${rowIndex}-${columnIndex}`}
-                    onCommit={flushDraft}
                     onTextChange={(nextValue) => updateBodyCell(rowIndex, columnIndex, nextValue)}
                   />
                 </td>
@@ -854,9 +723,10 @@ function FootnoteDefinitionBlockRenderer({
     <section className="cf-lexical-footnote-definition">
       <div className="cf-lexical-footnote-definition-label">{number}.</div>
       <div className="cf-lexical-footnote-definition-body">
-        <MarkdownNestedEditor
-          className="cf-lexical-nested-editor cf-lexical-nested-editor--footnote"
+        <EmbeddedFieldEditor
+          className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--footnote"
           doc={parsed.body}
+          family="footnote-body"
           namespace={`coflat-footnote-${nodeKey}`}
           onTextChange={(nextBody) => updateRaw(serializeFootnoteDefinition(parsed.id, nextBody))}
         />
@@ -961,9 +831,10 @@ function CaptionedBlockRenderer({
         />
       ) : null}
       <div className="cf-lexical-block-body">
-        <MarkdownNestedEditor
-          className={`cf-lexical-nested-editor cf-lexical-nested-editor--${parsed.blockType}-body`}
+        <EmbeddedFieldEditor
+          className={`cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--${parsed.blockType}-body`}
           doc={parsed.bodyMarkdown}
+          family="block-body"
           namespace={`coflat-captioned-block-${nodeKey}`}
           onTextChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
             bodyMarkdown: nextBody,
@@ -976,12 +847,14 @@ function CaptionedBlockRenderer({
             className="cf-lexical-block-caption-label cf-lexical-structure-toggle"
             {...structureToggleProps(surfaceEditable, () => setEditingOpener(true))}
           >
-            {`${label}.`}
+            {label}
           </span>
           <div className="cf-lexical-block-caption-text">
-            <MarkdownNestedEditor
-              className="cf-lexical-nested-editor cf-lexical-nested-editor--caption"
+            <EmbeddedFieldEditor
+              activation="focus"
+              className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--caption"
               doc={parsed.titleMarkdown}
+              family="caption"
               namespace={`coflat-block-caption-${nodeKey}`}
               onTextChange={(nextTitle) => updateRaw(serializeFencedDivRaw(parsed, {
                 bodyMarkdown: parsed.bodyMarkdown,
@@ -1126,9 +999,10 @@ function FencedDivBlockRenderer({
   if (parsed.blockType === "blockquote") {
     return (
       <blockquote className="cf-lexical-blockquote-shell">
-        <MarkdownNestedEditor
-          className="cf-lexical-nested-editor cf-lexical-nested-editor--blockquote"
+        <EmbeddedFieldEditor
+          className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--blockquote"
           doc={parsed.bodyMarkdown}
+          family="block-body"
           namespace={`coflat-blockquote-${nodeKey}`}
           onTextChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
             bodyMarkdown: nextBody,
@@ -1161,9 +1035,11 @@ function FencedDivBlockRenderer({
         </span>
         {parsed.titleMarkdown ? (
           <div className="cf-lexical-block-title">
-            <MarkdownNestedEditor
-              className="cf-lexical-nested-editor cf-lexical-nested-editor--title"
+            <EmbeddedFieldEditor
+              activation="focus"
+              className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--title"
               doc={parsed.titleMarkdown}
+              family="title"
               namespace={`coflat-block-title-${nodeKey}`}
               onTextChange={(nextTitle) => updateRaw(serializeFencedDivRaw(parsed, {
                 bodyMarkdown: parsed.bodyMarkdown,
@@ -1174,9 +1050,10 @@ function FencedDivBlockRenderer({
         ) : null}
       </header>
       <div className="cf-lexical-block-body">
-        <MarkdownNestedEditor
-          className="cf-lexical-nested-editor cf-lexical-nested-editor--block-body"
+        <EmbeddedFieldEditor
+          className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--block-body"
           doc={parsed.bodyMarkdown}
+          family="block-body"
           namespace={`coflat-block-body-${nodeKey}`}
           onTextChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
             bodyMarkdown: nextBody,
