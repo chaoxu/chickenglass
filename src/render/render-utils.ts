@@ -8,6 +8,7 @@
 export * from "./node-collection";
 export * from "./widget-core";
 export * from "./source-widget";
+export * from "./reference-widget";
 export * from "./shell-widget";
 export * from "./decoration-core";
 export * from "./focus-state";

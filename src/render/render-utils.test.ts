@@ -5,6 +5,7 @@ describe("render-utils compatibility barrel", () => {
   it("re-exports representative widget and decoration helpers", () => {
     expect(renderUtils.RenderWidget).toBeDefined();
     expect(renderUtils.SimpleTextRenderWidget).toBeDefined();
+    expect(renderUtils.SimpleTextReferenceWidget).toBeDefined();
     expect(renderUtils.buildDecorations).toBeDefined();
     expect(renderUtils.pushWidgetDecoration).toBeDefined();
   });

@@ -1048,6 +1048,7 @@ describe("#376 — shared text widget primitives", () => {
     const renderUtils = await import("../render/render-utils");
 
     expect(renderUtils.SimpleTextRenderWidget).toBeDefined();
+    expect(renderUtils.SimpleTextReferenceWidget).toBeDefined();
     expect(renderUtils.MacroAwareWidget).toBeDefined();
   });
 
@@ -1059,8 +1060,8 @@ describe("#376 — shared text widget primitives", () => {
     const sidenotes = fileText("src/render/sidenote-render.ts");
     const frontmatterRender = fileText("src/editor/frontmatter-render.ts");
 
-    expect(citations).toContain("extends SimpleTextRenderWidget");
-    expect(crossrefs).toContain("extends SimpleTextRenderWidget");
+    expect(citations).toContain("extends SimpleTextReferenceWidget");
+    expect(crossrefs).toContain("extends SimpleTextReferenceWidget");
     expect(codeBlockDecorations).toContain("extends ShellWidget");
     expect(codeBlockDecorations).toContain("makeTextElement");
     expect(includeLabels).toContain("new SimpleTextRenderWidget");
