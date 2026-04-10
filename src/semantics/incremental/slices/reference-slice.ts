@@ -1,7 +1,8 @@
 import type { ReferenceSemantics } from "../../document";
 import {
-  replaceOverlappingRanges,
+  rangesOverlap,
   type PositionMapper,
+  type RangeLike,
 } from "../merge-utils";
 import type { DirtyWindow, SemanticDelta } from "../types";
 import type { StructuralWindowExtraction } from "../window-extractor";
@@ -71,6 +72,108 @@ function mapBracketedReferences(
   return changed ? mapped : values;
 }
 
+function sameReferenceSemantics(
+  left: ReferenceSemantics,
+  right: ReferenceSemantics,
+): boolean {
+  return (
+    left.from === right.from
+    && left.to === right.to
+    && left.bracketed === right.bracketed
+    && left.ids.length === right.ids.length
+    && left.ids.every((id, index) => id === right.ids[index])
+    && left.locators.length === right.locators.length
+    && left.locators.every((locator, index) => locator === right.locators[index])
+  );
+}
+
+function replacementWindow<T extends RangeLike>(
+  window: RangeLike,
+  replacements: readonly T[],
+): RangeLike {
+  if (replacements.length === 0) return window;
+  return {
+    from: Math.min(window.from, replacements[0].from),
+    to: Math.max(window.to, replacements[replacements.length - 1].to),
+  };
+}
+
+function reuseEquivalentReferences(
+  existing: readonly ReferenceSemantics[],
+  replacements: readonly ReferenceSemantics[],
+): readonly ReferenceSemantics[] {
+  if (existing.length === 0 || replacements.length === 0) {
+    return replacements;
+  }
+
+  const reused = new Set<number>();
+  let changed = false;
+  const normalized = replacements.map((replacement) => {
+    const matchIndex = existing.findIndex((value, index) => (
+      !reused.has(index) && sameReferenceSemantics(value, replacement)
+    ));
+    if (matchIndex === -1) {
+      return replacement;
+    }
+
+    reused.add(matchIndex);
+    changed = true;
+    return existing[matchIndex];
+  });
+
+  return changed ? normalized : replacements;
+}
+
+function replaceReferenceRanges(
+  values: readonly ReferenceSemantics[],
+  window: RangeLike,
+  replacements: readonly ReferenceSemantics[],
+): readonly ReferenceSemantics[] {
+  const targetWindow = replacementWindow(window, replacements);
+
+  let start = values.length;
+  for (let index = 0; index < values.length; index++) {
+    if (
+      rangesOverlap(values[index], targetWindow)
+      || values[index].from >= targetWindow.from
+    ) {
+      start = index;
+      break;
+    }
+  }
+
+  if (start === values.length) {
+    return replacements.length === 0 ? values : [...values, ...replacements];
+  }
+
+  let end = start;
+  while (end < values.length && rangesOverlap(values[end], targetWindow)) {
+    end++;
+  }
+
+  const nextReplacements = reuseEquivalentReferences(
+    values.slice(start, end),
+    replacements,
+  );
+
+  if (start === end && nextReplacements.length === 0) {
+    return values;
+  }
+
+  if (
+    end - start === nextReplacements.length
+    && nextReplacements.every((value, index) => value === values[start + index])
+  ) {
+    return values;
+  }
+
+  return [
+    ...values.slice(0, start),
+    ...nextReplacements,
+    ...values.slice(end),
+  ];
+}
+
 export function createReferenceSlice(
   bracketedReferences: readonly ReferenceSemantics[],
   narrativeReferences: readonly ReferenceSemantics[],
@@ -111,7 +214,7 @@ export function mergeReferenceSlice(
 
   for (const { window, structural: dirtyStructural } of dirtyExtractions) {
     const windowRange = { from: window.fromNew, to: window.toNew };
-    bracketedReferences = replaceOverlappingRanges(
+    bracketedReferences = replaceReferenceRanges(
       bracketedReferences,
       windowRange,
       dirtyStructural.bracketedRefs,
@@ -120,7 +223,7 @@ export function mergeReferenceSlice(
 
   if (narrativeExtractions) {
     for (const { window, narrativeRefs } of narrativeExtractions) {
-      narrativeReferences = replaceOverlappingRanges(
+      narrativeReferences = replaceReferenceRanges(
         narrativeReferences,
         window,
         narrativeRefs,
@@ -128,7 +231,7 @@ export function mergeReferenceSlice(
     }
   } else {
     for (const { window, structural: dirtyStructural } of dirtyExtractions) {
-      narrativeReferences = replaceOverlappingRanges(
+      narrativeReferences = replaceReferenceRanges(
         narrativeReferences,
         { from: window.fromNew, to: window.toNew },
         dirtyStructural.narrativeRefs,
