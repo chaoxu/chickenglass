@@ -1,13 +1,10 @@
-import { parser as baseParser } from "@lezer/markdown";
-import { markdownExtensions } from "../parser";
 import {
   analyzeDocumentArtifacts,
   type DocumentArtifacts,
-  stringTextSource,
   type DocumentSemantics,
+  stringTextSource,
 } from "./document";
-
-const markdownSemanticsParser = baseParser.configure(markdownExtensions);
+import { markdownSemanticsParser } from "./markdown-parser";
 
 /**
  * Parse markdown with the editor's extension set and return the canonical

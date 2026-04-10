@@ -15,6 +15,8 @@
  * find, filter) are pure Map/array lookups that complete in microseconds.
  */
 
+import type { DocumentSemantics } from "../semantics/document";
+import { extractFileIndex, removeFileFromIndex, updateFileInIndex } from "./extract";
 import type {
   FileIndex,
   IndexEntry,
@@ -23,7 +25,6 @@ import type {
   SourceTextQuery,
 } from "./query-api";
 import { findReferences, getAllLabels, queryIndex, querySourceText, resolveLabel } from "./query-api";
-import { extractFileIndex, updateFileInIndex, removeFileFromIndex } from "./extract";
 
 /**
  * Document indexer that runs extraction and queries on the main thread.
@@ -52,9 +53,13 @@ export class BackgroundIndexer {
    * Update or add a single file without disturbing other indexed files.
    * Returns the number of entries found in the file.
    */
-  async updateFile(file: string, content: string): Promise<number> {
+  async updateFile(
+    file: string,
+    content: string,
+    analysis?: DocumentSemantics,
+  ): Promise<number> {
     if (this.disposed) throw new Error(`Indexer.updateFile("${file}"): indexer is disposed`);
-    this.files = updateFileInIndex(this.files, file, content);
+    this.files = updateFileInIndex(this.files, file, content, analysis);
     return this.files.get(file)?.entries.length ?? 0;
   }
 
@@ -106,13 +111,17 @@ export class BackgroundIndexer {
    * Returns the total entry count in the rebuilt index.
    */
   async bulkUpdate(
-    files: ReadonlyArray<{ file: string; content: string }>,
+    files: ReadonlyArray<{
+      file: string;
+      content: string;
+      analysis?: DocumentSemantics;
+    }>,
   ): Promise<number> {
     if (this.disposed) throw new Error(`Indexer.bulkUpdate(${files.length} files): indexer is disposed`);
     const nextFiles = new Map<string, FileIndex>();
     let totalEntries = 0;
-    for (const { file, content } of files) {
-      const fileIndex = extractFileIndex(content, file);
+    for (const { file, content, analysis } of files) {
+      const fileIndex = extractFileIndex(content, file, analysis, this.files.get(file));
       nextFiles.set(file, fileIndex);
       totalEntries += fileIndex.entries.length;
     }

@@ -1,28 +1,29 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { BackgroundIndexer } from "../../index";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { dispatchFormatEvent } from "../../constants/events";
+import { BackgroundIndexer } from "../../index";
+import { documentAnalysisField } from "../../semantics/codemirror-source";
 import {
-  resolveDocumentLabelBacklinks,
   type DocumentLabelBacklinksResult,
+  resolveDocumentLabelBacklinks,
 } from "../../semantics/document-label-backlinks";
 import {
+  type DocumentLabelRenameTarget,
   prepareDocumentLabelRename,
   resolveDocumentLabelRenameTarget,
-  type DocumentLabelRenameTarget,
 } from "../../semantics/document-label-rename";
-import { toggleFpsMeter } from "../fps-meter";
+import type { PaletteCommand } from "../components/command-palette";
 import { batchExport, exportDocument } from "../export";
 import type { FileSystem } from "../file-manager";
+import { toggleFpsMeter } from "../fps-meter";
 import { basename, modKey } from "../lib/utils";
 import { dispatchIfConnected } from "../lib/view-dispatch";
-import type { PaletteCommand } from "../components/command-palette";
 import { collectSearchableMarkdownPaths } from "../search";
-import { useAutoSave } from "./use-auto-save";
-import type { UseDialogsReturn } from "./use-dialogs";
-import { useHotkeys, type HotkeyBinding } from "./use-hotkeys";
-import { useMenuEvents } from "./use-menu-events";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
+import { useAutoSave } from "./use-auto-save";
+import type { UseDialogsReturn } from "./use-dialogs";
+import { type HotkeyBinding, useHotkeys } from "./use-hotkeys";
+import { useMenuEvents } from "./use-menu-events";
 import type { SidebarLayoutController } from "./use-sidebar-layout";
 
 interface AppOverlayDeps {
@@ -151,6 +152,7 @@ export function useAppOverlays({
   const [searchSyncRevision, setSearchSyncRevision] = useState(0);
   const [searchVersion, setSearchVersion] = useState(0);
   const [labelBacklinks, setLabelBacklinks] = useState<DocumentLabelBacklinksResult | null>(null);
+  const activeSearchAnalysis = editor.editorState?.view?.state.field(documentAnalysisField, false);
   const activeSearchDoc = useMemo(
     () => (
       dialogs.searchOpen && editor.currentPath
@@ -202,6 +204,10 @@ export function useAppOverlays({
               path === editor.currentPath
                 ? activeSearchDoc
                 : await fs.readFile(path),
+            analysis:
+              path === editor.currentPath
+                ? activeSearchAnalysis
+                : undefined,
           })),
         );
 
@@ -232,7 +238,7 @@ export function useAppOverlays({
     }
 
     void indexer
-      .updateFile(editor.currentPath, activeSearchDoc)
+      .updateFile(editor.currentPath, activeSearchDoc, activeSearchAnalysis)
       .then(() => {
         setSearchVersion((version) => version + 1);
       })
