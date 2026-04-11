@@ -8,6 +8,8 @@ import {
   $getSelection,
   $isRangeSelection,
   $setSelection,
+  CLICK_COMMAND,
+  COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
   KEY_ARROW_LEFT_COMMAND,
   KEY_ARROW_RIGHT_COMMAND,
@@ -300,29 +302,27 @@ export function InlineMathSourcePlugin() {
         (event) => tryOpenAdjacentInlineMath(event, false, "start"),
         COMMAND_PRIORITY_LOW,
       ),
-      editor.registerRootListener((rootElement, previousRootElement) => {
-        const detach = (element: HTMLElement | null) => {
-          if (!element) {
-            return;
+      editor.registerCommand(
+        CLICK_COMMAND,
+        (event) => {
+          const rootElement = editor.getRootElement();
+          if (!rootElement) {
+            return false;
           }
-          element.removeEventListener("mousedown", handleMouseDown, true);
-          element.removeEventListener("click", handleClick, true);
-        };
 
-        const handleMouseDown = (event: MouseEvent) => {
           const anchor = resolveInlineMathAnchor(event.target);
           if (!anchor) {
-            return;
+            return false;
           }
 
           const ownerRoot = anchor.closest<HTMLElement>(".cf-lexical-editor");
           if (ownerRoot !== rootElement) {
-            return;
+            return false;
           }
 
           const nodeKey = anchor.dataset.coflatInlineMathKey;
           if (!nodeKey) {
-            return;
+            return false;
           }
 
           event.preventDefault();
@@ -339,33 +339,10 @@ export function InlineMathSourcePlugin() {
           }, { discrete: true });
 
           startEditing(nodeKey, "end", anchor);
-        };
-
-        const handleClick = (event: MouseEvent) => {
-          const anchor = resolveInlineMathAnchor(event.target);
-          if (!anchor) {
-            return;
-          }
-          const ownerRoot = anchor.closest<HTMLElement>(".cf-lexical-editor");
-          if (ownerRoot !== rootElement) {
-            return;
-          }
-          event.preventDefault();
-          event.stopPropagation();
-        };
-
-        detach(previousRootElement);
-
-        if (!rootElement) {
-          return;
-        }
-
-        rootElement.addEventListener("mousedown", handleMouseDown, true);
-        rootElement.addEventListener("click", handleClick, true);
-        return () => {
-          detach(rootElement);
-        };
-      }),
+          return true;
+        },
+        COMMAND_PRIORITY_HIGH,
+      ),
     );
   }, [editor, startEditing]);
 
