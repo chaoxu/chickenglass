@@ -21,6 +21,7 @@ import {
   COMMAND_PRIORITY_HIGH,
   COPY_COMMAND,
   CUT_COMMAND,
+  FORMAT_TEXT_COMMAND,
   PASTE_COMMAND,
   PASTE_TAG,
   type LexicalEditor,
@@ -45,7 +46,6 @@ import { FocusEdgePlugin } from "./focus-edge-plugin";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { HeadingChromePlugin } from "./heading-chrome-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
-import { InlineFormatSourcePlugin } from "./inline-format-source-plugin";
 import { InlineMathSourcePlugin } from "./inline-math-source-plugin";
 import { LinkSourcePlugin } from "./link-source-plugin";
 import {
@@ -68,12 +68,13 @@ import {
   scrollSourcePositionIntoView,
   SourcePositionPlugin,
 } from "./source-position-plugin";
-import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
+import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "../lexical-next";
 import type {
   MarkdownEditorHandle,
   MarkdownEditorSelection,
 } from "./markdown-editor-types";
+import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
 
 function getViewportFromRichSurface(root: HTMLElement): number {
   const headings = [...root.querySelectorAll<HTMLElement>(".cf-lexical-heading[data-coflat-heading-pos]")];
@@ -111,6 +112,65 @@ function EditableSyncPlugin({
   useEffect(() => {
     editor.setEditable(editable);
   }, [editable, editor]);
+
+  return null;
+}
+
+function isInlineTextFormatEvent(
+  detail: FormatEventDetail,
+): detail is Extract<FormatEventDetail, { type: "bold" | "code" | "highlight" | "italic" | "strikethrough" }> {
+  return detail.type === "bold"
+    || detail.type === "code"
+    || detail.type === "highlight"
+    || detail.type === "italic"
+    || detail.type === "strikethrough";
+}
+
+function editorOwnsActiveSelection(root: HTMLElement | null): boolean {
+  if (!root) {
+    return false;
+  }
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || !selection.anchorNode || !selection.focusNode) {
+    return false;
+  }
+
+  const activeElement = document.activeElement;
+  return root.contains(selection.anchorNode)
+    && root.contains(selection.focusNode)
+    && !!activeElement
+    && (activeElement === root || root.contains(activeElement));
+}
+
+function FormatEventPlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    const handleFormat = (event: Event) => {
+      const detail = (event as CustomEvent<FormatEventDetail>).detail;
+      if (!isInlineTextFormatEvent(detail)) {
+        return;
+      }
+
+      const root = editor.getRootElement();
+      if (!editorOwnsActiveSelection(root)) {
+        return;
+      }
+
+      editor.update(() => {
+        editor.dispatchCommand(FORMAT_TEXT_COMMAND, detail.type);
+      }, {
+        discrete: true,
+        tag: COFLAT_FORMAT_EVENT_TAG,
+      });
+    };
+
+    document.addEventListener(FORMAT_EVENT, handleFormat);
+    return () => {
+      document.removeEventListener(FORMAT_EVENT, handleFormat);
+    };
+  }, [editor]);
 
   return null;
 }
@@ -539,6 +599,7 @@ export function LexicalRichMarkdownEditor({
     if (
       requireUserEditFlag
       && !userEditPendingRef.current
+      && !tags.has(COFLAT_FORMAT_EVENT_TAG)
       && !tags.has(COFLAT_NESTED_EDIT_TAG)
     ) {
       return;
@@ -648,12 +709,13 @@ export function LexicalRichMarkdownEditor({
               <FocusEdgePlugin />
               {showCodeBlockChrome ? <CodeBlockChromePlugin /> : null}
               {showIncludeAffordances ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
+              {editable && shouldRepairBlankClickSelection ? <ClickCaretRepairPlugin enabled /> : null}
+              {editable ? <FormatEventPlugin /> : null}
               {editable ? <HistoryPlugin /> : null}
               <ListPlugin />
               <CheckListPlugin />
               <LinkPlugin />
               {editable ? <LinkSourcePlugin /> : null}
-              {editable ? <InlineFormatSourcePlugin /> : null}
               {editable ? <InlineMathSourcePlugin /> : null}
               {editable ? <MarkdownExpansionPlugin /> : null}
               {editable ? <BlockKeyboardAccessPlugin /> : null}

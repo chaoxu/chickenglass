@@ -27,6 +27,14 @@ export async function run(page) {
   await page.waitForTimeout(150);
   await page.keyboard.type(` ${TITLE_MARKER}`);
   await page.waitForTimeout(250);
+  await page.keyboard.press("Meta+A");
+  await page.waitForTimeout(120);
+  await page.evaluate(() => {
+    document.dispatchEvent(new CustomEvent("cf:format", {
+      detail: { type: "bold" },
+    }));
+  });
+  await page.waitForTimeout(250);
 
   const tableCell = page
     .locator(".cf-lexical-table-block tbody td .cf-lexical-paragraph")
@@ -47,8 +55,10 @@ export async function run(page) {
   await page.keyboard.type(` ${MATH_MARKER}`);
   await page.waitForTimeout(250);
 
+  await page.waitForFunction(() => window.__app?.isDirty?.() ?? false);
   const text = await readEditorText(page);
   const dirty = await page.evaluate(() => window.__app?.isDirty?.() ?? false);
+  const theoremTitleLine = text.match(/:::: \{#thm:hover-preview \.theorem\} .*/m)?.[0] ?? "";
 
   if (!dirty) {
     return { pass: false, message: "nested lexical edits did not mark the document dirty" };
@@ -62,7 +72,7 @@ export async function run(page) {
     return { pass: false, message: "table-cell edit did not flow back into canonical markdown" };
   }
 
-  if (!text.includes(TITLE_MARKER)) {
+  if (!/\*\*.*TitleEditNeedle\*\*/.test(theoremTitleLine)) {
     return { pass: false, message: "theorem-title edit did not flow back into canonical markdown" };
   }
 
@@ -72,6 +82,6 @@ export async function run(page) {
 
   return {
     pass: true,
-    message: "nested theorem, title, table, and math edits propagated into canonical markdown",
+    message: "nested theorem, title, table, math, and nested format commands propagated into canonical markdown",
   };
 }

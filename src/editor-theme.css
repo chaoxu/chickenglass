@@ -586,20 +586,6 @@
   background: transparent;
 }
 
-.cf-lexical-inline-format-source {
-  display: inline;
-  vertical-align: baseline;
-  max-width: min(100%, calc(100vw - 8px));
-  white-space: pre-wrap;
-  border: 0;
-  outline: none;
-  background: transparent;
-  box-shadow: none;
-  text-decoration-thickness: inherit;
-  caret-color: var(--cf-fg);
-  word-break: break-word;
-}
-
 .cf-lexical-reference {
   color: var(--cf-fg);
   text-decoration: underline;
