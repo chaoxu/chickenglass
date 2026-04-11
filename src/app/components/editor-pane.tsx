@@ -6,9 +6,9 @@ import { type MarkdownEditorHandle, type MarkdownEditorSelection } from "../../l
 import { computeLiveStats } from "../writing-stats";
 import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
 import type { HeadingEntry } from "../heading-ancestry";
-import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
-import { useHeadingIndex } from "../stores/heading-index-store";
-import type { EditorDocumentChange } from "../editor-doc-change";
+import { useEditorTelemetryStore } from "../../state/editor-telemetry-store";
+import { useHeadingIndex } from "../../state/heading-index-store";
+import type { EditorDocumentChange } from "../../lib/editor-doc-change";
 import type { EditorMode } from "../editor-mode";
 import { Breadcrumbs } from "./breadcrumbs";
 import { LexicalEditorSurface } from "./lexical-editor-surface";

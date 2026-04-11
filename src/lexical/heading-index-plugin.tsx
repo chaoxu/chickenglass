@@ -7,6 +7,7 @@ import {
   hasUnnumberedHeadingAttributes,
   type HeadingEntry,
 } from "../app/markdown/headings";
+import { useHeadingIndexStore } from "../state/heading-index-store";
 
 const TAG_TO_LEVEL: Record<string, number> = {
   h1: 1,

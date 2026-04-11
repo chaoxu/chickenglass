@@ -7,7 +7,7 @@
  */
 
 import { create } from "zustand";
-import type { HeadingEntry } from "../heading-ancestry";
+import type { HeadingEntry } from "../app/heading-ancestry";
 
 // ── State shape ─────────────────────────────────────────────────────────────
 

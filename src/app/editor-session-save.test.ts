@@ -4,7 +4,7 @@ import {
   createEditorDocumentText,
   editorDocumentToString,
   emptyEditorDocument,
-} from "./editor-doc-change";
+} from "../lib/editor-doc-change";
 import { applySaveAsResult } from "./editor-session-save";
 import { createEditorSessionState } from "./editor-session-model";
 

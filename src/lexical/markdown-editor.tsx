@@ -37,7 +37,7 @@ import {
   applyEditorDocumentChanges,
   createMinimalEditorDocumentChanges,
   type EditorDocumentChange,
-} from "../app/editor-doc-change";
+} from "../lib/editor-doc-change";
 import {
   focusSurface,
   type FocusOwner,
@@ -94,7 +94,7 @@ import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
 import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
-import { useDevSettings } from "../app/dev-settings";
+import { useDevSettings } from "../state/dev-settings";
 
 const clickRepairHandlers = new WeakMap<HTMLElement, EventListener>();
 

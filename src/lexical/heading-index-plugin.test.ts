@@ -3,7 +3,7 @@ import { $createHeadingNode, $isHeadingNode, HeadingNode } from "@lexical/rich-t
 import { $createParagraphNode, $createTextNode, $getRoot, ParagraphNode, TextNode } from "lexical";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { useHeadingIndexStore } from "../app/stores/heading-index-store";
+import { useHeadingIndexStore } from "../state/heading-index-store";
 import { $collectHeadingEntries } from "./heading-index-plugin";
 
 function createTestEditor() {

@@ -6,7 +6,7 @@ import { markdownEditorModes, type EditorMode } from "../editor-mode";
 import { computeDocStats, formatReadingTime, type DocStats } from "../writing-stats";
 import { subscribeFpsMeter, getFpsMeterSnapshot } from "../fps-meter";
 import { cn } from "../lib/utils";
-import { useEditorTelemetry } from "../stores/editor-telemetry-store";
+import { useEditorTelemetry } from "../../state/editor-telemetry-store";
 import { buildInfo } from "../build-info";
 import { useDevSettings, selectAnyDebugActive, type DevSettings } from "../dev-settings";
 import {

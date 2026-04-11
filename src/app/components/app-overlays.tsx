@@ -9,7 +9,7 @@ import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 import { useAppEditorController } from "../contexts/app-editor-context";
 import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import type { UseDialogsReturn } from "../hooks/use-dialogs";
-import { useEditorTelemetry } from "../stores/editor-telemetry-store";
+import { useEditorTelemetry } from "../../state/editor-telemetry-store";
 import type { AppOverlayController } from "../hooks/use-app-overlays";
 import type { UseUnsavedChangesDialogReturn } from "../hooks/use-unsaved-changes-dialog";
 import { getAppSearchMode } from "../search";

@@ -5,7 +5,7 @@ import {
   MAX_PERF_OPERATIONS,
   PERF_PANEL_REFRESH_EVENT,
 } from "../constants";
-import { useDevSettings } from "./dev-settings";
+import { useDevSettings } from "../state/dev-settings";
 
 export type PerfSource = "frontend" | "backend";
 

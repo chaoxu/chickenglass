@@ -9,7 +9,7 @@ import {
   type DocumentLabelBacklinksResult,
   type DocumentLabelRenameTarget,
 } from "../markdown/labels";
-import { useDevSettings } from "../dev-settings";
+import { useDevSettings } from "../../state/dev-settings";
 import { batchExport, exportDocument } from "../export";
 import type { FileSystem } from "../file-manager";
 import { basename, modKey } from "../lib/utils";

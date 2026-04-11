@@ -5,7 +5,7 @@ import {
   editorDocumentToString,
   emptyEditorDocument,
   type EditorDocumentText,
-} from "./editor-doc-change";
+} from "../lib/editor-doc-change";
 import type { FileSystem } from "./file-manager";
 import { MemoryFileSystem } from "./file-manager";
 import { createEditorSessionState, type SessionDocument } from "./editor-session-model";

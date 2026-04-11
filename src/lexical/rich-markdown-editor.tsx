@@ -43,7 +43,7 @@ import {
   applyEditorDocumentChanges,
   createMinimalEditorDocumentChanges,
   type EditorDocumentChange,
-} from "../app/editor-doc-change";
+} from "../lib/editor-doc-change";
 import {
   focusSurface,
   type FocusOwner,
@@ -99,7 +99,7 @@ import {
   SourcePositionPlugin,
 } from "./source-position-plugin";
 import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
-import { useDevSettings } from "../app/dev-settings";
+import { useDevSettings } from "../state/dev-settings";
 import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "../lexical-next";
 import type {
   MarkdownEditorHandle,

@@ -11,7 +11,7 @@
 import { createPortal } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { TreeView } from "@lexical/react/LexicalTreeView";
-import { useDevSettings } from "../app/dev-settings";
+import { useDevSettings } from "../state/dev-settings";
 import { useTreeViewPortalTarget } from "../app/components/debug-sidebar";
 
 export function TreeViewPlugin() {

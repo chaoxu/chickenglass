@@ -1,4 +1,4 @@
-import type { EditorDocumentChange } from "../app/editor-doc-change";
+import type { EditorDocumentChange } from "../lib/editor-doc-change";
 
 export interface MarkdownEditorSelection {
   readonly anchor: number;

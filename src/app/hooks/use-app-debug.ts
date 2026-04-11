@@ -13,7 +13,7 @@ import {
 } from "../perf";
 import { setFpsMeterEnabled, stopFpsMeter } from "../fps-meter";
 import { getInteractionLog, clearInteractionLog } from "../../lexical/interaction-trace";
-import { useDevSettings } from "../dev-settings";
+import { useDevSettings } from "../../state/dev-settings";
 import {
   debugEmitFileChangedCommand,
   debugGetNativeStateCommand,

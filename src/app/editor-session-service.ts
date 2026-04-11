@@ -20,7 +20,7 @@ import {
   editorDocumentToString,
   emptyEditorDocument,
   type EditorDocumentChange,
-} from "./editor-doc-change";
+} from "../lib/editor-doc-change";
 import {
   documentForPath,
   documentTextForPath,

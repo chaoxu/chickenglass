@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 
 import { headingEntriesEqual, type HeadingEntry } from "../app/markdown/headings";
-import { useHeadingIndexStore } from "../app/stores/heading-index-store";
+import { useHeadingIndexStore } from "../state/heading-index-store";
 import { syncHeadingChrome } from "./heading-chrome-plugin";
 import { $collectHeadingEntries, mergeHeadingDomPositions } from "./heading-index-plugin";
 
