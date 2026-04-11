@@ -1,16 +1,18 @@
 solve_verify = [
   "pnpm typecheck",
+  "pnpm lint",
   "pnpm test",
 ]
 
 review_verify = [
   "pnpm typecheck",
+  "pnpm lint",
   "pnpm test",
 ]
 
 premerge_verify = [
-  "pnpm lint",
   "pnpm typecheck",
+  "pnpm lint",
   "pnpm test",
 ]
 
