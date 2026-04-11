@@ -7,8 +7,6 @@
  * remain stable together under actual browser usage.
  */
 
-import { readFileSync } from "node:fs";
-
 import {
   assertEditorHealth,
   clickSearchDialogResult,
@@ -27,6 +25,7 @@ import {
   withRestoredFixture,
   withRuntimeIssueCapture,
   waitForAutocomplete,
+  resolveFixtureDocument,
 } from "../test-helpers.mjs";
 
 export const name = "author-journey";
@@ -34,10 +33,8 @@ export const name = "author-journey";
 const RAW_TOKEN = "raw_token_785_only_in_source";
 const TABLE_REF = '.cf-crossref[aria-label="[@tbl:hover]"]';
 const FIGURE_REF = '.cf-crossref[aria-label="[@fig:hover]"]';
-const ORIGINAL_REFERENCE_AUTOCOMPLETE = readFileSync(
-  new URL("../../fixtures/cogirth/reference-autocomplete.md", import.meta.url),
-  "utf8",
-);
+const ORIGINAL_REFERENCE_AUTOCOMPLETE =
+  resolveFixtureDocument("cogirth/reference-autocomplete.md").content;
 
 export async function run(page) {
   const { value, issues } = await withRuntimeIssueCapture(page, async () => {

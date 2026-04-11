@@ -7,8 +7,6 @@
  * autocomplete, and hover previews without losing runtime health.
  */
 
-import { readFileSync } from "node:fs";
-
 import {
   assertEditorHealth,
   clickSearchDialogResult,
@@ -25,6 +23,7 @@ import {
   switchToMode,
   waitForHoverPreviewState,
   waitForAutocomplete,
+  resolveFixtureDocument,
   withRestoredFixture,
   withRuntimeIssueCapture,
 } from "../test-helpers.mjs";
@@ -34,14 +33,9 @@ export const name = "session-soak";
 const CYCLES = 2;
 const TABLE_REF = '.cf-crossref[aria-label="[@tbl:hover]"]';
 const FIGURE_REF = '.cf-crossref[aria-label="[@fig:hover]"]';
-const ORIGINAL_MAIN2 = readFileSync(
-  new URL("../../fixtures/cogirth/main2.md", import.meta.url),
-  "utf8",
-);
-const ORIGINAL_REFERENCE_AUTOCOMPLETE = readFileSync(
-  new URL("../../fixtures/cogirth/reference-autocomplete.md", import.meta.url),
-  "utf8",
-);
+const ORIGINAL_MAIN2 = resolveFixtureDocument("cogirth/main2.md").content;
+const ORIGINAL_REFERENCE_AUTOCOMPLETE =
+  resolveFixtureDocument("cogirth/reference-autocomplete.md").content;
 
 export async function run(page) {
   const { value, issues } = await withRuntimeIssueCapture(page, async () => {
