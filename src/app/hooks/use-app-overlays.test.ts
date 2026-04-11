@@ -373,4 +373,19 @@ describe("useAppOverlays", () => {
     getCommand(result.current.commands, "view.toggle-selection-always-on").action();
     expect(useDevSettings.getState().selectionAlwaysOn).toBe(false);
   });
+
+  it("toggles treeView via the palette command", async () => {
+    const { props } = await createHookProps({});
+
+    const { result } = renderHook(
+      (hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps),
+      { initialProps: props },
+    );
+
+    expect(useDevSettings.getState().treeView).toBe(false);
+    getCommand(result.current.commands, "view.toggle-tree-view").action();
+    expect(useDevSettings.getState().treeView).toBe(true);
+    getCommand(result.current.commands, "view.toggle-tree-view").action();
+    expect(useDevSettings.getState().treeView).toBe(false);
+  });
 });
