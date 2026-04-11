@@ -12,10 +12,22 @@ import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
+import { copyToClipboard } from "@lexical/clipboard";
 import {
+  $getSelection,
+  $isNodeSelection,
+  $isRangeSelection,
+  COMMAND_PRIORITY_HIGH,
+  COPY_COMMAND,
+  CUT_COMMAND,
+  PASTE_COMMAND,
+  PASTE_TAG,
   $getRoot,
   CLEAR_HISTORY_COMMAND,
   type LexicalEditor,
+  isDOMNode,
+  isSelectionCapturedInDecoratorInput,
+  mergeRegister,
 } from "lexical";
 
 import {
@@ -25,6 +37,7 @@ import {
 import {
   LexicalRenderContextProvider,
   type LexicalRenderContextValue,
+  useLexicalRenderContext,
 } from "./render-context";
 import { BibliographySection } from "./bibliography-section";
 import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
@@ -35,6 +48,11 @@ import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugi
 import { InlineFormatSourcePlugin } from "./inline-format-source-plugin";
 import { InlineMathSourcePlugin } from "./inline-math-source-plugin";
 import { LinkSourcePlugin } from "./link-source-plugin";
+import {
+  getCoflatClipboardData,
+  getCoflatMarkdownFromDataTransfer,
+  insertCoflatMarkdownAtSelection,
+} from "./clipboard";
 import {
   coflatMarkdownNodes,
   coflatMarkdownTransformers,
@@ -188,6 +206,100 @@ function CodeHighlightPlugin() {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => registerCodeHighlighting(editor), [editor]);
+ 
+  return null;
+}
+
+function getClipboardEvent(
+  event: ClipboardEvent | KeyboardEvent | null,
+): ClipboardEvent | null {
+  return event && "clipboardData" in event
+    ? event as ClipboardEvent
+    : null;
+}
+
+function getPasteClipboardData(
+  event: ClipboardEvent | InputEvent | KeyboardEvent,
+): DataTransfer | null {
+  return "clipboardData" in event
+    ? event.clipboardData ?? null
+    : null;
+}
+
+function CoflatClipboardPlugin() {
+  const [editor] = useLexicalComposerContext();
+  const renderContext = useLexicalRenderContext();
+
+  useEffect(() => {
+    const getClipboardData = () => editor.getEditorState().read(() =>
+      getCoflatClipboardData(editor, renderContext, $getSelection())
+    );
+
+    return mergeRegister(
+      editor.registerCommand(COPY_COMMAND, (event) => {
+        const clipboardData = getClipboardData();
+        if (!clipboardData) {
+          return false;
+        }
+
+        void copyToClipboard(editor, getClipboardEvent(event), clipboardData);
+        return true;
+      }, COMMAND_PRIORITY_HIGH),
+      editor.registerCommand(CUT_COMMAND, (event) => {
+        const clipboardData = getClipboardData();
+        if (!clipboardData) {
+          return false;
+        }
+
+        void copyToClipboard(editor, getClipboardEvent(event), clipboardData).then((copied) => {
+          if (!copied) {
+            return;
+          }
+
+          editor.update(() => {
+            const selection = $getSelection();
+            if ($isRangeSelection(selection)) {
+              selection.removeText();
+              return;
+            }
+
+            if ($isNodeSelection(selection)) {
+              for (const node of selection.getNodes()) {
+                node.remove();
+              }
+            }
+          });
+        });
+
+        return true;
+      }, COMMAND_PRIORITY_HIGH),
+      editor.registerCommand(PASTE_COMMAND, (event) => {
+        const clipboardData = getPasteClipboardData(event);
+        if (!clipboardData) {
+          return false;
+        }
+
+        if (isDOMNode(event.target) && isSelectionCapturedInDecoratorInput(event.target)) {
+          return false;
+        }
+
+        const markdown = getCoflatMarkdownFromDataTransfer(clipboardData);
+        if (!markdown) {
+          return false;
+        }
+
+        const inserted = insertCoflatMarkdownAtSelection(editor, markdown, {
+          tag: PASTE_TAG,
+        });
+        if (!inserted) {
+          return false;
+        }
+
+        event.preventDefault();
+        return true;
+      }, COMMAND_PRIORITY_HIGH),
+    );
+  }, [editor, renderContext]);
 
   return null;
 }
@@ -418,6 +530,7 @@ export function LexicalRichMarkdownEditor({
               lastCommittedDocRef={lastCommittedDocRef}
               suppressedDocRef={suppressedDocRef}
             />
+            <CoflatClipboardPlugin />
             <RichTextPlugin
               contentEditable={(
                 <ContentEditable

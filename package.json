@@ -85,6 +85,7 @@
     "@floating-ui/dom": "^1.7.6",
     "@headless-tree/core": "^1.6.3",
     "@headless-tree/react": "^1.6.3",
+    "@lexical/clipboard": "^0.42.0",
     "@lexical/code": "^0.42.0",
     "@lexical/headless": "^0.42.0",
     "@lexical/link": "^0.42.0",
