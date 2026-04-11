@@ -156,7 +156,7 @@ export class TableWidget extends ShellWidget {
   private readonly renderSignature: string;
 
   constructor(
-    private readonly table: ParsedTable,
+    private table: ParsedTable,
     private readonly tableText: string,
     private tableFrom: number,
     private readonly macros: Record<string, string>,
@@ -318,6 +318,15 @@ export class TableWidget extends ShellWidget {
     this.syncToRoot(section, row, col, content, "commit");
   }
 
+  private applyLocalCellEdit(
+    cell: HTMLElement,
+    content: string,
+  ): void {
+    this.restoreRenderedCell(cell, content);
+    const { section, row, col } = this.getCellPosition(cell);
+    this.table = this.buildUpdatedTable(section, row, col, content);
+  }
+
   private syncContainerAttrs(container: HTMLElement): void {
     this.ensureSourceRange();
     container.className = "cf-table-widget";
@@ -375,6 +384,16 @@ export class TableWidget extends ShellWidget {
     const tableRange = this.currentTableRange();
     if (!rootView || !tableRange) return false;
 
+    return this.focusRootOutsideTableWithRange(rootView, tableRange, direction);
+  }
+
+  private focusRootOutsideTableWithRange(
+    rootView: EditorView,
+    tableRange: TableRange,
+    direction: "up" | "down",
+  ): boolean {
+    if (!rootView.dom.isConnected) return false;
+
     const doc = rootView.state.doc;
     const startLine = doc.lineAt(tableRange.from);
     const endLine = doc.lineAt(Math.max(tableRange.from, tableRange.to - 1));
@@ -385,13 +404,18 @@ export class TableWidget extends ShellWidget {
     clearActivePreviewCell();
     rootView.dispatch({
       selection: { anchor: targetPos },
-      scrollIntoView: true,
+      scrollIntoView: false,
       userEvent: "select",
     });
     rootView.focus();
     requestAnimationFrame(() => {
       if (!rootView.dom.isConnected) return;
       rootView.focus();
+      rootView.dispatch({
+        selection: { anchor: targetPos },
+        scrollIntoView: true,
+        userEvent: "select",
+      });
     });
     return true;
   }
@@ -423,16 +447,20 @@ export class TableWidget extends ShellWidget {
     ): void => {
       const targetSection = linearRow === 0 ? "header" : "body";
       const targetRow = linearRow === 0 ? 0 : linearRow - 1;
+      if (activeInlineEditor) {
+        const destroyed = destroyActiveInlineEditor();
+        if (!destroyed) return;
+        if (destroyed.owner === this) {
+          destroyed.owner.applyLocalCellEdit(destroyed.cell, destroyed.text);
+        } else {
+          destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+        }
+      }
+
       const target = tableEl.querySelector(
         `[data-section="${targetSection}"][data-row="${targetRow}"][data-col="${targetCol}"]`,
       ) as HTMLElement | null;
       if (target) {
-        if (activeInlineEditor) {
-          const destroyed = destroyActiveInlineEditor();
-          if (destroyed) {
-            destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
-          }
-        }
         openCellEditor(target, targetSection, targetRow, targetCol, { placeAtEnd });
       }
     };
@@ -633,10 +661,14 @@ export class TableWidget extends ShellWidget {
             event.preventDefault();
             const prevLinear = currentLinear - 1;
             if (prevLinear < 0) {
+              const rootView = this.editorView;
+              const tableRange = this.currentTableRange();
               const destroyed = destroyActiveInlineEditor();
               if (!destroyed) return true;
               destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
-              destroyed.owner.focusRootOutsideTable("up");
+              if (rootView && tableRange) {
+                destroyed.owner.focusRootOutsideTableWithRange(rootView, tableRange, "up");
+              }
               return true;
             }
             activateTargetCell(prevLinear, col);
@@ -647,10 +679,14 @@ export class TableWidget extends ShellWidget {
             event.preventDefault();
             const nextLinear = currentLinear + 1;
             if (nextLinear >= totalRows) {
+              const rootView = this.editorView;
+              const tableRange = this.currentTableRange();
               const destroyed = destroyActiveInlineEditor();
               if (!destroyed) return true;
               destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
-              destroyed.owner.focusRootOutsideTable("down");
+              if (rootView && tableRange) {
+                destroyed.owner.focusRootOutsideTableWithRange(rootView, tableRange, "down");
+              }
               return true;
             }
             activateTargetCell(nextLinear, col);
@@ -827,7 +863,11 @@ export class TableWidget extends ShellWidget {
           if (activeInlineEditor) {
             const destroyed = destroyActiveInlineEditor();
             if (destroyed) {
-              destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+              if (destroyed.owner === this) {
+                destroyed.owner.applyLocalCellEdit(destroyed.cell, destroyed.text);
+              } else {
+                destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+              }
             }
           }
           setActivePreviewCell(cell, this);
@@ -846,7 +886,11 @@ export class TableWidget extends ShellWidget {
         if (activeInlineEditor) {
           const destroyed = destroyActiveInlineEditor();
           if (destroyed) {
-            destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+            if (destroyed.owner === this) {
+              destroyed.owner.applyLocalCellEdit(destroyed.cell, destroyed.text);
+            } else {
+              destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+            }
           }
         }
 
