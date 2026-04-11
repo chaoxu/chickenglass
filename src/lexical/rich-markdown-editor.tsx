@@ -80,6 +80,7 @@ import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
 import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
 import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
 import { TableScrollShadowPlugin } from "./table-scroll-shadow-plugin";
+import { TableActionMenuPlugin } from "./table-action-menu-plugin";
 import { SlashPickerPlugin } from "./slash-picker-plugin";
 import {
   scrollSourcePositionIntoView,
@@ -824,6 +825,7 @@ export function LexicalRichMarkdownEditor({
                 <CheckListPlugin />
                 <LinkPlugin />
                 <TableScrollShadowPlugin />
+                {editable ? <TableActionMenuPlugin /> : null}
                 {editable ? <LinkSourcePlugin /> : <ClickableLinkPlugin />}
                 {editable ? <InlineMathSourcePlugin /> : null}
                 {editable ? <MarkdownExpansionPlugin /> : null}

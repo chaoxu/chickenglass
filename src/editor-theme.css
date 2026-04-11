@@ -1546,3 +1546,46 @@ div.cf-lexical-table-block > table {
   border: 1px solid var(--cf-border);
   border-radius: var(--cf-border-radius);
 }
+
+/* ── Table action menu ────────────────────────────────────────────── */
+
+.cf-table-action-menu {
+  min-width: 10rem;
+  padding: 0.25rem;
+  background: var(--cf-bg);
+  border: 1px solid var(--cf-border);
+  border-radius: 0.45rem;
+  box-shadow: 0 12px 24px -18px rgb(0 0 0 / 0.22), 0 10px 18px -18px rgb(0 0 0 / 0.18);
+  font-family: var(--cf-ui-font);
+  font-size: 0.85rem;
+}
+
+.cf-table-action-menu-item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  border: none;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--cf-fg);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cf-table-action-menu-item:hover {
+  background: color-mix(in srgb, var(--cf-bg) 88%, var(--cf-hover));
+}
+
+.cf-table-action-menu-item--destructive {
+  color: var(--cf-danger, #dc2626);
+}
+
+.cf-table-action-menu-separator {
+  height: 1px;
+  margin: 0.2rem 0.4rem;
+  background: var(--cf-border);
+}
