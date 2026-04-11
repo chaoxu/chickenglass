@@ -1,3 +1,5 @@
+/* color-mix() is used without fallbacks because all target engines support it:
+   Tauri v2 WebView2 (Chromium 111+), WebKit (Safari 16.2+), WebKitGTK 2.40+. */
 :root {
   --cf-ui-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --cf-content-font: KaTeX_Main, "Times New Roman", serif;
@@ -13,6 +15,7 @@
   --cf-mark-bg: rgba(255, 255, 0, 0.2);
   --cf-math-error-fg: #c00;
   --cf-math-error-bg: rgba(255, 0, 0, 0.05);
+  --cf-danger: #dc2626;
   --cf-accent: #18181b;
   --cf-accent-fg: #ffffff;
   --cf-link: var(--cf-fg);
@@ -55,6 +58,7 @@
   --cf-table-line-height: 1.5;
   --cf-embed-border: var(--cf-border);
   --cf-base-font-size: 16px;
+  --cf-code-font-size: 0.85em;
   --cf-line-height: 1.5;
   --cf-content-max-width: 800px;
   --cf-sidenote-width: 224px;
@@ -107,6 +111,7 @@
   --cf-accent-fg: #09090b;
   --cf-bg-overlay: rgba(10, 10, 10, 0.82);
   --cf-border-overlay: rgba(63, 63, 70, 0.6);
+  --cf-danger: #f87171;
   --cf-code-keyword: #fdba74;
   --cf-code-string: #86efac;
   --cf-code-number: #93c5fd;
@@ -261,7 +266,7 @@
 
 .cf-inline-code {
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-  font-size: 0.85em;
+  font-size: var(--cf-code-font-size, 0.85em);
   background: var(--cf-hover);
   padding: 0.15em 0.35em;
   border-radius: var(--cf-border-radius);
@@ -284,7 +289,7 @@
   background: transparent;
   overflow-x: auto;
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-  font-size: 0.85em;
+  font-size: var(--cf-code-font-size, 0.85em);
 }
 
 .cf-lexical-code-token--comment,
@@ -1496,7 +1501,7 @@ div.cf-lexical-table-block > table {
 
 .cf-hover-preview-body code {
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-  font-size: 0.85em;
+  font-size: var(--cf-code-font-size, 0.85em);
   background: var(--cf-hover);
   padding: 0.15em 0.35em;
   border-radius: var(--cf-border-radius);
@@ -1544,7 +1549,7 @@ div.cf-lexical-table-block > table {
   border-radius: var(--cf-border-radius);
   padding: 1px 4px;
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
-  font-size: 0.85em;
+  font-size: var(--cf-code-font-size, 0.85em);
 }
 
 .cf-link-rendered {
@@ -1601,7 +1606,7 @@ div.cf-lexical-table-block > table {
 }
 
 .cf-table-action-menu-item--destructive {
-  color: var(--cf-danger, #dc2626);
+  color: var(--cf-danger);
 }
 
 .cf-table-action-menu-separator {
