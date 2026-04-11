@@ -85,6 +85,7 @@ export interface ParsedDisplayMathBlock extends DisplayMathInfo {
 
 export interface MarkdownTable {
   readonly alignments: ReadonlyArray<"center" | "left" | "right" | null>;
+  readonly dividerCells?: ReadonlyArray<string>;
   readonly headers: ReadonlyArray<string>;
   readonly rows: ReadonlyArray<ReadonlyArray<string>>;
 }
@@ -927,6 +928,10 @@ function serializeTableRow(cells: readonly string[]): string {
   return `| ${cells.join(" | ")} |`;
 }
 
+function serializeTableDivider(cells: readonly string[]): string {
+  return `|${cells.join("|")}|`;
+}
+
 export function parseMarkdownTable(raw: string): MarkdownTable | null {
   const lines = raw.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   if (lines.length < 2) {
@@ -944,6 +949,7 @@ export function parseMarkdownTable(raw: string): MarkdownTable | null {
 
   return {
     alignments,
+    dividerCells: divider,
     headers,
     rows: rows.map((row) => {
       const normalized = [...row];
@@ -956,9 +962,31 @@ export function parseMarkdownTable(raw: string): MarkdownTable | null {
 }
 
 export function serializeMarkdownTable(table: MarkdownTable): string {
+  const columnCount = Math.max(
+    1,
+    table.headers.length,
+    table.alignments.length,
+    table.dividerCells?.length ?? 0,
+    ...table.rows.map((row) => row.length),
+  );
+  const dividerCells = Array.from({ length: columnCount }, (_, index) =>
+    table.dividerCells?.[index]?.trim() || formatAlignment(table.alignments[index] ?? null)
+  );
+  const headers = [...table.headers];
+  while (headers.length < columnCount) {
+    headers.push("");
+  }
+  const rows = table.rows.map((row) => {
+    const normalized = [...row];
+    while (normalized.length < columnCount) {
+      normalized.push("");
+    }
+    return normalized.slice(0, columnCount);
+  });
+
   return [
-    serializeTableRow(table.headers),
-    serializeTableRow(table.alignments.map(formatAlignment)),
-    ...table.rows.map((row) => serializeTableRow(row)),
+    serializeTableRow(headers.slice(0, columnCount)),
+    serializeTableDivider(dividerCells),
+    ...rows.map((row) => serializeTableRow(row)),
   ].join("\n");
 }

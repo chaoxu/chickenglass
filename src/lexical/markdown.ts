@@ -8,12 +8,16 @@ import {
   type ElementTransformer,
   type MultilineElementTransformer,
   type TextMatchTransformer,
+  type Transformer,
+  TEXT_FORMAT_TRANSFORMERS,
+  TEXT_MATCH_TRANSFORMERS,
   $convertFromMarkdownString,
   $convertToMarkdownString,
   TRANSFORMERS,
 } from "@lexical/markdown";
 import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import {
+  $createParagraphNode,
   type EditorThemeClasses,
   type ElementNode,
   type Klass,
@@ -40,6 +44,10 @@ import {
 import { $createInlineMathNode, $isInlineMathNode, InlineMathNode } from "./nodes/inline-math-node";
 import { $createReferenceNode, $isReferenceNode, ReferenceNode } from "./nodes/reference-node";
 import { $createRawBlockNode, $isRawBlockNode, type RawBlockVariant, RawBlockNode } from "./nodes/raw-block-node";
+import { $createTableCellNode, $isTableCellNode, TableCellNode } from "./nodes/table-cell-node";
+import { $createTableNode, $isTableNode, type TableColumnAlignment, TableNode } from "./nodes/table-node";
+import { $createTableRowNode, $isTableRowNode, TableRowNode } from "./nodes/table-row-node";
+import { type MarkdownTable, parseMarkdownTable, serializeMarkdownTable } from "./rendering";
 
 const FRONTMATTER_DELIMITER = /^---\s*$/;
 const FENCED_DIV_START = /^\s*(:{3,})(.*)$/;
@@ -223,26 +231,25 @@ const footnoteDefinitionTransformer = createRawBlockTransformer(
 );
 footnoteDefinitionTransformer.regExpStart = FOOTNOTE_DEFINITION_START;
 
-const tableBlockTransformer = createRawBlockTransformer(
-  "table",
-  (lines, startLineIndex) => {
-    const startLine = lines[startLineIndex] ?? "";
-    const dividerLine = lines[startLineIndex + 1] ?? "";
-    if (!/\|/.test(startLine) || !/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(dividerLine)) {
-      return -1;
+function matchTableEnd(
+  lines: readonly string[],
+  startLineIndex: number,
+): number {
+  const startLine = lines[startLineIndex] ?? "";
+  const dividerLine = lines[startLineIndex + 1] ?? "";
+  if (!/\|/.test(startLine) || !/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(dividerLine)) {
+    return -1;
+  }
+  let endLineIndex = startLineIndex + 1;
+  for (let lineIndex = startLineIndex + 2; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex] ?? "";
+    if (!/\|/.test(line) || /^\s*$/.test(line)) {
+      break;
     }
-    let endLineIndex = startLineIndex + 1;
-    for (let lineIndex = startLineIndex + 2; lineIndex < lines.length; lineIndex += 1) {
-      const line = lines[lineIndex] ?? "";
-      if (!/\|/.test(line) || /^\s*$/.test(line)) {
-        break;
-      }
-      endLineIndex = lineIndex;
-    }
-    return endLineIndex;
-  },
-);
-tableBlockTransformer.regExpStart = /^\s*\|.*$/;
+    endLineIndex = lineIndex;
+  }
+  return endLineIndex;
+}
 
 function createInlineMathTransformer(
   delimiter: "dollar" | "paren",
@@ -353,6 +360,148 @@ const inlineFormatSourceTransformer = createInlineTokenTransformer(
   NEVER_INLINE_FORMAT_SOURCE_SHORTCUT,
 );
 
+const tableCellMarkdownTransformers = [
+  ...TEXT_FORMAT_TRANSFORMERS,
+  inlineMathDollarTransformer,
+  inlineMathParenTransformer,
+  inlineImageTransformer,
+  inlineFormatSourceTransformer,
+  bracketedReferenceTransformer,
+  footnoteReferenceTransformer,
+  narrativeReferenceTransformer,
+  ...TEXT_MATCH_TRANSFORMERS,
+] satisfies readonly Transformer[];
+
+function writeTableCellMarkdown(cellNode: TableCellNode, markdown: string): void {
+  $convertFromMarkdownString(markdown, [...tableCellMarkdownTransformers], cellNode, true);
+  if (cellNode.getChildrenSize() === 0) {
+    cellNode.append($createParagraphNode());
+  }
+}
+
+function readTableCellMarkdown(cellNode: TableCellNode): string {
+  return $convertToMarkdownString([...tableCellMarkdownTransformers], cellNode, true)
+    .replace(/\n+/g, " ");
+}
+
+function normalizeTableAlignments(
+  alignments: readonly TableColumnAlignment[],
+  columnCount: number,
+): TableColumnAlignment[] {
+  const next = [...alignments.slice(0, columnCount)];
+  while (next.length < columnCount) {
+    next.push(null);
+  }
+  return next;
+}
+
+function readTableRowMarkdown(
+  rowNode: TableRowNode,
+  columnCount: number,
+): string[] {
+  const cells = rowNode
+    .getChildren()
+    .filter($isTableCellNode)
+    .slice(0, columnCount)
+    .map((cellNode) => readTableCellMarkdown(cellNode));
+  while (cells.length < columnCount) {
+    cells.push("");
+  }
+  return cells;
+}
+
+function buildTableNode(table: MarkdownTable): TableNode {
+  const tableNode = $createTableNode(table.alignments, table.dividerCells ?? []);
+  const headerRow = $createTableRowNode();
+  for (const headerCell of table.headers) {
+    const cellNode = $createTableCellNode(true);
+    writeTableCellMarkdown(cellNode, headerCell);
+    headerRow.append(cellNode);
+  }
+  tableNode.append(headerRow);
+
+  for (const row of table.rows) {
+    const rowNode = $createTableRowNode();
+    for (const cell of row) {
+      const cellNode = $createTableCellNode(false);
+      writeTableCellMarkdown(cellNode, cell);
+      rowNode.append(cellNode);
+    }
+    tableNode.append(rowNode);
+  }
+
+  return tableNode;
+}
+
+function extractMarkdownTable(node: TableNode): MarkdownTable {
+  const rowNodes = node.getChildren().filter($isTableRowNode);
+  const columnCount = Math.max(
+    1,
+    node.getAlignments().length,
+    ...rowNodes.map((rowNode) =>
+      rowNode.getChildren().filter($isTableCellNode).length
+    ),
+  );
+  const headerRow = rowNodes[0] ?? null;
+
+  return {
+    alignments: normalizeTableAlignments(node.getAlignments(), columnCount),
+    dividerCells: node.getDividerCells(),
+    headers: headerRow ? readTableRowMarkdown(headerRow, columnCount) : Array(columnCount).fill(""),
+    rows: rowNodes.slice(headerRow ? 1 : 0).map((rowNode) => readTableRowMarkdown(rowNode, columnCount)),
+  };
+}
+
+export function createTableNodeFromMarkdown(raw: string): TableNode | null {
+  const parsed = parseMarkdownTable(raw);
+  return parsed ? buildTableNode(parsed) : null;
+}
+
+const tableBlockTransformer: MultilineElementTransformer = {
+  dependencies: [TableNode, TableRowNode, TableCellNode],
+  export(node) {
+    if ($isTableNode(node)) {
+      return serializeMarkdownTable(extractMarkdownTable(node));
+    }
+    return null;
+  },
+  handleImportAfterStartMatch({
+    lines,
+    rootNode,
+    startLineIndex,
+  }) {
+    const endLineIndex = matchTableEnd(lines, startLineIndex);
+    if (endLineIndex < 0) {
+      return null;
+    }
+    const tableNode = createTableNodeFromMarkdown(
+      joinRawLines(lines, startLineIndex, endLineIndex),
+    );
+    if (!tableNode) {
+      return null;
+    }
+    rootNode.append(tableNode);
+    return [true, endLineIndex];
+  },
+  regExpStart: /^\s*\|.*$/,
+  replace(rootNode, _children, startMatch, endMatch, linesInBetween) {
+    const fragments = [startMatch[0]];
+    if (linesInBetween) {
+      fragments.push(...linesInBetween);
+    }
+    if (endMatch && endMatch[0] !== startMatch[0]) {
+      fragments.push(endMatch[0]);
+    }
+    const tableNode = createTableNodeFromMarkdown(fragments.join("\n"));
+    if (!tableNode) {
+      return false;
+    }
+    rootNode.append(tableNode);
+    return true;
+  },
+  type: "multiline-element",
+};
+
 export const coflatMarkdownNodes = [
   HeadingNode,
   QuoteNode,
@@ -367,6 +516,9 @@ export const coflatMarkdownNodes = [
   ReferenceNode,
   FootnoteReferenceNode,
   RawBlockNode,
+  TableNode,
+  TableRowNode,
+  TableCellNode,
 ] as const;
 
 const codeHighlightTokens = [

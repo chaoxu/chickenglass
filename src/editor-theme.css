@@ -690,14 +690,6 @@
   white-space: pre-wrap;
 }
 
-.cf-lexical-nested-editor--table-cell {
-  font-size: 0.96rem;
-}
-
-.cf-lexical-nested-editor--table-cell :is(.cf-lexical-paragraph, .cf-lexical-heading) {
-  margin: 0;
-}
-
 .cf-lexical-title-shell {
   margin: 0 0 1em;
   padding-bottom: 0.15em;
@@ -1046,7 +1038,7 @@
   background: #fff;
 }
 
-.cf-lexical-table-block table {
+table.cf-lexical-table-block {
   width: auto;
   max-width: 100%;
   margin-inline: auto;
@@ -1068,6 +1060,10 @@
   font-family: inherit;
   font-weight: 600;
   border-bottom: 2px solid var(--cf-table-header-border);
+}
+
+.cf-lexical-table-block :is(th, td) > :is(.cf-lexical-paragraph, .cf-lexical-heading) {
+  margin: 0;
 }
 
 .cf-lexical-footnote-definition {

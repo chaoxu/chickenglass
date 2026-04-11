@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   $createParagraphNode,
+  $getNodeByKey,
+  $isElementNode,
   $getSelection,
   $isRangeSelection,
   COMMAND_PRIORITY_HIGH,
@@ -14,6 +16,10 @@ import {
 } from "lexical";
 
 import { $createRawBlockNode, type RawBlockVariant } from "./nodes/raw-block-node";
+import { $isTableCellNode } from "./nodes/table-cell-node";
+import { $isTableNode } from "./nodes/table-node";
+import { $isTableRowNode } from "./nodes/table-row-node";
+import { createTableNodeFromMarkdown } from "./markdown";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
 const FENCED_DIV_START_RE = /^\s*(:{3,})(.*)$/;
@@ -35,7 +41,7 @@ interface ExpansionCandidate {
   readonly focusTarget: InsertFocusTarget;
   readonly raw: string;
   readonly replaceNodes: readonly LexicalNode[];
-  readonly variant: RawBlockVariant;
+  readonly variant: RawBlockVariant | "table";
 }
 
 function getSelectionParagraph(selection: RangeSelection): ElementNode | null {
@@ -166,8 +172,44 @@ function ensureTrailingParagraph(insertedNode: LexicalNode, afterNode: LexicalNo
   insertedNode.insertAfter($createParagraphNode());
 }
 
+function focusFirstTableCell(editor: LexicalEditor, key: NodeKey): void {
+  editor.update(() => {
+    const node = $getNodeByKey(key);
+    if (!$isTableNode(node)) {
+      return;
+    }
+
+    const rowNodes = node.getChildren().filter($isTableRowNode);
+    const targetRow = rowNodes[1] ?? rowNodes[0] ?? null;
+    const targetCell = targetRow
+      ?.getChildren()
+      .find($isTableCellNode);
+
+    if (!targetCell) {
+      return;
+    }
+
+    const firstChild = targetCell.getFirstChild();
+    if ($isElementNode(firstChild)) {
+      firstChild.selectStart();
+      return;
+    }
+
+    targetCell.selectStart();
+  }, {
+    discrete: true,
+    tag: COFLAT_NESTED_EDIT_TAG,
+  });
+  editor.focus();
+}
+
 function activateInsertedBlock(editor: LexicalEditor, key: NodeKey, focusTarget: InsertFocusTarget): void {
   requestAnimationFrame(() => {
+    if (focusTarget === "table-cell") {
+      focusFirstTableCell(editor, key);
+      return;
+    }
+
     const element = editor.getElementByKey(key);
     if (!element) {
       return;
@@ -179,7 +221,6 @@ function activateInsertedBlock(editor: LexicalEditor, key: NodeKey, focusTarget:
       "footnote-body": ".cf-lexical-footnote-definition-body [contenteditable='true']",
       "frontmatter": ".cf-lexical-structure-toggle--frontmatter",
       "include-path": ".cf-lexical-structure-toggle--include",
-      "table-cell": ".cf-lexical-table-block tbody [contenteditable='true'], .cf-lexical-table-block thead [contenteditable='true']",
     }[focusTarget];
     const target = element.querySelector<HTMLElement>(selector);
     if (!target) {
@@ -194,14 +235,19 @@ function activateInsertedBlock(editor: LexicalEditor, key: NodeKey, focusTarget:
 function insertExpandedBlock(
   editor: LexicalEditor,
   candidate: ExpansionCandidate,
-): NodeKey {
-  let insertedNodeKey = "";
+): NodeKey | null {
+  let insertedNodeKey: NodeKey | null = null;
 
   editor.update(() => {
     const firstNode = candidate.replaceNodes[0];
     const lastNode = candidate.replaceNodes[candidate.replaceNodes.length - 1];
     const afterNode = lastNode?.getNextSibling() ?? null;
-    const insertedNode = $createRawBlockNode(candidate.variant, candidate.raw);
+    const insertedNode = candidate.variant === "table"
+      ? createTableNodeFromMarkdown(candidate.raw)
+      : $createRawBlockNode(candidate.variant, candidate.raw);
+    if (!insertedNode) {
+      return;
+    }
     insertedNodeKey = insertedNode.getKey();
 
     firstNode.insertBefore(insertedNode);
@@ -237,7 +283,9 @@ export function MarkdownExpansionPlugin() {
 
       (event as KeyboardEvent | null)?.preventDefault();
       const insertedNodeKey = insertExpandedBlock(editor, candidate);
-      activateInsertedBlock(editor, insertedNodeKey, candidate.focusTarget);
+      if (insertedNodeKey) {
+        activateInsertedBlock(editor, insertedNodeKey, candidate.focusTarget);
+      }
       return true;
     },
     COMMAND_PRIORITY_HIGH,

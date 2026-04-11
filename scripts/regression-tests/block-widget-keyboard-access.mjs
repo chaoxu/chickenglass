@@ -95,14 +95,17 @@ export async function run(page) {
   await page.waitForTimeout(180);
 
   const tableEntry = await page.evaluate(() => ({
-    activeInsideTable: Boolean(
-      document.activeElement?.closest(".cf-lexical-table-block"),
-    ),
-    activeText: document.activeElement?.textContent ?? "",
+    activeInsideTable: (() => {
+      const selection = window.getSelection();
+      const anchorElement = selection?.anchorNode instanceof Element
+        ? selection.anchorNode
+        : selection?.anchorNode?.parentElement;
+      return Boolean(anchorElement?.closest(".cf-lexical-table-block"));
+    })(),
   }));
 
   if (!tableEntry.activeInsideTable) {
-    return { pass: false, message: "ArrowDown did not enter a table cell editor" };
+    return { pass: false, message: "ArrowDown did not move the caret into the native table surface" };
   }
 
   await page.keyboard.type(TABLE_MARKER);

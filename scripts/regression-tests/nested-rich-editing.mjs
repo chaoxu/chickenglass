@@ -29,7 +29,7 @@ export async function run(page) {
   await page.waitForTimeout(250);
 
   const tableCell = page
-    .locator(".cf-lexical-table-block tbody td .cf-lexical-nested-editor--table-cell")
+    .locator(".cf-lexical-table-block tbody td .cf-lexical-paragraph")
     .first();
   await tableCell.click();
   await page.keyboard.type(` ${CELL_MARKER}`);

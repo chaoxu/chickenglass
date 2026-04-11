@@ -6,100 +6,77 @@ function same(left, right) {
   return left === right;
 }
 
+function getContentCell(page, label) {
+  return page
+    .locator(`.cf-lexical-table-block tr:has-text("${label}")`)
+    .first()
+    .locator("td")
+    .nth(1);
+}
+
+async function readCell(page, label) {
+  const cell = getContentCell(page, label);
+  if (await cell.count() === 0) {
+    return null;
+  }
+
+  return cell.evaluate((element) => {
+    const normalizeText = (value) => value?.replace(/\s+/g, " ").trim() ?? "";
+    const selection = window.getSelection();
+    const anchorElement = selection?.anchorNode instanceof Element
+      ? selection.anchorNode
+      : selection?.anchorNode?.parentElement;
+    const katex = element.querySelector(".katex");
+    const citation = element.querySelector(".cf-citation");
+    const link = element.querySelector("a.cf-lexical-link");
+    const code = element.querySelector(".cf-inline-code");
+
+    return {
+      citationCount: element.querySelectorAll(".cf-citation").length,
+      citationText: normalizeText(citation?.textContent),
+      codeCount: element.querySelectorAll(".cf-inline-code").length,
+      codeFontFamily: code ? getComputedStyle(code).fontFamily : null,
+      highlightCount: element.querySelectorAll(".cf-highlight").length,
+      hasSelection: Boolean(anchorElement && element.contains(anchorElement)),
+      katexCount: element.querySelectorAll(".katex").length,
+      katexFontSize: katex ? getComputedStyle(katex).fontSize : null,
+      linkCount: element.querySelectorAll("a.cf-lexical-link").length,
+      linkText: normalizeText(link?.textContent),
+      text: normalizeText(element.innerText),
+    };
+  });
+}
+
+async function captureParity(page, label) {
+  const before = await readCell(page, label);
+  if (!before) {
+    return null;
+  }
+  await getContentCell(page, label).click();
+  await page.waitForTimeout(140);
+  const after = await readCell(page, label);
+  return {
+    activated: Boolean(after?.hasSelection),
+    after,
+    before,
+  };
+}
+
 export async function run(page) {
   await openRegressionDocument(page, "index.md", { mode: "lexical" });
 
-  const state = await page.evaluate(async () => {
-    const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
-    const normalizeText = (value) => value?.replace(/\s+/g, " ").trim() ?? "";
-
-    const findContentCell = (label) => {
-      const row = [...document.querySelectorAll(".cf-lexical-table-block tr")].find((candidate) => {
-        const firstCell = candidate.querySelector("th, td");
-        return normalizeText(firstCell?.textContent) === label;
-      });
-      if (!row) {
-        return null;
-      }
-      return row.querySelectorAll("td")[1] ?? null;
-    };
-
-    const readCell = (label) => {
-      const cell = findContentCell(label);
-      if (!(cell instanceof HTMLElement)) {
-        return null;
-      }
-      const katex = cell.querySelector(".katex");
-      const citation = cell.querySelector(".cf-citation");
-      const link = cell.querySelector("a.cf-lexical-link");
-      const code = cell.querySelector(".cf-inline-code");
-      return {
-        citationCount: cell.querySelectorAll(".cf-citation").length,
-        citationText: normalizeText(citation?.textContent),
-        codeCount: cell.querySelectorAll(".cf-inline-code").length,
-        codeFontFamily: code ? getComputedStyle(code).fontFamily : null,
-        editableCount: cell.querySelectorAll("[contenteditable='true']").length,
-        highlightCount: cell.querySelectorAll(".cf-highlight").length,
-        katexCount: cell.querySelectorAll(".katex").length,
-        katexFontSize: katex ? getComputedStyle(katex).fontSize : null,
-        linkCount: cell.querySelectorAll("a.cf-lexical-link").length,
-        linkText: normalizeText(link?.textContent),
-        text: normalizeText(cell.innerText),
-      };
-    };
-
-    const activateCell = async (label) => {
-      const cell = findContentCell(label);
-      if (!(cell instanceof HTMLElement)) {
-        return false;
-      }
-      const shell = cell.querySelector(".cf-embedded-field-shell") ?? cell;
-      shell.dispatchEvent(new MouseEvent("mousedown", {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      }));
-      shell.dispatchEvent(new MouseEvent("mouseup", {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      }));
-      shell.dispatchEvent(new MouseEvent("click", {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      }));
-      await sleep(140);
-      return true;
-    };
-
-    const captureParity = async (label) => {
-      const before = readCell(label);
-      if (!before) {
-        return null;
-      }
-      const activated = await activateCell(label);
-      const after = readCell(label);
-      return {
-        activated,
-        after,
-        before,
-      };
-    };
-
-    return {
-      citation: await captureParity("citation + highlight"),
-      code: await captureParity("code + link"),
-      math: await captureParity("emphasis + math"),
-    };
-  });
+  const state = {
+    citation: await captureParity(page, "citation + highlight"),
+    code: await captureParity(page, "code + link"),
+    math: await captureParity(page, "emphasis + math"),
+  };
 
   if (!state.math || !state.citation || !state.code) {
     return { pass: false, message: "rich table parity fixture did not render the expected rows" };
   }
 
-  if (!state.math.activated || (state.math.after?.editableCount ?? 0) === 0) {
-    return { pass: false, message: "math table cell did not activate the nested Lexical surface" };
+  if (!state.math.activated || !state.math.after?.hasSelection) {
+    return { pass: false, message: "math table cell did not place the caret inside the native table cell" };
   }
   if (!same(state.math.before.katexCount, 1) || !same(state.math.after?.katexCount, 1)) {
     return { pass: false, message: "math table cell lost KaTeX rendering when activated" };
@@ -111,8 +88,8 @@ export async function run(page) {
     return { pass: false, message: "math table cell changed visible content when activated" };
   }
 
-  if (!state.citation.activated || (state.citation.after?.editableCount ?? 0) === 0) {
-    return { pass: false, message: "citation table cell did not activate the nested Lexical surface" };
+  if (!state.citation.activated || !state.citation.after?.hasSelection) {
+    return { pass: false, message: "citation table cell did not place the caret inside the native table cell" };
   }
   if (!same(state.citation.before.citationCount, 1) || !same(state.citation.after?.citationCount, 1)) {
     return { pass: false, message: "citation table cell lost citation rendering when activated" };
@@ -127,8 +104,8 @@ export async function run(page) {
     return { pass: false, message: "citation table cell lost the highlight segment when activated" };
   }
 
-  if (!state.code.activated || (state.code.after?.editableCount ?? 0) === 0) {
-    return { pass: false, message: "code/link table cell did not activate the nested Lexical surface" };
+  if (!state.code.activated || !state.code.after?.hasSelection) {
+    return { pass: false, message: "code/link table cell did not place the caret inside the native table cell" };
   }
   if (!same(state.code.before.codeCount, 1) || !same(state.code.after?.codeCount, 1)) {
     return { pass: false, message: "code/link table cell lost inline code styling when activated" };

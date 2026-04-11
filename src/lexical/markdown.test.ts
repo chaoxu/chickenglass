@@ -8,6 +8,8 @@ import {
   roundTripMarkdown,
   setLexicalMarkdown,
 } from "./markdown";
+import { $isRawBlockNode } from "./nodes/raw-block-node";
+import { $isTableNode } from "./nodes/table-node";
 
 describe("coflat lexical markdown", () => {
   it("round-trips frontmatter macros without doubling backslashes", () => {
@@ -99,5 +101,25 @@ describe("coflat lexical markdown", () => {
     } finally {
       unregister();
     }
+  });
+
+  it("imports markdown tables as native table nodes instead of raw blocks", () => {
+    const editor = createHeadlessCoflatEditor();
+    const markdown = [
+      "| Feature | Value |",
+      "|:--------|------:|",
+      "| `code` | [link](https://example.com) |",
+      "| $x$ | [@ref] |",
+    ].join("\n");
+
+    setLexicalMarkdown(editor, markdown);
+
+    editor.getEditorState().read(() => {
+      const firstChild = $getRoot().getFirstChild();
+      expect($isTableNode(firstChild)).toBe(true);
+      expect($isRawBlockNode(firstChild)).toBe(false);
+    });
+
+    expect(getLexicalMarkdown(editor)).toBe(markdown);
   });
 });

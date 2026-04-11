@@ -14,6 +14,7 @@ const DISPLAY_MATH_DOLLAR_END = /^\s*\$\$(?:\s+\{#[^}]+\})?\s*$/;
 const DISPLAY_MATH_BRACKET_END = /^\s*\\\](?:\s+\{#[^}]+\})?\s*$/;
 const IMAGE_BLOCK_START = /^\s*!\[[^\]\n]*\]\([^)]+\)\s*$/;
 const FOOTNOTE_DEFINITION_START = /^\[\^[^\]]+\]:\s*(.*)$/;
+const SOURCE_BLOCK_SELECTOR = "[data-coflat-raw-block='true'], [data-coflat-table-block='true']";
 
 function computeLineOffsets(lines: readonly string[]): number[] {
   const offsets: number[] = [];
@@ -47,7 +48,7 @@ function matchDisplayMathEnd(
   return -1;
 }
 
-function collectRawBlockStarts(doc: string): number[] {
+function collectSourceBlockStarts(doc: string): number[] {
   const lines = doc.split("\n");
   const offsets = computeLineOffsets(lines);
   const starts: number[] = [];
@@ -138,13 +139,13 @@ function collectRawBlockStarts(doc: string): number[] {
   return starts;
 }
 
-export function syncRawBlockSourcePositions(root: HTMLElement | null, doc: string): void {
+export function syncSourceBlockPositions(root: HTMLElement | null, doc: string): void {
   if (!root) {
     return;
   }
 
-  const starts = collectRawBlockStarts(doc);
-  const elements = [...root.querySelectorAll<HTMLElement>("[data-coflat-raw-block='true']")];
+  const starts = collectSourceBlockStarts(doc);
+  const elements = [...root.querySelectorAll<HTMLElement>(SOURCE_BLOCK_SELECTOR)];
 
   elements.forEach((element, index) => {
     const start = starts[index];
@@ -211,7 +212,7 @@ export function SourcePositionPlugin({
 
   useEffect(() => {
     const sync = () => {
-      syncRawBlockSourcePositions(editor.getRootElement(), syncToken.doc);
+      syncSourceBlockPositions(editor.getRootElement(), syncToken.doc);
     };
 
     sync();

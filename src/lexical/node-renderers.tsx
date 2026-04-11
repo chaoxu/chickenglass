@@ -16,21 +16,18 @@ import { useIncludedDocument, useLexicalRenderContext } from "./render-context";
 import { $isRawBlockNode, type RawBlockVariant } from "./nodes/raw-block-node";
 import { StructureSourceEditor } from "./structure-source-editor";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
-import { updateTableBodyCell, updateTableHeaderCell } from "../state/table-edit";
 import {
   type ParsedReferenceToken,
   humanizeBlockType,
   parseReferenceToken,
   parseFootnoteDefinition,
   parseMarkdownImage,
-  parseMarkdownTable,
   parseStructuredDisplayMathRaw,
   parseStructuredFencedDivRaw,
   renderMarkdownRichHtml,
   renderReferenceDisplay,
   serializeFencedDivRaw,
   serializeFootnoteDefinition,
-  serializeMarkdownTable,
 } from "./rendering";
 import { buildKatexOptions } from "../lib/katex-options";
 import { parseFrontmatter } from "../lib/frontmatter";
@@ -619,89 +616,6 @@ function ImageBlockRenderer({
   return <FigureMedia alt={parsed.alt} src={parsed.src} />;
 }
 
-function TableBlockRenderer({
-  nodeKey,
-  raw,
-}: {
-  readonly nodeKey: NodeKey;
-  readonly raw: string;
-}) {
-  const externalParsed = useMemo(() => parseMarkdownTable(raw), [raw]);
-  const updateRaw = useRawBlockUpdater(nodeKey);
-  const [draft, setDraft] = useState(externalParsed);
-
-  useEffect(() => {
-    setDraft(externalParsed);
-  }, [externalParsed]);
-
-  const updateHeaderCell = useCallback((columnIndex: number, nextValue: string) => {
-    setDraft((prev) => {
-      if (!prev) {
-        return prev;
-      }
-      const next = updateTableHeaderCell(prev, columnIndex, nextValue);
-      updateRaw(serializeMarkdownTable(next));
-      return next;
-    });
-  }, [updateRaw]);
-
-  const updateBodyCell = useCallback((rowIndex: number, columnIndex: number, nextValue: string) => {
-    setDraft((prev) => {
-      if (!prev) {
-        return prev;
-      }
-      const next = updateTableBodyCell(prev, rowIndex, columnIndex, nextValue);
-      updateRaw(serializeMarkdownTable(next));
-      return next;
-    });
-  }, [updateRaw]);
-
-  if (!draft) {
-    return <div className="cf-lexical-raw-fallback">{raw}</div>;
-  }
-
-  return (
-    <div className="cf-lexical-table-block">
-      <table>
-        <thead>
-          <tr>
-            {draft.headers.map((cell, columnIndex) => (
-              <th key={`h-${columnIndex}`}>
-                <EmbeddedFieldEditor
-                  activation="focus"
-                  className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--table-cell"
-                  doc={cell}
-                  family="table-cell"
-                  namespace={`coflat-table-${nodeKey}-head-${columnIndex}`}
-                  onTextChange={(nextValue) => updateHeaderCell(columnIndex, nextValue)}
-                />
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {draft.rows.map((row, rowIndex) => (
-            <tr key={`r-${rowIndex}`}>
-              {row.map((cell, columnIndex) => (
-                <td key={`c-${rowIndex}-${columnIndex}`}>
-                  <EmbeddedFieldEditor
-                    activation="focus"
-                    className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--table-cell"
-                    doc={cell}
-                    family="table-cell"
-                    namespace={`coflat-table-${nodeKey}-${rowIndex}-${columnIndex}`}
-                    onTextChange={(nextValue) => updateBodyCell(rowIndex, columnIndex, nextValue)}
-                  />
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function FootnoteDefinitionBlockRenderer({
   nodeKey,
   raw,
@@ -1084,8 +998,6 @@ export function RawBlockRenderer({
     content = <FencedDivBlockRenderer nodeKey={nodeKey} raw={raw} />;
   } else if (variant === "footnote-definition") {
     content = <FootnoteDefinitionBlockRenderer nodeKey={nodeKey} raw={raw} />;
-  } else if (variant === "table") {
-    content = <TableBlockRenderer nodeKey={nodeKey} raw={raw} />;
   } else {
     content = <div className="cf-lexical-raw-fallback">{raw}</div>;
   }
