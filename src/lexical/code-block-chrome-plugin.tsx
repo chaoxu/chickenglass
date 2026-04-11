@@ -36,7 +36,7 @@ function formatLanguage(codeElement: HTMLElement): string {
   return language ? language.toUpperCase() : "TEXT";
 }
 
-function collectCodeBlockOverlays(
+export function collectCodeBlockOverlays(
   rootElement: HTMLElement,
   surfaceElement: HTMLElement,
 ): readonly CodeBlockOverlay[] {
@@ -106,6 +106,9 @@ export function CodeBlockChromePlugin() {
 
     sync();
     surfaceElement.addEventListener("scroll", sync, { passive: true });
+    if (surfaceElement !== rootElement) {
+      rootElement.addEventListener("scroll", sync, { passive: true });
+    }
     window.addEventListener("resize", sync);
 
     return mergeRegister(
@@ -116,6 +119,9 @@ export function CodeBlockChromePlugin() {
         cancelAnimationFrame(raf);
         window.clearTimeout(timeout);
         surfaceElement.removeEventListener("scroll", sync);
+        if (surfaceElement !== rootElement) {
+          rootElement.removeEventListener("scroll", sync);
+        }
         window.removeEventListener("resize", sync);
       },
     );

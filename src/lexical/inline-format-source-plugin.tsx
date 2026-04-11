@@ -1,22 +1,20 @@
 import { useCallback, useEffect } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
+  $getAdjacentNode,
   $getNearestNodeFromDOMNode,
   $getNodeByKey,
   $getRoot,
   $getSelection,
   $isRangeSelection,
   $parseSerializedNode,
-  BEFORE_INPUT_COMMAND,
-  CLICK_COMMAND,
-  COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
   KEY_ARROW_LEFT_COMMAND,
   KEY_ARROW_RIGHT_COMMAND,
-  KEY_DOWN_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
   mergeRegister,
+  type LexicalEditor,
   type NodeKey,
 } from "lexical";
 
@@ -35,7 +33,6 @@ import {
   $isInlineFormatSourceNode,
 } from "./nodes/inline-format-source-node";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
-import { $findAdjacentNodeAtSelectionBoundary } from "./selection-boundary";
 import { getInlineTextFormatSelector, getInlineTextFormatSpecs } from "../lexical-next";
 
 const INLINE_FORMAT_SPECS = getInlineTextFormatSpecs();
@@ -119,28 +116,161 @@ function resolveInlineFormatAnchor(target: EventTarget | null): HTMLElement | nu
   return anchor.closest("a.cf-lexical-link") ? null : anchor;
 }
 
-function readSourceSelectionOffsets(): SourceSelectionOffsets | null {
-  const selection = $getSelection();
-  if (!$isRangeSelection(selection)) {
+function findBoundarySibling(rootElement: HTMLElement, startNode: Node, isBackward: boolean): Node | null {
+  let current: Node | null = startNode;
+  while (current && current !== rootElement) {
+    const sibling = isBackward ? current.previousSibling : current.nextSibling;
+    if (sibling) {
+      return sibling;
+    }
+    current = current.parentNode;
+  }
+  return null;
+}
+
+function findInlineFormatAnchorInNode(node: Node | null, isBackward: boolean): HTMLElement | null {
+  if (!node) {
     return null;
   }
 
-  const anchorNode = selection.anchor.getNode();
-  const focusNode = selection.focus.getNode();
+  if (node instanceof HTMLElement) {
+    if (node.matches(INLINE_FORMAT_SELECTOR) && !node.closest("a.cf-lexical-link")) {
+      return node;
+    }
+    const matches = node.querySelectorAll<HTMLElement>(INLINE_FORMAT_SELECTOR);
+    if (matches.length > 0) {
+      return isBackward ? matches[matches.length - 1] : matches[0];
+    }
+  }
+
+  const child = isBackward ? node.lastChild : node.firstChild;
+  return findInlineFormatAnchorInNode(child, isBackward);
+}
+
+function findInlineFormatAnchorFromDomSelection(
+  rootElement: HTMLElement | null,
+  isBackward: boolean,
+): HTMLElement | null {
+  if (!rootElement) {
+    return null;
+  }
+
+  const selection = window.getSelection();
+  if (!selection || !selection.isCollapsed) {
+    return null;
+  }
+
+  const anchorNode = selection.anchorNode;
+  if (!anchorNode || !rootElement.contains(anchorNode)) {
+    return null;
+  }
+
+  if (anchorNode instanceof Text) {
+    const textLength = anchorNode.textContent?.length ?? 0;
+    if ((isBackward && selection.anchorOffset !== 0) || (!isBackward && selection.anchorOffset !== textLength)) {
+      return null;
+    }
+    const sibling = findBoundarySibling(rootElement, anchorNode, isBackward);
+    return findInlineFormatAnchorInNode(sibling, isBackward);
+  }
+
+  if (anchorNode instanceof Element) {
+    const childIndex = isBackward ? selection.anchorOffset - 1 : selection.anchorOffset;
+    if (childIndex >= 0 && childIndex < anchorNode.childNodes.length) {
+      return findInlineFormatAnchorInNode(anchorNode.childNodes[childIndex], isBackward);
+    }
+    const sibling = findBoundarySibling(rootElement, anchorNode, isBackward);
+    return findInlineFormatAnchorInNode(sibling, isBackward);
+  }
+
+  return null;
+}
+
+function measureTextOffsetWithinElement(
+  element: HTMLElement,
+  node: Node,
+  offset: number,
+): number {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.setEnd(node, offset);
+  return range.toString().length;
+}
+
+function getInlineFormatSourceElement(
+  editor: LexicalEditor,
+  nodeKey: NodeKey,
+): HTMLElement | null {
+  const element = editor.getElementByKey(nodeKey);
+  if (!(element instanceof HTMLElement) || !element.classList.contains("cf-lexical-inline-format-source")) {
+    return null;
+  }
+  return element;
+}
+
+function readSourceSelectionOffsets(
+  editor: LexicalEditor,
+  rootElement: HTMLElement | null,
+): SourceSelectionOffsets | null {
+  if (!rootElement) {
+    return null;
+  }
+
+  const selection = window.getSelection();
+  const anchorDomNode = selection?.anchorNode ?? null;
+  const focusDomNode = selection?.focusNode ?? null;
+  if (!selection || !anchorDomNode || !focusDomNode) {
+    return null;
+  }
+
+  const sourceNode = editor.getEditorState().read(() => {
+    const anchorNode = $getNearestNodeFromDOMNode(anchorDomNode);
+    const focusNode = $getNearestNodeFromDOMNode(focusDomNode);
+    if (!$isInlineFormatSourceNode(anchorNode) || !$isInlineFormatSourceNode(focusNode)) {
+      return null;
+    }
+    return anchorNode.getKey() === focusNode.getKey()
+      ? anchorNode
+      : null;
+  });
+  if (!sourceNode) {
+    return null;
+  }
+
+  const sourceElement = getInlineFormatSourceElement(editor, sourceNode.getKey());
   if (
-    !$isInlineFormatSourceNode(anchorNode)
-    || !$isInlineFormatSourceNode(focusNode)
-    || anchorNode.getKey() !== focusNode.getKey()
+    !(sourceElement instanceof HTMLElement)
+    || !rootElement.contains(sourceElement)
+    || !sourceElement.contains(anchorDomNode)
+    || !sourceElement.contains(focusDomNode)
   ) {
     return null;
   }
 
-  const rawLength = anchorNode.getRaw().length;
-  const anchorOffset = Math.min(selection.anchor.offset, rawLength);
-  const focusOffset = Math.min(selection.focus.offset, rawLength);
+  const nodeKey = sourceNode.getKey();
+
+  if (sourceElement.textContent === EMPTY_INLINE_FORMAT_SOURCE_SENTINEL) {
+    return {
+      end: 0,
+      nodeKey,
+      start: 0,
+    };
+  }
+
+  const anchorOffset = measureTextOffsetWithinElement(
+    sourceElement,
+    anchorDomNode,
+    selection.anchorOffset,
+  );
+  const focusOffset = measureTextOffsetWithinElement(
+    sourceElement,
+    focusDomNode,
+    selection.focusOffset,
+  );
+
   return {
     end: Math.max(anchorOffset, focusOffset),
-    nodeKey: anchorNode.getKey(),
+    nodeKey,
     start: Math.min(anchorOffset, focusOffset),
   };
 }
@@ -355,73 +485,115 @@ export function InlineFormatSourcePlugin() {
           .map((node) => node.getKey())
       );
 
-    const selectSourceCaret = (nodeKey: NodeKey, caretOffset: number): boolean => {
-      let selected = false;
-      editor.update(() => {
-        const sourceNode = $getNodeByKey(nodeKey);
-        if (!$isInlineFormatSourceNode(sourceNode)) {
-          return;
-        }
-
-        const clampedOffset = Math.min(caretOffset, sourceNode.getRaw().length);
-        sourceNode.select(clampedOffset, clampedOffset);
-        selected = true;
-      }, {
-        discrete: true,
-        tag: COFLAT_NESTED_EDIT_TAG,
-      });
-      return selected;
-    };
-
     const syncSourceSelection = (activation: InlineFormatActivation) => {
       queueMicrotask(() => {
-        const syncSelection = () => {
-          const caretOffset = editor.getEditorState().read(() => {
-            const sourceNode = $getNodeByKey(activation.nodeKey);
-            return $isInlineFormatSourceNode(sourceNode)
-              ? getInlineFormatEntryCaretOffset(sourceNode.getRaw(), activation.entrySide)
-              : null;
-          });
-          return caretOffset == null
-            ? false
-            : selectSourceCaret(activation.nodeKey, caretOffset);
-        };
-
-        if (!syncSelection()) {
-          pendingActivation = null;
-          return;
-        }
-
+        editor.update(() => {
+          const sourceNode = $getNodeByKey(activation.nodeKey);
+          if (!$isInlineFormatSourceNode(sourceNode)) {
+            return;
+          }
+          const caretOffset = getInlineFormatEntryCaretOffset(sourceNode.getRaw(), activation.entrySide);
+          sourceNode.select(caretOffset, caretOffset);
+        }, {
+          discrete: true,
+          tag: COFLAT_NESTED_EDIT_TAG,
+        });
         editor.focus();
 
-        const resyncSelection = (remainingFrames: number) => {
+        const syncDomSelection = (remainingFrames: number) => {
           requestAnimationFrame(() => {
-            if (!syncSelection()) {
+            editor.update(() => {
+              const sourceNode = $getNodeByKey(activation.nodeKey);
+              if (!$isInlineFormatSourceNode(sourceNode)) {
+                return;
+              }
+              const caretOffset = getInlineFormatEntryCaretOffset(sourceNode.getRaw(), activation.entrySide);
+              sourceNode.select(caretOffset, caretOffset);
+            }, {
+              discrete: true,
+              tag: COFLAT_NESTED_EDIT_TAG,
+            });
+
+            const rootElement = editor.getRootElement();
+            const sourceElement = getInlineFormatSourceElement(editor, activation.nodeKey);
+            const textNode = sourceElement?.firstChild instanceof Text
+              ? sourceElement.firstChild
+              : null;
+            const selection = window.getSelection();
+
+            if (
+              !(rootElement instanceof HTMLElement)
+              || !(sourceElement instanceof HTMLElement)
+              || !rootElement.contains(sourceElement)
+              || !textNode
+              || !selection
+            ) {
+              if (remainingFrames > 0) {
+                syncDomSelection(remainingFrames - 1);
+                return;
+              }
               pendingActivation = null;
               return;
             }
 
+            const raw = normalizeInlineFormatSourceRaw(textNode.textContent ?? "");
+            const caretOffset = getInlineFormatEntryCaretOffset(raw, activation.entrySide);
+            const range = document.createRange();
+            range.setStart(textNode, caretOffset);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
             if (remainingFrames > 0) {
-              resyncSelection(remainingFrames - 1);
+              syncDomSelection(remainingFrames - 1);
               return;
             }
             pendingActivation = null;
           });
         };
 
-        resyncSelection(3);
+        syncDomSelection(3);
       });
     };
 
     const syncSourceCaret = (nodeKey: NodeKey, caretOffset: number) => {
       queueMicrotask(() => {
-        if (!selectSourceCaret(nodeKey, caretOffset)) {
-          return;
-        }
+        editor.update(() => {
+          const sourceNode = $getNodeByKey(nodeKey);
+          if (!$isInlineFormatSourceNode(sourceNode)) {
+            return;
+          }
+          sourceNode.select(
+            Math.min(caretOffset, sourceNode.getRaw().length),
+            Math.min(caretOffset, sourceNode.getRaw().length),
+          );
+        }, {
+          discrete: true,
+          tag: COFLAT_NESTED_EDIT_TAG,
+        });
         editor.focus();
 
         requestAnimationFrame(() => {
-          selectSourceCaret(nodeKey, caretOffset);
+          const rootElement = editor.getRootElement();
+          const sourceElement = getInlineFormatSourceElement(editor, nodeKey);
+          if (
+            !(rootElement instanceof HTMLElement)
+            || !(sourceElement instanceof HTMLElement)
+            || !rootElement.contains(sourceElement)
+          ) {
+            return;
+          }
+          const textNode = sourceElement?.firstChild instanceof Text
+            ? sourceElement.firstChild
+            : null;
+          const selection = window.getSelection();
+          if (!(sourceElement instanceof HTMLElement) || !textNode || !selection) {
+            return;
+          }
+          const range = document.createRange();
+          range.setStart(textNode, Math.min(caretOffset, textNode.textContent?.length ?? 0));
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
         });
       });
     };
@@ -454,9 +626,14 @@ export function InlineFormatSourcePlugin() {
         return false;
       }
 
-      const activation = editor.getEditorState().read(() => {
-        const adjacent = $findAdjacentNodeAtSelectionBoundary(isBackward, isEditableInlineFormatNode);
-        if (!adjacent) {
+      const adjacentActivation = editor.getEditorState().read(() => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
+          return null;
+        }
+
+        const adjacent = $getAdjacentNode(selection.anchor, isBackward);
+        if (!isEditableInlineFormatNode(adjacent)) {
           return null;
         }
 
@@ -465,6 +642,15 @@ export function InlineFormatSourcePlugin() {
           nodeKey: adjacent.getKey(),
         } satisfies InlineFormatActivation;
       });
+
+      const fallbackAnchor = adjacentActivation
+        ? null
+        : findInlineFormatAnchorFromDomSelection(editor.getRootElement(), isBackward);
+      const activation = adjacentActivation ?? (
+        fallbackAnchor
+          ? getActivationFromAnchor(fallbackAnchor, entrySide)
+          : null
+      );
       if (!activation) {
         return false;
       }
@@ -566,151 +752,6 @@ export function InlineFormatSourcePlugin() {
         },
         COMMAND_PRIORITY_LOW,
       ),
-      editor.registerCommand(
-        BEFORE_INPUT_COMMAND,
-        (event) => {
-          const selectionOffsets = readSourceSelectionOffsets();
-          if (!selectionOffsets) {
-            return false;
-          }
-
-          if (event.inputType === "insertText" || event.inputType === "insertCompositionText") {
-            event.preventDefault();
-            event.stopPropagation();
-            replaceSourceRange(selectionOffsets, event.data ?? "");
-            return true;
-          }
-
-          if (event.inputType === "deleteContentBackward") {
-            event.preventDefault();
-            event.stopPropagation();
-            if (selectionOffsets.start !== selectionOffsets.end) {
-              replaceSourceRange(selectionOffsets, "");
-              return true;
-            }
-            if (selectionOffsets.start === 0) {
-              return true;
-            }
-            replaceSourceRange({
-              ...selectionOffsets,
-              start: selectionOffsets.start - 1,
-            }, "");
-            return true;
-          }
-
-          if (event.inputType === "deleteContentForward") {
-            event.preventDefault();
-            event.stopPropagation();
-            if (selectionOffsets.start !== selectionOffsets.end) {
-              replaceSourceRange(selectionOffsets, "");
-              return true;
-            }
-            editor.getEditorState().read(() => {
-              const sourceNode = $getNodeByKey(selectionOffsets.nodeKey);
-              if (!$isInlineFormatSourceNode(sourceNode) || selectionOffsets.end >= sourceNode.getTextContentSize()) {
-                return;
-              }
-              replaceSourceRange({
-                ...selectionOffsets,
-                end: selectionOffsets.end + 1,
-              }, "");
-            });
-            return true;
-          }
-
-          return false;
-        },
-        COMMAND_PRIORITY_HIGH,
-      ),
-      editor.registerCommand(
-        KEY_DOWN_COMMAND,
-        (event) => {
-          const selectionOffsets = readSourceSelectionOffsets();
-          if (!selectionOffsets) {
-            return false;
-          }
-
-          if (event.key !== "Backspace" && event.key !== "Delete") {
-            return false;
-          }
-
-          event.preventDefault();
-          event.stopPropagation();
-
-          if (selectionOffsets.start !== selectionOffsets.end) {
-            replaceSourceRange(selectionOffsets, "");
-            return true;
-          }
-
-          if (event.key === "Backspace") {
-            if (selectionOffsets.start === 0) {
-              return true;
-            }
-            replaceSourceRange({
-              ...selectionOffsets,
-              start: selectionOffsets.start - 1,
-            }, "");
-            return true;
-          }
-
-          editor.getEditorState().read(() => {
-            const sourceNode = $getNodeByKey(selectionOffsets.nodeKey);
-            if (!$isInlineFormatSourceNode(sourceNode) || selectionOffsets.end >= sourceNode.getRaw().length) {
-              return;
-            }
-            replaceSourceRange({
-              ...selectionOffsets,
-              end: selectionOffsets.end + 1,
-            }, "");
-          });
-          return true;
-        },
-        COMMAND_PRIORITY_HIGH,
-      ),
-      editor.registerCommand(
-        CLICK_COMMAND,
-        (event) => {
-          const rootElement = editor.getRootElement();
-          if (!rootElement) {
-            return false;
-          }
-
-          const anchor = resolveInlineFormatAnchor(event.target);
-          if (!anchor) {
-            const activeSourceNodeKeys = readActiveSourceNodeKeys();
-            const targetNode = event.target instanceof Node ? event.target : null;
-            const sourceElement = targetNode instanceof Element
-              ? targetNode.closest(".cf-lexical-inline-format-source")
-              : null;
-            if (!sourceElement && activeSourceNodeKeys.length > 0) {
-              closeActiveSources(activeSourceNodeKeys);
-            }
-            return false;
-          }
-
-          const ownerRoot = anchor.closest<HTMLElement>(".cf-lexical-editor");
-          if (ownerRoot !== rootElement) {
-            return false;
-          }
-
-          const rect = anchor.getBoundingClientRect();
-          const entrySide: EntrySide = event.clientX <= rect.left + rect.width / 2 ? "start" : "end";
-          const activation = getActivationFromAnchor(anchor, entrySide);
-          if (!activation) {
-            return false;
-          }
-
-          event.preventDefault();
-          event.stopPropagation();
-          if (!startEditing(activation.nodeKey, activation.entrySide)) {
-            return true;
-          }
-          pendingActivation = activation;
-          syncSourceSelection(activation);
-          return true;
-        },
-        COMMAND_PRIORITY_HIGH,
-      ),
       editor.registerUpdateListener(({ tags }) => {
         if (tags.has(COFLAT_NESTED_EDIT_TAG)) {
           return;
@@ -753,6 +794,190 @@ export function InlineFormatSourcePlugin() {
           pendingActivation = nextActivation;
           syncSourceSelection(nextActivation);
         });
+      }),
+      editor.registerRootListener((rootElement, previousRootElement) => {
+        const detach = (element: HTMLElement | null) => {
+          if (!element) {
+            return;
+          }
+          element.removeEventListener("beforeinput", handleBeforeInput, true);
+          element.removeEventListener("keydown", handleKeyDown, true);
+          element.removeEventListener("mousedown", handleMouseDown, true);
+          element.removeEventListener("click", handleClick, true);
+        };
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+          if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            const selectionOffsets = readSourceSelectionOffsets(editor, rootElement);
+            if (!selectionOffsets && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+              const isBackward = event.key === "ArrowLeft";
+              const anchor = findInlineFormatAnchorFromDomSelection(rootElement, isBackward);
+              const activation = anchor
+                ? getActivationFromAnchor(anchor, isBackward ? "end" : "start")
+                : null;
+              if (activation && startEditing(activation.nodeKey, activation.entrySide)) {
+                event.preventDefault();
+                event.stopPropagation();
+                pendingActivation = activation;
+                syncSourceSelection(activation);
+                return;
+              }
+            }
+          }
+
+          if (event.key !== "Backspace" && event.key !== "Delete") {
+            return;
+          }
+
+          const selectionOffsets = readSourceSelectionOffsets(editor, rootElement);
+          if (!selectionOffsets) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+
+          if (selectionOffsets.start !== selectionOffsets.end) {
+            replaceSourceRange(selectionOffsets, "");
+            return;
+          }
+
+          if (event.key === "Backspace") {
+            if (selectionOffsets.start === 0) {
+              return;
+            }
+            replaceSourceRange({
+              ...selectionOffsets,
+              start: selectionOffsets.start - 1,
+            }, "");
+            return;
+          }
+
+          editor.getEditorState().read(() => {
+            const sourceNode = $getNodeByKey(selectionOffsets.nodeKey);
+            if (!$isInlineFormatSourceNode(sourceNode) || selectionOffsets.end >= sourceNode.getRaw().length) {
+              return;
+            }
+            replaceSourceRange({
+              ...selectionOffsets,
+              end: selectionOffsets.end + 1,
+            }, "");
+          });
+        };
+
+        const handleBeforeInput = (event: InputEvent) => {
+          const selectionOffsets = readSourceSelectionOffsets(editor, rootElement);
+          if (!selectionOffsets) {
+            return;
+          }
+
+          if (event.inputType === "insertText" || event.inputType === "insertCompositionText") {
+            event.preventDefault();
+            event.stopPropagation();
+            replaceSourceRange(selectionOffsets, event.data ?? "");
+            return;
+          }
+
+          if (event.inputType === "deleteContentBackward") {
+            event.preventDefault();
+            event.stopPropagation();
+            if (selectionOffsets.start !== selectionOffsets.end) {
+              replaceSourceRange(selectionOffsets, "");
+              return;
+            }
+            if (selectionOffsets.start === 0) {
+              return;
+            }
+            replaceSourceRange({
+              ...selectionOffsets,
+              start: selectionOffsets.start - 1,
+            }, "");
+            return;
+          }
+
+          if (event.inputType === "deleteContentForward") {
+            event.preventDefault();
+            event.stopPropagation();
+            if (selectionOffsets.start !== selectionOffsets.end) {
+              replaceSourceRange(selectionOffsets, "");
+              return;
+            }
+            editor.getEditorState().read(() => {
+              const sourceNode = $getNodeByKey(selectionOffsets.nodeKey);
+              if (!$isInlineFormatSourceNode(sourceNode) || selectionOffsets.end >= sourceNode.getTextContentSize()) {
+                return;
+              }
+              replaceSourceRange({
+                ...selectionOffsets,
+                end: selectionOffsets.end + 1,
+              }, "");
+            });
+          }
+        };
+
+        const handleMouseDown = (event: MouseEvent) => {
+          const anchor = resolveInlineFormatAnchor(event.target);
+          if (!anchor) {
+            const activeSourceNodeKeys = readActiveSourceNodeKeys();
+            const targetNode = event.target instanceof Node ? event.target : null;
+            const sourceElement = targetNode instanceof Element
+              ? targetNode.closest(".cf-lexical-inline-format-source")
+              : null;
+            if (!sourceElement && activeSourceNodeKeys.length > 0) {
+              closeActiveSources(activeSourceNodeKeys);
+            }
+            return;
+          }
+
+          const ownerRoot = anchor.closest<HTMLElement>(".cf-lexical-editor");
+          if (ownerRoot !== rootElement) {
+            return;
+          }
+
+          const rect = anchor.getBoundingClientRect();
+          const entrySide: EntrySide = event.clientX <= rect.left + rect.width / 2 ? "start" : "end";
+          const activation = getActivationFromAnchor(anchor, entrySide);
+          if (!activation) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          if (!startEditing(activation.nodeKey, activation.entrySide)) {
+            return;
+          }
+          pendingActivation = activation;
+          syncSourceSelection(activation);
+        };
+
+        const handleClick = (event: MouseEvent) => {
+          if (!pendingActivation) {
+            return;
+          }
+
+          const targetNode = event.target instanceof Node ? event.target : null;
+          if (!(rootElement instanceof HTMLElement) || !targetNode || !rootElement.contains(targetNode)) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          syncSourceSelection(pendingActivation);
+        };
+
+        detach(previousRootElement);
+
+        if (!rootElement) {
+          return;
+        }
+
+        rootElement.addEventListener("beforeinput", handleBeforeInput, true);
+        rootElement.addEventListener("keydown", handleKeyDown, true);
+        rootElement.addEventListener("mousedown", handleMouseDown, true);
+        rootElement.addEventListener("click", handleClick, true);
+        return () => {
+          detach(rootElement);
+        };
       }),
     );
   }, [closeActiveSources, closeEditing, editor, startEditing]);

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LexicalEditor } from "lexical";
 
 import { type MarkdownEditorHandle, type MarkdownEditorSelection } from "../../lexical/plain-text-editor";
+import { dispatchNavigateSourcePositionEvent } from "../../constants/events";
 import { computeLiveStats } from "../writing-stats";
 import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
@@ -93,25 +94,11 @@ export function EditorPane({
   }, []);
 
   const handleHeadingNavigation = useCallback((from: number): boolean => {
-    if (editorMode === "source") {
+    if (editorMode === "source" || !richRootRef.current) {
       return false;
     }
 
-    const root = richRootRef.current;
-    if (!root) {
-      return false;
-    }
-
-    const selector = `.cf-lexical-heading[data-coflat-heading-pos="${String(from)}"]`;
-    const target = root.querySelector<HTMLElement>(selector);
-    if (!target) {
-      return false;
-    }
-
-    const rootRect = root.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    root.scrollTop += targetRect.top - rootRect.top - 24;
-    root.focus();
+    dispatchNavigateSourcePositionEvent(from);
     return true;
   }, [editorMode]);
 

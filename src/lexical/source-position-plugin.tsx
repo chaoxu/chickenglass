@@ -1,10 +1,17 @@
 import { useEffect, useMemo } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import {
+  $createNodeSelection,
+  $getNearestNodeFromDOMNode,
+  $setSelection,
+  type LexicalEditor,
+} from "lexical";
 
 import {
   NAVIGATE_SOURCE_POSITION_EVENT,
   type NavigateSourcePositionEventDetail,
 } from "../constants/events";
+import { $isRawBlockNode } from "./nodes/raw-block-node";
 
 const FRONTMATTER_DELIMITER = /^---\s*$/;
 const FENCED_DIV_START = /^\s*(:{3,})(.*)$/;
@@ -157,18 +164,49 @@ export function syncSourceBlockPositions(root: HTMLElement | null, doc: string):
   });
 }
 
-export function scrollSourcePositionIntoView(root: HTMLElement | null, pos: number): boolean {
+function selectNavigationTarget(
+  editor: LexicalEditor,
+  target: HTMLElement,
+): boolean {
+  let didSelect = false;
+
+  editor.update(() => {
+    const node = $getNearestNodeFromDOMNode(target);
+    if (!node) {
+      return;
+    }
+
+    if ($isRawBlockNode(node)) {
+      const selection = $createNodeSelection();
+      selection.add(node.getKey());
+      $setSelection(selection);
+      didSelect = true;
+      return;
+    }
+
+    node.selectStart();
+    didSelect = true;
+  }, { discrete: true });
+
+  if (didSelect) {
+    editor.focus();
+  }
+
+  return didSelect;
+}
+
+export function scrollSourcePositionIntoView(
+  editor: LexicalEditor,
+  root: HTMLElement | null,
+  pos: number,
+): boolean {
   if (!root) {
     return false;
   }
 
   const heading = root.querySelector<HTMLElement>(`.cf-lexical-heading[data-coflat-heading-pos="${String(pos)}"]`);
   if (heading) {
-    const rootRect = root.getBoundingClientRect();
-    const targetRect = heading.getBoundingClientRect();
-    root.scrollTop += targetRect.top - rootRect.top - 24;
-    root.focus();
-    return true;
+    return selectNavigationTarget(editor, heading);
   }
 
   const rawBlocks = [...root.querySelectorAll<HTMLElement>("[data-coflat-source-from]")];
@@ -193,11 +231,7 @@ export function scrollSourcePositionIntoView(root: HTMLElement | null, pos: numb
     return false;
   }
 
-  const rootRect = root.getBoundingClientRect();
-  const targetRect = target.getBoundingClientRect();
-  root.scrollTop += targetRect.top - rootRect.top - 24;
-  root.focus();
-  return true;
+  return selectNavigationTarget(editor, target);
 }
 
 export function SourcePositionPlugin({
@@ -228,7 +262,7 @@ export function SourcePositionPlugin({
 
     const handleNavigation = (event: Event) => {
       const detail = (event as CustomEvent<NavigateSourcePositionEventDetail>).detail;
-      scrollSourcePositionIntoView(editor.getRootElement(), detail.pos);
+      scrollSourcePositionIntoView(editor, editor.getRootElement(), detail.pos);
     };
 
     document.addEventListener(NAVIGATE_SOURCE_POSITION_EVENT, handleNavigation);
