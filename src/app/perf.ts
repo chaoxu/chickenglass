@@ -3,9 +3,9 @@
 import {
   MAX_PERF_RECORDS,
   MAX_PERF_OPERATIONS,
-  PERF_PANEL_TOGGLE_EVENT,
   PERF_PANEL_REFRESH_EVENT,
 } from "../constants";
+import { useDevSettings } from "./dev-settings";
 
 export type PerfSource = "frontend" | "backend";
 
@@ -348,11 +348,7 @@ export async function invokeWithPerf<T>(
 }
 
 export function togglePerfPanel(): void {
-  window.dispatchEvent(new Event(PERF_PANEL_TOGGLE_EVENT));
-}
-
-export function perfPanelToggleEventName(): string {
-  return PERF_PANEL_TOGGLE_EVENT;
+  useDevSettings.getState().toggle("perfPanel");
 }
 
 export function perfPanelRefreshEventName(): string {

@@ -5,9 +5,6 @@
  * distinguishable from native browser events and third-party libraries.
  */
 
-/** Dispatched on `window` to toggle the performance debug panel open/closed. */
-export const PERF_PANEL_TOGGLE_EVENT = "cf:perf-panel-toggle";
-
 /** Dispatched on `window` to trigger a data refresh in the perf debug panel. */
 export const PERF_PANEL_REFRESH_EVENT = "cf:perf-panel-refresh";
 

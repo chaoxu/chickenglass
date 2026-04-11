@@ -11,7 +11,8 @@ import {
   printPerfSummary,
   togglePerfPanel,
 } from "../perf";
-import { toggleFpsMeter, stopFpsMeter } from "../fps-meter";
+import { setFpsMeterEnabled, stopFpsMeter } from "../fps-meter";
+import { useDevSettings } from "../dev-settings";
 import {
   debugEmitFileChangedCommand,
   debugGetNativeStateCommand,
@@ -95,6 +96,17 @@ export function useAppDebug({
   // Stop the FPS rAF loop only on true unmount / HMR — not on every effect
   // refresh caused by dependency changes (openProject, currentDocument, etc.).
   useEffect(() => () => stopFpsMeter(), []);
+
+  // Sync the FPS meter module with the fpsCounter dev setting.
+  useEffect(() => {
+    let prev = useDevSettings.getState().fpsCounter;
+    return useDevSettings.subscribe((state) => {
+      if (state.fpsCounter !== prev) {
+        prev = state.fpsCounter;
+        setFpsMeterEnabled(state.fpsCounter);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const snapshot = JSON.stringify({
@@ -260,7 +272,7 @@ export function useAppDebug({
       printPerfSummary,
       clearPerf: clearCombinedPerf,
       togglePerfPanel,
-      toggleFps: toggleFpsMeter,
+      toggleFps: () => useDevSettings.getState().toggle("fpsCounter"),
     };
     window.__cmDebug = {
       dump: () => ({

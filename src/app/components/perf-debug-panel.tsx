@@ -4,23 +4,22 @@ import {
   clearCombinedPerf,
   getCombinedPerfSnapshot,
   perfPanelRefreshEventName,
-  perfPanelToggleEventName,
   type CombinedPerfSnapshot,
 } from "../perf";
+import { useDevSettings } from "../dev-settings";
 
 function formatMs(value: number): string {
   return `${value.toFixed(1)} ms`;
 }
 
 export function PerfDebugPanel() {
-  const [open, setOpen] = useState(false);
+  const open = useDevSettings((s) => s.perfPanel);
+  const toggleOpen = useDevSettings((s) => s.toggle);
   const [snapshot, setSnapshot] = useState<CombinedPerfSnapshot | null>(null);
 
   useEffect(() => {
-    const toggleEvent = perfPanelToggleEventName();
     const refreshEvent = perfPanelRefreshEventName();
 
-    const toggle = () => setOpen((value) => !value);
     const refresh = () => {
       if (!open) return;
       void getCombinedPerfSnapshot().then(setSnapshot).catch(
@@ -28,10 +27,8 @@ export function PerfDebugPanel() {
       );
     };
 
-    window.addEventListener(toggleEvent, toggle);
     window.addEventListener(refreshEvent, refresh);
     return () => {
-      window.removeEventListener(toggleEvent, toggle);
       window.removeEventListener(refreshEvent, refresh);
     };
   }, [open]);
@@ -91,7 +88,7 @@ export function PerfDebugPanel() {
           </button>
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={() => toggleOpen("perfPanel")}
             className="rounded border border-[var(--cf-border)] px-2 py-1 text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]"
           >
             Close

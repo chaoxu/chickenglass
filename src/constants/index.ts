@@ -45,7 +45,6 @@ export {
 } from "./layout";
 
 export {
-  PERF_PANEL_TOGGLE_EVENT,
   PERF_PANEL_REFRESH_EVENT,
   FORMAT_EVENT,
   MODE_CHANGE_EVENT,
