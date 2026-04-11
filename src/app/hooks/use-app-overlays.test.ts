@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BackgroundIndexer } from "../../index";
 import { createActiveDocumentSignal } from "../active-document-signal";
 import type { PaletteCommand } from "../components/command-palette";
+import { useDevSettings } from "../dev-settings";
 import { MemoryFileSystem } from "../file-manager";
 import type { Settings } from "../lib/types";
 
@@ -356,5 +357,20 @@ describe("useAppOverlays", () => {
     expect(dialogs.setSearchOpen).toHaveBeenNthCalledWith(1, true);
     expect(dialogs.setSearchOpen).toHaveBeenNthCalledWith(2, true);
     expect(dialogs.setSearchOpen).toHaveBeenNthCalledWith(3, expect.any(Function));
+  });
+
+  it("toggles selectionAlwaysOn via the palette command", async () => {
+    const { props } = await createHookProps({});
+
+    const { result } = renderHook(
+      (hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps),
+      { initialProps: props },
+    );
+
+    expect(useDevSettings.getState().selectionAlwaysOn).toBe(false);
+    getCommand(result.current.commands, "view.toggle-selection-always-on").action();
+    expect(useDevSettings.getState().selectionAlwaysOn).toBe(true);
+    getCommand(result.current.commands, "view.toggle-selection-always-on").action();
+    expect(useDevSettings.getState().selectionAlwaysOn).toBe(false);
   });
 });

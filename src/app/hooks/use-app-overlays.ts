@@ -414,6 +414,7 @@ export function useAppOverlays({
     { id: "view.toggle-sidenotes", label: "Toggle Sidenote Margin", category: "View", action: () => sidebarLayout.setSidenotesCollapsed((value) => !value) },
     { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => workspace.setTheme(workspace.resolvedTheme === "dark" ? "light" : "dark") },
     { id: "view.toggle-fps", label: "Toggle FPS Meter", category: "View", action: () => useDevSettings.getState().toggle("fpsCounter") },
+    { id: "view.toggle-selection-always-on", label: "Toggle Selection Always On", category: "View", action: () => useDevSettings.getState().toggle("selectionAlwaysOn") },
 
     // ── Export ────────────────────────────────────────────────────────────
     { id: "export.html", label: "Export Current File to HTML", category: "Export", menuId: "file_export", action: handleExportHtml },

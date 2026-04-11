@@ -16,6 +16,7 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
 import { ClickableLinkPlugin } from "@lexical/react/LexicalClickableLinkPlugin";
+import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysOnDisplay";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import {
@@ -85,12 +86,14 @@ import {
   SourcePositionPlugin,
 } from "./source-position-plugin";
 import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
+import { useDevSettings } from "../app/dev-settings";
 import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "../lexical-next";
 import type {
   MarkdownEditorHandle,
   MarkdownEditorSelection,
 } from "./markdown-editor-types";
 import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
+import { TreeViewPlugin } from "./tree-view-plugin";
 
 
 function getViewportFromRichSurface(root: HTMLElement): number {
@@ -649,6 +652,7 @@ export function LexicalRichMarkdownEditor({
   spellCheck = false,
   testId = "lexical-editor",
 }: LexicalRichMarkdownEditorProps) {
+  const selectionAlwaysOn = useDevSettings((s) => s.selectionAlwaysOn);
   const inheritedSurface = useEditorScrollSurface();
   const initialDocRef = useRef(doc);
   const lastCommittedDocRef = useRef(doc);
@@ -832,7 +836,9 @@ export function LexicalRichMarkdownEditor({
                 {showViewportTracking ? <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} /> : null}
                 {editable ? <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} /> : null}
                 {editable ? <OnChangePlugin onChange={handleChange} /> : null}
+                {selectionAlwaysOn ? <SelectionAlwaysOnDisplay /> : null}
                 {showBibliography ? <BibliographySection /> : null}
+                <TreeViewPlugin />
               </StructureEditProvider>
             </LexicalComposer>
           </EditorScrollSurfaceProvider>

@@ -21,6 +21,7 @@ import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPl
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
+import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysOnDisplay";
 import {
   $getRoot,
   HISTORY_MERGE_TAG,
@@ -78,8 +79,10 @@ import {
   selectSourceOffsetsInLexicalRoot,
   writeSourceTextToLexicalRoot,
 } from "./source-text";
+import { TreeViewPlugin } from "./tree-view-plugin";
 import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
+import { useDevSettings } from "../app/dev-settings";
 
 const clickRepairHandlers = new WeakMap<HTMLElement, EventListener>();
 
@@ -698,6 +701,7 @@ export function LexicalMarkdownEditor({
   const sourceSelectionRef = useRef<MarkdownEditorSelection>(createMarkdownSelection(0));
   const userEditPendingRef = useRef(false);
   const [surfaceElement, setSurfaceElement] = useState<HTMLElement | null>(null);
+  const selectionAlwaysOn = useDevSettings((s) => s.selectionAlwaysOn);
   const isSourceMode = editorMode === "source";
   const focusOwner = useMemo(
     () => focusSurface(
@@ -919,7 +923,9 @@ export function LexicalMarkdownEditor({
                   <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} />
                 ) : null}
                 {editable ? <OnChangePlugin onChange={handleChange} /> : null}
+                {selectionAlwaysOn ? <SelectionAlwaysOnDisplay /> : null}
                 {!isSourceMode ? <BibliographySection /> : null}
+                <TreeViewPlugin />
               </StructureEditProvider>
             </LexicalComposer>
           </EditorScrollSurfaceProvider>
