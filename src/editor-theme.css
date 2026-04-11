@@ -1025,11 +1025,55 @@
 }
 
 table.cf-lexical-table-block {
+  display: block;
   width: auto;
   max-width: 100%;
   margin-inline: auto;
-  border-collapse: collapse;
   font-size: var(--cf-table-font-size, 0.9em);
+  overflow-x: auto;
+}
+
+table.cf-lexical-table-block > tbody {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table.cf-lexical-table-block[data-scroll-edge="left"] {
+  box-shadow: inset 12px 0 8px -8px rgba(0, 0, 0, 0.08);
+}
+
+table.cf-lexical-table-block[data-scroll-edge="right"] {
+  box-shadow: inset -12px 0 8px -8px rgba(0, 0, 0, 0.08);
+}
+
+table.cf-lexical-table-block[data-scroll-edge="both"] {
+  box-shadow:
+    inset 12px 0 8px -8px rgba(0, 0, 0, 0.08),
+    inset -12px 0 8px -8px rgba(0, 0, 0, 0.08);
+}
+
+div.cf-lexical-table-block {
+  overflow-x: auto;
+}
+
+div.cf-lexical-table-block > table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+div.cf-lexical-table-block[data-scroll-edge="left"] {
+  box-shadow: inset 12px 0 8px -8px rgba(0, 0, 0, 0.08);
+}
+
+div.cf-lexical-table-block[data-scroll-edge="right"] {
+  box-shadow: inset -12px 0 8px -8px rgba(0, 0, 0, 0.08);
+}
+
+div.cf-lexical-table-block[data-scroll-edge="both"] {
+  box-shadow:
+    inset 12px 0 8px -8px rgba(0, 0, 0, 0.08),
+    inset -12px 0 8px -8px rgba(0, 0, 0, 0.08);
 }
 
 .cf-lexical-table-block :is(th, td) {
@@ -1262,6 +1306,48 @@ table.cf-lexical-table-block {
 
 .cf-reference-completion-rich-preview .cf-lexical-display-math-body {
   overflow-y: hidden;
+}
+
+.cf-slash-picker-anchor {
+  z-index: 70;
+}
+
+.cf-slash-picker-tooltip {
+  min-width: min(16rem, calc(100vw - 1rem));
+  max-width: min(24rem, calc(100vw - 1rem));
+  max-height: min(20rem, calc(100vh - 1rem));
+  overflow: hidden;
+  box-shadow: 0 12px 24px -18px rgb(0 0 0 / 0.22), 0 10px 18px -18px rgb(0 0 0 / 0.18);
+}
+
+.cf-slash-picker-list {
+  max-height: min(20rem, calc(100vh - 1rem));
+  margin: 0;
+  padding: 0.25rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.cf-slash-picker-item {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.35rem;
+  color: var(--cf-fg);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.cf-slash-picker-item[aria-selected="true"] {
+  background: color-mix(in srgb, var(--cf-bg) 88%, var(--cf-hover));
+}
+
+.cf-slash-picker-label {
+  font-family: var(--cf-ui-font);
+  font-size: 0.92rem;
+  font-weight: 500;
 }
 
 .cf-hover-preview-tooltip {

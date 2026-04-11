@@ -15,11 +15,11 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
+import { ClickableLinkPlugin } from "@lexical/react/LexicalClickableLinkPlugin";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import {
   $getSelection,
-  $getRoot,
   $isNodeSelection,
   $isRangeSelection,
   CLEAR_HISTORY_COMMAND,
@@ -57,6 +57,7 @@ import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { dispatchSurfaceFocusRequest, EditorFocusPlugin } from "./editor-focus-plugin";
 import { HeadingChromePlugin } from "./heading-chrome-plugin";
+import { HeadingIndexPlugin } from "./heading-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
 import { InlineMathSourcePlugin } from "./inline-math-source-plugin";
 import { LinkSourcePlugin } from "./link-source-plugin";
@@ -77,6 +78,8 @@ import {
 import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
 import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
 import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
+import { TableScrollShadowPlugin } from "./table-scroll-shadow-plugin";
+import { SlashPickerPlugin } from "./slash-picker-plugin";
 import {
   scrollSourcePositionIntoView,
   SourcePositionPlugin,
@@ -89,7 +92,6 @@ import type {
 } from "./markdown-editor-types";
 import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
 
-const clickRepairHandlers = new WeakMap<HTMLElement, EventListener>();
 
 function getViewportFromRichSurface(root: HTMLElement): number {
   const headings = [...root.querySelectorAll<HTMLElement>(".cf-lexical-heading[data-coflat-heading-pos]")];
@@ -131,56 +133,6 @@ function hasEditableTextSelection(root: HTMLElement): boolean {
   return Boolean(textLeaf && root.contains(textLeaf));
 }
 
-function ClickCaretRepairPlugin({
-  enabled,
-}: {
-  readonly enabled: boolean;
-}) {
-  const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
-    const handleMouseUp = (rootElement: HTMLElement) => {
-      queueMicrotask(() => {
-        if (document.activeElement !== rootElement) {
-          return;
-        }
-
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0 && rootElement.contains(selection.anchorNode)) {
-          return;
-        }
-
-        editor.update(() => {
-          $getRoot().selectEnd();
-        }, { discrete: true });
-      });
-    };
-
-    return editor.registerRootListener((rootElement, previousRootElement) => {
-      if (previousRootElement) {
-        const previousListener = clickRepairHandlers.get(previousRootElement);
-        if (previousListener) {
-          previousRootElement.removeEventListener("mouseup", previousListener);
-          clickRepairHandlers.delete(previousRootElement);
-        }
-      }
-
-      if (!rootElement) {
-        return;
-      }
-
-      const listener = () => handleMouseUp(rootElement);
-      clickRepairHandlers.set(rootElement, listener);
-      rootElement.addEventListener("mouseup", listener);
-    });
-  }, [editor, enabled]);
-
-  return null;
-}
 
 function EditableSyncPlugin({
   editable,
@@ -867,12 +819,15 @@ export function LexicalRichMarkdownEditor({
                 <ListPlugin />
                 <CheckListPlugin />
                 <LinkPlugin />
-                {editable ? <LinkSourcePlugin /> : null}
+                <TableScrollShadowPlugin />
+                {editable ? <LinkSourcePlugin /> : <ClickableLinkPlugin />}
                 {editable ? <InlineMathSourcePlugin /> : null}
                 {editable ? <MarkdownExpansionPlugin /> : null}
                 {editable ? <BlockKeyboardAccessPlugin /> : null}
                 {editable ? <ReferenceTypeaheadPlugin /> : null}
+                {editable ? <SlashPickerPlugin /> : null}
                 {showHeadingChrome ? <HeadingChromePlugin doc={renderContextValue?.doc ?? doc} /> : null}
+                {showHeadingChrome ? <HeadingIndexPlugin /> : null}
                 <SourcePositionPlugin doc={renderContextValue?.doc ?? doc} enableNavigation={enableSourceNavigation} />
                 {showViewportTracking ? <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} /> : null}
                 {editable ? <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} /> : null}
