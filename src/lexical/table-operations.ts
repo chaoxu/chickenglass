@@ -6,7 +6,7 @@ import {
   type TableCellNode,
 } from "./nodes/table-cell-node";
 import { $createTableRowNode, $isTableRowNode } from "./nodes/table-row-node";
-import { $isTableNode, type TableNode } from "./nodes/table-node";
+import type { TableNode } from "./nodes/table-node";
 
 function $getTableRows(table: TableNode) {
   return table.getChildren().filter($isTableRowNode);
@@ -74,60 +74,46 @@ export function $deleteRow(table: TableNode, rowIndex: number): void {
   }
 }
 
-export function $insertColumnAfter(table: TableNode, columnIndex: number): void {
+function $insertColumn(table: TableNode, columnIndex: number, position: "before" | "after"): void {
   const rows = $getTableRows(table);
   const alignments = table.getAlignments();
   if (columnIndex < 0 || columnIndex >= alignments.length) return;
+
+  const spliceIndex = position === "after" ? columnIndex + 1 : columnIndex;
 
   for (const row of rows) {
     const cells = $getRowCells(row);
     const isHeader = cells[0]?.isHeader() ?? false;
     const newCell = $createEmptyCell(isHeader);
     if (columnIndex < cells.length) {
-      cells[columnIndex].insertAfter(newCell);
+      if (position === "after") {
+        cells[columnIndex].insertAfter(newCell);
+      } else {
+        cells[columnIndex].insertBefore(newCell);
+      }
     } else {
       row.append(newCell);
     }
   }
 
   const newAlignments = [...alignments];
-  newAlignments.splice(columnIndex + 1, 0, null);
+  newAlignments.splice(spliceIndex, 0, null);
   table.setAlignments(newAlignments);
 
   const dividerCells = table.getDividerCells();
   if (dividerCells.length > 0) {
     const newDividerCells = [...dividerCells];
-    newDividerCells.splice(columnIndex + 1, 0, "---");
+    newDividerCells.splice(spliceIndex, 0, "---");
     table.setDividerCells(newDividerCells);
   }
 }
 
+export function $insertColumnAfter(table: TableNode, columnIndex: number): void {
+  $insertColumn(table, columnIndex, "after");
+}
+
 export function $insertColumnBefore(table: TableNode, columnIndex: number): void {
-  const rows = $getTableRows(table);
-  const alignments = table.getAlignments();
-  if (columnIndex < 0 || columnIndex >= alignments.length) return;
-
-  for (const row of rows) {
-    const cells = $getRowCells(row);
-    const isHeader = cells[0]?.isHeader() ?? false;
-    const newCell = $createEmptyCell(isHeader);
-    if (columnIndex < cells.length) {
-      cells[columnIndex].insertBefore(newCell);
-    } else {
-      row.append(newCell);
-    }
-  }
-
-  const newAlignments = [...alignments];
-  newAlignments.splice(columnIndex, 0, null);
-  table.setAlignments(newAlignments);
-
-  const dividerCells = table.getDividerCells();
-  if (dividerCells.length > 0) {
-    const newDividerCells = [...dividerCells];
-    newDividerCells.splice(columnIndex, 0, "---");
-    table.setDividerCells(newDividerCells);
-  }
+  $insertColumn(table, columnIndex, "before");
 }
 
 export function $deleteColumn(table: TableNode, columnIndex: number): void {
@@ -168,9 +154,7 @@ export function $toggleHeaderRow(table: TableNode): void {
 }
 
 export function $deleteTable(table: TableNode): void {
-  if ($isTableNode(table)) {
-    table.remove();
-  }
+  table.remove();
 }
 
 /**

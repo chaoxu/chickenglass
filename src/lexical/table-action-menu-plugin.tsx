@@ -19,10 +19,14 @@ import {
 
 interface MenuState {
   readonly anchor: HTMLElement;
+  readonly columnCount: number;
   readonly columnIndex: number;
+  readonly rowCount: number;
   readonly rowIndex: number;
   readonly tableKey: NodeKey;
 }
+
+const preventMouseDown = (e: React.MouseEvent) => e.preventDefault();
 
 function getTableNodeKey(tableEl: HTMLElement, editor: ReturnType<typeof useLexicalComposerContext>[0]): NodeKey | null {
   // Lexical stores the node key on DOM elements as __lexicalKey_<editorKey>
@@ -73,28 +77,14 @@ function TableActionMenu({
     [editor, menuState.tableKey, onClose],
   );
 
-  const rowIndex = menuState.rowIndex;
-  const columnIndex = menuState.columnIndex;
+  const { rowIndex, columnIndex, rowCount, columnCount } = menuState;
   const isHeaderRow = rowIndex === 0;
-
-  const { rowCount, columnCount } = (() => {
-    let rows = 0;
-    let cols = 0;
-    editor.read(() => {
-      const node = $getNodeByKey(menuState.tableKey);
-      if ($isTableNode(node)) {
-        rows = node.getChildren().filter($isTableRowNode).length;
-        cols = node.getAlignments().length;
-      }
-    });
-    return { rowCount: rows, columnCount: cols };
-  })();
 
   return (
     <div className="cf-table-action-menu" ref={menuRef} role="menu">
       <button
         className="cf-table-action-menu-item"
-        onMouseDown={(e) => e.preventDefault()}
+        onMouseDown={preventMouseDown}
         onClick={() => withTable((t) => $insertRowBefore(t, rowIndex))}
         role="menuitem"
         type="button"
@@ -103,7 +93,7 @@ function TableActionMenu({
       </button>
       <button
         className="cf-table-action-menu-item"
-        onMouseDown={(e) => e.preventDefault()}
+        onMouseDown={preventMouseDown}
         onClick={() => withTable((t) => $insertRowAfter(t, rowIndex))}
         role="menuitem"
         type="button"
@@ -113,7 +103,7 @@ function TableActionMenu({
       <div className="cf-table-action-menu-separator" role="separator" />
       <button
         className="cf-table-action-menu-item"
-        onMouseDown={(e) => e.preventDefault()}
+        onMouseDown={preventMouseDown}
         onClick={() => withTable((t) => $insertColumnBefore(t, columnIndex))}
         role="menuitem"
         type="button"
@@ -122,7 +112,7 @@ function TableActionMenu({
       </button>
       <button
         className="cf-table-action-menu-item"
-        onMouseDown={(e) => e.preventDefault()}
+        onMouseDown={preventMouseDown}
         onClick={() => withTable((t) => $insertColumnAfter(t, columnIndex))}
         role="menuitem"
         type="button"
@@ -133,7 +123,7 @@ function TableActionMenu({
       {rowCount > 1 && (
         <button
           className="cf-table-action-menu-item cf-table-action-menu-item--destructive"
-          onMouseDown={(e) => e.preventDefault()}
+          onMouseDown={preventMouseDown}
           onClick={() => withTable((t) => $deleteRow(t, rowIndex))}
           role="menuitem"
           type="button"
@@ -144,7 +134,7 @@ function TableActionMenu({
       {columnCount > 1 && (
         <button
           className="cf-table-action-menu-item cf-table-action-menu-item--destructive"
-          onMouseDown={(e) => e.preventDefault()}
+          onMouseDown={preventMouseDown}
           onClick={() => withTable((t) => $deleteColumn(t, columnIndex))}
           role="menuitem"
           type="button"
@@ -154,7 +144,7 @@ function TableActionMenu({
       )}
       <button
         className="cf-table-action-menu-item cf-table-action-menu-item--destructive"
-        onMouseDown={(e) => e.preventDefault()}
+        onMouseDown={preventMouseDown}
         onClick={() => withTable((t) => $deleteTable(t))}
         role="menuitem"
         type="button"
@@ -164,7 +154,7 @@ function TableActionMenu({
       <div className="cf-table-action-menu-separator" role="separator" />
       <button
         className="cf-table-action-menu-item"
-        onMouseDown={(e) => e.preventDefault()}
+        onMouseDown={preventMouseDown}
         onClick={() => withTable((t) => $toggleHeaderRow(t))}
         role="menuitem"
         type="button"
@@ -180,9 +170,6 @@ export function TableActionMenuPlugin() {
   const [menuState, setMenuState] = useState<MenuState | null>(null);
 
   useEffect(() => {
-    const rootElement = editor.getRootElement();
-    if (!rootElement) return;
-
     const handleContextMenu = (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
@@ -193,19 +180,31 @@ export function TableActionMenuPlugin() {
       const tableKey = getTableNodeKey(resolved.tableEl, editor);
       if (!tableKey) return;
 
+      let rowCount = 0;
+      let columnCount = 0;
+      editor.read(() => {
+        const node = $getNodeByKey(tableKey);
+        if ($isTableNode(node)) {
+          rowCount = node.getChildren().filter($isTableRowNode).length;
+          columnCount = node.getAlignments().length;
+        }
+      });
+
       event.preventDefault();
       setMenuState({
         anchor: resolved.cell,
+        columnCount,
         columnIndex: resolved.columnIndex,
+        rowCount,
         rowIndex: resolved.rowIndex,
         tableKey,
       });
     };
 
-    rootElement.addEventListener("contextmenu", handleContextMenu);
-    return () => {
-      rootElement.removeEventListener("contextmenu", handleContextMenu);
-    };
+    return editor.registerRootListener((rootElement, prevRootElement) => {
+      prevRootElement?.removeEventListener("contextmenu", handleContextMenu);
+      rootElement?.addEventListener("contextmenu", handleContextMenu);
+    });
   }, [editor]);
 
   const handleClose = useCallback(() => {

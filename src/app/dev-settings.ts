@@ -12,8 +12,6 @@
 
 import { create } from "zustand";
 
-// ── State shape ─────────────────────────────────────────────────────────────
-
 export interface DevSettings {
   /** Show the Lexical tree inspector panel. */
   treeView: boolean;
@@ -35,8 +33,6 @@ export interface DevSettingsStore extends DevSettings {
   /** Set a single boolean flag. */
   set: (key: keyof DevSettings, value: boolean) => void;
 }
-
-// ── Store ───────────────────────────────────────────────────────────────────
 
 export const useDevSettings = create<DevSettingsStore>((setState, getState) => ({
   treeView: false,

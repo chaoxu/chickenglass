@@ -1,60 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createHeadlessEditor } from "@lexical/headless";
-import {
-  $getRoot,
-  $getSelection,
-  $isRangeSelection,
-  LexicalEditor,
-  ParagraphNode,
-  TextNode,
-} from "lexical";
+import { $getRoot, ParagraphNode, TextNode } from "lexical";
 import { HeadingNode, $createHeadingNode } from "@lexical/rich-text";
-
-/**
- * Inline copy of readLexicalTree since we test the debug bridge output,
- * not the React panel rendering.
- */
-function $printNode(node: import("lexical").LexicalNode, indent: number): string {
-  const prefix = "  ".repeat(indent);
-  const type = node.getType();
-  const key = node.getKey();
-  let line = `${prefix}(${type}) ${JSON.stringify(key)}`;
-
-  if ("__text" in node && typeof (node as Record<string, unknown>).__text === "string") {
-    const text = (node as Record<string, unknown>).__text as string;
-    line += ` ${JSON.stringify(text.length > 40 ? `${text.slice(0, 40)}...` : text)}`;
-  }
-
-  const children =
-    "getChildren" in node && typeof node.getChildren === "function"
-      ? (node.getChildren as () => import("lexical").LexicalNode[])()
-      : [];
-
-  const childLines = children.map((child: import("lexical").LexicalNode) =>
-    $printNode(child, indent + 1),
-  );
-  return [line, ...childLines].join("\n");
-}
-
-function readLexicalTree(editor: LexicalEditor): string {
-  let result = "";
-  editor.read(() => {
-    const root = $getRoot();
-    const selection = $getSelection();
-    const lines: string[] = [];
-    lines.push(`(root) "${editor._config.namespace}"`);
-    for (const child of root.getChildren()) {
-      lines.push($printNode(child, 1));
-    }
-    if ($isRangeSelection(selection)) {
-      lines.push(
-        `\nselection: anchor=${selection.anchor.key}:${selection.anchor.offset} focus=${selection.focus.key}:${selection.focus.offset}`,
-      );
-    }
-    result = lines.join("\n");
-  });
-  return result;
-}
+import { readLexicalTree } from "./tree-print";
 
 function createTestEditor(namespace = "test-editor") {
   return createHeadlessEditor({

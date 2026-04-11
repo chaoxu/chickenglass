@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { TableNode } from "./nodes/table-node";
 
 const TABLE_SELECTOR = ".cf-lexical-table-block";
 const SCROLL_THRESHOLD = 2;
@@ -34,9 +35,19 @@ export function TableScrollShadowPlugin() {
 
   useEffect(() => {
     const tracked = new Map<HTMLElement, () => void>();
-    const resizeObserver = new ResizeObserver(() => {
-      for (const table of tracked.keys()) {
-        syncScrollState(table);
+    let rootElement: HTMLElement | null = null;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const target = entry.target as HTMLElement;
+        if (target === rootElement) {
+          // Root resized — re-check all tables for overflow changes
+          for (const table of tracked.keys()) {
+            syncScrollState(table);
+          }
+        } else if (tracked.has(target)) {
+          syncScrollState(target);
+        }
       }
     });
 
@@ -76,12 +87,6 @@ export function TableScrollShadowPlugin() {
       }
     }
 
-    const rootElement = editor.getRootElement();
-    if (rootElement) {
-      resizeObserver.observe(rootElement);
-      scanAll(rootElement);
-    }
-
     const unregisterRootListener = editor.registerRootListener(
       (nextRoot, prevRoot) => {
         if (prevRoot) {
@@ -90,6 +95,7 @@ export function TableScrollShadowPlugin() {
             detach(table);
           }
         }
+        rootElement = nextRoot;
         if (nextRoot) {
           resizeObserver.observe(nextRoot);
           scanAll(nextRoot);
@@ -97,16 +103,20 @@ export function TableScrollShadowPlugin() {
       },
     );
 
-    const unregisterUpdateListener = editor.registerUpdateListener(() => {
-      const root = editor.getRootElement();
-      if (root) {
-        scanAll(root);
-      }
-    });
+    // Only rescan tables when table nodes are added/removed, not on every keystroke.
+    const unregisterMutationListener = editor.registerMutationListener(
+      TableNode,
+      () => {
+        const root = editor.getRootElement();
+        if (root) {
+          scanAll(root);
+        }
+      },
+    );
 
     return () => {
       unregisterRootListener();
-      unregisterUpdateListener();
+      unregisterMutationListener();
       resizeObserver.disconnect();
       for (const table of tracked.keys()) {
         detach(table);

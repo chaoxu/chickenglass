@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import type { LexicalEditor } from "lexical";
-import { $getRoot, $getSelection, $isRangeSelection } from "lexical";
 import type { EditorMode } from "../editor-mode";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { isTauri } from "../../lib/tauri";
 import { recordDebugSessionEvent } from "../../debug/session-recorder";
 import type { SourceMap } from "../source-map";
+import { readLexicalTree } from "../../lexical/tree-print";
 import {
   clearCombinedPerf,
   getCombinedPerfSnapshot,
@@ -69,45 +69,6 @@ interface AppDebugDeps {
   hasDirtyDocument: boolean;
   startupComplete: boolean;
   restoredProjectRoot: string | null;
-}
-
-function $printNode(node: import("lexical").LexicalNode, indent: number): string {
-  const prefix = "  ".repeat(indent);
-  const type = node.getType();
-  const key = node.getKey();
-  let line = `${prefix}(${type}) ${JSON.stringify(key)}`;
-
-  if ("__text" in node && typeof (node as Record<string, unknown>).__text === "string") {
-    const text = (node as Record<string, unknown>).__text as string;
-    line += ` ${JSON.stringify(text.length > 40 ? `${text.slice(0, 40)}...` : text)}`;
-  }
-
-  const children = "getChildren" in node && typeof node.getChildren === "function"
-    ? (node.getChildren as () => import("lexical").LexicalNode[])()
-    : [];
-
-  const childLines = children.map((child: import("lexical").LexicalNode) => $printNode(child, indent + 1));
-  return [line, ...childLines].join("\n");
-}
-
-function readLexicalTree(editor: LexicalEditor): string {
-  let result = "";
-  editor.read(() => {
-    const root = $getRoot();
-    const selection = $getSelection();
-    const lines: string[] = [];
-    lines.push(`(root) "${editor._config.namespace}"`);
-    for (const child of root.getChildren()) {
-      lines.push($printNode(child, 1));
-    }
-    if ($isRangeSelection(selection)) {
-      lines.push(
-        `\nselection: anchor=${selection.anchor.key}:${selection.anchor.offset} focus=${selection.focus.key}:${selection.focus.offset}`,
-      );
-    }
-    result = lines.join("\n");
-  });
-  return result;
 }
 
 export function useAppDebug({
@@ -324,7 +285,7 @@ export function useAppDebug({
       line: (lineNumber: number) => getCurrentDocText().split("\n")[lineNumber - 1] ?? null,
       selection: () => editorHandle?.getSelection() ?? null,
       tree: () => lexicalEditor ? readLexicalTree(lexicalEditor) : "",
-      treeString: () => lexicalEditor ? readLexicalTree(lexicalEditor) : "",
+      get treeString() { return this.tree; },
     };
     window.__cfSourceMap = getCurrentSourceMap();
     if (import.meta.env.DEV && isTauri()) {

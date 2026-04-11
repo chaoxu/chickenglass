@@ -96,6 +96,11 @@ import type {
 import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
 import { TreeViewPlugin } from "./tree-view-plugin";
 
+function SelectionAlwaysOnPlugin() {
+  const open = useDevSettings((s) => s.selectionAlwaysOn);
+  if (!open) return null;
+  return <SelectionAlwaysOnDisplay />;
+}
 
 function getViewportFromRichSurface(root: HTMLElement): number {
   const headings = [...root.querySelectorAll<HTMLElement>(".cf-lexical-heading[data-coflat-heading-pos]")];
@@ -653,7 +658,6 @@ export function LexicalRichMarkdownEditor({
   spellCheck = false,
   testId = "lexical-editor",
 }: LexicalRichMarkdownEditorProps) {
-  const selectionAlwaysOn = useDevSettings((s) => s.selectionAlwaysOn);
   const inheritedSurface = useEditorScrollSurface();
   const initialDocRef = useRef(doc);
   const lastCommittedDocRef = useRef(doc);
@@ -838,7 +842,7 @@ export function LexicalRichMarkdownEditor({
                 {showViewportTracking ? <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} /> : null}
                 {editable ? <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} /> : null}
                 {editable ? <OnChangePlugin onChange={handleChange} /> : null}
-                {selectionAlwaysOn ? <SelectionAlwaysOnDisplay /> : null}
+                <SelectionAlwaysOnPlugin />
                 {showBibliography ? <BibliographySection /> : null}
                 <TreeViewPlugin />
               </StructureEditProvider>

@@ -107,17 +107,17 @@ class SlashPickerOption extends MenuOption {
   }
 }
 
-function filterEntries(query: string): readonly SlashPickerOption[] {
+const ALL_OPTIONS = SLASH_PICKER_ENTRIES.map((e) => new SlashPickerOption(e));
+
+function filterEntries(query: string): SlashPickerOption[] {
   const q = query.toLowerCase().trim();
   if (q.length === 0) {
-    return SLASH_PICKER_ENTRIES.map((e) => new SlashPickerOption(e));
+    return ALL_OPTIONS;
   }
-  return SLASH_PICKER_ENTRIES
-    .filter((e) =>
-      e.title.toLowerCase().includes(q)
-      || e.keywords.some((kw) => kw.includes(q)),
-    )
-    .map((e) => new SlashPickerOption(e));
+  return ALL_OPTIONS.filter((o) =>
+    o.entry.title.toLowerCase().includes(q)
+    || o.entry.keywords.some((kw) => kw.includes(q)),
+  );
 }
 
 function SlashPickerMenu({

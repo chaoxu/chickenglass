@@ -116,7 +116,8 @@ export function HeadingIndexPlugin() {
     // Initial sync
     sync();
 
-    const unregister = editor.registerUpdateListener(() => {
+    const unregister = editor.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
+      if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
       sync();
     });
 
