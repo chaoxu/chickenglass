@@ -62,7 +62,9 @@ export function SurfaceFloatingPortal({
       style={{
         ...style,
         display: visible ? "block" : "none",
+        left: 0,
         position: "absolute",
+        top: 0,
         zIndex,
       }}
     >

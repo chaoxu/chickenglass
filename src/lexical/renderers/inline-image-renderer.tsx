@@ -30,7 +30,7 @@ export function InlineImageRenderer({
 
   useEffect(() => {
     if (editing) {
-      inputRef.current?.focus();
+      inputRef.current?.focus({ preventScroll: true });
       inputRef.current?.select();
     }
   }, [editing]);

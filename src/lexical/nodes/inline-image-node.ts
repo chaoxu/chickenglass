@@ -39,6 +39,10 @@ export class InlineImageNode extends DecoratorNode<JSX.Element> {
     return document.createElement("span");
   }
 
+  isInline(): boolean {
+    return true;
+  }
+
   updateDOM(): false {
     return false;
   }

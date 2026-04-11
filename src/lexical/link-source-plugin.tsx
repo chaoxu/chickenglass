@@ -62,7 +62,7 @@ export function LinkSourcePlugin() {
     if (!editing) {
       return;
     }
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
     inputRef.current?.select();
   }, [editing]);
 

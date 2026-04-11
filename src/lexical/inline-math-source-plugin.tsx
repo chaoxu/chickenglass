@@ -174,7 +174,7 @@ export function InlineMathSourcePlugin() {
     if (!input) {
       return;
     }
-    input.focus();
+    input.focus({ preventScroll: true });
     const caret = editing.entrySide === "start" ? 0 : input.value.length;
     input.setSelectionRange(caret, caret);
   }, [editing]);

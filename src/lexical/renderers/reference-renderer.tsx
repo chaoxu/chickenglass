@@ -64,7 +64,7 @@ export function ReferenceRenderer({
 
   useEffect(() => {
     if (editingAnchor) {
-      inputRef.current?.focus();
+      inputRef.current?.focus({ preventScroll: true });
       inputRef.current?.select();
     }
   }, [editingAnchor]);
