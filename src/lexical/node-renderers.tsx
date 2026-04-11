@@ -93,12 +93,10 @@ function useRawBlockUpdater(nodeKey: NodeKey): (raw: string) => void {
 }
 
 function FencedDivStructureSourceEditor({
-  namespace,
   nodeKey,
   onClose,
   raw,
 }: {
-  readonly namespace: string;
   readonly nodeKey: NodeKey;
   readonly onClose: () => void;
   readonly raw: string;
@@ -110,7 +108,6 @@ function FencedDivStructureSourceEditor({
       <StructureSourceEditor
         className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--opener"
         doc={getFirstLine(raw)}
-        namespace={namespace}
         onChange={(nextOpener) => updateRaw(replaceFirstLine(raw, nextOpener))}
         onClose={onClose}
       />
@@ -521,7 +518,6 @@ function FrontmatterRenderer({
           className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--frontmatter"
           doc={raw}
           multiline
-          namespace={`coflat-frontmatter-source-${nodeKey}`}
           onChange={updateRaw}
           onClose={() => setEditingSource(false)}
         />
@@ -599,7 +595,6 @@ function DisplayMathBlockRenderer({
             className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--math"
             doc={raw}
             multiline
-            namespace={`coflat-display-math-${nodeKey}`}
             onChange={updateRaw}
             onClose={() => setEditing(false)}
           />
@@ -782,7 +777,6 @@ function IncludeBlockRenderer({
         <StructureSourceEditor
           className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--include"
           doc={parsed.bodyMarkdown.trim()}
-          namespace={`coflat-include-path-${nodeKey}`}
           onChange={(nextPath) => updateRaw(serializeFencedDivRaw(parsed, {
             bodyMarkdown: nextPath,
           }))}
@@ -827,7 +821,6 @@ function CaptionedBlockRenderer({
     <section className={`cf-lexical-block cf-lexical-block--${parsed.blockType} cf-lexical-block--captioned`}>
       {editingOpener ? (
         <FencedDivStructureSourceEditor
-          namespace={`coflat-block-opener-${nodeKey}`}
           nodeKey={nodeKey}
           onClose={() => setEditingOpener(false)}
           raw={raw}
@@ -914,7 +907,6 @@ function EmbedBlockRenderer({
       </header>
       {editingOpener ? (
         <FencedDivStructureSourceEditor
-          namespace={`coflat-embed-opener-${nodeKey}`}
           nodeKey={nodeKey}
           onClose={() => setEditingOpener(false)}
           raw={raw}
@@ -925,7 +917,6 @@ function EmbedBlockRenderer({
           <StructureSourceEditor
             className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--embed"
             doc={parsed.bodyMarkdown.trim()}
-            namespace={`coflat-embed-${nodeKey}`}
             onChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
               bodyMarkdown: nextBody,
             }))}
@@ -1023,7 +1014,6 @@ function FencedDivBlockRenderer({
     <section className={`cf-lexical-block cf-lexical-block--${parsed.blockType}`}>
       {editingOpener ? (
         <FencedDivStructureSourceEditor
-          namespace={`coflat-block-opener-${nodeKey}`}
           nodeKey={nodeKey}
           onClose={() => setEditingOpener(false)}
           raw={raw}

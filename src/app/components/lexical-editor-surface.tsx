@@ -2,11 +2,10 @@ import { useCallback, useEffect, useRef } from "react";
 import type { LexicalEditor } from "lexical";
 
 import {
-  LexicalPlainTextEditor,
   type MarkdownEditorHandle,
   type MarkdownEditorSelection,
-} from "../../lexical/plain-text-editor";
-import { LexicalRichMarkdownEditor } from "../../lexical/rich-markdown-editor";
+} from "../../lexical/markdown-editor-types";
+import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
 import { FORMAT_EVENT, type FormatEventDetail } from "../../constants/events";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import type { EditorMode } from "../editor-mode";
@@ -43,6 +42,7 @@ export function LexicalEditorSurface({
 }: LexicalEditorSurfaceProps) {
   const handleRef = useRef<MarkdownEditorHandle | null>(null);
   const docRef = useRef(doc);
+  const readyPendingRef = useRef(false);
 
   useEffect(() => {
     docRef.current = doc;
@@ -51,7 +51,27 @@ export function LexicalEditorSurface({
   const handleEditorReady = useCallback((handle: MarkdownEditorHandle, editor: LexicalEditor) => {
     handleRef.current = handle;
     onEditorReady?.(handle, editor);
-  }, [onEditorReady]);
+    if (readyPendingRef.current) {
+      readyPendingRef.current = false;
+      onDocumentReady?.();
+    }
+  }, [onDocumentReady, onEditorReady]);
+
+  useEffect(() => {
+    if (!onDocumentReady) {
+      return;
+    }
+    if (!onEditorReady) {
+      onDocumentReady();
+      return;
+    }
+    if (handleRef.current) {
+      readyPendingRef.current = false;
+      onDocumentReady();
+      return;
+    }
+    readyPendingRef.current = true;
+  }, [doc, editorMode, onDocumentReady, onEditorReady]);
 
   useEffect(() => {
     const handleFormat = (event: Event) => {
@@ -73,57 +93,24 @@ export function LexicalEditorSurface({
   }, []);
 
   return (
-    <>
-      <div inert aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden opacity-0">
-        <LexicalPlainTextEditor
-          doc={doc}
-          namespace="coflat-app-lexical-source-bridge"
-          editorClassName="cf-lexical-editor cf-lexical-editor--hidden"
-          onDocChange={onDocChange}
-          onEditorReady={handleEditorReady}
-          onSelectionChange={onSelectionChange}
-          onTextChange={onTextChange}
-          onDocumentReady={onDocumentReady}
-          spellCheck={false}
-          testId={null}
-        />
-      </div>
-      {editorMode === "source" ? (
-        <LexicalPlainTextEditor
-          doc={doc}
-          namespace="coflat-app-lexical-visible-source"
-          editorClassName={[
-            "cf-lexical-editor",
-            "cf-lexical-editor--source",
-            "h-full overflow-auto px-6 py-8 text-[var(--cf-fg)] outline-none font-mono whitespace-pre-wrap",
-          ].join(" ")}
-          onDocChange={onDocChange}
-          onTextChange={onTextChange}
-          onScrollChange={onScrollChange}
-          spellCheck={spellCheck}
-        />
-      ) : (
-        <LexicalRichMarkdownEditor
-          doc={doc}
-          docPath={docPath}
-          editable
-          editorClassName={[
-            "cf-lexical-editor",
-            "cf-lexical-editor--rich",
-            "px-6 py-8 text-[var(--cf-fg)] outline-none",
-          ].join(" ")}
-          namespace="coflat-app-lexical-rich-surface"
-          onDocChange={onDocChange}
-          onRootElementChange={onRichRootElementChange}
-          onScrollChange={onScrollChange}
-          onTextChange={onTextChange}
-          onViewportFromChange={onViewportFromChange}
-          enableSourceNavigation
-          showIncludeAffordances
-          showBibliography
-          spellCheck={spellCheck}
-        />
-      )}
-    </>
+    <LexicalMarkdownEditor
+      doc={doc}
+      docPath={docPath}
+      editorMode={editorMode}
+      editable
+      editorClassName={[
+        "cf-lexical-editor",
+        editorMode === "source" ? "h-full" : "px-6 py-8 text-[var(--cf-fg)] outline-none",
+      ].join(" ")}
+      namespace="coflat-app-lexical-surface"
+      onDocChange={onDocChange}
+      onEditorReady={handleEditorReady}
+      onRootElementChange={onRichRootElementChange}
+      onScrollChange={onScrollChange}
+      onSelectionChange={onSelectionChange}
+      onTextChange={onTextChange}
+      onViewportFromChange={onViewportFromChange}
+      spellCheck={spellCheck}
+    />
   );
 }
