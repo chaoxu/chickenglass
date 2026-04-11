@@ -1,12 +1,15 @@
 import { $isCodeNode, type CodeNode } from "@lexical/code";
 import {
   $generateJSONFromSelectedNodes,
+  $generateNodesFromSerializedNodes,
   $getLexicalContent,
+  $insertGeneratedNodes,
   type LexicalClipboardData,
 } from "@lexical/clipboard";
 import {
   $createParagraphNode,
   $getRoot,
+  $getSelection,
   $isDecoratorNode,
   $isElementNode,
   $isRangeSelection,
@@ -20,6 +23,7 @@ import {
 import {
   createHeadlessCoflatEditor,
   getLexicalMarkdown,
+  setLexicalMarkdown,
 } from "./markdown";
 import { renderMarkdownRichHtml } from "./rendering";
 import type { LexicalRenderContextValue } from "./render-context";
@@ -125,6 +129,52 @@ function serializeSelectedNodesToMarkdown(nodes: readonly SerializedLexicalNode[
   return getLexicalMarkdown(editor);
 }
 
+function parseMarkdownToSerializedNodes(markdown: string): readonly SerializedLexicalNode[] {
+  const editor = createHeadlessCoflatEditor();
+  setLexicalMarkdown(editor, markdown);
+  let serializedNodes: readonly SerializedLexicalNode[] = [];
+
+  editor.update(() => {
+    $getRoot().select(0, $getRoot().getChildrenSize());
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) {
+      serializedNodes = [];
+      return;
+    }
+
+    serializedNodes = $generateJSONFromSelectedNodes<SerializedLexicalNode>(editor, selection).nodes;
+  }, { discrete: true });
+
+  return serializedNodes;
+}
+
+function resolveInsertedNodes(
+  nodes: LexicalNode[],
+  selection: BaseSelection,
+): LexicalNode[] {
+  if (
+    !$isRangeSelection(selection)
+    || nodes.length !== 1
+    || selection.anchor.type !== "text"
+    || selection.focus.type !== "text"
+  ) {
+    return nodes;
+  }
+
+  const [firstNode] = nodes;
+  if (!$isElementNode(firstNode) || firstNode.getType() !== "paragraph") {
+    return nodes;
+  }
+
+  const children = firstNode.getChildren();
+  if (children.length === 0) {
+    return nodes;
+  }
+
+  firstNode.clear();
+  return children;
+}
+
 export function getCoflatClipboardData(
   editor: LexicalEditor,
   renderContext: ClipboardRenderContext,
@@ -168,4 +218,51 @@ export function getCoflatClipboardData(
   }
 
   return clipboardData;
+}
+
+export function getCoflatMarkdownFromDataTransfer(
+  dataTransfer: Pick<DataTransfer, "getData">,
+): string | null {
+  const markdown = dataTransfer.getData(COFLAT_MARKDOWN_MIME);
+  return markdown || null;
+}
+
+export function insertCoflatMarkdownAtSelection(
+  editor: LexicalEditor,
+  markdown: string,
+  options?: {
+    readonly tag?: string;
+  },
+): boolean {
+  if (!markdown) {
+    return false;
+  }
+
+  const serializedNodes = parseMarkdownToSerializedNodes(markdown);
+  if (serializedNodes.length === 0) {
+    return false;
+  }
+
+  let inserted = false;
+
+  editor.update(() => {
+    const selection = $getSelection();
+    if (!selection) {
+      return;
+    }
+
+    const generatedNodes = $generateNodesFromSerializedNodes([...serializedNodes]);
+    const nodes = resolveInsertedNodes(generatedNodes, selection);
+    if (nodes.length === 0) {
+      return;
+    }
+
+    $insertGeneratedNodes(editor, nodes, selection);
+    inserted = true;
+  }, {
+    discrete: true,
+    tag: options?.tag,
+  });
+
+  return inserted;
 }

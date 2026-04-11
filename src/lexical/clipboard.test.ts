@@ -1,19 +1,31 @@
+import { act, render, waitFor } from "@testing-library/react";
+import { createElement } from "react";
 import {
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  $isTextNode,
+  $setSelection,
+  PASTE_COMMAND,
+  getNearestEditorFromDOMNode,
 } from "lexical";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   COFLAT_MARKDOWN_MIME,
   getCoflatClipboardData,
+  getCoflatMarkdownFromDataTransfer,
+  insertCoflatMarkdownAtSelection,
   type ClipboardRenderContext,
 } from "./clipboard";
 import {
   createHeadlessCoflatEditor,
+  getLexicalMarkdown,
   setLexicalMarkdown,
 } from "./markdown";
+import { FileSystemProvider } from "../app/contexts/file-system-context";
+import { MemoryFileSystem } from "../app/file-manager";
+import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
 import { buildRenderIndex } from "./rendering";
 
 function createRenderContext(doc: string): ClipboardRenderContext {
@@ -75,6 +87,35 @@ describe("coflat clipboard helpers", () => {
     expect(clipboardData).toBeNull();
   });
 
+  it("inserts coflat markdown into the current selection", () => {
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, "seed");
+
+    editor.update(() => {
+      const textNode = $getRoot().getFirstDescendant();
+      if (!$isTextNode(textNode)) {
+        throw new Error("expected a text node");
+      }
+
+      textNode.select(0, textNode.getTextContentSize());
+    }, { discrete: true });
+
+    expect(insertCoflatMarkdownAtSelection(editor, "**bold** $x^2$")).toBe(true);
+    expect(getLexicalMarkdown(editor)).toBe("**bold** $x^2$");
+  });
+
+  it("does not insert coflat markdown when there is no current selection", () => {
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, "seed");
+
+    editor.update(() => {
+      $setSelection(null);
+    }, { discrete: true });
+
+    expect(insertCoflatMarkdownAtSelection(editor, "**bold** $x^2$")).toBe(false);
+    expect(getLexicalMarkdown(editor)).toBe("seed");
+  });
+
   it("emits HTML and canonical markdown for fenced code block selections", () => {
     const doc = "```ts\nconst answer = 42;\n```";
     const editor = createHeadlessCoflatEditor();
@@ -97,5 +138,143 @@ describe("coflat clipboard helpers", () => {
     expect(clipboardData?.[COFLAT_MARKDOWN_MIME]).toBe(doc);
     expect(clipboardData?.["text/html"]).toContain("<pre");
     expect(clipboardData?.["text/html"]).toContain("const answer = 42;");
+  });
+
+  it("reads coflat markdown from custom clipboard data", () => {
+    expect(getCoflatMarkdownFromDataTransfer({
+      getData(type: string) {
+        return type === COFLAT_MARKDOWN_MIME ? "## heading" : "";
+      },
+    })).toBe("## heading");
+
+    expect(getCoflatMarkdownFromDataTransfer({
+      getData() {
+        return "";
+      },
+    })).toBeNull();
+  });
+
+  it("handles coflat-origin paste through PASTE_COMMAND in the live editor", async () => {
+    const onTextChange = vi.fn();
+    const fs = new MemoryFileSystem();
+    let rootElement: HTMLElement | null = null;
+    vi.stubGlobal("DragEvent", class DragEvent extends Event {});
+    vi.stubGlobal("ClipboardEvent", class ClipboardEvent extends Event {});
+
+    const view = render(
+      createElement(FileSystemProvider, { value: fs },
+        createElement(LexicalRichMarkdownEditor, {
+          doc: "seed",
+          onRootElementChange: (nextRoot: HTMLElement | null) => {
+            rootElement = nextRoot;
+          },
+          requireUserEditFlag: false,
+          onTextChange,
+        })),
+    );
+
+    try {
+      await waitFor(() => expect(rootElement).not.toBeNull());
+
+      const editor = getNearestEditorFromDOMNode(rootElement);
+      expect(editor).not.toBeNull();
+      if (!editor) {
+        throw new Error("expected a lexical editor instance");
+      }
+
+      act(() => {
+        editor.update(() => {
+          const textNode = $getRoot().getFirstDescendant();
+          if (!$isTextNode(textNode)) {
+            throw new Error("expected an initial text node");
+          }
+
+          textNode.select(0, textNode.getTextContentSize());
+        });
+      });
+
+      const clipboardData = {
+        files: [],
+        getData(type: string) {
+          return type === COFLAT_MARKDOWN_MIME ? "**bold** $x^2$" : "";
+        },
+        types: [COFLAT_MARKDOWN_MIME],
+      } as DataTransfer;
+      const preventDefault = vi.fn();
+
+      act(() => {
+        editor.dispatchCommand(PASTE_COMMAND, {
+          clipboardData,
+          preventDefault,
+          target: rootElement,
+        } as ClipboardEvent);
+      });
+
+      await waitFor(() => {
+        expect(getLexicalMarkdown(editor)).toBe("**bold** $x^2$");
+        expect(onTextChange).toHaveBeenCalledWith("**bold** $x^2$");
+      });
+      expect(preventDefault).toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      vi.unstubAllGlobals();
+    }
+  }, 15_000);
+
+  it("falls through when coflat paste arrives without an editor selection", async () => {
+    const fs = new MemoryFileSystem();
+    let rootElement: HTMLElement | null = null;
+    vi.stubGlobal("DragEvent", class DragEvent extends Event {});
+    vi.stubGlobal("ClipboardEvent", class ClipboardEvent extends Event {});
+
+    const view = render(
+      createElement(FileSystemProvider, { value: fs },
+        createElement(LexicalRichMarkdownEditor, {
+          doc: "seed",
+          onRootElementChange: (nextRoot: HTMLElement | null) => {
+            rootElement = nextRoot;
+          },
+          requireUserEditFlag: false,
+        })),
+    );
+
+    try {
+      await waitFor(() => expect(rootElement).not.toBeNull());
+
+      const editor = getNearestEditorFromDOMNode(rootElement);
+      expect(editor).not.toBeNull();
+      if (!editor) {
+        throw new Error("expected a lexical editor instance");
+      }
+
+      act(() => {
+        editor.update(() => {
+          $setSelection(null);
+        });
+      });
+
+      const clipboardData = {
+        files: [],
+        getData(type: string) {
+          return type === COFLAT_MARKDOWN_MIME ? "**bold** $x^2$" : "";
+        },
+        types: [COFLAT_MARKDOWN_MIME],
+      } as DataTransfer;
+      const preventDefault = vi.fn();
+
+      act(() => {
+        editor.dispatchCommand(PASTE_COMMAND, {
+          clipboardData,
+          preventDefault,
+          target: rootElement,
+        } as ClipboardEvent);
+      });
+
+      expect(getLexicalMarkdown(editor)).toBe("seed");
+      expect(preventDefault).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      vi.unstubAllGlobals();
+    }
   });
 });
