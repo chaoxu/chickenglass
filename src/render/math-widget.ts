@@ -29,6 +29,9 @@ import { cloneRenderedHTMLElement } from "./widget-core";
 const KATEX_STYLE_ID = "cf-katex-styles";
 const displayMathHeightCache = new Map<string, number>();
 const displayMathDomCache = new Map<string, HTMLElement>();
+const DEFAULT_DISPLAY_MATH_HEIGHT_PX = 32;
+const DISPLAY_MATH_EXTRA_LINE_HEIGHT_PX = 14;
+const MAX_ESTIMATED_DISPLAY_MATH_HEIGHT_PX = 96;
 
 function ensureKatexStyles(): void {
   if (typeof document === "undefined") return;
@@ -38,6 +41,17 @@ function ensureKatexStyles(): void {
   styleEl.id = KATEX_STYLE_ID;
   styleEl.textContent = katexStyles;
   document.head.appendChild(styleEl);
+}
+
+function estimateDisplayMathHeight(latex: string): number {
+  let lineCount = Math.max(1, latex.split("\n").length);
+  if (latex.includes("\\\\") || latex.includes("\\begin{")) {
+    lineCount += 1;
+  }
+  return Math.min(
+    MAX_ESTIMATED_DISPLAY_MATH_HEIGHT_PX,
+    DEFAULT_DISPLAY_MATH_HEIGHT_PX + (lineCount - 1) * DISPLAY_MATH_EXTRA_LINE_HEIGHT_PX,
+  );
 }
 
 ensureKatexStyles();
@@ -367,10 +381,11 @@ export class MathWidget extends ShellMacroAwareWidget {
 
   get estimatedHeight(): number {
     if (!this.isDisplay) return -1;
-    return estimatedBlockWidgetHeight(
+    const cached = estimatedBlockWidgetHeight(
       displayMathHeightCache,
       this.displayMeasurementKey,
     );
+    return cached >= 0 ? cached : estimateDisplayMathHeight(this.latex);
   }
 
   override ignoreEvent(): boolean {

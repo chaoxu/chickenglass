@@ -41,17 +41,20 @@ function buildDemoAssetUrl(path: string): string | null {
 /** In-memory filesystem for demo/testing purposes. */
 export class MemoryFileSystem implements FileSystem {
   private readonly files: Map<string, string>;
+  private readonly binaryPaths: Set<string>;
   /** Tracks explicitly created directories (not just inferred from file paths). */
   private readonly dirs: Set<string>;
   private immediateChildrenCache: Map<string, readonly FileEntry[]> | null = null;
 
   constructor(initialFiles?: Record<string, string>) {
     this.files = new Map(Object.entries(initialFiles ?? {}));
+    this.binaryPaths = new Set();
     this.dirs = new Set();
   }
 
   replaceAll(entries: readonly MemoryFileSystemEntry[]): void {
     this.files.clear();
+    this.binaryPaths.clear();
     this.dirs.clear();
 
     for (const entry of entries) {
@@ -60,6 +63,9 @@ export class MemoryFileSystem implements FileSystem {
         this.dirs.add(parts.slice(0, i).join("/"));
       }
       this.files.set(entry.path, entry.kind === "text" ? entry.content : entry.base64);
+      if (entry.kind === "binary") {
+        this.binaryPaths.add(entry.path);
+      }
     }
 
     this.invalidateImmediateChildrenCache();
@@ -199,6 +205,7 @@ export class MemoryFileSystem implements FileSystem {
       throw new Error(`File not found: ${path}`);
     }
     this.files.set(path, content);
+    this.binaryPaths.delete(path);
   }
 
   async createFile(path: string, content?: string): Promise<void> {
@@ -206,6 +213,7 @@ export class MemoryFileSystem implements FileSystem {
       throw new Error(`File already exists: ${path}`);
     }
     this.files.set(path, content ?? "");
+    this.binaryPaths.delete(path);
     this.invalidateImmediateChildrenCache();
   }
 
@@ -230,6 +238,9 @@ export class MemoryFileSystem implements FileSystem {
     }
     this.files.delete(oldPath);
     this.files.set(newPath, content);
+    if (this.binaryPaths.delete(oldPath)) {
+      this.binaryPaths.add(newPath);
+    }
     this.invalidateImmediateChildrenCache();
   }
 
@@ -259,13 +270,17 @@ export class MemoryFileSystem implements FileSystem {
       }
     }
     this.files.set(path, uint8ArrayToBase64(data));
+    this.binaryPaths.add(path);
     this.invalidateImmediateChildrenCache();
   }
 
   async readFileBinary(path: string): Promise<Uint8Array> {
     const content = this.files.get(path);
     if (content !== undefined) {
-      return base64ToUint8Array(content);
+      if (this.binaryPaths.has(path)) {
+        return base64ToUint8Array(content);
+      }
+      return new TextEncoder().encode(content);
     }
     // Fallback: try fetching as a static asset (e.g., PDF files served by Vite
     // from the demo/ directory that weren't loaded into the in-memory filesystem).
@@ -288,6 +303,7 @@ export class MemoryFileSystem implements FileSystem {
     // Check if it's a file first
     if (this.files.has(path)) {
       this.files.delete(path);
+      this.binaryPaths.delete(path);
       this.invalidateImmediateChildrenCache();
       return;
     }

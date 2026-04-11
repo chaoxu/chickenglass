@@ -16,7 +16,9 @@ import { createElement, useState, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import {
+  clearScrollGuardEvents,
   computeScrollGuardPadding,
+  getScrollGuardEvents,
   guardReverseScrollRemap,
   useEditorScroll,
   type UseEditorScrollReturn,
@@ -28,6 +30,7 @@ import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 // `requestMeasure` (added for #463 large-scroll viewport recovery).
 
 interface MockView {
+  dom: HTMLDivElement;
   scrollDOM: HTMLDivElement;
   contentDOM: HTMLDivElement;
   lineBlockAtHeight: (h: number) => { from: number };
@@ -48,7 +51,12 @@ function createMockView(): MockView {
     writable: true,
     value: 600,
   });
+  Object.defineProperty(scrollDOM, "isConnected", {
+    configurable: true,
+    value: true,
+  });
   return {
+    dom: scrollDOM,
     scrollDOM,
     contentDOM,
     lineBlockAtHeight: vi.fn((h: number) => ({ from: Math.floor(h) })),
@@ -110,6 +118,7 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     useEditorTelemetryStore.getState().reset();
+    clearScrollGuardEvents();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -306,7 +315,9 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     expect(mockView.scrollDOM.scrollTop).toBe(1490);
     expect(getStoredScroll().scrollTop).toBe(1490);
     expect(mockView.requestMeasure).toHaveBeenCalledTimes(1);
+    expect(getScrollGuardEvents()).toHaveLength(0);
   });
+
 });
 
 describe("guardReverseScrollRemap", () => {
@@ -320,6 +331,7 @@ describe("guardReverseScrollRemap", () => {
       wheelDeltaY: 90,
       wheelAgeMs: 20,
       preservedMaxScrollTop: null,
+      preservedTargetTop: null,
     })).toEqual({
       correctedTop: 1490,
       paddingBottom: 600,
@@ -338,6 +350,7 @@ describe("guardReverseScrollRemap", () => {
       wheelDeltaY: 90,
       wheelAgeMs: 20,
       preservedMaxScrollTop: null,
+      preservedTargetTop: null,
     })).toBeNull();
   });
 
@@ -351,7 +364,27 @@ describe("guardReverseScrollRemap", () => {
       wheelDeltaY: 90,
       wheelAgeMs: 20,
       preservedMaxScrollTop: null,
+      preservedTargetTop: null,
     })).toBeNull();
+  });
+
+  it("reuses the preserved wheel target instead of adding another wheel step", () => {
+    expect(guardReverseScrollRemap({
+      previousTop: 1490,
+      previousHeight: 2400,
+      currentTop: 1200,
+      currentHeight: 1800,
+      clientHeight: 600,
+      wheelDeltaY: 90,
+      wheelAgeMs: 20,
+      preservedMaxScrollTop: 2400,
+      preservedTargetTop: 1490,
+    })).toEqual({
+      correctedTop: 1490,
+      paddingBottom: 1200,
+      preservedMaxScrollTop: 2400,
+      observedMaxScrollTop: 1200,
+    });
   });
 });
 

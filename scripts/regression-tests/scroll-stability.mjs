@@ -14,7 +14,7 @@ export const name = "scroll-stability";
 
 const STEP_PX = 180;
 const STEP_COUNT = 8;
-const STEP_SETTLE_MS = 120;
+const STEP_SETTLE_MS = 220;
 const DOWN_OVERSHOOT_TOLERANCE_PX = 120;
 const UP_OVERSHOOT_TOLERANCE_PX = 120;
 const REVERSE_TOLERANCE_PX = 40;
@@ -66,7 +66,7 @@ function findScrollAnomalies(samples) {
 
 export async function run(page) {
   await openFixtureDocument(page, RANKDECREASE_FIXTURE, { mode: "rich" });
-  await sleep(600);
+  await sleep(900);
 
   const samples = await page.evaluate(
     async ({ stepPx, stepCount, settleMs }) => {
@@ -75,6 +75,32 @@ export async function run(page) {
       const settle = async () => {
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         await wait(settleMs);
+      };
+      const readScrollMetrics = () => ({
+        scrollTop: Math.round(view.scrollDOM.scrollTop),
+        scrollHeight: Math.round(view.scrollDOM.scrollHeight),
+        maxScrollTop: Math.round(
+          Math.max(0, view.scrollDOM.scrollHeight - view.scrollDOM.clientHeight),
+        ),
+      });
+      const waitForStableNearBottom = async () => {
+        let stableCount = 0;
+        let previous = readScrollMetrics();
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          await settle();
+          const current = readScrollMetrics();
+          if (
+            current.scrollTop === previous.scrollTop
+            && current.scrollHeight === previous.scrollHeight
+            && current.maxScrollTop === previous.maxScrollTop
+          ) {
+            stableCount += 1;
+            if (stableCount >= 2) return;
+          } else {
+            stableCount = 0;
+          }
+          previous = current;
+        }
       };
       const sample = (label) => {
         const topPos = view.lineBlockAtHeight(view.scrollDOM.scrollTop).from;
@@ -96,7 +122,7 @@ export async function run(page) {
         0,
         view.scrollDOM.scrollHeight - view.scrollDOM.clientHeight - 2200,
       );
-      await settle();
+      await waitForStableNearBottom();
       trace.push(sample("start"));
 
       for (let step = 0; step < stepCount; step += 1) {

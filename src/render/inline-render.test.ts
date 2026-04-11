@@ -401,30 +401,33 @@ describe("renderInlineMarkdown — resolved reference context", () => {
     expect(html).not.toContain("cm-editor");
   });
 
-  it("renders resolved table-preview crossrefs as plain label text", () => {
+  it("renders resolved table-preview crossrefs as interactive preview DOM", () => {
     const html = renderWithReferenceContext(
       "See [@thm:fundamental].",
       inlineReferenceContext,
       "table-preview-inline",
     );
-    expect(html).toBe("See (Theorem 3).");
+    expect(html).toContain('class="cf-crossref"');
+    expect(html).toContain("Theorem 3");
   });
 
-  it("renders table-preview citations as plain citation text", () => {
+  it("renders table-preview citations with citation styling", () => {
     const html = renderWithReferenceContext(
       "See [@cormen2009].",
       inlineReferenceContext,
       "table-preview-inline",
     );
-    expect(html).toBe("See [1].");
+    expect(html).toContain('class="cf-citation"');
+    expect(html).toContain("[1]");
   });
 
-  it("renders table-preview inline math as raw source text", () => {
+  it("renders table-preview inline math with KaTeX output", () => {
     const html = renderWithReferenceContext(
       "Cost $O(n^2)$.",
       inlineReferenceContext,
       "table-preview-inline",
     );
-    expect(html).toBe("Cost $O(n^2)$.");
+    expect(html).toContain('class="cf-math-inline"');
+    expect(html).toContain("katex");
   });
 });

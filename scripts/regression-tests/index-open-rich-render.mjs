@@ -144,6 +144,16 @@ export async function run(page) {
 
   await scrollToText(page, "Links and Images");
   await settleEditorLayout(page, { frameCount: 4, delayMs: 80 });
+  await page.waitForFunction(
+    () => {
+      const inView = (el) => {
+        const rect = el.getBoundingClientRect();
+        return rect.bottom > 0 && rect.top < window.innerHeight;
+      };
+      return Array.from(document.querySelectorAll(".cf-image-wrapper")).some(inView);
+    },
+    { timeout: 5000 },
+  ).catch(() => {});
 
   const imageStatus = await page.evaluate(() => {
     const inView = (el) => {

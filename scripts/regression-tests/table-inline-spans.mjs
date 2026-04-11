@@ -71,7 +71,8 @@ async function inspectCase(page, insertText) {
       selection: { anchor: 0 },
     });
 
-    const cells = [...view.dom.querySelectorAll(".cf-grid-cell")].map((el) => el.textContent?.trim() ?? "");
+    const cells = [...view.dom.querySelectorAll(".cf-table-widget th, .cf-table-widget td")]
+      .map((el) => el.textContent?.trim() ?? "");
     const thirdIndex = cells.indexOf("Path to CSL style file");
     return {
       foundTarget: true,

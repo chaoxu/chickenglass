@@ -64,46 +64,6 @@ function renderReference(
     return;
   }
 
-  if (surface === "table-preview-inline") {
-    if (!referenceContext) {
-      container.appendChild(document.createTextNode(fragment.rawText));
-      return;
-    }
-
-    if (!fragment.parenthetical) {
-      const classification = referenceContext.classify(fragment.ids[0], false);
-      if (classification.kind === "crossref") {
-        container.appendChild(document.createTextNode(classification.resolved.label));
-        return;
-      }
-      if (classification.kind === "citation") {
-        container.appendChild(document.createTextNode(referenceContext.citeNarrative(fragment.ids[0])));
-        return;
-      }
-      container.appendChild(document.createTextNode(fragment.rawText));
-      return;
-    }
-
-    const classifications = fragment.ids.map((id) =>
-      referenceContext.classify(id, true),
-    );
-    const hasCitation = classifications.some((classification) => classification.kind === "citation");
-    if (hasCitation) {
-      container.appendChild(
-        document.createTextNode(referenceContext.cite(fragment.ids, fragment.locators)),
-      );
-      return;
-    }
-
-    const label = classifications.map((classification, index) => (
-      classification.kind === "crossref"
-        ? classification.resolved.label
-        : fragment.ids[index]
-    )).join("; ");
-    container.appendChild(document.createTextNode(`(${label})`));
-    return;
-  }
-
   if (!referenceContext) {
     if (!fragment.parenthetical) {
       container.appendChild(document.createTextNode(fragment.rawText));
@@ -281,10 +241,12 @@ function renderFragment(
     }
 
     case "highlight": {
-      const mark = document.createElement("mark");
-      mark.className = CSS.highlight;
-      renderFragments(mark, fragment.children, macros, surface, referenceContext);
-      container.appendChild(mark);
+      const highlight = document.createElement(
+        surface === "document-body" ? "mark" : "span",
+      );
+      highlight.className = CSS.highlight;
+      renderFragments(highlight, fragment.children, macros, surface, referenceContext);
+      container.appendChild(highlight);
       return;
     }
 
@@ -297,11 +259,6 @@ function renderFragment(
     }
 
     case "math": {
-      if (surface === "table-preview-inline") {
-        container.appendChild(document.createTextNode(fragment.raw));
-        return;
-      }
-
       const span = document.createElement("span");
       span.className = CSS.mathInline;
       span.setAttribute("role", "img");

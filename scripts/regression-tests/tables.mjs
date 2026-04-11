@@ -1,8 +1,8 @@
 /**
  * Regression test: table grid rendering.
  *
- * Verifies that pipe tables in the document are rendered with the grid layout
- * system (`.cf-grid-cell` elements).
+ * Verifies that pipe tables in the document are rendered as semantic table DOM
+ * inside the table widget.
  */
 
 /* global window */
@@ -25,24 +25,33 @@ export async function run(page) {
 
   await scrollToText(page, "# Tables");
 
-  // Check for rendered grid cells
-  const cellCount = await page.evaluate(() => {
+  // Check for rendered table cells
+  const tableStatus = await page.evaluate(() => {
     const editor = window.__cmView.dom;
-    return editor.querySelectorAll(".cf-grid-cell").length;
+    return {
+      widgetCount: editor.querySelectorAll(".cf-table-widget").length,
+      headerCellCount: editor.querySelectorAll(".cf-table-widget thead th").length,
+      bodyCellCount: editor.querySelectorAll(".cf-table-widget tbody td").length,
+    };
   });
 
-  if (cellCount === 0) {
-    return { pass: false, message: "Table node exists but no .cf-grid-cell elements in DOM" };
+  if (
+    tableStatus.widgetCount === 0 ||
+    tableStatus.headerCellCount === 0 ||
+    tableStatus.bodyCellCount === 0
+  ) {
+    return {
+      pass: false,
+      message:
+        `Table node exists but rendered semantic table DOM is missing ` +
+        `(widgets=${tableStatus.widgetCount}, headers=${tableStatus.headerCellCount}, body=${tableStatus.bodyCellCount})`,
+    };
   }
-
-  // Verify header cells exist
-  const headerCellCount = await page.evaluate(() => {
-    const editor = window.__cmView.dom;
-    return editor.querySelectorAll(".cf-grid-cell-header").length;
-  });
 
   return {
     pass: true,
-    message: `${cellCount} grid cells (${headerCellCount} headers) rendered`,
+    message:
+      `${tableStatus.headerCellCount + tableStatus.bodyCellCount} table cells ` +
+      `(${tableStatus.headerCellCount} headers) rendered`,
   };
 }

@@ -246,8 +246,20 @@ export async function discardCurrentFile(page) {
  * Uses the app's real openFile function via window.__app.
  */
 export async function openFile(page, path) {
-  await page.evaluate((p) => window.__app.openFile(p), path);
-  await sleep(500);
+  try {
+    await page.evaluate((p) => window.__app.openFile(p), path);
+    await sleep(500);
+    return;
+  } catch (error) {
+    if (!hasFixtureDocument(path)) {
+      throw error;
+    }
+  }
+
+  await openFixtureDocument(page, path, {
+    discardCurrent: false,
+    project: "full-project",
+  });
 }
 
 function defaultFixtureCandidates(path) {
@@ -467,8 +479,13 @@ export async function openFixtureDocument(page, fixture, options = {}) {
         throw new Error("window.__app.openFile is unavailable.");
       }
 
+      if (fixtureProjectFiles && app.loadFixtureProject) {
+        await app.loadFixtureProject(fixtureProjectFiles, path);
+        return { method: "loadFixtureProject" };
+      }
+
       const canOpenInCurrentProject = tryOpenFileFirst
-        || (fixtureProjectFiles && app.hasFile ? await app.hasFile(path) : false);
+        || (app.hasFile ? await app.hasFile(path) : false);
 
       if (canOpenInCurrentProject) {
         try {
@@ -479,11 +496,6 @@ export async function openFixtureDocument(page, fixture, options = {}) {
             throw error;
           }
         }
-      }
-
-      if (fixtureProjectFiles && app.loadFixtureProject) {
-        await app.loadFixtureProject(fixtureProjectFiles, path);
-        return { method: "loadFixtureProject" };
       }
 
       if (!app.openFileWithContent) {

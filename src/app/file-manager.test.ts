@@ -239,6 +239,22 @@ describe("MemoryFileSystem.readFileBinary", () => {
     expect(result).toEqual(data);
   });
 
+  it("returns UTF-8 bytes for text-backed svg fixture entries", async () => {
+    const fs = new MemoryFileSystem();
+    fs.replaceAll([
+      {
+        path: "assets/figure.svg",
+        kind: "text",
+        content: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>x</text></svg>",
+      },
+    ]);
+
+    const result = await fs.readFileBinary("assets/figure.svg");
+
+    expect(new TextDecoder().decode(result)).toContain("<svg");
+    expect(new TextDecoder().decode(result)).toContain("<text>x</text>");
+  });
+
   it("fetches missing demo assets through an encoded demo URL", async () => {
     const bytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
     const fetchMock = vi.fn().mockResolvedValue({

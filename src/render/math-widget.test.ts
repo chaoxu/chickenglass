@@ -107,6 +107,16 @@ describe("MathWidget (display)", () => {
     expect(el.dataset.shellFrom).toBe("8");
     expect(el.dataset.shellTo).toBe("15");
   });
+
+  it("provides a stable fallback estimatedHeight before the first measurement", () => {
+    const widget = new MathWidget("x^2", "$$x^2$$", true);
+    expect(widget.estimatedHeight).toBe(32);
+  });
+
+  it("uses a taller fallback estimate for multiline display math", () => {
+    const widget = new MathWidget("a \\\\\n b", "$$\na \\\\\n b\n$$", true);
+    expect(widget.estimatedHeight).toBeGreaterThan(32);
+  });
 });
 
 describe("MathWidget shell-surface ownership", () => {

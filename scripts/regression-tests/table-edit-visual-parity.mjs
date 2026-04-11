@@ -346,7 +346,7 @@ export async function run(page) {
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
   const featureMatrixFirstClickChecks = [
-    { rowLabel: "caption stays below the media", selector: ".cf-crossref" },
+    { rowLabel: "regular local image rendering + caption below", selector: ".cf-crossref" },
     { rowLabel: "numbered block cross-reference", selector: ".cf-crossref" },
     { rowLabel: "CSL-formatted citation rendering", selector: ".cf-citation" },
     { rowLabel: "monospace styling inside table cells", selector: ".cf-inline-code" },
@@ -363,6 +363,9 @@ export async function run(page) {
     }
     await clearTableEditing(page);
   }
+
+  await scrollToText(page, "Rich table for edit/display parity");
+  await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
   const typingError = await checkFirstClickTypingWorks(
     page,

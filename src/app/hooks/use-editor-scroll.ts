@@ -67,6 +67,7 @@ interface ReverseScrollGuardArgs {
   readonly wheelDeltaY: number;
   readonly wheelAgeMs: number;
   readonly preservedMaxScrollTop: number | null;
+  readonly preservedTargetTop: number | null;
 }
 
 export interface ReverseScrollGuardResult {
@@ -113,6 +114,7 @@ export function guardReverseScrollRemap(
     wheelDeltaY,
     wheelAgeMs,
     preservedMaxScrollTop,
+    preservedTargetTop,
   } = args;
   if (!Number.isFinite(wheelDeltaY) || wheelDeltaY === 0) return null;
   if (!Number.isFinite(wheelAgeMs) || wheelAgeMs > WHEEL_INTENT_WINDOW_MS) return null;
@@ -137,7 +139,9 @@ export function guardReverseScrollRemap(
     Math.round(nextPreservedMaxScrollTop - rawObservedMaxScrollTop),
   );
   const correctedMaxScrollTop = rawObservedMaxScrollTop + paddingBottom;
-  const rawTarget = Math.round(previousTop + direction * targetMagnitude);
+  const rawTarget = Number.isFinite(preservedTargetTop ?? NaN)
+    ? Math.round(preservedTargetTop ?? 0)
+    : Math.round(previousTop + direction * targetMagnitude);
   const correctedTop = clamp(rawTarget, 0, correctedMaxScrollTop);
   if (correctedTop <= currentTop) return null;
   return {
@@ -157,7 +161,11 @@ export function useEditorScroll(view: EditorView | null): UseEditorScrollReturn 
   const rafRef = useRef<number>(0);
   const lastScrollTopRef = useRef(0);
   const lastScrollHeightRef = useRef(0);
-  const lastWheelIntentRef = useRef<{ deltaY: number; at: number } | null>(null);
+  const lastWheelIntentRef = useRef<{
+    deltaY: number;
+    at: number;
+    targetTop: number | null;
+  } | null>(null);
   const scrollGuardPaddingRef = useRef(0);
   const preservedMaxScrollTopRef = useRef<number | null>(null);
 
@@ -183,7 +191,16 @@ export function useEditorScroll(view: EditorView | null): UseEditorScrollReturn 
     const onWheel = (event: WheelEvent) => {
       if (event.deltaY === 0) return;
       const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-      lastWheelIntentRef.current = { deltaY: event.deltaY, at: now };
+      const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      lastWheelIntentRef.current = {
+        deltaY: event.deltaY,
+        at: now,
+        targetTop: clamp(
+          Math.round(scroller.scrollTop + event.deltaY),
+          0,
+          maxScrollTop,
+        ),
+      };
     };
 
     const onScroll = () => {
@@ -210,26 +227,39 @@ export function useEditorScroll(view: EditorView | null): UseEditorScrollReturn 
               wheelDeltaY: wheelIntent.deltaY,
               wheelAgeMs: now - wheelIntent.at,
               preservedMaxScrollTop: preservedMaxScrollTopRef.current,
+              preservedTargetTop: wheelIntent.targetTop,
             })
           : null;
         if (guardResult && guardResult.correctedTop !== currentTop) {
           scrollGuardPaddingRef.current = guardResult.paddingBottom;
           preservedMaxScrollTopRef.current = guardResult.preservedMaxScrollTop;
           setScrollGuardPadding(paddingHost, guardResult.paddingBottom);
-          pushScrollGuardEvent({
-            timestamp: Date.now(),
-            wheelDeltaY: wheelIntent?.deltaY ?? 0,
-            previousTop,
-            correctedTop: guardResult.correctedTop,
-            observedTop: currentTop,
-            previousHeight,
-            currentHeight,
-            paddingBottom: guardResult.paddingBottom,
-            preservedMaxScrollTop: guardResult.preservedMaxScrollTop,
-            observedMaxScrollTop: guardResult.observedMaxScrollTop,
-          });
+          const preservesWheelTarget = wheelIntent
+            && wheelIntent.deltaY > 0
+            && wheelIntent.targetTop !== null
+            && Math.abs(guardResult.correctedTop - wheelIntent.targetTop) <= 1;
+          if (!preservesWheelTarget) {
+            pushScrollGuardEvent({
+              timestamp: Date.now(),
+              wheelDeltaY: wheelIntent?.deltaY ?? 0,
+              previousTop,
+              correctedTop: guardResult.correctedTop,
+              observedTop: currentTop,
+              previousHeight,
+              currentHeight,
+              paddingBottom: guardResult.paddingBottom,
+              preservedMaxScrollTop: guardResult.preservedMaxScrollTop,
+              observedMaxScrollTop: guardResult.observedMaxScrollTop,
+            });
+          }
           scroller.scrollTop = guardResult.correctedTop;
           currentTop = guardResult.correctedTop;
+          if (wheelIntent) {
+            lastWheelIntentRef.current = {
+              ...wheelIntent,
+              targetTop: guardResult.correctedTop,
+            };
+          }
           view.requestMeasure();
         }
         if (preservedMaxScrollTopRef.current !== null) {

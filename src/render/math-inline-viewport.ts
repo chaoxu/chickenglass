@@ -9,14 +9,7 @@ import {
   type ViewUpdate,
   ViewPlugin,
 } from "@codemirror/view";
-import {
-  mergeRanges,
-  mapVisibleRanges,
-  snapshotRanges,
-  type VisibleRange,
-} from "./viewport-diff";
-
-const INLINE_MATH_VIEWPORT_LINE_MARGIN = 8;
+import { mapVisibleRanges, type VisibleRange } from "./viewport-diff";
 
 function sameRanges(
   left: readonly VisibleRange[],
@@ -36,60 +29,14 @@ function fullDocumentRange(state: EditorState): readonly VisibleRange[] {
   return [{ from: 0, to: state.doc.length }];
 }
 
-function selectionLineBand(
-  state: EditorState,
-  lineMargin: number,
-): readonly VisibleRange[] {
-  if (state.doc.length === 0) {
-    return [{ from: 0, to: 0 }];
-  }
-  return [
-    expandRangeToLineBand(
-      state,
-      {
-        from: state.selection.main.from,
-        to: state.selection.main.to,
-      },
-      lineMargin,
-    ),
-  ];
-}
-
-function expandRangeToLineBand(
-  state: EditorState,
-  range: VisibleRange,
-  lineMargin: number,
-): VisibleRange {
-  if (state.doc.length === 0) {
-    return { from: 0, to: 0 };
-  }
-
-  const startPos = Math.max(0, Math.min(range.from, state.doc.length));
-  const endPos = Math.max(0, Math.min(Math.max(range.from, range.to), state.doc.length));
-  const startLineNumber = state.doc.lineAt(startPos).number;
-  const endLineNumber = state.doc.lineAt(
-    Math.max(startPos, Math.max(0, endPos - 1)),
-  ).number;
-  const expandedStartLine = Math.max(1, startLineNumber - lineMargin);
-  const expandedEndLine = Math.min(state.doc.lines, endLineNumber + lineMargin);
-  return {
-    from: state.doc.line(expandedStartLine).from,
-    to: state.doc.line(expandedEndLine).to,
-  };
-}
-
 export function computeInlineMathViewportRanges(
   view: EditorView,
-  lineMargin = INLINE_MATH_VIEWPORT_LINE_MARGIN,
 ): readonly VisibleRange[] {
-  const visibleRanges = snapshotRanges(view.visibleRanges);
-  if (visibleRanges.length === 0) {
-    return fullDocumentRange(view.state);
-  }
-
-  return mergeRanges(
-    visibleRanges.map((range) => expandRangeToLineBand(view.state, range, lineMargin)),
-  );
+  // Inline replacement math changes line wrapping, so viewport-only mounting
+  // feeds back into CM6's height map and can cause large reverse scroll jumps
+  // on dense documents. Keep the rendered inline-math surface document-wide
+  // until we have a layout-stable local strategy.
+  return fullDocumentRange(view.state);
 }
 
 export const setInlineMathViewportRangesEffect =
@@ -98,7 +45,7 @@ export const setInlineMathViewportRangesEffect =
 export const inlineMathViewportRangesField =
   StateField.define<readonly VisibleRange[]>({
     create(state) {
-      return selectionLineBand(state, INLINE_MATH_VIEWPORT_LINE_MARGIN);
+      return fullDocumentRange(state);
     },
 
     update(value, tr) {
