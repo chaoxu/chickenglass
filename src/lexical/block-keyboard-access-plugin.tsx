@@ -3,9 +3,9 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import {
   $createParagraphNode,
   $createNodeSelection,
+  $getNodeByKey,
   $getRoot,
   $getSelection,
-  $getNearestNodeFromDOMNode,
   $isDecoratorNode,
   $isNodeSelection,
   $setSelection,
@@ -15,45 +15,11 @@ import {
   KEY_DELETE_COMMAND,
   KEY_ARROW_UP_COMMAND,
   mergeRegister,
+  type NodeKey,
 } from "lexical";
+import { $findAdjacentTopLevelSiblingFromSelection } from "./selection-boundary";
 
 type NavigationDirection = "forward" | "backward";
-
-function closestTopLevelChild(rootElement: HTMLElement, node: Node): HTMLElement | null {
-  let current: Node | null = node;
-  while (current && current.parentNode !== rootElement) {
-    current = current.parentNode;
-  }
-  return current instanceof HTMLElement ? current : null;
-}
-
-function findAdjacentDecorator(
-  rootElement: HTMLElement,
-  direction: NavigationDirection,
-): HTMLElement | null {
-  const selection = window.getSelection();
-  if (!selection || !selection.isCollapsed) {
-    return null;
-  }
-
-  const anchorNode = selection.anchorNode;
-  if (!anchorNode || !rootElement.contains(anchorNode)) {
-    return null;
-  }
-
-  const currentBlock = closestTopLevelChild(rootElement, anchorNode);
-  if (!currentBlock) {
-    return null;
-  }
-
-  const sibling = direction === "forward"
-    ? currentBlock.nextSibling
-    : currentBlock.previousSibling;
-
-  return sibling instanceof HTMLElement && sibling.dataset.lexicalDecorator === "true"
-    ? sibling
-    : null;
-}
 
 function queryEditableTargets(target: HTMLElement): HTMLElement[] {
   const bodyCells = [...target.querySelectorAll<HTMLElement>(
@@ -121,9 +87,9 @@ function enterDecoratorTarget(
 export function BlockKeyboardAccessPlugin() {
   const [editor] = useLexicalComposerContext();
 
-  const selectDecoratorTarget = (target: HTMLElement) => {
+  const selectDecoratorTarget = (nodeKey: NodeKey) => {
     editor.update(() => {
-      const node = $getNearestNodeFromDOMNode(target);
+      const node = $getNodeByKey(nodeKey);
       if (!$isDecoratorNode(node)) {
         return;
       }
@@ -137,18 +103,24 @@ export function BlockKeyboardAccessPlugin() {
     editor.registerCommand(
       KEY_ARROW_DOWN_COMMAND,
       (event) => {
-        const rootElement = editor.getRootElement();
-        if (!rootElement || !event || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+        if (!event || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
           return false;
         }
 
-        const target = findAdjacentDecorator(rootElement, "forward");
-        if (!target) {
+        const targetKey = editor.getEditorState().read(() =>
+          $findAdjacentTopLevelSiblingFromSelection("forward", $isDecoratorNode)?.getKey() ?? null
+        );
+        if (!targetKey) {
+          return false;
+        }
+
+        const target = editor.getElementByKey(targetKey);
+        if (!(target instanceof HTMLElement)) {
           return false;
         }
 
         event.preventDefault();
-        selectDecoratorTarget(target);
+        selectDecoratorTarget(targetKey);
         return enterDecoratorTarget(target, "forward");
       },
       COMMAND_PRIORITY_LOW,
@@ -156,18 +128,24 @@ export function BlockKeyboardAccessPlugin() {
     editor.registerCommand(
       KEY_ARROW_UP_COMMAND,
       (event) => {
-        const rootElement = editor.getRootElement();
-        if (!rootElement || !event || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+        if (!event || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
           return false;
         }
 
-        const target = findAdjacentDecorator(rootElement, "backward");
-        if (!target) {
+        const targetKey = editor.getEditorState().read(() =>
+          $findAdjacentTopLevelSiblingFromSelection("backward", $isDecoratorNode)?.getKey() ?? null
+        );
+        if (!targetKey) {
+          return false;
+        }
+
+        const target = editor.getElementByKey(targetKey);
+        if (!(target instanceof HTMLElement)) {
           return false;
         }
 
         event.preventDefault();
-        selectDecoratorTarget(target);
+        selectDecoratorTarget(targetKey);
         return enterDecoratorTarget(target, "backward");
       },
       COMMAND_PRIORITY_LOW,
