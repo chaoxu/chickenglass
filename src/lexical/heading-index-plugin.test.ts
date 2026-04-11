@@ -1,8 +1,9 @@
 import { createHeadlessEditor } from "@lexical/headless";
 import { $createHeadingNode, $isHeadingNode, HeadingNode } from "@lexical/rich-text";
 import { $createParagraphNode, $createTextNode, $getRoot, ParagraphNode, TextNode } from "lexical";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
+import { useHeadingIndexStore } from "../app/stores/heading-index-store";
 import { $collectHeadingEntries } from "./heading-index-plugin";
 
 function createTestEditor() {
@@ -211,5 +212,202 @@ describe("$collectHeadingEntries", () => {
 
     expect(result2).toHaveLength(1);
     expect(result2[0]).toMatchObject({ text: "Keep" });
+  });
+});
+
+// ── Integration: headless editor → Zustand store ───────────────────────────
+
+/**
+ * Replicate the sync logic from HeadingIndexPlugin without React.
+ * Returns a cleanup function that unregisters the listener and resets the store.
+ */
+function registerHeadingIndexSync(editor: ReturnType<typeof createHeadlessEditor>) {
+  const store = useHeadingIndexStore;
+  let prev: ReturnType<typeof store.getState>["headings"] = [];
+
+  const sync = () => {
+    let entries: ReturnType<typeof $collectHeadingEntries> = [];
+    editor.read(() => {
+      entries = $collectHeadingEntries();
+    });
+    // No DOM in headless mode — use index-based pos (the fallback path).
+    const headings = entries.map((e, i) => ({ ...e, pos: i }));
+    if (headings.length !== prev.length || headings.some((h, i) => h.text !== prev[i].text || h.level !== prev[i].level || h.number !== prev[i].number)) {
+      prev = headings;
+      store.getState().setHeadings(headings);
+    }
+  };
+
+  sync();
+
+  const unregister = editor.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
+    if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
+    sync();
+  });
+
+  return () => {
+    unregister();
+    store.getState().reset();
+  };
+}
+
+describe("HeadingIndexPlugin integration (editor → store)", () => {
+  afterEach(() => {
+    useHeadingIndexStore.getState().reset();
+  });
+
+  it("populates the store when a heading is added", () => {
+    const editor = createTestEditor();
+    const cleanup = registerHeadingIndexSync(editor);
+
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+      const h1 = $createHeadingNode("h1");
+      h1.append($createTextNode("Introduction"));
+      root.append(h1);
+    }, { discrete: true });
+
+    const { headings } = useHeadingIndexStore.getState();
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toMatchObject({ level: 1, text: "Introduction", number: "1" });
+
+    cleanup();
+  });
+
+  it("reflects multiple headings in document order", () => {
+    const editor = createTestEditor();
+    const cleanup = registerHeadingIndexSync(editor);
+
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+
+      const h1 = $createHeadingNode("h1");
+      h1.append($createTextNode("Chapter"));
+      root.append(h1);
+
+      const h2 = $createHeadingNode("h2");
+      h2.append($createTextNode("Section"));
+      root.append(h2);
+    }, { discrete: true });
+
+    const { headings } = useHeadingIndexStore.getState();
+    expect(headings).toHaveLength(2);
+    expect(headings[0]).toMatchObject({ level: 1, text: "Chapter", number: "1" });
+    expect(headings[1]).toMatchObject({ level: 2, text: "Section", number: "1.1" });
+
+    cleanup();
+  });
+
+  it("updates the store when a heading is removed", () => {
+    const editor = createTestEditor();
+    const cleanup = registerHeadingIndexSync(editor);
+
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+
+      const h1 = $createHeadingNode("h1");
+      h1.append($createTextNode("Keep"));
+      root.append(h1);
+
+      const h2 = $createHeadingNode("h2");
+      h2.append($createTextNode("Remove"));
+      root.append(h2);
+    }, { discrete: true });
+
+    expect(useHeadingIndexStore.getState().headings).toHaveLength(2);
+
+    editor.update(() => {
+      const root = $getRoot();
+      const headings = root.getChildren().filter($isHeadingNode);
+      headings[1]?.remove();
+    }, { discrete: true });
+
+    const { headings } = useHeadingIndexStore.getState();
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toMatchObject({ text: "Keep" });
+
+    cleanup();
+  });
+
+  it("updates the store when heading text changes", () => {
+    const editor = createTestEditor();
+    const cleanup = registerHeadingIndexSync(editor);
+
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+      const h1 = $createHeadingNode("h1");
+      h1.append($createTextNode("Original"));
+      root.append(h1);
+    }, { discrete: true });
+
+    expect(useHeadingIndexStore.getState().headings[0]).toMatchObject({ text: "Original" });
+
+    editor.update(() => {
+      const root = $getRoot();
+      const heading = root.getChildren().find($isHeadingNode);
+      if (heading) {
+        heading.getFirstChild()?.remove();
+        heading.append($createTextNode("Revised"));
+      }
+    }, { discrete: true });
+
+    expect(useHeadingIndexStore.getState().headings[0]).toMatchObject({ text: "Revised" });
+
+    cleanup();
+  });
+
+  it("updates the store when heading level changes", () => {
+    const editor = createTestEditor();
+    const cleanup = registerHeadingIndexSync(editor);
+
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+      const h1 = $createHeadingNode("h1");
+      h1.append($createTextNode("Title"));
+      root.append(h1);
+    }, { discrete: true });
+
+    expect(useHeadingIndexStore.getState().headings[0]).toMatchObject({ level: 1 });
+
+    editor.update(() => {
+      const root = $getRoot();
+      const children = root.getChildren();
+      const oldHeading = children.find($isHeadingNode);
+      if (oldHeading) {
+        const text = oldHeading.getTextContent();
+        const h3 = $createHeadingNode("h3");
+        h3.append($createTextNode(text));
+        oldHeading.replace(h3);
+      }
+    }, { discrete: true });
+
+    const { headings } = useHeadingIndexStore.getState();
+    expect(headings[0]).toMatchObject({ level: 3, text: "Title" });
+
+    cleanup();
+  });
+
+  it("resets the store on cleanup", () => {
+    const editor = createTestEditor();
+    const cleanup = registerHeadingIndexSync(editor);
+
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+      const h1 = $createHeadingNode("h1");
+      h1.append($createTextNode("Present"));
+      root.append(h1);
+    }, { discrete: true });
+
+    expect(useHeadingIndexStore.getState().headings).toHaveLength(1);
+
+    cleanup();
+
+    expect(useHeadingIndexStore.getState().headings).toHaveLength(0);
   });
 });
