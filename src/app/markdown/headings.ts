@@ -20,6 +20,10 @@ const HEADING_RE = /^(#{1,6})[ \t]+(.+?)\s*$/;
 const TRAILING_ATTRIBUTES_RE = /\s+(\{[^{}\n]*\})\s*$/;
 const LABEL_RE = /#([A-Za-z0-9_][\w.:-]*)/;
 
+export function extractLabelId(attrs: string | undefined): string | undefined {
+  return attrs?.match(LABEL_RE)?.[1];
+}
+
 export function findTrailingHeadingAttributes(text: string): string | undefined {
   return text.match(TRAILING_ATTRIBUTES_RE)?.[1];
 }
@@ -67,7 +71,7 @@ export function extractHeadingDefinitions(
     const number = unnumbered
       ? ""
       : counters.slice(0, level).filter((value) => value > 0).join(".");
-    const id = attrs?.match(LABEL_RE)?.[1];
+    const id = extractLabelId(attrs);
     const attrsStart = attrs ? line.text.lastIndexOf(attrs) : -1;
     const labelStart = id && attrs ? attrs.indexOf(`#${id}`) : -1;
 
@@ -100,6 +104,23 @@ export function extractHeadingsFromMarkdown(doc: string): HeadingEntry[] {
     pos,
     id,
   }));
+}
+
+export function headingEntriesEqual(
+  a: ReadonlyArray<HeadingEntry>,
+  b: ReadonlyArray<HeadingEntry>,
+): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (
+      a[i].pos !== b[i].pos ||
+      a[i].level !== b[i].level ||
+      a[i].text !== b[i].text ||
+      a[i].number !== b[i].number ||
+      a[i].id !== b[i].id
+    ) return false;
+  }
+  return true;
 }
 
 export function headingAncestryAt(

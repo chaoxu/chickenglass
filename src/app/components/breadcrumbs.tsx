@@ -13,7 +13,7 @@
  */
 
 import { Fragment, useState, useEffect, useRef, useCallback } from "react";
-import { headingAncestryAt, type HeadingEntry } from "../heading-ancestry";
+import { headingAncestryAt, headingEntriesEqual, type HeadingEntry } from "../heading-ancestry";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 import { HeadingLabel } from "./heading-chrome";
 import { CSS } from "../../constants/css-classes";
@@ -36,19 +36,8 @@ interface BreadcrumbsProps {
 /** Milliseconds to wait after last scroll before fading out. */
 const FADE_DELAY_MS = 2000;
 
-/** Compare ancestry arrays by all heading fields (pos, level, text, number). */
-export function ancestryEqual(a: HeadingEntry[], b: HeadingEntry[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (
-      a[i].pos !== b[i].pos ||
-      a[i].level !== b[i].level ||
-      a[i].text !== b[i].text ||
-      a[i].number !== b[i].number
-    ) return false;
-  }
-  return true;
-}
+/** Compare ancestry arrays by all heading fields. */
+export const ancestryEqual = headingEntriesEqual;
 
 /** Apply visibility classes directly to the container element (no React). */
 export function applyBreadcrumbVisibility(el: HTMLDivElement, visible: boolean, instant: boolean): void {

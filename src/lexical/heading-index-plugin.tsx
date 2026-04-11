@@ -4,8 +4,10 @@ import { $getRoot } from "lexical";
 import { $isHeadingNode } from "@lexical/rich-text";
 
 import {
+  extractLabelId,
   findTrailingHeadingAttributes,
   hasUnnumberedHeadingAttributes,
+  headingEntriesEqual,
   type HeadingEntry,
 } from "../app/markdown/headings";
 import { useHeadingIndexStore } from "../app/stores/heading-index-store";
@@ -18,8 +20,6 @@ const TAG_TO_LEVEL: Record<string, number> = {
   h5: 5,
   h6: 6,
 };
-
-const LABEL_RE = /#([A-Za-z0-9_][\w.:-]*)/;
 
 /**
  * Walk the Lexical root and build a HeadingEntry[] from HeadingNodes.
@@ -58,7 +58,7 @@ export function $collectHeadingEntries(): Omit<HeadingEntry, "pos">[] {
       ? ""
       : counters.slice(0, level).filter((v) => v > 0).join(".");
 
-    const id = attrs?.match(LABEL_RE)?.[1];
+    const id = extractLabelId(attrs);
 
     entries.push({ level, text, number, ...(id ? { id } : {}) });
   }
@@ -87,25 +87,6 @@ function mergeWithDomPositions(
 }
 
 /**
- * Compare two HeadingEntry arrays for shallow equality.
- */
-function headingIndexEqual(a: HeadingEntry[], b: HeadingEntry[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (
-      a[i].level !== b[i].level ||
-      a[i].text !== b[i].text ||
-      a[i].number !== b[i].number ||
-      a[i].pos !== b[i].pos ||
-      a[i].id !== b[i].id
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
  * Lexical plugin that maintains a live heading index in a Zustand store.
  *
  * Listens for editor updates and rebuilds the heading index from the
@@ -126,7 +107,7 @@ export function HeadingIndexPlugin() {
         entries = $collectHeadingEntries();
       });
       const headings = mergeWithDomPositions(entries, editor.getRootElement());
-      if (!headingIndexEqual(prev, headings)) {
+      if (!headingEntriesEqual(prev, headings)) {
         prev = headings;
         store.getState().setHeadings(headings);
       }
