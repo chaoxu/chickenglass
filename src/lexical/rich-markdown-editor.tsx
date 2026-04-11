@@ -94,6 +94,7 @@ import type {
   MarkdownEditorSelection,
 } from "./markdown-editor-types";
 import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
+import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
 
 function SelectionAlwaysOnPlugin() {
@@ -844,6 +845,7 @@ export function LexicalRichMarkdownEditor({
                 {editable ? <OnChangePlugin onChange={handleChange} /> : null}
                 <SelectionAlwaysOnPlugin />
                 {showBibliography ? <BibliographySection /> : null}
+                <ActiveEditorPlugin />
                 <TreeViewPlugin />
               </StructureEditProvider>
             </LexicalComposer>

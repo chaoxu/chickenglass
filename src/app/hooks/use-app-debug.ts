@@ -5,6 +5,7 @@ import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { isTauri } from "../../lib/tauri";
 import { recordDebugSessionEvent } from "../../debug/session-recorder";
 import type { SourceMap } from "../source-map";
+import { getActiveEditor } from "../../lexical/active-editor-tracker";
 import { readLexicalTree } from "../../lexical/tree-print";
 import {
   clearCombinedPerf,
@@ -284,7 +285,10 @@ export function useAppDebug({
       }),
       line: (lineNumber: number) => getCurrentDocText().split("\n")[lineNumber - 1] ?? null,
       selection: () => editorHandle?.getSelection() ?? null,
-      tree: () => lexicalEditor ? readLexicalTree(lexicalEditor) : "",
+      tree: () => {
+        const active = getActiveEditor() ?? lexicalEditor;
+        return active ? readLexicalTree(active) : "";
+      },
       get treeString() { return this.tree; },
     };
     window.__cfSourceMap = getCurrentSourceMap();

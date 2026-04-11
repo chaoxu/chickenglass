@@ -80,6 +80,7 @@ import {
   selectSourceOffsetsInLexicalRoot,
   writeSourceTextToLexicalRoot,
 } from "./source-text";
+import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
 import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
@@ -927,6 +928,7 @@ export function LexicalMarkdownEditor({
                 {editable ? <OnChangePlugin onChange={handleChange} /> : null}
                 {selectionAlwaysOn ? <SelectionAlwaysOnDisplay /> : null}
                 {!isSourceMode ? <BibliographySection /> : null}
+                <ActiveEditorPlugin />
                 <TreeViewPlugin />
               </StructureEditProvider>
             </LexicalComposer>
