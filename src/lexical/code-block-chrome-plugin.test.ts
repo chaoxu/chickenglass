@@ -50,24 +50,24 @@ function createCodeBlockDom() {
 
 describe("collectCodeBlockOverlays", () => {
   it("does not add root scroll offset into overlay coordinates", () => {
-    const { container, root, surface } = createCodeBlockDom();
+    const { code, root, surface } = createCodeBlockDom();
     root.scrollTop = 280;
     surface.scrollTop = 0;
 
     mockRect(surface, { bottom: 600, left: 0, right: 800, top: 0 });
-    mockRect(container, { bottom: 240, left: 32, right: 632, top: 120 });
+    mockRect(code, { bottom: 240, left: 32, right: 632, top: 120 });
 
     const overlay = collectCodeBlockOverlays(root, surface, { left: 0, top: surface.scrollTop })[0];
     expect(overlay?.rect.top).toBe(120);
   });
 
   it("keeps surface scroll offset in overlay coordinates", () => {
-    const { container, root, surface } = createCodeBlockDom();
+    const { code, root, surface } = createCodeBlockDom();
     root.scrollTop = 0;
     surface.scrollTop = 280;
 
     mockRect(surface, { bottom: 600, left: 0, right: 800, top: 0 });
-    mockRect(container, { bottom: 240, left: 32, right: 632, top: 120 });
+    mockRect(code, { bottom: 240, left: 32, right: 632, top: 120 });
 
     const overlay = collectCodeBlockOverlays(root, surface, { left: 0, top: surface.scrollTop })[0];
     expect(overlay?.rect.top).toBe(400);

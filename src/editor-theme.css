@@ -262,22 +262,14 @@
   cursor: pointer;
 }
 
-.cf-lexical-editor--rich pre:has(> .cf-lexical-code-block) {
+.cf-lexical-code-block {
+  display: block;
   margin: 1em 0;
   padding: 1.9rem 1rem 0.7rem;
   border: 1px solid var(--cf-border);
   border-radius: 0;
-  background: var(--cf-hover);
-  overflow-x: auto;
-}
-
-.cf-lexical-code-block {
-  display: block;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
   background: transparent;
+  overflow-x: auto;
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   font-size: 0.85em;
 }

@@ -54,10 +54,7 @@ export function collectCodeBlockOverlays(
     codeElement.classList.add("cf-codeblock-body");
     codeElement.setAttribute(LANGUAGE_ATTR, formatLanguage(codeElement));
 
-    const containerElement = codeElement.parentElement instanceof HTMLElement
-      ? codeElement.parentElement
-      : codeElement;
-    const rect = containerElement.getBoundingClientRect();
+    const rect = codeElement.getBoundingClientRect();
     overlays.push({
       id,
       language: codeElement.getAttribute(LANGUAGE_ATTR) ?? "TEXT",
