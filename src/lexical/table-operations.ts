@@ -153,6 +153,25 @@ export function $toggleHeaderRow(table: TableNode): void {
   }
 }
 
+export function $toggleHeaderColumn(table: TableNode, columnIndex: number): void {
+  const rows = $getTableRows(table);
+  if (rows.length === 0) return;
+
+  const alignments = table.getAlignments();
+  if (columnIndex < 0 || columnIndex >= alignments.length) return;
+
+  // Determine current state from the first row's cell in this column
+  const firstRowCells = $getRowCells(rows[0]);
+  const currentlyHeader = columnIndex < firstRowCells.length && firstRowCells[columnIndex].isHeader();
+
+  for (const row of rows) {
+    const cells = $getRowCells(row);
+    if (columnIndex < cells.length) {
+      cells[columnIndex].setHeader(!currentlyHeader);
+    }
+  }
+}
+
 export function $deleteTable(table: TableNode): void {
   table.remove();
 }

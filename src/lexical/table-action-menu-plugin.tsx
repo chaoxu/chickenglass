@@ -3,6 +3,7 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import { $getNodeByKey, type NodeKey } from "lexical";
 
 import { SurfaceFloatingPortal } from "../lexical-next";
+import { $isTableCellNode } from "./nodes/table-cell-node";
 import { $isTableNode, type TableNode } from "./nodes/table-node";
 import { $isTableRowNode } from "./nodes/table-row-node";
 import {
@@ -13,6 +14,7 @@ import {
   $insertColumnBefore,
   $insertRowAfter,
   $insertRowBefore,
+  $toggleHeaderColumn,
   $toggleHeaderRow,
   resolveTableCellFromDom,
 } from "./table-operations";
@@ -21,6 +23,7 @@ interface MenuState {
   readonly anchor: HTMLElement;
   readonly columnCount: number;
   readonly columnIndex: number;
+  readonly isHeaderColumn: boolean;
   readonly rowCount: number;
   readonly rowIndex: number;
   readonly tableKey: NodeKey;
@@ -77,7 +80,7 @@ function TableActionMenu({
     [editor, menuState.tableKey, onClose],
   );
 
-  const { rowIndex, columnIndex, rowCount, columnCount } = menuState;
+  const { rowIndex, columnIndex, rowCount, columnCount, isHeaderColumn } = menuState;
   const isHeaderRow = rowIndex === 0;
 
   return (
@@ -161,6 +164,15 @@ function TableActionMenu({
       >
         {isHeaderRow ? "Remove header row" : "Toggle header row"}
       </button>
+      <button
+        className="cf-table-action-menu-item"
+        onMouseDown={preventMouseDown}
+        onClick={() => withTable((t) => $toggleHeaderColumn(t, columnIndex))}
+        role="menuitem"
+        type="button"
+      >
+        {isHeaderColumn ? "Remove header column" : "Toggle header column"}
+      </button>
     </div>
   );
 }
@@ -182,11 +194,20 @@ export function TableActionMenuPlugin() {
 
       let rowCount = 0;
       let columnCount = 0;
+      let isHeaderColumn = false;
       editor.read(() => {
         const node = $getNodeByKey(tableKey);
         if ($isTableNode(node)) {
           rowCount = node.getChildren().filter($isTableRowNode).length;
           columnCount = node.getAlignments().length;
+          const firstRow = node.getChildren().find($isTableRowNode);
+          if (firstRow) {
+            const cells = firstRow.getChildren();
+            const cell = cells[resolved.columnIndex];
+            if ($isTableCellNode(cell)) {
+              isHeaderColumn = cell.isHeader();
+            }
+          }
         }
       });
 
@@ -195,6 +216,7 @@ export function TableActionMenuPlugin() {
         anchor: resolved.cell,
         columnCount,
         columnIndex: resolved.columnIndex,
+        isHeaderColumn,
         rowCount,
         rowIndex: resolved.rowIndex,
         tableKey,
