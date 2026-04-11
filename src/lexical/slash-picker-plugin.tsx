@@ -1,4 +1,3 @@
-import { $isCodeNode } from "@lexical/code";
 import {
   LexicalTypeaheadMenuPlugin,
   MenuOption,
@@ -7,35 +6,33 @@ import {
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
-  $createParagraphNode,
-  $getNodeByKey,
   $getSelection,
-  $isElementNode,
   $isRangeSelection,
   type LexicalEditor,
-  type LexicalNode,
-  type NodeKey,
   type TextNode,
 } from "lexical";
 import { useCallback, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
+import {
+  activateInsertedBlock,
+  ensureTrailingParagraph,
+  type InsertFocusTarget,
+} from "./block-insert-focus";
 import { $createRawBlockNode, type RawBlockVariant } from "./nodes/raw-block-node";
-import { $isTableCellNode } from "./nodes/table-cell-node";
-import { $isTableNode } from "./nodes/table-node";
-import { $isTableRowNode } from "./nodes/table-row-node";
 import { createTableNodeFromMarkdown } from "./markdown";
 import { EditorChromePanel } from "./editor-chrome";
 import {
   getPendingEmbeddedSurfaceFocusId,
   queuePendingSurfaceFocus,
 } from "./pending-surface-focus";
+import { $isForbiddenTypeaheadContext } from "./typeahead-context";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
 type SlashInsertVariant = RawBlockVariant | "code-block" | "table";
 
 interface SlashPickerEntry {
-  readonly focusTarget: string;
+  readonly focusTarget: InsertFocusTarget;
   readonly keywords: readonly string[];
   readonly raw: string;
   readonly title: string;
@@ -87,32 +84,6 @@ const SLASH_PICKER_ENTRIES: readonly SlashPickerEntry[] = [
   },
 ];
 
-function isForbiddenSlashContext(): boolean {
-  const selection = $getSelection();
-  if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
-    return true;
-  }
-
-  if (selection.hasFormat("code")) {
-    return true;
-  }
-
-  let node: LexicalNode | null = selection.anchor.getNode();
-  while (node) {
-    if ($isCodeNode(node)) {
-      return true;
-    }
-    node = node.getParent();
-  }
-
-  return false;
-}
-
-function isStartOfParagraph(text: string, matchOffset: number): boolean {
-  const before = text.slice(0, matchOffset);
-  return before.length === 0 || /\s$/.test(before);
-}
-
 function findSlashMatch(text: string): MenuTextMatch | null {
   const match = text.match(/(^|\s)\/([\w\s]*)$/);
   if (!match) {
@@ -120,10 +91,6 @@ function findSlashMatch(text: string): MenuTextMatch | null {
   }
 
   const slashOffset = (match.index ?? 0) + match[1].length;
-  if (!isStartOfParagraph(text, slashOffset)) {
-    return null;
-  }
-
   return {
     leadOffset: slashOffset,
     matchingString: match[2],
@@ -193,48 +160,11 @@ function SlashPickerMenu({
   );
 }
 
-function ensureTrailingParagraph(insertedNode: LexicalNode): void {
-  if (!insertedNode.getNextSibling()) {
-    insertedNode.insertAfter($createParagraphNode());
-  }
-}
-
-function focusFirstTableCell(editor: LexicalEditor, key: NodeKey): void {
-  editor.update(() => {
-    const node = $getNodeByKey(key);
-    if (!$isTableNode(node)) {
-      return;
-    }
-
-    const rowNodes = node.getChildren().filter($isTableRowNode);
-    const targetRow = rowNodes[1] ?? rowNodes[0] ?? null;
-    const targetCell = targetRow
-      ?.getChildren()
-      .find($isTableCellNode);
-
-    if (!targetCell) {
-      return;
-    }
-
-    const firstChild = targetCell.getFirstChild();
-    if ($isElementNode(firstChild)) {
-      firstChild.selectStart();
-      return;
-    }
-
-    targetCell.selectStart();
-  }, {
-    discrete: true,
-    tag: COFLAT_NESTED_EDIT_TAG,
-  });
-  editor.focus();
-}
-
 export function SlashPickerPlugin() {
   const [editor] = useLexicalComposerContext();
 
   const triggerFn = useCallback((text: string, _editor: LexicalEditor): MenuTextMatch | null => {
-    if (isForbiddenSlashContext()) {
+    if ($isForbiddenTypeaheadContext()) {
       return null;
     }
     return findSlashMatch(text);
@@ -273,25 +203,20 @@ export function SlashPickerPlugin() {
     editor.update(() => {
       const selection = $getSelection();
       if (!$isRangeSelection(selection)) {
-        closeMenu();
         return;
       }
 
       const anchorNode = selection.anchor.getNode();
       const paragraph = anchorNode.getTopLevelElement();
       if (!paragraph || paragraph.getType() !== "paragraph") {
-        closeMenu();
         return;
       }
 
       if (entry.variant === "code-block") {
-        // For code blocks, insert the raw markdown text and let
-        // MarkdownShortcutPlugin handle the expansion.
         if (textNodeContainingQuery) {
           textNodeContainingQuery.setTextContent("```");
           textNodeContainingQuery.selectEnd();
         }
-        closeMenu();
         return;
       }
 
@@ -300,16 +225,11 @@ export function SlashPickerPlugin() {
         if (tableNode) {
           paragraph.replace(tableNode);
           ensureTrailingParagraph(tableNode);
-          const tableKey = tableNode.getKey();
-          requestAnimationFrame(() => {
-            focusFirstTableCell(editor, tableKey);
-          });
+          activateInsertedBlock(editor, tableNode.getKey(), "table-cell");
         }
-        closeMenu();
         return;
       }
 
-      // RawBlockNode variants: display-math, fenced-div, footnote-definition
       const variant = entry.variant as RawBlockVariant;
       const rawBlockNode = $createRawBlockNode(variant, entry.raw);
       const nodeKey = rawBlockNode.getKey();
@@ -323,34 +243,7 @@ export function SlashPickerPlugin() {
 
       paragraph.replace(rawBlockNode);
       ensureTrailingParagraph(rawBlockNode);
-
-      // Focus inserted block for display-math, include-path, frontmatter
-      if (
-        entry.focusTarget !== "block-body"
-        && entry.focusTarget !== "footnote-body"
-        && entry.focusTarget !== "none"
-      ) {
-        requestAnimationFrame(() => {
-          const element = editor.getElementByKey(nodeKey);
-          if (!element) {
-            return;
-          }
-
-          const selector: Record<string, string> = {
-            "display-math": ".cf-lexical-display-math-body",
-            "include-path": ".cf-lexical-structure-toggle--include",
-          };
-          const sel = selector[entry.focusTarget];
-          if (!sel) {
-            return;
-          }
-          const target = element.querySelector<HTMLElement>(sel);
-          if (target) {
-            target.focus();
-            target.click();
-          }
-        });
-      }
+      activateInsertedBlock(editor, nodeKey, entry.focusTarget);
     }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
 
     closeMenu();

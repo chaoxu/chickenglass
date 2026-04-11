@@ -1,4 +1,3 @@
-import { $isCodeNode } from "@lexical/code";
 import {
   LexicalTypeaheadMenuPlugin,
   MenuOption,
@@ -10,7 +9,6 @@ import {
   $getSelection,
   $isRangeSelection,
   type LexicalEditor,
-  type LexicalNode,
   type TextNode,
 } from "lexical";
 import { useCallback, useMemo, useState } from "react";
@@ -31,28 +29,8 @@ import {
   type ReferenceCompletionPreviewModel,
 } from "./reference-completion-preview";
 import { useLexicalRenderContext } from "./render-context";
+import { $isForbiddenTypeaheadContext } from "./typeahead-context";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
-
-function isForbiddenReferenceCompletionContext(): boolean {
-  const selection = $getSelection();
-  if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
-    return true;
-  }
-
-  if (selection.hasFormat("code")) {
-    return true;
-  }
-
-  let node: LexicalNode | null = selection.anchor.getNode();
-  while (node) {
-    if ($isCodeNode(node)) {
-      return true;
-    }
-    node = node.getParent();
-  }
-
-  return false;
-}
 
 class ReferenceCompletionOption extends MenuOption {
   readonly candidate: ReferenceCompletionCandidate;
@@ -148,7 +126,7 @@ export function ReferenceTypeaheadPlugin({
   );
 
   const triggerFn = useCallback((text: string, _editor: LexicalEditor): MenuTextMatch | null => {
-    if (isForbiddenReferenceCompletionContext()) {
+    if ($isForbiddenTypeaheadContext()) {
       return null;
     }
     return findReferenceCompletionMatch(text);

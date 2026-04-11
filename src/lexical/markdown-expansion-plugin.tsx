@@ -1,9 +1,6 @@
 import { useEffect } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
-  $createParagraphNode,
-  $getNodeByKey,
-  $isElementNode,
   $getSelection,
   $isRangeSelection,
   COMMAND_PRIORITY_HIGH,
@@ -15,10 +12,12 @@ import {
   type RangeSelection,
 } from "lexical";
 
+import {
+  activateInsertedBlock,
+  ensureTrailingParagraph,
+  type InsertFocusTarget,
+} from "./block-insert-focus";
 import { $createRawBlockNode, type RawBlockVariant } from "./nodes/raw-block-node";
-import { $isTableCellNode } from "./nodes/table-cell-node";
-import { $isTableNode } from "./nodes/table-node";
-import { $isTableRowNode } from "./nodes/table-row-node";
 import { createTableNodeFromMarkdown } from "./markdown";
 import {
   getPendingEmbeddedSurfaceFocusId,
@@ -32,15 +31,6 @@ const DISPLAY_MATH_BRACKET_RE = /^\s*\\\[\s*$/;
 const FOOTNOTE_DEFINITION_RE = /^\[\^[^\]]+\]:\s*(.*)$/;
 const IMAGE_BLOCK_RE = /^\s*!\[[^\]\n]*\]\([^)]+\)\s*$/;
 const TABLE_DIVIDER_RE = /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/;
-
-type InsertFocusTarget =
-  | "block-body"
-  | "display-math"
-  | "footnote-body"
-  | "frontmatter"
-  | "include-path"
-  | "none"
-  | "table-cell";
 
 interface ExpansionCandidate {
   readonly focusTarget: InsertFocusTarget;
@@ -168,80 +158,6 @@ export function getMarkdownExpansionCandidate(selection: RangeSelection): Expans
   }
 
   return null;
-}
-
-function ensureTrailingParagraph(insertedNode: LexicalNode, afterNode: LexicalNode | null): void {
-  if (afterNode) {
-    return;
-  }
-  insertedNode.insertAfter($createParagraphNode());
-}
-
-function focusFirstTableCell(editor: LexicalEditor, key: NodeKey): void {
-  editor.update(() => {
-    const node = $getNodeByKey(key);
-    if (!$isTableNode(node)) {
-      return;
-    }
-
-    const rowNodes = node.getChildren().filter($isTableRowNode);
-    const targetRow = rowNodes[1] ?? rowNodes[0] ?? null;
-    const targetCell = targetRow
-      ?.getChildren()
-      .find($isTableCellNode);
-
-    if (!targetCell) {
-      return;
-    }
-
-    const firstChild = targetCell.getFirstChild();
-    if ($isElementNode(firstChild)) {
-      firstChild.selectStart();
-      return;
-    }
-
-    targetCell.selectStart();
-  }, {
-    discrete: true,
-    tag: COFLAT_NESTED_EDIT_TAG,
-  });
-  editor.focus();
-}
-
-function activateInsertedBlock(editor: LexicalEditor, key: NodeKey, focusTarget: InsertFocusTarget): void {
-  if (focusTarget === "block-body" || focusTarget === "footnote-body") {
-    return;
-  }
-
-  requestAnimationFrame(() => {
-    if (focusTarget === "none") {
-      return;
-    }
-    if (focusTarget === "table-cell") {
-      focusFirstTableCell(editor, key);
-      return;
-    }
-
-    const element = editor.getElementByKey(key);
-    if (!element) {
-      return;
-    }
-
-    const selector = {
-      "block-body": ".cf-lexical-block-body [contenteditable='true']",
-      "display-math": ".cf-lexical-display-math-body",
-      "footnote-body": ".cf-lexical-footnote-definition-body [contenteditable='true']",
-      "frontmatter": ".cf-lexical-structure-toggle--frontmatter",
-      "include-path": ".cf-lexical-structure-toggle--include",
-    }[focusTarget];
-    const target = element.querySelector<HTMLElement>(selector);
-    if (!target) {
-      return;
-    }
-
-    target.focus();
-    target.click();
-  });
 }
 
 function insertExpandedBlock(
