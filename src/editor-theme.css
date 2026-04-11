@@ -18,6 +18,11 @@
   --cf-link: var(--cf-fg);
   --cf-bg-overlay: rgba(255, 255, 255, 0.82);
   --cf-border-overlay: rgba(228, 228, 231, 0.6);
+  --cf-code-keyword: #9a3412;
+  --cf-code-string: #166534;
+  --cf-code-number: #1d4ed8;
+  --cf-code-symbol: #0f766e;
+  --cf-code-tag: #be123c;
   --cf-block-header-accent: var(--cf-fg);
   --cf-block-title-color: var(--cf-fg);
   --cf-block-title-weight: 700;
@@ -102,6 +107,11 @@
   --cf-accent-fg: #09090b;
   --cf-bg-overlay: rgba(10, 10, 10, 0.82);
   --cf-border-overlay: rgba(63, 63, 70, 0.6);
+  --cf-code-keyword: #fdba74;
+  --cf-code-string: #86efac;
+  --cf-code-number: #93c5fd;
+  --cf-code-symbol: #5eead4;
+  --cf-code-tag: #fda4af;
 }
 
 .cf-lexical-root {
@@ -270,6 +280,61 @@
   background: transparent;
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   font-size: 0.85em;
+}
+
+.cf-lexical-code-token--comment,
+.cf-lexical-code-token--cdata,
+.cf-lexical-code-token--doctype,
+.cf-lexical-code-token--prolog {
+  color: var(--cf-muted);
+  font-style: italic;
+}
+
+.cf-lexical-code-token--atrule,
+.cf-lexical-code-token--important,
+.cf-lexical-code-token--keyword {
+  color: var(--cf-code-keyword);
+}
+
+.cf-lexical-code-token--attr,
+.cf-lexical-code-token--char,
+.cf-lexical-code-token--inserted,
+.cf-lexical-code-token--regex,
+.cf-lexical-code-token--selector,
+.cf-lexical-code-token--string,
+.cf-lexical-code-token--url {
+  color: var(--cf-code-string);
+}
+
+.cf-lexical-code-token--boolean,
+.cf-lexical-code-token--constant,
+.cf-lexical-code-token--deleted,
+.cf-lexical-code-token--number,
+.cf-lexical-code-token--symbol {
+  color: var(--cf-code-number);
+}
+
+.cf-lexical-code-token--builtin,
+.cf-lexical-code-token--class-name,
+.cf-lexical-code-token--function,
+.cf-lexical-code-token--property,
+.cf-lexical-code-token--variable {
+  color: var(--cf-code-symbol);
+}
+
+.cf-lexical-code-token--entity,
+.cf-lexical-code-token--namespace,
+.cf-lexical-code-token--tag {
+  color: var(--cf-code-tag);
+}
+
+.cf-lexical-code-token--operator,
+.cf-lexical-code-token--punctuation {
+  color: color-mix(in srgb, var(--cf-fg) 82%, transparent);
+}
+
+.cf-lexical-code-token--important {
+  font-weight: 700;
 }
 
 .cf-codeblock-language {

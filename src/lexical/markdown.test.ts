@@ -1,3 +1,5 @@
+import { $isCodeHighlightNode, $isCodeNode, registerCodeHighlighting } from "@lexical/code";
+import { $getRoot } from "lexical";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -63,5 +65,39 @@ describe("coflat lexical markdown", () => {
 
     setLexicalMarkdown(editor, markdown);
     expect(getLexicalMarkdown(editor)).toBe(markdown);
+  });
+
+  it("tokenizes fenced code blocks into highlighted code nodes", () => {
+    const editor = createHeadlessCoflatEditor();
+    const unregister = registerCodeHighlighting(editor);
+    const markdown = [
+      "```ts",
+      "const total = lines.length + 1;",
+      "```",
+    ].join("\n");
+
+    try {
+      setLexicalMarkdown(editor, markdown);
+      expect(getLexicalMarkdown(editor)).toBe(markdown);
+      const highlightTypes = editor.getEditorState().read(() => {
+        const root = $getRoot();
+        const codeNode = root.getFirstChild();
+        if (!$isCodeNode(codeNode)) {
+          return null;
+        }
+        return codeNode
+          .getChildren()
+          .filter($isCodeHighlightNode)
+          .map((node) => node.getHighlightType())
+          .filter((type): type is string => typeof type === "string");
+      });
+
+      expect(highlightTypes).not.toBeNull();
+      expect(highlightTypes).toContain("keyword");
+      expect(highlightTypes).toContain("operator");
+      expect(highlightTypes).toContain("number");
+    } finally {
+      unregister();
+    }
   });
 });

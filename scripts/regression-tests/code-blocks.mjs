@@ -20,6 +20,39 @@ export async function run(page) {
     return { pass: false, message: "code block chrome did not render language/copy affordances" };
   }
 
+  const highlightState = await page.evaluate(() => {
+    const codeBlocks = [...document.querySelectorAll(".cf-lexical-code-block")];
+    const typescriptBlock = codeBlocks.find((element) =>
+      element.textContent?.includes("const clickMappingLines = ["));
+
+    if (!(typescriptBlock instanceof HTMLElement)) {
+      return {
+        found: false,
+        hasHighlightLanguage: false,
+        tokenClasses: [],
+      };
+    }
+
+    const tokenClasses = [...typescriptBlock.querySelectorAll("[class*='cf-lexical-code-token--']")]
+      .flatMap((element) => [...element.classList])
+      .filter((className) => className.startsWith("cf-lexical-code-token--"));
+
+    return {
+      found: true,
+      hasHighlightLanguage: typescriptBlock.hasAttribute("data-highlight-language"),
+      tokenClasses,
+    };
+  });
+
+  if (
+    !highlightState.found
+    || !highlightState.hasHighlightLanguage
+    || !highlightState.tokenClasses.includes("cf-lexical-code-token--keyword")
+    || !highlightState.tokenClasses.includes("cf-lexical-code-token--string")
+  ) {
+    return { pass: false, message: "code block syntax highlighting did not render token classes" };
+  }
+
   const copied = await page.evaluate(async () => {
     const writes = [];
     const originalClipboard = navigator.clipboard;
@@ -68,6 +101,6 @@ export async function run(page) {
 
   return {
     pass: true,
-    message: `code block chrome rendered with ${initialState.language ?? "unknown"} label and a working copy button`,
+    message: `code block chrome rendered with ${initialState.language ?? "unknown"} label, syntax tokens, and a working copy button`,
   };
 }

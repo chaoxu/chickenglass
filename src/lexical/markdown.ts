@@ -1,5 +1,5 @@
 import type { InitialEditorStateType } from "@lexical/react/LexicalComposer";
-import { CodeNode } from "@lexical/code";
+import { CodeHighlightNode, CodeNode } from "@lexical/code";
 import { createHeadlessEditor } from "@lexical/headless";
 import { LinkNode } from "@lexical/link";
 import { ListItemNode, ListNode } from "@lexical/list";
@@ -360,12 +360,45 @@ export const coflatMarkdownNodes = [
   ListItemNode,
   LinkNode,
   CodeNode,
+  CodeHighlightNode,
   InlineMathNode,
   InlineImageNode,
   InlineFormatSourceNode,
   ReferenceNode,
   FootnoteReferenceNode,
   RawBlockNode,
+] as const;
+
+const codeHighlightTokens = [
+  "atrule",
+  "attr",
+  "boolean",
+  "builtin",
+  "cdata",
+  "char",
+  "class-name",
+  "comment",
+  "constant",
+  "deleted",
+  "doctype",
+  "entity",
+  "function",
+  "important",
+  "inserted",
+  "keyword",
+  "namespace",
+  "number",
+  "operator",
+  "prolog",
+  "property",
+  "punctuation",
+  "regex",
+  "selector",
+  "string",
+  "symbol",
+  "tag",
+  "url",
+  "variable",
 ] as const;
 
 export const coflatMarkdownTransformers = [
@@ -412,6 +445,12 @@ export const lexicalMarkdownTheme: EditorThemeClasses = {
   },
   link: "cf-lexical-link",
   code: "cf-lexical-code-block block",
+  codeHighlight: Object.fromEntries(
+    codeHighlightTokens.map((token) => [
+      token,
+      `cf-lexical-code-token cf-lexical-code-token--${token}`,
+    ]),
+  ) as NonNullable<EditorThemeClasses["codeHighlight"]>,
   text: Object.fromEntries(
     getInlineTextFormatSpecs().map((spec) => [spec.lexicalFormat, spec.themeClassName]),
   ) as NonNullable<EditorThemeClasses["text"]>,

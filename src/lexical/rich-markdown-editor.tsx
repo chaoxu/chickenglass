@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
+import { registerCodeHighlighting } from "@lexical/code";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
@@ -179,6 +180,14 @@ function EditableSyncPlugin({
   useEffect(() => {
     editor.setEditable(editable);
   }, [editable, editor]);
+
+  return null;
+}
+
+function CodeHighlightPlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => registerCodeHighlighting(editor), [editor]);
 
   return null;
 }
@@ -457,6 +466,7 @@ export function LexicalRichMarkdownEditor({
               ErrorBoundary={LexicalErrorBoundary}
               placeholder={null}
             />
+            <CodeHighlightPlugin />
             <FocusEdgePlugin />
             {showCodeBlockChrome ? <CodeBlockChromePlugin /> : null}
             {showIncludeAffordances ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
