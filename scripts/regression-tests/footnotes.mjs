@@ -12,7 +12,7 @@ export async function run(page) {
     tree: window.__cmDebug?.treeString?.() ?? "",
   }));
 
-  if (!state.tree.includes("FootnoteRef")) {
+  if (!state.tree.includes("coflat-footnote-reference")) {
     return { pass: false, message: "debug tree did not report any footnote references" };
   }
 

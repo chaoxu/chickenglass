@@ -155,6 +155,7 @@ function AppInner() {
 
   useAppDebug({
     editorHandle: editor.editorHandle,
+    lexicalEditor: editor.lexicalEditor,
     openProject: (path) => fileDialogs.openProjectInCurrentWindow(path),
     openFile: editor.openFile,
     hasFile: (path) => fs.exists(path),

@@ -66,6 +66,7 @@ export interface AppEditorShellDeps {
 export interface AppEditorShellController extends UseEditorSessionReturn {
   readonly pluginManager: EditorPluginManager;
   readonly editorHandle: MarkdownEditorHandle | null;
+  readonly lexicalEditor: LexicalEditor | null;
   readonly headings: HeadingEntry[];
   readonly diagnostics: DiagnosticEntry[];
   readonly handleHeadingsChange: (headings: HeadingEntry[]) => void;
@@ -116,6 +117,7 @@ export function useAppEditorShell({
   }, [sessionSaveFile]);
 
   const [editorHandle, setEditorHandle] = useState<MarkdownEditorHandle | null>(null);
+  const lexicalEditorRef = useRef<LexicalEditor | null>(null);
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
 
@@ -133,8 +135,9 @@ export function useAppEditorShell({
     syncHandle,
   } = navigation;
 
-  const handleLexicalEditorReady = useCallback((handle: MarkdownEditorHandle) => {
+  const handleLexicalEditorReady = useCallback((handle: MarkdownEditorHandle, editor: LexicalEditor) => {
     setEditorHandle(handle);
+    lexicalEditorRef.current = editor;
     syncHandle(handle);
   }, [syncHandle]);
 
@@ -257,6 +260,7 @@ export function useAppEditorShell({
     pluginManager,
     saveFile,
     editorHandle,
+    lexicalEditor: lexicalEditorRef.current,
     headings,
     diagnostics,
     handleHeadingsChange,

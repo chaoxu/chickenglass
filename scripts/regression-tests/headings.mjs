@@ -14,8 +14,8 @@ export async function run(page) {
     tree: window.__cmDebug?.treeString?.() ?? "",
   }));
 
-  if (!state.tree.includes("ATXHeading1") && !state.tree.includes("ATXHeading2")) {
-    return { pass: false, message: "debug tree did not report any ATX headings" };
+  if (!state.tree.includes("(heading)")) {
+    return { pass: false, message: "debug tree did not report any headings" };
   }
 
   if (state.headingCount === 0) {

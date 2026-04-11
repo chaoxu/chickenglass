@@ -12,7 +12,7 @@ export async function run(page) {
     tree: window.__cmDebug?.treeString?.() ?? "",
   }));
 
-  if (!state.tree.includes("Table")) {
+  if (!state.tree.includes("coflat-table")) {
     return { pass: false, message: "debug tree did not report a markdown table" };
   }
 
