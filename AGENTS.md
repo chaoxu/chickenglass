@@ -136,7 +136,7 @@ Do not use the Playwright MCP plugin for this repo.
 ## Perf benchmarking
 
 - Use `scripts/perf-regression.mjs`
-- Preferred heavy fixture: `fixtures/cogirth/main2.md`
+- Preferred heavy fixture: `fixtures/rankdecrease/main.md`
 - Fallback public fixture: `demo/index.md`
 - Every perf change must report before/after numbers on a real document
 

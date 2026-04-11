@@ -30,7 +30,7 @@ Run `pnpm test` before and after the change. The change must not introduce new f
 
 1. Visual/editor changes.
 If the change touches Lexical rendering, DecoratorNode output, node DOM, themes, CSS, or scrolling:
-  - verify in the live browser on `index.md`. For long-document behavior, also verify on `fixtures/cogirth/main2.md`.
+  - verify in the live browser on `index.md`. For long-document behavior, also verify on `fixtures/rankdecrease/main.md`.
   - use the managed harness (`pnpm test:browser`, `scripts/test-helpers.mjs`) over ad-hoc browser setup.
   - for Rich/Source mode issues, confirm both modes.
   - reject manual DOM manipulation (window.getSelection, addEventListener, querySelector on editor content, element.focus()) when a Lexical-native API exists (registerCommand, $getSelection, node.select(), $getNearestNodeFromDOMNode).
@@ -54,7 +54,7 @@ If the change touches markdown transformers, custom nodes, or document structure
 
 5. Performance.
   - require before/after numbers from `pnpm perf:capture` / `pnpm perf:compare`.
-  - prefer `fixtures/cogirth/main2.md`; note the limitation if using `demo/index.md`.
+  - prefer `fixtures/rankdecrease/main.md`; note the limitation if using `demo/index.md`.
 
 6. Package surface.
 If the change touches editor exports or bundle shape: `pnpm build:editor`, `pnpm publint`, `pnpm size`.
