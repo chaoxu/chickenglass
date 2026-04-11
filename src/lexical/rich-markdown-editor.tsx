@@ -726,7 +726,6 @@ export function LexicalRichMarkdownEditor({
               <CodeHighlightPlugin />
               {showCodeBlockChrome ? <CodeBlockChromePlugin /> : null}
               {showIncludeAffordances ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
-              {editable && shouldRepairBlankClickSelection ? <ClickCaretRepairPlugin enabled /> : null}
               {editable ? <FormatEventPlugin /> : null}
               {editable ? <HistoryPlugin /> : null}
               <ListPlugin />
