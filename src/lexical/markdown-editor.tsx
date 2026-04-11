@@ -65,6 +65,7 @@ import {
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "./markdown-editor-types";
 import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
 import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
+import { SlashPickerPlugin } from "./slash-picker-plugin";
 import {
   LexicalRenderContextProvider,
   type LexicalRenderContextValue,
@@ -910,6 +911,7 @@ export function LexicalMarkdownEditor({
                 {!isSourceMode && editable ? <MarkdownExpansionPlugin /> : null}
                 {!isSourceMode && editable ? <BlockKeyboardAccessPlugin /> : null}
                 {!isSourceMode && editable ? <ReferenceTypeaheadPlugin /> : null}
+                {!isSourceMode && editable ? <SlashPickerPlugin /> : null}
                 {!isSourceMode ? <HeadingChromePlugin doc={renderContextValue?.doc ?? doc} /> : null}
                 {!isSourceMode ? <HeadingIndexPlugin /> : null}
                 {!isSourceMode ? (
