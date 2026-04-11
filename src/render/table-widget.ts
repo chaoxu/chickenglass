@@ -14,6 +14,7 @@ import {
   findClosestTable,
   findClosestWidgetContainer,
   findTablesInState,
+  type TableRange,
 } from "./table-discovery";
 import { addRow, formatTable, type ParsedTable } from "./table-utils";
 import { requestScrollStabilizedMeasure } from "./scroll-anchor";
@@ -248,16 +249,11 @@ export class TableWidget extends ShellWidget {
     return parseInlineFragments(content).some((fragment) => fragment.kind === "reference");
   }
 
-  private getReferenceCatalog() {
-    const state = this.editorView?.state as { field?: unknown } | undefined;
-    return state && typeof state.field === "function"
-      ? getEditorDocumentReferenceCatalog(this.editorView!.state)
-      : undefined;
-  }
-
   private mountPreviewEditor(cell: HTMLElement, content: string): void {
     const bibData = this.editorView?.state.field?.(bibDataField, false);
-    const referenceCatalog = this.getReferenceCatalog();
+    const referenceCatalog = this.editorView
+      ? getEditorDocumentReferenceCatalog(this.editorView.state)
+      : undefined;
     const controller = createInlineEditorController({
       parent: cell,
       doc: content,
@@ -375,6 +371,38 @@ export class TableWidget extends ShellWidget {
     this.resizeObserver.observe(container);
   }
 
+  private currentTableRange(): TableRange | null {
+    const rootView = this.editorView;
+    if (!rootView) return null;
+    return findClosestTable(findTablesInState(rootView.state), this.tableFrom) ?? null;
+  }
+
+  private focusRootOutsideTable(direction: "up" | "down"): boolean {
+    const rootView = this.editorView;
+    const tableRange = this.currentTableRange();
+    if (!rootView || !tableRange) return false;
+
+    const doc = rootView.state.doc;
+    const startLine = doc.lineAt(tableRange.from);
+    const endLine = doc.lineAt(Math.max(tableRange.from, tableRange.to - 1));
+    const targetPos = direction === "up"
+      ? Math.max(0, startLine.from - 1)
+      : Math.min(doc.length, endLine.to + 1);
+
+    clearActivePreviewCell();
+    rootView.dispatch({
+      selection: { anchor: targetPos },
+      scrollIntoView: true,
+      userEvent: "select",
+    });
+    rootView.focus();
+    requestAnimationFrame(() => {
+      if (!rootView.dom.isConnected) return;
+      rootView.focus();
+    });
+    return true;
+  }
+
   private buildTableDOM(view: EditorView): HTMLTableElement {
     this.editorView = view;
 
@@ -405,10 +433,13 @@ export class TableWidget extends ShellWidget {
         `[data-section="${targetSection}"][data-row="${targetRow}"][data-col="${targetCol}"]`,
       ) as HTMLElement | null;
       if (target) {
-        target.dataset.placeAtEnd = placeAtEnd ? "true" : "false";
-        target.dispatchEvent(
-          new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
-        );
+        if (activeInlineEditor) {
+          const destroyed = destroyActiveInlineEditor();
+          if (destroyed) {
+            destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+          }
+        }
+        openCellEditor(target, targetSection, targetRow, targetCol, { placeAtEnd });
       }
     };
 
@@ -442,7 +473,9 @@ export class TableWidget extends ShellWidget {
       const currentLinear = section === "header" ? 0 : row + 1;
       const totalRows = 1 + bodyRowCount;
       const bibData = this.editorView?.state.field?.(bibDataField, false);
-      const referenceCatalog = this.getReferenceCatalog();
+      const referenceCatalog = this.editorView
+        ? getEditorDocumentReferenceCatalog(this.editorView.state)
+        : undefined;
       const controller = createInlineEditorController({
         parent: cell,
         doc: rawText,
@@ -458,16 +491,24 @@ export class TableWidget extends ShellWidget {
         },
         onBlur: () => {
           const blurredEditor = activeInlineEditor;
-          setTimeout(() => {
-            if (!shouldCommitBlurredInlineEditor(blurredEditor, activeInlineEditor, cell)) return;
-            const destroyed = destroyActiveInlineEditor();
-            if (!destroyed) return;
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              if (
+                document.activeElement instanceof HTMLElement &&
+                cell.contains(document.activeElement)
+              ) {
+                return;
+              }
+              if (!shouldCommitBlurredInlineEditor(blurredEditor, activeInlineEditor, cell)) return;
+              const destroyed = destroyActiveInlineEditor();
+              if (!destroyed) return;
 
-            destroyed.owner.commitRenderedCell(
-              destroyed.cell,
-              destroyed.text,
-            );
-          }, 0);
+              destroyed.owner.commitRenderedCell(
+                destroyed.cell,
+                destroyed.text,
+              );
+            });
+          });
         },
         onKeydown: (event) => {
           if (event.key === "Escape") {
@@ -598,7 +639,13 @@ export class TableWidget extends ShellWidget {
           if (event.key === "ArrowUp") {
             event.preventDefault();
             const prevLinear = currentLinear - 1;
-            if (prevLinear < 0) return true;
+            if (prevLinear < 0) {
+              const destroyed = destroyActiveInlineEditor();
+              if (!destroyed) return true;
+              destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+              destroyed.owner.focusRootOutsideTable("up");
+              return true;
+            }
             activateTargetCell(prevLinear, col);
             return true;
           }
@@ -606,7 +653,13 @@ export class TableWidget extends ShellWidget {
           if (event.key === "ArrowDown") {
             event.preventDefault();
             const nextLinear = currentLinear + 1;
-            if (nextLinear >= totalRows) return true;
+            if (nextLinear >= totalRows) {
+              const destroyed = destroyActiveInlineEditor();
+              if (!destroyed) return true;
+              destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+              destroyed.owner.focusRootOutsideTable("down");
+              return true;
+            }
             activateTargetCell(nextLinear, col);
             return true;
           }
@@ -621,6 +674,11 @@ export class TableWidget extends ShellWidget {
 
       activeInlineEditor = { controller, view: editorView, cell, owner: this };
 
+      const refocusEditor = (): void => {
+        if (activeInlineEditor?.view !== editorView) return;
+        editorView.focus();
+      };
+
       const applyInitialSelection = (anchor: number): void => {
         if (activeInlineEditor?.view !== editorView) return;
         editorView.dispatch({ selection: { anchor } });
@@ -633,7 +691,12 @@ export class TableWidget extends ShellWidget {
         const docLen = editorView.state.doc.length;
         applyInitialSelection(docLen);
       }
-      editorView.focus();
+      refocusEditor();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          refocusEditor();
+        });
+      });
 
       if (useClickPlacement) {
         requestAnimationFrame(() => {
@@ -678,6 +741,27 @@ export class TableWidget extends ShellWidget {
 
         const currentLinear = section === "header" ? 0 : row + 1;
 
+        if (
+          event.key.length === 1 &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.altKey
+        ) {
+          event.preventDefault();
+          openCellEditor(cell, section, row, col);
+          requestAnimationFrame(() => {
+            const active = activeInlineEditor;
+            if (active?.cell !== cell) return;
+            const selection = active.view.state.selection.main;
+            active.view.dispatch({
+              changes: { from: selection.from, to: selection.to, insert: event.key },
+              selection: { anchor: selection.from + event.key.length },
+              userEvent: "input.type",
+            });
+          });
+          return;
+        }
+
         if (event.key === "Enter" || event.key === "F2") {
           event.preventDefault();
           openCellEditor(cell, section, row, col);
@@ -708,14 +792,24 @@ export class TableWidget extends ShellWidget {
         if (event.key === "ArrowUp") {
           event.preventDefault();
           const prevLinear = currentLinear - 1;
-          if (prevLinear >= 0) focusTargetCell(prevLinear, col);
+          if (prevLinear >= 0) {
+            focusTargetCell(prevLinear, col);
+          } else {
+            clearActivePreviewCell();
+            this.focusRootOutsideTable("up");
+          }
           return;
         }
 
         if (event.key === "ArrowDown") {
           event.preventDefault();
           const nextLinear = currentLinear + 1;
-          if (nextLinear < 1 + this.table.rows.length) focusTargetCell(nextLinear, col);
+          if (nextLinear < 1 + this.table.rows.length) {
+            focusTargetCell(nextLinear, col);
+          } else {
+            clearActivePreviewCell();
+            this.focusRootOutsideTable("down");
+          }
           return;
         }
       });
@@ -734,6 +828,17 @@ export class TableWidget extends ShellWidget {
 
         event.preventDefault();
         event.stopPropagation();
+
+        if (!event.isTrusted) {
+          if (activeInlineEditor) {
+            const destroyed = destroyActiveInlineEditor();
+            if (destroyed) {
+              destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+            }
+          }
+          setActivePreviewCell(cell, this);
+          return;
+        }
 
         const clickX = event.clientX;
         const clickY = event.clientY;

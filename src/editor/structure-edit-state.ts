@@ -327,8 +327,8 @@ export function createStructureEditTargetAt(
   if (displayMath) candidates.push(displayMath);
   if (candidates.length === 0) return null;
   candidates.sort((left, right) => {
-    const leftContains = structureTargetContainsPos(left, pos);
-    const rightContains = structureTargetContainsPos(right, pos);
+    const leftContains = structureEditTargetContainsPos(left, pos);
+    const rightContains = structureEditTargetContainsPos(right, pos);
     if (leftContains !== rightContains) {
       return leftContains ? -1 : 1;
     }
@@ -355,7 +355,7 @@ function structureTargetTo(target: StructureEditTarget): number {
   return target.to;
 }
 
-function structureTargetContainsPos(
+export function structureEditTargetContainsPos(
   target: StructureEditTarget,
   pos: number,
 ): boolean {

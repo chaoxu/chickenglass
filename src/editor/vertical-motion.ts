@@ -11,6 +11,7 @@ import {
   clearStructureEditTarget,
   createStructureEditTargetAt,
   getActiveStructureEditTarget,
+  structureEditTargetContainsPos,
 } from "./structure-edit-state";
 
 const FALLBACK_LINE_HEIGHT_PX = 24;
@@ -338,6 +339,19 @@ function activateTableStop(
   view: EditorView,
   table: TableRange,
 ): number {
+  const requestTableFocus = (container: HTMLElement | null): void => {
+    if (!container) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!view.dom.isConnected || !container.isConnected) return;
+        const focusTarget = container.querySelector<HTMLElement>(
+          `.${CSS.tableCellEditing} .cm-content, .${CSS.tableCellEditing} .cm-editor, .${CSS.tableCellActive}`,
+        );
+        focusTarget?.focus();
+      });
+    });
+  };
+
   const openFirstCell = (): boolean => {
     const container = findClosestTableWidgetContainer(view, table.from);
     const firstCell = container?.querySelector<HTMLElement>(
@@ -345,12 +359,16 @@ function activateTableStop(
     );
     if (!firstCell) return false;
     dispatchPlainMouseDown(firstCell);
-    return Boolean(
+    const opened = Boolean(
       container?.querySelector(`.${CSS.tableCellEditing} .cm-editor`) ||
       (container !== null &&
         document.activeElement instanceof HTMLElement &&
         container.contains(document.activeElement))
     );
+    if (opened) {
+      requestTableFocus(container);
+    }
+    return opened;
   };
 
   if (!openFirstCell()) {
@@ -526,11 +544,13 @@ export function moveVerticallyInRichView(
     return true;
   }
 
-  if (activeStructure?.kind === "display-math") {
-    const nextInsideActiveDisplayMath =
-      nextRange.head >= activeStructure.from && nextRange.head < activeStructure.to;
+  if (activeStructure) {
+    const nextInsideActiveStructure = structureEditTargetContainsPos(
+      activeStructure,
+      nextRange.head,
+    );
 
-    if (!nextInsideActiveDisplayMath) {
+    if (!nextInsideActiveStructure) {
       clearStructureEditTarget(view);
     }
 
@@ -618,7 +638,12 @@ export function moveVerticallyInRichView(
     return true;
   }
 
-  if (activateStructureEditAt(view, nextRange.head)) {
+  const landedStructureTarget = createStructureEditTargetAt(view.state, nextRange.head);
+  if (
+    landedStructureTarget &&
+    structureEditTargetContainsPos(landedStructureTarget, nextRange.head) &&
+    activateStructureEditAt(view, nextRange.head)
+  ) {
     requestSelectionVisibility(view);
     return true;
   }

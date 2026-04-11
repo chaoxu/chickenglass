@@ -579,9 +579,10 @@ export async function openRegressionDocument(page, path = "index.md") {
  */
 export async function findLine(page, needle) {
   return page.evaluate((text) => {
-    const doc = window.__cmView.state.doc;
-    for (let line = 1; line <= doc.lines; line += 1) {
-      if (doc.line(line).text.includes(text)) {
+    const docText = window.__cmView.state.doc.toString();
+    const lines = docText.split("\n");
+    for (let line = 1; line <= lines.length; line += 1) {
+      if (lines[line - 1].includes(text)) {
         return line;
       }
     }
@@ -1138,8 +1139,15 @@ export async function setCursor(page, line, col = 0) {
     ({ line, col }) => {
       const view = window.__cmView;
       view.focus();
-      const lineObj = view.state.doc.line(line);
-      view.dispatch({ selection: { anchor: lineObj.from + col } });
+      const lines = view.state.doc.toString().split("\n");
+      const clampedLine = Math.max(1, Math.min(line, lines.length));
+      let anchor = 0;
+      for (let index = 0; index < clampedLine - 1; index += 1) {
+        anchor += lines[index].length + 1;
+      }
+      const lineText = lines[clampedLine - 1] ?? "";
+      anchor += Math.max(0, Math.min(col, lineText.length));
+      view.dispatch({ selection: { anchor } });
     },
     { line, col },
   );
@@ -1153,12 +1161,17 @@ export async function scrollTo(page, line) {
   await page.evaluate((ln) => {
     const view = window.__cmView;
     view.focus();
-    const lineObj = view.state.doc.line(ln);
+    const lines = view.state.doc.toString().split("\n");
+    const clampedLine = Math.max(1, Math.min(ln, lines.length));
+    let anchor = 0;
+    for (let index = 0; index < clampedLine - 1; index += 1) {
+      anchor += lines[index].length + 1;
+    }
     view.dispatch({
-      selection: { anchor: lineObj.from },
+      selection: { anchor },
       scrollIntoView: true,
     });
-    const coords = view.coordsAtPos(lineObj.from, 1) ?? view.coordsAtPos(lineObj.from, -1);
+    const coords = view.coordsAtPos(anchor, 1) ?? view.coordsAtPos(anchor, -1);
     if (!coords) return;
     const rect = view.scrollDOM.getBoundingClientRect();
     const targetTop = rect.top + Math.min(120, view.scrollDOM.clientHeight / 3);

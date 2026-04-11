@@ -97,6 +97,7 @@ export const CSS = {
   /** Table widget. */
   tableWidget: "cf-table-widget",
   tableCellEditing: "cf-table-cell-editing",
+  tableCellActive: "cf-table-cell-active",
 
   /** Include region and label. */
   includeRegion: "cf-include-region",

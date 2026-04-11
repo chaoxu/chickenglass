@@ -14,7 +14,10 @@ export async function run(page) {
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
   const displayMathLine = await findLine(page, "$$");
-  const afterDisplayLine = await findLine(page, "Backslash:");
+  const afterDisplayLine = await findLine(
+    page,
+    "Backslash:",
+  );
 
   if (displayMathLine < 0 || afterDisplayLine < 0) {
     return {
