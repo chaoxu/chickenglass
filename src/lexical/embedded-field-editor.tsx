@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import {
   type EmbeddedFieldFamily,
@@ -10,6 +11,7 @@ import { useLexicalRenderContext } from "./render-context";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
 
 type ActivationMode = "always" | "focus";
+type FocusRequest = "end" | "pointer";
 
 export interface EmbeddedFieldEditorProps {
   readonly activation?: ActivationMode;
@@ -33,7 +35,7 @@ export function EmbeddedFieldEditor({
   const context = useLexicalRenderContext();
   const surfaceEditable = useLexicalSurfaceEditable();
   const shellRef = useRef<HTMLDivElement | null>(null);
-  const requestedFocusRef = useRef(false);
+  const requestedFocusRef = useRef<FocusRequest | null>(null);
   const spec = getEmbeddedFieldFamilySpec(family);
   const canActivate = activation === "focus" && (editable ?? surfaceEditable);
   const [active, setActive] = useState(activation === "always");
@@ -48,11 +50,17 @@ export function EmbeddedFieldEditor({
     }
   }, [activation, editable, surfaceEditable]);
 
-  const activate = useCallback(() => {
+  const activate = useCallback((focusRequest: FocusRequest = "end") => {
     if (!canActivate) {
       return;
     }
-    requestedFocusRef.current = true;
+    requestedFocusRef.current = focusRequest;
+    if (focusRequest === "pointer") {
+      flushSync(() => {
+        setActive(true);
+      });
+      return;
+    }
     setActive(true);
   }, [canActivate]);
 
@@ -61,7 +69,8 @@ export function EmbeddedFieldEditor({
     : Boolean(editable ?? surfaceEditable);
 
   useEffect(() => {
-    if (!requestedFocusRef.current || !active) {
+    const requestedFocus = requestedFocusRef.current;
+    if (!requestedFocus || !active) {
       return;
     }
 
@@ -69,25 +78,27 @@ export function EmbeddedFieldEditor({
     let attemptsRemaining = 6;
 
     const focusEditableRoot = () => {
-      if (cancelled || !requestedFocusRef.current) {
+      if (cancelled || requestedFocusRef.current !== requestedFocus) {
         return;
       }
 
       const editableRoot = shellRef.current?.querySelector<HTMLElement>("[contenteditable='true']");
       if (editableRoot) {
-        editableRoot.dispatchEvent(new CustomEvent(COFLAT_FOCUS_EDGE_EVENT, {
-          detail: { edge: "end" },
-        }));
+        if (requestedFocus === "end") {
+          editableRoot.dispatchEvent(new CustomEvent(COFLAT_FOCUS_EDGE_EVENT, {
+            detail: { edge: "end" },
+          }));
+        }
         editableRoot.focus({ preventScroll: true });
       }
       if (shellRef.current?.contains(document.activeElement)) {
-        requestedFocusRef.current = false;
+        requestedFocusRef.current = null;
         return;
       }
 
       attemptsRemaining -= 1;
       if (attemptsRemaining <= 0) {
-        requestedFocusRef.current = false;
+        requestedFocusRef.current = null;
         return;
       }
 
@@ -126,9 +137,8 @@ export function EmbeddedFieldEditor({
           }
         : undefined}
       onMouseDownCapture={canActivate && !active
-        ? (event) => {
-            event.preventDefault();
-            activate();
+        ? () => {
+            activate("pointer");
           }
         : undefined}
       ref={shellRef}
@@ -141,7 +151,6 @@ export function EmbeddedFieldEditor({
         layoutMode={spec.fieldKind === "inline" ? "inline" : "block"}
         namespace={namespace}
         onTextChange={onTextChange}
-        repairBlankClickSelection={spec.fieldKind !== "inline"}
         requireUserEditFlag={false}
         renderContextValue={context}
         showCodeBlockChrome={false}

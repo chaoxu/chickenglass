@@ -15,7 +15,6 @@ import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import {
   $getSelection,
-  $getRoot,
   $isNodeSelection,
   $isRangeSelection,
   CLEAR_HISTORY_COMMAND,
@@ -76,8 +75,6 @@ import type {
   MarkdownEditorSelection,
 } from "./markdown-editor-types";
 
-const clickRepairHandlers = new WeakMap<HTMLElement, EventListener>();
-
 function getViewportFromRichSurface(root: HTMLElement): number {
   const headings = [...root.querySelectorAll<HTMLElement>(".cf-lexical-heading[data-coflat-heading-pos]")];
   if (headings.length === 0) {
@@ -102,71 +99,6 @@ function getViewportFromRichSurface(root: HTMLElement): number {
   }
 
   return active;
-}
-
-function hasEditableTextSelection(root: HTMLElement): boolean {
-  const selection = window.getSelection();
-  if (!selection || !selection.isCollapsed) {
-    return false;
-  }
-
-  const anchorNode = selection.anchorNode;
-  const anchorElement = anchorNode instanceof Element
-    ? anchorNode
-    : anchorNode?.parentElement;
-  const textLeaf = anchorElement?.closest("[data-lexical-text='true']");
-  return Boolean(textLeaf && root.contains(textLeaf));
-}
-
-function ClickCaretRepairPlugin({
-  enabled,
-}: {
-  readonly enabled: boolean;
-}) {
-  const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
-    const handleMouseUp = (rootElement: HTMLElement) => {
-      queueMicrotask(() => {
-        if (document.activeElement !== rootElement) {
-          return;
-        }
-
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0 && rootElement.contains(sel.anchorNode)) {
-          return;
-        }
-
-        editor.update(() => {
-          $getRoot().selectEnd();
-        }, { discrete: true });
-      });
-    };
-
-    return editor.registerRootListener((rootElement, previousRootElement) => {
-      if (previousRootElement) {
-        const previousListener = clickRepairHandlers.get(previousRootElement);
-        if (previousListener) {
-          previousRootElement.removeEventListener("mouseup", previousListener);
-          clickRepairHandlers.delete(previousRootElement);
-        }
-      }
-
-      if (!rootElement) {
-        return;
-      }
-
-      const listener = () => handleMouseUp(rootElement);
-      clickRepairHandlers.set(rootElement, listener);
-      rootElement.addEventListener("mouseup", listener);
-    });
-  }, [editor, enabled]);
-
-  return null;
 }
 
 function EditableSyncPlugin({
@@ -526,23 +458,6 @@ function RootElementPlugin({
   return null;
 }
 
-function repairBlankClickSelection(root: HTMLElement, event: React.MouseEvent): void {
-  if (hasEditableTextSelection(root)) {
-    return;
-  }
-
-  const selection = window.getSelection();
-  if (!selection) {
-    return;
-  }
-
-  const range = document.caretRangeFromPoint(event.clientX, event.clientY);
-  if (range && root.contains(range.startContainer)) {
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-}
-
 export interface LexicalRichMarkdownEditorProps {
   readonly doc: string;
   readonly docPath?: string;
@@ -557,7 +472,6 @@ export interface LexicalRichMarkdownEditorProps {
   readonly onTextChange?: (text: string) => void;
   readonly onScrollChange?: (scrollTop: number) => void;
   readonly onViewportFromChange?: (from: number) => void;
-  readonly repairBlankClickSelection?: boolean;
   readonly requireUserEditFlag?: boolean;
   readonly renderContextValue?: LexicalRenderContextValue;
   readonly showBibliography?: boolean;
@@ -585,7 +499,6 @@ export function LexicalRichMarkdownEditor({
   onTextChange,
   onScrollChange,
   onViewportFromChange,
-  repairBlankClickSelection: shouldRepairBlankClickSelection = false,
   requireUserEditFlag = true,
   renderContextValue,
   showBibliography = false,
@@ -724,11 +637,6 @@ export function LexicalRichMarkdownEditor({
                           userEditPendingRef.current = true;
                         }
                       : undefined}
-                    onMouseUp={editable && shouldRepairBlankClickSelection
-                      ? (event: React.MouseEvent<HTMLDivElement>) => {
-                        repairBlankClickSelection(event.currentTarget, event);
-                      }
-                      : undefined}
                     onScroll={(event) => onScrollChange?.(event.currentTarget.scrollTop)}
                     spellCheck={spellCheck}
                   />
@@ -740,7 +648,6 @@ export function LexicalRichMarkdownEditor({
               <FocusEdgePlugin />
               {showCodeBlockChrome ? <CodeBlockChromePlugin /> : null}
               {showIncludeAffordances ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
-              {editable && shouldRepairBlankClickSelection ? <ClickCaretRepairPlugin enabled /> : null}
               {editable ? <HistoryPlugin /> : null}
               <ListPlugin />
               <CheckListPlugin />
