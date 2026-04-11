@@ -9,6 +9,7 @@ export const name = "whole-document-arrowdown-sweep";
 function selectionSignature(page) {
   return page.evaluate(() => {
     const root = window.__cmDebug.selection();
+    const scroller = window.__cmView?.scrollDOM;
     const structure = window.__cmDebug.structure()?.kind ?? null;
     const domSel = window.getSelection();
     const range = domSel && domSel.rangeCount ? domSel.getRangeAt(0) : null;
@@ -36,6 +37,7 @@ function selectionSignature(page) {
       rectLeft: rect ? Math.round(rect.left) : null,
       rectWidth: rect ? Math.round(rect.width) : null,
       rectHeight: rect ? Math.round(rect.height) : null,
+      editorScrollTop: Math.round(scroller?.scrollTop ?? 0),
       scrollY: Math.round(window.scrollY),
     };
   });
@@ -54,9 +56,24 @@ export async function run(page) {
   let repeated = 0;
   let previousSignature = null;
   let state = await selectionSignature(page);
+  let previousState = null;
 
   for (let step = 0; step < 1200; step += 1) {
     state = await selectionSignature(page);
+    if (previousState) {
+      if (state.rootLine < previousState.rootLine) {
+        return {
+          pass: false,
+          message: `ArrowDown moved backward in document lines: ${JSON.stringify({ step, previousState, state })}`,
+        };
+      }
+      if (state.editorScrollTop + 40 < previousState.editorScrollTop) {
+        return {
+          pass: false,
+          message: `ArrowDown scrolled backward in the editor: ${JSON.stringify({ step, previousState, state })}`,
+        };
+      }
+    }
     const signature = JSON.stringify(state);
     if (signature === previousSignature) {
       repeated += 1;
@@ -64,6 +81,7 @@ export async function run(page) {
       repeated = 0;
       previousSignature = signature;
     }
+    previousState = state;
 
     if (repeated >= 3) {
       if (state.rootLine >= state.docLines) {

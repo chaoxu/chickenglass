@@ -6,7 +6,7 @@ import {
 } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import { EditorSelection, type EditorState, type Extension, Prec } from "@codemirror/state";
-import { type EditorView, keymap } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { MODE_CHANGE_EVENT, OPEN_FILE_EVENT } from "../constants/events";
 import { getClosingFenceRanges } from "../plugins/fence-protection";
@@ -330,6 +330,23 @@ function moveWithReverseScrollGuard(
     || moveVerticallyInRichView(view, movingDown);
 }
 
+const richVerticalMotionDomHandlers: Extension = EditorView.domEventHandlers({
+  keydown(event, view) {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return false;
+    if (!isRichMode(view)) return false;
+
+    const handled = moveWithReverseScrollGuard(
+      view,
+      event.key === "ArrowDown" ? "down" : "up",
+    );
+    if (!handled) return false;
+
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  },
+});
+
 function clearActiveStructureEdit(view: EditorView): boolean {
   return clearStructureEditTarget(view);
 }
@@ -337,6 +354,7 @@ function clearActiveStructureEdit(view: EditorView): boolean {
 /** Default keybindings for the editor. */
 export const editorKeybindings: Extension = [
   history(),
+  richVerticalMotionDomHandlers,
   Prec.high(
     keymap.of([
       { key: "Escape", run: clearActiveStructureEdit },

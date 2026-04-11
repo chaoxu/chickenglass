@@ -1,7 +1,8 @@
-import { EditorSelection } from "@codemirror/state";
+import { EditorSelection, type SelectionRange } from "@codemirror/state";
 import { type EditorView } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
 import { getLineElement } from "../render/render-core";
+import { documentAnalysisField } from "../state/document-analysis";
 import { type TableRange } from "../state/table-discovery";
 import { findTablesInState } from "../state/table-discovery";
 import { appendDebugTimelineEvent } from "./debug-timeline";
@@ -15,9 +16,11 @@ import {
 } from "./structure-edit-state";
 
 const FALLBACK_LINE_HEIGHT_PX = 24;
-const REVERSE_SCROLL_THRESHOLD_PX = 120;
+const REVERSE_SCROLL_JITTER_PX = 8;
+const SUSPICIOUS_STRUCTURE_EXIT_LINE_DELTA = 25;
 const MAX_GUARD_EVENTS = 20;
-const pendingReverseScrollGuardIds = new WeakMap<EditorView, number>();
+const REVERSE_SCROLL_CORRECTION_ATTEMPTS = 4;
+const activeReverseScrollGuards = new WeakMap<EditorView, ReverseScrollGuard>();
 const verticalMotionGuardEvents = new WeakMap<EditorView, VerticalMotionGuardEvent[]>();
 let nextReverseScrollGuardId = 0;
 
@@ -46,6 +49,14 @@ export type VerticalMotionGuardEvent =
       readonly afterScrollTop: number;
       readonly correctedScrollTop: number;
     });
+
+interface ReverseScrollGuard {
+  readonly id: number;
+  readonly direction: "up" | "down";
+  enforcedScrollTop: number;
+  removeScrollListener: (() => void) | null;
+  timeoutId: number | null;
+}
 
 export function recordVerticalMotionGuardEvent(
   view: EditorView,
@@ -86,6 +97,29 @@ function snapshotVerticalMotion(view: EditorView): VerticalMotionSnapshot {
     line: view.state.doc.lineAt(head).number,
     scrollTop: view.scrollDOM.scrollTop,
   };
+}
+
+function hasReversedVerticalDirection(
+  beforeLine: number,
+  targetLine: number,
+  forward: boolean,
+): boolean {
+  return forward ? targetLine < beforeLine : targetLine > beforeLine;
+}
+
+function fallbackVerticalCursor(
+  view: EditorView,
+  lineNumber: number,
+  forward: boolean,
+): SelectionRange {
+  const targetLineNumber = forward
+    ? Math.min(view.state.doc.lines, lineNumber + 1)
+    : Math.max(1, lineNumber - 1);
+  const targetLine = view.state.doc.line(targetLineNumber);
+  return EditorSelection.cursor(
+    forward ? targetLine.from : targetLine.to,
+    forward ? 1 : -1,
+  );
 }
 
 function measuredLineHeight(
@@ -138,10 +172,10 @@ export function correctedReverseVerticalScrollTop(
   const movedUp = lineDelta < 0 || headDelta < 0;
   const movedDown = lineDelta > 0 || headDelta > 0;
 
-  if (movedUp && scrollDelta >= REVERSE_SCROLL_THRESHOLD_PX) {
+  if (movedUp && scrollDelta > REVERSE_SCROLL_JITTER_PX) {
     return Math.max(0, before.scrollTop - traversedHeight);
   }
-  if (movedDown && scrollDelta <= -REVERSE_SCROLL_THRESHOLD_PX) {
+  if (movedDown && scrollDelta < -REVERSE_SCROLL_JITTER_PX) {
     return before.scrollTop + traversedHeight;
   }
   return null;
@@ -182,6 +216,20 @@ function parseWidgetSourcePos(value: string | undefined): number | null {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
+function isInlineVerticalMotionStopElement(
+  el: HTMLElement,
+): boolean {
+  return el.classList.contains(CSS.mathInline) ||
+    el.classList.contains(CSS.crossref) ||
+    el.classList.contains(CSS.citation) ||
+    el.classList.contains(CSS.linkRendered) ||
+    el.classList.contains(CSS.referenceSource) ||
+    el.classList.contains(CSS.mathSource) ||
+    el.classList.contains(CSS.sourceDelimiter) ||
+    el.classList.contains(CSS.inlineEditor) ||
+    el.classList.contains(CSS.footnoteInline);
+}
+
 function collectHiddenWidgetStopCandidates(
   view: EditorView,
 ): HiddenWidgetStopCandidate[] {
@@ -189,6 +237,8 @@ function collectHiddenWidgetStopCandidates(
   const candidates: HiddenWidgetStopCandidate[] = [];
 
   for (const el of view.contentDOM.querySelectorAll<HTMLElement>("[data-source-from][data-source-to]")) {
+    if (isInlineVerticalMotionStopElement(el)) continue;
+
     const from = parseWidgetSourcePos(el.dataset.sourceFrom);
     const to = parseWidgetSourcePos(el.dataset.sourceTo);
     if (from === null || to === null || from < 0 || to < from) continue;
@@ -400,6 +450,53 @@ function dispatchPlainMouseDown(target: HTMLElement): void {
   }));
 }
 
+function activateDisplayMathStopBetweenLines(
+  view: EditorView,
+  fromLine: number,
+  targetLine: number,
+  forward: boolean,
+): number | null {
+  const hiddenLineStart = Math.min(fromLine, targetLine) + 1;
+  const hiddenLineEnd = Math.max(fromLine, targetLine) - 1;
+  if (hiddenLineStart > hiddenLineEnd) return null;
+
+  const analysis = view.state.field(documentAnalysisField, false);
+  if (!analysis) return null;
+
+  const matching = analysis.mathRegions
+    .filter((region) => region.isDisplay)
+    .map((region) => ({
+      region,
+      startLine: view.state.doc.lineAt(region.from).number,
+      endLine: view.state.doc.lineAt(region.to).number,
+    }))
+    .filter((candidate) =>
+      candidate.endLine >= hiddenLineStart && candidate.startLine <= hiddenLineEnd
+    );
+
+  if (matching.length === 0) return null;
+
+  matching.sort((left, right) => {
+    if (forward) {
+      if (left.startLine !== right.startLine) return left.startLine - right.startLine;
+      return left.region.from - right.region.from;
+    }
+    if (left.endLine !== right.endLine) return right.endLine - left.endLine;
+    return right.region.to - left.region.to;
+  });
+
+  const chosen = matching[0]?.region;
+  if (!chosen) return null;
+
+  const probePos = forward ? chosen.contentFrom : chosen.contentTo;
+  const target = createStructureEditTargetAt(view.state, probePos);
+  if (target?.kind !== "display-math") return null;
+
+  const anchor = forward ? target.contentFrom : target.contentTo;
+  if (!activateStructureEditTarget(view, target, anchor)) return null;
+  return view.state.doc.lineAt(anchor).number;
+}
+
 function activateHiddenWidgetStop(
   view: EditorView,
   stop: HiddenWidgetStop,
@@ -407,6 +504,17 @@ function activateHiddenWidgetStop(
 ): number | null {
   const selectionBefore = view.state.selection.main;
   const lineForStop = view.state.doc.lineAt(stop.from).number;
+  const targetPos = forward ? stop.from : Math.max(stop.from, stop.to - 1);
+  const target = createStructureEditTargetAt(view.state, targetPos);
+
+  if (target?.kind === "display-math") {
+    const anchor = forward ? target.contentFrom : target.contentTo;
+    if (!activateStructureEditTarget(view, target, anchor)) return null;
+    return view.state.doc.lineAt(anchor).number;
+  }
+  if (target && activateStructureEditAt(view, targetPos)) {
+    return view.state.doc.lineAt(view.state.selection.main.head).number;
+  }
 
   if (stop.element.classList.contains(CSS.tableWidget)) {
     const firstCell = stop.element.querySelector<HTMLElement>("[data-section][data-row][data-col]");
@@ -446,17 +554,6 @@ function activateHiddenWidgetStop(
     }
   }
 
-  const targetPos = forward ? stop.from : Math.max(stop.from, stop.to - 1);
-  const target = createStructureEditTargetAt(view.state, targetPos);
-  if (target?.kind === "display-math") {
-    const anchor = forward ? target.contentFrom : target.contentTo;
-    if (!activateStructureEditTarget(view, target, anchor)) return null;
-    return view.state.doc.lineAt(anchor).number;
-  }
-  if (activateStructureEditAt(view, targetPos)) {
-    return view.state.doc.lineAt(view.state.selection.main.head).number;
-  }
-
   view.dispatch({
     selection: EditorSelection.cursor(targetPos, forward ? 1 : -1),
     scrollIntoView: false,
@@ -467,6 +564,7 @@ function activateHiddenWidgetStop(
 
 function requestSelectionVisibility(
   view: EditorView,
+  direction?: "up" | "down",
 ): void {
   if (!view.dom.isConnected) return;
   const selectionAssoc: 1 | -1 = view.state.selection.main.assoc === -1
@@ -496,11 +594,30 @@ function requestSelectionVisibility(
         nextScrollTop += measurement.coords.bottom - (measurement.scrollerBottom - margin);
       }
       const clampedScrollTop = Math.max(0, nextScrollTop);
-      if (clampedScrollTop !== measurement.scrollTop) {
-        view.scrollDOM.scrollTop = clampedScrollTop;
+      const monotonicScrollTop = direction === "down"
+        ? Math.max(measurement.scrollTop, clampedScrollTop)
+        : direction === "up"
+        ? Math.min(measurement.scrollTop, clampedScrollTop)
+        : clampedScrollTop;
+      if (monotonicScrollTop !== measurement.scrollTop) {
+        view.scrollDOM.scrollTop = monotonicScrollTop;
       }
     },
   });
+}
+
+function preserveDirectionalScrollTop(
+  view: EditorView,
+  baselineScrollTop: number,
+  forward: boolean,
+): void {
+  const currentScrollTop = view.scrollDOM.scrollTop;
+  const correctedScrollTop = forward
+    ? Math.max(currentScrollTop, baselineScrollTop)
+    : Math.min(currentScrollTop, baselineScrollTop);
+  if (correctedScrollTop !== currentScrollTop) {
+    view.scrollDOM.scrollTop = correctedScrollTop;
+  }
 }
 
 function exitActiveDisplayMathTarget(
@@ -517,8 +634,145 @@ function exitActiveDisplayMathTarget(
     scrollIntoView: false,
     userEvent: "select",
   });
-  requestSelectionVisibility(view);
+  requestSelectionVisibility(view, forward ? "down" : "up");
   return true;
+}
+
+function displayMathExitRange(
+  active: Extract<ReturnType<typeof getActiveStructureEditTarget>, { kind: "display-math" }>,
+  forward: boolean,
+): SelectionRange {
+  const exitPos = forward ? active.to : active.from;
+  return EditorSelection.cursor(exitPos, forward ? 1 : -1);
+}
+
+function scheduleReverseScrollGuard(
+  view: EditorView,
+  before: VerticalMotionSnapshot,
+  forward: boolean,
+): void {
+  const direction: "up" | "down" = forward ? "down" : "up";
+  let guard = activeReverseScrollGuards.get(view);
+  if (!guard || guard.direction !== direction) {
+    const previousGuard = guard;
+    if (previousGuard && previousGuard.timeoutId !== null) {
+      window.clearTimeout(previousGuard.timeoutId);
+    }
+    previousGuard?.removeScrollListener?.();
+    guard = {
+      id: ++nextReverseScrollGuardId,
+      direction,
+      enforcedScrollTop: before.scrollTop,
+      removeScrollListener: null,
+      timeoutId: null,
+    };
+    const createdGuard = guard;
+    const onScroll = (): void => {
+      if (!view.dom.isConnected) {
+        createdGuard.removeScrollListener?.();
+        activeReverseScrollGuards.delete(view);
+        return;
+      }
+      const currentGuard = activeReverseScrollGuards.get(view);
+      if (currentGuard !== createdGuard) {
+        createdGuard.removeScrollListener?.();
+        return;
+      }
+      const currentScrollTop = view.scrollDOM.scrollTop;
+      const needsCorrection = forward
+        ? currentScrollTop < currentGuard.enforcedScrollTop - REVERSE_SCROLL_JITTER_PX
+        : currentScrollTop > currentGuard.enforcedScrollTop + REVERSE_SCROLL_JITTER_PX;
+      if (needsCorrection) {
+        view.scrollDOM.scrollTop = currentGuard.enforcedScrollTop;
+      }
+    };
+    guard.removeScrollListener = () => {
+      view.scrollDOM.removeEventListener("scroll", onScroll);
+    };
+    view.scrollDOM.addEventListener("scroll", onScroll, { passive: true });
+    activeReverseScrollGuards.set(view, guard);
+  } else {
+    guard.enforcedScrollTop = forward
+      ? Math.max(guard.enforcedScrollTop, before.scrollTop)
+      : Math.min(guard.enforcedScrollTop, before.scrollTop);
+  }
+
+  if (guard.timeoutId !== null) {
+    window.clearTimeout(guard.timeoutId);
+  }
+  guard.timeoutId = window.setTimeout(() => {
+    const currentGuard = activeReverseScrollGuards.get(view);
+    if (currentGuard !== guard) return;
+    currentGuard.removeScrollListener?.();
+    activeReverseScrollGuards.delete(view);
+  }, 200);
+
+  const guardId = guard.id;
+  const enforceCorrectedScrollTop = (
+    correctedScrollTop: number,
+    attemptsRemaining: number,
+  ): void => {
+    if (!view.dom.isConnected) return;
+    const currentGuard = activeReverseScrollGuards.get(view);
+    if (currentGuard?.id !== guardId) return;
+
+    const currentScrollTop = view.scrollDOM.scrollTop;
+    const needsCorrection = forward
+      ? currentScrollTop < correctedScrollTop - REVERSE_SCROLL_JITTER_PX
+      : currentScrollTop > correctedScrollTop + REVERSE_SCROLL_JITTER_PX;
+
+    if (needsCorrection) {
+      view.scrollDOM.scrollTop = correctedScrollTop;
+    }
+
+    if (attemptsRemaining <= 1) return;
+    requestAnimationFrame(() => {
+      enforceCorrectedScrollTop(correctedScrollTop, attemptsRemaining - 1);
+    });
+  };
+
+  enforceCorrectedScrollTop(
+    guard.enforcedScrollTop,
+    REVERSE_SCROLL_CORRECTION_ATTEMPTS,
+  );
+
+  requestAnimationFrame(() => {
+    if (!view.dom.isConnected) return;
+    const currentGuard = activeReverseScrollGuards.get(view);
+    if (!currentGuard || currentGuard.id !== guardId) return;
+
+    const after = snapshotVerticalMotion(view);
+    const traversedHeight = sumTraversedLineHeights(
+      before.line,
+      after.line,
+      (lineNumber) => readLineHeight(view, lineNumber),
+    );
+    const correctedScrollTop = correctedReverseVerticalScrollTop(
+      before,
+      after,
+      traversedHeight,
+    );
+    if (correctedScrollTop !== null && correctedScrollTop !== view.scrollDOM.scrollTop) {
+      currentGuard.enforcedScrollTop = forward
+        ? Math.max(currentGuard.enforcedScrollTop, correctedScrollTop)
+        : Math.min(currentGuard.enforcedScrollTop, correctedScrollTop);
+      view.scrollDOM.scrollTop = currentGuard.enforcedScrollTop;
+      enforceCorrectedScrollTop(
+        currentGuard.enforcedScrollTop,
+        REVERSE_SCROLL_CORRECTION_ATTEMPTS,
+      );
+      recordVerticalMotionGuardEvent(view, {
+        kind: "reverse-scroll",
+        direction: forward ? "down" : "up",
+        beforeLine: before.line,
+        afterLine: after.line,
+        beforeScrollTop: before.scrollTop,
+        afterScrollTop: after.scrollTop,
+        correctedScrollTop,
+        timestamp: Date.now(),
+      });
+    }
+  });
 }
 
 export function moveVerticallyInRichView(
@@ -537,6 +791,7 @@ export function moveVerticallyInRichView(
     nextRange.head === range.head
   ) {
     if (exitActiveDisplayMathTarget(view, forward)) {
+      scheduleReverseScrollGuard(view, before, forward);
       return true;
     }
     // Consume the key at rich-mode boundaries so CM6's default ArrowUp/Down
@@ -546,25 +801,71 @@ export function moveVerticallyInRichView(
   }
 
   if (activeStructure) {
+    const nextTargetLine = view.state.doc.lineAt(nextRange.head).number;
     const nextInsideActiveStructure = structureEditTargetContainsPos(
       activeStructure,
       nextRange.head,
     );
+    const suspiciousStructureExit = !nextInsideActiveStructure
+      && Math.abs(nextTargetLine - before.line) > SUSPICIOUS_STRUCTURE_EXIT_LINE_DELTA;
+    const reversedStructureExit = !nextInsideActiveStructure
+      && hasReversedVerticalDirection(before.line, nextTargetLine, forward);
 
     if (!nextInsideActiveStructure) {
       clearStructureEditTarget(view);
+      const exitRange = activeStructure.kind === "display-math"
+        ? suspiciousStructureExit || reversedStructureExit
+          ? displayMathExitRange(activeStructure, forward)
+          : EditorSelection.cursor(nextRange.head, forward ? 1 : -1)
+        : suspiciousStructureExit || reversedStructureExit
+          ? fallbackVerticalCursor(view, before.line, forward)
+          : EditorSelection.cursor(nextRange.head, forward ? 1 : -1);
+      const correctedTargetLine = view.state.doc.lineAt(exitRange.head).number;
+      if (correctedTargetLine !== nextTargetLine) {
+        recordVerticalMotionGuardEvent(view, {
+          kind: "visible-line-jump",
+          direction: forward ? "down" : "up",
+          beforeLine: before.line,
+          rawTargetLine: nextTargetLine,
+          correctedTargetLine,
+          timestamp: Date.now(),
+        });
+      }
+      view.dispatch({
+        selection: exitRange,
+        scrollIntoView: false,
+        userEvent: "select",
+      });
+    } else {
+      view.dispatch({
+        selection: view.state.selection.replaceRange(nextRange),
+        scrollIntoView: false,
+        userEvent: "select",
+      });
     }
-
-    view.dispatch({
-      selection: view.state.selection.replaceRange(nextRange),
-      scrollIntoView: false,
-      userEvent: "select",
-    });
-    requestSelectionVisibility(view);
+    preserveDirectionalScrollTop(view, before.scrollTop, forward);
+    requestSelectionVisibility(view, forward ? "down" : "up");
+    scheduleReverseScrollGuard(view, before, forward);
     return true;
   }
 
-  const rawTargetLine = view.state.doc.lineAt(nextRange.head).number;
+  const initialTargetLine = view.state.doc.lineAt(nextRange.head).number;
+  const fallbackRange = hasReversedVerticalDirection(before.line, initialTargetLine, forward)
+    ? fallbackVerticalCursor(view, before.line, forward)
+    : null;
+  if (fallbackRange) {
+    const correctedTargetLine = view.state.doc.lineAt(fallbackRange.head).number;
+    recordVerticalMotionGuardEvent(view, {
+      kind: "visible-line-jump",
+      direction: forward ? "down" : "up",
+      beforeLine: before.line,
+      rawTargetLine: initialTargetLine,
+      correctedTargetLine,
+      timestamp: Date.now(),
+    });
+  }
+  const normalizedNextRange = fallbackRange ?? nextRange;
+  const rawTargetLine = view.state.doc.lineAt(normalizedNextRange.head).number;
   const hiddenWidgetStops = collectHiddenWidgetStopCandidates(view);
   const tableStops = collectTableStopCandidates(view);
   const hiddenWidgetStop = firstHiddenWidgetStopBetweenLines(
@@ -574,7 +875,9 @@ export function moveVerticallyInRichView(
     forward,
   );
   if (hiddenWidgetStop) {
-    const correctedTargetLine = activateHiddenWidgetStop(view, hiddenWidgetStop, forward);
+    const correctedTargetLine = hiddenWidgetStop.element.classList.contains(CSS.mathDisplay)
+      ? activateDisplayMathStopBetweenLines(view, before.line, rawTargetLine, forward)
+      : activateHiddenWidgetStop(view, hiddenWidgetStop, forward);
     if (correctedTargetLine !== null) {
       recordVerticalMotionGuardEvent(view, {
         kind: "visible-line-jump",
@@ -584,7 +887,9 @@ export function moveVerticallyInRichView(
         correctedTargetLine,
         timestamp: Date.now(),
       });
-      requestSelectionVisibility(view);
+      preserveDirectionalScrollTop(view, before.scrollTop, forward);
+      requestSelectionVisibility(view, forward ? "down" : "up");
+      scheduleReverseScrollGuard(view, before, forward);
       return true;
     }
   }
@@ -608,9 +913,11 @@ export function moveVerticallyInRichView(
     return true;
   }
 
-  const landedWidgetStop = hiddenWidgetStopAtPos(hiddenWidgetStops, nextRange.head);
+  const landedWidgetStop = hiddenWidgetStopAtPos(hiddenWidgetStops, normalizedNextRange.head);
   if (landedWidgetStop) {
-    const correctedTargetLine = activateHiddenWidgetStop(view, landedWidgetStop, forward);
+    const correctedTargetLine = landedWidgetStop.element.classList.contains(CSS.mathDisplay)
+      ? activateDisplayMathStopBetweenLines(view, before.line, rawTargetLine, forward)
+      : activateHiddenWidgetStop(view, landedWidgetStop, forward);
     if (correctedTargetLine !== null) {
       recordVerticalMotionGuardEvent(view, {
         kind: "visible-line-jump",
@@ -620,12 +927,13 @@ export function moveVerticallyInRichView(
         correctedTargetLine,
         timestamp: Date.now(),
       });
+      preserveDirectionalScrollTop(view, before.scrollTop, forward);
       requestSelectionVisibility(view);
       return true;
     }
   }
 
-  const landedTableStop = tableStopAtPos(tableStops, nextRange.head);
+  const landedTableStop = tableStopAtPos(tableStops, normalizedNextRange.head);
   if (landedTableStop) {
     const correctedTargetLine = activateTableStop(view, landedTableStop);
     recordVerticalMotionGuardEvent(view, {
@@ -639,56 +947,26 @@ export function moveVerticallyInRichView(
     return true;
   }
 
-  const landedStructureTarget = createStructureEditTargetAt(view.state, nextRange.head);
+  const landedStructureTarget = createStructureEditTargetAt(view.state, normalizedNextRange.head);
   if (
     landedStructureTarget &&
-    structureEditTargetContainsPos(landedStructureTarget, nextRange.head) &&
-    activateStructureEditAt(view, nextRange.head)
+    structureEditTargetContainsPos(landedStructureTarget, normalizedNextRange.head) &&
+    activateStructureEditAt(view, normalizedNextRange.head)
   ) {
-    requestSelectionVisibility(view);
+    preserveDirectionalScrollTop(view, before.scrollTop, forward);
+    requestSelectionVisibility(view, forward ? "down" : "up");
+    scheduleReverseScrollGuard(view, before, forward);
     return true;
   }
 
   view.dispatch({
-    selection: view.state.selection.replaceRange(nextRange),
+    selection: view.state.selection.replaceRange(normalizedNextRange),
     scrollIntoView: false,
     userEvent: "select",
   });
-  requestSelectionVisibility(view);
-
-  const guardId = ++nextReverseScrollGuardId;
-  pendingReverseScrollGuardIds.set(view, guardId);
-
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      if (!view.dom.isConnected) return;
-      if (pendingReverseScrollGuardIds.get(view) !== guardId) return;
-
-      const after = snapshotVerticalMotion(view);
-      const traversedHeight = sumTraversedLineHeights(
-        before.line,
-        after.line,
-        (lineNumber) => readLineHeight(view, lineNumber),
-      );
-      const correctedScrollTop = correctedReverseVerticalScrollTop(
-        before,
-        after,
-        traversedHeight,
-      );
-      if (correctedScrollTop !== null && correctedScrollTop !== view.scrollDOM.scrollTop) {
-        recordVerticalMotionGuardEvent(view, {
-          kind: "reverse-scroll",
-          direction: forward ? "down" : "up",
-          beforeLine: before.line,
-          afterLine: after.line,
-          beforeScrollTop: before.scrollTop,
-          afterScrollTop: after.scrollTop,
-          correctedScrollTop,
-          timestamp: Date.now(),
-        });
-      }
-    });
-  });
+  preserveDirectionalScrollTop(view, before.scrollTop, forward);
+  requestSelectionVisibility(view, forward ? "down" : "up");
+  scheduleReverseScrollGuard(view, before, forward);
 
   return true;
 }

@@ -37,10 +37,26 @@ describe("correctedReverseVerticalScrollTop", () => {
     )).toBe(1224);
   });
 
+  it("corrects medium downward reverse scroll during structure handoff", () => {
+    expect(correctedReverseVerticalScrollTop(
+      { head: 3590, line: 146, scrollTop: 2345 },
+      { head: 3603, line: 147, scrollTop: 2232 },
+      24,
+    )).toBe(2369);
+  });
+
   it("leaves normal vertical motion alone", () => {
     expect(correctedReverseVerticalScrollTop(
       { head: 100, line: 20, scrollTop: 1200 },
       { head: 90, line: 19, scrollTop: 1176 },
+      24,
+    )).toBeNull();
+  });
+
+  it("ignores tiny reverse-scroll jitter", () => {
+    expect(correctedReverseVerticalScrollTop(
+      { head: 90, line: 19, scrollTop: 1200 },
+      { head: 100, line: 20, scrollTop: 1194 },
       24,
     )).toBeNull();
   });
