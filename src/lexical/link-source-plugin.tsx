@@ -5,6 +5,8 @@ import {
   $createTextNode,
   $getNearestNodeFromDOMNode,
   $getNodeByKey,
+  CLICK_COMMAND,
+  COMMAND_PRIORITY_HIGH,
   type NodeKey,
 } from "lexical";
 
@@ -65,24 +67,22 @@ export function LinkSourcePlugin() {
   }, [editing]);
 
   useEffect(() => {
-    return editor.registerRootListener((rootElement, previousRootElement) => {
-      const detach = (element: HTMLElement | null) => {
-        if (!element) {
-          return;
+    return editor.registerCommand(
+      CLICK_COMMAND,
+      (event) => {
+        const rootElement = editor.getRootElement();
+        if (!rootElement) {
+          return false;
         }
-        element.removeEventListener("mousedown", handleMouseDown, true);
-        element.removeEventListener("click", handleClick, true);
-      };
 
-      const handleMouseDown = (event: MouseEvent) => {
         const target = resolveLinkElement(event.target);
         if (!target) {
-          return;
+          return false;
         }
 
         const ownerRoot = target.closest<HTMLElement>(".cf-lexical-editor");
         if (ownerRoot !== rootElement) {
-          return;
+          return false;
         }
 
         event.preventDefault();
@@ -108,33 +108,10 @@ export function LinkSourcePlugin() {
           setDraft(nextEditingValue.raw);
           setEditing(nextEditingValue);
         }
-      };
-
-      const handleClick = (event: MouseEvent) => {
-        const target = resolveLinkElement(event.target);
-        if (!target) {
-          return;
-        }
-        const ownerRoot = target.closest<HTMLElement>(".cf-lexical-editor");
-        if (ownerRoot !== rootElement) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-      };
-
-      detach(previousRootElement);
-
-      if (!rootElement) {
-        return;
-      }
-
-      rootElement.addEventListener("mousedown", handleMouseDown, true);
-      rootElement.addEventListener("click", handleClick, true);
-      return () => {
-        detach(rootElement);
-      };
-    });
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
   }, [editor]);
 
   const commitDraft = (current: EditingLinkState, nextRaw: string) => {
