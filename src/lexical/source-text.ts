@@ -6,23 +6,16 @@ import {
   $getSelection,
   $isElementNode,
   $isRangeSelection,
-  $isTextNode,
   $setSelection,
   type ElementNode,
   type LexicalEditor,
-  type LexicalNode,
   type PointType,
   type RangeSelection,
 } from "lexical";
 
-export interface PlainTextSelection {
-  readonly anchor: number;
-  readonly focus: number;
-  readonly from: number;
-  readonly to: number;
-}
+import type { MarkdownEditorSelection } from "./markdown-editor-types";
 
-interface PlainTextPoint {
+interface SourceTextPoint {
   readonly key: string;
   readonly offset: number;
   readonly type: "element" | "text";
@@ -32,16 +25,15 @@ function getParagraphs(): ElementNode[] {
   return $getRoot().getChildren().filter($isElementNode);
 }
 
-export function readPlainTextFromLexicalRoot(): string {
+export function readSourceTextFromLexicalRoot(): string {
   return getParagraphs().map((paragraph) => paragraph.getTextContent()).join("\n");
 }
 
-export function writePlainTextToLexicalRoot(text: string): void {
+export function writeSourceTextToLexicalRoot(text: string): void {
   const root = $getRoot();
   root.clear();
 
-  const lines = text.split("\n");
-  for (const line of lines) {
+  for (const line of text.split("\n")) {
     const paragraph = $createParagraphNode();
     if (line.length > 0) {
       paragraph.append($createTextNode(line));
@@ -53,19 +45,18 @@ export function writePlainTextToLexicalRoot(text: string): void {
 function paragraphStartOffset(paragraphIndex: number, paragraphs: readonly ElementNode[]): number {
   let offset = 0;
   for (let index = 0; index < paragraphIndex; index += 1) {
-    offset += paragraphs[index].getTextContent().length;
-    offset += 1;
+    offset += paragraphs[index].getTextContent().length + 1;
   }
   return offset;
 }
 
-function resolvePointAtOffset(offset: number): PlainTextPoint {
+function resolvePointAtOffset(offset: number): SourceTextPoint {
   const paragraphs = getParagraphs();
   if (paragraphs.length === 0) {
-    const fallback = $createParagraphNode();
-    $getRoot().append(fallback);
+    const paragraph = $createParagraphNode();
+    $getRoot().append(paragraph);
     return {
-      key: fallback.getKey(),
+      key: paragraph.getKey(),
       offset: 0,
       type: "element",
     };
@@ -84,7 +75,6 @@ function resolvePointAtOffset(offset: number): PlainTextPoint {
     }
 
     if (remaining > textLength && !isLastParagraph) {
-      remaining = 0;
       const nextParagraph = paragraphs[index + 1];
       const nextTextNode = nextParagraph.getAllTextNodes()[0];
       if (nextTextNode) {
@@ -148,8 +138,8 @@ function resolvePointAtOffset(offset: number): PlainTextPoint {
   };
 }
 
-function applyPlainTextSelection(selection: RangeSelection, point: PlainTextPoint, focus: PlainTextPoint): void {
-  selection.anchor.set(point.key, point.offset, point.type);
+function applySelection(selection: RangeSelection, anchor: SourceTextPoint, focus: SourceTextPoint): void {
+  selection.anchor.set(anchor.key, anchor.offset, anchor.type);
   selection.focus.set(focus.key, focus.offset, focus.type);
   $setSelection(selection);
 }
@@ -195,7 +185,7 @@ function resolvePointOffset(point: PointType): number {
   return baseOffset + paragraph.getTextContent().length;
 }
 
-export function readPlainTextSelectionFromLexicalRoot(): PlainTextSelection {
+export function readSourceTextSelectionFromLexicalRoot(): MarkdownEditorSelection {
   const selection = $getSelection();
   if (!$isRangeSelection(selection)) {
     return {
@@ -216,52 +206,27 @@ export function readPlainTextSelectionFromLexicalRoot(): PlainTextSelection {
   };
 }
 
-export function selectPlainTextOffsetsInLexicalRoot(anchor: number, focus = anchor): void {
+export function selectSourceOffsetsInLexicalRoot(anchor: number, focus = anchor): void {
   const selection = $createRangeSelection();
-  const anchorPoint = resolvePointAtOffset(anchor);
-  const focusPoint = resolvePointAtOffset(focus);
-  applyPlainTextSelection(selection, anchorPoint, focusPoint);
+  applySelection(selection, resolvePointAtOffset(anchor), resolvePointAtOffset(focus));
 }
 
-export function getPlainText(editor: LexicalEditor): string {
-  return editor.getEditorState().read(() => readPlainTextFromLexicalRoot());
+export function getSourceText(editor: LexicalEditor): string {
+  return editor.getEditorState().read(() => readSourceTextFromLexicalRoot());
 }
 
-export function setPlainText(editor: LexicalEditor, text: string): void {
+export function setSourceText(editor: LexicalEditor, text: string): void {
   editor.update(() => {
-    writePlainTextToLexicalRoot(text);
+    writeSourceTextToLexicalRoot(text);
   }, { discrete: true });
 }
 
-export function getPlainTextSelection(editor: LexicalEditor): PlainTextSelection {
-  return editor.getEditorState().read(() => readPlainTextSelectionFromLexicalRoot());
+export function getSourceTextSelection(editor: LexicalEditor): MarkdownEditorSelection {
+  return editor.getEditorState().read(() => readSourceTextSelectionFromLexicalRoot());
 }
 
-export function setPlainTextSelection(
-  editor: LexicalEditor,
-  anchor: number,
-  focus = anchor,
-): void {
+export function setSourceTextSelection(editor: LexicalEditor, anchor: number, focus = anchor): void {
   editor.update(() => {
-    selectPlainTextOffsetsInLexicalRoot(anchor, focus);
+    selectSourceOffsetsInLexicalRoot(anchor, focus);
   }, { discrete: true });
-}
-
-export function insertPlainText(editor: LexicalEditor, text: string): void {
-  editor.update(() => {
-    const selection = $getSelection();
-    if ($isRangeSelection(selection)) {
-      selection.insertText(text);
-      return;
-    }
-
-    const fallbackSelection = $createRangeSelection();
-    const fallbackPoint = resolvePointAtOffset(readPlainTextFromLexicalRoot().length);
-    applyPlainTextSelection(fallbackSelection, fallbackPoint, fallbackPoint);
-    fallbackSelection.insertText(text);
-  });
-}
-
-export function isLexicalTextNode(node: LexicalNode | null | undefined): boolean {
-  return $isTextNode(node);
 }

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LexicalEditor } from "lexical";
 
-import { type MarkdownEditorHandle, type MarkdownEditorSelection } from "../../lexical/plain-text-editor";
 import { dispatchNavigateSourcePositionEvent } from "../../constants/events";
+import { type MarkdownEditorHandle, type MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
 import { computeLiveStats } from "../writing-stats";
 import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";

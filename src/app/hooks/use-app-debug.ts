@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { EditorMode } from "../editor-mode";
-import type { MarkdownEditorHandle } from "../../lexical/plain-text-editor";
+import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { isTauri } from "../../lib/tauri";
 import { recordDebugSessionEvent } from "../../debug/session-recorder";
 import { buildLegacyTreeString } from "../legacy-debug-bridge";

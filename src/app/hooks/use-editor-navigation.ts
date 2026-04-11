@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from "react";
 
-import type { MarkdownEditorHandle } from "../../lexical/plain-text-editor";
+import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { getOffsetForLineAndColumn } from "../markdown/text-lines";
 
 export interface EditorNavigationDeps {

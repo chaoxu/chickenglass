@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useRef } from "react";
 
 import type { LexicalEditor } from "lexical";
 
-import type { MarkdownEditorHandle } from "../../lexical/plain-text-editor";
+import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { dispatchNavigateSourcePositionEvent } from "../../constants/events";
 import { type DiagnosticEntry } from "../diagnostics";
 import { type HeadingEntry } from "../heading-ancestry";

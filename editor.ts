@@ -2,11 +2,13 @@ import { createElement, useEffect, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 
+import { FileSystemProvider } from "./src/app/contexts/file-system-context";
 import { type EditorMode, normalizeEditorMode } from "./src/app/editor-mode";
+import { MemoryFileSystem } from "./src/app/file-manager";
 import {
-  LexicalPlainTextEditor,
   type MarkdownEditorHandle,
-} from "./src/lexical/plain-text-editor";
+} from "./src/lexical/markdown-editor-types";
+import { LexicalMarkdownEditor } from "./src/lexical/markdown-editor";
 
 export type StandaloneEditorMode = EditorMode;
 
@@ -52,6 +54,7 @@ function MountedLexicalEditor({
 }: MountedLexicalEditorProps) {
   const [doc, setDoc] = useState(initialDoc);
   const [mode, setModeState] = useState<StandaloneEditorMode>(initialMode);
+  const [fs] = useState(() => new MemoryFileSystem({}));
   const docRef = useRef(initialDoc);
   const handleRef = useRef<MarkdownEditorHandle | null>(null);
 
@@ -77,26 +80,30 @@ function MountedLexicalEditor({
   }, [controlRef, mode, onModeChange]);
 
   return (
-    createElement(LexicalPlainTextEditor, {
-      doc,
-      namespace: "coflat-standalone-editor",
-      editorClassName: [
-        "cf-lexical-editor",
-        "h-full overflow-auto px-6 py-8 text-[var(--cf-fg)] outline-none",
-        mode === "source"
-          ? "cf-lexical-editor--source font-mono whitespace-pre-wrap"
-          : "whitespace-pre-wrap",
-      ].join(" "),
-      onEditorReady: (handle: MarkdownEditorHandle) => {
-        handleRef.current = handle;
-      },
-      onTextChange: (nextDoc: string) => {
-        docRef.current = nextDoc;
-      },
-      onDocChange: () => {
-        onChange?.(docRef.current);
-      },
-    })
+    createElement(
+      FileSystemProvider,
+      { value: fs },
+      createElement(LexicalMarkdownEditor, {
+        doc,
+        editorMode: mode,
+        namespace: "coflat-standalone-editor",
+        editorClassName: [
+          "cf-lexical-editor",
+          mode === "source"
+            ? "h-full"
+            : "px-6 py-8 text-[var(--cf-fg)] outline-none",
+        ].join(" "),
+        onEditorReady: (handle: MarkdownEditorHandle) => {
+          handleRef.current = handle;
+        },
+        onTextChange: (nextDoc: string) => {
+          docRef.current = nextDoc;
+        },
+        onDocChange: () => {
+          onChange?.(docRef.current);
+        },
+      }),
+    )
   );
 }
 

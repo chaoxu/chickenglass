@@ -6,7 +6,7 @@ import { MemoryFileSystem } from "../file-manager";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import type { Settings } from "../lib/types";
 import type { AppEditorShellController } from "./use-app-editor-shell";
-import type { MarkdownEditorHandle } from "../../lexical/plain-text-editor";
+import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 
 vi.mock("../perf", () => ({
   measureAsync: (_name: string, task: () => Promise<unknown>) => task(),
@@ -93,8 +93,10 @@ function createHandle(): MarkdownEditorHandle {
   return {
     applyChanges: vi.fn(),
     focus: vi.fn(),
+    getDoc: vi.fn(() => ""),
     getSelection: vi.fn(() => ({ anchor: 0, focus: 0, from: 0, to: 0 })),
     insertText: vi.fn(),
+    setDoc: vi.fn(),
     setSelection: vi.fn(),
   };
 }

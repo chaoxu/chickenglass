@@ -1,15 +1,17 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MarkdownEditorHandle } from "../../lexical/plain-text-editor";
+import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { useEditorNavigation } from "./use-editor-navigation";
 
 function createHandle() {
   return {
     applyChanges: vi.fn(),
     focus: vi.fn(),
+    getDoc: vi.fn(() => ""),
     getSelection: vi.fn(() => ({ anchor: 0, focus: 0, from: 0, to: 0 })),
     insertText: vi.fn(),
+    setDoc: vi.fn(),
     setSelection: vi.fn(),
   } satisfies MarkdownEditorHandle;
 }

@@ -1,13 +1,16 @@
-import { useCallback, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
-
-import { LexicalPlainTextEditor, type MarkdownEditorHandle } from "./plain-text-editor";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 
 interface StructureSourceEditorProps {
   readonly className: string;
   readonly doc: string;
   readonly multiline?: boolean;
-  readonly namespace: string;
   readonly onChange: (nextValue: string) => void;
   readonly onClose: () => void;
 }
@@ -16,31 +19,32 @@ export function StructureSourceEditor({
   className,
   doc,
   multiline = false,
-  namespace,
   onChange,
   onClose,
 }: StructureSourceEditorProps) {
   const [draft, setDraft] = useState(() => doc);
   const originalDocRef = useRef(doc);
-  const handleRef = useRef<MarkdownEditorHandle | null>(null);
-  const focusedRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const focusEditor = useCallback(() => {
-    if (focusedRef.current) {
+  useEffect(() => {
+    const field = multiline ? textareaRef.current : inputRef.current;
+    if (!field) {
       return;
     }
-    focusedRef.current = true;
-    queueMicrotask(() => {
-      const handle = handleRef.current;
-      if (!handle) {
-        focusedRef.current = false;
-        return;
-      }
-      handle.focus();
-      handle.setSelection(multiline ? draft.length : draft.length);
-      focusedRef.current = false;
-    });
-  }, [draft.length, multiline]);
+    field.focus();
+    const end = draft.length;
+    field.setSelectionRange(end, end);
+  }, []);
+
+  useEffect(() => {
+    if (doc === originalDocRef.current) {
+      return;
+    }
+
+    originalDocRef.current = doc;
+    setDraft(doc);
+  }, [doc]);
 
   const closeWithRevert = useCallback(() => {
     if (draft !== originalDocRef.current) {
@@ -50,7 +54,9 @@ export function StructureSourceEditor({
     onClose();
   }, [draft, onChange, onClose]);
 
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = useCallback((
+    event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
     if (event.key === "Escape") {
       event.preventDefault();
       closeWithRevert();
@@ -63,30 +69,24 @@ export function StructureSourceEditor({
     }
   }, [closeWithRevert, multiline, onClose]);
 
-  return (
-    <LexicalPlainTextEditor
-      doc={draft}
-      editorClassName={className}
-      namespace={namespace}
-      onBlurCapture={(event) => {
-        const nextFocused = event.relatedTarget;
-        if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) {
-          return;
-        }
-        onClose();
-      }}
-      onEditorReady={(handle) => {
-        handleRef.current = handle;
-        focusEditor();
-      }}
-      onFocus={focusEditor}
-      onKeyDown={handleKeyDown}
-      onTextChange={(nextValue) => {
-        setDraft(nextValue);
-        onChange(nextValue);
-      }}
-      spellCheck={false}
-      testId={null}
-    />
+  const commonProps = {
+    className,
+    onBlur: () => onClose(),
+    onChange: (
+      event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    ) => {
+      const nextValue = event.currentTarget.value;
+      setDraft(nextValue);
+      onChange(nextValue);
+    },
+    onKeyDown: handleKeyDown,
+    spellCheck: false,
+    value: draft,
+  } as const;
+
+  return multiline ? (
+    <textarea {...commonProps} ref={textareaRef} />
+  ) : (
+    <input {...commonProps} ref={inputRef} />
   );
 }
