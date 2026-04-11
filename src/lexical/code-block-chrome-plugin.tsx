@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { mergeRegister } from "lexical";
@@ -21,6 +21,11 @@ interface CodeBlockOverlay {
   readonly text: string;
 }
 
+interface ScrollPosition {
+  readonly left: number;
+  readonly top: number;
+}
+
 function ensureCodeBlockId(codeElement: HTMLElement): string {
   const existing = codeElement.getAttribute(ID_ATTR);
   if (existing) {
@@ -36,9 +41,10 @@ function formatLanguage(codeElement: HTMLElement): string {
   return language ? language.toUpperCase() : "TEXT";
 }
 
-function collectCodeBlockOverlays(
+export function collectCodeBlockOverlays(
   rootElement: HTMLElement,
   surfaceElement: HTMLElement,
+  scrollPosition: ScrollPosition,
 ): readonly CodeBlockOverlay[] {
   const overlays: CodeBlockOverlay[] = [];
   const surfaceRect = surfaceElement.getBoundingClientRect();
@@ -56,8 +62,8 @@ function collectCodeBlockOverlays(
       id,
       language: codeElement.getAttribute(LANGUAGE_ATTR) ?? "TEXT",
       rect: {
-        left: rect.left - surfaceRect.left + surfaceElement.scrollLeft,
-        top: rect.top - surfaceRect.top + surfaceElement.scrollTop,
+        left: rect.left - surfaceRect.left + scrollPosition.left,
+        top: rect.top - surfaceRect.top + scrollPosition.top,
         width: rect.width,
       },
       text: codeElement.textContent ?? "",
@@ -73,6 +79,7 @@ export function CodeBlockChromePlugin() {
   const [overlays, setOverlays] = useState<readonly CodeBlockOverlay[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const surfaceElement = useEditorScrollSurface();
+  const scrollPositionRef = useRef<ScrollPosition>({ left: 0, top: 0 });
 
   useEffect(() => {
     let raf = 0;
@@ -92,7 +99,7 @@ export function CodeBlockChromePlugin() {
           setOverlays([]);
           return;
         }
-        setOverlays(collectCodeBlockOverlays(rootElement, surfaceElement));
+        setOverlays(collectCodeBlockOverlays(rootElement, surfaceElement, scrollPositionRef.current));
       };
 
       raf = requestAnimationFrame(commit);
@@ -104,8 +111,19 @@ export function CodeBlockChromePlugin() {
       return undefined;
     }
 
-    sync();
-    surfaceElement.addEventListener("scroll", sync, { passive: true });
+    const syncScrollPosition = () => {
+      scrollPositionRef.current = {
+        left: surfaceElement.scrollLeft,
+        top: surfaceElement.scrollTop,
+      };
+      sync();
+    };
+
+    syncScrollPosition();
+    surfaceElement.addEventListener("scroll", syncScrollPosition, { passive: true });
+    if (surfaceElement !== rootElement) {
+      rootElement.addEventListener("scroll", syncScrollPosition, { passive: true });
+    }
     window.addEventListener("resize", sync);
 
     return mergeRegister(
@@ -115,7 +133,10 @@ export function CodeBlockChromePlugin() {
       () => {
         cancelAnimationFrame(raf);
         window.clearTimeout(timeout);
-        surfaceElement.removeEventListener("scroll", sync);
+        surfaceElement.removeEventListener("scroll", syncScrollPosition);
+        if (surfaceElement !== rootElement) {
+          rootElement.removeEventListener("scroll", syncScrollPosition);
+        }
         window.removeEventListener("resize", sync);
       },
     );
