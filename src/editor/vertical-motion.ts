@@ -910,6 +910,9 @@ export function moveVerticallyInRichView(
       correctedTargetLine,
       timestamp: Date.now(),
     });
+    preserveDirectionalScrollTop(view, before.scrollTop, forward);
+    requestSelectionVisibility(view, forward ? "down" : "up");
+    scheduleReverseScrollGuard(view, before, forward);
     return true;
   }
 
@@ -928,7 +931,8 @@ export function moveVerticallyInRichView(
         timestamp: Date.now(),
       });
       preserveDirectionalScrollTop(view, before.scrollTop, forward);
-      requestSelectionVisibility(view);
+      requestSelectionVisibility(view, forward ? "down" : "up");
+      scheduleReverseScrollGuard(view, before, forward);
       return true;
     }
   }
@@ -944,6 +948,9 @@ export function moveVerticallyInRichView(
       correctedTargetLine,
       timestamp: Date.now(),
     });
+    preserveDirectionalScrollTop(view, before.scrollTop, forward);
+    requestSelectionVisibility(view, forward ? "down" : "up");
+    scheduleReverseScrollGuard(view, before, forward);
     return true;
   }
 

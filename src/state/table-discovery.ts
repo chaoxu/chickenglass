@@ -173,18 +173,42 @@ function changeCouldAffectTableStructure(
   return TABLE_STRUCTURE_RE.test(change.inserted.toString());
 }
 
+function localRangeContainsTable(
+  doc: Text,
+  range: DirtyRange,
+): boolean {
+  if (doc.length === 0) {
+    return false;
+  }
+
+  const startLineNumber = doc.lineAt(Math.min(range.from, doc.length)).number;
+  const endLineNumber = doc.lineAt(Math.min(Math.max(range.from, range.to), doc.length)).number;
+  const lines: string[] = [];
+
+  for (let lineNumber = startLineNumber; lineNumber <= endLineNumber; lineNumber += 1) {
+    lines.push(doc.line(lineNumber).text);
+  }
+
+  for (let startIndex = 0; startIndex < lines.length - 1; startIndex += 1) {
+    if (!lines[startIndex].includes("|")) {
+      continue;
+    }
+    if (parseTable(lines.slice(startIndex))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function canSkipLocalTableRebuild(
   tables: readonly TableRange[],
   tr: Transaction,
 ): boolean {
   let canSkip = true;
 
-  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+  tr.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
     if (!canSkip) return;
-    if (changeCouldAffectTableStructure({ from: fromA, to: toA, inserted })) {
-      canSkip = false;
-      return;
-    }
 
     const expanded = expandChangedRangeToNearbyLines(tr.startState.doc, fromA, toA);
     for (const table of tables) {
@@ -192,6 +216,15 @@ function canSkipLocalTableRebuild(
       if (!rangesOverlap(table, expanded)) continue;
       canSkip = false;
       return;
+    }
+
+    if (!changeCouldAffectTableStructure({ from: fromA, to: toA, inserted })) {
+      return;
+    }
+
+    const expandedNext = expandChangedRangeToNearbyLines(tr.state.doc, fromB, toB);
+    if (localRangeContainsTable(tr.state.doc, expandedNext)) {
+      canSkip = false;
     }
   }, true);
 
